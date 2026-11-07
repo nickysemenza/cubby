@@ -36,10 +36,6 @@ export const { definition, readSchemas } = defineEntityModel({
       module: "~/features/task/list-columns",
       export: "taskListOverride",
     },
-    listReadProjection: {
-      module: "~/entity/entity-list/list-read-demand",
-      export: "declaredListReadProjection",
-    },
     basePath: "tasks",
   },
   table: "Task",

@@ -87,20 +87,17 @@ const renderIndexRoute = (entity: RoutedEntity, listed: boolean): string => {
       : "") +
     (entity.route.listReadProjection
       ? `  readProjection: ${entity.route.listReadProjection.export},\n`
-      : entity.route.listColumns
-        ? "  readProjection: null,\n"
-        : "") +
+      : "") +
     (createAction === null ? "" : `  actions: () => ${createAction},\n`) +
     "});\n\n" +
     `export const Route = createFileRoute(${JSON.stringify(`/_authenticated/${basePath}/`)})({\n` +
     `  beforeLoad: ({ context }) => ensureEntityMetadata(context.queryClient, ${JSON.stringify(entity.key)}).then(() => undefined),\n` +
     `  validateSearch: entitySearch.${entity.key}.schema,\n` +
     `  search: { middlewares: [stripSearchParams(entitySearch.${entity.key}.defaults)] },\n` +
-    // The eager first-page loader exists only for an entity with a generated
-    // list read; a client-paged roster (cookbook) fetches on mount.
+    // Only kernel-backed list routes share the eager opening-page plan.
     (listed
       ? "  loaderDeps: ({ search }) => search,\n" +
-        `  loader: entityListLoader(${JSON.stringify(entity.key)}${entity.route.listReadProjection ? `, ${entity.route.listReadProjection.export}` : entity.route.listColumns ? ", null" : ""}),\n`
+        `  loader: entityListLoader(${JSON.stringify(entity.key)}${entity.route.listReadProjection ? `, ${entity.route.listReadProjection.export}` : ""}),\n`
       : "") +
     `  head: () => ({ meta: [{ title: pageTitle(${JSON.stringify(plural)}) }] }),\n` +
     `  component: ${page},\n` +

@@ -407,6 +407,15 @@ row-action inputs remain loaded when their columns are hidden. Ingredient unit
 mappings retain linked Products, and Meal rename/delete retains name and date.
 Task progress and Cookbook extraction counts declare dependencies on their owning
 Name and Recipes columns.
+All generic rosters now default to declared demand; an override no longer opts
+into a complete read. Inventory dialogs retain canonical amount, Product, Location
+and editable-location evidence. A missing canonical quantity never falls back to
+a retained physical amount. Wish tree rows retain acquisition state for the same
+purchased toggle as canonical rows. Expense admission reads only its line kind and
+planned status; the editor owns its fresh complete baseline. Unfiltered action
+subjects do not force exact counts, keeping the loader and mounted query aligned.
+Column and subject `readFields` annotations that had no reader are removed;
+field display dependencies and pure specialist projections own their inputs.
 Stored publications load once per page for the envelope and admitted bindings'
 combined key demand. Every binding consuming the shared stored map declares its
 keys, including Email relationship facts and Product pricing/food inputs.

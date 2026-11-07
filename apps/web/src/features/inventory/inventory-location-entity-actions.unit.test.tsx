@@ -1,11 +1,18 @@
 import { inventoryListItemOut } from "@cubby/schemas/entities/inventory";
 import { testShortcode } from "@cubby/schemas/testing";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  renderHook,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { createEditorBrowserTestHarness as createBrowserTestHarness } from "#web/tests/editor-metadata.fixtures.ts";
 import { fieldValueFixture } from "~/entity/fields/field-envelope.fixtures";
 
+import { discardInventoryActionDefinition } from "./discard-inventory-action";
 import { inventoryLocationEntityActionDefinitions } from "./inventory-location-entity-actions";
 
 const inventoryRow = {
@@ -86,6 +93,23 @@ describe("inventory and location action catalog", () => {
   });
 
   it("parses a selected inventory row before opening the real move dialog", async () => {
+    const discard = renderHook(() => discardInventoryActionDefinition.use(), {
+      wrapper: harness.wrapper,
+    });
+    const discardRow = {
+      ...inventoryRow,
+      product: {
+        ...inventoryRow.product,
+        id: testShortcode("product", "PRD-4K7M"),
+      },
+    };
+    expect(
+      discard.result.current.availability?.({
+        entity: "inventory",
+        surface: "row",
+        rows: [discardRow],
+      }),
+    ).toEqual({ status: "available" });
     const resolved: boolean[] = [];
     render(
       <MoveInventoryActionHarness
@@ -111,6 +135,25 @@ describe("inventory and location action catalog", () => {
       inventoryListItemOut.shape.fields.shape.amount,
       undefined,
     );
+    const discard = renderHook(() => discardInventoryActionDefinition.use(), {
+      wrapper: harness.wrapper,
+    });
+    const discardRow = {
+      ...inventoryRow,
+      amount: { value: 99, unit: "each" },
+      product: {
+        ...inventoryRow.product,
+        id: testShortcode("product", "PRD-4K7M"),
+      },
+      fields: { ...inventoryRow.fields, amount: missing },
+    };
+    expect(
+      discard.result.current.availability?.({
+        entity: "inventory",
+        surface: "row",
+        rows: [discardRow],
+      }),
+    ).toEqual({ status: "hidden" });
     render(
       <MoveInventoryActionHarness
         row={{

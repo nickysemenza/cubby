@@ -4,6 +4,8 @@ import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { useNavigate } from "@tanstack/react-router";
 import { useCallback } from "react";
 
+import { INVENTORY_DIALOG_READ_FIELDS } from "~/entity/actions/action-read-fields";
+
 import { VerbMenuItem } from "../../entity/actions/action-verb-ui";
 import { defineEntityAction } from "../../entity/actions/entity-action-definition";
 import type {
@@ -217,6 +219,7 @@ function useMoveLocationUnderAction(): EntityActionHandles {
 export const inventoryLocationEntityActionDefinitions = [
   defineEntityAction({
     id: "move-inventory",
+    readFields: INVENTORY_DIALOG_READ_FIELDS,
     verb: "moveTo",
     entities: ["inventory"],
     arity: "both",
@@ -227,6 +230,7 @@ export const inventoryLocationEntityActionDefinitions = [
   }),
   defineEntityAction({
     id: "print-location-labels",
+    readFields: ["type"],
     verb: "printLabel",
     entities: ["location"],
     arity: "both",

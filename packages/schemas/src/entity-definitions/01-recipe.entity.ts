@@ -32,10 +32,6 @@ export const { definition, readSchemas } = defineEntityModel(
         module: "~/features/recipe/list-columns",
         export: "recipeListOverride",
       },
-      listReadProjection: {
-        module: "~/entity/entity-list/list-read-demand",
-        export: "declaredListReadProjection",
-      },
       basePath: "recipes",
       createOverride: "page",
       detail: null,

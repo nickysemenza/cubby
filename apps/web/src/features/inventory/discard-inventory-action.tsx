@@ -1,3 +1,5 @@
+import { inventoryListItemOut } from "@cubby/schemas/entities/inventory";
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import {
   inventoryShortcode,
   locationShortcode,
@@ -5,6 +7,8 @@ import {
 } from "@cubby/schemas/identifiers";
 import { useCallback, useState } from "react";
 import { z } from "zod";
+
+import { INVENTORY_DIALOG_READ_FIELDS } from "~/entity/actions/action-read-fields";
 
 import { VerbMenuItem } from "../../entity/actions/action-verb-ui";
 import { defineEntityAction } from "../../entity/actions/entity-action-definition";
@@ -40,7 +44,21 @@ const discardableRow = z.object({
   product: z.object({ id: productShortcode, name: z.string() }),
 });
 
+const canonicalDiscardRow = discardableRow.omit({ amount: true }).extend({
+  fields: inventoryListItemOut.shape.fields.pick({ amount: true }),
+});
+
 const asDiscardItem = (row: EntityActionRow): InventoryDialogItem | null => {
+  const canonical = canonicalDiscardRow.safeParse(row);
+  if (canonical.success) {
+    // A loaded envelope wins over a physical quantity retained by another surface.
+    const parsed = discardableRow.safeParse({
+      ...canonical.data,
+      amount: fieldValueOf(canonical.data.fields.amount),
+    });
+    return parsed.success ? parsed.data : null;
+  }
+
   const parsed = discardableRow.safeParse(row);
   return parsed.success ? parsed.data : null;
 };
@@ -96,6 +114,7 @@ function useDiscardInventoryAction(): EntityActionHandles {
 }
 
 export const discardInventoryActionDefinition = defineEntityAction({
+  readFields: INVENTORY_DIALOG_READ_FIELDS,
   verb: "discard",
   // `inventory`, not `product`: an entry names its amount and its shelf, so a
   // selection of entries is already a complete instruction. A product row is

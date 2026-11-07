@@ -147,8 +147,6 @@ export interface CubbyColumnMeta<TData = CellData> {
   code?: boolean;
   filterConfig?: FilterConfig;
   cellData?: ColumnCellData<TData>;
-  /** Authoritative list inputs when a display column has another id. */
-  readFields?: readonly string[];
   /** Deferred values must render their state without invoking data accessors. */
   valueUnavailable?: (row: TData) => boolean;
   /** A present value the cell deliberately paints as nothing. */

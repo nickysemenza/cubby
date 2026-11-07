@@ -6,10 +6,13 @@ import { metadataQueryClient } from "#web/tests/entity-metadata.ts";
 import { declaredListReadProjection } from "~/entity/entity-list/list-read-demand";
 import { entityMetadata } from "~/entity/metadata";
 import { listEntities } from "~/entity/model/list-contracts";
+import { expenseListReadProjection } from "~/features/expense/list-read";
 import { imageListReadProjection } from "~/features/image/list-read";
 import { ingredientListReadProjection } from "~/features/ingredient/list-read";
+import { inventoryListReadProjection } from "~/features/inventory/list-read";
 import { locationListReadProjection } from "~/features/location/list-read";
 import { mealListReadProjection } from "~/features/meal/list-read";
+import { wishListReadProjection } from "~/features/wish/list-read";
 import { db } from "~/server/db";
 import {
   selectListReadRows,
@@ -209,6 +212,9 @@ describe("list projection group execution", () => {
       ["ingredient", ingredientListReadProjection],
       ["location", locationListReadProjection],
       ["meal", mealListReadProjection],
+      ["expense", expenseListReadProjection],
+      ["inventory", inventoryListReadProjection],
+      ["wish", wishListReadProjection],
     ]);
     for (const entity of listEntities) {
       const visibility = Object.fromEntries(

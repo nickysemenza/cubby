@@ -42,6 +42,10 @@ export const { definition, readSchemas } = defineEntityModel(
         module: "~/features/inventory/list-columns",
         export: "inventoryListOverride",
       },
+      listReadProjection: {
+        module: "~/features/inventory/list-read",
+        export: "inventoryListReadProjection",
+      },
       basePath: "inventory",
     },
     table: "InventoryEntry",

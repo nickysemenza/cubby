@@ -84,7 +84,6 @@ function InventoryProductLink({
  * of these here" — reach this row without the inventory table declaring one.
  */
 const PRODUCT_SUBJECT = {
-  readFields: ["product"],
   entity: "product" as const,
   resolve: (row: InventoryListItem) => ({
     entity: "product" as const,
@@ -340,7 +339,6 @@ export function createInventoryEntriesColumn<
     filterConfig?: FilterConfig;
     provenance?: EntityFieldProvenance;
     context?: (row: T) => string | null | undefined;
-    contextReadFields?: readonly string[];
     explanation?: ColumnExplanation;
     /**
      * When set, rows with entries get a hover-revealed pencil that opens a
@@ -383,7 +381,6 @@ export function createInventoryEntriesColumn<
       mobile: options?.mobile,
       filterConfig: options?.filterConfig,
       provenance: options?.provenance,
-      readFields: [String(accessor), ...(options?.contextReadFields ?? [])],
       explanation: options?.explanation,
       linksTo: entity,
       entityRefs: (row) =>

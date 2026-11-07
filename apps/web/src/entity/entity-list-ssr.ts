@@ -36,7 +36,7 @@ type EntityListLoaderArgs = {
 /** Bind the standard eager list loader while leaving route options literal. */
 export function entityListLoader<E extends ListEntity>(
   entity: E,
-  readProjection: ListReadProjection | null = declaredListReadProjection,
+  readProjection: ListReadProjection = declaredListReadProjection,
 ) {
   return async ({ context, deps, abortController }: EntityListLoaderArgs) => {
     await ensureEntityMetadata(context.queryClient, entity);
@@ -69,17 +69,14 @@ export async function ensureEntityListSsr<E extends ListEntity>(options: {
   defaultSort?: { orderBy: string; direction: "asc" | "desc" };
   nested?: boolean;
   signal?: AbortSignal;
-  readProjection?: ListReadProjection | null;
+  readProjection?: ListReadProjection;
 }) {
   if (options.active === false) return;
   await ensureEntityMetadata(options.queryClient, options.entity);
   const defaultSort =
     options.defaultSort ??
     entityListDefaultSort(options.queryClient, options.entity);
-  const projection =
-    options.readProjection === undefined
-      ? declaredListReadProjection
-      : options.readProjection;
+  const projection = options.readProjection ?? declaredListReadProjection;
   const openingSearch = searchWithInitialFilter(
     options.queryClient,
     options.entity,
@@ -92,7 +89,7 @@ export async function ensureEntityListSsr<E extends ListEntity>(options: {
   );
   // Pivot is viewport-dependent; the mounted renderer owns its summary demand.
   if (requestedView === PIVOT_VIEW_ID) return;
-  const fields = projection?.(
+  const fields = projection(
     options.queryClient,
     options.entity,
     listReadVisibility(

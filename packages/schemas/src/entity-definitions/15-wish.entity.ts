@@ -20,6 +20,10 @@ export const { definition, readSchemas } = defineEntityModel({
       module: "~/features/wish/list-columns",
       export: "wishListOverride",
     },
+    listReadProjection: {
+      module: "~/features/wish/list-read",
+      export: "wishListReadProjection",
+    },
     basePath: "wishes",
   },
   table: "Wish",

@@ -143,7 +143,7 @@ test("capture keeps pending role controls available and saves an explicitly sele
   const rows = z
     .object({
       items: z.array(
-        expenseOut.pick({ name: true, cost: true }).extend({
+        expenseOut.pick({ id: true, name: true, cost: true }).extend({
           fields: expenseOut.shape.fields.pick({
             lineKind: true,
             productId: true,
@@ -157,4 +157,30 @@ test("capture keeps pending role controls available and saves an explicitly sele
   expect(fieldValueOf(saved.fields.lineKind)).toBe("principal");
   expect(fieldValueOf(saved.fields.productId)).toBe(product.id);
   expect(saved.cost).toBe(2.13);
+
+  const planned = await entityApi(page.request).update("expense", saved.id, {
+    future: true,
+  });
+  expect(planned.ok(), await planned.text()).toBe(true);
+  await gotoAuthenticatedPage(page, `/expenses?q=${encodeURIComponent(name)}`);
+  const row = page.getByRole("row").filter({ hasText: name });
+  await row.getByRole("button", { name: "Row actions" }).click();
+  await page
+    .getByRole("menuitem", { name: "Mark purchased", exact: true })
+    .click();
+  await waitForFormHydration(page);
+  await expect(dialog.getByLabel("Cost", { exact: true })).toHaveValue("2.13");
+  await dialog.getByLabel("Cost", { exact: true }).fill("3.27");
+  await dialog.getByRole("button", { name: /^Save/ }).click();
+  await expect(dialog).not.toBeVisible();
+  const purchased = await readExpense(
+    page,
+    saved.id,
+    expenseOut.pick({ cost: true, future: true }).extend({
+      fields: expenseOut.shape.fields.pick({ productId: true }),
+    }),
+  );
+  expect(purchased.cost).toBe(3.27);
+  expect(purchased.future).toBe(false);
+  expect(fieldValueOf(purchased.fields.productId)).toBe(product.id);
 });

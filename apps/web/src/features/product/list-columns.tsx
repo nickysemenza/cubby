@@ -6,11 +6,6 @@ import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { ProductCostValue } from "~/entity/display/product-cost-value";
 import { useEntityMetadata } from "~/entity/metadata";
 
-import {
-  PRODUCT_COST_READ_FIELDS,
-  PRODUCT_GTIN_READ_FIELDS,
-  PRODUCT_STOCK_READ_FIELDS,
-} from "./list-read";
 type ProductListItem = EntityFieldEnvelopeRead<"product", "list">;
 import type { KitComponentRowOut } from "@cubby/schemas/product-components";
 import { useQuery } from "@tanstack/react-query";
@@ -247,7 +242,6 @@ export const productListOverride = defineListOverride<
                 id: "primaryGtin",
                 header: "Barcode / ISBN",
                 meta: {
-                  readFields: PRODUCT_GTIN_READ_FIELDS,
                   className: "w-24",
                   mono: true,
                   code: true,
@@ -320,7 +314,6 @@ export const productListOverride = defineListOverride<
                 id: "cost",
                 header: () => "Cost",
                 meta: {
-                  readFields: PRODUCT_COST_READ_FIELDS,
                   numeric: true,
                   className: "w-32",
                   mobile: { slot: "trailing", priority: 10, interactive: true },
@@ -443,7 +436,6 @@ export const productListOverride = defineListOverride<
                 id: "location",
                 columnGroup: "Stock",
                 context: (product) => fieldValueOf(product.fields.stockStatus),
-                contextReadFields: PRODUCT_STOCK_READ_FIELDS,
                 explanation: {
                   entity: "product",
                   field: "stockStatus",

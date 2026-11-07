@@ -23,6 +23,7 @@ export type WishRow = (
       previewId: WishListItemOut["id"];
       name: string;
       wish: WishListItemOut;
+      acquiredAt: WishListItemOut["acquiredAt"];
       subRows: WishRow[];
     }
   | {
@@ -54,6 +55,7 @@ export const buildWishRows = (wishes: readonly WishListItemOut[]): WishRow[] =>
     createdAt: wish.createdAt,
     updatedAt: wish.updatedAt,
     wish,
+    acquiredAt: wish.acquiredAt,
     subRows: (wish.candidates ?? []).map((candidate) => ({
       kind: "candidate",
       id: `${wish.id}:${candidate.id}`,

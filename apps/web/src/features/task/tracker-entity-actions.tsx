@@ -5,9 +5,10 @@ import {
   type TaskShortcode,
 } from "@cubby/schemas/identifiers";
 import { useState } from "react";
+import { z } from "zod";
 
+import { EXPENSE_MARK_PURCHASED_READ_FIELDS } from "~/entity/actions/action-read-fields";
 import { EntityEditDialog } from "~/entity/editing/entity-edit-dialog";
-import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import { CreateProjectFromTasksDialog } from "~/features/task/create-project-from-tasks-dialog";
 
 import { VerbMenuItem } from "../../entity/actions/action-verb-ui";
@@ -21,14 +22,23 @@ import type {
 const ALREADY_PURCHASED = "Already purchased";
 const ADJUSTMENT_NOT_CLASSIFIED = "Adjustments aren't classified";
 
-const asExpense = (row: EntityActionRow): ExpenseOut | null => {
-  const parsed = expenseFieldEnvelopeSchemas.detail.safeParse(row);
+const expenseActionRow = expenseFieldEnvelopeSchemas.detail
+  .pick({ id: true, future: true })
+  .extend({
+    fields: expenseFieldEnvelopeSchemas.detail.shape.fields.pick({
+      lineKind: true,
+    }),
+  });
+type ExpenseActionRow = z.infer<typeof expenseActionRow>;
+
+const asExpense = (row: EntityActionRow): ExpenseActionRow | null => {
+  const parsed = expenseActionRow.safeParse(row);
   return parsed.success ? parsed.data : null;
 };
 
 export function useMarkExpensePurchasedAction(): EntityActionHandles {
-  const [target, setTarget] = useState<ExpenseOut | null>(null);
-  const disabledReason = (expense: ExpenseOut) => {
+  const [target, setTarget] = useState<ExpenseActionRow | null>(null);
+  const disabledReason = (expense: ExpenseActionRow) => {
     const effectiveExpenseLineKind = fieldValueOf(expense.fields.lineKind);
     return effectiveExpenseLineKind !== "principal"
       ? ADJUSTMENT_NOT_CLASSIFIED
@@ -104,6 +114,7 @@ export function useCreateProjectFromTasksAction(): EntityActionHandles {
 }
 
 export const markExpensePurchasedActionDefinition = defineEntityAction({
+  readFields: EXPENSE_MARK_PURCHASED_READ_FIELDS,
   verb: "markPurchased",
   entities: ["expense"],
   arity: "single",
@@ -124,5 +135,3 @@ export const createProjectFromTasksActionDefinition = defineEntityAction({
   preserveSelection: true,
   use: useCreateProjectFromTasksAction,
 });
-
-type ExpenseOut = DetailRecordOf<"expense">;

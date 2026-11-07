@@ -2255,10 +2255,12 @@ list, so their default cache keys agree. Named list renderers contribute the
 inputs owned by the shared renderer coverage catalog. It includes visible declared fields,
 identity and image requirements, and explicit specialist/action dependencies;
 membership, sorting, grouping and totals retain independent server predicates.
-An entity route with specialist columns opts in through its declaration's
-`listReadProjection` source. Other specialist routes retain full reads. Product's
-pure plan shares the discard, stock and specialist column dependencies with their
-owners. Selection-action validation reloads complete records under the original
+Declared projections are the default for every generic roster, including routes
+with specialist overrides. A route's `listReadProjection` source adds only its
+specialist row or column inputs. Product's pure plan combines shared discard
+inputs with its stock and specialist column inputs. Inventory and Expense
+actions likewise share their minimal admission keys; opening an editor resolves
+its complete fresh baseline separately. Selection-action validation reloads complete records under the original
 scope before acting. Selecting a nested value retains its canonical nested shape.
 Identity-only navigation declares `recordDemand: "identity"`; loaded roster rows
 can open Inspect without a complete-record request. Eligibility and mutation

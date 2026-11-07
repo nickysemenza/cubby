@@ -249,7 +249,7 @@ export interface GenericEntityListProps {
   /** Test seam: replaces the entity's generic list read. */
   operations?: { list?: ListQueryOptionsFn<object, BaseListRow> };
   override?: AnyEntityListOverride;
-  readProjection?: ListReadProjection | null;
+  readProjection?: ListReadProjection;
 }
 
 /** A scoped roster uses the same columns, reads, selection and workbench as a page. */
@@ -455,13 +455,7 @@ export function GenericEntityList({
       entity={entity}
       view={bodyView}
       override={override}
-      readProjection={
-        readProjection === undefined
-          ? override === NO_OVERRIDE
-            ? declaredListReadProjection
-            : null
-          : readProjection
-      }
+      readProjection={readProjection ?? declaredListReadProjection}
       context={{ search, navigate }}
       operations={operations}
     />
@@ -497,7 +491,7 @@ function ServerListBody({
   entity: BrowserRoutedEntity;
   view: "table" | "shelf" | "timeline" | typeof PIVOT_VIEW_ID;
   override: AnyEntityListOverride;
-  readProjection?: ListReadProjection | null;
+  readProjection?: ListReadProjection;
   context: ListOverrideContext;
   operations: GenericEntityListProps["operations"];
 }) {

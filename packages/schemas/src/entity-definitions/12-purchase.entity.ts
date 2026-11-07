@@ -38,10 +38,6 @@ export const { definition, readSchemas } = defineEntityModel({
       module: "~/features/purchase/list-columns",
       export: "purchaseListOverride",
     },
-    listReadProjection: {
-      module: "~/entity/entity-list/list-read-demand",
-      export: "declaredListReadProjection",
-    },
     basePath: "purchases",
   },
   table: "Purchase",

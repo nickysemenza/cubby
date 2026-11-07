@@ -38,7 +38,7 @@ export type ListReadProjection = (
   queryClient: QueryClient,
   entity: Entity,
   visibility?: Readonly<Record<string, boolean>>,
-) => string[] | undefined;
+) => string[];
 
 /** Shared by the eager loader and mounted roster; visibility never changes membership. */
 export const declaredListReadProjection: ListReadProjection = (
@@ -132,12 +132,12 @@ export function specialistListReadProjection({
   whenRevealed = {},
 }: {
   always?: readonly string[];
+  /** Composed columns shown by default; declared columns use display.readFields. */
   whenShown?: Readonly<Record<string, readonly string[]>>;
   whenRevealed?: Readonly<Record<string, readonly string[]>>;
 }): ListReadProjection {
   return (queryClient, entity, visibility = DEFAULT_LIST_COLUMN_VISIBILITY) => {
     const fields = declaredListReadProjection(queryClient, entity, visibility);
-    if (!fields) return undefined;
     return [
       ...new Set([
         ...fields,
