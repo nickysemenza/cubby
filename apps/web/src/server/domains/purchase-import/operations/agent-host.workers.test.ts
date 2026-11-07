@@ -93,21 +93,22 @@ describe("purchase agent host observation", () => {
         }, context);
         await pi.close(context);
         const sql = state.storage.sql;
-        if (version === 2) {
-          // Upstream schema 2 rebuilds only tasks to admit sleeping checkpoints.
-          // The installed schema-1 SDK cannot create this retained state.
-          sql.exec(`CREATE TABLE pi_tasks_v2 (
+        // pi-durable ≥1.4 opens SQLite at schema 2. Keep a schema-1 fixture by
+        // rebuilding the task table without `sleeping` so cold reads still cover
+        // retained pre-migration stores without resuming tasks.
+        if (version === 1) {
+          sql.exec(`CREATE TABLE pi_tasks_v1 (
           id INTEGER PRIMARY KEY, conversation_id INTEGER NOT NULL, kind TEXT NOT NULL,
-          status TEXT NOT NULL CHECK (status IN ('pending', 'running', 'waiting', 'sleeping', 'completing', 'terminal')),
+          status TEXT NOT NULL CHECK (status IN ('pending', 'running', 'waiting', 'completing', 'terminal')),
           abort_requested INTEGER NOT NULL CHECK (abort_requested IN (0, 1)),
           background INTEGER NOT NULL CHECK (background IN (0, 1)),
           record TEXT NOT NULL CHECK (json_valid(record))
         ) STRICT`);
-          sql.exec("INSERT INTO pi_tasks_v2 SELECT * FROM pi_tasks");
+          sql.exec("INSERT INTO pi_tasks_v1 SELECT * FROM pi_tasks");
           sql.exec("DROP TABLE pi_tasks");
-          sql.exec("ALTER TABLE pi_tasks_v2 RENAME TO pi_tasks");
+          sql.exec("ALTER TABLE pi_tasks_v1 RENAME TO pi_tasks");
           sql.exec(
-            "UPDATE pi_durable_schema SET version = 2 WHERE singleton = 1",
+            "UPDATE pi_durable_schema SET version = 1 WHERE singleton = 1",
           );
         }
         sql.exec(
