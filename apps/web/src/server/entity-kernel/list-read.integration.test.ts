@@ -350,6 +350,7 @@ describe("complete list composition", () => {
       "purchase",
       "financialAccount",
       "financialTransaction",
+      "recipe",
     ] as const) {
       const full = await executeEntity(context, {
         action: "list",

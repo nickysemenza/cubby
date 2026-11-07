@@ -2,6 +2,7 @@ import { seedCostedIngredientPrerequisite } from "./fixtures/recipes";
 import {
   SHORTCODE,
   fillInput,
+  gotoAuthenticatedPage,
   selectComboboxItem,
   uniqueName,
   waitForFormHydration,
@@ -107,5 +108,16 @@ test.describe("Create Recipe - Full Flow", () => {
     await expect(
       page.getByRole("heading", { name: recipeName, level: 1 }),
     ).toBeVisible();
+
+    await gotoAuthenticatedPage(
+      page,
+      `/recipes?name=${encodeURIComponent(recipeName)}&view=table`,
+    );
+    const recipeRow = page.getByRole("row").filter({ hasText: recipeName });
+    await expect(recipeRow).toBeVisible();
+    // The numeric serving count is empty for a yield measured in cookies.
+    await page.getByRole("button", { name: /empty columns hidden/ }).click();
+    await page.getByRole("menuitem", { name: "Show all", exact: true }).click();
+    await expect(recipeRow).toContainText("12 cookies");
   });
 });
