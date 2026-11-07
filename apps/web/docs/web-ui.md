@@ -226,7 +226,11 @@ instead of expanding the page. Decorated cells render through
 controls (explanation, relation workbench, resolution marks) use `CellFrame
 overlay` and reserve no width; they mount only in the hovered or focused cell
 and stand aside (transparent, click-through) over clipped text, where the cell
-spill draws them after the full value. A derived value reads muted and
+spill draws them after the full value. Missing derived values use the shared
+`MissingFieldValue` icon with a focusable explanation: idle means “Not calculated yet”, queued and waiting work use a clock,
+only an observed current execution spins, and failures retain their unavailable
+label and error control. Status explanations use the body font even in numeric columns. Retain existing values
+during refreshes. A derived value reads muted and
 suggestion marks stay in flow. Rich reference cells put their edit pencil in
 that same `CellFrame overlay` rail so it cannot intercept a category link or
 `ChipCluster` overflow control. One-line chip lists use `ChipCluster

@@ -2,7 +2,9 @@ import {
   fieldDecisionOf,
   type ReadableFieldEnvelope,
 } from "@cubby/schemas/field-envelope";
-import { fieldMissingLabel } from "@cubby/schemas/field-envelope-presentation";
+import { ArrowClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowClockwise";
+import { CircleDashedIcon } from "@phosphor-icons/react/dist/csr/CircleDashed";
+import { ClockIcon } from "@phosphor-icons/react/dist/csr/Clock";
 import { cn } from "cn";
 import { useEffect, useState, type ReactNode } from "react";
 
@@ -77,6 +79,74 @@ export function UpdatingDot({
   );
 }
 
+/** Missing is not evidence that work is running; keep the work state explicit. */
+export function MissingFieldValue({
+  envelope,
+  interactive = true,
+}: {
+  envelope: ReadableFieldEnvelope;
+  interactive?: boolean;
+}) {
+  const work = envelope.work;
+  const running = useFieldExecutionCurrent(
+    work.kind === "pending" ? work.execution : undefined,
+  );
+  if (work.kind === "failed")
+    return <span className="font-sans text-muted-foreground">Unavailable</span>;
+  const label =
+    work.kind === "pending"
+      ? pendingWorkLabel(work, running)
+      : work.kind === "waiting"
+        ? "Waiting to refresh"
+        : "Not calculated yet";
+  const detail =
+    work.kind === "waiting"
+      ? work.reason
+      : work.kind === "idle"
+        ? "No refresh is currently queued."
+        : null;
+  const Icon = running
+    ? ArrowClockwiseIcon
+    : work.kind === "pending" || work.kind === "waiting"
+      ? ClockIcon
+      : CircleDashedIcon;
+  if (!interactive)
+    return (
+      <span
+        title={detail ? `${label}. ${detail}` : label}
+        aria-label={label}
+        className="inline-flex font-sans text-muted-foreground"
+      >
+        <Icon
+          aria-hidden="true"
+          className={cn("size-3", running && "motion-safe:animate-spin")}
+        />
+      </span>
+    );
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <button
+            type="button"
+            aria-label={label}
+            className="inline-flex shrink-0 items-center font-sans text-muted-foreground"
+          />
+        }
+      >
+        <Icon
+          aria-hidden="true"
+          className={cn("size-3", running && "motion-safe:animate-spin")}
+        />
+      </TooltipTrigger>
+      <TooltipContent className="max-w-80 font-sans break-words">
+        <p>{label}</p>
+        {detail ? <p>{detail}</p> : null}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
 /** Marks stay in the value flow, independent of hover-only cell controls. */
 export function FieldValueMark({
   envelope,
@@ -137,7 +207,7 @@ export function FieldValueMark({
       ) : null}
       <span className="min-w-0 truncate">
         {missing && envelope ? (
-          fieldMissingLabel(envelope.work)
+          <MissingFieldValue envelope={envelope} interactive={interactive} />
         ) : auto ? (
           <RecordPillTreatmentContext.Provider value={{ kind: "auto" }}>
             {children}
@@ -159,7 +229,7 @@ export function FieldValueMark({
           <TooltipContent>{AUTO_LABEL}</TooltipContent>
         </Tooltip>
       ) : null}
-      {updating && error === null ? (
+      {!missing && updating && error === null ? (
         <UpdatingDot label={refreshLabel} active={running} />
       ) : null}
       {error !== null && !interactive ? (

@@ -51,7 +51,6 @@ describe.each(["compact", "full"] as const)(
 
     it("keeps an unpublished pending result distinct from zero and pricing counts", () => {
       show(envelope({ kind: "missing" }, { kind: "pending" }));
-      expect(screen.getByText("Updating…")).toBeVisible();
       expect(screen.getByLabelText("Queued for refresh")).toBeVisible();
       expect(screen.queryByText(/\$/)).not.toBeInTheDocument();
       expect(screen.queryByText(/no pricing/)).not.toBeInTheDocument();
@@ -70,7 +69,9 @@ describe.each(["compact", "full"] as const)(
       expect(screen.getByText("—")).toBeVisible();
       expect(screen.queryByText(/\$/)).not.toBeInTheDocument();
       expect(screen.queryByText(/no pricing/)).not.toBeInTheDocument();
-      expect(screen.queryByText("Updating…")).not.toBeInTheDocument();
+      expect(
+        screen.queryByLabelText("Queued for refresh"),
+      ).not.toBeInTheDocument();
     });
 
     it("renders a successful numeric zero and its supplied pricing counts", () => {

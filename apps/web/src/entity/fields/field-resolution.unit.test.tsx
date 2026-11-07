@@ -174,7 +174,7 @@ it("distinguishes a missing computation from successful empty and retains its fa
       Not recorded
     </FieldRecordValue>,
   );
-  expect(screen.getByText("Updating…")).toBeVisible();
+  expect(screen.getByLabelText("Not calculated yet")).toBeVisible();
   expect(screen.queryByText("Not recorded")).not.toBeInTheDocument();
   const error = "Synthetic initial computation failed";
   view.rerender(
@@ -217,5 +217,5 @@ it("distinguishes a missing computation from successful empty and retains its fa
     </FieldRecordValue>,
   );
   expect(screen.getByText("None")).toBeVisible();
-  expect(screen.queryByText("Updating…")).not.toBeInTheDocument();
+  expect(screen.queryByLabelText("Not calculated yet")).not.toBeInTheDocument();
 });

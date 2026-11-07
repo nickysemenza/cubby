@@ -1,9 +1,9 @@
 import type { EntityFieldEnvelopeRead } from "@cubby/schemas/entity-field-envelopes";
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
-import { fieldMissingLabel } from "@cubby/schemas/field-envelope-presentation";
 import { countLabel } from "@cubby/shared/pluralize";
 
 import { formatCurrency } from "~/lib/number-format";
+import { MissingFieldValue } from "~/ui/derived/value-mark";
 import {
   Tooltip,
   TooltipContent,
@@ -18,11 +18,7 @@ export function ProductCostValue({
   envelope: EntityFieldEnvelopeRead<"product", "output">["fields"]["cost"];
 }) {
   if (envelope.result.kind === "missing")
-    return (
-      <span className="text-muted-foreground">
-        {fieldMissingLabel(envelope.work)}
-      </span>
-    );
+    return <MissingFieldValue envelope={envelope} />;
   const cost = fieldValueOf(envelope);
   if (!cost) return <NoneValue />;
   if (cost.kind === "item") return formatCurrency(cost.amount);

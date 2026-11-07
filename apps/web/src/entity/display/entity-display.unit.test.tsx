@@ -261,7 +261,7 @@ describe("declared entity displays", () => {
       renderRowCell(column.cell, record),
     );
     const view = render(<>{cell}</>, { wrapper: harness.wrapper });
-    expect(screen.getByText("Updating…")).toBeInTheDocument();
+    expect(screen.getByLabelText("Queued for refresh")).toBeInTheDocument();
     view.unmount();
     harness.dispose();
   });
