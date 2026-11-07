@@ -2,6 +2,7 @@ import { entityRefKey } from "@cubby/schemas/entity";
 import { fieldEnvelopeFor, fieldValueOf } from "@cubby/schemas/field-envelope";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { rawLocationList } from "@cubby/schemas/location-raw-read";
+import { recordSourceTransactionRecordsInput } from "@cubby/schemas/source-transaction-record";
 import { eq, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { taxonomyShortcode } from "tooling/product-category-fixtures";
@@ -15,6 +16,7 @@ import { getDb, mapImages } from "~/server/db/helpers";
 import {
   entityAttachment,
   financialTransaction,
+  financialEvidenceAlias,
   sourceTransactionRecord,
   image,
   imageDerivative,
@@ -46,7 +48,10 @@ import {
   locationSearch,
 } from "~/server/domains/location/repo/crud";
 import { buildLocationTree } from "~/server/domains/location/repo/tree";
-import { updateSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
+import {
+  recordSourceTransactionRecords,
+  updateSourceTransactionRecords,
+} from "~/server/domains/transaction-import/repo/source-transaction-record";
 import { listSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record.fixtures";
 import { createFinancialEvidenceFixture } from "~/server/domains/transaction-import/repo/source-transaction-record.fixtures";
 import { createVendor } from "~/server/domains/vendor/repo/vendor";
@@ -102,7 +107,7 @@ import {
 describe("entity display image resolver", () => {
   const ctx = withTestDb();
 
-  it("borrows a source record logo only through live accepted evidence", async () => {
+  it("borrows source logos through live transactions and retained historical evidence", async () => {
     const { record } = await createFinancialEvidenceFixture(ctx.db);
     const ref = {
       entityKind: "sourceTransactionRecord",
@@ -158,6 +163,77 @@ describe("entity display image resolver", () => {
       url: getR2PublicUrl(logo.key),
       representations: expectedRepresentations(logo.key),
     });
+    const retained = await recordSourceTransactionRecords(
+      ctx.db,
+      recordSourceTransactionRecordsInput.parse({
+        import: {
+          source: "synthetic-media-history",
+          label: "Synthetic retained media",
+          fingerprint: crypto.randomUUID(),
+        },
+        rows: [
+          {
+            rowPosition: 1,
+            providerTransactionId: "synthetic-historical-media",
+            accountDescriptor: "Synthetic retained account",
+            statementDate: "2026-01-01",
+            providerAmount: -1,
+            rawDescription: "SYNTHETIC RETAINED MEDIA",
+          },
+        ],
+      }),
+      ctx.actor,
+    );
+    if (!retained.batchId) throw new Error("Synthetic retained import missing");
+    const [historical] = await getDb(ctx.db)
+      .select()
+      .from(sourceTransactionRecord)
+      .where(eq(sourceTransactionRecord.batchId, retained.batchId));
+    if (!historical) throw new Error("Synthetic retained source missing");
+    const retainedKey = `synthetic-media-${crypto.randomUUID()}`;
+    // Tombstoned aliases remain visual history; they do not accept ownership.
+    await getDb(ctx.db)
+      .insert(financialEvidenceAlias)
+      .values([
+        {
+          source: historical.source,
+          kind: "legacyReference",
+          value: retainedKey,
+          observationId: historical.id,
+          occurrenceId: historical.occurrenceId,
+          provenanceKey: `${retainedKey}-observation`,
+          provenance: { kind: "retained_legacy_binding" },
+          scopeEvidence: {},
+          deletedAt: new Date(),
+        },
+        {
+          source: historical.source,
+          kind: "transaction_ref",
+          value: retainedKey,
+          historicalTransactionId: transaction.entityId,
+          provenanceKey: `${retainedKey}-transaction`,
+          provenance: { kind: "retained_legacy_binding" },
+          scopeEvidence: {},
+          deletedAt: new Date(),
+        },
+      ]);
+    const refs: Parameters<typeof resolveEntityDisplayMedia>[1] = [
+      { entityKind: "sourceTransactionRecord", entityId: record.id },
+      { entityKind: "sourceTransactionRecord", entityId: historical.id },
+      { entityKind: "vendor", entityId: seller.entityId },
+    ];
+    const full = await resolveEntityDisplayMedia(ctx.db, refs);
+    const covers = await resolveEntityDisplayCovers(ctx.db, refs);
+    for (const entry of refs) {
+      const entryKey = entityRefKey(entry.entityKind, entry.entityId);
+      expect(full.displayImages.get(entryKey)).toEqual([
+        expectedDisplayImage(logo),
+      ]);
+      expect(covers.displayCovers.get(entryKey)).toEqual({
+        image: expectedDisplayImage(logo),
+        count: 1,
+      });
+    }
     await getDb(ctx.db)
       .update(financialTransaction)
       .set({ deletedAt: new Date() })
