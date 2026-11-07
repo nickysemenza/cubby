@@ -295,8 +295,10 @@ export async function advanceStepRun(
   const stamp = stampOf(params.attempt);
   const waitSeconds = remainingStepWaitSeconds(next);
   if (waitSeconds !== null) return { kind: "continue", waitSeconds };
-  // Only a reopened step is queued after it has already run pages.
-  const retrying = next.state === "queued" && next.pages > 0;
+  // Retained failures can predate committed pages; reopening records their retry separately.
+  const retrying =
+    next.state === "queued" &&
+    (next.pages > 0 || (next.meta?.retriedFailures ?? 0) > 0);
   const context = (step: RunStepRow): StepContext => ({
     db,
     run: owner,

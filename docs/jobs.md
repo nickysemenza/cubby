@@ -116,6 +116,7 @@ evaluations settled; that step still needs to publish its final tally. Other
 cancellations remain stopped. Retry failed on a cancelled Sweep step with
 no failed items directs the member to Retry run. Actual failures remain
 retryable without reviving the cancelled remainder.
+A retained step with zero committed pages still retries its full failed roster.
 Mailbox discovery acquires at most five messages from its frozen provider page
 per Job claim. Its durable message offset resumes the remaining messages without
 replaying the completed prefix; absent offsets on retained pages mean zero.

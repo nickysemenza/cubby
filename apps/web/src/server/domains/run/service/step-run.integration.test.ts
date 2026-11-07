@@ -33,7 +33,7 @@ import {
  * `total` makes it a `count` step whose COUNT the engine calls.
  */
 function scripted(key: string, pages: StepPage[], total?: number) {
-  const seen: { cursor: unknown; retried: unknown }[] = [];
+  const seen: { cursor: unknown; retried: unknown; retrying: boolean }[] = [];
   let counts = 0;
   const declaration: RunStepDeclaration = {
     key,
@@ -53,8 +53,12 @@ function scripted(key: string, pages: StepPage[], total?: number) {
         return { total, boundary: null };
       },
     }),
-    page: async ({ step }) => {
-      seen.push({ cursor: step.cursor, retried: step.meta?.retryRefs });
+    page: async ({ step, retrying }) => {
+      seen.push({
+        cursor: step.cursor,
+        retried: step.meta?.retryRefs,
+        retrying,
+      });
       const next = pages.shift();
       if (!next) throw new Error(`${key} has no scripted page left`);
       return next;
@@ -688,33 +692,42 @@ describe("step-ledger Runs", () => {
 
   // Failure mode (review): the error sample holds 20, so a retry that read it
   // re-admitted 20 failures and silently dropped the rest.
-  it("re-admits every failed item on retry, not only the displayed sample", async () => {
-    const { id, params } = await startRun();
-    const refs = Array.from({ length: 25 }, (_, n) => `image:synthetic-${n}`);
-    const exif = scripted(
-      "exif",
-      [
-        {
-          kind: "progress",
-          delta: { failed: 25 },
-          errors: refs.map((ref) => ({
-            at: new Date().toISOString(),
-            message: "R2 object not found (404)",
-            ref,
-          })),
-          done: true,
-        },
-      ],
-      25,
-    );
-    await drive(params, [exif.entry]);
-    expect((await readRunSteps(ctx.db, id))[0]?.errors).toHaveLength(20);
-    exif.pages.push({ kind: "progress", delta: { done: 25 }, done: true });
-    await retryRunStep(ctx.db, id, "exif");
-    const attempt = attemptOf(await readRun(id));
-    await drive({ runId: id, attempt }, [exif.entry]);
-    expect(exif.seen.at(-1)?.retried).toEqual(refs);
-  });
+  it.each([0, 1])(
+    "re-admits every failed item on retry after %i committed pages",
+    async (pages) => {
+      const { id, params } = await startRun();
+      const refs = Array.from({ length: 25 }, (_, n) => `image:synthetic-${n}`);
+      const exif = scripted(
+        "exif",
+        [
+          {
+            kind: "progress",
+            delta: { failed: 25 },
+            errors: refs.map((ref) => ({
+              at: new Date().toISOString(),
+              message: "R2 object not found (404)",
+              ref,
+            })),
+            done: true,
+          },
+        ],
+        25,
+      );
+      await drive(params, [exif.entry]);
+      expect((await readRunSteps(ctx.db, id))[0]?.errors).toHaveLength(20);
+      // Historical failures can predate the page ledger while retaining their full failure roster.
+      await getDb(ctx.db)
+        .update(runStep)
+        .set({ pages })
+        .where(eq(runStep.runId, id));
+      exif.pages.push({ kind: "progress", delta: { done: 25 }, done: true });
+      await retryRunStep(ctx.db, id, "exif");
+      const attempt = attemptOf(await readRun(id));
+      await drive({ runId: id, attempt }, [exif.entry]);
+      expect(exif.seen.at(-1)?.retried).toEqual(refs);
+      expect(exif.seen.at(-1)?.retrying).toBe(true);
+    },
+  );
 
   // Failure mode (review): reconcile fails a Run whose first dispatch was lost,
   // and recovery only looked at running attempt-0 Runs, so it never relaunched.
