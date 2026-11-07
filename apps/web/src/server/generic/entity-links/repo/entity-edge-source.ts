@@ -552,6 +552,13 @@ export async function readMergeCandidates(
 ): Promise<
   { id: string; code: string; createdAt: string; connectionCount: number }[]
 > {
+  const identityResult = await unwrapDb(db).execute(sql`
+    SELECT e."id", e."shortcode", e."createdAt" FROM "Entity" e
+    WHERE e."kind" = ${kind} AND ${notDeleted("e")}
+      AND e."shortcode" IN (${sql.join(
+        codes.map((code) => sql`${code}`),
+        sql`, `,
+      )})`);
   const identities = z
     .array(
       z.object({
@@ -560,17 +567,7 @@ export async function readMergeCandidates(
         createdAt: z.coerce.date(),
       }),
     )
-    .parse(
-      (
-        await unwrapDb(db).execute(sql`
-          SELECT e."id", e."shortcode", e."createdAt" FROM "Entity" e
-          WHERE e."kind" = ${kind} AND ${notDeleted("e")}
-            AND e."shortcode" IN (${sql.join(
-              codes.map((code) => sql`${code}`),
-              sql`, `,
-            )})`)
-      ).rows,
-    );
+    .parse(identityResult.rows);
   const byCode = new Map(
     identities.map((identity) => [identity.shortcode, identity]),
   );
@@ -588,23 +585,21 @@ export async function readMergeCandidates(
     );
   }
   const specs = ENTITY_EDGE_SPECS.filter((spec) => spec.targetKind === kind);
-  const counts = new Map(
+  const countResult =
     specs.length === 0
-      ? []
-      : z
-          .array(z.object({ targetId: z.string(), count: z.number().int() }))
-          .parse(
-            (
-              await unwrapDb(db).execute(sql`
-                SELECT edge."targetId", count(*)::integer AS "count"
-                FROM (${entityEdgeSourceSql(specs, {
-                  side: "targets",
-                  ids: identities.map((identity) => identity.id),
-                })}) edge
-                GROUP BY edge."targetId"`)
-            ).rows,
-          )
-          .map((row) => [row.targetId, row.count]),
+      ? undefined
+      : await unwrapDb(db).execute(sql`
+          SELECT edge."targetId", count(*)::integer AS "count"
+          FROM (${entityEdgeSourceSql(specs, {
+            side: "targets",
+            ids: identities.map((identity) => identity.id),
+          })}) edge
+          GROUP BY edge."targetId"`);
+  const counts = new Map(
+    z
+      .array(z.object({ targetId: z.string(), count: z.number().int() }))
+      .parse(countResult?.rows ?? [])
+      .map((row) => [row.targetId, row.count]),
   );
   return ordered.map((identity) => ({
     id: identity.id,
