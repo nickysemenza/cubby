@@ -64,17 +64,20 @@ export const sourceObservationHistoricalLinks = sql`(
     JOIN evidence_history evidence ON evidence."occurrenceId"=sibling."occurrenceId"
     WHERE sibling."observationId" IS NOT NULL AND sibling."occurrenceId" IS NOT NULL
   ),
+  history_keys AS MATERIALIZED (
+    SELECT DISTINCT source, value FROM key_history
+  ),
   observation_keys AS MATERIALIZED (
-    -- Map each relevant alias to its observations before expanding history pairs.
+    -- includes-deleted: retained alias tombstones stay in presentation history; map keys before expansion.
     SELECT observed."observationId", observed.source, observed.value
     FROM "FinancialEvidenceAlias" observed
+    JOIN history_keys keys ON keys.source=observed.source AND keys.value=observed.value
     WHERE observed."observationId" IS NOT NULL
-      AND (observed.source, observed.value) IN (SELECT source, value FROM key_history)
     UNION
     SELECT record.id, observed.source, observed.value
     FROM "SourceTransactionRecord" record
     JOIN "FinancialEvidenceAlias" observed ON observed."occurrenceId"=record."occurrenceId"
-    WHERE (observed.source, observed.value) IN (SELECT source, value FROM key_history)
+    JOIN history_keys keys ON keys.source=observed.source AND keys.value=observed.value
   ),
   history AS MATERIALIZED (
     SELECT DISTINCT observed."observationId", history."historicalTransactionId", history.code
