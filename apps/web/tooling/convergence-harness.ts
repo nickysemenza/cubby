@@ -38,10 +38,10 @@ import { resolveMail } from "~/server/domains/purchase-import/operations/mail-to
 import { getDb } from "~/server/db/helpers";
 import { effectiveExpenseSpendingCategorySql } from "~/server/domains/expense/repo/expense-category-resolution";
 import {
-  IMAGE_DESCRIPTION_PROCESSOR_REVISION,
   claimImageProcessingJob,
   completeImageProcessingJob,
 } from "~/server/domains/image-processing/repo/image-processing";
+import { IMAGE_DESCRIPTION_PROCESSOR_REVISION } from "~/server/domains/image-processing/repo/processor-policy";
 import { assignImageProcessingExecutor } from "~/server/domains/image-processing/repo/image-processing-history";
 import { imageDescriptionInputFingerprint } from "~/server/domains/image-processing/repo/description-policy";
 

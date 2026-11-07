@@ -24,7 +24,7 @@ import {
 import {
   IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
   IMAGE_DESCRIPTION_PROCESSOR_REVISION,
-} from "~/server/domains/image-processing/repo/image-processing";
+} from "~/server/domains/image-processing/repo/processor-policy";
 import { productionPhotoImportCommitPorts } from "~/server/domains/photo-import/repo/photo-import-commit";
 import { retireSettledCoordinators } from "~/server/domains/purchase-import/repo/run-retirement";
 import {

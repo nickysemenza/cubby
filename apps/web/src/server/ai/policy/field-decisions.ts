@@ -14,13 +14,14 @@ import {
 import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
 import { z } from "zod";
 
+import type { AiDecisionFeature } from "~/server/ai/policy/feature-identity";
+
 import {
   buildChoiceInput,
   classificationPrompt,
   type DecisionChoicePrompt,
   selectionPrompt,
 } from "./decision-choice";
-import type { AiDecisionFeature } from "./feature-identity";
 import { FIELD_SUGGESTION_FEATURE } from "./features";
 import {
   fieldSuggestDecisionFor,

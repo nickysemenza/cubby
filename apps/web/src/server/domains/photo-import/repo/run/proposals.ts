@@ -89,11 +89,11 @@ import {
   entityExternalId,
 } from "~/server/db/schema";
 import { imageJobDisplayStateSql } from "~/server/domains/image-processing/repo/image-job-state";
+import { loadImageRepresentations } from "~/server/domains/image-processing/repo/image-processing";
 import {
   IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
   IMAGE_DESCRIPTION_PROCESSOR_REVISION,
-  loadImageRepresentations,
-} from "~/server/domains/image-processing/repo/image-processing";
+} from "~/server/domains/image-processing/repo/processor-policy";
 import { loadImageAnalysisEvidence } from "~/server/domains/image/repo/image-analysis-summary";
 import { loadLocationAncestors } from "~/server/domains/location/repo/tree";
 import { photoFieldCrossCheck } from "~/server/domains/photo-import/repo/photo-correctness";

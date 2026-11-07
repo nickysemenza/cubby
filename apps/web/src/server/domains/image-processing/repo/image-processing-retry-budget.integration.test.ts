@@ -16,6 +16,7 @@ import {
   readImageExecution,
   updateImageExecution,
 } from "~/server/domains/image-processing/repo/image-execution.fixtures";
+import { IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION } from "~/server/domains/image-processing/repo/processor-policy";
 import { claimCompanionImageCommands } from "~/server/domains/image-processing/service/image-processing.service";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
 
@@ -24,7 +25,6 @@ import {
   claimImageProcessingJob,
   completeImageProcessingJob,
   createTransparentDerivativeAndJob,
-  IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION,
   retryImageProcessingNow,
 } from "./image-processing";
 

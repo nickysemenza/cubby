@@ -13,13 +13,13 @@ import { readDeviceById } from "~/server/domains/device/repo/device";
 import { upsertDeviceFromHello } from "~/server/domains/device/repo/device-participation";
 import { imageJobRepository } from "~/server/domains/image-job/repo";
 import { updateImageExecution } from "~/server/domains/image-processing/repo/image-execution.fixtures";
+import { IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION } from "~/server/domains/image-processing/repo/processor-policy";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 
 import {
   claimImageProcessingJob,
   createImageProcessingJob,
-  IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
 } from "./image-processing";
 import { assignImageProcessingExecutor } from "./image-processing-history";
 

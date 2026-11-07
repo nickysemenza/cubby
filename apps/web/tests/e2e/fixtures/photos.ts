@@ -17,7 +17,7 @@ import {
 import {
   IMAGE_DESCRIPTION_PROCESSOR_REVISION,
   IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION,
-} from "~/server/domains/image-processing/repo/image-processing";
+} from "~/server/domains/image-processing/repo/processor-policy";
 import { getDb } from "~/server/db/helpers";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { insertEntityFixtures } from "~/server/testing/repo.fixtures";

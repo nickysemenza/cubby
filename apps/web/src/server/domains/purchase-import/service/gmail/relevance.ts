@@ -11,8 +11,8 @@ import {
 } from "@cubby/shared/external-fetch";
 
 import { scrubErrorMessage } from "~/lib/error-diagnostics";
+import type { AiChatRequest } from "~/server/ai/policy/feature-identity";
 import { MAILBOX_RELEVANCE_FEATURE } from "~/server/ai/policy/features";
-import type { AiChatRequest } from "~/server/ai/run-feature";
 import {
   ModelImageInputError,
   prepareModelImage,

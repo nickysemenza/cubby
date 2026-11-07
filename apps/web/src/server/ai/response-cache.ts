@@ -8,7 +8,7 @@ import { createLogger } from "@cubby/worker-tracing";
 import { z } from "zod";
 
 import type { UnparsedError } from "~/lib/error-utils";
-import type { AiChatRequest } from "~/server/ai/run-feature";
+import type { AiChatRequest } from "~/server/ai/policy/feature-identity";
 import { getAiResponseCacheNamespace } from "~/server/cf-env";
 import { inJobExecution } from "~/server/generic/jobs/context";
 import { JobDeferredError } from "~/server/generic/jobs/errors";

@@ -18,6 +18,10 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import { notDeleted, unwrapDb } from "~/server/db/helpers";
 import { imageProcessingAttempt } from "~/server/db/image-processing-schema";
 import { device, imageProcessingJob } from "~/server/db/schema";
+import {
+  IMAGE_DESCRIPTION_PROCESSOR_REVISION,
+  IMAGE_IDENTIFICATION_PROCESSOR_REVISION,
+} from "~/server/domains/image-processing/repo/processor-policy";
 import { defineRepository } from "~/server/entity-kernel/repo/repository";
 import { listReadValue } from "~/server/generic/list/repo/field-compiler";
 import { listScaffold } from "~/server/generic/list/repo/list";
@@ -28,10 +32,6 @@ import {
   imageJobDisplayStateSql,
   imageJobWaitingOn,
 } from "../image-processing/repo/image-job-state";
-import {
-  IMAGE_DESCRIPTION_PROCESSOR_REVISION,
-  IMAGE_IDENTIFICATION_PROCESSOR_REVISION,
-} from "../image-processing/repo/image-processing";
 
 type ImageJobRow = typeof imageProcessingJob.$inferSelect;
 

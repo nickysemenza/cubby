@@ -29,7 +29,7 @@ import {
 import {
   IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
   IMAGE_DESCRIPTION_PROCESSOR_REVISION,
-} from "~/server/domains/image-processing/repo/image-processing";
+} from "~/server/domains/image-processing/repo/processor-policy";
 import { deleteImages } from "~/server/domains/image/repo/image";
 import { mergeLedgerParties } from "~/server/domains/ledger-party/repo/ledger-party";
 import { mergeProducts } from "~/server/domains/product/repo/merge";

@@ -26,10 +26,8 @@ import {
   project,
 } from "~/server/db/schema";
 import { upsertCookbook } from "~/server/domains/cookbook/repo/cookbook";
-import {
-  createImageProcessingJob,
-  IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION,
-} from "~/server/domains/image-processing/repo/image-processing";
+import { createImageProcessingJob } from "~/server/domains/image-processing/repo/image-processing";
+import { IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION } from "~/server/domains/image-processing/repo/processor-policy";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
 import { createFinancialEvidenceFixture } from "~/server/domains/transaction-import/repo/source-transaction-record.fixtures";
 import type { UsdaReleaseRpc } from "~/server/domains/usda-release/operations/rpc";

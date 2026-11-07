@@ -20,6 +20,10 @@ import {
   readImageExecutions,
   updateImageExecution,
 } from "~/server/domains/image-processing/repo/image-execution.fixtures";
+import {
+  IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
+  IMAGE_DESCRIPTION_PROCESSOR_REVISION,
+} from "~/server/domains/image-processing/repo/processor-policy";
 import * as companionDispatch from "~/server/domains/image-processing/service/dispatch";
 import {
   claimCompanionImageCommands,
@@ -32,8 +36,6 @@ import {
   claimImageProcessingJob,
   completeImageProcessingJob,
   createImageProcessingJob,
-  IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
-  IMAGE_DESCRIPTION_PROCESSOR_REVISION,
   releaseAssignedImageProcessingJob,
   renewAssignedImageProcessingLease,
 } from "./image-processing";

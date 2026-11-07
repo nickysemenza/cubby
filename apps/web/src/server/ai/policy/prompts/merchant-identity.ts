@@ -1,4 +1,4 @@
-import type { AiChatRequest } from "~/server/ai/run-feature";
+import type { AiChatRequest } from "~/server/ai/policy/feature-identity";
 
 export function merchantIdentityRequest(
   merchant: string,

@@ -46,7 +46,6 @@ import { mapImages } from "~/server/db/helpers/transform";
 import { entityAttachment, image } from "~/server/db/schema";
 import { effectiveExpenseProjectSql } from "~/server/domains/expense/repo/expense-inheritance";
 import {
-  IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION,
   compatibleSubjectLiftOutputs,
   loadImageRepresentations,
 } from "~/server/domains/image-processing/repo/image-processing";
@@ -55,6 +54,7 @@ import {
   imageRepresentationRowsSql,
   imageRepresentationsFromRows,
 } from "~/server/domains/image-processing/repo/image-representations";
+import { IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION } from "~/server/domains/image-processing/repo/processor-policy";
 import { displayableImageSql } from "~/server/domains/image/repo/image-displayability";
 import { hydrateImageReadProjection } from "~/server/domains/image/repo/image-read-projection";
 import { suggestedMerchantVendorCandidatesSql } from "~/server/domains/vendor/repo/merchant-vendor-inference";

@@ -26,6 +26,11 @@ import {
   readImageExecutions,
   updateImageExecution,
 } from "~/server/domains/image-processing/repo/image-execution.fixtures";
+import {
+  IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
+  IMAGE_DESCRIPTION_PROCESSOR_REVISION,
+  IMAGE_IDENTIFICATION_PROCESSOR_REVISION,
+} from "~/server/domains/image-processing/repo/processor-policy";
 import { dispatchImageProcessingWakeup } from "~/server/domains/image-processing/service/dispatch";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
 import { getVerifiedImageRendition } from "~/server/domains/image/repo/image-identification";
@@ -33,9 +38,6 @@ import { getVerifiedImageRendition } from "~/server/domains/image/repo/image-ide
 import {
   claimImageProcessingJob,
   completeImageProcessingJob,
-  IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
-  IMAGE_DESCRIPTION_PROCESSOR_REVISION,
-  IMAGE_IDENTIFICATION_PROCESSOR_REVISION,
 } from "./image-processing";
 import { assignImageProcessingExecutor } from "./image-processing-history";
 import { persistImageProcessingSubmission } from "./image-processing-submission";

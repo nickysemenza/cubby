@@ -1,4 +1,4 @@
-import type { AiChatRequest } from "~/server/ai/run-feature";
+import type { AiChatRequest } from "~/server/ai/policy/feature-identity";
 
 const SELECTION_FRAME =
   "You are given a subject and a numbered shortlist. Choose exactly one entry's id, or null when none fits.";

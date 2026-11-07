@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import { getDb } from "~/server/db/helpers";
 import { imageProcessingJob } from "~/server/db/image-processing-schema";
 import { image } from "~/server/db/schema";
+import { IMAGE_DESCRIPTION_PROCESSOR_REVISION } from "~/server/domains/image-processing/repo/processor-policy";
 import { prepareCompanionImageCommand } from "~/server/domains/image-processing/service/dispatch";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
 
@@ -13,7 +14,6 @@ import {
   claimImageProcessingJob,
   createImageProcessingJob,
   createTransparentDerivativeAndJob,
-  IMAGE_DESCRIPTION_PROCESSOR_REVISION,
 } from "./image-processing";
 
 // Subject lift must reach Apple even without a cloud description or when cloud eligibility is
