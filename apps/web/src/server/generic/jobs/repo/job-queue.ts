@@ -35,6 +35,7 @@ import { run } from "~/server/db/schema";
 import { imageJobWaitingOnReasonSql } from "~/server/domains/image-processing/repo/image-job-state";
 import {
   memberStoppedRunPredicate,
+  settledAiRunPredicate,
   retiredRunPredicate,
 } from "~/server/domains/run/repo/work-attention";
 import { recordChange } from "~/server/generic/changes/repo/change";
@@ -42,6 +43,7 @@ import {
   JOB_KIND_POLICY,
   jobKindPolicy,
 } from "~/server/generic/jobs/kind-policy";
+import { runHasLiveJobs } from "~/server/generic/jobs/repo/job-reads";
 import { retryJobsNow } from "~/server/generic/jobs/repo/operator";
 import { type JobRow } from "~/server/generic/jobs/repo/queue";
 import {
@@ -100,8 +102,7 @@ export function runStalledSql(now = new Date()): SQL<boolean> {
   const images = sql`"ImageProcessingJob" p WHERE p."runId" = ${outer(run.id)}`;
   return sql<boolean>`(
     NOT (${run.failureCode} IS NOT DISTINCT FROM 'execution_limit' AND ${run.status} IN (${runStatus.enum.paused_auth}, ${runStatus.enum.needs_review}))
-    AND (EXISTS (SELECT 1 FROM ${demand} d JOIN "Job" j ON j.id = d.job_id
-      WHERE j.state IN (${jobState.enum.queued},${jobState.enum.retry_wait},${jobState.enum.running},${jobState.enum.paused}))
+    AND (${runHasLiveJobs(outer(run.id))}
       OR EXISTS (SELECT 1 FROM ${images} AND p.state = ${imageProcessingJobState.enum.pending}))
     AND NOT EXISTS (SELECT 1 FROM ${demand} d JOIN "Job" j ON j.id = d.job_id
       WHERE j.state = ${jobState.enum.running} AND j."leaseExpiresAt" > ${at})
@@ -121,7 +122,7 @@ export function runNeedsAttentionSql(): SQL<boolean> {
     (next) => sql`${next.predecessorRunId} = ${outer(run.id)}`,
   ).exists();
   return sql<boolean>`(NOT ${memberStoppedRunPredicate(sql`${run.failureCode}`)} AND NOT ${retiredRunPredicate(sql`${run.retiredAt}`)}
-    AND (${runStalledSql()} OR (${run.status} IN (${runStatus.enum.paused},${runStatus.enum.paused_auth},${runStatus.enum.needs_review},${runStatus.enum.failed},${runStatus.enum.dispatch_failed}) AND NOT ${successor})))`;
+    AND (${runStalledSql()} OR (${run.status} IN (${runStatus.enum.paused},${runStatus.enum.paused_auth},${runStatus.enum.needs_review},${runStatus.enum.failed},${runStatus.enum.dispatch_failed}) AND NOT ${successor} AND NOT ${settledAiRunPredicate({ id: outer(run.id), purpose: sql`${run.purpose}`, status: sql`${run.status}`, failureCode: sql`${run.failureCode}` })})))`;
 }
 
 /** One Run's demand as a predicate on "Job". */

@@ -21,9 +21,10 @@ import { z } from "zod";
 import { hasEvaluationRetryReceipt } from "~/server/ai/evaluation/repo/ai-evaluation-requests";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
+import { outer } from "~/server/db/helpers/related";
 import { aiEvaluation, aiEvaluationRequest } from "~/server/db/schema";
 
-export type EvaluationScope = { runId: RunId } & (
+export type EvaluationScope = { runId: RunId | SQL } & (
   | { source: "owned"; connectionsOnly?: boolean }
   | { source: "requested"; executionKind?: string }
 );
@@ -33,7 +34,8 @@ const uuidString = (value: SQLWrapper) =>
   sql`(jsonb_typeof(${value}) = 'string' AND (${value} #>> '{}') ~ ${UUID_PATTERN})`;
 
 const connectionTarget = () => {
-  const field = (key: string) => sql`(${aiEvaluation.target} -> ${key}::text)`;
+  const field = (key: string) =>
+    sql`(${outer(aiEvaluation.target)} -> ${key}::text)`;
   return sql`(${field("kind")} = to_jsonb(${aiEvaluationTargetKind.enum.connection}::text)
     AND jsonb_typeof(${field("entity")}) = 'string'
     AND ${uuidString(field("recordId"))}
@@ -43,46 +45,52 @@ const connectionTarget = () => {
 
 /** A cancelled request hides a falsy receipt; otherwise its own receipt wins over the shared one. */
 const requestedReceipt = () => sql`(CASE
-  WHEN ${aiEvaluationRequest.cancelledAt} IS NOT NULL
-    AND (${aiEvaluationRequest.receipt} IS NULL
-      OR ${aiEvaluationRequest.receipt} IN ('null'::jsonb, 'false'::jsonb, '0'::jsonb, '""'::jsonb))
+  WHEN ${outer(aiEvaluationRequest.cancelledAt)} IS NOT NULL
+    AND (${outer(aiEvaluationRequest.receipt)} IS NULL
+      OR ${outer(aiEvaluationRequest.receipt)} IN ('null'::jsonb, 'false'::jsonb, '0'::jsonb, '""'::jsonb))
   THEN NULL
-  ELSE coalesce(NULLIF(${aiEvaluationRequest.receipt}, 'null'::jsonb), ${aiEvaluation.receipt})
+  ELSE coalesce(NULLIF(${outer(aiEvaluationRequest.receipt)}, 'null'::jsonb), ${outer(aiEvaluation.receipt)})
 END)`;
 
 function reads(scope: EvaluationScope) {
   const owned = scope.source === "owned";
   const state = owned
-    ? sql`${aiEvaluation.state}`
-    : sql`(CASE WHEN ${aiEvaluationRequest.cancelledAt} IS NOT NULL
-        THEN ${aiEvaluationState.enum.cancelled} ELSE ${aiEvaluation.state} END)`;
-  const receipt = owned ? sql`${aiEvaluation.receipt}` : requestedReceipt();
+    ? sql`${outer(aiEvaluation.state)}`
+    : sql`(CASE WHEN ${outer(aiEvaluationRequest.cancelledAt)} IS NOT NULL
+        THEN ${aiEvaluationState.enum.cancelled} ELSE ${outer(aiEvaluation.state)} END)`;
+  const receipt = owned
+    ? sql`${outer(aiEvaluation.receipt)}`
+    : requestedReceipt();
   const error = owned
-    ? sql<string | null>`${aiEvaluation.error}`
+    ? sql<string | null>`${outer(aiEvaluation.error)}`
     : sql<
         string | null
-      >`(CASE WHEN ${aiEvaluationRequest.cancelledAt} IS NOT NULL
-        THEN ${MEMBER_CANCELLED_AI_WORK} ELSE ${aiEvaluation.error} END)`;
+      >`(CASE WHEN ${outer(aiEvaluationRequest.cancelledAt)} IS NOT NULL
+        THEN ${MEMBER_CANCELLED_AI_WORK} ELSE ${outer(aiEvaluation.error)} END)`;
+  const scopeWhere = and(
+    owned
+      ? sql`${outer(aiEvaluation.runId)} = ${scope.runId}`
+      : sql`${outer(aiEvaluationRequest.runId)} = ${scope.runId}`,
+    owned
+      ? scope.connectionsOnly
+        ? connectionTarget()
+        : undefined
+      : scope.executionKind
+        ? sql`${outer(aiEvaluation.executionKind)} = ${scope.executionKind}`
+        : undefined,
+  );
   return {
+    scopeWhere,
+    from: owned
+      ? sql`${aiEvaluation}`
+      : sql`${aiEvaluation} INNER JOIN ${aiEvaluationRequest} ON ${outer(aiEvaluationRequest.evaluationId)} = ${outer(aiEvaluation.id)}`,
     state,
     receipt,
     error,
     order: owned
       ? [aiEvaluation.createdAt, aiEvaluation.id]
       : [aiEvaluationRequest.sequence, aiEvaluationRequest.id],
-    where: and(
-      owned
-        ? eq(aiEvaluation.runId, scope.runId)
-        : eq(aiEvaluationRequest.runId, scope.runId),
-      owned
-        ? scope.connectionsOnly
-          ? connectionTarget()
-          : undefined
-        : scope.executionKind
-          ? sql`${aiEvaluation.executionKind} = ${scope.executionKind}`
-          : undefined,
-      sql`NOT ${hasEvaluationRetryReceipt(receipt)}`,
-    ),
+    where: and(scopeWhere, sql`NOT ${hasEvaluationRetryReceipt(receipt)}`),
     query<S extends SelectedFields>(db: Database, selection: S) {
       const base = getDb(db).select(selection).from(aiEvaluation).$dynamic();
       // A dynamic builder joins in place, so both sources keep one result type.
@@ -94,6 +102,52 @@ function reads(scope: EvaluationScope) {
       return base;
     },
   };
+}
+
+/** Durable roster existence, including handed-off history. */
+export function evaluationRosterExists(scope: EvaluationScope): SQL<boolean> {
+  const { from, scopeWhere } = reads(scope);
+  return sql<boolean>`EXISTS (SELECT 1 FROM ${from} WHERE ${scopeWhere})`;
+}
+
+/**
+ * Current failures/pending work and uncertain handoffs keep recovery visible.
+ * Current writers create forward-only handoffs. Validate retained paths against
+ * manual repairs and future writers too; scoped request receipts still win.
+ * Missing targets, cycles and paths beyond 64 edges fail closed.
+ */
+export function evaluationRecoveryExists(scope: EvaluationScope): SQL<boolean> {
+  const { from, scopeWhere, state, receipt } = reads(scope);
+  const validRetry = hasEvaluationRetryReceipt(sql`walk.receipt`);
+  const nextReceipt =
+    scope.source === "owned"
+      ? sql`next.receipt`
+      : sql`CASE WHEN scoped_target.id IS NOT NULL THEN scoped_target.receipt ELSE next.receipt END`;
+  const scopedTarget =
+    scope.source === "owned"
+      ? sql``
+      : sql`LEFT JOIN roster scoped_target ON scoped_target.id = next.id`;
+  return sql<boolean>`EXISTS (
+    WITH RECURSIVE roster AS MATERIALIZED (
+      SELECT ${outer(aiEvaluation.id)} AS id, ${state} AS state, ${receipt} AS receipt
+      FROM ${from} WHERE ${scopeWhere}
+    ), walk AS (
+      SELECT id, receipt, ARRAY[id] AS path, false AS cycle, false AS dangling FROM roster
+      WHERE receipt ? 'retryEvaluationId'
+      UNION ALL
+      SELECT next.id, ${nextReceipt}, walk.path || next.id,
+        next.id = ANY(walk.path), next.id IS NULL
+      FROM walk LEFT JOIN ${aiEvaluation} next ON next.id = CASE WHEN ${validRetry}
+        THEN (walk.receipt->>'retryEvaluationId')::uuid END
+      ${scopedTarget}
+      WHERE NOT walk.cycle AND NOT walk.dangling AND cardinality(walk.path) < 66
+        AND walk.receipt ? 'retryEvaluationId'
+    )
+    SELECT 1 FROM roster WHERE NOT ${hasEvaluationRetryReceipt(sql`roster.receipt`)}
+      AND state NOT IN (${aiEvaluationState.enum.completed}, ${aiEvaluationState.enum.blocked}, ${aiEvaluationState.enum.obsolete}, ${aiEvaluationState.enum.cancelled})
+    UNION ALL
+    SELECT 1 FROM walk WHERE cycle OR dangling OR cardinality(path) >= 66
+  )`;
 }
 
 function tallyColumns(state: SQL) {
