@@ -209,7 +209,7 @@ export function listReadPlan<Row>(
     return {
       load: get,
       fields: (picked, value, bindingOptions) => ({
-        schema: picked.strict(),
+        schema: picked,
         scope: bindingOptions?.scope,
         storedKeys: bindingOptions?.storedKeys,
         prefetch: prefetchPage
@@ -234,7 +234,7 @@ export function listReadPlan<Row>(
       ) => z.output<z.ZodObject<Fields>>,
       bindingOptions?: BindingOptions,
     ): ListReadBinding<Row> => ({
-      schema: picked.strict(),
+      schema: picked,
       scope: bindingOptions?.scope,
       storedKeys: bindingOptions?.storedKeys,
       value: (row, _page, context) => value(row, context),
@@ -284,7 +284,11 @@ export function listReadPlan<Row>(
       { storedKeys: field.storedKey ? [field.storedKey] : [] },
     );
   });
-  const bindings = [...resultBindings, ...declaredBindings];
+  // Directly supplied bindings retain the same strict validation as builder outputs.
+  const bindings = [...resultBindings, ...declaredBindings].map((binding) => ({
+    ...binding,
+    schema: binding.schema.strict(),
+  }));
   const written = new Set<string>(["id", "dataQuality", "displayImages"]);
   // A key may have one page writer and one detail-scoped writer: the record
   // read takes the richer detail value, a page keeps its own.
