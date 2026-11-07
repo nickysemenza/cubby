@@ -371,7 +371,8 @@ the provider retry time. Neither consumes an attempt or discards frozen input,
 page evidence or the Job cursor. Generic early retries leave a funding-paused Run
 waiting while its funding-resume Job is pending. An explicit Run launch or
 Resume makes its retained queued/backing-off Job due immediately, preserving
-its generation, attempts and cursor; the next page still checks current funding
+its generation, attempts and cursor and clearing the old wait reason; the next
+page still checks current funding
 and may pause again. Resume creates no paid grant; `run_now_paid` uses its explicit
 paid authority. An explicit budget increase also restores funding-paused
 discovery before bringing queued Jobs forward; member pauses remain stopped.

@@ -168,6 +168,7 @@ describe("Run Job admission", () => {
     });
     const [waiting] = await readJobs(ctx.db, { key: `run:${id}` });
     expect(waiting?.availableAt).toEqual(fundingDeadline);
+    expect(waiting?.waitReason).toBe("ai_funding_window");
     await getDb(ctx.db)
       .update(run)
       .set({
@@ -182,6 +183,7 @@ describe("Run Job admission", () => {
       generation: execution.generation,
       attempts: 1,
       cursor,
+      waitReason: null,
     });
     if (!resumed) throw new Error("Missing resumed execution");
     expect(resumed.availableAt.getTime()).toBeLessThanOrEqual(Date.now());
