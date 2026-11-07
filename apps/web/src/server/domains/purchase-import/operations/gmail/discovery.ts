@@ -766,11 +766,21 @@ export async function continueMailDiscovery(
     return;
   let nextRunId = existing?.id;
   if (!nextRunId) {
+    const { coverage } = await loadGmailCursor(db, {
+      ledgerPartyId: previous.ledgerPartyId,
+      mailboxId: input.mailboxId,
+    });
+    // Continuation carries current objectives, never a retired or revised search.
+    const scopedQueries = input.scopedQueries.filter((query) =>
+      coverage?.scoped.some(
+        (current) => current.key === query.key && current.query === query.query,
+      ),
+    );
     if (
       !(await discoveryAllowed(db, {
         ledgerPartyId: previous.ledgerPartyId,
         mailboxId: input.mailboxId,
-        scopedQueries: input.scopedQueries,
+        scopedQueries,
       }))
     )
       return;
@@ -784,7 +794,7 @@ export async function continueMailDiscovery(
           status: "running",
           clientKey,
           notes: "Continue Gmail history coverage",
-          input: { ...input, emailAuditVersion: 1 },
+          input: { ...input, scopedQueries, emailAuditVersion: 1 },
           progress: {
             attempt: 0,
             phase: "listing",

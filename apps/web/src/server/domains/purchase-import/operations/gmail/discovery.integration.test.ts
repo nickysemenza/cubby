@@ -652,6 +652,11 @@ describe("scheduled Gmail discovery", () => {
           expect.objectContaining({ phase: "page_saved" }),
         ]),
       );
+      await continueMailDiscovery(ctx.db, successor);
+      expect(await created()).toHaveLength(search === "pruned" ? 2 : 3);
+      expect(
+        (await getDb(ctx.db).select().from(mailboxCursor))[0]?.coverage,
+      ).toEqual(intervening);
       expect(relevance).toHaveBeenCalledOnce();
       // Each distinct targeted page checks durable child admission; page replay
       // and reused classification create no extra source or prediction.
