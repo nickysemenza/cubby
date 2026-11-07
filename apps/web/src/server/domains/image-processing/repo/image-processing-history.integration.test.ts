@@ -46,6 +46,7 @@ import {
   completeImageProcessingJob,
   getLeasedImageProcessingJobContext,
   retryImageProcessingNow,
+  retireObsoleteImageProcessingJobs,
 } from "./image-processing";
 import {
   assignImageProcessingExecutor,
@@ -204,12 +205,12 @@ describe("image execution history conservation", () => {
         },
       },
     });
-    // A non-retryable report is not terminal: the job stays open and backs off.
+    // A deterministic failure stays recorded until the member explicitly retries.
     const [open] = await getDb(ctx.db)
       .select({ state: imageProcessingJob.state })
       .from(imageProcessingJob)
       .where(eq(imageProcessingJob.id, jobId));
-    expect(open?.state).toBe("pending");
+    expect(open?.state).toBe("failed");
     const submission = await createImageProcessingSubmission(ctx.db);
     const imageId = parseEntityId("image", source.id);
     // Every open job of the image is retried now, the Apple description too.
@@ -667,6 +668,16 @@ describe("image execution history conservation", () => {
       .set({ sha256: "b".repeat(64) })
       .where(eq(image.id, source.id));
     expect(await retryImageProcessingNow(ctx.db, { imageId })).toEqual([]);
+    expect(await retireObsoleteImageProcessingJobs(ctx.db, { jobId })).toBe(1);
+    const [retired] = await getDb(ctx.db)
+      .select()
+      .from(imageProcessingJob)
+      .where(eq(imageProcessingJob.id, jobId));
+    expect(retired).toMatchObject({
+      state: "skipped",
+      lastError: "Old source failed",
+    });
+    expect(retired?.result).toMatchObject({ reason: "Old source failed" });
     await getDb(ctx.db)
       .update(image)
       .set({ sha256: "a".repeat(64) })

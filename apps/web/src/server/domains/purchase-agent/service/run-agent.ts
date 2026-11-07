@@ -85,7 +85,10 @@ import { readPiModelUsage } from "./model-usage";
 import { RunSettlement, SETTLEMENT_POLL_MS } from "./run-settlement";
 import { renderSignal } from "./signals";
 import { continueMailImportOnYield, runAgentTools } from "./tools";
-import { currentWorkItemMessages } from "./work-item-context";
+import {
+  currentPhotoWorkItemMessages,
+  currentWorkItemMessages,
+} from "./work-item-context";
 
 const log = createLogger("purchase-agent");
 const context = BACKGROUND_CONTEXT;
@@ -647,7 +650,7 @@ export class PurchaseImportRunAgent
               const messages =
                 manifest.workItemContext === "current"
                   ? currentWorkItemMessages(request.messages)
-                  : request.messages;
+                  : currentPhotoWorkItemMessages(request.messages);
               if (settlementRefusal)
                 return {
                   messages: [
@@ -659,9 +662,7 @@ export class PurchaseImportRunAgent
                     },
                   ],
                 };
-              return manifest.workItemContext === "current"
-                ? { messages }
-                : undefined;
+              return { messages };
             },
             afterResponse: async (message, api, context) => {
               await this.afterResponse(message);

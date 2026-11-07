@@ -46,6 +46,10 @@ import type {
   PreparedEvaluationPage,
 } from "~/server/ai/evaluation/repo/evaluation-page";
 import {
+  gatewayAdmissionWait,
+  GatewayProviderStopError,
+} from "~/server/ai/gateway-egress-client";
+import {
   compiledRefreshManifest,
   dependenciesCurrent,
 } from "~/server/ai/policy/refresh-manifest";
@@ -64,6 +68,7 @@ import {
 import type { DrainItem } from "~/server/generic/jobs/drain-store";
 import {
   JobDeferredError,
+  JobEvidenceObsoleteError,
   JobSupersededError,
   JobTargetError,
 } from "~/server/generic/jobs/errors";
@@ -87,8 +92,6 @@ export type AiEvaluationExecution = {
     targets: readonly EvaluationPageTarget[],
     context: DrainContext,
   ): Promise<PreparedEvaluationPage>;
-  /** Domain evidence that changed during inference: the evaluation settles obsolete. */
-  evidenceInvalidated(error: UnparsedError): boolean;
   /** Upstream work still owes this target's evidence: the item waits for it. */
   coveragePending(error: UnparsedError): boolean;
   pauseRun(db: Database, runId: string, message: string): Promise<void>;
@@ -120,6 +123,8 @@ type Entry =
   | { kind: "settled" }
   /** Upstream still owes its evidence: same ticket and attempts, explained on the item. */
   | { kind: "wait" }
+  /** External stop: retain the ticket while paid siblings publish before feature deferral. */
+  | { kind: "defer" }
   | { kind: "outcome" }
   | { kind: "obsolete"; reason: string }
   | { kind: "fail"; error: string };
@@ -130,14 +135,51 @@ type Prepared = {
   page?: PreparedEvaluationPage;
 };
 
-const OBSOLETE =
-  /obsolete|changed during inference|changed during evaluation|decided during inference|no longer exists|Connection (discovery )?source changed/;
-
 const errorMessage = (error: unknown) =>
   scrubErrorMessage(error instanceof Error ? error.message : String(error));
 
-const evidenceObsolete = (execution: AiEvaluationExecution, error: unknown) =>
-  execution.evidenceInvalidated(error) || OBSOLETE.test(errorMessage(error));
+const evidenceObsolete = (error: unknown) =>
+  findErrorCause(
+    error,
+    (cause): cause is JobEvidenceObsoleteError =>
+      cause instanceof JobEvidenceObsoleteError,
+  ) !== undefined;
+
+/** The same external wait applies whether a target or its whole preparation page escaped. */
+function evaluationDeferral(error: unknown) {
+  const is = <E extends Error>(type: abstract new (...args: never[]) => E) =>
+    findErrorCause(error, (cause): cause is E => cause instanceof type);
+  const message = errorMessage(error);
+  const budget = is(AiBudgetExhaustedError);
+  if (budget)
+    return new JobDeferredError(
+      message,
+      new Date(budget.resumeAt),
+      "ai_funding_window",
+    );
+  const capacity = aiWorkDeferral(error);
+  if (capacity)
+    return new JobDeferredError(
+      message,
+      new Date(capacity.until),
+      "provider_capacity",
+    );
+  const admission = gatewayAdmissionWait(error);
+  if (admission)
+    return new JobDeferredError(
+      message,
+      new Date(admission.retryAt),
+      "rate_limit",
+    );
+  const provider = is(GatewayProviderStopError);
+  if (provider)
+    return new JobDeferredError(
+      message,
+      new Date(provider.retryAt),
+      "provider_capacity",
+    );
+  return undefined;
+}
 
 /**
  * Domain failures at the drain seam: evidence changes settle obsolete,
@@ -158,33 +200,9 @@ async function mapFailure(
   if (stopsDrainPage(error)) return { failed: error };
   if (execution.coveragePending(error)) return { entry: { kind: "wait" } };
   const message = errorMessage(error);
-  const budget = is(AiBudgetExhaustedError);
-  if (budget)
-    return {
-      failed: new JobDeferredError(
-        message,
-        new Date(budget.resumeAt),
-        "ai_funding_window",
-      ),
-    };
-  const capacity = aiWorkDeferral(error);
-  if (capacity)
-    return {
-      failed: new JobDeferredError(
-        message,
-        new Date(capacity.until),
-        "provider_capacity",
-      ),
-    };
-  if (message.includes("AI Gateway admission is waiting"))
-    return {
-      failed: new JobDeferredError(
-        message,
-        new Date(Date.now() + 30_000),
-        "rate_limit",
-      ),
-    };
-  if (evidenceObsolete(execution, error))
+  const deferred = evaluationDeferral(error);
+  if (deferred) return { failed: deferred };
+  if (evidenceObsolete(error))
     return { entry: { kind: "obsolete", reason: message } };
   const { evaluation } = target;
   if (evaluation.executionKind !== "ai_refresh" && evaluation.runId) {
@@ -236,11 +254,13 @@ function aiEvaluationPage(
   feature: string,
   token: string,
   context: DrainContext,
-): BackgroundDrain {
+  publicationTransaction: JobContext["fenced"],
+) {
+  let deferred: JobDeferredError | undefined;
   const paged = PAGE_FEATURES.has(feature);
-  return rowDrain<Prepared>({
+  const drain = rowDrain<Prepared>({
     name: aiEvaluationPageKey(feature),
-    transaction: context.fenced,
+    transaction: publicationTransaction,
     store: aiEvaluationStore(feature, token),
     backoff: AI_EVALUATION_BACKOFF,
     limit: PAGE_LIMIT,
@@ -333,7 +353,17 @@ function aiEvaluationPage(
       const settle = async (target: EvaluationPageTarget, error: unknown) => {
         const mapped = await mapFailure(db, execution, target, error);
         if ("entry" in mapped) entries.set(target.item.ref, mapped.entry);
-        else failed.set(target.item, mapped.failed);
+        else {
+          const stop = findErrorCause(
+            mapped.failed,
+            (cause): cause is JobDeferredError =>
+              cause instanceof JobDeferredError,
+          );
+          if (stop) {
+            entries.set(target.item.ref, { kind: "defer" });
+            if (!deferred || stop.until > deferred.until) deferred = stop;
+          } else failed.set(target.item, mapped.failed);
+        }
       };
       if (!paged) {
         await prepareItems(db, runnable, context, execution, settle, entries);
@@ -364,7 +394,8 @@ function aiEvaluationPage(
           return target &&
             kind !== "skip" &&
             kind !== "settled" &&
-            kind !== "wait"
+            kind !== "wait" &&
+            kind !== "defer"
             ? [target]
             : [];
         }),
@@ -403,6 +434,9 @@ function aiEvaluationPage(
           .filter(({ target }) => authorization.has(target.evaluation.id))
           .map(({ target }) => target.item),
         ...waiting,
+        ...held.flatMap(({ target, entry }) =>
+          entry.kind === "defer" ? [target.item] : [],
+        ),
       ];
       const written = held.filter(
         ({ entry }) =>
@@ -432,7 +466,7 @@ function aiEvaluationPage(
           // Evidence that changed during inference settles obsolete. The
           // drain splits a chunk on target errors, so a change obsoletes only
           // its own evaluation and its siblings still publish.
-          if (!evidenceObsolete(execution, error)) throw error;
+          if (!evidenceObsolete(error)) throw error;
           if (ids.length > 1)
             throw new JobTargetError(errorMessage(error), { cause: error });
           published = [];
@@ -486,6 +520,7 @@ function aiEvaluationPage(
       );
     },
   });
+  return { drain, deferral: () => deferred };
 }
 
 export type AiEvaluationPageOutcome =
@@ -520,25 +555,54 @@ export async function runAiEvaluationPage(
     fenced: (work, options) =>
       (options?.isolationLevel === "serializable"
         ? repositorySnapshotWriteDatabase
-        : repositoryTransactionDatabase)(db, async (tx) => {
-        await assertHeld(tx);
-        return work(tx);
-      }),
+        : repositoryTransactionDatabase)(db, work),
     fence: assertHeld,
     check: () => assertHeld(db),
   });
   try {
-    const page = await aiEvaluationPage(execution, feature, token, {
-      ...context,
-      name: aiEvaluationPageKey(feature),
-      attemptToken: token,
-    }).page(db, { deadline: Date.now() + 20_000 });
+    const preparedPage = aiEvaluationPage(
+      execution,
+      feature,
+      token,
+      {
+        ...context,
+        name: aiEvaluationPageKey(feature),
+        attemptToken: token,
+        fenced: (work, options) =>
+          context.fenced(async (tx) => {
+            await assertHeld(tx);
+            return work(tx);
+          }, options),
+      },
+      // Publication checks only its locked chunk's leases; a page-wide read
+      // here creates serialization dependencies on unrelated evaluation work.
+      context.fenced,
+    );
+    const page = await preparedPage.drain.page(db, {
+      deadline: Date.now() + 20_000,
+    });
+    const deferred = preparedPage.deferral();
+    if (deferred) {
+      await deferAiEvaluationFeature(
+        db,
+        feature,
+        token,
+        deferred.until,
+        deferred.reason,
+        deferred.message,
+      );
+      return { outcome: "deferred", settled: page.settled ?? 0 };
+    }
     return {
       outcome: page.processed ? "succeeded" : "skipped",
       settled: page.settled ?? 0,
     };
   } catch (error) {
-    const failure = classifyJobFailure(error);
+    let failure = classifyJobFailure(error);
+    if (failure.kind === "failed" || failure.kind === "transient") {
+      const deferred = evaluationDeferral(error);
+      if (deferred) failure = classifyJobFailure(deferred);
+    }
     if (failure.kind === "deferred") {
       await deferAiEvaluationFeature(
         db,
@@ -546,6 +610,7 @@ export async function runAiEvaluationPage(
         token,
         failure.until,
         failure.reason ?? "provider_capacity",
+        errorMessage(error),
       );
       return { outcome: "deferred", settled: 0 };
     }
@@ -557,6 +622,7 @@ export async function runAiEvaluationPage(
       token,
       new Date(Date.now() + AI_EVALUATION_BACKOFF.baseMs),
       "page_failed",
+      errorMessage(error),
     );
     throw error;
   } finally {

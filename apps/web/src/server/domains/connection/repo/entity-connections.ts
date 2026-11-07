@@ -34,6 +34,7 @@ import { moveInventoryEntries } from "~/server/domains/inventory/repo/bulk";
 import { setProjectToolUsage } from "~/server/domains/project/repo/tools";
 import { confirmPurchaseAcquisition } from "~/server/domains/purchase/repo/purchase-products";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
+import { JobEvidenceObsoleteError } from "~/server/generic/jobs/errors";
 import {
   lookupEntityLabels,
   resolveShortcodes,
@@ -79,9 +80,6 @@ const keyFor = (candidate: ConnectionCandidate) =>
     sourceKey(candidate.source),
     sourceKey(candidate.target),
   ]);
-
-/** Fresh retrieval may be retried; it must never exhaust an execution attempt. */
-export class ConnectionEvidenceInvalidatedError extends Error {}
 
 export type PreparedEntityConnection = z.infer<
   typeof connectionSuggestionEvidence
@@ -144,7 +142,7 @@ export async function publishPreparedEntityConnections(
         locked,
       );
       if (canonicalJson(basis) !== canonicalJson(original.basis))
-        throw new ConnectionEvidenceInvalidatedError(
+        throw new JobEvidenceObsoleteError(
           "Connection evidence changed after candidate retrieval; discover again before publishing",
         );
       if (
@@ -153,7 +151,7 @@ export async function publishPreparedEntityConnections(
           .object({ dependencies: z.object({ eventId: z.string() }) })
           .safeParse(basis).success
       )
-        throw new ConnectionEvidenceInvalidatedError(
+        throw new JobEvidenceObsoleteError(
           "Retained Email evidence changed; discover again before publishing",
         );
       const fingerprint = await sha256CanonicalJson(
@@ -712,7 +710,7 @@ async function assertAcquisitionConnectionsEligible(
     eligibleAcquisitionPairs(db, pairs),
   ]);
   if (expenses.some((code) => !eligibleExpenses.has(code)))
-    throw new Error(
+    throw new JobEvidenceObsoleteError(
       "Connection Expense is no longer eligible for acquisition or is already assigned to a Product",
     );
   if (
@@ -723,7 +721,7 @@ async function assertAcquisitionConnectionsEligible(
         ),
     )
   )
-    throw new Error(
+    throw new JobEvidenceObsoleteError(
       "Connection Product/Purchase pair is no longer eligible because acquisition is already recorded",
     );
 }

@@ -61,3 +61,114 @@ export function currentWorkItemMessages(
     ...messages.slice(latest),
   ];
 }
+
+const PHOTO_READ = "mcp__cubby__photo_run_read";
+const PHOTO_WRITE = "mcp__cubby__photo_run";
+const photoPage = z.object({
+  remaining: z.literal(true),
+  images: z.array(z.object({ id: z.string() })),
+  boundaryGroup: z.unknown(),
+});
+const photoAcknowledgement = z.object({
+  savedGroupKeys: z.array(z.string()),
+});
+
+function toolValue<T>(message: Message, schema: z.ZodType<T>): T | undefined {
+  if (message.role !== "toolResult" || message.isError) return undefined;
+  const text = message.content.find((part) => part.type === "text");
+  try {
+    return text?.type === "text"
+      ? schema.safeParse(JSON.parse(text.text)).data
+      : undefined;
+  } catch {
+    // SILENT: truncated or legacy output cannot establish a durable checkpoint.
+    return undefined;
+  }
+}
+
+/**
+ * Photo decisions and the pending boundary live in proposals, not accumulated
+ * reads. Publication closes a page; the next request reloads remaining photos
+ * and its boundary. This projection never mutates pi's evidence transcript.
+ */
+export function currentPhotoWorkItemMessages(
+  messages: readonly Message[],
+): readonly Message[] {
+  const calls = new Map<string, number>();
+  for (const [index, message] of messages.entries()) {
+    if (message.role !== "assistant") continue;
+    for (const block of message.content) {
+      if (block.type === "toolCall") calls.set(block.id, index);
+    }
+  }
+  let start: number | undefined;
+  let pageCallId: string | undefined;
+  let published = false;
+  for (const message of messages) {
+    if (message.role !== "toolResult") continue;
+    if (message.toolName === PHOTO_READ && toolValue(message, photoPage)) {
+      start = calls.get(message.toolCallId);
+      pageCallId = message.toolCallId;
+      published = false;
+    }
+    if (
+      message.toolName === PHOTO_WRITE &&
+      toolValue(message, photoAcknowledgement)
+    ) {
+      start = calls.get(message.toolCallId);
+      published = true;
+    }
+  }
+  const persistent = messages.filter(
+    (message) => message.role === "user" || message.role === "system",
+  );
+  if (start === undefined || published) {
+    return [
+      ...persistent,
+      {
+        role: "user",
+        timestamp: 0,
+        content:
+          "Reload durable photo grouping progress before further work: call photo_run_read run_context with remaining: true and no cursor. It returns only uncovered photos and the saved mutable boundary group. Keep member and settled decisions unchanged. Earlier tool evidence remains in the Run transcript.",
+      },
+    ];
+  }
+  const current = [
+    ...messages
+      .slice(0, start)
+      .filter(
+        (message) => message.role === "user" || message.role === "system",
+      ),
+    ...messages.slice(start),
+  ];
+  if (new TextEncoder().encode(JSON.stringify(current)).byteLength <= 96_000)
+    return current;
+  const latest = [...messages]
+    .reverse()
+    .find((message) => message.role === "toolResult");
+  const keep = new Set([
+    pageCallId,
+    latest?.role === "toolResult" ? latest.toolCallId : undefined,
+  ]);
+  // Candidate reads are unpublished reasoning. Retain complete exchanges for
+  // this page and the latest lookup; saved decisions reload from proposals.
+  return [
+    ...messages.flatMap((message): Message[] => {
+      if (message.role === "user" || message.role === "system")
+        return [message];
+      if (message.role === "toolResult")
+        return keep.has(message.toolCallId) ? [message] : [];
+      if (message.role !== "assistant") return [];
+      const content = message.content.filter(
+        (part) => part.type === "toolCall" && keep.has(part.id),
+      );
+      return content.length ? [{ ...message, content }] : [];
+    }),
+    {
+      role: "user",
+      timestamp: 0,
+      content:
+        "The current photo page and latest complete lookup are retained; earlier unpublished lookups were removed to stay within the model budget. Publish the supported item now with a durable boundary when needed, then reload remaining photos. Do not reconstruct earlier speculative choices from memory.",
+    },
+  ];
+}

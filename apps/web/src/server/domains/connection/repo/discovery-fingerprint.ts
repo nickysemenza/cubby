@@ -2,6 +2,7 @@ import type { EntityRef } from "@cubby/schemas/entity";
 import { sha256Hex } from "@cubby/shared/sha256";
 
 import type { Database } from "~/server/db";
+import { JobEvidenceObsoleteError } from "~/server/generic/jobs/errors";
 
 import {
   connectionRecord,
@@ -25,7 +26,7 @@ export async function connectionDiscoveryFingerprints(
   );
   return fingerprints.map((fingerprint, index) => {
     if (fingerprint === null)
-      throw new Error(
+      throw new JobEvidenceObsoleteError(
         `Connection ${sources[index]!.entityKind} no longer exists`,
       );
     return fingerprint;

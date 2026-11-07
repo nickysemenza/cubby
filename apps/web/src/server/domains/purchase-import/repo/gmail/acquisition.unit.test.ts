@@ -4,7 +4,12 @@ import { mergeMailboxQueries } from "@cubby/schemas/mailbox-research";
  * scans starve newly arriving mail; unrelated or unreadable mail is archived. */
 import { describe, expect, it, vi } from "vitest";
 
-import { initializeMailboxCoverage, listGmailPage } from "./sync";
+import {
+  creditScopedPage,
+  initializeMailboxCoverage,
+  listGmailPage,
+  rebaseMailboxPage,
+} from "./sync";
 import { GmailApiError, type GmailProvider } from "./types";
 
 const gmail = (overrides: Partial<GmailProvider> = {}): GmailProvider => ({
@@ -123,6 +128,26 @@ describe("durable Gmail page acquisition", () => {
     );
     expect(done.messageIds).toEqual([]);
     expect(listMessages).toHaveBeenCalledOnce();
+    // An unattended frozen page may finish after another pass completed its query.
+    // Keep that newer receipt/cursor, without counting the old page a second time.
+    const rebased = rebaseMailboxPage({
+      page: scoped,
+      coverage: scoped.nextCoverage,
+      restoreScopedQuery: false,
+    });
+    expect(rebased).not.toBeNull();
+    if (!rebased)
+      throw new Error("Completed query must settle its retained page");
+    expect(creditScopedPage(rebased, 1, new Date())).toEqual(
+      scoped.nextCoverage,
+    );
+    expect(
+      rebaseMailboxPage({
+        page: scoped,
+        coverage: scoped.nextCoverage,
+        restoreScopedQuery: true,
+      }),
+    ).toBeNull();
   });
 
   it("checkpoints history page tokens without advancing its start until all history pages are processed", async () => {

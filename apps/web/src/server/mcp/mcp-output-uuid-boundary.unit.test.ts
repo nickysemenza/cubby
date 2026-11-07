@@ -73,6 +73,7 @@ const DECLARED_UUID_OUTPUT_PATHS = new Set([
   "photo_run.proposals[].review.fieldSuggestions[].id",
   "photo_run.fieldSuggestions[].id",
   "photo_run_read.proposals[].review.fieldSuggestions[].id",
+  "photo_run_read.boundaryGroup.review.fieldSuggestions[].id",
   "photo_run_read.candidates[].purchaseLines[].acceptedSourceLines[].sourceOrderId",
   "product_enrichment.product.externalIds[].id",
   "purchase_import_read.items[].suggestionId",

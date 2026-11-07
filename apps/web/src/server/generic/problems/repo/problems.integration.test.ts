@@ -1181,16 +1181,6 @@ describe("problems — purchase financial settlement mismatches", () => {
   });
 });
 
-/**
- * `kitsCountedTwice` — a kit on the books under its own name AND under its
- * parts', together claiming more units than were bought.
- *
- * Asserted through `findFastProblems` rather than the list filter it compiles
- * to, because the presenter is a separate switch that THROWS on an unregistered
- * key. A detector whose filter works and whose card presenter is missing fails
- * only when the first real row appears, which is the worst possible moment.
- */
-
 describe("problems — weight-sold products", () => {
   const ctx = withTestDb();
 

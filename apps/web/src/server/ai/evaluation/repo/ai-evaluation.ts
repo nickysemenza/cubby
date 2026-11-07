@@ -24,7 +24,10 @@ import { repositoryBeforeCommit } from "~/server/db/repository-access.boundary";
 import { aiEvaluation, aiEvaluationRequest, run } from "~/server/db/schema";
 import type { DrainContext } from "~/server/generic/background/drains";
 import type { DrainItem } from "~/server/generic/jobs/drain-store";
-import { JobDeferredError } from "~/server/generic/jobs/errors";
+import {
+  JobEvidenceObsoleteError,
+  JobDeferredError,
+} from "~/server/generic/jobs/errors";
 
 import type {
   EvaluationPageTarget,
@@ -185,7 +188,9 @@ export async function guardAiEvaluation(
         activation.manifest,
       )
     )
-      throw new Error("AI evaluation generation is obsolete");
+      throw new JobEvidenceObsoleteError(
+        "AI evaluation generation is obsolete",
+      );
   }
   return { row, target: aiEvaluationTarget.parse(row.target) };
 }
@@ -216,7 +221,7 @@ async function fenceAiEvaluationActivation(
         ),
     )
   )
-    throw new Error("AI evaluation generation is obsolete");
+    throw new JobEvidenceObsoleteError("AI evaluation generation is obsolete");
 }
 
 export async function completeAiEvaluation(
@@ -560,7 +565,8 @@ export async function continueAiEvaluationPage<T>(
     tx,
     targets,
   );
-  if (stale.length) throw new Error("AI evaluation generation is obsolete");
+  if (stale.length)
+    throw new JobEvidenceObsoleteError("AI evaluation generation is obsolete");
   if (unauthorized.length) throw new AiEvaluationUnauthorizedError();
   if (valid.length !== targets.length)
     throw new AiEvaluationAttemptObsoleteError();

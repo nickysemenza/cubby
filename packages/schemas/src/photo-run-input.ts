@@ -51,6 +51,14 @@ export const photoInventoryRunInput = z.strictObject({
   /** Null preserves manual grouping when an older Run gains capture defaults. */
   processor: photoRunProcessor.nullable(),
   defaults: photoRunDefaults.optional(),
+  /** Mutable agent proposal retained while the next page may extend this item. */
+  groupingBoundaryGroupKey: z
+    .string()
+    .trim()
+    .min(1)
+    .max(200)
+    .nullable()
+    .optional(),
   batches: z.array(photoRunUploadBatch).max(500),
 });
 export type PhotoInventoryRunInput = z.infer<typeof photoInventoryRunInput>;

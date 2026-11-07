@@ -1055,9 +1055,14 @@ describe("durable image representations", () => {
         "retry_wait",
       );
     }
-    expect((await readImageExecutions(ctx.db, descriptionId))[0]?.state).toBe(
-      "retry_wait",
-    );
+    expect(
+      (
+        await getDb(ctx.db)
+          .select({ state: imageProcessingJob.state })
+          .from(imageProcessingJob)
+          .where(eq(imageProcessingJob.id, descriptionId))
+      )[0]?.state,
+    ).toBe("failed");
     expect((await readImageExecutions(ctx.db, active.jobId))[0]?.state).toBe(
       "running",
     );
@@ -1212,7 +1217,7 @@ describe("durable image representations", () => {
         .from(imageProcessingOrphan)
         .where(eq(imageProcessingOrphan.key, failedLease.derivativeKey));
       expect(retired).toHaveLength(1);
-      // One failure only backs off; repeated failures ask for attention.
+      // A deterministic refusal needs attention immediately.
       expect(
         (
           await imageScaffold.read(ctx.db, {
@@ -1224,7 +1229,7 @@ describe("durable image representations", () => {
             },
           })
         ).data,
-      ).toEqual([]);
+      ).toMatchObject([{ id: failed.shortcode }]);
       await updateImageExecution(ctx.db, failed.jobId, {
         failures: JOB_NEEDS_ATTENTION_ATTEMPTS,
       });

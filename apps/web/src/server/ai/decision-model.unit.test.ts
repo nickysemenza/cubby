@@ -331,14 +331,34 @@ describe("runDecisionChoice", () => {
     },
   );
 
-  it("preserves the complete provider rejection body", async () => {
-    vi.stubEnv("AI_GATEWAY_API_KEY", "dev-token");
-    await resetDecisionTransport();
-    const { runDecisionChoice: request } = await import("./decision-model");
-    const body = "synthetic provider diagnostic ".repeat(20);
-    vi.stubGlobal("fetch", async () => new Response(body, { status: 401 }));
-    await expect(request({ ...base, choices: ["one"] })).rejects.toThrow(body);
-  });
+  it.each([401, 402])(
+    "preserves the complete provider %s rejection and typed stop",
+    async (status) => {
+      vi.stubEnv("AI_GATEWAY_API_KEY", "dev-token");
+      await resetDecisionTransport();
+      const { runDecisionChoice: request } = await import("./decision-model");
+      const body = "synthetic provider diagnostic ".repeat(20);
+      vi.stubGlobal("fetch", async () => new Response(body, { status }));
+      const { GatewayProviderStopError } =
+        await import("./gateway-egress-client");
+      const { findErrorCause } = await import("~/lib/error-diagnostics");
+      const failure = await request({ ...base, choices: ["one"] }).catch(
+        (error: unknown) => error,
+      );
+      expect(failure).toBeInstanceOf(Error);
+      expect(
+        findErrorCause(
+          failure,
+          (cause): cause is InstanceType<typeof GatewayProviderStopError> =>
+            cause instanceof GatewayProviderStopError,
+        ),
+      ).toMatchObject({
+        status,
+        kind: status === 402 ? "funding" : "configuration",
+        message: expect.stringContaining(body),
+      });
+    },
+  );
 
   // Regression: the gateway-scoped `/ai/run` (REST, and the binding's
   // `AI.run` with `gateway.id`) wraps the decision model's answer in a completed-run layer

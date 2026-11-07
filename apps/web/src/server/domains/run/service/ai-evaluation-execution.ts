@@ -1,13 +1,11 @@
 import { runEntityId } from "@cubby/schemas/identifiers";
 
-import { findErrorCause } from "~/lib/error-diagnostics";
 /**
  * The Run domain's side of the `ai.evaluation` drain: feature execution under
  * each requester Run's workflow context, and requester authority (pause,
  * status, funding resume). The drain itself lives in `ai/evaluation`.
  */
 import type { AiEvaluationExecution } from "~/server/ai/evaluation/service/ai-evaluation-drain";
-import { ConnectionEvidenceInvalidatedError } from "~/server/domains/connection/repo/entity-connections";
 import { semanticCoveragePending } from "~/server/generic/embedding/repo/entity-embedding";
 import { withWorkflowExecution } from "~/server/workflows/runs/execution";
 
@@ -43,12 +41,6 @@ export const runAiEvaluationExecution = (
     ),
   preparePage: (db, targets, context) =>
     prepareAiRefreshPage(db, targets, context, ports),
-  evidenceInvalidated: (error) =>
-    !!findErrorCause(
-      error,
-      (cause): cause is ConnectionEvidenceInvalidatedError =>
-        cause instanceof ConnectionEvidenceInvalidatedError,
-    ),
   coveragePending: semanticCoveragePending,
   pauseRun: async (db, runId, message) => {
     await pauseRunForAiWork(db, runEntityId.parse(runId), message);

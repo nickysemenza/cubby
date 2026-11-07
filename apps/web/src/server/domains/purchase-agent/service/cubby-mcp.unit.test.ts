@@ -11,6 +11,7 @@ import {
 
 import {
   cubbyToolResult,
+  photoCoordinatorToolResult,
   stampGeneration,
   mailWriterOutcome,
 } from "./cubby-mcp";
@@ -191,4 +192,41 @@ describe("stampGeneration", () => {
       operationId: "synthetic-operation",
     });
   });
+});
+
+it("acknowledges photo publication without replaying the whole pending roster", () => {
+  const output = photoCoordinatorToolResult(
+    "photo_run",
+    {
+      action: "propose_groups",
+      groups: [{ groupKey: "boundary" }],
+    },
+    {
+      content: [],
+      structuredContent: {
+        runId: "RUN-4K7M",
+        runStatus: "running",
+        proposals: [],
+        unassignedImageIds: ["IMG-4K7M"],
+        frozenGroupKeys: [],
+      },
+    },
+  );
+  expect(output.isError).toBe(false);
+  expect(output.output).toEqual([
+    {
+      type: "text",
+      text: JSON.stringify({
+        runId: "RUN-4K7M",
+        runStatus: "running",
+        proposalCount: 0,
+        unassignedImageCount: 1,
+        conflictedGroupCount: 0,
+        failedGroupCount: 0,
+        groupsNeedingRepair: [],
+        savedGroupKeys: ["boundary"],
+        frozenGroupKeys: [],
+      }),
+    },
+  ]);
 });

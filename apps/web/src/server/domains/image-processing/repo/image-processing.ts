@@ -510,7 +510,7 @@ export async function retireObsoleteImageProcessingJobs(
   const dbc = getDb(db);
   const scoped = "jobId" in input;
   const obsolete = and(
-    eq(imageProcessingJob.state, "pending"),
+    inArray(imageProcessingJob.state, ["pending", "failed"]),
     scoped ? eq(imageProcessingJob.id, input.jobId) : undefined,
     // includes-deleted: retire work whose source image was removed.
     sql`EXISTS (SELECT 1 FROM ${image} WHERE ${image.id}=${imageProcessingJob.imageId} AND (${obsoleteImageProcessingSource()} OR NOT ${currentImageProcessingProcessor()}))`,
@@ -534,7 +534,7 @@ export async function retireObsoleteImageProcessingJobs(
         state: "skipped",
         completedAt: new Date(),
         leaseUntil: null,
-        lastError: "Image source, type or processor is obsolete",
+        lastError: sql`coalesce(${imageProcessingJob.lastError}, 'Image source, type or processor is obsolete')`,
       })
       .where(batch ? inArray(imageProcessingJob.id, batch) : obsolete)
       .returning({ id: imageProcessingJob.id }),
@@ -1088,7 +1088,7 @@ export async function releaseImageProcessingLease(
 
 /**
  * Retry now: an image's open jobs become due immediately, backoff cleared and
- * prior errors kept. Every job stays open until a result or a moot ending.
+ * prior errors kept. Deterministic failures reopen only on this explicit retry.
  */
 export async function retryImageProcessingNow(
   db: Database,
@@ -1116,8 +1116,7 @@ export async function retryImageProcessingNow(
       )
       .where(
         and(
-          // `failed` is a legacy terminal state the migration reopened for
-          // current processors; any left over is reopened here too.
+          // A member can retry retained deterministic failures after fixing their cause.
           or(
             inArray(imageProcessingJob.state, ["pending", "failed"]),
             and(
@@ -1448,27 +1447,29 @@ function canAdoptCompletion(
 }
 
 /**
- * One more reported failure. Image work is never abandoned: every failure,
- * including one its executor calls non-retryable, waits out capped
- * exponential backoff and runs again, keeping its cause on the row. After
- * `JOB_NEEDS_ATTENTION_ATTEMPTS` failures it also shows as needing attention.
+ * Transient failures back off. A deterministic refusal retains its evidence
+ * for explicit retry rather than repeating the same unsupported operation.
  */
 async function settleImageProcessingFailure(
   tx: DrizzleTransaction,
   job: CompletionJob,
   input: {
     reason: string;
+    retryable: boolean;
     set: Partial<typeof imageProcessingJob.$inferInsert>;
   },
 ): Promise<void> {
   const failures = job.failures + 1;
   const runAt = new Date(Date.now() + imageRetryDelayMs(failures));
   // The backoff ends while devices may idle; the ring covers it.
-  if (job.lane === "device") await ringDeviceWorkAt(tx, runAt);
+  if (input.retryable && job.lane === "device")
+    await ringDeviceWorkAt(tx, runAt);
   await tx
     .update(imageProcessingJob)
     .set({
       ...input.set,
+      state: input.retryable ? "pending" : "failed",
+      completedAt: input.retryable ? null : new Date(),
       failures,
       runAt,
       leaseUntil: null,
@@ -1489,6 +1490,7 @@ async function adoptFailedCompletion(
   // another device; its lease is gone, so it can no longer adopt.
   await settleImageProcessingFailure(tx, job, {
     reason: outcome.reason,
+    retryable: outcome.retryable,
     set: { runtime: input.runtime ?? null, result: outcome },
   });
   if (input.orphanOutputKey)
@@ -1505,7 +1507,7 @@ async function adoptFailedCompletion(
 
 /**
  * A negative subject-lift result settles these exact source/processor inputs.
- * Other executor skips still retry with their cause recorded.
+ * Other executor skips retain a deterministic failure for explicit retry.
  */
 function reportedSkipAsFailure(input: CompletionInput): CompletionInput {
   const outcome = input.result.outcome;
@@ -1517,7 +1519,7 @@ function reportedSkipAsFailure(input: CompletionInput): CompletionInput {
     return input;
   const failed = {
     status: "failed" as const,
-    retryable: true,
+    retryable: false,
     reason: outcome.reason,
   };
   return {

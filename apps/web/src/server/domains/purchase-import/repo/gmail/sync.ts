@@ -98,6 +98,16 @@ export function rebaseMailboxPage({
     );
     const current = next.scoped.find((query) => query.key === page.scopedKey);
     if (
+      !restoreScopedQuery &&
+      current?.completed &&
+      before?.query === current.query
+    ) {
+      // The retained page's messages were processed, but a newer pass already
+      // finished this search. Keep its cursor/receipt and do not credit twice.
+      const { scopedKey: _settledKey, ...settled } = page;
+      return { ...settled, startCoverage: coverage, nextCoverage: coverage };
+    }
+    if (
       !before ||
       !after ||
       (current

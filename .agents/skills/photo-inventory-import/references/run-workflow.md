@@ -9,13 +9,19 @@ grouping, ownership, and location rules.
    it does not need hosted-only claim/progress tools. Pass `{{runId}}` as the
    public run code to `photo_run_read.run_context`. It returns the owner, structured
    capture defaults (intent and optional storage location), notes,
-   and one page of photos in capture order with their analysis summaries; pass
-   `nextCursor` back as `cursor` until it is null. For a multi-page run,
-   propose each page's groups as you go, but hold back a page's last group
-   until the next page shows whether the item continues.
+   and one page of photos in capture order with their analysis summaries.
+   Hosted agents use `remaining: true` without a cursor: this returns uncovered
+   photos and the saved mutable `boundaryGroup`. Publish each page's groups,
+   including its last provisional group, with `boundaryGroupKey` naming that
+   group. Extend it if the next page continues the same item; set the key to null
+   when the boundary is resolved. Reload remaining photos after each publication
+   and after a lost reply. An oversized boundary stays saved for member review
+   when `boundaryReviewRequired` is present; continue the uncovered photos.
+   External sessions keep ordinary full-scan pagination, passing `nextCursor`
+   as `cursor` until null and holding the last group across page boundaries.
 2. For each distinct item, call `photo_run_read.product_candidates` with its
-   observed name and brand text (`brandName`); issue the calls for all items in one turn,
-   since they are independent. Compare the physical variant to the returned
+   observed name and brand text (`brandName`), working within the current page.
+   Compare the physical variant to the returned
    Products. Prefer a matching Product with no own-item photo or earlier photo
    import, whether or not it has a vendor import or purchase. Read labels in
    context: fit text and a separate size marker can mean different things.

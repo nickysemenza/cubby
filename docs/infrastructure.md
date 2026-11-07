@@ -163,11 +163,20 @@ Its checked-in configuration is part of `apps/web/cloudflare.config.ts`:
   (`server/domains/purchase-import/service/README.md`). Each
   Anthropic request marks a cache breakpoint at the end of that kept prefix,
   and each OpenAI request keys `prompt_cache_key` to the Run
-  (`withWorkItemCaching`), so the prefix can be read from cache on each Email;
+  (`withWorkItemCaching`), so the prefix can be read from cache on each Email.
+  Photo inventory reconstructs bounded context from uncovered photos and its
+  durable boundary proposal. Compact proposal responses include up to eight
+  groups needing repair, with conflict identities and bounded error text; the
+  coordinator repairs them and reads again for further failures.
+  Publishing a page resets model input; accumulated
+  candidate lookups also have a byte budget. The stored transcript remains the
+  evidence history, while proposals and their atomic boundary checkpoint own
+  recovery. Public external-agent full-scan pagination remains available;
 - Mail progress comes from memoized claims, refreshing the existing progress,
   heartbeat and work samples without a model-directed progress call. Email gaps
   still use `mail_resolve`; Run-wide provider failures use the explicit stop
   tool. Photo inventory keeps its model-directed progress tool;
+
 - the agent's `entity_read` schema narrowed to the purpose's `entityRead`
   view (Mail import: purchase, vendor and product, each with only its curated
   list filters, and no `groupBy`/`groupLevel`/`nesting`); other kinds are

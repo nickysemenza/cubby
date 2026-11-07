@@ -2,8 +2,7 @@ import type { ProductId } from "@cubby/schemas/identifiers";
 import { isServiceProductCategory } from "@cubby/schemas/product-category-fields";
 import { productReadFacts } from "@cubby/schemas/product-read-fields";
 import { foodSummary } from "@cubby/usda";
-import { and, getTableColumns, inArray, sql } from "drizzle-orm";
-import { QueryBuilder } from "drizzle-orm/pg-core";
+import { and, eq, exists, getTableColumns, inArray, sql } from "drizzle-orm";
 
 import { actualExpense } from "~/server/db/computed/expense-aggregate-sql";
 import {
@@ -40,23 +39,28 @@ const partsAccountedKitsSql = sql`(SELECT min(floor(COALESCE(${sql.raw(onHandUni
       WHERE kac."fromEntityId" = ${product.id}
         AND ${notDeleted("kac")} AND kac."kind" = 'productComponent')`;
 
-const recordedDisposal = new QueryBuilder()
-  .select({ id: expense.productId })
-  .from(expense)
-  .where(
-    and(notDeleted(expense), actualExpense(), ownershipExitExpensePredicate()),
-  );
-
 /** The drain evaluates authoritative inputs; page readers only use its publication. */
 export const computeProductReadFacts: DerivedCompute = async (db, ids) => {
   if (ids.length === 0) return new Map();
+  // Unlinked disposal Expenses are valid; EXISTS keeps membership boolean.
+  const recordedDisposal = unwrapDb(db)
+    .select({ id: expense.id })
+    .from(expense)
+    .where(
+      and(
+        eq(expense.productId, product.id),
+        notDeleted(expense),
+        actualExpense(),
+        ownershipExitExpensePredicate(),
+      ),
+    );
   const rows = await unwrapDb(db)
     .select({
       ...getTableColumns(product),
       accountedKits: sql<
         number | null
       >`${partsAccountedKitsSql}::double precision`,
-      recordedDisposal: inArray(product.id, recordedDisposal),
+      recordedDisposal: exists(recordedDisposal),
       category: categorySummarySql(sql`${product.categoryId}`),
       categoryStockTracking: categoryStockTrackingSql(
         sql`${product.categoryId}`,

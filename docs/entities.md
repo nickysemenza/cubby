@@ -2806,6 +2806,8 @@ date. This avoids repeating the household Expense allocation on each page.
 
 Product `readFacts.workFacts` publishes accounted kit units, unknown acquisition,
 kit double-counting, disposal reconciliation, quantity gaps and price eligibility.
+Disposal membership uses a correlated existence check: unlinked Expenses remain
+valid evidence without making another Product's boolean fact SQL null.
 Work and list predicates read those typed members, including negative filters;
 legacy payloads without the members remain unresolved until the hourly pass.
 The publisher reuses its loaded quantity ledger and pricing facts. Browsing never

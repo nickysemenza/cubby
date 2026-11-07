@@ -49,6 +49,7 @@ import { findSimilarEntitiesPage } from "~/server/generic/embedding/repo/entity-
 import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
 import { semanticEmbeddingsConfigured } from "~/server/generic/embedding/service/semantic/embeddings";
 import { productionVectorStore } from "~/server/generic/embedding/service/semantic/vector-store";
+import { JobEvidenceObsoleteError } from "~/server/generic/jobs/errors";
 import { nameAliasKeysSql } from "~/server/lib/name-alias-match";
 
 export const productIdentityPrompt = (subject: string) => ({
@@ -478,7 +479,9 @@ async function evaluateCurrentProductIdentityPair(
   };
   const model = decisionModelFor(question);
   if (!current || current.fingerprint !== pair.fingerprint)
-    throw new Error("Product identity evidence changed during evaluation");
+    throw new JobEvidenceObsoleteError(
+      "Product identity evidence changed during evaluation",
+    );
   const decision = pair.exact
     ? null
     : await runDecisionChoice({
@@ -546,9 +549,11 @@ export async function evaluateProductIdentity(
       prepared.productIds.length !== 1 ||
       prepared.productIds[0] !== id)
   )
-    throw new Error("Product identity catalog changed during preparation");
+    throw new JobEvidenceObsoleteError(
+      "Product identity catalog changed during preparation",
+    );
   const pairs = [];
-  let failure: string | null = null;
+  let failure: Error | null = null;
   const usage = ports.usage ?? { db, ...owner, operation: "product-identity" };
   const settled = await evaluatePreparedProductIdentityPairs(
     db,
@@ -558,7 +563,11 @@ export async function evaluateProductIdentity(
   );
   for (const result of settled) {
     if (result.status === "fulfilled") pairs.push(result.value);
-    else failure = getErrorMessage(result.reason);
+    else
+      failure =
+        result.reason instanceof Error
+          ? result.reason
+          : new Error(getErrorMessage(result.reason));
   }
   return { eligible: prepared.eligible, pairs, failure };
 }

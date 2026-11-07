@@ -192,12 +192,14 @@ export async function deferAiEvaluationFeature(
   token: string,
   until: Date,
   cause: string,
+  error: string,
 ) {
   await getDb(db)
     .update(aiEvaluation)
     .set({
       runAt: until,
       waitCause: cause,
+      error: sql`CASE WHEN ${aiEvaluation.leaseToken} = ${token}::uuid THEN ${error} ELSE ${aiEvaluation.error} END`,
       leaseToken: null,
       leaseUntil: null,
     })
@@ -272,6 +274,7 @@ export const aiEvaluationStore = (
       ),
       sql`${aiEvaluation.leaseToken} = ${token}::uuid`,
       sql`NOT ${aiEvaluation.leaseStale}`,
+      sql`${aiEvaluation.leaseUntil} > now()`,
     );
   return {
     claim: async (db, limit) => {
