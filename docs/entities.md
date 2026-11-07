@@ -1870,6 +1870,12 @@ The Product Sellers report reads the same acquisition relation, counts distinct
 Purchases and opens an exact Vendor-id list rather than the broader Vendors
 relationship.
 
+The Vendor manifest exposes the kernel's exact `ids` restriction as a record
+filter. Report links carrying selected Vendor identities round-trip through the
+route schema and filter codec instead of falling back to the broad Product
+relationship. Relationship grouping labels prefer their declared relation label;
+filter predicate wording does not rename existing grouping choices.
+
 The list-field compiler also owns `listFields.presentation`: semantic labels,
 descriptions, entity targets, value types, cardinality and admitted sort, group
 and filter keys with unavailable reasons. Shared web columns and menus consume

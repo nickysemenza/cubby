@@ -1185,12 +1185,15 @@ const compileGroupChoice = (
   const labelFilter = filterOn(null);
   const label =
     field?.label ??
-    (labelFilter === undefined ? undefined : filterFieldLabel(labelFilter)) ??
     entity.relations.find(
       (relation) =>
         relation.key === key ||
+        key === `related:${entity.key}.${relation.view?.key ?? relation.key}` ||
         (bound?.shape === "via" && relation.key === bound.path),
     )?.label ??
+    (key.startsWith("related:") && labelFilter !== undefined
+      ? filterFieldLabel(labelFilter)
+      : undefined) ??
     (bound?.shape === "via"
       ? byKey.get(bound.target)?.inspector.singular
       : bound?.shape === "rows" && bound.terminal.kind === "record"

@@ -1,3 +1,4 @@
+import { compileFilterCodec } from "@cubby/schemas/entity-definitions/list-filters";
 import type {
   ReportBlock,
   EntityReportOut,
@@ -10,6 +11,8 @@ import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { generatedEntityFilterCodecs } from "~/entity/generated/entity-filter-codecs.gen";
+import { entitySearch } from "~/entity/generated/entity-search.gen";
 import { unwrapDb } from "~/server/db/helpers";
 import { expense } from "~/server/db/schema";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
@@ -153,6 +156,22 @@ describe("entity report", () => {
           .sort()
           .join(","),
       },
+    });
+    const linkedSearch = entitySearch.vendor.schema.parse(
+      block.listLink?.filters,
+    );
+    expect(
+      compileFilterCodec(generatedEntityFilterCodecs.vendor).decode(
+        linkedSearch,
+      ),
+    ).toContainEqual({
+      id: "ids",
+      value: [
+        sellers[0]!.shortcode,
+        sellers[1]!.shortcode,
+        sellers[3]!.shortcode,
+        sellers[4]!.shortcode,
+      ].sort(),
     });
     await unwrapDb(ctx.db)
       .update(expense)
