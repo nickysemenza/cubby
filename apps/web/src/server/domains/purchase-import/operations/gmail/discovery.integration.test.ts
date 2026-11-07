@@ -743,6 +743,18 @@ describe("scheduled Gmail discovery", () => {
       expect(relevance).toHaveBeenCalledTimes(calls);
       expect((await readRun(state.params.runId)).status).toBe("paused_auth");
       expect((await readJobs(ctx.db, { key }))[0]?.availableAt).toEqual(until);
+      // Raising the budget releases discovery without granting per-Run overage.
+      const { resumeFundingPausedRuns } =
+        await import("~/server/domains/run/service/ai-work");
+      await resumeFundingPausedRuns(ctx.db, { anyWindow: true });
+      expect(await readRun(state.params.runId)).toMatchObject({
+        status: "running",
+        failureCode: null,
+        dispatchError: null,
+      });
+      expect(await advance()).toBe("deferred");
+      expect(relevance).toHaveBeenCalledTimes(calls + 1);
+      expect((await readRun(state.params.runId)).status).toBe("paused_auth");
       // Explicit paid authority restores the Run even while the funding owner waits.
       await controlWorkflowRun(
         ctx.db,
@@ -782,6 +794,10 @@ describe("scheduled Gmail discovery", () => {
       stop = undefined;
       await updateJobs(ctx.db, { key }, { availableAt: new Date() });
       expect(await advance()).toBe("succeeded");
+      expect(await readRun(state.params.runId)).toMatchObject({
+        status: "completed",
+        dispatchError: null,
+      });
       expect(await getDb(ctx.db).select().from(orderMail)).toHaveLength(1);
       expect((await readRun(state.params.runId)).input).toEqual(retained.input);
       expect(await getDb(ctx.db).select().from(emailTable)).toHaveLength(1);

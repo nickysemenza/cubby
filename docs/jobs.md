@@ -370,7 +370,9 @@ budget stops into `ai_funding_window` Job deferrals at the same window end plus
 the provider retry time. Neither consumes an attempt or discards frozen input,
 page evidence or the Job cursor. Generic early retries leave a funding-paused Run
 waiting while its funding-resume Job is pending; explicit `run_now_paid` authority
-can launch it immediately. Automatic mailbox admission joins the retained Run.
+can launch it immediately. An explicit budget increase also restores funding-paused
+discovery before bringing queued Jobs forward; member pauses remain stopped.
+Automatic mailbox admission joins the retained Run.
 Run control refusals are
 `RUN_CONTROL_REFUSED` (409), never 500.
 

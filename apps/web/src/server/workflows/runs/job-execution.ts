@@ -10,7 +10,10 @@ import { GatewayProviderStopError } from "~/server/ai/gateway-egress-client";
 import { getDb } from "~/server/db/helpers";
 import { run } from "~/server/db/retained-tables";
 import { readRun } from "~/server/domains/run/repo/ai-work-state";
-import { fundingResumeAt } from "~/server/domains/run/repo/execution-context";
+import {
+  fundingResumeAt,
+  fundingResumeInput,
+} from "~/server/domains/run/repo/execution-context";
 import { JobPausedError, JobDeferredError } from "~/server/generic/jobs/errors";
 import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 import { defineJobHandler } from "~/server/generic/jobs/service/jobs";
@@ -66,13 +69,9 @@ export const runJobHandler = defineJobHandler(
               { order: ["availableAt"] },
             )
           )
-            .map(
-              (job) =>
-                new Date(
-                  z.object({ until: z.iso.datetime() }).parse(job.input).until,
-                ),
-            )
-            .find((until) => until > new Date());
+            .map((job) => new Date(fundingResumeInput.parse(job.input).until))
+            .filter((until) => until > new Date())
+            .sort((left, right) => left.getTime() - right.getTime())[0];
           if (pending)
             throw new JobDeferredError(
               before.dispatchError ?? "Run awaits its funding window",

@@ -7,7 +7,9 @@ import {
   runStatus,
   STEP_RUN_PURPOSES,
 } from "@cubby/schemas/run-fields";
-import { and, eq, isNull, notInArray, sql } from "drizzle-orm";
+import { and, eq, isNull, lt, notExists, notInArray, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
+import { z } from "zod";
 
 import type { AiBudgetExhaustedError } from "~/server/ai/budget";
 import type { Database } from "~/server/db";
@@ -97,6 +99,43 @@ export async function pauseExecutionRun(
     )
     .returning({ id: run.id });
   return paused.length > 0;
+}
+
+export const fundingResumeInput = z.object({
+  runId: z.uuid().optional(),
+  until: z.iso.datetime(),
+});
+
+/** Explicit budget raises release discovery without reopening member stops. */
+export async function resumeFundingPausedDiscovery(db: Database, now: Date) {
+  const successor = alias(run, "funding_successor");
+  const resumed = await unwrapDb(db)
+    .update(run)
+    .set({
+      status: "running",
+      failureCode: null,
+      dispatchError: null,
+      endedAt: null,
+      updatedAt: now,
+    })
+    .where(
+      and(
+        eq(run.purpose, "mail_discovery"),
+        eq(run.status, "paused_auth"),
+        eq(run.failureCode, "execution_limit"),
+        lt(run.updatedAt, now),
+        notDeleted(run),
+        isNull(run.retiredAt),
+        notExists(
+          unwrapDb(db)
+            .select({ id: successor.id })
+            .from(successor)
+            .where(eq(successor.predecessorRunId, run.id)),
+        ),
+      ),
+    )
+    .returning({ id: run.id });
+  return resumed.length;
 }
 
 const RESUME_MARGIN_MS = 60_000;
