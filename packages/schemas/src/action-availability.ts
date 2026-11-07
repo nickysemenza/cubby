@@ -46,6 +46,14 @@ export const actionAvailabilityRules = {
   complete: {
     unlessValue: { path: "status", value: "done", reason: "Already done." },
   },
+  // `productId` reads the field envelope's resolved Product, so an unset or
+  // unresolved link refuses even when a stale raw id remains.
+  receive: {
+    requires: {
+      path: "productId",
+      reason: "Link a Product to receive this line into inventory.",
+    },
+  },
 } as const satisfies Readonly<Record<string, ActionAvailabilityRule>>;
 
 export const actionAvailabilityRuleFor = (

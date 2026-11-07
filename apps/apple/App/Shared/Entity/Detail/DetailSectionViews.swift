@@ -287,7 +287,7 @@ struct FieldsSectionView: View {
                                 .frame(width: 118, alignment: .trailing)
                                 .frame(minHeight: 20)
                                 if let session = inlineSession, session.field.key == field.key {
-                                    InlineFieldEditor(session: session) { inlineSession = nil }
+                                    InlineFieldEditor(session: session) { finishEditing(session) }
                                         .labelsHidden()
                                 } else {
                                     VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
@@ -355,7 +355,7 @@ struct FieldsSectionView: View {
     @ViewBuilder
     private func fieldRowWithResolutionActions(_ field: FieldDescriptor) -> some View {
         if let session = inlineSession, session.field.key == field.key {
-            InlineFieldEditor(session: session) { inlineSession = nil }
+            InlineFieldEditor(session: session) { finishEditing(session) }
         } else {
             VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
                 HStack(spacing: FieldGuideTokens.Space.xs) {
@@ -403,6 +403,11 @@ struct FieldsSectionView: View {
     private func beginEditing(_ field: FieldDescriptor) {
         inlineSession = InlineEditSession(
             field: field, row: row, descriptor: descriptor, client: appModel.client)
+    }
+
+    /// A save that outlives its row finishes late; it must not close another field's editor.
+    private func finishEditing(_ session: InlineEditSession) {
+        if inlineSession === session { inlineSession = nil }
     }
 
     @ViewBuilder
