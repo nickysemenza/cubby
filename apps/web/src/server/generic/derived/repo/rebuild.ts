@@ -58,7 +58,6 @@ export function rebuildDeclarations(): readonly EntityStoredDerivedDeclaration[]
 const claimRow = z.object({
   target: z.string(),
   afterId: z.uuid().nullable(),
-  cursorAttempts: z.number().int(),
 });
 export type RebuildClaim = z.infer<typeof claimRow> & { token: string };
 
@@ -90,7 +89,7 @@ export async function claimRebuild(
       token = EXCLUDED.token, "leaseExpiresAt" = EXCLUDED."leaseExpiresAt"
     WHERE ("DerivedRebuild"."leaseExpiresAt" IS NULL OR "DerivedRebuild"."leaseExpiresAt" < now() AT TIME ZONE 'UTC' OR ("DerivedRebuild".token IS NULL AND ${force}))
       AND ("DerivedRebuild".running OR ${force} OR "DerivedRebuild"."startedAt" IS NULL OR "DerivedRebuild"."startedAt" < date_trunc('hour', now() AT TIME ZONE 'UTC'))
-    RETURNING target, "afterId", "cursorAttempts"`);
+    RETURNING target, "afterId"`);
   const row = z.array(claimRow).parse(result.rows)[0];
   return row ? { ...row, token } : null;
 }

@@ -1,6 +1,5 @@
 import { aiRefreshRunInput } from "@cubby/schemas/ai-evaluation";
-import type { RunId } from "@cubby/schemas/identifiers";
-import { and, count, eq, inArray, ne, sql } from "drizzle-orm";
+import { and, count, eq, inArray, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers/core";
@@ -27,7 +26,7 @@ export async function lockAiRefreshScheduling(db: Database) {
 }
 
 /** Discovery has an activation owner; Sweeps own their evaluations and take no slot. */
-export async function hasAiRefreshRunCapacity(db: Database, excludeId?: RunId) {
+export async function hasAiRefreshRunCapacity(db: Database) {
   const [row] = await getDb(db)
     .select({ count: count() })
     .from(run)
@@ -36,7 +35,6 @@ export async function hasAiRefreshRunCapacity(db: Database, excludeId?: RunId) {
         eq(run.purpose, "ai_refresh"),
         inArray(run.status, ["running", "paused", "paused_auth"]),
         sql`coalesce((${run.input}->>${aiRefreshRunInput.keyof().enum.discovery})::boolean, false) = false`,
-        excludeId ? ne(run.id, excludeId) : undefined,
         notDeleted(run),
       ),
     );

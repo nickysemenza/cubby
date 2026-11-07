@@ -35,6 +35,7 @@ import {
   type AiEvaluationRow,
   type RunRow,
 } from "~/server/domains/run/repo/ai-work-state";
+import { JobEvidenceObsoleteError } from "~/server/generic/jobs/errors";
 import { buildCrudServices } from "~/server/http/request-context";
 import type { WorkflowRunParams } from "~/server/workflows/runs/contract";
 import { launchWorkflowRun } from "~/server/workflows/runs/lifecycle";
@@ -184,7 +185,10 @@ export async function executeAiWorkTarget(
     await executeReclassificationTarget(db, item, ports.reclassification);
   else {
     const owner = item.runId && (await readRun(db, item.runId));
-    if (!owner) throw new Error("Suggestion sweep Run no longer exists");
+    if (!owner)
+      throw new JobEvidenceObsoleteError(
+        "Suggestion sweep Run no longer exists",
+      );
     const context = ports.sweep?.context ?? {
       ...buildCrudServices(db),
       actorContext: buildActorContext(owner.actorUserId, owner.channel, {

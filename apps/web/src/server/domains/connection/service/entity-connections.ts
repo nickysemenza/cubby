@@ -49,6 +49,7 @@ import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { readSelectedEntityRecords } from "~/server/entity-kernel/selected-read";
 import { latestFieldWrite } from "~/server/generic/audit-log/repo/field-write";
 import { withJobPhase } from "~/server/generic/jobs/context";
+import { JobEvidenceObsoleteError } from "~/server/generic/jobs/errors";
 import {
   lookupShortcodes,
   resolveOrThrow,
@@ -166,7 +167,7 @@ export async function prepareEntityConnections(
         ports.productIdentityPorts,
       ),
     );
-    if (identity.failure) throw new Error(identity.failure);
+    if (identity.failure) throw identity.failure;
     for (let offset = 0; offset < identity.pairs.length; offset += 16) {
       const prepared = await prepareProductPairPublications(
         db,
@@ -176,7 +177,9 @@ export async function prepareEntityConnections(
         })),
       );
       if (prepared.length !== identity.pairs.slice(offset, offset + 16).length)
-        throw new Error("Product pair evidence changed during inference");
+        throw new JobEvidenceObsoleteError(
+          "Product pair evidence changed during inference",
+        );
       productPairs.push(...prepared);
       const codes = await lookupShortcodes(
         db,
@@ -291,7 +294,8 @@ async function prepareFieldConnections(
     ids: [source.entityId],
     fields: projection,
   });
-  if (!selected) throw new Error("Connection source no longer exists");
+  if (!selected)
+    throw new JobEvidenceObsoleteError("Connection source no longer exists");
   const row = selected;
   const valueOf = (key: string) => {
     const path = readPaths.get(key);

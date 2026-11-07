@@ -10,7 +10,6 @@ import { z } from "zod";
 
 import {
   completeAiEvaluation,
-  publishAiEvaluation,
   settleAiEvaluations,
 } from "~/server/ai/evaluation/repo/ai-evaluation";
 import {
@@ -27,8 +26,11 @@ import {
   aiEvaluationItem,
   drainAiEvaluations,
   updateAiEvaluationWork,
-  withClaimedAiEvaluation,
 } from "~/server/ai/evaluation/service/ai-evaluation-drain.fixtures";
+import {
+  GatewayAdmissionWaitError,
+  GatewayProviderStopError,
+} from "~/server/ai/gateway-egress-client";
 import { dependencyStamps } from "~/server/ai/policy/refresh-manifest";
 import { activateAiRefresh } from "~/server/ai/repo/ai-refresh";
 import {
@@ -141,7 +143,9 @@ describe("AI evaluation drain publication", () => {
                 ? {
                     kind: "failed" as const,
                     target,
-                    error: new Error("Synthetic preparation failure"),
+                    error: new Error(
+                      "Synthetic provider response mentions obsolete",
+                    ),
                   }
                 : {
                     kind: "ready" as const,
@@ -207,6 +211,127 @@ describe("AI evaluation drain publication", () => {
     );
   });
 
+  // Funding/configuration and shared admission must preserve attempts and paid siblings.
+  it.each(["funding", "configuration", "admission"] satisfies (
+    | "funding"
+    | "configuration"
+    | "admission"
+  )[])(
+    "publishes paid siblings before a %s stop without replaying them",
+    async (kind) => {
+      const seeded = await seed(3);
+      const stoppedId = seeded.rows[0]!.id;
+      const other = await seed(1, "synthetic-unrelated-feature");
+      await getDb(ctx.db)
+        .update(aiEvaluation)
+        .set({ attempts: 2 })
+        .where(eq(aiEvaluation.id, stoppedId));
+      const stop =
+        kind === "admission"
+          ? new GatewayAdmissionWaitError(Date.now() + 60_000)
+          : new GatewayProviderStopError(
+              kind,
+              kind === "funding" ? 402 : 401,
+              "Synthetic provider funding or credential diagnosis",
+            );
+      const paid: string[] = [];
+      let stopped = true;
+      const execution: AiEvaluationExecution = {
+        ...runAiEvaluationExecution(),
+        async preparePage(_db, targets) {
+          for (const target of targets) paid.push(target.evaluation.id);
+          return {
+            ready: new Map(
+              targets
+                .filter(
+                  (target) => !stopped || target.evaluation.id !== stoppedId,
+                )
+                .map((target) => [target.evaluation.id, { target, weight: 1 }]),
+            ),
+            failures: stopped
+              ? new Map([
+                  [
+                    stoppedId,
+                    new Error("Synthetic wrapped provider stop", {
+                      cause: stop,
+                    }),
+                  ],
+                ])
+              : new Map(),
+            oversized: new Map(),
+            overflow: [],
+            async publish(_tx, ids) {
+              return ids.map((evaluationId) => ({
+                evaluationId,
+                state: "completed",
+                receipt: { syntheticPaid: true },
+              }));
+            },
+          };
+        },
+      };
+      expect(
+        await runAiEvaluationPage(ctx.db, execution, "product-identity"),
+      ).toMatchObject({ outcome: "deferred", settled: 2 });
+      const [waiting] = await getDb(ctx.db)
+        .select()
+        .from(aiEvaluation)
+        .where(eq(aiEvaluation.id, stoppedId));
+      expect(waiting).toMatchObject({
+        state: "queued",
+        attempts: 2,
+        runAt: new Date(stop.retryAt),
+        waitCause: kind === "admission" ? "rate_limit" : "provider_capacity",
+      });
+      expect(waiting?.error).toContain("Synthetic wrapped provider stop");
+      const unrelated = await aiEvaluationItem(ctx.db, other.rows[0]!.id);
+      expect(unrelated?.attempts).toBe(0);
+      const [unrelatedRow] = await getDb(ctx.db)
+        .select()
+        .from(aiEvaluation)
+        .where(eq(aiEvaluation.id, other.rows[0]!.id));
+      expect(unrelatedRow?.waitCause).toBeNull();
+      stopped = false;
+      await updateAiEvaluationWork(ctx.db, [stoppedId], { runAt: new Date(0) });
+      expect(
+        await runAiEvaluationPage(ctx.db, execution, "product-identity"),
+      ).toMatchObject({ outcome: "succeeded", settled: 1 });
+      expect(paid.filter((id) => id !== stoppedId)).toHaveLength(2);
+      expect(paid.filter((id) => id === stoppedId)).toHaveLength(2);
+      expect(
+        (
+          await getDb(ctx.db)
+            .select()
+            .from(aiEvaluation)
+            .where(eq(aiEvaluation.id, stoppedId))
+        )[0]?.state,
+      ).toBe("completed");
+      const escaped = await seed(1);
+      await updateAiEvaluationWork(ctx.db, [escaped.rows[0]!.id], {
+        attempts: 2,
+      });
+      expect(
+        await runAiEvaluationPage(
+          ctx.db,
+          {
+            ...execution,
+            async preparePage() {
+              throw new Error("Synthetic escaped page stop", { cause: stop });
+            },
+          },
+          "product-identity",
+        ),
+      ).toMatchObject({ outcome: "deferred", settled: 0 });
+      expect(await aiEvaluationItem(ctx.db, escaped.rows[0]!.id)).toMatchObject(
+        {
+          attempts: 2,
+          readyAt: new Date(stop.retryAt),
+          lastError: expect.stringContaining("Synthetic escaped page stop"),
+        },
+      );
+    },
+  );
+
   it("settles receipt sets, preserves explicit retry receipts, and wakes each coordinator", async () => {
     const seeded = await seed(3);
     await enqueueJob(ctx.db, {
@@ -244,39 +369,54 @@ describe("AI evaluation drain publication", () => {
     expect(coordinator!.availableAt.getTime()).toBeLessThan(Date.now() + 1000);
   });
 
-  it("refuses publication once the page's lease is lost", async () => {
-    const seeded = await seed(1);
-    const id = seeded.rows[0]!.id;
-    const refused = await withClaimedAiEvaluation(
-      ctx.db,
-      id,
-      async (claimed) => {
-        // Another worker reclaimed the row after this lease expired.
-        await getDb(ctx.db)
-          .update(aiEvaluation)
-          .set({ leaseToken: crypto.randomUUID() })
-          .where(eq(aiEvaluation.id, id));
-        return publishAiEvaluation(
-          ctx.db,
-          id,
-          claimed.attemptToken,
-          async () => ({
-            synthetic: true,
-          }),
-        ).then(
-          () => null,
-          (error: unknown) => error,
-        );
-      },
-    );
-    expect(refused).toBeInstanceOf(Error);
-    const [row] = await getDb(ctx.db)
-      .select()
-      .from(aiEvaluation)
-      .where(eq(aiEvaluation.id, id));
-    expect(row?.state).toBe("queued");
-    expect(await aiEvaluationItem(ctx.db, id)).toBeDefined();
-  });
+  it.each(["reclaimed", "expired"])(
+    "refuses publication once its exact chunk lease is %s",
+    async (loss) => {
+      const seeded = await seed(1);
+      const id = seeded.rows[0]!.id;
+      let publications = 0;
+      const execution: AiEvaluationExecution = {
+        ...runAiEvaluationExecution(),
+        async preparePage(_db, targets) {
+          await getDb(ctx.db)
+            .update(aiEvaluation)
+            .set(
+              loss === "reclaimed"
+                ? { leaseToken: crypto.randomUUID() }
+                : { leaseUntil: new Date(0) },
+            )
+            .where(eq(aiEvaluation.id, id));
+          return {
+            ready: new Map(
+              targets.map((target) => [
+                target.evaluation.id,
+                { target, weight: 1 },
+              ]),
+            ),
+            failures: new Map(),
+            oversized: new Map(),
+            overflow: [],
+            async publish(_tx, ids) {
+              publications++;
+              return ids.map((evaluationId) => ({
+                evaluationId,
+                state: "completed",
+                receipt: { synthetic: true },
+              }));
+            },
+          };
+        },
+      };
+      await runAiEvaluationPage(ctx.db, execution, "product-identity");
+      expect(publications).toBe(0);
+      const [row] = await getDb(ctx.db)
+        .select()
+        .from(aiEvaluation)
+        .where(eq(aiEvaluation.id, id));
+      expect(row).toMatchObject({ state: "queued", receipt: null });
+      expect(await aiEvaluationItem(ctx.db, id)).toBeDefined();
+    },
+  );
 
   it.each(["ai_refresh", "suggestion_sweep", "mail_reclassify"] as const)(
     "reuses completed input only for automatic refresh (%s)",

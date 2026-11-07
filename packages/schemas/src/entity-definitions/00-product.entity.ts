@@ -2300,7 +2300,6 @@ Rules:
               match: { id: "id" },
               columns: ["stockTracked", "categoryId"],
             },
-            // Keep this input position: its pending tickets still name Location IDs.
             // Placements include both recorded stock and Locations that are Products.
             {
               table: "Location",

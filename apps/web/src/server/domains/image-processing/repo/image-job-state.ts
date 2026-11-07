@@ -24,7 +24,7 @@ const at = (now: Date) => sql`${now.toISOString()}::timestamp`;
 
 /**
  * The displayed state of an image job. The row stores the domain outcome
- * (`pending` while open, `ready`, `skipped`) and its own execution columns:
+ * (`pending` while open, `ready`, `skipped`, or deterministic `failed`) and its execution columns:
  *
  * - `leased`: an attempt holds a live lease;
  * - `failed`: open work that failed `JOB_NEEDS_ATTENTION_ATTEMPTS` times in a
@@ -32,7 +32,7 @@ const at = (now: Date) => sql`${now.toISOString()}::timestamp`;
  * - `waiting_for_device`: parked for an Apple device;
  * - `pending`: queued for the server, or backing off.
  *
- * A stored `failed` is a legacy terminal state of a superseded processor.
+ * A stored `failed` retains a nonretryable result until explicit retry or new inputs.
  */
 export const imageJobDisplayStateSql = (alias = "ImageProcessingJob") => {
   const c = (name: string) => column(alias, name);

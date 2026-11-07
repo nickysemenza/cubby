@@ -1,5 +1,8 @@
 import type { JobWaitReason } from "@cubby/schemas/job";
 
+/** Fresh evidence or eligibility is required; retire the stale target without spending attempts. */
+export class JobEvidenceObsoleteError extends Error {}
+
 /** Pure control signals shared with providers without importing the database runtime. */
 export class JobPausedError extends Error {}
 /** A page may retry this target alone after rolling back its shared publication. */

@@ -1,10 +1,13 @@
-import type {
-  GatewayControls,
-  GatewayFetchRequest,
+import {
+  isInferenceFundingRefusal,
+  isPaidFundingUnavailable,
+  type GatewayControls,
+  type GatewayFetchRequest,
 } from "@cubby/shared/ai/gateway-request";
 import type { GatewayProvider } from "@cubby/shared/ai/models";
 import { sleep } from "@cubby/shared/retry";
 
+import { findErrorCause } from "~/lib/error-diagnostics";
 import type { UnparsedError } from "~/lib/error-utils";
 
 import { deferCooperativeAiWork } from "./cooperative-work";
@@ -15,15 +18,41 @@ export class GatewayAdmissionWaitError extends Error {
     super("AI Gateway admission is waiting for shared capacity");
   }
 }
-export function isGatewayAdmissionWait(error: UnparsedError) {
-  for (
-    let depth = 0, current = error;
-    depth < 8 && current instanceof Error;
-    depth++, current = current.cause
+export const gatewayAdmissionWait = (error: UnparsedError) =>
+  findErrorCause(
+    error,
+    (cause): cause is GatewayAdmissionWaitError =>
+      cause instanceof GatewayAdmissionWaitError,
+  );
+
+export const isGatewayAdmissionWait = (error: UnparsedError) =>
+  gatewayAdmissionWait(error) !== undefined;
+
+/** The provider needs funding or configuration; probe later without exhausting targets. */
+export class GatewayProviderStopError extends Error {
+  readonly retryAt = Date.now() + 15 * 60_000;
+
+  constructor(
+    readonly kind: "funding" | "configuration",
+    readonly status: number,
+    body: string,
   ) {
-    if (current instanceof GatewayAdmissionWaitError) return true;
+    super(`Decision request failed (${status}): ${body}`);
   }
-  return false;
+}
+
+/** Classify the actual provider response once, before retrying or wrapping it. */
+export function gatewayProviderStop(status: number, body: string) {
+  if (
+    status === 402 ||
+    isPaidFundingUnavailable(body) ||
+    isInferenceFundingRefusal(status, body, "openai_credit") ||
+    isInferenceFundingRefusal(status, body, "subscriber_credit")
+  )
+    return new GatewayProviderStopError("funding", status, body);
+  if (status === 401 || status === 403)
+    return new GatewayProviderStopError("configuration", status, body);
+  return null;
 }
 
 export async function coordinatedGatewayRequest(

@@ -64,6 +64,7 @@ import {
 import {
   setPhotoRunDefaults,
   readPhotoRunReview,
+  readRemainingPhotoRunContext,
   approvePhotoGroupProposals,
   resolvePhotoGroupConcern,
   assertPhotoRunReviewer,
@@ -156,6 +157,74 @@ describe("photo group proposals", () => {
       );
     return row;
   };
+
+  it("checkpoints an unfinished item atomically and resumes without repeating member decisions", async () => {
+    const { run, codes } = await seedRun(4);
+    await proposePhotoGroups(
+      ctx.db,
+      {
+        runId: run.shortcode,
+        groups: [
+          createGroup("settled-page", [codes[0]!]),
+          createGroup("boundary", [codes[1]!]),
+        ],
+        boundaryGroupKey: "boundary",
+      },
+      "external_agent",
+    );
+    const first = await readRemainingPhotoRunContext(ctx.db, run.shortcode);
+    expect(first.boundaryGroup?.groupKey).toBe("boundary");
+    expect(first.images.map((entry) => entry.id)).toEqual(codes.slice(2));
+    await expect(
+      proposePhotoGroups(
+        ctx.db,
+        {
+          runId: run.shortcode,
+          groups: [createGroup("invalid", [codes[0]!])],
+          boundaryGroupKey: null,
+        },
+        "external_agent",
+      ),
+    ).rejects.toThrow(/appears in both/);
+    expect(
+      (await readRemainingPhotoRunContext(ctx.db, run.shortcode)).boundaryGroup
+        ?.groupKey,
+    ).toBe("boundary");
+    await proposePhotoGroups(
+      ctx.db,
+      {
+        runId: run.shortcode,
+        groups: [createGroup("boundary", [codes[1]!, codes[2]!])],
+        boundaryGroupKey: "boundary",
+      },
+      "external_agent",
+    );
+    const continued = await readRemainingPhotoRunContext(ctx.db, run.shortcode);
+    expect(continued.boundaryGroup?.images.map((entry) => entry.id)).toEqual(
+      codes.slice(1, 3),
+    );
+    expect(continued.images.map((entry) => entry.id)).toEqual(codes.slice(3));
+    await proposePhotoGroups(
+      ctx.db,
+      {
+        runId: run.shortcode,
+        groups: [
+          createGroup(
+            "boundary",
+            [codes[1]!, codes[2]!],
+            "Synthetic member choice",
+          ),
+        ],
+      },
+      "member",
+    );
+    const reviewed = await readRemainingPhotoRunContext(ctx.db, run.shortcode);
+    expect(reviewed.boundaryGroup).toBeNull();
+    expect(reviewed.images.map((entry) => entry.id)).toEqual(codes.slice(3));
+    expect((await readRow(run.id, "boundary"))?.productCreate?.name).toBe(
+      "Synthetic member choice",
+    );
+  });
 
   it("inherits owned-item intent and fills a missing batch location without overwriting exceptions", async () => {
     const { run, codes } = await seedRun(4);

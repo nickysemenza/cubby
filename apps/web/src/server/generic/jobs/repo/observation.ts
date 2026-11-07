@@ -161,7 +161,7 @@ async function readAiEvaluationStreams(
   const at = sql`${now.toISOString()}::timestamp`;
   const since = (minutes: number) =>
     sql`${at} - ${minutes} * interval '1 minute'`;
-  const owed = sql`e."runAt" IS NOT NULL`;
+  const owed = sql`e."runAt" IS NOT NULL AND e.state IN (${aiEvaluationState.enum.queued}, ${aiEvaluationState.enum.result_ready})`;
   const held = sql`e."leaseUntil" > ${at}`;
   const later = sql`${owed} AND NOT coalesce(${held}, false) AND e."runAt" > ${at}`;
   const claimable = sql`${owed} AND NOT coalesce(${held}, false) AND e."runAt" <= ${at}`;
@@ -343,7 +343,14 @@ const kindLabel = (kind: string) => {
   if (kind === "image.cloud") return "Photo processing in the cloud";
   if (kind === "image.device") return "Photo processing on Apple devices";
   if (kind.startsWith("embedding.")) return "Search embeddings";
-  if (kind.startsWith("ai.evaluation")) return "AI evaluations";
+  if (kind.startsWith("ai.evaluation:")) {
+    const feature = kind.slice("ai.evaluation:".length);
+    if (feature === "entity-connections") return "Connection evaluations";
+    if (feature === "mailbox-relevance") return "Email relevance";
+    if (feature === "mailbox-triage") return "Email triage";
+    if (feature === "product-identity") return "Product identity";
+    return "Field suggestions";
+  }
   const declared = jobKindDeclaration(kind);
   return declared?.activityLabel ?? declared?.label ?? kind;
 };
@@ -405,9 +412,14 @@ async function readFailedWork(db: Database, now: Date) {
         OR (state IN (${jobState.enum.queued}, ${jobState.enum.retry_wait}) AND attempts >= ${JOB_NEEDS_ATTENTION_ATTEMPTS})
       UNION ALL SELECT 'ai.evaluation:' || feature, "updatedAt", error FROM "AiEvaluation"
         WHERE (state = ${aiEvaluationState.enum.failed} AND "updatedAt" > ${since}::timestamp)
-          OR ("runAt" IS NOT NULL AND attempts >= ${JOB_NEEDS_ATTENTION_ATTEMPTS})
-      UNION ALL SELECT 'image.' || lane, "updatedAt", "lastError" FROM "ImageProcessingJob"
-        WHERE state = ${imageProcessingJobState.enum.pending} AND failures >= ${JOB_NEEDS_ATTENTION_ATTEMPTS}
+          OR (state IN (${aiEvaluationState.enum.queued}, ${aiEvaluationState.enum.result_ready})
+            AND "runAt" IS NOT NULL AND attempts >= ${JOB_NEEDS_ATTENTION_ATTEMPTS})
+      UNION ALL SELECT 'image.' || lane, "updatedAt", "lastError" FROM "ImageProcessingJob" image_job
+        WHERE (state = ${imageProcessingJobState.enum.failed}
+          OR (state = ${imageProcessingJobState.enum.pending} AND failures >= ${JOB_NEEDS_ATTENTION_ATTEMPTS}))
+          AND ${notDeleted("image_job")} AND EXISTS (SELECT 1 FROM "Image" source
+            WHERE source.id = image_job."imageId" AND ${notDeleted("source")}
+              AND source.sha256 = image_job."sourceContentHash")
       UNION ALL SELECT 'embedding.refresh', "updatedAt", "embeddingError" FROM "SearchDocument"
         WHERE "embeddingDueAt" IS NOT NULL AND "embeddingAttempts" >= ${JOB_NEEDS_ATTENTION_ATTEMPTS}
           AND ${notDeleted("SearchDocument")}

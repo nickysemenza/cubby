@@ -4,6 +4,10 @@ import {
   mailReadAgentText,
   mailResolveOut,
 } from "@cubby/schemas/mailbox-research";
+import {
+  photoGroupProposalList,
+  proposePhotoGroupsOutput,
+} from "@cubby/schemas/photo-import-run";
 import { sha256Hex } from "@cubby/shared/sha256";
 import type { Context } from "@earendil-works/chord";
 import { Type, type JsonObject } from "@earendil-works/pi-ai";
@@ -197,6 +201,63 @@ export function cubbyToolResult(raw: unknown): ToolExecutionResult {
   return { output: content, isError: parsed.isError === true, diagnostics };
 }
 
+/** Decision inputs remain in the transcript; complete rosters remain in durable proposals. */
+export function photoCoordinatorToolResult(
+  tool: string,
+  args: JsonObject,
+  result: z.output<typeof callResult>,
+): ToolExecutionResult {
+  if (tool !== "photo_run" && tool !== "photo_run_read")
+    return cubbyToolResult(result);
+  if (result.isError) return cubbyToolResult(result);
+  const written = tool === "photo_run" && args.action === "propose_groups";
+  const read = tool === "photo_run_read" && args.action === "proposals";
+  if (!written && !read) return cubbyToolResult(result);
+  const text = result.content
+    .flatMap((part) => textBlock.safeParse(part).data?.text ?? [])
+    .at(0);
+  const value: unknown =
+    result.structuredContent ?? (text ? JSON.parse(text) : undefined);
+  const list = photoGroupProposalList.parse(value);
+  const submitted = z
+    .object({ groups: z.array(z.object({ groupKey: z.string() })).default([]) })
+    .parse(args);
+  const frozen = written
+    ? proposePhotoGroupsOutput.parse(value).frozenGroupKeys
+    : [];
+  const compact = {
+    runId: list.runId,
+    runStatus: list.runStatus,
+    proposalCount: list.proposals.length,
+    unassignedImageCount: list.unassignedImageIds.length,
+    conflictedGroupCount: list.proposals.filter(
+      (group) => group.conflict?.length,
+    ).length,
+    failedGroupCount: list.proposals.filter((group) => group.lastError).length,
+    // Repair the first outstanding groups, then read again for the next batch.
+    groupsNeedingRepair: list.proposals
+      .filter((group) => group.conflict?.length || group.lastError)
+      .slice(0, 8)
+      .map((group) => ({
+        groupKey: group.groupKey,
+        conflict: group.conflict?.slice(0, 8) ?? null,
+        lastError: group.lastError?.slice(0, 2000) ?? null,
+      })),
+    ...(written
+      ? {
+          savedGroupKeys: submitted.groups
+            .map((group) => group.groupKey)
+            .filter((key) => !frozen.includes(key)),
+          frozenGroupKeys: frozen,
+        }
+      : {}),
+  };
+  return {
+    output: [{ type: "text", text: JSON.stringify(compact) }],
+    isError: false,
+  };
+}
+
 type WriterResult = Pick<ToolExecutionResult, "isError" | "diagnostics">;
 
 /** Only the MCP adapter emits this prefix; source text cannot supply a verdict. */
@@ -239,6 +300,7 @@ export function cubbyMcpExtension(
     api: ToolExecutionApi,
     context: Context,
   ) => Promise<string | undefined>,
+  runId?: string,
 ): Extension {
   let client: Promise<Client> | undefined;
   const connected = () => {
@@ -261,17 +323,23 @@ export function cubbyMcpExtension(
           ? { outputLimits: EMAIL_READ_OUTPUT_LIMITS }
           : {}),
         execute: async (args, api, context) =>
-          cubbyToolResult(
-            await (
-              await connected()
-            ).callTool(
-              {
-                name: tool.name,
-                arguments: await stampGeneration(args, () =>
-                  generationFor?.(api, context),
-                ),
-              },
-              { signal: context.abortSignal, timeout: TOOL_CALL_TIMEOUT_MS },
+          photoCoordinatorToolResult(
+            tool.name,
+            args,
+            callResult.parse(
+              await (
+                await connected()
+              ).callTool(
+                {
+                  name: tool.name,
+                  arguments: await stampGeneration(
+                    args,
+                    () => generationFor?.(api, context),
+                    runId,
+                  ),
+                },
+                { signal: context.abortSignal, timeout: TOOL_CALL_TIMEOUT_MS },
+              ),
             ),
           ),
       }),
@@ -283,21 +351,40 @@ export function cubbyMcpExtension(
  * Overwrite any model-written `_runExecution.generation` with the host's own
  * record of the issuing request's generation; the bearer minted for the call
  * signs it, and the server fences superseded generations by it. A model that
- * also names its Run's public `run` code beside `runId` is dropped to `runId`:
- * the envelope refuses both, and the delegation already binds the Run.
+ * also names its Run's public `run` code beside `runId` is dropped to `runId`.
+ * Mail supplies the immutable delegated Run here instead of asking the model
+ * to repeat it. Email/checksum and operation ids stay in the saved arguments.
  */
 export async function stampGeneration(
   args: JsonObject,
   generation: () => Promise<string | undefined> | undefined,
+  runId?: string,
 ): Promise<JsonObject> {
-  const envelope = args._runExecution;
+  const nested = runId && isJsonObject(args.input) ? args.input : undefined;
+  const envelope =
+    args._runExecution === undefined
+      ? nested?._runExecution
+      : args._runExecution;
   if (!isJsonObject(envelope)) return args;
   const { generation: _claimed, ...claimed } = envelope;
   const { run: _publicRun, ...withoutRun } = claimed;
-  const rest = claimed.runId === undefined ? claimed : withoutRun;
+  const rest = runId
+    ? { ...withoutRun, runId }
+    : claimed.runId === undefined
+      ? claimed
+      : withoutRun;
   const stamped = await generation();
   return {
     ...args,
+    // Describe may place the envelope inside a compact action's input. Mail
+    // signs it at the root before the server flattens that input.
+    ...(nested && isJsonObject(nested._runExecution)
+      ? {
+          input: Object.fromEntries(
+            Object.entries(nested).filter(([key]) => key !== "_runExecution"),
+          ),
+        }
+      : {}),
     _runExecution: stamped ? { ...rest, generation: stamped } : rest,
   };
 }

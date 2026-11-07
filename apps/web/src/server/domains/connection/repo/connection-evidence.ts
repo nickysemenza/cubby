@@ -38,6 +38,7 @@ import {
   listPurchasesSettlementCandidates,
 } from "~/server/domains/purchase/repo/purchase-settlement-candidates";
 import { liveLinks } from "~/server/generic/entity-links/repo/entity-links";
+import { JobEvidenceObsoleteError } from "~/server/generic/jobs/errors";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import {
   SHORTCODE_TABLE,
@@ -339,7 +340,7 @@ export async function connectionRecord(
   const parsed = parseShortcode(ref.entityId);
   if (parsed?.type !== kind) {
     await resolveOrThrow(db, kind, ref.entityId);
-    throw new Error(`Connection ${kind} no longer exists`);
+    throw new JobEvidenceObsoleteError(`Connection ${kind} no longer exists`);
   }
   const table: ShortcodeTable = SHORTCODE_TABLE[kind];
   // One statement by live shortcode: resolving first doubled every record read.
@@ -353,7 +354,7 @@ export async function connectionRecord(
   // rediscovers without it); only a live code without a row "no longer exists".
   if (!value) {
     await resolveOrThrow(db, kind, ref.entityId);
-    throw new Error(`Connection ${kind} no longer exists`);
+    throw new JobEvidenceObsoleteError(`Connection ${kind} no longer exists`);
   }
   return {
     id: parseEntityId(kind, value.id),

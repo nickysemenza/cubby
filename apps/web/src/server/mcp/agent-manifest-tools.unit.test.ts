@@ -1,4 +1,5 @@
 import { importRunAgentManifest } from "@cubby/schemas/import-run-agent";
+import { AjvJsonSchemaValidator } from "@modelcontextprotocol/client/validators/ajv";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
@@ -165,5 +166,65 @@ describe("import run agent manifest", () => {
           readers.includes(tool.name),
         );
     }
+    // Pi 1.3's Anthropic adapter copies only root properties/required. Full
+    // common inputs must still validate without root definitions at escalation.
+    const validator = new AjvJsonSchemaValidator();
+    const catalog = purchaseAgentToolCatalog("mail_import");
+    for (const nameAndAction of importRunAgentManifest.mail_import
+      .mcpInputActions) {
+      const [name, action] = nameAndAction.split(".");
+      const schema = z
+        .object({
+          properties: z
+            .object({
+              input: z.object({
+                anyOf: z.array(z.record(z.string(), z.json())),
+              }),
+            })
+            .catchall(z.json()),
+          required: z.array(z.string()),
+        })
+        .parse(catalog.find((tool) => tool.name === name)?.inputSchema);
+      const detailed = schema.properties.input.anyOf.find(
+        (branch) =>
+          branch.description === `Complete input for action ${action}.`,
+      );
+      expect(detailed).toBeDefined();
+      expect(() =>
+        validator.getValidator(
+          z.record(z.string(), z.json()).parse({
+            type: "object",
+            properties: schema.properties,
+            required: schema.required,
+          }),
+        ),
+      ).not.toThrow();
+    }
+    const resolve = catalog.find((tool) => tool.name === "purchase_import")!;
+    const projection = z
+      .object({
+        properties: z.record(z.string(), z.json()),
+        required: z.array(z.string()),
+      })
+      .parse(resolve.inputSchema);
+    const validate = validator.getValidator(
+      z.record(z.string(), z.json()).parse({ type: "object", ...projection }),
+    );
+    expect(
+      validate({
+        action: "mail_resolve",
+        input: {
+          mailboxId: "synthetic-mailbox",
+          messageId: "original-email",
+          checksum: "c".repeat(64),
+          disposition: {
+            kind: "unresolved",
+            category: "missing_evidence",
+            reason: "Synthetic missing evidence",
+          },
+        },
+        _runExecution: { operationId: "synthetic-operation" },
+      }).valid,
+    ).toBe(true);
   });
 });

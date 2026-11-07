@@ -13,7 +13,10 @@ import { suggestionTable } from "~/server/db/schema";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { readSelectedEntityRecords } from "~/server/entity-kernel/selected-read";
 import { latestFieldWrite } from "~/server/generic/audit-log/repo/field-write";
-import { JobTargetError } from "~/server/generic/jobs/errors";
+import {
+  JobEvidenceObsoleteError,
+  JobTargetError,
+} from "~/server/generic/jobs/errors";
 import { applyAutomaticRules } from "~/server/generic/suggestions/repo/automatic-application";
 import {
   fieldInputFingerprint,
@@ -114,7 +117,9 @@ export async function saveSweepSuggestions(
         (await latestFieldWrite(tx, input.entity, typedRecordId, input.field))
           ?.id !== (input.fieldDecisionId ?? undefined)
       )
-        throw new Error("Suggestion member decision changed during inference");
+        throw new JobEvidenceObsoleteError(
+          "Suggestion member decision changed during inference",
+        );
       const code = (
         await import("~/server/generic/shortcode/repo/shortcode-resolver")
       ).lookupShortcodes;
@@ -122,7 +127,10 @@ export async function saveSweepSuggestions(
         parseEntityRef(input.entity, typedRecordId),
       ]);
       const publicId = codes.get(`${input.entity}:${typedRecordId}`);
-      if (!publicId) throw new Error("Suggestion target no longer exists");
+      if (!publicId)
+        throw new JobEvidenceObsoleteError(
+          "Suggestion target no longer exists",
+        );
       const txContext = {
         ...context,
         db: tx,
@@ -137,7 +145,10 @@ export async function saveSweepSuggestions(
         ids: [publicId],
         fields: [input.field],
       });
-      if (!record) throw new Error("Suggestion target no longer exists");
+      if (!record)
+        throw new JobEvidenceObsoleteError(
+          "Suggestion target no longer exists",
+        );
       const governed = Object.hasOwn(
         entityFieldEnvelopeFields[input.entity],
         input.field,
@@ -156,7 +167,9 @@ export async function saveSweepSuggestions(
         canonicalJson(z.json().parse(currentValue ?? null)) !==
         canonicalJson(input.currentValue)
       )
-        throw new Error("Suggestion target changed during inference");
+        throw new JobEvidenceObsoleteError(
+          "Suggestion target changed during inference",
+        );
 
       const predecessors = await getDb(tx)
         .select(suggestionStateColumns)
@@ -199,7 +212,9 @@ export async function saveSweepSuggestions(
             ),
         )
       )
-        throw new Error("Suggestion was decided during inference");
+        throw new JobEvidenceObsoleteError(
+          "Suggestion was decided during inference",
+        );
       if (
         input.predecessorIds &&
         predecessors.some(
@@ -207,7 +222,9 @@ export async function saveSweepSuggestions(
             row.status === "pending" && !input.predecessorIds!.includes(row.id),
         )
       )
-        throw new Error("Suggestion target changed during inference");
+        throw new JobEvidenceObsoleteError(
+          "Suggestion target changed during inference",
+        );
       const rejected = predecessors.filter(
         (row) =>
           row.status === "rejected" && row.suppression?.scope === "field_value",

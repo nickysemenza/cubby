@@ -1,6 +1,7 @@
 import type { RawPhotoProductOwnPhoto } from "@cubby/schemas/photo-import-raw-read";
 import {
   photoCandidateGroupResult,
+  photoGroupingBoundary,
   photoRunCandidatesResponse,
   photoProductEvidence,
   photoProductCandidate,
@@ -32,6 +33,7 @@ import {
 } from "~/server/domains/photo-import/repo/run/lifecycle";
 import {
   readPhotoRunDefaults,
+  readRemainingPhotoRunContext,
   setPhotoRunDefaults,
   resolvePhotoGroupConcern,
   approvePhotoGroupProposals,
@@ -369,15 +371,40 @@ export const photoImportHandlers = implementOperationDomain(
       const run = await readRun(context.db, input.runId);
       if (!run || run.purpose !== "photo_inventory" || !run.ledgerPartyId)
         throw new Error("Photo-inventory run and owner were not found");
-      const all = await listPhotoRunImages(context.db, input.runId);
+      const remaining = input.remaining
+        ? await readRemainingPhotoRunContext(context.db, input.runId)
+        : undefined;
+      const all =
+        remaining?.images ??
+        (await listPhotoRunImages(context.db, input.runId));
       const cursor = input.cursor ?? 0;
-      const end = cursor + (input.limit ?? PHOTO_CONTEXT_PAGE_DEFAULT);
-      return {
+      const end =
+        cursor +
+        (input.limit ??
+          (input.remaining
+            ? PHOTO_REMAINING_PAGE_DEFAULT
+            : PHOTO_CONTEXT_PAGE_DEFAULT));
+      const boundaryGroup = remaining?.boundaryGroup
+        ? photoGroupingBoundary.parse(remaining.boundaryGroup)
+        : null;
+      const boundaryTooLarge =
+        boundaryGroup &&
+        new TextEncoder().encode(JSON.stringify(boundaryGroup)).byteLength >
+          PHOTO_BOUNDARY_BYTES;
+      const page = {
         runId: input.runId,
         ledgerPartyId: run.ledgerPartyId,
         notes: run.notes,
-        defaults: await readPhotoRunDefaults(context.db, input.runId),
-        totalImages: all.length,
+        defaults:
+          remaining?.defaults ??
+          (await readPhotoRunDefaults(context.db, input.runId)),
+        totalImages: remaining?.totalImages ?? all.length,
+        remaining: input.remaining === true,
+        boundaryGroup: boundaryTooLarge ? null : boundaryGroup,
+        boundaryReviewRequired:
+          boundaryTooLarge && boundaryGroup
+            ? `Group ${boundaryGroup.groupKey} has more evidence than one model page can carry. Keep this saved group for member review and continue only with uncovered photos.`
+            : null,
         nextCursor: end < all.length ? end : null,
         images: all.slice(cursor, end).map((image) => {
           const summary: z.infer<typeof photoRunContextImage> = {
@@ -397,6 +424,25 @@ export const photoImportHandlers = implementOperationDomain(
           return summary;
         }),
       };
+      if (!input.remaining) return page;
+      // Advance only past returned photos. JSON overhead and UTF-8 OCR count
+      // against the same budget, so a page is complete evidence, never truncated JSON.
+      while (
+        page.images.length > 1 &&
+        new TextEncoder().encode(JSON.stringify(page)).byteLength >
+          PHOTO_CONTEXT_PAGE_BYTES
+      ) {
+        page.images.pop();
+        page.nextCursor = cursor + page.images.length;
+      }
+      if (
+        new TextEncoder().encode(JSON.stringify(page)).byteLength >
+        PHOTO_CONTEXT_PAGE_BYTES
+      )
+        throw new Error(
+          "Photo Run notes or one photo exceed the bounded context budget; preserve the evidence and review this Run manually",
+        );
+      return page;
     },
     productCandidates: async (context, input) => ({
       candidates: (
@@ -435,8 +481,11 @@ export const photoImportHandlers = implementOperationDomain(
 );
 
 // A photo's text is bounded for the same reason the page is (see
-// `PHOTO_CONTEXT_PAGE_MAX`): every page stays in the coordinator's context.
+// `PHOTO_CONTEXT_PAGE_MAX`): only the current page stays in model context.
 const PHOTO_CONTEXT_PAGE_DEFAULT = 50;
+const PHOTO_REMAINING_PAGE_DEFAULT = 20;
+const PHOTO_CONTEXT_PAGE_BYTES = 32_000;
+const PHOTO_BOUNDARY_BYTES = 16_000;
 const DESCRIPTION_CHARS = 800;
 const RECOGNIZED_TEXT_CHARS = 400;
 

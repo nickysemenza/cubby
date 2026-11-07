@@ -59,6 +59,9 @@ pending: nothing here starts Product research.
    mail keeps only its provider identity. Coverage is checkpointed with a
    compare-and-swap in the same transaction as the page's events
    (`gmail/persistence.ts`).
+   An unattended retained page whose exact search already completed in newer
+   coverage settles its processed messages without rewinding or crediting that
+   search twice. Member-controlled scans still refuse changed selected coverage.
    A member's **Reclassify** (`gmail/reclassify.ts`, MCP `purchase_import.email_reclassify`)
    reruns these stages, including the relevance model, for up to 200 selected
    Emails through the same ingest path in its `reclassify` mode: the result is
@@ -102,12 +105,26 @@ pending: nothing here starts Product research.
    A successor retains the predecessor's frozen roster/outcomes and records the
    ownership transfer. Foreground, retired, reviewed and excluded work stays held.
 3. **Pi** (`agent-host.ts`, `server/domains/purchase-agent/`) runs on the generic agent
-   tools (`claim_next_import_work`, `report_agent_progress`,
-   `stop_import_run_for_review`) plus the MCP actions its manifest mounts
+   tools (`claim_next_import_work`, `stop_import_run_for_review`)
+   plus the MCP actions its manifest mounts
    (`packages/schemas/src/import-run-agent.ts`), called in process through the
    MCP handler with a run-bound delegation (`agent-services.ts`
    `mcpFetch`). Instructions: `.agents/skills/purchase-import/references/mail-import.md`
    via `server/domains/purchase-agent/service/import-run-workflows.ts`.
+   Memoized claims publish host-owned progress, heartbeat and work samples.
+   Progress publication is best-effort: a telemetry failure never turns a
+   successful durable claim into a tool error. RunOperation activity also
+   contributes to the existing stale-run check.
+   Mail has no model-directed progress or approval pause. The MCP adapter binds
+   the Run and request generation; Email identities, checksums and replay ids
+   stay explicit, so an old call cannot silently follow a newer claim.
+   The host normalizes a Mail envelope returned inside a compact action's
+   `input` to the root before signing its originating generation.
+   `mail_resolve` and `shipments.record` publish their complete input schemas
+   to the coordinator; other compact actions retain `describe`. Shared
+   instructions precede dynamic context without changing cache accounting or
+   retention. These remove coordination work; cost and latency savings need
+   a separately authorized inference comparison.
    Stronger-model escalation is explicitly requested with a blocker category.
    Missing evidence, member decisions, held sources and transient failures do
    not escalate. An unresolved disposition or refused preparation does not

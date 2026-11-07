@@ -53,7 +53,10 @@ import {
 } from "./decision-request-batch";
 import { settleDecisionWork } from "./decision-work-batch";
 import { captureAiInput, preparingAiInputs } from "./evaluation-inputs";
-import { isGatewayAdmissionWait } from "./gateway-egress-client";
+import {
+  gatewayProviderStop,
+  isGatewayAdmissionWait,
+} from "./gateway-egress-client";
 
 const DECISION_MAX_CHOICES = 255;
 /** One slot is reserved for `none`. */
@@ -243,12 +246,14 @@ async function sendDecisionRequest(
             signal: controller.signal,
           },
         );
-        return {
-          response: attemptResponse,
-          body: attemptResponse.ok
-            ? ""
-            : await attemptResponse.text().catch(() => ""),
-        };
+        const body = attemptResponse.ok
+          ? ""
+          : await attemptResponse.text().catch(() => "");
+        if (!attemptResponse.ok) {
+          const stopped = gatewayProviderStop(attemptResponse.status, body);
+          if (stopped) throw stopped;
+        }
+        return { response: attemptResponse, body };
       },
       {
         signal: controller.signal,

@@ -663,7 +663,8 @@ or an ETA. A failed read says the page cannot tell, with raw diagnostics and Try
 again, and never claims all clear. Stuck rows are flat with hairlines: a static
 `warning-ink` glyph, an outcome title, one sentence on consequence or remedy, at
 most one action, and a closed Technical details disclosure holding the raw failure
-with Copy. Eight rows show, then a link to failed Jobs. A retry reads every 10
+with Copy. Eight rows show initially; Show more reveals every remaining category
+in place, and Show fewer restores the compact view. A retry reads every 10
 seconds for two minutes, then the page goes quiet.
 
 Needs you is the embedded `WorkQueue` grouped by Reason, over `NEEDS_YOU_FILTERS`

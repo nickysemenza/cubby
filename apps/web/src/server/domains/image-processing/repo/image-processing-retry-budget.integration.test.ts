@@ -28,11 +28,8 @@ import {
   retryImageProcessingNow,
 } from "./image-processing";
 
-// Production finding: exhausted image Jobs failed while their rows stayed
-// leased, and deterministic device failures ended work for good. Image work
-// is never abandoned: every failure backs off and retries, repeated failure
-// only asks for attention, and a hand-off the server could not make is
-// released without spending an attempt.
+// Transient failures retry; deterministic refusals retain evidence for an explicit
+// retry. A refused hand-off spends no attempt.
 describe("image job retry policy", () => {
   const ctx = withTestDb();
 
@@ -106,14 +103,14 @@ describe("image job retry policy", () => {
     return jobOf(jobId);
   }
 
-  it("retries every failure, retryable or not, and only asks for attention after repeated failures", async () => {
+  it("retries transient failures and retains deterministic failures until explicit retry", async () => {
     const { imageId, jobId } = await subjectLiftJob();
     for (
       let failure = 1;
       failure <= JOB_NEEDS_ATTENTION_ATTEMPTS + 1;
       failure++
     ) {
-      const after = await failOnce(jobId, failure % 2 === 0);
+      const after = await failOnce(jobId, true);
       expect(after).toMatchObject({
         state: "pending",
         executionState: "retry_wait",
@@ -133,6 +130,15 @@ describe("image job retry policy", () => {
       .where(eq(imageDerivative.id, exhausted.derivativeId!));
     // The output stays pending for the next attempt, never failed.
     expect(derivative?.status).toBe("pending");
+
+    await failOnce(jobId, false);
+    expect(await jobOf(jobId)).toMatchObject({
+      state: "failed",
+      displayed: "failed",
+      lastError: "deadline_exceeded",
+    });
+    await makeDue(jobId);
+    expect(await devicePull()).toBeNull();
 
     expect(await retryImageProcessingNow(ctx.db, { imageId })).toEqual([jobId]);
     expect(await jobOf(jobId)).toMatchObject({

@@ -190,8 +190,12 @@ stable id per `extraction.candidate.lines` entry in the same order. For example,
 describes a candidate with two lines. The extraction contains source facts;
 the order envelope contains their stable identities.
 
-A returned public Run code is for reporting; `_runExecution` keeps the
-delegated `runId`.
+A returned public Run code is for reporting. On the Mail coordinator, the host
+supplies `_runExecution.runId` and generation; supply the stable operation id
+and any item operation ids the action requires. Keep the claimed Email identity
+and checksum explicit, including on retries after another Email is claimed.
+The host records progress when claiming work; use `mail_resolve` for an Email's
+unresolved gap and the stop tool only for a Run-wide provider failure.
 
 Before calling an action whose input fields are not in the tool's published
 schema, call that tool with `action: "describe", input: { actions: ["<action>"] }`.

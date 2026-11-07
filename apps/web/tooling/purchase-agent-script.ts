@@ -67,11 +67,11 @@ const toolArguments = (
     ? { ...(action === undefined ? {} : { action }), ...fields }
     : { action, input: fields };
 
-/** An MCP mutation: Cubby's stable run envelope plus the tool's own fields. */
+/** An MCP mutation; Mail omits the Run identity supplied by its host. */
 export const mcp = (
   id: string,
   tool: string,
-  runId: ScriptValue,
+  runId: ScriptValue | undefined,
   args: Record<string, ScriptValue>,
   envelope: Record<string, ScriptValue> = {},
 ): ScriptStep => ({
@@ -79,7 +79,11 @@ export const mcp = (
   tool: `mcp__cubby__${tool}`,
   args: {
     ...toolArguments(tool, args),
-    _runExecution: { runId, operationId: id, ...envelope },
+    _runExecution: {
+      ...(runId === undefined ? {} : { runId }),
+      operationId: id,
+      ...envelope,
+    },
   },
 });
 

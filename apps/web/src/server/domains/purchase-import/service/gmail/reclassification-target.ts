@@ -8,6 +8,7 @@ import { PENDING_AI_STATES } from "~/server/ai/evaluation/repo/ai-evaluation-req
 import type { Database } from "~/server/db";
 import { HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION } from "~/server/domains/purchase-import/repo/mail-source-identity";
 import { withRunEvaluation } from "~/server/domains/run/repo/execution-context";
+import { JobEvidenceObsoleteError } from "~/server/generic/jobs/errors";
 
 import {
   deferClassificationRefresh,
@@ -35,7 +36,8 @@ export async function executeReclassificationTarget(
 ) {
   const token = evaluation.attemptToken;
   const { owner, current } = await loadReclassificationTarget(db, evaluation);
-  if (!owner) throw new Error("Reclassification Run no longer exists");
+  if (!owner)
+    throw new JobEvidenceObsoleteError("Reclassification Run no longer exists");
   const input = mailReclassifyRunInput.parse(owner.input);
   const settle = async (outcome: "removed" | "frozen") => {
     await publishGmailEvidence(

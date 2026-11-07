@@ -660,9 +660,28 @@ function toolSchema(
   actions: ReadonlyArray<{ action: CompiledAction; json: JsonObject }>,
   runExecution = true,
   compact = false,
+  inputActions: readonly string[] = [],
 ) {
   if (compact) {
     const actionNames = actions.map(({ action }) => shortName(action));
+    // Action inputs are emitted inline. Keep them under root properties:
+    // pi-ai 1.3's Anthropic adapter drops root combinators and definitions.
+    const detailed = actions.filter(({ action }) =>
+      inputActions.includes(action.name),
+    );
+    const discoveryInput = {
+      type: "object",
+      description:
+        "Action-specific input. For describe, pass { actions: [actionName, ...] }.",
+      properties: {
+        actions: {
+          type: "array",
+          items: { type: "string", enum: actionNames },
+          minItems: 1,
+        },
+      },
+      additionalProperties: true,
+    } satisfies JsonObject;
     return {
       description: toolDescription(declaration, actions, true),
       inputJsonSchema: {
@@ -674,19 +693,17 @@ function toolSchema(
             description:
               "Which action to run, or describe to inspect action schemas.",
           },
-          input: {
-            type: "object",
-            description:
-              "Action-specific input. For describe, pass { actions: [actionName, ...] }.",
-            properties: {
-              actions: {
-                type: "array",
-                items: { type: "string", enum: actionNames },
-                minItems: 1,
-              },
-            },
-            additionalProperties: true,
-          },
+          input: detailed.length
+            ? {
+                anyOf: [
+                  ...detailed.map(({ action, json }) => ({
+                    ...json,
+                    description: `Complete input for action ${shortName(action)}.`,
+                  })),
+                  discoveryInput,
+                ],
+              }
+            : discoveryInput,
           ...(runExecution ? { _runExecution: runExecutionJsonSchema } : {}),
         },
         required: ["action", "input"],
@@ -729,12 +746,13 @@ const narrowedSchemas = new Map<string, ReturnType<typeof toolSchema>>();
 export function narrowedToolSchema(
   tool: CompiledTool,
   allowed: ReadonlySet<string>,
+  inputActions: readonly string[] = [],
 ): ReturnType<typeof toolSchema> | null {
   const actions = [...tool.actions.values()].filter((action) =>
     allowed.has(action.name),
   );
   if (actions.length === 0) return null;
-  const key = actions.map((action) => action.name).join("|");
+  const key = `${actions.map((action) => action.name).join("|")}:${inputActions.join("|")}`;
   const cached = narrowedSchemas.get(key);
   if (cached) return cached;
   const schema = toolSchema(
@@ -745,6 +763,7 @@ export function narrowedToolSchema(
     })),
     actions.some(agentReadsRunExecution),
     tool.compact,
+    inputActions,
   );
   narrowedSchemas.set(key, schema);
   return schema;

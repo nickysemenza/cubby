@@ -858,7 +858,7 @@ describe("stored Product identity pairs", () => {
         },
       },
     );
-    expect(result.failure).toContain("Synthetic unavailable model");
+    expect(result.failure?.message).toContain("Synthetic unavailable model");
     await publishProductIdentity(ctx.db, result);
     const [pair] = await getDb(ctx.db)
       .select()
