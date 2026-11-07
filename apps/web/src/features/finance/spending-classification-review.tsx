@@ -123,27 +123,32 @@ function ClassificationReview({
         </div>
       )}
       {request.action === "productCategory" && (
-        <CategorySearch>
-          {({ items, ...search }) => (
-            <RecordPicker
-              {...search}
-              entity="productCategory"
-              items={items}
-              label="Parent category"
-              value={parent}
-              disabled={busy}
-              clearable
-              placeholder="Root category"
-              setValue={(item) => {
-                const parentId = item
-                  ? productCategoryShortcode.parse(item.id)
-                  : null;
-                setParent(item && parentId ? { ...item, id: parentId } : null);
-                setDraft({ ...request, parentId });
-              }}
-            />
-          )}
-        </CategorySearch>
+        <div className="space-y-1 text-sm">
+          <span>Parent category</span>
+          <CategorySearch>
+            {({ items, ...search }) => (
+              <RecordPicker
+                {...search}
+                entity="productCategory"
+                items={items}
+                label="Parent category"
+                value={parent}
+                disabled={busy}
+                clearable
+                placeholder="Root category"
+                setValue={(item) => {
+                  const parentId = item
+                    ? productCategoryShortcode.parse(item.id)
+                    : null;
+                  setParent(
+                    item && parentId ? { ...item, id: parentId } : null,
+                  );
+                  setDraft({ ...request, parentId });
+                }}
+              />
+            )}
+          </CategorySearch>
+        </div>
       )}
       {request.action === "vendor" && (
         <div className="space-y-1 text-sm">

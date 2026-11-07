@@ -102,14 +102,6 @@ test("reviews historical item classification and preserves explicit purpose", as
       })
       .parse(await response.json());
   };
-  const childRead =
-    process.env.CUBBY_E2E_SEARCH_DIAGNOSTIC === "1"
-      ? page.waitForResponse(
-          (response) =>
-            response.request().postData()?.includes('"scope":"children"') ??
-            false,
-        )
-      : null;
   await gotoAuthenticatedPage(
     page,
     "/product-categories?view=hierarchy",
@@ -119,41 +111,20 @@ test("reviews historical item classification and preserves explicit purpose", as
     name: "Product category mappings",
     exact: true,
   });
-  if (childRead) {
-    const search = page.getByPlaceholder("Find a category or branch…", {
-      exact: true,
-    });
-    await search.fill("classification shoes");
-    await (await childRead).finished();
-    await expect(tree).toHaveAttribute("aria-busy", "false");
-    await page.waitForTimeout(500);
-    const readSearch = async () => ({
-      input: await search.inputValue(),
-      busy: await tree.getAttribute("aria-busy"),
-      rows: await tree.getByRole("row").allTextContents(),
-      links: await tree.getByRole("link").allTextContents(),
-    });
-    const early = await readSearch();
-    await search.clear();
-    await page.waitForTimeout(500);
-    const cleared = await readSearch();
-    await search.fill("classification shoes");
-    await page.waitForTimeout(500);
-    const retyped = await readSearch();
-    await testInfo.attach("hierarchy-search-diagnostic", {
-      body: JSON.stringify({ early, cleared, retyped }, null, 2),
-      contentType: "application/json",
-    });
-    await search.clear();
-  }
   await expect(
     tree.getByRole("link", { name: childName, exact: true }),
   ).toBeVisible();
   await page
     .getByPlaceholder("Find a category or branch…", { exact: true })
     .fill("classification shoes");
+  const parent = tree.getByRole("row").filter({
+    has: page.getByRole("button", {
+      name: `Collapse ${parentName}`,
+      exact: true,
+    }),
+  });
   await expect(
-    tree.getByRole("link", { name: parentName, exact: true }),
+    parent.getByRole("link", { name: parentName, exact: true }),
   ).toBeVisible();
   await expect(
     tree.getByRole("link", { name: childName, exact: true }),
