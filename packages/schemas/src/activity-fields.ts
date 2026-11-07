@@ -387,10 +387,10 @@ export const RUN_KINDS = {
       },
       {
         key: "coordinators",
-        scope: "Retires coordinators idle for more than 24 hours.",
+        scope: "Preserves coordinator transcripts while retirement is on hold.",
         label: "Coordinator retirement",
-        purpose: "Retires idle coordinators.",
-        action: "Retiring coordinators",
+        purpose: "Retirement is on hold pending a retention decision.",
+        action: "Preserving coordinator transcripts",
         unit: "coordinators",
         input: once,
       },

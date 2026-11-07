@@ -273,8 +273,10 @@ pending: nothing here starts Product research.
    `unresolved`, then the coordinator continues the batch; an unavailable
    escalation does not block unrelated Emails. Explicit Run review, stopped
    Runs and exhausted rosters still settle. Pi's settled submission reconciles the Run
-   (`run-review.ts` `reconcileSettledRun`); the daily cron expires stale Runs
-   and destroys settled Runs' transcripts (`run-retirement.ts`), oldest
+   (`run-review.ts` `reconcileSettledRun`); the daily cron expires stale Runs.
+   Transcript retirement is on hold pending the retention decision documented
+   in [Background work](../../../../../../../docs/jobs.md). When enabled,
+   disposal destroys settled Runs' transcripts (`run-retirement.ts`), oldest
    first in bounded batches; the destroying call and an immediate follow-up
    that reaches a fresh, empty coordinator let one pass stamp
    `Run.retiredAt`, and a failing coordinator does not block the Runs behind
