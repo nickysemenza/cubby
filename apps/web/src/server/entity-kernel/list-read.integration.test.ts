@@ -8,7 +8,7 @@ import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { metadataQueryClient } from "#web/tests/entity-metadata.ts";
-import { entitySummaryFields } from "~/contracts/mcp-projections";
+import { declaredListReadProjection } from "~/entity/entity-list/list-read-demand";
 import { getEntityFilters } from "~/entity/filter-manifest";
 import { buildFiltersFromManifest } from "~/entity/filters";
 import { viewsForEntity } from "~/entity/model/view-manifest";
@@ -343,7 +343,14 @@ describe("complete list composition", () => {
   it("returns complete canonical rows and matching selected fields in one list read", async () => {
     await seedReferenceUniverse(ctx.db);
     const context = buildKernelContext(ctx.db);
-    for (const entity of ["product", "vendor", "expense"] as const) {
+    for (const entity of [
+      "product",
+      "vendor",
+      "expense",
+      "purchase",
+      "financialAccount",
+      "financialTransaction",
+    ] as const) {
       const full = await executeEntity(context, {
         action: "list",
         entity,
@@ -354,6 +361,7 @@ describe("complete list composition", () => {
       if (full.action !== "list") throw new Error("Wrong list action");
       expect(full.meta.totalCount).toBeGreaterThanOrEqual(full.items.length);
       expect(full.items.length).toBeLessThanOrEqual(2);
+      expect(full.items.length).toBeGreaterThan(0);
       expect(full.meta).not.toHaveProperty("derived");
       for (const row of full.items) {
         expect(
@@ -365,7 +373,7 @@ describe("complete list composition", () => {
       const fields =
         entity === "product"
           ? (productListReadProjection(queryClient, entity) ?? [])
-          : entitySummaryFields(entity);
+          : (declaredListReadProjection(queryClient, entity) ?? []);
       const selected = await listOperations(entity).listFields(
         context,
         { filters: {}, pagination: { pageIndex: 0, pageSize: 2 } },

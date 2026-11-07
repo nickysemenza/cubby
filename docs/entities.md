@@ -4236,7 +4236,10 @@ through it.
 
 Agents read declared relations, including multi-hop paths the physical graph has no
 edge for, through `entity_graph_read.graph`. Declaring a relation on an entity is
-enough: web, native and MCP read it from the same compiled roster.
+enough: web, native and MCP read it from the same compiled roster. A zero graph
+item budget returns exact branch counts with empty node, edge and item arrays,
+without labels, previews or image hydration. Count-only branches have no next
+offset; positive budgets retain ordinary graph pagination.
 
 The orphan finder restricts graph arms to edges touching its checked kinds
 before reading rows. Polymorphic source arms remain eligible because their

@@ -37,7 +37,8 @@ export const entityGraphInputSchema = z.object({
   /** Restrict expansions to these target entity kinds. */
   entityKinds: z.array(entitySchema).max(20).optional(),
   offset: z.number().int().nonnegative().default(0),
-  limit: z.number().int().min(1).max(25).default(25),
+  /** Zero returns branch counts without graph items, previews or images. */
+  limit: z.number().int().min(0).max(25).default(25),
 });
 export type EntityGraphInput = z.input<typeof entityGraphInputSchema>;
 
