@@ -681,7 +681,10 @@ eligibility that changed while inference ran and a Sweep basis changed after
 queuing, before inference or paid-result reuse. Ordinary provider text never decides
 obsoletion. Funding/configuration refusal defers the affected feature without
 spending target attempts; it preserves the configured provider route and probes
-again after a bounded wait. Gateway admission carries its actual retry time.
+again after a bounded wait. The paid rung treats the Gateway's explicit
+"Insufficient balance; add money to your gateway or use BYOK" refusal as a funding
+stop even when it arrives as HTTP 403 / `invalid_prompt`; that wrapper is not
+proof that the prompt is malformed or that the household Run budget was spent. Gateway admission carries its actual retry time.
 Prepared paid siblings publish before a provider stop defers the remaining work.
 Publication checks exact chunk leases under the ordered target locks, including
 expiry; preparation still checks the whole claimed page. Atomic evidence,
