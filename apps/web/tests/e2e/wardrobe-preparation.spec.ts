@@ -84,7 +84,11 @@ test("taxonomy edits keep product classification paths and labels separate from 
       exact: true,
     }),
   ).toBeVisible();
-  await page.locator("#images").scrollIntoViewIfNeeded();
+  // Section navigation follows the target while streamed loading elements are replaced.
+  await page
+    .getByRole("navigation", { name: "Section index" })
+    .getByRole("link", { name: "Images", exact: true })
+    .click();
   await expect(
     page.locator("#images").getByRole("img", { name: `${itemImageName}.png` }),
   ).toBeVisible();
