@@ -78,7 +78,7 @@ export const calendarIdentities = sqliteTable(
   ],
 );
 
-// A marker blocks an uncertain resource; it contains no replayable mutation.
+// A marker retains identity and exact commit evidence, never a replayable mutation.
 export const calendarUncertainWrites = sqliteTable(
   "calendar_uncertain_writes",
   {
@@ -88,6 +88,7 @@ export const calendarUncertainWrites = sqliteTable(
     uid: text("uid").notNull().unique(),
     shortcode: text("shortcode"),
     startedAt: text("started_at").notNull(),
+    auditId: text("audit_id"),
   },
   (table) => [primaryKey({ columns: [table.entity, table.filename] })],
 );

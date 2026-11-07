@@ -1,4 +1,5 @@
 import { userId, type UserId } from "@cubby/schemas/identifiers";
+import { getErrorMessage } from "@cubby/shared";
 import { concatBytes } from "@cubby/shared/external-fetch";
 import { createLogger } from "@cubby/worker-tracing";
 import {
@@ -9,6 +10,7 @@ import {
   type Element,
 } from "@xmldom/xmldom";
 
+import { scrubErrorMessage } from "~/lib/error-diagnostics";
 import { withTrace } from "~/server/observability/tracing";
 
 import {
@@ -690,10 +692,13 @@ export function createCalDavHandler(
         path: new URL(request.url).pathname,
         error,
       });
-      return new Response("Calendar temporarily unavailable", {
-        status: 503,
-        headers: { "Retry-After": "30" },
-      });
+      return new Response(
+        `Calendar temporarily unavailable: ${scrubErrorMessage(getErrorMessage(error))}`,
+        {
+          status: 503,
+          headers: { "Retry-After": "30" },
+        },
+      );
     }
   };
 }

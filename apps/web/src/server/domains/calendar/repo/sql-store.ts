@@ -13,6 +13,7 @@ import { calendarProjectionSchema } from "./caldav-types";
 import type { StoredCalendarDocument } from "./contracts";
 import migration from "./migrations/20260907210455_bright_tyger_tiger/migration.sql?raw";
 import resetMigration from "./migrations/20260908023453_watery_tomas/migration.sql?raw";
+import receiptMigration from "./migrations/20261107171347_flashy_lester/migration.sql?raw";
 import {
   calendarMeta,
   calendarResources,
@@ -33,6 +34,7 @@ export class CalendarSqlStore {
       migrations: {
         "20260907210455_bright_tyger_tiger": migration,
         "20260908023453_watery_tomas": resetMigration,
+        "20261107171347_flashy_lester": receiptMigration,
       },
     });
     this.db.insert(calendarMeta).values({ id: 1 }).onConflictDoNothing().run();
@@ -105,6 +107,40 @@ export class CalendarSqlStore {
           })
           .run();
       }
+    });
+  }
+
+  /** Publish the committed event without rebuilding unrelated collections or feeds. */
+  publishWrite(resource: CalDavResource) {
+    this.db.transaction(() => {
+      const generation = this.meta().generation;
+      this.db
+        .delete(calendarResources)
+        .where(
+          and(
+            eq(calendarResources.generation, generation),
+            eq(calendarResources.shortcode, resource.projection.id),
+          ),
+        )
+        .run();
+      this.db
+        .insert(calendarResources)
+        .values({
+          ...resource,
+          generation,
+          shortcode: resource.projection.id,
+          projection: JSON.stringify(resource.projection),
+        })
+        .run();
+      const remembered = this.rememberIdentity({
+        entity: resource.projection.entity,
+        shortcode: resource.projection.id,
+        filename: resource.filename,
+        uid: resource.uid,
+      });
+      if (!remembered)
+        throw new Error("Calendar identity conflicts with the committed write");
+      this.clearUncertainWrite(resource.collection, resource.filename);
     });
   }
 
@@ -268,11 +304,24 @@ export class CalendarSqlStore {
       .get();
   }
   rememberIdentity(identity: CalendarIdentity) {
+    const existing = this.identityFor(identity.shortcode);
+    if (existing)
+      return (
+        existing.entity === identity.entity &&
+        existing.filename === identity.filename &&
+        existing.uid === identity.uid
+      );
+    if (
+      this.byUid(identity.uid) ||
+      this.identityAt(identity.entity, identity.filename)
+    )
+      return false;
     this.db
       .insert(calendarIdentities)
       .values(identity)
       .onConflictDoNothing({ target: calendarIdentities.shortcode })
       .run();
+    return true;
   }
   identityAt(entity: "task" | "meal", filename: string) {
     return this.db
@@ -291,6 +340,25 @@ export class CalendarSqlStore {
   }
   startWrite(value: typeof calendarUncertainWrites.$inferInsert) {
     this.db.insert(calendarUncertainWrites).values(value).run();
+  }
+  prepareWriteReceipt(
+    collection: CalDavCollection,
+    filename: string,
+    receipt: { auditId: string; shortcode: string },
+  ) {
+    this.db
+      .update(calendarUncertainWrites)
+      .set(receipt)
+      .where(
+        and(
+          eq(
+            calendarUncertainWrites.entity,
+            collection === "meals" ? "meal" : "task",
+          ),
+          eq(calendarUncertainWrites.filename, filename),
+        ),
+      )
+      .run();
   }
   clearUncertainWrite(collection: CalDavCollection, filename: string) {
     this.db
