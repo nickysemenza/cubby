@@ -22,7 +22,7 @@ test("reviews historical item classification and preserves explicit purpose", as
   const childName = "Synthetic classification shoes";
   const siblingName = "Synthetic classification bags";
   const giftsName = "Synthetic classification gifts";
-  const { clothing, gifts, expense, explicitExpense } =
+  const { clothing, gifts, originalSpending, expense, explicitExpense } =
     await createFixtureGraph(page, async (create) => {
       const { id: clothing } = await create("spendingCategory", {
         name: categoryName,
@@ -30,8 +30,13 @@ test("reviews historical item classification and preserves explicit purpose", as
       const { id: gifts } = await create("spendingCategory", {
         name: giftsName,
       });
+      const { id: originalSpending } = await create("spendingCategory", {
+        name: "Synthetic classification original spending",
+      });
       const { id: parent } = await create("productCategory", {
         name: parentName,
+        spendingCategoryMode: "mapped",
+        spendingCategoryId: originalSpending,
       });
       const { id: productCategory } = await create("productCategory", {
         name: childName,
@@ -73,7 +78,7 @@ test("reviews historical item classification and preserves explicit purpose", as
         purchaseId: purchase,
         spendingCategoryId: gifts,
       });
-      return { clothing, gifts, expense, explicitExpense };
+      return { clothing, gifts, originalSpending, expense, explicitExpense };
     });
 
   const patch = async (
@@ -118,13 +123,13 @@ test("reviews historical item classification and preserves explicit purpose", as
   await expect(
     tree.getByRole("link", { name: siblingName, exact: true }),
   ).toHaveCount(0);
+  await expect(
+    tree.getByRole("columnheader", { name: /Effective spending/ }),
+  ).toBeVisible();
   const child = tree
     .getByRole("row")
     .filter({ has: page.getByRole("link", { name: childName, exact: true }) });
-  await child
-    .getByRole("cell", { name: "Missing", exact: true })
-    .first()
-    .click();
+  await child.getByRole("cell", { name: "$85.00", exact: true }).click();
   const allocations = page.getByRole("region", {
     name: "Where this branch's money lands",
     exact: true,
@@ -162,6 +167,27 @@ test("reviews historical item classification and preserves explicit purpose", as
   await expect(
     page.getByRole("dialog", { name: childName, exact: true }),
   ).toBeVisible();
+  await page.getByRole("button", { name: "Close panel", exact: true }).click();
+  await expect(
+    page.getByRole("dialog", { name: childName, exact: true }),
+  ).toHaveCount(0);
+  const mobileChild = page.getByRole("button").filter({
+    has: page.getByRole("link", { name: childName, exact: true }),
+  });
+  await expect(mobileChild).toBeVisible();
+  const phoneTreePath = ".impeccable/review/category-mapping-mobile-tree.png";
+  await page.screenshot({ path: phoneTreePath, fullPage: true });
+  await testInfo.attach("Category mapping phone tree", {
+    path: phoneTreePath,
+    contentType: "image/png",
+  });
+  await mobileChild.press("Enter");
+  await expect(
+    page.getByRole("dialog", { name: childName, exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Close panel", exact: true }),
+  ).toBeVisible();
   const phonePath = ".impeccable/review/category-mapping-mobile.png";
   await page.screenshot({ path: phonePath, fullPage: true });
   await testInfo.attach("Category mapping phone", {
@@ -169,6 +195,12 @@ test("reviews historical item classification and preserves explicit purpose", as
     contentType: "image/png",
   });
   if (viewport) await page.setViewportSize(viewport);
+  // A child with an inherited mapping must preview its stored inherit intent,
+  // rather than sending the effective category as an explicit saved value.
+  await page.getByRole("button", { name: "Preview historical impact" }).click();
+  await expect(
+    page.getByRole("button", { name: "Apply reviewed change" }),
+  ).toBeVisible();
   await chooseOption(
     page,
     page.getByRole("combobox", {
@@ -188,7 +220,9 @@ test("reviews historical item classification and preserves explicit purpose", as
   ).toBeVisible();
   expect((await read()).fields.spendingCategoryId).toMatchObject({
     current: { assignment: { kind: "inherit" } },
-    result: { decision: { outcome: { kind: "empty" } } },
+    result: {
+      decision: { outcome: { kind: "value", value: originalSpending } },
+    },
   });
   await patch(expense, { cost: 61 });
   await page.getByRole("button", { name: "Apply reviewed change" }).click();
@@ -197,7 +231,9 @@ test("reviews historical item classification and preserves explicit purpose", as
   ).toBeVisible();
   expect((await read()).fields.spendingCategoryId).toMatchObject({
     current: { assignment: { kind: "inherit" } },
-    result: { decision: { outcome: { kind: "empty" } } },
+    result: {
+      decision: { outcome: { kind: "value", value: originalSpending } },
+    },
   });
   await page.getByRole("button", { name: "Preview historical impact" }).click();
   await expect(
