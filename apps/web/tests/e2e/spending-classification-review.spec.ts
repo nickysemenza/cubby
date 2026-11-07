@@ -22,10 +22,15 @@ test("reviews historical item classification and preserves explicit purpose", as
   const childName = "Synthetic classification shoes";
   const siblingName = "Synthetic classification bags";
   const giftsName = "Synthetic classification gifts";
+  const purposeRootName = "Synthetic classification purpose root";
   const { clothing, gifts, originalSpending, expense, explicitExpense } =
     await createFixtureGraph(page, async (create) => {
+      const { id: purposeRoot } = await create("spendingCategory", {
+        name: purposeRootName,
+      });
       const { id: clothing } = await create("spendingCategory", {
         name: categoryName,
+        parentId: purposeRoot,
       });
       const { id: gifts } = await create("spendingCategory", {
         name: giftsName,
@@ -75,6 +80,15 @@ test("reviews historical item classification and preserves explicit purpose", as
         costType: "materials",
         trade: "other",
         productId: product,
+        purchaseId: purchase,
+        spendingCategoryId: gifts,
+      });
+      await create("expense", {
+        name: "Synthetic classification productless gift",
+        cost: 7,
+        date: "2026-09-01",
+        costType: "materials",
+        trade: "other",
         purchaseId: purchase,
         spendingCategoryId: gifts,
       });
@@ -138,6 +152,21 @@ test("reviews historical item classification and preserves explicit purpose", as
   const child = tree
     .getByRole("row")
     .filter({ has: page.getByRole("link", { name: childName, exact: true }) });
+  await expect(
+    parent.getByRole("checkbox", { name: "Select row", exact: true }),
+  ).toBeDisabled();
+  await expect(
+    child.getByRole("button", { name: "Expand", exact: true }),
+  ).toHaveCount(0);
+  await page.getByRole("button", { name: "Flat", exact: true }).click();
+  await expect(
+    tree.getByRole("link", { name: parentName, exact: true }),
+  ).toHaveCount(0);
+  await expect(page.getByRole("textbox", { name: /Search/ })).toHaveValue(
+    "classification shoes",
+  );
+  await page.getByRole("button", { name: "Tree", exact: true }).click();
+  await expect(parent).toBeVisible();
   await child.getByRole("cell", { name: "$85.00", exact: true }).click();
   const allocations = page.getByRole("region", {
     name: "Where this branch's money lands",
@@ -345,5 +374,79 @@ test("reviews historical item classification and preserves explicit purpose", as
         current: { assignment: { kind: "value", value: gifts } },
       },
     },
+  });
+  await gotoAuthenticatedPage(
+    page,
+    "/spending-categories",
+    page.getByRole("table", { name: "Spending Categories table", exact: true }),
+  );
+  const spendingTree = page.getByRole("table", {
+    name: "Spending Categories table",
+    exact: true,
+  });
+  await page
+    .getByRole("textbox", { name: /Search/ })
+    .fill("classification clothing");
+  const spendingRoot = spendingTree
+    .getByRole("row")
+    .filter({
+      has: page.getByRole("link", { name: purposeRootName, exact: true }),
+    });
+  await expect(spendingRoot).toContainText("$25.00");
+  const clothingRow = spendingTree
+    .getByRole("row")
+    .filter({
+      has: page.getByRole("link", { name: categoryName, exact: true }),
+    });
+  await expect(clothingRow).toContainText("$25.00");
+  await clothingRow.getByRole("cell", { name: "$25.00", exact: true }).click();
+  await expect(
+    page
+      .getByRole("region", {
+        name: `Contributing branches · ${categoryName}`,
+        exact: true,
+      })
+      .getByRole("row")
+      .filter({ hasText: childName }),
+  ).toContainText("$25.00");
+  await expect(
+    page.getByRole("region", {
+      name: "Configured incoming mappings",
+      exact: true,
+    }),
+  ).toContainText(childName);
+  await expect(
+    page.getByRole("region", { name: "Category and policies", exact: true }),
+  ).toContainText("Itemization");
+  const spendingDesktopPath =
+    ".impeccable/review/spending-category-desktop.png";
+  await page.screenshot({ path: spendingDesktopPath, fullPage: true });
+  await testInfo.attach("Spending category desktop", {
+    path: spendingDesktopPath,
+    contentType: "image/png",
+  });
+  await page.getByRole("button", { name: "Close panel", exact: true }).click();
+  await page
+    .getByRole("textbox", { name: /Search/ })
+    .fill("classification gifts");
+  const giftsRow = spendingTree
+    .getByRole("row")
+    .filter({ has: page.getByRole("link", { name: giftsName, exact: true }) });
+  await giftsRow.getByRole("cell", { name: "$68.00", exact: true }).click();
+  const giftContributions = page.getByRole("region", {
+    name: `Contributing branches · ${giftsName}`,
+    exact: true,
+  });
+  await expect(giftContributions).toContainText("$61.00");
+  await expect(giftContributions).toContainText("$7.00");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(
+    page.getByRole("dialog", { name: giftsName, exact: true }),
+  ).toBeVisible();
+  const spendingPhonePath = ".impeccable/review/spending-category-mobile.png";
+  await page.screenshot({ path: spendingPhonePath, fullPage: true });
+  await testInfo.attach("Spending category phone", {
+    path: spendingPhonePath,
+    contentType: "image/png",
   });
 });
