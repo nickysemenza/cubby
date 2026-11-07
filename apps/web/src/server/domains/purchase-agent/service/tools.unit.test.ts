@@ -23,6 +23,45 @@ const tools = (services: RunServices) =>
     async () => ({ generation: "synthetic-generation", sequence: 1 }),
   );
 describe("run agent tool behavior", () => {
+  // Claims must refresh liveness without a model progress call; replay must
+  // not publish a new progress sequence or repeat its work.
+  it("records Mail claim progress once and preserves its generation on replay", async () => {
+    const reports: Parameters<RunServices["updateAgentProgress"]>[0][] = [];
+    let claims = 0;
+    const services = fromPartial<RunServices>({
+      claimNextWork: async () => {
+        claims++;
+        return { kind: "email", email: { subject: "  Synthetic receipt  " } };
+      },
+      updateAgentProgress: async (
+        report: Parameters<RunServices["updateAgentProgress"]>[0],
+      ) => {
+        reports.push(report);
+        return { recorded: true };
+      },
+    });
+    const claim = runAgentTools(
+      () => services,
+      async () => ({ generation: "original-generation", sequence: 2 }),
+      undefined,
+      "mail_import",
+    ).find((candidate) => candidate.name === "claim_next_import_work");
+    if (!claim) throw new Error("Missing Mail claim tool");
+    const api = fakeApi();
+    const result = await claim.execute({}, api, BACKGROUND_CONTEXT);
+    expect(await claim.execute({}, api, BACKGROUND_CONTEXT)).toEqual(result);
+    expect(claims).toBe(1);
+    expect(reports).toEqual([
+      {
+        eventId: expect.any(String),
+        generation: "original-generation",
+        sequence: 2,
+        phase: "investigating",
+        currentItem: "Synthetic receipt",
+        detail: "Processing admitted Email evidence",
+      },
+    ]);
+  });
   it("continues a premature Mail answer with the next durable claim and preserves replay", async () => {
     let claims = 0;
     const services: Pick<RunServices, "claimNextWork" | "loadScope"> = {

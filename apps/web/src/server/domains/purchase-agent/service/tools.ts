@@ -1,3 +1,4 @@
+import type { AgentImportRunPurpose } from "@cubby/schemas/import-run-agent";
 import { MAIL_READ_RESPONSE_MAX_BYTES } from "@cubby/schemas/mailbox-research";
 import { photoInventoryToolInputs } from "@cubby/schemas/purchase-agent-services";
 import type { RunProgressStamp } from "@cubby/schemas/run-fields";
@@ -219,8 +220,8 @@ function tool<N extends ToolName>(
 }
 
 /**
- * The host-owned tools every import Run's agent mounts beside its Cubby MCP
- * actions: claim the next admitted item, publish progress, stop for review.
+ * Host-owned tools selected by the purpose's manifest. Mail claims publish
+ * progress themselves; photo inventory retains model-directed progress.
  */
 export function runAgentTools(
   services: () => RunServices,
@@ -232,6 +233,7 @@ export function runAgentTools(
   escalate?: (
     request: z.infer<ToolInputs["escalate_import_work"]>,
   ) => Promise<object>,
+  purpose: AgentImportRunPurpose = "photo_inventory",
 ): ToolRegistration[] {
   return [
     tool("escalate_import_work", {
@@ -253,6 +255,28 @@ export function runAgentTools(
         const output = await step(api, context, "claim-work", () =>
           services().claimNextWork({ operationId }),
         );
+        if (purpose === "mail_import" && !claimStopped(output)) {
+          const claimed = z
+            .object({
+              kind: z.literal("email"),
+              email: z.object({ subject: z.string().nullable().optional() }),
+            })
+            .safeParse(output);
+          const subject = claimed.success
+            ? claimed.data.email.subject?.trim().slice(0, 500)
+            : undefined;
+          await step(api, context, "claim-progress", async () =>
+            services().updateAgentProgress({
+              ...(await progressStamp(api, context)),
+              eventId: `${operationId}:progress`,
+              phase: claimed.success ? "investigating" : "reconciling",
+              ...(subject ? { currentItem: subject } : {}),
+              detail: claimed.success
+                ? "Processing admitted Email evidence"
+                : "Checking Email import outcomes",
+            }),
+          );
+        }
         // The run ended (for example an outdated Mac stopped it): nothing to claim.
         return result(output, claimStopped(output));
       },
@@ -272,12 +296,6 @@ export function runAgentTools(
               detail: args.detail,
             }))(),
         );
-        if (args.phase === "review" && (await mailBatchContinues(services)))
-          return result({
-            recorded: true,
-            stopped: false,
-            next: MAIL_STOP_REFUSAL,
-          });
         // A `review` report ends the run's submission, so it must also move
         // the run: a progress row alone left runs `running` with no
         // coordinator behind them.

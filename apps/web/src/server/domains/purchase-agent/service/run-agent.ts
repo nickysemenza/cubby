@@ -498,6 +498,7 @@ export class PurchaseImportRunAgent
             () => this.services(),
             (api, context) => this.toolProgressStamp(api, context),
             (request) => escalation.escalate(request),
+            purpose,
           ),
           ...(attempts
             ? [importExtractedOrderTool(runId, attempts.ordinaryEvidence)]
@@ -700,6 +701,7 @@ export class PurchaseImportRunAgent
         mcpTools,
         () => this.services(),
         (api, context) => this.toolGeneration(api, context),
+        purpose === "mail_import" ? runId : undefined,
       ),
     );
     if (workflow.skills)

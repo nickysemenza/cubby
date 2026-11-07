@@ -79,10 +79,6 @@ export function workflowForRun(
   return {
     skills: null,
     instructions: [
-      // Writes that read `_runExecution` must name the delegated Run by its
-      // private id; only those tools advertise the envelope to the agent
-      // (`narrowedToolSchema`), so without this Pi could not form it.
-      `This Mail import Run is (runId ${runId}). Every call to a tool whose input offers \`_runExecution\` carries \`_runExecution: { runId: "${runId}", operationId: <a stable id per call> }\`; \`commit\` names the \`prepare\` call's operationId.`,
       mailImportWorkflow,
       extractionRules,
       // Only the authority paragraph: the sign rules after it govern

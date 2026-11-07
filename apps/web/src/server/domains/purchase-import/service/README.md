@@ -102,12 +102,21 @@ pending: nothing here starts Product research.
    A successor retains the predecessor's frozen roster/outcomes and records the
    ownership transfer. Foreground, retired, reviewed and excluded work stays held.
 3. **Pi** (`agent-host.ts`, `server/domains/purchase-agent/`) runs on the generic agent
-   tools (`claim_next_import_work`, `report_agent_progress`,
-   `stop_import_run_for_review`) plus the MCP actions its manifest mounts
+   tools (`claim_next_import_work`, `stop_import_run_for_review`)
+   plus the MCP actions its manifest mounts
    (`packages/schemas/src/import-run-agent.ts`), called in process through the
    MCP handler with a run-bound delegation (`agent-services.ts`
    `mcpFetch`). Instructions: `.agents/skills/purchase-import/references/mail-import.md`
    via `server/domains/purchase-agent/service/import-run-workflows.ts`.
+   Memoized claims publish host-owned progress, heartbeat and work samples.
+   Mail has no model-directed progress or approval pause. The MCP adapter binds
+   the Run and request generation; Email identities, checksums and replay ids
+   stay explicit, so an old call cannot silently follow a newer claim.
+   `mail_resolve` and `shipments.record` publish their complete input schemas
+   to the coordinator; other compact actions retain `describe`. Shared
+   instructions precede dynamic context without changing cache accounting or
+   retention. These remove coordination work; cost and latency savings need
+   a separately authorized inference comparison.
    Stronger-model escalation is explicitly requested with a blocker category.
    Missing evidence, member decisions, held sources and transient failures do
    not escalate. An unresolved disposition or refused preparation does not

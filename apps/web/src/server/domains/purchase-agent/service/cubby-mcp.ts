@@ -239,6 +239,7 @@ export function cubbyMcpExtension(
     api: ToolExecutionApi,
     context: Context,
   ) => Promise<string | undefined>,
+  runId?: string,
 ): Extension {
   let client: Promise<Client> | undefined;
   const connected = () => {
@@ -267,8 +268,10 @@ export function cubbyMcpExtension(
             ).callTool(
               {
                 name: tool.name,
-                arguments: await stampGeneration(args, () =>
-                  generationFor?.(api, context),
+                arguments: await stampGeneration(
+                  args,
+                  () => generationFor?.(api, context),
+                  runId,
                 ),
               },
               { signal: context.abortSignal, timeout: TOOL_CALL_TIMEOUT_MS },
@@ -283,18 +286,24 @@ export function cubbyMcpExtension(
  * Overwrite any model-written `_runExecution.generation` with the host's own
  * record of the issuing request's generation; the bearer minted for the call
  * signs it, and the server fences superseded generations by it. A model that
- * also names its Run's public `run` code beside `runId` is dropped to `runId`:
- * the envelope refuses both, and the delegation already binds the Run.
+ * also names its Run's public `run` code beside `runId` is dropped to `runId`.
+ * Mail supplies the immutable delegated Run here instead of asking the model
+ * to repeat it. Email/checksum and operation ids stay in the saved arguments.
  */
 export async function stampGeneration(
   args: JsonObject,
   generation: () => Promise<string | undefined> | undefined,
+  runId?: string,
 ): Promise<JsonObject> {
   const envelope = args._runExecution;
   if (!isJsonObject(envelope)) return args;
   const { generation: _claimed, ...claimed } = envelope;
   const { run: _publicRun, ...withoutRun } = claimed;
-  const rest = claimed.runId === undefined ? claimed : withoutRun;
+  const rest = runId
+    ? { ...withoutRun, runId }
+    : claimed.runId === undefined
+      ? claimed
+      : withoutRun;
   const stamped = await generation();
   return {
     ...args,
