@@ -1,3 +1,4 @@
+import { compileFilterCodec } from "@cubby/schemas/entity-definitions/list-filters";
 import type {
   ReportBlock,
   EntityReportOut,
@@ -10,6 +11,8 @@ import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { generatedEntityFilterCodecs } from "~/entity/generated/entity-filter-codecs.gen";
+import { entitySearch } from "~/entity/generated/entity-search.gen";
 import { unwrapDb } from "~/server/db/helpers";
 import { expense } from "~/server/db/schema";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
@@ -22,6 +25,7 @@ import {
   createProductIdentityFixture,
   makeLocationInput,
   makeProductInput,
+  makeExpenseInput,
 } from "~/server/testing/repo.fixtures";
 
 import { buildEntityReport, buildEntityReports } from "./index";
@@ -45,7 +49,7 @@ describe("entity report", () => {
   const ctx = withTestDb("mcp");
   // A collection scope must never fall through to a record builder, silently
   // discard filters, or count nested project spend twice in its headline.
-  it("ranks sellers by distinct live actual purchases and preserves last-purchase dates", async () => {
+  it("ranks acquisition sellers by distinct purchases and preserves last-purchase dates", async () => {
     const product = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Summary fixture Product" }),
@@ -101,6 +105,24 @@ describe("entity report", () => {
     await add(sellers[1]!, "2026-12-02", { planned: true });
     await add(sellers[1]!, "2026-12-03", { deletedPurchase: true });
     await add(sellers[2]!, "2026-12-04");
+    const ambiguous = await createRepoEntity(ctx, "vendor", {
+      name: "Summary ambiguous counterparty",
+    });
+    const refundOnly = await createRepoEntity(ctx, "purchase", {
+      vendorId: ambiguous.output.id,
+      date: "2026-12-05",
+    });
+    await createRepoEntity(
+      ctx,
+      "expense",
+      makeExpenseInput({
+        productId: product.id,
+        purchaseId: refundOnly.output.id,
+        name: "Unclassified counterparty line",
+        cost: -5,
+        date: "2026-12-05",
+      }),
+    );
     const result = await buildEntityReport(
       ctx.db,
       { slot: "product.sellers", scope: { kind: "record", id: product.id } },
@@ -124,7 +146,32 @@ describe("entity report", () => {
     expect(block.footer).toContain("of 4 sellers");
     expect(block.listLink).toEqual({
       entity: "vendor",
-      filters: { productId: product.id },
+      filters: {
+        ids: [
+          sellers[0]!.shortcode,
+          sellers[1]!.shortcode,
+          sellers[3]!.shortcode,
+          sellers[4]!.shortcode,
+        ]
+          .sort()
+          .join(","),
+      },
+    });
+    const linkedSearch = entitySearch.vendor.schema.parse(
+      block.listLink?.filters,
+    );
+    expect(
+      compileFilterCodec(generatedEntityFilterCodecs.vendor).decode(
+        linkedSearch,
+      ),
+    ).toContainEqual({
+      id: "ids",
+      value: [
+        sellers[0]!.shortcode,
+        sellers[1]!.shortcode,
+        sellers[3]!.shortcode,
+        sellers[4]!.shortcode,
+      ].sort(),
     });
     await unwrapDb(ctx.db)
       .update(expense)

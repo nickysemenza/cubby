@@ -19,6 +19,7 @@ import { unwrapDb } from "~/server/db/helpers";
 import { notDeleted, actualExpenseSql } from "~/server/db/helpers/predicates";
 import { emailScaffold } from "~/server/domains/email/repo/email";
 import { productScaffold } from "~/server/domains/product/repo/crud";
+import { productSellerPurchasesSql } from "~/server/domains/product/repo/product-counterparties";
 import { sourceTransactionRecordScaffold } from "~/server/domains/transaction-import/repo/entity-repositories";
 import { getConnectedRecords } from "~/server/generic/entity-links/repo/connected-records";
 import { selectedListProjection } from "~/server/generic/list/repo/list-projection";
@@ -30,22 +31,23 @@ const sellerRow = z.object({
   count: z.coerce.number(),
   sellerCount: z.coerce.number(),
   lastPurchase: z.string().nullable(),
+  sellerCodes: z.array(z.string()),
 });
 
 /** Count purchases once even when several actual lines name the same Product. */
 export async function productSellersReport(
   db: Database,
   productId: ProductId,
-  code: string,
 ): Promise<ReportBlock[]> {
   const result = await unwrapDb(db).execute(
     sql`
     SELECT v."shortcode" AS id, v."name", count(DISTINCT p."id")::int AS count, count(*) OVER ()::int AS "sellerCount",
+      array_agg(v."shortcode") OVER (ORDER BY v."shortcode" ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS "sellerCodes",
       max(p."date")::text AS "lastPurchase"
-    FROM "Expense" e
-    JOIN "Purchase" p ON p."id" = e."purchaseId" AND ${notDeleted("p")}
-    JOIN "Vendor" v ON v."id" = p."vendorId" AND ${notDeleted("v")}
-    WHERE e."productId" = ${productId} AND ${notDeleted("e")} AND ${sql.raw(actualExpenseSql("e"))}
+    FROM (${productSellerPurchasesSql}) acquisition
+    JOIN "Purchase" p ON p."id" = acquisition."purchaseId"
+    JOIN "Vendor" v ON v."id" = acquisition.seller
+    WHERE acquisition.owner = ${productId}
     GROUP BY v."id", v."shortcode", v."name"
     ORDER BY count(DISTINCT p."id") DESC, max(p."date") DESC NULLS LAST, v."shortcode" ASC
     LIMIT 3
@@ -73,11 +75,13 @@ export async function productSellersReport(
         ],
       })),
       totalCount: rows[0]?.sellerCount ?? 0,
-      listLink: { entity: "vendor", filters: { productId: code } },
-      footer: rows[0]
-        ? `Top ${rows.length} of ${rows[0].sellerCount} sellers by distinct actual Purchases`
+      listLink: rows[0]
+        ? { entity: "vendor", filters: { ids: rows[0].sellerCodes.join(",") } }
         : undefined,
-      empty: "No actual purchases recorded.",
+      footer: rows[0]
+        ? `Top ${rows.length} of ${rows[0].sellerCount} sellers by distinct acquisition Purchases`
+        : undefined,
+      empty: "No acquisition sellers recorded.",
     },
   ];
 }

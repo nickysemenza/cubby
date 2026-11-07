@@ -22,7 +22,6 @@ export const reportBindings = {
     blocks: await productSellersReport(
       execution.request.db,
       await execution.read(productId),
-      execution.request.id,
     ),
   })),
   "product.pricing-summary": reportDependency(async (execution) => ({

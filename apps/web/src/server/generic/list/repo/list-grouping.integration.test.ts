@@ -11,6 +11,7 @@ import { z } from "zod";
 import { getDb } from "~/server/db/helpers";
 import {
   ledgerParty,
+  expenseAttribution,
   productCategory,
   product as productTable,
 } from "~/server/db/schema";
@@ -572,16 +573,80 @@ describe("expanded grouped list memberships", () => {
       }),
       ctx.actor,
     );
-    await createRepoEntity(
+    const allocationProject = await createRepoEntity(ctx, "project", {
+      name: "Grouping allocation project",
+    });
+    const basis = await createRepoEntity(
       ctx,
       "expense",
       makeExpenseInput({
         name: "Grouping basis",
         productId: first.id,
+        projectId: allocationProject.output.id,
         cost: 10,
         date: "2026-01-01",
       }),
     );
+    const noProject = await createRepoEntity(
+      ctx,
+      "expense",
+      makeExpenseInput({
+        name: "Grouping unallocated expense",
+        cost: 4,
+        date: "2026-01-01",
+      }),
+    );
+    const byAllocatedProject = await executeEntity(kernel(), {
+      action: "list",
+      entity: "expense",
+      filters: { ids: [basis.output.id, noProject.output.id] },
+      groupBy: [{ key: "projectFilter" }],
+      pagination: { pageIndex: 0, pageSize: 10 },
+    });
+    if (byAllocatedProject.action !== "list") throw new Error("expected list");
+    // Grouping must request the allocation dimension even without a Project
+    // filter. Otherwise its prepared row set would expose only NULL values.
+    expect(groups(byAllocatedProject.meta)).toMatchObject([
+      {
+        key: allocationProject.output.id,
+        label: "Grouping allocation project",
+        count: 1,
+      },
+      { key: FILTER_NONE, count: 1 },
+    ]);
+    expect(byAllocatedProject.meta.totalCount).toBe(2);
+    const knownParty = await createRepoEntity(ctx, "ledgerParty", {
+      name: "Grouping known party",
+    });
+    await getDb(ctx.db)
+      .insert(expenseAttribution)
+      .values([
+        {
+          expenseId: basis.entityId,
+          role: "funder",
+          ledgerPartyId: knownParty.entityId,
+          weight: 1,
+        },
+        {
+          expenseId: basis.entityId,
+          role: "beneficiary",
+          ledgerPartyId: null,
+          weight: 1,
+        },
+      ]);
+    const byParty = await executeEntity(kernel(), {
+      action: "list",
+      entity: "expense",
+      filters: { ids: [basis.output.id] },
+      groupBy: [{ key: "ledgerPartyId" }],
+      pagination: { pageIndex: 0, pageSize: 10 },
+    });
+    if (byParty.action !== "list") throw new Error("expected list");
+    expect(groups(byParty.meta)).toMatchObject([
+      { key: knownParty.output.id, count: 1 },
+      { key: FILTER_NONE, count: 1 },
+    ]);
+    expect(byParty.meta.membershipCount).toBe(2);
     const pages = [];
     for (const pageIndex of [0, 1, 2]) {
       const page = await executeEntity(kernel(), {
@@ -711,6 +776,64 @@ describe("expanded grouped list memberships", () => {
       { key: plant.id, label: "Grouping herb", count: 1 },
       { key: FILTER_NONE, count: 1 },
     ]);
+    const counterparties = await Promise.all(
+      ["Reference vendor alpha", "Reference vendor beta"].map((name) =>
+        createRepoEntity(ctx, "vendor", { name }),
+      ),
+    );
+    for (const counterparty of counterparties) {
+      const purchase = await createRepoEntity(ctx, "purchase", {
+        vendorId: counterparty.output.id,
+        date: "2026-01-01",
+      });
+      // Repeated lines and signed refunds preserve one membership per Vendor.
+      for (const cost of [10, 3, -2])
+        await createRepoEntity(
+          ctx,
+          "expense",
+          makeExpenseInput({
+            name: "Reference purchase line",
+            productId: first.id,
+            purchaseId: purchase.output.id,
+            cost,
+            date: "2026-01-01",
+          }),
+        );
+    }
+    const paths = [];
+    for (const pageIndex of [0, 1, 2]) {
+      const byVendor = await executeEntity(kernel(), {
+        action: "list",
+        entity: "product",
+        filters: { ids: [first.id, unassigned.id] },
+        groupBy: [{ key: "related:product.vendors" }],
+        pagination: { pageIndex, pageSize: 1 },
+      });
+      if (byVendor.action !== "list") throw new Error("expected list");
+      expect(byVendor.meta.totalCount).toBe(2);
+      expect(byVendor.meta.membershipCount).toBe(3);
+      paths.push(...(byVendor.meta.memberships ?? []));
+    }
+    expect(paths).toEqual([
+      ...counterparties.map((counterparty) => ({
+        id: first.id,
+        path: [counterparty.output.id],
+      })),
+      { id: unassigned.id, path: [FILTER_NONE] },
+    ]);
+    const filtered = await executeEntity(kernel(), {
+      action: "list",
+      entity: "product",
+      filters: {
+        ids: [first.id, unassigned.id],
+        vendorId: [counterparties[0]!.output.id],
+      },
+      groupBy: [{ key: "related:product.vendors" }],
+      pagination: { pageIndex: 0, pageSize: 10 },
+    });
+    if (filtered.action !== "list") throw new Error("expected list");
+    expect(filtered.meta.totalCount).toBe(1);
+    expect(filtered.meta.memberships).toEqual(paths.slice(0, 2));
   });
 
   it("rejects duplicate dimensions, excess dimensions, and buckets on non-dates", async () => {

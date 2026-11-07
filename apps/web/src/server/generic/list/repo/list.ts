@@ -318,6 +318,25 @@ export const withListGroupBy = <Filters extends object>(
 ): Filters =>
   groupBy === undefined ? filters : Object.assign({}, filters, { groupBy });
 
+/** Prepared row sets must materialize dimensions read by grouping too. */
+export const rowSetIsGrouped = (
+  entity: Entity,
+  filters: ListFilterValues,
+  rows: string,
+  terminal: string,
+): boolean => {
+  const choices: readonly GeneratedGroupChoice[] =
+    generatedEntityListFields[entity].grouping;
+  return listGroupByFromFilters(filters).some(({ key }) => {
+    const value = choices.find((choice) => choice.key === key)?.value;
+    return (
+      value?.kind === "rowRecord" &&
+      value.rows === rows &&
+      value.path === `${rows}.${terminal}`
+    );
+  });
+};
+
 const searchQueryFromFilters = <Filters extends object>(
   filters: Filters | undefined,
 ) => listSearchSchema.parse(filters ?? {}).searchQuery;
@@ -528,7 +547,10 @@ export function listScaffold<
     const targets = new Set(
       listGroupByFromFilters(filters).flatMap(({ key }) => {
         const value = choices.find((choice) => choice.key === key)?.value;
-        return value?.kind === "record" && value.titleColumn === null
+        return (value?.kind === "record" ||
+          value?.kind === "rowRecord" ||
+          value?.kind === "relatedRecord") &&
+          value.titleColumn === null
           ? [value.target]
           : [];
       }),
@@ -1178,6 +1200,7 @@ export function listScaffold<
           context.has(groupTitlesPrepare)
             ? context.get(groupTitlesPrepare)
             : undefined,
+          rowsSql,
         );
         if (!group.members) return group;
         const at = (column: string) =>
@@ -1186,7 +1209,9 @@ export function listScaffold<
         const options =
           value !== null && "options" in value ? value.options : null;
         const order: ListGroupSql["order"] =
-          value?.kind === "record"
+          value?.kind === "record" ||
+          value?.kind === "rowRecord" ||
+          value?.kind === "relatedRecord"
             ? ["label", "key"]
             : options?.length
               ? [

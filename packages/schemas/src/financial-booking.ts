@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { expenseEconomicRoleSchema } from "./expense-fields";
 import {
   financialTransactionShortcode,
   financialAccountShortcode,
@@ -117,7 +118,7 @@ export const financialBookingInput = z.object({
   spendingCategoryId: spendingCategoryShortcode.nullable().default(null),
   costType: z.enum(["materials", "tools", "services"]).default("materials"),
   trade: tradeSchema.default("other"),
-  economicRole: z.enum(["vendor", "reimbursement"]).default("vendor"),
+  economicRole: expenseEconomicRoleSchema.default("vendor"),
   purchaserId: ledgerPartyShortcode.nullable().default(null),
   beneficiaries: ledgerAttributions.optional(),
 });

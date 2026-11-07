@@ -383,7 +383,12 @@ const compileRowsVia = (
             column: stored?.column ?? null,
           },
     sort: reason("sort"),
-    group: reason("group"),
+    group:
+      target === undefined
+        ? `Grouping values from ${rowSet.label} is unavailable.`
+        : target.table === null
+          ? `${target.inspector.singular} has no stored records to group.`
+          : null,
   };
 };
 
@@ -955,7 +960,10 @@ const menuNoun = (
 
 const relationOf = (descriptor: FilterDescriptor, entity: CompiledEntity) => {
   const key = /^related:[^.]+\.(.+)$/u.exec(descriptor.columnId)?.[1];
-  return entity.relations.find((candidate) => candidate.key === key);
+  if (key === undefined) return undefined;
+  return entity.relations.find(
+    (candidate) => candidate.key === key || candidate.view?.key === key,
+  );
 };
 
 /** The noun a placeholder names ("Filter by related expenses id..."). */
@@ -1116,7 +1124,18 @@ const compileGroupChoice = (
   const stored = entity.fieldModel.storage.find(
     (candidate) => candidate.key === key,
   );
-  const bound = derived[key];
+  const relationDescriptor = descriptors.find(
+    (descriptor) => descriptor.columnId === key,
+  );
+  const relation =
+    relationDescriptor === undefined
+      ? undefined
+      : relationOf(relationDescriptor, entity);
+  const bound =
+    derived[key] ??
+    (relation?.provenance.kind === "local-path"
+      ? compileVia(entity, relation.key, byKey, where)
+      : undefined);
   /**
    * The value filter on the same path: the field's own filter, or for a
    * one-step reference, the filter on that foreign key. Derived aliases match
@@ -1125,7 +1144,7 @@ const compileGroupChoice = (
    */
   const filterOn = (value: GroupValue | null) => {
     const edge =
-      value !== null && value.kind !== "column" && value.kind !== "derived"
+      value !== null && (value.kind === "record" || value.kind === "field")
         ? value.steps.length === 1 && value.steps[0]?.direction === "outgoing"
           ? value.steps[0].edge.split(".").at(-1)
           : undefined
@@ -1163,17 +1182,23 @@ const compileGroupChoice = (
     throw new EntityDeclarationError(
       `${where} names no model.fields or model.derived key.`,
     );
+  const labelFilter = filterOn(null);
   const label =
     field?.label ??
-    filterOn(null)?.label ??
     entity.relations.find(
       (relation) =>
         relation.key === key ||
+        key === `related:${entity.key}.${relation.view?.key ?? relation.key}` ||
         (bound?.shape === "via" && relation.key === bound.path),
     )?.label ??
+    (key.startsWith("related:") && labelFilter !== undefined
+      ? filterFieldLabel(labelFilter)
+      : undefined) ??
     (bound?.shape === "via"
       ? byKey.get(bound.target)?.inspector.singular
-      : undefined) ??
+      : bound?.shape === "rows" && bound.terminal.kind === "record"
+        ? byKey.get(bound.terminal.target)?.inspector.singular
+        : undefined) ??
     humanize(key);
   /**
    * The levels a section key can group at: a related record whose entity
@@ -1185,7 +1210,11 @@ const compileGroupChoice = (
   ): Pick<CompiledGroupChoice, "levels" | "levelReason"> => {
     if (value === null)
       return { levels: 0, levelReason: reason ?? `${label} cannot group.` };
-    if (value.kind !== "record")
+    if (
+      value.kind !== "record" &&
+      value.kind !== "rowRecord" &&
+      value.kind !== "relatedRecord"
+    )
       return {
         levels: 0,
         levelReason: `${label} is a value, not a record with parents, so it has no levels.`,
@@ -1212,12 +1241,14 @@ const compileGroupChoice = (
       listed:
         entity.fieldModel.grouping.includes(key) ||
         (field !== undefined && key !== "deletedAt") ||
-        (bound?.shape === "via" && bound.terminal.kind === "record"),
+        ((bound?.shape === "via" || bound?.shape === "rows") &&
+          bound.terminal.kind === "record"),
       label,
-      noValueLabel: "Unassigned",
+      noValueLabel: field?.display.emptyLabel ?? "Unassigned",
       multiple:
         field?.kind === "text-array" ||
         field?.reference?.multiple === true ||
+        bound?.shape === "rows" ||
         (bound?.shape === "via" &&
           (bound.many ||
             (bound.terminal.kind === "field" &&
@@ -1259,6 +1290,8 @@ const compileGroupChoice = (
   };
   const viaValue = (via: Extract<CompiledListField, { shape: "via" }>) => {
     if (via.group !== null) return choice(null, via.group);
+    if (byKey.get(via.target)?.table === null)
+      return choice(null, `${label} has no stored records to group.`);
     if (via.terminal.kind === "field") {
       const target = byKey.get(via.target);
       const terminalColumn = via.terminal.column;
@@ -1280,6 +1313,16 @@ const compileGroupChoice = (
         null,
       );
     }
+    if (relation !== undefined && key.startsWith("related:"))
+      return choice(
+        {
+          kind: "relatedRecord",
+          relationKey: key.slice("related:".length),
+          target: via.target,
+          titleColumn: via.terminal.titleColumn,
+        },
+        null,
+      );
     return choice(
       {
         kind: "record",
@@ -1291,6 +1334,20 @@ const compileGroupChoice = (
     );
   };
   if (bound?.shape === "via") return viaValue(bound);
+  if (bound?.shape === "rows" && bound.terminal.kind === "record")
+    return choice(
+      bound.group === null
+        ? {
+            kind: "rowRecord",
+            rows: bound.rows,
+            path: bound.path,
+            target: bound.terminal.target,
+            column: bound.terminal.column,
+            titleColumn: bound.terminal.titleColumn,
+          }
+        : null,
+      bound.group,
+    );
   // A predicate, or a value with no single section key (a date span).
   if (bound !== undefined && bound.group !== null)
     return choice(null, bound.group);
@@ -1470,6 +1527,7 @@ const presentationCardinality = ({
   field?.reference?.multiple ||
   kind === "text-array" ||
   (value?.shape === "via" && value.many) ||
+  value?.shape === "rows" ||
   relation?.cardinality === "many"
     ? "many"
     : "one";
@@ -1491,6 +1549,9 @@ const presentationTarget = ({
   field?.reference?.entity ??
   (value?.shape === "via" && value.terminal.kind === "record"
     ? value.target
+    : null) ??
+  (value?.shape === "rows" && value.terminal.kind === "record"
+    ? value.terminal.target
     : null) ??
   relation?.target ??
   filter?.brandRef?.entity ??
@@ -1527,6 +1588,7 @@ const compileFieldPresentation = (
     ...Object.keys(derived),
     ...sorts,
     ...descriptors.map(({ columnId }) => columnId),
+    ...grouping.map(({ key }) => key),
   ]);
   return Object.fromEntries(
     [...keys].map((key) => {
@@ -1545,7 +1607,8 @@ const compileFieldPresentation = (
         );
       const relation = entity.relations.find(
         (relation) =>
-          key === `related:${entity.key}.${relation.key}` ||
+          key ===
+            `related:${entity.key}.${relation.view?.key ?? relation.key}` ||
           (value?.shape === "via" && relation.key === value.path),
       );
       const relatedViewSort = key.startsWith("related:");
@@ -1592,7 +1655,9 @@ const compileFieldPresentation = (
         ),
         group: operation(
           group?.reason === null ? group.key : undefined,
-          group?.reason ?? "Grouping is unavailable for this field.",
+          group?.reason ??
+            value?.group ??
+            "Grouping is unavailable for this field.",
           group?.multiple
             ? "Records may appear in several groups. Filters select whole records and retain their other memberships."
             : null,
@@ -1891,18 +1956,30 @@ export const compileListFields = (
       .filter(([, field]) =>
         field.shape === "value"
           ? ["enum", "boolean", "date"].includes(field.type)
-          : field.shape === "via" &&
-            (field.terminal.kind === "record" ||
-              ["enum", "boolean", "date", "timestamp"].includes(
-                field.terminal.fieldKind,
-              )),
+          : field.shape === "rows"
+            ? field.terminal.kind === "record"
+            : field.shape === "via" &&
+              (field.terminal.kind === "record" ||
+                ["enum", "boolean", "date", "timestamp"].includes(
+                  field.terminal.fieldKind,
+                )),
       )
       .map(([key]) => key);
+    // Related previews already declare their label, traversal and record
+    // filter. Reuse that path instead of requiring a second derived alias.
+    const relatedGroups = filterDescriptors.flatMap((descriptor) => {
+      const relation = relationOf(descriptor, entity);
+      return descriptor.kind === "idMulti" &&
+        relation?.provenance.kind === "local-path"
+        ? [descriptor.columnId]
+        : [];
+    });
     const grouping = [
       ...new Set([
         ...entity.fieldModel.grouping,
         ...inferred,
         ...inferredDerived,
+        ...relatedGroups,
       ]),
     ].map((key) =>
       compileGroupChoice(

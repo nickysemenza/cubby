@@ -19,8 +19,12 @@ function groupRecordRef(
   choice: GeneratedGroupChoice | undefined,
   value: string,
 ): EntityRef | undefined {
-  return choice?.value?.kind === "record" && value !== FILTER_NONE
-    ? { entityKind: choice.value.target, entityId: value }
+  const record = choice?.value;
+  return (record?.kind === "record" ||
+    record?.kind === "rowRecord" ||
+    record?.kind === "relatedRecord") &&
+    value !== FILTER_NONE
+    ? { entityKind: record.target, entityId: value }
     : undefined;
 }
 

@@ -1844,6 +1844,38 @@ Deletion timestamps and duplicate path aliases stay out of the menu while their
 accepted keys remain valid. Derived expressions retain their own key identity,
 even when they have identical option lists.
 
+Record-picker filters on local-path related previews also supply grouping
+choices directly. Their existing relation declaration owns the label, target,
+traversal and drill-down binding; a duplicate `model.derived` alias is not
+required. Equivalent stored-reference and related-path choices share one menu
+entry while retaining accepted keys. Query-backed and external relations do not
+acquire SQL grouping merely because they have a preview.
+Preview-derived grouping reuses the related-view reader's full evidence union,
+view conditions and filter traversal, including explicit links without Expense
+rows. Grouping never reduces a multi-source preview to its first path. Ancestor
+drill-down and exclusion require an exact subtree filter binding; without one,
+those actions remain unavailable rather than selecting only the ancestor itself.
+
+Product Sellers use acquisition evidence for each Product and Purchase
+together: actual vendor-role Expense acquisition lines or a live explicit
+`acquisitionConfirmed` link. Signed refunds on an eligible acquisition remain
+included even when its net cost becomes negative. Buying one Product does not
+classify a different trade-in on that Purchase as acquired. Plans,
+reimbursements, bare identity links and negative amounts alone establish no
+seller. The broad Vendors relationship and its keys retain their existing
+meaning. Seller membership contains only live known Vendors; its "No seller"
+bucket means no known acquisition seller, including deliberate acquisitions
+without a counterparty. It is not a request to repair those records.
+The Product Sellers report reads the same acquisition relation, counts distinct
+Purchases and opens an exact Vendor-id list rather than the broader Vendors
+relationship.
+
+The Vendor manifest exposes the kernel's exact `ids` restriction as a record
+filter. Report links carrying selected Vendor identities round-trip through the
+route schema and filter codec instead of falling back to the broad Product
+relationship. Relationship grouping labels prefer their declared relation label;
+filter predicate wording does not rename existing grouping choices.
+
 The list-field compiler also owns `listFields.presentation`: semantic labels,
 descriptions, entity targets, value types, cardinality and admitted sort, group
 and filter keys with unavailable reasons. Shared web columns and menus consume
@@ -2882,20 +2914,23 @@ one shape:
   a correlated scalar subquery that starts at the outer row's reference, even
   when the repository already joins that table: knowing each FROM would be
   per-entity knowledge, so a measured cost earns a declared index rather than
-  a join-aware compiler. Only
-  a to-one path (every relation `one` and every step outgoing) can sort or
-  group. The compiler rejects any other in `sort.fields` with the reason it
-  derives (`Goes through a list of Purchases. Only paths that lead to a
-  single record can sort.`); in `model.grouping` it stays a disabled Group by
-  choice showing its reason. A list request sorting or grouping by it (or by
-  a `predicate`) fails with that reason over HTTP and MCP.
+  a join-aware compiler. Only a to-one path (every relation `one` and every
+  step outgoing) can supply a scalar sort; unsupported sort declarations fail
+  with the derived reason. Grouping expands to-many paths into distinct
+  memberships instead. Missing live values use the no-value bucket. Predicate
+  and other unsupported grouping sources retain explicit refusal reasons.
 - `{ via: "<rows>.<terminal>" }` starts at a `model.rows` row set (below) and
   takes one terminal: a column of the row (a JSON item key), or an entity the
   row references (`importTargets.run`), which filters by shortcode and gets
-  the "Include sub-…" toggle when it declares `model.hierarchy`. A row set is
-  to-many, so it filters but never sorts or groups (`Goes through a list of
-  Import targets. …`), and its value filters generate Any value / No value,
-  Match all, and Exclude.
+  the "Include sub-…" toggle when it declares `model.hierarchy`. Record
+  terminals group by distinct live identities, using canonical titles and
+  hierarchy levels. Their row set, narrowing and preparation are shared with
+  filters. A missing or deleted reference in a populated row set contributes
+  a no-value membership alongside its known references, matching that row
+  set's existing No value filter; no rows also contributes no value. A to-many
+  row set supplies no arbitrary scalar sort. Scalar row
+  terminals remain unavailable for grouping. Value filters generate Any value
+  / No value, Match all, and Exclude.
 - `{ type }` is a repository value: the repository passes its SQL as
   `listScaffold(entity, table, { derived })`, whose argument type is
   generated, so a declared key without SQL fails typecheck. A compound value
@@ -3364,14 +3399,16 @@ terminals are checked when its SQL renders (`rowSetSql` in
 (the list row's id) and each column, a `{ reference }` column holding the
 referenced record's id; the argument type is generated, so a declared row
 set without SQL fails typecheck. It compiles to an uncorrelated
-`id IN (SELECT "owner" FROM relation WHERE …)` and renders only when a
-filter reads it. A relation may come from a `listPrepare` (`prepare.rows`):
+`id IN (SELECT "owner" FROM relation WHERE …)` for filters and a correlated
+membership selection for grouping. It renders only when read. A relation may
+come from a `listPrepare` (`prepare.rows`):
 expense `allocationShares` bounds its computed shares by the request's
 other row filters (`rowSetFilterKeys` names the keys to leave out) and
-allocates only the dimensions a filter reads (expense analytics, which
+allocates only the dimensions a filter or group reads (`rowSetIsGrouped` shares
+the compiled grouping source with prepared row sets). Expense analytics, which
 allocate the shares themselves, drop the allocation filters their scope
 expresses — any-of values ORed with their presence — and keep the group for
-Match all and Exclude); project `attentionItems`
+Match all and Exclude. Project `attentionItems`
 renders `VALUES` from the attention rules' items; gardenEntry
 `journalPlantings` is SQL (live journal links, plus whole-area entries at a
 planting's location inside its window). `relation` names a stored-path

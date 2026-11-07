@@ -368,17 +368,13 @@ describe("list field compiler", () => {
     const column = (name: string) =>
       renderWhereSql(
         set.column({
-          shape: "rows",
           path: `subjectTasks.${name}`,
-          rows: "subjectTasks",
           terminal: {
             kind: "column",
             column: name,
             fieldKind: null,
             options: null,
           },
-          sort: "",
-          group: "",
         }),
       );
     expect(column("status")).toBe('rs1."status"');

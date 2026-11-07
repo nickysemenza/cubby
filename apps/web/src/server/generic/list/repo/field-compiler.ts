@@ -41,7 +41,10 @@ import { householdDaySql, uuidArrayParam } from "~/server/db/helpers/query";
 import { createAppError } from "~/server/errors/app-error";
 import type { QualityReadContext } from "~/server/generic/data-quality/repo/registry";
 import { storedDerivedSql } from "~/server/generic/derived/repo/read";
-import { relatedSortExpression } from "~/server/generic/entity-links/repo/related-view";
+import {
+  relatedRecordIdsSql,
+  relatedSortExpression,
+} from "~/server/generic/entity-links/repo/related-view";
 import {
   hierarchyAncestorSql,
   hierarchyLevelSql,
@@ -767,7 +770,9 @@ export interface RowSetSql {
   readonly matches: (condition: SQL | undefined) => SQL;
   /** A row matches `condition`, or the record has no row at all. */
   readonly matchesOrEmpty: (condition: SQL | undefined) => SQL;
-  readonly column: (field: RowsField) => SQL;
+  readonly column: (field: Pick<RowsField, "path" | "terminal">) => SQL;
+  /** Correlated rows, shared by membership expansion and scalar rollups. */
+  readonly select: (projection: SQL) => SQL;
 }
 
 /**
@@ -825,6 +830,8 @@ export const rowSetSql = (
     };
     // Uncorrelated, so the relation is computed once for the whole list.
     return {
+      select: (projection) =>
+        sql`SELECT ${projection} FROM (${relation()}) row_set WHERE row_set."owner" = ${outer}."id"`,
       matches: (condition) =>
         sql`${outer}."id" IN (SELECT row_set."owner" FROM (${relation()}) row_set WHERE ${condition ?? sql`true`})`,
       // One pass: drop exactly the owners with rows of which none matches.
@@ -843,6 +850,7 @@ export const rowSetSql = (
     const array = sql`${outer}.${sql.identifier(storage.column)}`;
     const from = sql`jsonb_array_elements(CASE WHEN jsonb_typeof(${array}) = 'array' THEN ${array} ELSE '[]'::jsonb END) row_set`;
     return {
+      select: (projection) => sql`SELECT ${projection} FROM ${from}`,
       ...correlated(
         (condition) =>
           sql`EXISTS (SELECT 1 FROM ${from} WHERE ${condition ?? sql`true`})`,
@@ -878,6 +886,8 @@ export const rowSetSql = (
     ),
   );
   return {
+    select: (projection) =>
+      sql`SELECT ${projection} FROM ${sql.identifier(first.relation ?? first.table)} ${firstAlias} ${renderJoins({ hops: rest })} WHERE ${where}`,
     ...correlated(
       (condition) =>
         sql`EXISTS (SELECT 1 FROM ${sql.identifier(first.relation ?? first.table)} ${firstAlias} ${renderJoins({ hops: rest })} WHERE ${and(where, condition)})`,
@@ -1006,6 +1016,7 @@ export const groupSql = (
   table: PgTable,
   context: ListContext,
   recordTitles: ReadonlyMap<Entity, SQL> = new Map(),
+  rows: AnyRowsSql = {},
 ): ListGroupSql => {
   const choices: readonly GeneratedGroupChoice[] =
     generatedEntityListFields[entity].grouping;
@@ -1026,13 +1037,16 @@ export const groupSql = (
       `${choice.label} does not support ${bucket} buckets`,
     );
   const value = choice.value;
-  if (level !== undefined && (value.kind !== "record" || level > choice.levels))
+  // Only reference dimensions declare positive hierarchy levels.
+  if (level !== undefined && (level < 1 || level > choice.levels))
     throw createAppError(
       "LIST_GROUP_BY_FIELD_UNSUPPORTED",
       choice.levelReason ??
         `${choice.label} offers levels 1–${choice.levels}, not ${level}`,
     );
   switch (value.kind) {
+    case "relatedRecord":
+    case "rowRecord":
     case "record": {
       const recordLabel = (id: SQL, stored: (column: string) => SQL): SQL => {
         if (value.titleColumn !== null) return stored(value.titleColumn);
@@ -1044,6 +1058,57 @@ export const groupSql = (
           );
         return sql`(SELECT ${title} FROM ${sql.identifier(targetTable)} "__list_record" WHERE "__list_record"."id" = ${id})`;
       };
+      if (value.kind !== "record") {
+        const memberIds =
+          value.kind === "relatedRecord"
+            ? relatedRecordIdsSql(
+                entity,
+                value.relationKey,
+                sql`${sql.identifier(getTableName(table))}."id"`,
+              )
+            : (() => {
+                const set = rowSetSql(
+                  entity,
+                  value.rows,
+                  getTableName(table),
+                  rows,
+                  context,
+                );
+                const referenced = set.column({
+                  path: value.path,
+                  terminal: {
+                    kind: "record",
+                    target: value.target,
+                    titleColumn: value.titleColumn,
+                    column: value.column,
+                  },
+                });
+                return set.select(sql`${referenced} AS "id"`);
+              })();
+        const target = entityManifest[value.target];
+        const targetTable = target.dbTable;
+        if (targetTable === null)
+          throw new Error(`${value.target} has no table to group by`);
+        const leafId = sql`list_row_record."id"`;
+        const id =
+          level === undefined
+            ? leafId
+            : hierarchyAncestorSql(value.target, leafId, level);
+        const at = (column: string) =>
+          level === undefined
+            ? sql`list_row_record.${sql.identifier(column)}`
+            : sql`(SELECT a.${sql.identifier(column)} FROM ${sql.identifier(targetTable)} a WHERE a."id" = ${id})`;
+        return {
+          choice,
+          key: sql`null::text`,
+          label: sql`null::text`,
+          order: ["label", "key"],
+          subtree: null,
+          members: sql`SELECT DISTINCT ${at("shortcode")}::text AS "key", ${recordLabel(id, at)}::text AS "label", ${level === undefined ? sql`false` : sql`${hierarchyLevelSql(value.target, leafId)} > ${level}::int`} AS "subtree"
+            FROM (${memberIds}) list_row_member
+            LEFT JOIN ${sql.identifier(targetTable)} list_row_record ON list_row_record."id" = list_row_member."id"${target.softDelete ? sql` AND ${notDeleted("list_row_record")}` : sql``}`,
+        };
+      }
       if (choice.multiple) {
         const traversal = compileTraversal(entity, value.steps, "lg", {
           to: value.target,

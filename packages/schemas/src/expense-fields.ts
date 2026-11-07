@@ -3,6 +3,8 @@ import { z } from "zod";
 /** Expense-name search terms, OR-matched; a bare string is one term. */
 export const expenseSearchTerms = z.union([z.string(), z.array(z.string())]);
 
+export const expenseEconomicRoleSchema = z.enum(["vendor", "reimbursement"]);
+
 export const costTypeValues = ["materials", "tools", "services"] as const;
 export const costTypeSchema = z.enum(costTypeValues);
 export type CostType = z.infer<typeof costTypeSchema>;
