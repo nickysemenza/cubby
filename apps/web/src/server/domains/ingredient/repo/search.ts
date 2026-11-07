@@ -386,7 +386,6 @@ const loadIngredientProducts = async (
     await import("~/server/domains/product/repo/crud");
   const links = await unwrapDb(db)
     .select({
-      id: product.id,
       shortcode: product.shortcode,
       ingredientId: product.ingredientId,
     })
@@ -400,10 +399,13 @@ const loadIngredientProducts = async (
         ),
       ),
     );
-  const { data } = await productScaffold.getByIds(
+  // Links already carry public identities; the outer public read owns envelopes.
+  const { data } = await productScaffold.get(
     db,
-    links.map((link) => link.id),
+    links.map((link) => link.shortcode),
     Object.keys(rawProductWithMappings.shape),
+    undefined,
+    { includeFieldReads: false },
   );
   const byCode = new Map(
     data.map((row) => {
