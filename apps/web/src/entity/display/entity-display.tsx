@@ -2245,7 +2245,6 @@ export function createEntityDisplayColumns<TRecord extends object>(
             id: columnId,
             meta: attachCubbyColumnMeta({
               ...column.meta,
-              readFields: field.display.readFields,
               entityColumnRole: column.meta?.entityColumnRole ?? "fact",
               provenance: field.provenance ?? undefined,
               explanation: field.explanation

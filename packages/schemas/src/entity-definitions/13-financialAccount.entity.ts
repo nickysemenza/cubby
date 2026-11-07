@@ -29,10 +29,6 @@ export const { definition, readSchemas } = defineEntityModel({
       module: "~/features/finance/list-columns",
       export: "financialAccountListOverride",
     },
-    listReadProjection: {
-      module: "~/entity/entity-list/list-read-demand",
-      export: "declaredListReadProjection",
-    },
     basePath: "financial-accounts",
   },
   table: "FinancialAccount",

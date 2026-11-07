@@ -177,7 +177,7 @@ export interface UseEntityListOptions<
   queryOptions: ListQueryOptionsFn<TFilters, TRow>;
   /** An honest selected-row adapter; selection action reloads retain queryOptions. */
   selectedQueryOptions?: ListQueryOptionsFn<TFilters, TRow>;
-  readProjection?: ListReadProjection | null;
+  readProjection?: ListReadProjection;
   buildFilters?: (tableState: TableStateReturn) => TFilters;
   /**
    * Contextual scope imposed by the surrounding page (for example, expenses
@@ -209,7 +209,6 @@ export interface UseEntityListOptions<
    */
   subject?: {
     entity: Entity;
-    readFields?: readonly string[];
     resolve: (row: TData) => EntityActionSubject | null;
   };
   initialColumnVisibility?: Record<string, boolean>;
@@ -616,8 +615,7 @@ export function useEntityList<
     // A counted page reports its unresolved membership, and only a result filter
     // has any. Counting filtered lists makes the footer's state exact: a number
     // when one applies, nothing otherwise. Unfiltered pages still defer the scan.
-    includeCount:
-      summaryOnly || Boolean(subject || scopeFilters || hasActiveFilter),
+    includeCount: summaryOnly || Boolean(scopeFilters || hasActiveFilter),
   });
 
   const {

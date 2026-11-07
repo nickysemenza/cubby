@@ -103,6 +103,11 @@ function CreateProjectActionHarness({
 
 describe("tracker entity actions", () => {
   it("keeps Mark purchased refused for already-purchased or adjustment records", async () => {
+    const selected = (row: typeof plannedExpense) => ({
+      id: row.id,
+      future: row.future,
+      fields: { lineKind: row.fields.lineKind },
+    });
     const { result } = renderHook(() => useMarkExpensePurchasedAction(), {
       wrapper: harness.wrapper,
     });
@@ -123,14 +128,14 @@ describe("tracker entity actions", () => {
       result.current.availability?.({
         entity: "expense",
         surface: "inspector",
-        rows: [purchased],
+        rows: [selected(purchased)],
       }),
     ).toEqual({ status: "disabled", reason: "Already purchased" });
     expect(
       result.current.availability?.({
         entity: "expense",
         surface: "row",
-        rows: [adjustment],
+        rows: [selected(adjustment)],
       }),
     ).toEqual({
       status: "disabled",
@@ -140,7 +145,7 @@ describe("tracker entity actions", () => {
       result.current.availability?.({
         entity: "expense",
         surface: "row",
-        rows: [plannedExpense],
+        rows: [selected(plannedExpense)],
       }),
     ).toEqual({ status: "available" });
   });

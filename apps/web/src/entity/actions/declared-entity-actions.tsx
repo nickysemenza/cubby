@@ -20,7 +20,10 @@ import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
 import { featureRegistry } from "~/entity/feature-registry";
 
 import { useUpdateMutation } from "../hooks/use-update-mutation";
-import { PRODUCT_DISCARD_READ_FIELDS } from "./action-read-fields";
+import {
+  PRODUCT_DISCARD_READ_FIELDS,
+  WISH_PURCHASED_READ_FIELDS,
+} from "./action-read-fields";
 import { VerbMenuItem } from "./action-verb-ui";
 import { useBulkEditEntityAction } from "./bulk-edit-entity-action";
 import { defineEntityAction } from "./entity-action-definition";
@@ -150,7 +153,7 @@ function useSetProjectStatusAction(): EntityActionHandles {
 
 const wishRow = z.object({
   id: z.string(),
-  acquiredAt: z.union([z.string(), z.date()]).nullish(),
+  acquiredAt: z.union([z.string(), z.date()]).nullable(),
 });
 
 /** A wish's "Mark purchased" toggles `acquired`; already-acquired rows flip back. */
@@ -163,7 +166,7 @@ function useMarkWishPurchasedAction(): EntityActionHandles {
     const parsed = wishRow.safeParse(row);
     if (!parsed.success) return false;
     await update.mutateAsync({
-      id: row.id,
+      id: parsed.data.id,
       data: { acquired: !parsed.data.acquiredAt },
     });
     return true;
@@ -317,6 +320,7 @@ export const declaredEntityActionDefinitions = [
     use: useSetProjectStatusAction,
   }),
   defineEntityAction({
+    readFields: WISH_PURCHASED_READ_FIELDS,
     id: "mark-wish-purchased",
     verb: "markPurchased",
     entities: ["wish"],

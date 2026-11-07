@@ -50,6 +50,10 @@ export const { definition, readSchemas } = defineEntityModel({
       module: "~/features/expense/list-columns",
       export: "expenseListOverride",
     },
+    listReadProjection: {
+      module: "~/features/expense/list-read",
+      export: "expenseListReadProjection",
+    },
     basePath: "expenses",
   },
   table: "Expense",
@@ -889,7 +893,11 @@ Rules:
         kind: "text",
         nullable: true,
         control: { kind: "text" },
-        display: { columnGroup: "Links", listHidden: true },
+        display: {
+          readFields: ["vendor", "orderUrl"],
+          columnGroup: "Links",
+          listHidden: true,
+        },
         provenance: {
           kind: "relation",
           sources: [{ entity: "purchase", relation: "purchase" }],
@@ -915,7 +923,16 @@ Rules:
         nullable: true,
         reference: { entity: "purchase" },
         control: { kind: "specialized", renderer: "entity-select" },
-        display: { columnGroup: "Links", labelPath: "purchaseDisplayLabel" },
+        display: {
+          readFields: [
+            "vendor",
+            "orderId",
+            "purchaseDisplayLabel",
+            "purchaseDate",
+          ],
+          columnGroup: "Links",
+          labelPath: "purchaseDisplayLabel",
+        },
         validation: {
           read: purchaseShortcode.nullable(),
           create: purchaseShortcode.nullable().default(null),

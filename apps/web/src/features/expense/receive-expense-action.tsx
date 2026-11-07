@@ -5,6 +5,7 @@ import { expenseShortcode } from "@cubby/schemas/identifiers";
 import { useState } from "react";
 import { z } from "zod";
 
+import { EXPENSE_RECEIVE_READ_FIELDS } from "~/entity/actions/action-read-fields";
 import { VerbMenuItem } from "~/entity/actions/action-verb-ui";
 import { defineEntityAction } from "~/entity/actions/entity-action-definition";
 import type {
@@ -94,6 +95,6 @@ export const receiveExpenseActionDefinition = defineEntityAction({
   surfaces: ["row", "inspector", "detail"],
   group: "primary",
   priority: 45,
-  readFields: ["name", "productId"],
+  readFields: EXPENSE_RECEIVE_READ_FIELDS,
   use: useReceiveExpenseAction,
 });

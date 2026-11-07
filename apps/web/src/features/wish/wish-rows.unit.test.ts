@@ -88,13 +88,18 @@ describe("buildWishRows", () => {
   });
 
   it("keeps tree row identity separate from the entity preview target", () => {
-    const [row] = buildWishRows([wish("WSH-0001", [candidate("PRD-BBBB", 5)])]);
+    const source = wish("WSH-0001", [candidate("PRD-BBBB", 5)]);
+    source.acquiredAt = wishListItemOut.shape.acquiredAt.parse(
+      new Date("2026-01-03T00:00:00Z"),
+    );
+    const [row] = buildWishRows([source]);
     const child = row?.kind === "wish" ? row.subRows[0] : undefined;
 
     expect(row).toMatchObject({
       id: wishId("WSH-0001"),
       entityKind: "wish",
       previewId: wishId("WSH-0001"),
+      acquiredAt: source.acquiredAt,
     });
     expect(child).toMatchObject({
       id: `${wishId("WSH-0001")}:PRD-BBBB`,

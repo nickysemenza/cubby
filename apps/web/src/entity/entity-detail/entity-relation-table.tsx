@@ -111,9 +111,9 @@ const relationReadProjection =
       ...sectionVisibility,
       ...visibility,
     });
-    return fields === undefined
-      ? undefined
-      : [...new Set([...fields, ...entityRowActionReadFields(entity)])].sort();
+    return [
+      ...new Set([...fields, ...entityRowActionReadFields(entity)]),
+    ].sort();
   };
 
 export function planRelationSection(
