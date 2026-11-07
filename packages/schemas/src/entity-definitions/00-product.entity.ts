@@ -762,7 +762,7 @@ export const { definition, readSchemas } = defineEntityModel(
           },
           {
             id: "expenseTotal",
-            label: "Expenses",
+            label: "Product expense total",
             keys: ["expenseTotal"],
             format: "currency",
             group: true,
@@ -1877,6 +1877,9 @@ Rules:
         {
           output: false,
           key: "expenseTotal",
+          label: "Product expense total",
+          description:
+            "Sum of this Product's live Expenses, including refunds, disposals and planned lines. A Product in several groups contributes its whole total to each matching group.",
           kind: "number",
           display: {
             columnGroup: "Purchasing",

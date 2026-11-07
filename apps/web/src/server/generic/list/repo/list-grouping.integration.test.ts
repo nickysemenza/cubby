@@ -711,6 +711,64 @@ describe("expanded grouped list memberships", () => {
       { key: plant.id, label: "Grouping herb", count: 1 },
       { key: FILTER_NONE, count: 1 },
     ]);
+    const counterparties = await Promise.all(
+      ["Reference vendor alpha", "Reference vendor beta"].map((name) =>
+        createRepoEntity(ctx, "vendor", { name }),
+      ),
+    );
+    for (const counterparty of counterparties) {
+      const purchase = await createRepoEntity(ctx, "purchase", {
+        vendorId: counterparty.output.id,
+        date: "2026-01-01",
+      });
+      // Repeated lines and signed refunds preserve one membership per Vendor.
+      for (const cost of [10, 3, -2])
+        await createRepoEntity(
+          ctx,
+          "expense",
+          makeExpenseInput({
+            name: "Reference purchase line",
+            productId: first.id,
+            purchaseId: purchase.output.id,
+            cost,
+            date: "2026-01-01",
+          }),
+        );
+    }
+    const paths = [];
+    for (const pageIndex of [0, 1, 2]) {
+      const byVendor = await executeEntity(kernel(), {
+        action: "list",
+        entity: "product",
+        filters: { ids: [first.id, unassigned.id] },
+        groupBy: [{ key: "related:product.vendors" }],
+        pagination: { pageIndex, pageSize: 1 },
+      });
+      if (byVendor.action !== "list") throw new Error("expected list");
+      expect(byVendor.meta.totalCount).toBe(2);
+      expect(byVendor.meta.membershipCount).toBe(3);
+      paths.push(...(byVendor.meta.memberships ?? []));
+    }
+    expect(paths).toEqual([
+      ...counterparties.map((counterparty) => ({
+        id: first.id,
+        path: [counterparty.output.id],
+      })),
+      { id: unassigned.id, path: [FILTER_NONE] },
+    ]);
+    const filtered = await executeEntity(kernel(), {
+      action: "list",
+      entity: "product",
+      filters: {
+        ids: [first.id, unassigned.id],
+        vendorId: [counterparties[0]!.output.id],
+      },
+      groupBy: [{ key: "related:product.vendors" }],
+      pagination: { pageIndex: 0, pageSize: 10 },
+    });
+    if (filtered.action !== "list") throw new Error("expected list");
+    expect(filtered.meta.totalCount).toBe(1);
+    expect(filtered.meta.memberships).toEqual(paths.slice(0, 2));
   });
 
   it("rejects duplicate dimensions, excess dimensions, and buckets on non-dates", async () => {

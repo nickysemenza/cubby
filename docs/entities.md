@@ -1844,6 +1844,13 @@ Deletion timestamps and duplicate path aliases stay out of the menu while their
 accepted keys remain valid. Derived expressions retain their own key identity,
 even when they have identical option lists.
 
+Record-picker filters on local-path related previews also supply grouping
+choices directly. Their existing relation declaration owns the label, target,
+traversal and drill-down binding; a duplicate `model.derived` alias is not
+required. Equivalent stored-reference and related-path choices share one menu
+entry while retaining accepted keys. Query-backed and external relations do not
+acquire SQL grouping merely because they have a preview.
+
 The list-field compiler also owns `listFields.presentation`: semantic labels,
 descriptions, entity targets, value types, cardinality and admitted sort, group
 and filter keys with unavailable reasons. Shared web columns and menus consume

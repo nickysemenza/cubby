@@ -1116,7 +1116,18 @@ const compileGroupChoice = (
   const stored = entity.fieldModel.storage.find(
     (candidate) => candidate.key === key,
   );
-  const bound = derived[key];
+  const relationDescriptor = descriptors.find(
+    (descriptor) => descriptor.columnId === key,
+  );
+  const relation =
+    relationDescriptor === undefined
+      ? undefined
+      : relationOf(relationDescriptor, entity);
+  const bound =
+    derived[key] ??
+    (relation?.provenance.kind === "local-path"
+      ? compileVia(entity, relation.key, byKey, where)
+      : undefined);
   /**
    * The value filter on the same path: the field's own filter, or for a
    * one-step reference, the filter on that foreign key. Derived aliases match
@@ -1259,6 +1270,8 @@ const compileGroupChoice = (
   };
   const viaValue = (via: Extract<CompiledListField, { shape: "via" }>) => {
     if (via.group !== null) return choice(null, via.group);
+    if (byKey.get(via.target)?.table === null)
+      return choice(null, `${label} has no stored records to group.`);
     if (via.terminal.kind === "field") {
       const target = byKey.get(via.target);
       const terminalColumn = via.terminal.column;
@@ -1527,6 +1540,7 @@ const compileFieldPresentation = (
     ...Object.keys(derived),
     ...sorts,
     ...descriptors.map(({ columnId }) => columnId),
+    ...grouping.map(({ key }) => key),
   ]);
   return Object.fromEntries(
     [...keys].map((key) => {
@@ -1898,11 +1912,21 @@ export const compileListFields = (
               )),
       )
       .map(([key]) => key);
+    // Related previews already declare their label, traversal and record
+    // filter. Reuse that path instead of requiring a second derived alias.
+    const relatedGroups = filterDescriptors.flatMap((descriptor) => {
+      const relation = relationOf(descriptor, entity);
+      return descriptor.kind === "idMulti" &&
+        relation?.provenance.kind === "local-path"
+        ? [descriptor.columnId]
+        : [];
+    });
     const grouping = [
       ...new Set([
         ...entity.fieldModel.grouping,
         ...inferred,
         ...inferredDerived,
+        ...relatedGroups,
       ]),
     ].map((key) =>
       compileGroupChoice(
