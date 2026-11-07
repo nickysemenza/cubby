@@ -7,6 +7,7 @@ import type {
   GeneratedListFieldPresentation,
   GeneratedListOperation,
 } from "@cubby/schemas/entity-projection-types";
+import type { EntityDeclarationMetadata } from "@cubby/schemas/entity-definitions/definition";
 import {
   excludableFilterKind,
   filterExcludeField,
@@ -118,6 +119,7 @@ export type CompiledEntityListFields = Readonly<{
   /** `model.grouping`, in menu order. */
   grouping: readonly CompiledGroupChoice[];
   metrics: readonly { key: string; label: string; format: string | null }[];
+  evidenceMetrics: EntityDeclarationMetadata["presentation"]["list"]["evidenceMetrics"];
   /** `presentation.list.scope`: columns pinned to NULL on every list read. */
   scope: readonly string[];
   /** `presentation.list.scopes`, by request key. */
@@ -1818,6 +1820,64 @@ const compileDerivedEntry = (
   return compiled;
 };
 
+const validateEvidenceMetrics = (
+  entity: CompiledEntity,
+  rows: Readonly<Record<string, CompiledRowSet>>,
+  grouping: readonly CompiledGroupChoice[],
+  metrics: readonly { key: string; format: string | null }[],
+): void => {
+  const context = entity.key;
+  const metricKeys = new Set<string>();
+  for (const metric of entity.inspector.list.evidenceMetrics) {
+    if (metricKeys.has(metric.key))
+      throw new EntityDeclarationError(
+        `${context}: duplicate list metric ${metric.key}.`,
+      );
+    metricKeys.add(metric.key);
+    const scalar = metrics.find(({ key }) => key === metric.key);
+    if (
+      scalar &&
+      (metric.format === "currency") !==
+        ["currency", "signedCurrency"].includes(scalar.format ?? "")
+    )
+      throw new EntityDeclarationError(
+        `${context}.${metric.key}: evidence and scalar metrics must use compatible monetary formats.`,
+      );
+    const storage = rows[metric.rows]?.storage;
+    if (storage?.kind !== "repository")
+      throw new EntityDeclarationError(
+        `${context}.${metric.key}: evidence metrics require a typed repository row set.`,
+      );
+    if (
+      storage.columns[metric.identity] == null ||
+      storage.types[metric.value] !== "number" ||
+      (metric.where !== undefined && storage.types[metric.where] !== "boolean")
+    )
+      throw new EntityDeclarationError(
+        `${context}.${metric.key}: evidence needs an identity, numeric value and optional boolean predicate.`,
+      );
+    if (
+      metric.format === "currency" &&
+      storage.columns[metric.identity] !== "expense"
+    )
+      throw new EntityDeclarationError(
+        `${context}.${metric.key}: monetary evidence must identify canonical Expense contributors.`,
+      );
+    for (const [groupKey, column] of Object.entries(metric.bindings)) {
+      const choice = grouping.find(({ key }) => key === groupKey);
+      const value = choice?.value;
+      const target =
+        value !== null && value !== undefined && "target" in value
+          ? value.target
+          : undefined;
+      if (target === undefined || storage.columns[column] !== target)
+        throw new EntityDeclarationError(
+          `${context}.${metric.key}: binding ${groupKey} must reference the same entity as its group.`,
+        );
+    }
+  }
+};
+
 /**
  * The cross-entity half of the list-field compiler: resolves `via` paths
  * through declared relations, derives each sort/group rejection reason,
@@ -2030,8 +2090,10 @@ export const compileListFields = (
         );
       return { key, label: field?.label ?? humanize(key), format };
     });
+    validateEvidenceMetrics(entity, rows, grouping, metrics);
     validateSavedViewGrouping(entity, grouping, context);
     const listFields: CompiledEntityListFields = {
+      evidenceMetrics: entity.inspector.list.evidenceMetrics,
       presentation: compileFieldPresentation(
         entity,
         derived,

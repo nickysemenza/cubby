@@ -2,6 +2,7 @@ import type {
   ListGroupMargin,
   ListGroupSummary,
   ListGroupMembership,
+  ListGroupMetric,
 } from "@cubby/schemas/pagination";
 
 import type { ListReadRow } from "~/entity/model/list-read-fields";
@@ -21,4 +22,5 @@ export interface ListReadPage<T = ListReadRow> {
   margins?: ListGroupMargin[];
   memberships?: ListGroupMembership[];
   membershipCount?: number;
+  metrics?: Record<string, ListGroupMetric>;
 }

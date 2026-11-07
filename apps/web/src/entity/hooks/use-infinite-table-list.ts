@@ -2,6 +2,7 @@ import type {
   ListGroupBy,
   ListGroupMargin,
   ListGroupMembership,
+  ListGroupMetric,
   ListGroupSummary,
   ListNesting,
   ListResultMembership,
@@ -78,6 +79,7 @@ interface UseInfiniteTableListReturn<
   sums?: Record<string, number>;
   /** The declared list totals as the server words them, by total id. */
   totalLabels?: Record<string, string>;
+  metrics?: Record<string, ListGroupMetric>;
   groups?: ListGroupSummary[];
   margins?: ListGroupMargin[];
   memberships?: ListGroupMembership[];
@@ -426,6 +428,7 @@ export function useInfiniteTableList<
     // ones arrive: blanking them read as a failure on every filter edit.
     sums: lastMeta?.sums,
     totalLabels: lastMeta?.totalLabels,
+    metrics: lastMeta?.metrics,
     unresolvedCount: lastMeta?.unresolvedCount,
     groups,
     margins,

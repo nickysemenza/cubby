@@ -7,7 +7,12 @@ import { type KeyboardEvent, useMemo, useRef, useState } from "react";
 
 import type { GroupSummaryModel } from "~/entity/entity-list/group-drill-down";
 import { GroupValueLabel } from "~/entity/entity-list/group-value-label";
-import { formatCount, formatPercent } from "~/lib/number-format";
+import { ListMetricValue } from "~/entity/entity-list/list-evidence-summary";
+import {
+  formatCount,
+  formatCurrency,
+  formatPercent,
+} from "~/lib/number-format";
 import { Picker } from "~/ui/combobox/picker";
 import { useIsMobile } from "~/ui/hooks/use-mobile";
 import { CrossTabTable } from "~/ui/matrix/cross-tab-table";
@@ -59,6 +64,12 @@ interface Entry {
 }
 
 export interface EntityPivotProps {
+  metricDefinitions?: readonly {
+    key: string;
+    label: string;
+    format: string | null;
+    description: string | null;
+  }[];
   /** Dimension labels in groupBy order. */
   labels: readonly string[];
   /** Lowercase record nouns, for counts and announcements. */
@@ -90,7 +101,12 @@ export function EntityPivot({
   share,
   onShareChange,
   onDrill,
+  metricDefinitions = [],
 }: EntityPivotProps) {
+  const [metricKey, setMetricKey] = useState<string | null>(null);
+  const selectedMetric = metricDefinitions.find(
+    (metric) => metric.key === metricKey,
+  );
   const [expandColumns, setExpandColumns] = useState(false);
   const [sort, setSort] = useState<PivotSort | null>(null);
   const [open, setOpen] = useState<ReadonlySet<string>>(() => new Set());
@@ -98,6 +114,28 @@ export function EntityPivot({
   const container = useRef<HTMLDivElement>(null);
   const isMobile = useIsMobile();
   const current = isTransitioning ? undefined : summary;
+  const metricValues = useMemo(
+    () =>
+      new Map([
+        ...(current?.groups.map(
+          (group) =>
+            [
+              JSON.stringify([group.path.map((_, index) => index), group.path]),
+              group.metrics?.[selectedMetric?.key ?? ""],
+            ] as const,
+        ) ?? []),
+        ...(current?.margins.map(
+          (margin) =>
+            [
+              JSON.stringify([margin.dimensions, margin.path]),
+              margin.metrics?.[selectedMetric?.key ?? ""],
+            ] as const,
+        ) ?? []),
+      ]),
+    [current, selectedMetric?.key],
+  );
+  const atMetric = (dimensions: readonly number[], path: readonly string[]) =>
+    metricValues.get(JSON.stringify([dimensions, path]));
   const model = useMemo(
     () =>
       current
@@ -105,11 +143,16 @@ export function EntityPivot({
             groups: current.groups,
             margins: current.margins,
             totalCount: current.totalCount,
-            expandColumns,
+            expandColumns: selectedMetric ? true : expandColumns,
             sort,
+            metricValue: selectedMetric
+              ? (dimensions, path) =>
+                  metricValues.get(JSON.stringify([dimensions, path]))?.sum ??
+                  null
+              : undefined,
           })
         : undefined,
-    [current, expandColumns, sort],
+    [current, expandColumns, sort, selectedMetric, metricValues],
   );
   const needsDimensions = labels.length < 2;
   const state = needsDimensions
@@ -233,16 +276,33 @@ export function EntityPivot({
       grandTotal: model?.grandTotal ?? 0,
       maxCell,
     });
-    const heat = other || count === 0 ? 0 : heatBucket(count, basis);
+    const metric = atMetric(
+      path.map((_, index) => index),
+      path,
+    );
+    const heat =
+      selectedMetric || other || count === 0 ? 0 : heatBucket(count, basis);
     const percent =
-      share !== "count" && basis > 0 ? formatPercent(count / basis) : null;
-    const label = `${row.label}${parent ? ` (${parent.label})` : ""}, ${column.data.label}: ${records(count)}${percent ? `, ${percent}` : ""}`;
+      !selectedMetric && share !== "count" && basis > 0
+        ? formatPercent(count / basis)
+        : null;
+    const metricLabel = !selectedMetric
+      ? ""
+      : `; ${selectedMetric.label}: ${metric === undefined ? "unavailable" : metric.sum === null ? "unknown" : selectedMetric.format === "currency" || selectedMetric.format === "signedCurrency" ? formatCurrency(metric.sum) : formatCount(metric.sum)}${metric && metric.presentCount < metric.totalCount ? "; partial, some contributions have no amount" : ""}`;
+    const label = `${row.label}${parent ? ` (${parent.label})` : ""}, ${column.data.label}: ${records(count)}${percent ? `, ${percent}` : ""}${metricLabel}`;
     const content =
       count === 0 ? (
         <span className={emptyCell}>{EMPTY_MARK}</span>
       ) : (
         <>
-          {formatCount(count)}
+          {selectedMetric ? (
+            <ListMetricValue
+              value={metric}
+              format={selectedMetric.format ?? "integer"}
+            />
+          ) : (
+            formatCount(count)
+          )}
           {percent && (
             <span
               className={cn(
@@ -311,18 +371,43 @@ export function EntityPivot({
           {rowLabel} × {columnLabel}
           {subLabel ? ` › ${subLabel}` : ""}
         </span>
-        <Picker
-          mode="segmented"
-          className="ml-auto"
-          label="Cell value"
-          options={SHARE_OPTIONS}
-          value={share}
-          onValueChange={(next) => {
-            const choice = PIVOT_SHARES.find((value) => value === next);
-            if (choice) onShareChange(choice);
-          }}
-        />
+        {metricDefinitions.length > 0 && (
+          <Picker
+            label="Measure"
+            options={[
+              { value: "__record_count__", label: "Record count" },
+              ...metricDefinitions.map((metric) => ({
+                value: metric.key,
+                label: metric.label,
+              })),
+            ]}
+            value={selectedMetric?.key ?? "__record_count__"}
+            onValueChange={(next) => {
+              setMetricKey(next === "__record_count__" ? null : next);
+              setSort(null);
+            }}
+          />
+        )}
+        {!selectedMetric && (
+          <Picker
+            mode="segmented"
+            className="ml-auto"
+            label="Cell value"
+            options={SHARE_OPTIONS}
+            value={share}
+            onValueChange={(next) => {
+              const choice = PIVOT_SHARES.find((value) => value === next);
+              if (choice) onShareChange(choice);
+            }}
+          />
+        )}
       </div>
+      {selectedMetric && (
+        <p className="text-xs text-muted-foreground">
+          {selectedMetric.description} Amounts retain their sign; partial means
+          some contributions have no amount.
+        </p>
+      )}
       <Visualization
         state={state}
         icon={GridNineIcon}
@@ -445,9 +530,19 @@ export function EntityPivot({
                   className: totalCell,
                 },
               ]}
-              renderPinnedCell={({ data: { row } }) => (
+              renderPinnedCell={({ data: { row, parent } }) => (
                 <span className={cn(cellMono, "block", totalCell)}>
-                  {formatCount(row.total)}
+                  {selectedMetric ? (
+                    <ListMetricValue
+                      value={atMetric(
+                        parent ? [0, 2] : [0],
+                        parent ? [parent.key, row.key] : [row.key],
+                      )}
+                      format={selectedMetric.format ?? "integer"}
+                    />
+                  ) : (
+                    formatCount(row.total)
+                  )}
                 </span>
               )}
               footer={[
@@ -455,11 +550,26 @@ export function EntityPivot({
                   key: "total",
                   label: "Total",
                   cell: (key) =>
-                    formatCount(
-                      columns.find((column) => column.key === key)?.data
-                        .total ?? 0,
+                    selectedMetric ? (
+                      <ListMetricValue
+                        value={atMetric([1], [key])}
+                        format={selectedMetric.format ?? "integer"}
+                      />
+                    ) : (
+                      formatCount(
+                        columns.find((column) => column.key === key)?.data
+                          .total ?? 0,
+                      )
                     ),
-                  pinnedCell: () => formatCount(model.grandTotal),
+                  pinnedCell: () =>
+                    selectedMetric ? (
+                      <ListMetricValue
+                        value={current?.metrics?.[selectedMetric.key]}
+                        format={selectedMetric.format ?? "integer"}
+                      />
+                    ) : (
+                      formatCount(model.grandTotal)
+                    ),
                 },
               ]}
             />
@@ -469,8 +579,9 @@ export function EntityPivot({
       {model?.overlapping && (
         <p className="text-xs text-muted-foreground">
           Some {recordLabel.other} hold more than one value in a dimension, so
-          they appear in several cells. Totals count each {recordLabel.one}{" "}
-          once.
+          they appear in several cells. Totals count each{" "}
+          {selectedMetric ? "contribution" : recordLabel.one} once in their
+          scope.
         </p>
       )}
     </div>

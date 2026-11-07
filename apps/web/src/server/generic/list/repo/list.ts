@@ -25,6 +25,7 @@ import {
   buildTakeSkip,
   listGroupByDimensionsSchema,
   type ListGroupMargin,
+  type ListGroupMetric,
   type ListGroupMembership,
   type ListGroupSummary,
   type ListGroupBy,
@@ -112,6 +113,7 @@ import {
   type FilterColumn,
   isHierarchyEntity,
 } from "./declared-filters";
+import { compileEvidenceMetrics } from "./evidence-metrics";
 import {
   type DerivedSqlArg,
   type AnyDerivedSql,
@@ -196,6 +198,8 @@ interface ListRequest<Filters extends object> {
   pagination: PaginationParams;
   /** Existing callers retain exact counts; browser rosters may select one extra row. */
   includeCount?: boolean;
+  /** Internal narrow readers can omit list-level contributor summaries. */
+  includeMetrics?: boolean;
   readIntent?: ListReadIntent;
   projection?: ListProjection;
   /** Shares prepared derived data across the reads of one request. */
@@ -206,6 +210,7 @@ interface ListRequest<Filters extends object> {
 
 /** What a list request reads, so `scaffold.context` prepares only that. */
 export interface ListContextRequest<Filters extends object> {
+  includeMetrics?: boolean;
   preparation?: ListPreparationScope;
   filters: Filters;
   sorts?: readonly SortParams[];
@@ -868,6 +873,13 @@ export function listScaffold<
         [
           ...(!counting && listGroupByFromFilters(request.filters).length
             ? [groupTitlesPrepare]
+            : []),
+          ...(!counting &&
+          (request.includeMetrics !== false ||
+            listGroupByFromFilters(request.filters).length > 0)
+            ? generatedEntityListFields[entity].evidenceMetrics.map((metric) =>
+                rowsPrepare(rowsSql, metric.rows),
+              )
             : []),
           ...requested.map((key) => {
             const field = derivedFields[key];
@@ -1693,7 +1705,11 @@ export function listScaffold<
         selectedListProjection(listEntity, request.projection);
       return scaffold.list(
         db,
-        { ...request, projection: request.projection ?? [] },
+        {
+          ...request,
+          projection: request.projection ?? [],
+          includeMetrics: false,
+        },
         { ...spec, hydrate: (rows) => rows },
       );
     },
@@ -1716,12 +1732,13 @@ export function listScaffold<
       margins?: ListGroupMargin[];
       memberships?: ListGroupMembership[];
       membershipCount?: number;
+      metrics?: Record<string, ListGroupMetric>;
     }> {
       // Keep the PgTable object: interpolating an aliased table into SQL
       // emits only its alias, while Drizzle's FROM builder names its origin.
       const source = listTable;
-      // The query reads only filter, sort and grouping prepares. Prepares a page
-      // merely displays load beside the id and row queries, for hydration.
+      // Filters, sorts, grouping and admitted metrics prepare before SQL.
+      // Display-only prepares load beside the id and row queries for hydration.
       const context =
         spec.context ??
         (await scaffold.context(db, request, [], { projection: false }));
@@ -1896,7 +1913,11 @@ export function listScaffold<
         { entity, fields: projection.length },
         async () => {
           const groupedPage =
-            group.length && readIntent === "page"
+            (group.length > 0 ||
+              (request.includeMetrics !== false &&
+                generatedEntityListFields[entity].evidenceMetrics.length >
+                  0)) &&
+            readIntent === "page"
               ? await readGroupedQuery({
                   db,
                   source,
@@ -1905,8 +1926,22 @@ export function listScaffold<
                   where,
                   joins: spec.joins,
                   groups: group,
-                  metrics: generatedEntityListFields[entity].metrics.map(
-                    ({ key }) => ({
+                  evidence: compileEvidenceMetrics({
+                    entity,
+                    groupBy: listGroupByFromFilters(request.filters),
+                    rows: rowsSql,
+                    context,
+                  }),
+                  // Evidence refinements own their sums and coverage; do not
+                  // compute the replaced root rollup over the full population.
+                  metrics: generatedEntityListFields[entity].metrics
+                    .filter(
+                      ({ key }) =>
+                        !generatedEntityListFields[entity].evidenceMetrics.some(
+                          (metric) => metric.key === key,
+                        ),
+                    )
+                    .map(({ key }) => ({
                       key,
                       value: listMetricSql(
                         entity,
@@ -1915,8 +1950,7 @@ export function listScaffold<
                         table,
                         context,
                       ),
-                    }),
-                  ),
+                    })),
                   order: page.orderBy,
                   limit: take,
                   offset: skip,
@@ -1977,10 +2011,15 @@ export function listScaffold<
             groupedPage === null
               ? {}
               : {
-                  groups: groupedPage.groups,
-                  margins: groupedPage.margins,
-                  memberships: groupedPage.memberships,
-                  membershipCount: groupedPage.membershipCount,
+                  metrics: groupedPage.metrics,
+                  ...(group.length
+                    ? {
+                        groups: groupedPage.groups,
+                        margins: groupedPage.margins,
+                        memberships: groupedPage.memberships,
+                        membershipCount: groupedPage.membershipCount,
+                      }
+                    : {}),
                 };
           const unresolvedCount = includeCount
             ? await scaffold.unresolvedCount(db, request.filters, context)

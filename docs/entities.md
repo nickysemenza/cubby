@@ -1876,6 +1876,42 @@ route schema and filter codec instead of falling back to the broad Product
 relationship. Relationship grouping labels prefer their declared relation label;
 filter predicate wording does not rename existing grouping choices.
 
+`presentation.list.evidenceMetrics` declares additive contributions from a typed
+repository row set: canonical contributor identity, nullable numeric value,
+optional admission predicate, contributor unit, descriptions, compact-summary
+visibility and explicit group-key-to-reference bindings. A metric may refine an
+existing scalar sum key with contributor coverage, preserving that key and its
+column placement. The compiled owner validates identities, numeric/boolean
+columns, compatible formats and group reference targets. One row-set source is
+shared across its metrics in the statement.
+Narrow internal `raw` readers omit ungrouped metric evidence; a relation's id-only
+page does not acquire the parent list's spending computation.
+
+The grouped reader deduplicates contributor identities independently at each
+prefix, Pivot margin and full-filter total. It never deduplicates by amount.
+Bindings constrain the same contributor row, and only dimensions present in the
+scope constrain a parent or margin. Unbound dimensions retain whole-record
+membership. Empty evidence has a known zero; null amounts stay unknown and
+contribute to coverage, with a partial marker beside any known subtotal.
+
+Product expense total covers all live direct `Expense.cost` evidence. Seller
+spending covers actual vendor-role lines of eligible acquisition pairs, including
+signed refunds. Actual vendor costs lacking a live acquisition seller remain
+Unattributed spending, including deliberate no-counterparty acquisitions and
+ambiguous exits. Plans and actual reimbursements stay separate in contribution
+details; together the four categories partition the whole Product expense
+evidence. A Product with known sellers can have unattributed spending without
+receiving a No-seller membership. Those amounts remain in parent and global
+totals even when no seller child carries them. These direct costs do not silently
+include Purchase-level tax/shipping allocated in other financial views.
+
+Shared web group rows and list footers consume these definitions and coverage.
+Desktop Pivot offers record count or an admitted metric; its cells, row totals,
+column totals, sub-row totals and grand total read the same scoped facts. Counts
+still determine overlap. Signed metrics use numeric values and explicit partial
+guidance, not count percentages or count heat shading. Phone retains the grouped
+list and contribution disclosure; native rendering is separate.
+
 The list-field compiler also owns `listFields.presentation`: semantic labels,
 descriptions, entity targets, value types, cardinality and admitted sort, group
 and filter keys with unavailable reasons. Shared web columns and menus consume

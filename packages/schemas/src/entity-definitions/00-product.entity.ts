@@ -752,6 +752,86 @@ export const { definition, readSchemas } = defineEntityModel(
             },
           },
         ],
+        evidenceMetrics: [
+          {
+            key: "expenseTotal",
+            label: "Product expense total",
+            description:
+              "All live direct Product Expense costs, including plans, reimbursements, acquisitions and exits. Each Expense contributes once in this scope. Unknown costs remain visible in coverage; the known subtotal is not a complete amount.",
+            format: "currency",
+            unit: "Expenses",
+            summary: false,
+            rows: "spendingEvidence",
+            identity: "identity",
+            value: "value",
+          },
+          {
+            key: "sellerSpending",
+            label: "Seller spending",
+            description:
+              "Signed actual vendor-role Expense costs backed by acquisition evidence for this Product and Purchase, including refunds. Direct line costs exclude separately allocated tax and shipping. Each Expense contributes once per total.",
+            format: "currency",
+            unit: "Expenses",
+            rows: "spendingEvidence",
+            identity: "identity",
+            value: "value",
+            where: "sellerSpending",
+            bindings: {
+              sellers: "seller",
+              "related:product.vendors": "counterparty",
+            },
+          },
+          {
+            key: "unattributedSpending",
+            label: "Unattributed spending",
+            description:
+              "Actual vendor-role Expense costs with no known acquisition seller: no Purchase, an unavailable counterparty, or insufficient acquisition evidence. This can include disposals. Amount sign alone does not establish a buyer or seller. Products with known sellers can also have unattributed amounts.",
+            format: "currency",
+            unit: "Expenses",
+            rows: "spendingEvidence",
+            identity: "identity",
+            value: "value",
+            where: "unattributed",
+            bindings: {
+              sellers: "seller",
+              "related:product.vendors": "counterparty",
+            },
+          },
+          {
+            key: "plannedExpenses",
+            summary: false,
+            label: "Planned expenses",
+            description:
+              "Planned Expense costs, separate from actual spending. These contribute to Product expense total but never to Seller spending.",
+            format: "currency",
+            unit: "Expenses",
+            rows: "spendingEvidence",
+            identity: "identity",
+            value: "value",
+            where: "planned",
+            bindings: {
+              sellers: "seller",
+              "related:product.vendors": "counterparty",
+            },
+          },
+          {
+            key: "reimbursementExpenses",
+            summary: false,
+            label: "Reimbursements",
+            description:
+              "Signed actual reimbursement-role Expense costs. These contribute to Product expense total and remain separate from vendor spending.",
+            format: "currency",
+            unit: "Expenses",
+            rows: "spendingEvidence",
+            identity: "identity",
+            value: "value",
+            where: "reimbursement",
+            bindings: {
+              sellers: "seller",
+              "related:product.vendors": "counterparty",
+            },
+          },
+        ],
         totals: [
           {
             id: "price",
@@ -2278,6 +2358,19 @@ Rules:
       ],
 
       rows: {
+        spendingEvidence: {
+          label: "Product Expense evidence",
+          repository: {
+            identity: { reference: "expense" },
+            value: "number",
+            seller: { reference: "vendor" },
+            counterparty: { reference: "vendor" },
+            sellerSpending: "boolean",
+            unattributed: "boolean",
+            planned: "boolean",
+            reimbursement: "boolean",
+          },
+        },
         sellerMemberships: {
           label: "Seller memberships",
           repository: { seller: { reference: "vendor" } },

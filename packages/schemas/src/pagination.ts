@@ -325,6 +325,7 @@ export const listGroupMarginSchema = z
     /** One group key per dimension, encoded like `ListGroupSummary.path`. */
     path: z.array(z.string()).min(1).max(2),
     count: z.number().int().positive(),
+    metrics: z.record(z.string(), listGroupMetricSchema).optional(),
   })
   .meta({ id: "ListGroupMargin" });
 export type ListGroupMargin = z.infer<typeof listGroupMarginSchema>;
@@ -372,6 +373,8 @@ export function buildPaginatedResponse<T>(
     margins?: ListGroupMargin[];
     memberships?: ListGroupMembership[];
     membershipCount?: number;
+    /** Full-filter totals at each metric's declared contributor grain. */
+    metrics?: Record<string, ListGroupMetric>;
   } = {},
 ) {
   type PaginatedMeta = z.infer<typeof paginatedMetaSchema>;
@@ -402,6 +405,7 @@ export function buildPaginatedResponse<T>(
   if (aggregates.unresolvedCount !== undefined)
     meta.unresolvedCount = aggregates.unresolvedCount;
   if (aggregates.totalLabels) meta.totalLabels = aggregates.totalLabels;
+  if (aggregates.metrics) meta.metrics = aggregates.metrics;
   if (aggregates.groups) meta.groups = aggregates.groups;
   if (aggregates.margins) meta.margins = aggregates.margins;
   if (aggregates.memberships) meta.memberships = aggregates.memberships;
@@ -427,6 +431,7 @@ export const paginatedMetaSchema = z
     totalLabels: z.record(z.string(), z.string()).optional(),
     groups: z.array(listGroupSummarySchema).optional(),
     margins: z.array(listGroupMarginSchema).optional(),
+    metrics: z.record(z.string(), listGroupMetricSchema).optional(),
     memberships: z.array(listGroupMembershipSchema).optional(),
     membershipCount: z.number().int().nonnegative().optional(),
   })

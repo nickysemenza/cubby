@@ -1765,6 +1765,31 @@ const buildMetadataSchemas = () => {
           .optional()
           .default({}),
         /** Full-filter server aggregates to present on every list client. */
+        evidenceMetrics: z
+          .array(
+            z.strictObject({
+              key: nonEmptyString(),
+              label: nonEmptyString(),
+              description: nonEmptyString(),
+              format: z.enum(["currency", "integer"]),
+              /** The contributor grain, used in coverage and average guidance. */
+              unit: nonEmptyString(),
+              /** Visible in the compact totals; all metrics remain in details. */
+              summary: z.boolean().optional().default(true),
+              rows: derivedKey,
+              identity: derivedKey,
+              value: derivedKey,
+              /** Optional boolean column admitting a contributor to this metric. */
+              where: derivedKey.optional(),
+              /** Group key → contributor reference column, matched on the same row. */
+              bindings: z
+                .record(nonEmptyString(), derivedKey)
+                .optional()
+                .default({}),
+            }),
+          )
+          .optional()
+          .default([]),
         totals: z
           .array(
             z
@@ -2050,6 +2075,7 @@ const buildMetadataSchemas = () => {
           views,
           viewAliases,
           totals,
+          evidenceMetrics,
           shelfSubtitleOverride,
           titleSubtitle,
           initialFilter,
@@ -2065,6 +2091,7 @@ const buildMetadataSchemas = () => {
           views,
           viewAliases,
           totals,
+          evidenceMetrics,
           metrics: listGroupMetricKeys(totals, rail),
           shelf:
             shelfSubtitleOverride === undefined
