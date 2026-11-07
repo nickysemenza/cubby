@@ -2895,6 +2895,11 @@ value. A predicate and a value both receive the caller's quality read context
 SQL that needs request data (inventory valuations, an Email list's scope) wraps a
 `listPrepare(load)` handle, whose `load` receives the request's filters, with
 `.value`/`.predicate`; fields share a prepare by sharing the handle.
+`.value(render, { projection: "binding" })` keeps prepared SQL for filters,
+sorting and grouping while requiring a read binding to supply the projected
+value. Projection alone does not run that prepare. Vendor Mail search uses
+the page's ids unless its query context already holds global search states;
+sender-conflict attribution still checks the whole Vendor population.
 `scaffold.context(db, request)` loads each needed prepare at most once, and
 only when the request filters, sorts, groups, or projects on a field that
 reads it; a caller that already holds a prepare's data passes it as

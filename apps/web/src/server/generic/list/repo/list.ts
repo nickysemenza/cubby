@@ -120,7 +120,7 @@ import {
   declaredRollups,
   declaredResultProjections,
   derivedSelectSql,
-  derivedValueSet,
+  derivedProjectedByBinding,
   derivedValueSql,
   groupSql,
   type ListGroupSql,
@@ -564,7 +564,7 @@ export function listScaffold<
         : new Set([
             ...Object.keys(getTableColumns(table)),
             ...Object.keys(derivedFields).filter(
-              (key) => derivedValueSet(derivedSql, key) === null,
+              (key) => !derivedProjectedByBinding(derivedSql, key),
             ),
             ...Object.keys(readDeclaration.columns ?? {}),
           ]),
@@ -581,6 +581,7 @@ export function listScaffold<
   // Internal filter-only rows can require tokens absent from an ordinary page.
   const projects = (key: string, projection: ListProjection): boolean =>
     fieldModel?.fields.some((field) => field.key === key) === true &&
+    !derivedProjectedByBinding(derivedSql, key) &&
     projection.includes(key);
   /** Stored columns, declared derived values and declared columns a projection reads. */
   const readColumns = (projection: ListProjection, context: ListContext) => {
@@ -1364,7 +1365,8 @@ export function listScaffold<
       ).projection;
       plan.validate(projection);
       const scoped = { ...request, projection };
-      // Prepared derived values a projection reads render into its select.
+      // Query-dependent prepares precede SQL; binding-only projections load
+      // after paging, with the same context available for reuse.
       const context = (
         override.context ?? (await scaffold.context(db, scoped))
       ).withReader(request.reader);

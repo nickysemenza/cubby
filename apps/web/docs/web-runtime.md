@@ -619,8 +619,10 @@ production (about 50-75 ms through Hyperdrive), so `listScaffold.list` keeps
 the chain short: the id-and-count query starts the page's id-only loads
 (quality, display images) beside the row load, and prepares a page only
 displays load beside both queries, awaited at hydration. A repository that
-builds its own context keeps every prepare ahead of its query, because its
-select or footer reads the prepared data.
+builds its own context keeps query-dependent prepares ahead of its query.
+Prepared values explicitly projected by a binding instead load with the page;
+the [derived-field contract](../../../docs/entities.md#filters-and-search)
+owns that distinction.
 Production list spans report `db.query.busy_intervals`, a lower bound on
 sequential round trips (a dependent query that starts while another still
 runs joins that interval).

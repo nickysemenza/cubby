@@ -139,7 +139,10 @@ export interface ListPrepare<P> {
     db: Database | DrizzleTransaction,
   ) => Promise<P>;
   readonly load: PrepareLoad<P>;
-  value(render: (prepared: P) => DerivedValue): PreparedValue;
+  value(
+    render: (prepared: P) => DerivedValue,
+    options?: { projection: "binding" },
+  ): PreparedValue;
   predicate<V>(
     render: (prepared: P, value: V) => SQL | undefined,
   ): PreparedPredicate<V>;
@@ -154,6 +157,7 @@ interface PreparedRows {
 interface PreparedValue {
   readonly prepare: ListPrepare<unknown>;
   readonly render: (context: ListContext) => DerivedValue;
+  readonly projection?: "binding";
 }
 
 interface PreparedPredicate<V> {
@@ -193,9 +197,10 @@ const createListPrepare = <P>(
   const handle: ListPrepare<P> = {
     load,
     loadShared,
-    value: (render) => ({
+    value: (render, options) => ({
       prepare: handle,
       render: (context) => render(context.get(handle)),
+      projection: options?.projection,
     }),
     predicate: (render) => ({
       prepare: handle,
@@ -395,6 +400,21 @@ const isSetValue = (
   entry: DerivedValueSql | DerivedPredicateSql<never>,
 ): entry is SetValue => typeof entry === "object" && "set" in entry;
 
+/** Query predicates keep their SQL; a read binding supplies the projected value. */
+export const derivedProjectedByBinding = (
+  derived: AnyDerivedSql,
+  key: string,
+): boolean => {
+  const entry = derived[key];
+  return (
+    entry !== undefined &&
+    (isSetValue(entry) ||
+      (isPrepared(entry) &&
+        "projection" in entry &&
+        entry.projection === "binding"))
+  );
+};
+
 /** The prepare a derived field's SQL needs, if any. */
 export const derivedPrepare = (
   derived: AnyDerivedSql,
@@ -468,7 +488,7 @@ export const derivedSelectSql = (
     field?.shape !== "value" ||
     entry === undefined ||
     typeof entry === "function" ||
-    isSetValue(entry)
+    derivedProjectedByBinding(derived, key)
   )
     return null;
   const parts = derivedValueParts(entity, derived, key, context);
