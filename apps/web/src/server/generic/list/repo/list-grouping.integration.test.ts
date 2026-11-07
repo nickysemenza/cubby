@@ -572,16 +572,48 @@ describe("expanded grouped list memberships", () => {
       }),
       ctx.actor,
     );
-    await createRepoEntity(
+    const allocationProject = await createRepoEntity(ctx, "project", {
+      name: "Grouping allocation project",
+    });
+    const basis = await createRepoEntity(
       ctx,
       "expense",
       makeExpenseInput({
         name: "Grouping basis",
         productId: first.id,
+        projectId: allocationProject.output.id,
         cost: 10,
         date: "2026-01-01",
       }),
     );
+    const noProject = await createRepoEntity(
+      ctx,
+      "expense",
+      makeExpenseInput({
+        name: "Grouping unallocated expense",
+        cost: 4,
+        date: "2026-01-01",
+      }),
+    );
+    const byAllocatedProject = await executeEntity(kernel(), {
+      action: "list",
+      entity: "expense",
+      filters: { ids: [basis.output.id, noProject.output.id] },
+      groupBy: [{ key: "projectFilter" }],
+      pagination: { pageIndex: 0, pageSize: 10 },
+    });
+    if (byAllocatedProject.action !== "list") throw new Error("expected list");
+    // Grouping must request the allocation dimension even without a Project
+    // filter. Otherwise its prepared row set would expose only NULL values.
+    expect(groups(byAllocatedProject.meta)).toMatchObject([
+      {
+        key: allocationProject.output.id,
+        label: "Grouping allocation project",
+        count: 1,
+      },
+      { key: FILTER_NONE, count: 1 },
+    ]);
+    expect(byAllocatedProject.meta.totalCount).toBe(2);
     const pages = [];
     for (const pageIndex of [0, 1, 2]) {
       const page = await executeEntity(kernel(), {

@@ -2889,20 +2889,20 @@ one shape:
   a correlated scalar subquery that starts at the outer row's reference, even
   when the repository already joins that table: knowing each FROM would be
   per-entity knowledge, so a measured cost earns a declared index rather than
-  a join-aware compiler. Only
-  a to-one path (every relation `one` and every step outgoing) can sort or
-  group. The compiler rejects any other in `sort.fields` with the reason it
-  derives (`Goes through a list of Purchases. Only paths that lead to a
-  single record can sort.`); in `model.grouping` it stays a disabled Group by
-  choice showing its reason. A list request sorting or grouping by it (or by
-  a `predicate`) fails with that reason over HTTP and MCP.
+  a join-aware compiler. Only a to-one path (every relation `one` and every
+  step outgoing) can supply a scalar sort; unsupported sort declarations fail
+  with the derived reason. Grouping expands to-many paths into distinct
+  memberships instead. Missing live values use the no-value bucket. Predicate
+  and other unsupported grouping sources retain explicit refusal reasons.
 - `{ via: "<rows>.<terminal>" }` starts at a `model.rows` row set (below) and
   takes one terminal: a column of the row (a JSON item key), or an entity the
   row references (`importTargets.run`), which filters by shortcode and gets
-  the "Include sub-…" toggle when it declares `model.hierarchy`. A row set is
-  to-many, so it filters but never sorts or groups (`Goes through a list of
-  Import targets. …`), and its value filters generate Any value / No value,
-  Match all, and Exclude.
+  the "Include sub-…" toggle when it declares `model.hierarchy`. Record
+  terminals group by distinct live identities, using canonical titles and
+  hierarchy levels. Their row set, narrowing and preparation are shared with
+  filters. A to-many row set supplies no arbitrary scalar sort. Scalar row
+  terminals remain unavailable for grouping. Value filters generate Any value
+  / No value, Match all, and Exclude.
 - `{ type }` is a repository value: the repository passes its SQL as
   `listScaffold(entity, table, { derived })`, whose argument type is
   generated, so a declared key without SQL fails typecheck. A compound value
@@ -3371,14 +3371,16 @@ terminals are checked when its SQL renders (`rowSetSql` in
 (the list row's id) and each column, a `{ reference }` column holding the
 referenced record's id; the argument type is generated, so a declared row
 set without SQL fails typecheck. It compiles to an uncorrelated
-`id IN (SELECT "owner" FROM relation WHERE …)` and renders only when a
-filter reads it. A relation may come from a `listPrepare` (`prepare.rows`):
+`id IN (SELECT "owner" FROM relation WHERE …)` for filters and a correlated
+membership selection for grouping. It renders only when read. A relation may
+come from a `listPrepare` (`prepare.rows`):
 expense `allocationShares` bounds its computed shares by the request's
 other row filters (`rowSetFilterKeys` names the keys to leave out) and
-allocates only the dimensions a filter reads (expense analytics, which
+allocates only the dimensions a filter or group reads (`rowSetIsGrouped` shares
+the compiled grouping source with prepared row sets). Expense analytics, which
 allocate the shares themselves, drop the allocation filters their scope
 expresses — any-of values ORed with their presence — and keep the group for
-Match all and Exclude); project `attentionItems`
+Match all and Exclude. Project `attentionItems`
 renders `VALUES` from the attention rules' items; gardenEntry
 `journalPlantings` is SQL (live journal links, plus whole-area entries at a
 planting's location inside its window). `relation` names a stored-path

@@ -40,6 +40,7 @@ import {
   declaredFilterPredicates,
   listScaffold,
   rowSetFilterKeys,
+  rowSetIsGrouped,
 } from "~/server/generic/list/repo/list";
 import { resolveAllPresent } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
@@ -177,6 +178,7 @@ const rowDerived = {
 
 const shareKeys = new Set(rowSetFilterKeys("expense", "allocationShares"));
 const readsShare = (values: ListFilterValues, terminal: string) =>
+  rowSetIsGrouped("expense", values, "allocationShares", terminal) ||
   rowSetFilterKeys("expense", "allocationShares", terminal).some(
     (key) => values[key] !== undefined,
   );
@@ -204,7 +206,7 @@ const allocationBound = (values: ListFilterValues): SQL | undefined => {
 
 /**
  * The `allocationShares` row set: every share of the bounded expenses,
- * allocating only the dimensions the request filters by.
+ * allocating only the dimensions the request filters or groups by.
  */
 const allocationShares = listPrepare(async (_db, values) => ({
   bound: allocationBound(values),

@@ -185,7 +185,7 @@ export type GeneratedListField<E extends string = Entity> =
             readonly column: string | null;
           };
       readonly sort: string;
-      readonly group: string;
+      readonly group: string | null;
     }
   | {
       readonly shape: "value";
@@ -324,6 +324,14 @@ export type GeneratedGroupChoice<E extends string = Entity> = {
         readonly kind: "column";
         readonly column: string;
         readonly options: GroupOptions;
+      }
+    | {
+        readonly kind: "rowRecord";
+        readonly rows: string;
+        readonly path: string;
+        readonly column: string | null;
+        readonly target: E;
+        readonly titleColumn: string | null;
       }
     | {
         readonly kind: "record";
