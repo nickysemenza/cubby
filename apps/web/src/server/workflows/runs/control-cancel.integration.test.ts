@@ -86,7 +86,7 @@ describe("Run AI work cancel", () => {
         error: "Superseded by synthetic evidence",
       })
       .where(eq(aiEvaluation.id, superseded!.id));
-    await cancelRunAiWork(ctx.db, runId, "Cancelled by a member");
+    await cancelRunAiWork(ctx.db, runId, MEMBER_CANCELLED_AI_WORK);
     // Retrying failures must not re-admit the work the member stopped.
     await readmitFailedAiWork(ctx.db, runId, {
       owned: true,
@@ -205,7 +205,7 @@ describe("Run AI work cancel", () => {
     ).toBe(evaluation.id);
     // Reclassification requests shared work; it owns none.
     expect(
-      await cancelRunAiWork(ctx.db, first!, "Cancelled by a member", {
+      await cancelRunAiWork(ctx.db, first!, MEMBER_CANCELLED_AI_WORK, {
         owned: false,
         requested: true,
       }),
@@ -257,7 +257,7 @@ describe("Run AI work cancel", () => {
           )
       )[0],
     ).toMatchObject({ cancelledAt: null, receipt: null });
-    await cancelRunAiWork(ctx.db, first!, "Cancelled by a member", {
+    await cancelRunAiWork(ctx.db, first!, MEMBER_CANCELLED_AI_WORK, {
       owned: false,
       requested: true,
     });

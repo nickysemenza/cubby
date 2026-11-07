@@ -967,5 +967,26 @@ describe("Sweeps", () => {
         (item) => item.state === "queued" && item.item,
       ),
     ).toBe(true);
+    // Completion can arrive during the wait before the member cancels the Run.
+    await getDb(ctx.db)
+      .execute(sql`UPDATE "AiEvaluation" SET state = ${aiEvaluationState.enum.completed}
+      WHERE "runId" = ${runId}::uuid AND state = ${aiEvaluationState.enum.queued}`);
+    await controlWorkflowRun(
+      ctx.db,
+      ctx.actor,
+      { runPublicId: shortcode, action: "cancel" },
+      "sweep",
+    );
+    await controlWorkflowRun(
+      ctx.db,
+      ctx.actor,
+      { runPublicId: shortcode, action: "retry" },
+      "sweep",
+    );
+    expect(await drive(runId)).toBe("finished");
+    expect((await readRunSteps(ctx.db, runId))[1]).toMatchObject({
+      key: "field_evaluate",
+      state: "done",
+    });
   });
 });

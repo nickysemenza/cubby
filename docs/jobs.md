@@ -111,7 +111,9 @@ Retry run on a member-cancelled Run revokes that member stop: its interrupted
 steps reopen, member-cancelled owned evaluations get linked replacements, and
 withdrawn requests rejoin any still-live shared evaluation without a retry link
 to themselves. The stored member-cancellation marker has one schema owner.
-Other cancellations remain stopped. Retry failed on a cancelled Sweep step with
+A cancelled Run may also resume an interrupted or queued step after all of its
+evaluations settled; that step still needs to publish its final tally. Other
+cancellations remain stopped. Retry failed on a cancelled Sweep step with
 no failed items directs the member to Retry run. Actual failures remain
 retryable without reviving the cancelled remainder.
 Mailbox discovery acquires at most five messages from its frozen provider page

@@ -137,6 +137,19 @@ export async function controlWorkflowRun(
           "This legacy Run retains historical receipts; historical recovery creates a linked continuation rather than retrying its empty roster.",
         );
     }
+    const stoppedSteps =
+      row.failureCode === "user_cancelled"
+        ? await database
+            .select({ key: runStep.key })
+            .from(runStep)
+            .where(
+              and(
+                eq(runStep.runId, row.id),
+                eq(runStep.state, runStepState.enum.failed),
+                eq(runStep.pausedReason, MEMBER_CANCELLED_AI_WORK),
+              ),
+            )
+        : [];
     if (ownsAiWork(purpose) || requestsAiWork(purpose)) {
       const admitted = await readmitFailedAiWork(db, row.id, {
         owned: ownsAiWork(purpose),
@@ -148,9 +161,17 @@ export async function controlWorkflowRun(
         const [failedStep] = await database
           .select({ id: runStep.id })
           .from(runStep)
-          .where(and(eq(runStep.runId, row.id), sql`${runStep.failed} > 0`))
+          .where(
+            and(
+              eq(runStep.runId, row.id),
+              or(
+                sql`${runStep.failed} > 0`,
+                eq(runStep.state, runStepState.enum.queued),
+              ),
+            ),
+          )
           .limit(1);
-        if (!failedStep)
+        if (!failedStep && stoppedSteps.length === 0)
           throw createAppError(
             "RUN_CONTROL_REFUSED",
             "This cancelled Run has no re-admissible work; start a new Run to evaluate that scope again.",
@@ -158,16 +179,6 @@ export async function controlWorkflowRun(
       }
     }
     if (row.failureCode === "user_cancelled") {
-      const stoppedSteps = await database
-        .select({ key: runStep.key })
-        .from(runStep)
-        .where(
-          and(
-            eq(runStep.runId, row.id),
-            eq(runStep.state, runStepState.enum.failed),
-            eq(runStep.pausedReason, MEMBER_CANCELLED_AI_WORK),
-          ),
-        );
       // Re-admitted items still need their interrupted evaluate step to wait for them.
       for (const step of stoppedSteps)
         await reopenRunStep(db, row.id, step.key);
