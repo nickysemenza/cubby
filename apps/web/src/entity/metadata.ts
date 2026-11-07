@@ -34,6 +34,16 @@ export function listFieldPresentation(
     entityMetadata(queryClient, entity).listFields.presentation;
   return fields[key];
 }
+
+/** Saved aliases stay addressable while menus select their canonical choice. */
+export function listGroupingMenuKey(
+  queryClient: QueryClient,
+  entity: Entity,
+  key: string,
+): string {
+  const group = listFieldPresentation(queryClient, entity, key)?.group;
+  return group?.supported ? group.key : key;
+}
 export type EntityMetadataFor<E extends Entity> = EntityMetadataByEntity[E];
 type MetadataBundle = Awaited<ReturnType<typeof readEntityMetadata>>;
 

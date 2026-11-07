@@ -48,7 +48,11 @@ import {
   serverTreeStatusOf,
   useServerTreeChildren,
 } from "~/entity/hooks/use-server-tree-children";
-import { useEntityMetadata, listFieldPresentation } from "~/entity/metadata";
+import {
+  useEntityMetadata,
+  listFieldPresentation,
+  listGroupingMenuKey,
+} from "~/entity/metadata";
 import { listEntities } from "~/entity/model/list-contracts";
 import { useProblemContinuation } from "~/entity/problems/problem-continuation";
 import type { RowLinkResolver } from "~/entity/table/column-helpers";
@@ -446,7 +450,10 @@ export function useEntityList<
     () =>
       onGroupByChange && {
         choices: metadata.listFields.grouping.flatMap((choice) =>
-          (choice.listed || choice.key === groupChoice?.key) &&
+          (choice.listed ||
+            (choice.key === groupChoice?.key &&
+              listGroupingMenuKey(queryClient, entity, choice.key) ===
+                choice.key)) &&
           choice.reason === null &&
           choice.filter
             ? [
@@ -458,7 +465,9 @@ export function useEntityList<
               ]
             : [],
         ),
-        active: groupChoice?.key ?? null,
+        active: groupChoice?.key
+          ? listGroupingMenuKey(queryClient, entity, groupChoice.key)
+          : null,
         // A bucketed or levelled section summarizes its column; the rows still
         // differ within it, so that column stays.
         groupedColumnIds: (groupBy ?? []).flatMap((dimension) => {
@@ -470,7 +479,7 @@ export function useEntityList<
         }),
         onChange: onGroupByChange,
       },
-    [metadata, groupChoice?.key, groupBy, onGroupByChange],
+    [metadata, groupChoice?.key, groupBy, onGroupByChange, queryClient, entity],
   );
   const inspection = useEntityPreview(
     fixedPreviewEntity(entity, previewOptions),

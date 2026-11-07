@@ -16,7 +16,11 @@ import type { Icon } from "@phosphor-icons/react/lib";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { entities, EntityIcon } from "~/entity/entities";
-import { useEntityMetadata, listFieldPresentation } from "~/entity/metadata";
+import {
+  useEntityMetadata,
+  listFieldPresentation,
+  listGroupingMenuKey,
+} from "~/entity/metadata";
 import { DisplayRow } from "~/entity/table/display-menu";
 import { ListFieldTypeMark } from "~/ui/data-table/column-presentation";
 import { useIsMobile } from "~/ui/hooks/use-mobile";
@@ -268,7 +272,11 @@ function ListGroupMenu({ entity }: { entity: BrowserRoutedEntity }) {
               .filter(
                 (choice) =>
                   choice.listed ||
-                  dimensions.some(({ key }) => key === choice.key),
+                  dimensions.some(
+                    ({ key }) =>
+                      key === choice.key &&
+                      listGroupingMenuKey(queryClient, entity, key) === key,
+                  ),
               )
               .map((choice) => {
                 const presentation = listFieldPresentation(
@@ -277,7 +285,9 @@ function ListGroupMenu({ entity }: { entity: BrowserRoutedEntity }) {
                   choice.key,
                 );
                 const index = dimensions.findIndex(
-                  ({ key }) => key === choice.key,
+                  ({ key }) =>
+                    listGroupingMenuKey(queryClient, entity, key) ===
+                    choice.key,
                 );
                 const reason = timeline ? TIMELINE_GROUP_REASON : choice.reason;
                 return (

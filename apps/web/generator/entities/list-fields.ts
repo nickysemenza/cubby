@@ -1408,6 +1408,8 @@ const presentationValueType = ({
   kind: string | undefined;
   target: string | null;
 }): GeneratedListFieldPresentation["valueType"] => {
+  if (field?.display.value) return field.display.value.kind;
+  if (field?.display.standard === "image") return "images";
   if (target !== null) return "record";
   if (
     field?.display.format === "currency" ||
@@ -1417,8 +1419,8 @@ const presentationValueType = ({
     return "money";
   if (
     kind === "boolean" ||
-    filter?.kind === "boolean" ||
-    filter?.kind === "presence"
+    (field === undefined &&
+      (filter?.kind === "boolean" || filter?.kind === "presence"))
   )
     return "boolean";
   if (kind === "date" || kind === "timestamp" || filter?.range?.kind === "date")
@@ -1451,6 +1453,7 @@ const presentationCardinality = ({
   kind: string | undefined;
 }): GeneratedListFieldPresentation["cardinality"] =>
   group?.multiple ||
+  (field?.display.value?.kind === "record" && field.display.value.multiple) ||
   field?.reference?.multiple ||
   kind === "text-array" ||
   (value?.shape === "via" && value.many) ||
@@ -1458,12 +1461,45 @@ const presentationCardinality = ({
     ? "many"
     : "one";
 
+const presentationTarget = ({
+  field,
+  value,
+  relation,
+  filter,
+}: {
+  field: CompiledEntity["fieldModel"]["fields"][number] | undefined;
+  value: CompiledListField | undefined;
+  relation: CompiledEntity["relations"][number] | undefined;
+  filter: FilterDescriptor | undefined;
+}): string | null =>
+  (field?.display.value?.kind === "record"
+    ? field.display.value.entity
+    : null) ??
+  field?.reference?.entity ??
+  (value?.shape === "via" && value.terminal.kind === "record"
+    ? value.target
+    : null) ??
+  relation?.target ??
+  filter?.brandRef?.entity ??
+  null;
+
 const compileFieldPresentation = (
   entity: CompiledEntity,
   derived: Readonly<Record<string, CompiledListField>>,
   grouping: readonly CompiledGroupChoice[],
   descriptors: readonly FilterDescriptor[],
+  byKey: ReadonlyMap<string, CompiledEntity>,
 ): CompiledEntityListFields["presentation"] => {
+  const menuGroup = (choice: CompiledGroupChoice | undefined) => {
+    if (!choice || choice.listed || choice.value === null) return choice;
+    return (
+      grouping.find(
+        (candidate) =>
+          candidate.listed &&
+          JSON.stringify(candidate.value) === JSON.stringify(choice.value),
+      ) ?? choice
+    );
+  };
   const operation = (
     key: string | undefined,
     reason: string,
@@ -1483,7 +1519,7 @@ const compileFieldPresentation = (
     [...keys].map((key) => {
       const field = entity.fieldModel.fields.find((field) => field.key === key);
       const value = derived[key];
-      const group = grouping.find((choice) => choice.key === key);
+      const group = menuGroup(grouping.find((choice) => choice.key === key));
       const filter =
         descriptors.find(
           (candidate) =>
@@ -1500,14 +1536,11 @@ const compileFieldPresentation = (
           (value?.shape === "via" && relation.key === value.path),
       );
       const relatedCountSort = key.startsWith("related:");
-      const target =
-        field?.reference?.entity ??
-        (value?.shape === "via" && value.terminal.kind === "record"
-          ? value.target
-          : null) ??
-        relation?.target ??
-        filter?.brandRef?.entity ??
-        null;
+      const target = presentationTarget({ field, value, relation, filter });
+      if (target !== null && !byKey.has(target))
+        throw new EntityDeclarationError(
+          `${entity.key}.${key}.display.value names unknown entity ${target}.`,
+        );
       const kind =
         field?.kind ??
         (value?.shape === "value"
@@ -1903,6 +1936,7 @@ export const compileListFields = (
         derived,
         grouping,
         filterDescriptors,
+        byKey,
       ),
       derived,
       rows,

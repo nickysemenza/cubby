@@ -3,6 +3,7 @@ import type { GeneratedListFieldPresentation } from "@cubby/schemas/entity-proje
 import { CalendarBlankIcon } from "@phosphor-icons/react/dist/csr/CalendarBlank";
 import { CurrencyDollarIcon } from "@phosphor-icons/react/dist/csr/CurrencyDollar";
 import { HashIcon } from "@phosphor-icons/react/dist/csr/Hash";
+import { ImageIcon } from "@phosphor-icons/react/dist/csr/Image";
 import { LinkSimpleIcon } from "@phosphor-icons/react/dist/csr/LinkSimple";
 import { ListChecksIcon } from "@phosphor-icons/react/dist/csr/ListChecks";
 import { TextTIcon } from "@phosphor-icons/react/dist/csr/TextT";
@@ -45,6 +46,7 @@ export const listFieldTypeLabel = (
     money: "money",
     count: "count",
     structured: "structured",
+    images: "images",
   }[field.valueType];
 };
 
@@ -66,6 +68,7 @@ export function ListFieldTypeMark({
     money: CurrencyDollarIcon,
     count: HashIcon,
     structured: ListChecksIcon,
+    images: ImageIcon,
   }[valueType];
   return <Icon className={className} aria-hidden="true" />;
 }

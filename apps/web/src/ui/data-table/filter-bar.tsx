@@ -947,6 +947,8 @@ function PanelSection({
 function filterTypeLabel(field: FilterBarField): string {
   if (field.dateRange) return "date range";
   if (field.numberRange) return "number range";
+  if (field.valueType === "boolean" || field.valueType === "presence")
+    return "yes / no";
   if (field.presentation) return listFieldTypeLabel(field.presentation);
   if (field.referenceEntity) return "record";
   return {

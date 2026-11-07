@@ -1848,6 +1848,13 @@ previews contain records even when their declared sort orders by related count;
 that sort carries its own explanation. Sort controls offer supported hidden
 columns independently of column visibility.
 
+`display.value` declares a cell's semantic kind when it differs from its stored
+shape, including the target and cardinality of a structured record link. A
+presence filter still edits yes/no; it does not turn the linked cell into a
+boolean. Standard image columns retain their media semantics. Reference groups
+whose public title is computed read the existing canonical repository title SQL,
+prepared once through the list context, rather than requiring a stored title.
+
 Grouping menu eligibility is separate from accepted request keys. Internal
 fields and duplicate SQL values are unlisted, retaining existing grouped links
 and supplied views. Authored choices win; otherwise the choice matching its
