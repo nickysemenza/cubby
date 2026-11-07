@@ -142,6 +142,16 @@ describe("USDAFoodList", () => {
       view: "shelf",
       description: "Example",
     });
+    fireEvent.click(
+      await screen.findByRole("button", { name: /USDA Foods view:/ }),
+    );
+    fireEvent.click(
+      await screen.findByRole("menuitem", { name: "Contact sheet view" }),
+    );
+    expect(
+      await screen.findByTestId("entity-contact-sheet"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("1 loaded record without images")).toBeVisible();
     // Display stays open after a layout choice.
     fireEvent.click(
       await screen.findByRole("button", { name: /USDA Foods view:/ }),

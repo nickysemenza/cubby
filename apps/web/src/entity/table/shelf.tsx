@@ -103,10 +103,12 @@ export function GroupedFlow<T>({
  * desktop inspector simply yields fewer columns. Compact targets about twice
  * the desktop density without making phone targets smaller.
  */
-export const shelfGridClass = (compact = false) =>
-  compact
-    ? "grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(min(100%,6rem),1fr))]"
-    : "grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(min(14rem,calc((100%_-_0.75rem)/2)),1fr))]";
+export const shelfGridClass = (compact = false, contactSheet = false) =>
+  contactSheet
+    ? "grid gap-px [grid-template-columns:repeat(auto-fill,32px)]"
+    : compact
+      ? "grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(min(100%,6rem),1fr))]"
+      : "grid gap-3 [grid-template-columns:repeat(auto-fill,minmax(min(14rem,calc((100%_-_0.75rem)/2)),1fr))]";
 
 /** The largest display transform the standard shelf card needs. */
 const SHELF_CARD_DISPLAY_WIDTH = 240;
@@ -258,18 +260,28 @@ export function ShelfCard({
   );
 }
 
-function ShelfSkeleton({ compact = false }: { compact?: boolean }) {
+function ShelfSkeleton({
+  compact = false,
+  contactSheet = false,
+}: {
+  compact?: boolean;
+  contactSheet?: boolean;
+}) {
   return (
-    <div className={shelfGridClass(compact)}>
-      {Array.from({ length: 12 }, (_, i) => (
-        <Panel key={i} tone="default" flush>
-          <Skeleton className="aspect-square w-full rounded-none" />
-          <div className="space-y-2 px-2 py-2">
-            <Skeleton className="h-3.5 w-3/4" />
-            <Skeleton className="h-3 w-1/2" />
-          </div>
-        </Panel>
-      ))}
+    <div className={shelfGridClass(compact, contactSheet)}>
+      {Array.from({ length: 12 }, (_, i) =>
+        contactSheet ? (
+          <Skeleton key={i} className="size-8 rounded-none" />
+        ) : (
+          <Panel key={i} tone="default" flush>
+            <Skeleton className="aspect-square w-full rounded-none" />
+            <div className="space-y-2 px-2 py-2">
+              <Skeleton className="h-3.5 w-3/4" />
+              <Skeleton className="h-3 w-1/2" />
+            </div>
+          </Panel>
+        ),
+      )}
     </div>
   );
 }
@@ -290,6 +302,7 @@ export function ShelfGrid<T>({
   infiniteScroll,
   emptyState,
   compact = false,
+  contactSheet = false,
   getItemId,
   onRetry,
 }: {
@@ -304,6 +317,8 @@ export function ShelfGrid<T>({
   emptyState?: ReactNode;
   /** Local-only density choice; URL selection remains the shelf view. */
   compact?: boolean;
+  /** Fixed-size, padding-free main-image tiles. */
+  contactSheet?: boolean;
   onRetry?: () => void;
 }) {
   const sentinelRef = useInfiniteScrollSentinel(infiniteScroll, "400px");
@@ -320,7 +335,7 @@ export function ShelfGrid<T>({
   if (error && items.length === 0) return failure;
 
   if (isLoading && items.length === 0)
-    return <ShelfSkeleton compact={compact} />;
+    return <ShelfSkeleton compact={compact} contactSheet={contactSheet} />;
 
   if (items.length === 0) return <>{emptyState}</>;
 
@@ -328,8 +343,8 @@ export function ShelfGrid<T>({
     <div aria-busy={infiniteScroll?.isTransitioning ?? false}>
       {failure}
       <div
-        className={grouping ? undefined : shelfGridClass(compact)}
-        data-testid="entity-card-grid"
+        className={grouping ? undefined : shelfGridClass(compact, contactSheet)}
+        data-testid={contactSheet ? "entity-contact-sheet" : "entity-card-grid"}
         data-compact={compact ? "true" : "false"}
         inert={infiniteScroll?.isTransitioning ? true : undefined}
       >
@@ -359,7 +374,7 @@ export function ShelfGrid<T>({
                   actions={section.actions}
                   className="sticky top-[var(--app-chrome-top)] z-10 mb-3"
                 />
-                <div className={shelfGridClass(compact)}>
+                <div className={shelfGridClass(compact, contactSheet)}>
                   {section.items.map(renderCard)}
                 </div>
               </section>

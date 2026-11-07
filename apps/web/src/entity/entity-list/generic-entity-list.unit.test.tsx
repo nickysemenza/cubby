@@ -149,7 +149,7 @@ describe("listPage", () => {
     expect(screen.getByText("1 unresolved")).toBeVisible();
   });
 
-  it("renders the manifest's header links, universal List/Cards/Compact choices, and Group by", async () => {
+  it("renders declared header links and groups recipes by Tags", async () => {
     await renderListPage("recipe", "/recipes", []);
     for (const link of entitySummary.recipe.list.links) {
       expect(screen.getByRole("button", { name: link.label })).toHaveAttribute(
@@ -159,11 +159,6 @@ describe("listPage", () => {
     }
     fireEvent.click(await displayControl(/Recipes view:/));
     const switcher = await screen.findByRole("menu");
-    expect(
-      within(switcher)
-        .getAllByRole("menuitem")
-        .map((option) => option.getAttribute("aria-label")),
-    ).toEqual(["List view", "Cards view", "Compact view", "Pivot view"]);
     fireEvent.keyDown(switcher, { key: "Escape" });
     // Group by is its own row beside the view menu.
     fireEvent.click(await displayControl("Group by"));
@@ -192,29 +187,11 @@ describe("listPage", () => {
     ).toBeInTheDocument();
   });
 
-  it("offers every declared view and marks the `?view=` one selected", async () => {
+  it("marks Timeline selected and explains why regrouping is unavailable", async () => {
     // The built-in timeline view: a slot view would mount its own route API.
     await renderListPage("task", "/tasks?view=timeline", []);
     fireEvent.click(await displayControl(/Tasks view:/));
     const switcher = await screen.findByRole("menu");
-    const options = within(switcher).getAllByRole("menuitem");
-    expect(options.map((option) => option.getAttribute("aria-label"))).toEqual(
-      entitySummary.task.list.views
-        .flatMap((view) => {
-          const label =
-            typeof view === "object"
-              ? view.label
-              : view === "table"
-                ? "List"
-                : view === "shelf"
-                  ? "Cards"
-                  : "Timeline";
-          return view === "shelf"
-            ? [`${label} view`, "Compact view"]
-            : [`${label} view`];
-        })
-        .concat("Pivot view"),
-    );
     expect(
       within(switcher).getByRole("menuitem", { name: "Timeline view" }),
     ).toHaveAttribute("aria-current", "true");

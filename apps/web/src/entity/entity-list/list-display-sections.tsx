@@ -61,7 +61,7 @@ function ListViewMenu({ entity }: { entity: BrowserRoutedEntity }) {
   const isMobile = useIsMobile();
   // Pivot is built in on desktop wherever two choices can group.
   const pivot = !isMobile && pivotAvailable(grouping);
-  if (views.length < 2 && !pivot) return null;
+
   const dimensions = listGroupBy(search) ?? [];
   const pivotReason =
     dimensions.length < 2
@@ -95,6 +95,7 @@ function ListViewMenu({ entity }: { entity: BrowserRoutedEntity }) {
     reason?: string | null;
   }[] = [
     ...declared,
+    { value: "contact-sheet", label: "Contact sheet", icon: GridNineIcon },
     ...(pivot
       ? [
           {
@@ -108,13 +109,19 @@ function ListViewMenu({ entity }: { entity: BrowserRoutedEntity }) {
   ];
   const defaultView = listViewId(views[0] ?? "table");
   const selected =
-    pivot && search.view === PIVOT_VIEW_ID
-      ? PIVOT_VIEW_ID
-      : view === "shelf" && density === "compact"
-        ? "compact"
-        : listViewId(view);
+    density === "contact-sheet"
+      ? "contact-sheet"
+      : pivot && search.view === PIVOT_VIEW_ID
+        ? PIVOT_VIEW_ID
+        : view === "shelf" && density === "compact"
+          ? "compact"
+          : listViewId(view);
   const selectedOption = options.find((option) => option.value === selected);
   const onValueChange = (next: string) => {
+    if (next === "contact-sheet") {
+      setDensity("contact-sheet");
+      return;
+    }
     if (next === "compact") {
       setDensity("compact");
       navigate({ view: "shelf" });
@@ -189,13 +196,19 @@ function ListViewMenu({ entity }: { entity: BrowserRoutedEntity }) {
  */
 function ListGroupMenu({ entity }: { entity: BrowserRoutedEntity }) {
   const { search, navigate } = useListSearch();
+  const { density } = useEntityListCardDensity();
   const { view } = resolveListView(useQueryClient(), entity, search);
   const choices = useEntityMetadata(entity).listFields.grouping;
   // A board's columns are its grouping; it declares its own choices.
-  const board = typeof view === "object" && view.kind === "board";
+  const board =
+    density !== "contact-sheet" &&
+    typeof view === "object" &&
+    view.kind === "board";
   if (choices.length === 0 || board) return null;
   const timeline =
-    view === "timeline" || (typeof view === "object" && view.id === "calendar");
+    density !== "contact-sheet" &&
+    (view === "timeline" ||
+      (typeof view === "object" && view.id === "calendar"));
   const dimensions = timeline ? [] : (listGroupBy(search) ?? []);
   const apply = (next: ListGroupBy[]) =>
     navigate({ groupBy: next.length ? next : undefined });

@@ -14,7 +14,7 @@ import {
   type ListSlotProps,
 } from "./list-slot-types";
 
-type CardDensity = "cards" | "compact";
+type CardDensity = "cards" | "compact" | "contact-sheet";
 type CardDensityState = {
   density: CardDensity;
   setDensity: (density: CardDensity) => void;
@@ -22,9 +22,9 @@ type CardDensityState = {
 const CardDensityContext = createContext<CardDensityState | null>(null);
 
 /**
- * Compactness belongs to the mounted list screen, not the URL or persistence.
+ * Card density and Contact sheet belong to the mounted list screen, not the URL or persistence.
  * The provider is shared with the route chrome so its segmented control and
- * the card renderer change together.
+ * the record renderer change together.
  */
 export function EntityListCardDensityProvider({
   children,
