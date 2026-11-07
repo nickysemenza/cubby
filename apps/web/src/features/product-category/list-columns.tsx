@@ -1,0 +1,208 @@
+import { productCategoryShortcode } from "@cubby/schemas/identifiers";
+import { useQueryClient } from "@tanstack/react-query";
+import { useMemo } from "react";
+
+import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import type { ListRowOf } from "~/entity/display/list-renderer-types";
+import { listNested, nestSearchValue } from "~/entity/entity-list/list-nesting";
+import type { EntityPreviewRendererProps } from "~/entity/hooks/use-entity-preview";
+import { defineListOverride } from "~/entity/list-columns/types";
+import type { EntityListParamsByEntity } from "~/entity/model/list-contracts";
+import { CategorySpendingRemainders } from "~/features/finance/category-spending-remainders";
+import { CategoryWorkspaceArrangement } from "~/features/finance/category-workspace-arrangement";
+import {
+  useCategoryContextTree,
+  type CategoryContextRow,
+} from "~/features/finance/use-category-context-tree";
+import { useCategorySpending } from "~/features/finance/use-category-spending";
+import { ProductCategoryConnections } from "~/features/product-category/mapping-workspace";
+import { formatCurrency } from "~/lib/number-format";
+import {
+  createCubbyColumnCollection,
+  createCubbyColumnHelper,
+  type CubbyColumnCollection,
+} from "~/ui/data-table/table-features";
+import { ErrorDisplay } from "~/ui/feedback/error-display";
+import { Stack } from "~/ui/layout";
+import { SidePanel } from "~/ui/overlays/side-panel";
+import { Description } from "~/ui/text/description";
+
+type CategoryRow = ListRowOf<"productCategory">;
+type CategoryTreeRow = CategoryContextRow<CategoryRow>;
+
+function ProductCategoryInspector({
+  preview,
+  onClose,
+}: EntityPreviewRendererProps) {
+  const id = productCategoryShortcode.parse(preview.id);
+  return (
+    <SidePanel
+      label="Category mapping inspector"
+      title={preview.name ?? "Product category"}
+      onClose={onClose}
+    >
+      <div className="p-4">
+        <ProductCategoryConnections key={id} id={id} />
+      </div>
+    </SidePanel>
+  );
+}
+
+function MappingSource({ row }: { row: CategoryRow }) {
+  const mapping = row.spendingCategoryMapping;
+  if (mapping?.state === "direct") return <>Set here</>;
+  if (mapping?.source)
+    return (
+      <span>
+        {mapping.state === "blocked" ? "Blocked at" : "Inherited from"}{" "}
+        <EntityRefLink
+          entity="productCategory"
+          id={mapping.source.id}
+          name={mapping.source.name}
+        />
+      </span>
+    );
+  return <>{mapping?.state === "blocked" ? "Blocked" : "Missing"}</>;
+}
+
+function productCategoryPhoneFooter(row: CategoryTreeRow) {
+  const target = row.spendingCategoryMapping?.category;
+  return (
+    <Stack gap="xs" className="text-sm text-muted-foreground">
+      {row.categoryContext && <span className="block">Ancestor</span>}
+      <div>
+        <MappingSource row={row} />
+      </div>
+      {target && (
+        <div>
+          Spending default:{" "}
+          <EntityRefLink
+            entity="spendingCategory"
+            id={target.id}
+            name={target.name}
+          />
+        </div>
+      )}
+    </Stack>
+  );
+}
+
+const PREVIEW = {
+  responsiveInspector: true,
+  mobileBehavior: "sheet",
+  renderInspector: (props: EntityPreviewRendererProps) => (
+    <ProductCategoryInspector {...props} />
+  ),
+} as const;
+
+export const productCategoryListOverride = defineListOverride<
+  CategoryTreeRow,
+  EntityListParamsByEntity["productCategory"]["filters"],
+  CategoryRow
+>({
+  use(context) {
+    const client = useQueryClient();
+    const nested = listNested(client, "productCategory", context.search);
+    const spending = useCategorySpending("productCategory");
+    const hierarchy = useCategoryContextTree(spending.records, nested);
+    const compose = useMemo(
+      () => (declared: CubbyColumnCollection<CategoryTreeRow>) =>
+        createCubbyColumnCollection<CategoryTreeRow>((add) => {
+          declared.visit(add);
+          const helper = createCubbyColumnHelper<CategoryTreeRow>();
+          add(
+            helper.accessor(
+              (row) =>
+                spending.totals
+                  ? (spending.totals.cents.get(row.id) ?? 0) / 100
+                  : null,
+              {
+                id: "subtreeNet",
+                header: "Subtree net",
+                enableSorting: false,
+                meta: {
+                  provenance: null,
+                  numeric: true,
+                  mobile: { slot: "trailing", priority: 10 },
+                },
+                cell: ({ getValue, row }) =>
+                  getValue() === null
+                    ? spending.isLoading
+                      ? "Loading…"
+                      : "Unavailable"
+                    : `${formatCurrency(getValue() ?? 0)}${spending.totals?.incomplete.has(row.original.id) ? " + unknown" : ""}`,
+              },
+            ),
+          );
+          add(
+            helper.accessor(
+              (row) => row.spendingCategoryMapping?.state ?? "unmapped",
+              {
+                id: "mappingSource",
+                header: "Mapping source",
+                enableSorting: false,
+                meta: {
+                  provenance: null,
+                },
+                cell: ({ row }) => <MappingSource row={row.original} />,
+              },
+            ),
+          );
+        }),
+      [spending.totals, spending.isLoading],
+    );
+    const list = useMemo(
+      () => ({
+        preview: PREVIEW,
+        nameSuffix: (row: CategoryTreeRow) =>
+          row.categoryContext ? (
+            <span className="shrink-0 text-xs text-muted-foreground">
+              Ancestor
+            </span>
+          ) : null,
+      }),
+      [],
+    );
+    return {
+      compose,
+      list,
+      tree: hierarchy.tree,
+      useWorkbench(list) {
+        return {
+          ...hierarchy.useWorkbench(list),
+          renderMobileRowFooter: productCategoryPhoneFooter,
+        };
+      },
+      above: () => (
+        <>
+          <CategoryWorkspaceArrangement
+            nested={nested}
+            onChange={(value) =>
+              context.navigate(
+                { nest: nestSearchValue(client, "productCategory", value) },
+                { replace: true },
+              )
+            }
+          />
+          <Description>
+            All history, including planned. Products and net spending include
+            descendants. Display filters change rows, not historical review
+            scope.
+          </Description>
+          {spending.error && (
+            <ErrorDisplay
+              error={spending.error}
+              onRetry={() => void spending.refetch()}
+            />
+          )}
+          {spending.status === "too_large" && (
+            <Description>
+              Spending is unavailable because the report exceeds its limit.
+            </Description>
+          )}
+        </>
+      ),
+      below: () => <CategorySpendingRemainders entity="productCategory" />,
+    };
+  },
+});

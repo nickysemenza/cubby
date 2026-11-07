@@ -10,7 +10,17 @@ const expectation = z.enum(["unknown", "required", "not_expected"]);
 export const { definition, readSchemas } = defineEntityModel({
   key: "spendingCategory",
   names: { singular: "Spending Category", plural: "Spending Categories" },
-  route: { basePath: "spending-categories" },
+  route: {
+    basePath: "spending-categories",
+    listColumns: {
+      module: "~/features/spending-category/list-columns",
+      export: "spendingCategoryListOverride",
+    },
+    listReadProjection: {
+      module: "~/features/spending-category/list-read",
+      export: "spendingCategoryListReadProjection",
+    },
+  },
   table: "SpendingCategory",
   identifiers: { brand: "SpendingCategoryId", shortcode: "SPC-" },
   presentation: {
@@ -31,7 +41,7 @@ export const { definition, readSchemas } = defineEntityModel({
         {
           kind: "records",
           id: "expenses",
-          title: "Expenses",
+          title: "Expense overrides",
           viewKey: "relation:expenses",
         },
         {
@@ -101,7 +111,28 @@ export const { definition, readSchemas } = defineEntityModel({
       ],
     },
     list: {
-      tree: {},
+      savedViews: [
+        {
+          id: "needs-policies",
+          label: "Needs policies",
+          description:
+            "Categories missing an itemization or Product expectation",
+          filters: [
+            {
+              id: "dataGaps",
+              value: [
+                "spending_category_itemization_expectation",
+                "spending_category_product_expectation",
+              ],
+            },
+          ],
+        },
+      ],
+      primarySearch: {
+        key: "name",
+        placeholder: "Search spending categories...",
+      },
+      tree: { toggle: true, defaultNested: true },
     },
   },
   model: {
@@ -118,6 +149,7 @@ export const { definition, readSchemas } = defineEntityModel({
           ],
         },
         display: {
+          listHidden: true,
           mobile: { slot: "meta", priority: 20 },
           columnGroup: "Catalog",
           width: "lg",
@@ -224,6 +256,7 @@ export const { definition, readSchemas } = defineEntityModel({
           ],
         },
         display: {
+          listHidden: true,
           mobile: { slot: "meta", priority: 30 },
           columnGroup: "Policy",
           columnLabel: "Evidence",
@@ -283,6 +316,7 @@ export const { definition, readSchemas } = defineEntityModel({
           ],
         },
         display: {
+          listHidden: true,
           columnGroup: "Policy",
           columnLabel: "Products",
           optionRole: "status",

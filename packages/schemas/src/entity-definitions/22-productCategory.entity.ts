@@ -19,6 +19,14 @@ export const { definition, readSchemas } = defineEntityModel({
   names: { singular: "Product Category", plural: "Product Categories" },
   route: {
     basePath: "product-categories",
+    listColumns: {
+      module: "~/features/product-category/list-columns",
+      export: "productCategoryListOverride",
+    },
+    listReadProjection: {
+      module: "~/features/product-category/list-read",
+      export: "productCategoryListReadProjection",
+    },
   },
   table: "ProductCategory",
   identifiers: { brand: "ProductCategoryId", shortcode: "CAT-" },
@@ -107,6 +115,10 @@ export const { definition, readSchemas } = defineEntityModel({
     },
     icons: { phosphor: "Tag", sfSymbol: "tag", emoji: "🏷️" },
     list: {
+      primarySearch: {
+        key: "name",
+        placeholder: "Search product categories...",
+      },
       rail: [{ field: "productCount" }],
       savedViews: [
         {
@@ -116,8 +128,9 @@ export const { definition, readSchemas } = defineEntityModel({
           filters: [{ id: "needsClassification", value: "true" }],
         },
       ],
-      views: ["table", { kind: "slot", id: "hierarchy", label: "Mappings" }],
-      tree: {},
+      views: ["table"],
+      viewAliases: { hierarchy: "table" },
+      tree: { toggle: true, defaultNested: true },
     },
   },
   model: {
@@ -138,7 +151,10 @@ export const { definition, readSchemas } = defineEntityModel({
         kind: "identifier",
         nullable: true,
         reference: { entity: "spendingCategory" },
-        display: { columnGroup: "Spending policy", columnLabel: "Spending" },
+        display: {
+          columnGroup: "Spending policy",
+          columnLabel: "Spending",
+        },
         explanation: {
           ruleId: "productCategory.effective-spending-category",
           evidence: { kind: "scalar", inheritField: "spendingCategoryId" },
@@ -219,6 +235,7 @@ export const { definition, readSchemas } = defineEntityModel({
         display: {
           columnGroup: "Spending policy",
           columnLabel: "Spending mode",
+          list: false,
           optionRole: "category",
           optionColor: "neutral-status",
         },
@@ -237,6 +254,7 @@ export const { definition, readSchemas } = defineEntityModel({
         display: {
           columnGroup: "Spending policy",
           labelPath: "spendingCategoryName",
+          list: false,
         },
         // `blocked` keeps the category unresolved: an explicit None.
         resolution: {
@@ -469,6 +487,7 @@ Rules:
           },
         },
         display: {
+          listHidden: true,
           columnGroup: "Classification",
           width: "md",
           mobile: { slot: "meta", priority: 10 },
@@ -608,7 +627,10 @@ Rules:
         },
         provenance: {
           kind: "derived",
-          sources: [{ entity: "product", relation: "products" }],
+          sources: [
+            { entity: "product" },
+            { label: "Descendant Product Categories" },
+          ],
         },
         explanation: {
           ruleId: "productCategory.product-count",

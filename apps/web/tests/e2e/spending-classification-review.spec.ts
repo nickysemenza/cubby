@@ -22,10 +22,15 @@ test("reviews historical item classification and preserves explicit purpose", as
   const childName = "Synthetic classification shoes";
   const siblingName = "Synthetic classification bags";
   const giftsName = "Synthetic classification gifts";
+  const purposeRootName = "Synthetic classification purpose root";
   const { clothing, gifts, originalSpending, expense, explicitExpense } =
     await createFixtureGraph(page, async (create) => {
+      const { id: purposeRoot } = await create("spendingCategory", {
+        name: purposeRootName,
+      });
       const { id: clothing } = await create("spendingCategory", {
         name: categoryName,
+        parentId: purposeRoot,
       });
       const { id: gifts } = await create("spendingCategory", {
         name: giftsName,
@@ -78,6 +83,15 @@ test("reviews historical item classification and preserves explicit purpose", as
         purchaseId: purchase,
         spendingCategoryId: gifts,
       });
+      await create("expense", {
+        name: "Synthetic classification productless gift",
+        cost: 7,
+        date: "2026-09-01",
+        costType: "materials",
+        trade: "other",
+        purchaseId: purchase,
+        spendingCategoryId: gifts,
+      });
       return { clothing, gifts, originalSpending, expense, explicitExpense };
     });
 
@@ -105,21 +119,21 @@ test("reviews historical item classification and preserves explicit purpose", as
   await gotoAuthenticatedPage(
     page,
     "/product-categories?view=hierarchy",
-    page.getByRole("table", { name: "Product category mappings", exact: true }),
+    page.getByRole("table", { name: "Product Categories table", exact: true }),
   );
   const tree = page.getByRole("table", {
-    name: "Product category mappings",
+    name: "Product Categories table",
     exact: true,
   });
   await expect(
-    tree.getByRole("link", { name: childName, exact: true }),
+    page.getByRole("button", { name: "Flat", exact: true }),
   ).toBeVisible();
   await page
-    .getByPlaceholder("Find a category or branch…", { exact: true })
+    .getByRole("textbox", { name: /Search/ })
     .fill("classification shoes");
   const parent = tree.getByRole("row").filter({
     has: page.getByRole("button", {
-      name: `Collapse ${parentName}`,
+      name: "Collapse",
       exact: true,
     }),
   });
@@ -129,16 +143,32 @@ test("reviews historical item classification and preserves explicit purpose", as
   await expect(
     tree.getByRole("link", { name: childName, exact: true }),
   ).toBeVisible();
+  await expect(parent.getByText("Ancestor", { exact: true })).toBeInViewport({
+    ratio: 1,
+  });
   await expect(
     tree.getByRole("link", { name: siblingName, exact: true }),
   ).toHaveCount(0);
   await expect(
-    tree.getByRole("columnheader", { name: /Effective spending/ }),
+    tree.getByRole("columnheader", { name: /Spending/ }),
   ).toBeVisible();
   const child = tree
     .getByRole("row")
     .filter({ has: page.getByRole("link", { name: childName, exact: true }) });
-  await child.getByRole("cell", { name: "$85.00", exact: true }).click();
+  await expect(
+    parent.getByRole("checkbox", { name: "Select row", exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    child.getByRole("button", { name: "Expand", exact: true }),
+  ).toHaveCount(0);
+  await page.getByRole("button", { name: "Flat", exact: true }).click();
+  await expect(tree.getByRole("row")).toHaveCount(2);
+  await expect(page.getByRole("textbox", { name: /Search/ })).toHaveValue(
+    "classification shoes",
+  );
+  await page.getByRole("button", { name: "Tree", exact: true }).click();
+  await expect(parent).toBeVisible();
+  await child.getByRole("link", { name: childName, exact: true }).click();
   const allocations = page.getByRole("region", {
     name: "Where this branch's money lands",
     exact: true,
@@ -174,16 +204,40 @@ test("reviews historical item classification and preserves explicit purpose", as
   });
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(
-    page.getByRole("dialog", { name: childName, exact: true }),
+    page.getByRole("dialog").filter({
+      has: page.getByRole("heading", { name: childName, exact: true }),
+    }),
   ).toBeVisible();
   await page.getByRole("button", { name: "Close panel", exact: true }).click();
   await expect(
-    page.getByRole("dialog", { name: childName, exact: true }),
+    page.getByRole("dialog").filter({
+      has: page.getByRole("heading", { name: childName, exact: true }),
+    }),
   ).toHaveCount(0);
   const mobileChild = page
-    .getByRole("list", { name: "Records list", exact: true })
+    .getByRole("list", { name: "Product Categories list", exact: true })
     .getByRole("button", { name: new RegExp(`^${childName} `) });
   await expect(mobileChild).toBeVisible();
+  const phoneParent = page
+    .getByRole("list", { name: "Product Categories list", exact: true })
+    .getByRole("listitem")
+    .filter({
+      has: page.getByRole("button", { name: new RegExp(`^${parentName} `) }),
+    });
+  await expect(
+    phoneParent.getByText("Ancestor", { exact: true }),
+  ).toBeVisible();
+  const phoneChild = page
+    .getByRole("list", { name: "Product Categories list", exact: true })
+    .getByRole("listitem")
+    .filter({
+      has: page.getByRole("button", { name: new RegExp(`^${childName} `) }),
+    });
+  await expect(
+    phoneChild.getByText(`Inherited from ${parentName}`, { exact: true }),
+  ).toBeVisible();
+  await page.mouse.move(0, 0);
+
   const phoneTreePath = ".impeccable/review/category-mapping-mobile-tree.png";
   await page.screenshot({ path: phoneTreePath, fullPage: true });
   await testInfo.attach("Category mapping phone tree", {
@@ -192,7 +246,9 @@ test("reviews historical item classification and preserves explicit purpose", as
   });
   await mobileChild.press("Enter");
   await expect(
-    page.getByRole("dialog", { name: childName, exact: true }),
+    page.getByRole("dialog").filter({
+      has: page.getByRole("heading", { name: childName, exact: true }),
+    }),
   ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Close panel", exact: true }),
@@ -345,5 +401,89 @@ test("reviews historical item classification and preserves explicit purpose", as
         current: { assignment: { kind: "value", value: gifts } },
       },
     },
+  });
+  await gotoAuthenticatedPage(
+    page,
+    "/spending-categories",
+    page.getByRole("table", { name: "Spending Categories table", exact: true }),
+  );
+  const spendingTree = page.getByRole("table", {
+    name: "Spending Categories table",
+    exact: true,
+  });
+  const roots = await spendingTree.getByRole("link").allTextContents();
+  expect(roots.indexOf(giftsName)).toBeLessThan(roots.indexOf(purposeRootName));
+  await page
+    .getByRole("textbox", { name: /Search/ })
+    .fill("classification clothing");
+  const spendingRoot = spendingTree.getByRole("row").filter({
+    has: page.getByRole("link", { name: purposeRootName, exact: true }),
+  });
+  await expect(spendingRoot).toContainText("$25.00");
+  const clothingRow = spendingTree.getByRole("row").filter({
+    has: page.getByRole("link", { name: categoryName, exact: true }),
+  });
+  await expect(clothingRow).toContainText("$25.00");
+  await clothingRow
+    .getByRole("link", { name: categoryName, exact: true })
+    .click();
+  await expect(
+    page
+      .getByRole("region", {
+        name: `Contributing branches · ${categoryName}`,
+        exact: true,
+      })
+      .getByRole("row")
+      .filter({ hasText: childName }),
+  ).toContainText("$25.00");
+  await expect(
+    page.getByRole("region", {
+      name: "Configured incoming mappings",
+      exact: true,
+    }),
+  ).toContainText(childName);
+  await expect(
+    page.getByRole("region", { name: "Category and policies", exact: true }),
+  ).toContainText("Itemization");
+  const spendingDesktopPath =
+    ".impeccable/review/spending-category-desktop.png";
+  await page.screenshot({ path: spendingDesktopPath, fullPage: true });
+  await testInfo.attach("Spending category desktop", {
+    path: spendingDesktopPath,
+    contentType: "image/png",
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole("button", { name: "Close panel", exact: true }).click();
+  await expect(
+    page
+      .getByRole("list", { name: "Spending Categories list", exact: true })
+      .getByText("Ancestor", { exact: true }),
+  ).toBeVisible();
+  if (viewport) await page.setViewportSize(viewport);
+  await page
+    .getByRole("textbox", { name: /Search/ })
+    .fill("classification gifts");
+  const giftsRow = spendingTree
+    .getByRole("row")
+    .filter({ has: page.getByRole("link", { name: giftsName, exact: true }) });
+  await expect(giftsRow).toContainText("$68.00");
+  await giftsRow.getByRole("link", { name: giftsName, exact: true }).click();
+  const giftContributions = page.getByRole("region", {
+    name: `Contributing branches · ${giftsName}`,
+    exact: true,
+  });
+  await expect(giftContributions).toContainText("$61.00");
+  await expect(giftContributions).toContainText("$7.00");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(
+    page.getByRole("dialog").filter({
+      has: page.getByRole("heading", { name: giftsName, exact: true }),
+    }),
+  ).toBeVisible();
+  const spendingPhonePath = ".impeccable/review/spending-category-mobile.png";
+  await page.screenshot({ path: spendingPhonePath, fullPage: true });
+  await testInfo.attach("Spending category phone", {
+    path: spendingPhonePath,
+    contentType: "image/png",
   });
 });

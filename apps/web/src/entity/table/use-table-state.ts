@@ -179,7 +179,8 @@ export function useTableState(
   const codec = useMemo(
     () =>
       compileFilterCodec(
-        primarySearch
+        primarySearch &&
+          !filterSpecs.some((spec) => spec.columnId === primarySearch.key)
           ? [
               {
                 columnId: primarySearch.key,

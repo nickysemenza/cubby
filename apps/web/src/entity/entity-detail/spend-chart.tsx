@@ -19,8 +19,8 @@ const monthReadoutLabel = (month: string) =>
   formatCalendarDay(`${month}-01`, "monthYearLong");
 
 /**
- * Twelve months of `SUM(Expense.cost)` reached through the entity's declared
- * relation, as bars closing the key-numbers strip. Credits net into their
+ * Twelve months of incurred spending: categories use canonical allocation
+ * shares; other entities use their declared Expense relation, as bars closing the key-numbers strip. Credits net into their
  * month; a month that nets below zero draws below the zero baseline.
  */
 export function MonthlySpendChart({
@@ -87,12 +87,19 @@ export function MonthlySpendChart({
             compact && "sr-only",
           )}
         >
-          Spend, last 12 months
+          {entity === "productCategory" || entity === "spendingCategory"
+            ? "Incurred net, last 12 months"
+            : "Spend, last 12 months"}
         </span>
         <span className="font-mono text-xs text-foreground-strong tabular-nums">
           {spend.isPending ? "…" : formatCurrency(total / 100)}
         </span>
       </figcaption>
+      {(entity === "productCategory" || entity === "spendingCategory") && (
+        <p className="text-xs text-muted-foreground">
+          Includes descendants; excludes planned Expenses.
+        </p>
+      )}
       <div
         className={cn(
           "relative mt-1.5 flex gap-[3px]",

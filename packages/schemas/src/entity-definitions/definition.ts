@@ -1890,7 +1890,7 @@ const buildMetadataSchemas = () => {
           )
           .optional()
           .default([]),
-        /** A custom list transport's search parameter (for example USDA's nameFilter). */
+        /** A declared filter column promoted to search, or a custom transport parameter (for example USDA nameFilter). */
         primarySearch: orNull(
           z
             .object({ key: nonEmptyString(), placeholder: nonEmptyString() })

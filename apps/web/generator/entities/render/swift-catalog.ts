@@ -778,18 +778,31 @@ const entityJSON = (
   // field to Optional for a case that has never occurred.
   const plural = entity.inspector.plural ?? entity.inspector.singular;
   const searchable = entity.descriptor.searchable === true;
-  const primarySearch =
-    entity.inspector.list.primarySearch === null
-      ? entity.contract !== null && searchable
-        ? {
-            key: "searchQuery",
-            placeholder: `Search ${plural.toLowerCase()} or shortcode`,
-          }
-        : null
-      : {
-          key: entity.inspector.list.primarySearch.key,
-          placeholder: entity.inspector.list.primarySearch.placeholder,
-        };
+  const declaredSearch = entity.inspector.list.primarySearch;
+  const searchFilter =
+    declaredSearch &&
+    entity.filterDescriptors.find(
+      (filter) => filter.columnId === declaredSearch.key,
+    );
+  if (searchFilter && searchFilter.wire.kind !== "param")
+    throw new Error(
+      `${context}: primary search must resolve to a scalar filter parameter`,
+    );
+  // Native sends wire parameters, while the browser binds filter column ids.
+  const primarySearch = declaredSearch
+    ? {
+        key:
+          searchFilter?.wire.kind === "param"
+            ? searchFilter.wire.name
+            : declaredSearch.key,
+        placeholder: declaredSearch.placeholder,
+      }
+    : entity.contract !== null && searchable
+      ? {
+          key: "searchQuery",
+          placeholder: `Search ${plural.toLowerCase()} or shortcode`,
+        }
+      : null;
   return {
     key: entityKey(entity.key, context),
     singular: entity.inspector.singular,

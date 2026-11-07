@@ -165,7 +165,8 @@ export function EntityBoard({
       specs,
       filterGetterFromColumnFilters(table.columnFilters),
     ),
-    ...(primarySearch
+    ...(primarySearch &&
+    !specs.some((spec) => spec.columnId === primarySearch.key)
       ? { [primarySearch.key]: table.getColumnFilter(primarySearch.key) }
       : {}),
     ...view.filters,

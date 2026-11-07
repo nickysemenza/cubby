@@ -509,7 +509,14 @@ export function useEntityList<
         ...scopeFilters,
       };
       const primarySearch = metadata.summary.primarySearch;
-      if (primarySearch) {
+      // A declared column already maps its UI key to the API field (for
+      // example name → search). Only custom transports add the key directly.
+      if (
+        primarySearch &&
+        !getEntityFilters(queryClient, entity).some(
+          (spec) => spec.columnId === primarySearch.key,
+        )
+      ) {
         const primaryValue = ts.getColumnFilter(primarySearch.key);
         if (primaryValue !== undefined) {
           Object.assign(resolvedFilters, {
@@ -1133,6 +1140,11 @@ export function useEntityList<
       refreshControls,
       groupConfig,
       nestToggle,
+      // A sheet inspector owns the phone tap; do not synthesize a detail link.
+      navigation:
+        previewOptions?.mobileBehavior === "sheet"
+          ? { kind: "none" }
+          : undefined,
     },
     currentFilters,
     mappingsMap,

@@ -51,7 +51,10 @@ export function entityListLoader<E extends ListEntity>(
       // list is not its first page to hydrate.
       active: typeof view === "string",
       // The table pages a nested tree's roots; Cards and the timeline stay flat.
-      nested: view === "table" && listNested(context.queryClient, entity, deps),
+      nested:
+        readProjection.nesting !== "flat" &&
+        view === "table" &&
+        listNested(context.queryClient, entity, deps),
       signal: abortController.signal,
     });
   };
@@ -111,7 +114,10 @@ export async function ensureEntityListSsr<E extends ListEntity>(options: {
       defaultSort,
       fields,
       includeCount,
-      nesting: options.nested ? ROOTS_SCOPE : undefined,
+      nesting:
+        options.nested && projection.nesting !== "flat"
+          ? ROOTS_SCOPE
+          : undefined,
       // Timeline owns its arrangement; retained URL dimensions must not
       // preload a grouped query the mounted renderer never consumes.
       groupBy: view === "timeline" ? [] : undefined,

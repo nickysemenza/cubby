@@ -120,15 +120,32 @@ item detail and eligible fallbacks; it never changes their money or clears
 Purchase defaults. A stale preview and a forbidden feature or category change
 surface the owning operation's raw error.
 
-The Product Category **Mappings** view searches the complete tree locally,
-retaining matching rows' ancestors. It shows effective mapping and source,
-subtree Product counts, and allocation-based subtree net spending labelled
-**All history, including planned**. Ancestor amounts include descendants and
-must not be added together. Selecting a branch shows its actual Spending
-Category outcomes and the branches contributing to a selected spending bucket;
-these amounts can differ from the configured default. The view reuses the
-canonical tree read and batched allocation analysis, with no row-level finance
-queries or stored spending summaries.
+Product Categories and Spending Categories use their ordinary category tables as
+one mapping workspace, with Tree and Flat arrangements. Existing Mappings links
+(`?view=hierarchy`) open that table. Filters, saved views, matching-row selection
+and applicable bulk actions remain owned by the generic list. Tree search keeps
+matching rows' ancestors as context; context rows are excluded from
+selection. Only rows with children have expand controls. Phone rows retain
+ancestor labels and readable mapping provenance beneath their summaries.
+
+Product Categories show one effective Spending Category, its source/state,
+subtree Product counts and allocation-based subtree net spending. The inspector's
+Product count opens that same branch, including descendants, in Products. Spending
+Categories show allocation-based subtree net and incoming mapping counts for
+each category itself. Spending is labelled **All history, including planned**;
+display filters change visible categories, not this spending or historical
+review scope. Parent amounts include descendants and must not be added together.
+Household-wide coverage beneath each table keeps named unresolved remainders
+visible with canonical Ledger links.
+
+Selecting a row opens the responsive inspector. Product Categories show mapping
+provenance, actual Spending Category outcomes and canonical reviewed mapping or
+parent edits. Spending Categories show actual contributing Product Category
+branches and productless/unresolved evidence, separately from configured
+incoming mappings, and retain the existing itemization, Product expectation and
+stock policies. The Needs policies queue uses the existing data-gap filters. Configured mappings are defaults, not money outcomes. Complete
+ancestry and allocation reads are batched, with no row-level finance queries or
+stored spending summaries.
 
 Merging Spending Categories is keeper-wins: every incoming reference (explicit
 Expense categories, Purchase defaults, Financial Transactions, merchant
