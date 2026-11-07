@@ -517,6 +517,24 @@ describe("statement row ledger", () => {
         "objects",
       );
       expect(rows).toEqual([{ differences: 0 }]);
+      const page = await sourceTransactionRecordScaffold.read(ctx.db, {
+        filters: {},
+        sorts: [],
+        pagination: { pageIndex: 0, pageSize: 100 },
+        projection: selectedListProjection("sourceTransactionRecord", [
+          "id",
+          "matchState",
+        ]),
+      });
+      const expected = await getDb(ctx.db).execute<{
+        shortcode: string;
+        matchState: string;
+      }>(
+        sql`SELECT shortcode, "matchState" FROM ${sourceObservations} observed WHERE observed."deletedAt" IS NULL`,
+      );
+      expect(page.data.map((row) => [row.id, row.matchState]).sort()).toEqual(
+        expected.rows.map((row) => [row.shortcode, row.matchState]).sort(),
+      );
     };
     const [historicalBinding] = await getDb(ctx.db)
       .insert(financialEvidenceAlias)

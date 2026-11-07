@@ -64,15 +64,24 @@ export const sourceObservationHistoricalLinks = sql`(
     JOIN evidence_history evidence ON evidence."occurrenceId"=sibling."occurrenceId"
     WHERE sibling."observationId" IS NOT NULL AND sibling."occurrenceId" IS NOT NULL
   ),
-  history AS MATERIALIZED (
-    SELECT observed."observationId", history."historicalTransactionId", history.code
-    FROM "FinancialEvidenceAlias" observed JOIN key_history history ON history.source=observed.source AND history.value=observed.value
+  history_keys AS MATERIALIZED (
+    SELECT DISTINCT source, value FROM key_history
+  ),
+  observation_keys AS MATERIALIZED (
+    -- includes-deleted: retained alias tombstones stay in presentation history; map keys before expansion.
+    SELECT observed."observationId", observed.source, observed.value
+    FROM "FinancialEvidenceAlias" observed
+    JOIN history_keys keys ON keys.source=observed.source AND keys.value=observed.value
     WHERE observed."observationId" IS NOT NULL
     UNION
-    SELECT record.id, history."historicalTransactionId", history.code
+    SELECT record.id, observed.source, observed.value
     FROM "SourceTransactionRecord" record
     JOIN "FinancialEvidenceAlias" observed ON observed."occurrenceId"=record."occurrenceId"
-    JOIN key_history history ON history.source=observed.source AND history.value=observed.value
+    JOIN history_keys keys ON keys.source=observed.source AND keys.value=observed.value
+  ),
+  history AS MATERIALIZED (
+    SELECT DISTINCT observed."observationId", history."historicalTransactionId", history.code
+    FROM observation_keys observed JOIN key_history history ON history.source=observed.source AND history.value=observed.value
   )
   SELECT "observationId", array_agg(code ORDER BY code) AS codes
   FROM history GROUP BY "observationId"

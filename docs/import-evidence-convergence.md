@@ -675,6 +675,12 @@ uncorrelated membership sets. Page bindings load states and historical links in
 one batch rather than a scalar subquery per observation. They preserve the point acceptance
 check's live-binding/transaction rules and retained alias provenance. Historical
 links remain presentation and negative ownership fences, never accepted ownership.
+The page binding owns projected match state. The main SELECT omits its redundant
+scalar expression; filters, sorts and groups retain their declared state SQL.
+Historical closure maps relevant alias keys to observations before expanding
+transaction pairs, avoiding repeated record lookups for every historical link.
+Both alias routes retain their tombstones and deduplicate the same complete
+observation/transaction set before ordering the public codes.
 
 Transaction imports are read-only outside intake. Neither generic create,
 update, merge nor delete changes their metadata or membership. Intake owns
