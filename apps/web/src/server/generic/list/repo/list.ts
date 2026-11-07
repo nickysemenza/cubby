@@ -651,8 +651,9 @@ export function listScaffold<
       };
     return {
       select: async (page, projection) =>
-        // SAFETY: the selection is the root table's columns plus the read's
-        // declared SQL, which is what `Row` describes.
+        // SAFETY: closed reads carry identity and requested physical columns.
+        // plan.read guards omitted keys; withPageFields only requires identity
+        // on that path. Bindings and field facts retain complete row inputs.
         (await unwrapDb(db)
           .select(readColumns(projection, context))
           .from(listTable)
