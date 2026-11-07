@@ -408,6 +408,11 @@ replace this fresh decision read or the receiving command's current-stock checks
 
 ## List loading and enrichment
 
+Desktop page tables start inside the same `60vh` bound the virtualizer uses
+before measurement. The measured remaining viewport then replaces that bound.
+An unbounded first layout would mount the full page and admit premature paging;
+embedded tables retain their `60vh` cap.
+
 Filter option sources compile from declarations: fixed choices remain complete
 local rosters; entity references use the shared live roster; a relation source
 uses `entityFilterOptions.filterOptions` with `source: "relation"`. Relationship

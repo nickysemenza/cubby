@@ -125,16 +125,14 @@ function desktopPaneStyle({
   entity?: Entity;
 }): DesktopPaneStyle {
   const style: DesktopPaneStyle = {};
-  if (embedded) {
-    style.maxHeight = "60vh";
-  } else if (paneMaxHeight != null) {
-    style.maxHeight = `${paneMaxHeight}px`;
-  }
+  // Match the virtualizer's initial estimate so the first layout cannot mount
+  // the whole page and request more rows before the pane is measured.
+  const height =
+    embedded || paneMaxHeight === null ? "60vh" : `${paneMaxHeight}px`;
+  style.maxHeight = height;
   // A page list fills its pane, so the footer holds the viewport's bottom edge
   // however few rows there are.
-  if (!embedded && paneMaxHeight != null) {
-    style.height = `${paneMaxHeight}px`;
-  }
+  if (!embedded) style.height = height;
   if (entity && isBrowserRoutedEntity(entity)) {
     style["--row-accent"] = entities[entity].color.accent;
   }
