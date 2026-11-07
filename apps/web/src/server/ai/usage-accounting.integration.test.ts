@@ -567,50 +567,62 @@ describe("AiUsage accounting", () => {
     });
   });
 
-  it("pauses the Run for the next window when the paid rung has no key", async () => {
-    const runId = await ensureRun(ctx.db, ctx.actor, {
-      purpose: "mail_reclassify",
-      trigger: "manual",
-      status: "running",
-    });
-    const faux = fauxProvider();
-    const reason =
-      "HTTP 400: Provider 'openai' has no BYOK credential named 'default'";
-    const ports: StructuredRunPorts = {
-      callTarget: () => ({
-        model: faux.getModel(),
-        complete: async () => {
-          throw new Error(reason);
-        },
-      }),
-    };
+  it.each([
+    {
+      label: "missing provider key",
+      reason:
+        "HTTP 400: Provider 'openai' has no BYOK credential named 'default'",
+    },
+    {
+      label: "gateway balance refusal",
+      reason:
+        'OpenAI API error (403): {"code":"invalid_prompt","message":"Insufficient balance; add money to your gateway or use BYOK"}',
+    },
+  ])(
+    "pauses the Run when the paid rung cannot be funded: $label",
+    async ({ reason }) => {
+      const runId = await ensureRun(ctx.db, ctx.actor, {
+        purpose: "mail_reclassify",
+        trigger: "manual",
+        status: "running",
+      });
+      const faux = fauxProvider();
+      const ports: StructuredRunPorts = {
+        callTarget: () => ({
+          model: faux.getModel(),
+          complete: async () => {
+            throw new Error(reason);
+          },
+        }),
+      };
 
-    await expect(
-      runStructuredFeature(
-        LOCATION_DESCRIPTION_FEATURE,
-        {
-          systemPrompts: ["frame"],
-          messages: [{ role: "user", content: "x" }],
-        },
-        { db: ctx.db, runId, operation: "locationDescription" },
-        ports,
-      ),
-    ).rejects.toBeInstanceOf(AiBudgetExhaustedError);
+      await expect(
+        runStructuredFeature(
+          LOCATION_DESCRIPTION_FEATURE,
+          {
+            systemPrompts: ["frame"],
+            messages: [{ role: "user", content: "x" }],
+          },
+          { db: ctx.db, runId, operation: "locationDescription" },
+          ports,
+        ),
+      ).rejects.toBeInstanceOf(AiBudgetExhaustedError);
 
-    const [paused] = await getDb(ctx.db)
-      .select({
-        status: run.status,
-        failureCode: run.failureCode,
-        dispatchError: run.dispatchError,
-      })
-      .from(run)
-      .where(eq(run.id, runId));
-    expect(paused).toMatchObject({
-      status: "paused_auth",
-      failureCode: "execution_limit",
-      dispatchError: expect.stringContaining(reason),
-    });
-  });
+      const [paused] = await getDb(ctx.db)
+        .select({
+          status: run.status,
+          failureCode: run.failureCode,
+          dispatchError: run.dispatchError,
+        })
+        .from(run)
+        .where(eq(run.id, runId));
+      expect(paused).toMatchObject({
+        status: "paused_auth",
+        failureCode: "execution_limit",
+        dispatchError: expect.stringContaining(reason),
+      });
+    },
+  );
 
   // Plan refusals were invisible: the failed row kept no body, so a rejected
   // request shape could not be identified without a deploy.

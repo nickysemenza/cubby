@@ -506,7 +506,9 @@ export function isInferenceFundingRefusal(
  * someone changes that, so the caller waits for funding rather than failing.
  */
 export const isPaidFundingUnavailable = (failure: string) =>
-  /Insufficient unified billing balance|has no BYOK credential/u.test(failure);
+  /Insufficient unified billing balance|Insufficient balance; add money to your gateway or use BYOK|has no BYOK credential/u.test(
+    failure,
+  );
 
 /**
  * The egress Durable Object's answer while a recorded provider credit refusal
