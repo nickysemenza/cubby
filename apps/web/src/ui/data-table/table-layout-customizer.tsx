@@ -153,21 +153,30 @@ function SortableColumn<TData extends RowData>({
             aria-label={`Actions for ${columnLabel(column)}`}
           />
           <DropdownMenuContent align="end" className="w-52">
-            {column.columnDef.meta?.presentation && (
-              <Description className="px-2 py-1">
-                {column.columnDef.meta.presentation.description}
-                {!column.columnDef.meta.presentation.sort.supported && (
-                  <span className="block">
-                    {column.columnDef.meta.presentation.sort.reason}
-                  </span>
-                )}
-                {!column.columnDef.meta.presentation.group.supported && (
-                  <span className="block">
-                    {column.columnDef.meta.presentation.group.reason}
-                  </span>
-                )}
-              </Description>
-            )}
+            {column.columnDef.meta?.presentation &&
+              (column.columnDef.meta.presentation.description ||
+                !column.columnDef.meta.presentation.sort.supported ||
+                !column.columnDef.meta.presentation.group.supported ||
+                !column.columnDef.meta.presentation.filter.supported) && (
+                <Description className="px-2 py-1">
+                  {column.columnDef.meta.presentation.description}
+                  {!column.columnDef.meta.presentation.sort.supported && (
+                    <span className="block">
+                      {column.columnDef.meta.presentation.sort.reason}
+                    </span>
+                  )}
+                  {!column.columnDef.meta.presentation.group.supported && (
+                    <span className="block">
+                      {column.columnDef.meta.presentation.group.reason}
+                    </span>
+                  )}
+                  {!column.columnDef.meta.presentation.filter.supported && (
+                    <span className="block">
+                      {column.columnDef.meta.presentation.filter.reason}
+                    </span>
+                  )}
+                </Description>
+              )}
             <DropdownMenuGroup>
               <DropdownMenuLabel>
                 {column.columnDef.meta?.columnGroup

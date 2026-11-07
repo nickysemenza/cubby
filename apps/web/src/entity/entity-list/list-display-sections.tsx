@@ -237,6 +237,10 @@ function ListGroupMenu({ entity }: { entity: BrowserRoutedEntity }) {
       return `${choice?.label ?? dimension.key}${dimension.bucket ? ` / ${dimension.bucket}` : dimension.level ? ` / ${groupLevelLabel(dimension.level)}` : ""}`;
     })
     .join(" → ");
+  const membershipGuidance = dimensions.flatMap(({ key }) => {
+    const group = listFieldPresentation(queryClient, entity, key)?.group;
+    return group?.supported && group.description ? [group.description] : [];
+  })[0];
   return (
     <DisplayRow label="Group">
       <DropdownMenu>
@@ -448,6 +452,11 @@ function ListGroupMenu({ entity }: { entity: BrowserRoutedEntity }) {
               </DropdownMenuSubmenu>
             );
           })}
+          {membershipGuidance && (
+            <p className="max-w-72 px-2 py-1 text-xs text-muted-foreground">
+              {membershipGuidance}
+            </p>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
     </DisplayRow>

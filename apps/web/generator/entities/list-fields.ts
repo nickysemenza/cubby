@@ -1574,17 +1574,20 @@ const compileFieldPresentation = (
         }),
         sort: operation(
           sorts.includes(key) ? key : undefined,
-          value?.sort ?? "No sort is declared for this field.",
+          value?.sort ?? "Sorting is unavailable for this field.",
           relatedCountSort ? "Sorts by the number of related records." : null,
         ),
         group: operation(
           group?.reason === null ? group.key : undefined,
-          group?.reason ?? "No grouping is declared for this field.",
+          group?.reason ?? "Grouping is unavailable for this field.",
+          group?.multiple
+            ? "Records may appear in several groups. Filters select whole records and retain their other memberships."
+            : null,
         ),
         filter: {
           ...operation(
             filter?.columnId,
-            "No filter is declared for this field.",
+            "Filtering is unavailable for this field.",
           ),
           label: filter
             ? filterFieldLabel(filter)

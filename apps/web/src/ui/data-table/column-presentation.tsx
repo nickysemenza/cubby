@@ -45,7 +45,7 @@ export const listFieldTypeLabel = (
     number: "number",
     money: "money",
     count: "count",
-    structured: "structured",
+    structured: "details",
     images: "images",
   }[field.valueType];
 };

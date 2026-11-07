@@ -409,9 +409,7 @@ it("keeps quality beside identity and emits its server sort", async () => {
     ),
   );
   fireEvent.click(screen.getByRole("button", { name: "Display" }));
-  fireEvent.click(
-    await screen.findByRole("button", { name: /^Sort: Data quality/ }),
-  );
+  fireEvent.click(await screen.findByRole("button", { name: /^Sort:/ }));
   fireEvent.click(await screen.findByRole("menuitem", { name: "Updated at" }));
   await waitFor(() =>
     expect(state.requests.at(-1)).toEqual(

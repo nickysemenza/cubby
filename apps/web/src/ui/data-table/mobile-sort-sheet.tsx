@@ -81,7 +81,7 @@ export function SortSection<TItem extends RowData>({
         // Cleared sort is not "unsorted" — the list falls back to the
         // entity's own default order (see `buildSortsParams`), which is
         // exactly what "reset" should mean here.
-        detail="Declared default order"
+        detail="List default order"
         selected={!activeSort}
         onSelect={() => table.setSorting([])}
       />
