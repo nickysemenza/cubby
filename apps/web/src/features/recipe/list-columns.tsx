@@ -3,7 +3,6 @@ import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import type { ListRowOf } from "~/entity/display/list-renderer-types";
 type RecipeListItem = ListRowOf<"recipe">;
 import { countLabel } from "@cubby/shared/pluralize";
-import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 
 import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
@@ -16,8 +15,6 @@ import { formatYield } from "~/entity/presentation/recipe-yield";
 import { EditableCell } from "~/entity/table/editable-cell";
 import { EditableTagsCell } from "~/features/recipe/editable-tags-cell";
 import { RecipeTag } from "~/features/recipe/recipe-tag";
-import { relatedData } from "~/integrations/tanstack-query/generated/domains/relatedData.gen";
-import type { PickerOption } from "~/ui/combobox/picker-option";
 import {
   numberCellData,
   specFromCellData,
@@ -36,32 +33,26 @@ import { defineListOverride } from "../../entity/list-columns/types";
 type RecipeFilters = EntityListParamsByEntity["recipe"]["filters"];
 
 const columnHelper = createCubbyColumnHelper<RecipeListItem>();
-const NO_INGREDIENT_OPTIONS: PickerOption[] = [];
 
 export const recipeListOverride = defineListOverride<
   RecipeListItem,
   RecipeFilters
 >({
   use() {
-    const { options: tagOptions } = useTagOptions("recipe");
-    const ingredientOptionsQuery = useQuery(
-      relatedData.options.queryOptions({
-        relationKey: "recipe.ingredients",
-        limit: 100,
-      }),
-    );
-    const ingredientOptions = useMemo<PickerOption[]>(
-      () =>
-        ingredientOptionsQuery.data?.map(({ id, label, count }) => ({
-          value: id,
-          label,
-          hint: String(count),
-        })) ?? NO_INGREDIENT_OPTIONS,
-      [ingredientOptionsQuery.data],
-    );
+    const {
+      options: tagOptions,
+      isLoading: tagsLoading,
+      error: tagsError,
+      onRetry: retryTags,
+    } = useTagOptions("recipe");
     const filterOptions = useFilterOptions({
-      tags: tagOptions,
-      recipeIngredients: ingredientOptions,
+      tags: {
+        options: tagOptions,
+        isLoading: tagsLoading,
+        error: tagsError?.message ?? null,
+        onRetry: retryTags,
+        onActivate: () => {},
+      },
     });
 
     const updateRecipeMutation = useUpdateMutation({

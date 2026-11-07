@@ -1,7 +1,8 @@
 import { type BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
+import { relatedViewKeySchema } from "@cubby/schemas/related-view";
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import { useQueryClient } from "@tanstack/react-query";
-import { useQueries } from "@tanstack/react-query";
+import { useQueries, type UseQueryResult } from "@tanstack/react-query";
 import { useCallback, useMemo, useRef, useState } from "react";
 
 import {
@@ -37,6 +38,10 @@ export function useDeferredReferenceFilterOptions(
                 key,
                 target: spec.referenceEntity,
                 optionsKind: spec.referenceOptionsKind,
+                relationKey:
+                  spec.optionSource?.kind === "relation"
+                    ? relatedViewKeySchema.parse(spec.optionSource.relationKey)
+                    : undefined,
               },
             ]
           : [];
@@ -50,12 +55,22 @@ type FilterOptionsPage = Awaited<
   ReturnType<typeof entityFilterOptions.filterOptions.call>
 >;
 const rosterResults = (
-  results: readonly { data?: FilterOptionsPage; isFetching: boolean }[],
-) => results.map(({ data, isFetching }) => ({ data, isFetching }));
+  results: readonly Pick<
+    UseQueryResult<FilterOptionsPage>,
+    "data" | "isFetching" | "error" | "refetch"
+  >[],
+) =>
+  results.map(({ data, isFetching, error, refetch }) => ({
+    data,
+    isFetching,
+    error,
+    refetch,
+  }));
 
 export type DeferredEntityRoster = {
   key: string;
   target: BrowserRoutedEntity;
+  relationKey?: string;
   optionsKind?:
     | "locationWithInventory"
     | "ingredientWithProduct"
@@ -73,26 +88,94 @@ export function useDeferredEntityRosters(
   const [selected, setSelected] = useState<Record<string, readonly string[]>>(
     {},
   );
-  const queries = useQueries({
-    queries: references.map(({ key, target, optionsKind }) => ({
-      ...entityFilterOptions.filterOptions.queryOptions({
-        ...(optionsKind
-          ? { source: "kind" as const, kind: optionsKind }
-          : {
-              source: "entity" as const,
-              entity: target,
-              include: ["emoji" as const],
-            }),
-        search: debouncedSearch[key] ?? "",
-        selectedIds: [...(selected[key] ?? [])],
-        limit: 25,
+  // Selection hydration is independent: choosing a later row must not reset
+  // the browsed pages or re-fetch every page under a different selection key.
+  const [pages, setPages] = useState<
+    Record<string, { scope: string; cursors: (string | undefined)[] }>
+  >({});
+  const requests = useMemo(
+    () =>
+      references.flatMap((reference) => {
+        const { key } = reference;
+        const scope = debouncedSearch[key] ?? "";
+        const cursors =
+          pages[key]?.scope === scope ? pages[key].cursors : [undefined];
+        return [
+          ...cursors.map((cursor) => ({
+            ...reference,
+            cursor,
+            scope,
+            selection: false,
+          })),
+          ...((selected[key]?.length ?? 0) > 0
+            ? [{ ...reference, cursor: undefined, scope, selection: true }]
+            : []),
+        ];
       }),
-      enabled: active[key] === true,
-    })),
-    // A stable result keeps the returned rosters (and any column set built
-    // from them) unchanged across unrelated renders.
+    [references, debouncedSearch, selected, pages],
+  );
+  const queries = useQueries({
+    queries: requests.map(
+      ({ key, target, optionsKind, relationKey, cursor, selection }) => ({
+        ...entityFilterOptions.filterOptions.queryOptions({
+          ...(relationKey
+            ? {
+                source: "relation" as const,
+                relationKey: relatedViewKeySchema.parse(relationKey),
+              }
+            : optionsKind
+              ? { source: "kind" as const, kind: optionsKind }
+              : {
+                  source: "entity" as const,
+                  entity: target,
+                  include: ["emoji" as const],
+                }),
+          search: selection ? "" : (debouncedSearch[key] ?? ""),
+          selectedIds: selection ? [...(selected[key] ?? [])] : [],
+          cursor,
+          limit: selection ? 1 : 25,
+        }),
+        enabled: active[key] === true,
+      }),
+    ),
     combine: rosterResults,
   });
+  const rosters = useMemo(
+    () =>
+      references.map(({ key }) => {
+        const indices = requests.flatMap((request, index) =>
+          request.key === key && !request.selection ? [index] : [],
+        );
+        const items = new Map(
+          indices.flatMap((index) =>
+            (queries[index]?.data?.items ?? []).map(
+              (item) => [item.id, item] as const,
+            ),
+          ),
+        );
+        const selectionIndex = requests.findIndex(
+          (request) => request.key === key && request.selection,
+        );
+        const selectedIds = new Set(selected[key] ?? []);
+        for (const item of queries[selectionIndex]?.data?.items ?? []) {
+          if (selectedIds.has(item.id)) items.set(item.id, item);
+        }
+        const lastIndex = indices.at(-1);
+        const first = queries[indices[0] ?? -1];
+        const last = queries[lastIndex ?? -1];
+        const failed = [...indices, selectionIndex]
+          .map((index) => queries[index])
+          .find((query) => query?.error);
+        return {
+          items: [...items.values()],
+          first,
+          last,
+          failed,
+          request: requests[lastIndex ?? -1],
+        };
+      }),
+    [references, requests, queries, selected],
+  );
   // FilterBar re-activates an active filter after every commit. Comparing
   // against the last request, not the updater's `current`, keeps that from
   // enqueueing again: an update in a low-priority lane (a list hydrated at idle
@@ -125,7 +208,7 @@ export function useDeferredEntityRosters(
   const inheritedImages = useEntityDisplayImageMap();
   const images = useEntityDisplayImages(
     references.flatMap(({ target }, index) =>
-      (queries[index]?.data?.items ?? []).map((item) => ({
+      (rosters[index]?.items ?? []).map((item) => ({
         entityKind: target,
         entityId: item.id,
       })),
@@ -136,12 +219,18 @@ export function useDeferredEntityRosters(
     () =>
       Object.fromEntries(
         references.map(({ key, target }, index) => {
-          const query = queries[index];
+          const roster = rosters[index];
+          const searching =
+            (search[key] ?? "") !== (debouncedSearch[key] ?? "");
+          const nextCursor = roster?.last?.data?.nextCursor;
+          const fetchingNext = Boolean(
+            roster?.request?.cursor && roster.last?.isFetching,
+          );
           return [
             key,
             {
               options:
-                query?.data?.items.map((item) =>
+                roster?.items.map((item) =>
                   recordFilterOption(
                     target,
                     item,
@@ -161,7 +250,36 @@ export function useDeferredEntityRosters(
                     ? current
                     : { ...current, [key]: value },
                 ),
-              isLoading: query?.isFetching ?? false,
+              isLoading: searching || (roster?.first?.isFetching ?? false),
+              isFetchingNextPage: fetchingNext,
+              hasNextPage: Boolean(nextCursor),
+              error: roster?.failed?.error?.message ?? null,
+              onRetry: () => {
+                void roster?.failed?.refetch();
+              },
+              onLoadMore: () => {
+                if (
+                  searching ||
+                  !nextCursor ||
+                  roster?.last?.isFetching ||
+                  roster?.failed ||
+                  !roster?.request
+                )
+                  return;
+                const scope = roster.request.scope;
+                setPages((current) => {
+                  const cursors =
+                    current[key]?.scope === scope
+                      ? current[key].cursors
+                      : [undefined];
+                  return cursors.includes(nextCursor)
+                    ? current
+                    : {
+                        ...current,
+                        [key]: { scope, cursors: [...cursors, nextCursor] },
+                      };
+                });
+              },
               ...(isPickerEntity(target)
                 ? { records: recordSource(target) }
                 : {}),
@@ -169,6 +287,6 @@ export function useDeferredEntityRosters(
           ];
         }),
       ),
-    [activate, queries, references, images],
+    [activate, rosters, references, images, search, debouncedSearch],
   );
 }

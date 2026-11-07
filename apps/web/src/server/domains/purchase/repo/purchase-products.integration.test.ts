@@ -1,3 +1,4 @@
+import { filterOptionsInput } from "@cubby/schemas/filter-options";
 /**
  * `PurchaseProduct` — the provenance link between an order and the Products it
  * bought. The cases that matter are the ones the partial-unique index makes
@@ -23,9 +24,9 @@ import { liveLinks } from "~/server/generic/entity-links/repo/entity-links";
 import {
   loadRelatedBranch,
   loadRelatedPreviews,
-  loadRelatedOptions,
   relatedWhereConditions,
 } from "~/server/generic/entity-links/repo/related-view";
+import { getFilterOptions } from "~/server/generic/list/repo/filter-options";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { requireActor } from "~/server/http/request-context";
 import {
@@ -262,16 +263,46 @@ describe("purchase ↔ product links", () => {
           offset: 0,
         }),
       ).toMatchObject({ totalCount: 1, items: [{ id: item.id }] });
+      const roster = (input: {
+        search?: string;
+        cursor?: string;
+        selectedIds?: string[];
+      }) =>
+        getFilterOptions(
+          ctx.db,
+          filterOptionsInput.parse({
+            source: "relation",
+            relationKey: "product.purchases",
+            limit: 1,
+            ...input,
+          }),
+        );
+      const first = await roster({});
+      expect(first.items).toHaveLength(1);
+      expect(first.nextCursor).not.toBeNull();
+      const second = await roster({ cursor: first.nextCursor ?? undefined });
+      expect(second.items).toHaveLength(1);
+      expect(second.items[0]?.id).not.toBe(first.items[0]?.id);
+      const last = await roster({ cursor: second.nextCursor ?? undefined });
+      expect(last.nextCursor).toBeNull();
       expect(
-        await loadRelatedOptions(ctx.db, {
-          relationKey: "product.purchases",
-          limit: 50,
-        }),
+        new Set(
+          [...first.items, ...second.items, ...last.items].map((row) => row.id),
+        ),
       ).toEqual(
+        new Set([mixed.shortcode, linked.shortcode, planned.shortcode]),
+      );
+      const searched = await roster({
+        search: linked.shortcode,
+        selectedIds: [planned.shortcode],
+      });
+      expect(searched.items).toEqual(
         expect.arrayContaining([
           expect.objectContaining({ id: linked.shortcode, count: 1 }),
+          expect.objectContaining({ id: planned.shortcode, count: 1 }),
         ]),
       );
+      expect(searched.nextCursor).toBeNull();
       const filtered = await getDb(ctx.db)
         .select({ id: product.id })
         .from(product)

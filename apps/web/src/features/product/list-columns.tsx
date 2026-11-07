@@ -15,7 +15,12 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ProductGtin } from "~/entity/components/product-gtin";
 import { entityListHiddenColumns } from "~/entity/display/entity-display";
 import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
+import {
+  useEntityDisplayImages,
+  entityDisplayImageKey,
+} from "~/entity/entity-media/entity-display-images";
 import { relationshipFieldProvenance } from "~/entity/fields/field-provenance";
+import { recordFilterOption } from "~/entity/filter-option-presentation";
 import { useTagOptions } from "~/entity/hooks/use-entity-options";
 import { useFilterOptions } from "~/entity/hooks/use-filter-options";
 import { useNameEditable } from "~/entity/hooks/use-name-editable";
@@ -39,7 +44,6 @@ import {
   productTreeSubRows,
 } from "~/features/product/product-kit-rows";
 import { product as productOperations } from "~/integrations/tanstack-query/generated/domains/product.gen";
-import { relatedData } from "~/integrations/tanstack-query/generated/domains/relatedData.gen";
 import { formatCurrency } from "~/lib/number-format";
 import { booleanCellOptions } from "~/lib/select-options";
 import type { PickerOption } from "~/ui/combobox/picker-option";
@@ -89,14 +93,35 @@ function useProductFilterOptions() {
     );
   }, []);
   // Runtime picklist for the manifest's `tags` spec (optionsKey: "tags").
-  const { options: tagOptions, isLoading: tagsLoading } = useTagOptions(
-    "product",
-    active.tags === true,
-  );
-  const { categories, isLoading: categoriesLoading } = useProductCategories(
+  const {
+    options: tagOptions,
+    isLoading: tagsLoading,
+    error: tagsError,
+    onRetry: retryTags,
+  } = useTagOptions("product", active.tags === true);
+  const {
+    categories,
+    isLoading: categoriesLoading,
+    error: categoriesError,
+    onRetry: retryCategories,
+  } = useProductCategories(
     active.productCategories === true ||
       active.productCategoryFamilies === true,
   );
+  const categoryImages = useEntityDisplayImages(
+    categories.map((category) => ({
+      entityKind: "productCategory",
+      entityId: category.id,
+    })),
+  );
+  const categoryOption = (id: string, label: string) =>
+    recordFilterOption(
+      "productCategory",
+      { id, label },
+      categoryImages[
+        entityDisplayImageKey({ entityKind: "productCategory", entityId: id })
+      ] ?? null,
+    );
   const externalIdSourceOptionsQuery = useQuery({
     ...productOperations.externalIdSourceOptions.queryOptions(),
     enabled: active.externalIdSources === true,
@@ -110,41 +135,6 @@ function useProductFilterOptions() {
       })) ?? NO_FILTER_OPTIONS,
     [externalIdSourceOptionsQuery.data],
   );
-  // The graph owns these picklists: their count is distinct matching
-  // Products, and keying by the relation offers only Vendors/Purchases that
-  // can match a Product.
-  const vendorOptionsQuery = useQuery({
-    ...relatedData.options.queryOptions({
-      relationKey: "product.vendors",
-      limit: 100,
-    }),
-    enabled: active.productVendors === true,
-  });
-  const purchaseOptionsQuery = useQuery({
-    ...relatedData.options.queryOptions({
-      relationKey: "product.purchases",
-      limit: 100,
-    }),
-    enabled: active.productPurchases === true,
-  });
-  const vendorOptions = useMemo<PickerOption[]>(
-    () =>
-      vendorOptionsQuery.data?.map(({ id, label, count }) => ({
-        value: id,
-        label,
-        hint: String(count),
-      })) ?? NO_FILTER_OPTIONS,
-    [vendorOptionsQuery.data],
-  );
-  const purchaseOptions = useMemo<PickerOption[]>(
-    () =>
-      purchaseOptionsQuery.data?.map(({ id, label, count }) => ({
-        value: id,
-        label,
-        hint: String(count),
-      })) ?? NO_FILTER_OPTIONS,
-    [purchaseOptionsQuery.data],
-  );
   const options = {
     tags: tagOptions,
     productCategories: treePickerItems(categories, {
@@ -155,8 +145,7 @@ function useProductFilterOptions() {
       },
       labelOf: (category) => category.name,
     }).map((item) => ({
-      value: item.id,
-      label: item.name,
+      ...categoryOption(item.id, item.name),
       group: item.presentation?.group,
       depth: item.presentation?.depth,
       rowLabel: item.presentation?.rowLabel,
@@ -166,14 +155,12 @@ function useProductFilterOptions() {
       return effectiveCategoryFeature
         ? [
             {
+              ...categoryOption(category.id, category.name),
               value: effectiveCategoryFeature,
-              label: category.name,
             },
           ]
         : [];
     }),
-    productVendors: vendorOptions,
-    productPurchases: purchaseOptions,
     externalIdSources: externalIdSourceOptions,
   };
   return useFilterOptions(
@@ -183,17 +170,28 @@ function useProductFilterOptions() {
         {
           options,
           onActivate: () => activate(key),
+          error:
+            (key === "tags"
+              ? tagsError
+              : key === "externalIdSources"
+                ? externalIdSourceOptionsQuery.error
+                : categoriesError
+            )?.message ?? null,
+          onRetry:
+            key === "tags"
+              ? retryTags
+              : key === "externalIdSources"
+                ? () => {
+                    void externalIdSourceOptionsQuery.refetch();
+                  }
+                : retryCategories,
           isLoading:
             active[key] === true &&
             (key === "tags"
               ? tagsLoading
               : key === "externalIdSources"
                 ? externalIdSourceOptionsQuery.isFetching
-                : key === "productVendors"
-                  ? vendorOptionsQuery.isFetching
-                  : key === "productPurchases"
-                    ? purchaseOptionsQuery.isFetching
-                    : categoriesLoading),
+                : categoriesLoading),
         },
       ]),
     ),

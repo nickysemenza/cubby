@@ -105,6 +105,11 @@ export const renderFilterArtifacts = (
         ? []
         : [`urlKey:${JSON.stringify(descriptor.urlKey)}`]),
       `kind:${JSON.stringify(descriptor.kind)}`,
+      ...(descriptor.optionSource
+        ? [
+            `optionSource:${JSON.stringify({ ...descriptor.optionSource, entity: descriptor.brandRef?.entity })}`,
+          ]
+        : []),
       ...(descriptor.brandRef === null
         ? []
         : [

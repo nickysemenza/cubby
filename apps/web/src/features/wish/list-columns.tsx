@@ -3,7 +3,6 @@ import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import type { WishFilters } from "@cubby/schemas/wish";
 import { ImageIcon } from "@phosphor-icons/react/dist/csr/Image";
 import { useQueryClient } from "@tanstack/react-query";
-import { useQuery } from "@tanstack/react-query";
 import { uniq } from "es-toolkit";
 import { useMemo } from "react";
 
@@ -14,7 +13,6 @@ import {
   useEntityDisplayImage,
 } from "~/entity/entity-media/entity-display-images";
 import { relationshipFieldProvenance } from "~/entity/fields/field-provenance";
-import { useFilterOptions } from "~/entity/hooks/use-filter-options";
 import { rowDisplayCover } from "~/entity/model/row-display-cover";
 import { renderOptionCell } from "~/entity/table/column-helpers";
 import { ImageThumbnail } from "~/entity/table/image-thumbnail";
@@ -23,11 +21,9 @@ import {
   type WishRow,
   wishSubRows,
 } from "~/features/wish/wish-rows";
-import { relatedData } from "~/integrations/tanstack-query/generated/domains/relatedData.gen";
 import { rangeMidpoint } from "~/lib/format-range";
 import { formatCurrencyRange } from "~/lib/number-format";
 import { formatCurrency } from "~/lib/number-format";
-import type { PickerOption } from "~/ui/combobox/picker-option";
 import { ROW_DENSITY } from "~/ui/data-table/density";
 import {
   createCubbyColumnCollection,
@@ -43,9 +39,6 @@ import {
 } from "../../entity/list-columns/types";
 
 const columnHelper = createCubbyColumnHelper<WishRow>();
-
-/** Stable empty default — `useFilterOptions` needs a referentially fixed miss. */
-const NO_FILTER_OPTIONS: PickerOption[] = [];
 
 /**
  * The children are Products, not Wishes — a heterogeneous tree: `rowLink`
@@ -120,23 +113,6 @@ export const wishListOverride = defineListOverride<
 >({
   use() {
     const queryClient = useQueryClient();
-    // The candidate roster comes from the relation itself: only a Product
-    // that is somebody's candidate can narrow this list.
-    const candidateOptionsQuery = useQuery(
-      relatedData.options.queryOptions({
-        relationKey: "wish.candidates",
-        limit: 100,
-      }),
-    );
-    const filterOptions = useFilterOptions({
-      wishCandidates:
-        candidateOptionsQuery.data?.map(({ id, label, count }) => ({
-          value: id,
-          label,
-          hint: String(count),
-        })) ?? NO_FILTER_OPTIONS,
-    });
-
     const overrides = useMemo(
       () =>
         createCubbyColumnCollection<WishRow>((add) => {
@@ -360,10 +336,9 @@ export const wishListOverride = defineListOverride<
     const list = useMemo(
       () => ({
         deletable: true as const,
-        filterOptions,
         preview: WISH_PREVIEW,
       }),
-      [filterOptions],
+      [],
     );
 
     return {

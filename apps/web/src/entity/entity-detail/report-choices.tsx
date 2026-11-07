@@ -133,7 +133,7 @@ export function ChoiceControl({
       </div>
       {option?.pick && picker ? (
         <picker.Search>
-          {({ items, onSearchChange, onOpenChange, isLoading }) => (
+          {({ items, onSearchChange, onOpenChange, isLoading, ...paging }) => (
             <Picker
               entity={picker.entity}
               label={option.pick?.label ?? choice.label}
@@ -144,6 +144,7 @@ export function ChoiceControl({
                   : null
               }
               setValue={(item) => choosePick(item, option.id)}
+              {...paging}
               onSearchChange={onSearchChange}
               onOpenChange={onOpenChange}
               isLoading={isLoading}

@@ -4,13 +4,22 @@ import {
   attachmentRoleForEntity,
 } from "@cubby/schemas/image";
 import { getErrorMessage, parseShortcode } from "@cubby/shared";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useMutation,
+  useInfiniteQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
 
 import { entityLabel } from "~/entity/entities";
 import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import { buildSearchHitComboboxItem } from "~/entity/picker/combobox-builders";
+import {
+  pagination,
+  pickerLexicalQueryOptions,
+  pickerQueryState,
+} from "~/entity/picker/entity-search-hooks";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { image as imageOperations } from "~/integrations/tanstack-query/generated/domains/image.gen";
 import { search } from "~/integrations/tanstack-query/generated/domains/search.gen";
@@ -41,17 +50,20 @@ export function AttachExistingImageDialog({
   const [purpose, setPurpose] = useState<"item" | "label">("item");
   const queryClient = useQueryClient();
   const attachedIds = new Set(image.associations.map((item) => item.entityId));
-  const targetSearch = useQuery({
-    ...findTargets.queryOptions({
-      query: query.trim() || "_",
-      entityKinds: image.contentType.startsWith("image/")
-        ? [...attachableImageEntity.options]
-        : [...galleryEntities],
-      limit: 10,
-    }),
+  const targetSearch = useInfiniteQuery({
+    ...pickerLexicalQueryOptions(
+      {
+        query: query.trim() || "_",
+        entityKinds: image.contentType.startsWith("image/")
+          ? [...attachableImageEntity.options]
+          : [...galleryEntities],
+        limit: pagination.pageSize,
+      },
+      findTargets,
+    ),
     enabled: query.trim().length > 0,
   });
-  const targetItems = (targetSearch.data ?? [])
+  const targetItems = (targetSearch.data?.items ?? [])
     .filter((hit) => !attachedIds.has(hit.id))
     .map((hit) => {
       const item = buildSearchHitComboboxItem(hit, hit.entityKind);
@@ -117,7 +129,7 @@ export function AttachExistingImageDialog({
           value={target}
           setValue={setTarget}
           onSearchChange={setQuery}
-          isLoading={targetSearch.isFetching}
+          {...pickerQueryState(targetSearch)}
           clearable
         />
         {isProduct && (

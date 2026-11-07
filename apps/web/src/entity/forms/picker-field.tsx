@@ -135,6 +135,11 @@ export function PickerField<TFieldValues extends FieldValues>(
             isLoading: props.isLoading ?? false,
             onCreateNew: props.onCreateNew,
             onOpenChange: props.onOpenChange ?? (() => {}),
+            hasNextPage: props.hasNextPage,
+            isFetchingNextPage: props.isFetchingNextPage,
+            onLoadMore: props.onLoadMore,
+            error: props.error,
+            onRetry: props.onRetry,
           }}
         />
       );
@@ -394,6 +399,11 @@ function RecordPickerField<TFieldValues extends FieldValues>({
               );
               onSelect?.(item);
             }}
+            hasNextPage={search.hasNextPage}
+            isFetchingNextPage={search.isFetchingNextPage}
+            onLoadMore={search.onLoadMore}
+            error={search.error}
+            onRetry={search.onRetry}
             onSearchChange={search.onSearchChange}
             isLoading={search.isLoading}
             onCreateNew={search.onCreateNew}
@@ -467,6 +477,11 @@ function VendorNamePickerField<TFieldValues extends FieldValues>({
               label={label}
               placeholder={placeholder}
               items={search.items}
+              hasNextPage={search.hasNextPage}
+              isFetchingNextPage={search.isFetchingNextPage}
+              onLoadMore={search.onLoadMore}
+              error={search.error}
+              onRetry={search.onRetry}
               onSearchChange={search.onSearchChange}
               isLoading={search.isLoading}
               value={selected}
@@ -554,6 +569,11 @@ function MultiPickerField<TFieldValues extends FieldValues>({
                 >,
               )
             }
+            hasNextPage={search.hasNextPage}
+            isFetchingNextPage={search.isFetchingNextPage}
+            onLoadMore={search.onLoadMore}
+            error={search.error}
+            onRetry={search.onRetry}
             onSearchChange={search.onSearchChange}
             isLoading={search.isLoading}
             onOpenChange={(open) => {

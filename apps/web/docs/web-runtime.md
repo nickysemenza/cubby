@@ -402,6 +402,17 @@ replace this fresh decision read or the receiving command's current-stock checks
 
 ## List loading and enrichment
 
+Filter option sources compile from declarations: fixed choices remain complete
+local rosters; entity references use the shared live roster; a relation source
+uses `entityFilterOptions.filterOptions` with `source: "relation"`. Relationship
+eligibility and counts come from the same compiled traversal as the list filter.
+The retired `relatedData.options` operation and feature-local capped relationship
+rosters must not return. The generic runtime owns search, page accumulation,
+selected-record hydration, errors/retry and batched canonical display images.
+Query identities include source, scope, search, page and selected values. Search
+or scope changes must never reuse previous-scope candidates. Per-page UI adapters
+forward paging and request controls with the rows instead of dropping them.
+
 Generic browser rosters request `displayCover` for thumbnails and retain its full
 count in table and shelf badges. Image-chain popovers still load every image.
 The list-only root and its shared resolver contract are owned by

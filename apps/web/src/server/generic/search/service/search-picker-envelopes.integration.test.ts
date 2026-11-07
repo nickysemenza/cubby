@@ -162,6 +162,26 @@ describe("canonical selected search and picker fields", () => {
     if (!ancestor) throw new Error("Synthetic parent missing from breadcrumb");
     expect(fieldValueOf(ancestor.fields.type)).toBe("room");
     expect(ancestor).not.toHaveProperty("type");
+
+    await refreshSearchDocument(ctx.db, "location", parent.entityId);
+    await refreshSearchDocument(ctx.db, "location", child.entityId);
+    const discovered: string[] = [];
+    for (const offset of [0, 1, 2]) {
+      const page = await searchHandlers.operations.find({
+        data: {
+          query: "Synthetic picker",
+          entityKinds: ["location"],
+          limit: 1,
+          offset,
+        },
+        request: request(),
+      });
+      expect(page.ok).toBe(true);
+      if (!page.ok) throw new Error(page.error.message);
+      expect(page.data).toHaveLength(offset < 2 ? 1 : 0);
+      discovered.push(...page.data.map((hit) => hit.id));
+    }
+    expect(discovered.sort()).toEqual([parent.id, child.id].sort());
     await refreshSearchDocument(ctx.db, "product", product.entityId);
     const grouped = await searchHandlers.operations.grouped({
       data: { query: product.name, limit: 10 },

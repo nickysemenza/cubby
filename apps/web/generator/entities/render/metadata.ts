@@ -71,6 +71,20 @@ const browserFilterDescriptors = (entity: CompiledEntity) =>
         options: options ?? null,
         expandRule: expandRef ? filterExpandRule(expandRef.export) : null,
         brand: brandRef,
+        optionSource:
+          descriptor.optionSource && brandRef
+            ? { ...descriptor.optionSource, entity: brandRef.entity }
+            : brandRef
+              ? {
+                  kind: "entity" as const,
+                  entity: brandRef.entity,
+                  ...(brandRef.optionsKind
+                    ? { optionsKind: brandRef.optionsKind }
+                    : {}),
+                }
+              : options
+                ? { kind: "fixed" as const }
+                : null,
       };
     },
   );
@@ -87,6 +101,26 @@ export const renderEntityMetadataArtifacts = (
   }));
   const connectionCatalog = createConnectionCatalog(relationshipCatalog);
   const relatedViews = compileRelatedViews(entities);
+  for (const entity of entities) {
+    for (const filter of entity.filterDescriptors) {
+      if (!filter.optionSource) continue;
+      const view = relatedViews.find(
+        ({ key }) => key === filter.optionSource?.relationKey,
+      );
+      if (
+        !view ||
+        view.source !== entity.key ||
+        view.target !== filter.brandRef?.entity
+      )
+        throw new EntityDeclarationError(
+          `${entity.key}.${filter.columnId} option source must name a relation to its reference entity.`,
+        );
+      if (filter.options || filter.optionsRef)
+        throw new EntityDeclarationError(
+          `${entity.key}.${filter.columnId} cannot combine a relation roster with fixed options.`,
+        );
+    }
+  }
   const projections = entityProjectionMaps(entities);
   const browserIcons = [
     ...new Set(

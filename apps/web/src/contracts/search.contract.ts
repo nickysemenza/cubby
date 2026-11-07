@@ -29,7 +29,9 @@ export const searchContract = defineContract(
   {
     find: query({
       exposure: "view",
-      input: searchQueryInputSchema,
+      input: searchQueryInputSchema.extend({
+        offset: z.number().int().nonnegative().optional(),
+      }),
       output: searchHitsOut,
     }),
     grouped: query({

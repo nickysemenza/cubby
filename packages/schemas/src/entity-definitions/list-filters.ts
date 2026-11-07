@@ -70,6 +70,18 @@ export interface FilterSpecCore {
   brand?: (value: string) => string;
   /** Declared target for the shortcode-native reference, when applicable. */
   referenceEntity?: ShortcodeEntity;
+  /** Compiled discovery policy; identity belongs to the target entity. */
+  optionSource?:
+    | { kind: "fixed" }
+    | {
+        kind: "entity";
+        entity: string;
+        optionsKind?:
+          | "locationWithInventory"
+          | "ingredientWithProduct"
+          | "locationIdentityProduct";
+      }
+    | { kind: "relation"; entity: string; relationKey: string };
   /** A declaration-scoped roster served by the existing option read. */
   referenceOptionsKind?:
     | "locationWithInventory"

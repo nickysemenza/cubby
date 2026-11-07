@@ -3,11 +3,12 @@ import {
   type VendorShortcode,
 } from "@cubby/schemas/identifiers";
 import type { SearchHit } from "@cubby/schemas/search";
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import { useCallback } from "react";
 import { toast } from "sonner";
 
 import { useEntityCommands } from "~/entity/editing/use-entity-commands";
+import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-options";
 import { entityFilterOptions } from "~/integrations/tanstack-query/generated/domains/entityFilterOptions.gen";
 import { showErrorToast } from "~/ui/feedback/error-details";
 
@@ -19,6 +20,8 @@ import {
 } from "./combobox-builders";
 import {
   type EntitySearchScope,
+  pagination,
+  pickerQueryState,
   useEntitySearchRows,
 } from "./entity-search-hooks";
 import type { SearchProviderProps } from "./with-search-hook";
@@ -42,24 +45,24 @@ export type VendorName = string;
 type VendorRow = Parameters<typeof buildVendorComboboxItem>[0];
 
 function useVendorListSource(_searchQuery: string, enabled: boolean) {
-  const { data, isLoading } = useQuery({
-    ...entityFilterOptions.filterOptions.queryOptions({
+  const query = useInfiniteQuery({
+    ...cursorQueryOptions(entityFilterOptions.filterOptions, {
       source: "entity",
       entity: "vendor",
-      // The whole roster, most-purchased first; search filters client-side.
-      limit: 1000,
+      limit: pagination.pageSize,
       include: ["count", "logo"],
     }),
     enabled,
-    select: (page): VendorRow[] =>
-      page.items.map((item) => ({
-        id: parseShortcodeFor("vendor", item.id),
-        name: item.label,
-        count: item.count,
-        logo: item.logo,
-      })),
   });
-  return { data, isLoading };
+  const data: VendorRow[] | undefined = query.data?.pages.flatMap((page) =>
+    page.items.map((item) => ({
+      id: parseShortcodeFor("vendor", item.id),
+      name: item.label,
+      count: item.count,
+      logo: item.logo,
+    })),
+  );
+  return { data, ...pickerQueryState(query) };
 }
 
 /**
@@ -99,6 +102,11 @@ function VendorSearch<TId extends string>({
     isLoading: search.isLoading,
     onCreateNew: search.onCreateNew,
     onOpenChange: search.onOpenChange,
+    hasNextPage: search.hasNextPage,
+    isFetchingNextPage: search.isFetchingNextPage,
+    onLoadMore: search.onLoadMore,
+    error: search.error,
+    onRetry: search.onRetry,
   });
 }
 

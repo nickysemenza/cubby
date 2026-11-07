@@ -1152,7 +1152,7 @@ export const { definition, readSchemas } = defineEntityModel(
           urlKey: "related-ingredient",
           kind: "idMulti",
           placeholder: "Filter by ingredient...",
-          optionsKey: "recipeIngredients",
+          optionSource: { kind: "relation", relationKey: "recipe.ingredients" },
           brandRef: { entity: "ingredient" },
           nullable: { field: "ingredientPresenceFilter", label: "ingredient" },
         },

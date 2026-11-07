@@ -2647,6 +2647,11 @@ const buildMetadataSchemas = () => {
       .optional(),
     optionsRef: sourceRefMetadataSchema.nullable().optional(),
     optionsKey: nonEmptyString().nullable().optional(),
+    /** Restricts a record roster to targets witnessed by this declared relation. */
+    optionSource: z
+      .object({ kind: z.literal("relation"), relationKey: nonEmptyString() })
+      .strict()
+      .optional(),
     label: nonEmptyString().nullable().optional(),
     schemaDescription: nonEmptyString().nullable().optional(),
     deriveSchema: z.boolean({ error: "must be a boolean" }).optional(),

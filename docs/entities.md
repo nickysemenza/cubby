@@ -2575,6 +2575,28 @@ the agent's. Calendar sources reuse their entity list scaffolds, including
 prepared derived predicates and related scopes.
 A filter whose column differs from its request key declares `field`; `urlKey`
 controls only the URL codec and does not rename the compiled input.
+Option discovery belongs to the filter declaration and shared picker runtime.
+Static options compile as a fixed complete roster; `brandRef` compiles an
+entity-backed source. A relationship-scoped filter declares
+`optionSource: { kind: "relation", relationKey: "product.vendors" }`; generation
+requires that relation to belong to the source entity and target the same
+reference entity. It derives target identity and preserves relationship eligibility
+and distinct-source counts. Do not replace these sources with page-local
+`optionsKey` arrays. Specialized complete vocabularies retain their explicit
+loaders, which must drain all pages rather than silently stop at a page limit.
+
+Growing record rosters search their full eligible scope on the server and page
+on scroll, with an accessible Load more fallback. Their initial page is never a
+complete local-search roster. Selected records resolve independently of search
+and paging; result and selection identities deduplicate by public shortcode.
+Search and scope changes reset paging; stale requests must not populate a new
+scope. Typed record pickers retain lexical search ranking and exact-code lookup.
+Fixed choices and deliberately complete vocabularies search locally.
+Canonical pictures, logos and fallback marks come from the target entity's
+shared presentation and batched display-image resolver, never row-owned reads.
+Initial loading, further-page loading, no matches and raw request failures with
+Retry remain distinct, with known rows and selections retained after failure.
+
 RTable checks a bounded loaded sample in development for multiselect values
 missing from declared choices, skipping deferred and record-backed rosters.
 

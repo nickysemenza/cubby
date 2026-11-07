@@ -2313,7 +2313,13 @@ function ProductPanel({
             <label className="flex min-w-0 flex-col gap-1 text-xs">
               <span className="text-muted-foreground">Category</span>
               <WithProductCategorySearch>
-                {({ items, onSearchChange, isLoading, onOpenChange }) => (
+                {({
+                  items,
+                  onSearchChange,
+                  isLoading,
+                  onOpenChange,
+                  ...paging
+                }) => (
                   <Picker
                     entity="productCategory"
                     label="category"
@@ -2334,6 +2340,7 @@ function ProductPanel({
                         },
                       })
                     }
+                    {...paging}
                     onSearchChange={onSearchChange}
                     onOpenChange={onOpenChange}
                     isLoading={isLoading}

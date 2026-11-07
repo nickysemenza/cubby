@@ -182,22 +182,5 @@ export const relatedSummaryOutput = z
 export type RelatedSummaryOutput = z.infer<typeof relatedSummaryOutput>;
 export type RelatedBranchOutput = z.infer<typeof relatedBranchOutput>;
 
-export const relatedOptionsInput = z.object({
-  relationKey: relatedViewKeySchema,
-  search: z.string().trim().max(200).optional(),
-  limit: z.number().int().min(1).max(100).default(25),
-});
-export type RelatedOptionsInput = z.infer<typeof relatedOptionsInput>;
-
-export const relatedOptionsOutput = z.array(
-  z.object({
-    entity: entitySchema,
-    id: z.string(),
-    label: z.string(),
-    count: z.number().int().nonnegative(),
-  }),
-);
-export type RelatedOptionsOutput = z.infer<typeof relatedOptionsOutput>;
-
 export const relatedFilterPrefix = (view: RelatedViewDefinition): string =>
   view.filterPrefix ?? view.target;

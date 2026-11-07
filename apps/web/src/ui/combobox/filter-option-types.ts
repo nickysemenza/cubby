@@ -6,6 +6,12 @@ export interface DeferredFilterOptionSource {
   onActivate: (selectedIds?: readonly string[]) => void;
   onSearchChange?: (query: string) => void;
   isLoading: boolean;
+  hasNextPage?: boolean;
+  isFetchingNextPage?: boolean;
+  onLoadMore?: () => void;
+  error?: string | null;
+  onRetry?: () => void;
+
   /** A roster of one entity's records: its pickers run in record mode. */
   records?: PickerRecordSource;
 }
@@ -32,5 +38,11 @@ export const deferredRosterControls = (
   onActivate: source?.onActivate,
   onSearchChange: source?.onSearchChange,
   isLoading: source?.isLoading,
+  hasNextPage: source?.hasNextPage,
+  isFetchingNextPage: source?.isFetchingNextPage,
+  onLoadMore: source?.onLoadMore,
+  error: source?.error,
+  onRetry: source?.onRetry,
+
   records: source?.records,
 });

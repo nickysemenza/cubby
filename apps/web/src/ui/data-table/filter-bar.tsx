@@ -698,6 +698,11 @@ function ChecklistEditor({
       }
       onSearchChange={field.onSearchChange}
       isLoading={field.isLoading}
+      hasNextPage={field.hasNextPage}
+      isFetchingNextPage={field.isFetchingNextPage}
+      onLoadMore={field.onLoadMore}
+      error={field.error}
+      onRetry={field.onRetry}
       records={field.records}
       header={header}
       renderItem={
@@ -786,6 +791,11 @@ function SingleValueEditor({
       label={`Filter ${labelOf(field)}`}
       onSearchChange={field.onSearchChange}
       isLoading={field.isLoading}
+      hasNextPage={field.hasNextPage}
+      isFetchingNextPage={field.isFetchingNextPage}
+      onLoadMore={field.onLoadMore}
+      error={field.error}
+      onRetry={field.onRetry}
       records={field.records}
     />
   );
@@ -971,7 +981,7 @@ function FilterMark({
         style={{ backgroundColor: option.color }}
       />
     );
-  if (option && (option.icon || option.color || option.glyph))
+  if (option && (option.thumb || option.icon || option.color || option.glyph))
     return <PickerVisual item={pickerOptionItem(option)} size={16} />;
   return (
     <span className="flex size-3 shrink-0 items-center justify-center text-muted-foreground [&_svg]:size-3">

@@ -1,11 +1,13 @@
 import { searchableEntitySchema, type SearchHit } from "@cubby/schemas/search";
 import { parseShortcode } from "@cubby/shared";
-import { type QueryClient } from "@tanstack/react-query";
-import { useQuery } from "@tanstack/react-query";
+import { type InfiniteData, type QueryClient } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useCallback, useMemo, useRef, useState } from "react";
+import { z } from "zod";
 
 import { entityDetailFor } from "~/entity/entity-detail";
 import { getEntityFilters } from "~/entity/filter-manifest";
+import { flattenUniquePageItems } from "~/entity/hooks/infinite-page-utils";
 import type { EntityDetailByEntity } from "~/entity/model/detail-contracts";
 import { search } from "~/integrations/tanstack-query/generated/domains/search.gen";
 
@@ -13,6 +15,64 @@ import type {
   ComboboxItem,
   PickerEntity,
 } from "../../ui/combobox/combobox-types";
+
+/** Every lexical picker pages the same ranked search.find population. */
+export function pickerLexicalQueryOptions(
+  input: Parameters<typeof search.find.infiniteQueryOptions>[0],
+  operation = search.find,
+) {
+  const limit = input.limit ?? pagination.pageSize;
+  return {
+    ...operation.infiniteQueryOptions(
+      { ...input, limit, offset: 0 },
+      {
+        pageParamSchema: z.number().int().nonnegative(),
+        initialPageParam: 0,
+        page: (pageInput, offset) => ({ ...pageInput, offset }),
+        getNextPageParam: () => undefined,
+      },
+    ),
+    select: (data: InfiniteData<SearchHit[], number>) => ({
+      ...data,
+      items: flattenUniquePageItems(data.pages.map((items) => ({ items }))),
+    }),
+    getNextPageParam: (
+      page: SearchHit[],
+      _pages: SearchHit[][],
+      offset: number,
+    ) => (page.length === limit ? offset + limit : undefined),
+  };
+}
+
+/** Shared query controls retain loaded candidates when a later page fails. */
+export function pickerQueryState(query: {
+  isLoading: boolean;
+  hasNextPage: boolean;
+  isFetchingNextPage: boolean;
+  isFetching: boolean;
+  isFetchNextPageError: boolean;
+  error: Error | null;
+  fetchNextPage: () => void;
+  refetch: () => void;
+}) {
+  return {
+    isLoading: query.isLoading,
+    hasNextPage: query.hasNextPage,
+    isFetchingNextPage: query.isFetchingNextPage,
+    error: query.error?.message ?? null,
+    onLoadMore: () => {
+      if (query.hasNextPage && !query.isFetching && !query.error)
+        void query.fetchNextPage();
+    },
+    onRetry: () => {
+      if (query.isFetching) return;
+      if (query.isFetchNextPageError) void query.fetchNextPage();
+      else void query.refetch();
+    },
+  };
+}
+
+type PickerQueryState = ReturnType<typeof pickerQueryState>;
 
 /**
  * Filter values supplied by a manifest reference's dependent-field scope.
@@ -43,7 +103,10 @@ type EntitySearchRowSource<TRow> = (
   searchQuery: string,
   enabled: boolean,
   scope?: EntitySearchScope | null,
-) => { data: TRow[] | undefined; isLoading: boolean };
+) => {
+  data: TRow[] | undefined;
+  isLoading: boolean;
+} & PickerQueryState;
 
 export interface UseEntitySearchConfig<TId extends string, TRow, TDetail> {
   /**
@@ -258,8 +321,9 @@ const buildSearchItems = <
   searchHits: readonly SearchHit[] | undefined,
   config: UseEntitySearchConfig<TId, TRow, TDetail>,
 ): ComboboxItem<TId>[] => {
+  if (!scopeReady) return [];
   if (searchingByCode) {
-    if (!scopeReady || !exactItem) return [];
+    if (!exactItem) return [];
     // SAFETY: the detail query and config are selected by the same entity key;
     // TDetail is the smaller picker-facing structural shape that config needs.
     return [config.buildDetail(exactItem as TDetail)];
@@ -314,16 +378,16 @@ export function useEntitySearchRows<
   const { exactCode, searchingByCode, useBlankPath, globalSearchEntity } =
     resolveSearchPath(searchQuery, entity, config, scope);
 
-  const { data: rows, isLoading: isRowsLoading } = config.useListSource(
+  const rowSource = config.useListSource(
     searchQuery,
     enabled && scopeReady && !searchingByCode && useBlankPath,
     scope,
   );
-  const { data: searchHits, isLoading: isSearchLoading } = useQuery({
-    ...search.find.queryOptions({
+  const searchSource = useInfiniteQuery({
+    ...pickerLexicalQueryOptions({
       query: searchQuery || entity,
       entityKinds: [globalSearchEntity],
-      limit: 20,
+      limit: pagination.pageSize,
     }),
     enabled:
       enabled &&
@@ -332,26 +396,36 @@ export function useEntitySearchRows<
       config.splitBlankTyped &&
       !useBlankPath,
   });
-  const { data: exactItem, isLoading: isExactLoading } = useQuery(
+  const rows = rowSource.data;
+  const searchHits = useMemo(
+    () => searchSource.data?.items,
+    [searchSource.data],
+  );
+  const exactSource = useQuery(
     entityDetailFor(entity).queryOptions(
       exactCode ?? config.detailPlaceholder,
       { enabled: exactCode != null && scopeReady },
     ),
   );
 
+  const exactItem = exactSource.data;
   const onCreateNew = config.useOnCreateNew(openDialog);
 
   const items = useMemo(
     () =>
-      buildSearchItems(
-        searchingByCode,
-        scopeReady,
-        exactItem,
-        useBlankPath,
-        rows,
-        searchHits,
-        config,
-      ),
+      flattenUniquePageItems([
+        {
+          items: buildSearchItems(
+            searchingByCode,
+            scopeReady,
+            exactItem,
+            useBlankPath,
+            rows,
+            searchHits,
+            config,
+          ),
+        },
+      ]),
     [
       searchingByCode,
       scopeReady,
@@ -362,15 +436,44 @@ export function useEntitySearchRows<
       config,
     ],
   );
-  const isLoading = searchLoading(exactCode, useBlankPath, {
-    exact: isExactLoading,
-    rows: isRowsLoading,
-    search: isSearchLoading,
-  });
+  const isLoading =
+    scopeReady &&
+    searchLoading(exactCode, useBlankPath, {
+      exact: exactSource.isLoading,
+      rows: rowSource.isLoading,
+      search: searchSource.isLoading,
+    });
+
+  const controls = !scopeReady
+    ? {
+        hasNextPage: false,
+        isFetchingNextPage: false,
+        onLoadMore: undefined,
+        error: null,
+        onRetry: undefined,
+      }
+    : searchingByCode
+      ? {
+          hasNextPage: false,
+          isFetchingNextPage: false,
+          onLoadMore: undefined,
+          error: exactSource.error?.message ?? null,
+          onRetry: () => {
+            void exactSource.refetch();
+          },
+        }
+      : useBlankPath
+        ? rowSource
+        : pickerQueryState(searchSource);
 
   return {
     items,
     isLoading,
+    hasNextPage: controls.hasNextPage,
+    isFetchingNextPage: controls.isFetchingNextPage,
+    onLoadMore: controls.onLoadMore,
+    error: controls.error,
+    onRetry: controls.onRetry,
     onSearchChange,
     onOpenChange,
     onCreateNew,

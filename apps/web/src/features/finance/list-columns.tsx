@@ -1,4 +1,3 @@
-import type { FilterOptionsOut } from "@cubby/schemas/filter-options";
 import type { FinancialAccountFilters } from "@cubby/schemas/financial-account";
 import type {
   FinancialTransactionFilters,
@@ -11,7 +10,6 @@ import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
 import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import { useDeletableConfig } from "~/entity/hooks/use-deletable-config";
 import { useFilterOptions } from "~/entity/hooks/use-filter-options";
-import { entityFilterOptions } from "~/integrations/tanstack-query/generated/domains/entityFilterOptions.gen";
 import { financialTransaction } from "~/integrations/tanstack-query/generated/domains/financialTransaction.gen";
 
 import { defineListOverride } from "../../entity/list-columns/types";
@@ -38,7 +36,6 @@ export const financialAccountListOverride = defineListOverride<
 /* Financial transactions                                                  */
 /* ---------------------------------------------------------------------- */
 
-const NO_OPTIONS: FilterOptionsOut = { items: [], nextCursor: null };
 const NO_SOURCES: FinancialTransactionSourceOptionsOut = [];
 
 export const financialTransactionListOverride = defineListOverride<
@@ -46,25 +43,10 @@ export const financialTransactionListOverride = defineListOverride<
   FinancialTransactionFilters
 >({
   use() {
-    // Eagerly-loaded rosters for the Account and Source header filters (a
-    // header control needs the whole list up front).
-    const { data: accounts = NO_OPTIONS } = useQuery(
-      entityFilterOptions.filterOptions.queryOptions({
-        source: "entity",
-        entity: "financialAccount",
-        limit: 1000,
-        include: ["count"],
-      }),
-    );
     const { data: sources = NO_SOURCES } = useQuery(
       financialTransaction.sourceOptions.queryOptions(null),
     );
     const filterOptions = useFilterOptions({
-      account: accounts.items.map((a) => ({
-        value: a.id,
-        label: a.label,
-        hint: `${a.count ?? 0}`,
-      })),
       source: sources.map((s) => ({
         value: s.source,
         label: s.source,

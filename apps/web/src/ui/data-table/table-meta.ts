@@ -49,6 +49,12 @@ export interface FilterConfig {
   onActivate?: (selectedIds?: readonly string[]) => void;
   onSearchChange?: (query: string) => void;
   isLoading?: boolean;
+  hasNextPage?: boolean;
+  isFetchingNextPage?: boolean;
+  onLoadMore?: () => void;
+  error?: string | null;
+  onRetry?: () => void;
+
   /** A roster of one entity's records: its pickers run in record mode. */
   records?: PickerRecordSource;
 }

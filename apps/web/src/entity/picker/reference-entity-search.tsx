@@ -84,7 +84,7 @@ export function productCategorySearchItems(
 
 function WithProductCategorySearch({ children }: SearchProviderProps<string>) {
   const [query, setQuery] = useState("");
-  const { categories, isLoading } = useProductCategories();
+  const { categories, isLoading, error, onRetry } = useProductCategories();
   const onSearchChange = useCallback((next: string) => setQuery(next), []);
 
   const items = useMemo<ComboboxItem[]>(
@@ -114,6 +114,8 @@ function WithProductCategorySearch({ children }: SearchProviderProps<string>) {
   });
   return children({
     items: illustratedItems,
+    error: error?.message ?? null,
+    onRetry,
     onSearchChange,
     isLoading,
     onOpenChange: (open) => {

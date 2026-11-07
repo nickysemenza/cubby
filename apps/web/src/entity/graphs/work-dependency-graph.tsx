@@ -6,8 +6,8 @@ import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "@tanstack/react-router";
 import { useMemo } from "react";
 
-import { RecordEmoji } from "~/entity/components/record-emoji";
-import { useEntityOptions } from "~/entity/hooks/use-entity-options";
+import { useSelectedPickerItems } from "~/entity/picker/selected-items";
+import { useEntityListSource } from "~/entity/picker/with-search-hook";
 import { project } from "~/integrations/tanstack-query/generated/domains/project.gen";
 import { householdLocalDate } from "~/lib/household-date";
 import { effectiveTaskDueDate } from "~/lib/task-dates";
@@ -42,20 +42,32 @@ export function WorkDependencyGraph({
   const { data, isLoading, isError, error, refetch } = useQuery(
     project.getDependencyGraph.queryOptions({ projectId }),
   );
-  const { items: projects } = useEntityOptions("project");
+  const {
+    dialog,
+    items: projects,
+    ...projectSearch
+  } = useEntityListSource("project");
+  const selected = useSelectedPickerItems(
+    "project",
+    projectId ? [projectId] : [],
+    projects,
+  );
   const projectOptions = useMemo(
     (): PickerOption[] => [
       { value: "", label: "All projects and tasks" },
-      ...projects.map((item) => ({
+      ...[
+        ...projects,
+        ...selected.filter(
+          (item) => !projects.some((project) => project.id === item.id),
+        ),
+      ].map((item) => ({
         value: item.id,
-        label: item.label,
-        ...(item.detail && { detail: item.detail }),
-        ...(item.emoji && {
-          icon: <RecordEmoji entity="project" emoji={item.emoji} />,
-        }),
+        label: item.name,
+        detail: item.detail,
+        icon: item.thumb?.fallback,
       })),
     ],
-    [projects],
+    [projects, selected],
   );
   const today = householdLocalDate();
   const graph = useMemo<GraphData>(
@@ -91,9 +103,11 @@ export function WorkDependencyGraph({
   );
   return (
     <Stack gap="md">
+      {dialog}
       <Row align="center" gap="sm">
         <span>Project</span>
         <Picker
+          {...projectSearch}
           compact
           label="Project"
           className="w-64 max-w-full min-w-0"

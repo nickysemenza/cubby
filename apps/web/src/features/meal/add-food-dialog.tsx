@@ -13,18 +13,14 @@ import {
   type MealFoodNutrients,
 } from "@cubby/schemas/meal";
 import { getErrorMessage } from "@cubby/shared";
-import {
-  useMutation,
-  useQuery,
-  type UseQueryResult,
-} from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { useId, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 import { entityDetailFor } from "~/entity/entity-detail";
+import { useEntityOptions } from "~/entity/hooks/use-entity-options";
 import { EntityReferencePicker } from "~/entity/picker/entity-reference-picker";
 import { Picker } from "~/entity/picker/picker";
-import { entityFilterOptions } from "~/integrations/tanstack-query/generated/domains/entityFilterOptions.gen";
 import { meal } from "~/integrations/tanstack-query/generated/domains/meal.gen";
 import { calculateFoodAmount } from "~/lib/meal-food-nutrition";
 import {
@@ -84,18 +80,9 @@ function FoodEntryForm({
     nutrients,
   } = draft;
   const [error, setError] = useState<string | null>(null);
-  const eaters = useQuery(
-    entityFilterOptions.filterOptions.queryOptions({
-      source: "entity",
-      entity: "ledgerParty",
-      search: "",
-      selectedIds: [],
-      include: ["kind"],
-      limit: 1000,
-    }),
-  );
-  const eaterOptions: LedgerPartyOptionsOut | undefined =
-    eaters.data?.items.map((item) => ({
+  const eaters = useEntityOptions("ledgerParty", { include: ["kind"] });
+  const eaterOptions: LedgerPartyOptionsOut | undefined = eaters.items.map(
+    (item) => ({
       // SAFETY: `entity: "ledgerParty"` filter options always publish the
       // entity's own branded shortcode as `id`.
       id: item.id as LedgerPartyShortcode,
@@ -103,7 +90,8 @@ function FoodEntryForm({
       // SAFETY: `include: ["kind"]` on the `ledgerParty` entity always
       // populates `kind` (see `getFilterOptions`'s `optionKindFor`).
       kind: item.kind!,
-    }));
+    }),
+  );
   const options = eaterOptions?.filter((p) => p.kind !== "household");
   const selectedEater =
     eaterId == null ? options?.[0] : options?.find((p) => p.id === eaterId);
@@ -270,7 +258,10 @@ function FoodSourceFields({
   draft: ReturnType<typeof useFoodDraft>;
   calculation: ReturnType<typeof useFoodAmount>;
   options: LedgerPartyOptionsOut | undefined;
-  eaters: Pick<UseQueryResult, "isLoading" | "error">;
+  eaters: Pick<
+    ReturnType<typeof useEntityOptions>,
+    "isLoading" | "error" | "onRetry"
+  >;
   selectedEater: LedgerPartyOptionsOut[number] | undefined;
   setEaterId: (id: LedgerPartyShortcode | null) => void;
   onRecipe?: (recipeId: RecipeShortcode) => void;
@@ -298,6 +289,7 @@ function FoodSourceFields({
         setValue={(item) => setEaterId(item?.id ?? null)}
         isLoading={eaters.isLoading}
         error={eaters.error ? getErrorMessage(eaters.error) : null}
+        onRetry={eaters.onRetry}
         clearable={false}
       />
       {kind === "product" ? (

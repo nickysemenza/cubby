@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { relatedViewKeySchema } from "./related-view";
 import { entitySchema, type Entity } from "./entity";
 import { type ShortcodeEntity } from "./entity-manifest";
 import { shortcodeEntities } from "./generated/entity-roster.gen";
@@ -76,7 +77,13 @@ const tagsFilterOptionsInput = filterOptionRequest.extend({
   limit: z.number().int().min(1).max(1000).default(25),
 });
 
+const relationFilterOptionsInput = filterOptionRequest.extend({
+  source: z.literal("relation"),
+  relationKey: relatedViewKeySchema,
+});
+
 export const filterOptionsInput = z.union([
+  relationFilterOptionsInput,
   kindFilterOptionsInput,
   entityFilterOptionsInput,
   tagsFilterOptionsInput,

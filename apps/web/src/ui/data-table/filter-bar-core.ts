@@ -69,6 +69,12 @@ type FilterFieldConfig = {
   onActivate?: (selectedIds?: readonly string[]) => void;
   onSearchChange?: (query: string) => void;
   isLoading?: boolean;
+  hasNextPage?: boolean;
+  isFetchingNextPage?: boolean;
+  onLoadMore?: () => void;
+  error?: string | null;
+  onRetry?: () => void;
+
   /** A roster of one entity's records: its pickers run in record mode. */
   records?: PickerRecordSource;
 };
@@ -304,6 +310,12 @@ export function barFieldFromConfig(
     onActivate: config.onActivate,
     onSearchChange: config.onSearchChange,
     isLoading: config.isLoading,
+    hasNextPage: config.hasNextPage,
+    isFetchingNextPage: config.isFetchingNextPage,
+    onLoadMore: config.onLoadMore,
+    error: config.error,
+    onRetry: config.onRetry,
+
     records: config.records,
   };
 }

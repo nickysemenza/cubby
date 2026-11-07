@@ -378,7 +378,7 @@ export const { definition, readSchemas } = defineEntityModel({
         urlKey: "related-product",
         kind: "idMulti",
         placeholder: "Filter by candidate product...",
-        optionsKey: "wishCandidates",
+        optionSource: { kind: "relation", relationKey: "wish.candidates" },
         brandRef: { entity: "product" },
         nullable: { field: "productPresenceFilter", label: "candidate" },
       },
