@@ -43,6 +43,7 @@ import {
 } from "~/server/ai/run-feature";
 
 import { aiWorkDeferral, withCooperativeAiWork } from "./cooperative-work";
+import { DECISION_DEADLINE_MS } from "./decision-deadline";
 import {
   DECISION_CONTEXT_BYTE_LIMIT,
   type BatchedChoiceResponse,
@@ -62,8 +63,6 @@ const DECISION_MAX_CHOICES = 255;
 /** One slot is reserved for `none`. */
 export const DECISION_MAX_CANDIDATES = DECISION_MAX_CHOICES - 1;
 const DECISION_MAX_ATTEMPTS = 3;
-/** The decision model's whole budget for one choice, retries included; MCP model reads outlast it. */
-export const DECISION_DEADLINE_MS = 30_000;
 
 function retryDelay(
   response: Response,
