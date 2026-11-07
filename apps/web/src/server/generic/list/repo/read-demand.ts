@@ -78,8 +78,18 @@ export function compileReadDemand(
       ...classificationFieldDependencies(entity, key),
     ])
       assignments.add(dependency);
-    for (const source of [key, field.readKey, field.storedKey])
-      if (source && storedDerived(entity, source)) stored.add(source);
+    for (const source of [key, field.readKey, field.storedKey]) {
+      const declaration = source ? storedDerived(entity, source) : undefined;
+      // Other own-table values come from the row or its live resolver, not a publication.
+      if (
+        source &&
+        declaration &&
+        (declaration.publishes === "derivedValue" ||
+          declaration.recordSource !== null ||
+          declaration.snapshotSource !== undefined)
+      )
+        stored.add(source);
+    }
     if (
       field.control?.suggest?.mode === "fill" &&
       !field.control.suggest.reviewRequired

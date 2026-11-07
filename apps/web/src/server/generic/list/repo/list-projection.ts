@@ -66,6 +66,7 @@ type ListIdPage = {
   projection: ListProjection;
   /** The request's context: its reader (actor, clients) and prepares. */
   context: ListContext;
+  /** Covers admitted bindings' declared storedKeys, including loaded absences. */
   stored: Promise<PageStoredMeta>;
 };
 
@@ -265,7 +266,6 @@ export function listReadPlan<Row>(
   );
   const storedProjections = bind.ids((page) =>
     loadStoredFieldProjections(
-      page.db,
       entity,
       page.ids,
       page.stored,

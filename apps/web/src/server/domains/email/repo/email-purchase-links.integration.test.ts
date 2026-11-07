@@ -647,6 +647,17 @@ describe("Email Purchase links", () => {
   it("discovers newly eligible matches and keeps live owner gates separate from cached facts", async () => {
     const f = await retainedReviewFixture();
     await drainStoredDerived(ctx.db);
+    // Internal response hydration still needs links when it omits envelopes.
+    const internal = await emailScaffold.get(
+      ctx.db,
+      [f.email],
+      undefined,
+      undefined,
+      { includeFieldReads: false },
+    );
+    expect(internal.data[0]?.purchaseLinks).toMatchObject([
+      { purchaseId: f.purchase.shortcode, state: "suggested" },
+    ]);
     // Model a missing snapshot without treating it as a successful no-match.
     await getDb(ctx.db).execute(
       sql`DELETE FROM "EmailReadSnapshot" WHERE "entityId" IN (SELECT id FROM "Email" WHERE shortcode = ${f.email})`,

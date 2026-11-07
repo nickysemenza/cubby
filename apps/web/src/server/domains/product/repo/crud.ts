@@ -534,7 +534,7 @@ export const productScaffold = listScaffold<
         );
       });
       const stored = bind.ids((page) => page.stored);
-      const storedRead = (
+      const requireStoredRead = (
         published: Awaited<ReturnType<typeof stored.load>>,
         id: string,
         key: string,
@@ -548,10 +548,10 @@ export const productScaffold = listScaffold<
         const published = await stored.load(page);
         return new Map(
           page.ids.map((id) => {
-            const read = storedRead(published, id, "readFacts");
+            const read = requireStoredRead(published, id, "readFacts");
             return [
               id,
-              read?.resultExists ? productReadFacts.parse(read.value) : null,
+              read.resultExists ? productReadFacts.parse(read.value) : null,
             ];
           }),
         );
@@ -563,7 +563,7 @@ export const productScaffold = listScaffold<
           page.rows.map((row) => {
             const saved =
               snapshots.get(row.id)?.pricing ?? resolveProductPricing(null);
-            storedRead(published, row.id, "price");
+            requireStoredRead(published, row.id, "price");
             const effectivePrice = storedEffectivePrice(published, {
               ...row,
               category: row.categorySummary,
@@ -615,8 +615,8 @@ export const productScaffold = listScaffold<
           const id = parseShortcodeFor("product", row.shortcode);
           const price = prices.get(row.id);
           if (!price) throw new Error("Product food binding requires pricing");
-          const read = storedRead(published, row.id, "food");
-          const food = read?.resultExists
+          const read = requireStoredRead(published, row.id, "food");
+          const food = read.resultExists
             ? foodSummary.nullable().parse(read.value)
             : null;
           const seed = {

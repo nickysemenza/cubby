@@ -300,22 +300,16 @@ export async function loadStoredDerived(
 
 /** Raw repository hydration of declared projections; public envelopes retain availability. */
 export async function loadStoredFieldProjections(
-  db: RepositoryQueryInput,
   entity: Entity,
   ids: readonly string[],
-  started?: Promise<PageStoredMeta>,
-  requested?: readonly string[],
+  started: Promise<PageStoredMeta>,
+  requested: readonly string[],
 ): Promise<Map<string, CurrentReadFacts>> {
   const fields = entityFieldModels[entity].fields.filter((field) => {
     const key = field.readKey ?? field.key;
-    return field.storedPath && (!requested || requested.includes(key));
+    return field.storedPath && requested.includes(key);
   });
-  const reads = await (started ??
-    loadStoredDerived(db, entity, ids, [
-      ...new Set(
-        fields.flatMap((field) => (field.storedKey ? [field.storedKey] : [])),
-      ),
-    ]));
+  const reads = await started;
   for (const id of ids)
     for (const field of fields)
       if (field.storedKey && !reads.get(id)?.has(field.storedKey))

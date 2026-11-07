@@ -2178,6 +2178,8 @@ of envelope demand and admitted bindings' declared stored inputs, including read
 that omit public envelopes. Automatic stored projections admit only selected
 fields. A loaded absence is distinct from an unloaded key: envelope and binding
 readers reject missing coverage instead of producing placeholder values.
+Own-table declarations without a readable record or snapshot source retain
+their row/resolver value rather than acquiring a missing-publication receipt.
 Projectors declare cross-field dependencies beside
 their source reference; generation rejects unknown fields and cycles.
 
