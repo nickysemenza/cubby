@@ -1,3 +1,4 @@
+import { parseEntityId } from "@cubby/schemas/identifiers";
 import { and, eq } from "drizzle-orm";
 import {
   taxonomyId,
@@ -292,7 +293,7 @@ describe("persisted Suggestion sweeps", () => {
         fields: ["categoryId"],
         filters: { categoryIdPresenceFilter: "none" },
       },
-      { context, pauseAfter: 2, ...categoryPorts() },
+      { context, pauseAfter: 1, ...categoryPorts() },
     );
     const paused = await savedRun(ctx.db, started.id);
     expect(paused.purpose).toBe("sweep");
@@ -323,7 +324,7 @@ describe("persisted Suggestion sweeps", () => {
           .from(aiEvaluation)
           .where(eq(aiEvaluation.runId, started.id))
       ).filter((row) => row.state === "completed"),
-    ).toHaveLength(2);
+    ).toHaveLength(1);
 
     await expect(
       controlWorkflowRun(
@@ -333,21 +334,53 @@ describe("persisted Suggestion sweeps", () => {
         "sweep",
       ),
     ).rejects.toThrow("Only running member-requested AI work can be paused");
+    const [stale] = await getDb(ctx.db)
+      .select({ id: aiEvaluation.id, target: aiEvaluation.target })
+      .from(aiEvaluation)
+      .where(
+        and(
+          eq(aiEvaluation.runId, started.id),
+          eq(aiEvaluation.state, "queued"),
+        ),
+      );
+    if (!stale || stale.target.entity !== "product")
+      throw new Error("Synthetic queued Product is missing");
+    const staleProductId = parseEntityId("product", stale.target.recordId);
+    await getDb(ctx.db)
+      .update(productTable)
+      .set({ name: "Synthetic changed queued item" })
+      .where(eq(productTable.id, staleProductId));
+    const ports = categoryPorts();
+    const decide = vi.fn(ports.suggestPorts.decisionPort);
     await resumeSuggestionSweep(ctx.db, started.id, {
       context,
-      ...categoryPorts(),
+      ...ports,
+      suggestPorts: { ...ports.suggestPorts, decisionPort: decide },
+    });
+    expect(decide).toHaveBeenCalledTimes(1);
+    expect(
+      (
+        await getDb(ctx.db)
+          .select()
+          .from(aiEvaluation)
+          .where(eq(aiEvaluation.id, stale.id))
+      )[0],
+    ).toMatchObject({
+      state: "obsolete",
+      attempts: 0,
+      receipt: { reason: "Suggestion basis changed after queuing" },
     });
     const finished = await savedRun(ctx.db, started.id);
     expect(finished.status).toBe("completed");
     expect(await evaluationProgress(ctx.db, started.id)).toMatchObject({
       total: 3,
       done: 3,
-      applied: 3,
+      applied: 2,
       queued: 0,
       failed: 0,
     });
     const rows = await runSuggestions(ctx.db, started.id);
-    expect(rows).toHaveLength(3);
+    expect(rows).toHaveLength(2);
     for (const row of rows)
       expect(row).toMatchObject({
         kind: "addition",
@@ -357,7 +390,9 @@ describe("persisted Suggestion sweeps", () => {
       });
     for (const product of products)
       expect(await productCategoryId(ctx.db, product.id)).toBe(
-        taxonomyId(SUGGESTED_CATEGORY),
+        (await recordId(ctx.db, product.id, "product")) === staleProductId
+          ? null
+          : taxonomyId(SUGGESTED_CATEGORY),
       );
   });
 

@@ -17,7 +17,11 @@ const egressRequest = (headers: Record<string, string>) =>
     body: JSON.stringify({
       provider: "anthropic",
       endpoint: "v1/messages",
-      query: {},
+      query: {
+        model: "claude-opus-5-5",
+        messages: [],
+        thinking: { type: "adaptive" },
+      },
       headers,
       controls: {
         metadata: {
@@ -341,7 +345,11 @@ describe("shared Gateway admission", () => {
           body: JSON.stringify({
             provider: "anthropic",
             endpoint: "v1/messages",
-            query: {},
+            query: {
+              model: "claude-opus-5-5",
+              messages: [],
+              thinking: { type: "adaptive" },
+            },
             headers: { "anthropic-version": "2023-06-01" },
             controls: {
               metadata: {
@@ -356,11 +364,18 @@ describe("shared Gateway admission", () => {
         expect(await (await instance.fetch(request())).text()).toBe(
           "synthetic response",
         );
-        expect(calls[0]?.url).toMatch(/\/cubby\/anthropic\/v1\/messages$/);
+        expect(calls[0]?.url).toMatch(/\/ai\/v1\/messages$/);
         expect(calls[0]?.headers.get("anthropic-version")).toBe("2023-06-01");
-        expect(calls[0]?.headers.get("cf-aig-authorization")).toBe(
+        expect(calls[0]?.headers.get("authorization")).toBe(
           "Bearer synthetic-gateway-key",
         );
+        expect(calls[0]?.headers.has("cf-aig-authorization")).toBe(false);
+        expect(calls[0]?.headers.get("cf-aig-gateway-id")).toBe("cubby");
+        expect(await calls[0]?.json()).toEqual({
+          model: "anthropic/claude-opus-5.5",
+          messages: [],
+          thinking: { type: "adaptive" },
+        });
         expect(calls[0]?.headers.has("cf-aig-byok-alias")).toBe(false);
         expect(calls[0]?.headers.has("cf-aig-no-wholesale")).toBe(false);
         failCancel = true;

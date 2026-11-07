@@ -50,6 +50,8 @@ interface ChatModelDeclaration extends ModelDeclaration {
   role: "chat";
   /** `openai` is `/openai/responses`; `anthropic` is `/anthropic/v1/messages`. */
   gatewayProvider: ChatGatewayProvider;
+  /** Explicit Cloudflare catalog id for the dedicated paid REST API. */
+  unifiedModelId: string;
   vision: boolean;
   /**
    * Anthropic only: whether the model takes `thinking: {type: "adaptive"}` and
@@ -97,6 +99,7 @@ type AiModelDeclaration =
 export const AI_MODELS = {
   "gpt-6-luna": {
     role: "chat",
+    unifiedModelId: "openai/gpt-6-luna",
     provider: "openai",
     catalogProvider: "openai",
     gatewayProvider: "openai",
@@ -104,6 +107,7 @@ export const AI_MODELS = {
   },
   "gpt-6-sol": {
     role: "chat",
+    unifiedModelId: "openai/gpt-6-sol",
     provider: "openai",
     catalogProvider: "openai",
     gatewayProvider: "openai",
@@ -111,6 +115,7 @@ export const AI_MODELS = {
   },
   "claude-sonnet-5": {
     role: "chat",
+    unifiedModelId: "anthropic/claude-sonnet-5",
     provider: "anthropic",
     catalogProvider: "anthropic",
     gatewayProvider: "anthropic",
@@ -119,6 +124,7 @@ export const AI_MODELS = {
   },
   "claude-opus-5-5": {
     role: "chat",
+    unifiedModelId: "anthropic/claude-opus-5.5",
     provider: "anthropic",
     catalogProvider: "anthropic",
     gatewayProvider: "anthropic",
@@ -127,6 +133,7 @@ export const AI_MODELS = {
   },
   "claude-sonnet-5-5": {
     role: "chat",
+    unifiedModelId: "anthropic/claude-sonnet-5.5",
     provider: "anthropic",
     catalogProvider: "anthropic",
     gatewayProvider: "anthropic",
@@ -137,6 +144,7 @@ export const AI_MODELS = {
   // rejects a thinking budget or a forced tool (400).
   "claude-haiku-5-5": {
     role: "chat",
+    unifiedModelId: "anthropic/claude-haiku-5.5",
     provider: "anthropic",
     catalogProvider: "anthropic",
     gatewayProvider: "anthropic",
@@ -145,6 +153,7 @@ export const AI_MODELS = {
   },
   "claude-haiku-4-5": {
     role: "chat",
+    unifiedModelId: "anthropic/claude-haiku-4.5",
     provider: "anthropic",
     catalogProvider: "anthropic",
     gatewayProvider: "anthropic",

@@ -661,19 +661,30 @@ and the AI funding card report it as `credit.state` `refused`, with `until` and
    `cf-aig-no-wholesale: true`; a missing or invalid key fails with raw setup
    diagnostics rather than silently spending paid credits.
 
-Production third-party requests use native provider endpoints. Universal
-`gateway.run()` does not honor the alias in its payload and refused unaliased
-paid requests once a non-default key existed (Anthropic after October 16, 2026;
-OpenAI after October 28). Paid native requests omit the alias and
-`cf-aig-no-wholesale`, relying on the gateway's Unified Billing policy; credit
-requests retain both controls. The Worker authenticates native passthrough
-with its `AI_GATEWAY_API_KEY` secret (a Cloudflare inference token, not the
-Anthropic key). Reuse the existing Worker secret; deploying this feature does
-not provision or overwrite it from a GitHub Actions token. Use the [secret listing command](#secrets-and-plaintext-variables) before
-adding provisioning changes.
-Paid calls also require this secret, including profiles without shared egress.
-Missing native authentication fails with an explicit diagnostic. Workers AI
-retains its binding, and the purchase-agent harness retains its Universal shim.
+Production paid OpenAI/Anthropic chat uses Cloudflare's dedicated
+[`/ai/v1/responses`, `/ai/v1/messages`, or `/ai/v1/chat/completions` REST API](https://developers.cloudflare.com/ai-gateway/usage/rest-api/).
+It preserves each provider's wire format and changes only `model` to the explicit
+Cloudflare catalog id declared in `models.ts` (including dotted Anthropic ids).
+Universal `gateway.run()` and native unaliased paid requests both encountered
+BYOK alias resolution failures when non-default keys existed; native passthrough
+was not sufficient to enable paid fallback. The dedicated endpoints
+[consult only default BYOK keys before Unified Billing](https://developers.cloudflare.com/ai-gateway/features/unified-billing/).
+Keep default keys unset and the funding ladder and paid budget admission unchanged.
+
+Credit uses native provider passthrough with both `cf-aig-byok-alias:
+subscriber-credit` and `cf-aig-no-wholesale: true`. Explicit alias or no-wholesale
+intent is never removed to select paid routing. Other provider protocols retain
+native routing. The shared transport owner serves coordinated Worker egress and
+the Node fallback, preserving controls, metadata, query suffixes and streaming.
+Dedicated REST authenticates with `Authorization: Bearer` and scopes requests
+with `cf-aig-gateway-id`; native passthrough uses `cf-aig-authorization`.
+Both reuse the existing `AI_GATEWAY_API_KEY` Worker secret (a Cloudflare inference
+token with Workers AI Read, not a provider key). Jev BYOK already uses that secret
+on `/ai/run` with no-wholesale; its separate BYOK-only route is unchanged.
+Deploying this repair does not provision or overwrite secrets or grants.
+Missing authentication fails explicitly. Workers AI retains its binding, and the
+live purchase-agent harness retains its Universal shim. This transport repair
+does not resolve the separate audit-recovery funding-ladder work in #2729.
 
 Console spend limits reset on the first of the calendar month, while promotional
 credits refresh on the subscription billing cycle. A workspace cap is therefore

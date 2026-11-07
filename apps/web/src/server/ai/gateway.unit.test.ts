@@ -41,7 +41,7 @@ async function devGatewayFetch(token: string) {
 }
 
 /** The physical provider request is the external seam in either runtime. */
-function fakeNativeGateway(response: Response) {
+function physicalRequests(response: Response) {
   const calls: Request[] = [];
   vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => {
     calls.push(new Request(input, init));
@@ -54,9 +54,9 @@ const metadata = { feature: "recipe-flow", operation: "generate" };
 /** What leaves the Worker: the caller's labels plus the derived environment. */
 const outbound = { ...metadata, environment: "development" };
 
-describe("gatewayFetch native provider passthrough", () => {
+describe("gatewayFetch provider transport", () => {
   it("addresses the gateway by provider and endpoint, without the SDK's credentials", async () => {
-    const calls = fakeNativeGateway(new Response("{}"));
+    const calls = physicalRequests(new Response("{}"));
     const send = gatewayFetch("anthropic", { metadata, skipCache: true });
     const controller = new AbortController();
 
@@ -74,24 +74,25 @@ describe("gatewayFetch native provider passthrough", () => {
     });
 
     const sent = calls[0];
-    expect(sent?.url).toMatch(/\/anthropic\/v1\/messages\?beta=true$/);
+    expect(sent?.url).toMatch(/\/ai\/v1\/messages\?beta=true$/);
     expect(sent?.headers.get("anthropic-version")).toBe("2023-06-01");
-    for (const name of ["authorization", "x-api-key", "content-length"])
+    for (const name of ["cf-aig-authorization", "x-api-key", "content-length"])
       expect(sent?.headers.has(name)).toBe(false);
-    expect(sent?.headers.get("cf-aig-authorization")).toBe(
+    expect(sent?.headers.get("authorization")).toBe(
       "Bearer synthetic-gateway-token",
     );
+    expect(sent?.headers.get("cf-aig-gateway-id")).toBe("cubby");
     expect(sent?.headers.get("cf-aig-skip-cache")).toBe("true");
     expect(JSON.parse(sent?.headers.get("cf-aig-metadata") ?? "{}")).toEqual(
       outbound,
     );
-    expect(await sent?.json()).toEqual({ model: "claude-sonnet-5" });
+    expect(await sent?.json()).toEqual({ model: "anthropic/claude-sonnet-5" });
     controller.abort();
     expect(sent?.signal.aborted).toBe(true);
   });
 
   it("rejects a cacheTtlSeconds outside the gateway's 60s..30d range", async () => {
-    fakeNativeGateway(new Response("{}"));
+    physicalRequests(new Response("{}"));
 
     expect(() =>
       gatewayFetch("anthropic", { metadata, cacheTtlSeconds: 59 }),
@@ -108,7 +109,7 @@ describe("gatewayFetch native provider passthrough", () => {
   });
 
   it("accepts the gateway's boundary TTLs of 60s and 30 days", async () => {
-    fakeNativeGateway(new Response("{}"));
+    physicalRequests(new Response("{}"));
 
     expect(() =>
       gatewayFetch("anthropic", { metadata, cacheTtlSeconds: 60 }),
@@ -131,11 +132,11 @@ describe("gatewayFetch native provider passthrough", () => {
     const streamed = new Response(stream, {
       headers: { "content-type": "text/event-stream" },
     });
-    fakeNativeGateway(streamed);
+    physicalRequests(streamed);
 
     const response = await gatewayFetch("openai", { metadata })(
       `${gatewayBaseURL("openai")}/responses`,
-      { method: "POST", body: "{}" },
+      { method: "POST", body: JSON.stringify({ model: "gpt-6-sol" }) },
     );
 
     expect(response).toBe(streamed);
@@ -150,14 +151,14 @@ describe("gatewayFetch native provider passthrough", () => {
         headers: { "retry-after": "30" },
       },
     );
-    fakeNativeGateway(failure);
+    physicalRequests(failure);
     const observed: unknown[] = [];
     const response = await gatewayFetch("openai", {
       metadata,
       onErrorResponse: (details) => observed.push(details),
     })(`${gatewayBaseURL("openai")}/responses`, {
       method: "POST",
-      body: "{}",
+      body: JSON.stringify({ model: "gpt-6-sol" }),
     });
 
     expect(response).toBe(failure);
@@ -248,7 +249,7 @@ describe("gatewayFetch on the dev REST fallback", () => {
     await expect(
       devFetch("anthropic", { metadata })(
         `${gatewayBaseURL("anthropic")}/v1/messages`,
-        { method: "POST", body: "{}" },
+        { method: "POST", body: JSON.stringify({ model: "claude-sonnet-5" }) },
       ),
     ).rejects.toThrow("AI_GATEWAY_API_KEY is not configured");
   });
@@ -258,7 +259,7 @@ describe("gatewayFetch transport selection", () => {
   // Disconnected subscription research must stop before API billing, and a
   // refused metered reservation must stop the physical gateway request.
   it("refuses paid transmission before invoking the native gateway", async () => {
-    const runs = fakeNativeGateway(new Response("{}"));
+    const runs = physicalRequests(new Response("{}"));
     const beforePaidRequest = vi.fn(async () => {
       throw new Error("Metered research allowance exhausted");
     });
@@ -292,7 +293,7 @@ describe("gatewayFetch transport selection", () => {
 
   /** A native gateway plus a household ChatGPT plan whose inference fails. */
   function bindingWithPlan(connected: boolean) {
-    const runs = fakeNativeGateway(new Response("{}"));
+    const runs = physicalRequests(new Response("{}"));
     const infer = vi.fn(async () => {
       throw new Error("ChatGPT plan connection reset");
     });
@@ -358,13 +359,13 @@ describe("gatewayFetch metadata contract", () => {
   async function freshGateway(vars: Record<string, string>) {
     for (const [key, value] of Object.entries(vars)) vi.stubEnv(key, value);
     vi.resetModules();
-    const calls = fakeNativeGateway(new Response("{}"));
+    const calls = physicalRequests(new Response("{}"));
     const { gatewayFetch: send } = await import("./gateway");
     await send("openai", { metadata })(
       `${gatewayBaseURL("openai")}/responses`,
       {
         method: "POST",
-        body: "{}",
+        body: JSON.stringify({ model: "gpt-6-sol" }),
       },
     );
     return JSON.parse(calls[0]?.headers.get("cf-aig-metadata") ?? "{}");
@@ -397,7 +398,7 @@ describe("gatewayFetch metadata contract", () => {
   });
 
   it("rejects diagnostic metadata instead of truncating or forwarding it", () => {
-    fakeNativeGateway(new Response("{}"));
+    physicalRequests(new Response("{}"));
     for (const extra of [
       { entityId: "synthetic-entity" },
       { runId: "synthetic-run" },
@@ -412,10 +413,13 @@ describe("gatewayFetch metadata contract", () => {
   });
 
   it("keeps an optional entityKind", async () => {
-    const calls = fakeNativeGateway(new Response("{}"));
+    const calls = physicalRequests(new Response("{}"));
     await gatewayFetch("openai", {
       metadata: { ...metadata, entityKind: "location" },
-    })(`${gatewayBaseURL("openai")}/responses`, { method: "POST", body: "{}" });
+    })(`${gatewayBaseURL("openai")}/responses`, {
+      method: "POST",
+      body: JSON.stringify({ model: "gpt-6-sol" }),
+    });
     expect(
       JSON.parse(calls[0]?.headers.get("cf-aig-metadata") ?? "{}"),
     ).toEqual({
@@ -530,14 +534,14 @@ describe("gatewayFetch response observation", () => {
     });
 
   it("reports the native response's log id and cache verdict", async () => {
-    fakeNativeGateway(cachedAnswer());
+    physicalRequests(cachedAnswer());
     const observed: unknown[] = [];
     const response = await gatewayFetch("anthropic", {
       metadata,
       onResponse: (info) => observed.push(info),
     })(`${gatewayBaseURL("anthropic")}/v1/messages`, {
       method: "POST",
-      body: "{}",
+      body: JSON.stringify({ model: "claude-sonnet-5" }),
     });
 
     expect(observed).toEqual([
@@ -548,7 +552,7 @@ describe("gatewayFetch response observation", () => {
 
   it("reports the test peer's response first, before any binding", async () => {
     const universal = vi.fn();
-    const native = fakeNativeGateway(new Response("unexpected native request"));
+    const native = physicalRequests(new Response("unexpected native request"));
     setCfEnv(
       fromPartial<Env & { CUBBY_TEST_AI_GATEWAY: { fetch: typeof fetch } }>({
         AI: {
@@ -563,7 +567,10 @@ describe("gatewayFetch response observation", () => {
       metadata,
       onResponse: (info) => observed.push(info),
       onErrorResponse: (failure) => failures.push(failure),
-    })(`${gatewayBaseURL("openai")}/responses`, { method: "POST", body: "{}" });
+    })(`${gatewayBaseURL("openai")}/responses`, {
+      method: "POST",
+      body: JSON.stringify({ model: "gpt-6-sol" }),
+    });
 
     expect(universal).not.toHaveBeenCalled();
     expect(native).toHaveLength(0);
@@ -574,7 +581,7 @@ describe("gatewayFetch response observation", () => {
   });
 
   it("reports a failed response to both observers", async () => {
-    fakeNativeGateway(
+    physicalRequests(
       new Response("synthetic failure", {
         status: 500,
         headers: { "cf-aig-log-id": "example-log" },
@@ -586,7 +593,10 @@ describe("gatewayFetch response observation", () => {
       metadata,
       onResponse: (info) => observed.push(info),
       onErrorResponse: (failure) => failures.push(failure),
-    })(`${gatewayBaseURL("openai")}/responses`, { method: "POST", body: "{}" });
+    })(`${gatewayBaseURL("openai")}/responses`, {
+      method: "POST",
+      body: JSON.stringify({ model: "gpt-6-sol" }),
+    });
 
     expect(observed).toEqual([
       { gatewayLogId: "example-log", gatewayCacheStatus: null },
@@ -621,7 +631,7 @@ it("preserves sanitized provider headers through shared Gateway coordination", a
         "anthropic-beta": "synthetic-beta",
         "x-api-key": "synthetic-secret",
       },
-      body: "{}",
+      body: JSON.stringify({ model: "claude-sonnet-5" }),
     },
   );
   expect(await response.text()).toBe("synthetic stream");

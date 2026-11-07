@@ -14,7 +14,7 @@ import {
   type GatewayFetchRoutes,
   gatewayFetchThrough,
   type GatewayResponseObservers,
-  runNativeGateway,
+  runProviderGateway,
   type WorkersAiRunGateway,
   workersAiModel,
   workersAiRunRequest,
@@ -173,9 +173,12 @@ async function workersAiFetch(
  * The one AI Gateway transport: a `fetch` any provider SDK can be handed.
  *
  * Workers AI models use `AI.run` scoped to the `cubby` gateway. Third-party
- * models use native provider passthrough authenticated by `AI_GATEWAY_API_KEY`,
- * both inside the coordinated Worker and in the Node fallback. Credit requests
- * select their named alias; paid requests rely on Unified Billing without it.
+ * chat models use the same transport owner inside coordinated Worker egress
+ * and the Node fallback. Credit uses native passthrough with its named alias
+ * and no-wholesale control. Paid OpenAI/Anthropic chat uses dedicated /ai/v1
+ * REST with explicit Cloudflare catalog ids, authenticated by the existing
+ * AI_GATEWAY_API_KEY (Workers AI Read). Native paid fallback still hit BYOK
+ * alias resolution errors. Other provider protocols retain native routing.
  *
  * Every branch returns the gateway's `Response` untouched, so streaming bodies
  * pass straight through to the SDK.
@@ -249,7 +252,7 @@ export function gatewayFetch(
           id: aiGatewayId(controls.metadata.environment),
           ...controls,
         });
-      return runNativeGateway({
+      return runProviderGateway({
         accountId: CF_ACCOUNT_ID,
         gatewayId: aiGatewayId(controls.metadata.environment),
         token: requiredApiKey(),

@@ -398,7 +398,9 @@ export async function executeSuggestionSweepTarget(
       queuedTarget.field,
     )) !== preparedFingerprint
   )
-    throw new Error("Suggestion basis changed after queuing");
+    throw new JobEvidenceObsoleteError(
+      "Suggestion basis changed after queuing",
+    );
   basis.__resolutionContext = fieldSuggestionResolutionContext(
     record.fields,
     policyKeys,

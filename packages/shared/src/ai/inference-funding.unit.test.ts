@@ -4,7 +4,7 @@ import {
   type GatewayQuery,
   inferenceFundingHeaders,
   isInferenceFundingRefusal,
-  runNativeGateway,
+  runProviderGateway,
   gatewayFetchThrough,
   type InferenceFunding,
 } from "./gateway-request";
@@ -49,15 +49,27 @@ describe("inference funding", () => {
     { provider: "anthropic", funding: "paid" },
     { provider: "openai", funding: "paid" },
   ] satisfies { provider: string; funding: InferenceFunding }[])(
-    "sends $provider $funding controls on the native request",
+    "sends $provider $funding controls on the funded transport",
     async ({ provider, funding }) => {
       let sent: Request | undefined;
       const endpoint = provider === "openai" ? "responses" : "v1/messages";
       const query: GatewayQuery =
         provider === "openai"
-          ? { model: "gpt-6-sol", input: [] }
-          : { model: "claude-opus-5-5", messages: [] };
-      await runNativeGateway({
+          ? {
+              model: "gpt-6-sol",
+              input: [],
+              stream: true,
+              reasoning: { effort: "high" },
+              tools: [{ type: "function", name: "synthetic" }],
+            }
+          : {
+              model: "claude-opus-5-5",
+              messages: [],
+              stream: true,
+              thinking: { type: "adaptive" },
+              max_tokens: 512,
+            };
+      await runProviderGateway({
         accountId: "example-account",
         gatewayId: "cubby",
         token: "example-token",
@@ -83,7 +95,9 @@ describe("inference funding", () => {
         },
       });
       expect(sent?.url).toBe(
-        `https://gateway.ai.cloudflare.com/v1/example-account/cubby/${provider}/${endpoint}`,
+        funding === "paid"
+          ? `https://api.cloudflare.com/client/v4/accounts/example-account/ai/v1/${provider === "openai" ? "responses" : "messages"}`
+          : `https://gateway.ai.cloudflare.com/v1/example-account/cubby/${provider}/${endpoint}`,
       );
       expect(sent?.headers.get("cf-aig-byok-alias")).toBe(
         funding === "paid" ? null : "subscriber-credit",
@@ -92,9 +106,28 @@ describe("inference funding", () => {
         funding === "paid" ? null : "true",
       );
       expect(sent?.headers.get("cf-aig-authorization")).toBe(
-        "Bearer example-token",
+        funding === "paid" ? null : "Bearer example-token",
       );
-      expect(await sent?.json()).toEqual(query);
+      expect(sent?.headers.get("authorization")).toBe(
+        funding === "paid" ? "Bearer example-token" : null,
+      );
+      expect(sent?.headers.get("cf-aig-gateway-id")).toBe(
+        funding === "paid" ? "cubby" : null,
+      );
+      expect(query.model).toBe(
+        provider === "openai" ? "gpt-6-sol" : "claude-opus-5-5",
+      );
+      expect(await sent?.json()).toEqual(
+        funding === "paid"
+          ? {
+              ...query,
+              model:
+                provider === "openai"
+                  ? "openai/gpt-6-sol"
+                  : "anthropic/claude-opus-5.5",
+            }
+          : query,
+      );
     },
   );
 

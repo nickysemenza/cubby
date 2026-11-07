@@ -677,7 +677,8 @@ funding caps.
 ## AI evaluation drains
 
 Expected evidence invalidation is a typed obsolete outcome, including acquisition
-eligibility that changed while inference ran. Ordinary provider text never decides
+eligibility that changed while inference ran and a Sweep basis changed after
+queuing, before inference or paid-result reuse. Ordinary provider text never decides
 obsoletion. Funding/configuration refusal defers the affected feature without
 spending target attempts; it preserves the configured provider route and probes
 again after a bounded wait. Gateway admission carries its actual retry time.
