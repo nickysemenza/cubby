@@ -651,7 +651,14 @@ totals. Every browsable entity declares what applies to it.
   so the compiler's additivity rules apply (money must be Expense-derived).
 - Option `quiet: true` marks the expected value (a task's Not started) that rows
   leave unsaid; one per roster. Put it on the control roster (`withQuiet`), not on
-  filter presets.
+  filter presets. Option `closed: true` marks a terminal value (a task's or
+  project's Done): a record holding it is finished, so its passed deadline is not
+  drawn as overdue.
+- `capabilities.mergeFlow: "specialized"` declares that web merges the entity
+  through its own flow (a reviewed preview, a domain merge operation or an extra
+  rule) instead of the generic kernel merge dialog. Web's generic merge action and
+  native's selection Merge both read it; native shows Merge on web for such an
+  entity rather than running the kernel merge. It requires `merge`.
 - `list.rowCommand` draws one `list.extraActions` verb as the row's leading
   control. `list.swipe` replaces the derived swipe verbs, or `false` removes them.
 - `detail.quickActions` (filled) and `detail.quickFields` (tonal, updatable fields

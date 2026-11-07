@@ -2115,6 +2115,8 @@ export const { definition, readSchemas } = defineEntityModel({
     },
     delete: { mode: "soft", bulk: true },
     merge: true,
+    // Web refuses a merge across vendors before the kernel merge runs.
+    mergeFlow: "specialized",
   },
   extensions: {
     ports: {

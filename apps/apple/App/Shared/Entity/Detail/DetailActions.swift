@@ -10,8 +10,9 @@ import SwiftUI
 
 /// Runs one record's declared actions (`HeroActionPlan`s): one-tap writes directly, forms in
 /// `HeroActionSheet`, Delete and other input-free destructive verbs behind one native
-/// confirmation, native flows in their own screens, and web handoffs in the browser. The detail
-/// screen and nested relation-row commands share it, so a verb behaves the same everywhere.
+/// confirmation, native flows in their own screens, and web handoffs in the browser. It is the
+/// one router for plans: the detail screen, nested relation-row commands and list rows (swipes,
+/// context menu, row command) all start plans here, so a verb behaves the same everywhere.
 @MainActor
 @Observable
 final class RecordActionPresenter {
@@ -31,6 +32,9 @@ final class RecordActionPresenter {
     let entity: EntityKey
     /// Row commands stay quiet; the detail screen confirms a write with its message.
     let showsNotice: Bool
+    /// Where a native flow's screen opens; nil pushes onto the app navigator's stack. A list
+    /// passes its own destination so the flow opens in the stack (or sheet) that hosts it.
+    private let navigate: (@MainActor (Route) -> Void)?
     var form: HeroActionModel?
     var receiving: ReceivingModel?
     var confirmation: Confirmation?
@@ -38,9 +42,12 @@ final class RecordActionPresenter {
     var notice: String?
     private(set) var isBusy = false
 
-    init(entity: EntityKey, showsNotice: Bool = true) {
+    init(
+        entity: EntityKey, showsNotice: Bool = true, navigate: (@MainActor (Route) -> Void)? = nil
+    ) {
         self.entity = entity
         self.showsNotice = showsNotice
+        self.navigate = navigate
     }
 
     func start(
@@ -49,28 +56,36 @@ final class RecordActionPresenter {
     ) {
         let runner = HeroActionRunner(client: appModel.client)
         switch plan.kind {
-        case .toggleField, .create, .setField(_, _?):
-            // No input and nothing destructive: one explicit tap runs it. The flag flips before
-            // the task is scheduled so a second tap cannot start a second write.
-            run(plan, row: row, appModel: appModel, confirmed: false, onFinished: onFinished)
         case .delete:
             confirmation = Confirmation(plan: plan, row: row)
         case .operation(let operation)
         where plan.confirmation == .destructive && operation.fields.isEmpty && operation.preview == nil:
             confirmation = Confirmation(plan: plan, row: row)
-        case .operation, .setField, .editField:
-            form = HeroActionModel(plan: plan, entity: entity, row: row, runner: runner)
-        case .flow(let flow, _):
+        case .flow(let flow, let requires):
             switch flow {
             case .receiveExpense:
-                guard let productID = row.raw.recordValue("productId")?.stringValue else { return }
+                // The flow's declared requirement names the linked Product it receives into.
+                let path = requires?.path ?? "productId"
+                guard let productID = (row.raw.recordValue(path) ?? row.raw.pathValue(path))?.stringValue
+                else { return }
                 receiving = ReceivingModel(
                     expenseID: row.id, productID: ProductCode(productID), service: appModel.client)
             case .locationPhotoPass:
-                appModel.navigator.push(.locationPhotoPass(scope: LocationCode(row.id)))
+                let route = Route.locationPhotoPass(scope: LocationCode(row.id))
+                if let navigate { navigate(route) } else { appModel.navigator.push(route) }
             }
         case .handoff(let section, _):
             Self.open(appModel.webHandoff.url(.record(key: entity, id: row.id, section: section)))
+        case .toggleField, .create:
+            run(plan, row: row, appModel: appModel, confirmed: false, onFinished: onFinished)
+        case .operation, .setField, .editField:
+            // No input and nothing destructive (a preset field write, a form-less operation):
+            // one explicit tap runs it. Anything else asks in the form.
+            if plan.runsOnTap {
+                run(plan, row: row, appModel: appModel, confirmed: false, onFinished: onFinished)
+            } else {
+                form = HeroActionModel(plan: plan, entity: entity, row: row, runner: runner)
+            }
         }
     }
 
@@ -78,6 +93,7 @@ final class RecordActionPresenter {
         _ plan: HeroActionPlan, row: EntityRow, appModel: AppModel, confirmed: Bool,
         onFinished: @escaping @MainActor (HeroActionPlan, HeroActionOutcome) -> Void
     ) {
+        // The flag flips before the task is scheduled so a second tap cannot start a second write.
         guard !isBusy else { return }
         isBusy = true
         let runner = HeroActionRunner(client: appModel.client)
@@ -319,15 +335,13 @@ struct RelationRowCommand: View {
             Button {
                 presenter?.start(plan, row: row, appModel: appModel) { _, _ in onChanged() }
             } label: {
-                Image(systemName: command.symbol)
-                    .imageScale(.large)
-                    .frame(width: FieldGuideTokens.touchTarget, height: FieldGuideTokens.touchTarget)
-                    .contentShape(Rectangle())
+                RowCommandGlyph(action: command)
             }
             .buttonStyle(.borderless)
             .disabled(!command.enabled || presenter?.isBusy == true)
             .accessibilityLabel(command.label)
-            .accessibilityHint(command.enabled ? "" : (command.reason ?? ""))
+            .accessibilityValue(command.isApplied ? "Done" : "")
+            .accessibilityHint(RowCommandGlyph.hint(command))
             .accessibilityIdentifier("relation.command.\(entity.rawValue).\(row.id)")
             .recordActionPresentation(
                 presenter, onFinished: { _, _ in onChanged() }, onEditorSaved: onChanged

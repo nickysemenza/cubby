@@ -156,6 +156,28 @@ struct EntityRowPresentation: Sendable, Hashable {
         return nil
     }
 
+    /// The first declared mobile `subtitle` field with a visible value other than the title, in
+    /// priority order, skipping `excluded` (the status field, which reads as line 2's mark, and rail
+    /// fields, which already show in their columns). Read through `fact` so dates never print as
+    /// raw ISO values.
+    static func subtitleFact(
+        descriptor: EntityDescriptor, row: EntityRow, excluding excluded: Set<String>
+    ) -> Fact? {
+        descriptor.fields
+            .filter { $0.mobileSlot == "subtitle" && !excluded.contains($0.key) }
+            .sorted { ($0.mobilePriority ?? .max) < ($1.mobilePriority ?? .max) }
+            .lazy
+            .compactMap { fact($0.key, descriptor: descriptor, row: row) }
+            .first {
+                isVisibleListFactValue($0.value) && $0.value.caseInsensitiveCompare(row.title) != .orderedSame
+            }
+    }
+
+    /// A fact as line 2 prints it: a date reads as its compact calendar day, like the rail.
+    static func lineText(_ fact: Fact) -> String {
+        fact.dateValue.flatMap { DatePresentation.absolute(of: $0, compact: true) } ?? fact.value
+    }
+
     /// A composed title may include a declared reference name after the canonical ` · `
     /// separator. When the manifest asks for a title subtitle and supplies no separate caption,
     /// put that reference suffix on the row's second line instead of wrapping the title.
@@ -295,23 +317,32 @@ struct EntityRowPresentation: Sendable, Hashable {
     /// The declared `list.rail` columns for `row`: each column's value and sub value from the
     /// list projection, sized by the field's `display.width` bucket so values align down the list.
     static func rail(descriptor: EntityDescriptor, row: EntityRow) -> [RecordRailCell] {
-        (descriptor.presentation.listRail ?? []).prefix(2).compactMap { column in
+        let closed = isClosed(descriptor: descriptor, row: row)
+        return (descriptor.presentation.listRail ?? []).prefix(2).compactMap { column in
             guard let field = descriptor.field(column.field) else { return nil }
             let value = fact(field.key, descriptor: descriptor, row: row)
             let day = value.flatMap { railDay(field, fact: $0, row: row) }
             let shown = value.map { fact in
                 day.flatMap { DatePresentation.absolute(of: $0, compact: true) } ?? fact.value
             }
-            // A deadline without a declared sub value shows how far off it is ("3d ago").
+            // An open deadline without a declared sub value shows how far off it is ("3d ago").
             let sub =
                 column.sub.flatMap { fact($0, descriptor: descriptor, row: row) }.map(railText)
-                ?? (field.dateRangeSemantics == "deadline"
+                ?? (field.dateRangeSemantics == "deadline" && !closed
                     ? day.flatMap { DatePresentation.value($0, compact: true)?.relative } : nil)
             return RecordRailCell(
                 id: field.key, label: field.columnHeader,
                 value: shown.flatMap { isVisibleListFactValue($0) ? $0 : nil },
                 sub: sub.flatMap { isVisibleListFactValue($0) ? $0 : nil },
-                width: railWidth(field), tone: railTone(field, value: value, day: day))
+                width: railWidth(field), tone: railTone(field, value: value, day: day, closed: closed))
+        }
+    }
+
+    /// Whether the record holds a declared terminal (`closed`) option, such as a done task: its
+    /// work is over, so a passed deadline no longer reads as overdue.
+    static func isClosed(descriptor: EntityDescriptor, row: EntityRow) -> Bool {
+        descriptor.fields.contains { field in
+            EntityFieldValue.option(in: row.raw, field: field, surface: "list")?.closed == true
         }
     }
 
@@ -346,16 +377,17 @@ struct EntityRowPresentation: Sendable, Hashable {
     }
 
     /// Condition tone, always paired with the value's own sign or wording: a refund's minus sign
-    /// reads muted, and a passed deadline (worded "… ago") reads destructive.
-    private static func railTone(_ field: FieldDescriptor, value: Fact?, day: String?) -> RecordRailCell.Tone
-    {
+    /// reads muted, and a passed deadline (worded "… ago") on an open record reads destructive.
+    private static func railTone(
+        _ field: FieldDescriptor, value: Fact?, day: String?, closed: Bool
+    ) -> RecordRailCell.Tone {
         guard let value else { return .plain }
         if field.format == "signedCurrency" || field.format == "currency",
             value.value.hasPrefix("-") || value.value.hasPrefix("−")
         {
             return .muted
         }
-        if field.dateRangeSemantics == "deadline", let date = day,
+        if field.dateRangeSemantics == "deadline", !closed, let date = day,
             DatePresentation.value(date, compact: true)?.relative.hasSuffix("ago") == true
         {
             return .destructive
@@ -373,6 +405,23 @@ struct EntityRowPresentation: Sendable, Hashable {
                 ? sums[field.key].flatMap { EntityFieldValue.text(.number($0), field: field) } : nil
             return RecordRailCell(
                 id: field.key, label: field.columnHeader, value: total, sub: nil, width: railWidth(field))
+        }
+    }
+
+    /// The whole list's rail totals: for each column declared `total: "sum"`, the server's worded
+    /// list total over that one field (`meta.totalLabels`). Other declared totals stay out of the
+    /// rail, so no figure prints unlabeled or twice.
+    static func railTotals(descriptor: EntityDescriptor, labels: [String: String]?) -> [RecordRailCell] {
+        (descriptor.presentation.listRail ?? []).prefix(2).compactMap { column in
+            guard let field = descriptor.field(column.field) else { return nil }
+            let total =
+                column.total == "sum"
+                ? descriptor.presentation.listTotals.first { $0.keys == [field.key] }
+                    .flatMap { labels?[$0.id] } : nil
+            return RecordRailCell(
+                id: field.key, label: field.columnHeader,
+                value: total.flatMap { $0.trimmingCharacters(in: .whitespaces).isEmpty ? nil : $0 },
+                sub: nil, width: railWidth(field))
         }
     }
 

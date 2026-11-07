@@ -69,10 +69,14 @@ public struct PlacedAction: Sendable, Hashable, Identifiable {
     public let reason: String?
     public let isDestructive: Bool
     public let prominence: Prominence
+    /// The record already carries what the action would write (Done on a done task): a row
+    /// command draws its completed state rather than an unavailable verb.
+    public let isApplied: Bool
 
     public init(
         id: String, kind: Kind, label: String, symbol: String, enabled: Bool = true,
-        reason: String? = nil, isDestructive: Bool = false, prominence: Prominence = .plain
+        reason: String? = nil, isDestructive: Bool = false, prominence: Prominence = .plain,
+        isApplied: Bool = false
     ) {
         self.id = id
         self.kind = kind
@@ -82,12 +86,13 @@ public struct PlacedAction: Sendable, Hashable, Identifiable {
         self.reason = reason
         self.isDestructive = isDestructive
         self.prominence = prominence
+        self.isApplied = isApplied
     }
 
     func with(_ prominence: Prominence) -> PlacedAction {
         PlacedAction(
             id: id, kind: kind, label: label, symbol: symbol, enabled: enabled, reason: reason,
-            isDestructive: isDestructive, prominence: prominence)
+            isDestructive: isDestructive, prominence: prominence, isApplied: isApplied)
     }
 }
 
@@ -214,7 +219,13 @@ public struct ActionPlacement: Sendable {
         {
             items.append(bulkEdit)
         }
-        if presentation.listActions.contains("merge"), native.contains(.merge),
+        // Native runs only the merge web runs through its generic kernel dialog. A specialized
+        // web flow (a reviewed preview, a domain merge operation) is handed to web instead.
+        if presentation.listActions.contains("merge"), presentation.listMergeOnWeb == true {
+            items.append(
+                PlacedAction(
+                    id: "merge", kind: .openOnWeb, label: "Merge on web", symbol: "arrow.triangle.merge"))
+        } else if presentation.listActions.contains("merge"), native.contains(.merge),
             let merge = combined({ $0.kernel("merge", .merge, "Merge", "arrow.triangle.merge") })
         {
             items.append(rows.count < 2 ? merge.disabled("Select at least two records to merge.") : merge)
@@ -252,17 +263,21 @@ private struct Resolver {
         if let entry = server?[id] { return (entry.enabled, entry.enabled ? nil : entry.reason) }
         guard let plan else { return (true, nil) }
         if let reason = HeroActionRunner.unmet(plan, in: raw) { return (false, reason) }
-        if case .setField(let field, let value?) = plan.kind, raw.planValue(field)?.stringValue == value {
-            return (false, nil)
-        }
+        if isApplied(plan) { return (false, nil) }
         return (true, nil)
+    }
+
+    /// A preset field write whose value the record already holds.
+    func isApplied(_ plan: HeroActionPlan) -> Bool {
+        guard case .setField(let field, let value?) = plan.kind else { return false }
+        return raw.planValue(field)?.stringValue == value
     }
 
     func placed(id: String, plan: HeroActionPlan) -> PlacedAction {
         let (enabled, reason) = availability(id, plan: plan)
         return PlacedAction(
             id: id, kind: .plan(plan), label: plan.label, symbol: plan.symbol, enabled: enabled,
-            reason: reason, isDestructive: plan.confirmation == .destructive)
+            reason: reason, isDestructive: plan.confirmation == .destructive, isApplied: isApplied(plan))
     }
 
     /// A declared verb with a native plan on this entity; nil for kernel ids and web-only verbs.
@@ -323,7 +338,7 @@ extension PlacedAction {
         PlacedAction(
             id: id, kind: kind, label: label, symbol: symbol, enabled: enabled,
             reason: enabled ? nil : reason,
-            isDestructive: isDestructive, prominence: prominence)
+            isDestructive: isDestructive, prominence: prominence, isApplied: isApplied)
     }
 }
 

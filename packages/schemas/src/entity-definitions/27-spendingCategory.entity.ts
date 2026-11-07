@@ -427,6 +427,8 @@ export const { definition, readSchemas } = defineEntityModel({
     countable: false,
     delete: { mode: "soft", bulk: true },
     merge: true,
+    // A category merge reclassifies past spending; web reviews that preview first.
+    mergeFlow: "specialized",
     dataQuality: {
       checks: [
         {

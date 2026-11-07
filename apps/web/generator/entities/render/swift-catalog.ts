@@ -222,19 +222,21 @@ const options = (
         color?: string;
         role?: "status" | "category";
         quiet?: true;
+        closed?: true;
         glyph?: { phosphor: string; sfSymbol: string };
       }[]
     | null,
 ) =>
   values === null
     ? null
-    : values.map(({ value, label, color, role, glyph, quiet }) => ({
+    : values.map(({ value, label, color, role, glyph, quiet, closed }) => ({
         value,
         label,
         color,
         role,
         glyph,
         quiet,
+        closed,
       }));
 
 const filterJSON = (
@@ -637,6 +639,7 @@ const presentationJSON = (
   presentation: CompiledEntity["inspector"],
   filterDescriptors: CompiledEntity["filterDescriptors"],
   connections: ConnectionCatalog,
+  mergeFlow: CompiledEntity["mergeFlow"],
 ) => {
   const { detail, list, edit } = presentation;
   const entityConnectedViews = connections.views(entity);
@@ -717,6 +720,8 @@ const presentationJSON = (
     listRowCommand: list.rowCommand ?? undefined,
     listSwipe: list.swipe || undefined,
     listSwipeDisabled: list.swipe === false || undefined,
+    // A specialized web merge flow: native selections hand the merge to web.
+    listMergeOnWeb: mergeFlow === "specialized" || undefined,
     timelineFields: [...(list.timeline?.fields ?? [])],
     lifecycle:
       list.timeline?.lifecycle == null
@@ -846,6 +851,7 @@ const entityJSON = (
       entity.inspector,
       entity.filterDescriptors,
       connections,
+      entity.mergeFlow,
     ),
   };
 };

@@ -118,6 +118,8 @@ type Presentation = {
   glyph?: Glyph;
   /** The expected value native rows leave unsaid. */
   quiet?: true;
+  /** A terminal value: a passed deadline on a closed record is not overdue. */
+  closed?: true;
 };
 /**
  * Marks `value` as the roster's quiet option. Controls carry it; filter presets share the
@@ -272,7 +274,7 @@ export const selectControlOptions = {
     planning: { role: "status", color: "neutral-status" },
     not_started: { role: "status", color: "neutral-status" },
     in_progress: { role: "status", color: "info", quiet: true },
-    done: { role: "status", color: "positive" },
+    done: { role: "status", color: "positive", closed: true },
   }),
   projectKind: labeled(
     projectKindValues,
@@ -292,7 +294,7 @@ export const selectControlOptions = {
     later: { role: "status", color: "warning" },
     in_progress: { role: "status", color: "info" },
     blocked: { role: "status", color: "destructive" },
-    done: { role: "status", color: "positive" },
+    done: { role: "status", color: "positive", closed: true },
   }),
   trade: withGlyphs(
     labeled(

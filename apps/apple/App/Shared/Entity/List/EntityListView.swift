@@ -707,8 +707,9 @@ struct EntityListView: View {
         guard let model else { return "" }
         let meta = model.isSearching ? model.searchModel?.summaryMeta : model.summaryMeta
         guard let meta else { return "" }
+        // Each declared total is labeled: two currency totals must not read as one repeated figure.
         let totals = descriptor.presentation.listTotals.map { total in
-            meta.totalLabels?[total.id] ?? "Unavailable"
+            "\(total.label) \(meta.totalLabels?[total.id] ?? "unavailable")"
         }
         return ([countSummary(meta)] + totals).joined(separator: " · ")
     }
@@ -1554,7 +1555,12 @@ struct EntityListView: View {
         let visibleMeta = model.isSearching ? model.searchModel?.summaryMeta : model.summaryMeta
         if let meta = visibleMeta {
             #if !os(macOS)
+                // The row's own trailing inset, so the totals sit over the rail columns.
                 listSummary(meta: meta, filtered: !model.filters.isEmpty)
+                    .listRowInsets(
+                        EdgeInsets(
+                            top: FieldGuideTokens.Space.xs, leading: FieldGuideTokens.Space.md,
+                            bottom: FieldGuideTokens.Space.xs, trailing: FieldGuideTokens.Space.md))
             #endif
         }
         if let sections = model.sections {
@@ -1606,19 +1612,14 @@ struct EntityListView: View {
         }
     }
 
+    /// The count with the entity's noun ("8 products"), then the summed rail columns' totals over
+    /// their columns.
     private func listSummary(meta: ListPageMeta, filtered: Bool) -> some View {
-        let totals = descriptor.presentation.listTotals.compactMap {
-            meta.totalLabels?[$0.id]
-        }.filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-        let summary = ([countSummary(meta)] + totals + (filtered ? ["filtered"] : []))
-            .joined(separator: " · ")
-        return Text(summary)
-            .font(.caption)
-            .foregroundStyle(.secondary)
-            .lineLimit(1)
-            .truncationMode(.tail)
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(summary)
+        let noun = (meta.totalCount == 1 ? descriptor.singular : descriptor.plural).lowercased()
+        let count = meta.totalCount == nil ? countSummary(meta) : "\(countSummary(meta)) \(noun)"
+        return EntityListSummary(
+            text: ([count] + (filtered ? ["filtered"] : [])).joined(separator: " · "),
+            totals: EntityRowPresentation.railTotals(descriptor: descriptor, labels: meta.totalLabels))
     }
 
     @ViewBuilder
@@ -1690,6 +1691,7 @@ struct EntityListView: View {
                     }
                 #endif
             }
+            .accessibilityHint(command.map(RowCommandGlyph.hint) ?? "")
             .accessibilityActions {
                 if let command, command.enabled {
                     Button(command.label) {

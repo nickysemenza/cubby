@@ -42,6 +42,9 @@ final class EntitySelectionController {
             bulkEdit = EntityBulkEditModel(descriptor: descriptor, ids: ids, client: appModel.client)
         case .merge:
             merge = EntityMergeModel(descriptor: descriptor, ids: ids, client: appModel.client)
+        case .openOnWeb:
+            // A specialized merge: web's list runs its own reviewed flow over the selection.
+            RecordActionPresenter.open(appModel.webHandoff.url(.route(path: "/\(descriptor.basePath)")))
         case .plan(let plan):
             switch plan.kind {
             case .delete:

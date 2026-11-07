@@ -64,21 +64,23 @@ struct EntityRowView: View {
                 [$0.field] + [$0.sub].compactMap { $0 }
             })
 
+        // The status field reads as line 2's mark (or stays quiet) and rail fields read in their
+        // columns; neither repeats as the subtitle.
+        let lineExcluded = railKeys.union([statusKey].compactMap { $0 })
         let titleSubtitle = EntityRowPresentation.titleSubtitle(descriptor: descriptor, row: row)
-        // The status field reads as line 2's mark (or stays quiet), never again as the subtitle.
-        let mobileSubtitle = presentation.facts.first {
-            $0.id != statusKey && descriptor.field($0.id)?.mobileSlot == "subtitle"
+            .flatMap { lineExcluded.contains($0.id) ? nil : $0 }
+        let mobileSubtitle = EntityRowPresentation.subtitleFact(
+            descriptor: descriptor, row: row, excluding: lineExcluded)
+        // Line 2 never repeats the title (an Expense named after its Product).
+        func addsToTitle(_ fact: EntityRowPresentation.Fact) -> Bool {
+            fact.id != descriptor.titleField && EntityRowPresentation.isVisibleListFactValue(fact.value)
+                && fact.value.caseInsensitiveCompare(row.title) != .orderedSame
         }
-        let declaredSubtitle = titleSubtitle?.value ?? row.subtitle ?? mobileSubtitle?.value
+        let subtitle = [titleSubtitle, mobileSubtitle].compactMap { $0 }.first(where: addsToTitle)
+        // An empty subtitle lets a composed title move its reference suffix to line 2.
         let titleParts = EntityRowPresentation.titleParts(
-            descriptor: descriptor, row: row, subtitle: declaredSubtitle)
-        let subtitleText =
-            [titleSubtitle?.value, row.subtitle, mobileSubtitle?.value]
-            .compactMap { $0 }
-            .first(where: EntityRowPresentation.isVisibleListFactValue) ?? titleParts.subtitle
-        let subtitle = [titleSubtitle, mobileSubtitle].compactMap { $0 }.first {
-            EntityRowPresentation.isVisibleListFactValue($0.value)
-        }
+            descriptor: descriptor, row: row, subtitle: subtitle?.value ?? "")
+        let subtitleText = subtitle.map(EntityRowPresentation.lineText) ?? titleParts.subtitle
 
         // Without a declared rail, the highest-priority trailing fact and a semantic date keep
         // the free trailing slot. The status field already reads on line 2.
@@ -97,9 +99,7 @@ struct EntityRowView: View {
         let omitted = Set(
             ["dataQuality", statusKey, subtitle?.id, trailingValue?.id, date?.id].compactMap { $0 }
         ).union(railKeys)
-        let facts = presentation.facts.filter {
-            !omitted.contains($0.id) && EntityRowPresentation.isVisibleListFactValue($0.value)
-        }
+        let facts = presentation.facts.filter { !omitted.contains($0.id) && addsToTitle($0) }
         return Layout(
             presentation: presentation, title: titleParts.title, status: status, facts: facts,
             subtitleText: subtitleText.flatMap {
@@ -164,7 +164,10 @@ struct EntityRowView: View {
         let descriptor = EntityCatalog[key]
         let breadcrumb = descriptor.presentation.heroBreadcrumb
         func item(_ fact: EntityRowPresentation.Fact) -> (text: String, spoken: String) {
-            (fact.value, "\(descriptor.field(fact.id)?.label ?? fact.id): \(fact.spokenValue)")
+            (
+                EntityRowPresentation.lineText(fact),
+                "\(descriptor.field(fact.id)?.label ?? fact.id): \(fact.spokenValue)"
+            )
         }
         var items: [(text: String, spoken: String)] = []
         if layout.needsData { items.append(("Needs data", "Needs data")) }

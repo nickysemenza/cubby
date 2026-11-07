@@ -39,18 +39,11 @@ function SpendingCategoryMergeReviewFill(
 
 type MergeEntity = MergeCommand["entity"] | "ingredient" | "vendor";
 
-/** Entities whose merge needs more than the kernel's `{ keepId, mergeIds }`. */
-const BESPOKE_MERGE = new Set<string>([
-  "ingredient",
-  "vendor",
-  "purchase",
-  "spendingCategory",
-]);
-
+/** A `mergeFlow: "specialized"` entity has its own handler below; the rest share the kernel dialog. */
 const isKernelMergeEntity = (
   entity: (typeof generatedBrowserCrudEntities)[number],
 ): entity is MergeCommand["entity"] =>
-  entityRoster[entity].merge && !BESPOKE_MERGE.has(entity);
+  entityRoster[entity].merge && entityRoster[entity].mergeFlow === "generic";
 
 /** Every kernel-merged entity without a bespoke handler gets the generic merge. */
 const kernelMergeEntities =

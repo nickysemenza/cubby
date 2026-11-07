@@ -552,6 +552,8 @@ export const { definition, readSchemas } = defineEntityModel(
       },
       delete: { mode: "soft", bulk: true },
       merge: true,
+      // Web merges through `ingredient.merge`, which also reconciles aliases.
+      mergeFlow: "specialized",
       // Standalone ingredients only: a recipe's own ingredient rows (`recipeId`
       // set) are never a resolve target.
       resolve: {

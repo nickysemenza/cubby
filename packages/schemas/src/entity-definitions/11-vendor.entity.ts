@@ -1447,6 +1447,8 @@ export const { definition, readSchemas } = defineEntityModel({
     delete: { mode: "soft", bulk: true },
     resolve: { match: ["name", "aliases"], createMissing: false },
     merge: true,
+    // Web merges through `vendor.merge`, not the generic kernel dialog.
+    mergeFlow: "specialized",
     dataQuality: {
       inputs: [
         {

@@ -366,6 +366,9 @@ const buildMetadataSchemas = () => {
               role: z.enum(enumRoles).optional(),
               /** The expected value native rows leave unsaid; one per roster. */
               quiet: z.literal(true).optional(),
+              /** A terminal value (a task's Done): the record's work is over, so a passed
+               * deadline no longer reads as overdue. */
+              closed: z.literal(true).optional(),
             })
             .strict(),
         ),
@@ -576,6 +579,9 @@ const buildMetadataSchemas = () => {
               role: z.enum(enumRoles).optional(),
               /** The expected value native rows leave unsaid; one per roster. */
               quiet: z.literal(true).optional(),
+              /** A terminal value (a task's Done): the record's work is over, so a passed
+               * deadline no longer reads as overdue. */
+              closed: z.literal(true).optional(),
             })
             .strict(),
         ),
@@ -2494,6 +2500,16 @@ const buildMetadataSchemas = () => {
       softDelete: flag(true),
       delete: entityDeleteMetadataSchema.nullable(),
       merge: z.boolean({ error: "must be a boolean" }),
+      /**
+       * `specialized`: web merges through its own flow (a reviewed preview, a
+       * domain merge operation or an extra rule) rather than the generic kernel
+       * merge dialog, so native selections hand the merge to web instead of
+       * running the kernel merge. Requires `merge`.
+       */
+      mergeFlow: z
+        .enum(["generic", "specialized"])
+        .optional()
+        .default("generic"),
       /**
        * Who serves delete and merge. Derived as `kernel` for each declared
        * capability; declare it only when a workflow owns one (cookbook).

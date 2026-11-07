@@ -3,19 +3,12 @@ import CubbyKit
 import SwiftUI
 
 /// Runs a list row's placed actions (`ActionPlacement`): swipes, context menu, row command and
-/// the swipe's More. Preset writes run on the tap; a destructive verb without inputs asks once in
-/// a native confirmation dialog; anything else that needs input opens the hero sheet; native flows
-/// and web handoffs open their own surfaces. The list refreshes from the recorded mutation.
+/// the swipe's More. Declared verbs, flows and handoffs go to the shared `RecordActionPresenter`,
+/// which owns forms, confirmations, native flows and web handoffs for list and detail alike; this
+/// runner adds only the row's kernel actions (Edit, Select, Copy link, Open on web, More). The
+/// list refreshes from the recorded mutation.
 @MainActor @Observable
 final class EntityRowActionRunner {
-    struct Pending: Identifiable {
-        let action: PlacedAction
-        let plan: HeroActionPlan
-        let key: EntityKey
-        let row: EntityRow
-        var id: String { "\(action.id).\(row.id)" }
-    }
-
     struct EditingRecord: Identifiable {
         let key: EntityKey
         let id: String
@@ -28,14 +21,13 @@ final class EntityRowActionRunner {
         var id: String { row.id }
     }
 
-    var sheet: HeroActionModel?
-    var confirming: Pending?
+    /// The plan router for the list's entity, made on first use.
+    private(set) var actions: RecordActionPresenter?
     var more: MoreMenu?
-    var receiving: ReceivingModel?
     var editing: EditingRecord?
     var flowRoute: Route?
-    var failure: String?
-    private(set) var busy = false
+
+    var busy: Bool { actions?.isBusy ?? false }
 
     func run(
         _ action: PlacedAction, key: EntityKey, row: EntityRow, appModel: AppModel,
@@ -44,7 +36,7 @@ final class EntityRowActionRunner {
         guard action.enabled else { return }
         switch action.kind {
         case .plan(let plan):
-            start(plan, action: action, key: key, row: row, appModel: appModel, openURL: openURL)
+            presenter(for: key).start(plan, row: row, appModel: appModel) { _, _ in }
         case .edit: editing = EditingRecord(key: key, id: row.id)
         case .select: select(row)
         case .copyLink:
@@ -66,67 +58,12 @@ final class EntityRowActionRunner {
         }
     }
 
-    private func start(
-        _ plan: HeroActionPlan, action: PlacedAction, key: EntityKey, row: EntityRow, appModel: AppModel,
-        openURL: OpenURLAction
-    ) {
-        switch plan.kind {
-        case .flow(.receiveExpense, let requires):
-            let path = requires?.path ?? "productId"
-            guard let productID = (row.raw.recordValue(path) ?? row.raw.pathValue(path))?.stringValue else {
-                return
-            }
-            receiving = ReceivingModel(
-                expenseID: row.id, productID: ProductCode(productID), service: appModel.client)
-            return
-        case .flow(.locationPhotoPass, _):
-            flowRoute = .locationPhotoPass(scope: LocationCode(row.id))
-            return
-        case .handoff(let section, _):
-            openURL(appModel.webHandoff.url(.record(key: key, id: row.id, section: section)))
-            return
-        default: break
-        }
-        if plan.confirmation == .destructive, plan.fields.isEmpty {
-            confirming = Pending(action: action, plan: plan, key: key, row: row)
-            return
-        }
-        let runner = HeroActionRunner(client: appModel.client)
-        if case .toggleField = plan.kind {
-            perform(plan, key: key, row: row, confirmed: false, appModel: appModel)
-        } else if plan.runsOnTap {
-            perform(plan, key: key, row: row, confirmed: false, appModel: appModel)
-        } else {
-            sheet = HeroActionModel(plan: plan, entity: key, row: row, runner: runner)
-        }
-    }
-
-    func confirm(_ pending: Pending, appModel: AppModel) {
-        perform(pending.plan, key: pending.key, row: pending.row, confirmed: true, appModel: appModel)
-    }
-
-    private func perform(
-        _ plan: HeroActionPlan, key: EntityKey, row: EntityRow, confirmed: Bool, appModel: AppModel
-    ) {
-        // The flag flips before the task is scheduled so a second tap cannot start a second write.
-        guard !busy else { return }
-        busy = true
-        let runner = HeroActionRunner(client: appModel.client)
-        Task {
-            defer { busy = false }
-            do {
-                finish(
-                    try await runner.perform(plan, on: key, row: row, values: [:], confirmed: confirmed),
-                    appModel: appModel)
-            } catch {
-                Diagnostics.report(error, context: "list.rowAction")
-                failure = error.userMessage
-            }
-        }
-    }
-
-    func finish(_ outcome: HeroActionOutcome, appModel: AppModel) {
-        if case .completed(_, let changed) = outcome { appModel.recordEntityMutation(keys: changed) }
+    private func presenter(for key: EntityKey) -> RecordActionPresenter {
+        if let actions, actions.entity == key { return actions }
+        let presenter = RecordActionPresenter(
+            entity: key, showsNotice: false, navigate: { [weak self] in self?.flowRoute = $0 })
+        actions = presenter
+        return presenter
     }
 }
 
@@ -190,6 +127,34 @@ struct EntityRowContextMenu: View {
     }
 }
 
+/// A row command's glyph: the verb in ink when it can run, the filled check once the record
+/// already carries its write (a done task), and the same verb dimmed while unavailable, so an
+/// unavailable command never reads as done. Every state keeps the 44-point slot.
+struct RowCommandGlyph: View {
+    let action: PlacedAction
+
+    var body: some View {
+        Group {
+            if action.isApplied {
+                Image(systemName: "checkmark.circle.fill").foregroundStyle(.secondary)
+            } else {
+                Image(systemName: action.symbol)
+                    .foregroundStyle(action.enabled ? FieldGuideTokens.interaction : Color.secondary)
+                    .opacity(action.enabled ? 1 : 0.4)
+            }
+        }
+        .font(.title3)
+        .frame(width: FieldGuideTokens.touchTarget, height: FieldGuideTokens.touchTarget)
+        .contentShape(Rectangle())
+    }
+
+    /// The spoken reason an unavailable command cannot run; nothing when it can, or once applied.
+    static func hint(_ action: PlacedAction) -> String {
+        guard !action.enabled, !action.isApplied else { return "" }
+        return ["\(action.label) unavailable", action.reason].compactMap { $0 }.joined(separator: ": ")
+    }
+}
+
 /// `list.rowCommand`: a 44-point leading control beside the row's link, never inside it. It
 /// stays in place while unavailable so rows keep their alignment.
 struct RowCommandButton: View {
@@ -205,11 +170,7 @@ struct RowCommandButton: View {
         Button {
             runner.run(action, key: key, row: row, appModel: appModel, openURL: openURL, select: { _ in })
         } label: {
-            Image(systemName: action.enabled ? action.symbol : "checkmark.circle.fill")
-                .font(.title3)
-                .foregroundStyle(action.enabled ? FieldGuideTokens.interaction : Color.secondary)
-                .frame(width: FieldGuideTokens.touchTarget, height: FieldGuideTokens.touchTarget)
-                .contentShape(Rectangle())
+            RowCommandGlyph(action: action)
         }
         .buttonStyle(.borderless)
         .disabled(!action.enabled || runner.busy)
@@ -234,13 +195,7 @@ private struct EntityRowActionHost: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .sheet(item: $runner.sheet) { action in
-                HeroActionSheet(model: action) { outcome in runner.finish(outcome, appModel: appModel) }
-                    .environment(appModel)
-            }
-            .sheet(item: $runner.receiving) { model in
-                ReceiveExpenseSheet(model: model).environment(appModel)
-            }
+            .recordActionPresentation(runner.actions, onFinished: { _, _ in })
             .sheet(item: $runner.editing) { record in
                 EntityEditorSheet(key: record.key, mode: .update(id: record.id)) { _ in
                     appModel.recordEntityMutation(keys: [record.key])
@@ -249,21 +204,6 @@ private struct EntityRowActionHost: ViewModifier {
             }
             .navigationDestination(item: $runner.flowRoute) { route in
                 RouteDestinationView(route: route)
-            }
-            .confirmationDialog(
-                runner.confirming.map { "\($0.action.label) \($0.row.title)?" } ?? "",
-                isPresented: Binding(
-                    get: { runner.confirming != nil }, set: { if !$0 { runner.confirming = nil } }),
-                titleVisibility: .visible, presenting: runner.confirming
-            ) { pending in
-                Button(pending.action.label, role: .destructive) {
-                    runner.confirm(pending, appModel: appModel)
-                }
-                .accessibilityIdentifier("browse.confirm.\(pending.action.id)")
-            } message: { pending in
-                if case .delete = pending.plan.kind {
-                    Text("This can't be undone.")
-                }
             }
             .confirmationDialog(
                 runner.more?.row.title ?? "",
@@ -277,16 +217,6 @@ private struct EntityRowActionHost: ViewModifier {
                             select: { _ in })
                     }
                 }
-            }
-            .alert(
-                "Couldn't finish",
-                isPresented: Binding(
-                    get: { runner.failure != nil }, set: { if !$0 { runner.failure = nil } }),
-                presenting: runner.failure
-            ) { _ in
-                Button("OK") {}
-            } message: { failure in
-                Text(failure)
             }
     }
 }

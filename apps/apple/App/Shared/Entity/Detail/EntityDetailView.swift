@@ -25,6 +25,20 @@ struct EntityDetailView: View {
 
     private var descriptor: EntityDescriptor { EntityCatalog[key] }
 
+    init(key: EntityKey, id: String) {
+        self.key = key
+        self.id = id
+    }
+
+    /// The real screen over an already loaded model and relation sections (the preview catalog),
+    /// so its toolbar, action bar and More render without a detail read.
+    init(loaded model: GenericEntityDetailModel, relationSections: [RelationSectionModel]) {
+        key = model.descriptor.key
+        id = model.row?.id ?? ""
+        _model = State(initialValue: model)  // state-init-ok: injected preview model
+        _relationSections = State(initialValue: relationSections)  // state-init-ok: injected preview model
+    }
+
     var body: some View {
         let model = model
         let titled =

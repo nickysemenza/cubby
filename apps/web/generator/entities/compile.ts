@@ -1627,6 +1627,10 @@ const validateDeclarationCapabilities = (
       `${context}.capabilities.operationOwners.merge must match merge capability.`,
     );
   }
+  if (capabilities.mergeFlow === "specialized" && !mergeCapability)
+    throw new EntityDeclarationError(
+      `${context}.capabilities.mergeFlow is specialized without a merge capability.`,
+    );
   for (const [index, name] of (capabilities.mcp ?? []).entries()) {
     if (!SUPPORTED_MCP_ACTIONS.has(name))
       throw new EntityDeclarationError(
@@ -2709,6 +2713,7 @@ export const compileEntity = (
     inspector,
     timeline: declaration.capabilities.timeline,
     suggestionFamilies: declaration.capabilities.suggestions,
+    mergeFlow: declaration.capabilities.mergeFlow,
     contract,
     descriptor,
     route,

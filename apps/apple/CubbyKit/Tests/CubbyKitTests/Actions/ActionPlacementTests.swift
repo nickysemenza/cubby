@@ -72,4 +72,23 @@ struct ActionPlacementTests {
         let mixed = ActionPlacement.selectionBar(entity: task, rows: [open, refused])
         #expect(mixed.first { $0.id == "complete" }?.reason == "Blocked")
     }
+
+    @Test func nativeMergeRunsOnlyWhereWebUsesTheKernelMergeDialog() {
+        func merge(_ key: EntityKey) -> PlacedAction? {
+            let entity = EntityCatalog[key]
+            let rows = ["A", "B"].compactMap { entity.row(from: ["id": .string("\(key.rawValue)-\($0)")]) }
+            return ActionPlacement.selectionBar(entity: entity, rows: rows).first { $0.id == "merge" }
+        }
+        // A spending category merge reclassifies past spending behind web's reviewed preview.
+        #expect(merge(.spendingCategory)?.kind == .openOnWeb)
+        #expect(merge(.product)?.kind == .merge)
+    }
+
+    @Test func doneRowCommandReadsAppliedAndUnavailableOneDoesNot() {
+        let task = EntityCatalog[.task]
+        let done = ActionPlacement(entity: task, raw: ["id": "TSK-1", "status": "done"]).rowCommand
+        #expect(done?.enabled == false && done?.isApplied == true)
+        let expense = ActionPlacement(entity: EntityCatalog[.expense], raw: ["id": "EXP-1"]).rowCommand
+        #expect(expense?.enabled == false && expense?.isApplied == false)
+    }
 }

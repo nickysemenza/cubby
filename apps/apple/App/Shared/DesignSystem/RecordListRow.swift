@@ -112,9 +112,9 @@ struct RecordRailCell: Identifiable, Hashable {
     var tone: Tone = .plain
 }
 
-/// Up to two fixed-width rail columns. At accessibility sizes the columns become one wrapping
-/// labeled line under the title ("Qty 3 · Value $4.29"); the switch reads the type size, never
-/// the row's measured width.
+/// Up to two fixed-width rail columns. At accessibility sizes each column becomes one labeled,
+/// wrapping line under the title ("Due Sep 8 · 2 mo ago") that keeps its condition tone; the
+/// switch reads the type size, never the row's measured width.
 struct RecordRailColumns: View {
     let cells: [RecordRailCell]
     @Environment(\.dynamicTypeSize) private var textSize
@@ -122,15 +122,20 @@ struct RecordRailColumns: View {
 
     var body: some View {
         if textSize.isAccessibilitySize {
-            Text(
-                cells.compactMap { cell in
-                    guard let value = cell.value else { return nil }
-                    return (["\(cell.label) \(value)"] + [cell.sub].compactMap { $0 }).joined(separator: " ")
-                }.joined(separator: " · ")
-            )
+            VStack(alignment: .leading, spacing: 2) {
+                ForEach(cells.filter { $0.value != nil }) { cell in
+                    // Concrete colors: the row's rail already sits in a secondary style, and a
+                    // nested hierarchical `.secondary` would fade the line to tertiary.
+                    Text(
+                        (["\(cell.label) \(cell.value ?? "")"] + [cell.sub].compactMap { $0 })
+                            .joined(separator: " · ")
+                    )
+                    .foregroundStyle(
+                        cell.tone == .destructive ? FieldGuideTokens.destructive : Color.secondary)
+                }
+            }
             .font(.footnote)
             .monospacedDigit()
-            .foregroundStyle(.secondary)
             .fixedSize(horizontal: false, vertical: true)
         } else {
             HStack(alignment: .firstTextBaseline, spacing: FieldGuideTokens.Space.sm) {

@@ -414,6 +414,7 @@ export const renderEntityMetadataArtifacts = (
                 recordIconEntityField: entity.inspector.recordIconEntityField,
                 recordEmojiField: entity.inspector.recordEmojiField,
                 merge: entity.operationOwners.merge === "kernel",
+                mergeFlow: entity.mergeFlow,
                 graph:
                   entity.descriptor.dbTable !== null &&
                   "shortcodePrefix" in entity.descriptor,

@@ -48,7 +48,7 @@ final class EntityScreenPreviewModel {
     let screen: EntityScreenPreview
     let appModel: AppModel
     private(set) var list: GenericEntityListModel?
-    private(set) var detailRow: EntityRow?
+    private(set) var detail: GenericEntityDetailModel?
     private(set) var relationSections: [RelationSectionModel] = []
 
     init(screen: EntityScreenPreview) {
@@ -56,14 +56,16 @@ final class EntityScreenPreviewModel {
         appModel = PreviewFixtures.signedInModel()
     }
 
-    var isReady: Bool { list != nil || detailRow != nil }
+    var isReady: Bool { list != nil || detail != nil }
 
     func prepare() async {
         guard !isReady else { return }
         let fixture = screen.fixture
         if screen.isDetail {
             let row = fixture.detailRow
-            PreviewOperationResponses.register(fixture: "\(fixture.rawValue)DetailReads", recordID: row.id)
+            PreviewOperationResponses.register(
+                fixture: "\(fixture.rawValue)DetailReads", recordID: row.id,
+                suggestions: fixture == .product ? PreviewFixtures.productSuggestions : nil)
             let pages = fixture.relationPages
             let sections = RelationSectionModel.sections(
                 of: fixture.descriptor, recordID: row.id, client: appModel.client)
@@ -72,7 +74,8 @@ final class EntityScreenPreviewModel {
                 await section.list.setSource(Self.source("\(screen.id).\(section.id)", page))
             }
             relationSections = sections
-            detailRow = row
+            detail = GenericEntityDetailModel(
+                descriptor: fixture.descriptor, client: appModel.client, loaded: row)
         } else {
             let model = GenericEntityListModel(
                 descriptor: fixture.descriptor, client: appModel.client,
@@ -120,15 +123,9 @@ struct EntityScreenPreviewHost: View {
         let fixture = model.screen.fixture
         if let list = model.list {
             EntityListView(key: fixture.key, model: list)
-        } else if let row = model.detailRow {
-            EntityDetailContent(
-                descriptor: fixture.descriptor, row: row, relationSections: model.relationSections
-            )
-            .fieldGuideScreen()
-            .navigationTitle(fixture.descriptor.singular)
-            #if os(iOS)
-                .navigationBarTitleDisplayMode(.inline)
-            #endif
+        } else if let detail = model.detail {
+            // The real screen: toolbar, action bar under the hero and More all render.
+            EntityDetailView(loaded: detail, relationSections: model.relationSections)
         } else {
             ProgressView()
         }

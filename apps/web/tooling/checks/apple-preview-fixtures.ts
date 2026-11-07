@@ -50,6 +50,7 @@ import {
   entityReportManyOut,
   entityReportOut,
 } from "@cubby/schemas/entity-report";
+import { relatednessOutSchema } from "@cubby/schemas/relatedness";
 import {
   createPaginatedResponseSchema,
   paginatedMetaSchema,
@@ -1242,6 +1243,16 @@ function buildTaskDetail() {
   );
 }
 
+/** The twelve `YYYY-MM` months ending in `PREVIEW_TODAY`'s month, oldest first. */
+function previewMonths(): string[] {
+  const today = new Date(`${PREVIEW_TODAY}T00:00:00Z`);
+  const end = today.getUTCFullYear() * 12 + today.getUTCMonth();
+  return Array.from({ length: 12 }, (_, index) => {
+    const offset = end - (11 - index);
+    return `${Math.floor(offset / 12)}-${String((offset % 12) + 1).padStart(2, "0")}`;
+  });
+}
+
 /**
  * The detail screen's secondary reads, answered by the preview network
  * (`PreviewOperationResponses`) instead of failing: `operations` maps an
@@ -1278,9 +1289,18 @@ function detailReads(
       }),
       "entity.connectedRecordsPreview":
         connectedRecordsPreviewOutputSchema.parse({ views: [] }),
+      // The detail's Related records section reads this for embeddable entities.
+      "relatedness.forEntity": relatednessOutSchema.parse({
+        status: "ready",
+        items: [],
+      }),
       ...(timeline ? { "entity.timeline": timeline } : {}),
+      // The server always returns the twelve months ending in the current one.
       "entity.monthlyExpenseSpend": monthlyExpenseSpendOutputSchema.parse(
-        spend.map(([month, cents]) => ({ month, cents })),
+        previewMonths().map((month) => ({
+          month,
+          cents: spend.find(([spent]) => spent === month)?.[1] ?? 0,
+        })),
       ),
     },
     connectedRecords: Object.fromEntries(

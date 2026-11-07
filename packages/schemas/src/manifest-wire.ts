@@ -70,8 +70,17 @@ export const manifestWire = {
       role: "string?",
       glyph: "EnumOptionIcon?",
       quiet: "boolean?",
+      closed: "boolean?",
     },
-    { defaults: { color: "nil", role: "nil", glyph: "nil", quiet: "nil" } },
+    {
+      defaults: {
+        color: "nil",
+        role: "nil",
+        glyph: "nil",
+        quiet: "nil",
+        closed: "nil",
+      },
+    },
   ),
   EnumOptionIcon: record({ phosphor: "string", sfSymbol: "string" }),
   FieldReference: record({
@@ -344,6 +353,7 @@ export const manifestWire = {
     listRowCommand: "string?",
     listSwipe: "ListSwipe?",
     listSwipeDisabled: "boolean?",
+    listMergeOnWeb: "boolean?",
     timelineFields: "[string]",
     lifecycle: "TimelineLifecycle~",
     editSections: "[EditSection]",

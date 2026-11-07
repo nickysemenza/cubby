@@ -1024,7 +1024,7 @@ struct RelationSectionView: View {
             }
             if list.hasMore {
                 NavigationLink(value: Route.entityList(model.target.key, filters: list.filters)) {
-                    Text("Open all · \(list.meta.map { "\($0.totalCount)" } ?? "")")
+                    Text(list.meta?.totalCount.map { "Open all · \($0.formatted())" } ?? "Open all")
                         .frame(minHeight: FieldGuideTokens.touchTarget)
                 }
                 .accessibilityIdentifier("relation.openAll.\(model.id)")
@@ -1036,7 +1036,9 @@ struct RelationSectionView: View {
 extension RelationSectionModel {
     var title: String { section.title ?? target.plural }
     /// "Photos · 12" once the first page reports the relation's total.
-    var countedTitle: String { list.meta.map { "\(title) · \($0.totalCount)" } ?? title }
+    var countedTitle: String {
+        list.meta?.totalCount.map { "\(title) · \($0.formatted())" } ?? title
+    }
     var isLoadedEmpty: Bool { list.phase == .loaded && list.rows.isEmpty }
 }
 
@@ -1208,42 +1210,44 @@ private struct DetailDisplayRows: View {
 }
 
 /// Bounded reference presentation and its scoped browse link share the declaration.
-/// A `resolvedList` value on a detail page (a Product's owners): each item opens the record it
-/// names, and an item that is only inherited carries the shared marker.
+/// A `resolvedList` value on a detail page (a Product's owners), as one `LabeledContent` row like
+/// a single reference: the label leading, each item trailing as a link to the record it names. An
+/// item that is only inherited carries the shared marker.
 private struct ResolvedListRows: View {
     let field: FieldDescriptor
     let subject: EntityRef
     let items: [EntityFieldValue.ResolvedItem]
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            FieldExplanationLabel(field: field, subject: subject).font(.subheadline)
-            if items.isEmpty, let emptyLabel = field.emptyLabel {
-                Text(emptyLabel).foregroundStyle(.secondary)
-            }
-            ForEach(Array(items.enumerated()), id: \.offset) { _, item in
-                if let reference = item.reference {
-                    NavigationLink(value: Route.entityDetail(reference.entity, id: reference.id)) {
-                        HStack(spacing: FieldGuideTokens.Space.xs) {
-                            label(item)
-                            Image(systemName: "chevron.right").font(.caption).accessibilityHidden(true)
+        LabeledContent {
+            VStack(alignment: .trailing, spacing: FieldGuideTokens.Space.xs) {
+                if items.isEmpty, let emptyLabel = field.emptyLabel {
+                    Text(emptyLabel).foregroundStyle(.secondary)
+                }
+                ForEach(Array(items.enumerated()), id: \.offset) { _, item in
+                    if let reference = item.reference {
+                        NavigationLink(value: Route.entityDetail(reference.entity, id: reference.id)) {
+                            label(item, tint: true)
                         }
-                        .frame(minHeight: FieldGuideTokens.touchTarget, alignment: .leading)
-                        .contentShape(Rectangle())
+                        .buttonStyle(.plain)
+                    } else {
+                        label(item, tint: false)
                     }
-                    .buttonStyle(.plain)
-                } else {
-                    label(item).frame(minHeight: FieldGuideTokens.touchTarget, alignment: .leading)
                 }
             }
+        } label: {
+            FieldExplanationLabel(field: field, subject: subject)
         }
     }
 
-    private func label(_ item: EntityFieldValue.ResolvedItem) -> some View {
+    private func label(_ item: EntityFieldValue.ResolvedItem, tint: Bool) -> some View {
         HStack(spacing: FieldGuideTokens.Space.xs) {
-            Text(item.label).fixedSize(horizontal: false, vertical: true)
+            Text(item.label).multilineTextAlignment(.trailing).fixedSize(horizontal: false, vertical: true)
                 .foregroundStyle(
-                    item.inherited ? FieldGuideTokens.graphiteSecondary : FieldGuideTokens.graphite)
+                    tint
+                        ? AnyShapeStyle(.tint)
+                        : AnyShapeStyle(
+                            item.inherited ? FieldGuideTokens.graphiteSecondary : FieldGuideTokens.graphite))
             if item.inherited { InheritedMarker() }
         }
         .accessibilityElement(children: .combine)
@@ -1271,47 +1275,45 @@ private struct RecordReferenceList: View {
         }
         return result
     }
+    /// One `LabeledContent` row, like a single reference: the label leading, the linked records
+    /// trailing, then the show-more and View all links.
     var body: some View {
         if let target {
-            VStack(alignment: .leading, spacing: 0) {
-                FieldExplanationLabel(field: field, subject: subject).font(.subheadline)
-                ForEach(
-                    Array(
-                        (expanded ? items : Array(items.prefix(field.referencePreviewLimit ?? items.count)))
-                            .enumerated()), id: \.offset
-                ) { _, item in
-                    if let id = item["id"]?.stringValue ?? item.stringValue {
-                        NavigationLink(value: Route.entityDetail(target, id: id)) {
-                            HStack {
-                                if let emoji = item["emoji"]?.stringValue {
-                                    Text(emoji).accessibilityHidden(true)
+            LabeledContent {
+                VStack(alignment: .trailing, spacing: FieldGuideTokens.Space.xs) {
+                    let limit = expanded ? items.count : field.referencePreviewLimit ?? items.count
+                    let shown = Array(items.prefix(limit))
+                    ForEach(Array(shown.enumerated()), id: \.offset) { _, item in
+                        if let id = item["id"]?.stringValue ?? item.stringValue {
+                            NavigationLink(value: Route.entityDetail(target, id: id)) {
+                                HStack(spacing: FieldGuideTokens.Space.xs) {
+                                    if let emoji = item["emoji"]?.stringValue {
+                                        Text(emoji).accessibilityHidden(true)
+                                    }
+                                    Text(item["name"]?.stringValue ?? id)
+                                        .multilineTextAlignment(.trailing)
+                                        .fixedSize(horizontal: false, vertical: true)
                                 }
-                                Text(item["name"]?.stringValue ?? id)
-                                    .fixedSize(horizontal: false, vertical: true)
-                                Image(systemName: "chevron.right").font(.caption).accessibilityHidden(true)
+                                .foregroundStyle(.tint)
                             }
-                            .frame(minHeight: FieldGuideTokens.touchTarget, alignment: .leading)
-                            .contentShape(Rectangle())
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    if let limit = field.referencePreviewLimit, items.count > limit {
+                        Button(expanded ? "Show less" : "+\(items.count - limit) more") { expanded.toggle() }
+                            .buttonStyle(.plain)
+                            .frame(minHeight: FieldGuideTokens.touchTarget)
+                    }
+                    if !filters.isEmpty {
+                        NavigationLink(value: Route.entityList(target, filters: filters)) {
+                            Text("View all").foregroundStyle(.tint)
                         }
                         .buttonStyle(.plain)
+                        .frame(minHeight: FieldGuideTokens.touchTarget)
                     }
                 }
-                if let limit = field.referencePreviewLimit, items.count > limit {
-                    Button {
-                        expanded.toggle()
-                    } label: {
-                        Text(expanded ? "Show less" : "+\(items.count - limit) more")
-                            .frame(minHeight: FieldGuideTokens.touchTarget)
-                    }
-                    .buttonStyle(.plain)
-                }
-                if !filters.isEmpty {
-                    NavigationLink(value: Route.entityList(target, filters: filters)) {
-                        Label("View all", systemImage: "chevron.right")
-                            .frame(minHeight: FieldGuideTokens.touchTarget)
-                    }
-                    .buttonStyle(.plain)
-                }
+            } label: {
+                FieldExplanationLabel(field: field, subject: subject)
             }
         }
     }

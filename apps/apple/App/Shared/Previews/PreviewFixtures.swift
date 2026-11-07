@@ -215,15 +215,17 @@ nonisolated private final class PreviewNetworkResponse: URLProtocol, @unchecked 
 /// id each request names, so a detail preview's reports and summary records render synthetic data.
 nonisolated enum PreviewOperationResponses {
     private struct Reads: Decodable {
-        let operations: [String: JSONValue]
+        var operations: [String: JSONValue]
         let connectedRecords: [String: JSONValue]
     }
 
     private static let registered = Mutex<[String: Reads]>([:])
 
-    static func register(fixture name: String, recordID: String) {
-        let reads: Reads = PreviewFixtures.screenFixture(name)
-        registered.withLock { $0[recordID] = reads }
+    /// `suggestions` answers the record's pending field Suggestions read (`suggestions.list`).
+    static func register(fixture name: String, recordID: String, suggestions: JSONValue? = nil) {
+        var reads: Reads = PreviewFixtures.screenFixture(name)
+        if let suggestions { reads.operations["suggestions.list"] = suggestions }
+        registered.withLock { [reads] in $0[recordID] = reads }
     }
 
     static func response(operation: String, body: JSONValue?) -> Data? {
