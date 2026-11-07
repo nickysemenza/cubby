@@ -71,6 +71,7 @@ import { Description } from "~/ui/text/description";
 import { EnumPill } from "~/ui/text/enum-pill";
 import { Pill } from "~/ui/text/pill";
 
+import { listFieldTypeLabel } from "./column-presentation";
 import {
   activeSides,
   type Filter,
@@ -84,7 +85,7 @@ import {
   withMode,
   withSideValues,
 } from "./filter-bar-core";
-import { sortableColumns, SortSection } from "./mobile-sort-sheet";
+import { sortableFields, SortSection } from "./mobile-sort-sheet";
 import type { CubbyTable as Table } from "./table-features";
 import TableLayoutCustomizer from "./table-layout-customizer";
 
@@ -946,6 +947,7 @@ function PanelSection({
 function filterTypeLabel(field: FilterBarField): string {
   if (field.dateRange) return "date range";
   if (field.numberRange) return "number range";
+  if (field.presentation) return listFieldTypeLabel(field.presentation);
   if (field.referenceEntity) return "record";
   return {
     entity: "record",
@@ -1835,9 +1837,10 @@ export function MobileFilterTier<TData extends RowData>({
     isFieldActive(filtersByField.get(field.key)),
   );
   const editingField = chipFields.find((field) => field.key === view);
+  const fieldTypeId = useId();
   // The `Filter` sheet is also where phone sort lives — surface the trigger
   // for a sortable-only table even when it declares no filterable fields.
-  const hasSort = sortableColumns(table).length > 0;
+  const hasSort = sortableFields(table).length > 0;
   const showFilterTrigger =
     chipFields.length > 0 || hasSort || switches.length > 0;
 
@@ -1951,6 +1954,8 @@ export function MobileFilterTier<TData extends RowData>({
                 <button
                   key={field.key}
                   type="button"
+                  aria-label={field.label ?? field.key}
+                  aria-describedby={`${fieldTypeId}-${field.key}`}
                   className="flex min-h-11 items-center justify-between gap-2 border-b border-border px-1 text-left text-sm"
                   disabled={Boolean(field.unsupportedReason)}
                   onClick={() => setView(field.key)}
@@ -1959,7 +1964,10 @@ export function MobileFilterTier<TData extends RowData>({
                   <span className="min-w-0 truncate font-medium">
                     {field.label ?? field.key}
                   </span>
-                  <span className="shrink-0 text-xs text-muted-foreground">
+                  <span
+                    id={`${fieldTypeId}-${field.key}`}
+                    className="shrink-0 text-xs text-muted-foreground"
+                  >
                     {filterTypeLabel(field)}
                   </span>
                   <span className="min-w-0 truncate text-muted-foreground">

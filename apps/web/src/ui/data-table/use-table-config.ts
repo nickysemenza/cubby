@@ -69,6 +69,7 @@ interface UseTableConfigOptions<TData extends RowData> {
   valueChangeScope?: string;
   /** Group by choices the column header menus offer; see `CubbyTableMeta`. */
   grouping?: CubbyTableMeta["grouping"];
+  sortFields?: CubbyTableMeta["sortFields"];
   /**
    * Opt-in expandable tree support. Return a row's children to render nested
    * sub-rows. The shared v9 feature bundle includes the expanded row model;
@@ -113,6 +114,7 @@ export function useTableConfig<TData extends RowData>({
   rowContentVersion,
   valueChangeScope,
   grouping,
+  sortFields,
   getSubRows,
   filterFromLeafRows,
   paginateExpandedRows,
@@ -173,6 +175,7 @@ export function useTableConfig<TData extends RowData>({
     if (grouping) {
       Object.assign(meta, { grouping });
     }
+    if (sortFields) Object.assign(meta, { sortFields });
 
     const state = {
       sorting,
@@ -276,6 +279,7 @@ export function useTableConfig<TData extends RowData>({
     rowContentVersion,
     valueChangeScope,
     grouping,
+    sortFields,
     getRowId,
     enableRowSelection,
     rowSelection,

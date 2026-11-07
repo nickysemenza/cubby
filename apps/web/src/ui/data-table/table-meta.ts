@@ -1,5 +1,6 @@
 import type { Entity, EntityRef } from "@cubby/schemas/entity";
 import type { EntityFieldProvenance } from "@cubby/schemas/entity-fields";
+import type { GeneratedListFieldPresentation } from "@cubby/schemas/entity-projection-types";
 import { humanize, type NumberRange } from "@cubby/shared";
 import type { CellData, RowData } from "@tanstack/react-table";
 import { type ReactNode, useEffect } from "react";
@@ -14,6 +15,7 @@ import type { CubbyColumn, CubbyTable } from "./table-features";
 
 /** Configuration for an inline column-header filter. */
 export interface FilterConfig {
+  presentation?: GeneratedListFieldPresentation;
   placeholder: string;
   /** The filter's declared name; it wins over the hosting column's header. */
   label?: string;
@@ -134,6 +136,7 @@ export interface CubbyColumnMeta<TData = CellData> {
   countOf?: Entity;
   /** Header and column-manager identity, without changing cell link marks. */
   headerEntity?: Entity;
+  presentation?: GeneratedListFieldPresentation;
   /**
    * Every value links to one entity's records: the header paints that
    * entity's icon once and each link drops its generic icon
@@ -201,6 +204,11 @@ export interface ServerTotals {
 }
 
 export interface CubbyTableMeta {
+  /** Server-admitted sorts, including fields without a rendered column. */
+  sortFields?: readonly {
+    key: string;
+    presentation: GeneratedListFieldPresentation;
+  }[];
   /** All rows are loaded: filter counts may be computed from this table's row model. */
   completeLocalData?: boolean;
   /** Primary search for a bounded, non-entity list; its key hosts a text accessor. */

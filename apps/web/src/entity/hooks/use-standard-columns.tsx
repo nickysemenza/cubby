@@ -13,7 +13,7 @@ import { identityWidthClassName } from "~/entity/entity-list/identity-list-confi
 import { readRecordField } from "~/entity/entity-references";
 import { featureRegistry } from "~/entity/feature-registry";
 import { manifestFilterConfig } from "~/entity/filter-manifest";
-import { useEntityMetadata } from "~/entity/metadata";
+import { useEntityMetadata, listFieldPresentation } from "~/entity/metadata";
 import {
   createActionsColumn,
   createImageColumn,
@@ -348,15 +348,18 @@ export function useStandardColumns<TData extends BaseListRow>({
           colId: string,
         ): CubbyColumnDef<TData, TValue> => {
           const manifestConfig = getFilterConfig(colId);
-          if (!manifestConfig) return col;
           const nextColumn = {
             ...col,
             // Client-side tables would otherwise resolve a filterFn from the ROW
             // value's type and silently match nothing against an array. Harmless
             // on server-filtered tables, which never run it.
-            meta: { ...col.meta, filterConfig: manifestConfig },
+            meta: {
+              ...col.meta,
+              presentation: listFieldPresentation(queryClient, entity, colId),
+              ...(manifestConfig ? { filterConfig: manifestConfig } : {}),
+            },
           };
-          if (manifestConfig.filterType === "multiselect") {
+          if (manifestConfig?.filterType === "multiselect") {
             nextColumn.filterFn = multiSelectFilterFn;
           }
           return nextColumn;

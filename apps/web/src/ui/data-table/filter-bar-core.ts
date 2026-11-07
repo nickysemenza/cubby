@@ -31,6 +31,7 @@ export type FilterValueType =
   | "presence";
 
 type FilterFieldConfig = {
+  presentation?: FilterConfig["presentation"];
   key: string;
   label?: string;
   type: "text" | "select" | "multiselect";
@@ -286,6 +287,8 @@ export function barFieldFromConfig(
   const type = config.filterType ?? "text";
   return {
     key,
+    presentation: config.presentation,
+    description: config.presentation?.description ?? undefined,
     label,
     type,
     kind: config.kind,

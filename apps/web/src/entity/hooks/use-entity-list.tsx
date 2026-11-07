@@ -48,10 +48,9 @@ import {
   serverTreeStatusOf,
   useServerTreeChildren,
 } from "~/entity/hooks/use-server-tree-children";
-import { useEntityMetadata } from "~/entity/metadata";
+import { useEntityMetadata, listFieldPresentation } from "~/entity/metadata";
 import { listEntities } from "~/entity/model/list-contracts";
 import { useProblemContinuation } from "~/entity/problems/problem-continuation";
-import { defaultSortFor } from "~/entity/sortable-fields";
 import type { RowLinkResolver } from "~/entity/table/column-helpers";
 import type { ServerListWorkbenchModel } from "~/entity/table/list-workbench";
 import { problemWorklistState } from "~/entity/table/problem-worklist";
@@ -447,7 +446,9 @@ export function useEntityList<
     () =>
       onGroupByChange && {
         choices: metadata.listFields.grouping.flatMap((choice) =>
-          choice.reason === null && choice.filter
+          (choice.listed || choice.key === groupChoice?.key) &&
+          choice.reason === null &&
+          choice.filter
             ? [
                 {
                   key: choice.key,
@@ -579,22 +580,13 @@ export function useEntityList<
     initialColumnVisibility,
     ...worklistColumns,
   });
-  // Audit dates stay off the default roster, but a column someone chose to sort
-  // by must be on screen. The entity's own default order does not count: most
-  // lists open newest-first, which would put the date back on every one of them.
-  const entityDefaultSort = defaultSortFor(queryClient, entity);
-  const columnVisibilityWithSort = useMemo(
-    () =>
-      listReadVisibility(
-        visibility.columnVisibility,
-        tableState.sorting.map(({ id }) => id),
-        entityDefaultSort,
-      ),
-    [entityDefaultSort, tableState.sorting, visibility.columnVisibility],
+  const listVisibility = useMemo(
+    () => listReadVisibility(visibility.columnVisibility),
+    [visibility.columnVisibility],
   );
   const requestedFields = useMemo(
-    () => readProjection?.(queryClient, entity, columnVisibilityWithSort),
-    [entity, queryClient, readProjection, columnVisibilityWithSort],
+    () => readProjection?.(queryClient, entity, listVisibility),
+    [entity, queryClient, readProjection, listVisibility],
   );
   const pageQueryOptions = useMemo(
     (): ListQueryOptionsFn<TFilters, TRow> =>
@@ -968,6 +960,14 @@ export function useEntityList<
           onExpandedChange: treeChildren.onExpandedChange,
         }
       : undefined;
+  const sortFields = useMemo(
+    () =>
+      metadata.sort?.fields.flatMap((key) => {
+        const presentation = listFieldPresentation(queryClient, entity, key);
+        return presentation ? [{ key, presentation }] : [];
+      }),
+    [metadata.sort, queryClient, entity],
+  );
   const table = useTableConfig({
     valueChangeScope: selectionScope,
     data: tableData,
@@ -988,13 +988,14 @@ export function useEntityList<
     // The declared roster is the default layout: a column hidden by default is
     // not a customization, and Restore default returns to it.
     initialColumnVisibility: visibility.initialColumnVisibility,
-    columnVisibility: columnVisibilityWithSort,
+    columnVisibility: listVisibility,
     onColumnVisibilityChange: setColumnVisibility,
     scrollRestorationId: entity,
     serverTotals,
     filterFields,
     rowContentVersion,
     grouping: tableGrouping || undefined,
+    sortFields,
   });
 
   const [isSelectingAll, setIsSelectingAll] = useState(false);

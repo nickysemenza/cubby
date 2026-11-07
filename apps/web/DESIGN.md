@@ -536,6 +536,17 @@ mounted screen, with no URL or saved-preference state.
 
 ### Data visualization
 
+List controls share the compiled list-field vocabulary. Columns lead with the
+visibility checkbox and field label; the canonical entity mark follows the
+right-aligned type label. Headers and record links retain leading marks. Group
+and Sort choices lead with the canonical entity or type mark. Group selection
+shows 1st, 2nd and 3rd explicitly; multivalue guidance explains whole-record
+filtering. Column actions disclose field descriptions and unavailable operations.
+Supported hidden fields remain available in Sort. The section action reads
+"Exclude matching records" and explains its effect on every group; Collapse
+closes only that section. Phone controls keep the base target size and grouped
+list layout.
+
 Data colors are independent of neutral interaction ink. The eight categorical
 chart tokens use the existing blue, plum, teal, ochre, violet, terracotta, olive
 and slate palette on the web's light surface. The shared sequential heat scale

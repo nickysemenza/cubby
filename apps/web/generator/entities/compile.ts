@@ -2728,6 +2728,7 @@ export const compileEntity = (
     },
     // Resolved across entities by `compileListFields`.
     listFields: {
+      presentation: {},
       derived: {},
       rows: {},
       terms: {},

@@ -1840,6 +1840,20 @@ multivalue capability, ancestor levels, and supported date buckets. Unsupported
 SQL sources remain disabled with a reason; the kernel validates the same
 capabilities for every client.
 
+The list-field compiler also owns `listFields.presentation`: semantic labels,
+descriptions, entity targets, value types, cardinality and admitted sort, group
+and filter keys with unavailable reasons. Shared web columns and menus consume
+these facts rather than guessing semantics from storage shape. Relationship
+previews contain records even when their declared sort orders by related count;
+that sort carries its own explanation. Sort controls offer supported hidden
+columns independently of column visibility.
+
+Grouping menu eligibility is separate from accepted request keys. Internal
+fields and duplicate SQL values are unlisted, retaining existing grouped links
+and supplied views. Authored choices win; otherwise the choice matching its
+filter column wins. Derived aliases bind drill-down through the same compiled
+relationship path, including a stored reference's equivalent related preview.
+
 List requests and supplied views use `groupBy: [{ key, level?, bucket? }]`, with
 at most three unique keys in hierarchy order. Empty or omitted means ungrouped.
 Web URL state encodes that array in `groupBy`; there is no standalone
@@ -1921,6 +1935,11 @@ filter adapter, so that action is unavailable there. "Hide" is available only
 for a single root value with an exclusion filter; a flat exclusion cannot negate
 a multidimensional path conjunction. Native multidimensional leaf menus are
 disabled for the same reason, while labels retain ancestor context.
+
+Web calls this action "Exclude matching records": it removes whole records,
+including their occurrences in other groups. Collapse changes presentation only.
+Filters and "Filter to this" also select whole records; they do not trim the
+other memberships of a selected record.
 
 Complete matching selection uses `entity.selectionIds`, separately from list
 hydration. Its filters and nesting define the canonical population; bounded

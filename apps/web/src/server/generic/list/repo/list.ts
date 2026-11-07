@@ -17,6 +17,7 @@ import {
   entityMembership,
   type ShortcodeEntity,
 } from "@cubby/schemas/entity-manifest";
+import type { GeneratedGroupChoice } from "@cubby/schemas/entity-projection-types";
 import { generatedEntitySort } from "@cubby/schemas/entity-sort";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import { FILTER_NONE } from "@cubby/schemas/filter-sentinel-fields";
@@ -88,6 +89,7 @@ import {
   type PageStoredMeta,
 } from "~/server/generic/derived/repo/read";
 import type { PageFieldReadContexts } from "~/server/generic/derived/repo/read-context";
+import { labelSql } from "~/server/generic/entity-graph/repo/record-label";
 import { relatedWhereConditions } from "~/server/generic/entity-links/repo/related-view";
 import type { EvidenceLoader } from "~/server/generic/field-explanation/repo/field-explanation-evidence";
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
@@ -131,6 +133,7 @@ import {
   ListContext,
   type ListPreparationScope,
   type ListPrepare,
+  listPrepare,
   type ListReader,
   relatedExistsSql,
   type AnyRowsSql,
@@ -518,6 +521,27 @@ export function listScaffold<
   const rowsSql: AnyRowsSql = options?.rows ?? {};
   const derivedFields = derivedFieldsOf(entity);
   const listFields = generatedEntityListFields[entity];
+  // Canonical titles are prepared only for requested record dimensions that
+  // cannot read a physical title column. Existing prepares own request reuse.
+  const groupTitlesPrepare = listPrepare(async (_db, filters) => {
+    const choices: readonly GeneratedGroupChoice[] = listFields.grouping;
+    const targets = new Set(
+      listGroupByFromFilters(filters).flatMap(({ key }) => {
+        const value = choices.find((choice) => choice.key === key)?.value;
+        return value?.kind === "record" && value.titleColumn === null
+          ? [value.target]
+          : [];
+      }),
+    );
+    return new Map(
+      await Promise.all(
+        [...targets].map(
+          async (target) =>
+            [target, await labelSql(target, "__list_record")] as const,
+        ),
+      ),
+    );
+  });
   // Immutable observations expose their latest annotation time through the declared projection.
   const updatedAtSql = (context: ListContext) =>
     derivedFields.updatedAt
@@ -820,6 +844,9 @@ export function listScaffold<
       const scopes = requestedScopes(values);
       const prepares = new Set(
         [
+          ...(!counting && listGroupByFromFilters(request.filters).length
+            ? [groupTitlesPrepare]
+            : []),
           ...requested.map((key) => {
             const field = derivedFields[key];
             return field?.shape === "rows"
@@ -1142,7 +1169,16 @@ export function listScaffold<
       context: ListContext = ListContext.empty,
     ): ListGroupSql[] {
       return listGroupByFromFilters(filters).map((dimension, index) => {
-        const group = groupSql(entity, dimension, derivedSql, table, context);
+        const group = groupSql(
+          entity,
+          dimension,
+          derivedSql,
+          table,
+          context,
+          context.has(groupTitlesPrepare)
+            ? context.get(groupTitlesPrepare)
+            : undefined,
+        );
         if (!group.members) return group;
         const at = (column: string) =>
           sql`${sql.identifier(`list_group_${index}`)}.${sql.identifier(column)}`;

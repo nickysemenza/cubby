@@ -1,4 +1,5 @@
 import type { Entity } from "@cubby/schemas/entity";
+import type { GeneratedListFieldPresentation } from "@cubby/schemas/entity-projection-types";
 import {
   queryOptions,
   type QueryClient,
@@ -22,6 +23,17 @@ const readEntityMetadata = createIsomorphicFn()
   .client(loadBrowserEntityMetadata);
 
 const metadataKey = (entity: Entity) => ["entity-metadata", entity] as const;
+
+/** The compiled field vocabulary is shared by every list surface. */
+export function listFieldPresentation(
+  queryClient: QueryClient,
+  entity: Entity,
+  key: string,
+): GeneratedListFieldPresentation | undefined {
+  const fields: Readonly<Record<string, GeneratedListFieldPresentation>> =
+    entityMetadata(queryClient, entity).listFields.presentation;
+  return fields[key];
+}
 export type EntityMetadataFor<E extends Entity> = EntityMetadataByEntity[E];
 type MetadataBundle = Awaited<ReturnType<typeof readEntityMetadata>>;
 

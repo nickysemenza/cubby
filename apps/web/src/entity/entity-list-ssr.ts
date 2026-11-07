@@ -20,7 +20,6 @@ import {
   encodeFilters,
   filterGetterFromColumnFilters,
   resolveOpeningFilters,
-  paramToSort,
 } from "./filters";
 import type { ListEntity } from "./model/list-contracts";
 import { entityListDefaultSort } from "./sortable-fields";
@@ -95,11 +94,7 @@ export async function ensureEntityListSsr<E extends ListEntity>(options: {
   const fields = projection(
     options.queryClient,
     options.entity,
-    listReadVisibility(
-      {},
-      paramToSort(openingSearch.sort)?.map(({ id }) => id) ?? [],
-      defaultSort.orderBy,
-    ),
+    listReadVisibility({}),
   );
   const includeCount = listReadNeedsCount(
     entityMetadata(options.queryClient, options.entity).summary.primarySearch

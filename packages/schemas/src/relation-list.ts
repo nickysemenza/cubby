@@ -86,6 +86,7 @@ export const relationGroupChoice = <const K extends string>(choice: {
   options?: Options;
 }): SupportedChoice<K> => ({
   key: choice.key,
+  listed: true,
   label: choice.label,
   noValueLabel: choice.noValueLabel ?? "None",
   reason: null,
@@ -109,6 +110,7 @@ export const unsupportedGroupChoice = <const K extends string>(choice: {
   reason: string;
 }): UnsupportedChoice<K> => ({
   key: choice.key,
+  listed: true,
   label: choice.label,
   noValueLabel: "None",
   reason: choice.reason,

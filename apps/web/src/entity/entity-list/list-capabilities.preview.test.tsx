@@ -163,9 +163,7 @@ it.each([1440, 402])(
     if (width !== 402) return;
     fireEvent.click(screen.getByRole("button", { name: "Filter" }));
     const filters = await screen.findByRole("dialog", { name: "Filter" });
-    const brandLabel = within(filters).getByText("Brand", { exact: true });
-    const brand = brandLabel.closest("button");
-    if (!brand) throw new Error("Brand filter has no field control");
+    const brand = within(filters).getByRole("button", { name: "Brand" });
     expect(brand).toHaveTextContent("record");
     fireEvent.click(brand);
     const editor = await screen.findByRole("dialog", {
@@ -177,6 +175,18 @@ it.each([1440, 402])(
     fireEvent.click(within(editor).getByRole("button", { name: "Close" }));
     fireEvent.click(screen.getByRole("button", { name: "Filter" }));
     const reopened = await screen.findByRole("dialog", { name: "Filter" });
+    fireEvent.click(
+      within(reopened).getByRole("button", { name: "Sort by Updated at" }),
+    );
+    await waitFor(() =>
+      expect(state.requests.at(-1)).toEqual(
+        expect.objectContaining({
+          sort: expect.arrayContaining([
+            expect.objectContaining({ orderBy: "updatedAt" }),
+          ]),
+        }),
+      ),
+    );
     fireEvent.click(within(reopened).getByRole("button", { name: "Columns" }));
     const columns = await screen.findByRole("dialog", { name: "Columns" });
     fireEvent.click(
@@ -398,6 +408,23 @@ it("keeps quality beside identity and emits its server sort", async () => {
       }),
     ),
   );
+  fireEvent.click(screen.getByRole("button", { name: "Display" }));
+  fireEvent.click(
+    await screen.findByRole("button", { name: /^Sort: Data quality/ }),
+  );
+  fireEvent.click(await screen.findByRole("menuitem", { name: "Updated at" }));
+  await waitFor(() =>
+    expect(state.requests.at(-1)).toEqual(
+      expect.objectContaining({
+        sort: expect.arrayContaining([
+          expect.objectContaining({ orderBy: "updatedAt" }),
+        ]),
+      }),
+    ),
+  );
+  expect(
+    document.querySelector('thead th[data-column-id="updatedAt"]'),
+  ).toBeNull();
 });
 
 // The SQL identity and bulk-write owners retain filtering and persistence.
