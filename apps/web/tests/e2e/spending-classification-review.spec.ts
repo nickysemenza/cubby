@@ -180,9 +180,9 @@ test("reviews historical item classification and preserves explicit purpose", as
   await expect(
     page.getByRole("dialog", { name: childName, exact: true }),
   ).toHaveCount(0);
-  const mobileChild = page.getByRole("button").filter({
-    has: page.getByRole("link", { name: childName, exact: true }),
-  });
+  const mobileChild = page
+    .getByRole("list", { name: "Records list", exact: true })
+    .getByRole("button", { name: new RegExp(`^${childName} `) });
   await expect(mobileChild).toBeVisible();
   const phoneTreePath = ".impeccable/review/category-mapping-mobile-tree.png";
   await page.screenshot({ path: phoneTreePath, fullPage: true });
