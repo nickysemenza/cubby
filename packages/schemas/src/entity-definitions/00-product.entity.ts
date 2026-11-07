@@ -1907,6 +1907,16 @@ Rules:
         },
         {
           output: false,
+          key: "sellers",
+          description:
+            "Vendors this Product was acquired from. Refunds on those acquisitions stay included. Planned lines, reimbursements and ambiguous counterparties do not establish a seller.",
+          kind: "identifier",
+          nullable: true,
+          reference: { entity: "vendor", multiple: true },
+          display: { emptyLabel: "No seller" },
+        },
+        {
+          output: false,
           key: "componentCount",
           kind: "number",
           display: {
@@ -2268,6 +2278,10 @@ Rules:
       ],
 
       rows: {
+        sellerMemberships: {
+          label: "Seller memberships",
+          repository: { seller: { reference: "vendor" } },
+        },
         barcodes: {
           label: "Barcodes",
           path: [{ edge: "EntityExternalId.entityId", direction: "incoming" }],
@@ -2516,6 +2530,7 @@ Rules:
         // The primary live GTIN, else the oldest.
         primaryGtin: { type: "text" },
         expenseTotal: { type: "number" },
+        sellers: { via: "sellerMemberships.seller" },
         expenseCount: { type: "number" },
         ledgerExpectedQuantity: {
           type: "number",
@@ -2650,7 +2665,13 @@ Rules:
           "related:product.purchases",
         ],
       },
-      grouping: ["categoryId", "brandId", "tags", "quantityVarianceState"],
+      grouping: [
+        "categoryId",
+        "brandId",
+        "tags",
+        "quantityVarianceState",
+        "sellers",
+      ],
       intents: {
         fields: {
           // The list's "New" dialog and the picker's "Create product" open
@@ -2857,6 +2878,19 @@ Rules:
           brandRef: { entity: "vendor" },
           placeholder: "Filter by brand...",
           deriveSchema: true,
+        },
+        {
+          columnId: "sellers",
+          field: "sellerId",
+          urlKey: "seller",
+          kind: "idMulti",
+          label: "Sellers",
+          placeholder: "Filter sellers...",
+          schemaDescription:
+            "Products with a proven acquisition seller. Filters select whole Products and retain their other seller memberships.",
+          deriveSchema: true,
+          optionsKey: "vendor",
+          brandRef: { entity: "vendor" },
         },
         {
           columnId: "brandSearch",

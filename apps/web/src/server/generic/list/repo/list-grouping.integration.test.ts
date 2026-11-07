@@ -11,6 +11,7 @@ import { z } from "zod";
 import { getDb } from "~/server/db/helpers";
 import {
   ledgerParty,
+  expenseAttribution,
   productCategory,
   product as productTable,
 } from "~/server/db/schema";
@@ -614,6 +615,38 @@ describe("expanded grouped list memberships", () => {
       { key: FILTER_NONE, count: 1 },
     ]);
     expect(byAllocatedProject.meta.totalCount).toBe(2);
+    const knownParty = await createRepoEntity(ctx, "ledgerParty", {
+      name: "Grouping known party",
+    });
+    await getDb(ctx.db)
+      .insert(expenseAttribution)
+      .values([
+        {
+          expenseId: basis.entityId,
+          role: "funder",
+          ledgerPartyId: knownParty.entityId,
+          weight: 1,
+        },
+        {
+          expenseId: basis.entityId,
+          role: "beneficiary",
+          ledgerPartyId: null,
+          weight: 1,
+        },
+      ]);
+    const byParty = await executeEntity(kernel(), {
+      action: "list",
+      entity: "expense",
+      filters: { ids: [basis.output.id] },
+      groupBy: [{ key: "ledgerPartyId" }],
+      pagination: { pageIndex: 0, pageSize: 10 },
+    });
+    if (byParty.action !== "list") throw new Error("expected list");
+    expect(groups(byParty.meta)).toMatchObject([
+      { key: knownParty.output.id, count: 1 },
+      { key: FILTER_NONE, count: 1 },
+    ]);
+    expect(byParty.meta.membershipCount).toBe(2);
     const pages = [];
     for (const pageIndex of [0, 1, 2]) {
       const page = await executeEntity(kernel(), {

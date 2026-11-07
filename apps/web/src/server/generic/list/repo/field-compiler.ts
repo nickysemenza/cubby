@@ -1095,7 +1095,7 @@ export const groupSql = (
           subtree: null,
           members: sql`SELECT DISTINCT ${at("shortcode")}::text AS "key", ${recordLabel(id, at)}::text AS "label", ${level === undefined ? sql`false` : sql`${hierarchyLevelSql(value.target, leafId)} > ${level}::int`} AS "subtree"
             FROM (${set.select(sql`${referenced} AS "id"`)}) list_row_member
-            JOIN ${sql.identifier(targetTable)} list_row_record ON list_row_record."id" = list_row_member."id"${target.softDelete ? sql` AND ${notDeleted("list_row_record")}` : sql``}`,
+            LEFT JOIN ${sql.identifier(targetTable)} list_row_record ON list_row_record."id" = list_row_member."id"${target.softDelete ? sql` AND ${notDeleted("list_row_record")}` : sql``}`,
         };
       }
       if (choice.multiple) {

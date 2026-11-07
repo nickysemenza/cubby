@@ -17,6 +17,7 @@ import { plainDate } from "@cubby/schemas/base-entity";
 import {
   costTypeSchema,
   signedProductQuantity,
+  expenseEconomicRoleSchema,
 } from "@cubby/schemas/expense-fields";
 import {
   EXPENSE_LINE_ROLE_EVIDENCE_FIELDS,
@@ -504,9 +505,9 @@ export const { definition, readSchemas } = defineEntityModel({
           optionColor: "domain-finance",
         },
         validation: {
-          read: z.enum(["vendor", "reimbursement"]).default("vendor"),
-          create: z.enum(["vendor", "reimbursement"]).default("vendor"),
-          update: z.enum(["vendor", "reimbursement"]).optional(),
+          read: expenseEconomicRoleSchema.default("vendor"),
+          create: expenseEconomicRoleSchema.default("vendor"),
+          update: expenseEconomicRoleSchema.optional(),
         },
       },
       {

@@ -1851,6 +1851,20 @@ required. Equivalent stored-reference and related-path choices share one menu
 entry while retaining accepted keys. Query-backed and external relations do not
 acquire SQL grouping merely because they have a preview.
 
+Product Sellers use acquisition evidence for each Product and Purchase
+together: actual vendor-role Expense acquisition lines or a live explicit
+`acquisitionConfirmed` link. Signed refunds on an eligible acquisition remain
+included even when its net cost becomes negative. Buying one Product does not
+classify a different trade-in on that Purchase as acquired. Plans,
+reimbursements, bare identity links and negative amounts alone establish no
+seller. The broad Vendors relationship and its keys retain their existing
+meaning. Seller membership contains only live known Vendors; its "No seller"
+bucket means no known acquisition seller, including deliberate acquisitions
+without a counterparty. It is not a request to repair those records.
+The Product Sellers report reads the same acquisition relation, counts distinct
+Purchases and opens an exact Vendor-id list rather than the broader Vendors
+relationship.
+
 The list-field compiler also owns `listFields.presentation`: semantic labels,
 descriptions, entity targets, value types, cardinality and admitted sort, group
 and filter keys with unavailable reasons. Shared web columns and menus consume
@@ -2900,7 +2914,10 @@ one shape:
   the "Include sub-…" toggle when it declares `model.hierarchy`. Record
   terminals group by distinct live identities, using canonical titles and
   hierarchy levels. Their row set, narrowing and preparation are shared with
-  filters. A to-many row set supplies no arbitrary scalar sort. Scalar row
+  filters. A missing or deleted reference in a populated row set contributes
+  a no-value membership alongside its known references, matching that row
+  set's existing No value filter; no rows also contributes no value. A to-many
+  row set supplies no arbitrary scalar sort. Scalar row
   terminals remain unavailable for grouping. Value filters generate Any value
   / No value, Match all, and Exclude.
 - `{ type }` is a repository value: the repository passes its SQL as

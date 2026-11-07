@@ -1234,7 +1234,7 @@ const compileGroupChoice = (
         ((bound?.shape === "via" || bound?.shape === "rows") &&
           bound.terminal.kind === "record"),
       label,
-      noValueLabel: "Unassigned",
+      noValueLabel: field?.display.emptyLabel ?? "Unassigned",
       multiple:
         field?.kind === "text-array" ||
         field?.reference?.multiple === true ||

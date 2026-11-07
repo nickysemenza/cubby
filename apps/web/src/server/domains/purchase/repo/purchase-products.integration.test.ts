@@ -1,4 +1,5 @@
 import { filterOptionsInput } from "@cubby/schemas/filter-options";
+import { FILTER_NONE } from "@cubby/schemas/filter-sentinel-fields";
 /**
  * `PurchaseProduct` — the provenance link between an order and the Products it
  * bought. The cases that matter are the ones the partial-unique index makes
@@ -13,7 +14,13 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
-import { entityLink, expense, product, purchase } from "~/server/db/schema";
+import {
+  entityLink,
+  expense,
+  product,
+  purchase,
+  vendor,
+} from "~/server/db/schema";
 import { createExpense } from "~/server/domains/expense/repo/crud";
 import { mergeProducts } from "~/server/domains/product/repo/merge";
 import { getProductMovementTimeline } from "~/server/domains/product/repo/movement-timeline";
@@ -43,6 +50,7 @@ import {
   listPurchaseProducts,
   listPurchaseProductsPage,
   listProductPurchasesPage,
+  confirmPurchaseAcquisition,
 } from "./purchase-products";
 
 describe("purchase ↔ product links", () => {
@@ -367,6 +375,9 @@ describe("purchase ↔ product links", () => {
         makeProductInput({ name: "Union Saw" }),
         ctx.actor,
       );
+      const firstSeller = await createRepoEntity(ctx, "vendor", {
+        name: "Expense Leg Vendor",
+      });
       await expenseOn({
         name: "Union Saw",
         cost: 120,
@@ -387,6 +398,122 @@ describe("purchase ↔ product links", () => {
       const purchases = await listProductPurchases(ctx.db, saw.entityId);
       expect(purchases).toHaveLength(1);
       expect(purchases[0]?.source).toBe("expense");
+      const secondSeller = await createRepoEntity(ctx, "vendor", {
+        name: "Second acquisition vendor",
+      });
+      const otherPurchase = await createRepoEntity(ctx, "purchase", {
+        vendorId: secondSeller.output.id,
+        date: "2026-03-02",
+      });
+      for (const cost of [25, 25, 5, -80, null])
+        await createRepoEntity(
+          ctx,
+          "expense",
+          makeExpenseInput({
+            productId: saw.id,
+            purchaseId: otherPurchase.output.id,
+            name: "Repeated acquisition evidence",
+            cost,
+            date: "2026-03-02",
+          }),
+        );
+      // A refund-only Purchase does not prove a seller or a buyer. It must
+      // not create a No-seller membership beside this Product's known sellers.
+      await createRepoEntity(
+        ctx,
+        "expense",
+        makeExpenseInput({
+          name: "Unclassified refund",
+          productId: saw.id,
+          productQuantity: -1,
+          cost: -7,
+          vendor: "Unclassified counterparty",
+          orderId: "UNCLASSIFIED-REFUND",
+          date: "2026-03-03",
+        }),
+      );
+      const noSeller = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "No actual acquisition seller" }),
+        ctx.actor,
+      );
+      for (const line of [
+        { cost: 10, future: true, economicRole: "vendor" },
+        { cost: -15, future: false, economicRole: "reimbursement" },
+        {
+          cost: -100,
+          productQuantity: -1,
+          future: false,
+          economicRole: "vendor",
+        },
+      ] as const)
+        await createRepoEntity(
+          ctx,
+          "expense",
+          makeExpenseInput({
+            name: "Non-acquisition evidence",
+            productId: noSeller.id,
+            purchaseId: otherPurchase.output.id,
+            date: "2026-03-02",
+            ...line,
+          }),
+        );
+      const kernel = requireActor(
+        createTestRequestContext(ctx.db, {
+          auth: { userId: ctx.actor.userId },
+        }),
+      );
+      const memberships = [];
+      for (const pageIndex of [0, 1, 2]) {
+        const result = await executeEntity(kernel, {
+          action: "list",
+          entity: "product",
+          filters: { ids: [saw.id, noSeller.id] },
+          groupBy: [{ key: "sellers" }],
+          pagination: { pageIndex, pageSize: 1 },
+        });
+        if (result.action !== "list") throw new Error("expected list");
+        expect(result.meta.totalCount).toBe(2);
+        expect(result.meta.membershipCount).toBe(3);
+        memberships.push(...(result.meta.memberships ?? []));
+      }
+      expect(memberships).toEqual([
+        { id: saw.id, path: [firstSeller.output.id] },
+        { id: saw.id, path: [secondSeller.output.id] },
+        { id: noSeller.id, path: [FILTER_NONE] },
+      ]);
+      for (const filters of [
+        { sellerId: [firstSeller.output.id] },
+        { sellersPresenceFilter: "none" as const },
+      ]) {
+        const result = await executeEntity(kernel, {
+          action: "list",
+          entity: "product",
+          filters: { ids: [saw.id, noSeller.id], ...filters },
+          groupBy: [{ key: "sellers" }],
+          pagination: { pageIndex: 0, pageSize: 10 },
+        });
+        if (result.action !== "list") throw new Error("expected list");
+        expect(result.meta.totalCount).toBe(1);
+        expect(result.meta.memberships).toEqual(
+          "sellerId" in filters
+            ? memberships.slice(0, 2)
+            : memberships.slice(2),
+        );
+      }
+      await getDb(ctx.db)
+        .update(vendor)
+        .set({ deletedAt: new Date() })
+        .where(eq(vendor.id, secondSeller.entityId));
+      const surviving = await executeEntity(kernel, {
+        action: "list",
+        entity: "product",
+        filters: { ids: [saw.id] },
+        groupBy: [{ key: "sellers" }],
+        pagination: { pageIndex: 0, pageSize: 10 },
+      });
+      if (surviving.action !== "list") throw new Error("expected list");
+      expect(surviving.meta.memberships).toEqual(memberships.slice(0, 1));
     });
   });
 
@@ -431,6 +558,34 @@ describe("purchase ↔ product links", () => {
     const purchases = await listProductPurchases(ctx.db, range.entityId);
     expect(purchases).toHaveLength(1);
     expect(purchases[0]?.displayLabel).toBe("appliances");
+    const kernel = requireActor(
+      createTestRequestContext(ctx.db, {
+        auth: { userId: ctx.actor.userId },
+      }),
+    );
+    const sellers = () =>
+      executeEntity(kernel, {
+        action: "list",
+        entity: "product",
+        filters: { ids: [range.id, fridge.id] },
+        groupBy: [{ key: "sellers" }],
+        pagination: { pageIndex: 0, pageSize: 10 },
+      });
+    const linkedOnly = await sellers();
+    if (linkedOnly.action !== "list") throw new Error("expected list");
+    expect(linkedOnly.meta.groups).toMatchObject([
+      { label: "No seller", count: 2 },
+    ]);
+    await confirmPurchaseAcquisition(ctx.db, {
+      purchaseId: order.shortcode,
+      productId: range.id,
+    });
+    const confirmed = await sellers();
+    if (confirmed.action !== "list") throw new Error("expected list");
+    expect(confirmed.meta.groups).toMatchObject([
+      { label: "Link Test Vendor", count: 1 },
+      { label: "No seller", count: 1 },
+    ]);
 
     const detached = await detachPurchaseProducts(
       ctx.db,
