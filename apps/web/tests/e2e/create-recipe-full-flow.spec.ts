@@ -115,6 +115,9 @@ test.describe("Create Recipe - Full Flow", () => {
     );
     const recipeRow = page.getByRole("row").filter({ hasText: recipeName });
     await expect(recipeRow).toBeVisible();
+    // The numeric serving count is empty for a yield measured in cookies.
+    await page.getByRole("button", { name: /empty columns hidden/ }).click();
+    await page.getByRole("menuitem", { name: "Show all", exact: true }).click();
     await expect(recipeRow).toContainText("12 cookies");
   });
 });
