@@ -108,6 +108,7 @@ export function USDAFoodList({
   const { search } = useListSearch();
   const { view } = resolveListView(useQueryClient(), "usda-food", search);
   const { density } = useEntityListCardDensity();
+  const tableView = view === "table" && density !== "contact-sheet";
   const queryClient = useQueryClient();
   useEntityMetadata("usda-food");
   const buildFilters = useCallback(
@@ -346,17 +347,17 @@ export function USDAFoodList({
 
   useEffect(() => {
     if (
-      view !== "table" &&
+      !tableView &&
       Object.keys(workbench.table.atoms.rowSelection?.get() ?? {}).length > 0
     )
       workbench.table.resetRowSelection();
-  }, [view, workbench.table]);
+  }, [tableView, workbench.table]);
 
   return (
     <ListDisplaySectionsContext
       value={<ListDisplaySections entity="usda-food" />}
     >
-      {view === "table" ? (
+      {tableView ? (
         <ListWorkbench
           model={workbench}
           ariaLabel="USDA Foods Table"
@@ -392,6 +393,7 @@ export function USDAFoodList({
                   .getRowModel()
                   .rows.map((row) => row.original)}
                 compact={density === "compact"}
+                contactSheet={density === "contact-sheet"}
                 isLoading={workbench.isLoading}
                 error={workbench.error}
                 infiniteScroll={workbench.infiniteScroll}

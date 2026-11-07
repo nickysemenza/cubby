@@ -12,6 +12,7 @@ import {
   type GenericEntityListProps,
   listGroupBy,
   useListSearch,
+  useEntityListCardDensity,
 } from "~/entity/entity-list/generic-entity-list";
 import { ListDisplaySections } from "~/entity/entity-list/list-display-sections";
 import { resolveListView } from "~/entity/entity-list/resolve-list-view";
@@ -76,7 +77,8 @@ interface EntityListPageOptions {
 function ListWorkbenchMenus({ entity }: { entity: BrowserRoutedEntity }) {
   const { search } = useListSearch();
   const { view } = resolveListView(useQueryClient(), entity, search);
-  if (typeof view === "string") return null;
+  const { density } = useEntityListCardDensity();
+  if (typeof view === "string" || density === "contact-sheet") return null;
   return (
     <DisplayMenu customized={(listGroupBy(search)?.length ?? 0) > 0}>
       <ListDisplaySections entity={entity} />
@@ -194,7 +196,9 @@ export function listChromePage({
   bodyGutter,
 }: ListChromeOptions) {
   return function ListChromeShell() {
-    const [density, setDensity] = useState<"cards" | "compact">("cards");
+    const [density, setDensity] = useState<
+      "cards" | "compact" | "contact-sheet"
+    >("cards");
     const cardDensity = { density, setDensity };
     const routedEntity =
       entity !== undefined && isBrowserRoutedEntity(entity) ? entity : null;
@@ -203,6 +207,7 @@ export function listChromePage({
       (routedEntity
         ? () => <ListWorkbenchMenus entity={routedEntity} />
         : undefined);
+    const gutter = bodyGutter?.();
     return (
       <EntityListCardDensityProvider value={cardDensity}>
         <Page
@@ -218,7 +223,7 @@ export function listChromePage({
               {resolvedWorkbenchControls?.()}
             </EntityListCardDensityProvider>
           }
-          bodyGutter={bodyGutter?.()}
+          bodyGutter={density === "contact-sheet" ? "none" : gutter}
         >
           <PageBody />
         </Page>

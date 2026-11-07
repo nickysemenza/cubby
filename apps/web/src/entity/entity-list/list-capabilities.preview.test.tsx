@@ -74,8 +74,20 @@ const product = mock(productListItem, {
   },
 });
 
-async function mount(path: string, empty = false) {
-  let rows = empty ? [] : [product];
+async function mount(path: string, empty = false, contactSheet = false) {
+  const picturedProduct = {
+    ...product,
+    id: testShortcode("product", "PRD-8P2N"),
+    name: "Example blue storage box",
+    displayCover: {
+      image: {
+        id: testShortcode("image", "IMG-4K7M"),
+        url: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='40'%3E%3Crect width='80' height='40' fill='%230077e6'/%3E%3C/svg%3E",
+      },
+      count: 1,
+    },
+  };
+  let rows = empty ? [] : contactSheet ? [product, picturedProduct] : [product];
   const requests: object[] = [];
   const operation: ListQueryOptionsFn<object, typeof product> = (params) => ({
     queryKey: ["list-capability", params],
@@ -159,7 +171,9 @@ it.each([1440, 402])(
     const editor = await screen.findByRole("dialog", {
       name: "Filter by Brand",
     });
-    expect(within(editor).getByText(/Is \/ is not/)).toBeVisible();
+    await waitFor(() =>
+      expect(within(editor).getByText(/Is \/ is not/)).toBeVisible(),
+    );
     fireEvent.click(within(editor).getByRole("button", { name: "Close" }));
     fireEvent.click(screen.getByRole("button", { name: "Filter" }));
     const reopened = await screen.findByRole("dialog", { name: "Filter" });
@@ -181,43 +195,101 @@ it.each([1440, 402])(
   },
 );
 
-it("changes card density without storing it in navigation and resets on remount", async () => {
-  await page.viewport(1600, 1000);
-  await mount("/products?view=shelf");
-  const grid = await screen.findByTestId("entity-card-grid");
-  const card = await screen.findByRole("link", { name: productName });
-  const standardWidth = card.getBoundingClientRect().width;
-  fireEvent.click(screen.getByRole("button", { name: "Display" }));
-  fireEvent.click(
-    await screen.findByRole("button", { name: /Products view:/i }),
-  );
-  fireEvent.click(
-    await screen.findByRole("menuitem", { name: "Compact view" }),
-  );
-  await waitFor(() => expect(grid).toHaveAttribute("data-compact", "true"));
-  expect(card.getBoundingClientRect().width).toBeLessThan(standardWidth * 0.7);
-  expect(harness?.router.state.location.search).not.toHaveProperty("density");
-  const search = screen.getByRole("textbox", {
-    name: "Search products or shortcode",
-  });
-  search.focus();
-  fireEvent.change(search, { target: { value: "precision workshop tool" } });
-  await waitFor(() =>
-    expect(harness?.router.state.location.search).toHaveProperty(
-      "searchQuery",
-      "precision workshop tool",
-    ),
-  );
-  expect(grid).toHaveAttribute("data-compact", "true");
-  expect(search).toHaveFocus();
-  harness?.dispose();
-  harness = undefined;
-  await mount("/products?view=shelf");
-  expect(await screen.findByTestId("entity-card-grid")).toHaveAttribute(
-    "data-compact",
-    "false",
-  );
-});
+it.each([1440, 402])(
+  "changes temporary card and contact sheet layouts at %ipx",
+  async (width) => {
+    await page.viewport(width, 1000);
+    await mount("/products?view=shelf", false, true);
+    const grid = await screen.findByTestId("entity-card-grid");
+    const card = await screen.findByRole("link", { name: productName });
+    const standardWidth = card.getBoundingClientRect().width;
+    fireEvent.click(screen.getByRole("button", { name: "Display" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: /Products view:/i }),
+    );
+    fireEvent.click(
+      await screen.findByRole("menuitem", { name: "Compact view" }),
+    );
+    await waitFor(() => expect(grid).toHaveAttribute("data-compact", "true"));
+    expect(card.getBoundingClientRect().width).toBeLessThan(
+      standardWidth * 0.7,
+    );
+    expect(harness?.router.state.location.search).not.toHaveProperty("density");
+    fireEvent.click(screen.getByRole("button", { name: /Products view:/i }));
+    fireEvent.click(
+      await screen.findByRole("menuitem", { name: "Contact sheet view" }),
+    );
+    await userEvent.keyboard("{Escape}");
+    const sheet = await screen.findByTestId("entity-contact-sheet");
+    const tile = within(sheet).getByRole("link", {
+      name: "Example blue storage box",
+    });
+    expect(within(sheet).queryByRole("link", { name: productName })).toBeNull();
+    expect(screen.getByText("1 loaded record without images")).toBeVisible();
+    expect(tile.getBoundingClientRect().width).toBe(32);
+    expect(tile.getBoundingClientRect().height).toBe(32);
+    expect(getComputedStyle(sheet).gap).toBe("1px");
+    const image = tile.querySelector("img");
+    if (!image) throw new Error("Contact sheet has no main image");
+    expect(getComputedStyle(image).objectFit).toBe("contain");
+    fireEvent.click(screen.getByRole("button", { name: "Fill" }));
+    expect(getComputedStyle(image).objectFit).toBe("cover");
+    screen.getByRole("button", { name: "Fill" }).focus();
+    await userEvent.keyboard("{Tab}");
+    expect(tile).toHaveFocus();
+    expect(await screen.findByRole("tooltip")).toHaveTextContent(
+      "Example blue storage box",
+    );
+    expect(harness?.router.state.location.search).not.toHaveProperty(
+      "view",
+      "contact-sheet",
+    );
+    const search = screen.getByRole("textbox", {
+      name: "Search products or shortcode",
+    });
+    search.focus();
+    fireEvent.change(search, { target: { value: "precision workshop tool" } });
+    await waitFor(() =>
+      expect(harness?.router.state.location.search).toHaveProperty(
+        "searchQuery",
+        "precision workshop tool",
+      ),
+    );
+    expect(sheet).toBeVisible();
+    expect(search).toHaveFocus();
+    expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width);
+    harness?.dispose();
+    harness = undefined;
+    await mount("/products?view=shelf", false, true);
+    expect(await screen.findByTestId("entity-card-grid")).toHaveAttribute(
+      "data-compact",
+      "false",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Display" }));
+    fireEvent.click(screen.getByRole("button", { name: /Products view:/i }));
+    fireEvent.click(
+      await screen.findByRole("menuitem", { name: "Contact sheet view" }),
+    );
+    await userEvent.keyboard("{Escape}");
+    const resetSheet = await screen.findByTestId("entity-contact-sheet");
+    const resetTile = within(resetSheet).getByRole("link", {
+      name: "Example blue storage box",
+    });
+    expect(getComputedStyle(resetTile.querySelector("img")!).objectFit).toBe(
+      "contain",
+    );
+    if (width !== 1440) return;
+    resetTile.focus();
+    await userEvent.keyboard("{Enter}");
+    await waitFor(() =>
+      expect(resetTile).toHaveAttribute("aria-current", "true"),
+    );
+    expect(
+      (await screen.findAllByRole("button", { name: "Close inspector" }))
+        .length,
+    ).toBeGreaterThan(0);
+  },
+);
 
 // Actual declared Product columns sit inside the shared sizing/rail machinery;
 // primitive spill, hover and two-line date cases live in table-density previews.

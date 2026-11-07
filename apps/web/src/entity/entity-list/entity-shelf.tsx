@@ -5,17 +5,27 @@ import {
   publicImageUrl,
   publicImageUrlSummary,
 } from "@cubby/schemas/image-summary";
+import { countLabel } from "@cubby/shared/pluralize";
 import { useQueryClient } from "@tanstack/react-query";
-import type { ReactNode } from "react";
+import { Link } from "@tanstack/react-router";
+import { useState, type ReactNode } from "react";
 import { z } from "zod";
 
 import { entities, entityDetailParams } from "~/entity/entities";
 import type { InfiniteScrollControls } from "~/entity/hooks/use-infinite-table-list";
 import { useEntityMetadata } from "~/entity/metadata";
 import { rowDisplayCover } from "~/entity/model/row-display-cover";
+import { readPathValue } from "~/entity/read-path";
 import { EntityEmptyState } from "~/entity/table/entity-empty-states";
 import { ShelfCard, ShelfGrid } from "~/entity/table/shelf";
+import { Picker } from "~/ui/combobox/picker";
 import type { GroupConfig } from "~/ui/data-table/use-grouped-list";
+import { Image } from "~/ui/media/image";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "~/ui/primitives/tooltip";
 
 import { recordCaption } from "./record-caption";
 
@@ -31,7 +41,10 @@ type ShelfRow = z.infer<typeof shelfRowSchema>;
 /** The record's title, the manifest's `titleField` (a non-nullable text read field). */
 function shelfTitle(entity: BrowserRoutedEntity, row: ShelfRow): string {
   return (
-    z.string().catch("").parse(row[entityRoster[entity].titleField]) || row.id
+    z
+      .string()
+      .catch("")
+      .parse(readPathValue(row, entityRoster[entity].titleField)) || row.id
   );
 }
 
@@ -65,6 +78,7 @@ export function EntityShelf<TRow extends { id: string }>({
   error,
   infiniteScroll,
   compact = false,
+  contactSheet = false,
   groupConfig,
   onInspect,
   onRowHover,
@@ -80,6 +94,7 @@ export function EntityShelf<TRow extends { id: string }>({
   error?: unknown;
   infiniteScroll?: InfiniteScrollControls;
   compact?: boolean;
+  contactSheet?: boolean;
   groupConfig?: GroupConfig;
   onInspect?: (record: TRow) => void;
   onRowHover?: (record: TRow) => void;
@@ -89,49 +104,133 @@ export function EntityShelf<TRow extends { id: string }>({
 }) {
   const queryClient = useQueryClient();
   useEntityMetadata(entity);
+  const [imageFit, setImageFit] = useState<"fit" | "fill">("fit");
+  const omitted = contactSheet
+    ? items.filter(
+        (record) =>
+          shelfImages(entity, shelfRowSchema.parse(record)).length === 0,
+      ).length
+    : 0;
   return (
-    <ShelfGrid
-      items={items}
-      isLoading={isLoading}
-      error={error}
-      infiniteScroll={infiniteScroll}
-      compact={compact}
-      grouping={groupConfig}
-      getItemId={(record) => record.id}
-      onRetry={onRetry}
-      emptyState={emptyState ?? <EntityEmptyState entity={entity} />}
-      renderCard={(record) => {
-        const row = shelfRowSchema.parse(record);
-        const images = shelfImages(entity, row);
-        return (
-          <ShelfCard
-            key={row.id}
-            record={record}
-            to={entities[entity].routes.detail}
-            params={
-              entity === "usda-food"
-                ? { id: row.id }
-                : entityDetailParams(row.id)
-            }
-            image={images[0]?.url}
-            extraCount={
-              (entity === "image"
-                ? images.length
-                : rowDisplayCover(row).count) - 1
-            }
-            title={shelfTitle(entity, row)}
-            subtitle={recordCaption(queryClient, entity, row)}
-            entity={entity}
-            compact={compact}
-            onInspect={onInspect ? () => onInspect(record) : undefined}
-            onRowHover={onRowHover ? () => onRowHover(record) : undefined}
-            onRowHoverEnd={
-              onRowHoverEnd ? () => onRowHoverEnd(record) : undefined
-            }
-            selected={currentRowId === row.id}
+    <>
+      {contactSheet && (
+        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+          <Picker
+            mode="segmented"
+            label="Image fit"
+            value={imageFit}
+            onValueChange={(value) => {
+              if (value === "fit" || value === "fill") setImageFit(value);
+            }}
+            options={[
+              { value: "fit", label: "Fit" },
+              { value: "fill", label: "Fill" },
+            ]}
           />
-        );
-      }}
-    />
+          <span>{countLabel(omitted, "loaded record")} without images</span>
+          {!isLoading && items.length > 0 && omitted === items.length && (
+            <span>No images in the loaded records.</span>
+          )}
+        </div>
+      )}
+      {/* Keep unpictured rows in the lifecycle so an all-unpictured page still loads the next page. */}
+      <ShelfGrid
+        items={items}
+        isLoading={isLoading}
+        error={error}
+        infiniteScroll={infiniteScroll}
+        compact={compact}
+        contactSheet={contactSheet}
+        grouping={groupConfig}
+        getItemId={(record) => record.id}
+        onRetry={onRetry}
+        emptyState={emptyState ?? <EntityEmptyState entity={entity} />}
+        renderCard={(record) => {
+          const row = shelfRowSchema.parse(record);
+          const images = shelfImages(entity, row);
+          const title = shelfTitle(entity, row);
+          const params =
+            entity === "usda-food"
+              ? { id: row.id }
+              : entityDetailParams(row.id);
+          if (contactSheet) {
+            const image = images[0];
+            if (!image) return null;
+            return (
+              <Tooltip key={row.id}>
+                <TooltipTrigger
+                  render={
+                    <Link
+                      to={entities[entity].routes.detail}
+                      params={params}
+                      aria-label={title}
+                      aria-current={
+                        currentRowId === row.id ? "true" : undefined
+                      }
+                      className="relative block size-8 overflow-hidden bg-muted/20 hover:outline hover:outline-1 hover:-outline-offset-1 hover:outline-ring focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring aria-current:outline-2 aria-current:-outline-offset-2 aria-current:outline-ring"
+                      onMouseEnter={
+                        onRowHover ? () => onRowHover(record) : undefined
+                      }
+                      onMouseLeave={
+                        onRowHoverEnd ? () => onRowHoverEnd(record) : undefined
+                      }
+                      onClick={(event) => {
+                        if (
+                          !onInspect ||
+                          event.button !== 0 ||
+                          event.metaKey ||
+                          event.ctrlKey ||
+                          event.altKey ||
+                          event.shiftKey
+                        )
+                          return;
+                        event.preventDefault();
+                        onInspect(record);
+                      }}
+                    />
+                  }
+                >
+                  <Image
+                    src={image.url}
+                    alt=""
+                    displayWidth={32}
+                    className={
+                      imageFit === "fit"
+                        ? "absolute inset-0 size-full object-contain"
+                        : "absolute inset-0 size-full object-cover"
+                    }
+                  />
+                </TooltipTrigger>
+                <TooltipContent role="tooltip">{title}</TooltipContent>
+              </Tooltip>
+            );
+          }
+          return (
+            <ShelfCard
+              key={row.id}
+              record={record}
+              to={entities[entity].routes.detail}
+              params={params}
+              image={images[0]?.url}
+              extraCount={
+                (entity === "image"
+                  ? images.length
+                  : rowDisplayCover(row).count) - 1
+              }
+              title={title}
+              subtitle={recordCaption(queryClient, entity, row)}
+              entity={entity}
+              compact={compact}
+              onInspect={onInspect ? () => onInspect(record) : undefined}
+              onRowHover={onRowHover ? () => onRowHover(record) : undefined}
+              onRowHoverEnd={
+                onRowHoverEnd ? () => onRowHoverEnd(record) : undefined
+              }
+              selected={currentRowId === row.id}
+            />
+          );
+        }}
+      />
+    </>
   );
 }

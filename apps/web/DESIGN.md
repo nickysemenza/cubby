@@ -518,6 +518,22 @@ Headers carry their label, with relation entity glyphs only, and drag sideways t
 
 Tables expose a Group control only for declared grouping choices. Declared problem views tint their counts from the existing problem classification. Active-filter chips are 18px with 4px corners and 11px text; toolbar search and buttons are 26px. Headers, the Filters button and active chips open the same focused filter editor. All filters returns to its searchable field list. Record choices show the canonical identity pill with useful secondary facts below and counts separately; enums remain compact, while dates and numbers use typed bounds. Edits apply immediately through the existing shared draft and URL state. Filter sections use sentence-case labels, typed rows, inline boolean choices and a live count. Whole-table empty states use `EmptyState` page geometry. Initial desktop loading draws ten row-height skeletons under the actual columns. Group headers stick while their rows scroll, with totals under their money columns (the sum, then a muted mean) and the grouped column hidden. On desktop and tablet, a list with two groupable choices offers Pivot in Layout: the first Group by field makes rows, the second columns and a third collapsible sub-rows, drawn with `CrossTabTable` and the matrix chrome. Cells show the count with a Count / Row % / Col % / All % segmented choice, shaded on the shared heat scale against the chosen row, column or grid total (Count shades against the largest cell). Total column and row count each record once and a quiet note explains overlapping values. Columns order by total; beyond 12, a single-valued column field folds the rest into a "+N more" column that expands on click. No value sorts last as its own row or column. Headers sort the pivot only. Each cell is a button on one roving tab stop moved by arrow keys; an eligible cell opens the table filtered to it, and an ineligible one stays focusable with its reason. Phones keep the grouped list. A footer appears when a visible money column has numeric loaded values; it uses the server aggregate when present, otherwise labels loaded-row totals explicitly. The floating selection bar rises 8px in 180ms, keeps query controls visible, totals each visible loaded money column separately, and renders only the list's existing bulk actions, with its count, three primaries, a More overflow and Clear.
 
+### Contact sheet
+
+Every generic entity list offers Contact sheet in Display → Layout. It shares
+Cards' list reader, grouping, search, filters, sorting, pagination and inspector.
+Each record contributes only its resolved main image, in a fixed 32×32px square
+with 1px gaps and no tile padding or captions. This explicitly requested contact
+sheet density stays 32px on phones too; the other controls retain their normal
+touch targets. Fit is the default and contains the complete image; Fill crops
+it to cover the square. Hover and keyboard focus reveal the record name, and
+activation opens the existing inspector. Modified link clicks retain normal
+navigation. Image-less records leave no placeholder; the omission count explicitly
+covers loaded records and updates as more pages arrive. Loading, errors, empty
+results and the next-page sentinel retain the shared list lifecycle, even when
+an entire loaded page has no images. Contact sheet and Fit/Fill are local to the
+mounted screen, with no URL or saved-preference state.
+
 ### Data visualization
 
 Data colors are independent of neutral interaction ink. The eight categorical

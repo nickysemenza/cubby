@@ -432,6 +432,7 @@ export function GenericEntityList({
   const { search, navigate } = useListSearch();
   const queryClient = useQueryClient();
   const { view, requestedView } = resolveListView(queryClient, entity, search);
+  const { density } = useEntityListCardDensity();
   const isMobile = useIsMobile();
   // Pivot is desktop and tablet only; a phone keeps the grouped list.
   const pivot =
@@ -450,6 +451,7 @@ export function GenericEntityList({
       operations={operations}
     />
   );
+  if (density === "contact-sheet") return body("contact-sheet");
   if (pivot) return body(PIVOT_VIEW_ID);
   if (typeof view === "object" && view.kind === "board") {
     if (!isListEntity(entity))
@@ -479,7 +481,7 @@ function ServerListBody({
   operations,
 }: {
   entity: BrowserRoutedEntity;
-  view: "table" | "shelf" | "timeline" | typeof PIVOT_VIEW_ID;
+  view: "table" | "shelf" | "contact-sheet" | "timeline" | typeof PIVOT_VIEW_ID;
   override: AnyEntityListOverride;
   readProjection?: ListReadProjection;
   context: ListOverrideContext;
@@ -637,7 +639,9 @@ function ServerListBody({
               entity={entity}
               portalWorkbenchUtilities
               additionalContent={
-                renderedView === "shelf" ? inspectorToggle : undefined
+                renderedView === "shelf" || renderedView === "contact-sheet"
+                  ? inspectorToggle
+                  : undefined
               }
             />
           )}
@@ -656,7 +660,7 @@ function ServerListBody({
               footerContent={isMobile ? undefined : footerContent}
             />
           )}
-          {renderedView === "shelf" && (
+          {(renderedView === "shelf" || renderedView === "contact-sheet") && (
             <>
               <div
                 className={
@@ -682,6 +686,7 @@ function ServerListBody({
                     error={list.workbench.error}
                     infiniteScroll={list.workbench.infiniteScroll}
                     compact={density === "compact"}
+                    contactSheet={renderedView === "contact-sheet"}
                     groupConfig={list.workbench.groupConfig}
                     onRetry={() =>
                       void list.workbench.refreshControls.onRefresh()
@@ -726,12 +731,13 @@ function ServerListBody({
               </div>
             </>
           )}
-          {renderedView === "shelf" && !list.workbench.infiniteScroll && (
-            <DataTablePagination
-              table={list.workbench.table}
-              timing={list.workbench.timing}
-            />
-          )}
+          {(renderedView === "shelf" || renderedView === "contact-sheet") &&
+            !list.workbench.infiniteScroll && (
+              <DataTablePagination
+                table={list.workbench.table}
+                timing={list.workbench.timing}
+              />
+            )}
           {renderedView === PIVOT_VIEW_ID && (
             <EntityPivot
               labels={(listGroupBy(context.search) ?? []).map(
@@ -790,15 +796,7 @@ function ServerListBody({
         declaresTotals:
           Boolean(parts.footerTotals) ||
           entityMetadata(queryClient, entity).summary.list.totals.length > 0,
-        displaySections:
-          resolveListView(queryClient, entity, context.search).views.length >
-            1 ||
-          pivotAvailable(
-            entityMetadata(queryClient, entity).listFields.grouping,
-          ) ||
-          entityMetadata(queryClient, entity).listFields.grouping.length > 0 ? (
-            <ListDisplaySections entity={entity} />
-          ) : undefined,
+        displaySections: <ListDisplaySections entity={entity} />,
         actionsMenuItems: sweep.menuItem,
       }
     : null;
