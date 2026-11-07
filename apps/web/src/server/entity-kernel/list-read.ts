@@ -2,6 +2,7 @@ import { entityInspectorMetadata } from "@cubby/schemas/entity-manifest";
 import {
   listGroupByDimensionsSchema,
   listResultMembership,
+  listChildCountSchema,
   sortDirection,
 } from "@cubby/schemas/pagination";
 import { buildPaginatedResponse } from "@cubby/schemas/pagination";
@@ -140,10 +141,20 @@ export function defineListOperations<
           ? await withRecordEmoji(context.db, binding.entity, result.data)
           : result.data;
       const selected = validateListReadRows(binding.entity, rows, fields);
+      const selectedSchema = selectedFieldEnvelopeSchema(
+        binding.schemas.list,
+        fields,
+      );
+      // Expansion must be offered before children load. This structural count
+      // belongs to the nesting scope, independently of selected record fields.
+      const outputSchema =
+        parseNesting(binding, input.nesting).scope === "flat"
+          ? selectedSchema
+          : selectedSchema.extend({ childCount: listChildCountSchema });
       const enveloped = await publicFieldEnvelopeRows({
         db: context.db,
         entity: binding.entity,
-        schema: selectedFieldEnvelopeSchema(binding.schemas.list, fields),
+        schema: outputSchema,
         rows: selected,
         contexts: result.fieldReads,
       });

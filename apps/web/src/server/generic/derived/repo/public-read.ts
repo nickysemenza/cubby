@@ -315,10 +315,7 @@ export function selectedFieldEnvelopeSchema(
   return z.object({
     ...Object.fromEntries(
       Object.entries(schema.shape).filter(
-        // Nesting metadata is structural, not a selectable record field. The
-        // normal table needs it before children load to offer expansion.
-        ([key]) =>
-          key !== "fields" && (wanted.has(key) || key === "childCount"),
+        ([key]) => key !== "fields" && wanted.has(key),
       ),
     ),
     id: z.string(),

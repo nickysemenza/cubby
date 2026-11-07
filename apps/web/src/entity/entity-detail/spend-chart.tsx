@@ -19,8 +19,8 @@ const monthReadoutLabel = (month: string) =>
   formatCalendarDay(`${month}-01`, "monthYearLong");
 
 /**
- * Twelve months of `SUM(Expense.cost)` reached through the entity's declared
- * relation, as bars closing the key-numbers strip. Credits net into their
+ * Twelve months of incurred spending: categories use canonical allocation
+ * shares; other entities use their declared Expense relation, as bars closing the key-numbers strip. Credits net into their
  * month; a month that nets below zero draws below the zero baseline.
  */
 export function MonthlySpendChart({

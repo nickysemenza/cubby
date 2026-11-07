@@ -19,6 +19,14 @@ export const { definition, readSchemas } = defineEntityModel({
   names: { singular: "Product Category", plural: "Product Categories" },
   route: {
     basePath: "product-categories",
+    listColumns: {
+      module: "~/features/product-category/list-columns",
+      export: "productCategoryListOverride",
+    },
+    listReadProjection: {
+      module: "~/features/product-category/list-read",
+      export: "productCategoryListReadProjection",
+    },
   },
   table: "ProductCategory",
   identifiers: { brand: "ProductCategoryId", shortcode: "CAT-" },
@@ -116,7 +124,8 @@ export const { definition, readSchemas } = defineEntityModel({
           filters: [{ id: "needsClassification", value: "true" }],
         },
       ],
-      views: ["table", { kind: "slot", id: "hierarchy", label: "Mappings" }],
+      views: ["table"],
+      viewAliases: { hierarchy: "table" },
       tree: { toggle: true, defaultNested: true },
     },
   },
@@ -140,7 +149,7 @@ export const { definition, readSchemas } = defineEntityModel({
         reference: { entity: "spendingCategory" },
         display: {
           columnGroup: "Spending policy",
-          columnLabel: "Spending category",
+          columnLabel: "Spending",
         },
         explanation: {
           ruleId: "productCategory.effective-spending-category",

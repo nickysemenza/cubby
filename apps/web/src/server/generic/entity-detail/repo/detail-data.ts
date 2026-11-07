@@ -13,7 +13,16 @@ import {
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { entityManifest } from "@cubby/schemas/entity-manifest";
 import { entitySummary } from "@cubby/schemas/entity-summary";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import type { ExpenseFilters } from "@cubby/schemas/project";
 import { decodeBase64UrlText, encodeBase64Url } from "@cubby/shared/base64";
+import {
+  endOfMonth,
+  format,
+  parseISO,
+  startOfMonth,
+  subMonths,
+} from "date-fns";
 import { sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 
@@ -21,6 +30,7 @@ import { householdLocalDate } from "~/lib/household-date";
 import type { Database } from "~/server/db";
 import { unwrapDb } from "~/server/db/helpers";
 import { notDeleted, actualExpenseSql } from "~/server/db/helpers/predicates";
+import { expenseMonthlySummary } from "~/server/domains/expense/repo/analytics";
 import { labelSql } from "~/server/generic/entity-graph/repo/record-label";
 import { compiledConnectedRoutes } from "~/server/generic/entity-links/repo/connected-records";
 
@@ -80,6 +90,35 @@ export async function getMonthlyExpenseSpend(
     throw new Error(
       `Monthly spend must target Expense: ${entityKind}.${chart.viewKey}`,
     );
+  if (entityKind === "productCategory" || entityKind === "spendingCategory") {
+    const current = startOfMonth(parseISO(today));
+    const months = Array.from({ length: 12 }, (_, index) =>
+      format(subMonths(current, 11 - index), "yyyy-MM"),
+    );
+    const filters: ExpenseFilters = {
+      future: false,
+      dateFrom: format(subMonths(current, 11), "yyyy-MM-dd"),
+      dateTo: format(endOfMonth(current), "yyyy-MM-dd"),
+      ...(entityKind === "productCategory"
+        ? {
+            productCategoryId: parseShortcodeFor("productCategory", entityId),
+            includeSubProductCategories: true,
+          }
+        : {
+            spendingCategoryId: parseShortcodeFor("spendingCategory", entityId),
+            includeSubSpendingCategories: true,
+          }),
+    };
+    // Category charts group the same scoped shares as the Ledger, including
+    // inherited purposes and shared charges; direct override edges are incomplete.
+    const period = await expenseMonthlySummary(db, filters);
+    const cents = new Map(
+      period.map((row) => [row.month, Math.round(row.net * 100)]),
+    );
+    return monthlyExpenseSpendOutputSchema.parse(
+      months.map((month) => ({ month, cents: cents.get(month) ?? 0 })),
+    );
+  }
   const source = root(entityKind, entityId);
   const routes = await compiledConnectedRoutes(entityKind, chart.viewKey);
   if (!routes.length)

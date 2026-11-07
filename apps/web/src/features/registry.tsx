@@ -407,11 +407,6 @@ const mealList = slotsFrom(() =>
 const plantingList = slotsFrom(() =>
   import("~/features/planting/list-slots").then((m) => m.plantingListSlots),
 );
-const productCategoryList = slotsFrom(() =>
-  import("~/features/product-category/list-slots").then(
-    (m) => m.productCategoryListSlots,
-  ),
-);
 const projectList = slotsFrom(() =>
   import("~/features/project/list-slots").then((m) => m.projectListSlots),
 );
@@ -434,7 +429,6 @@ const listSlots = {
     calendar: plantingList("calendar"),
     schedule: plantingList("schedule"),
   },
-  productCategory: { hierarchy: productCategoryList("hierarchy") },
   project: {
     calendar: projectList("calendar"),
     overview: projectList("overview"),

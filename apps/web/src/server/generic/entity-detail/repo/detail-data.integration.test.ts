@@ -1,12 +1,20 @@
 import { allEntities, entityManifest } from "@cubby/schemas/entity-manifest";
 import { entitySummary } from "@cubby/schemas/entity-summary";
+import { productCategoryShortcode } from "@cubby/schemas/identifiers";
+import { testUserId } from "@cubby/schemas/testing";
 import { eq, sql } from "drizzle-orm";
+import { createEntity } from "tooling/factories/create";
 import { createRepoEntity } from "tooling/factories/repo";
-import { withTestDb } from "tooling/test-setup";
+import { buildKernelContext } from "tooling/scenarios/context";
+import { withTestDb, TEST_USER_ID } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { unwrapDb } from "~/server/db/helpers";
 import { auditLog, expense } from "~/server/db/schema";
+import {
+  createProductIdentityFixture,
+  makeProductInput,
+} from "~/server/testing/repo.fixtures";
 
 import { getDetailActivity, getMonthlyExpenseSpend } from "./detail-data";
 
@@ -49,6 +57,36 @@ describe("declared detail data", () => {
 
   it("zero-fills twelve months and sums only distinct live, actual Expense costs", async () => {
     const vendor = await createRepoEntity(ctx, "vendor");
+    const context = buildKernelContext(ctx.db, testUserId(TEST_USER_ID));
+    const spendingRoot = await createEntity(context, "spendingCategory", {
+      name: "Synthetic chart household",
+    });
+    const tools = await createEntity(context, "spendingCategory", {
+      name: "Synthetic chart tools",
+      parentId: spendingRoot.id,
+    });
+    const gifts = await createEntity(context, "spendingCategory", {
+      name: "Synthetic chart gifts",
+      parentId: spendingRoot.id,
+    });
+    const category = await createEntity(context, "productCategory", {
+      name: "Synthetic chart equipment",
+      spendingCategoryMode: "mapped",
+      spendingCategoryId: tools.id,
+    });
+    const child = await createEntity(context, "productCategory", {
+      name: "Synthetic chart drills",
+      parentId: category.id,
+    });
+    const product = await createProductIdentityFixture(
+      ctx.db,
+      makeProductInput({
+        name: "Synthetic chart drill",
+        categoryId: productCategoryShortcode.parse(child.id),
+        brandId: vendor.output.id,
+      }),
+      ctx.actor,
+    );
     const purchase = await createRepoEntity(ctx, "purchase", {
       vendorId: vendor.output.id,
       date: "2026-09-08",
@@ -59,30 +97,53 @@ describe("declared detail data", () => {
       purchaseId: purchase.output.id,
       date: "2026-09-08",
       cost: 12.34,
+      productId: product.id,
     });
     await createRepoEntity(ctx, "expense", {
       trade: "other",
       purchaseId: purchase.output.id,
       date: "2026-09-09",
       cost: -2,
+      productId: product.id,
+    });
+    const plannedPurchase = await createRepoEntity(ctx, "purchase", {
+      vendorId: vendor.output.id,
+      date: "2026-10-02",
     });
     await createRepoEntity(ctx, "expense", {
       trade: "other",
-      purchaseId: purchase.output.id,
+      purchaseId: plannedPurchase.output.id,
       date: "2026-10-02",
       cost: 100,
       future: true,
+      productId: product.id,
     });
     const removed = await createRepoEntity(ctx, "expense", {
       trade: "other",
       purchaseId: purchase.output.id,
       date: "2026-09-10",
       cost: 300,
+      productId: product.id,
     });
     await unwrapDb(ctx.db)
       .update(expense)
       .set({ deletedAt: new Date() })
       .where(eq(expense.id, removed.entityId));
+    await createRepoEntity(ctx, "expense", {
+      trade: "other",
+      purchaseId: purchase.output.id,
+      productId: product.id,
+      date: "2026-09-09",
+      cost: 5,
+      spendingCategoryId: gifts.id,
+    });
+    await createRepoEntity(ctx, "expense", {
+      trade: "other",
+      purchaseId: purchase.output.id,
+      date: "2026-09-09",
+      cost: 0.66,
+      lineKind: "tax",
+    });
     const input = {
       source: { entityKind: "vendor" as const, entityId: vendor.output.id },
     };
@@ -93,9 +154,30 @@ describe("declared detail data", () => {
           index < 2
             ? `2025-${index + 11}`
             : `2026-${String(index - 1).padStart(2, "0")}`,
-        cents: index === 10 ? 1034 : 0,
+        cents: index === 10 ? 1600 : 0,
       })),
     );
+    // Both taxonomy charts use allocation scope: inherited mappings and shared
+    // charges count, while explicit Gifts remains separate from Product identity.
+    for (const [entityKind, entityId, cents] of [
+      ["productCategory", category.id, 1600],
+      ["productCategory", child.id, 1600],
+      ["spendingCategory", spendingRoot.id, 1600],
+      ["spendingCategory", tools.id, 1081],
+      ["spendingCategory", gifts.id, 519],
+    ] as const) {
+      const categorySeries = await getMonthlyExpenseSpend(
+        ctx.db,
+        { source: { entityKind, entityId } },
+        "2026-10-20",
+      );
+      expect(categorySeries).toEqual(
+        series.map((point) => ({
+          ...point,
+          cents: point.month === "2026-09" ? cents : 0,
+        })),
+      );
+    }
     const account = await createRepoEntity(ctx, "financialAccount");
     for (const amount of [700, 800]) {
       await createRepoEntity(ctx, "financialTransaction", {

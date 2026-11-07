@@ -10,7 +10,17 @@ const expectation = z.enum(["unknown", "required", "not_expected"]);
 export const { definition, readSchemas } = defineEntityModel({
   key: "spendingCategory",
   names: { singular: "Spending Category", plural: "Spending Categories" },
-  route: { basePath: "spending-categories" },
+  route: {
+    basePath: "spending-categories",
+    listColumns: {
+      module: "~/features/spending-category/list-columns",
+      export: "spendingCategoryListOverride",
+    },
+    listReadProjection: {
+      module: "~/features/spending-category/list-read",
+      export: "spendingCategoryListReadProjection",
+    },
+  },
   table: "SpendingCategory",
   identifiers: { brand: "SpendingCategoryId", shortcode: "SPC-" },
   presentation: {

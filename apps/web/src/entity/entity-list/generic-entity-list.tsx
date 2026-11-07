@@ -502,18 +502,17 @@ function ServerListBody({
   const { navigate } = context;
   const nestToggle = useMemo(
     () =>
-      parts.tree ||
       !entityMetadata(queryClient, entity).summary.list.tree?.toggle
         ? undefined
         : {
-            nested,
+            nested: listNested(queryClient, entity, context.search),
             onNestedChange: (value: boolean) =>
               navigate(
                 { nest: nestSearchValue(queryClient, entity, value) },
                 { replace: true },
               ),
           },
-    [entity, navigate, nested, parts.tree, queryClient],
+    [entity, navigate, queryClient, context.search],
   );
   const onGroupByChange = useCallback(
     (key: string | null) => navigate({ groupBy: key ? [{ key }] : undefined }),
