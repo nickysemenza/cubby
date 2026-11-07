@@ -543,6 +543,15 @@ export async function retryRunStep(db: Database, runId: RunId, key: string) {
     throw new Error(
       "This Run is still running; retry its failures once it stops.",
     );
+  if (owner.purpose === "sweep" && owner.failureCode === "user_cancelled") {
+    const step = (await listRunSteps(db, runId)).find(
+      (item) => item.key === key,
+    );
+    if (step && step.failed === 0)
+      throw new Error(
+        "Cancelled AI work stays stopped; start a new Run to evaluate that scope again.",
+      );
+  }
   // One maintenance pass at a time (Run_one_active_maintenance).
   const active =
     owner.purpose === "maintenance"

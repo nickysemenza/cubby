@@ -9,14 +9,25 @@ import {
   owedAiEvaluations,
 } from "~/server/ai/evaluation/service/ai-evaluation-drain.fixtures";
 import { getDb } from "~/server/db/helpers";
-import { aiEvaluation, aiEvaluationRequest } from "~/server/db/schema";
+import {
+  aiEvaluation,
+  aiEvaluationRequest,
+  run,
+  runStep,
+} from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
+import { ensureRunSteps } from "~/server/domains/run/repo/run-step";
+import { retryRunStep } from "~/server/domains/run/service/step-run";
 import {
   createProductIdentityFixture,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 
-import { cancelRunAiWork, readmitFailedAiWork } from "./control";
+import {
+  cancelRunAiWork,
+  controlWorkflowRun,
+  readmitFailedAiWork,
+} from "./control";
 
 // Production finding: Run cancel called cancelJob once per evaluation inside
 // one transaction under the global AI admission lock and timed out for large
@@ -33,6 +44,7 @@ describe("Run AI work cancel", () => {
     const runId = await ensureRun(ctx.db, ctx.actor, {
       purpose: "sweep",
       trigger: "manual",
+      input: { kind: "sweep", families: [{ family: "field", scope: {} }] },
       execution: false,
     });
     for (let index = 0; index < 120; index++)
@@ -74,6 +86,37 @@ describe("Run AI work cancel", () => {
     expect(evaluations).toHaveLength(120);
     expect(evaluations.every((row) => row.state === "cancelled")).toBe(true);
     expect(await owedAiEvaluations(ctx.db)).toBe(0);
+    const [cancelled] = await getDb(ctx.db)
+      .update(run)
+      .set({ status: "failed", failureCode: "user_cancelled" })
+      .where(eq(run.id, runId))
+      .returning({ code: run.shortcode });
+    await ensureRunSteps(ctx.db, runId, [
+      { key: "field_evaluate", label: "Fields: evaluate" },
+    ]);
+    await getDb(ctx.db)
+      .update(runStep)
+      .set({ state: "failed" })
+      .where(eq(runStep.runId, runId));
+    await expect(
+      controlWorkflowRun(
+        ctx.db,
+        ctx.actor,
+        { runPublicId: cancelled!.code, action: "retry" },
+        "sweep",
+      ),
+    ).rejects.toThrow("Cancelled AI work stays stopped");
+    await expect(retryRunStep(ctx.db, runId, "field_evaluate")).rejects.toThrow(
+      "Cancelled AI work stays stopped",
+    );
+    expect(
+      (
+        await getDb(ctx.db)
+          .select({ status: run.status, failureCode: run.failureCode })
+          .from(run)
+          .where(eq(run.id, runId))
+      )[0],
+    ).toEqual({ status: "failed", failureCode: "user_cancelled" });
   });
 
   it("keeps work another live requester still wants", async () => {
@@ -147,5 +190,39 @@ describe("Run AI work cancel", () => {
     expect(await aiEvaluationItem(ctx.db, evaluation.id)).toMatchObject({
       feature: "mailbox-relevance",
     });
+    const paidResult = { decision: "synthetic-retained-result" };
+    await getDb(ctx.db)
+      .update(aiEvaluation)
+      .set({ state: "failed", runAt: null, result: paidResult })
+      .where(eq(aiEvaluation.id, evaluation.id));
+    expect(
+      await readmitFailedAiWork(ctx.db, second!, {
+        owned: false,
+        requested: true,
+        attempt: 1,
+      }),
+    ).toBe(1);
+    const retried = await getDb(ctx.db)
+      .select({
+        id: aiEvaluation.id,
+        state: aiEvaluation.state,
+        result: aiEvaluation.result,
+      })
+      .from(aiEvaluation);
+    expect(retried).toHaveLength(2);
+    expect(retried.find((item) => item.id !== evaluation.id)).toMatchObject({
+      state: "result_ready",
+      result: paidResult,
+    });
+    expect(retried.find((item) => item.id === evaluation.id)).toMatchObject({
+      state: "failed",
+      result: paidResult,
+    });
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(aiEvaluationRequest)
+        .where(eq(aiEvaluationRequest.runId, first!)),
+    ).toEqual(stoppedRequests);
   });
 });

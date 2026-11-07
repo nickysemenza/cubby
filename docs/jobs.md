@@ -107,7 +107,10 @@ Running Sweeps and mail reclassification support member pause/resume through
 the Run lifecycle, preserving their steps, scope and committed progress. Retrying
 failed Run or step work re-admits failures only: cancelled evaluations and
 withdrawn shared requests retain their original stop and receipts, including
-superseded historical work.
+superseded historical work. A member-cancelled AI Run with no remaining
+failures refuses Retry with a diagnostic rather than completing without work;
+a cancelled Sweep step with no failed items does likewise. Actual failures
+remain retryable without reviving the cancelled remainder.
 Mailbox discovery acquires at most five messages from its frozen provider page
 per Job claim. Its durable message offset resumes the remaining messages without
 replaying the completed prefix; absent offsets on retained pages mean zero.

@@ -133,12 +133,25 @@ export async function controlWorkflowRun(
           "This legacy Run retains historical receipts; historical recovery creates a linked continuation rather than retrying its empty roster.",
         );
     }
-    if (ownsAiWork(purpose) || requestsAiWork(purpose))
-      await readmitFailedAiWork(db, row.id, {
+    if (ownsAiWork(purpose) || requestsAiWork(purpose)) {
+      const admitted = await readmitFailedAiWork(db, row.id, {
         owned: ownsAiWork(purpose),
         requested: requestsAiWork(purpose),
         attempt: row.attempt,
       });
+      if (row.failureCode === "user_cancelled" && admitted === 0) {
+        const [failedStep] = await database
+          .select({ id: runStep.id })
+          .from(runStep)
+          .where(and(eq(runStep.runId, row.id), sql`${runStep.failed} > 0`))
+          .limit(1);
+        if (!failedStep)
+          throw createAppError(
+            "RUN_CONTROL_REFUSED",
+            "Cancelled AI work stays stopped; start a new Run to evaluate that scope again.",
+          );
+      }
+    }
     await launchWorkflowRun(db, { runId: row.id, purpose });
     return;
   }
@@ -263,8 +276,9 @@ export async function readmitFailedAiWork(
     requested,
     attempt,
   }: { owned: boolean; requested: boolean; attempt: number },
-) {
+): Promise<number> {
   const database = getDb(db);
+  let admitted = 0;
   if (owned) {
     const { aiEvaluation } = await import("~/server/db/schema");
     const failed = await database
@@ -277,8 +291,9 @@ export async function readmitFailedAiWork(
           sql`${aiEvaluation.receipt}->>'retryEvaluationId' IS NULL`,
         ),
       );
-    await withTransactionDatabase(db, async (tx) => {
+    admitted += await withTransactionDatabase(db, async (tx) => {
       const database = getDb(tx);
+      let created = 0;
       for (const item of failed) {
         const retryId = crypto.randomUUID();
         const [replacement] = await database
@@ -297,6 +312,7 @@ export async function readmitFailedAiWork(
           .onConflictDoNothing()
           .returning({ id: aiEvaluation.id });
         if (replacement) {
+          created += 1;
           await markAiEvaluationWork(tx, [replacement.id]);
           await database
             .update(aiEvaluation)
@@ -304,9 +320,10 @@ export async function readmitFailedAiWork(
             .where(eq(aiEvaluation.id, item.id));
         }
       }
+      return created;
     });
   }
-  if (!requested) return;
+  if (!requested) return admitted;
   const { aiEvaluationRequest } = await import("~/server/db/schema");
   const { enqueueAiEvaluation, requestedAiEvaluations } =
     await import("~/server/ai/evaluation/repo/ai-evaluation-requests");
@@ -325,6 +342,7 @@ export async function readmitFailedAiWork(
       result: item.result,
       state: item.result ? "result_ready" : "queued",
     });
+    admitted += 1;
     await database
       .update(aiEvaluationRequest)
       .set({
@@ -340,4 +358,5 @@ export async function readmitFailedAiWork(
         ),
       );
   }
+  return admitted;
 }
