@@ -1251,6 +1251,10 @@ The centralized resolver in
 `apps/web/src/server/entity-kernel/repo/entity-display-image.ts` composes these
 paths breadth first in one SQL read. Direct displayable images come first,
 then directly related images in declaration order, then deeper fallbacks.
+Identical expanded paths run only at their earliest priority while traversal
+continues through every declared fallback. Purchased-Product paths share one
+effective Project/Product pair per query, so repeat purchases do not enumerate
+the same gallery again. Product and Vendor source ordering stays authoritative.
 Source transaction records reuse the accepted-settlement relation to borrow the
 linked FinancialTransaction’s canonical images, including Purchase and Vendor
 fallbacks. When those yield no image, a unique supported merchant inference

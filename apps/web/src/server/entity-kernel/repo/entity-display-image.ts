@@ -150,6 +150,8 @@ const displayPathSteps = (
 const DISPLAY_SOURCES: readonly DisplaySource[] = allEntities.flatMap(
   (entity) => {
     const sources: DisplaySource[] = [];
+    const sourcePaths = new Set<string>();
+    let priority = 0;
     const pending: Array<{
       target: Entity;
       path: readonly RelationshipPathStep[];
@@ -178,16 +180,23 @@ const DISPLAY_SOURCES: readonly DisplaySource[] = allEntities.flatMap(
           relationship.target === "image" ||
           entityManifest[relationship.target].images.storage !== false
         ) {
-          sources.push({
-            entity,
-            target: relationship.target,
-            priority: sources.length + 1,
-            groups,
-            path:
-              relationship.target === "image"
-                ? path
-                : [...path, ...imageRelationshipSteps(relationship.target)],
-          });
+          const imagePath =
+            relationship.target === "image"
+              ? path
+              : [...path, ...imageRelationshipSteps(relationship.target)];
+          const key = JSON.stringify([relationship.target, imagePath]);
+          priority += 1;
+          // Earlier identical paths always win image deduplication; keep their priority positions.
+          if (!sourcePaths.has(key)) {
+            sourcePaths.add(key);
+            sources.push({
+              entity,
+              target: relationship.target,
+              priority,
+              groups,
+              path: imagePath,
+            });
+          }
         }
         pending.push({
           target: relationship.target,
@@ -575,11 +584,13 @@ async function resolveRankedDisplayImages(
   // Explicit and purchase assignments identify page candidates through their
   // indexes. The effective-project expression still decides precedence; food
   // fallback requires the wider set only when the household project is in refs.
+  // Expense is a connector here; Product and Vendor own source ordering.
   const expenseProjectRelation = selectedBranches.some(
     ({ usesExpenseProjectRelation }) => usesExpenseProjectRelation,
   )
     ? sql`, "${sql.raw(EXPENSE_PROJECT_RELATION)}" AS MATERIALIZED (
-        SELECT e.*, ${effectiveExpenseProjectSql("e")} AS "effectiveProjectId"
+        SELECT DISTINCT effective."effectiveProjectId", effective."productId", effective."deletedAt"
+        FROM (SELECT e."productId", e."deletedAt", ${effectiveExpenseProjectSql("e")} AS "effectiveProjectId"
         FROM "Expense" e
         WHERE ${notDeleted("e")}
           AND e."lineKind" = 'principal'
@@ -603,6 +614,7 @@ async function resolveRankedDisplayImages(
                 AND ${notDeleted("household")}
             )
           )
+        ) effective
       )`
     : sql``;
   const borrowedImages = branchSql.length
