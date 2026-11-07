@@ -134,6 +134,7 @@ export const { definition, readSchemas } = defineEntityModel({
       ],
     },
     list: {
+      rail: [{ field: "expectedHarvestStart" }],
       views: [
         "table",
         {
@@ -274,6 +275,7 @@ export const { definition, readSchemas } = defineEntityModel({
             },
             {
               value: "growing",
+              quiet: true,
               label: "Growing",
               description: "Currently transplanted or actively growing",
               color: "positive",

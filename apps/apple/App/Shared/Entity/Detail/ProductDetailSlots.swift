@@ -151,8 +151,10 @@ struct RelatedRecordsDetailSlot: View {
     }
 }
 
-#Preview("Nutrition") { Form { ProductNutritionDetailSlot(row: PreviewFixtures.sampleDetailRow) } }
-#Preview("Unit mappings") { Form { ProductUnitMappingsDetailSlot(row: PreviewFixtures.sampleDetailRow) } }
+#Preview("Nutrition") { Form { ProductNutritionDetailSlot(row: EntityScreenFixture.product.detailRow) } }
+#Preview("Unit mappings") {
+    Form { ProductUnitMappingsDetailSlot(row: EntityScreenFixture.product.detailRow) }
+}
 #Preview("Related records") {
     Form { RelatedRecordsDetailSlot(source: .init(entity: .product, id: "PRD-2345")) }.environment(
         PreviewFixtures.signedInModel())

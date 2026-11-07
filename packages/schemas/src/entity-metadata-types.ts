@@ -36,6 +36,8 @@ export type EntityRosterData = Record<
     recordIconEntityField: string | null;
     recordEmojiField: string | null;
     merge: boolean;
+    /** `specialized`: web merges through its own flow, not the generic kernel dialog. */
+    mergeFlow: "generic" | "specialized";
     graph: boolean;
     shortcodePrefix: string | null;
     browserRoutes: boolean;

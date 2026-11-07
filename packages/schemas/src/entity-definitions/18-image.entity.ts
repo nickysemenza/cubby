@@ -158,7 +158,9 @@ export const { definition, readSchemas } = defineEntityModel(
         ],
       },
       // An uploaded image displays itself; it loads as list media.
-      list: {},
+      list: {
+        rail: [{ field: "size" }],
+      },
     },
     model: {
       fields: [
@@ -262,6 +264,7 @@ export const { definition, readSchemas } = defineEntityModel(
               },
               {
                 value: "UPLOADED",
+                quiet: true,
                 label: "Uploaded",
                 color: "positive",
               },

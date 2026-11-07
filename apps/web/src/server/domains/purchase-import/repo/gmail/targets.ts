@@ -1,7 +1,19 @@
 import { parseBankDescriptor } from "@cubby/schemas/financial-transaction-fields";
+import { parseEntityId, runEntityId } from "@cubby/schemas/identifiers";
 import type { SenderAttribution } from "@cubby/schemas/mail-coverage";
 import type { MailboxScopedQuery } from "@cubby/schemas/mailbox-research";
-import { and, eq, isNotNull, isNull, or } from "drizzle-orm";
+import {
+  and,
+  asc,
+  eq,
+  isNotNull,
+  isNull,
+  notExists,
+  or,
+  sql,
+} from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
+import { z } from "zod";
 
 import { senderAddress, distinctSenderDomain } from "~/lib/vendor/domains";
 import { account } from "~/server/db/auth.schema";
@@ -15,8 +27,10 @@ import {
   financialAccount,
   financialTransaction,
   financialTransactionAllocation,
+  run,
 } from "~/server/db/retained-tables";
 import { readSenderAttributions } from "~/server/domains/purchase-import/repo/sender-attribution-read";
+import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 
 import { vendorSearchTerms } from "./vendor-identity";
 import { vendorMailQueries } from "./vendor-mail-scope";
@@ -27,6 +41,70 @@ export type GmailSyncTarget = {
   mailboxId: string;
   scopedQueries: MailboxScopedQuery[];
 };
+
+const discoveryExecution = z.object({
+  runId: runEntityId,
+  purpose: z.literal("mail_discovery"),
+});
+
+/** Fresh automatic admission leaves the mailbox slot for a retained Job's own recovery claim. */
+export async function mailDiscoveryRecoveryWakeAt(
+  db: Database,
+  target: Pick<GmailSyncTarget, "ledgerPartyId" | "mailboxId">,
+): Promise<Date | null> {
+  const successor = alias(run, "discovery_recovery_successor");
+  const candidates = await getDb(db)
+    .select({ id: run.id })
+    .from(run)
+    .where(
+      and(
+        eq(run.purpose, "mail_discovery"),
+        eq(run.trigger, "scheduled"),
+        eq(run.status, "failed"),
+        eq(run.failureCode, "job_failed"),
+        eq(
+          run.ledgerPartyId,
+          parseEntityId("ledgerParty", target.ledgerPartyId),
+        ),
+        sql`${run.input}->>'mailboxId' = ${target.mailboxId}`,
+        sql`${run.input}->>'controlled' IS NULL`,
+        notDeleted(run),
+        isNull(run.retiredAt),
+        notExists(
+          getDb(db)
+            .select({ id: successor.id })
+            .from(successor)
+            .where(
+              and(
+                eq(successor.predecessorRunId, run.id),
+                notDeleted(successor),
+              ),
+            ),
+        ),
+      ),
+    )
+    .orderBy(asc(run.createdAt), asc(run.id));
+  if (!candidates.length) return null;
+  const jobs = await readJobs(db, {
+    kind: "run.execute",
+    keys: candidates.map((candidate) => `run:${candidate.id}`),
+    states: ["queued", "retry_wait", "running"],
+  });
+  for (const candidate of candidates) {
+    const job = jobs.find(
+      (row) => row.runId === candidate.id && row.key === `run:${candidate.id}`,
+    );
+    if (!job || !(job.generation > 1 || job.attempts > 0)) continue;
+    const execution = discoveryExecution.safeParse(job.input);
+    if (!execution.success || execution.data.runId !== candidate.id) continue;
+    if (job.state === "running") {
+      if (job.leaseExpiresAt) return job.leaseExpiresAt;
+      continue;
+    }
+    return job.availableAt;
+  }
+  return null;
+}
 
 /**
  * Members whose login has connected Google, one row per mailbox: the

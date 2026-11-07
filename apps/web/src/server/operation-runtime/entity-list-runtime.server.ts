@@ -4,6 +4,10 @@ import { loadEntityListSchemas } from "~/entity/model/read-schemas/loaders";
 import { executeEntitySelectionIds } from "~/server/entity-kernel";
 import { resolveFilterTokens } from "~/server/entity-kernel/filter-tokens";
 import { listOperations } from "~/server/entity-kernel/list-operations";
+import {
+  entityActionReadFields,
+  withEntityActionStates,
+} from "~/server/generic/actions/entity-action-states";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
 
 /**
@@ -32,17 +36,22 @@ export const entityListHandlers = implementOperationDomain(entityListContract, {
         const result = await listOperations(input.entity).listFields(
           context,
           resolved,
-          input.fields,
+          [
+            ...new Set([
+              ...input.fields,
+              ...entityActionReadFields(input.entity),
+            ]),
+          ],
         );
         return schemas.selectedListOutput.parse({
-          items: result.items,
+          items: withEntityActionStates(input.entity, [...result.items]),
           meta: result.meta,
           selectedFields: input.fields,
         });
       }
       const result = await executeEntityAs(context, "list", resolved);
       return schemas.listOutput.parse({
-        items: result.items,
+        items: withEntityActionStates(input.entity, [...result.items]),
         meta: result.meta,
       });
     },

@@ -3,12 +3,15 @@ import SwiftUI
 
 /// The records between a source and a target, as one compact line: intermediate records read by
 /// entity kind (paths repeat names), each still opening its record, with the full name in the
-/// accessibility label and help. Further paths disclose under "+N paths".
+/// accessibility label and help. Further paths disclose under "+N paths". A single direct path
+/// adds nothing the row does not already say, so it draws nothing.
 struct RecordPathView: View {
     let paths: [[ConnectedPathNode]]
 
     var body: some View {
-        if let shortest = paths.first {
+        if let shortest = paths.first,
+            paths.count > 1 || !ConnectedPathPresentation.intermediates(shortest).isEmpty
+        {
             VStack(alignment: .leading, spacing: 4) {
                 trail(shortest)
                 if paths.count > 1 {
@@ -65,7 +68,8 @@ struct ConnectedRecordRow: View {
                 ) {
                     Text(EntityCatalog[item.target.entityKind].singular)
                 } rail: {
-                    Text(ConnectedPathPresentation.hopLabel(item.shortestHops))
+                    // A direct record needs no hop count; only an indirect one says how far.
+                    if item.shortestHops > 1 { Text(ConnectedPathPresentation.hopLabel(item.shortestHops)) }
                 } supplement: {
                     EmptyView()
                 }

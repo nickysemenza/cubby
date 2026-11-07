@@ -46,6 +46,7 @@ export const { definition, readSchemas } = defineEntityModel({
     },
     icons: { phosphor: "Package", sfSymbol: "shippingbox", emoji: "📦" },
     list: {
+      rail: [{ field: "lastEventDate" }],
       savedViews: [
         {
           id: "carrier-by-vendor",
@@ -183,7 +184,11 @@ export const { definition, readSchemas } = defineEntityModel({
         kind: "identifier",
         nullable: true,
         reference: { entity: "vendor" },
-        display: { columnGroup: "Tracking", labelPath: "carrierName" },
+        display: {
+          mobile: { slot: "subtitle", priority: 10 },
+          columnGroup: "Tracking",
+          labelPath: "carrierName",
+        },
         validation: {
           read: shortcodeSchema("vendor").nullable(),
           create: null,
@@ -202,7 +207,10 @@ export const { definition, readSchemas } = defineEntityModel({
         key: "trackingNumber",
         kind: "text",
         nullable: true,
-        display: { columnGroup: "Tracking" },
+        display: {
+          mobile: { slot: "meta", priority: 20 },
+          columnGroup: "Tracking",
+        },
         validation: readOnly(z.string().nullable()),
       },
       {
@@ -226,6 +234,7 @@ export const { definition, readSchemas } = defineEntityModel({
         key: "purpose",
         kind: "enum",
         display: {
+          mobile: { slot: "meta", priority: 30 },
           columnGroup: "Purchase",
           optionRole: "category",
           optionColor: "neutral-status",

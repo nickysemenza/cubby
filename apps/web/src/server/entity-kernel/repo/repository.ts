@@ -853,6 +853,21 @@ export function defineRepository<
               mergeSummary: merge.summary(output),
             };
           },
+          /** The survivor re-read after a merge-time survivor update. */
+          readKeeper: (ctx: EntityKernelContext, keepId: string) =>
+            repository.get(
+              ctx,
+              // SAFETY: the binding's id schema is SchemasFor<E>'s; the
+              // generated record widens it to the union across entities.
+              ENTITY_SCHEMA_BINDINGS[entity].id.parse(keepId) as ZodOutput<
+                SchemasFor<E>["id"]
+              >,
+            ),
+          blockers: async (
+            ctx: EntityKernelContext,
+            input: { keepId: string; mergeIds: string[] },
+          ) =>
+            merge.blockers ? merge.blockers(ctx, merge.input.parse(input)) : [],
         }
       : null;
 

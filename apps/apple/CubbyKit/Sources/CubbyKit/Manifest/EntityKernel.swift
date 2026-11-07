@@ -30,6 +30,8 @@ struct EntityKernelCapabilities: Decodable, Sendable {
     let read: NativeReadKind
     let imageAttach: Bool
     let imageOrder: Bool
+    /// The atomic bulk update's accepted keys, in declaration order.
+    let bulkFields: [String]
     let parameters: [String: Parameter]
 }
 
@@ -64,6 +66,9 @@ extension EntityKey {
 
     /// Whether the entity's update accepts `pendingImageIds`.
     public var acceptsImageAttach: Bool { kernel?.imageAttach ?? false }
+
+    /// The keys one atomic bulk update accepts; empty when the entity has no bulk update.
+    public var bulkUpdateFields: [String] { kernel?.bulkFields ?? [] }
 }
 
 extension EntityDescriptor {
@@ -175,12 +180,34 @@ extension EntityDescriptor {
         return updated.count
     }
 
+    /// `entity.mutate` merge: folds `mergeIds` into `keepId` and removes them. `survivorValues` are
+    /// the conflicting fields' chosen candidate values; the server applies them in the merge's
+    /// transaction, so a refused merge changes nothing. Irreversible: only the merge sheet calls
+    /// it, after its explicit confirmation.
+    func merge(
+        keepID: String, mergeIDs: [String], survivorValues: [String: JSONValue], client: CubbyClient
+    ) async throws {
+        try require(.merge)
+        var command: [String: JSONValue] = [
+            "action": "merge", "entity": .string(key.rawValue),
+            "data": ["keepId": .string(keepID), "mergeIds": .array(mergeIDs.map { .string($0) })],
+        ]
+        if !survivorValues.isEmpty { command["survivorValues"] = .object(survivorValues) }
+        _ = try await mutate(.object(command), client)
+    }
+
     /// `entity.mutate` delete. Destructive: only the hero-action runner calls it, behind an
     /// explicit confirmation.
     func delete(id: String, client: CubbyClient) async throws {
+        try await delete(ids: [id], client: client)
+    }
+
+    /// One kernel delete for a list selection; the server removes all of them or none.
+    func delete(ids: [String], client: CubbyClient) async throws {
         try require(.delete)
         _ = try await mutate(
-            ["action": "delete", "entity": .string(key.rawValue), "ids": .array([.string(id)])], client)
+            ["action": "delete", "entity": .string(key.rawValue), "ids": .array(ids.map { .string($0) })],
+            client)
     }
 
     /// An update carrying only `pendingImageIds`, for entities whose update declares it.

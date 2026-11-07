@@ -103,6 +103,7 @@ export const { definition, readSchemas } = defineEntityModel(
         ],
       },
       list: {
+        rail: [{ field: "recipeCount" }],
         links: [{ label: "Import", path: "/recipes/import" }],
       },
     },

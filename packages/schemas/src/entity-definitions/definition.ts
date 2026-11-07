@@ -22,6 +22,7 @@ import {
 import { fieldPolicyValue } from "../field-policy-fields";
 import { photoCategoryKeys } from "../photo-categories";
 import { childTableMetadataSchema } from "./child-definition";
+import { listGroupMetricKeys } from "./list-group-metrics";
 import { createRelationships } from "./relationships";
 import { entityRelationMetadataSchema } from "./relationship-shape";
 
@@ -363,6 +364,11 @@ const buildMetadataSchemas = () => {
               glyph: enumOptionIconSchema.optional(),
               /** Explicit option role, otherwise the declared roster role. */
               role: z.enum(enumRoles).optional(),
+              /** The expected value native rows leave unsaid; one per roster. */
+              quiet: z.literal(true).optional(),
+              /** A terminal value (a task's Done): the record's work is over, so a passed
+               * deadline no longer reads as overdue. */
+              closed: z.literal(true).optional(),
             })
             .strict(),
         ),
@@ -542,6 +548,8 @@ const buildMetadataSchemas = () => {
        */
       referencePreviewLimit: orNull(z.number().int().positive()),
       listHidden: flag(false),
+      /** `false` keeps a simple field out of native tap-to-edit on detail. */
+      inlineEdit: z.literal(false).nullable().optional().default(null),
       /**
        * A table header's short form when the label is longer than its
        * column's values ("Itemized" for "Itemization coverage"). The label
@@ -569,6 +577,11 @@ const buildMetadataSchemas = () => {
               glyph: enumOptionIconSchema.optional(),
               /** Explicit option role, otherwise the declared roster role. */
               role: z.enum(enumRoles).optional(),
+              /** The expected value native rows leave unsaid; one per roster. */
+              quiet: z.literal(true).optional(),
+              /** A terminal value (a task's Done): the record's work is over, so a passed
+               * deadline no longer reads as overdue. */
+              closed: z.literal(true).optional(),
             })
             .strict(),
         ),
@@ -1607,10 +1620,17 @@ const buildMetadataSchemas = () => {
             actions: extraActions,
           })),
         /**
-         * One or two `hero.extraActions` verbs every client offers as the
+         * Up to four `hero.extraActions` verbs every client offers as the
          * record's leading buttons, ahead of the More menu.
          */
-        quickActions: z.array(actionKey).max(2).optional().default([]),
+        quickActions: z.array(actionKey).max(4).optional().default([]),
+        /**
+         * Updatable fields offered as tonal action-bar tiles after the quick
+         * actions (four tiles in all); each opens the field's inline editor.
+         */
+        quickFields: z.array(fieldKey).optional().default([]),
+        /** Native phone hero image: a tile beside the title, or a full-width banner. */
+        heroMedia: z.enum(["tile", "banner"]).optional().default("tile"),
         /** Only these relations contribute dated records to merged activity. */
         activityRelations: z
           .array(
@@ -1693,12 +1713,16 @@ const buildMetadataSchemas = () => {
           variantOverride,
           hero,
           quickActions,
+          quickFields,
+          heroMedia,
           omitRelations,
         }) => ({
           variant: variantOverride,
           summary,
           hero,
           quickActions,
+          quickFields,
+          heroMedia,
           sections,
           activityRelations,
           overviewSections,
@@ -1922,6 +1946,40 @@ const buildMetadataSchemas = () => {
          * swipe and the first row-menu items.
          */
         quickActions: z.array(actionKey).max(2).optional().default([]),
+        /**
+         * Up to two aligned trailing columns on native rows (number, money,
+         * amount or date fields), each with an optional secondary `sub` value.
+         * `total: "sum"` adds the field to grouped metrics so group headers and
+         * selections show server totals.
+         */
+        rail: z
+          .array(
+            z.strictObject({
+              field: fieldKey,
+              sub: fieldKey.optional(),
+              total: z.literal("sum").optional(),
+            }),
+          )
+          .max(2)
+          .optional()
+          .default([]),
+        /** A list verb drawn as the row's leading control (a task's Done). */
+        rowCommand: actionKey.nullable().optional().default(null),
+        /**
+         * Replaces the derived native swipe actions with these list verbs, or
+         * `false` for none. Unset derives them from quick and one-tap verbs.
+         */
+        swipe: z
+          .union([
+            z.literal(false),
+            z.strictObject({
+              leading: z.array(actionKey).optional(),
+              trailing: z.array(actionKey).optional(),
+            }),
+          ])
+          .nullable()
+          .optional()
+          .default(null),
         links: z
           .array(
             z
@@ -1963,6 +2021,9 @@ const buildMetadataSchemas = () => {
         ({
           extraActions,
           quickActions,
+          rail,
+          rowCommand,
+          swipe,
           views,
           viewAliases,
           totals,
@@ -1981,7 +2042,7 @@ const buildMetadataSchemas = () => {
           views,
           viewAliases,
           totals,
-          metrics: totals.flatMap((total) => (total.group ? total.keys : [])),
+          metrics: listGroupMetricKeys(totals, rail),
           shelf:
             shelfSubtitleOverride === undefined
               ? null
@@ -1994,6 +2055,9 @@ const buildMetadataSchemas = () => {
           tree,
           actions: extraActions,
           quickActions,
+          rail,
+          rowCommand,
+          swipe,
           links,
           timeline,
         }),
@@ -2436,6 +2500,16 @@ const buildMetadataSchemas = () => {
       softDelete: flag(true),
       delete: entityDeleteMetadataSchema.nullable(),
       merge: z.boolean({ error: "must be a boolean" }),
+      /**
+       * `specialized`: web merges through its own flow (a reviewed preview, a
+       * domain merge operation or an extra rule) rather than the generic kernel
+       * merge dialog, so native selections hand the merge to web instead of
+       * running the kernel merge. Requires `merge`.
+       */
+      mergeFlow: z
+        .enum(["generic", "specialized"])
+        .optional()
+        .default("generic"),
       /**
        * Who serves delete and merge. Derived as `kernel` for each declared
        * capability; declare it only when a workflow owns one (cookbook).

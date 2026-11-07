@@ -136,6 +136,7 @@ export const { definition, readSchemas } = defineEntityModel({
         extraActions: ["complete", "bulkEdit", "delete"],
       },
       quickActions: ["complete"],
+      quickFields: ["status", "assigneeId"],
       lead: ["overview"],
       pairs: [["schedule", "dependencies"]],
       sections: [
@@ -255,6 +256,8 @@ export const { definition, readSchemas } = defineEntityModel({
       ],
       extraActions: ["complete"],
       quickActions: ["complete"],
+      rowCommand: "complete",
+      rail: [{ field: "due" }],
       timeline: {
         fields: ["due.start", "due.end"],
         lifecycle: {

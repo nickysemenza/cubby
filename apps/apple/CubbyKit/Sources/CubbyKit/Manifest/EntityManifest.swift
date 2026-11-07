@@ -122,7 +122,7 @@ public enum EntityCatalog {
 
 // Quick actions are omitted from the wire when none are declared.
 extension EntityPresentation {
-    /// The declared `detail.quickActions`: the record's leading buttons, at most two.
+    /// The declared `detail.quickActions`: the record's leading buttons, at most four.
     public var detailQuickActionIDs: [EntityHeroActionID] { detailQuickActions ?? [] }
 
     /// The declared `list.quickActions` that are hero verbs, the only ones a row can run.

@@ -154,6 +154,7 @@ None is committed; edit the generator or its inputs, never the output. A missing
 - **Server-owned reports.** Report slots draw through the one `ReportDetailSlot`; every figure,
   candidate, verb and disabled reason is the server's. Writes go through the same operations web
   calls, behind the server's `disabledReason` and a fresh server check of exactly what is sent.
+  Record and row verbs read the server's `actions` states the same way.
   `ReportChoiceAnswers` never preselects an answer and mints a new operation id per answer change.
 - **Structured values.** `FieldDescriptor.valueSchema` (from the field's Zod input schema) is
   drawn by the one `StructuredValueControl`, so a new structured field is a declaration, not a
@@ -242,8 +243,8 @@ Test on the simulator with `xcrun simctl openurl booted https://cubby.nickysemen
   store under Application Support instead. `URL.path()` percent-encodes — use
   `path(percentEncoded: false)` for FileManager.
 - The API emits `.000Z` timestamps the generated client rejects; use `Configuration.cubby`
-  (`LenientISO8601DateTranscoder`). Product list rows carry no image URLs (`coverImageUrl` is on
-  detail only); image `status` is `PENDING|UPLOADED|FAILED`.
+  (`LenientISO8601DateTranscoder`). List rows carry `displayImages` (own, then declared
+  related `displaySources`; `[0]` is the cover); image `status` is `PENDING|UPLOADED|FAILED`.
 - A generator never emits one giant array literal: Release/WMO stalls single-threaded in the
   SIL `COWArrayOpt` pass. Large catalogs ship as bundled JSON decoded at runtime.
 - `Cubby.xcodeproj` is generated and gitignored; Git operations do not regenerate it. Run `pnpm apple gen` after

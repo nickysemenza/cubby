@@ -80,6 +80,7 @@ export const { definition, readSchemas } = defineEntityModel(
         ],
       },
       list: {
+        rail: [{ field: "amount", sub: "transactionDate" }],
         savedViews: [
           {
             id: "outstanding",
@@ -762,6 +763,7 @@ export const { definition, readSchemas } = defineEntityModel(
               },
               {
                 value: "posted",
+                quiet: true,
                 label: "Posted",
                 color: "positive",
               },

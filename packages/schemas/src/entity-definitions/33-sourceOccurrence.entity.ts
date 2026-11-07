@@ -13,7 +13,7 @@ import {
 import { defineEntity, defineEntityModel } from "./definition";
 import { readOnly, timestampField } from "./field-policy";
 
-const enumPresentation = (values: readonly string[]) => ({
+const enumPresentation = (values: readonly string[], quiet?: string) => ({
   display: {
     optionRole: "status" as const,
     optionColor: "neutral-status" as const,
@@ -26,6 +26,7 @@ const enumPresentation = (values: readonly string[]) => ({
       label: value.replaceAll("_", " "),
       color: "neutral-status" as const,
       glyph: { phosphor: "Info", sfSymbol: "info.circle" },
+      ...(value === quiet ? { quiet: true as const } : {}),
     })),
   },
 });
@@ -50,7 +51,7 @@ export const { definition, readSchemas } = defineEntityModel(
         description:
           "Imported bank records share decisions only after source proof or explicit review.",
       },
-      list: { savedViews: [] },
+      list: { savedViews: [], rail: [{ field: "lastObservedAt" }] },
       detail: {
         summary: [
           {
@@ -220,7 +221,7 @@ export const { definition, readSchemas } = defineEntityModel(
         {
           key: "reviewState",
           kind: "enum",
-          ...enumPresentation(sourceOccurrenceReviewState.options),
+          ...enumPresentation(sourceOccurrenceReviewState.options, "ready"),
           validation: readOnly(sourceOccurrenceReviewState),
         },
         {

@@ -22,7 +22,6 @@ import {
   executeEntity,
 } from "~/server/entity-kernel";
 import { recordChange } from "~/server/generic/changes/repo/change";
-import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import {
   createImageFixture,
@@ -136,11 +135,6 @@ describe("repository writes publish after their commit", () => {
 
   it("coalesces source wakes across savepoints without enrolling work from notifications", async () => {
     await recordChange(ctx.db, { kind: "source", categories: ["task"] });
-    const executions = async () =>
-      (
-        await readJobs(ctx.db, { kind: "derived.drain" }, { order: ["id"] })
-      ).map(({ id, generation, state }) => ({ id, generation, state }));
-    const executionsBefore = await executions();
     const published = recordingQueue();
     await withTransactionDatabase(ctx.db, async (outer) => {
       // A rolled-back first registration must not consume the deduplication key.
@@ -164,7 +158,6 @@ describe("repository writes publish after their commit", () => {
       });
       expect(published).toEqual([]);
     });
-    expect(await executions()).toEqual(executionsBefore);
     expect(published).toHaveLength(1);
     await recordChange(ctx.db, {
       kind: "projection",

@@ -198,6 +198,7 @@ export const { definition, readSchemas } = defineEntityModel({
           options: [
             {
               value: "yes",
+              quiet: true,
               label: "Yes",
               color: "positive",
             },

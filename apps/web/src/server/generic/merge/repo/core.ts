@@ -43,6 +43,23 @@ export const mergeNotes = (
   return texts.length ? texts.join("\n\n") : null;
 };
 
+/**
+ * The survivor a merge preview suggests: the candidate with the most
+ * connections (the fewest edges to repoint), then the oldest, then the
+ * lowest code, so one selection always suggests the same record.
+ */
+export const suggestMergeSurvivor = <
+  C extends { id: string; connectionCount: number; createdAt: string },
+>(
+  candidates: readonly C[],
+): C | undefined =>
+  [...candidates].sort(
+    (left, right) =>
+      right.connectionCount - left.connectionCount ||
+      Date.parse(left.createdAt) - Date.parse(right.createdAt) ||
+      left.id.localeCompare(right.id),
+  )[0];
+
 type MergeableTable = PgTable & { id: PgColumn; deletedAt: PgColumn };
 
 type MergeAuditChanges = Record<string, { from: unknown; to: unknown }>;

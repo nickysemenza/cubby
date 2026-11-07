@@ -1,4 +1,5 @@
 import { timestampField, readOnly } from "./field-policy";
+import { withQuiet } from "./select-control-options.js";
 import { emailRelationshipResult } from "../email-relationship-facts";
 import { EMAIL_RELATIONSHIP_INPUTS } from "./email-relationship-inputs";
 import type { ColorToken, EnumIcon } from "@cubby/shared/enum-palette";
@@ -223,6 +224,7 @@ export const { definition, readSchemas } = defineEntityModel({
       ],
     },
     list: {
+      rail: [{ field: "receivedAt" }],
       views: ["table"],
       links: [{ label: "Mail coverage", path: "/emails/coverage" }],
       savedViews: [
@@ -276,7 +278,10 @@ export const { definition, readSchemas } = defineEntityModel({
         key: "sender",
         kind: "text",
         nullable: true,
-        display: { columnGroup: "Message" },
+        display: {
+          mobile: { slot: "subtitle", priority: 10 },
+          columnGroup: "Message",
+        },
         validation: readOnly(z.string().nullable()),
       },
       {
@@ -302,6 +307,7 @@ export const { definition, readSchemas } = defineEntityModel({
         control: { kind: "select", options: relevanceOptions },
         // The list cell names the deciding stage, e.g. "Uncertain · Rule".
         display: {
+          mobile: { slot: "meta", priority: 30 },
           columnGroup: "Review",
           labelPath: "relevanceLabel",
           optionRole: "status",
@@ -381,8 +387,12 @@ export const { definition, readSchemas } = defineEntityModel({
       {
         key: "status",
         kind: "enum",
-        control: { kind: "select", options: statusOptions },
+        control: {
+          kind: "select",
+          options: withQuiet(statusOptions, "completed"),
+        },
         display: {
+          mobile: { slot: "meta", priority: 20 },
           columnGroup: "Import",
           optionRole: "status",
           optionColor: "neutral-status",

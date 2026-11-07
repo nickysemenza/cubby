@@ -18,7 +18,9 @@ export const { definition, readSchemas } = defineEntityModel({
   table: "VendorAccount",
   identifiers: { brand: "VendorAccountId", shortcode: "VACCT-" },
   presentation: {
-    list: {},
+    list: {
+      rail: [{ field: "purchaseCount" }],
+    },
     titleField: "displayName",
     domain: "purchases",
     description: "A member's purchasing relationship with a vendor.",

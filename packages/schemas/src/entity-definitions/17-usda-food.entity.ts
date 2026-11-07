@@ -99,7 +99,7 @@ export const { definition, readSchemas } = defineEntityModel(
         {
           key: "fdc_id",
           kind: "identifier",
-          display: {},
+          display: { mobile: { slot: "meta", priority: 20 } },
           provenance: {
             kind: "derived",
             sources: [{ label: "USDA identifiers" }],
@@ -250,7 +250,11 @@ export const { definition, readSchemas } = defineEntityModel(
           key: "linkedProducts",
           kind: "json",
           reference: { entity: "product", multiple: true },
-          display: { columnGroup: "Catalog", columnLabel: "Products" },
+          display: {
+            mobile: { slot: "meta", priority: 30 },
+            columnGroup: "Catalog",
+            columnLabel: "Products",
+          },
           explanation: {
             ruleId: "usda-food.linked-products",
             description:

@@ -24,6 +24,7 @@ export const { definition, readSchemas } = defineEntityModel({
     },
     icons: { phosphor: "Files", sfSymbol: "tray.full", emoji: "📥" },
     list: {
+      rail: [{ field: "rowCountStored" }, { field: "observedAt" }],
       savedViews: [],
     },
     detail: {
@@ -107,7 +108,10 @@ export const { definition, readSchemas } = defineEntityModel({
         audit: true,
         key: "source",
         kind: "text",
-        display: { columnGroup: "Source" },
+        display: {
+          mobile: { slot: "subtitle", priority: 10 },
+          columnGroup: "Source",
+        },
         validation: readOnly(z.string()),
       },
       {
@@ -129,6 +133,7 @@ export const { definition, readSchemas } = defineEntityModel({
         key: "dateKind",
         kind: "enum",
         display: {
+          mobile: { slot: "meta", priority: 30 },
           columnGroup: "Source",
           optionRole: "status",
           optionColor: "neutral-status",

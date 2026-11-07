@@ -148,7 +148,10 @@ public final class GenericEntityListModel {
             rows: rows,
             groups: groups.map {
                 (key: $0.key, path: $0.path, label: $0.label, count: $0.count, subtree: $0.subtree ?? false)
-            }, memberships: memberships)
+            }, memberships: memberships,
+            sums: Dictionary(
+                groups.map { group in (group.path, (group.metrics ?? [:]).compactMapValues(\.sum)) },
+                uniquingKeysWith: { first, _ in first }))
     }
 
     public var activeSavedView: SavedView? {

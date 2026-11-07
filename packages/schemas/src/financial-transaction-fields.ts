@@ -25,6 +25,31 @@ const financialTransactionStatusValues = [
 ] as const;
 export const financialTransactionKind = z.enum(financialTransactionKindValues);
 export type FinancialTransactionKind = z.infer<typeof financialTransactionKind>;
+
+/**
+ * Kinds that may carry a `purchaseId`, i.e. that can act as settlement evidence
+ * for a Purchase.
+ *
+ * `income` is here for sale proceeds. A disposal is modelled as a Purchase whose
+ * Expenses are negative, and the marketplace payout that settles it is an
+ * inflow — not a `refund` (which means "the vendor gave money back for goods I
+ * returned", and is separately needed on sale Purchases for real refunds to
+ * buyers) and not a `purchase` (which is validated positive).
+ *
+ * The DB CHECK `FinancialTransaction_purchase_settlement_check` in
+ * apps/web/src/server/db/schema.ts is generated from this constant and the sign
+ * table in `financial-transaction.ts`, via `purchaseSettlementCheckExpression` — nothing about the rule
+ * is written twice.
+ */
+export const purchaseSettlementKinds = [
+  "purchase",
+  "refund",
+  "adjustment",
+  "fee",
+  "interest",
+  "income",
+] as const satisfies readonly FinancialTransactionKind[];
+
 export const financialTransactionStatus = z.enum(
   financialTransactionStatusValues,
 );

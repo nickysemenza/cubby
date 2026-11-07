@@ -345,6 +345,8 @@ export type CompiledEntity = Readonly<{
   /** `capabilities.timeline`: how `resources.<entity>.timeline` is served. */
   timeline: "default" | "custom" | null;
   suggestionFamilies: readonly string[];
+  /** `capabilities.mergeFlow`: whether web merges through the generic kernel dialog. */
+  mergeFlow: "generic" | "specialized";
   descriptor: DeclarationObject;
   contract: Readonly<{
     create: SourceRef | null;

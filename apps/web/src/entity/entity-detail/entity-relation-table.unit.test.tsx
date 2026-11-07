@@ -195,7 +195,7 @@ describe("EntityRelationTable", () => {
     );
     const list = entityList.list.withTransport(async ({ input }) => ({
       selectedFields: input.fields,
-      items: rows,
+      items: rows.map((row) => ({ ...row, actions: [] })),
       meta: {
         hasNextPage: false,
         pageIndex: 0,
@@ -267,7 +267,7 @@ describe("EntityRelationTable", () => {
     });
     const list = entityList.list.withTransport(async ({ input }) => ({
       selectedFields: input.fields,
-      items: [row],
+      items: [{ ...row, actions: [] }],
       meta: {
         hasNextPage: false,
         pageIndex: 0,
@@ -389,7 +389,7 @@ describe("EntityRelationTable", () => {
     };
     const list = entityList.list.withTransport(async ({ input }) => ({
       selectedFields: input.fields,
-      items: [task],
+      items: [{ ...task, actions: [] }],
       meta: {
         hasNextPage: false,
         pageIndex: 0,

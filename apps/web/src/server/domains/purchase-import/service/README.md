@@ -62,6 +62,12 @@ pending: nothing here starts Product research.
    An unattended retained page whose exact search already completed in newer
    coverage settles its processed messages without rewinding or crediting that
    search twice. Member-controlled scans still refuse changed selected coverage.
+   Fresh automatic discovery and its continuations yield the mailbox slot to a
+   retained scheduled discovery whose failed execution has a runnable recovery
+   Job. The existing Job keeps its backoff, frozen scope and evidence; only its
+   current fenced claim restores the Run. Paused, cancelled, retired or superseded
+   work does not reserve this recovery admission, and explicit paid launches keep
+   their existing funding admission.
    A member's **Reclassify** (`gmail/reclassify.ts`, MCP `purchase_import.email_reclassify`)
    reruns these stages, including the relevance model, for up to 200 selected
    Emails through the same ingest path in its `reclassify` mode: the result is

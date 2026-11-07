@@ -104,6 +104,7 @@ export const { definition, readSchemas } = defineEntityModel({
       ],
     },
     list: {
+      rail: [{ field: "observedOn" }],
       timeline: { fields: ["observedOn"] },
     },
   },
@@ -114,7 +115,10 @@ export const { definition, readSchemas } = defineEntityModel({
         kind: "identifier",
         reference: { entity: "location" },
         control: { kind: "specialized", renderer: "entity-select" },
-        display: { columnGroup: "Observation" },
+        display: {
+          mobile: { slot: "subtitle", priority: 10 },
+          columnGroup: "Observation",
+        },
         validation: {
           read: locationShortcode,
           create: locationShortcode,
@@ -171,6 +175,7 @@ export const { definition, readSchemas } = defineEntityModel({
           ],
         },
         display: {
+          mobile: { slot: "meta", priority: 20 },
           columnGroup: "Observation",
           optionRole: "category",
           optionColor: "domain-garden",
@@ -212,6 +217,7 @@ export const { definition, readSchemas } = defineEntityModel({
         nullable: true,
         control: { kind: "text" },
         display: {
+          mobile: { slot: "meta", priority: 30 },
           columnGroup: "Plantings & harvest",
           columnLabel: "Harvest",
         },
@@ -425,6 +431,8 @@ export const { definition, readSchemas } = defineEntityModel({
     timeline: "default",
     images: {
       storage: "gallery",
+      // A note without its own photo shows the bed it was written about.
+      displaySources: [{ relationPath: ["location"] }],
       ingress: [
         { kind: "self", routeId: "garden-entry-self" },
         {

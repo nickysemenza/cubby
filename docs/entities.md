@@ -640,6 +640,52 @@ roots without recursively applying their mutation ripples or scheduling Jobs.
 List responses share one metadata schema across entities and clients, including
 pagination, grouping, totals and derived-state sidecars.
 
+### Native row and action declarations
+
+These knobs are presentation facts; server reads own availability, figures and
+totals. Every browsable entity declares what applies to it.
+
+- `list.rail`: at most two list-readable number, money, amount, date or
+  server-worded (`labelPath`) fields, each with an optional `sub`. Rail fields
+  are not repeated as row facts. `total: "sum"` joins the grouped metric roster,
+  so the compiler's additivity rules apply (money must be Expense-derived).
+- Option `quiet: true` marks the expected value (a task's Not started) that rows
+  leave unsaid; one per roster. Put it on the control roster (`withQuiet`), not on
+  filter presets. Option `closed: true` marks a terminal value (a task's or
+  project's Done): a record holding it is finished, so its passed deadline is not
+  drawn as overdue.
+- `capabilities.mergeFlow: "specialized"` declares that web merges the entity
+  through its own flow (a reviewed preview, a domain merge operation or an extra
+  rule) instead of the generic kernel merge dialog. Web's generic merge action and
+  native's selection Merge both read it; native shows Merge on web for such an
+  entity rather than running the kernel merge. It requires `merge`.
+- `list.rowCommand` draws one `list.extraActions` verb as the row's leading
+  control. `list.swipe` replaces the derived swipe verbs, or `false` removes them.
+- `detail.quickActions` (filled) and `detail.quickFields` (tonal, updatable fields
+  that open their inline editor) share four action-bar tiles.
+  `detail.heroMedia` is `tile` (default) or `banner`. `display.inlineEdit: false`
+  keeps a simple field out of tap-to-edit.
+- Thumbnails borrow through `capabilities.images.displaySources` (an Expense
+  shows its Product, then its Purchase, then that Purchase's Vendor).
+
+CubbyKit `ActionPlacement` is the one native derivation of where actions appear.
+Leading swipe: list quick actions, then one-tap non-destructive verbs, at most
+two. Trailing swipe: Delete, destructive verbs, More. Context menu: verbs and
+flows, Edit and Select, Copy link / Share / Open on web, destructive last. The
+selection bar holds Bulk edit, Merge (two or more), verbs whose native plan sets
+`bulk`, and Delete. Detail tiles come from quick actions, then one-tap verbs,
+native flows and quick fields; never destructive. Detail More groups verbs,
+create (flows, Add photo), share, web handoffs and destructive actions.
+Unavailable actions are hidden in swipes and context menus and dimmed with their
+reason elsewhere. Availability is the row's server `actions: [{id, enabled,
+reason}]`; without it, placement falls back to the plan's `requires`.
+
+`native-coverage.ts` owns native execution. A `flow` plan presents a screen the
+app already owns (`NATIVE_FLOWS`: receiving an Expense, the location photo
+pass). `nativeRecordActionPlans` adds record affordances that are not web
+verbs: a flow, or a handoff to a declared detail section, limited by `when`
+record conditions. Expense `receive` is a declared verb on both clients.
+
 ## One declaration, several consumers
 
 Each declaration co-locates schemas and field policy. Use an existing
@@ -709,6 +755,27 @@ workflow rather than a universal detail action. A list gets `bulkEdit` (bulk upd
 `detail.quickActions` and `list.quickActions` promote one or two of those
 declared verbs (generation fails on any other); each client's DESIGN.md owns
 their placement, and they leave the More menu.
+`entity.detail` and every `entity.list` row carry `actions: [{ id, enabled,
+reason }]` for the union of hero and list verbs. The server evaluates them in
+`server/generic/actions/entity-action-states.ts` from the per-verb rules in
+`@cubby/schemas/action-availability` (`requires` a present value, or
+`unlessValue` for a preset write the record already holds); a page costs no
+extra query, and a narrow `fields` read adds the rule fields. Clients render
+`enabled`/`reason` and derive no availability. `entity.mergePreview` returns
+the kernel merge's suggested survivor (most live incoming connections, then
+oldest, then lowest code), every scalar update field the candidates disagree
+on, each candidate's incoming connections with the merge disposition
+`entity.connections` reports, and `blockers` for merging into the optional
+`keepId` (default the suggestion): live `block` dispositions on the other
+candidates plus the merge port's own `blockers` rules (Product editions, kit
+cycles, classification). Keeping a loser's value is the merge's
+`survivorValues` (`{ field: value }`): each key must be a field the preview
+reports as a conflict and each value one a candidate holds, checked before the
+merge; the kernel update applies them to the survivor after the merge in the
+same transaction, so a refused merge leaves the survivor unchanged and a value
+from a merged-away record no longer collides with its live unique key.
+The kernel `merge` verb is in entity-kernel.json wherever the merge operation is
+kernel-owned, so native dispatches the same `entity.mutate` merge web sends.
 Web record-level slot actions render once in the detail header through
 `DetailActionTarget` (`apps/web/src/entity/entity-detail/detail-action-bar.tsx`).
 `reportDetailActions` identifies record-level report commands and diagnostic
@@ -1096,7 +1163,7 @@ unique single-column foreign-key indexes supply the existing semantics;
 `semanticRole: "externalIdentifier" | "attachment"` marks ambiguous fields.
 Shareable references remain editable.
 
-The web `bulkEdit` action and MCP expose that same roster. The web dialog uses
+The web `bulkEdit` action, MCP and native (`bulkFields` in the generated entity-kernel.json) expose that same roster. The web dialog uses
 normal intent controls, unchanged/set/clear assignment modes, and submits only
 touched fields. Nullable scalar controls share the form's empty `null` baseline;
 initialization or resetting another field must never stage a clear. Explicit
@@ -1121,7 +1188,10 @@ the batch instead of treating it as empty.
 
 Every exposed field has a usable normal editor control. Only assignment mode
 companions are folded into their owning value controls; bulk rendering never
-silently omits a genuine update field.
+silently omits a genuine update field. Native bulk edit sets or clears single
+values (structured values included) and adds/removes value collections and
+multi-references with the record editor's controls; a keyed structured
+collection opens web's bulk edit.
 Structured additions and removals use the normal editor's wire normalization;
 empty optional lists are omitted. The dialog sends removals before additions so
 a held keyed item can change atomically, and labels removal controls visibly.
@@ -1791,7 +1861,9 @@ the Pivot view id and keeps the grouped list.
 
 A `presentation.list.totals` entry with `group: true` also sums its key
 per group, and section headers show the mean over records with a value
-(`sum / presentCount`) beside the sum; there is no separate metrics list. The compiler emits labels and display formats and rejects unsupported or mixed-unit
+(`sum / presentCount`) beside the sum; there is no separate metrics list.
+`listGroupMetricKeys` (`entity-definitions/list-group-metrics.ts`) builds that
+roster from group totals and rail fields declaring `total: "sum"`. The compiler emits labels and display formats and rejects unsupported or mixed-unit
 sources. Monetary values retain authoritative `SUM(Expense.cost)` provenance;
 field names never imply currency. Per-prefix metrics distinguish unknown sums
 from zero and include present/total counts and coverage. Date grouping with a
