@@ -22,6 +22,7 @@ import {
   sourceOccurrenceHasUnresolvedHistory,
   sourceOccurrencesWithUnresolvedHistory,
   sourceObservationHistoricalLinks,
+  sourcePageHistory,
 } from "~/server/db/computed/source-occurrence-history-sql";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { uuidArrayParam } from "~/server/db/helpers/query";
@@ -70,7 +71,16 @@ export const sourceObservationIdentities = sql`(
 
 const sourceObservationRead = (
   observationIds?: readonly SourceTransactionRecordId[],
-) => sql`(SELECT observation.*,
+) => {
+  const history =
+    observationIds === undefined
+      ? {
+          relations: sql``,
+          unresolved: sourceOccurrencesWithUnresolvedHistory,
+          links: sourceObservationHistoricalLinks,
+        }
+      : sourcePageHistory(observationIds);
+  return sql`(${history.relations} SELECT observation.*,
   CASE WHEN observation.disposition = ${sqlEnumConstant(sourceTransactionRecordDisposition, sourceTransactionRecordDisposition.enum.ignored)} THEN ${sqlEnumConstant(sourceTransactionRecordDisposition, sourceTransactionRecordDisposition.enum.ignored)}
     WHEN observation."supersededByRowId" IS NOT NULL THEN ${sourceTransactionRecordMatchState.enum.superseded}
     WHEN observation."transactionShortcode" IS NULL AND (observation."reviewState" <> ${sourceOccurrenceReviewState.enum.ready} OR cardinality(observation."historicalTransactionIds") > 0 OR observation."acceptedTransactionId" IS NOT NULL) THEN ${sourceTransactionRecordMatchState.enum.held}
@@ -81,10 +91,11 @@ const sourceObservationRead = (
         THEN ${sourceOccurrenceReviewState.enum.ownership_conflict} ELSE facts."storedReviewState" END AS "reviewState",
       coalesce(history.codes, ARRAY[]::text[]) AS "historicalTransactionIds"
     FROM ${sourceObservationFacts} facts
-    LEFT JOIN ${sourceOccurrencesWithUnresolvedHistory} unresolved ON unresolved.id=facts."occurrenceId"
-    LEFT JOIN ${sourceObservationHistoricalLinks(observationIds)} history ON history."observationId"=facts.id
+    LEFT JOIN ${history.unresolved} unresolved ON unresolved.id=facts."occurrenceId"
+    LEFT JOIN ${history.links} history ON history."observationId"=facts.id
     ${observationIds === undefined ? sql`` : sql`WHERE facts.id=ANY(${uuidArrayParam(observationIds)})`}
   ) observation)`;
+};
 
 export const sourceObservations = sourceObservationRead();
 
