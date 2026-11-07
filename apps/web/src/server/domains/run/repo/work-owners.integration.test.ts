@@ -23,7 +23,7 @@ describe("Run review authority query work", () => {
 
   // Failure modes: joining authority can duplicate candidates, admit a deleted
   // account, or turn an unresolved private owner into shared work.
-  it("preserves unresolved authority across retained Run ownership states", async () => {
+  it("preserves review authority and retired source findings across retained Run states", async () => {
     const otherUserId = testUserId("synthetic-authority-other-user");
     await getDb(ctx.db).insert(user).values({
       id: otherUserId,
@@ -184,6 +184,18 @@ describe("Run review authority query work", () => {
       memberOnly: true,
     });
     expect(history.items.filter((row) => row.family === "account")).toEqual([]);
+    await getDb(ctx.db)
+      .update(run)
+      .set({ failureCode: "execution_limit" })
+      .where(eq(run.id, first.id));
+    const retiredFundingWait = await readRecordWorkQueue(ctx.db, {
+      id: first.shortcode,
+      memberPartyId: member.id,
+      memberOnly: true,
+    });
+    expect(
+      retiredFundingWait.items.filter((row) => row.family === "execution"),
+    ).toEqual([]);
     const sourceReview = await readRecordWorkQueue(ctx.db, {
       id: sourceRun.shortcode,
       memberPartyId: member.id,

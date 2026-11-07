@@ -33,7 +33,10 @@ import { outer, related } from "~/server/db/helpers/related";
 import { job } from "~/server/db/retained-tables";
 import { run } from "~/server/db/schema";
 import { imageJobWaitingOnReasonSql } from "~/server/domains/image-processing/repo/image-job-state";
-import { memberStoppedRunPredicate } from "~/server/domains/run/repo/work-attention";
+import {
+  memberStoppedRunPredicate,
+  retiredRunPredicate,
+} from "~/server/domains/run/repo/work-attention";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import {
   JOB_KIND_POLICY,
@@ -111,13 +114,13 @@ export function runStalledSql(now = new Date()): SQL<boolean> {
   )`;
 }
 
-/** Member cancellations stay in history; retry successors take over stopped work. */
+/** Member stops and retirement stay in history; successors take over stopped work. */
 export function runNeedsAttentionSql(): SQL<boolean> {
   const successor = related(
     run,
     (next) => sql`${next.predecessorRunId} = ${outer(run.id)}`,
   ).exists();
-  return sql<boolean>`(NOT ${memberStoppedRunPredicate(sql`${run.failureCode}`)}
+  return sql<boolean>`(NOT ${memberStoppedRunPredicate(sql`${run.failureCode}`)} AND NOT ${retiredRunPredicate(sql`${run.retiredAt}`)}
     AND (${runStalledSql()} OR (${run.status} IN (${runStatus.enum.paused},${runStatus.enum.paused_auth},${runStatus.enum.needs_review},${runStatus.enum.failed},${runStatus.enum.dispatch_failed}) AND NOT ${successor})))`;
 }
 

@@ -249,7 +249,11 @@ describe("Run attention entity view", () => {
       execution: false,
     });
     const stoppedHistories = [];
-    for (const failureCode of ["user_cancelled", "dispatch_aborted"]) {
+    for (const { failureCode, retiredAt } of [
+      { failureCode: "user_cancelled", retiredAt: null },
+      { failureCode: "dispatch_aborted", retiredAt: null },
+      { failureCode: "agent_failed", retiredAt: new Date() },
+    ]) {
       const cancelled = await ensureRun(ctx.db, ctx.actor, {
         purpose: "ai_suggest",
         trigger: "manual",
@@ -257,7 +261,7 @@ describe("Run attention entity view", () => {
       });
       const [history] = await getDb(ctx.db)
         .update(runTable)
-        .set({ status: "failed", failureCode })
+        .set({ status: "failed", failureCode, retiredAt })
         .where(eq(runTable.id, cancelled))
         .returning({
           code: runTable.shortcode,
