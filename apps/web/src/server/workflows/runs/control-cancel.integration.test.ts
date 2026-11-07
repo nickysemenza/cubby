@@ -165,139 +165,187 @@ describe("Run AI work cancel", () => {
     ).toBe("queued");
   });
 
-  it("keeps work another live requester still wants", async () => {
-    const shared = {
-      executionKind: "mail_reclassify" as const,
-      shareKey: "synthetic-shared-reclassify",
-      feature: "mailbox-relevance",
-      target: {
-        kind: "email" as const,
-        entity: "email" as const,
-        recordId: parseEntityId("email", crypto.randomUUID()),
-        field: null,
-        suggestionIds: [],
-      },
-      provenance: {
-        dependencies: [],
-        inputFingerprint: "synthetic-shared-input",
-        optionFingerprint: "",
-        model: null,
-      },
-      snapshot: {},
-      state: "queued" as const,
-      result: null,
-    };
-    const [first, second] = await Promise.all(
-      ["first", "second"].map(() =>
-        ensureRun(ctx.db, ctx.actor, {
-          purpose: "mail_reclassify",
-          trigger: "manual",
-          execution: false,
+  it.each([false, true])(
+    "keeps shared demand and paid retries with a queued successor: %s",
+    async (queuedSuccessor) => {
+      const shared = {
+        executionKind: "mail_reclassify" as const,
+        shareKey: "synthetic-shared-reclassify",
+        feature: "mailbox-relevance",
+        target: {
+          kind: "email" as const,
+          entity: "email" as const,
+          recordId: parseEntityId("email", crypto.randomUUID()),
+          field: null,
+          suggestionIds: [],
+        },
+        provenance: {
+          dependencies: [],
+          inputFingerprint: "synthetic-shared-input",
+          optionFingerprint: "",
+          model: null,
+        },
+        snapshot: {},
+        state: "queued" as const,
+        result: null,
+      };
+      const [first, second] = await Promise.all(
+        ["first", "second"].map(() =>
+          ensureRun(ctx.db, ctx.actor, {
+            purpose: "mail_reclassify",
+            trigger: "manual",
+            execution: false,
+          }),
+        ),
+      );
+      const evaluation = await enqueueAiEvaluation(ctx.db, {
+        ...shared,
+        runId: first!,
+      });
+      expect(
+        (await enqueueAiEvaluation(ctx.db, { ...shared, runId: second! })).id,
+      ).toBe(evaluation.id);
+      // Reclassification requests shared work; it owns none.
+      expect(
+        await cancelRunAiWork(ctx.db, first!, MEMBER_CANCELLED_AI_WORK, {
+          owned: false,
+          requested: true,
         }),
-      ),
-    );
-    const evaluation = await enqueueAiEvaluation(ctx.db, {
-      ...shared,
-      runId: first!,
-    });
-    expect(
-      (await enqueueAiEvaluation(ctx.db, { ...shared, runId: second! })).id,
-    ).toBe(evaluation.id);
-    // Reclassification requests shared work; it owns none.
-    expect(
-      await cancelRunAiWork(ctx.db, first!, MEMBER_CANCELLED_AI_WORK, {
-        owned: false,
-        requested: true,
-      }),
-    ).toBe(true);
-    const stoppedRequests = await getDb(ctx.db)
-      .select()
-      .from(aiEvaluationRequest)
-      .where(eq(aiEvaluationRequest.runId, first!));
-    await readmitFailedAiWork(ctx.db, first!, {
-      owned: false,
-      requested: true,
-      attempt: 1,
-    });
-    expect(
-      await getDb(ctx.db).select({ id: aiEvaluation.id }).from(aiEvaluation),
-    ).toHaveLength(1);
-    expect(
-      await getDb(ctx.db)
+      ).toBe(true);
+      const stoppedRequests = await getDb(ctx.db)
         .select()
         .from(aiEvaluationRequest)
-        .where(eq(aiEvaluationRequest.runId, first!)),
-    ).toEqual(stoppedRequests);
-    const [row] = await getDb(ctx.db)
-      .select({ state: aiEvaluation.state })
-      .from(aiEvaluation)
-      .where(eq(aiEvaluation.id, evaluation.id));
-    expect(row?.state).toBe("queued");
-    expect(await aiEvaluationItem(ctx.db, evaluation.id)).toMatchObject({
-      feature: "mailbox-relevance",
-    });
-    expect(
+        .where(eq(aiEvaluationRequest.runId, first!));
       await readmitFailedAiWork(ctx.db, first!, {
         owned: false,
         requested: true,
         attempt: 1,
-        reviveCancelled: true,
-      }),
-    ).toBe(1);
-    expect(
-      (
+      });
+      expect(
+        await getDb(ctx.db).select({ id: aiEvaluation.id }).from(aiEvaluation),
+      ).toHaveLength(1);
+      expect(
         await getDb(ctx.db)
           .select()
           .from(aiEvaluationRequest)
-          .where(
-            and(
-              eq(aiEvaluationRequest.runId, first!),
-              eq(aiEvaluationRequest.evaluationId, evaluation.id),
-            ),
-          )
-      )[0],
-    ).toMatchObject({ cancelledAt: null, receipt: null });
-    await cancelRunAiWork(ctx.db, first!, MEMBER_CANCELLED_AI_WORK, {
-      owned: false,
-      requested: true,
-    });
-    const withdrawnAgain = await getDb(ctx.db)
-      .select()
-      .from(aiEvaluationRequest)
-      .where(eq(aiEvaluationRequest.runId, first!));
-    const paidResult = { decision: "synthetic-retained-result" };
-    await getDb(ctx.db)
-      .update(aiEvaluation)
-      .set({ state: "failed", runAt: null, result: paidResult })
-      .where(eq(aiEvaluation.id, evaluation.id));
-    expect(
-      await readmitFailedAiWork(ctx.db, second!, {
+          .where(eq(aiEvaluationRequest.runId, first!)),
+      ).toEqual(stoppedRequests);
+      const [row] = await getDb(ctx.db)
+        .select({ state: aiEvaluation.state })
+        .from(aiEvaluation)
+        .where(eq(aiEvaluation.id, evaluation.id));
+      expect(row?.state).toBe("queued");
+      expect(await aiEvaluationItem(ctx.db, evaluation.id)).toMatchObject({
+        feature: "mailbox-relevance",
+      });
+      expect(
+        await readmitFailedAiWork(ctx.db, first!, {
+          owned: false,
+          requested: true,
+          attempt: 1,
+          reviveCancelled: true,
+        }),
+      ).toBe(1);
+      expect(
+        (
+          await getDb(ctx.db)
+            .select()
+            .from(aiEvaluationRequest)
+            .where(
+              and(
+                eq(aiEvaluationRequest.runId, first!),
+                eq(aiEvaluationRequest.evaluationId, evaluation.id),
+              ),
+            )
+        )[0],
+      ).toMatchObject({ cancelledAt: null, receipt: null });
+      await cancelRunAiWork(ctx.db, first!, MEMBER_CANCELLED_AI_WORK, {
         owned: false,
         requested: true,
-        attempt: 1,
-      }),
-    ).toBe(1);
-    const retried = await getDb(ctx.db)
-      .select({
-        id: aiEvaluation.id,
-        state: aiEvaluation.state,
-        result: aiEvaluation.result,
-      })
-      .from(aiEvaluation);
-    expect(retried).toHaveLength(2);
-    expect(retried.find((item) => item.id !== evaluation.id)).toMatchObject({
-      state: "result_ready",
-      result: paidResult,
-    });
-    expect(retried.find((item) => item.id === evaluation.id)).toMatchObject({
-      state: "failed",
-      result: paidResult,
-    });
-    expect(
-      await getDb(ctx.db)
+      });
+      const withdrawnAgain = await getDb(ctx.db)
         .select()
         .from(aiEvaluationRequest)
-        .where(eq(aiEvaluationRequest.runId, first!)),
-    ).toEqual(withdrawnAgain);
-  });
+        .where(eq(aiEvaluationRequest.runId, first!));
+      const paidResult = { decision: "synthetic-retained-result" };
+      await getDb(ctx.db)
+        .update(aiEvaluation)
+        .set({ state: "failed", runAt: null, result: paidResult })
+        .where(eq(aiEvaluation.id, evaluation.id));
+      const successor = queuedSuccessor
+        ? await enqueueAiEvaluation(ctx.db, {
+            ...shared,
+            runId: await ensureRun(ctx.db, ctx.actor, {
+              purpose: "mail_reclassify",
+              trigger: "manual",
+              execution: false,
+            }),
+          })
+        : null;
+      const successorBefore = successor
+        ? (
+            await getDb(ctx.db)
+              .select()
+              .from(aiEvaluation)
+              .where(eq(aiEvaluation.id, successor.id))
+          )[0]
+        : null;
+      expect(
+        await readmitFailedAiWork(ctx.db, second!, {
+          owned: false,
+          requested: true,
+          attempt: 1,
+        }),
+      ).toBe(1);
+      const retried = await getDb(ctx.db)
+        .select({
+          id: aiEvaluation.id,
+          state: aiEvaluation.state,
+          result: aiEvaluation.result,
+        })
+        .from(aiEvaluation);
+      expect(retried).toHaveLength(queuedSuccessor ? 3 : 2);
+      expect(
+        retried.find((item) => item.state === "result_ready"),
+      ).toMatchObject({
+        state: "result_ready",
+        result: paidResult,
+      });
+      expect(retried.find((item) => item.id === evaluation.id)).toMatchObject({
+        state: "failed",
+        result: paidResult,
+      });
+      const successorAfter = successor
+        ? (
+            await getDb(ctx.db)
+              .select()
+              .from(aiEvaluation)
+              .where(eq(aiEvaluation.id, successor.id))
+          )[0]
+        : null;
+      expect(successorAfter).toEqual(successorBefore);
+      const currentRequests = await getDb(ctx.db)
+        .select({
+          evaluationId: aiEvaluationRequest.evaluationId,
+          receipt: aiEvaluationRequest.receipt,
+        })
+        .from(aiEvaluationRequest)
+        .where(eq(aiEvaluationRequest.runId, second!));
+      expect(currentRequests).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            evaluationId: retried.find((item) => item.state === "result_ready")!
+              .id,
+            receipt: null,
+          }),
+        ]),
+      );
+      expect(
+        await getDb(ctx.db)
+          .select()
+          .from(aiEvaluationRequest)
+          .where(eq(aiEvaluationRequest.runId, first!)),
+      ).toEqual(withdrawnAgain);
+    },
+  );
 });

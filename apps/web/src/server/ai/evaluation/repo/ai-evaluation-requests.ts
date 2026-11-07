@@ -141,7 +141,11 @@ export async function enqueueAiEvaluations(
             input.executionKind === aiExecutionKind.enum.ai_refresh))
           ? latest
           : undefined;
-      const open = rows.find((row) => row.state === "queued");
+      // A retained answer or terminal receipt cannot be discarded into queued work.
+      const open =
+        (input.state ?? "queued") === "queued"
+          ? rows.find((row) => row.state === "queued")
+          : undefined;
       const existing = reusable ?? open;
       const id = existing?.id ?? crypto.randomUUID();
       const base = input.workKey ?? `${input.executionKind}:${id}`;
