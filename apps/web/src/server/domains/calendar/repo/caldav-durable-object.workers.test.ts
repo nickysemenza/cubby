@@ -383,7 +383,20 @@ describe("CalendarFeedDurableObject in workerd", () => {
     await expectStatus(put({ "if-match": '"stale"' }), 412);
     await expectStatus(put({ "if-none-match": "*" }), 412);
     await expectStatus(put({ "if-match": resource.etag }), 503);
+    // A missing backend cannot have committed and must not strand the event.
+    expect((await stub.inspect(ORIGIN)).caldav?.uncertainWrites).toEqual([]);
     await runInDurableObject(stub, async (_instance, state) => {
+      const store = new CalendarSqlStore(state.storage);
+      store.startWrite({
+        entity: "task",
+        collection: "tasks",
+        filename: resource.filename,
+        uid: resource.uid,
+        shortcode: resource.projection.id,
+        startedAt: new Date().toISOString(),
+      });
+      await store.dirty("test.uncertain", ORIGIN);
+      await state.storage.setAlarm(Date.now() + 2_000);
       expect(await state.storage.getAlarm()).not.toBeNull();
       await state.storage.deleteAlarm();
       expect(await state.storage.getAlarm()).toBeNull();
@@ -454,9 +467,12 @@ describe("CalendarFeedDurableObject in workerd", () => {
         id: testShortcode("task", "replacement"),
       },
     };
-    await runInDurableObject(stub, async (_instance, state) => {
+    await runInDurableObject(stub, async (instance, state) => {
       const store = new CalendarSqlStore(state.storage);
       store.dirty("test.write", ORIGIN);
+      await state.storage.setAlarm(Date.now() - 60_000);
+      await instance.markDirty("test.write", ORIGIN);
+      expect(await state.storage.getAlarm()).toBeGreaterThan(Date.now());
       await state.storage.deleteAlarm();
       const generation = store.beginPublication();
       store.stageResources(generation, [replacement]);
@@ -532,7 +548,23 @@ describe("CalendarFeedDurableObject in workerd", () => {
             updatedAt: resource.projection.updatedAt,
           },
         };
-        publish(store, [completed]);
+        store.startWrite({
+          entity: "task",
+          collection: "tasks",
+          filename: resource.filename,
+          uid: resource.uid,
+          shortcode: resource.projection.id,
+          startedAt: new Date().toISOString(),
+        });
+        store.prepareWriteReceipt("tasks", resource.filename, {
+          auditId: "synthetic-audit",
+          shortcode: resource.projection.id,
+        });
+        store.publishWrite(completed);
+        expect(store.meta().generation).toBe(2);
+        expect(store.document("all")?.revision).toBe(2);
+        expect(store.uncertainWrites()).toEqual([]);
+        expect(store.list("tasks")).toEqual([]);
         expect(store.list("completed-tasks")).toHaveLength(1);
         expect(store.identityFor(resource.projection.id)?.uid).toBe(
           resource.uid,

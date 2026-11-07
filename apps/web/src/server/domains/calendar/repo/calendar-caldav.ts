@@ -6,14 +6,20 @@ import {
   taskShortcode,
 } from "@cubby/schemas/identifiers";
 import { MEAL_TYPE_LABELS } from "@cubby/schemas/meal-classification";
-import { and, eq, isNotNull, or } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, or } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 
 import { shiftPlainDate } from "~/lib/household-date";
 import type { Database, DrizzleTransaction } from "~/server/db";
-import { notDeleted, withTransaction } from "~/server/db/helpers";
+import {
+  getDb,
+  notDeleted,
+  runBeforeCommitDatabase,
+  withTransaction,
+  withTransactionDatabase,
+} from "~/server/db/helpers";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
-import { meal, task } from "~/server/db/schema";
+import { auditLog, meal, task } from "~/server/db/schema";
 import {
   type CalDavWrite,
   type CalendarProjection,
@@ -22,9 +28,114 @@ import {
 import { UID_DOMAIN } from "~/server/domains/calendar/repo/contracts";
 import { executeEntity } from "~/server/entity-kernel";
 import type { EntityKernelContext } from "~/server/entity-kernel";
+import { withAuditReceipts } from "~/server/generic/audit-log/repo/audit-receipts";
 import { buildCrudServices } from "~/server/http/request-context";
 
 const PAGE_SIZE = 500;
+
+export interface CalDavCommitReceipt {
+  auditId: string;
+  shortcode: string;
+}
+
+/** The audit and canonical mutation share a transaction; absence is never replay permission. */
+export async function hasCalDavCommitReceipt(
+  db: Database,
+  receipt: CalDavCommitReceipt & { entity: "meal" | "task" },
+): Promise<boolean> {
+  const table = receipt.entity === "meal" ? meal : task;
+  // includes-deleted: a committed write still owns its DAV identity after later deletion.
+  const [row] = await getDb(db)
+    .select({ id: auditLog.id })
+    .from(auditLog)
+    .innerJoin(table, eq(auditLog.entityId, table.id))
+    .where(
+      and(
+        eq(auditLog.id, receipt.auditId),
+        eq(auditLog.channel, "caldav"),
+        eq(auditLog.entityKind, receipt.entity),
+        eq(table.shortcode, receipt.shortcode),
+      ),
+    );
+  return Boolean(row);
+}
+
+export async function executeCalDavWrite(
+  db: Database,
+  write: CalDavWrite,
+  prepareReceipt?: (receipt: CalDavCommitReceipt) => Promise<void>,
+): Promise<{ shortcode: string; projection: CalendarProjection }> {
+  return withTransactionDatabase(db, async (transactionDb) => {
+    const { result, auditIds } = await withAuditReceipts(() =>
+      mutateCalDavWrite(transactionDb, write),
+    );
+    const entity = write.collection === "meals" ? "meal" : "task";
+    const table = entity === "meal" ? meal : task;
+    const [receipt] = await getDb(transactionDb)
+      .select({ auditId: auditLog.id, shortcode: table.shortcode })
+      .from(auditLog)
+      .innerJoin(table, eq(auditLog.entityId, table.id))
+      .where(
+        and(
+          inArray(auditLog.id, auditIds),
+          eq(auditLog.entityKind, entity),
+          eq(auditLog.channel, "caldav"),
+          eq(table.shortcode, result.shortcode),
+        ),
+      );
+    // Task writers omit audit rows when no rendered fields changed. An unchanged
+    // PUT needs no commit proof; creating or changing a record still requires one.
+    if (!receipt && (!write.expected || auditIds.length > 0))
+      throw new Error("Calendar mutation did not produce its audit receipt");
+    let projection: CalendarProjection;
+    if (entity === "meal") {
+      const [row] = await getDb(transactionDb)
+        .select({
+          name: meal.name,
+          date: meal.date,
+          mealType: meal.mealType,
+          updatedAt: meal.updatedAt,
+        })
+        .from(meal)
+        .where(and(eq(meal.shortcode, result.shortcode), notDeleted(meal)));
+      if (!row) throw new Error("Written meal is unavailable");
+      projection = {
+        ...row,
+        entity,
+        id: parseShortcodeFor("meal", result.shortcode),
+        updatedAt: timestamp(row.updatedAt),
+      };
+    } else {
+      const [row] = await getDb(transactionDb)
+        .select({
+          name: task.name,
+          dueDate: task.dueDate,
+          dueEndDate: task.dueEndDate,
+          status: task.status,
+          updatedAt: task.updatedAt,
+        })
+        .from(task)
+        .where(and(eq(task.shortcode, result.shortcode), notDeleted(task)));
+      if (!row) throw new Error("Written task is unavailable");
+      projection = {
+        ...row,
+        entity,
+        id: parseShortcodeFor("task", result.shortcode),
+        updatedAt: timestamp(row.updatedAt),
+      };
+    }
+    // Capture after validation/fences, but before COMMIT, including caller-owned boundaries.
+    if (receipt)
+      await runBeforeCommitDatabase(
+        transactionDb,
+        async () => {
+          await prepareReceipt?.(receipt);
+        },
+        "publication",
+      );
+    return { ...result, projection };
+  });
+}
 
 const shiftDate = (value: string, days: number) => {
   try {
@@ -205,7 +316,7 @@ function rejectReservedCalDavIdentity(filename: string, uid: string) {
  * transaction can be uncertain, so only explicit pre-commit CalDavErrors are
  * classified as definite DAV refusals.
  */
-export async function executeCalDavWrite(
+async function mutateCalDavWrite(
   db: Database,
   write: CalDavWrite,
 ): Promise<{ shortcode: string }> {

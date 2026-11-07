@@ -1,10 +1,18 @@
+import { readFileSync } from "node:fs";
+import { DatabaseSync } from "node:sqlite";
+
+import { testShortcode } from "@cubby/schemas/testing";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { runWithExecutionCtx, setCfEnv } from "~/server/cf-env";
 import { withInvocationDb } from "~/server/db";
-import { getDb } from "~/server/db/helpers";
+import {
+  getDb,
+  runAfterCommit,
+  withTransactionDatabase,
+} from "~/server/db/helpers";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
 import type {
   CalDavResource,
@@ -15,7 +23,12 @@ import { createMealWithEntityId } from "~/server/domains/meal/repo/crud";
 import { updateTask } from "~/server/domains/task/repo/crud";
 import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 
-import { executeCalDavWrite, visitCalDavProjection } from "./calendar-caldav";
+import {
+  executeCalDavWrite,
+  hasCalDavCommitReceipt,
+  visitCalDavProjection,
+  type CalDavCommitReceipt,
+} from "./calendar-caldav";
 import { scheduleCalendarFeedDirty } from "./client";
 
 const loadCalDavProjection = async (
@@ -47,20 +60,39 @@ describe("CalDAV canonical mutation seam", () => {
   const ctx = withTestDb();
 
   it("creates a Task through the canonical kernel and preserves CalDAV attribution", async () => {
-    const result = await executeCalDavWrite(ctx.db, {
-      actorId: ctx.actor.userId,
-      collection: "tasks",
-      filename: "client-event.ics",
-      expected: null,
-      event: {
-        uid: "client-event@example.test",
-        summary: "CalDAV task",
-        trade: "planning",
-        startDate: "2026-09-07",
-        endDateExclusive: "2026-09-08",
-        mealType: null,
+    let receipt: CalDavCommitReceipt | undefined;
+    const result = await executeCalDavWrite(
+      ctx.db,
+      {
+        actorId: ctx.actor.userId,
+        collection: "tasks",
+        filename: "client-event.ics",
+        expected: null,
+        event: {
+          uid: "client-event@example.test",
+          summary: "CalDAV task",
+          trade: "planning",
+          startDate: "2026-09-07",
+          endDateExclusive: "2026-09-08",
+          mealType: null,
+        },
       },
-    });
+      async (prepared) => {
+        receipt = prepared;
+      },
+    );
+    expect(receipt).toBeDefined();
+    if (!receipt) return;
+    expect(
+      await hasCalDavCommitReceipt(ctx.db, { ...receipt, entity: "task" }),
+    ).toBe(true);
+    expect(
+      await hasCalDavCommitReceipt(ctx.db, {
+        ...receipt,
+        shortcode: testShortcode("task", "unrelated"),
+        entity: "task",
+      }),
+    ).toBe(false);
 
     expect((await loadCalDavProjection(ctx.db)).projections).toContainEqual(
       expect.objectContaining({
@@ -77,6 +109,67 @@ describe("CalDAV canonical mutation seam", () => {
       },
     });
     expect(audit).toHaveLength(1);
+
+    const unchanged = await executeCalDavWrite(ctx.db, {
+      actorId: ctx.actor.userId,
+      collection: "tasks",
+      filename: "client-event.ics",
+      expected: expectedResource(result.projection, "tasks"),
+      event: {
+        uid: "client-event@example.test",
+        summary: "CalDAV task",
+        startDate: "2026-09-07",
+        endDateExclusive: "2026-09-08",
+        mealType: null,
+      },
+    });
+    expect(unchanged.shortcode).toBe(result.shortcode);
+    expect(unchanged.projection).toMatchObject({
+      name: "CalDAV task",
+      dueDate: "2026-09-07",
+    });
+    expect(await getDb(ctx.db).query.auditLog.findMany()).toHaveLength(1);
+
+    let committed: CalDavCommitReceipt | undefined;
+    await expect(
+      withTransactionDatabase(ctx.db, async (db) => {
+        await runAfterCommit(db, async () => {
+          throw new Error("synthetic effect failure after commit");
+        });
+        return executeCalDavWrite(
+          db,
+          {
+            actorId: ctx.actor.userId,
+            collection: "tasks",
+            filename: "client-event.ics",
+            expected: expectedResource(result.projection, "tasks"),
+            event: {
+              uid: "client-event@example.test",
+              summary: "Saved despite effect failure",
+              startDate: "2026-09-08",
+              endDateExclusive: "2026-09-09",
+              mealType: null,
+            },
+          },
+          async (prepared) => {
+            committed = prepared;
+          },
+        );
+      }),
+    ).rejects.toThrow(
+      "Transaction committed, but an after-commit effect failed",
+    );
+    expect(committed).toBeDefined();
+    if (!committed) return;
+    expect(
+      await hasCalDavCommitReceipt(ctx.db, { ...committed, entity: "task" }),
+    ).toBe(true);
+    expect((await loadCalDavProjection(ctx.db)).projections).toContainEqual(
+      expect.objectContaining({
+        id: result.shortcode,
+        name: "Saved despite effect failure",
+      }),
+    );
   });
 
   it("refuses an unclassified new task before writing", async () => {
@@ -95,6 +188,35 @@ describe("CalDAV canonical mutation seam", () => {
         },
       }),
     ).rejects.toMatchObject({ status: 422 });
+    let abandoned: CalDavCommitReceipt | undefined;
+    await expect(
+      executeCalDavWrite(
+        ctx.db,
+        {
+          actorId: ctx.actor.userId,
+          collection: "tasks",
+          filename: "abandoned.ics",
+          expected: null,
+          event: {
+            uid: "abandoned@example.test",
+            summary: "Rolled back task",
+            trade: "planning",
+            startDate: "2026-09-07",
+            endDateExclusive: "2026-09-08",
+            mealType: null,
+          },
+        },
+        async (receipt) => {
+          abandoned = receipt;
+          throw new Error("synthetic interruption before commit");
+        },
+      ),
+    ).rejects.toThrow("synthetic interruption before commit");
+    expect(abandoned).toBeDefined();
+    if (!abandoned) return;
+    expect(
+      await hasCalDavCommitReceipt(ctx.db, { ...abandoned, entity: "task" }),
+    ).toBe(false);
     expect(await getDb(ctx.db).query.task.findMany()).toHaveLength(0);
   });
 
@@ -288,4 +410,59 @@ describe("durable calendar dirty-mark fallback", () => {
       ).toBe(true);
       consoleError.mockRestore();
     }));
+});
+
+// Existing pending writes must remain unresolved when exact commit evidence is unavailable.
+it("preserves populated Calendar SQLite state while adding commit evidence", () => {
+  const sqlite = new DatabaseSync(":memory:");
+  try {
+    for (const name of [
+      "20260907210455_bright_tyger_tiger",
+      "20260908023453_watery_tomas",
+    ])
+      sqlite.exec(
+        readFileSync(
+          new URL(`./migrations/${name}/migration.sql`, import.meta.url),
+          "utf8",
+        ),
+      );
+    sqlite.exec(`
+      INSERT INTO calendar_meta (id, generation, dirty_reason, dirty_sequence) VALUES (1, 7, 'pending', 12);
+      INSERT INTO calendar_credentials VALUES ('synthetic-owner', 'synthetic-login', 'synthetic-hash', '2026-09-07T00:00:00Z');
+      INSERT INTO calendar_identities VALUES ('synthetic-record', 'meal', 'client.ics', 'client@example.test');
+      INSERT INTO calendar_uncertain_writes VALUES ('meal', 'meals', 'client.ics', 'client@example.test', NULL, '2026-09-07T00:00:00Z');
+      INSERT INTO calendar_documents VALUES ('meals', 'synthetic-document', 'synthetic-etag', '2026-09-07T00:00:00Z', 7, 1);
+    `);
+    const tables = [
+      "calendar_meta",
+      "calendar_credentials",
+      "calendar_identities",
+      "calendar_documents",
+    ];
+    const before = tables.map((table) =>
+      sqlite.prepare(`SELECT * FROM ${table}`).all(),
+    );
+    sqlite.exec(
+      readFileSync(
+        new URL(
+          "./migrations/20261107171347_flashy_lester/migration.sql",
+          import.meta.url,
+        ),
+        "utf8",
+      ),
+    );
+    expect(
+      tables.map((table) => sqlite.prepare(`SELECT * FROM ${table}`).all()),
+    ).toEqual(before);
+    expect(
+      sqlite.prepare("SELECT * FROM calendar_uncertain_writes").get(),
+    ).toMatchObject({
+      filename: "client.ics",
+      uid: "client@example.test",
+      shortcode: null,
+      audit_id: null,
+    });
+  } finally {
+    sqlite.close();
+  }
 });

@@ -45,13 +45,7 @@ export class CalendarFeedDurableObject
         const meta = this.store.meta();
         if (!meta.generation && env.APP_ORIGIN)
           await this.markDirty("initialize", env.APP_ORIGIN);
-        else if (
-          meta.dirtyReason &&
-          meta.origin &&
-          (await ctx.storage.getAlarm()) === null
-        )
-          // A hard reset can end the alarm before the refresh catch schedules a retry.
-          await ctx.storage.setAlarm(Date.now() + DIRTY_DELAY_MS);
+        else if (meta.dirtyReason && meta.origin) await this.armDirtyAlarm();
         // Clean cutover: old subscription credentials and documents are disposable.
         await ctx.storage.delete([
           "calendar:meta",
@@ -155,7 +149,10 @@ export class CalendarFeedDurableObject
         counts: this.store.counts(),
         uncertainWrites: this.store
           .uncertainWrites()
-          .map(({ entity: _entity, uid: _uid, ...marker }) => marker),
+          .map(
+            ({ entity: _entity, uid: _uid, auditId: _auditId, ...marker }) =>
+              marker,
+          ),
         refreshFailedAt: meta.refreshFailedAt,
       },
     };
@@ -188,7 +185,12 @@ export class CalendarFeedDurableObject
   }
   async markDirty(reason: string, origin: string) {
     this.store.dirty(reason, origin);
-    if ((await this.ctx.storage.getAlarm()) === null)
+    await this.armDirtyAlarm();
+  }
+  private async armDirtyAlarm() {
+    const alarm = await this.ctx.storage.getAlarm();
+    // An interrupted delivery can retain an expired alarm; dirty work must wake again.
+    if (alarm === null || alarm <= Date.now())
       await this.ctx.storage.setAlarm(Date.now() + DIRTY_DELAY_MS);
   }
   async refreshNow(reason: string, origin: string) {
@@ -255,7 +257,7 @@ export class CalendarFeedDurableObject
         const generation = this.store.beginPublication();
         const snapshot = await this.withDatabase(async (db) => {
           const [
-            { visitCalDavProjection },
+            { visitCalDavProjection, hasCalDavCommitReceipt },
             { buildCalendarSnapshot },
             { renderCalDavResource },
           ] = await Promise.all([
@@ -263,6 +265,26 @@ export class CalendarFeedDurableObject
             import("../service/snapshot"),
             import("../service/caldav-ics"),
           ]);
+          const recovered = [];
+          for (const marker of this.store.uncertainWrites()) {
+            if (!marker.auditId || !marker.shortcode) continue;
+            if (
+              await hasCalDavCommitReceipt(db, {
+                ...marker,
+                auditId: marker.auditId,
+                shortcode: marker.shortcode,
+              })
+            ) {
+              if (
+                !this.store.rememberIdentity({
+                  ...marker,
+                  shortcode: marker.shortcode,
+                })
+              )
+                continue;
+              recovered.push(marker);
+            }
+          }
           await visitCalDavProjection(db, async (projections) => {
             const resources = [];
             for (const projection of projections) {
@@ -280,11 +302,12 @@ export class CalendarFeedDurableObject
             }
             this.store.stageResources(generation, resources);
           });
-          return buildCalendarSnapshot(db, {
+          const snapshot = await buildCalendarSnapshot(db, {
             origin,
             now: new Date(),
             revision: generation,
           });
+          return { ...snapshot, recovered };
         }, origin);
         const revision = this.store.publish(
           generation,
@@ -292,6 +315,8 @@ export class CalendarFeedDurableObject
           origin,
         );
         this.store.clearDirty(sequence);
+        for (const marker of snapshot.recovered)
+          this.store.clearUncertainWrite(marker.collection, marker.filename);
         return {
           generatedAt: snapshot.generatedAt,
           revision,
@@ -305,7 +330,13 @@ export class CalendarFeedDurableObject
     return this.withDatabase(async (db) => {
       const { executeCalDavWrite } =
         await import("~/server/domains/calendar/repo/calendar-caldav");
-      return executeCalDavWrite(db, write);
+      return executeCalDavWrite(db, write, async (receipt) => {
+        this.store.prepareWriteReceipt(
+          write.collection,
+          write.filename,
+          receipt,
+        );
+      });
     }, origin);
   }
   private async write(
@@ -334,6 +365,13 @@ export class CalendarFeedDurableObject
         "Calendar resource identity is reserved",
         "no-uid-conflict",
       );
+    // No PostgreSQL invocation can have started when the binding is absent.
+    if (!this.env.HYPERDRIVE?.connectionString)
+      throw new CalDavError(
+        503,
+        "Calendar PostgreSQL write backend is unavailable",
+      );
+    await this.markDirty("caldav-write", origin);
     this.store.startWrite({
       entity,
       collection: input.collection,
@@ -349,24 +387,35 @@ export class CalendarFeedDurableObject
       expected,
       event: input.event,
     };
-    let committed = false;
     try {
-      await this.markDirty("caldav-write", origin);
       const result = await this.execute(write, origin).finally(() =>
         recordDatabaseWrite("caldav.write"),
       );
-      committed = true;
-      this.store.rememberIdentity({
-        entity,
-        shortcode: result.shortcode,
-        filename: input.filename,
-        uid: input.event.uid,
-      });
-      await this.refresh(origin, "caldav-write");
-      this.store.clearUncertainWrite(input.collection, input.filename);
+      const { renderCalDavResource } = await import("../service/caldav-ics");
+      const resource = await renderCalDavResource(
+        result.projection,
+        {
+          entity,
+          shortcode: result.shortcode,
+          filename: input.filename,
+          uid: input.event.uid,
+        },
+        origin,
+      );
+      this.store.publishWrite(resource);
     } catch (error) {
-      // Only known precommit rejections can release a marker automatically.
-      if (!committed && error instanceof CalDavError && error.status < 500)
+      // New semantic writes cannot commit before their exact receipt is durable.
+      // An audit-free task PUT is a verified no-op, so it needs no commit proof.
+      if (
+        !this.store
+          .uncertainWrites()
+          .some(
+            (marker) =>
+              marker.entity === entity &&
+              marker.filename === input.filename &&
+              marker.auditId,
+          )
+      )
         this.store.clearUncertainWrite(input.collection, input.filename);
       throw error;
     }

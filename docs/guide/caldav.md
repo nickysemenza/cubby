@@ -34,24 +34,40 @@ deletion. Resetting DO storage loses client identity metadata.
 Creates and updates use the canonical entity kernel, auditing, search updates,
 and normal after-commit side effects. Transactional comparison of projected
 fields protects against stale edits. There are no PostgreSQL calendar metadata
-tables, operation receipts, preallocated entity IDs, or automatic mutation replay.
+tables, separate operation receipts, preallocated entity IDs, or automatic mutation replay.
 
-A minimal resource marker is stored before each write. Successful publication
-or a known precommit refusal removes it. An uncertain outcome blocks that
-resource (including the other Task collection and matching UID), while reads,
-unrelated writes, and projection refresh remain available. In Settings →
-Calendar state, inspect the record in Cubby before choosing **Clear uncertain
-write**. Clearing only releases the marker; it does not repeat, undo, or delete
-anything. Unknown creates can appear under a shortcode-based resource after
-refresh if their client mapping was never saved; inspect for duplicates before
-creating again.
+A resource marker is stored before each write. Before PostgreSQL commits, it
+retains the exact canonical audit receipt and record shortcode. The audit entry
+and entity mutation commit together; projection refresh checks that exact receipt
+before restoring the original client UID and filename and releasing the marker.
+A missing receipt never authorizes mutation replay. Markers from before receipt
+capture remain unresolved; a nearby audit timestamp or matching title is not
+identity evidence. Conflicting durable identities remain unresolved as well.
+
+Successful writes publish their own canonical CalDAV resource directly into
+SQLite, atomically with its durable identity and marker removal. They do not
+wait for a rebuild of unrelated collections or subscription feeds. Dirty
+notifications refresh subscriptions through the existing alarm. Failures before
+receipt capture release their marker: semantic changes cannot commit before that
+proof is durable. An unchanged Task PUT needs no audit receipt. A missing
+PostgreSQL binding or a failed dirty alarm creates no marker.
+
+An uncertain outcome blocks only that resource (including the other Task
+collection and matching UID). Reads, unrelated writes and projection refresh
+remain available. In Settings → Calendar state, inspect the record in Cubby
+before choosing **Clear uncertain write**. Clearing only releases the marker;
+it does not repeat, undo, or delete anything. An unresolved legacy create can
+appear under a shortcode-based resource if its client mapping was never saved;
+inspect for duplicates before creating again.
 
 Dirty notifications refresh promptly; the daily cron is the backstop. Refresh
 publishes current entity state even with uncertain markers. Failed refreshes
 retain the previous complete generation. Refresh reads the full CalDAV collection
-in 500-record pages and stages rendered resources in SQLite. Only a completed
-publication switches the visible generation and records new durable identities.
-After an isolate reset, a pending dirty notification re-arms its alarm; the retry
+in 500-record pages and stages rendered resources in SQLite. A full refresh switches
+the visible generation only after staging completes; individual writes publish
+their own resource and identity atomically.
+After an isolate reset, a pending dirty notification re-arms a missing or expired
+alarm; new dirty notifications also repair expired wake-ups. The retry
 discards partial staging and starts again. New dirty notifications that arrive
 during a refresh remain pending after that generation publishes.
 
