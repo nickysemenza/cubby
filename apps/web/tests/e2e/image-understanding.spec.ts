@@ -11,9 +11,9 @@ import {
 import { getDb } from "~/server/db/helpers";
 import {
   createImageProcessingJob,
-  IMAGE_IDENTIFICATION_PROCESSOR_REVISION,
   saveImageDescriptionAnalysis,
 } from "~/server/domains/image-processing/repo/image-processing";
+import { IMAGE_IDENTIFICATION_PROCESSOR_REVISION } from "~/server/domains/image-processing/repo/processor-policy";
 import {
   imageDescriptionInputFingerprint,
   preferredImageDescriptionPolicy,

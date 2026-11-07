@@ -314,13 +314,13 @@ async function assertNativePhotoImport(
           `Native uploaded photo bytes are unavailable for ${runID}`,
         );
     }
-    const processing =
-      await import("~/server/domains/image-processing/repo/image-processing");
+    const processorPolicy =
+      await import("~/server/domains/image-processing/repo/processor-policy");
     const expectedJobs = [
-      `describe_image:${processing.IMAGE_DESCRIPTION_PROCESSOR_REVISION}`,
-      `describe_image:${processing.IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION}`,
-      `identify_image:${processing.IMAGE_IDENTIFICATION_PROCESSOR_REVISION}`,
-      `subject_lift:${processing.IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION}`,
+      `describe_image:${processorPolicy.IMAGE_DESCRIPTION_PROCESSOR_REVISION}`,
+      `describe_image:${processorPolicy.IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION}`,
+      `identify_image:${processorPolicy.IMAGE_IDENTIFICATION_PROCESSOR_REVISION}`,
+      `subject_lift:${processorPolicy.IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION}`,
     ].sort();
     const jobs = await checkPool.query<{
       imageId: string;
@@ -357,12 +357,14 @@ async function assertNativePhotoImport(
 async function exercisePhotoProcessingJobs(imageIDs: string[]): Promise<void> {
   const pool = createPostgresPool({ connectionString: databaseURL });
   try {
-    const [scenario, processing, dispatch, schemas] = await Promise.all([
-      import("./scenarios/context"),
-      import("~/server/domains/image-processing/repo/image-processing"),
-      import("~/server/domains/image-processing/service/dispatch"),
-      import("@cubby/schemas/image-processing"),
-    ]);
+    const [scenario, processing, processorPolicy, dispatch, schemas] =
+      await Promise.all([
+        import("./scenarios/context"),
+        import("~/server/domains/image-processing/repo/image-processing"),
+        import("~/server/domains/image-processing/repo/processor-policy"),
+        import("~/server/domains/image-processing/service/dispatch"),
+        import("@cubby/schemas/image-processing"),
+      ]);
     const db = scenario.buildScenarioDatabase(pool);
     const result = await pool.query<{
       imageId: string;
@@ -374,7 +376,7 @@ async function exercisePhotoProcessingJobs(imageIDs: string[]): Promise<void> {
        JOIN "Image" i ON i.id = j."imageId"
        WHERE i.shortcode = ANY($1::text[])
          AND (j.kind <> 'describe_image' OR j."processorRevision" = $2)`,
-      [imageIDs, processing.IMAGE_DESCRIPTION_PROCESSOR_REVISION],
+      [imageIDs, processorPolicy.IMAGE_DESCRIPTION_PROCESSOR_REVISION],
     );
     const jobs = result.rows.map((row) => ({
       ...row,
@@ -449,7 +451,7 @@ async function exercisePhotoProcessingJobs(imageIDs: string[]): Promise<void> {
        JOIN "Image" i ON i.id = j."imageId"
        WHERE i.shortcode = ANY($1::text[])
          AND (j.kind <> 'describe_image' OR j."processorRevision" = $2)`,
-      [imageIDs, processing.IMAGE_DESCRIPTION_PROCESSOR_REVISION],
+      [imageIDs, processorPolicy.IMAGE_DESCRIPTION_PROCESSOR_REVISION],
     );
     for (const imageID of imageIDs) {
       const state = (kind: string) =>

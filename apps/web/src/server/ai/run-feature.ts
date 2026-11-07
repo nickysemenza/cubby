@@ -79,11 +79,6 @@ import {
   type AiImagePart,
   type AiMessage,
 } from "~/server/ai/policy/feature-identity";
-export type {
-  AiChatRequest,
-  AiImagePart,
-  AiMessage,
-} from "~/server/ai/policy/feature-identity";
 import type {
   AiChatFeature,
   AiFeature,

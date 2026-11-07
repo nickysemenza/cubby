@@ -33,6 +33,11 @@ import {
   updateImageExecution,
 } from "~/server/domains/image-processing/repo/image-execution.fixtures";
 import {
+  IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
+  IMAGE_DESCRIPTION_PROCESSOR_REVISION,
+  IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION,
+} from "~/server/domains/image-processing/repo/processor-policy";
+import {
   createUploadedImageRecord,
   deleteImages,
   imageScaffold,
@@ -66,9 +71,6 @@ import {
   getImageProcessingReadProjection,
   saveImageDescriptionAnalysis,
   createImageProcessingJob,
-  IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
-  IMAGE_DESCRIPTION_PROCESSOR_REVISION,
-  IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION,
   retireObsoleteImageProcessingJobs,
   repairImageProcessingExecution,
   retryImageProcessingNow,

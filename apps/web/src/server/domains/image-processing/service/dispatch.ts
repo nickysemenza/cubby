@@ -20,7 +20,6 @@ import {
 } from "~/server/clients/s3";
 import type { Database } from "~/server/db";
 import {
-  IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
   assertImageLeaseHeld,
   claimImageProcessingJob,
   completeImageProcessingJob,
@@ -30,6 +29,7 @@ import {
   assignImageProcessingExecutor,
   deferImageProcessingJob,
 } from "~/server/domains/image-processing/repo/image-processing-history";
+import { IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION } from "~/server/domains/image-processing/repo/processor-policy";
 import { getVerifiedImageRendition } from "~/server/domains/image/repo/image-identification";
 import { reserveImageAnalysisInput } from "~/server/generic/activity/repo/activity-input";
 import { JobDeferredError } from "~/server/generic/jobs/errors";

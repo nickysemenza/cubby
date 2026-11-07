@@ -95,12 +95,6 @@ import { MAIL_ATTACHMENT_UPLOAD_REASON } from "~/server/domains/mail/repo/mail-a
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { JobSupersededError } from "~/server/generic/jobs/errors";
 import { findOrCreateWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
-export {
-  IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
-  IMAGE_DESCRIPTION_PROCESSOR_REVISION,
-  IMAGE_IDENTIFICATION_PROCESSOR_REVISION,
-  IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION,
-} from "~/server/domains/image-processing/repo/processor-policy";
 
 import {
   imageJobClaimable,

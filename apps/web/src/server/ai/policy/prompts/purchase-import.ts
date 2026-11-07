@@ -3,7 +3,10 @@ import type {
   ImportExtractionOutcome,
 } from "@cubby/schemas/purchase-import";
 
-import type { AiMessage, AiChatRequest } from "~/server/ai/run-feature";
+import type {
+  AiMessage,
+  AiChatRequest,
+} from "~/server/ai/policy/feature-identity";
 
 import { purchaseImportPromptText } from "./purchase-import-prompt-text.gen";
 

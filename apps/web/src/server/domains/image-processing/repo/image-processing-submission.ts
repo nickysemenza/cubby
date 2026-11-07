@@ -3,15 +3,17 @@ import type { ImageProcessingJobKind } from "@cubby/schemas/image-processing";
 
 import type { Database } from "~/server/db";
 import { withTransactionDatabase } from "~/server/db/helpers";
+import {
+  IMAGE_DESCRIPTION_PROCESSOR_REVISION,
+  IMAGE_IDENTIFICATION_PROCESSOR_REVISION,
+  IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
+} from "~/server/domains/image-processing/repo/processor-policy";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import {
   getUploadedImageProcessingSource,
   createTransparentDerivativeAndJob,
   createImageProcessingJob,
-  IMAGE_DESCRIPTION_PROCESSOR_REVISION,
-  IMAGE_IDENTIFICATION_PROCESSOR_REVISION,
-  IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
 } from "./image-processing";
 import {
   createImageProcessingSubmission,

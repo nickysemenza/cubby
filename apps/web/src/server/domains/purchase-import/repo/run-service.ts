@@ -108,10 +108,10 @@ import {
   vendor,
   vendorAccount,
 } from "~/server/db/schema";
-import { IMAGE_DESCRIPTION_PROCESSOR_REVISION } from "~/server/domains/image-processing/repo/image-processing";
 import { createImageProcessingSubmission } from "~/server/domains/image-processing/repo/image-processing-history";
 import { publishImageProcessingWakeups } from "~/server/domains/image-processing/repo/image-processing-maintenance";
 import { persistImageProcessingSubmission } from "~/server/domains/image-processing/repo/image-processing-submission";
+import { IMAGE_DESCRIPTION_PROCESSOR_REVISION } from "~/server/domains/image-processing/repo/processor-policy";
 import {
   recordImportSightings,
   resolveDeviceSightingContext,

@@ -1,6 +1,6 @@
 import { and, eq, isNotNull, sql } from "drizzle-orm";
 
-import type { AiChatRequest } from "~/server/ai/run-feature";
+import type { AiChatRequest } from "~/server/ai/policy/feature-identity";
 import type { Database } from "~/server/db";
 import { getDb, notDeleted, withTransaction } from "~/server/db/helpers";
 import {
