@@ -189,7 +189,7 @@ function Chart({ block }: { block: Extract<ReportBlock, { kind: "chart" }> }) {
             </span>
           </Row>
           <div
-            className="h-1 bg-primary/60"
+            className="h-1 bg-chart-1"
             style={{ width: `${(Math.abs(entry.value) / max) * 100}%` }}
           />
         </li>

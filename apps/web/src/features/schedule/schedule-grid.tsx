@@ -581,8 +581,8 @@ export function ScheduleGrid({
                     const color =
                       segment.color ??
                       (segment.variant === "reference"
-                        ? "var(--muted-foreground)"
-                        : "var(--primary)");
+                        ? "var(--chart-5)"
+                        : "var(--chart-1)");
                     const style: CSSProperties = {
                       left,
                       backgroundColor: color,

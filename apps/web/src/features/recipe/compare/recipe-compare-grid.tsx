@@ -319,7 +319,7 @@ export const RecipeCompareGrid: React.FC<{
         <span className="flex items-center gap-2 text-xs text-muted-foreground">
           <span
             className="inline-block size-2 rounded-full"
-            style={{ backgroundColor: "var(--primary)" }}
+            style={{ backgroundColor: "var(--chart-2)" }}
           />
           largest deviation from average
         </span>
@@ -435,7 +435,7 @@ export const RecipeCompareGrid: React.FC<{
                             ? "text-muted-foreground/50"
                             : ""
                       }`}
-                      style={isMax ? { color: "var(--primary)" } : undefined}
+                      style={isMax ? { color: "var(--chart-2)" } : undefined}
                     >
                       {formatValue(v, basis)}
                     </span>

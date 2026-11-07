@@ -346,6 +346,8 @@ async function queryWorkQueue(
 
   // Inline source and routing stages so common filters can reach their inputs.
   // Counts and paging share the materialized filtered population below.
+  // Under an any-of Reason filter, summarize only the selected reason keys:
+  // drilling into another membership would otherwise widen that population.
   const result = await getDb(db).execute(
     // oxlint-disable-next-line cubby/no-raw-enum-literal-in-sql -- JSON property names below are the response contract, not vocabulary values.
     sql`
@@ -395,6 +397,28 @@ async function queryWorkQueue(
     )
     SELECT
       (SELECT count(*)::int FROM eligible) AS total,
+      ${
+        input.pageSize === 0
+          ? sql`jsonb_build_object(
+        'cells', coalesce((SELECT jsonb_agg(to_jsonb(cells) ORDER BY reason, entity) FROM (
+          SELECT reasons.reason, entity, count(DISTINCT key)::int AS count
+          FROM eligible CROSS JOIN LATERAL unnest(reason_keys) AS reasons(reason)
+          ${
+            scope.reasons?.length
+              ? sql`WHERE reasons.reason IN (${sql.join(
+                  scope.reasons.map((key) => sql`${key}`),
+                  sql`, `,
+                )})`
+              : sql``
+          }
+          GROUP BY reasons.reason, entity
+        ) cells), '[]'::jsonb),
+        'types', coalesce((SELECT jsonb_agg(to_jsonb(types) ORDER BY entity) FROM (
+          SELECT entity, count(*)::int AS count FROM eligible GROUP BY entity
+        ) types), '[]'::jsonb)
+      )`
+          : sql`NULL::jsonb`
+      } AS summary,
       coalesce((SELECT jsonb_agg(to_jsonb(missing) ORDER BY source) FROM (
         SELECT source, count(DISTINCT key)::int AS count, NULL::text AS message FROM incomplete GROUP BY source
         UNION ALL ${coverageUnion}
@@ -445,6 +469,7 @@ async function queryWorkQueue(
   const row = z
     .object({
       total: z.number(),
+      summary: workQueueOutSchema.shape.meta.shape.summary.unwrap().nullable(),
       incompleteSources: workQueueOutSchema.shape.meta.shape.incompleteSources
         .unwrap()
         .element.omit({ label: true })
@@ -501,6 +526,7 @@ async function queryWorkQueue(
         label: sourceById.get(input.source)?.inputLabel ?? input.source,
       })),
       totalCount: row.total,
+      ...(row.summary ? { summary: row.summary } : {}),
       viewCounts: row.viewCounts,
       reasons,
       ...(row.groups

@@ -37,7 +37,7 @@ const ENVELOPE_COLOR = "var(--chart-1)";
 const COMMITTED_COLOR = "var(--chart-6)";
 const SCENARIO_OUT_COLOR = "var(--chart-4)";
 const SCENARIO_IN_COLOR = "var(--chart-positive)";
-const NET_COLOR = "var(--foreground)";
+const NET_COLOR = "var(--chart-5)";
 
 export const cashFlowSegments = (data: CashFlowProjectionOut): Segment[] => [
   ...data.baseline.map((row, index) => ({

@@ -317,7 +317,7 @@ function Legend({ data }: { data: CashFlowProjectionOut }) {
         </li>
       ))}
       <li className="flex items-center gap-1.5">
-        <span className="h-0.5 w-3 bg-foreground" aria-hidden="true" />
+        <span className="h-0.5 w-3 bg-chart-5" aria-hidden="true" />
         Net
       </li>
     </ul>

@@ -3,11 +3,12 @@ import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { CaretUpIcon } from "@phosphor-icons/react/dist/csr/CaretUp";
 import { GridNineIcon } from "@phosphor-icons/react/dist/csr/GridNine";
 import { cn } from "cn";
-import { type KeyboardEvent, useMemo, useState } from "react";
+import { type KeyboardEvent, useMemo, useRef, useState } from "react";
 
 import type { GroupSummaryModel } from "~/entity/entity-list/group-drill-down";
 import { formatCount, formatPercent } from "~/lib/number-format";
 import { Picker } from "~/ui/combobox/picker";
+import { useIsMobile } from "~/ui/hooks/use-mobile";
 import { CrossTabTable } from "~/ui/matrix/cross-tab-table";
 import type { CrossTabColumn } from "~/ui/matrix/group-columns";
 import { HEAT_CLASSES, heatBucket } from "~/ui/matrix/heat-scale";
@@ -93,6 +94,8 @@ export function EntityPivot({
   const [sort, setSort] = useState<PivotSort | null>(null);
   const [open, setOpen] = useState<ReadonlySet<string>>(() => new Set());
   const [active, setActive] = useState<[number, number]>([0, 0]);
+  const container = useRef<HTMLDivElement>(null);
+  const isMobile = useIsMobile();
   const current = isTransitioning ? undefined : summary;
   const model = useMemo(
     () =>
@@ -182,7 +185,7 @@ export function EntityPivot({
       : `Sort by ${label}`;
 
   const cellAt = (rowIndex: number, columnIndex: number) =>
-    document.querySelector<HTMLElement>(
+    container.current?.querySelector<HTMLElement>(
       `[data-pivot-cell="${rowIndex}:${columnIndex}"]`,
     );
   const onKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
@@ -245,9 +248,9 @@ export function EntityPivot({
                 "ml-1.5 text-2xs",
                 // Muted ink disappears on mid-ramp fills; follow the cell ink.
                 heat >= 4
-                  ? "text-background/80"
+                  ? "text-background"
                   : heat >= 2
-                    ? "text-foreground/75"
+                    ? "text-foreground"
                     : "text-muted-foreground",
               )}
             >
@@ -298,7 +301,10 @@ export function EntityPivot({
     : undefined;
 
   return (
-    <div className="min-w-0 space-y-2 px-2 py-2 md:px-4">
+    <div
+      ref={container}
+      className="flex min-w-0 flex-col gap-2 px-2 py-2 md:px-4"
+    >
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-xs text-muted-foreground">
           {rowLabel} × {columnLabel}
@@ -332,6 +338,11 @@ export function EntityPivot({
               surface="background"
               bareCells
               rowHover
+              layout={
+                isMobile
+                  ? { rowHeader: 148, column: 88, pinned: 72 }
+                  : { rowHeader: 320, column: 112, pinned: 88 }
+              }
               cornerLabel={
                 <button
                   type="button"
@@ -400,6 +411,7 @@ export function EntityPivot({
               pinned={[
                 {
                   key: TOTAL_COLUMN,
+                  stickyRight: "right-0",
                   label: (
                     <button
                       type="button"
@@ -438,7 +450,8 @@ export function EntityPivot({
       {model?.overlapping && (
         <p className="text-xs text-muted-foreground">
           Some {recordLabel.other} hold more than one value in a dimension, so
-          they appear in several cells. Totals count each record once.
+          they appear in several cells. Totals count each {recordLabel.one}{" "}
+          once.
         </p>
       )}
     </div>
