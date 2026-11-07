@@ -109,20 +109,28 @@ public struct FoundationModelsImageDescriber: CompanionImageDescribing {
         isolation: isolated (any Actor)? = #isolation,
         generate: (CGImage, Int?) async throws -> CompanionImageDescription
     ) async throws -> CompanionImageDescription {
-        let responseBudget = min(512, max(32, contextSize / 8))
-        for (index, edge) in [1024, 512].enumerated() {
+        var responseBudget = min(512, max(32, contextSize / 8))
+        var edge = 1024
+        for index in 0..<2 {
             try Task.checkCancellation()
             let prepared = try ImageEncoding.downscaled(image, maxPixelSize: edge)
             do {
-                return try await generate(prepared, max(32, responseBudget / (index + 1)))
+                return try await generate(prepared, responseBudget)
             } catch let failure as StructuredOutputFailure {
+                let largerBudget = min(1024, contextSize / 4)
+                // An incomplete latest response at the cap proves truncation, not a bad schema.
+                // Reserve at least three quarters of the context for input and never replay twice.
+                if index == 0, failure.isTruncated, largerBudget > responseBudget {
+                    responseBudget = largerBudget
+                    continue
+                }
                 throw CompanionImageDescriptionFailure.model(
                     reason:
                         "structured_output_invalid: snapshot=\(failure.metadata); \(String(reflecting: failure.original)); rawContent=\(failure.original.rawContent)",
                     retryable: false)
             } catch let error as GeneratedContent.ParsingError {
                 // Structured decoding errors are separate from LanguageModelError. Replaying
-                // the same greedy request cannot supply missing required properties.
+                // the same greedy request without evidence of truncation cannot repair its shape.
                 throw CompanionImageDescriptionFailure.model(
                     reason:
                         "structured_output_invalid: \(String(reflecting: error)); rawContent=\(error.rawContent)",
@@ -130,7 +138,11 @@ public struct FoundationModelsImageDescriber: CompanionImageDescribing {
             } catch let error as LanguageModelError {
                 // A fresh session alone repeats a deterministic greedy failure. Reduce
                 // both image and output budgets once; never invent a partial description.
-                if case .contextSizeExceeded = error, index == 0 { continue }
+                if case .contextSizeExceeded = error, index == 0 {
+                    edge = 512
+                    responseBudget = max(32, responseBudget / 2)
+                    continue
+                }
                 throw Self.failure(error)
             }
         }
@@ -162,7 +174,10 @@ public struct FoundationModelsImageDescriber: CompanionImageDescribing {
             throw StructuredOutputFailure(
                 original: error,
                 metadata: parsingMetadata(
-                    error, image: image, maximumResponseTokens: maximumResponseTokens, session: session))
+                    error, image: image, maximumResponseTokens: maximumResponseTokens, session: session),
+                responseComplete: latestStructuredResponse(session)?.isComplete,
+                outputTokens: session.usage.output.totalTokenCount,
+                maximumResponseTokens: maximumResponseTokens)
         }
         let generated = response.content
         let eligibility: CompanionCutoutEligibility =
@@ -176,9 +191,30 @@ public struct FoundationModelsImageDescriber: CompanionImageDescribing {
             claims: generated.claims.map { CompanionImageClaim(text: $0) })
     }
 
-    private struct StructuredOutputFailure: Error {
+    // Captured synchronously from the failed fresh session, before it leaves scope.
+    struct StructuredOutputFailure: Error {
         let original: GeneratedContent.ParsingError
         let metadata: String
+        let responseComplete: Bool?
+        let outputTokens: Int
+        let maximumResponseTokens: Int?
+
+        var isTruncated: Bool {
+            guard let maximumResponseTokens, maximumResponseTokens > 0 else { return false }
+            return responseComplete == false && outputTokens >= maximumResponseTokens
+        }
+    }
+
+    private static func latestStructuredResponse(_ session: LanguageModelSession) -> GeneratedContent? {
+        for entry in session.transcript.reversed() {
+            guard case .response(let response) = entry else { continue }
+            // Never borrow completeness from an older response.
+            return response.segments.reversed().compactMap { segment -> GeneratedContent? in
+                guard case .structure(let structure) = segment else { return nil }
+                return structure.content
+            }.first
+        }
+        return nil
     }
 
     // Capture before the failed session leaves scope. Only fixed shapes and literal keys are

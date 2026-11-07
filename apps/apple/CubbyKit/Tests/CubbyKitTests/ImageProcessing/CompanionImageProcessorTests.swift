@@ -34,6 +34,46 @@ struct CompanionImageProcessorTests {
         #expect(attempts[1].0 == 512 && attempts[1].1 == 256)
         #expect(result.cutoutEligibility == .ineligible)
 
+        // Only an incomplete response at the configured cap justifies a larger request.
+        for (complete, outputTokens, expectedAttempts) in [
+            (false, 514, 2), (true, 514, 1), (false, 511, 1), (nil, 514, 1),
+        ] as [(Bool?, Int, Int)] {
+            for repeatTruncation in [false, true] {
+                attempts = []
+                do {
+                    let recovered = try await FoundationModelsImageDescriber.describeWithRecovery(
+                        image, contextSize: 8192
+                    ) { input, maximum in
+                        attempts.append((input.width, maximum))
+                        if attempts.count == 1 || repeatTruncation {
+                            throw FoundationModelsImageDescriber.StructuredOutputFailure(
+                                original: .init(
+                                    rawContent: "Synthetic incomplete output",
+                                    debugDescription: "Synthetic truncation"),
+                                metadata: "synthetic snapshot", responseComplete: complete,
+                                outputTokens: attempts.count == 1 ? outputTokens : (maximum ?? 0) + 2,
+                                maximumResponseTokens: maximum)
+                        }
+                        return CompanionImageDescription(
+                            description: "Synthetic complete description", cutoutEligibility: .eligible,
+                            claims: [.init(text: "A visible shape")])
+                    }
+                    #expect(expectedAttempts == 2 && !repeatTruncation)
+                    #expect(recovered.description == "Synthetic complete description")
+                    #expect(recovered.cutoutEligibility == .eligible)
+                    #expect(recovered.claims == [.init(text: "A visible shape")])
+                } catch CompanionImageDescriptionFailure.model(let reason, let retryable) {
+                    #expect(expectedAttempts == 1 || repeatTruncation)
+                    #expect(!retryable)
+                    #expect(reason.contains("synthetic snapshot"))
+                }
+                #expect(attempts.count == expectedAttempts)
+                if attempts.count == 2 {
+                    #expect(attempts[1].0 == 1024 && attempts[1].1 == 1024)
+                }
+            }
+        }
+
         let rawContent = #"{"description":"A metal tool marked 3/8"}"#
         attempts = []
         do {
