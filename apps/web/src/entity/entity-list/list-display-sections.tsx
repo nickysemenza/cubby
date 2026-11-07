@@ -316,7 +316,10 @@ function ListGroupMenu({ entity }: { entity: BrowserRoutedEntity }) {
                                 key: choice.key,
                                 ...(choice.buckets.length
                                   ? { bucket: "month" }
-                                  : search.view === PIVOT_VIEW_ID && choice.filter?.columnId === "categoryId" && choice.levels > 0
+                                  : search.view === PIVOT_VIEW_ID &&
+                                      choice.filter?.columnId ===
+                                        "categoryId" &&
+                                      choice.levels > 0
                                     ? { level: 1 }
                                     : {}),
                               },
@@ -327,6 +330,7 @@ function ListGroupMenu({ entity }: { entity: BrowserRoutedEntity }) {
                     {presentation?.target ? (
                       <EntityIcon
                         entity={presentation.target}
+                        aria-hidden="true"
                         className="size-3.5 shrink-0"
                       />
                     ) : (

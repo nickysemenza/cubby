@@ -254,7 +254,7 @@ export const filterSpecLabel = (
     FilterSpec,
     "label" | "placeholder" | "columnId" | "kind" | "presentation"
   >,
-): string => spec.presentation?.label ?? filterFieldLabel(spec);
+): string => spec.presentation?.filter.label ?? filterFieldLabel(spec);
 
 /**
  * Options for a picklist kind that declares none. The label already names

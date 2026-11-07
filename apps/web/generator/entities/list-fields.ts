@@ -1453,6 +1453,8 @@ const presentationCardinality = ({
   kind: string | undefined;
 }): GeneratedListFieldPresentation["cardinality"] =>
   group?.multiple ||
+  field?.display.standard === "image" ||
+  field?.display.value?.kind === "images" ||
   (field?.display.value?.kind === "record" && field.display.value.multiple) ||
   field?.reference?.multiple ||
   kind === "text-array" ||
@@ -1555,9 +1557,9 @@ const compileFieldPresentation = (
             ? `${entity.inspector.singular} name`
             : undefined) ??
           group?.label ??
+          field?.label ??
           relation?.label ??
           (filter?.columnId === key ? filterFieldLabel(filter) : undefined) ??
-          field?.label ??
           filter?.label ??
           humanize(key),
         description: field?.description ?? filter?.schemaDescription ?? null,
@@ -1579,10 +1581,15 @@ const compileFieldPresentation = (
           group?.reason === null ? group.key : undefined,
           group?.reason ?? "No grouping is declared for this field.",
         ),
-        filter: operation(
-          filter?.columnId,
-          "No filter is declared for this field.",
-        ),
+        filter: {
+          ...operation(
+            filter?.columnId,
+            "No filter is declared for this field.",
+          ),
+          label: filter
+            ? filterFieldLabel(filter)
+            : (field?.label ?? humanize(key)),
+        },
       };
       return [key, presentation];
     }),

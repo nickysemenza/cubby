@@ -1851,7 +1851,8 @@ columns independently of column visibility.
 `display.value` declares a cell's semantic kind when it differs from its stored
 shape, including the target and cardinality of a structured record link. A
 presence filter still edits yes/no; it does not turn the linked cell into a
-boolean. Standard image columns retain their media semantics. Reference groups
+boolean. The compiled filter label names its predicate separately from the cell
+label. Standard image columns retain their media semantics. Reference groups
 whose public title is computed read the existing canonical repository title SQL,
 prepared once through the list context, rather than requiring a stored title.
 

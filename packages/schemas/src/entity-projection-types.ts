@@ -309,7 +309,7 @@ export type GeneratedListFieldPresentation<E extends string = Entity> = {
   readonly cardinality: "one" | "many";
   readonly sort: GeneratedListOperation;
   readonly group: GeneratedListOperation;
-  readonly filter: GeneratedListOperation;
+  readonly filter: GeneratedListOperation & { readonly label: string };
 };
 
 export type GeneratedGroupChoice<E extends string = Entity> = {
