@@ -3024,6 +3024,8 @@ receives it. The generated `generatedEntityListFields` map
 (`@cubby/schemas/entity-list-fields`) carries each entity's derived shapes,
 row sets, term expanders, inherited fields, hierarchy, subtree toggles, Group
 by choices, and declared scopes.
+Field presentation stays in each entity's web metadata slice; the global
+repository catalog omits that duplicate vocabulary.
 
 A compiled id filter resolves its shortcodes inside the list query, through
 `shortcodeIdsSql`, rather than in a lookup before it: an unknown or

@@ -882,20 +882,26 @@ export const renderEntityMetadataArtifacts = (
         {
           name: "generatedEntityListFields",
           value: Object.fromEntries(
-            entities.map((entity) => [
-              entity.key,
-              {
-                ...entity.listFields,
-                filterUrlKeys: [
-                  ...new Set([
-                    ...(resolvedPrimarySearch(entity)
-                      ? [resolvedPrimarySearch(entity)!.key]
-                      : []),
-                    ...entity.filterUrlKeys,
-                  ]),
-                ],
-              },
-            ]),
+            entities.map((entity) => {
+              // Web presentation belongs to the per-entity metadata slice;
+              // repository readers need only the compiled query vocabulary.
+              const { presentation: _presentation, ...listFields } =
+                entity.listFields;
+              return [
+                entity.key,
+                {
+                  ...listFields,
+                  filterUrlKeys: [
+                    ...new Set([
+                      ...(resolvedPrimarySearch(entity)
+                        ? [resolvedPrimarySearch(entity)!.key]
+                        : []),
+                      ...entity.filterUrlKeys,
+                    ]),
+                  ],
+                },
+              ];
+            }),
           ),
         },
         {
