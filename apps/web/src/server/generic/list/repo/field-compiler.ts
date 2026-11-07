@@ -178,8 +178,8 @@ export const listReadValue = (
  * A value whose filters read a whole-list relation instead of the per-row
  * scalar: `set` selects `("id", "value")` for every row that has one, and a
  * filter matches `id IN (SELECT "id" FROM set WHERE …)`, so one set-based
- * walk serves the filter. Sort, group and projection read `value`, which must
- * agree with `set` row for row.
+ * walk serves the filter. Sort and group read `value`, which must agree with
+ * `set` row for row; a page binding supplies the projected value.
  */
 interface SetValue {
   readonly value: SQL;
@@ -467,7 +467,8 @@ export const derivedSelectSql = (
   if (
     field?.shape !== "value" ||
     entry === undefined ||
-    typeof entry === "function"
+    typeof entry === "function" ||
+    isSetValue(entry)
   )
     return null;
   const parts = derivedValueParts(entity, derived, key, context);
