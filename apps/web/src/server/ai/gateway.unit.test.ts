@@ -2,17 +2,20 @@ import { gatewayBaseURL } from "@cubby/shared/ai/gateway-request";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { type getAiGateway, setCfEnv } from "~/server/cf-env";
+import type { getAiGateway } from "~/server/cf-env";
 
-import { gatewayFetch } from "./gateway";
+let gatewayFetch: typeof import("./gateway").gatewayFetch;
+let setCfEnv: typeof import("~/server/cf-env").setCfEnv;
 
 type AiGatewayBinding = NonNullable<ReturnType<typeof getAiGateway>>;
-type GatewayRun = Parameters<AiGatewayBinding["run"]>;
 
 // Vitest runs with NODE_ENV=test; a CI runner's own `CI` would otherwise
 // change the expected `environment` between a laptop and GitHub.
-beforeEach(() => {
+beforeEach(async () => {
   vi.stubEnv("CI", "");
+  vi.stubEnv("AI_GATEWAY_API_KEY", "synthetic-gateway-token");
+  ({ setCfEnv } = await import("~/server/cf-env"));
+  ({ gatewayFetch } = await import("./gateway"));
 });
 
 afterEach(() => {
@@ -33,22 +36,13 @@ async function devGatewayFetch(token: string) {
   return (await import("./gateway")).gatewayFetch;
 }
 
-/** Stand in for `env.AI.gateway("cubby")`, keeping what `run()` was handed. */
-function fakeBinding(response: Response) {
-  const calls: GatewayRun[] = [];
-  setCfEnv(
-    fromPartial<Env>({
-      AI: {
-        gateway: () =>
-          fromPartial<AiGatewayBinding>({
-            run: (...args: GatewayRun) => {
-              calls.push(args);
-              return Promise.resolve(response);
-            },
-          }),
-      },
-    }),
-  );
+/** The physical provider request is the external seam in either runtime. */
+function fakeNativeGateway(response: Response) {
+  const calls: Request[] = [];
+  vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => {
+    calls.push(new Request(input, init));
+    return Promise.resolve(response);
+  });
   return calls;
 }
 
@@ -56,9 +50,9 @@ const metadata = { feature: "recipe-flow", operation: "generate" };
 /** What leaves the Worker: the caller's labels plus the derived environment. */
 const outbound = { ...metadata, environment: "development" };
 
-describe("gatewayFetch on the Worker binding", () => {
+describe("gatewayFetch native provider passthrough", () => {
   it("addresses the gateway by provider and endpoint, without the SDK's credentials", async () => {
-    const calls = fakeBinding(new Response("{}"));
+    const calls = fakeNativeGateway(new Response("{}"));
     const send = gatewayFetch("anthropic", { metadata, skipCache: true });
     const controller = new AbortController();
 
@@ -75,38 +69,25 @@ describe("gatewayFetch on the Worker binding", () => {
       signal: controller.signal,
     });
 
-    const [data, options] = calls[0] ?? [];
-    expect(data).toEqual({
-      provider: "anthropic",
-      endpoint: "v1/messages?beta=true",
-      headers: {
-        "content-type": "application/json",
-        "anthropic-version": "2023-06-01",
-      },
-      query: { model: "claude-sonnet-5" },
-    });
-    expect(options?.gateway).toEqual({
-      skipCache: true,
-      metadata: outbound,
-      requestTimeoutMs: undefined,
-    });
-    expect(options?.signal).toBe(controller.signal);
-  });
-
-  it("passes cacheTtlSeconds through as the binding's cacheTtl", async () => {
-    const calls = fakeBinding(new Response("{}"));
-
-    await gatewayFetch("anthropic", { metadata, cacheTtlSeconds: 604_800 })(
-      `${gatewayBaseURL("anthropic")}/v1/messages`,
-      { method: "POST", body: "{}" },
+    const sent = calls[0];
+    expect(sent?.url).toMatch(/\/anthropic\/v1\/messages\?beta=true$/);
+    expect(sent?.headers.get("anthropic-version")).toBe("2023-06-01");
+    for (const name of ["authorization", "x-api-key", "content-length"])
+      expect(sent?.headers.has(name)).toBe(false);
+    expect(sent?.headers.get("cf-aig-authorization")).toBe(
+      "Bearer synthetic-gateway-token",
     );
-
-    const [, options] = calls[0] ?? [];
-    expect(options?.gateway).toMatchObject({ cacheTtl: 604_800 });
+    expect(sent?.headers.get("cf-aig-skip-cache")).toBe("true");
+    expect(JSON.parse(sent?.headers.get("cf-aig-metadata") ?? "{}")).toEqual(
+      outbound,
+    );
+    expect(await sent?.json()).toEqual({ model: "claude-sonnet-5" });
+    controller.abort();
+    expect(sent?.signal.aborted).toBe(true);
   });
 
   it("rejects a cacheTtlSeconds outside the gateway's 60s..30d range", async () => {
-    fakeBinding(new Response("{}"));
+    fakeNativeGateway(new Response("{}"));
 
     expect(() =>
       gatewayFetch("anthropic", { metadata, cacheTtlSeconds: 59 }),
@@ -123,7 +104,7 @@ describe("gatewayFetch on the Worker binding", () => {
   });
 
   it("accepts the gateway's boundary TTLs of 60s and 30 days", async () => {
-    fakeBinding(new Response("{}"));
+    fakeNativeGateway(new Response("{}"));
 
     expect(() =>
       gatewayFetch("anthropic", { metadata, cacheTtlSeconds: 60 }),
@@ -146,7 +127,7 @@ describe("gatewayFetch on the Worker binding", () => {
     const streamed = new Response(stream, {
       headers: { "content-type": "text/event-stream" },
     });
-    fakeBinding(streamed);
+    fakeNativeGateway(streamed);
 
     const response = await gatewayFetch("openai", { metadata })(
       `${gatewayBaseURL("openai")}/responses`,
@@ -165,7 +146,7 @@ describe("gatewayFetch on the Worker binding", () => {
         headers: { "retry-after": "30" },
       },
     );
-    fakeBinding(failure);
+    fakeNativeGateway(failure);
     const observed: unknown[] = [];
     const response = await gatewayFetch("openai", {
       metadata,
@@ -185,16 +166,25 @@ describe("gatewayFetch on the Worker binding", () => {
     ]);
   });
 
-  it("needs no local credential when the binding is present", async () => {
-    vi.stubEnv("AI_GATEWAY_API_KEY", "");
-    fakeBinding(new Response("{}"));
+  it("requires native authentication even when a Universal binding is present", async () => {
+    const send = await devGatewayFetch("");
+    const current = await import("~/server/cf-env");
+    const universal = vi.fn();
+    current.setCfEnv(
+      fromPartial<Env>({
+        AI: {
+          gateway: () => fromPartial<AiGatewayBinding>({ run: universal }),
+        },
+      }),
+    );
 
     await expect(
-      gatewayFetch("compat", { metadata })(
+      send("compat", { metadata })(
         `${gatewayBaseURL("compat")}/chat/completions`,
         { method: "POST", body: "{}" },
       ),
-    ).resolves.toBeInstanceOf(Response);
+    ).rejects.toThrow("AI_GATEWAY_API_KEY is not configured");
+    expect(universal).not.toHaveBeenCalled();
   });
 });
 
@@ -263,8 +253,8 @@ describe("gatewayFetch on the dev REST fallback", () => {
 describe("gatewayFetch transport selection", () => {
   // Disconnected subscription research must stop before API billing, and a
   // refused metered reservation must stop the physical gateway request.
-  it("refuses paid transmission before invoking the Worker binding", async () => {
-    const runs = fakeBinding(new Response("{}"));
+  it("refuses paid transmission before invoking the native gateway", async () => {
+    const runs = fakeNativeGateway(new Response("{}"));
     const beforePaidRequest = vi.fn(async () => {
       throw new Error("Metered research allowance exhausted");
     });
@@ -296,23 +286,14 @@ describe("gatewayFetch transport selection", () => {
     expect(runs).toHaveLength(0);
   });
 
-  /** The binding plus a household ChatGPT plan whose inference fails. */
+  /** A native gateway plus a household ChatGPT plan whose inference fails. */
   function bindingWithPlan(connected: boolean) {
-    const runs: GatewayRun[] = [];
+    const runs = fakeNativeGateway(new Response("{}"));
     const infer = vi.fn(async () => {
       throw new Error("ChatGPT plan connection reset");
     });
     setCfEnv(
       fromPartial<Env>({
-        AI: {
-          gateway: () =>
-            fromPartial<AiGatewayBinding>({
-              run: (...args: GatewayRun) => {
-                runs.push(args);
-                return Promise.resolve(new Response("{}"));
-              },
-            }),
-        },
         CHATGPT_PLAN: {
           getByName: () => ({
             status: async () => ({ connected }),
@@ -370,24 +351,10 @@ describe("gatewayFetch transport selection", () => {
 // or entity id reaching the gateway (a spend-limit bucket per value, and past
 // five keys the gateway silently drops entries) instead of failing loudly.
 describe("gatewayFetch metadata contract", () => {
-  async function freshBinding(vars: Record<string, string>) {
+  async function freshGateway(vars: Record<string, string>) {
     for (const [key, value] of Object.entries(vars)) vi.stubEnv(key, value);
     vi.resetModules();
-    const cfEnv = await import("~/server/cf-env");
-    const calls: GatewayRun[] = [];
-    cfEnv.setCfEnv(
-      fromPartial<Env>({
-        AI: {
-          gateway: () =>
-            fromPartial<AiGatewayBinding>({
-              run: (...args: GatewayRun) => {
-                calls.push(args);
-                return Promise.resolve(new Response("{}"));
-              },
-            }),
-        },
-      }),
-    );
+    const calls = fakeNativeGateway(new Response("{}"));
     const { gatewayFetch: send } = await import("./gateway");
     await send("openai", { metadata })(
       `${gatewayBaseURL("openai")}/responses`,
@@ -396,12 +363,12 @@ describe("gatewayFetch metadata contract", () => {
         body: "{}",
       },
     );
-    return calls[0]?.[1]?.gateway?.metadata;
+    return JSON.parse(calls[0]?.headers.get("cf-aig-metadata") ?? "{}");
   }
 
   it("labels the deployed Worker production even when its build ran in CI", async () => {
     expect(
-      await freshBinding({
+      await freshGateway({
         NODE_ENV: "production",
         E2E_AUTH_TEST_MODE: "false",
         CI: "true",
@@ -410,23 +377,23 @@ describe("gatewayFetch metadata contract", () => {
   });
 
   it("labels harness and test traffic ci on a CI runner and development elsewhere", async () => {
-    expect(await freshBinding({ NODE_ENV: "test", CI: "true" })).toMatchObject({
+    expect(await freshGateway({ NODE_ENV: "test", CI: "true" })).toMatchObject({
       environment: "ci",
     });
     expect(
-      await freshBinding({
+      await freshGateway({
         NODE_ENV: "production",
         E2E_AUTH_TEST_MODE: "true",
         CI: "",
       }),
     ).toMatchObject({ environment: "development" });
-    expect(await freshBinding({ NODE_ENV: "development" })).toMatchObject({
+    expect(await freshGateway({ NODE_ENV: "development" })).toMatchObject({
       environment: "development",
     });
   });
 
   it("rejects diagnostic metadata instead of truncating or forwarding it", () => {
-    fakeBinding(new Response("{}"));
+    fakeNativeGateway(new Response("{}"));
     for (const extra of [
       { entityId: "synthetic-entity" },
       { runId: "synthetic-run" },
@@ -441,11 +408,13 @@ describe("gatewayFetch metadata contract", () => {
   });
 
   it("keeps an optional entityKind", async () => {
-    const calls = fakeBinding(new Response("{}"));
+    const calls = fakeNativeGateway(new Response("{}"));
     await gatewayFetch("openai", {
       metadata: { ...metadata, entityKind: "location" },
     })(`${gatewayBaseURL("openai")}/responses`, { method: "POST", body: "{}" });
-    expect(calls[0]?.[1]?.gateway?.metadata).toEqual({
+    expect(
+      JSON.parse(calls[0]?.headers.get("cf-aig-metadata") ?? "{}"),
+    ).toEqual({
       ...outbound,
       entityKind: "location",
     });
@@ -556,8 +525,8 @@ describe("gatewayFetch response observation", () => {
       headers: { "cf-aig-log-id": "example-log", "cf-aig-cache-status": "HIT" },
     });
 
-  it("reports the binding response's log id and cache verdict", async () => {
-    fakeBinding(cachedAnswer());
+  it("reports the native response's log id and cache verdict", async () => {
+    fakeNativeGateway(cachedAnswer());
     const observed: unknown[] = [];
     const response = await gatewayFetch("anthropic", {
       metadata,
@@ -575,6 +544,7 @@ describe("gatewayFetch response observation", () => {
 
   it("reports the test peer's response first, before any binding", async () => {
     const universal = vi.fn();
+    const native = fakeNativeGateway(new Response("unexpected native request"));
     setCfEnv(
       fromPartial<Env & { CUBBY_TEST_AI_GATEWAY: { fetch: typeof fetch } }>({
         AI: {
@@ -592,6 +562,7 @@ describe("gatewayFetch response observation", () => {
     })(`${gatewayBaseURL("openai")}/responses`, { method: "POST", body: "{}" });
 
     expect(universal).not.toHaveBeenCalled();
+    expect(native).toHaveLength(0);
     expect(observed).toEqual([
       { gatewayLogId: "example-log", gatewayCacheStatus: "hit" },
     ]);
@@ -599,7 +570,7 @@ describe("gatewayFetch response observation", () => {
   });
 
   it("reports a failed response to both observers", async () => {
-    fakeBinding(
+    fakeNativeGateway(
       new Response("synthetic failure", {
         status: 500,
         headers: { "cf-aig-log-id": "example-log" },

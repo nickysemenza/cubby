@@ -6,6 +6,7 @@ import {
   isInferenceFundingRefusal,
   runNativeGateway,
   gatewayFetchThrough,
+  type InferenceFunding,
 } from "./gateway-request";
 
 // A missing credit key must not silently spend Unified Billing. Only capacity
@@ -42,9 +43,14 @@ describe("inference funding", () => {
     ).toBe(429);
     expect(calls).toEqual(["subscription"]);
   });
-  it.each(["anthropic", "openai"])(
-    "sends named BYOK controls on the native %s request, not a Universal payload",
-    async (provider) => {
+  it.each([
+    { provider: "anthropic", funding: "subscriber_credit" },
+    { provider: "openai", funding: "openai_credit" },
+    { provider: "anthropic", funding: "paid" },
+    { provider: "openai", funding: "paid" },
+  ] satisfies { provider: string; funding: InferenceFunding }[])(
+    "sends $provider $funding controls on the native request",
+    async ({ provider, funding }) => {
       let sent: Request | undefined;
       const endpoint = provider === "openai" ? "responses" : "v1/messages";
       const query: GatewayQuery =
@@ -58,11 +64,7 @@ describe("inference funding", () => {
         provider,
         request: {
           endpoint,
-          headers: new Headers(
-            inferenceFundingHeaders(
-              provider === "openai" ? "openai_credit" : "subscriber_credit",
-            ),
-          ),
+          headers: new Headers(inferenceFundingHeaders(funding)),
           input: new URL(`https://ai-gateway.invalid/${provider}/${endpoint}`),
           init: { method: "POST" },
           signal: undefined,
@@ -83,8 +85,15 @@ describe("inference funding", () => {
       expect(sent?.url).toBe(
         `https://gateway.ai.cloudflare.com/v1/example-account/cubby/${provider}/${endpoint}`,
       );
-      expect(sent?.headers.get("cf-aig-byok-alias")).toBe("subscriber-credit");
-      expect(sent?.headers.get("cf-aig-no-wholesale")).toBe("true");
+      expect(sent?.headers.get("cf-aig-byok-alias")).toBe(
+        funding === "paid" ? null : "subscriber-credit",
+      );
+      expect(sent?.headers.get("cf-aig-no-wholesale")).toBe(
+        funding === "paid" ? null : "true",
+      );
+      expect(sent?.headers.get("cf-aig-authorization")).toBe(
+        "Bearer example-token",
+      );
       expect(await sent?.json()).toEqual(query);
     },
   );

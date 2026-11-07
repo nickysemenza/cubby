@@ -661,13 +661,19 @@ and the AI funding card report it as `credit.state` `refused`, with `until` and
    `cf-aig-no-wholesale: true`; a missing or invalid key fails with raw setup
    diagnostics rather than silently spending paid credits.
 
-Named BYOK uses the native provider endpoint: Universal `gateway.run()` does
-not honor the alias in its payload. The Worker authenticates native passthrough
+Production third-party requests use native provider endpoints. Universal
+`gateway.run()` does not honor the alias in its payload and refused unaliased
+paid requests once a non-default key existed (Anthropic after October 16, 2026;
+OpenAI after October 28). Paid native requests omit the alias and
+`cf-aig-no-wholesale`, relying on the gateway's Unified Billing policy; credit
+requests retain both controls. The Worker authenticates native passthrough
 with its `AI_GATEWAY_API_KEY` secret (a Cloudflare inference token, not the
 Anthropic key). Reuse the existing Worker secret; deploying this feature does
 not provision or overwrite it from a GitHub Actions token. Use the [secret listing command](#secrets-and-plaintext-variables) before
 adding provisioning changes.
-Managed paid calls retain the binding. Missing native authentication fails with an explicit diagnostic.
+Paid calls also require this secret, including profiles without shared egress.
+Missing native authentication fails with an explicit diagnostic. Workers AI
+retains its binding, and the purchase-agent harness retains its Universal shim.
 
 Console spend limits reset on the first of the calendar month, while promotional
 credits refresh on the subscription billing cycle. A workspace cap is therefore
