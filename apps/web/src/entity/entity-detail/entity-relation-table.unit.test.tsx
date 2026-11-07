@@ -17,6 +17,7 @@ import type { EntityListInputByEntity } from "~/entity/model/list-contracts";
 import { installFeatures } from "~/features/registry";
 import { entityGraph } from "~/integrations/tanstack-query/generated/domains/entityGraph.gen";
 import { entityList } from "~/integrations/tanstack-query/generated/domains/entityList.gen";
+import { QUERY_CLIENT_DEFAULT_OPTIONS } from "~/integrations/tanstack-query/query-policy";
 import { mock } from "~/lib/test/mock-schema";
 import { getEntityListItemSchema } from "~/server/entity-reads/list-contracts";
 const productListItem = getEntityListItemSchema("product");
@@ -193,7 +194,8 @@ describe("EntityRelationTable", () => {
         },
       }),
     );
-    const list = entityList.list.withTransport(async () => ({
+    const list = entityList.list.withTransport(async ({ input }) => ({
+      selectedFields: input.fields,
       items: rows.map((row) => ({ ...row, actions: [] })),
       meta: {
         hasNextPage: false,
@@ -264,7 +266,8 @@ describe("EntityRelationTable", () => {
         displayLabel: "Role order",
       },
     });
-    const list = entityList.list.withTransport(async () => ({
+    const list = entityList.list.withTransport(async ({ input }) => ({
+      selectedFields: input.fields,
       items: [{ ...row, actions: [] }],
       meta: {
         hasNextPage: false,
@@ -305,10 +308,12 @@ describe("EntityRelationTable", () => {
   });
 
   it("issues the scoped list read, sorted, grouped and filtered per the plan", async () => {
+    harness.queryClient.setDefaultOptions(QUERY_CLIENT_DEFAULT_OPTIONS);
     const inputs: EntityListInputByEntity["task"][] = [];
     const list = entityList.list.withTransport(async ({ input }) => {
       inputs.push(input as EntityListInputByEntity["task"]);
       return {
+        selectedFields: input.fields,
         items: [],
         meta: {
           hasNextPage: false,
@@ -324,12 +329,17 @@ describe("EntityRelationTable", () => {
         plan={planFor("project", "tasks")}
         recordId={testShortcode("project", "PRJ-TEST")}
         title="Tasks"
+        emptyLabel="Synthetic empty relation"
         operations={{ list }}
       />,
       { wrapper: harness.wrapper },
     );
-    await waitFor(() => expect(inputs.length).toBeGreaterThan(0));
+    await screen.findByText("Synthetic empty relation");
+    expect(inputs).toEqual([inputs[0]]);
     const [input] = inputs;
+    expect(input?.fields).toContain("due");
+    expect(input?.fields).not.toContain("createdAt");
+    expect(input?.fields).not.toContain("updatedAt");
     expect(input?.entity).toBe("task");
     expect(input?.filters).toMatchObject({ projectId: "PRJ-TEST" });
     // Project → Tasks declares status grouping and newest-due-first order.
@@ -342,7 +352,8 @@ describe("EntityRelationTable", () => {
   });
 
   it("keeps the journal's own single-line empty copy instead of the generic sentence", async () => {
-    const list = entityList.list.withTransport(async () => ({
+    const list = entityList.list.withTransport(async ({ input }) => ({
+      selectedFields: input.fields,
       items: [],
       meta: {
         hasNextPage: false,
@@ -380,7 +391,8 @@ describe("EntityRelationTable", () => {
       id: testShortcode("task", "TSK-TEST"),
       status: "not_started" as const,
     };
-    const list = entityList.list.withTransport(async () => ({
+    const list = entityList.list.withTransport(async ({ input }) => ({
+      selectedFields: input.fields,
       items: [{ ...task, actions: [] }],
       meta: {
         hasNextPage: false,

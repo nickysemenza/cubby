@@ -8,7 +8,10 @@ import {
   loadEntityDeclarations,
   loadEntityDeclarationBundle,
 } from "../declarations.ts";
-import { renderFieldEnvelopeArtifacts } from "./field-envelopes.ts";
+import {
+  governedFields,
+  renderFieldEnvelopeArtifacts,
+} from "./field-envelopes.ts";
 
 describe("recursive field projections", () => {
   it("builds a stored source declaration without a repository port and refuses unsupported ordinary writes", async () => {
@@ -313,7 +316,8 @@ describe("recursive field projections", () => {
 
   it("emits declared domain envelope ports without importing repository adapters", async () => {
     const entities = await loadEntityDeclarations();
-    const port = renderFieldEnvelopeArtifacts(entities).find((artifact) =>
+    const artifacts = renderFieldEnvelopeArtifacts(entities);
+    const port = artifacts.find((artifact) =>
       artifact.relativePath.endsWith("entity-field-envelope-projectors.gen.ts"),
     );
     expect(port?.source).toContain(
@@ -321,6 +325,53 @@ describe("recursive field projections", () => {
     );
     expect(port?.source).toContain('"product":productFieldEnvelopeProjector');
     expect(port?.source).not.toContain("productRepository");
+    const assignments = artifacts.find((artifact) =>
+      artifact.relativePath.endsWith(
+        "entity-field-envelope-assignments.gen.ts",
+      ),
+    );
+    expect(assignments?.source).toContain(
+      "export const entityFieldEnvelopeDependencies = ",
+    );
+    expect(assignments?.source).toContain(
+      `export const entityFieldEnvelopeKeys = {${entities
+        .filter((entity) => entity.contract !== null)
+        .map(
+          (entity) =>
+            `${JSON.stringify(entity.key)}:${JSON.stringify(governedFields(entity).map((field) => field.key))}`,
+        )
+        .join(",")}} as const;`,
+    );
+    expect(assignments?.source).toContain(
+      '"product":{"cost":["price"],"unitPrice":["price"],"unitPriceLabel":["price"],"unitPriceDetailLabel":["price"]}',
+    );
+    expect(assignments?.source).toContain('"email":{}');
+    expect(assignments?.source).not.toContain("import ");
+    const invalidDependencies: Record<string, string[]>[] = [
+      { cost: ["unknownField"] },
+      { unknownField: ["price"] },
+      { cost: ["price"], price: ["cost"] },
+    ];
+    for (const dependencies of invalidDependencies) {
+      expect(() =>
+        renderFieldEnvelopeArtifacts(
+          entities.map((entity) =>
+            entity.key === "product" && entity.ports.fieldEnvelope
+              ? {
+                  ...entity,
+                  ports: {
+                    ...entity.ports,
+                    fieldEnvelope: {
+                      ...entity.ports.fieldEnvelope,
+                      dependencies,
+                    },
+                  },
+                }
+              : entity,
+          ),
+        ),
+      ).toThrow(/field envelope dependenc/u);
+    }
     const checks = renderKernelBindingsArtifacts(entities).filter((artifact) =>
       artifact.relativePath.includes("entity-port-checks"),
     );

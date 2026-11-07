@@ -21,6 +21,7 @@ import type {
   FieldReadContext,
   PageFieldReadContexts,
 } from "~/server/generic/derived/repo/read-context";
+import { compileReadDemand } from "~/server/generic/list/repo/read-demand";
 const rowRecord = z.record(z.string(), z.unknown());
 const rowArray = z.array(z.unknown());
 type ReadRow = z.output<typeof rowRecord>;
@@ -230,13 +231,13 @@ export function publicFieldEnvelopeRow<S extends z.ZodType>(
   schema: S,
   entity: Entity,
   value: ReadRow,
-  context?: FieldReadContext,
+  context?: Omit<FieldReadContext, "covered">,
 ): z.output<S>;
 export function publicFieldEnvelopeRow(
   schema: z.ZodType,
   entity: Entity,
   value: ReadRow,
-  context?: FieldReadContext,
+  context?: Omit<FieldReadContext, "covered">,
 ) {
   if (!(schema instanceof z.ZodObject))
     throw new Error("An entity field read requires an object schema");
@@ -344,12 +345,23 @@ export async function publicFieldEnvelopeBatch({
     prepareReadNode(entity, schema, row),
   );
   const requested = new Map<ShortcodeEntity, Set<string>>();
+  const requestedFields = new Map<ShortcodeEntity, Set<string>>();
+  const needsFacts = new Set<ReadNode>();
   const collect = (node: ReadNode) => {
     const fields = node.schema.shape.fields;
-    if (fields instanceof z.ZodObject && Object.keys(fields.shape).length > 0) {
+    const demand =
+      fields instanceof z.ZodObject
+        ? compileReadDemand(node.entity, Object.keys(fields.shape))
+        : null;
+    // Synthesized media envelopes use already loaded row values, not field facts.
+    if (demand?.facts) {
+      needsFacts.add(node);
       const codes = requested.get(node.entity) ?? new Set<string>();
       codes.add(canonicalCode(publicIdentity.parse(node.row).id));
       requested.set(node.entity, codes);
+      const keys = requestedFields.get(node.entity) ?? new Set<string>();
+      for (const key of demand.envelope) keys.add(key);
+      requestedFields.set(node.entity, keys);
     }
     for (const child of node.children) collect(child.node);
   };
@@ -364,11 +376,16 @@ export async function publicFieldEnvelopeBatch({
         context,
       ]),
     );
-    const missing = [...codes].filter((code) => !existing.has(code));
+    const keys = [...(requestedFields.get(kind) ?? [])];
+    // A narrow root context cannot satisfy a wider embedded row of the same kind.
+    const missing = [...codes].filter((code) => {
+      const context = existing.get(code);
+      return !context || keys.some((key) => !context.covered.includes(key));
+    });
     let loaded: PageFieldReadContexts | undefined;
     if (missing.length) {
       const read = await repositoryReadBinding(kind);
-      loaded = await read.fieldReads(db, missing);
+      loaded = await read.fieldReads(db, missing, keys);
     }
     facts.set(kind, new Map([...existing, ...(loaded ?? [])]));
   }
@@ -386,11 +403,7 @@ export async function publicFieldEnvelopeBatch({
     // Validate that leaf as declared rather than inventing an empty field envelope.
     if (!(fields instanceof z.ZodObject))
       return rowRecord.parse(node.schema.parse(row));
-    if (
-      fields instanceof z.ZodObject &&
-      Object.keys(fields.shape).length > 0 &&
-      !current
-    )
+    if (needsFacts.has(node) && !current)
       throw new Error(
         `Current field facts unavailable for ${node.entity} projection`,
       );

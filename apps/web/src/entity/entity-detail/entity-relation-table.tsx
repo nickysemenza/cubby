@@ -16,6 +16,7 @@ import {
   useState,
 } from "react";
 
+import { entityRowActionReadFields } from "~/entity/actions/entity-actions";
 import { createEntityDisplayColumns } from "~/entity/display/entity-display";
 import { EntityEditDialog } from "~/entity/editing/entity-edit-dialog";
 import type {
@@ -23,6 +24,12 @@ import type {
   EntityMutationPort,
 } from "~/entity/editing/types";
 import { entityListFor } from "~/entity/entity-list";
+import {
+  declaredListReadProjection,
+  DEFAULT_LIST_COLUMN_VISIBILITY,
+  listReadVisibility,
+  type ListReadProjection,
+} from "~/entity/entity-list/list-read-demand";
 import { EntityDisplayImagesProvider } from "~/entity/entity-media/entity-display-images";
 import { getEntityFilters } from "~/entity/filter-manifest";
 import { buildFiltersFromManifest } from "~/entity/filters";
@@ -37,6 +44,7 @@ import {
   connectionRefs,
   ConnectionPaths,
 } from "~/entity/relationships/connection-paths";
+import { defaultSortFor } from "~/entity/sortable-fields";
 import { entityGraph } from "~/integrations/tanstack-query/generated/domains/entityGraph.gen";
 import { entityList } from "~/integrations/tanstack-query/generated/domains/entityList.gen";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
@@ -79,6 +87,34 @@ export type RelationSectionPlan = Omit<
 
 const isListEntity = (value: string): value is ListEntity =>
   listEntities.some((entity) => entity === value);
+
+/** The section's declared columns determine its canonical row demand. */
+const relationReadProjection =
+  (plan: RelationSectionPlan): ListReadProjection =>
+  (queryClient, entity, visibility = DEFAULT_LIST_COLUMN_VISIBILITY) => {
+    const columns = plan.columns === null ? null : new Set(plan.columns);
+    const sectionVisibility = Object.fromEntries(
+      entityMetadata(queryClient, entity)
+        .fields.fields.filter((field) => field.display.list)
+        .map((field) => {
+          const key = field.display.columnId ?? field.key;
+          return [
+            key,
+            columns
+              ? columns.has(key)
+              : key !== plan.backReferenceColumn && !field.display.listHidden,
+          ];
+        }),
+    );
+    const fields = declaredListReadProjection(queryClient, entity, {
+      ...DEFAULT_LIST_COLUMN_VISIBILITY,
+      ...sectionVisibility,
+      ...visibility,
+    });
+    return fields === undefined
+      ? undefined
+      : [...new Set([...fields, ...entityRowActionReadFields(entity)])].sort();
+  };
 
 export function planRelationSection(
   queryClient: QueryClient,
@@ -414,15 +450,25 @@ function StreamedEntityRelationTable(props: EntityRelationTableProps) {
   const { plan, recordId, operations = productionOperations } = props;
   const queryClient = useQueryClient();
   useEntityMetadata(plan.target);
+  const projection = useMemo(() => relationReadProjection(plan), [plan]);
   // The first page uses exactly the embedded table's opening filters and key.
   // Its ordinary observer then owns edits, grouping and retained refresh state.
   useSuspenseInfiniteQuery(
-    entityListFor(plan.target, operations.list).infiniteQueryOptions(
+    entityListFor(plan.target, operations.list).browserInfiniteQueryOptions(
       entityListParamsFromParsed(
         plan.target,
         parseEntityListInput(plan.target, {
           entity: plan.target,
           includeCount: true,
+          fields: projection(
+            queryClient,
+            plan.target,
+            listReadVisibility(
+              {},
+              [plan.sort.field],
+              defaultSortFor(queryClient, plan.target),
+            ),
+          ),
           filters: {
             ...buildFiltersFromManifest(
               getEntityFilters(queryClient, plan.target),
@@ -455,6 +501,7 @@ function LiveEntityRelationTable({
   const { target } = plan;
   const queryClient = useQueryClient();
   useEntityMetadata(target);
+  const readProjection = useMemo(() => relationReadProjection(plan), [plan]);
   const movementSource = relationshipMovementSource(
     plan.source,
     plan.target,
@@ -470,6 +517,17 @@ function LiveEntityRelationTable({
       [operations.list, target],
     );
   const helper = useMemo(() => createCubbyColumnHelper<RelationRow>(), []);
+  const selectedListQueryOptions: ListQueryOptionsFn<
+    RelationFilters,
+    RelationRow
+  > = useCallback(
+    (params) =>
+      // SAFETY: the descriptor's target parses these filters and selected fields.
+      entityListFor(target, operations.list).selectedListQueryPlan(
+        params as never,
+      ),
+    [operations.list, target],
+  );
   const scope = useMemo<RelationFilters>(
     () => ({
       [plan.filterKey]: recordId,
@@ -558,6 +616,8 @@ function LiveEntityRelationTable({
   const list = useEntityList<RelationRow, RelationFilters>({
     entity: target,
     queryOptions: listQueryOptions,
+    selectedQueryOptions: selectedListQueryOptions,
+    readProjection,
     scopeFilters: scope,
     columns,
     tableStateOptions,
@@ -579,7 +639,7 @@ function LiveEntityRelationTable({
       targetIds: visibleIds,
       limit: 50,
     }),
-    enabled: !plan.derived,
+    enabled: !plan.derived && visibleIds.length > 0,
   });
   const evidence = new Map(
     evidenceQuery.data?.items.map((item) => [item.target.entityId, item]),

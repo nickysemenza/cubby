@@ -2157,6 +2157,16 @@ its outer mutation supplies loading state and presentation only.
 
 ## List reads
 
+Selected reads compile envelope demand from the manifest, including projector and
+classification dependencies. Governed fields retain assignment refusal and
+automatic ownership even when neighboring columns are omitted. Identity-only
+pages skip envelope facts. Contexts record their covered fields so a narrow root
+cannot stand in for a wider nested read. Synthesized media envelopes use loaded
+row values and do not demand another field-fact read. Generated read ports carry
+the requested fact keys through to the repository. Page bindings and detail bindings receive
+the shared stored-data promise before any prefetch starts. Projectors declare cross-field dependencies beside
+their source reference; generation rejects unknown fields and cycles.
+
 The scaffold compiles one filter plan for repository readers, with population,
 related scopes, result availability, joins and ordering under one owner. Declared
 rollups and result projections cannot be silently replaced by repository SQL.

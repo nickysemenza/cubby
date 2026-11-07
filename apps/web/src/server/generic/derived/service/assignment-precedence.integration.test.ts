@@ -228,6 +228,17 @@ describe("assignment and stored projection precedence", () => {
       service.id,
     ]);
     expect(serviceWithoutPrice.meta.unresolvedCount).toBe(0);
+    const selectedService = await listOperations("product").listFields(
+      context(),
+      {
+        filters: { ids: [service.id] },
+        pagination: { pageIndex: 0, pageSize: 10 },
+      },
+      ["id", "price"],
+    );
+    expect(fieldEnvelopeFor(selectedService.items[0], "price")).toEqual(
+      fieldEnvelopeFor(serviceWithoutPrice.items[0], "price"),
+    );
   });
 
   it("keeps unit prices on the selected valuation while expense recomputation is pending", async () => {

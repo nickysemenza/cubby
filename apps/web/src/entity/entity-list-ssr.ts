@@ -4,9 +4,12 @@ import type { QueryClient } from "@tanstack/react-query";
 import { compileEntityListInput, entityListFor } from "~/entity/entity-list";
 import { entityMetadata, ensureEntityMetadata } from "~/entity/metadata";
 
+import { PIVOT_VIEW_ID } from "./entity-list/list-grouping";
 import { listNested } from "./entity-list/list-nesting";
 import {
   declaredListReadProjection,
+  listReadNeedsCount,
+  listReadVisibility,
   type ListReadProjection,
 } from "./entity-list/list-read-demand";
 import type { ListSearch } from "./entity-list/list-slot-types";
@@ -17,6 +20,7 @@ import {
   encodeFilters,
   filterGetterFromColumnFilters,
   resolveOpeningFilters,
+  paramToSort,
 } from "./filters";
 import type { ListEntity } from "./model/list-contracts";
 import { entityListDefaultSort } from "./sortable-fields";
@@ -76,29 +80,45 @@ export async function ensureEntityListSsr<E extends ListEntity>(options: {
     options.readProjection === undefined
       ? declaredListReadProjection
       : options.readProjection;
-  const fields = projection?.(options.queryClient, options.entity);
-  const query = entityListFor(options.entity).browserInfiniteQueryOptions(
-    compileEntityListInput(
-      options.queryClient,
-      options.entity,
-      searchWithInitialFilter(
-        options.queryClient,
-        options.entity,
-        options.search,
-      ),
-      {
-        defaultSort,
-        fields,
-        nesting: options.nested ? ROOTS_SCOPE : undefined,
-        // Timeline owns its arrangement; retained URL dimensions must not
-        // preload a grouped query the mounted renderer never consumes.
-        groupBy:
-          resolveListView(options.queryClient, options.entity, options.search)
-            .view === "timeline"
-            ? []
-            : undefined,
-      },
+  const openingSearch = searchWithInitialFilter(
+    options.queryClient,
+    options.entity,
+    options.search,
+  );
+  const { view, requestedView } = resolveListView(
+    options.queryClient,
+    options.entity,
+    openingSearch,
+  );
+  // Pivot is viewport-dependent; the mounted renderer owns its summary demand.
+  if (requestedView === PIVOT_VIEW_ID) return;
+  const fields = projection?.(
+    options.queryClient,
+    options.entity,
+    listReadVisibility(
+      {},
+      paramToSort(openingSearch.sort)?.map(({ id }) => id) ?? [],
+      defaultSort.orderBy,
     ),
+  );
+  const includeCount = listReadNeedsCount(
+    entityMetadata(options.queryClient, options.entity).summary.primarySearch
+      ?.key,
+    decodeFilters(
+      getEntityFilters(options.queryClient, options.entity),
+      openingSearch,
+    ).map(({ id }) => id),
+  );
+  const query = entityListFor(options.entity).browserInfiniteQueryOptions(
+    compileEntityListInput(options.queryClient, options.entity, openingSearch, {
+      defaultSort,
+      fields,
+      includeCount,
+      nesting: options.nested ? ROOTS_SCOPE : undefined,
+      // Timeline owns its arrangement; retained URL dimensions must not
+      // preload a grouped query the mounted renderer never consumes.
+      groupBy: view === "timeline" ? [] : undefined,
+    }),
   );
   const cancelUnobserved = () => {
     const cached = options.queryClient

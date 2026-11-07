@@ -392,6 +392,14 @@ replace this fresh decision read or the receiving command's current-stock checks
 
 ## List loading and enrichment
 
+SSR preloads and mounted lists share audit-column visibility, explicit sort
+demand and filter-count policy so their first page has one query identity.
+Embedded relation tables request their declared columns through the same list
+projection compiler and include the row-action catalog’s declared read fields,
+even when those fields have no visible column. Row actions retain their
+authoritative record reads.
+Connection evidence loads only for visible rows; empty relation pages skip it.
+
 Proposal badges demand counts only for mounted table rows, including the
 virtualizer's overscan. Stable batches of 50 roster records prefetch nearby
 counts; inactive batches retain their cached values without refetching until

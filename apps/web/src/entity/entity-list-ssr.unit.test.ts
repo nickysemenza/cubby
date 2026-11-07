@@ -107,14 +107,37 @@ describe("ensureEntityListSsr", () => {
         {
           defaultSort: entityListDefaultSort(queryClient, "product"),
           fields: productListReadProjection(queryClient, "product", {
-            createdAt: true,
-            updatedAt: true,
+            createdAt: false,
+            updatedAt: false,
           }),
         },
       ),
     );
     expect(ensure.mock.calls[0]?.[0].queryKey).toEqual(
       infiniteOperationQueryKey(mountedPlan.queryKey),
+    );
+
+    await ensureEntityListSsr({
+      queryClient,
+      entity: "run",
+      search: { status: "failed" },
+    });
+    const filteredPlan = entityListFor("run").selectedListQueryPlan(
+      compileEntityListInput(
+        queryClient,
+        "run",
+        { status: "failed" },
+        {
+          fields: declaredListReadProjection(queryClient, "run", {
+            createdAt: false,
+            updatedAt: false,
+          }),
+          includeCount: true,
+        },
+      ),
+    );
+    expect(ensure.mock.calls[1]?.[0].queryKey).toEqual(
+      infiniteOperationQueryKey(filteredPlan.queryKey),
     );
   });
 

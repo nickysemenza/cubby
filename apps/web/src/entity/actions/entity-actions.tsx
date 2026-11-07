@@ -411,6 +411,20 @@ const appliesTo = (
   definition.entities.includes(entity) &&
   (definition.surfaces ?? DEFAULT_SURFACES).includes(surface);
 
+/** Fields required by row verbs even when their columns are hidden. */
+export const entityRowActionReadFields = (
+  entity: Entity,
+): readonly string[] => [
+  ...new Set(
+    entityActions()
+      .filter(
+        (definition) =>
+          appliesTo(definition, entity, "row") && definition.arity !== "multi",
+      )
+      .flatMap((definition) => definition.readFields ?? []),
+  ),
+];
+
 /**
  * The sole heterogeneous-registry escape hatch. Definitions are correlated at
  * construction time; filtering above proves this runtime entity is in the

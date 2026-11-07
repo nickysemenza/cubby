@@ -2932,7 +2932,13 @@ const buildMetadataSchemas = () => {
         repository: orNull(sourceRefMetadataSchema),
         reports: orNull(sourceRefMetadataSchema),
         /** Pure final projection over selected envelopes and already loaded facts. */
-        fieldEnvelope: orNull(sourceRefMetadataSchema),
+        fieldEnvelope: orNull(
+          sourceRefMetadataSchema.extend({
+            dependencies: z
+              .record(nonEmptyString(), z.array(nonEmptyString()))
+              .default({}),
+          }),
+        ),
         references: z
           .object({
             label: sourceRefMetadataSchema.nullable(),

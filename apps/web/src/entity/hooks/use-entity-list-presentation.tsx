@@ -5,6 +5,7 @@ import type { ColumnVisibilityState } from "@tanstack/react-table";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { DEFAULT_LIST_COLUMN_VISIBILITY } from "~/entity/entity-list/list-read-demand";
 import { getEntityFilters } from "~/entity/filter-manifest";
 import { useEntityMetadata } from "~/entity/metadata";
 import {
@@ -168,8 +169,7 @@ export function useEntityListColumnVisibility({
   );
   const mergedInitialColumnVisibility = useMemo(
     () => ({
-      createdAt: false,
-      updatedAt: false,
+      ...DEFAULT_LIST_COLUMN_VISIBILITY,
       ...relatedInitialVisibility,
       ...transientColumnVisibility,
       ...initialColumnVisibility,

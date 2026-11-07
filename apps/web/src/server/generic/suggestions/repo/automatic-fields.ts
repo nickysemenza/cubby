@@ -36,17 +36,21 @@ export async function loadCurrentFieldOwnership(
   db: RepositoryQueryInput,
   entity: Entity,
   ids: readonly string[],
+  projection?: readonly string[],
 ): Promise<Map<string, CurrentFieldOwnership>> {
   const eligibleEntity = fieldSuggestionsInput.shape.entity.safeParse(entity);
   if (!ids.length || !eligibleEntity.success) return new Map();
-  if (
-    !entityFieldModels[entity].fields.some(
+  const fields = entityFieldModels[entity].fields
+    .filter(
       (field) =>
         field.control?.suggest?.mode === "fill" &&
-        !field.control.suggest.reviewRequired,
+        !field.control.suggest.reviewRequired &&
+        (projection === undefined ||
+          projection.includes(field.key) ||
+          (field.readKey !== null && projection.includes(field.readKey))),
     )
-  )
-    return new Map();
+    .map((field) => field.key);
+  if (!fields.length) return new Map();
   const table = alias(SHORTCODE_TABLE[eligibleEntity.data], "t");
   const tableName = SHORTCODE_TABLE[eligibleEntity.data];
   const rows = await unwrapDb(db).execute<{
@@ -58,6 +62,10 @@ export async function loadCurrentFieldOwnership(
               (s."acceptanceReceipt"->>'confidence')::double precision))
             FROM "Suggestion" s
             WHERE s.entity = ${entity} AND s."recordId" = t.id
+              AND s.field IN (${sql.join(
+                fields.map((field) => sql`${field}`),
+                sql`, `,
+              )})
               AND s.family = ${suggestionFamily.enum.field} AND s.status = ${suggestionStatus.enum.applied}
               AND s.subject->>'entity' = s.entity AND s.subject->>${suggestionSubjects.field.keyof().enum.field} = s.field
               AND s.subject->>'recordId' = t.id::text

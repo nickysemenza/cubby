@@ -33,6 +33,8 @@ export const renderFieldEnvelopeArtifacts = (
   const assignmentBindings: string[] = [];
   const projectorImports: string[] = [];
   const projectorBindings: string[] = [];
+  const dependencyBindings: string[] = [];
+  const governedKeyBindings: string[] = [];
   const artifacts = entities.flatMap((entity) => {
     if (entity.contract === null) return [];
     const contract = entity.contract;
@@ -42,7 +44,34 @@ export const renderFieldEnvelopeArtifacts = (
         `${entity.key} has no declaration module for field envelopes.`,
       );
     const fields = governedFields(entity);
+    governedKeyBindings.push(
+      `${JSON.stringify(entity.key)}:${JSON.stringify(fields.map((field) => field.key))}`,
+    );
     const projector = entity.ports.fieldEnvelope;
+    const dependencies = projector?.dependencies ?? {};
+    const governedKeys = new Set(fields.map((field) => field.key));
+    const visited = new Set<string>();
+    const visiting = new Set<string>();
+    const validateDependency = (key: string): void => {
+      if (!governedKeys.has(key))
+        throw new EntityDeclarationError(
+          `${entity.key} field envelope dependency ${key} is not a governed field.`,
+        );
+      if (visiting.has(key))
+        throw new EntityDeclarationError(
+          `${entity.key} field envelope dependencies contain a cycle at ${key}.`,
+        );
+      if (visited.has(key)) return;
+      visiting.add(key);
+      for (const dependency of dependencies[key] ?? [])
+        validateDependency(dependency);
+      visiting.delete(key);
+      visited.add(key);
+    };
+    for (const key of Object.keys(dependencies)) validateDependency(key);
+    dependencyBindings.push(
+      `${JSON.stringify(entity.key)}:${JSON.stringify(dependencies)}`,
+    );
     if (projector) {
       const local = `${entity.key}FieldEnvelopeProjector`;
       projectorImports.push(
@@ -449,7 +478,9 @@ export const renderFieldEnvelopeArtifacts = (
         "packages/schemas/src/generated/entity-field-envelope-assignments.gen.ts",
       source: rawSource(
         generatedHeader +
-          `export const entityFieldAssignmentKeys = {${assignmentBindings.join(",")}} as const;\n`,
+          `export const entityFieldAssignmentKeys = {${assignmentBindings.join(",")}} as const;\n` +
+          `export const entityFieldEnvelopeKeys = {${governedKeyBindings.join(",")}} as const;\n` +
+          `export const entityFieldEnvelopeDependencies = {${dependencyBindings.join(",")}} as const;\n`,
       ),
     },
   ];

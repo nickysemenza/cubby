@@ -30,5 +30,5 @@ export function resolveListView(
     views.find((candidate) => listViewId(candidate) === requestedView) ??
     views[0] ??
     "table";
-  return { views, view };
+  return { views, view, requestedView };
 }

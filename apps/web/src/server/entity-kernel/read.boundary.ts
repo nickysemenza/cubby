@@ -10,6 +10,7 @@ export async function repositoryReadBinding(entity: Entity): Promise<{
   fieldReads: (
     db: RepositoryQueryInput,
     codes: readonly string[],
+    keys?: readonly string[],
   ) => Promise<PageFieldReadContexts>;
 }> {
   const bindings =

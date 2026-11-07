@@ -3828,6 +3828,12 @@ Rules:
         fieldEnvelope: {
           module: "~/server/domains/product/repo/field-envelope",
           export: "projectProductFieldEnvelopes",
+          dependencies: {
+            cost: ["price"],
+            unitPrice: ["price"],
+            unitPriceLabel: ["price"],
+            unitPriceDetailLabel: ["price"],
+          },
         },
         repository: {
           module: "~/server/domains/product/repo/repository",
