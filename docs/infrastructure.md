@@ -438,18 +438,18 @@ pnpm --dir apps/web exec wrangler secret put NAME --name cubby
 pnpm --dir apps/web exec cf workers secrets list --worker cubby
 ```
 
-| Name                   | Storage                        | Purpose                                                                                                                                                           |
-| ---------------------- | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `BETTER_AUTH_SECRET`   | `cubby` Worker secret          | Better Auth signing/encryption                                                                                                                                    |
-| `R2_ACCESS_KEY_ID`     | `cubby` Worker secret          | Main R2 S3 credential                                                                                                                                             |
-| `R2_SECRET_ACCESS_KEY` | `cubby` Worker secret          | Main R2 S3 credential                                                                                                                                             |
-| `GOOGLE_CLIENT_SECRET` | `cubby` Worker secret          | Google OAuth confidential credential                                                                                                                              |
-| `GOOGLE_CLIENT_ID`     | Checked-in Worker `vars` value | Public Google OAuth client identifier                                                                                                                             |
-| `APNS_KEY_ID`          | `cubby` Worker secret          | APNs token-auth key id (photo-run Live Activities and alerts)                                                                                                     |
-| `APNS_TEAM_ID`         | `cubby` Worker secret          | Apple Developer team id that owns the APNs key                                                                                                                    |
-| `APNS_PRIVATE_KEY`     | `cubby` Worker secret          | APNs `.p8` PKCS8 PEM; absent = pushes recorded unsent                                                                                                             |
-| `AI_GATEWAY_API_KEY`   | Worker/local secret            | Cloudflare API token: authenticated REST inference, including named subscriber BYOK; with account-scoped Workers Observability Edit it also reads inline Job logs |
-| `NOTION_API_KEY`       | Optional Worker/local secret   | Optional Notion integration                                                                                                                                       |
+| Name                   | Storage                        | Purpose                                                                                                                                                                                            |
+| ---------------------- | ------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `BETTER_AUTH_SECRET`   | `cubby` Worker secret          | Better Auth signing/encryption                                                                                                                                                                     |
+| `R2_ACCESS_KEY_ID`     | `cubby` Worker secret          | Main R2 S3 credential                                                                                                                                                                              |
+| `R2_SECRET_ACCESS_KEY` | `cubby` Worker secret          | Main R2 S3 credential                                                                                                                                                                              |
+| `GOOGLE_CLIENT_SECRET` | `cubby` Worker secret          | Google OAuth confidential credential                                                                                                                                                               |
+| `GOOGLE_CLIENT_ID`     | Checked-in Worker `vars` value | Public Google OAuth client identifier                                                                                                                                                              |
+| `APNS_KEY_ID`          | `cubby` Worker secret          | APNs token-auth key id (photo-run Live Activities and alerts)                                                                                                                                      |
+| `APNS_TEAM_ID`         | `cubby` Worker secret          | Apple Developer team id that owns the APNs key                                                                                                                                                     |
+| `APNS_PRIVATE_KEY`     | `cubby` Worker secret          | APNs `.p8` PKCS8 PEM; absent = pushes recorded unsent                                                                                                                                              |
+| `AI_GATEWAY_API_KEY`   | Worker/local secret            | Cloudflare API token: authenticated REST inference, including named subscriber BYOK and paid third-party passthrough; with account-scoped Workers Observability Edit it also reads inline Job logs |
+| `NOTION_API_KEY`       | Optional Worker/local secret   | Optional Notion integration                                                                                                                                                                        |
 
 OAuth client IDs, Cloudflare account IDs, resource IDs, public origins, and
 Sentry DSNs are identifiers, not credentials. They may be committed. OAuth
@@ -876,8 +876,8 @@ MCP, following `.agents/skills/decision-grading`: reviewed Suggestions
 Jev or Clef server-side. Only aggregates leave the session.
 
 The `AI_GATEWAY_API_KEY` environment variable authenticates the direct REST
-fallback used outside Cloudflare Workers. It is optional in the deployed Worker
-because the `AI` binding supplies Worker-identity authentication.
+fallback used outside Cloudflare Workers. The deployed Worker also needs it for
+third-party native passthrough; only Workers AI runs on the binding alone.
 
 ## Observability
 
