@@ -149,7 +149,9 @@ describe("entity report", () => {
           sellers[1]!.shortcode,
           sellers[3]!.shortcode,
           sellers[4]!.shortcode,
-        ].sort(),
+        ]
+          .sort()
+          .join(","),
       },
     });
     await unwrapDb(ctx.db)

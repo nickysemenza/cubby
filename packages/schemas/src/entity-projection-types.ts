@@ -326,6 +326,12 @@ export type GeneratedGroupChoice<E extends string = Entity> = {
         readonly options: GroupOptions;
       }
     | {
+        readonly kind: "relatedRecord";
+        readonly relationKey: string;
+        readonly target: E;
+        readonly titleColumn: string | null;
+      }
+    | {
         readonly kind: "rowRecord";
         readonly rows: string;
         readonly path: string;

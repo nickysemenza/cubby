@@ -76,7 +76,7 @@ export async function productSellersReport(
       })),
       totalCount: rows[0]?.sellerCount ?? 0,
       listLink: rows[0]
-        ? { entity: "vendor", filters: { ids: rows[0].sellerCodes } }
+        ? { entity: "vendor", filters: { ids: rows[0].sellerCodes.join(",") } }
         : undefined,
       footer: rows[0]
         ? `Top ${rows.length} of ${rows[0].sellerCount} sellers by distinct acquisition Purchases`

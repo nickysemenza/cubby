@@ -563,6 +563,22 @@ describe("purchase ↔ product links", () => {
         auth: { userId: ctx.actor.userId },
       }),
     );
+    const byPurchase = await executeEntity(kernel, {
+      action: "list",
+      entity: "product",
+      filters: { ids: [range.id, fridge.id] },
+      groupBy: [{ key: "related:product.purchases" }],
+      pagination: { pageIndex: 0, pageSize: 10 },
+    });
+    if (byPurchase.action !== "list") throw new Error("expected list");
+    // Related grouping reads explicit links even without any Expense rows.
+    expect(byPurchase.meta.memberships).toEqual(
+      expect.arrayContaining([
+        { id: range.id, path: [order.shortcode] },
+        { id: fridge.id, path: [order.shortcode] },
+      ]),
+    );
+    expect(byPurchase.meta.membershipCount).toBe(2);
     const sellers = () =>
       executeEntity(kernel, {
         action: "list",

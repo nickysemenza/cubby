@@ -514,7 +514,33 @@ export async function loadRelatedBranch(
   };
 }
 
-/** Search targets for a relation, including the number of distinct sources. */
+/** The same complete live identities the related-view filter can match. */
+export const relatedRecordIdsSql = (
+  entity: Entity,
+  relationKey: string,
+  rootId: SQL,
+): SQL => {
+  const parsed = relatedViewKeySchema.safeParse(relationKey);
+  const definition = parsed.success
+    ? relatedViewsByKey.get(parsed.data)
+    : undefined;
+  if (!parsed.success || definition?.source !== entity)
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      `Unknown ${entity} related view ${relationKey}`,
+    );
+  const view = sqlRelatedView(parsed.data);
+  if (view.sourceTable === null)
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      `${relationKey} has no stored source`,
+    );
+  return sql`SELECT DISTINCT t."id"
+    FROM ${sql.identifier(view.sourceTable)} s
+    ${compiledRelatedJoins(parsed.data, "filter")}
+    WHERE s."id" = ${rootId} AND ${notDeleted("s")} AND t."id" IS NOT NULL ${viewWhere(view)}`;
+};
+
 /**
  * The ORDER BY expression of a `related:<key>` sort-roster column, built from
  * the SAME joins, sort expression, and `where` the cell reads — so a change to
@@ -556,6 +582,7 @@ export const relatedSortExpression = (
       ${viewWhere(view)})`;
 };
 
+/** Search targets for a relation, including the number of distinct sources. */
 export async function loadRelatedOptions(
   db: Database,
   input: Extract<FilterOptionsInput, { source: "relation" }>,

@@ -45,6 +45,12 @@ export function groupPathFilters(
     const summary = context.groups.find(
       (entry) => entry.key === JSON.stringify(path.slice(0, depth + 1)),
     );
+    if (
+      dimension?.level !== undefined &&
+      !spec.subtree &&
+      summary?.subtree !== false
+    )
+      return undefined;
     // A hierarchy value matches its subtree; a section counting only the
     // value itself narrows to it exactly.
     const value =
@@ -66,7 +72,7 @@ export const withGroupFilters = (
   ...drilled,
 ];
 
-/** The root-level section's filter field, for Hide. */
+/** The root-level section's exact record-exclusion filter. */
 export function groupRootField(context: GroupDrillContext, key: string) {
   const dimension = context.groupBy?.[0];
   const choice = context.grouping.find((entry) => entry.key === dimension?.key);
@@ -74,6 +80,15 @@ export function groupRootField(context: GroupDrillContext, key: string) {
   const spec = filter
     ? context.fields.find((entry) => entry.columnId === filter.columnId)
     : undefined;
+  const summary = context.groups.find(
+    (entry) => entry.path.length === 1 && entry.path[0] === key,
+  );
+  if (
+    dimension?.level !== undefined &&
+    !spec?.subtree &&
+    summary?.subtree !== false
+  )
+    return undefined;
   return filter && spec && (key !== FILTER_NONE || filter.noValue)
     ? { filter, spec, key }
     : undefined;

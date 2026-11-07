@@ -960,7 +960,10 @@ const menuNoun = (
 
 const relationOf = (descriptor: FilterDescriptor, entity: CompiledEntity) => {
   const key = /^related:[^.]+\.(.+)$/u.exec(descriptor.columnId)?.[1];
-  return entity.relations.find((candidate) => candidate.key === key);
+  if (key === undefined) return undefined;
+  return entity.relations.find(
+    (candidate) => candidate.key === key || candidate.view?.key === key,
+  );
 };
 
 /** The noun a placeholder names ("Filter by related expenses id..."). */
@@ -1204,7 +1207,11 @@ const compileGroupChoice = (
   ): Pick<CompiledGroupChoice, "levels" | "levelReason"> => {
     if (value === null)
       return { levels: 0, levelReason: reason ?? `${label} cannot group.` };
-    if (value.kind !== "record" && value.kind !== "rowRecord")
+    if (
+      value.kind !== "record" &&
+      value.kind !== "rowRecord" &&
+      value.kind !== "relatedRecord"
+    )
       return {
         levels: 0,
         levelReason: `${label} is a value, not a record with parents, so it has no levels.`,
@@ -1303,6 +1310,16 @@ const compileGroupChoice = (
         null,
       );
     }
+    if (relation !== undefined && key.startsWith("related:"))
+      return choice(
+        {
+          kind: "relatedRecord",
+          relationKey: key.slice("related:".length),
+          target: via.target,
+          titleColumn: via.terminal.titleColumn,
+        },
+        null,
+      );
     return choice(
       {
         kind: "record",
@@ -1587,7 +1604,8 @@ const compileFieldPresentation = (
         );
       const relation = entity.relations.find(
         (relation) =>
-          key === `related:${entity.key}.${relation.key}` ||
+          key ===
+            `related:${entity.key}.${relation.view?.key ?? relation.key}` ||
           (value?.shape === "via" && relation.key === value.path),
       );
       const relatedViewSort = key.startsWith("related:");

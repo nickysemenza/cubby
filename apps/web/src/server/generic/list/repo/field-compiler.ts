@@ -41,7 +41,10 @@ import { householdDaySql, uuidArrayParam } from "~/server/db/helpers/query";
 import { createAppError } from "~/server/errors/app-error";
 import type { QualityReadContext } from "~/server/generic/data-quality/repo/registry";
 import { storedDerivedSql } from "~/server/generic/derived/repo/read";
-import { relatedSortExpression } from "~/server/generic/entity-links/repo/related-view";
+import {
+  relatedRecordIdsSql,
+  relatedSortExpression,
+} from "~/server/generic/entity-links/repo/related-view";
 import {
   hierarchyAncestorSql,
   hierarchyLevelSql,
@@ -1034,17 +1037,15 @@ export const groupSql = (
       `${choice.label} does not support ${bucket} buckets`,
     );
   const value = choice.value;
-  if (
-    level !== undefined &&
-    ((value.kind !== "record" && value.kind !== "rowRecord") ||
-      level > choice.levels)
-  )
+  // Only reference dimensions declare positive hierarchy levels.
+  if (level !== undefined && (level < 1 || level > choice.levels))
     throw createAppError(
       "LIST_GROUP_BY_FIELD_UNSUPPORTED",
       choice.levelReason ??
         `${choice.label} offers levels 1–${choice.levels}, not ${level}`,
     );
   switch (value.kind) {
+    case "relatedRecord":
     case "rowRecord":
     case "record": {
       const recordLabel = (id: SQL, stored: (column: string) => SQL): SQL => {
@@ -1057,23 +1058,33 @@ export const groupSql = (
           );
         return sql`(SELECT ${title} FROM ${sql.identifier(targetTable)} "__list_record" WHERE "__list_record"."id" = ${id})`;
       };
-      if (value.kind === "rowRecord") {
-        const set = rowSetSql(
-          entity,
-          value.rows,
-          getTableName(table),
-          rows,
-          context,
-        );
-        const referenced = set.column({
-          path: value.path,
-          terminal: {
-            kind: "record",
-            target: value.target,
-            titleColumn: value.titleColumn,
-            column: value.column,
-          },
-        });
+      if (value.kind !== "record") {
+        const memberIds =
+          value.kind === "relatedRecord"
+            ? relatedRecordIdsSql(
+                entity,
+                value.relationKey,
+                sql`${sql.identifier(getTableName(table))}."id"`,
+              )
+            : (() => {
+                const set = rowSetSql(
+                  entity,
+                  value.rows,
+                  getTableName(table),
+                  rows,
+                  context,
+                );
+                const referenced = set.column({
+                  path: value.path,
+                  terminal: {
+                    kind: "record",
+                    target: value.target,
+                    titleColumn: value.titleColumn,
+                    column: value.column,
+                  },
+                });
+                return set.select(sql`${referenced} AS "id"`);
+              })();
         const target = entityManifest[value.target];
         const targetTable = target.dbTable;
         if (targetTable === null)
@@ -1094,7 +1105,7 @@ export const groupSql = (
           order: ["label", "key"],
           subtree: null,
           members: sql`SELECT DISTINCT ${at("shortcode")}::text AS "key", ${recordLabel(id, at)}::text AS "label", ${level === undefined ? sql`false` : sql`${hierarchyLevelSql(value.target, leafId)} > ${level}::int`} AS "subtree"
-            FROM (${set.select(sql`${referenced} AS "id"`)}) list_row_member
+            FROM (${memberIds}) list_row_member
             LEFT JOIN ${sql.identifier(targetTable)} list_row_record ON list_row_record."id" = list_row_member."id"${target.softDelete ? sql` AND ${notDeleted("list_row_record")}` : sql``}`,
         };
       }

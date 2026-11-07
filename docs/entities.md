@@ -1850,6 +1850,11 @@ traversal and drill-down binding; a duplicate `model.derived` alias is not
 required. Equivalent stored-reference and related-path choices share one menu
 entry while retaining accepted keys. Query-backed and external relations do not
 acquire SQL grouping merely because they have a preview.
+Preview-derived grouping reuses the related-view reader's full evidence union,
+view conditions and filter traversal, including explicit links without Expense
+rows. Grouping never reduces a multi-source preview to its first path. Ancestor
+drill-down and exclusion require an exact subtree filter binding; without one,
+those actions remain unavailable rather than selecting only the ancestor itself.
 
 Product Sellers use acquisition evidence for each Product and Purchase
 together: actual vendor-role Expense acquisition lines or a live explicit
