@@ -4899,7 +4899,8 @@ under Technical details. Observation `fields` name declared source fields whose 
 explanation and controls are available alongside the record link. Editable stored fields
 receive a direct-value explanation; native detail retains explainable empty fields.
 Stock-tracking resolutions retain their evaluated category chain and fallback source even
-when a Product override wins.
+when a Product override wins. Category stock-tracking SQL materializes its deciding
+source and evaluated ladder once per expression, retaining the full evaluated chain.
 
 Product Owner explanations expand each inventory entry's assignment and acquisition
 stack. Acquisition-only owner labels say "from purchase"; purchaser, beneficiary, funder,
