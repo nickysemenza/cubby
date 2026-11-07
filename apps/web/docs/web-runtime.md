@@ -117,6 +117,12 @@ bounded entry-aware schema grouping read an undefined `schema.shape` during
 Product startup in a paired probe. A successful bundle build does not
 establish client initialization; verify real authenticated navigation when
 changing chunk boundaries.
+Client dynamic-import preload lists omit JavaScript in every entry's static
+closure: the browser has loaded those modules before an entry can import more.
+HTML and CSS preloads stay intact. The client build computes this intersection
+before Vite's preload rewrite and includes the filter policy in chunk hashes;
+changing this policy must not reuse an immutable asset URL. This changes
+preload lists, not module imports, chunk boundaries or evaluation order.
 Deployment preload recovery schedules a bounded reload while leaving Vite's
 preload error uncancelled. Preventing that event makes the import promise fulfill
 with `undefined`, turning an asset-fetch failure into a second lazy-module error.
