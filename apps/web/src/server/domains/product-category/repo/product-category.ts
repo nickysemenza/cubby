@@ -614,10 +614,12 @@ export const updateProductCategory = defineMutationWriter({
         (data.spendingCategoryMode ?? current.mode) !== current.mode ||
         target !== current.target
       ) {
-        const affected = await unwrapDb(db)
-          .execute(sql`SELECT 1 FROM "Expense" e JOIN "Product" p ON p.id=e."productId"
-        WHERE ${notDeleted("e")} AND ${notDeleted("p")} AND p."categoryId" IN ${hierarchyDescendantsSql("productCategory", [id])} LIMIT 1`);
-        if (affected.rows.length) assertReviewedSpendingClassification(db);
+        const affected = await unwrapDb(db).execute(
+          sql`SELECT 1 FROM "Expense" e JOIN "Product" p ON p.id=e."productId"
+        WHERE ${notDeleted("e")} AND ${notDeleted("p")} AND p."categoryId" IN ${hierarchyDescendantsSql("productCategory", [id])} LIMIT 1`,
+          "objects",
+        );
+        if (affected.length) assertReviewedSpendingClassification(db);
       }
     }
     await withTransaction(db, async (tx) => {

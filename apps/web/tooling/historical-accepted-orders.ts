@@ -1,7 +1,5 @@
 import { createDatabase } from "~/server/db/database-runtime";
 import { createPostgresPool } from "./postgres-pool";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { parseArgs } from "node:util";
 
 import { getTableName, sql } from "drizzle-orm";
@@ -19,7 +17,7 @@ import {
   inventoryEntry,
   purchasePaymentEvidence,
 } from "~/server/db/schema";
-import { drizzleSchema as schema } from "~/server/db/drizzle-schema";
+import { relationalSchema } from "~/server/db/schema";
 import { promoteHistoricalAcceptedObservation } from "~/server/domains/purchase-import/repo/reconciliation-observations";
 import {
   databaseForTransaction,
@@ -135,29 +133,37 @@ async function main() {
     );
   const pool = createPostgresPool({ connectionString: url, max: 1 });
   try {
-    const entries = z
-      .object({ entries: z.array(z.object({ tag: z.string() })) })
-      .parse(
-        JSON.parse(
-          readFileSync(join(MIGRATIONS_FOLDER, "meta/_journal.json"), "utf8"),
-        ),
-      ).entries;
-    const boundary = entries.findIndex((entry) => entry.tag === CUTOVER_TAG);
-    const applied = await assertMigrationBookkeeping(
-      drizzle(pool),
-      readMigrationFiles({ migrationsFolder: MIGRATIONS_FOLDER }),
+    const entries = readMigrationFiles({ migrationsFolder: MIGRATIONS_FOLDER });
+    const boundary = entries.findIndex((entry) => entry.name === CUTOVER_TAG);
+    const applied = new Set(
+      await assertMigrationBookkeeping(
+        drizzle({ client: pool, paramsInErrors: true }),
+        entries,
+      ),
     );
-    if (boundary < 0 || applied !== boundary + 1)
+    if (
+      boundary < 0 ||
+      applied.size !== boundary + 1 ||
+      entries.slice(0, boundary + 1).some((entry) => !applied.has(entry.name))
+    )
       throw new Error(
         `Historical transform requires bookkeeping exactly through ${CUTOVER_TAG}; deploy the matching server and drain old in-flight work before promotion.`,
       );
-    const client = drizzle(pool, { schema });
+    const client = drizzle({
+      client: pool,
+      relations: relationalSchema,
+      paramsInErrors: true,
+    });
     const database = createDatabase(() => ({
       client,
       withConnection: (fn) => fn(client),
     }));
     if (!values.apply) {
-      const { rows } = await client.execute(sql`
+      const { rows } = await client.execute<{
+        total: number;
+        known: number;
+        retained_candidates: number;
+      }>(sql`
         SELECT count(*)::int AS total,
           count(*) FILTER (WHERE "acceptedObservationId" IS NOT NULL)::int AS known,
           count(*) FILTER (WHERE "acceptedObservationId" IS NULL AND "originalOrder" IS NOT NULL)::int AS retained_candidates

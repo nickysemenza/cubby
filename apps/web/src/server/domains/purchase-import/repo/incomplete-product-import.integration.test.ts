@@ -6,10 +6,12 @@ import {
 } from "@cubby/schemas/purchase-import";
 import { moneyToMinor } from "@cubby/shared";
 import { and, eq } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb, notDeleted } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
   expense,
   financialTransaction,
@@ -808,7 +810,10 @@ describe("incomplete itemized purchase identity", () => {
     );
     expect(
       await getDb(ctx.db).query.product.findFirst({
-        where: eq(product.id, item.id),
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(table, eq(product.id, item.id)),
+        },
       }),
     ).toMatchObject({ deletedAt: null });
   });

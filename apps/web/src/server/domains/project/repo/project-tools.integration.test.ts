@@ -1,5 +1,6 @@
 import type { ProductId, ProductShortcode } from "@cubby/schemas/identifiers";
 import { and, eq } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { createRepoEntity } from "tooling/factories/repo";
 import { taxonomyShortcode } from "tooling/product-category-fixtures";
 import { withTestDb } from "tooling/test-setup";
@@ -7,6 +8,7 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { getDb } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { entityLink } from "~/server/db/schema";
 import { deleteProducts } from "~/server/domains/product/repo/crud";
 import {
@@ -100,10 +102,16 @@ describe("project reusable resources", () => {
       ),
     ).resolves.toEqual({ repointed: 1, alreadyPresent: 0 });
     const live = await getDb(ctx.db).query.entityLink.findMany({
-      where: and(
-        eq(entityLink.fromEntityId, project.entityId),
-        liveLinks("projectTool"),
-      ),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(
+              eq(entityLink.fromEntityId, project.entityId),
+              liveLinks("projectTool"),
+            ),
+          ),
+      },
       columns: { toEntityId: true },
     });
     expect(live).toEqual([{ toEntityId: target.entityId }]);
@@ -232,10 +240,16 @@ describe("repointProjectUses", () => {
 
   const liveProjectIdsFor = async (productEntityId: ProductId) => {
     const rows = await getDb(ctx.db).query.entityLink.findMany({
-      where: and(
-        eq(entityLink.toEntityId, productEntityId),
-        liveLinks("projectTool"),
-      ),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(
+              eq(entityLink.toEntityId, productEntityId),
+              liveLinks("projectTool"),
+            ),
+          ),
+      },
       columns: { fromEntityId: true },
     });
     return rows.map((row) => row.fromEntityId).sort();

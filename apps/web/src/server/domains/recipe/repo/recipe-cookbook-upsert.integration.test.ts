@@ -1,11 +1,13 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import { type RecipeCreateInput } from "@cubby/schemas/entities/recipe";
 import { eq } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { withTestDb } from "tooling/test-setup";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { recipe } from "~/server/db/schema";
 import { upsertCookbook } from "~/server/domains/cookbook/repo/cookbook";
 import { createIngredient } from "~/server/domains/ingredient/repo/crud";
@@ -89,12 +91,17 @@ describe("upsertCookbookRecipe", () => {
     expect(second.id).toBe(first.id);
 
     const all = await getDb(db).query.recipe.findMany({
-      where: eq(recipe.name, "Pancakes"),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(table, eq(recipe.name, "Pancakes")),
+      },
     });
     expect(all).toHaveLength(1);
 
     const found = await getDb(db).query.recipe.findFirst({
-      where: eq(recipe.id, first.id),
+      where: {
+        RAW: (table: PgTable) => relationalSql(table, eq(recipe.id, first.id)),
+      },
       with: { sections: true },
     });
     expect(found!.sections[0]!.instructions).toEqual([
@@ -119,7 +126,10 @@ describe("upsertCookbookRecipe", () => {
     expect(b.id).not.toBe(a.id);
 
     const all = await getDb(db).query.recipe.findMany({
-      where: eq(recipe.name, "Pancakes"),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(table, eq(recipe.name, "Pancakes")),
+      },
       with: { cookbook: { columns: { name: true } } },
     });
     expect(all).toHaveLength(2);

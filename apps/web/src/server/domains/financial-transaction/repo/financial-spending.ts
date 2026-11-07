@@ -15,6 +15,7 @@ import type { FinancialTransactionSourceRef } from "@cubby/schemas/financial-tra
 import { parseShortcodeFor, parseEntityId } from "@cubby/schemas/identifiers";
 import { moneyToMinor, cents } from "@cubby/shared";
 import { and, eq, inArray, sql } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { groupBy } from "es-toolkit";
 import { z } from "zod";
 
@@ -25,6 +26,7 @@ import {
   notDeleted,
   withSnapshotWrite,
 } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
   financialAccount,
   financialTransaction,
@@ -171,12 +173,18 @@ export async function prepareFinancialSpendingPage(
   const transactions = input.transactionIds.length
     ? await getDb(db)
         .query.financialTransaction.findMany({
-          where: and(
-            inArray(financialTransaction.id, [
-              ...new Set(input.transactionIds),
-            ]),
-            notDeleted(financialTransaction),
-          ),
+          where: {
+            RAW: (table: PgTable) =>
+              relationalSql(
+                table,
+                and(
+                  inArray(financialTransaction.id, [
+                    ...new Set(input.transactionIds),
+                  ]),
+                  notDeleted(financialTransaction),
+                ),
+              ),
+          },
         })
         .then((rows) => rows.map(transactionDollars))
     : [];
@@ -188,10 +196,16 @@ export async function prepareFinancialSpendingPage(
   ];
   const accounts = accountIds.length
     ? await getDb(db).query.financialAccount.findMany({
-        where: and(
-          inArray(financialAccount.id, accountIds),
-          notDeleted(financialAccount),
-        ),
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(
+              table,
+              and(
+                inArray(financialAccount.id, accountIds),
+                notDeleted(financialAccount),
+              ),
+            ),
+        },
         with: { ledgerParty: true },
       })
     : [];
@@ -209,14 +223,23 @@ export async function prepareFinancialSpendingPage(
   const allocations = transactionIds.length
     ? await getDb(db)
         .query.financialTransactionAllocation.findMany({
-          where: and(
-            inArray(
-              financialTransactionAllocation.transactionId,
-              transactionIds,
-            ),
-            notDeleted(financialTransactionAllocation),
-          ),
-          orderBy: financialTransactionAllocation.purchaseId,
+          where: {
+            RAW: (table: PgTable) =>
+              relationalSql(
+                table,
+                and(
+                  inArray(
+                    financialTransactionAllocation.transactionId,
+                    transactionIds,
+                  ),
+                  notDeleted(financialTransactionAllocation),
+                ),
+              ),
+          },
+          orderBy: (table: PgTable) =>
+            [financialTransactionAllocation.purchaseId]
+              .flat()
+              .map((value) => relationalSql(table, value)),
         })
         .then((rows) => rows.map(allocationDollars))
     : [];
@@ -326,9 +349,10 @@ export async function prepareFinancialSpendingCandidates(
   ];
   const bounds = page.candidateBounds;
   if (bounds && vendorIds.length) {
-    const { rows } = await getDb(db).execute<
+    const rows = await getDb(db).execute<
       VendorCandidate & { vendorId: string }
-    >(sql`
+    >(
+      sql`
       SELECT p.id,p.shortcode,p."displayLabel",p.date,p."vendorId",
         ${vendorSpendingExists} AS "hasVendorSpending" FROM "Purchase" p
       WHERE ${notDeleted("p")} AND p."vendorId" IN (${sql.join(
@@ -337,7 +361,9 @@ export async function prepareFinancialSpendingCandidates(
       )})
         AND (p.date BETWEEN ${bounds.first}::date-14 AND ${bounds.last}::date+14
           OR ${vendorSpendingExists}) ORDER BY p.id
-    `);
+    `,
+      "objects",
+    );
     const byVendor = groupBy(rows, (row) => row.vendorId);
     for (const vendorId of vendorIds)
       page.vendorCandidates.set(
@@ -388,15 +414,22 @@ async function spendingFacts(
     >
   >,
 ) {
-  const row = request.transactionId
+  const transactionCode = request.transactionId;
+  const row = transactionCode
     ? page
-      ? page.transactions.get(request.transactionId)
+      ? page.transactions.get(transactionCode)
       : await getDb(db)
           .query.financialTransaction.findFirst({
-            where: and(
-              eq(financialTransaction.shortcode, request.transactionId),
-              notDeleted(financialTransaction),
-            ),
+            where: {
+              RAW: (table: PgTable) =>
+                relationalSql(
+                  table,
+                  and(
+                    eq(financialTransaction.shortcode, transactionCode),
+                    notDeleted(financialTransaction),
+                  ),
+                ),
+            },
           })
           .then((row) => (row ? transactionDollars(row) : row))
     : undefined;
@@ -405,15 +438,24 @@ async function spendingFacts(
   const account = page
     ? page.accounts.get(row?.accountId ?? request.source?.accountId ?? "")
     : await getDb(db).query.financialAccount.findFirst({
-        where: row
-          ? and(
-              eq(financialAccount.id, row.accountId),
-              notDeleted(financialAccount),
-            )
-          : and(
-              eq(financialAccount.shortcode, request.source?.accountId ?? ""),
-              notDeleted(financialAccount),
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(
+              table,
+              row
+                ? and(
+                    eq(financialAccount.id, row.accountId),
+                    notDeleted(financialAccount),
+                  )
+                : and(
+                    eq(
+                      financialAccount.shortcode,
+                      request.source?.accountId ?? "",
+                    ),
+                    notDeleted(financialAccount),
+                  ),
             ),
+        },
         with: { ledgerParty: true },
       });
   if (!account) refuse("The spending account is no longer live.");
@@ -447,11 +489,20 @@ async function spendingFacts(
       ? (page.allocations.get(row.id) ?? [])
       : await getDb(db)
           .query.financialTransactionAllocation.findMany({
-            where: and(
-              eq(financialTransactionAllocation.transactionId, row.id),
-              notDeleted(financialTransactionAllocation),
-            ),
-            orderBy: financialTransactionAllocation.purchaseId,
+            where: {
+              RAW: (table: PgTable) =>
+                relationalSql(
+                  table,
+                  and(
+                    eq(financialTransactionAllocation.transactionId, row.id),
+                    notDeleted(financialTransactionAllocation),
+                  ),
+                ),
+            },
+            orderBy: (table: PgTable) =>
+              [financialTransactionAllocation.purchaseId]
+                .flat()
+                .map((value) => relationalSql(table, value)),
           })
           .then((rows) => rows.map(allocationDollars))
     : [];
@@ -1002,12 +1053,18 @@ function spendingCategoryForDiscovery(
   // Coalesce concurrent advisory reads, including misses. Commit has no page.
   const lookup = getDb(db)
     .query.spendingCategory.findFirst({
-      where: and(
-        "id" in reference
-          ? eq(spendingCategory.id, reference.id)
-          : eq(spendingCategory.shortcode, reference.shortcode),
-        notDeleted(spendingCategory),
-      ),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(
+              "id" in reference
+                ? eq(spendingCategory.id, reference.id)
+                : eq(spendingCategory.shortcode, reference.shortcode),
+              notDeleted(spendingCategory),
+            ),
+          ),
+      },
     })
     .then((row) => row);
   page?.categories.set(key, lookup);
@@ -1042,12 +1099,19 @@ async function discoverSpendingEvidence(
     resolved.some((result) =>
       result.candidates.some((candidate) => !vendors.has(candidate.id)),
     );
-  const selectedVendor = request.vendorId
+  const selectedVendorCode = request.vendorId;
+  const selectedVendor = selectedVendorCode
     ? await getDb(db).query.vendor.findFirst({
-        where: and(
-          eq(vendorTable.shortcode, request.vendorId),
-          notDeleted(vendorTable),
-        ),
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(
+              table,
+              and(
+                eq(vendorTable.shortcode, selectedVendorCode),
+                notDeleted(vendorTable),
+              ),
+            ),
+        },
       })
     : undefined;
   const vendor =
@@ -1735,12 +1799,19 @@ export async function commitFinancialSpending(
             [{ name: plan.vendorName }],
             { create: false },
           );
-          const acceptedVendor = plan.vendorId
+          const acceptedVendorCode = plan.vendorId;
+          const acceptedVendor = acceptedVendorCode
             ? await getDb(txDb).query.vendor.findFirst({
-                where: and(
-                  eq(vendorTable.shortcode, plan.vendorId),
-                  notDeleted(vendorTable),
-                ),
+                where: {
+                  RAW: (table: PgTable) =>
+                    relationalSql(
+                      table,
+                      and(
+                        eq(vendorTable.shortcode, acceptedVendorCode),
+                        notDeleted(vendorTable),
+                      ),
+                    ),
+                },
               })
             : identity?.row;
           if (
@@ -1816,12 +1887,19 @@ export async function commitFinancialSpending(
         return refuse(
           "The raw or cleaned Vendor identity changed before booking.",
         );
-      const selectedVendor = fresh.request.vendorId
+      const selectedVendorCode = fresh.request.vendorId;
+      const selectedVendor = selectedVendorCode
         ? await getDb(txDb).query.vendor.findFirst({
-            where: and(
-              eq(vendorTable.shortcode, fresh.request.vendorId),
-              notDeleted(vendorTable),
-            ),
+            where: {
+              RAW: (table: PgTable) =>
+                relationalSql(
+                  table,
+                  and(
+                    eq(vendorTable.shortcode, selectedVendorCode),
+                    notDeleted(vendorTable),
+                  ),
+                ),
+            },
           })
         : undefined;
       const [resolved] = selectedVendor

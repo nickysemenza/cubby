@@ -227,7 +227,8 @@ export async function readEmailPurchaseEvidence(
   accountOwnerScope: "respect" | "ignore" = "respect",
 ): Promise<EvidenceRow[]> {
   if (emailIds.length === 0) return [];
-  const result = await unwrapDb(db).execute(sql`
+  const result = await unwrapDb(db).execute(
+    sql`
     SELECT "Email"."id" AS "emailId", evidence."purchaseId",
       p."shortcode" AS "purchaseShortcode", p."vendorId", evidence."eventId", evidence."kind",
       evidence."changed", evidence."proposedBy"
@@ -239,8 +240,10 @@ export async function readEmailPurchaseEvidence(
       sql`, `,
     )})
       ${scope ? sql`AND ${inScope(scope, sql`evidence."purchaseId"`)}` : sql``}
-  `);
-  return z.array(evidenceRow).parse(result.rows);
+  `,
+    "objects",
+  );
+  return z.array(evidenceRow).parse(result);
 }
 
 const statePriority = { linked: 0, suggested: 1, dismissed: 2 } as const;
@@ -370,14 +373,17 @@ export async function loadRelationshipPurchaseGates(
 ) {
   if (ids.length === 0)
     return new Map<string, z.output<typeof currentPurchase>>();
-  const result = await unwrapDb(db).execute(sql`
+  const result = await unwrapDb(db).execute(
+    sql`
     SELECT p.id, p."vendorId", account."ledgerPartyId" AS "ownerId" FROM "Purchase" p
     LEFT JOIN "VendorAccount" account ON account.id = p."vendorAccountId" AND ${notDeleted(liveAccount)}
-    WHERE p.id = ANY(${uuidArrayParam(ids)}) AND ${notDeleted(livePurchase)}`);
+    WHERE p.id = ANY(${uuidArrayParam(ids)}) AND ${notDeleted(livePurchase)}`,
+    "objects",
+  );
   return new Map(
     z
       .array(currentPurchase)
-      .parse(result.rows)
+      .parse(result)
       .map((row) => [row.id, row]),
   );
 }

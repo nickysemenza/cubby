@@ -1,0 +1,201 @@
+{
+  "dialect": "sqlite",
+  "id": "ef783afe-4701-4532-a299-e6c280587ac3",
+  "prevIds": ["00000000-0000-0000-0000-000000000000"],
+  "version": "7",
+  "ddl": [
+    {
+      "name": "cooldowns",
+      "entityType": "tables"
+    },
+    {
+      "name": "credit_epochs",
+      "entityType": "tables"
+    },
+    {
+      "name": "credit_refusals",
+      "entityType": "tables"
+    },
+    {
+      "name": "permits",
+      "entityType": "tables"
+    },
+    {
+      "name": "starts",
+      "entityType": "tables"
+    },
+    {
+      "table": "cooldowns",
+      "name": "bucket",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "cooldowns",
+      "name": "until_ms",
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "credit_epochs",
+      "name": "bucket",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "credit_epochs",
+      "name": "epoch",
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "credit_refusals",
+      "name": "bucket",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "credit_refusals",
+      "name": "until_ms",
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "credit_refusals",
+      "name": "reason",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "credit_refusals",
+      "name": "probe_window",
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "permits",
+      "name": "token",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "permits",
+      "name": "bucket",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "permits",
+      "name": "deadline",
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "starts",
+      "name": "bucket",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "starts",
+      "name": "started",
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "starts",
+      "name": "starts_time",
+      "columns": [
+        {
+          "value": "started",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "entityType": "indexes"
+    },
+    {
+      "table": "cooldowns",
+      "name": "cooldowns_pk",
+      "columns": ["bucket"],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
+      "table": "credit_epochs",
+      "name": "credit_epochs_pk",
+      "columns": ["bucket"],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
+      "table": "credit_refusals",
+      "name": "credit_refusals_pk",
+      "columns": ["bucket"],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
+      "table": "permits",
+      "name": "permits_pk",
+      "columns": ["token"],
+      "nameExplicit": false,
+      "entityType": "pks"
+    }
+  ],
+  "renames": []
+}

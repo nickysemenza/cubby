@@ -147,13 +147,14 @@ export async function listEntityRecords(
 ) {
   const result = await unwrapDb(db).execute(
     await buildEntityRecordsQuery(input),
+    "objects",
   );
   const parsed = z
     .object({
       totalCount: z.coerce.number().int().nonnegative(),
       items: z.array(privateRowSchema),
     })
-    .parse(result.rows[0]);
+    .parse(result[0]);
   const images = await resolveEntityDisplayImageLists(
     db,
     parsed.items.map((row) => ({

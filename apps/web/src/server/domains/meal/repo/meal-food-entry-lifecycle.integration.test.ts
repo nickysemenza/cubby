@@ -1,11 +1,13 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { fromAny } from "@total-typescript/shoehorn";
 import { and, eq, inArray, isNotNull, isNull, sql } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb, insertAndReturn, notDeleted } from "~/server/db/helpers";
 import { amountToColumns } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
   ingredient,
   ledgerParty,
@@ -96,10 +98,16 @@ describe("meal food entry lifecycle", () => {
     await deleteMeals(ctx.db, [meal.id], ctx.actor);
 
     const deleted = await getDb(ctx.db).query.mealFoodEntry.findFirst({
-      where: and(
-        eq(mealFoodEntry.id, entry.id),
-        isNotNull(mealFoodEntry.deletedAt),
-      ),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(
+              eq(mealFoodEntry.id, entry.id),
+              isNotNull(mealFoodEntry.deletedAt),
+            ),
+          ),
+      },
       columns: { id: true },
     });
     expect(deleted?.id).toBe(entry.id);
@@ -301,7 +309,10 @@ describe("meal food entry lifecycle", () => {
     );
     await expect(
       getDb(ctx.db).query.ingredient.findFirst({
-        where: eq(ingredient.id, lose.id),
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(table, eq(ingredient.id, lose.id)),
+        },
       }),
     ).resolves.toBeUndefined();
   });
@@ -342,7 +353,13 @@ describe("meal food entry lifecycle", () => {
     );
 
     const moved = await getDb(ctx.db).query.mealFoodEntry.findFirst({
-      where: and(eq(mealFoodEntry.id, entry.id), notDeleted(mealFoodEntry)),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(eq(mealFoodEntry.id, entry.id), notDeleted(mealFoodEntry)),
+          ),
+      },
       columns: { productId: true, amountValue: true, amountUnit: true },
     });
     expect(moved).toEqual({
@@ -381,10 +398,16 @@ describe("meal food entry lifecycle", () => {
     expect(result.mergeSummary.foodEntryEdgesRepointed).toBe(1);
 
     const moved = await getDb(ctx.db).query.mealFoodEntry.findFirst({
-      where: and(
-        eq(mealFoodEntry.id, entry.id),
-        isNull(mealFoodEntry.deletedAt),
-      ),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(
+              eq(mealFoodEntry.id, entry.id),
+              isNull(mealFoodEntry.deletedAt),
+            ),
+          ),
+      },
       columns: { ledgerPartyId: true, amountValue: true, amountUnit: true },
     });
     expect(moved).toEqual({
@@ -545,14 +568,26 @@ describe("meal food entry lifecycle", () => {
 
     const [loserAfter, portionsAfter] = await Promise.all([
       getDb(ctx.db).query.ledgerParty.findFirst({
-        where: and(eq(ledgerParty.id, lose.id), isNull(ledgerParty.deletedAt)),
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(
+              table,
+              and(eq(ledgerParty.id, lose.id), isNull(ledgerParty.deletedAt)),
+            ),
+        },
         columns: { id: true },
       }),
       getDb(ctx.db).query.mealRecipePortion.findMany({
-        where: and(
-          eq(mealRecipePortion.mealRecipeId, preparation.id),
-          isNull(mealRecipePortion.deletedAt),
-        ),
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(
+              table,
+              and(
+                eq(mealRecipePortion.mealRecipeId, preparation.id),
+                isNull(mealRecipePortion.deletedAt),
+              ),
+            ),
+        },
         columns: { amountValue: true, amountUnit: true },
       }),
     ]);

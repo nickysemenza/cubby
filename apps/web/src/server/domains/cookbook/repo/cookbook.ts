@@ -43,6 +43,7 @@ import {
 } from "@cubby/schemas/import-recipe";
 import { type CookbookUpdateInput } from "@cubby/schemas/recipe";
 import { and, eq, inArray, isNull, ne, sql } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import type { z } from "zod";
 
 import type { Database } from "~/server/db";
@@ -57,6 +58,7 @@ import {
   withTransaction,
 } from "~/server/db/helpers";
 import { outer, related } from "~/server/db/helpers/related";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { cookbook, image, product, recipe } from "~/server/db/schema";
 import { cookbookSourceRecipeCountSql } from "~/server/domains/cookbook/repo/cookbook-source-count";
 import { cookbookSearch } from "~/server/domains/cookbook/repo/search-read-cookbook";
@@ -149,10 +151,16 @@ export const upsertCookbook = async (
       );
     if (sourceHash) {
       const matches = await getDb(database).query.cookbook.findMany({
-        where: and(
-          sql`${cookbook.rawJson}->'source'->>'sha256' = ${sourceHash}`,
-          notDeleted(cookbook),
-        ),
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(
+              table,
+              and(
+                sql`${cookbook.rawJson}->'source'->>'sha256' = ${sourceHash}`,
+                notDeleted(cookbook),
+              ),
+            ),
+        },
         limit: 2,
       });
       if (matches.length > 1)
@@ -271,7 +279,13 @@ export const upsertCookbook = async (
 /** A non-deleted cookbook by name, or null. */
 export const getCookbookByName = async (db: Database, name: string) => {
   const row = await getDb(db).query.cookbook.findFirst({
-    where: and(eq(cookbook.name, name), notDeleted(cookbook)),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          and(eq(cookbook.name, name), notDeleted(cookbook)),
+        ),
+    },
   });
   return row ?? null;
 };
@@ -279,7 +293,10 @@ export const getCookbookByName = async (db: Database, name: string) => {
 /** A non-deleted cookbook by id, or null. */
 const getCookbookById = async (db: Database, id: CookbookId) => {
   const row = await getDb(db).query.cookbook.findFirst({
-    where: and(eq(cookbook.id, id), notDeleted(cookbook)),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(table, and(eq(cookbook.id, id), notDeleted(cookbook))),
+    },
   });
   return row ?? null;
 };
@@ -554,12 +571,18 @@ export const getCookbookRecipePhotoSource = async (
   }
 
   const target = await getDb(db).query.recipe.findFirst({
-    where: and(
-      eq(recipe.id, recipeId),
-      eq(recipe.cookbookId, cookbookId),
-      eq(recipe.name, source.recipe.name),
-      notDeleted(recipe),
-    ),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          and(
+            eq(recipe.id, recipeId),
+            eq(recipe.cookbookId, cookbookId),
+            eq(recipe.name, source.recipe.name),
+            notDeleted(recipe),
+          ),
+        ),
+    },
     columns: { id: true },
   });
   if (!target) {

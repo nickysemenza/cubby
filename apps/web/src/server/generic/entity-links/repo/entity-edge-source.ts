@@ -37,6 +37,7 @@ import {
   ENTITY_NOT_FOUND_REASON,
   parseEntityRef,
 } from "@cubby/schemas/identifiers";
+import { getColumnTable } from "drizzle-orm";
 import { is, type SQL, sql } from "drizzle-orm";
 import { getTableConfig, PgTable } from "drizzle-orm/pg-core";
 import { z } from "zod";
@@ -159,9 +160,9 @@ const sourceFor = (
     };
   }
   const { via } = owner;
-  if (!is(via.owner.table, PgTable))
+  if (!is(getColumnTable(via.owner), PgTable))
     throw new Error(`EntityEdge: ${table}'s owner join is not a table.`);
-  const viaInfo = tableInfo(via.owner.table);
+  const viaInfo = tableInfo(getColumnTable(via.owner));
   return {
     kind: "via",
     column: via.column.name,
@@ -179,9 +180,9 @@ export const ENTITY_EDGE_SPECS: readonly EntityEdgeSpec[] = allEntities.flatMap(
     const semantics = ENTITY_EDGE_SEMANTICS[target];
     return Object.entries(INCOMING_EDGES[target]).flatMap(([edgeKey, edge]) => {
       const column = edge.column;
-      if (!is(column.table, PgTable))
+      if (!is(getColumnTable(column), PgTable))
         throw new Error(`EntityEdge: ${edgeKey} is not on a table.`);
-      const info = tableInfo(column.table);
+      const info = tableInfo(getColumnTable(column));
       const scope = edge.scope
         ? { column: edge.scope.column.name, value: edge.scope.value }
         : null;
@@ -309,8 +310,11 @@ const readEdges = async (
   filter: EdgeFilter,
 ): Promise<EdgeRow[]> => {
   if (specs.length === 0) return [];
-  const result = await unwrapDb(db).execute(entityEdgeSourceSql(specs, filter));
-  return z.array(edgeRow).parse(result.rows);
+  const result = await unwrapDb(db).execute(
+    entityEdgeSourceSql(specs, filter),
+    "objects",
+  );
+  return z.array(edgeRow).parse(result);
 };
 
 const countedEdgeRow = edgeRow.extend({ count: z.number().int().positive() });
@@ -357,7 +361,8 @@ const readRepositoryConnections = async (
         for (const direction of directions) {
           const subjectColumn =
             direction === "incoming" ? ident(column) : ident("owner");
-          const result = await unwrapDb(db).execute(sql`
+          const result = await unwrapDb(db).execute(
+            sql`
             WITH pairs AS (
               SELECT DISTINCT row_set."owner" AS "sourceId",
                 row_set.${ident(column)} AS "targetId",
@@ -380,11 +385,13 @@ const readRepositoryConnections = async (
             FROM pairs
             ORDER BY "sourceCode", "sourceId", "targetCode", "targetId"
             LIMIT ${limit}
-          `);
+          `,
+            "objects",
+          );
           groups.push({
             direction,
             label: ENTITY_LABEL[sourceKind].toLowerCase(),
-            rows: z.array(countedEdgeRow).parse(result.rows),
+            rows: z.array(countedEdgeRow).parse(result),
           });
         }
       }
@@ -570,7 +577,8 @@ export async function findOrphanEntities(
   // Edges are checked only where they touch a candidate, and only for the
   // other endpoint's liveness: joining every edge to both identities hashed
   // the whole Entity table twice.
-  const result = await unwrapDb(db).execute(sql`
+  const result = await unwrapDb(db).execute(
+    sql`
     WITH edge AS (${edgeArmsSql(specs)}),
     candidate AS MATERIALIZED (
       SELECT e."id", e."kind", e."shortcode", e."createdAt"
@@ -601,7 +609,9 @@ export async function findOrphanEntities(
     SELECT o.*, count(*) OVER ()::int AS "total"
     FROM orphan o
     ORDER BY o."createdAt" DESC, o."id"
-    LIMIT ${options.limit}`);
+    LIMIT ${options.limit}`,
+    "objects",
+  );
   const rows = z
     .array(
       z.object({
@@ -611,7 +621,7 @@ export async function findOrphanEntities(
         total: z.number(),
       }),
     )
-    .parse(result.rows);
+    .parse(result);
   const labels = await lookupEntityLabels(
     db,
     rows.map((row) => parseEntityRef(row.kind, row.id)),

@@ -47,6 +47,12 @@ import type { EntityKernelEntity } from "../src/server/entity-kernel/contracts";
 import type { CreatableEntity, EntityOverrides } from "./factories/build";
 import { z } from "zod";
 
+// globalSetup runs before test.env; the full relational schema must stay lazy.
+async function loadTestRelations() {
+  // oxlint-disable-next-line no-restricted-imports -- Called only after the test environment is installed.
+  return (await import("../src/server/db/schema")).relationalSchema;
+}
+
 const toTestDatabase = (
   value: DatabaseClient | Database,
   pool: Pool,
@@ -57,7 +63,13 @@ const toTestDatabase = (
     withConnection: async (fn) => {
       const connection = await pool.connect();
       try {
-        return await fn(drizzle({ client: connection, schema }));
+        return await fn(
+          drizzle({
+            client: connection,
+            relations: await loadTestRelations(),
+            paramsInErrors: true,
+          }),
+        );
       } finally {
         connection.release();
       }
@@ -190,7 +202,11 @@ async function getFileDb() {
     }
   });
   resetSql = reset;
-  const rawDb = drizzle({ client: pool, schema });
+  const rawDb = drizzle({
+    client: pool,
+    relations: await loadTestRelations(),
+    paramsInErrors: true,
+  });
 
   fileDb = {
     db: toTestDatabase(rawDb, pool),
@@ -331,7 +347,11 @@ function fixtureTemplate<T extends FixtureJson>(
   return prepareFixtureTemplate(scopedKey, async (databaseUrl) => {
     const pool = openTestPool(databaseUrl);
     try {
-      const rawDb = drizzle({ client: pool, schema });
+      const rawDb = drizzle({
+        client: pool,
+        relations: await loadTestRelations(),
+        paramsInErrors: true,
+      });
       await seedTestUser(rawDb);
       await seedBaseWorld(rawDb);
       const value = await seed(toTestDatabase(rawDb, pool), actor);
@@ -374,7 +394,11 @@ async function leaseFixtureDb<T extends FixtureJson>(
       }
     },
   );
-  const rawDb = drizzle({ client: prepared.pool, schema });
+  const rawDb = drizzle({
+    client: prepared.pool,
+    relations: await loadTestRelations(),
+    paramsInErrors: true,
+  });
   return {
     fixtureDb: {
       db: toTestDatabase(rawDb, prepared.pool),
@@ -516,7 +540,7 @@ async function waitForLockWaiter(db: Database): Promise<void> {
   const { getDb } = await import("../src/server/db/helpers/core");
   await pollUntil(
     async () => {
-      const result = await getDb(db).execute(sql`
+      const result = await getDb(db).execute<{ count: string }>(sql`
         SELECT count(*) AS "count" FROM pg_stat_activity
         WHERE datname = current_database() AND wait_event_type = 'Lock'
       `);

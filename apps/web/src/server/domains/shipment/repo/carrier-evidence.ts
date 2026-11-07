@@ -493,11 +493,12 @@ export async function loadCarrierHistory(
   const current = shipmentId
     ? await database.execute(
         sql`SELECT first_day::text AS first, last_day::text AS last FROM shipment_identity_window(${shipmentId}::uuid)`,
+        "objects",
       )
     : null;
   const window = carrierHistoryWindow
     .omit({ id: true })
-    .parse("window" in scope ? scope.window : current?.rows[0]);
+    .parse("window" in scope ? scope.window : current?.[0]);
   const bound = sql<boolean>`EXISTS (SELECT 1 FROM ${shipmentSourcePackage} p WHERE p."sourceKey" = ${shipmentSourceCapture}."sourceKey" AND p."shipmentId" = ${shipmentId}::uuid)`;
   // Must match ShipmentSourceCapture_text_gin_idx. Separate UNION branches let
   // each use its index: an OR with the package EXISTS scans every email body.
@@ -533,7 +534,7 @@ export async function loadCarrierHistory(
   // A capture can contain an admitted package and another held package. Only
   // current events naming this reference can date its claims; otherwise keep them conservatively.
   const windows = await database.execute(
-    // oxlint-disable-next-line cubby/no-raw-enum-literal-in-sql -- reference, events and trackingNumber are JSON keys.
+    // oxlint-disable-next-line cubby/no-raw-enum-literal-in-sql -- reference and events are retained capture JSON keys.
     sql`SELECT p->>'id' AS id, p->>'reference' AS reference,
     CASE WHEN count(event) = 0 OR count(*) FILTER (WHERE shipment_event_day(event) IS NULL) > 0 THEN NULL ELSE min(shipment_event_day(event))::text END AS first,
     CASE WHEN count(event) = 0 OR count(*) FILTER (WHERE shipment_event_day(event) IS NULL) > 0 THEN NULL ELSE max(shipment_event_day(event))::text END AS last
@@ -548,10 +549,11 @@ export async function loadCarrierHistory(
     )}::jsonb) p LEFT JOIN LATERAL jsonb_array_elements(p->'events') event
     ON upper(regexp_replace(event->>'trackingNumber', '[[:space:]]', '', 'g')) = p->>'reference'
     GROUP BY p`,
+    "objects",
   );
   const periods = z
     .array(carrierHistoryWindow.extend({ reference: z.string() }))
-    .parse(windows.rows);
+    .parse(windows);
   const claims: Awaited<ReturnType<typeof assessCarrierPacket>>["explicit"] =
     [];
   for (const row of selected) {

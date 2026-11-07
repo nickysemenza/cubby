@@ -255,7 +255,10 @@ export async function leaseNamedDatabase<T>(
     const client = new Client({ connectionString: databaseUrl });
     await client.connect();
     try {
-      await (options.migrate ?? ((c) => migrateDatabase(drizzle(c))))(client);
+      await (
+        options.migrate ??
+        ((c) => migrateDatabase(drizzle({ client: c, paramsInErrors: true })))
+      )(client);
     } finally {
       await client.end();
     }

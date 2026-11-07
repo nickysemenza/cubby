@@ -13,9 +13,11 @@ import type { ProjectId, TaskId } from "@cubby/schemas/identifiers";
 import type { CreateProjectFromTasksInput } from "@cubby/schemas/project";
 import type { RawProjectOut, RawTaskOut } from "@cubby/schemas/work-raw-read";
 import { and, inArray } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 
 import type { Database } from "~/server/db";
 import { notDeleted, withTransaction } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { task } from "~/server/db/schema";
 import { setProjectExternalUrls } from "~/server/domains/project/repo/external-links";
 import { readTasksByIds } from "~/server/domains/task/repo/crud";
@@ -87,7 +89,13 @@ export async function createProjectFromTasks(
     });
 
     const before = await tx.query.task.findMany({
-      where: and(inArray(task.id, taskIdsUuid), notDeleted(task)),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(inArray(task.id, taskIdsUuid), notDeleted(task)),
+          ),
+      },
       columns: { id: true, projectId: true },
     });
 

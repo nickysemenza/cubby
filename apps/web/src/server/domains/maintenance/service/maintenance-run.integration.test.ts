@@ -197,11 +197,12 @@ describe("maintenance Run", () => {
       UPDATE "Entity" SET "deletedAt" = now() WHERE id = ${item.entityId}::uuid`);
     const id = await startPass();
     await drive(id, only("derived-refresh", {}));
-    const [document] = (
-      await getDb(ctx.db).execute(sql`
+    const [document] = await getDb(ctx.db).execute(
+      sql`
         SELECT "deletedAt" IS NOT NULL AS retired FROM "SearchDocument"
-         WHERE "entityId" = ${item.entityId}::uuid`)
-    ).rows;
+         WHERE "entityId" = ${item.entityId}::uuid`,
+      "objects",
+    );
     expect(document).toEqual({ retired: true });
   });
 

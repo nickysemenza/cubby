@@ -1,6 +1,6 @@
 import { createPostgresPool } from "./postgres-pool";
 import { randomBytes } from "node:crypto";
-import { readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
 import { sql } from "drizzle-orm";
@@ -13,7 +13,6 @@ import { drizzleSchema as schema } from "../src/server/db/drizzle-schema";
 import { diffSchemaCatalogs, readSchemaCatalog } from "./db-catalog";
 import { ensureDbExtensions } from "./db-extensions";
 import { MIGRATIONS_FOLDER, migrateDatabase } from "./db-migrate";
-import { toPushSchemaDatabase } from "./drizzle-kit-interop";
 import { testServiceConfig } from "./test-service-config";
 
 /**
@@ -21,8 +20,7 @@ import { testServiceConfig } from "./test-service-config";
  * its schema, so prove they still equal the model.
  *
  * (a) `schema.ts` has no change drizzle-kit would generate a migration for,
- *     and the journal is strictly ordered (drizzle's migrator skips an entry
- *     older than the last applied one).
+ *     and v1 snapshots reconstruct the current schema.
  * (b) A database built by the migrations has the same catalog as one built by
  *     pushing `schema.ts` plus the derived DDL.
  *
@@ -31,49 +29,25 @@ import { testServiceConfig } from "./test-service-config";
  * session) — the post-cutover proof that production equals a fresh build.
  */
 
-interface Journal {
-  entries: { idx: number; when: number; tag: string }[];
-}
-
 async function checkGeneratedState(): Promise<string[]> {
-  const problems: string[] = [];
-  const journal: Journal = JSON.parse(
-    readFileSync(join(MIGRATIONS_FOLDER, "meta/_journal.json"), "utf8"),
+  const { generateDrizzleJson, generateMigration, reconstruct } =
+    await import("drizzle-kit/api-postgres");
+  const snapshots = Object.fromEntries(
+    readdirSync(MIGRATIONS_FOLDER).flatMap((name) => {
+      const file = join(MIGRATIONS_FOLDER, name, "snapshot.json");
+      return existsSync(file)
+        ? [[name, JSON.parse(readFileSync(file, "utf8"))]]
+        : [];
+    }),
   );
-  journal.entries.forEach((entry, index) => {
-    const previous = journal.entries[index - 1];
-    if (previous && entry.when <= previous.when)
-      problems.push(
-        `journal: ${entry.tag} (when ${entry.when}) is not newer than ${previous.tag} (when ${previous.when}); drizzle would skip it`,
-      );
-  });
-  const last = journal.entries.at(-1);
-  if (!last) return [...problems, "journal: no migrations"];
-
-  const { generateDrizzleJson, generateMigration } =
-    await import("drizzle-kit/api");
-  const snapshotPath = join(
-    MIGRATIONS_FOLDER,
-    `meta/${String(last.idx).padStart(4, "0")}_snapshot.json`,
-  );
-  const obsolete = readdirSync(join(MIGRATIONS_FOLDER, "meta")).filter(
-    (name) =>
-      name.endsWith("_snapshot.json") &&
-      name !== `${String(last.idx).padStart(4, "0")}_snapshot.json`,
-  );
-  if (obsolete.length > 0)
-    problems.push(
-      `Remove superseded generation snapshots from drizzle/meta: ${obsolete.join(", ")}. Keep only the latest snapshot; SQL and journal history remain immutable.`,
-    );
-  const previous = JSON.parse(readFileSync(snapshotPath, "utf8"));
-  const current = generateDrizzleJson(schema, previous.id, ["public"]);
+  const previous = await reconstruct(snapshots);
+  const current = await generateDrizzleJson(schema, previous.id, ["public"]);
   const pending = await generateMigration(previous, current);
-  if (pending.length > 0)
-    problems.push(
-      `schema.ts has changes with no migration; run \`pnpm db:generate\`:\n${pending.join("\n")}`,
-    );
-
-  return problems;
+  return pending.length === 0
+    ? []
+    : [
+        `schema.ts has changes with no migration; run \`pnpm db:generate\`:\n${pending.join("\n")}`,
+      ];
 }
 
 async function withScratchDatabase<T>(
@@ -104,7 +78,7 @@ async function withDb(
 ): Promise<void> {
   const pool = createPostgresPool({ connectionString: url });
   try {
-    await build(drizzle(pool));
+    await build(drizzle({ client: pool, paramsInErrors: true }));
   } finally {
     await pool.end();
   }
@@ -112,11 +86,14 @@ async function withDb(
 
 /** The reference database: `schema.ts` pushed, plus the derived DDL. */
 async function buildFromModel(db: NodePgDatabase): Promise<void> {
-  const { pushSchema } = await import("drizzle-kit/api");
+  const { pushSchema } = await import("drizzle-kit/api-postgres");
   await ensureDbExtensions(db);
-  const { apply } = await pushSchema(schema, toPushSchemaDatabase(db), [
-    "public",
-  ]);
+  const { apply } = await pushSchema(schema, db, {
+    schemas: ["public"],
+    tables: [],
+    entities: undefined,
+    extensions: [],
+  });
   await apply();
   await db.execute(sql.raw(renderDerivedDdl()));
   await db.execute(sql.raw(renderDeclaredDerivedViews()));

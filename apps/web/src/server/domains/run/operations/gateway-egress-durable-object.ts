@@ -77,7 +77,7 @@ export class AiGatewayEgressDurableObject extends DurableObject<Env> {
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
-    this.db = drizzle(ctx.storage);
+    this.db = drizzle(ctx.storage, { paramsInErrors: true });
     void ctx.blockConcurrencyWhile(() => initializeGatewayEgress(ctx.storage));
   }
 

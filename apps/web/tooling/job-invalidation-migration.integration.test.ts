@@ -10,9 +10,9 @@ import { withMigrationDatabase } from "./test-database-lease";
 // generation) is dropped.
 it("starts existing refresh families observed and keeps every pending pass", async () => {
   await withMigrationDatabase(async (client) => {
-    const db = drizzle(client);
+    const db = drizzle({ client: client, paramsInErrors: true });
     await migrateDatabase(db, {
-      through: "0027_email_link_event_index",
+      through: "20261025033941_0027_email_link_event_index",
     });
     const lease = "00000000-0000-4000-8000-000000000071";
     const families = [
@@ -45,7 +45,9 @@ it("starts existing refresh families observed and keeps every pending pass", asy
     const before = await client.query(
       `SELECT ${executionColumns} FROM "Job" WHERE key IN ('refresh:search', 'refresh:quality', 'refresh:recipes', 'refresh:conversions') ORDER BY key`,
     );
-    await migrateDatabase(db, { through: "0028_job_invalidation" });
+    await migrateDatabase(db, {
+      through: "20261025033941_0028_job_invalidation",
+    });
     expect(
       (
         await client.query(

@@ -1,13 +1,12 @@
-/**
- * Recipe update helper functions.
- * Private helpers used by updateRecipe in crud.ts.
- */
-
 import type { amount } from "@cubby/schemas/codec";
 import {
   type RecipeCreateInput,
   type RecipeUpdateInput,
 } from "@cubby/schemas/entities/recipe";
+/**
+ * Recipe update helper functions.
+ * Private helpers used by updateRecipe in crud.ts.
+ */
 import type {
   CookbookId,
   IngredientId,
@@ -18,6 +17,7 @@ import {
   type recipeIngredientInput,
 } from "@cubby/schemas/recipe";
 import { and, eq, inArray, isNull, ne, notInArray, or } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import type { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -27,6 +27,7 @@ import {
   notDeleted,
   unwrapDb,
 } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
   cookbook,
   ingredient,
@@ -77,7 +78,10 @@ const findOrCreateRecipeLinkIngredient = async (
     where: and(eq(ingredient.recipeId, recipeId), notDeleted(ingredient)),
     values: async () => {
       const recipeRecord = await unwrapDb(db).query.recipe.findFirst({
-        where: eq(recipe.id, recipeId),
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(table, eq(recipe.id, recipeId)),
+        },
         columns: { name: true },
       });
       if (!recipeRecord) {
@@ -240,17 +244,26 @@ async function resolveCookbookRepoint(
   const name = updates.name || existingRecipe.name;
   if (cookbookId !== null) {
     const holder = await tx.query.recipe.findFirst({
-      where: and(
-        eq(recipe.cookbookId, cookbookId),
-        eq(recipe.name, name),
-        ne(recipe.id, recipeId),
-        notDeleted(recipe),
-      ),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(
+              eq(recipe.cookbookId, cookbookId),
+              eq(recipe.name, name),
+              ne(recipe.id, recipeId),
+              notDeleted(recipe),
+            ),
+          ),
+      },
       columns: { shortcode: true },
     });
     if (holder) {
       const book = await tx.query.cookbook.findFirst({
-        where: eq(cookbook.id, cookbookId),
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(table, eq(cookbook.id, cookbookId)),
+        },
         columns: { name: true },
       });
       throw createAppError(
@@ -265,15 +278,21 @@ async function resolveCookbookRepoint(
     });
   }
   const holder = await tx.query.recipe.findFirst({
-    where: and(
-      eq(recipe.name, name),
-      ne(recipe.id, recipeId),
-      notDeleted(recipe),
-      or(
-        isNull(recipe.sourceType),
-        notInArray(recipe.sourceType, ["Book", "Notion"]),
-      ),
-    ),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          and(
+            eq(recipe.name, name),
+            ne(recipe.id, recipeId),
+            notDeleted(recipe),
+            or(
+              isNull(recipe.sourceType),
+              notInArray(recipe.sourceType, ["Book", "Notion"]),
+            ),
+          ),
+        ),
+    },
     columns: { shortcode: true },
   });
   if (holder) {
@@ -471,7 +490,10 @@ export async function replaceRecipeSections(
   sections: RecipeCreateInput["sections"],
 ): Promise<void> {
   const existingSections = await tx.query.recipeSection.findMany({
-    where: eq(recipeSection.recipeId, recipeId),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(table, eq(recipeSection.recipeId, recipeId)),
+    },
     columns: { id: true },
   });
   await deleteAllSections(

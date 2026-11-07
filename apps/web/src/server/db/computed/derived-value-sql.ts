@@ -1,3 +1,4 @@
+import { getColumnTable } from "drizzle-orm";
 import { type AnyColumn, type SQL, sql, getTableName } from "drizzle-orm";
 
 import { entityStoredDerivedDeclarations } from "~/server/db/derived-declarations";
@@ -6,11 +7,12 @@ import { storedSourceSql } from "~/server/db/derived-source-sql";
 /** Nested relational extras resolve the same declared source as top-level reads. */
 const source = (id: AnyColumn, key: string): SQL => {
   const declaration = entityStoredDerivedDeclarations().find(
-    (entry) => entry.table === getTableName(id.table) && entry.key === key,
+    (entry) =>
+      entry.table === getTableName(getColumnTable(id)) && entry.key === key,
   );
   if (!declaration)
     throw new Error(
-      `Undeclared nested result: ${getTableName(id.table)}.${key}`,
+      `Undeclared nested result: ${getTableName(getColumnTable(id))}.${key}`,
     );
   return storedSourceSql(declaration, sql`${id}`);
 };

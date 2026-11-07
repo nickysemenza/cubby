@@ -1,9 +1,11 @@
 import { shortcode } from "@cubby/schemas/identifiers";
 import { eq } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
   importPreparedLine,
   importPreparedOrder,
@@ -179,7 +181,10 @@ describe("immutable prepared purchase review", () => {
       }),
     ]);
     const before = await getDb(ctx.db).query.runOperation.findFirst({
-      where: eq(runOperation.runId, run.id),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(table, eq(runOperation.runId, run.id)),
+      },
     });
     await deleteProducts(ctx.db, [product.id], ctx.actor);
     const archived = await loadRunDetail(ctx.db, run.publicId);
@@ -190,7 +195,10 @@ describe("immutable prepared purchase review", () => {
     expect(archived.targets[0]?.targetName).toContain("Fixture Nasturtium");
     expect(
       await getDb(ctx.db).query.runOperation.findFirst({
-        where: eq(runOperation.runId, run.id),
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(table, eq(runOperation.runId, run.id)),
+        },
       }),
     ).toEqual(before);
   });

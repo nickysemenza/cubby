@@ -8,12 +8,14 @@ import {
 } from "@cubby/schemas/nutrition";
 import { TIER1_NUTRIENT_KEYS } from "@cubby/usda";
 import { eq } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { buildEntity } from "tooling/factories/build";
 import { buildKernelContext } from "tooling/scenarios/context";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { inventoryEntry, recipe } from "~/server/db/schema";
 import { createLedgerParty } from "~/server/domains/ledger-party/repo/ledger-party";
 import { mealHandlers } from "~/server/domains/meal/operations.server";
@@ -414,7 +416,10 @@ describe("meal recipe preparations", () => {
       getMealPreparations(ctx.db, { mealId: source.id }),
       getMealPreparations(ctx.db, { mealId: target.id }),
       getDb(ctx.db).query.inventoryEntry.findFirst({
-        where: eq(inventoryEntry.id, inventoryBefore.id),
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(table, eq(inventoryEntry.id, inventoryBefore.id)),
+        },
       }),
     ]);
 

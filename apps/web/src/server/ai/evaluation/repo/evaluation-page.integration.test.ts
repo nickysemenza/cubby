@@ -115,11 +115,11 @@ describe("AI evaluation drain publication", () => {
         })
         .where(eq(aiEvaluation.id, row.id));
     const workRows = async (ids: readonly string[]) =>
-      (
-        await getDb(ctx.db)
-          .execute(sql`SELECT jsonb_build_object('ref', w.id, 'priority', w.priority, 'attempts', w.attempts, 'runAt', w."runAt") AS value FROM "AiEvaluation" w
-        WHERE w."runAt" IS NOT NULL AND w.id=ANY(${uuidArrayParam(ids)}) ORDER BY w.id`)
-      ).rows;
+      await getDb(ctx.db).execute(
+        sql`SELECT jsonb_build_object('ref', w.id, 'priority', w.priority, 'attempts', w.attempts, 'runAt', w."runAt") AS value FROM "AiEvaluation" w
+        WHERE w."runAt" IS NOT NULL AND w.id=ANY(${uuidArrayParam(ids)}) ORDER BY w.id`,
+        "objects",
+      );
     const original = await workRows(seeded.rows.map((row) => row.id));
     let before = original;
     const captured: string[] = [];

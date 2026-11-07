@@ -75,8 +75,9 @@ const mutateException = async (
     // Lock the record so concurrent waiver edits serialize on it.
     const locked = await tx.execute(
       sql`SELECT 1 FROM ${table} WHERE ${table.id} = ${id} AND ${liveQualityRow(table)} FOR UPDATE`,
+      "objects",
     );
-    const [live] = locked.rows.length
+    const [live] = locked.length
       ? await evaluateLiveQuality(tx, storedEntryFor(entityKind), [id])
       : [];
     if (!live) {

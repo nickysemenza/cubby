@@ -173,7 +173,8 @@ export async function readEntityGraph(
     if (!rootTable) continue;
     await options.beforeQuery?.();
     // Append-only roots have no deletedAt column; liveness belongs to the manifest.
-    const rootRows = await unwrapDb(db).execute(sql`
+    const rootRows = await unwrapDb(db).execute(
+      sql`
       SELECT "id" AS "dbId", "shortcode" AS "id", ${await labelSql(rootEntity, "")} AS "label",
         ${metadataFor(rootEntity, "")} AS "metadata"
       FROM ${sql.raw(`"${rootTable}"`)}
@@ -182,7 +183,9 @@ export async function readEntityGraph(
         sql`, `,
       )})
         ${entityManifest[rootEntity].softDelete ? sql`AND ${notDeleted(rootTable)}` : sql``}
-    `);
+    `,
+      "objects",
+    );
     const liveRoots = z
       .object({
         id: z.string(),
@@ -191,7 +194,7 @@ export async function readEntityGraph(
         metadata: z.record(z.string(), z.string()),
       })
       .array()
-      .parse(rootRows.rows)
+      .parse(rootRows)
       .map((row) => ({
         ref: { entityKind: rootEntity, entityId: row.id },
         dbId: row.dbId,
@@ -257,7 +260,8 @@ export async function readEntityGraph(
       }),
     );
     await options.beforeQuery?.();
-    const result = await unwrapDb(db).execute(sql`
+    const result = await unwrapDb(db).execute(
+      sql`
           WITH raw_related AS (${sql.join(sourceRows, sql` UNION ALL `)}), related AS (
             SELECT "rootShortcode", "relationshipKey", "targetEntity", "targetId", "targetShortcode", "label", "metadata",
               array_agg(DISTINCT "sourceKey") AS "sourceKeys"
@@ -284,8 +288,10 @@ export async function readEntityGraph(
           LEFT JOIN ranked ON ranked."rootShortcode" = branches."rootShortcode" AND ranked."relationshipKey" = branches."relationshipKey"
             AND ranked."rowNumber" > ${offset} AND ranked."rowNumber" <= ${offset + limit}
           ORDER BY branches."rootShortcode", branches."relationshipKey", ranked."label", ranked."targetShortcode"
-      `);
-    const rows = rowSchema.array().parse(result.rows);
+      `,
+      "objects",
+    );
+    const rows = rowSchema.array().parse(result);
     const rowsByBranch = groupBy(
       rows,
       (row) => `${row.rootShortcode}:${row.relationshipKey}`,

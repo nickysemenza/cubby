@@ -32,12 +32,13 @@ export async function storedKeys(
 ): Promise<SuggestionKey[]> {
   if (query.filters.status !== "pending") return [];
   const declaration = reviewFamilyDeclarations[family];
-  const { rows } = await unwrapDb(db).execute<{
+  const rows = await unwrapDb(db).execute<{
     id: string;
     fingerprint: string | null;
     createdAt: Date | string;
     conflict: boolean;
-  }>(sql`
+  }>(
+    sql`
     SELECT s.id, s.fingerprint, s."createdAt", COALESCE((s.judgment->>${suggestionJudgments.product_pair.keyof().enum.conflict})::boolean, false) AS conflict
     FROM "Suggestion" s
     WHERE s.family = ${family} AND s.active AND s.status = ${suggestionStatus.enum.pending} AND s.suppression IS NULL AND ${declaration.actionable}
@@ -48,7 +49,9 @@ export async function storedKeys(
           ? sql`AND ${currentProductPairPolicySql(sql`s.producer`)} AND EXISTS (SELECT 1 FROM "Product" p WHERE p.id = s."recordId" AND ${notDeleted("p")})
         AND EXISTS (SELECT 1 FROM "Product" p WHERE p.id::text = s.data->>'otherId' AND ${notDeleted("p")})`
           : sql``
-      }`);
+      }`,
+    "objects",
+  );
   return rows.map((row) => ({
     family,
     suggestionId: row.id,

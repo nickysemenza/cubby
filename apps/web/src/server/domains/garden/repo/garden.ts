@@ -28,6 +28,7 @@ import {
 } from "@cubby/schemas/planting-raw-read";
 import { isPlantingSourceFeature } from "@cubby/schemas/product-category-relations";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import type { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -43,6 +44,7 @@ import {
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
   entityLink,
   gardenEntry,
@@ -122,10 +124,16 @@ const validatePlantingSource = async (
 ): Promise<void> => {
   if (!sourceProductId) return;
   const source = await unwrapDb(db).query.product.findFirst({
-    where: and(
-      eq(product.id, parseEntityId("product", sourceProductId)),
-      notDeleted(product),
-    ),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          and(
+            eq(product.id, parseEntityId("product", sourceProductId)),
+            notDeleted(product),
+          ),
+        ),
+    },
     columns: { categoryId: true, growsPlantId: true },
   });
   if (!source) return;
@@ -166,10 +174,16 @@ const plantingReferences = {
 
 const loadPlantingReferences = (db: GardenDb, ids: readonly string[]) =>
   unwrapDb(db).query.planting.findMany({
-    where: inArray(
-      planting.id,
-      ids.map((id) => parseEntityId("planting", id)),
-    ),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          inArray(
+            planting.id,
+            ids.map((id) => parseEntityId("planting", id)),
+          ),
+        ),
+    },
     columns: { id: true },
     with: plantingReferences,
   });
@@ -557,7 +571,13 @@ export const updatePlanting = defineMutationWriter({
   ) => {
     const result = await withTransaction(db, async (tx) => {
       const before = await unwrapDb(tx).query.planting.findFirst({
-        where: and(eq(planting.id, id), notDeleted(planting)),
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(
+              table,
+              and(eq(planting.id, id), notDeleted(planting)),
+            ),
+        },
       });
       if (!before) {
         throw createAppError(
@@ -668,7 +688,13 @@ export const updateGardenEntry = defineMutationWriter({
   ) =>
     withTransaction(db, async (tx) => {
       const before = await unwrapDb(tx).query.gardenEntry.findFirst({
-        where: and(eq(gardenEntry.id, id), notDeleted(gardenEntry)),
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(
+              table,
+              and(eq(gardenEntry.id, id), notDeleted(gardenEntry)),
+            ),
+        },
       });
       if (!before) {
         throw createAppError(
@@ -878,10 +904,16 @@ export const gardenEntryScaffold = listScaffold("gardenEntry", gardenEntry, {
     bindings: (bind) => {
       const locations = bind.ids(async ({ db, ids }) => {
         const rows = await unwrapDb(db).query.gardenEntry.findMany({
-          where: inArray(
-            gardenEntry.id,
-            ids.map((id) => parseEntityId("gardenEntry", id)),
-          ),
+          where: {
+            RAW: (table: PgTable) =>
+              relationalSql(
+                table,
+                inArray(
+                  gardenEntry.id,
+                  ids.map((id) => parseEntityId("gardenEntry", id)),
+                ),
+              ),
+          },
           columns: { id: true },
           with: { location: { columns: { shortcode: true, name: true } } },
         });
@@ -889,10 +921,16 @@ export const gardenEntryScaffold = listScaffold("gardenEntry", gardenEntry, {
       });
       const attachments = bind.ids(async ({ db, ids }) => {
         const rows = await unwrapDb(db).query.gardenEntry.findMany({
-          where: inArray(
-            gardenEntry.id,
-            ids.map((id) => parseEntityId("gardenEntry", id)),
-          ),
+          where: {
+            RAW: (table: PgTable) =>
+              relationalSql(
+                table,
+                inArray(
+                  gardenEntry.id,
+                  ids.map((id) => parseEntityId("gardenEntry", id)),
+                ),
+              ),
+          },
           columns: { id: true },
           with: { images: { with: { image: true } } },
         });

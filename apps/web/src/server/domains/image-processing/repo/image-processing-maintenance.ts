@@ -43,7 +43,8 @@ export async function imageProcessingMaintenanceSummary(db: Database) {
     kind: "describe_image" | "subject_lift",
     revision: number,
   ) => {
-    const result = await getDb(db).execute(sql`
+    const result = await getDb(db).execute(
+      sql`
       WITH current_images AS (
         SELECT i.id,
           CASE WHEN j.id IS NULL THEN NULL ELSE ${imageJobDisplayStateSql("j")} END AS state,
@@ -62,8 +63,10 @@ export async function imageProcessingMaintenanceSummary(db: Database) {
         count(*) FILTER (WHERE result->'description'->>'cutoutEligibility' = ${imageCutoutEligibility.enum.review})::int AS "reviewNeeded",
         count(*) FILTER (WHERE state IS NULL)::int AS remaining
       FROM current_images
-    `);
-    return imageProcessingMaintenanceCounts.parse(result.rows[0]);
+    `,
+      "objects",
+    );
+    return imageProcessingMaintenanceCounts.parse(result[0]);
   };
   const [description, cutout] = await Promise.all([
     counts("describe_image", IMAGE_DESCRIPTION_PROCESSOR_REVISION),
@@ -102,12 +105,15 @@ export async function imagesMissingCurrentProcessing(
   batchSize: number,
   after?: ImageProcessingBacklogCursor | null,
 ) {
-  const result = await getDb(db).execute(sql`
+  const result = await getDb(db).execute(
+    sql`
     SELECT i.id, i.shortcode, i."createdAt"::text AS "createdAt" FROM "Image" i
     WHERE ${missingCurrentProcessingWhere(kinds)}
       ${after ? sql`AND (i."createdAt", i.id) > (${after.createdAt}::timestamp, ${after.id}::uuid)` : sql``}
     ORDER BY i."createdAt", i.id LIMIT ${batchSize}
-  `);
+  `,
+    "objects",
+  );
   return z
     .array(
       z.object({
@@ -116,7 +122,7 @@ export async function imagesMissingCurrentProcessing(
         createdAt: z.string(),
       }),
     )
-    .parse(result.rows)
+    .parse(result)
     .map(({ id, shortcode, createdAt }) => ({
       id,
       shortcode,
@@ -134,7 +140,8 @@ export async function pruneExecutorlessWaitingAttempts(
   db: Database,
   limit: number,
 ): Promise<number> {
-  const result = await getDb(db).execute(sql`
+  const result = await getDb(db).execute(
+    sql`
     WITH doomed AS (
       SELECT id, "jobId" FROM "ImageProcessingAttempt"
       WHERE state = ${imageProcessingAttemptState.enum.waiting} AND executor IS NULL
@@ -159,9 +166,10 @@ export async function pruneExecutorlessWaitingAttempts(
       )
       FROM touched t WHERE j.id = t."jobId"
     )
-    SELECT count(*)::int AS pruned FROM deleted`);
-  return z.array(z.object({ pruned: z.number() })).parse(result.rows)[0]!
-    .pruned;
+    SELECT count(*)::int AS pruned FROM deleted`,
+    "objects",
+  );
+  return z.array(z.object({ pruned: z.number() })).parse(result)[0]!.pruned;
 }
 
 const IMAGE_PROCESSING_WAKEUP_SOURCE = "image-processing";

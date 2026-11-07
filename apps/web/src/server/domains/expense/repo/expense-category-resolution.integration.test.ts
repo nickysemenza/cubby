@@ -91,18 +91,21 @@ describe("Expense category resolution", () => {
       sql`SELECT ${effectiveExpenseSpendingCategorySql("e")} AS category,
         ${expenseSpendingCategoryResolutionSql("e")}->>'categoryId' AS explained_category
         FROM "Expense" e WHERE e.id=${id}`,
+      "objects",
     );
-    expect(rows.rows[0]?.category).toBe(rows.rows[0]?.explained_category);
-    return rows.rows[0]?.category;
+    expect(rows[0]?.category).toBe(rows[0]?.explained_category);
+    return rows[0]?.category;
   }
   it("resolves category IDs without executing provenance projections", async () => {
     const f = await fixture();
-    const result = await unwrapDb(ctx.db)
-      .execute(sql`EXPLAIN (ANALYZE, FORMAT JSON)
-      SELECT ${effectiveExpenseSpendingCategorySql("e")} AS category FROM "Expense" e`);
+    const result = await unwrapDb(ctx.db).execute(
+      sql`EXPLAIN (ANALYZE, FORMAT JSON)
+      SELECT ${effectiveExpenseSpendingCategorySql("e")} AS category FROM "Expense" e`,
+      "objects",
+    );
     const plan = z
       .array(z.object({ Plan: categoryPlanNode }))
-      .parse(result.rows[0]?.["QUERY PLAN"])[0]!.Plan;
+      .parse(result[0]?.["QUERY PLAN"])[0]!.Plan;
     let catalogLookups = 0;
     const inspect = (node: z.infer<typeof categoryPlanNode>) => {
       if (node["Relation Name"] === "SpendingCategory")
@@ -119,11 +122,13 @@ describe("Expense category resolution", () => {
     await fixture();
     const category = effectiveExpenseSpendingCategorySql("e");
     const trade = effectiveExpenseTradeSql("e");
-    const rows = await unwrapDb(ctx.db)
-      .execute(sql`SELECT ${category} AS category, ${trade} AS trade, COUNT(*) AS count
-      FROM "Expense" e GROUP BY ${category}, ${trade}`);
-    expect(rows.rows).toHaveLength(1);
-    expect(rows.rows[0]?.count).toBe("1");
+    const rows = await unwrapDb(ctx.db).execute(
+      sql`SELECT ${category} AS category, ${trade} AS trade, COUNT(*) AS count
+      FROM "Expense" e GROUP BY ${category}, ${trade}`,
+      "objects",
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.count).toBe("1");
   });
 
   it("shares category ancestry across principal allocations and draft mappings", async () => {
@@ -164,10 +169,11 @@ describe("Expense category resolution", () => {
     const allocation = expenseSpendingAllocationSql(ids);
     const result = await unwrapDb(ctx.db).execute(
       sql`EXPLAIN (ANALYZE, FORMAT JSON) ${allocation}`,
+      "objects",
     );
     const plan = z
       .array(z.object({ Plan: categoryPlanNode }))
-      .parse(result.rows[0]?.["QUERY PLAN"])[0]!.Plan;
+      .parse(result[0]?.["QUERY PLAN"])[0]!.Plan;
     let taxonomyScans = 0;
     let categoryLookups = 0;
     const inspect = (node: z.infer<typeof categoryPlanNode>) => {
@@ -191,10 +197,10 @@ describe("Expense category resolution", () => {
     inspect(plan);
     expect(taxonomyScans).toBeLessThanOrEqual(8);
     expect(categoryLookups).toBeLessThanOrEqual(12);
-    const stored = await unwrapDb(ctx.db).execute(allocation);
-    expect(stored.rows).toHaveLength(ids.length);
+    const stored = await unwrapDb(ctx.db).execute(allocation, "objects");
+    expect(stored).toHaveLength(ids.length);
     expect(
-      stored.rows.every(
+      stored.every(
         (row) =>
           row.spendingCategoryId ===
           (row.expenseId === otherLine.id ? f.electronics.id : f.clothing.id),
@@ -211,10 +217,11 @@ describe("Expense category resolution", () => {
           },
         ],
       }),
+      "objects",
     );
-    expect(preview.rows).toHaveLength(ids.length);
+    expect(preview).toHaveLength(ids.length);
     expect(
-      preview.rows.every(
+      preview.every(
         (row) =>
           row.spendingCategoryId ===
           (row.expenseId === otherLine.id ? f.electronics.id : f.gifts.id),
@@ -237,12 +244,15 @@ describe("Expense category resolution", () => {
       future: false,
       purchaseId: f.purchase.id,
     });
-    const rows = await unwrapDb(ctx.db).execute(sql`
+    const rows = await unwrapDb(ctx.db).execute(
+      sql`
       SELECT ${effectiveExpenseSpendingCategorySql("e")} AS category,
         ${effectiveExpenseTradeSql("e")} AS trade
       FROM "Expense" e WHERE e.id=${unresolved.id}
-    `);
-    expect(rows.rows[0]).toEqual({ category: null, trade: null });
+    `,
+      "objects",
+    );
+    expect(rows[0]).toEqual({ category: null, trade: null });
   });
   it("uses live nearest Product mapping before Purchase fallback and preserves explicit purpose", async () => {
     const f = await fixture();
@@ -276,13 +286,16 @@ describe("Expense category resolution", () => {
   });
   it("scopes correlated category quality reads to the selected Expense basket", async () => {
     const f = await fixture();
-    const rows = await unwrapDb(ctx.db).execute(sql`
+    const rows = await unwrapDb(ctx.db).execute(
+      sql`
       SELECT allocation.* FROM "Expense" selected
       CROSS JOIN LATERAL (${expenseSpendingAllocationSql(sql`ARRAY[selected.id]::uuid[]`)}) allocation
       WHERE selected.id=${f.expense.id}
-    `);
-    expect(rows.rows).toHaveLength(1);
-    expect(rows.rows[0]).toMatchObject({
+    `,
+      "objects",
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
       expenseId: f.expense.id,
       spendingCategoryId: f.clothing.id,
       amount: 60,

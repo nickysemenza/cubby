@@ -1,10 +1,12 @@
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { eq } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import type { LocalPhotoAnalysis } from "~/contracts/photo-import.contract";
 import { getDb } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { photoRunImage } from "~/server/db/schema";
 import {
   readImageAnalysis,
@@ -155,7 +157,13 @@ describe("image photo-analysis backfill", () => {
     );
     const read = () =>
       getDb(ctx.db).query.photoRunImage.findFirst({
-        where: eq(photoRunImage.imageId, parseEntityId("image", fixture.id)),
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(
+              table,
+              eq(photoRunImage.imageId, parseEntityId("image", fixture.id)),
+            ),
+        },
       });
     expect(await read()).toMatchObject({ deviceWorkState: "completed" });
     const completed = await read();

@@ -221,8 +221,8 @@ export async function getConnectedRecords(
 ): Promise<ConnectedRecordsOutput> {
   const plan = await prepareConnectedPage(input);
   if (!plan.query) return connectedPage(plan.target, emptyPage);
-  const result = await unwrapDb(db).execute(plan.query);
-  return connectedPage(plan.target, result.rows[0]);
+  const result = await unwrapDb(db).execute(plan.query, "objects");
+  return connectedPage(plan.target, result[0]);
 }
 
 /** Every requested group shares one statement while retaining its own complete count and page. */
@@ -244,10 +244,11 @@ export async function getConnectedRecordsPreview(
   );
   const result = await unwrapDb(db).execute(
     sql`${sql.join(queries, sql` UNION ALL `)} ORDER BY "viewIndex"`,
+    "objects",
   );
   const rows = z
     .array(pageRowSchema.extend({ viewIndex: z.number().int().nonnegative() }))
-    .parse(result.rows);
+    .parse(result);
   if (rows.length !== views.length)
     throw new Error("Incomplete connected-record preview");
   return {

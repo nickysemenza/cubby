@@ -1,4 +1,5 @@
 import type { Entity } from "@cubby/schemas/entity";
+import { getColumnTable } from "drizzle-orm";
 import { and, getTableColumns, is, notInArray } from "drizzle-orm";
 import { PgTable, PgColumn } from "drizzle-orm/pg-core";
 
@@ -25,7 +26,7 @@ export const assertNoOrdinaryReferences = async (
   )?.[1];
   for (const [key, edge] of Object.entries(INCOMING_EDGES[entity])) {
     if (!ordinary.has(key)) continue;
-    const table = edge.column.table;
+    const table = getColumnTable(edge.column);
     if (!is(table, PgTable) || !is(edge.column, PgColumn))
       throw new Error(`Incoming edge ${key} is not PostgreSQL storage.`);
     const columns = getTableColumns(table);

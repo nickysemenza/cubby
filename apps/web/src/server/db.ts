@@ -23,7 +23,7 @@ import {
   type RequestDatabaseRuntimeScope,
   type RequestDbConnections,
 } from "./db/db-runtime-resolver";
-import { drizzleSchema as schema } from "./db/drizzle-schema";
+import { relationalSchema } from "./db/schema";
 
 export { Database };
 export type { RequestDbConnections };
@@ -41,14 +41,24 @@ const runtimeForPool = (
   role: RequestDbRole,
 ): DatabaseRuntime => {
   const tracedPool = tracePool(pool, role);
-  const client = drizzleNodePostgres({ client: tracedPool, schema });
+  const client = drizzleNodePostgres({
+    client: tracedPool,
+    relations: relationalSchema,
+    paramsInErrors: true,
+  });
   return {
     client,
     close: () => pool.end(),
     withConnection: async (fn) => {
       const connection = await acquireTracedConnection(tracedPool, false);
       try {
-        return await fn(drizzleNodePostgres({ client: connection, schema }));
+        return await fn(
+          drizzleNodePostgres({
+            client: connection,
+            relations: relationalSchema,
+            paramsInErrors: true,
+          }),
+        );
       } finally {
         connection.release();
       }

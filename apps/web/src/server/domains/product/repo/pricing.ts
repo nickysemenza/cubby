@@ -9,6 +9,7 @@ import { productPriceFacts } from "@cubby/schemas/product-fields";
 import type { RawProductOutput } from "@cubby/schemas/product-raw-read";
 import { round2 } from "@cubby/shared";
 import { and, inArray, isNotNull, sql, type SQL } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
 import { formatCurrency } from "~/lib/number-format";
@@ -20,6 +21,7 @@ import {
   uuidArrayParam,
 } from "~/server/db/helpers";
 import { actualExpenseSql } from "~/server/db/helpers/predicates";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { product } from "~/server/db/schema";
 import {
   costWeighted,
@@ -299,7 +301,8 @@ export const loadProductPricing = async (
 
   const [aggregateById, charges] = await Promise.all([
     loadPricingAggregates(db, ids, options),
-    unwrapDb(db).execute(sql`
+    unwrapDb(db).execute(
+      sql`
       SELECT p."id" AS "productId",
         avg(e."cost") FILTER (WHERE e."cost" > 0)::double precision AS average,
         count(*) FILTER (WHERE e."cost" > 0)::int AS count,
@@ -311,7 +314,9 @@ export const loadProductPricing = async (
       WHERE p."id" = ANY(${uuidArrayParam(ids)})
         AND ${sql.raw(serviceProductSqlText('p."id"'))}
       GROUP BY p."id"
-    `),
+    `,
+      "objects",
+    ),
   ]);
   const chargeRows = z
     .array(
@@ -322,7 +327,7 @@ export const loadProductPricing = async (
         latest: z.number().nullable(),
       }),
     )
-    .parse(charges.rows);
+    .parse(charges);
   const chargeById = new Map(chargeRows.map((row) => [row.productId, row]));
   return new Map(
     products.map((product) => {
@@ -384,7 +389,13 @@ export const loadEffectiveProductPricesById = async (
 ): Promise<Map<ProductId, number | null>> => {
   if (ids.length === 0) return new Map();
   const rows = await unwrapDb(db).query.product.findMany({
-    where: and(inArray(product.id, [...ids]), notDeleted(product)),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          and(inArray(product.id, [...ids]), notDeleted(product)),
+        ),
+    },
     columns: { id: true, price: true },
   });
   const pricing = await loadProductPricing(db, rows);
@@ -400,11 +411,17 @@ export const loadIngredientIdsForProducts = async (
 ): Promise<IngredientId[]> => {
   if (ids.length === 0) return [];
   const rows = await getDb(db).query.product.findMany({
-    where: and(
-      inArray(product.id, [...ids]),
-      isNotNull(product.ingredientId),
-      notDeleted(product),
-    ),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          and(
+            inArray(product.id, [...ids]),
+            isNotNull(product.ingredientId),
+            notDeleted(product),
+          ),
+        ),
+    },
     columns: { ingredientId: true },
   });
   return rows.flatMap((row) =>

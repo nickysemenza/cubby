@@ -1,6 +1,7 @@
 import type { AiAnalysisEntityKind } from "@cubby/schemas/ai";
 import { createLogger } from "@cubby/worker-tracing";
 import { and, desc, eq, isNull } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { isEqual } from "es-toolkit";
 import type { z } from "zod";
 
@@ -12,6 +13,7 @@ import {
   notDeleted,
   updateAndReturn,
 } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { aiAnalysis } from "~/server/db/schema";
 import { recordChange } from "~/server/generic/changes/repo/change";
 
@@ -44,15 +46,21 @@ export async function listAiAnalysesForEntityFeature<T>(
   },
 ): Promise<StoredAiAnalysis<T>[]> {
   const rows = await getDb(db).query.aiAnalysis.findMany({
-    where: and(
-      eq(aiAnalysis.entityKind, input.entityKind),
-      input.entityId == null
-        ? isNull(aiAnalysis.entityId)
-        : eq(aiAnalysis.entityId, input.entityId),
-      eq(aiAnalysis.feature, input.feature),
-      eq(aiAnalysis.promptVersion, input.promptVersion),
-      notDeleted(aiAnalysis),
-    ),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          and(
+            eq(aiAnalysis.entityKind, input.entityKind),
+            input.entityId == null
+              ? isNull(aiAnalysis.entityId)
+              : eq(aiAnalysis.entityId, input.entityId),
+            eq(aiAnalysis.feature, input.feature),
+            eq(aiAnalysis.promptVersion, input.promptVersion),
+            notDeleted(aiAnalysis),
+          ),
+        ),
+    },
     columns: {
       inputFingerprint: true,
       model: true,
@@ -60,7 +68,10 @@ export async function listAiAnalysesForEntityFeature<T>(
       result: true,
       updatedAt: true,
     },
-    orderBy: desc(aiAnalysis.updatedAt),
+    orderBy: (table: PgTable) =>
+      [desc(aiAnalysis.updatedAt)]
+        .flat()
+        .map((value) => relationalSql(table, value)),
     limit: input.limit ?? 50,
   });
 
@@ -110,7 +121,9 @@ export async function getCachedAiAnalysisRecord<T>(
   key: AiAnalysisKey<T>,
 ): Promise<{ result: T; analyzedAt: Date } | null> {
   const row = await getDb(db).query.aiAnalysis.findFirst({
-    where: analysisWhere(key),
+    where: {
+      RAW: (table: PgTable) => relationalSql(table, analysisWhere(key)),
+    },
     columns: { result: true, updatedAt: true },
   });
   if (!row) return null;
@@ -128,7 +141,7 @@ export async function upsertAiAnalysis<T>(
   const parsed = key.feature.analysisSchema.parse(result);
   const where = analysisWhere(key);
   const existing = await getDb(db).query.aiAnalysis.findFirst({
-    where,
+    where: { RAW: (table: PgTable) => relationalSql(table, where) },
     columns: { id: true, result: true },
   });
 

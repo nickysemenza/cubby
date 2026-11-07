@@ -164,8 +164,9 @@ describe("describeLocation previous description", () => {
           if (settled) return "published";
           const waiting = await getDb(ctx.db).execute(
             sql`SELECT 1 FROM pg_stat_activity WHERE datname=current_database() AND query ILIKE '%Image%' AND wait_event_type='Lock'`,
+            "objects",
           );
-          return waiting.rows.length ? "blocked" : "starting";
+          return waiting.length ? "blocked" : "starting";
         })
         .toBe("blocked");
     } finally {

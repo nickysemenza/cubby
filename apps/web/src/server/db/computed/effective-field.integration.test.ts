@@ -100,12 +100,15 @@ describe("inherited values", () => {
     const w = await projectWorld();
     const read = async (id: string) => {
       const row = { id: sql`${id}::uuid` };
-      const result = await unwrapDb(db()).execute(sql`SELECT
+      const result = await unwrapDb(db()).execute(
+        sql`SELECT
         ${inheritedFieldDecisionSql("project", "assigneeId", row)} AS decision,
         ${inheritedFieldSql("project", "assigneeId", row)} AS fallback,
         ${inheritedSourceSql("project", "assigneeId", row)} AS source,
-        ${effectiveFieldSql("project", "assigneeId", row)} AS effective`);
-      const first = result.rows[0];
+        ${effectiveFieldSql("project", "assigneeId", row)} AS effective`,
+        "objects",
+      );
+      const first = result[0];
       if (!first) throw new Error("Expected the selected project");
       return z
         .object({
@@ -154,11 +157,14 @@ describe("inherited values", () => {
       trade: "other",
     });
     const row = { id: sql`${task.id}::uuid` };
-    const result = await unwrapDb(db()).execute(sql`SELECT
+    const result = await unwrapDb(db()).execute(
+      sql`SELECT
       ${inheritedFieldDecisionSql("task", "assigneeId", row)} AS decision,
       ${inheritedFieldSql("task", "assigneeId", row)} AS fallback,
-      ${inheritedSourceSql("task", "assigneeId", row)} AS source`);
-    const first = result.rows[0];
+      ${inheritedSourceSql("task", "assigneeId", row)} AS source`,
+      "objects",
+    );
+    const first = result[0];
     if (!first) throw new Error("Expected the selected task");
     expect(inheritedFieldDecisionSchema.parse(first.decision)).toEqual({
       kind: "value",
@@ -171,9 +177,12 @@ describe("inherited values", () => {
       .update(taskTable)
       .set({ projectId: w.p5.id })
       .where(eq(taskTable.id, task.id));
-    const none = await unwrapDb(db()).execute(sql`SELECT
-      ${inheritedFieldDecisionSql("task", "assigneeId", row)} AS decision`);
-    expect(inheritedFieldDecisionSchema.parse(none.rows[0]?.decision)).toEqual({
+    const none = await unwrapDb(db()).execute(
+      sql`SELECT
+      ${inheritedFieldDecisionSql("task", "assigneeId", row)} AS decision`,
+      "objects",
+    );
+    expect(inheritedFieldDecisionSchema.parse(none[0]?.decision)).toEqual({
       kind: "empty",
       reason: "explicit_none",
       source: { entityKind: "project", entityId: w.p3.id },
@@ -183,9 +192,12 @@ describe("inherited values", () => {
   it("keeps an unassigned array default distinct from an ancestor's explicitly empty array", async () => {
     const w = await projectWorld();
     const read = async (id: string) => {
-      const result = await unwrapDb(db()).execute(sql`SELECT
-        ${inheritedFieldDecisionSql("project", "locations", { id: sql`${id}::uuid` })} AS decision`);
-      return inheritedFieldDecisionSchema.parse(result.rows[0]?.decision);
+      const result = await unwrapDb(db()).execute(
+        sql`SELECT
+        ${inheritedFieldDecisionSql("project", "locations", { id: sql`${id}::uuid` })} AS decision`,
+        "objects",
+      );
+      return inheritedFieldDecisionSchema.parse(result[0]?.decision);
     };
     expect(await read(w.p4.id)).toEqual({
       kind: "value",
@@ -217,12 +229,15 @@ describe("inherited values", () => {
       identity: { kind: "bank_account", accountType: "checking" },
       ledgerPartyId: owner.output.id,
     });
-    const result = await unwrapDb(db()).execute(sql`SELECT f.shortcode,
+    const result = await unwrapDb(db()).execute(
+      sql`SELECT f.shortcode,
       ${inheritedFieldDecisionSql("financialAccount", "primaryCardholderId", "f")} AS decision,
       ${inheritedFieldSql("financialAccount", "primaryCardholderId", "f")} AS fallback
-      FROM "FinancialAccount" f WHERE f.shortcode IN (${card.output.id}, ${bank.output.id})`);
+      FROM "FinancialAccount" f WHERE f.shortcode IN (${card.output.id}, ${bank.output.id})`,
+      "objects",
+    );
     const rows = new Map(
-      result.rows.map((row) => [
+      result.map((row) => [
         row.shortcode,
         {
           decision: inheritedFieldDecisionSchema.parse(row.decision),

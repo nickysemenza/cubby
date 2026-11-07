@@ -38,7 +38,10 @@ export const job = pgTable(
     state: text("state").$type<JobState>().notNull().default("queued"),
     runId: uuid("runId")
       .$type<RunId>()
-      .references((): AnyPgColumn => run.id, { onDelete: "set null" }),
+      .references((): AnyPgColumn => run.id, {
+        name: "Job_runId_Run_id_fk",
+        onDelete: "set null",
+      }),
     waitReason: text("waitReason").$type<JobWaitReason>(),
     input: jsonb("input").$type<JobPayload>().notNull(),
     cursor: jsonb("cursor").$type<JobPayload>(),

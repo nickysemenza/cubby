@@ -207,6 +207,18 @@ describe("CalendarFeedDurableObject in workerd", () => {
     expect(head.status).toBe(304);
     expect(await head.text()).toBe("");
 
+    // Reopen populated storage with the v0 ledger: v1 must name receipts without replaying DDL.
+    await runInDurableObject(stub, (_instance, state) => {
+      state.storage.sql.exec(
+        "ALTER TABLE __drizzle_migrations DROP COLUMN name",
+      );
+      state.storage.sql.exec(
+        "ALTER TABLE __drizzle_migrations DROP COLUMN applied_at",
+      );
+      state.storage.sql.exec(
+        "UPDATE __drizzle_migrations SET created_at = created_at + 123",
+      );
+    });
     await evictDurableObject(stub);
     const afterRestart = await stub.fetch(
       request(
@@ -490,7 +502,11 @@ describe("CalendarFeedDurableObject in workerd", () => {
         const store = new CalendarSqlStore(state.storage);
         const duplicate = { ...resource, filename: "duplicate.ics" };
         expect(() => publish(store, [resource, duplicate])).toThrow(
-          /UNIQUE constraint failed/i,
+          expect.objectContaining({
+            cause: expect.objectContaining({
+              message: expect.stringMatching(/UNIQUE constraint failed/i),
+            }),
+          }),
         );
         expect(store.meta().generation).toBe(1);
         expect(store.list("tasks")).toHaveLength(1);

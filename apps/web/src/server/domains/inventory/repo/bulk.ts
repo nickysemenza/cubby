@@ -13,6 +13,7 @@ import type {
 } from "@cubby/schemas/inventory";
 import type { InventoryOwnershipMode } from "@cubby/schemas/inventory-ownership";
 import { and, eq, inArray, max } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { uniq } from "es-toolkit";
 import { match } from "ts-pattern";
 
@@ -27,6 +28,7 @@ import {
   updateAndReturn,
   withTransaction,
 } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { inventoryEntry, location, product } from "~/server/db/schema";
 import {
   inventorySlotKey,
@@ -83,11 +85,19 @@ export const getInventoryLocationSnapshotToken = async (
   placement: InventoryPlacement | "all" = "stock",
 ): Promise<string> => {
   const rows = await getDb(db).query.inventoryEntry.findMany({
-    where: and(
-      eq(inventoryEntry.locationId, locationId),
-      placement === "all" ? undefined : eq(inventoryEntry.placement, placement),
-      notDeleted(inventoryEntry),
-    ),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          and(
+            eq(inventoryEntry.locationId, locationId),
+            placement === "all"
+              ? undefined
+              : eq(inventoryEntry.placement, placement),
+            notDeleted(inventoryEntry),
+          ),
+        ),
+    },
     columns: {
       id: true,
       productId: true,
@@ -217,11 +227,17 @@ const loadAddedInventoryTargets = async (
 ) => {
   if (productIds.length === 0) return [];
   return await tx.query.inventoryEntry.findMany({
-    where: and(
-      eq(inventoryEntry.locationId, locationId),
-      inArray(inventoryEntry.productId, productIds),
-      notDeleted(inventoryEntry),
-    ),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          and(
+            eq(inventoryEntry.locationId, locationId),
+            inArray(inventoryEntry.productId, productIds),
+            notDeleted(inventoryEntry),
+          ),
+        ),
+    },
     ...relations.inventory.full,
   });
 };
@@ -671,10 +687,16 @@ export const moveInventoryEntries = async (
         payload.items.map((item) => item.inventoryEntryId),
       );
       const sourceEntries = await tx.query.inventoryEntry.findMany({
-        where: and(
-          inArray(inventoryEntry.id, sourceIds),
-          notDeleted(inventoryEntry),
-        ),
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(
+              table,
+              and(
+                inArray(inventoryEntry.id, sourceIds),
+                notDeleted(inventoryEntry),
+              ),
+            ),
+        },
         ...relations.inventory.full,
       });
       const sourceById = new Map(sourceEntries.map((e) => [e.id, e]));
@@ -693,11 +715,17 @@ export const moveInventoryEntries = async (
       const destinationEntries =
         productIds.length > 0
           ? await tx.query.inventoryEntry.findMany({
-              where: and(
-                inArray(inventoryEntry.productId, productIds),
-                inArray(inventoryEntry.locationId, targetLocationIds),
-                notDeleted(inventoryEntry),
-              ),
+              where: {
+                RAW: (table: PgTable) =>
+                  relationalSql(
+                    table,
+                    and(
+                      inArray(inventoryEntry.productId, productIds),
+                      inArray(inventoryEntry.locationId, targetLocationIds),
+                      notDeleted(inventoryEntry),
+                    ),
+                  ),
+              },
               ...relations.inventory.full,
             })
           : [];
@@ -822,11 +850,17 @@ export const reconcileLocationSession = async (
       // throw: the row leaves `liveIds` while still in `expectedIds`, so the
       // snapshot genuinely changed. That is asserted, not accidental.
       const existing = await tx.query.inventoryEntry.findMany({
-        where: and(
-          eq(inventoryEntry.locationId, locationId),
-          stockOnly(),
-          notDeleted(inventoryEntry),
-        ),
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(
+              table,
+              and(
+                eq(inventoryEntry.locationId, locationId),
+                stockOnly(),
+                notDeleted(inventoryEntry),
+              ),
+            ),
+        },
         ...relations.inventory.full,
       });
       const latestRows = await tx

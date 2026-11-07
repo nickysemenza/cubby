@@ -39,7 +39,7 @@ export class UsdaReleaseDurableObject
     this.store = new UsdaReleaseStore(
       ctx.storage.sql,
       (fn) => ctx.storage.transactionSync(fn),
-      drizzle(ctx.storage),
+      drizzle(ctx.storage, { paramsInErrors: true }),
     );
     void ctx.blockConcurrencyWhile(() => migrateUsdaRelease(ctx.storage));
   }

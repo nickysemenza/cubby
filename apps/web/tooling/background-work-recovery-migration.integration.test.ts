@@ -7,8 +7,10 @@ import { withMigrationDatabase } from "./test-database-lease";
 // Recovery may restore owed work, but cannot discard paid evidence or resume member stops.
 it("recovers known background failures while preserving evidence, stops and live leases", async () => {
   await withMigrationDatabase(async (client) => {
-    const db = drizzle(client);
-    await migrateDatabase(db, { through: "0116_adr25-l2f-image" });
+    const db = drizzle({ client, paramsInErrors: true });
+    await migrateDatabase(db, {
+      through: "20261106180850_0116_adr25-l2f-image",
+    });
     let sequence = 0;
     const nextId = () =>
       `00000000-0000-4000-8000-${String(++sequence).padStart(12, "0")}`;
@@ -247,7 +249,9 @@ it("recovers known background failures while preserving evidence, stops and live
     const imageEvidenceBefore = await imageEvidence();
     const before = await evaluations();
     const imagesBefore = await images();
-    await migrateDatabase(db, { through: "0117_background-work-recovery" });
+    await migrateDatabase(db, {
+      through: "20261106235744_0117_background-work-recovery",
+    });
     const after = await evaluations();
     const imagesAfter = await images();
     expect(await evaluationEvidence()).toEqual(evidenceBefore);

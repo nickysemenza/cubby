@@ -7,6 +7,7 @@ import {
 import type { ProductId } from "@cubby/schemas/identifiers";
 import type { UnitMappingInput } from "@cubby/schemas/unitmapping";
 import { and, asc, eq, inArray, isNotNull, sql } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 
 import { isCanonicalPriceMapping } from "~/lib/price-mapping-utils";
 import { wasm } from "~/lib/wasm";
@@ -18,6 +19,7 @@ import {
   nextImageSortOrder,
   notDeleted,
 } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
   entityAttachment,
   entityExternalId,
@@ -114,7 +116,10 @@ export async function syncProductUnitMappings(
   unitMappings: UnitMappingInput[],
 ): Promise<void> {
   const existingMappings = await tx.query.productUnitMappings.findMany({
-    where: eq(productUnitMappings.productId, productId),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(table, eq(productUnitMappings.productId, productId)),
+    },
   });
 
   const toDelete = existingMappings.filter(
@@ -186,13 +191,22 @@ export async function ensureSlotPrimaries(
     if (seen.has(key)) continue;
     seen.add(key);
     const live = await tx.query.entityExternalId.findMany({
-      where: and(
-        eq(entityExternalId.entityId, productId),
-        eq(entityExternalId.source, source),
-        sql`${entityExternalId.kind} = ${slot.kind}`,
-        notDeleted(entityExternalId),
-      ),
-      orderBy: [asc(entityExternalId.createdAt), asc(entityExternalId.id)],
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(
+              eq(entityExternalId.entityId, productId),
+              eq(entityExternalId.source, source),
+              sql`${entityExternalId.kind} = ${slot.kind}`,
+              notDeleted(entityExternalId),
+            ),
+          ),
+      },
+      orderBy: (table: PgTable) =>
+        [[asc(entityExternalId.createdAt), asc(entityExternalId.id)]]
+          .flat()
+          .map((value) => relationalSql(table, value)),
     });
     if (live.length === 0 || live.some((row) => row.isPrimary)) continue;
     await tx
@@ -308,10 +322,16 @@ export async function syncProductExternalIds(
     { entityId: productId, entityKind: "product" },
   ]);
   const existingExternalIds = await tx.query.entityExternalId.findMany({
-    where: and(
-      eq(entityExternalId.entityId, productId),
-      notDeleted(entityExternalId),
-    ),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          and(
+            eq(entityExternalId.entityId, productId),
+            notDeleted(entityExternalId),
+          ),
+        ),
+    },
   });
 
   const normalized = externalIds.map((eid) => ({

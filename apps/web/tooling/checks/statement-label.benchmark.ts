@@ -1,3 +1,4 @@
+import { relationalSchema } from "~/server/db/schema";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { execFileSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
@@ -82,13 +83,23 @@ it.each(sizes)(
         querySources.set(querySource, (querySources.get(querySource) ?? 0) + 1);
       },
     );
-    const client = drizzle({ client: observed, schema });
+    const client = drizzle({
+      client: observed,
+      relations: relationalSchema,
+      paramsInErrors: true,
+    });
     const db = createDatabase(() => ({
       client,
       withConnection: async (run) => {
         const connection = await observed.connect();
         try {
-          return await run(drizzle({ client: connection, schema }));
+          return await run(
+            drizzle({
+              client: connection,
+              relations: relationalSchema,
+              paramsInErrors: true,
+            }),
+          );
         } finally {
           connection.release();
         }
@@ -381,7 +392,11 @@ it.each(sizes)(
       expect(
         measured.outcome.completed === size || measured.outcome.next !== null,
       ).toBe(true);
-      const money = await getDb(db).execute(sql`SELECT
+      const money = await getDb(db).execute<{
+        expenses: number;
+        transactions: number;
+        usage: number;
+      }>(sql`SELECT
         (SELECT count(*)::int FROM "Expense") AS expenses,
         (SELECT count(*)::int FROM "FinancialTransaction") AS transactions,
         (SELECT count(*)::int FROM "AiUsage") AS usage`);
@@ -443,8 +458,11 @@ it.each(sizes)(
       expect(repeated.labelled).toBe(0);
       expect(repeated.completed).toBe(0);
       expect(providerQuestions).toBe(callsBeforeRepeat);
-      const durable = await getDb(db)
-        .execute(sql`SELECT count(*)::int AS active,
+      const durable = await getDb(db).execute<{
+        active: number;
+        unfinished: number;
+        checkpoints: number;
+      }>(sql`SELECT count(*)::int AS active,
         count(*) FILTER (WHERE data->>'needsLabel' = 'true' OR data->>'applicationPending' = 'true')::int AS unfinished,
         count(*) FILTER (WHERE data->'labelCheckpoint'->>'revision' = ${STATEMENT_LABEL_REVISION})::int AS checkpoints
         FROM "Suggestion" WHERE family = ${suggestionFamily.enum.statement_transaction} AND active`);
@@ -453,7 +471,11 @@ it.each(sizes)(
         unfinished: 0,
         checkpoints: size,
       });
-      const settledMoney = await getDb(db).execute(sql`SELECT
+      const settledMoney = await getDb(db).execute<{
+        expenses: number;
+        transactions: number;
+        usage: number;
+      }>(sql`SELECT
         (SELECT count(*)::int FROM "Expense") AS expenses,
         (SELECT count(*)::int FROM "FinancialTransaction") AS transactions,
         (SELECT count(*)::int FROM "AiUsage") AS usage`);

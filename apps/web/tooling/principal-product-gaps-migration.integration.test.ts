@@ -6,8 +6,10 @@ import { withMigrationDatabase } from "./test-database-lease";
 
 it("preserves principal evidence and queues existing quality through the derived drain", async () => {
   await withMigrationDatabase(async (client) => {
-    const db = drizzle(client);
-    await migrateDatabase(db, { through: "0040_background_derived_priority" });
+    const db = drizzle({ client: client, paramsInErrors: true });
+    await migrateDatabase(db, {
+      through: "20261026155451_0040_background_derived_priority",
+    });
     const vendor = "00000000-0000-4000-8000-000000000001";
     const purchase = "00000000-0000-4000-8000-000000000002";
     const expense = "00000000-0000-4000-8000-000000000003";
@@ -44,7 +46,7 @@ it("preserves principal evidence and queues existing quality through the derived
     // A completed old publication has no remaining dirty mark.
     await client.query(`DELETE FROM "DerivedDirty"`);
     await migrateDatabase(db, {
-      through: "0041_unclassified_principal_product_gaps",
+      through: "20261026212913_0041_unclassified_principal_product_gaps",
     });
     expect(await retained()).toEqual(before);
     const marks = async () =>

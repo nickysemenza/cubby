@@ -4,6 +4,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { unwrapDb } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { effectiveExpenseSpendingCategorySql } from "~/server/domains/expense/repo/expense-category-resolution";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import {
@@ -88,8 +89,9 @@ describe("reviewed spending classification", () => {
       (
         await unwrapDb(ctx.db).execute(
           sql`SELECT "categoryId" FROM "Product" WHERE id=${item.id}`,
+          "objects",
         )
-      ).rows[0]?.categoryId,
+      )[0]?.categoryId,
     ).toBe(oldCategory.id);
     await applySpendingClassificationReview(context(), {
       request,
@@ -97,8 +99,9 @@ describe("reviewed spending classification", () => {
     });
     const resolved = await unwrapDb(ctx.db).execute(
       sql`SELECT id,cost,"productQuantity",${effectiveExpenseSpendingCategorySql("e")} AS category FROM "Expense" e WHERE e.id IN (${line.id},${override.id})`,
+      "objects",
     );
-    expect(resolved.rows).toEqual(
+    expect(resolved).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
           id: line.id,
@@ -147,14 +150,18 @@ describe("reviewed spending classification", () => {
       (
         await unwrapDb(ctx.db).execute(
           sql`SELECT "categoryId" FROM "Product" WHERE id=${item.id}`,
+          "objects",
         )
-      ).rows[0]?.categoryId,
+      )[0]?.categoryId,
     ).toBeNull();
   });
 
   it("refuses taxonomy changes that would change Food allocation semantics", async () => {
     const food = await unwrapDb(ctx.db).query.productCategory.findFirst({
-      where: (category, { eq }) => eq(category.feature, "food"),
+      where: {
+        RAW: (category, { eq }) =>
+          relationalSql(category, eq(category.feature, "food")),
+      },
     });
     if (!food) throw new Error("Missing synthetic Food feature root");
     const tools = await insertWithShortcode(ctx.db, "productCategory", {
@@ -267,8 +274,9 @@ describe("reviewed spending classification", () => {
       ).resolves.toMatchObject({ applied: true, updatedRecords: 1 });
       const resolved = await unwrapDb(ctx.db).execute(
         sql`SELECT ${effectiveExpenseSpendingCategorySql("e")} AS category FROM "Expense" e WHERE e.id=${expense.id}`,
+        "objects",
       );
-      expect(resolved.rows[0]?.category).toBe(category.id);
+      expect(resolved[0]?.category).toBe(category.id);
       // A completed review cannot authorize a later unrelated request.
       await expect(unreviewed()).rejects.toThrow(/Preview and apply/);
       await expect(
@@ -369,8 +377,9 @@ describe("reviewed spending classification", () => {
     );
     const before = await unwrapDb(ctx.db).execute(
       sql`SELECT "spendingCategoryId" FROM "Expense" WHERE id=${expense.id}`,
+      "objects",
     );
-    expect(before.rows[0]?.spendingCategoryId).toBeNull();
+    expect(before[0]?.spendingCategoryId).toBeNull();
     await unwrapDb(ctx.db).execute(
       sql`UPDATE "Expense" SET cost=15 WHERE id=${expense.id}`,
     );
@@ -382,7 +391,8 @@ describe("reviewed spending classification", () => {
     ).rejects.toThrow(/changed/i);
     const after = await unwrapDb(ctx.db).execute(
       sql`SELECT "spendingCategoryId" FROM "Expense" WHERE id=${expense.id}`,
+      "objects",
     );
-    expect(after.rows[0]?.spendingCategoryId).toBeNull();
+    expect(after[0]?.spendingCategoryId).toBeNull();
   });
 });

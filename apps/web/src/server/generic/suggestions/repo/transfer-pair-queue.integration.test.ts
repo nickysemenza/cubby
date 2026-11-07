@@ -315,8 +315,9 @@ describe("transfer pairs in the global queue", () => {
       const waitForAdvisory = (count: number) =>
         vi.waitFor(
           async () => {
-            const { rows } = await getDb(ctx.db).execute<{ count: number }>(
+            const rows = await getDb(ctx.db).execute<{ count: number }>(
               sql`SELECT count(*)::int AS count FROM pg_stat_activity WHERE datname=current_database() AND wait_event='advisory'`,
+              "objects",
             );
             expect(rows[0]!.count).toBeGreaterThanOrEqual(count);
           },

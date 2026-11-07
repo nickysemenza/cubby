@@ -1,3 +1,5 @@
+import type { PgTable } from "drizzle-orm/pg-core";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { z } from "zod";
 import { and, eq } from "drizzle-orm";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
@@ -128,10 +130,16 @@ test("connects Google and retains Gmail MIME evidence without economic writes", 
     true,
   );
   const connected = await database.query.account.findFirst({
-    where: and(
-      eq(googleAccount.userId, actor.userId),
-      eq(googleAccount.providerId, "google"),
-    ),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          and(
+            eq(googleAccount.userId, actor.userId),
+            eq(googleAccount.providerId, "google"),
+          ),
+        ),
+    },
   });
   if (!connected?.accessToken)
     throw new Error("Google callback did not retain its access token");
@@ -172,19 +180,28 @@ test("connects Google and retains Gmail MIME evidence without economic writes", 
   // Acquiring an original must not book spend or claim household ownership.
   expect(
     await database.query.purchase.findMany({
-      where: notDeleted(schema.purchase),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(table, notDeleted(schema.purchase)),
+      },
       columns: { id: true },
     }),
   ).toEqual([]);
   expect(
     await database.query.expense.findMany({
-      where: notDeleted(schema.expense),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(table, notDeleted(schema.expense)),
+      },
       columns: { id: true },
     }),
   ).toEqual([]);
   expect(
     await database.query.inventoryEntry.findMany({
-      where: notDeleted(schema.inventoryEntry),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(table, notDeleted(schema.inventoryEntry)),
+      },
       columns: { id: true },
     }),
   ).toEqual([]);

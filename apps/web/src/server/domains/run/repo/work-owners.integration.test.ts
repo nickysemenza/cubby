@@ -109,24 +109,28 @@ describe("Run review authority query work", () => {
     for (const [index, id] of ids.entries()) {
       const result = await getDb(ctx.db).execute(
         sql`SELECT ${workRunReviewOwners(sql`${id}::uuid`)} AS owners`,
+        "objects",
       );
-      expect(result.rows[0]?.owners).toEqual(expected[index]);
+      expect(result[0]?.owners).toEqual(expected[index]);
     }
     const missing = await getDb(ctx.db).execute(
       sql`SELECT ${workRunReviewOwners(sql`${crypto.randomUUID()}::uuid`)} AS owners`,
+      "objects",
     );
-    expect(missing.rows[0]?.owners).toEqual([]);
+    expect(missing[0]?.owners).toEqual([]);
     const read = workRunReviewRead();
-    const joined = await getDb(ctx.db)
-      .execute(sql`SELECT "Run".id, ${read.owners} AS owners
+    const joined = await getDb(ctx.db).execute(
+      sql`SELECT "Run".id, ${read.owners} AS owners
       FROM ${read.table} WHERE "Run".id IN (${sql.join(
         ids.map((id) => sql`${id}::uuid`),
         sql`, `,
       )})
-      AND "Run"."deletedAt" IS NULL`);
-    expect(joined.rows).toHaveLength(ids.length - 1);
+      AND "Run"."deletedAt" IS NULL`,
+      "objects",
+    );
+    expect(joined).toHaveLength(ids.length - 1);
     for (const [index, id] of ids.slice(0, -1).entries()) {
-      expect(joined.rows.find((row) => row.id === id)?.owners).toEqual(
+      expect(joined.find((row) => row.id === id)?.owners).toEqual(
         expected[index],
       );
     }
@@ -185,11 +189,12 @@ describe("Run review authority query work", () => {
     );
     const statement = sql`SELECT ${workRunReviewOwners(sql`candidate.id`)} AS owners
       FROM "Run" candidate WHERE candidate."ledgerPartyId" = ${member.id}`;
-    const rows = await getDb(ctx.db).execute(statement);
-    expect(rows.rows).toHaveLength(additionalRuns + 1);
-    for (const row of rows.rows) expect(row.owners).toEqual([member.id]);
+    const rows = await getDb(ctx.db).execute(statement, "objects");
+    expect(rows).toHaveLength(additionalRuns + 1);
+    for (const row of rows) expect(row.owners).toEqual([member.id]);
     const result = await getDb(ctx.db).execute(
       sql`EXPLAIN (ANALYZE, FORMAT JSON) ${statement}`,
+      "objects",
     );
     const nodeSchema = z.object({
       "Relation Name": z.string().optional(),
@@ -202,7 +207,7 @@ describe("Run review authority query work", () => {
           "QUERY PLAN": z.array(z.object({ Plan: z.unknown() })),
         }),
       )
-      .parse(result.rows);
+      .parse(result);
     let runReads = 0;
     const visit = (value: unknown) => {
       const node = nodeSchema.parse(value);

@@ -189,14 +189,17 @@ async function selfAndAncestors(
   db: Database | DrizzleTransaction,
   id: EntityId<"spendingCategory">,
 ): Promise<Set<string>> {
-  const rows = await unwrapDb(db).execute(sql`WITH RECURSIVE parents AS (
+  const rows = await unwrapDb(db).execute(
+    sql`WITH RECURSIVE parents AS (
       SELECT id, "parentId", ARRAY[id] AS path FROM "SpendingCategory" WHERE id = ${id} AND ${notDeleted("SpendingCategory")}
       UNION ALL SELECT c.id, c."parentId", p.path || c.id FROM "SpendingCategory" c JOIN parents p ON c.id = p."parentId" WHERE ${notDeleted("c")} AND NOT c.id = ANY(p.path)
-    ) SELECT id FROM parents`);
+    ) SELECT id FROM parents`,
+    "objects",
+  );
   return new Set(
     z
       .array(z.object({ id: z.string() }))
-      .parse(rows.rows)
+      .parse(rows)
       .map((row) => row.id),
   );
 }
@@ -347,15 +350,18 @@ async function reclassifiesExpenses(
   tx: DrizzleTransaction,
   loserIds: readonly EntityId<"spendingCategory">[],
 ): Promise<boolean> {
-  const rows = await unwrapDb(tx).execute(sql`
+  const rows = await unwrapDb(tx).execute(
+    sql`
     SELECT 1 FROM "Expense" e
     WHERE ${notDeleted("e")}
       AND ${effectiveExpenseSpendingCategorySql("e")} IN (${sql.join(
         loserIds.map((id) => sql`${id}::uuid`),
         sql`, `,
       )})
-    LIMIT 1`);
-  return rows.rows.length > 0;
+    LIMIT 1`,
+    "objects",
+  );
+  return rows.length > 0;
 }
 
 /**

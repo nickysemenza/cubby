@@ -68,12 +68,14 @@ import {
   rawTaskOut,
 } from "@cubby/schemas/work-raw-read";
 import { and, asc, ne } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 
 import { householdLocalDate } from "~/lib/household-date";
 import { effectiveTaskDueDate } from "~/lib/task-dates";
 import type { Database } from "~/server/db";
 import { effectiveFieldSql } from "~/server/db/computed/effective-field";
 import { getDb, notDeleted, relations } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { entityLink, project, task } from "~/server/db/schema";
 import { liveLinks } from "~/server/generic/entity-links/repo/entity-links";
 import { listAll } from "~/server/generic/list/repo/list-all";
@@ -481,7 +483,10 @@ export async function listActionableTasks(
 
   const [openTaskRows, graph] = await Promise.all([
     getDb(db).query.task.findMany({
-      where: and(notDeleted(task), ne(task.status, "done")),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(table, and(notDeleted(task), ne(task.status, "done"))),
+      },
       ...relations.task.withProject,
     }),
     loadTaskDependencyGraph(db),

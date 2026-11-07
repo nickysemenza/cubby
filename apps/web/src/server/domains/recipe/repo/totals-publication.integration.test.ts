@@ -1,10 +1,12 @@
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { eq } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { recipe, expense } from "~/server/db/schema";
 import { findOrCreateIngredient } from "~/server/domains/ingredient/repo/crud";
 import { markRecipesStale } from "~/server/domains/recipe/repo/totals";
@@ -64,7 +66,10 @@ describe("recipe Job publication", () => {
     );
     expect(stale.sources).toEqual(published.sources);
     const row = await getDb(ctx.db).query.recipe.findFirst({
-      where: eq(recipe.id, subject.entityId),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(table, eq(recipe.id, subject.entityId)),
+      },
     });
     expect(row?.totalsComputedAt).toBeNull();
     expect(row?.totalsPublishedAt?.toISOString()).toEqual(
@@ -130,7 +135,10 @@ describe("recipe Job publication", () => {
       const stored = async () =>
         (
           await getDb(ctx.db).query.recipe.findFirst({
-            where: eq(recipe.id, subject.entityId),
+            where: {
+              RAW: (table: PgTable) =>
+                relationalSql(table, eq(recipe.id, subject.entityId)),
+            },
           })
         )?.totals;
       await drain();

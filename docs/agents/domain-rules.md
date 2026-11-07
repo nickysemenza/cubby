@@ -47,7 +47,7 @@ Drizzle generation for `schema.ts`, and `pnpm --filter @cubby/web
 db:migrate --target=production` applies them with
 `PRODUCTION_DIRECT_DATABASE_URL`.
 Run `db:generate` with a TTY and unredirected stdout when Drizzle asks
-create/rename questions; inspect the journal and generated SQL before treating
+create/rename questions; inspect the snapshot graph and generated SQL before treating
 generation as complete.
 
 For functions, triggers, views, or other derived DDL, update the desired-state
@@ -57,19 +57,21 @@ migration to extend, use `pnpm db:generate --custom --name=description`.
 Do not copy the entire desired-state script into another migration or add a
 generator wrapper or hash lock. The catalog check detects missing SQL changes.
 
-Migration SQL and journal entries are immutable once merged, except for an
+Migration SQL and folder names are immutable once merged, except for an
 explicitly authorized baseline consolidation following the
 [production migration runbook](../runbooks/production-migrations.md#baseline-consolidation).
-Keep only the latest `drizzle/meta/*_snapshot.json`: it is generation state,
-not applied history. After `db:generate`, delete superseded snapshots;
-`db:check` rejects them. Snapshots remain committed so generation can recognize
-renames and drops, but `.gitattributes` suppresses their full-schema line diffs.
-The runner refuses bookkeeping that is not a prefix of the journal, apart from
-the exact retired-ledger adoption described in the runbook.
+Drizzle v1 stores each migration in `<UTC timestamp>_<name>/migration.sql`.
+Keep its `snapshot.json` and all predecessor snapshots: v1 reconstructs the
+generation state from this graph and checks cross-branch conflicts. `db:check`
+reconstructs that state and compares it with the full generated schema and a
+fresh database. The runner validates applied names and SQL hashes, rejects
+unknown or duplicate receipts, and applies every missing migration within the
+requested boundary. Legacy ledgers acquire names without replaying SQL; exact
+retired-ledger adoption still follows the runbook.
 A stored-shape transform accompanying schema work is a custom migration
 (`drizzle-kit generate --custom`). For an explicitly authorized one-off data-only
 correction, use a transactional update and verify preservation and read-back;
-keep the script outside the repository and add no journal entry or schema guard
+keep the script outside the repository and add no migration or schema guard
 solely to route it through migrations. CI `db:check` fails when `schema.ts` has no migration or the
 migrations build a catalog different from `schema.ts` plus the desired-state
 derived DDL, including function, trigger and view definitions; `tooling/db-catalog.ts`
@@ -107,15 +109,11 @@ Traps, all seen for real:
   Explicit production MCP/database access still reaches the shared household;
   concurrent sessions make point-in-time production sweeps unreliable.
   `db:migrate` uses its explicit target, never the application's `DATABASE_URL`.
-- Migrations from parallel branches can interleave: drizzle skips a journal
-  entry older than the last applied one, so regenerate after merging `main`
-  (`db:check` rejects an out-of-order journal).
-  If production already applied an unmerged predecessor, preserve its SQL,
-  hash and timestamp and insert it chronologically into the committed journal.
-  Preserve merged successor SQL and timestamps too; regenerate the snapshot
-  chain and contiguous journal indexes. Filename numbers need not match journal
-  indexes after this repair. Keep unapplied contractions after the repaired
-  prefix and out of an expansion-only repair; never reset production bookkeeping.
+- Migrations from parallel branches can interleave. Run `drizzle-kit check`
+  after merging `main`; v1 matches receipts by full folder name and applies
+  missing migrations even when an already-applied migration sorts later.
+  Preserve committed SQL and folder names. Never use a conflict repair that
+  deletes an applied migration or requires resetting a durable database.
 - Enum-like columns are text with a CHECK generated from a `packages/schemas`
   value array. Adding a value widens that CHECK, so `db:generate` emits a
   migration that must reach prod before the code that writes the value deploys.
@@ -248,6 +246,14 @@ valid prefix. Entity-specific schemas remain the declaration shape.
 Prefix inference applies the union fallback to each input member before
 combining results, so whitespace-wrapped members cannot borrow another
 member's entity brand.
+
+Relational queries use Drizzle RQB v2 and one assembled `relationalSchema`.
+Its root and nested rows have generated aliases. Build filters through the
+`RAW` callback and bind shared SQL expressions with `relationalSql(table, sql)`;
+use the same binding for prebuilt ordering and extras. `outer(column)` retains
+column identity for this binding while preserving qualification in plain selects.
+Do not interpolate an old RQB alias into a relational expression. Extras that
+accept a table-name argument must derive it from the callback's table.
 
 Drizzle raw-`sql` traps: a nullable timestamp `CASE` must cast its bound
 instant to `timestamp`; an unconstrained parameter beside `NULL` otherwise

@@ -23,6 +23,7 @@ import {
 import { moneyToMinor, cents, minorToMoney } from "@cubby/shared";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { and, eq, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 
 import { householdLocalDate } from "~/lib/household-date";
 import { wasm } from "~/lib/wasm";
@@ -34,6 +35,7 @@ import {
   notDeleted,
   withTransaction,
 } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
   entityAttachment,
   expense,
@@ -224,11 +226,17 @@ async function findPurchase(
 ) {
   if (!orderId) return null;
   return tx.query.purchase.findFirst({
-    where: and(
-      eq(purchase.vendorId, vendorId),
-      eq(purchase.orderId, orderId),
-      notDeleted(purchase),
-    ),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          and(
+            eq(purchase.vendorId, vendorId),
+            eq(purchase.orderId, orderId),
+            notDeleted(purchase),
+          ),
+        ),
+    },
   });
 }
 
@@ -620,7 +628,13 @@ export async function resolveLineProduct(
   if (decision.productId) {
     const productId = parseEntityId("product", decision.productId);
     const liveProduct = await tx.query.product.findFirst({
-      where: and(eq(product.id, productId), notDeleted(product)),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(eq(product.id, productId), notDeleted(product)),
+          ),
+      },
     });
     if (!liveProduct) throw new Error("The reviewed Product no longer exists.");
     await learnLineIdentifiers(
@@ -1325,11 +1339,17 @@ export async function importVendorOrder(
     }
     if (existingOrder) {
       const target = await tx.query.purchase.findFirst({
-        where: and(
-          eq(purchase.id, existingOrder.purchaseId),
-          eq(purchase.vendorId, parseEntityId("vendor", input.vendorId)),
-          notDeleted(purchase),
-        ),
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(
+              table,
+              and(
+                eq(purchase.id, existingOrder.purchaseId),
+                eq(purchase.vendorId, parseEntityId("vendor", input.vendorId)),
+                notDeleted(purchase),
+              ),
+            ),
+        },
       });
       if (!target)
         throw new Error(
@@ -1434,10 +1454,16 @@ export async function importVendorOrder(
     const selectedId = input.targetPurchaseId;
     const chosen = selectedId
       ? await tx.query.purchase.findFirst({
-          where: and(
-            eq(purchase.id, parseEntityId("purchase", selectedId)),
-            notDeleted(purchase),
-          ),
+          where: {
+            RAW: (table: PgTable) =>
+              relationalSql(
+                table,
+                and(
+                  eq(purchase.id, parseEntityId("purchase", selectedId)),
+                  notDeleted(purchase),
+                ),
+              ),
+          },
         })
       : undefined;
     if (selectedId && !chosen)
@@ -2107,7 +2133,13 @@ export async function importVendorOrder(
       }
     }
     const classifiedLines = await tx.query.expense.findMany({
-      where: and(eq(expense.purchaseId, purchaseId), notDeleted(expense)),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(eq(expense.purchaseId, purchaseId), notDeleted(expense)),
+          ),
+      },
     });
     for (const line of classifiedLines)
       await validateExpenseInheritance(tx, line);

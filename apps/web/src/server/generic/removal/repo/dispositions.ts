@@ -32,6 +32,7 @@ import {
   type ImageShortcode,
   parseEntityRef,
 } from "@cubby/schemas/identifiers";
+import { getColumnTable } from "drizzle-orm";
 import {
   and,
   getTableColumns,
@@ -127,7 +128,7 @@ const physicalEdges = <E extends RemovableEntity>(
       // SAFETY: INCOMING_EDGES is built only from Postgres schema columns.
       const column = edge.column as PgColumn;
       // SAFETY: as above — a Postgres column's table is a PgTable.
-      const table = column.table as PgTable;
+      const table = getColumnTable(column) as PgTable;
       const columns = getTableColumns(table);
       const property = Object.entries(columns).find(
         ([, candidate]) => candidate === column,

@@ -157,13 +157,14 @@ describe("MCP catalog", () => {
       createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
     );
     const snapshot = async () =>
-      (
-        await getDb(ctx.db).execute(sql`
+      await getDb(ctx.db).execute(
+        sql`
       SELECT (SELECT count(*) FROM "Run") AS runs, (SELECT count(*) FROM "Job") AS jobs,
         (SELECT count(*) FROM "Suggestion") AS suggestions,
         (SELECT coalesce(sum(cost),0) FROM "Expense" WHERE "deletedAt" IS NULL) AS money
-    `)
-      ).rows;
+    `,
+        "objects",
+      );
     const before = await snapshot();
     for (const dryRun of [true, false]) {
       const response = await callMcpTool(

@@ -11,7 +11,7 @@ import { z } from "zod";
 import { migrateDatabase } from "./db-migrate";
 
 // Runner failures: applying the contract past an expand boundary, skipping a
-// pending predecessor, accepting changed hashes/non-prefix rows, or mutating a
+// pending predecessor, accepting changed hashes/unknown receipts, or mutating a
 // database already beyond the requested boundary. PostgreSQL is the only fake.
 const roots: string[] = [];
 afterEach(() => {
@@ -36,31 +36,36 @@ function fixture(failure?: { text: string; code: string; times: number }) {
   ];
   const entries = statements.map((text, idx) => ({
     idx,
-    tag: ["0000_base", "0001_expand", "0002_contract"][idx],
+    tag: [
+      "19700101000001_base",
+      "19700101000002_expand",
+      "19700101000003_contract",
+    ][idx],
     when: (idx + 1) * 1000,
     breakpoints: true,
     hash: createHash("sha256").update(text).digest("hex"),
   }));
-  mkdirSync(join(migrationsFolder, "meta"));
-  writeFileSync(
-    join(migrationsFolder, "meta/_journal.json"),
-    JSON.stringify({ entries }),
-  );
   const textForEntry = (values: string[], index: number) => {
     const value = values[index];
     if (value === undefined)
       throw new Error("Synthetic migration statement missing");
     return value;
   };
-  entries.forEach((entry, index) =>
+  entries.forEach((entry, index) => {
+    if (!entry.tag) throw new Error("Synthetic migration name missing");
+    const folder = join(migrationsFolder, entry.tag);
+    mkdirSync(folder);
     writeFileSync(
-      join(migrationsFolder, `${entry.tag}.sql`),
+      join(folder, "migration.sql"),
       textForEntry(statements, index),
-    ),
-  );
-  const applied = entries
-    .slice(0, 1)
-    .map((entry) => ({ hash: entry.hash, created_at: String(entry.when) }));
+    );
+  });
+  const applied = entries.slice(0, 1).map((entry) => ({
+    hash: entry.hash,
+    created_at: String(entry.when),
+    name: entry.tag,
+    has_name: true,
+  }));
   const writes: string[] = [];
   const executed: string[] = [];
   const client = new Client();
@@ -76,7 +81,16 @@ function fixture(failure?: { text: string; code: string; times: number }) {
     let rows: object[] = [];
     if (text.includes("to_regclass")) rows = [{ exists: applied.length > 0 }];
     else if (text.includes("FROM pg_class")) rows = [{ count: 0 }];
-    else if (text.includes("ORDER BY created_at, id")) rows = [...applied];
+    else if (text.includes("information_schema.tables")) rows = [{ exists: 1 }];
+    else if (text.includes("pg_catalog.pg_attribute"))
+      rows = ["id", "hash", "created_at", "name", "applied_at"].map(
+        (column_name) => ({ column_name }),
+      );
+    else if (
+      text.includes("ORDER BY created_at, id") ||
+      text.includes("select id, hash, created_at, name")
+    )
+      rows = [...applied];
     else if (text.includes("order by created_at desc limit 1"))
       rows = applied.slice(-1);
     else {
@@ -86,7 +100,7 @@ function fixture(failure?: { text: string; code: string; times: number }) {
     return { rows, rowCount: rows.length, command: "", oid: 0, fields: [] };
   });
   return {
-    db: drizzle(client),
+    db: drizzle({ client: client, paramsInErrors: true }),
     migrationsFolder,
     entries,
     applied,
@@ -100,7 +114,7 @@ it("applies every pending predecessor through the exact boundary without executi
   state.applied.length = 0;
   await migrateDatabase(state.db, {
     migrationsFolder: state.migrationsFolder,
-    through: "0001_expand",
+    through: "19700101000002_expand",
   });
   expect(state.executed).toEqual([
     "SELECT 'synthetic_base';",
@@ -146,58 +160,60 @@ it("fails at once on any other migration error, and bounds lock retries", async 
   expect(await attempts("55P03")).toBe(6);
 });
 
-it("keeps the unbounded runner applying all pending migrations after the applied prefix", async () => {
+it("applies a missing predecessor even when a later migration is already recorded", async () => {
   const state = fixture();
+  const last = state.entries.at(-1);
+  if (!last) throw new Error("Synthetic migration missing");
+  state.applied.push({
+    hash: last.hash,
+    created_at: String(last.when),
+    name: last.tag,
+    has_name: true,
+  });
   await migrateDatabase(state.db, { migrationsFolder: state.migrationsFolder });
-  expect(state.executed).toEqual([
-    "SELECT 'synthetic_expand';",
-    "SELECT 'synthetic_contract';",
-  ]);
+  expect(state.executed).toEqual(["SELECT 'synthetic_expand';"]);
 });
 
 it.each([
-  { name: "unknown exact tag", through: "0001", change: "unknown" },
+  { name: "unknown exact tag", through: "unknown", change: "unknown" },
   {
     name: "an already later applied prefix",
-    through: "0001_expand",
+    through: "19700101000002_expand",
     change: "beyond",
   },
   {
-    name: "a skipped predecessor in bookkeeping",
-    through: "0001_expand",
+    name: "an unknown legacy receipt",
+    through: "19700101000002_expand",
     change: "prefix",
   },
   {
     name: "an edited applied migration hash",
-    through: "0001_expand",
+    through: "19700101000002_expand",
     change: "hash",
   },
   {
-    name: "an out-of-order journal entry",
-    through: "0001_expand",
+    name: "an unnamed v1 receipt",
+    through: "19700101000002_expand",
     change: "order",
   },
 ])("refuses $name before any write", async ({ through, change }) => {
   const state = fixture();
   if (change === "beyond")
     state.applied.push(
-      ...state.entries
-        .slice(1)
-        .map((entry) => ({ hash: entry.hash, created_at: String(entry.when) })),
+      ...state.entries.slice(1).map((entry) => ({
+        hash: entry.hash,
+        created_at: String(entry.when),
+        name: entry.tag,
+        has_name: true,
+      })),
     );
   const firstApplied = state.applied[0];
   const secondEntry = state.entries[1];
   if (!firstApplied || !secondEntry)
     throw new Error("Synthetic migration fixture incomplete");
-  if (change === "prefix") firstApplied.created_at = "2000";
+  if (change === "prefix") firstApplied.name = "synthetic-missing-migration";
   if (change === "hash") firstApplied.hash = "synthetic-edited-hash";
-  if (change === "order") {
-    secondEntry.when = 500;
-    writeFileSync(
-      join(state.migrationsFolder, "meta/_journal.json"),
-      JSON.stringify({ entries: state.entries }),
-    );
-  }
+  if (change === "order") firstApplied.name = undefined;
   await expect(
     migrateDatabase(state.db, {
       migrationsFolder: state.migrationsFolder,

@@ -137,7 +137,8 @@ export async function listPurchasesSettlementCandidates(
         transaction: '"FinancialTransaction"',
       })}
   )`;
-  const result = await unwrapDb(db).execute(sql`
+  const result = await unwrapDb(db).execute(
+    sql`
     SELECT subject.code AS "purchaseCode", ranked."transactionId", ranked.days,
       ranked."merchantMatches", ranked."exactAmount", ranked."nearAmount",
       ranked."partyConflict", ranked."tenderConflict"
@@ -167,8 +168,10 @@ export async function listPurchasesSettlementCandidates(
       ORDER BY rank
       LIMIT ${SETTLEMENT_CANDIDATE_LIMIT}
     ) ranked
-    ORDER BY subject.ordinal, ranked.rank`);
-  for (const row of z.array(candidateRow).parse(result.rows)) {
+    ORDER BY subject.ordinal, ranked.rank`,
+    "objects",
+  );
+  for (const row of z.array(candidateRow).parse(result)) {
     const { purchaseCode, partyConflict, tenderConflict, ...candidate } = row;
     out.get(purchaseCode)?.push({
       ...candidate,

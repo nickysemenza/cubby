@@ -63,7 +63,7 @@ describe("quality status: TS and SQL agree", () => {
           status: z.string(),
         }),
       )
-      .parse((await unwrapDb(ctx.db).execute(rows)).rows);
+      .parse(await unwrapDb(ctx.db).execute(rows, "objects"));
     expect(result).toHaveLength(all.length);
     for (const row of result) {
       expect({ index: row.index, status: row.status }).toEqual({

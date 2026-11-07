@@ -23,7 +23,8 @@ export async function assertSourceTransactionRecordDeletionAllowed(
     ids.map((id) => sql`${id}::uuid`),
     sql`, `,
   );
-  const { rows } = await unwrapDb(db).execute<{ protected: boolean }>(sql`
+  const rows = await unwrapDb(db).execute<{ protected: boolean }>(
+    sql`
     -- includes-deleted: retained source evidence protects its accepted and replacement history.
     SELECT EXISTS (
       SELECT 1 FROM "SourceOccurrence" owner
@@ -46,7 +47,9 @@ export async function assertSourceTransactionRecordDeletionAllowed(
       JOIN "FinancialEvidenceAlias" binding ON binding.source=evidence.source AND binding.value=evidence.value AND ${notDeleted("binding")}
       JOIN "FinancialTransaction" target ON target.id=binding."historicalTransactionId" AND ${notDeleted("target")}
       WHERE evidence."observationId" IN (${selected}) AND binding."historicalTransactionId" IS NOT NULL
-    ) AS protected`);
+    ) AS protected`,
+    "objects",
+  );
   if (rows[0]?.protected)
     throw createAppError(
       "CONSTRAINT_VIOLATION",

@@ -10,7 +10,7 @@ import { withMigrationDatabase } from "./test-database-lease";
 
 const id = (n: number) =>
   `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
-const PREDECESSOR = "0073_image_jobs_own_execution";
+const PREDECESSOR = "20261105070438_0073_image_jobs_own_execution";
 
 type Db = Client | PoolClient;
 
@@ -705,14 +705,17 @@ async function snapshot(client: Db) {
 
 const migration = () =>
   readFile(
-    join(import.meta.dirname, "../drizzle/0074_mail_decision_owners.sql"),
+    join(
+      import.meta.dirname,
+      "../drizzle/20261105072143_0074_mail_decision_owners/migration.sql",
+    ),
     "utf8",
   );
 
 describe("mail decision owners migration", () => {
   it("carries every decision, label, intent and finding, leaving the ledgers untouched", async () => {
     await withMigrationDatabase(async (client) => {
-      const db = drizzle(client);
+      const db = drizzle({ client: client, paramsInErrors: true });
       await migrateDatabase(db, { through: PREDECESSOR });
       await seedPredecessor(client);
       const before = await snapshot(client);
@@ -722,7 +725,9 @@ describe("mail decision owners migration", () => {
             .n,
         );
       const queued = await tickets();
-      await migrateDatabase(db, { through: "0074_mail_decision_owners" });
+      await migrateDatabase(db, {
+        through: "20261105072143_0074_mail_decision_owners",
+      });
 
       expect(await snapshot(client)).toEqual(before);
       const labelled = id(160);
@@ -1033,7 +1038,7 @@ describe("mail decision owners migration", () => {
     seed?: (client: Db) => Promise<void>,
   ) =>
     withMigrationDatabase(async (client) => {
-      const db = drizzle(client);
+      const db = drizzle({ client: client, paramsInErrors: true });
       await migrateDatabase(db, { through: PREDECESSOR });
       await seedPredecessor(client);
       await seed?.(client);
@@ -1085,7 +1090,7 @@ describe("mail decision owners migration", () => {
   // with no ledger lock held and takes the settlement's rows when it commits.
   it("waits for a settlement already holding Email, then carries its outcome", async () => {
     await withMigrationDatabase(async (client, databaseUrl) => {
-      const db = drizzle(client);
+      const db = drizzle({ client: client, paramsInErrors: true });
       await migrateDatabase(db, { through: PREDECESSOR });
       await seedPredecessor(client);
       const settlement = new Client({ connectionString: databaseUrl });
@@ -1097,7 +1102,7 @@ describe("mail decision owners migration", () => {
           [id(10)],
         );
         const migrating = migrateDatabase(db, {
-          through: "0074_mail_decision_owners",
+          through: "20261105072143_0074_mail_decision_owners",
         });
         await blockedOn(settlement, "Email");
         await settledOutcome(settlement, 93, {
@@ -1118,7 +1123,7 @@ describe("mail decision owners migration", () => {
   // match. Postgres breaks the cycle; a killed migration rolls back and retries.
   it("survives a writer that reaches the ledgers before Email", async () => {
     await withMigrationDatabase(async (client, databaseUrl) => {
-      const db = drizzle(client);
+      const db = drizzle({ client: client, paramsInErrors: true });
       await migrateDatabase(db, { through: PREDECESSOR });
       await seedPredecessor(client);
       const writer = new Client({ connectionString: databaseUrl });
@@ -1130,7 +1135,7 @@ describe("mail decision owners migration", () => {
           reason: "Synthetic crossing writer",
         });
         const migrating = migrateDatabase(db, {
-          through: "0074_mail_decision_owners",
+          through: "20261105072143_0074_mail_decision_owners",
           lockRetryDelayMs: 0,
         });
         await blockedOn(writer, "Assessment");

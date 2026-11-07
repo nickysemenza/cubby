@@ -6,9 +6,11 @@ import {
   type StatementSuggestionPreviewOut,
 } from "@cubby/schemas/statement-suggestion";
 import { and, eq } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { suggestionTable, financialTransaction } from "~/server/db/schema";
 import { previewFinancialSpending } from "~/server/domains/financial-transaction/repo/financial-spending";
 import { transactionDollars } from "~/server/domains/financial-transaction/repo/transaction-money";
@@ -28,10 +30,16 @@ export async function previewStatementSuggestion(
 ): Promise<StatementSuggestionPreviewOut> {
   const input = statementSuggestionPreviewInput.parse(raw);
   const state = await getDb(db).query.suggestionTable.findFirst({
-    where: and(
-      eq(suggestionTable.id, input.suggestionId),
-      eq(suggestionTable.family, "statement_transaction"),
-    ),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          and(
+            eq(suggestionTable.id, input.suggestionId),
+            eq(suggestionTable.family, "statement_transaction"),
+          ),
+        ),
+    },
   });
   if (!state)
     throw refuseStatementApplication(
@@ -94,7 +102,13 @@ export async function previewStatementSuggestion(
   const target = targetId
     ? await getDb(db)
         .query.financialTransaction.findFirst({
-          where: eq(financialTransaction.shortcode, codeOf(targetId)),
+          where: {
+            RAW: (table: PgTable) =>
+              relationalSql(
+                table,
+                eq(financialTransaction.shortcode, codeOf(targetId)),
+              ),
+          },
         })
         .then((row) => (row ? transactionDollars(row) : row))
     : undefined;

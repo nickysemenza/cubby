@@ -1,3 +1,5 @@
+import type { PgTable } from "drizzle-orm/pg-core";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
   sourceObservationColumns,
   sourceObservationFrom,
@@ -47,9 +49,13 @@ export async function recordReviewedConvergenceStatement(
   expect(recorded.ok(), await recorded.text()).toBe(true);
   const result = recordSourceTransactionRecordsOut.parse(recorded.body);
   expect(result.inserted).toBe(1);
-  if (!result.batchId) throw new Error("Recorded statement batch missing");
+  const batchId = result.batchId;
+  if (!batchId) throw new Error("Recorded statement batch missing");
   const collection = await getDb(db).query.transactionImport.findFirst({
-    where: eq(schema.transactionImport.shortcode, result.batchId),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(table, eq(schema.transactionImport.shortcode, batchId)),
+    },
   });
   if (!collection) throw new Error("Retained transaction import missing");
   const [evidence] = await getDb(db)
@@ -119,10 +125,16 @@ export async function applyReviewedSourceReconciliation(
   if (!finding) throw new Error("Reconciliation finding missing");
   const lines = () =>
     database.query.expense.findMany({
-      where: and(
-        eq(schema.expense.purchaseId, purchaseId),
-        notDeleted(schema.expense),
-      ),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(
+              eq(schema.expense.purchaseId, purchaseId),
+              notDeleted(schema.expense),
+            ),
+          ),
+      },
     });
   const aggregate = await lines();
   expect(aggregate).toMatchObject([{ cost: 42.5, productId: null }]);

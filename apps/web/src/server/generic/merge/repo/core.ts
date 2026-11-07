@@ -8,6 +8,7 @@ import type { Entity } from "@cubby/schemas/entity";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import type { EntityId } from "@cubby/schemas/identifiers";
+import { getColumnTable } from "drizzle-orm";
 import { type AnyColumn, and, getTableColumns, inArray } from "drizzle-orm";
 import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
 import { uniq } from "es-toolkit";
@@ -128,7 +129,7 @@ export const repointEdge = async <E extends Entity>(
   const column = edgeColumn(entity, edgeKey);
   // SAFETY: Every incoming-edge column is declared on a PostgreSQL table with
   // the `id` and `deletedAt` columns required by merge operations.
-  const table = column.table as MergeableTable;
+  const table = getColumnTable(column) as MergeableTable;
   const columns = getTableColumns(table);
   const property = Object.entries(columns).find(
     ([, candidate]) => candidate === column,

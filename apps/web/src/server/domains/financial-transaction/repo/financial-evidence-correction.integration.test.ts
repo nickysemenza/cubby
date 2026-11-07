@@ -1,11 +1,13 @@
 import { recordSourceTransactionRecordsInput } from "@cubby/schemas/source-transaction-record";
 import { minorToMoney } from "@cubby/shared";
 import { and, eq } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb, notDeleted } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
   expense,
   financialTransaction,
@@ -161,7 +163,13 @@ describe("generated booking evidence corrections", () => {
       loadFinancialBookingLineage(ctx.db, transaction.output.id);
     const money = async () => {
       const stored = await getDb(ctx.db).query.financialTransaction.findFirst({
-        where: eq(financialTransaction.id, transaction.entityId),
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(
+              table,
+              eq(financialTransaction.id, transaction.entityId),
+            ),
+        },
         with: { allocations: true },
       });
       return {
@@ -200,13 +208,19 @@ describe("generated booking evidence corrections", () => {
       expect(
         (
           await getDb(ctx.db).query.financialTransactionAllocation.findMany({
-            where: and(
-              eq(
-                financialTransactionAllocation.transactionId,
-                transaction.entityId,
-              ),
-              notDeleted(financialTransactionAllocation),
-            ),
+            where: {
+              RAW: (table: PgTable) =>
+                relationalSql(
+                  table,
+                  and(
+                    eq(
+                      financialTransactionAllocation.transactionId,
+                      transaction.entityId,
+                    ),
+                    notDeleted(financialTransactionAllocation),
+                  ),
+                ),
+            },
             columns: { confirmsMerchant: true },
           })
         ).map((row) => row.confirmsMerchant),
@@ -505,7 +519,10 @@ describe("generated booking evidence corrections", () => {
       expenses: [],
     });
     const retired = await getDb(ctx.db).query.expense.findFirst({
-      where: eq(expense.id, line.entityId),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(table, eq(expense.id, line.entityId)),
+      },
     });
     expect(retired).toMatchObject({
       cost: 25,

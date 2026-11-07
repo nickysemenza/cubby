@@ -109,8 +109,8 @@ export async function executeSearchDocumentSql<Schema extends z.ZodType>(
   rowSchema: Schema,
   query: SQL,
 ): Promise<Array<z.output<Schema>>> {
-  const result = await unwrapDb(db).execute(query);
-  return z.array(rowSchema).parse(result.rows);
+  const result = await unwrapDb(db).execute(query, "objects");
+  return z.array(rowSchema).parse(result);
 }
 
 /**
@@ -337,12 +337,15 @@ export async function getSearchDocumentSourceRepairPage(
       entityKind: SearchableEntity;
       entityId: string;
       sourceHash: string;
-    }>(sql`
+    }>(
+      sql`
       SELECT "entityKind", "entityId"::text AS "entityId", "sourceHash"
       FROM "SearchDocument"
       WHERE ${notDeleted("SearchDocument")}
         AND "entityId" = ANY(${uuidArrayParam(sources.map((source) => source.entityId))})
-    `),
+    `,
+      "objects",
+    ),
   ]);
   const imageTexts = await loadDirectImageSearchText(
     db,
@@ -355,7 +358,7 @@ export async function getSearchDocumentSourceRepairPage(
     texts.map((text) => [entityRefKey(text.entityKind, text.entityId), text]),
   );
   const documentByRef = new Map(
-    documents.rows.map((document) => [
+    documents.map((document) => [
       entityRefKey(document.entityKind, document.entityId),
       document,
     ]),
@@ -479,14 +482,17 @@ async function markSearchDocumentsMissing(
   refs: readonly SearchableEntityRef[],
 ): Promise<void> {
   if (!refs.length) return;
-  const changed = await unwrapDb(db).execute(sql`
+  const changed = await unwrapDb(db).execute(
+    sql`
     UPDATE "SearchDocument" d SET "deletedAt" = now(), "updatedAt" = now()
     FROM jsonb_to_recordset(${JSON.stringify(refs)}::jsonb)
       AS wanted("entityKind" text, "entityId" uuid)
     WHERE d."entityKind" = wanted."entityKind" AND d."entityId" = wanted."entityId"
       AND ${notDeleted("d")}
-    RETURNING d."entityId"`);
-  if (changed.rows.length)
+    RETURNING d."entityId"`,
+    "objects",
+  );
+  if (changed.length)
     await recordChange(db, {
       kind: "projection",
       categories: ["search", "relatedData", "problems"],
@@ -521,7 +527,8 @@ async function upsertSearchDocumentBatch(
       };
     }),
   );
-  const changed = await unwrapDb(db).execute(sql`
+  const changed = await unwrapDb(db).execute(
+    sql`
     WITH input AS MATERIALIZED (
       SELECT i.*, NULL::tsvector AS "searchVector", false AS missing FROM jsonb_to_recordset(${JSON.stringify(rows)}::jsonb)
         AS i("entityKind" text, "entityId" uuid, title text, subtitle text,
@@ -569,7 +576,9 @@ async function upsertSearchDocumentBatch(
       coalesce(jsonb_agg(jsonb_build_object('entityKind', input."entityKind", 'entityId', input."entityId"))
         FILTER (WHERE input.missing), '[]'::jsonb) AS missing
       FROM input
-  `);
+  `,
+    "objects",
+  );
   const publication = z
     .object({
       changed: z.array(
@@ -579,7 +588,7 @@ async function upsertSearchDocumentBatch(
         z.object({ entityKind: searchableEntitySchema, entityId: z.string() }),
       ),
     })
-    .parse(changed.rows[0]);
+    .parse(changed[0]);
   // The sorted upsert also locks existing missing rows without changing their
   // text. Retire only those observed rows after every publication lock is held;
   // missing records that had no document never acquire placeholder documents.
@@ -822,17 +831,19 @@ export async function searchCoverageIncomplete(
     WHERE NOT EXISTS (SELECT 1 FROM "SearchDocument" document
       WHERE document."entityKind" = source."entityKind" AND document."entityId" = source."entityId"::uuid AND ${notDeleted("document")}) LIMIT 1)`
     : sql`false`;
-  const result = await unwrapDb(db)
-    .execute(sql`${sources?.sourcePrefix ?? sql``} SELECT ${missingSources} OR EXISTS (
+  const result = await unwrapDb(db).execute(
+    sql`${sources?.sourcePrefix ?? sql``} SELECT ${missingSources} OR EXISTS (
     SELECT 1 ${unembeddedDocumentsSql(config)}
       AND sd."entityKind" IN (${sql.join(
         kinds.map((kind) => sql`${kind}`),
         sql`, `,
       )}) LIMIT 1
-  ) AS missing`);
+  ) AS missing`,
+    "objects",
+  );
   return (
-    z.array(z.object({ missing: z.boolean() })).parse(result.rows)[0]
-      ?.missing ?? false
+    z.array(z.object({ missing: z.boolean() })).parse(result)[0]?.missing ??
+    false
   );
 }
 

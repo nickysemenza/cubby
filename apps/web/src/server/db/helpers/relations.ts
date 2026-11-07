@@ -1,4 +1,5 @@
 import { type AnyColumn, and, asc, eq, sql } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 
 import {
   storedSortNumberSql,
@@ -12,12 +13,12 @@ import {
  * Example: db.query.ingredient.findFirst({ where: ..., ...relations.ingredient.full })
  *
  * SOFT DELETE: Drizzle's relational queries DO support a `where` on a (to-many)
- * nested relation, so prefer `where: notDeleted(table)` directly in the `with` block
+ * nested relation. Bind its `RAW` predicate to the callback table with
+ * `relationalSql` in the `with` block
  * to exclude soft-deleted rows at query time — that's the durable, correct-by-
  * construction mechanism. (The recipe-usage relations below do this.) Note `where`
- * is only available on to-many relations; a to-one relation — e.g. a section's
- * `recipe` — can't carry one, so when liveness depends on a to-one parent the
- * transform must still filter (see `computeRecipeUsages`). The transform-layer helpers
+ * remains attached to the existing to-many presets. When liveness depends on
+ * a to-one parent, the transform still filters (see `computeRecipeUsages`). The transform-layer helpers
  * (`mapRelation`, `mapImages`,
  * `Array.filter(deletedAt === null)`) remain as backstops and still cover the
  * relations not yet annotated here.
@@ -41,6 +42,8 @@ import {
 } from "~/server/db/computed/product-category-sql";
 import { productClassificationEvidenceSql } from "~/server/db/computed/product-classification-evidence";
 import { notDeleted } from "~/server/db/helpers/predicates";
+import { outer } from "~/server/db/helpers/related";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
   cookbook,
   entityAttachment,
@@ -66,7 +69,7 @@ import {
  * on the same live-edge predicate — the filter, the cell, and the hero
  * disagreeing is the #428 failure mode.
  */
-const productComponentCount = sql<number>`(SELECT count(*) FROM "EntityLink" pc WHERE pc."fromEntityId" = "product"."id" AND ${notDeleted("pc")} AND pc."kind" = 'productComponent')`;
+const productComponentCount = sql<number>`(SELECT count(*) FROM "EntityLink" pc WHERE pc."fromEntityId" = ${outer(product.id)} AND ${notDeleted("pc")} AND pc."kind" = 'productComponent')`;
 
 /**
  * An expense's parent `project` plus its optionally-linked `product`, same
@@ -120,7 +123,10 @@ const withProjectAndProductNameOnly = {
       },
     },
     attributions: {
-      where: notDeleted(expenseAttribution),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(table, notDeleted(expenseAttribution)),
+      },
       columns: {
         role: true,
         ledgerPartyId: true,
@@ -130,7 +136,10 @@ const withProjectAndProductNameOnly = {
       with: { ledgerParty: { columns: { shortcode: true, deletedAt: true } } },
     },
     sourceClaims: {
-      where: notDeleted(ledgerSourceClaim),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(table, notDeleted(ledgerSourceClaim)),
+      },
       columns: {
         source: true,
         sourceKey: true,
@@ -169,7 +178,13 @@ function singularAttachmentImage<
 >(role: "cover" | "logo", columns: Columns) {
   return {
     attachments: {
-      where: and(notDeleted(entityAttachment), eq(entityAttachment.role, role)),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(notDeleted(entityAttachment), eq(entityAttachment.role, role)),
+          ),
+      },
       limit: 1,
       columns: { id: true },
       with: { image: { columns } },
@@ -205,7 +220,10 @@ const withProjectAndParentTaskNameOnly = {
       columns: { name: true, shortcode: true, deletedAt: true },
     },
     images: {
-      where: notDeleted(entityAttachment),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(table, notDeleted(entityAttachment)),
+      },
       orderBy: sectionOrder,
       with: {
         image: true,
@@ -216,19 +234,33 @@ const withProjectAndParentTaskNameOnly = {
 
 /** Compact Product embeds need labels, without classification evidence or stock policy. */
 const productIdentityProjection = {
-  brandName: productBrandNameSql(product.brandId).as("brandName"),
-  category: categorySummarySql(sql`${product.categoryId}`).as("category"),
+  brandName: (table: PgTable) =>
+    relationalSql(table, productBrandNameSql(product.brandId).as("brandName")),
+  category: (table: PgTable) =>
+    relationalSql(
+      table,
+      categorySummarySql(sql`${product.categoryId}`).as("category"),
+    ),
 };
 
 const productCategoryProjection = {
   ...productIdentityProjection,
-  brandCode: productBrandCodeSql(product.brandId).as("brandCode"),
-  classificationEvidence: productClassificationEvidenceSql(
-    sql`${product.id}`,
-  ).as("classificationEvidence"),
-  categoryStockTracking: categoryStockTrackingSql(
-    sql`${product.categoryId}`,
-  ).as("categoryStockTracking"),
+  brandCode: (table: PgTable) =>
+    relationalSql(table, productBrandCodeSql(product.brandId).as("brandCode")),
+  classificationEvidence: (table: PgTable) =>
+    relationalSql(
+      table,
+      productClassificationEvidenceSql(sql`${product.id}`).as(
+        "classificationEvidence",
+      ),
+    ),
+  categoryStockTracking: (table: PgTable) =>
+    relationalSql(
+      table,
+      categoryStockTrackingSql(sql`${product.categoryId}`).as(
+        "categoryStockTracking",
+      ),
+    ),
 };
 
 /** A Location's identity SKU; canonical media is resolved separately. */
@@ -243,7 +275,13 @@ const locationIdentityProduct = {
 export const recipeSourceRelations = {
   cookbook: { columns: { shortcode: true, name: true } },
   externalIds: {
-    where: and(eq(entityExternalId.kind, "page"), notDeleted(entityExternalId)),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          and(eq(entityExternalId.kind, "page"), notDeleted(entityExternalId)),
+        ),
+    },
     columns: { externalId: true },
   },
 } as const;
@@ -254,12 +292,27 @@ export const relations = {
       with: {
         product: {
           extras: productCategoryProjection,
-          where: notDeleted(product),
+          where: {
+            RAW: (table: PgTable) => relationalSql(table, notDeleted(product)),
+          },
           with: {
-            unitMappings: { where: notDeleted(productUnitMappings) },
-            externalIds: { where: notDeleted(entityExternalId) },
+            unitMappings: {
+              where: {
+                RAW: (table: PgTable) =>
+                  relationalSql(table, notDeleted(productUnitMappings)),
+              },
+            },
+            externalIds: {
+              where: {
+                RAW: (table: PgTable) =>
+                  relationalSql(table, notDeleted(entityExternalId)),
+              },
+            },
             images: {
-              where: notDeleted(entityAttachment),
+              where: {
+                RAW: (table: PgTable) =>
+                  relationalSql(table, notDeleted(entityAttachment)),
+              },
               orderBy: sectionOrder,
               with: {
                 image: true,
@@ -269,7 +322,10 @@ export const relations = {
         },
         recipe: { with: recipeSourceRelations },
         recipeSectionIngredient: {
-          where: notDeleted(recipeSectionIngredient),
+          where: {
+            RAW: (table: PgTable) =>
+              relationalSql(table, notDeleted(recipeSectionIngredient)),
+          },
           with: {
             recipeSection: {
               with: {
@@ -284,7 +340,9 @@ export const relations = {
       with: {
         product: {
           extras: productCategoryProjection,
-          where: notDeleted(product),
+          where: {
+            RAW: (table: PgTable) => relationalSql(table, notDeleted(product)),
+          },
           // Load-bearing for BOTH the Product column's pill (which shows
           // `product[0]` of a possible +9) and the leading thumbnail (which
           // falls back to these images). Unordered, Postgres was free to
@@ -292,13 +350,22 @@ export const relations = {
           orderBy: linkOrder,
           with: {
             unitMappings: {
-              where: notDeleted(productUnitMappings),
+              where: {
+                RAW: (table: PgTable) =>
+                  relationalSql(table, notDeleted(productUnitMappings)),
+              },
             },
             externalIds: {
-              where: notDeleted(entityExternalId),
+              where: {
+                RAW: (table: PgTable) =>
+                  relationalSql(table, notDeleted(entityExternalId)),
+              },
             },
             images: {
-              where: notDeleted(entityAttachment),
+              where: {
+                RAW: (table: PgTable) =>
+                  relationalSql(table, notDeleted(entityAttachment)),
+              },
               orderBy: sectionOrder,
               with: {
                 image: true,
@@ -314,24 +381,49 @@ export const relations = {
       with: {
         ingredient: true,
         growsPlant: { columns: { shortcode: true } },
-        unitMappings: { where: notDeleted(productUnitMappings) },
-        externalIds: { where: notDeleted(entityExternalId) },
+        unitMappings: {
+          where: {
+            RAW: (table: PgTable) =>
+              relationalSql(table, notDeleted(productUnitMappings)),
+          },
+        },
+        externalIds: {
+          where: {
+            RAW: (table: PgTable) =>
+              relationalSql(table, notDeleted(entityExternalId)),
+          },
+        },
         // Locations that ARE this product — a bin in service, as opposed to
         // `inventoryEntry`, which is stock held somewhere. Scalar columns only;
         // the detail table renders a name, a type and a link.
-        locations: { where: notDeleted(location) },
+        locations: {
+          where: {
+            RAW: (table: PgTable) => relationalSql(table, notDeleted(location)),
+          },
+        },
         // Cookbook identities only; recipe counts belong to their owning report.
         cookbooks: {
-          where: notDeleted(cookbook),
-          orderBy: asc(cookbook.name),
+          where: {
+            RAW: (table: PgTable) => relationalSql(table, notDeleted(cookbook)),
+          },
+          orderBy: (table: PgTable) =>
+            [asc(cookbook.name)]
+              .flat()
+              .map((value) => relationalSql(table, value)),
         },
         inventoryEntry: {
-          where: notDeleted(inventoryEntry),
+          where: {
+            RAW: (table: PgTable) =>
+              relationalSql(table, notDeleted(inventoryEntry)),
+          },
           with: {
             location: {
               with: {
                 images: {
-                  where: notDeleted(entityAttachment),
+                  where: {
+                    RAW: (table: PgTable) =>
+                      relationalSql(table, notDeleted(entityAttachment)),
+                  },
                   orderBy: sectionOrder,
                   with: {
                     image: true,
@@ -342,7 +434,10 @@ export const relations = {
           },
         },
         images: {
-          where: notDeleted(entityAttachment),
+          where: {
+            RAW: (table: PgTable) =>
+              relationalSql(table, notDeleted(entityAttachment)),
+          },
           orderBy: sectionOrder,
           with: {
             image: true,
@@ -357,7 +452,8 @@ export const relations = {
       // cell and the hero must select the same rows.
       extras: {
         ...productCategoryProjection,
-        componentCount: productComponentCount.as("componentCount"),
+        componentCount: (table: PgTable) =>
+          relationalSql(table, productComponentCount.as("componentCount")),
       },
     },
     list: {
@@ -365,20 +461,32 @@ export const relations = {
         ingredient: true,
         growsPlant: { columns: { shortcode: true } },
         images: {
-          where: notDeleted(entityAttachment),
+          where: {
+            RAW: (table: PgTable) =>
+              relationalSql(table, notDeleted(entityAttachment)),
+          },
           orderBy: sectionOrder,
           with: {
             image: true,
           },
         },
         unitMappings: {
-          where: notDeleted(productUnitMappings),
+          where: {
+            RAW: (table: PgTable) =>
+              relationalSql(table, notDeleted(productUnitMappings)),
+          },
         },
         externalIds: {
-          where: notDeleted(entityExternalId),
+          where: {
+            RAW: (table: PgTable) =>
+              relationalSql(table, notDeleted(entityExternalId)),
+          },
         },
         inventoryEntry: {
-          where: notDeleted(inventoryEntry),
+          where: {
+            RAW: (table: PgTable) =>
+              relationalSql(table, notDeleted(inventoryEntry)),
+          },
           with: {
             location: true,
           },
@@ -388,17 +496,21 @@ export const relations = {
         ...productCategoryProjection,
         // Counts every live line, acquisitions and exits alike. Shared with the
         // ORDER BY and the range filter in product/crud.ts.
-        expenseCount: productExpenseCountSql().as("expenseCount"),
-        componentCount: productComponentCount.as("componentCount"),
+        expenseCount: (table: PgTable) =>
+          relationalSql(table, productExpenseCountSql().as("expenseCount")),
+        componentCount: (table: PgTable) =>
+          relationalSql(table, productComponentCount.as("componentCount")),
         // Net basis, shared with its ORDER BY and range filter the same way.
-        expenseTotal: productExpenseTotalSql().as("expenseTotal"),
+        expenseTotal: (table: PgTable) =>
+          relationalSql(table, productExpenseTotalSql().as("expenseTotal")),
         // A Product can be present on several Expense lines and Purchases, in
         // BOTH directions — a sale or disposal is a Purchase too. The column
         // means the latest ACQUISITION, so it reads the shared fragment that
         // the sort and both filters in product/crud.ts also read; the three
         // agreeing by hand is exactly how this shipped showing eBay-sale dates
         // as "purchase date" on 185 products.
-        purchaseDate: productAcquisitionDateSql().as("purchaseDate"),
+        purchaseDate: (table: PgTable) =>
+          relationalSql(table, productAcquisitionDateSql().as("purchaseDate")),
       },
     },
     // Product list rows are hydrated from bounded batch reads in product/crud.
@@ -411,10 +523,14 @@ export const relations = {
       },
       extras: {
         ...productCategoryProjection,
-        expenseCount: productExpenseCountSql().as("expenseCount"),
-        componentCount: productComponentCount.as("componentCount"),
-        expenseTotal: productExpenseTotalSql().as("expenseTotal"),
-        purchaseDate: productAcquisitionDateSql().as("purchaseDate"),
+        expenseCount: (table: PgTable) =>
+          relationalSql(table, productExpenseCountSql().as("expenseCount")),
+        componentCount: (table: PgTable) =>
+          relationalSql(table, productComponentCount.as("componentCount")),
+        expenseTotal: (table: PgTable) =>
+          relationalSql(table, productExpenseTotalSql().as("expenseTotal")),
+        purchaseDate: (table: PgTable) =>
+          relationalSql(table, productAcquisitionDateSql().as("purchaseDate")),
       },
     },
   },
@@ -429,11 +545,17 @@ export const relations = {
         // show, not just a code (same reasoning as `cookbook` above, plus a name).
         forkedFrom: { columns: { shortcode: true, name: true } },
         sections: {
-          where: notDeleted(recipeSection),
+          where: {
+            RAW: (table: PgTable) =>
+              relationalSql(table, notDeleted(recipeSection)),
+          },
           orderBy: sectionOrder,
           with: {
             ingredients: {
-              where: notDeleted(recipeSectionIngredient),
+              where: {
+                RAW: (table: PgTable) =>
+                  relationalSql(table, notDeleted(recipeSectionIngredient)),
+              },
               orderBy: sectionOrder,
               with: {
                 ingredient: {
@@ -446,7 +568,10 @@ export const relations = {
           },
         },
         images: {
-          where: notDeleted(entityAttachment),
+          where: {
+            RAW: (table: PgTable) =>
+              relationalSql(table, notDeleted(entityAttachment)),
+          },
           orderBy: sectionOrder,
           with: {
             image: true,
@@ -466,11 +591,17 @@ export const relations = {
         // show, not just a code (same reasoning as `cookbook` above, plus a name).
         forkedFrom: { columns: { shortcode: true, name: true } },
         sections: {
-          where: notDeleted(recipeSection),
+          where: {
+            RAW: (table: PgTable) =>
+              relationalSql(table, notDeleted(recipeSection)),
+          },
           orderBy: sectionOrder,
           with: {
             ingredients: {
-              where: notDeleted(recipeSectionIngredient),
+              where: {
+                RAW: (table: PgTable) =>
+                  relationalSql(table, notDeleted(recipeSectionIngredient)),
+              },
               orderBy: sectionOrder,
               with: {
                 ingredient: {
@@ -493,7 +624,9 @@ export const relations = {
         parent: true,
         product: locationIdentityProduct,
         children: {
-          where: notDeleted(location),
+          where: {
+            RAW: (table: PgTable) => relationalSql(table, notDeleted(location)),
+          },
           with: { product: locationIdentityProduct },
         },
         inventoryEntries: {
@@ -506,13 +639,22 @@ export const relations = {
           // The PRODUCT list's Locations cell is the deliberate opposite; see
           // the note in `product/crud.ts`. Same column helper, opposite correct
           // answer per direction.
-          where: and(notDeleted(inventoryEntry), stockOnly()),
+          where: {
+            RAW: (table: PgTable) =>
+              relationalSql(
+                table,
+                and(notDeleted(inventoryEntry), stockOnly()),
+              ),
+          },
           // Stored values ride the page's one relational read (ADR 0021).
           extras: {
-            storedValuation: storedSortNumberSql(
-              inventoryEntry.id,
-              "valuation",
-            ).as("storedValuation"),
+            storedValuation: (table: PgTable) =>
+              relationalSql(
+                table,
+                storedSortNumberSql(inventoryEntry.id, "valuation").as(
+                  "storedValuation",
+                ),
+              ),
           },
           with: {
             // See the `inventory.list` note below: the embedded product's
@@ -520,13 +662,24 @@ export const relations = {
             product: {
               extras: {
                 ...productIdentityProjection,
-                effectivePrice: storedValueOrSql(
-                  product.id,
-                  "price",
-                  sql`${product.price}`,
-                ).as("effectivePrice"),
+                effectivePrice: (table: PgTable) =>
+                  relationalSql(
+                    table,
+                    storedValueOrSql(
+                      product.id,
+                      "price",
+                      sql`${product.price}`,
+                    ).as("effectivePrice"),
+                  ),
               },
-              with: { externalIds: { where: notDeleted(entityExternalId) } },
+              with: {
+                externalIds: {
+                  where: {
+                    RAW: (table: PgTable) =>
+                      relationalSql(table, notDeleted(entityExternalId)),
+                  },
+                },
+              },
             },
           },
         },
@@ -534,7 +687,10 @@ export const relations = {
           // Association rows are soft-deletable independently of the Image, so
           // without this a detached image still renders a thumbnail — and would
           // disagree with `imagePresenceFilter`, which excludes it.
-          where: notDeleted(entityAttachment),
+          where: {
+            RAW: (table: PgTable) =>
+              relationalSql(table, notDeleted(entityAttachment)),
+          },
           orderBy: sectionOrder,
           with: {
             image: true,
@@ -548,7 +704,9 @@ export const relations = {
         parent: true,
         product: locationIdentityProduct,
         children: {
-          where: notDeleted(location),
+          where: {
+            RAW: (table: PgTable) => relationalSql(table, notDeleted(location)),
+          },
           extras: locationAiDescriptionExtras,
           with: {
             // Children carry their identity SKU too — the Contents table shows
@@ -556,7 +714,10 @@ export const relations = {
             // child renders an empty type with no name to fall back on.
             product: locationIdentityProduct,
             images: {
-              where: notDeleted(entityAttachment),
+              where: {
+                RAW: (table: PgTable) =>
+                  relationalSql(table, notDeleted(entityAttachment)),
+              },
               orderBy: sectionOrder,
               with: {
                 image: true,
@@ -569,7 +730,10 @@ export const relations = {
         // `directItemCount`; the detail page's Contents table reads the
         // inventory list (which includes installed fixtures) on its own.
         images: {
-          where: notDeleted(entityAttachment),
+          where: {
+            RAW: (table: PgTable) =>
+              relationalSql(table, notDeleted(entityAttachment)),
+          },
           orderBy: sectionOrder,
           with: {
             image: true,
@@ -582,7 +746,10 @@ export const relations = {
       with: {
         product: locationIdentityProduct,
         images: {
-          where: notDeleted(entityAttachment),
+          where: {
+            RAW: (table: PgTable) =>
+              relationalSql(table, notDeleted(entityAttachment)),
+          },
           orderBy: sectionOrder,
           with: {
             image: true,
@@ -599,7 +766,14 @@ export const relations = {
         // without it every inventory row would report itself barcode-less.
         product: {
           extras: productCategoryProjection,
-          with: { externalIds: { where: notDeleted(entityExternalId) } },
+          with: {
+            externalIds: {
+              where: {
+                RAW: (table: PgTable) =>
+                  relationalSql(table, notDeleted(entityExternalId)),
+              },
+            },
+          },
         },
         location: true,
       },
@@ -609,10 +783,23 @@ export const relations = {
         product: {
           extras: productCategoryProjection,
           with: {
-            unitMappings: { where: notDeleted(productUnitMappings) },
-            externalIds: { where: notDeleted(entityExternalId) },
+            unitMappings: {
+              where: {
+                RAW: (table: PgTable) =>
+                  relationalSql(table, notDeleted(productUnitMappings)),
+              },
+            },
+            externalIds: {
+              where: {
+                RAW: (table: PgTable) =>
+                  relationalSql(table, notDeleted(entityExternalId)),
+              },
+            },
             images: {
-              where: notDeleted(entityAttachment),
+              where: {
+                RAW: (table: PgTable) =>
+                  relationalSql(table, notDeleted(entityAttachment)),
+              },
               orderBy: sectionOrder,
               with: {
                 image: true,
@@ -624,7 +811,10 @@ export const relations = {
           with: {
             product: locationIdentityProduct,
             images: {
-              where: notDeleted(entityAttachment),
+              where: {
+                RAW: (table: PgTable) =>
+                  relationalSql(table, notDeleted(entityAttachment)),
+              },
               orderBy: sectionOrder,
               with: {
                 image: true,
@@ -657,7 +847,10 @@ export const relations = {
     full: {
       with: {
         recipes: {
-          where: notDeleted(mealRecipe),
+          where: {
+            RAW: (table: PgTable) =>
+              relationalSql(table, notDeleted(mealRecipe)),
+          },
           orderBy: sectionOrder,
           with: {
             // Only the fields mealRecipeFields reads — the full recipe body per planned recipe was pure over-fetch (the list shows name + scaled totals).
@@ -681,7 +874,10 @@ export const relations = {
           },
         },
         images: {
-          where: notDeleted(entityAttachment),
+          where: {
+            RAW: (table: PgTable) =>
+              relationalSql(table, notDeleted(entityAttachment)),
+          },
           orderBy: sectionOrder,
           with: {
             image: true,

@@ -347,12 +347,13 @@ export async function transferPairRows(
   query: SuggestionFamilyQuery,
   ids?: readonly string[],
 ) {
-  const { rows } = await unwrapDb(db).execute<{
+  const rows = await unwrapDb(db).execute<{
     id: string;
     fingerprint: string | null;
     createdAt: Date | string;
     judgment: unknown;
-  }>(sql`
+  }>(
+    sql`
     SELECT s.id, s.fingerprint, s."createdAt", s.judgment
     FROM "Suggestion" s
     WHERE s.family = ${suggestionFamily.enum.transfer_pair} AND s.status = ${query.filters.status}
@@ -360,7 +361,9 @@ export async function transferPairRows(
       ${ids ? sql`AND s.id = ANY(${uuidArrayParam(ids)})` : sql``}
       ${query.filters.status === "pending" ? sql`AND s.active` : sql``}
       ${query.filters.runId ? sql`AND s."runId" = (SELECT id FROM "Run" WHERE shortcode = ${query.filters.runId})` : sql``}
-  `);
+  `,
+    "objects",
+  );
   return rows.map((row) => ({
     ...row,
     evidence: transferPairJudgment.parse(row.judgment),

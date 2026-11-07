@@ -71,7 +71,8 @@ export async function claimRebuild(
   if (!first) return null;
   const token = crypto.randomUUID();
   const restart = sql`NOT "DerivedRebuild".running`;
-  const result = await getDb(db).execute(sql`
+  const result = await getDb(db).execute(
+    sql`
     INSERT INTO "DerivedRebuild" (key, running, target, "startedAt", token, "leaseExpiresAt", "cursorAttempts", "passFailures")
     VALUES (${DERIVED_REBUILD_KEY}, true, ${first.target}, now() AT TIME ZONE 'UTC', ${token}::uuid,
       (now() AT TIME ZONE 'UTC') + interval '1 second' * ${DERIVED_REBUILD_LEASE_SECONDS}, 1, 0)
@@ -89,8 +90,10 @@ export async function claimRebuild(
       token = EXCLUDED.token, "leaseExpiresAt" = EXCLUDED."leaseExpiresAt"
     WHERE ("DerivedRebuild"."leaseExpiresAt" IS NULL OR "DerivedRebuild"."leaseExpiresAt" < now() AT TIME ZONE 'UTC' OR ("DerivedRebuild".token IS NULL AND ${force}))
       AND ("DerivedRebuild".running OR ${force} OR "DerivedRebuild"."startedAt" IS NULL OR "DerivedRebuild"."startedAt" < date_trunc('hour', now() AT TIME ZONE 'UTC'))
-    RETURNING target, "afterId"`);
-  const row = z.array(claimRow).parse(result.rows)[0];
+    RETURNING target, "afterId"`,
+    "objects",
+  );
+  const row = z.array(claimRow).parse(result)[0];
   return row ? { ...row, token } : null;
 }
 
@@ -103,7 +106,8 @@ export async function beginRebuildPage(
   configured: number,
   first: boolean,
 ): Promise<{ ids: string[]; attempts: number; limit: number } | null> {
-  const result = await getDb(db).execute(sql`
+  const result = await getDb(db).execute(
+    sql`
     WITH attempt AS (
       UPDATE "DerivedRebuild" SET "cursorAttempts" = "cursorAttempts" + ${first ? 0 : 1}
       WHERE key = ${DERIVED_REBUILD_KEY} AND token = ${token}::uuid
@@ -114,7 +118,9 @@ export async function beginRebuildPage(
       WHERE ${notDeleted("identity")} ${afterId ? sql`AND source.id > ${afterId}::uuid` : sql``}
       ORDER BY source.id LIMIT (SELECT greatest(1, floor(${configured} / power(2, floor((attempts - 1) / 3.0))))::int FROM attempt)
     ) SELECT attempts, greatest(1, floor(${configured} / power(2, floor((attempts - 1) / 3.0))))::int AS limit,
-      coalesce((SELECT jsonb_agg(id ORDER BY id) FROM page), '[]'::jsonb) AS ids FROM attempt`);
+      coalesce((SELECT jsonb_agg(id ORDER BY id) FROM page), '[]'::jsonb) AS ids FROM attempt`,
+    "objects",
+  );
   return (
     z
       .array(
@@ -124,7 +130,7 @@ export async function beginRebuildPage(
           ids: z.array(z.uuid()),
         }),
       )
-      .parse(result.rows)[0] ?? null
+      .parse(result)[0] ?? null
   );
 }
 
@@ -140,8 +146,9 @@ export async function commitRebuildPage(
   return repositoryTransactionDatabase(db, async (tx) => {
     const held = await getDb(tx).execute(
       sql`SELECT token FROM "DerivedRebuild" WHERE key = ${DERIVED_REBUILD_KEY} AND token = ${claim.token}::uuid FOR UPDATE`,
+      "objects",
     );
-    if (!held.rows.length) return false;
+    if (!held.length) return false;
     await publish(tx);
     await getDb(tx).execute(sql`
       UPDATE "DerivedRebuild" SET
@@ -257,8 +264,9 @@ export async function publishRebuiltValues(
 export async function rebuildActive(db: Database): Promise<boolean> {
   const result = await getDb(db).execute(
     sql`SELECT 1 FROM "DerivedRebuild" WHERE key = ${DERIVED_REBUILD_KEY} AND running`,
+    "objects",
   );
-  return result.rows.length > 0;
+  return result.length > 0;
 }
 
 /** A member repair joins active work instead of creating per-value tickets. */

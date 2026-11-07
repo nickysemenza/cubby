@@ -3,6 +3,7 @@ import { financialSpendingAdvice } from "@cubby/schemas/financial-booking";
 import { recordSourceTransactionRecordsInput } from "@cubby/schemas/source-transaction-record";
 import { statementTransactionApplication } from "@cubby/schemas/statement-suggestion";
 import { eq, isNull, sql } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { createEntity } from "tooling/factories/create";
 import { createRepoEntity } from "tooling/factories/repo";
 import { buildKernelContext } from "tooling/scenarios/context";
@@ -10,6 +11,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
 import { getDb, runAfterCommit } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
   suggestionTable,
   sourceTransactionRecord,
@@ -294,7 +296,10 @@ describe("statement spending review and re-import", () => {
             });
             expect(
               await getDb(ctx.db).query.suggestionTable.findFirst({
-                where: eq(suggestionTable.id, suggestion.id),
+                where: {
+                  RAW: (table: PgTable) =>
+                    relationalSql(table, eq(suggestionTable.id, suggestion.id)),
+                },
               }),
             ).toMatchObject({ active: true, status: "pending" });
             racing.mockRestore();
@@ -312,7 +317,10 @@ describe("statement spending review and re-import", () => {
             });
             expect(
               await getDb(ctx.db).query.suggestionTable.findFirst({
-                where: eq(suggestionTable.id, suggestion.id),
+                where: {
+                  RAW: (table: PgTable) =>
+                    relationalSql(table, eq(suggestionTable.id, suggestion.id)),
+                },
               }),
             ).toMatchObject({ active: true, status: "pending" });
             return;
@@ -348,7 +356,10 @@ describe("statement spending review and re-import", () => {
         });
         expect(
           await getDb(ctx.db).query.suggestionTable.findFirst({
-            where: eq(suggestionTable.id, suggestion.id),
+            where: {
+              RAW: (table: PgTable) =>
+                relationalSql(table, eq(suggestionTable.id, suggestion.id)),
+            },
           }),
         ).toMatchObject({ status: "applied" });
         const stored = await read();
@@ -504,7 +515,10 @@ describe("statement spending review and re-import", () => {
     const first = await makeTransaction();
     const second = await makeTransaction();
     const vendor = await getDb(ctx.db).query.vendor.findFirst({
-      where: isNull(vendorTable.systemKey),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(table, isNull(vendorTable.systemKey)),
+      },
     });
     const purchase = await createRepoEntity(ctx, "purchase", {
       vendorId: vendor!.shortcode,
@@ -587,7 +601,10 @@ describe("statement spending review and re-import", () => {
       ],
     });
     const vendor = await getDb(ctx.db).query.vendor.findFirst({
-      where: isNull(vendorTable.systemKey),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(table, isNull(vendorTable.systemKey)),
+      },
     });
     await bookFinancialTransaction(
       ctx.db,
@@ -788,7 +805,10 @@ describe("statement spending review and re-import", () => {
     );
     expect(suggestion?.clean).toBe(true);
     const vendor = await getDb(ctx.db).query.vendor.findFirst({
-      where: eq(vendorTable.name, "Synthetic Orchard"),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(table, eq(vendorTable.name, "Synthetic Orchard")),
+      },
     });
     const receipt = await createRepoEntity(ctx, "purchase", {
       vendorId: vendor!.shortcode,
@@ -909,7 +929,10 @@ describe("statement spending review and re-import", () => {
       })
     ).items[0]!;
     const vendor = await getDb(ctx.db).query.vendor.findFirst({
-      where: isNull(vendorTable.systemKey),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(table, isNull(vendorTable.systemKey)),
+      },
     });
     const application = statementTransactionApplication.parse({
       kind: "statement_transaction",
@@ -956,7 +979,10 @@ describe("statement spending review and re-import", () => {
       ).items,
     ).toHaveLength(1);
     const vendor = await getDb(ctx.db).query.vendor.findFirst({
-      where: isNull(vendorTable.systemKey),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(table, isNull(vendorTable.systemKey)),
+      },
     });
     await bookFinancialTransaction(
       ctx.db,

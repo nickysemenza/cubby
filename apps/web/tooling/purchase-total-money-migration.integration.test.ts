@@ -5,9 +5,9 @@ import { withMigrationDatabase } from "./test-database-lease";
 
 it("preserves nullable signed stated totals and refuses noisy originals transactionally", async () => {
   await withMigrationDatabase(async (client) => {
-    const db = drizzle(client);
+    const db = drizzle({ client: client, paramsInErrors: true });
     await migrateDatabase(db, {
-      through: "0103_drop_workitem_capture_evidence",
+      through: "20261106012350_0103_drop_workitem_capture_evidence",
     });
     const vendor = "00000000-0000-4000-8000-000000000001";
     await client.query(
@@ -51,14 +51,18 @@ it("preserves nullable signed stated totals and refuses noisy originals transact
       [run],
     );
     await expect(
-      migrateDatabase(db, { through: "0104_purchase_total_minor_units" }),
+      migrateDatabase(db, {
+        through: "20261106014136_0104_purchase_total_minor_units",
+      }),
     ).rejects.toThrow("Financial refresh has unfinished steps");
     await client.query(
       `UPDATE "Run" SET status='failed',"failureCode"='user_cancelled',"endedAt"=now() WHERE id=$1`,
       [run],
     );
     await expect(
-      migrateDatabase(db, { through: "0104_purchase_total_minor_units" }),
+      migrateDatabase(db, {
+        through: "20261106014136_0104_purchase_total_minor_units",
+      }),
     ).rejects.toThrow("Financial refresh has unfinished steps");
     await client.query(
       `UPDATE "Job" SET state='cancelled' WHERE key='total-refresh'`,
@@ -72,7 +76,9 @@ it("preserves nullable signed stated totals and refuses noisy originals transact
       `UPDATE "Purchase" SET "statedTotal"=10.010000000000002 WHERE shortcode='PUR-SYNTOTAL0'`,
     );
     await expect(
-      migrateDatabase(db, { through: "0104_purchase_total_minor_units" }),
+      migrateDatabase(db, {
+        through: "20261106014136_0104_purchase_total_minor_units",
+      }),
     ).rejects.toThrow("independent IEEE");
     expect(
       (
@@ -84,7 +90,9 @@ it("preserves nullable signed stated totals and refuses noisy originals transact
     await client.query(
       `UPDATE "Purchase" SET "statedTotal"=10.01 WHERE shortcode='PUR-SYNTOTAL0'`,
     );
-    await migrateDatabase(db, { through: "0104_purchase_total_minor_units" });
+    await migrateDatabase(db, {
+      through: "20261106014136_0104_purchase_total_minor_units",
+    });
     expect(
       (
         await client.query(

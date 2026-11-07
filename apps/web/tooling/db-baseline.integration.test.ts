@@ -30,22 +30,18 @@ async function withBaselineDatabase(
     client: Parameters<Parameters<typeof withMigrationDatabase>[0]>[0],
     folder: string,
   ) => Promise<void>,
+  named = false,
 ) {
   const folder = mkdtempSync(join(tmpdir(), "cubby-baseline-"));
-  mkdirSync(join(folder, "meta"));
-  writeFileSync(join(folder, "0000_baseline.sql"), baseline);
-  writeFileSync(join(folder, "0001_next.sql"), next);
+  mkdirSync(join(folder, "19700101000003_baseline"));
+  mkdirSync(join(folder, "19700101000004_next"));
   writeFileSync(
-    join(folder, "meta/_journal.json"),
-    JSON.stringify({
-      entries: [
-        { idx: 0, tag: "0000_baseline", when: 3000, breakpoints: true },
-        { idx: 1, tag: "0001_next", when: 4000, breakpoints: true },
-      ],
-    }),
+    join(folder, "19700101000003_baseline/migration.sql"),
+    baseline,
   );
+  writeFileSync(join(folder, "19700101000004_next/migration.sql"), next);
   writeFileSync(
-    join(folder, "meta/_baseline.json"),
+    join(folder, "baseline.json"),
     JSON.stringify({
       baselineHash: hash(baseline),
       retiredCount: old.length,
@@ -65,6 +61,14 @@ async function withBaselineDatabase(
           "INSERT INTO drizzle.__drizzle_migrations (hash,created_at) VALUES ($1,$2)",
           [row.hash, row.created_at],
         );
+      if (named) {
+        await client.query(
+          "ALTER TABLE drizzle.__drizzle_migrations ADD COLUMN name text, ADD COLUMN applied_at timestamptz DEFAULT now()",
+        );
+        await client.query(
+          "UPDATE drizzle.__drizzle_migrations SET name = 'synthetic_retired_' || id",
+        );
+      }
       await run(client, folder);
     });
   } finally {
@@ -74,33 +78,46 @@ async function withBaselineDatabase(
 
 // Squashing must not replay CREATE/DML on an existing database or skip the
 // first post-baseline migration; adoption must be safe to run again.
-it("adopts the complete retired ledger without changing populated rows", async () => {
-  await withBaselineDatabase(old, async (client, folder) => {
-    await expect(
-      assertMigrationBookkeeping(
-        drizzle(client),
-        readMigrationFiles({ migrationsFolder: folder }),
-      ),
-    ).rejects.toThrow(/Refusing to migrate/);
-    const run = () =>
-      migrateDatabase(drizzle(client), { migrationsFolder: folder });
-    await run();
-    await run();
-    expect(
-      (await client.query('SELECT * FROM "SyntheticPreserved"')).rows,
-    ).toEqual([{ value: "Synthetic retained content", extra: null }]);
-    expect(
-      (
+it.each([false, true])(
+  "adopts the complete retired ledger without changing populated rows (named: %s)",
+  async (named) => {
+    await withBaselineDatabase(
+      old,
+      async (client, folder) => {
+        await expect(
+          assertMigrationBookkeeping(
+            drizzle({ client: client, paramsInErrors: true }),
+            readMigrationFiles({ migrationsFolder: folder }),
+          ),
+        ).rejects.toThrow(/Refusing to migrate/);
+        const run = () =>
+          migrateDatabase(drizzle({ client: client, paramsInErrors: true }), {
+            migrationsFolder: folder,
+          });
+        await run();
         await client.query(
-          "SELECT hash,created_at FROM drizzle.__drizzle_migrations ORDER BY created_at",
-        )
-      ).rows,
-    ).toEqual([
-      { hash: hash(baseline), created_at: "3000" },
-      { hash: hash(next), created_at: "4000" },
-    ]);
-  });
-});
+          "ALTER TABLE drizzle.__drizzle_migrations DROP COLUMN name, DROP COLUMN applied_at; UPDATE drizzle.__drizzle_migrations SET created_at = created_at + 123",
+        );
+        await run();
+        await run();
+        expect(
+          (await client.query('SELECT * FROM "SyntheticPreserved"')).rows,
+        ).toEqual([{ value: "Synthetic retained content", extra: null }]);
+        expect(
+          (
+            await client.query(
+              "SELECT hash,created_at FROM drizzle.__drizzle_migrations ORDER BY created_at",
+            )
+          ).rows,
+        ).toEqual([
+          { hash: hash(baseline), created_at: "3123" },
+          { hash: hash(next), created_at: "4123" },
+        ]);
+      },
+      named,
+    );
+  },
+);
 
 // Missing or edited retired migrations must fail without changing any history or data.
 it.each([
@@ -121,7 +138,9 @@ it.each([
       )
     ).rows;
     await expect(
-      migrateDatabase(drizzle(client), { migrationsFolder: folder }),
+      migrateDatabase(drizzle({ client: client, paramsInErrors: true }), {
+        migrationsFolder: folder,
+      }),
     ).rejects.toThrow(/Refusing to migrate/);
     expect(
       (
@@ -145,7 +164,7 @@ it("adds sender decision metadata while preserving populated Vendor identities",
     await client.query(
       readFileSync(
         new URL(
-          "../drizzle/0059_sender_attribution_policies.sql",
+          "../drizzle/20261029005641_0059_sender_attribution_policies/migration.sql",
           import.meta.url,
         ),
         "utf8",

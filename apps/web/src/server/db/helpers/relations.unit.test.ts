@@ -1,13 +1,7 @@
-import type { SQL } from "drizzle-orm";
-import {
-  Many,
-  createTableRelationsHelpers,
-  extractTablesRelationalConfig,
-  getTableColumns,
-} from "drizzle-orm";
+import { Many, getColumns, type TablesRelationalConfig } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 
-import { drizzleSchema as schema } from "~/server/db/drizzle-schema";
+import { relationalSchema } from "~/server/db/schema";
 
 import { relations } from "./relations";
 
@@ -47,27 +41,16 @@ const ROOT_TABLE = {
 const ALLOWLIST: Record<string, string> = {};
 
 /** The two fields of a Drizzle RQB config node this guard reads. */
-type PresetNode = true | { readonly where?: SQL; readonly with?: PresetBlock };
+type PresetNode =
+  | true
+  | { readonly where?: unknown; readonly with?: PresetBlock };
 type PresetBlock = Readonly<Record<string, PresetNode>>;
 
 const presets = relations as Readonly<
   Record<string, Readonly<Record<string, PresetNode>>>
 >;
 
-const config = extractTablesRelationalConfig(
-  schema,
-  createTableRelationsHelpers,
-);
-
-/**
- * dbName -> tsName. Built from `config.tables` rather than reusing
- * `config.tableNamesMap`, whose keys are schema-qualified ("public.Product"): a
- * bare-name lookup there returns undefined, which would silently skip the whole
- * nested walk and leave this guard vacuous.
- */
-const tsNameByDbName = new Map(
-  Object.values(config.tables).map((table) => [table.dbName, table.tsName]),
-);
+const config: TablesRelationalConfig = relationalSchema;
 
 const withBlockOf = (node: PresetNode): PresetBlock | undefined =>
   node === true ? undefined : node.with;
@@ -83,7 +66,7 @@ const findUnfiltered = (
   violations: string[],
   unresolved: string[],
 ) => {
-  const table = config.tables[tableTsName];
+  const table = config[tableTsName];
   if (!table) {
     unresolved.push(`${path} (no relational config for "${tableTsName}")`);
     return;
@@ -95,12 +78,12 @@ const findUnfiltered = (
       unresolved.push(`${here} (no such relation on "${tableTsName}")`);
       continue;
     }
-    const target = tsNameByDbName.get(relation.referencedTableName);
-    // To-one relations are skipped: Drizzle cannot put a `where` on them at all
-    // (see the header comment in relations.ts). Liveness for those is filtered in
+    const target = relation.targetTableName;
+    // Existing to-one relations keep their transform-owned liveness policy.
+    // Liveness for those is filtered in
     // the transform layer instead — `mapRelation` in ./transform.ts.
     const softDeletable =
-      getTableColumns(relation.referencedTable).deletedAt !== undefined;
+      getColumns(relation.targetTable).deletedAt !== undefined;
     if (
       relation instanceof Many &&
       softDeletable &&
@@ -110,7 +93,7 @@ const findUnfiltered = (
       // Name the table the fix needs, so the failure is directly actionable —
       // `images` alone is ambiguous across product/location/recipe image tables.
       violations.push(
-        `${here} -> where: notDeleted(${target ?? relation.referencedTableName})`,
+        `${here} -> where: notDeleted(${target ?? relation.targetTableName})`,
       );
     }
     const nested = withBlockOf(node);
@@ -121,7 +104,7 @@ const findUnfiltered = (
       findUnfiltered(target, nested, here, violations, unresolved);
     } else {
       unresolved.push(
-        `${here} (cannot resolve target table "${relation.referencedTableName}")`,
+        `${here} (cannot resolve target table "${relation.targetTableName}")`,
       );
     }
   }

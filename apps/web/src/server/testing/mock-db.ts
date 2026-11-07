@@ -19,14 +19,17 @@ import { Database } from "~/server/db/database";
  * test double — it cannot execute anything, only build query text.
  */
 import { createDatabase } from "~/server/db/database-runtime";
-import { drizzleSchema as schema } from "~/server/db/drizzle-schema";
+import { relationalSchema } from "~/server/db/schema";
 
 const dialect = new PgDialect();
 
 /** A fresh mock-backed `Database` handle for one test. */
 export const mockWhereDatabase = (): Database =>
   createDatabase(() => {
-    const client = drizzle.mock({ schema });
+    const client = drizzle.mock({
+      relations: relationalSchema,
+      paramsInErrors: true,
+    });
     return { client, withConnection: (fn) => fn(client) };
   });
 

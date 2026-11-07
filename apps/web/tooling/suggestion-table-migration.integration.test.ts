@@ -7,8 +7,8 @@ import { withMigrationDatabase } from "./test-database-lease";
 
 const id = (n: number) =>
   `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
-const PREDECESSOR = "0079_quality_snapshot";
-const MIGRATION = "0080_suggestion_table";
+const PREDECESSOR = "20261105093251_0079_quality_snapshot";
+const MIGRATION = "20261105100922_0080_suggestion_table";
 const MEMBER = "synthetic-member";
 
 type Db = Client | PoolClient;
@@ -310,7 +310,7 @@ const count = async (client: Db, statement: string) =>
 describe("Suggestion table migration", () => {
   it("carries every decision and moves the ledgers to the archive unchanged", async () =>
     await withMigrationDatabase(async (client) => {
-      const db = drizzle(client);
+      const db = drizzle({ client: client, paramsInErrors: true });
       await migrateDatabase(db, { through: PREDECESSOR });
       await seedPredecessor(client);
       const snapshot = async (schema: string) => ({
@@ -407,7 +407,7 @@ describe("Suggestion table migration", () => {
 
   it("aborts on a Feedback category nothing accounts for, leaving every table in place", async () =>
     await withMigrationDatabase(async (client) => {
-      const db = drizzle(client);
+      const db = drizzle({ client: client, paramsInErrors: true });
       await migrateDatabase(db, { through: PREDECESSOR });
       await seedPredecessor(client);
       await client.query(

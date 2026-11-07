@@ -302,7 +302,8 @@ const candidatesFor = async <E extends ResolvableEntity>(
     plan.scope.map((column) => sql` AND ${qualified(column)} IS NULL`),
     sql``,
   );
-  const result = await unwrapDb(db).execute(sql`
+  const result = await unwrapDb(db).execute(
+    sql`
     SELECT m.key AS key, cand.id AS id, cand.shortcode AS shortcode, cand.name AS name
     FROM unnest(
       ARRAY[${textList(lowered)}]::text[],
@@ -330,9 +331,11 @@ const candidatesFor = async <E extends ResolvableEntity>(
         ${name} ASC, t."shortcode" ASC, t."id" ASC
       LIMIT ${limit}
     ) cand
-  `);
+  `,
+    "objects",
+  );
   const byKey = new Map<string, ResolvedName<E>["candidates"]>();
-  for (const row of z.array(candidateRowSchema).parse(result.rows))
+  for (const row of z.array(candidateRowSchema).parse(result))
     byKey.set(row.key, [
       ...(byKey.get(row.key) ?? []),
       {

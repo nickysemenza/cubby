@@ -6,9 +6,9 @@ import { withMigrationDatabase } from "./test-database-lease";
 
 it("preserves account evidence and existing references without assigning missing providers", async () => {
   await withMigrationDatabase(async (client) => {
-    const db = drizzle(client);
+    const db = drizzle({ client: client, paramsInErrors: true });
     await migrateDatabase(db, {
-      through: "0024_receipt_expense_binding",
+      through: "20261024205947_0024_receipt_expense_binding",
     });
     const provider = "00000000-0000-4000-8000-000000000011";
     const duplicate = "00000000-0000-4000-8000-000000000012";
@@ -62,7 +62,9 @@ it("preserves account evidence and existing references without assigning missing
         `SELECT * FROM "FinancialAccount" WHERE shortcode LIKE 'FAC-SYNTHETIC%' ORDER BY shortcode`,
       )
     ).rows;
-    await migrateDatabase(db, { through: "0025_financial_account_providers" });
+    await migrateDatabase(db, {
+      through: "20261024214044_0025_financial_account_providers",
+    });
     const after = (
       await client.query(
         `SELECT * FROM "FinancialAccount" WHERE shortcode LIKE 'FAC-SYNTHETIC%' ORDER BY shortcode`,

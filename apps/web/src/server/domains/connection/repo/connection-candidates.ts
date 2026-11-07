@@ -267,7 +267,8 @@ export async function retrieveFinancialConnectionCandidatePage(
   );
   const requested = alias(financialTransaction, "t");
   const nearbyPurchase = alias(purchase, "p");
-  const result = await getDb(db).execute(sql`
+  const result = await getDb(db).execute(
+    sql`
     SELECT t.shortcode AS source, nearby.shortcode AS target
     FROM "FinancialTransaction" t
     CROSS JOIN LATERAL (
@@ -277,10 +278,12 @@ export async function retrieveFinancialConnectionCandidatePage(
       ORDER BY abs(p.date::date-coalesce(t."postedDate", t."transactionDate")::date), p.id LIMIT 10
     ) nearby
     WHERE ${inArray(sql`t.shortcode`, codes)} AND ${notDeleted(requested)}
-    ORDER BY t.id`);
+    ORDER BY t.id`,
+    "objects",
+  );
   const edges = z
     .array(z.object({ source: z.string(), target: z.string() }))
-    .parse(result.rows);
+    .parse(result);
   const targets: EntityRef[] = [
     ...new Set(edges.map((edge) => edge.target)),
   ].map((entityId) => ({ entityKind: "purchase", entityId }));

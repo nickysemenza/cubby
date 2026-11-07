@@ -1,3 +1,5 @@
+import type { PgTable } from "drizzle-orm/pg-core";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { z } from "zod";
@@ -123,12 +125,18 @@ test("Purchase title column exposes inverse acquisition review", async ({
   const productId = await resolveOrThrow(db, "product", item.id);
   const acquisition = () =>
     getDb(db).query.entityLink.findFirst({
-      where: and(
-        eq(entityLink.kind, "purchaseProduct"),
-        eq(entityLink.fromEntityId, purchaseId),
-        eq(entityLink.toEntityId, productId),
-        notDeleted(entityLink),
-      ),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(
+              eq(entityLink.kind, "purchaseProduct"),
+              eq(entityLink.fromEntityId, purchaseId),
+              eq(entityLink.toEntityId, productId),
+              notDeleted(entityLink),
+            ),
+          ),
+      },
     });
   expect(await acquisition()).toBeUndefined();
   const source = { entityKind: "product" as const, entityId: item.id };
@@ -176,7 +184,13 @@ test("Purchase title column exposes inverse acquisition review", async ({
   expect(await acquisition()).toMatchObject({ acquisitionConfirmed: true });
   expect(
     await getDb(db).query.expense.findMany({
-      where: and(eq(expense.purchaseId, purchaseId), notDeleted(expense)),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(eq(expense.purchaseId, purchaseId), notDeleted(expense)),
+          ),
+      },
     }),
   ).toHaveLength(0);
 });

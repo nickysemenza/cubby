@@ -6,9 +6,9 @@ import { withMigrationDatabase } from "./test-database-lease";
 
 it("projects retained connection targets without rewriting evidence or review state", async () => {
   await withMigrationDatabase(async (client) => {
-    const db = drizzle(client);
+    const db = drizzle({ client: client, paramsInErrors: true });
     await migrateDatabase(db, {
-      through: "0041_unclassified_principal_product_gaps",
+      through: "20261026212913_0041_unclassified_principal_product_gaps",
     });
     const record = "00000000-0000-4000-8000-000000000001";
     const id = "00000000-0000-4000-8000-000000000002";
@@ -60,7 +60,9 @@ it("projects retained connection targets without rewriting evidence or review st
         )
       ).rows;
     const before = { immutable: await immutable(), review: await review() };
-    await migrateDatabase(db, { through: "0042_connection_target_projection" });
+    await migrateDatabase(db, {
+      through: "20261026215424_0042_connection_target_projection",
+    });
     expect(await immutable()).toEqual(before.immutable);
     expect(await review()).toEqual(before.review);
     expect(

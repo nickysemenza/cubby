@@ -1,8 +1,10 @@
 import { eq } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { withTestDb } from "tooling/test-setup";
 import { expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { purchase as purchaseTable } from "~/server/db/schema";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
@@ -58,7 +60,10 @@ it("keeps legacy fallback provenance pending review until an explicit category s
     "purchase_spending_category_origin",
   );
   const stored = await getDb(ctx.db).query.purchase.findFirst({
-    where: eq(purchaseTable.id, purchase.id),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(table, eq(purchaseTable.id, purchase.id)),
+    },
   });
   expect(stored?.spendingCategoryId).toBe(category.id);
 });

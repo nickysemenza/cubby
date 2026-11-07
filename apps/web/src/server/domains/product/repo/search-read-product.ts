@@ -1,6 +1,7 @@
 import { entitySchema } from "@cubby/schemas/entity";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { sql, and, inArray } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { alias } from "drizzle-orm/pg-core";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -10,6 +11,7 @@ import {
 } from "~/server/db/computed/product-brand-sql";
 import { categorySummarySql } from "~/server/db/computed/product-category-sql";
 import { unwrapDb, notDeleted } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
   entityExternalId as searchTableentityExternalId,
   product as searchTableproduct,
@@ -30,23 +32,41 @@ async function loadEmbeddingText(
 ): Promise<SearchableEntityText[]> {
   const queryConfig = withOptionalLimit(
     {
-      where: and(
-        notDeleted(product),
-        options.ids?.length
-          ? inArray(
-              product.id,
-              options.ids.map((id) => parseEntityId("product", id)),
-            )
-          : undefined,
-      ),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(
+              notDeleted(product),
+              options.ids?.length
+                ? inArray(
+                    product.id,
+                    options.ids.map((id) => parseEntityId("product", id)),
+                  )
+                : undefined,
+            ),
+          ),
+      },
       extras: {
-        brandName: productBrandNameSql(product.brandId).as("brandName"),
-        brandCode: productBrandCodeSql(product.brandId).as("brandCode"),
-        category: sql<
-          string | null
-        >`${categorySummarySql(sql`${product.categoryId}`)}->>${"name"}`.as(
-          "category",
-        ),
+        brandName: (table: PgTable) =>
+          relationalSql(
+            table,
+            productBrandNameSql(product.brandId).as("brandName"),
+          ),
+        brandCode: (table: PgTable) =>
+          relationalSql(
+            table,
+            productBrandCodeSql(product.brandId).as("brandCode"),
+          ),
+        category: (table: PgTable) =>
+          relationalSql(
+            table,
+            sql<
+              string | null
+            >`${categorySummarySql(sql`${product.categoryId}`)}->>${"name"}`.as(
+              "category",
+            ),
+          ),
       },
       columns: {
         id: true,

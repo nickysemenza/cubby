@@ -5,7 +5,9 @@ import { parseEntityId, userId } from "@cubby/schemas/identifiers";
 import { acceptedSourceOrder } from "@cubby/schemas/purchase-import";
 import { recordSourceTransactionRecordsInput } from "@cubby/schemas/source-transaction-record";
 import { moneyToMinor } from "@cubby/shared";
+import { getColumnTable } from "drizzle-orm";
 import { eq, getTableColumns, getTableName, sql } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -13,6 +15,7 @@ import type { Database } from "~/server/db";
 import { ENTITY_EDGE_SEMANTICS } from "~/server/db/entity-edge-semantics";
 import { INCOMING_EDGES } from "~/server/db/entity-incoming-edges";
 import { getDb, insertAndReturn } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
   email as emailTable,
   entityAttachment,
@@ -560,9 +563,13 @@ const TARGET_FACTORIES = {
       }),
       TEST_ACTOR,
     );
-    if (!receipt.batchId) throw new Error("Synthetic import missing");
+    const batchId = receipt.batchId;
+    if (!batchId) throw new Error("Synthetic import missing");
     const collection = await getDb(db).query.transactionImport.findFirst({
-      where: eq(transactionImport.id, receipt.batchId),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(table, eq(transactionImport.id, batchId)),
+      },
     });
     if (!collection) throw new Error("Synthetic import missing");
     return collection;
@@ -1914,13 +1921,14 @@ function deriveMustTargetLiveEdges(): DerivedEdgeSpec[] {
       if (semantics.liveness.kind !== "must-target-live") continue; // Ingredient.recipeId
       // From the column, not the key: an `EntityLink[kind].end` key names
       // its link kind, not its table.
-      const sourceTableName = getTableName(edge.column.table);
+      const sourceTableName = getTableName(getColumnTable(edge.column));
       specs.push({
         edgeKey,
         targetEntity,
         role: semantics.role,
         sourceTableName,
-        sourceSoftDeletable: "deletedAt" in getTableColumns(edge.column.table),
+        sourceSoftDeletable:
+          "deletedAt" in getTableColumns(getColumnTable(edge.column)),
       });
     }
   }

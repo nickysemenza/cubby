@@ -72,15 +72,18 @@ export async function loadCurrentAssignmentFacts(
   if (!ids.length) return new Map();
   const columns = slots.flatMap(({ key, value }) => [sql`${key}::text`, value]);
   const rows = slots.length
-    ? await repositoryQueries(db).execute(sql`
+    ? await repositoryQueries(db).execute(
+        sql`
     SELECT ${table.id} AS id, jsonb_build_object(${sql.join(columns, sql`, `)}) AS raw
     FROM ${SHORTCODE_TABLE[entity]} AS ${sql.identifier("assignment_facts")}
-    WHERE ${table.id} = ANY(${uuidArrayParam(ids)})`)
-    : { rows: [] };
+    WHERE ${table.id} = ANY(${uuidArrayParam(ids)})`,
+        "objects",
+      )
+    : [];
   const stored = new Map(
     z
       .array(intentRow)
-      .parse(rows.rows)
+      .parse(rows)
       .map((fact) => [fact.id, fact.raw]),
   );
   const facts = ids.map((id) => ({
@@ -104,13 +107,16 @@ export async function loadCurrentAssignmentFacts(
       }
     }
   if (referenceIds.size) {
-    const identities = await repositoryQueries(db).execute(sql`
+    const identities = await repositoryQueries(db).execute(
+      sql`
       SELECT ${entityIdentity.id} AS id, ${entityIdentity.shortcode} AS shortcode
-      FROM ${entityIdentity} WHERE ${entityIdentity.id} = ANY(${uuidArrayParam([...referenceIds])})`);
+      FROM ${entityIdentity} WHERE ${entityIdentity.id} = ANY(${uuidArrayParam([...referenceIds])})`,
+      "objects",
+    );
     const codes = new Map(
       z
         .array(z.object({ id: z.string(), shortcode: z.string() }))
-        .parse(identities.rows)
+        .parse(identities)
         .map((identity) => [identity.id, identity.shortcode]),
     );
     const codeFor = (value: unknown, physical: boolean) => {

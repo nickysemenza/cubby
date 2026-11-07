@@ -40,7 +40,9 @@ export async function cloneSchemaTemplate(target: string): Promise<void> {
     });
     await connection.connect();
     try {
-      await migrateDatabase(drizzle(connection));
+      await migrateDatabase(
+        drizzle({ client: connection, paramsInErrors: true }),
+      );
     } finally {
       await connection.end();
     }

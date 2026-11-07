@@ -488,7 +488,8 @@ export async function completeDescribeImageJobs(
 
 /** Why a describe job refused its lease: state, due time, source-hash match. */
 export async function describeJobDiagnostic(db: Database, jobId: string) {
-  const diagnostic = await getDb(db).execute(sql`
+  const diagnostic = await getDb(db).execute(
+    sql`
     SELECT j.state, j.attempts, j."nextAttemptAt" <= now() AS "due",
       j."nextAttemptAt", now() AS "databaseNow", j."lastError",
       j."attemptId" IS NOT NULL AS "hasAttempt",
@@ -498,8 +499,10 @@ export async function describeJobDiagnostic(db: Database, jobId: string) {
     FROM "ImageProcessingJob" j JOIN "Image" i ON i.id = j."imageId"
     LEFT JOIN "AppSettings" s ON s.id = '00000000-0000-4000-8000-000000000071'
     WHERE j.id = ${jobId}
-  `);
-  return JSON.stringify(diagnostic.rows);
+  `,
+    "objects",
+  );
+  return JSON.stringify(diagnostic);
 }
 
 export interface ConvergenceScope {
@@ -517,7 +520,22 @@ export async function convergenceProjection(
 ) {
   const { productName, orderId, messageId, statementAccount } = names;
   const { vendorId, cardId, memberId, categoryShortcode } = scope;
-  const { rows } = await getDb(db).execute(sql`
+  const { rows } = await getDb(db).execute<{
+    purchases: number;
+    products: number;
+    expenses: number;
+    productLines: number;
+    settledPurchases: number;
+    categorizedExpenses: number;
+    spend: number | null;
+    settlement: number | null;
+    inventory: number;
+    ownedQuantity: number | null;
+    observations: number;
+    matchedObservations: number;
+    mail: number;
+    linkedMail: number;
+  }>(sql`
     SELECT
       (SELECT count(*)::int FROM "Purchase" WHERE "vendorId" = ${vendorId} AND "orderId" = ${orderId} AND "deletedAt" IS NULL) AS purchases,
       (SELECT count(*)::int FROM "Product" WHERE name = ${productName} AND "deletedAt" IS NULL) AS products,
@@ -540,7 +558,10 @@ export async function convergenceProjection(
 
 /** The Product-page #images/#labels rows for one Product. */
 export async function productPhotos(db: Database, productShortcode: string) {
-  const { rows } = await getDb(db).execute(sql`
+  const { rows } = await getDb(db).execute<{
+    filename: string;
+    purpose: string | null;
+  }>(sql`
     SELECT i.filename, a.purpose
     FROM "EntityAttachment" a
     JOIN "Image" i ON i.id = a."imageId" AND i."deletedAt" IS NULL

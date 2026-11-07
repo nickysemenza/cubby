@@ -9,12 +9,14 @@ import {
 import { moneyToMinor } from "@cubby/shared";
 import { OWNER_FILTER_HOUSEHOLD, OWNER_FILTER_UNKNOWN } from "@cubby/shared";
 import { and, eq } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { buildEntity } from "tooling/factories/build";
 import { raceUniqueInsert, TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
 import { getDb, notDeleted, withTransaction } from "~/server/db/helpers";
 import { amountFromColumns } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
   expense,
   financialAccount,
@@ -579,7 +581,10 @@ describe("inventory ownership mutations", () => {
     expect(changed).toHaveLength(2);
 
     const rows = await getDb(ctx.db).query.inventoryEntry.findMany({
-      where: eq(inventoryEntry.productId, productId),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(table, eq(inventoryEntry.productId, productId)),
+      },
     });
     const inherited = rows.find((row) => row.ownershipMode === "inherit");
     const explicit = rows.find((row) => row.ownershipMode === "explicit");
@@ -604,7 +609,10 @@ describe("inventory ownership mutations", () => {
       TEST_ACTOR,
     );
     const moved = await getDb(ctx.db).query.inventoryEntry.findFirst({
-      where: eq(inventoryEntry.id, explicit.id),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(table, eq(inventoryEntry.id, explicit.id)),
+      },
     });
     expect(moved).toMatchObject({
       locationId: drawerId,
@@ -630,10 +638,16 @@ describe("inventory ownership mutations", () => {
       ),
     ).rejects.toThrow("Cannot reassign 4; only 3 is available.");
     const rows = await getDb(ctx.db).query.inventoryEntry.findMany({
-      where: and(
-        eq(inventoryEntry.productId, subject.product.entityId),
-        notDeleted(inventoryEntry),
-      ),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(
+              eq(inventoryEntry.productId, subject.product.entityId),
+              notDeleted(inventoryEntry),
+            ),
+          ),
+      },
     });
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({
@@ -696,10 +710,16 @@ describe("inventory ownership mutations", () => {
       error: { reason: "CONSTRAINT_VIOLATION" },
     });
     const rows = await getDb(ctx.db).query.inventoryEntry.findMany({
-      where: and(
-        eq(inventoryEntry.productId, subject.product.entityId),
-        notDeleted(inventoryEntry),
-      ),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(
+              eq(inventoryEntry.productId, subject.product.entityId),
+              notDeleted(inventoryEntry),
+            ),
+          ),
+      },
     });
     expect(
       rows.reduce((total, row) => total + amountFromColumns(row).value, 0),

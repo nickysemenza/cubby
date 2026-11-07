@@ -171,8 +171,9 @@ export const findUnlinkedProductCandidates = async (
   if (arms.length === 0) return byIngredient;
   const result = await unwrapDb(db).execute(
     sql`SELECT * FROM (${sql.join(arms, sql` UNION ALL `)}) candidates ORDER BY "key", "rank"`,
+    "objects",
   );
-  for (const row of z.array(candidateRowSchema).parse(result.rows)) {
+  for (const row of z.array(candidateRowSchema).parse(result)) {
     const key = parseShortcodeFor("ingredient", row.key);
     byIngredient.set(key, [
       ...(byIngredient.get(key) ?? []),

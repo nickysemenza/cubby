@@ -132,11 +132,10 @@ export const loadQualityBreakdown = async (
   const selected = z
     .array(z.object({ id: z.string() }))
     .parse(
-      (
-        await unwrapDb(db).execute(
-          sql`SELECT ${entry.table.id} AS "id" FROM ${entry.table} WHERE ${entry.table.shortcode} = ${id} AND ${liveQualityRow(entry.table)}`,
-        )
-      ).rows,
+      await unwrapDb(db).execute(
+        sql`SELECT ${entry.table.id} AS "id" FROM ${entry.table} WHERE ${entry.table.shortcode} = ${id} AND ${liveQualityRow(entry.table)}`,
+        "objects",
+      ),
     );
   const target = selected[0];
   if (!target)
@@ -191,14 +190,17 @@ const loadRelatedIds = async (
     if (!link) throw new Error(`${entity} declares no link to ${target}.`);
     const t = entry.table;
     const r = storedEntryFor(target).table;
-    const result = await unwrapDb(db).execute(sql`SELECT
+    const result = await unwrapDb(db).execute(
+      sql`SELECT
   ${t.id} AS "ownerId", ${r.id} AS "relatedId"
 FROM ${t}, ${r}
 WHERE ${t.id} = ANY(${uuidArrayParam(ids)}) AND ${liveQualityRow(t)}
-  AND ${liveQualityRow(r)} AND ${link(t, sql`${r.id}`)}`);
+  AND ${liveQualityRow(r)} AND ${link(t, sql`${r.id}`)}`,
+      "objects",
+    );
     for (const row of z
       .array(z.object({ ownerId: z.string(), relatedId: z.string() }))
-      .parse(result.rows)) {
+      .parse(result)) {
       const list = related.get(row.ownerId) ?? [];
       list.push({ entity: target, id: row.relatedId });
       related.set(row.ownerId, list);

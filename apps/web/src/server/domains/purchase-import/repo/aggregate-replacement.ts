@@ -45,7 +45,8 @@ export async function redistributeReplacementAttributions(
   const inputs = JSON.stringify(
     lines.map((line, lineIndex) => ({ lineIndex, amount: line.amount })),
   );
-  const result = await tx.execute(sql`
+  const result = await tx.execute(
+    sql`
     WITH targets AS (
       SELECT * FROM jsonb_to_recordset(${targets}::jsonb)
         AS t(role text, "partyId" uuid, "partyCode" text, "targetCents" bigint)
@@ -94,8 +95,10 @@ export async function redistributeReplacementAttributions(
     SELECT "lineIndex", role, "partyId", "partyCode", weight::double precision AS weight,
       (direction * weight / 100.0)::double precision AS amount
     FROM transported WHERE weight > 0 ORDER BY "lineIndex", role, "partyCode"
-  `);
-  return z.array(replacementLineAttribution).parse(result.rows);
+  `,
+    "objects",
+  );
+  return z.array(replacementLineAttribution).parse(result);
 }
 
 export async function aggregateReplacementApprovalFingerprint(
@@ -193,16 +196,19 @@ export async function loadAggregateReplacementSnapshot(
       })),
     }),
   );
-  const labels = await tx.execute(sql`SELECT
+  const labels = await tx.execute(
+    sql`SELECT
     (SELECT p.name FROM "Project" p WHERE p.id = COALESCE(${row.projectId}::uuid, ${parent.defaultProjectId}::uuid) AND ${notDeleted("p")}) AS "projectName",
     (SELECT c.name FROM "SpendingCategory" c WHERE c.id = COALESCE(${row.spendingCategoryId}::uuid, ${parent.spendingCategoryId}::uuid) AND ${notDeleted("c")}) AS "categoryName"
-  `);
+  `,
+    "objects",
+  );
   const label = z
     .object({
       projectName: z.string().nullable(),
       categoryName: z.string().nullable(),
     })
-    .parse(labels.rows[0]);
+    .parse(labels[0]);
   return {
     row,
     parent,

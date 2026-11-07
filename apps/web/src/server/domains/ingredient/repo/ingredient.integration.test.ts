@@ -1,11 +1,13 @@
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { testEntityId, testShortcode } from "@cubby/schemas/testing";
 import { count, eq } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { raceUniqueInsert, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import type { Database } from "~/server/db";
 import { getDb, withTransaction } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
   entityEmbedding,
   auditLog,
@@ -247,7 +249,9 @@ describe("ingredient", () => {
 
     expect(
       await getDb(ctx.db).query.plant.findFirst({
-        where: eq(plant.id, grownId),
+        where: {
+          RAW: (table: PgTable) => relationalSql(table, eq(plant.id, grownId)),
+        },
         columns: { ingredientId: true },
       }),
     ).toEqual({ ingredientId: keeperId });
@@ -577,7 +581,10 @@ describe("ingredient", () => {
     // soft-deleted in the same transaction, asserted directly against the
     // table rather than through a detector.
     const embeddingRow = await getDb(ctx.db).query.entityEmbedding.findFirst({
-      where: eq(entityEmbedding.entityId, alias.id),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(table, eq(entityEmbedding.entityId, alias.id)),
+      },
     });
     expect(embeddingRow?.deletedAt).not.toBeNull();
   });
@@ -598,7 +605,9 @@ describe("ingredient", () => {
     ).rejects.toThrow(/not found/i);
 
     const keeper = await getDb(ctx.db).query.ingredient.findFirst({
-      where: eq(ingredient.id, a.id),
+      where: {
+        RAW: (table: PgTable) => relationalSql(table, eq(ingredient.id, a.id)),
+      },
     });
     expect(keeper).toBeDefined();
     expect(keeper!.aliases).toHaveLength(0);
@@ -680,7 +689,9 @@ describe("deleteIngredients", () => {
 
     expect(
       await getDb(ctx.db).query.plant.findFirst({
-        where: eq(plant.id, grownId),
+        where: {
+          RAW: (table: PgTable) => relationalSql(table, eq(plant.id, grownId)),
+        },
         columns: { ingredientId: true },
       }),
     ).toEqual({ ingredientId: null });

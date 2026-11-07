@@ -5,6 +5,7 @@ import type { LocationId, ProductId } from "@cubby/schemas/identifiers";
  */
 import type { RawProductCategorySummary } from "@cubby/schemas/product-category-fields";
 import { and, eq, isNull, type SQL, sql } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 
 import type { Database } from "~/server/db";
 import {
@@ -13,6 +14,7 @@ import {
 } from "~/server/db/computed/product-brand-sql";
 import { categorySummarySql } from "~/server/db/computed/product-category-sql";
 import { getDb, notDeleted } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { entityExternalId, inventoryEntry, product } from "~/server/db/schema";
 import { productHasDisplayableImageSql } from "~/server/domains/image/repo/image-displayability";
 import {
@@ -26,15 +28,36 @@ export const findDuplicateUniqueProducts = async (
   { excludeLocationId }: { excludeLocationId?: LocationId } = {},
 ) => {
   const duplicates = await getDb(db).query.product.findMany({
-    where: and(eq(product.expectedQuantity, 1), notDeleted(product)),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          and(eq(product.expectedQuantity, 1), notDeleted(product)),
+        ),
+    },
     extras: {
-      brandName: productBrandNameSql(product.brandId).as("brandName"),
-      brandCode: productBrandCodeSql(product.brandId).as("brandCode"),
-      category: categorySummarySql(sql`${product.categoryId}`).as("category"),
+      brandName: (table: PgTable) =>
+        relationalSql(
+          table,
+          productBrandNameSql(product.brandId).as("brandName"),
+        ),
+      brandCode: (table: PgTable) =>
+        relationalSql(
+          table,
+          productBrandCodeSql(product.brandId).as("brandCode"),
+        ),
+      category: (table: PgTable) =>
+        relationalSql(
+          table,
+          categorySummarySql(sql`${product.categoryId}`).as("category"),
+        ),
     },
     with: {
       inventoryEntry: {
-        where: notDeleted(inventoryEntry),
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(table, notDeleted(inventoryEntry)),
+        },
         with: {
           location: true,
         },
@@ -188,19 +211,36 @@ export const getCategoryDistribution = async (
   const dbClient = getDb(db);
 
   const productsWithInventory = await dbClient.query.product.findMany({
-    where: notDeleted(product),
+    where: {
+      RAW: (table: PgTable) => relationalSql(table, notDeleted(product)),
+    },
     columns: {
       id: true,
       categoryId: true,
     },
     extras: {
-      brandName: productBrandNameSql(product.brandId).as("brandName"),
-      brandCode: productBrandCodeSql(product.brandId).as("brandCode"),
-      category: categorySummarySql(sql`${product.categoryId}`).as("category"),
+      brandName: (table: PgTable) =>
+        relationalSql(
+          table,
+          productBrandNameSql(product.brandId).as("brandName"),
+        ),
+      brandCode: (table: PgTable) =>
+        relationalSql(
+          table,
+          productBrandCodeSql(product.brandId).as("brandCode"),
+        ),
+      category: (table: PgTable) =>
+        relationalSql(
+          table,
+          categorySummarySql(sql`${product.categoryId}`).as("category"),
+        ),
     },
     with: {
       inventoryEntry: {
-        where: notDeleted(inventoryEntry),
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(table, notDeleted(inventoryEntry)),
+        },
         columns: {},
         with: {
           location: {

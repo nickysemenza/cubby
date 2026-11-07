@@ -5,8 +5,10 @@ import { withMigrationDatabase } from "./test-database-lease";
 
 it("retains account evidence and explicit cardholders when retiring provisional", async () => {
   await withMigrationDatabase(async (client) => {
-    const db = drizzle(client);
-    await migrateDatabase(db, { through: "0025_financial_account_providers" });
+    const db = drizzle({ client: client, paramsInErrors: true });
+    await migrateDatabase(db, {
+      through: "20261024214044_0025_financial_account_providers",
+    });
     const owner = "00000000-0000-4000-8000-000000000001";
     const account = "00000000-0000-4000-8000-000000000002";
     await client.query(
@@ -26,7 +28,7 @@ it("retains account evidence and explicit cardholders when retiring provisional"
       [account],
     );
     await migrateDatabase(db, {
-      through: "0026_account_cardholder_inheritance",
+      through: "20261024224751_0026_account_cardholder_inheritance",
     });
     const after = await client.query(
       `SELECT id, shortcode, name, identity, "ledgerPartyId", "primaryCardholderId", notes, "sourceAliases" FROM "FinancialAccount" WHERE id=$1`,

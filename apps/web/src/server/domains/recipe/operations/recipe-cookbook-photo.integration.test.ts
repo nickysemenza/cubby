@@ -1,9 +1,11 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { and, eq } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb, notDeleted } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { entityAttachment, image } from "~/server/db/schema";
 import { upsertCookbook } from "~/server/domains/cookbook/repo/cookbook";
 import {
@@ -173,7 +175,13 @@ describe("cookbook recipe photo workflow", () => {
       [first.entityId, second.entityId, existing.entityId].sort(),
     );
     const pending = await getDb(ctx.db).query.image.findMany({
-      where: and(eq(image.status, "PENDING"), notDeleted(image)),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(eq(image.status, "PENDING"), notDeleted(image)),
+          ),
+      },
     });
     expect(pending).toHaveLength(1);
   });

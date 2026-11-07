@@ -3,10 +3,12 @@ import {
   type DisplayableFile,
 } from "@cubby/schemas/image";
 import { and, eq, sql } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { image } from "~/server/db/schema";
 import {
   displayableImageSql,
@@ -62,7 +64,13 @@ describe("displayable Product image predicate", () => {
     }
     const stored = await createImageFixture(ctx.db, "synthetic-alias-check");
     const relational = await getDb(ctx.db).query.image.findMany({
-      where: and(eq(image.id, stored.id), displayableImageWhere),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(eq(image.id, stored.id), displayableImageWhere),
+          ),
+      },
     });
     expect(relational.map((row) => row.id)).toContain(stored.id);
   });

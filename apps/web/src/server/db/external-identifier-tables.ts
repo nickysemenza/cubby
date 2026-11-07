@@ -35,7 +35,9 @@ export const externalSource = pgTable(
     label: text("label").notNull(),
     vendorId: uuid("vendorId")
       .$type<VendorId>()
-      .references(() => vendor.id),
+      .references(() => vendor.id, {
+        name: "ExternalSource_vendorId_Vendor_id_fk",
+      }),
     // A Vendor may own export and settlement sources; exactly one of its
     // sources issues its Product identifiers.
     issuer: boolean("issuer").notNull().default(false),
@@ -70,7 +72,10 @@ export const entityExternalId = pgTable(
     ...entityRef({ nullable: false }),
     source: text("source")
       .notNull()
-      .references(() => externalSource.slug, { onUpdate: "cascade" }),
+      .references(() => externalSource.slug, {
+        name: "EntityExternalId_source_ExternalSource_slug_fk",
+        onUpdate: "cascade",
+      }),
     kind: text("kind").notNull().$type<EntityExternalIdKind>(),
     externalId: text("externalId").notNull(),
     url: text("url"),

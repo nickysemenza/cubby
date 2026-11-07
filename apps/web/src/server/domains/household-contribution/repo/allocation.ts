@@ -436,7 +436,8 @@ export async function loadExpenseBeneficiaryPortions(
   ids: readonly ExpenseId[],
 ): Promise<Map<ExpenseId, z.output<typeof expenseBeneficiaryEvidence>[]>> {
   if (ids.length === 0) return new Map();
-  const result = await unwrapDb(db).execute(sql`
+  const result = await unwrapDb(db).execute(
+    sql`
     ${expenseAllocationSeedsSql({ expenseIds: ids, includeFuture: true }, { includeUnpriced: true })}
     SELECT s."expenseId", s."expenseShortcode", e.name AS "expenseName",
       p.shortcode AS "partyId", p.name AS "partyName", s."allocationKey",
@@ -448,12 +449,14 @@ export async function loadExpenseBeneficiaryPortions(
     LEFT JOIN "Purchase" purchase ON purchase.id = e."purchaseId" AND ${notDeleted(alias(purchase, "purchase"))}
     WHERE s.role = ${contributionRole.enum.beneficiary}
       AND (s.cost_cents IS NOT NULL OR s.basis = ${expenseBeneficiaryEvidence.shape.basis.enum.recorded})
-    ORDER BY s."expenseId", s."allocationKey"`);
+    ORDER BY s."expenseId", s."allocationKey"`,
+    "objects",
+  );
   const out = new Map<
     ExpenseId,
     z.output<typeof expenseBeneficiaryEvidence>[]
   >();
-  for (const row of z.array(beneficiarySeedRow).parse(result.rows)) {
+  for (const row of z.array(beneficiarySeedRow).parse(result)) {
     const id = parseEntityId("expense", row.expenseId);
     const portions = out.get(id) ?? [];
     portions.push(

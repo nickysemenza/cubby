@@ -11,9 +11,11 @@
  */
 import {
   type AnyColumn,
+  entityKind,
   getTableColumns,
   getTableName,
-  type SQL,
+  getColumnTable,
+  SQL,
   sql,
 } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
@@ -27,8 +29,20 @@ export const quotedTable = (table: PgTable): string =>
   `"${getTableName(table).replaceAll('"', '""')}"`;
 
 /** The outer list row's column, always table-qualified. */
-export const outer = (column: AnyColumn): SQL =>
-  sql`${sql.identifier(getTableName(column.table))}.${sql.identifier(column.name)}`;
+/** Retains column identity so a relational query can bind its own row alias. */
+export class OuterColumnSql extends SQL {
+  // Drizzle's instanceof checks use entityKind, including across module reloads.
+  static override readonly [entityKind] = "CubbyOuterColumnSql";
+  constructor(readonly column: AnyColumn) {
+    super([
+      sql.identifier(getTableName(getColumnTable(column))),
+      sql.raw("."),
+      sql.identifier(column.name),
+    ]);
+  }
+}
+
+export const outer = (column: AnyColumn): SQL => new OuterColumnSql(column);
 
 /** A related step's columns as qualified fragments, keyed like the table. */
 export type RelatedColumns<T extends PgTable> = {

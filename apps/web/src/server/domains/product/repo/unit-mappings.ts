@@ -1,3 +1,5 @@
+import type { Amount } from "@cubby/schemas/codec";
+import type { ProductId } from "@cubby/schemas/identifiers";
 /**
  * A product's stored conversion rows, read on their own, plus the conversion
  * between a row's `aValue/aUnit/bValue/bUnit` columns and the `{ a, b }`
@@ -7,15 +9,14 @@
  * inventory valuation path (`repo/inventory/valuation.ts`) needs this read to
  * build a product's unit graph, and `product/crud.ts` imports inventory code.
  */
-
-import type { Amount } from "@cubby/schemas/codec";
-import type { ProductId } from "@cubby/schemas/identifiers";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { and, inArray } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { uniq } from "es-toolkit";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { notDeleted, unwrapDb } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { productUnitMappings } from "~/server/db/schema";
 
 interface UnitMappingColumns {
@@ -71,10 +72,16 @@ export const getProductUnitMappingsByProductIds = async (
   if (uniqueIds.length === 0) return result;
 
   const rows = await unwrapDb(db).query.productUnitMappings.findMany({
-    where: and(
-      inArray(productUnitMappings.productId, uniqueIds),
-      notDeleted(productUnitMappings),
-    ),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          and(
+            inArray(productUnitMappings.productId, uniqueIds),
+            notDeleted(productUnitMappings),
+          ),
+        ),
+    },
   });
 
   for (const row of rows) {

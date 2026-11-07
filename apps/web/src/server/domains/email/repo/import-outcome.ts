@@ -24,13 +24,16 @@ export async function loadEmailImportOutcomes(
   rows: readonly { id: string; accepted: boolean | null }[],
 ): Promise<Map<string, z.output<typeof emailImportOutcome>>> {
   if (rows.length === 0) return new Map();
-  const result = await unwrapDb(db).execute(sql`
+  const result = await unwrapDb(db).execute(
+    sql`
     SELECT "Email".id, ${emailImportOutcomeSql(sql`accepted.accepted`)} AS outcome
     FROM jsonb_to_recordset(${JSON.stringify(rows)}::jsonb) AS accepted(id uuid, accepted boolean)
-    JOIN "Email" ON "Email".id = accepted.id`);
+    JOIN "Email" ON "Email".id = accepted.id`,
+    "objects",
+  );
   const parsed = z
     .array(z.object({ id: z.string(), outcome: emailImportOutcome.nullable() }))
-    .parse(result.rows);
+    .parse(result);
   const outcomes = new Map<string, z.output<typeof emailImportOutcome>>();
   for (const row of parsed)
     if (row.outcome !== null) outcomes.set(row.id, row.outcome);

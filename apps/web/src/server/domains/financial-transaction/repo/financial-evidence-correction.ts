@@ -7,6 +7,7 @@ import {
 } from "@cubby/schemas/identifiers";
 import { cents } from "@cubby/shared";
 import { and, eq, inArray } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 
 import type { Database } from "~/server/db";
 import {
@@ -15,6 +16,7 @@ import {
   notDeleted,
   withSnapshotWrite,
 } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
   entityAttachment,
   financialTransaction,
@@ -278,10 +280,16 @@ export async function reconcileFinancialEvidenceCorrection(
       const txDb = databaseForTransaction(tx);
       const row = await tx.query.financialTransaction
         .findFirst({
-          where: and(
-            eq(financialTransaction.shortcode, input.transactionId),
-            notDeleted(financialTransaction),
-          ),
+          where: {
+            RAW: (table: PgTable) =>
+              relationalSql(
+                table,
+                and(
+                  eq(financialTransaction.shortcode, input.transactionId),
+                  notDeleted(financialTransaction),
+                ),
+              ),
+          },
         })
         .then((row) => (row ? transactionDollars(row) : row));
       if (!row) return review("The financial transaction is no longer live.");
@@ -330,19 +338,31 @@ export async function reconcileFinancialEvidenceCorrection(
       );
       const allocations = await tx.query.financialTransactionAllocation
         .findMany({
-          where: and(
-            eq(financialTransactionAllocation.transactionId, row.id),
-            notDeleted(financialTransactionAllocation),
-          ),
+          where: {
+            RAW: (table: PgTable) =>
+              relationalSql(
+                table,
+                and(
+                  eq(financialTransactionAllocation.transactionId, row.id),
+                  notDeleted(financialTransactionAllocation),
+                ),
+              ),
+          },
         })
         .then((rows) => rows.map(allocationDollars));
       const allocatedPurchase = allocations[0];
       if (allocatedPurchase) {
         const target = await tx.query.purchase.findFirst({
-          where: and(
-            eq(purchase.id, allocatedPurchase.purchaseId),
-            notDeleted(purchase),
-          ),
+          where: {
+            RAW: (table: PgTable) =>
+              relationalSql(
+                table,
+                and(
+                  eq(purchase.id, allocatedPurchase.purchaseId),
+                  notDeleted(purchase),
+                ),
+              ),
+          },
         });
         if (!target) return review("The allocated Purchase is no longer live.");
       }
@@ -403,14 +423,21 @@ export async function reconcileFinancialEvidenceCorrection(
       )
         return review("The Purchase has independent or itemized Expenses.");
       const document = await tx.query.entityAttachment.findFirst({
-        where: and(
-          inArray(entityAttachment.entityId, [
-            row.id,
-            line.id,
-            line.purchaseId,
-          ]),
-          notDeleted(entityAttachment),
-        ),
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(
+              table,
+              and(
+                inArray(
+                  entityAttachment.entityId,
+                  [row.id, line.id, line.purchaseId].filter(
+                    (id) => id !== null,
+                  ),
+                ),
+                notDeleted(entityAttachment),
+              ),
+            ),
+        },
       });
       if (document)
         return review("The booking has independent attached evidence.");

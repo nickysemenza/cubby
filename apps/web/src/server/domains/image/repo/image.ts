@@ -52,6 +52,7 @@ import { oneOrManyValues } from "@cubby/schemas/pagination";
 import { photoRunImageState } from "@cubby/schemas/photo-import-run";
 import type { PurchaseDocumentKind } from "@cubby/schemas/purchase";
 import { searchableEntitySchema } from "@cubby/schemas/search";
+import { getColumnTable } from "drizzle-orm";
 import {
   and,
   asc,
@@ -114,6 +115,7 @@ import {
   touchUpdatedAt,
 } from "~/server/db/helpers";
 import { outer, related } from "~/server/db/helpers/related";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
   imageDerivative,
   imageProcessingOrphan,
@@ -497,12 +499,21 @@ export const getImageHashIndex = async (
   db: Database,
 ): Promise<ImageHashIndex> => {
   const rows = await getDb(db).query.image.findMany({
-    where: and(
-      eq(image.status, "UPLOADED"),
-      notDeleted(image),
-      displayableImageWhere,
-    ),
-    orderBy: [desc(image.createdAt), desc(image.id)],
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          and(
+            eq(image.status, "UPLOADED"),
+            notDeleted(image),
+            displayableImageWhere,
+          ),
+        ),
+    },
+    orderBy: (table: PgTable) =>
+      [[desc(image.createdAt), desc(image.id)]]
+        .flat()
+        .map((value) => relationalSql(table, value)),
     with: imageEntityRelations,
   });
   return {
@@ -686,7 +697,9 @@ export async function getImageCaptureState(
   imageId: ImageId,
 ): Promise<ImageCaptureStateRow | undefined> {
   return unwrapDb(db).query.image.findFirst({
-    where: eq(image.id, imageId),
+    where: {
+      RAW: (table: PgTable) => relationalSql(table, eq(image.id, imageId)),
+    },
     columns: {
       source: true,
       captureAttribution: true,
@@ -725,7 +738,9 @@ export async function getImageEmbeddedMetadataForCapture(
   imageId: ImageId,
 ): Promise<StoredImageEmbeddedMetadata | null> {
   const row = await unwrapDb(db).query.image.findFirst({
-    where: eq(image.id, imageId),
+    where: {
+      RAW: (table: PgTable) => relationalSql(table, eq(image.id, imageId)),
+    },
     columns: { embeddedMetadata: true },
   });
   return row?.embeddedMetadata ?? null;
@@ -795,7 +810,10 @@ export async function getLiveSightingsForCapture(
   imageId: ImageId,
 ): Promise<SightingCaptureRow[]> {
   return unwrapDb(db).query.imageSighting.findMany({
-    where: and(eq(imageSighting.imageId, imageId)),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(table, and(eq(imageSighting.imageId, imageId))),
+    },
     columns: {
       ledgerPartyId: true,
       sourceType: true,
@@ -1094,7 +1112,10 @@ const imageAssociations = (
 /** Shared relation config for loading entity associations with soft-delete filtering */
 const imageEntityRelations = {
   attachments: {
-    where: notDeleted(entityAttachment),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(table, notDeleted(entityAttachment)),
+    },
     columns: { role: true },
     // One of these is non-null per row: the attachment's subject.
     with: {
@@ -1285,7 +1306,10 @@ const loadImageAttachments = async (
   ids: readonly ImageId[],
 ) => {
   const rows = await unwrapDb(db).query.image.findMany({
-    where: inArray(image.id, [...ids]),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(table, inArray(image.id, [...ids])),
+    },
     columns: { id: true },
     with: imageEntityRelations,
   });
@@ -1570,7 +1594,9 @@ export const getImageByKey = async (
   key: string;
 } | null> => {
   const imageRecord = await getDb(db).query.image.findFirst({
-    where: eq(image.key, key),
+    where: {
+      RAW: (table: PgTable) => relationalSql(table, eq(image.key, key)),
+    },
     columns: {
       id: true,
       // Selected because callers report the PUBLIC id back to a client.
@@ -1789,7 +1815,7 @@ const imageEdgeOperations: ImageEdgeOperation[] = Object.entries(
   // SAFETY: every image incoming edge is built from a Postgres schema column.
   const column = edge.column as PgColumn;
   // SAFETY: as above — a Postgres column's table is a PgTable.
-  const table = column.table as PgTable;
+  const table = getColumnTable(column) as PgTable;
   const columns = getTableColumns(table);
   const property = Object.entries(columns).find(([, c]) => c === column)?.[0];
   if (!property) throw new Error(`No column property for image edge ${key}`);
@@ -2095,7 +2121,8 @@ export const reapUnreferencedImages = async (
  */
 export const imageJoinColumnFor = (table: PgTable): PgColumn | undefined => {
   for (const operation of imageEdgeOperations) {
-    if (operation.joinColumn?.table === table) return operation.joinColumn;
+    if (operation.joinColumn && getColumnTable(operation.joinColumn) === table)
+      return operation.joinColumn;
   }
   return undefined;
 };
@@ -2515,7 +2542,13 @@ export async function getImageMetadataExtractionRow(
   imageId: ImageId,
 ): Promise<ImageMetadataExtractionRow | undefined> {
   const row = await unwrapDb(db).query.image.findFirst({
-    where: and(eq(image.id, imageId), metadataExtractionCandidateWhere),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          and(eq(image.id, imageId), metadataExtractionCandidateWhere),
+        ),
+    },
     columns: { id: true, key: true, contentType: true },
   });
   return row ? { ...row, id: parseEntityId("image", row.id) } : undefined;

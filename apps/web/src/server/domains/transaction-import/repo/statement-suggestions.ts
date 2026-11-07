@@ -270,13 +270,17 @@ async function nextUnmatchedCharges(
   const result: ChargeRef[] = [];
   let after = input.after;
   for (;;) {
-    const { rows: keys } = await unwrapDb(db).execute<ChargeRef>(
+    const keys = await unwrapDb(db).execute<ChargeRef>(
       statementInputChargeKeys(input.scope, after, input.limit),
+      "objects",
     );
     if (!keys.length) return result;
-    const { rows } = await unwrapDb(db).execute<ChargeRef>(sql`
+    const rows = await unwrapDb(db).execute<ChargeRef>(
+      sql`
       SELECT cs.source,cs."chargeKey" FROM (${statementInputCharges(input.scope, keys)}) cs
-      ORDER BY cs.source,cs."chargeKey"`);
+      ORDER BY cs.source,cs."chargeKey"`,
+      "objects",
+    );
     result.push(
       ...rows.map((row) => ({ source: row.source, chargeKey: row.chargeKey })),
     );
@@ -296,9 +300,12 @@ export async function countUnmatchedCharges(
 ) {
   // Counting has no cursor: aggregate eligibility once rather than rebuilding
   // its joins for every raw identity chunk. Generation still bounds each page.
-  const { rows } = await unwrapDb(db).execute<{ count: number }>(sql`
+  const rows = await unwrapDb(db).execute<{ count: number }>(
+    sql`
     SELECT count(*)::int AS count FROM (${statementInputCharges(scope)}) inputs
-  `);
+  `,
+    "objects",
+  );
   return rows[0]?.count ?? 0;
 }
 
@@ -307,9 +314,10 @@ async function loadObservations(
   charges: readonly ChargeRef[],
 ): Promise<Observation[]> {
   if (!charges.length) return [];
-  const { rows } = await unwrapDb(db).execute<
+  const rows = await unwrapDb(db).execute<
     Record<string, string | number | Date | null>
-  >(sql`
+  >(
+    sql`
     SELECT r.id, r."occurrenceId", r."occurrenceVersion", r."reviewState", r.source, r."externalId", ${chargeKeyOf("r")} AS "chargeKey",
       r."rowPosition", r."providerTransactionId", r."providerAccountId", r."accountDescriptor",
       r."statementDate", r."providerAmount", r.amount, r.merchant,
@@ -320,7 +328,9 @@ async function loadObservations(
     WHERE ${notDeleted("r")}
       AND (r.source, ${chargeKeyOf("r")}) IN (${tuples(charges)})
     ORDER BY r.current DESC, r."lastObservedAt" DESC, r."createdAt" DESC, r.id
-  `);
+  `,
+    "objects",
+  );
   return rows.map((row) => ({
     occurrenceId: row.occurrenceId === null ? null : String(row.occurrenceId),
     occurrenceVersion:
@@ -386,9 +396,9 @@ async function statementPendingTransactions(
   input?: Parameters<typeof statementPendingInputTransactions>[1],
 ): Promise<PendingTransaction[]> {
   if (!accountIds.length) return [];
-  const { rows } = await unwrapDb(db).execute<
+  const rows = await unwrapDb(db).execute<
     Record<string, string | number | Date | null | string[]>
-  >(statementPendingInputTransactions(accountIds, input));
+  >(statementPendingInputTransactions(accountIds, input), "objects");
   return rows.map((row) => ({
     id: String(row.id),
     accountId: String(row.accountId),
@@ -440,10 +450,11 @@ async function siblingsFor(
   );
   // Each stage is materialized and scoped to this page's candidates, so the
   // charge-state aggregate and membership union never scan the whole ledger.
-  const { rows } = await unwrapDb(db).execute<{
+  const rows = await unwrapDb(db).execute<{
     key: string;
     siblings: string[];
-  }>(sql`
+  }>(
+    sql`
     WITH p AS MATERIALIZED (
       SELECT * FROM (VALUES ${values}) AS v(key, source, "chargeKey", descriptor, amount, day, "rowIds")
     ),
@@ -482,7 +493,9 @@ async function siblingsFor(
             AND o."rowPosition" <> own."rowPosition"))
     )
     GROUP BY o.key
-  `);
+  `,
+    "objects",
+  );
   for (const row of rows) result.set(row.key, row.siblings.map(String));
   return result;
 }
@@ -506,10 +519,11 @@ async function claimedCandidates(
     ),
     sql`, `,
   );
-  const { rows } = await unwrapDb(db).execute<{
+  const rows = await unwrapDb(db).execute<{
     key: string;
     transactionId: string;
-  }>(sql`
+  }>(
+    sql`
     WITH p AS MATERIALIZED (
       SELECT * FROM (VALUES ${values}) AS v(key, source, "chargeKey", "transactionId")
     ),
@@ -525,7 +539,9 @@ async function claimedCandidates(
       LEFT JOIN "SourceOccurrence" retained ON retained.id=unresolved."occurrenceId"
       WHERE retained.id IS NULL OR retained."acceptedTransactionId" IS DISTINCT FROM unresolved."historicalTransactionId"
     ) SELECT DISTINCT key, "transactionId" FROM owners
-  `);
+  `,
+    "objects",
+  );
   for (const row of rows) {
     const set = result.get(row.key) ?? new Set<string>();
     set.add(String(row.transactionId));
@@ -569,13 +585,14 @@ async function merchantHistory(
   );
   const merchantKey = (column: SQL) =>
     sql`btrim(regexp_replace(lower(${column}), '\\s+', ' ', 'g'))`;
-  const { rows } = await unwrapDb(db).execute<{
+  const rows = await unwrapDb(db).execute<{
     key: string;
     kinds: string[];
     count: number;
     reimbursed: boolean;
     purchased: boolean;
-  }>(sql`
+  }>(
+    sql`
     WITH p AS MATERIALIZED (
       SELECT v.key, v.account, ${merchantKey(sql`v.merchant`)} AS merchant, v.day, v.direction
       FROM (VALUES ${values}) AS v(key, account, merchant, day, direction)
@@ -619,7 +636,9 @@ async function merchantHistory(
       AND sign((ft."amountMinor"::numeric / 100))::int = p.direction
     WHERE ft.id NOT IN (SELECT id FROM ruled)
     GROUP BY p.key
-  `);
+  `,
+    "objects",
+  );
   for (const row of rows) {
     if (Number(row.count) < HISTORY_MIN_TRANSACTIONS) continue;
     const kinds = z.array(financialTransactionKind).parse(row.kinds);
@@ -730,15 +749,18 @@ async function prepareChargePreviews(
       : [];
   });
   if (!grouped.length) return null;
-  const { rows: matchedCharges } = await unwrapDb(db).execute<{
+  const matchedCharges = await unwrapDb(db).execute<{
     source: string;
     chargeKey: string;
     shortcode: string;
-  }>(sql`
+  }>(
+    sql`
     SELECT cs.source, cs."chargeKey", cs.shortcode FROM ${chargeStateOf(sql`(r.source, ${chargeKeyOf("r")}) IN (${tuples(charges)})`)} cs
     WHERE cs.shortcode IS NOT NULL
       AND NOT cs.ignored AND NOT cs.superseded
-  `);
+  `,
+    "objects",
+  );
   const matchedByCharge = new Map(
     matchedCharges.map((row) => [chargeId(row), row.shortcode]),
   );
@@ -998,15 +1020,18 @@ export async function buildChargeProposals(
     .map((row) => row.shortcode)
     .filter((code) => !ids.has(code));
   if (matchedCodes.length) {
-    const { rows } = await unwrapDb(db).execute<{
+    const rows = await unwrapDb(db).execute<{
       id: string;
       shortcode: string;
-    }>(sql`
+    }>(
+      sql`
       SELECT id, shortcode FROM "FinancialTransaction" WHERE shortcode IN (${sql.join(
         matchedCodes.map((code) => sql`${code}`),
         sql`, `,
       )})
-    `);
+    `,
+      "objects",
+    );
     for (const row of rows) ids.set(row.shortcode, String(row.id));
   }
   const accountIds = [
@@ -1498,13 +1523,16 @@ async function buildHoldVoidProposalsForHolds(
 
 async function loadObservationsById(db: Database, rowIds: readonly string[]) {
   if (!rowIds.length) return [];
-  const { rows } = await unwrapDb(db).execute<ChargeRef>(sql`
+  const rows = await unwrapDb(db).execute<ChargeRef>(
+    sql`
     SELECT DISTINCT r.source, ${chargeKeyOf("r")} AS "chargeKey" FROM ${sourceObservations} r
     WHERE r.id IN (${sql.join(
       rowIds.map((id) => sql`${id}::uuid`),
       sql`, `,
     )}) AND ${notDeleted("r")}
-  `);
+  `,
+    "objects",
+  );
   const all = await loadObservations(db, rows);
   return all.filter((row) => rowIds.includes(row.id));
 }
@@ -1520,7 +1548,8 @@ async function laterCoveringImport(
     rowIds: readonly string[];
   },
 ): Promise<string | null> {
-  const { rows } = await unwrapDb(db).execute<{ id: string }>(sql`
+  const rows = await unwrapDb(db).execute<{ id: string }>(
+    sql`
     SELECT DISTINCT si.id FROM "TransactionImport" si
     JOIN ${sourceObservations} head ON head."withdrawalImportId" = si.id
     JOIN ${sourceObservations} held ON held.source=head.source AND held."chargeKey"=head."chargeKey"
@@ -1532,7 +1561,9 @@ async function laterCoveringImport(
         sql`, `,
       )})
     LIMIT 1
-  `);
+  `,
+    "objects",
+  );
   return rows[0] ? String(rows[0].id) : null;
 }
 
@@ -1541,10 +1572,11 @@ async function postedTwinExists(
   hold: PendingTransaction,
   date: string,
 ): Promise<boolean> {
-  const { rows } = await unwrapDb(db).execute<{
+  const rows = await unwrapDb(db).execute<{
     amount: string;
     statementDate: unknown;
-  }>(sql`
+  }>(
+    sql`
     SELECT r.amount, r."statementDate" FROM ${sourceObservations} r
     WHERE ${notDeleted("r")}
       AND r."providerStatus" IS DISTINCT FROM ${sourceTransactionRecordProviderStatus.enum.pending}
@@ -1558,7 +1590,9 @@ async function postedTwinExists(
           sql`, `,
         )})
       )
-  `);
+  `,
+    "objects",
+  );
   return rows.some((row) =>
     pendingPostedMatch(
       { amount: hold.amount, date },
@@ -1715,9 +1749,8 @@ async function priorStatementPublications(
   );
   const result = new Map<string, ChargePublicationHistory[]>();
   if (!roots.length) return result;
-  const { rows } = await getDb(db).execute<
-    SuggestionRow & { owner: string }
-  >(sql`
+  const rows = await getDb(db).execute<SuggestionRow & { owner: string }>(
+    sql`
     WITH roots(owner, observation) AS (VALUES ${sql.join(roots, sql`, `)})
     SELECT DISTINCT roots.owner, s.id::text AS id, s.status, s.active, s.fingerprint, s.suppression, s.data,
       s.data->>'evidenceFingerprint' AS "evidenceFingerprint", to_char(s."createdAt", 'YYYY-MM-DD"T"HH24:MI:SS.US') AS "createdAt", s.producer, s.judgment
@@ -1725,7 +1758,9 @@ async function priorStatementPublications(
       AND (s."recordId"=roots.observation OR EXISTS (
         SELECT 1 FROM "FinancialEvidenceAlias" evidence
         WHERE evidence."observationId"=roots.observation AND ${notDeleted("evidence")} AND evidence.source=s.data->>${financialTransactionSourceRef.keyof().enum.source} AND evidence.value=s.data->>'chargeKey'))
-    ORDER BY "createdAt" DESC, id DESC`);
+    ORDER BY "createdAt" DESC, id DESC`,
+    "objects",
+  );
   for (const row of rows) {
     const data = z.record(z.string(), z.json()).parse(row.data);
     const value: ChargePublicationHistory = {
@@ -1783,10 +1818,11 @@ async function currentChargeStates(
   db: Database,
   charges: readonly ChargeRef[],
 ) {
-  const { rows } = await getDb(db).execute<ChargeState>(
+  const rows = await getDb(db).execute<ChargeState>(
     sql`SELECT cs.* FROM ${chargeStateOf(
       sql`(r.source, r."chargeKey") IN (${tuples(charges)})`,
     )} cs`,
+    "objects",
   );
   return new Map(rows.map((state) => [chargeId(state), state]));
 }
@@ -1896,12 +1932,15 @@ export const statementSuggestions: SuggestionFamilyDeclaration<"statement_transa
     // before publication never reaches the retiring trigger. Holds are the
     // exception: their charge is matched by the hold transaction itself.
     if (judgment.recommended !== "void") {
-      const { rows: settled } = await getDb(tx).execute(sql`
+      const settled = await getDb(tx).execute(
+        sql`
         SELECT 1 FROM ${chargeStateOf(
           sql`r.source = ${charge.source} AND ${chargeKeyOf("r")} = ${charge.chargeKey}`,
         )} cs
         WHERE cs.ignored OR cs.superseded OR (cs.shortcode IS NOT NULL AND ${judgment.recommended !== "book"})
-      `);
+      `,
+        "objects",
+      );
       if (settled.length) {
         // A prior commit may have lost its after-commit retirement effect.
         // Replaying that exact charge must finish the effect, not leave stale advice.
@@ -2778,13 +2817,16 @@ async function admitRetriedCharge(
   if (!observations.length)
     throw new Error("Retained charge identity was not found");
   if (scope.importId || scope.since) {
-    const { rows } = await getDb(db).execute(sql`
+    const rows = await getDb(db).execute(
+      sql`
       SELECT 1 FROM ${sourceObservations} r WHERE ${notDeleted("r")}
         AND r.source = ${charge.source} AND r."chargeKey" = ${charge.chargeKey}
         ${scope.since ? sql`AND r."statementDate" >= ${scope.since}::date` : sql``}
         ${scope.importId ? sql`AND (r.id IN (SELECT m."statementRowId" FROM ${transactionImportMembers} m WHERE m."importId" = ${scope.importId}::uuid) OR r."withdrawalImportId" = ${scope.importId}::uuid)` : sql``}
       LIMIT 1
-    `);
+    `,
+      "objects",
+    );
     if (!rows.length) return false;
   }
   if (scope.accountIds?.length) {
@@ -2837,11 +2879,12 @@ export async function retryStatementGenerationRefs(
       continue;
     }
     try {
-      const { rows: mapped } = await getDb(db).execute<{
+      const mapped = await getDb(db).execute<{
         source: string;
         chargeKey: string;
         held: boolean;
-      }>(sql`
+      }>(
+        sql`
         SELECT DISTINCT observation.source,observation."chargeKey",
           (observation."reviewState"<>${sourceOccurrenceReviewState.enum.ready}) AS held
         FROM ${sourceObservations} observation
@@ -2850,7 +2893,9 @@ export async function retryStatementGenerationRefs(
             -- includes-deleted: retained aliases rebind original work references without accepting ownership.
             EXISTS(SELECT 1 FROM "FinancialEvidenceAlias" retained WHERE retained."observationId"=observation.id
               AND retained.source=${original.source} AND retained.value=${original.chargeKey}))
-        ORDER BY observation.source,observation."chargeKey"`);
+        ORDER BY observation.source,observation."chargeKey"`,
+        "objects",
+      );
       if (!mapped.length || mapped.some((charge) => charge.held))
         throw createAppError(
           "CONSTRAINT_VIOLATION",
@@ -3208,12 +3253,15 @@ export async function recordStatementLabelCheckpoint(
   ): Promise<"saved" | "settled" | "moved" | "out_of_scope"> => {
     await assertWorkflowEffect(tx);
     if (input.scope) {
-      const { rows } = await unwrapDb(tx).execute<{ id: string }>(sql`
+      const rows = await unwrapDb(tx).execute<{ id: string }>(
+        sql`
         SELECT s.id FROM "Suggestion" s WHERE ${pendingSuggestion()}
           AND ${suggestionField("source")} = ${input.charge.source}
           AND ${suggestionField("chargeKey")} = ${input.charge.chargeKey}
           AND ${suggestionField("evidenceFingerprint")} = ${input.evidenceFingerprint}
-      `);
+      `,
+        "objects",
+      );
       if (
         rows.length &&
         !(
@@ -3294,12 +3342,15 @@ export async function recordStatementLabelCheckpoint(
     if (matched) {
       return "saved";
     }
-    const { rows: settled } = await unwrapDb(tx).execute(sql`
+    const settled = await unwrapDb(tx).execute(
+      sql`
     SELECT 1 FROM ${chargeStateOf(sql`r.source = ${input.charge.source} AND ${chargeKeyOf("r")} = ${input.charge.chargeKey}`)} cs
     WHERE ${checkpoint.judgment.recommended !== statementTransactionAction.enum.void}
       AND (cs.ignored OR cs.superseded OR (cs.shortcode IS NOT NULL AND ${checkpoint.judgment.recommended !== "book"}))
     LIMIT 1
-  `);
+  `,
+      "objects",
+    );
     return settled.length ? "settled" : "moved";
   };
   return input.scope
@@ -3509,11 +3560,11 @@ async function statementLabelCandidates(
   SELECT selected.id,to_char(selected."positionAt",'YYYY-MM-DD"T"HH24:MI:SS.US') AS "createdAt",selected."positionId" AS "cursorId"
   FROM selected
   ORDER BY selected."positionAt",selected."positionId"`;
-  const { rows } = await unwrapDb(db).execute<{
+  const rows = await unwrapDb(db).execute<{
     id: string;
     createdAt: string;
     cursorId: string;
-  }>(query);
+  }>(query, "objects");
   return rows;
 }
 
@@ -3615,13 +3666,14 @@ async function statementLabelScope(
   // Re-admission checks scope alone. Replaced/completed rows still reach the
   // existing evidence fences and later-round regeneration/replay path.
   const eligible = sql`s.family = ${suggestionFamily.enum.statement_transaction}`;
-  const { rows } = await unwrapDb(db).execute<
+  const rows = await unwrapDb(db).execute<
     ChargeRef & {
       id: string;
       voidTarget: boolean;
       voidAccountId: string | null;
     }
-  >(sql`
+  >(
+    sql`
     SELECT s.id, ${suggestionField("source")} AS source, ${suggestionField("chargeKey")} AS "chargeKey",
       s.judgment->${statementTransactionAction.enum.void}->>'transactionId' IS NOT NULL AS "voidTarget",
       held."accountId" AS "voidAccountId"
@@ -3629,7 +3681,9 @@ async function statementLabelScope(
     LEFT JOIN "FinancialTransaction" held ON held.id=(s.judgment->${statementTransactionAction.enum.void}->>'transactionId')::uuid
       AND ${notDeleted("held")}
     WHERE ${eligible} AND ${identity} AND ${selected}
-  `);
+  `,
+    "objects",
+  );
   const admitted: string[] = [];
   const preparation = rows.length
     ? await prepareFinancialStatementPreview(db)
@@ -3672,10 +3726,13 @@ export async function statementLabelTargetsInScope(
   suggestionIds: readonly string[],
 ) {
   const scoped = await statementLabelScope(db, scope, suggestionIds);
-  const { rows } = await unwrapDb(db).execute<{ id: string }>(sql`
+  const rows = await unwrapDb(db).execute<{ id: string }>(
+    sql`
     SELECT s.id FROM "Suggestion" s
     WHERE s.family = ${suggestionFamily.enum.statement_transaction} AND ${scoped}
-  `);
+  `,
+    "objects",
+  );
   return new Set(rows.map((row) => row.id));
 }
 

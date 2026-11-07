@@ -1,9 +1,11 @@
 import type { ExternalIdKind } from "@cubby/schemas/external-id";
 import { parseEntityId, type ProductId } from "@cubby/schemas/identifiers";
 import { and, eq } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 
 import type { DrizzleTransaction } from "~/server/db";
 import { notDeleted } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { entityExternalId } from "~/server/db/schema";
 import {
   ensureExternalSources,
@@ -55,12 +57,18 @@ export async function learnPurchaseProductExternalId(
   ]);
   const source = input.source.trim().toLowerCase();
   const existing = await tx.query.entityExternalId.findFirst({
-    where: and(
-      eq(entityExternalId.source, source),
-      eq(entityExternalId.kind, input.kind),
-      eq(entityExternalId.externalId, input.externalId),
-      notDeleted(entityExternalId),
-    ),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          and(
+            eq(entityExternalId.source, source),
+            eq(entityExternalId.kind, input.kind),
+            eq(entityExternalId.externalId, input.externalId),
+            notDeleted(entityExternalId),
+          ),
+        ),
+    },
   });
 
   if (existing) {
@@ -76,13 +84,19 @@ export async function learnPurchaseProductExternalId(
   }
 
   const primary = await tx.query.entityExternalId.findFirst({
-    where: and(
-      eq(entityExternalId.entityId, input.productId),
-      eq(entityExternalId.source, source),
-      eq(entityExternalId.kind, input.kind),
-      eq(entityExternalId.isPrimary, true),
-      notDeleted(entityExternalId),
-    ),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          and(
+            eq(entityExternalId.entityId, input.productId),
+            eq(entityExternalId.source, source),
+            eq(entityExternalId.kind, input.kind),
+            eq(entityExternalId.isPrimary, true),
+            notDeleted(entityExternalId),
+          ),
+        ),
+    },
     columns: { id: true },
   });
 
@@ -107,12 +121,18 @@ export async function learnPurchaseProductExternalId(
   // global identifier first so an identifier claimed by another Product is
   // never reinterpreted as a harmless primary-slot race.
   const winner = await tx.query.entityExternalId.findFirst({
-    where: and(
-      eq(entityExternalId.source, source),
-      eq(entityExternalId.kind, input.kind),
-      eq(entityExternalId.externalId, input.externalId),
-      notDeleted(entityExternalId),
-    ),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          and(
+            eq(entityExternalId.source, source),
+            eq(entityExternalId.kind, input.kind),
+            eq(entityExternalId.externalId, input.externalId),
+            notDeleted(entityExternalId),
+          ),
+        ),
+    },
   });
   if (winner?.entityId === input.productId) return "already_present";
   if (winner) {
@@ -143,12 +163,18 @@ export async function learnPurchaseProductExternalId(
   if (secondary) return "learned";
 
   const secondaryWinner = await tx.query.entityExternalId.findFirst({
-    where: and(
-      eq(entityExternalId.source, source),
-      eq(entityExternalId.kind, input.kind),
-      eq(entityExternalId.externalId, input.externalId),
-      notDeleted(entityExternalId),
-    ),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          and(
+            eq(entityExternalId.source, source),
+            eq(entityExternalId.kind, input.kind),
+            eq(entityExternalId.externalId, input.externalId),
+            notDeleted(entityExternalId),
+          ),
+        ),
+    },
   });
   if (secondaryWinner?.entityId === input.productId) return "already_present";
   if (secondaryWinner) {

@@ -6,9 +6,9 @@ import { withMigrationDatabase } from "./test-database-lease";
 
 it("preserves money and existing confirmations while retiring routing rules", async () => {
   await withMigrationDatabase(async (client) => {
-    const db = drizzle(client);
+    const db = drizzle({ client: client, paramsInErrors: true });
     await migrateDatabase(db, {
-      through: "0051_work_item_retired_fields_check",
+      through: "20261027193740_0051_work_item_retired_fields_check",
     });
     const vendor = "00000000-0000-4000-8000-000000000011";
     const party = "00000000-0000-4000-8000-000000000012";
@@ -71,7 +71,9 @@ it("preserves money and existing confirmations while retiring routing rules", as
     const transactions = (
       await client.query(`SELECT * FROM "FinancialTransaction" ORDER BY id`)
     ).rows;
-    await migrateDatabase(db, { through: "0053_statement_vendor_history" });
+    await migrateDatabase(db, {
+      through: "20261028035033_0053_statement_vendor_history",
+    });
     expect(
       (await client.query(`SELECT * FROM "FinancialTransaction" ORDER BY id`))
         .rows,

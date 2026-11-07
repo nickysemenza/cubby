@@ -5,6 +5,7 @@ import type {
 } from "@cubby/schemas/identifiers";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { and, eq, sql } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -16,6 +17,7 @@ import {
   notDeleted,
   withTransactionDatabase,
 } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
   auditLog,
   entityAttachment,
@@ -526,8 +528,11 @@ describe("vendor repository — mergeVendors", () => {
         .from(purchase)
         .where(eq(purchase.id, keeper.entityId))
         .for("update");
-      const result = await tx.execute(sql`SELECT pg_backend_pid() AS pid`);
-      locked.resolve(z.object({ pid: z.number() }).parse(result.rows[0]).pid);
+      const result = await tx.execute(
+        sql`SELECT pg_backend_pid() AS pid`,
+        "objects",
+      );
+      locked.resolve(z.object({ pid: z.number() }).parse(result[0]).pid);
       await release.promise;
       await tx
         .update(vendor)
@@ -550,9 +555,9 @@ describe("vendor repository — mergeVendors", () => {
         .poll(async () => {
           const result = await getDb(ctx.db).execute(
             sql`SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE ${pid}::int = ANY(pg_blocking_pids(pid))) AS waiting`,
+            "objects",
           );
-          return z.object({ waiting: z.boolean() }).parse(result.rows[0])
-            .waiting;
+          return z.object({ waiting: z.boolean() }).parse(result[0]).waiting;
         })
         .toBe(true);
     } finally {
@@ -935,10 +940,16 @@ describe("vendor repository — mergeVendors", () => {
     ]);
 
     const survivorDocs = await getDb(ctx.db).query.entityAttachment.findMany({
-      where: and(
-        eq(entityAttachment.entityId, survivor),
-        notDeleted(entityAttachment),
-      ),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(
+              eq(entityAttachment.entityId, survivor),
+              notDeleted(entityAttachment),
+            ),
+          ),
+      },
     });
     expect(survivorDocs.map((d) => d.imageId).sort()).toEqual(
       [survivorDoc.imageId, deadDoc.imageId].sort(),

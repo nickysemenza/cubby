@@ -107,6 +107,18 @@ describe("AI response cache Durable Object", () => {
       kind: "hit",
       value: JSON.stringify({ choice: "one" }),
     });
+    // Reopen populated storage with the v0 ledger: v1 must name receipts without replaying DDL.
+    await runInDurableObject(first, (_instance, state) => {
+      state.storage.sql.exec(
+        "ALTER TABLE __drizzle_migrations DROP COLUMN name",
+      );
+      state.storage.sql.exec(
+        "ALTER TABLE __drizzle_migrations DROP COLUMN applied_at",
+      );
+      state.storage.sql.exec(
+        "UPDATE __drizzle_migrations SET created_at = created_at + 123",
+      );
+    });
     await evictDurableObject(first);
     expect(await second.readOrClaim("key", false)).toMatchObject({
       kind: "hit",

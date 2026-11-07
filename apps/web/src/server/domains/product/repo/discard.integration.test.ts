@@ -1,8 +1,10 @@
 import { and, eq, isNull } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { entityEmbedding, expense, inventoryEntry } from "~/server/db/schema";
 import {
   createInventoryFixture as createInventoryEntry,
@@ -47,7 +49,10 @@ describe("discardProductUnits", () => {
 
   const loadExpense = async (id: string) =>
     getDb(ctx.db).query.expense.findFirst({
-      where: eq(expense.shortcode, id),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(table, eq(expense.shortcode, id)),
+      },
     });
 
   it.each(["2026-06-03", null])(
@@ -107,7 +112,10 @@ describe("discardProductUnits", () => {
       remainingValue: 1,
     });
     const after = await getDb(ctx.db).query.inventoryEntry.findFirst({
-      where: eq(inventoryEntry.id, entry.entityId),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(table, eq(inventoryEntry.id, entry.entityId)),
+      },
     });
     expect(after?.amountValue).toBe(1);
     expect(after?.deletedAt).toBeNull();
@@ -134,7 +142,10 @@ describe("discardProductUnits", () => {
 
     expect(result.inventory).toMatchObject({ remainingValue: 1 });
     const after = await getDb(ctx.db).query.inventoryEntry.findFirst({
-      where: eq(inventoryEntry.id, entry.entityId),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(table, eq(inventoryEntry.id, entry.entityId)),
+      },
     });
     expect(after?.amountValue).toBe(1);
   });
@@ -201,7 +212,10 @@ describe("discardProductUnits", () => {
       remainingValue: null,
     });
     const after = await getDb(ctx.db).query.inventoryEntry.findFirst({
-      where: eq(inventoryEntry.id, entry.entityId),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(table, eq(inventoryEntry.id, entry.entityId)),
+      },
     });
     expect(after?.deletedAt).not.toBeNull();
 

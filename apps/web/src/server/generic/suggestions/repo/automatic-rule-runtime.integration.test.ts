@@ -2,6 +2,7 @@ import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { financialSpendingAdvice } from "@cubby/schemas/financial-booking";
 import { recordSourceTransactionRecordsInput } from "@cubby/schemas/source-transaction-record";
 import { and, desc, eq, sql } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { createEntity } from "tooling/factories/create";
 import { createRepoEntity } from "tooling/factories/repo";
 import {
@@ -18,6 +19,7 @@ import {
 } from "~/server/ai/policy/refresh-manifest";
 import { producingAiManifest } from "~/server/ai/repo/ai-refresh";
 import { getDb } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { suggestionTable, expense, spendingCategory } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import {
@@ -53,7 +55,13 @@ const labelStatementSuggestions: typeof runStatementLabels = async (
   input,
 ) => {
   const category = await getDb(db).query.spendingCategory.findFirst({
-    where: eq(spendingCategory.name, "Synthetic automatic spending"),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          eq(spendingCategory.name, "Synthetic automatic spending"),
+        ),
+    },
   });
   return runStatementLabels(db, {
     ...input,
@@ -197,12 +205,18 @@ describe("clean import booking controls", () => {
     async ({ scope, booked }) => {
       const { account, recorded } = await unmatchedCharge(ctx);
       const collection = await getDb(ctx.db).query.transactionImport.findFirst({
-        where: (table, { eq }) => eq(table.id, recorded.batchId!),
+        where: {
+          RAW: (table, { eq }) =>
+            relationalSql(table, eq(table.id, recorded.batchId!)),
+        },
       });
       const withdrawals = () =>
-        getDb(ctx.db).execute(sql`
+        getDb(ctx.db).execute(
+          sql`
         SELECT id, "withdrawnAt", "withdrawalImportId" FROM ${sourceObservationFrom} ORDER BY id
-      `);
+      `,
+          "objects",
+        );
       const beforeWithdrawals = await withdrawals();
       const result = await labelStatementSuggestions(ctx.db, {
         port: sameCharge,
@@ -233,10 +247,13 @@ describe("clean import booking controls", () => {
       );
       expect(
         await getDb(ctx.db).query.transactionImport.findFirst({
-          where: (table, { eq }) => eq(table.id, recorded.batchId!),
+          where: {
+            RAW: (table, { eq }) =>
+              relationalSql(table, eq(table.id, recorded.batchId!)),
+          },
         }),
       ).toEqual(collection);
-      expect((await withdrawals()).rows).toEqual(beforeWithdrawals.rows);
+      expect(await withdrawals()).toEqual(beforeWithdrawals);
     },
   );
 

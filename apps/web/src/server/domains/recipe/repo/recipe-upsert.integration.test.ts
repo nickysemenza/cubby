@@ -1,9 +1,11 @@
 import { type RecipeCreateInput } from "@cubby/schemas/entities/recipe";
 import { asc, eq } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { raceUniqueInsert, withTestDb } from "tooling/test-setup";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
   recipe,
   recipeSection,
@@ -73,7 +75,10 @@ describe("upsertRecipe", () => {
     expect(thirdRun.id).toBe(firstRun.id);
 
     const allRecipes = await getDb(ctx.db).query.recipe.findMany({
-      where: eq(recipe.name, "Test Recipe Direct"),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(table, eq(recipe.name, "Test Recipe Direct")),
+      },
     });
 
     expect(allRecipes).toHaveLength(1);
@@ -119,7 +124,9 @@ describe("upsertRecipe", () => {
     // The upsert recovered onto the winner's row — no throw, no duplicate.
     expect(result.id).toBe(winnerId);
     const allRecipes = await getDb(ctx.db).query.recipe.findMany({
-      where: eq(recipe.name, name),
+      where: {
+        RAW: (table: PgTable) => relationalSql(table, eq(recipe.name, name)),
+      },
     });
     expect(allRecipes).toHaveLength(1);
   });
@@ -147,8 +154,14 @@ describe("upsertRecipe", () => {
 
     const { id } = await upsertRecipe(input, ctx.db, ctx.actor);
     const sections = await getDb(ctx.db).query.recipeSection.findMany({
-      where: eq(recipeSection.recipeId, id),
-      orderBy: [asc(recipeSection.sortOrder)],
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(table, eq(recipeSection.recipeId, id)),
+      },
+      orderBy: (table: PgTable) =>
+        [[asc(recipeSection.sortOrder)]]
+          .flat()
+          .map((value) => relationalSql(table, value)),
       with: { ingredients: true },
     });
 

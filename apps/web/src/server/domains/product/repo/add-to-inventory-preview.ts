@@ -3,10 +3,12 @@ import type { Amount } from "@cubby/schemas/codec";
 import type { LocationId, ProductId } from "@cubby/schemas/identifiers";
 import type { ProductAddToInventoryPreviewOut } from "@cubby/schemas/product";
 import { and, eq } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 
 import { wasm } from "~/lib/wasm";
 import type { Database } from "~/server/db";
 import { amountFromColumns, getDb, notDeleted } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { inventoryEntry } from "~/server/db/schema";
 import { listProductComponents } from "~/server/domains/product/repo/product-components";
 import { loadProductQuantitySummaries } from "~/server/domains/product/repo/quantity-ledger";
@@ -90,12 +92,18 @@ export const previewProductAddToInventory = async (
     locationId === null
       ? Promise.resolve(undefined)
       : getDb(db).query.inventoryEntry.findFirst({
-          where: and(
-            eq(inventoryEntry.productId, productId),
-            eq(inventoryEntry.locationId, locationId),
-            eq(inventoryEntry.placement, "stock"),
-            notDeleted(inventoryEntry),
-          ),
+          where: {
+            RAW: (table: PgTable) =>
+              relationalSql(
+                table,
+                and(
+                  eq(inventoryEntry.productId, productId),
+                  eq(inventoryEntry.locationId, locationId),
+                  eq(inventoryEntry.placement, "stock"),
+                  notDeleted(inventoryEntry),
+                ),
+              ),
+          },
         }),
   ]);
   return describeAddToInventory({

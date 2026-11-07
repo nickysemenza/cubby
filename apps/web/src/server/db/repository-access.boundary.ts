@@ -1,7 +1,7 @@
 import type { NodePgQueryResultHKT } from "drizzle-orm/node-postgres";
 import type {
-  PgDatabase,
-  PgTransaction,
+  PgAsyncDatabase,
+  PgAsyncTransaction,
   PgTransactionConfig,
 } from "drizzle-orm/pg-core";
 
@@ -18,7 +18,7 @@ import {
 
 /** Native SQL builders without the assembled relational schema or pool ownership. */
 export type RepositoryQueryClient = Pick<
-  PgDatabase<NodePgQueryResultHKT>,
+  PgAsyncDatabase<NodePgQueryResultHKT>,
   | "select"
   | "selectDistinct"
   | "selectDistinctOn"
@@ -32,11 +32,7 @@ export type RepositoryQueryClient = Pick<
 >;
 export type RepositoryQueryTransaction = RepositoryQueryClient &
   Pick<
-    PgTransaction<
-      NodePgQueryResultHKT,
-      Record<string, never>,
-      Record<string, never>
-    >,
+    PgAsyncTransaction<NodePgQueryResultHKT, Record<string, never>>,
     "rollback"
   >;
 export type RepositoryQueryInput = Database | RepositoryQueryTransaction;
