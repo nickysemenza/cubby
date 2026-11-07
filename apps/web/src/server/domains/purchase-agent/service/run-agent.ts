@@ -284,7 +284,7 @@ export class PurchaseImportRunAgent
 
   // ---- pi ---------------------------------------------------------------
 
-  private async openPi({ storage, context: open }: PiHarnessContext) {
+  private async openPi({ storage, context: open, onWake }: PiHarnessContext) {
     const models = createModels();
     const identity = this.identity();
     for (const provider of cubbyAgentProviders({
@@ -337,6 +337,9 @@ export class PurchaseImportRunAgent
           retry: { maxRetries: 3 },
         },
         onReport: (error) => this.report(error),
+        // agents ≥0.32 / pi-durable ≥1.4: pass onWake so sleeps hibernate the DO
+        // instead of retaining in-memory timers.
+        onWake,
       },
       open,
     );
