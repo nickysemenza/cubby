@@ -4,11 +4,12 @@ import { useMemo } from "react";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import type { ListRowOf } from "~/entity/display/list-renderer-types";
-import { listNested } from "~/entity/entity-list/list-nesting";
+import { listNested, nestSearchValue } from "~/entity/entity-list/list-nesting";
 import type { EntityPreviewRendererProps } from "~/entity/hooks/use-entity-preview";
 import { defineListOverride } from "~/entity/list-columns/types";
 import type { EntityListParamsByEntity } from "~/entity/model/list-contracts";
 import { CategorySpendingRemainders } from "~/features/finance/category-spending-remainders";
+import { CategoryWorkspaceArrangement } from "~/features/finance/category-workspace-arrangement";
 import {
   useCategoryContextTree,
   type CategoryContextRow,
@@ -141,6 +142,15 @@ export const productCategoryListOverride = defineListOverride<
       useWorkbench: hierarchy.useWorkbench,
       above: () => (
         <>
+          <CategoryWorkspaceArrangement
+            nested={nested}
+            onChange={(value) =>
+              context.navigate(
+                { nest: nestSearchValue(client, "productCategory", value) },
+                { replace: true },
+              )
+            }
+          />
           <Description>
             All history, including planned. Products and net spending include
             descendants; parent totals already include their children. Ancestor

@@ -115,6 +115,10 @@ export const { definition, readSchemas } = defineEntityModel({
     },
     icons: { phosphor: "Tag", sfSymbol: "tag", emoji: "🏷️" },
     list: {
+      primarySearch: {
+        key: "name",
+        placeholder: "Search product categories...",
+      },
       rail: [{ field: "productCount" }],
       savedViews: [
         {

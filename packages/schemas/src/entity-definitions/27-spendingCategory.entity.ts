@@ -111,6 +111,10 @@ export const { definition, readSchemas } = defineEntityModel({
       ],
     },
     list: {
+      primarySearch: {
+        key: "name",
+        placeholder: "Search spending categories...",
+      },
       tree: { toggle: true, defaultNested: true },
     },
   },

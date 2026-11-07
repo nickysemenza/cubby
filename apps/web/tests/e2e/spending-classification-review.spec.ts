@@ -105,21 +105,21 @@ test("reviews historical item classification and preserves explicit purpose", as
   await gotoAuthenticatedPage(
     page,
     "/product-categories?view=hierarchy",
-    page.getByRole("table", { name: "Product category mappings", exact: true }),
+    page.getByRole("table", { name: "Product Categories table", exact: true }),
   );
   const tree = page.getByRole("table", {
-    name: "Product category mappings",
+    name: "Product Categories table",
     exact: true,
   });
   await expect(
-    tree.getByRole("link", { name: childName, exact: true }),
+    page.getByRole("button", { name: "Flat", exact: true }),
   ).toBeVisible();
   await page
-    .getByPlaceholder("Find a category or branch…", { exact: true })
+    .getByRole("textbox", { name: /Search/ })
     .fill("classification shoes");
   const parent = tree.getByRole("row").filter({
     has: page.getByRole("button", {
-      name: `Collapse ${parentName}`,
+      name: "Collapse",
       exact: true,
     }),
   });
@@ -133,7 +133,7 @@ test("reviews historical item classification and preserves explicit purpose", as
     tree.getByRole("link", { name: siblingName, exact: true }),
   ).toHaveCount(0);
   await expect(
-    tree.getByRole("columnheader", { name: /Effective spending/ }),
+    tree.getByRole("columnheader", { name: /^Spending/ }),
   ).toBeVisible();
   const child = tree
     .getByRole("row")

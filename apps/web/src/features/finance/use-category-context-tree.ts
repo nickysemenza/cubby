@@ -20,7 +20,6 @@ export function useCategoryContextTree<
     | undefined => {
     if (!nested) return undefined;
     const byId = new Map<string, T>(catalog.map((row) => [row.id, row]));
-    const rank = new Map(catalog.map((row, index) => [row.id, index]));
     return {
       expandable: true,
       rowIsEntity: (row) => !row.categoryContext,
@@ -30,11 +29,15 @@ export function useCategoryContextTree<
         const originals = new Map(byId);
         for (const row of matches) originals.set(row.id, row);
         const nodes = new Map<string, CategoryContextRow<T>>();
-        for (const match of matches) {
+        // Server order owns matching siblings. A context ancestor follows its
+        // first matching descendant, rather than a second unfiltered sort.
+        const rank = new Map<string, number>();
+        for (const [index, match] of matches.entries()) {
           const visited = new Set<string>();
           let row: T | undefined = match;
           while (row && !visited.has(row.id)) {
             visited.add(row.id);
+            if (!rank.has(row.id)) rank.set(row.id, index);
             if (!nodes.has(row.id))
               nodes.set(row.id, {
                 ...row,

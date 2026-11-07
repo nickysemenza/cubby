@@ -30,7 +30,11 @@ allocation relation. Shared tax, shipping, fees and discounts carry their
 principal's Product Category; a saved Gifts purpose can therefore appear as
 Gifts × Tools. Product Category rows contain only their own category's money.
 The mapping editor rolls these disjoint amounts up in integer cents, while
-ordinary analytics keep their selected date and other filters.
+ordinary analytics keep their selected date and other filters. Both category
+workspaces use the same allocation totals. Category detail charts show the last
+twelve months of incurred Expenses, including descendant classifications and
+shared charges through the canonical allocator; they exclude planned Expenses.
+Their scope differs from the workspace's all-history, including planned totals.
 
 Named remainder buckets distinguish no Product, a deleted Product, an
 uncategorized Product, a deleted Category, an unidentified refund, an unresolved
