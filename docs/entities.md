@@ -1838,7 +1838,11 @@ explicit text fields and related paths. The compiler then infers eligible enum,
 reference, boolean, and calendar-date fields. Generated choices carry their filter, no-value label,
 multivalue capability, ancestor levels, and supported date buckets. Unsupported
 SQL sources remain disabled with a reason; the kernel validates the same
-capabilities for every client.
+capabilities for every client. A field omitted from a read projection can still
+be a useful grouping dimension; output policy does not hide its menu choice.
+Deletion timestamps and duplicate path aliases stay out of the menu while their
+accepted keys remain valid. Derived expressions retain their own key identity,
+even when they have identical option lists.
 
 The list-field compiler also owns `listFields.presentation`: semantic labels,
 descriptions, entity targets, value types, cardinality and admitted sort, group

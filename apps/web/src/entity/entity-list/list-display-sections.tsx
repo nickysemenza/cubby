@@ -299,8 +299,9 @@ function ListGroupMenu({ entity }: { entity: BrowserRoutedEntity }) {
                     key={choice.key}
                     aria-label={`Group by ${choice.label}`}
                     aria-description={
-                      presentation?.cardinality === "many"
-                        ? "Records may appear in several groups. Filters select whole records and retain their other memberships."
+                      presentation?.group.supported &&
+                      presentation.group.description
+                        ? presentation.group.description
                         : (presentation?.description ?? undefined)
                     }
                     title={presentation?.description ?? undefined}

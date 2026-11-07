@@ -423,6 +423,22 @@ it("keeps quality beside identity and emits its server sort", async () => {
   expect(
     document.querySelector('thead th[data-column-id="updatedAt"]'),
   ).toBeNull();
+  if (!screen.queryByRole("button", { name: "Group by" }))
+    fireEvent.click(screen.getByRole("button", { name: "Display" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Group by" }));
+  expect(
+    screen.queryByRole("menuitem", { name: "Group by Deleted at" }),
+  ).toBeNull();
+  fireEvent.click(
+    await screen.findByRole("menuitem", { name: "Group by Purchase date" }),
+  );
+  await waitFor(() =>
+    expect(state.requests.at(-1)).toEqual(
+      expect.objectContaining({
+        groupBy: [{ key: "purchaseDate", bucket: "month" }],
+      }),
+    ),
+  );
 });
 
 // The SQL identity and bulk-write owners retain filtering and persistence.

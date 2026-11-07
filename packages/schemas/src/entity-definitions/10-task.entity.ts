@@ -813,7 +813,7 @@ export const { definition, readSchemas } = defineEntityModel({
         "updatedAt",
       ],
     },
-    grouping: ["status", "projectId", "trade"],
+    grouping: ["status", "completion", "projectId", "trade"],
     intents: {
       fields: {
         capture: [

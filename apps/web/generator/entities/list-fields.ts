@@ -1211,7 +1211,7 @@ const compileGroupChoice = (
       key,
       listed:
         entity.fieldModel.grouping.includes(key) ||
-        (field !== undefined && entity.fieldModel.output.includes(key)) ||
+        (field !== undefined && key !== "deletedAt") ||
         (bound?.shape === "via" && bound.terminal.kind === "record"),
       label,
       noValueLabel: "Unassigned",
@@ -1357,6 +1357,15 @@ const compileGroupChoice = (
   );
 };
 
+// Derived SQL reads the choice key; identical option lists do not make two
+// derived expressions aliases of one another.
+const groupValueIdentity = (choice: CompiledGroupChoice): string =>
+  JSON.stringify(
+    choice.value?.kind === "derived"
+      ? { ...choice.value, key: choice.key }
+      : choice.value,
+  );
+
 /** Preserve accepted aliases while selecting one menu entry per SQL value. */
 const chooseGroupingMenuEntries = (
   entity: CompiledEntity,
@@ -1369,12 +1378,14 @@ const chooseGroupingMenuEntries = (
   for (const [index, choice] of grouping.entries()) {
     if (!choice.listed) continue;
     const value = derived[choice.key];
-    const identity = JSON.stringify(
-      choice.value ??
-        (value?.shape === "via"
-          ? { steps: value.steps, terminal: value.terminal }
-          : { key: choice.key }),
-    );
+    const identity =
+      choice.value !== null
+        ? groupValueIdentity(choice)
+        : JSON.stringify(
+            value?.shape === "via"
+              ? { steps: value.steps, terminal: value.terminal }
+              : { key: choice.key },
+          );
     const previousIndex = menuValues.get(identity);
     const previous =
       previousIndex === undefined ? undefined : grouping[previousIndex];
@@ -1498,7 +1509,7 @@ const compileFieldPresentation = (
       grouping.find(
         (candidate) =>
           candidate.listed &&
-          JSON.stringify(candidate.value) === JSON.stringify(choice.value),
+          groupValueIdentity(candidate) === groupValueIdentity(choice),
       ) ?? choice
     );
   };
@@ -1562,7 +1573,7 @@ const compileFieldPresentation = (
           (filter?.columnId === key ? filterFieldLabel(filter) : undefined) ??
           filter?.label ??
           humanize(key),
-        description: field?.description ?? filter?.schemaDescription ?? null,
+        description: field?.description ?? null,
         target,
         valueType,
         cardinality: presentationCardinality({
@@ -1590,6 +1601,7 @@ const compileFieldPresentation = (
           ...operation(
             filter?.columnId,
             "Filtering is unavailable for this field.",
+            filter?.schemaDescription ?? null,
           ),
           label: filter
             ? filterFieldLabel(filter)

@@ -288,7 +288,12 @@ export function barFieldFromConfig(
   return {
     key,
     presentation: config.presentation,
-    description: config.presentation?.description ?? undefined,
+    description:
+      (config.presentation?.filter.supported
+        ? config.presentation.filter.description
+        : null) ??
+      config.presentation?.description ??
+      undefined,
     label,
     type,
     kind: config.kind,
