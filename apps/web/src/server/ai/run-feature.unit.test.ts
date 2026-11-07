@@ -20,6 +20,7 @@ import { z } from "zod";
 
 import { AI_CACHE_TTL_SECONDS } from "~/server/ai/adapters";
 import type { GatewayCallOptions } from "~/server/ai/gateway";
+import type { AiChatRequest } from "~/server/ai/policy/feature-identity";
 import * as cfEnv from "~/server/cf-env";
 import { createDatabase } from "~/server/db/database-runtime";
 import { withJobExecution } from "~/server/generic/jobs/context";
@@ -35,7 +36,6 @@ import {
 import { aiResponseCacheKey } from "./response-cache";
 import {
   RESPOND_TOOL_NAME,
-  type AiChatRequest,
   type AiRunContext,
   identifyMedia,
   modelOptionsFor,

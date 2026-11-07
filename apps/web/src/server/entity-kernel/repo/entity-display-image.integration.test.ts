@@ -33,10 +33,8 @@ import {
   createGardenEntry,
   createPlanting,
 } from "~/server/domains/garden/repo/garden";
-import {
-  IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION,
-  loadImageRepresentations,
-} from "~/server/domains/image-processing/repo/image-processing";
+import { loadImageRepresentations } from "~/server/domains/image-processing/repo/image-processing";
+import { IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION } from "~/server/domains/image-processing/repo/processor-policy";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
 import { hydrateImageReadProjection } from "~/server/domains/image/repo/image-read-projection";
 import {

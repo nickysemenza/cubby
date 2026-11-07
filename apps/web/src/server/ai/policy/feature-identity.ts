@@ -17,7 +17,41 @@ import {
 } from "@cubby/shared/ai/models";
 import type { z } from "zod";
 
-import type { AiChatRequest } from "../run-feature";
+// Request shapes stay with declarations so repository policy never imports execution.
+/** One part of a user message's content: text, or an image/document fetched by URL. */
+interface AiTextPart {
+  type: "text";
+  content: string;
+}
+export interface AiImagePart {
+  type: "image";
+  source:
+    | { type: "url"; value: string; mimeType?: string }
+    | { type: "inline"; value: string; mimeType: string };
+}
+/** A document (e.g. a PDF receipt). Resolved the same way as an image — see
+ * the runner's media resolution — since pi-ai's `Message` has no document
+ * content type; the shared OpenAI provider (`@cubby/shared/ai/pi-providers`)
+ * rewrites the resulting PDF image block into the Responses `input_file`. */
+export interface AiDocumentPart {
+  type: "document";
+  source: { type: "url" | "inline"; value: string; mimeType: string };
+}
+export type AiContentPart = AiTextPart | AiImagePart | AiDocumentPart;
+/** Every message `runStructuredFeature` sends is a single-turn user prompt —
+ * no caller here carries a multi-turn conversation with prior assistant
+ * turns, so this intentionally only models `role: "user"`. */
+export interface AiMessage {
+  role: "user";
+  content: string | AiContentPart[];
+}
+
+/** Everything a `chat()` call needs that the feature record does not own:
+ * the prompt itself. Request builders in `clients/ai.ts` return this. */
+export interface AiChatRequest {
+  systemPrompts: string[];
+  messages: AiMessage[];
+}
 
 /** Embeddings share the catalog, while retaining their vector runner. */
 type AiTier = "fast" | "quality" | "decision" | "embedding";

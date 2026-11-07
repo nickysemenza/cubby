@@ -33,9 +33,6 @@ import {
   lockDevicePulls,
   releaseImageProcessingLease,
   SERVER_FAILURE_RETRYABLE,
-  IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
-  IMAGE_DESCRIPTION_PROCESSOR_REVISION,
-  IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION,
   retryImageProcessingNow,
   retryBackingOffDeviceWork,
   completeImageProcessingJob,
@@ -58,6 +55,11 @@ import {
   persistImageProcessingSubmission,
   persistAppleImageDescriptionSubmission,
 } from "~/server/domains/image-processing/repo/image-processing-submission";
+import {
+  IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
+  IMAGE_DESCRIPTION_PROCESSOR_REVISION,
+  IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION,
+} from "~/server/domains/image-processing/repo/processor-policy";
 import { MAX_DESCRIPTION_RENDITION_BYTES } from "~/server/domains/image-processing/service/cloud-limits";
 import { safeImageProcessingError } from "~/server/domains/image-processing/service/safe-error";
 import { inspectImageFile } from "~/server/domains/image/repo/image-integrity";

@@ -12,10 +12,8 @@ import {
   imageProcessingJob,
   run as runTable,
 } from "~/server/db/schema";
-import {
-  createImageProcessingJob,
-  IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
-} from "~/server/domains/image-processing/repo/image-processing";
+import { createImageProcessingJob } from "~/server/domains/image-processing/repo/image-processing";
+import { IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION } from "~/server/domains/image-processing/repo/processor-policy";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { readRecordWorkQueue } from "~/server/domains/work/service/work-queue-read";

@@ -17,15 +17,15 @@ import { z } from "zod";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
 import { runAfterCommit } from "~/server/db/helpers/core";
-import { wakeJobs } from "~/server/workflows/background-tasks/publish";
-
-import { imageJobDisplayStateSql } from "./image-job-state";
 import {
   IMAGE_DESCRIPTION_PROCESSOR_REVISION,
   IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
   IMAGE_IDENTIFICATION_PROCESSOR_REVISION,
   IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION,
-} from "./image-processing";
+} from "~/server/domains/image-processing/repo/processor-policy";
+import { wakeJobs } from "~/server/workflows/background-tasks/publish";
+
+import { imageJobDisplayStateSql } from "./image-job-state";
 
 export const ALL_IMAGE_PROCESSING_KINDS: readonly ImageProcessingJobKind[] = [
   "describe_image",

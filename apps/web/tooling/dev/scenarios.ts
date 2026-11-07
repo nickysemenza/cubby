@@ -1,8 +1,6 @@
 import { resolveDatabaseRuntime } from "~/server/db/database-runtime";
-import {
-  createImageProcessingJob,
-  IMAGE_DESCRIPTION_PROCESSOR_REVISION,
-} from "~/server/domains/image-processing/repo/image-processing";
+import { createImageProcessingJob } from "~/server/domains/image-processing/repo/image-processing";
+import { IMAGE_DESCRIPTION_PROCESSOR_REVISION } from "~/server/domains/image-processing/repo/processor-policy";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
 import {
   markRunFailed,

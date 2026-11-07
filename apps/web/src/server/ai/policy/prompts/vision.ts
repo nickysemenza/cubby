@@ -1,4 +1,7 @@
-import type { AiChatRequest, AiImagePart } from "~/server/ai/run-feature";
+import type {
+  AiChatRequest,
+  AiImagePart,
+} from "~/server/ai/policy/feature-identity";
 
 function buildProductIdentificationSystemPrompt(): string {
   return `You are a product identification assistant. Given one or more photos of a product, identify what it is.

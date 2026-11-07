@@ -14,10 +14,10 @@ import type { MailFinancialEventModelOutput } from "@cubby/schemas/mailbox-resea
 
 import { currencyMinorDigits } from "~/lib/number-format";
 import type { DecisionPort } from "~/server/ai/decision-model";
+import type { AiChatRequest } from "~/server/ai/policy/feature-identity";
 import { MAIL_FINANCIAL_EVENT_FEATURE } from "~/server/ai/policy/features";
 import {
   runStructuredFeature,
-  type AiChatRequest,
   type AiRunContext,
 } from "~/server/ai/run-feature";
 import type { Database } from "~/server/db";

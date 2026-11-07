@@ -33,6 +33,11 @@ import {
   updateImageExecution,
 } from "~/server/domains/image-processing/repo/image-execution.fixtures";
 import {
+  IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
+  IMAGE_DESCRIPTION_PROCESSOR_REVISION,
+  IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION,
+} from "~/server/domains/image-processing/repo/processor-policy";
+import {
   createUploadedImageRecord,
   deleteImages,
   imageScaffold,
@@ -44,6 +49,7 @@ import {
 import { confirmImageDescription } from "~/server/domains/image/repo/image-description-confirmation";
 import { loadSelectedDescriptionEvidence } from "~/server/domains/image/repo/image-description-selection";
 import { hydrateImageReadProjection } from "~/server/domains/image/repo/image-read-projection";
+import { readBackgroundWorkStatus } from "~/server/generic/jobs/repo/observation";
 import {
   publishSuggestion,
   recordFeedback,
@@ -65,9 +71,6 @@ import {
   getImageProcessingReadProjection,
   saveImageDescriptionAnalysis,
   createImageProcessingJob,
-  IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
-  IMAGE_DESCRIPTION_PROCESSOR_REVISION,
-  IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION,
   retireObsoleteImageProcessingJobs,
   repairImageProcessingExecution,
   retryImageProcessingNow,
@@ -833,7 +836,7 @@ describe("durable image representations", () => {
     ).toBe(false);
   });
 
-  it("commits Apple analysis with completion and can replay after an adoption rollback", async () => {
+  it("preserves description outcomes through rollback and cloud-covered Apple refusal", async () => {
     const row = await source();
     const imageId = parseEntityId("image", row.id);
     const jobId = await createImageProcessingJob(ctx.db, {
@@ -900,6 +903,197 @@ describe("durable image representations", () => {
       .where(eq(aiAnalysis.entityId, imageId));
     expect(analyses).toHaveLength(1);
     expect(analyses[0]?.result).toEqual(result.outcome.description);
+
+    const refused = await source();
+    const refusedImageId = parseEntityId("image", refused.id);
+    const refusedJobId = await createImageProcessingJob(ctx.db, {
+      imageId: refusedImageId,
+      kind: "describe_image",
+      sourceContentHash: hash,
+      processorRevision: IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
+    });
+    if (!refusedJobId) throw new Error("Expected Apple refusal job");
+    const refusedLease = await claimImageProcessingJob(ctx.db, {
+      jobId: refusedJobId,
+      kinds: ["describe_image"],
+      leaseMs: 60000,
+    });
+    if (!refusedLease) throw new Error("Expected Apple refusal lease");
+    await completeImageProcessingJob(ctx.db, {
+      result: {
+        jobId: refusedJobId,
+        attemptId: refusedLease.attemptId,
+        completedAt: new Date().toISOString(),
+        outcome: {
+          kind: "describe_image",
+          status: "failed",
+          reason: "guardrail_violation: Synthetic refusal",
+          retryable: false,
+        },
+      },
+    });
+    const [retainedRefusal] = await getDb(ctx.db)
+      .select()
+      .from(imageProcessingJob)
+      .where(eq(imageProcessingJob.id, refusedJobId));
+    if (!retainedRefusal) throw new Error("Expected retained Apple refusal");
+    const assertAttention = async (attention: boolean, preferred: boolean) => {
+      expect(
+        (await loadImageProcessingIssues(ctx.db, [refused.shortcode])).get(
+          refused.shortcode,
+        ),
+      ).toBe(attention ? "failed" : null);
+      expect(
+        (await readBackgroundWorkStatus(ctx.db)).stuck.some(
+          (item) => item.key === "image.device:failing",
+        ),
+      ).toBe(attention);
+      expect(
+        (
+          await getImageProcessingReadProjection(ctx.db, refusedImageId)
+        ).analyses.some((entry) => entry.preferred),
+      ).toBe(preferred);
+    };
+    await assertAttention(true, false);
+    const provider = providerFor(IMAGE_DESCRIPTION_FEATURE.model);
+    const fingerprint = imageDescriptionInputFingerprint({
+      sourceContentHash: hash,
+      contentType: "image/jpeg",
+      provider,
+      model: IMAGE_DESCRIPTION_FEATURE.model,
+    });
+    const cloudJobId = await createImageProcessingJob(ctx.db, {
+      imageId: refusedImageId,
+      kind: "describe_image",
+      sourceContentHash: hash,
+      processorRevision: IMAGE_DESCRIPTION_PROCESSOR_REVISION,
+    });
+    if (!cloudJobId) throw new Error("Expected cloud job");
+    const cloudLease = await claimImageProcessingJob(ctx.db, {
+      jobId: cloudJobId,
+      kinds: ["describe_image"],
+      leaseMs: 60000,
+    });
+    if (!cloudLease) throw new Error("Expected cloud lease");
+    await completeImageProcessingJob(ctx.db, {
+      result: {
+        jobId: cloudJobId,
+        attemptId: cloudLease.attemptId,
+        completedAt: new Date().toISOString(),
+        outcome: {
+          kind: "describe_image",
+          status: "completed",
+          description: {
+            description: "A synthetic blue mug",
+            claims: [],
+            cutoutEligibility: "eligible",
+          },
+          runtime: {
+            platform: "cloud",
+            model: IMAGE_DESCRIPTION_FEATURE.model,
+          },
+        },
+      },
+      cloudAnalysis: {
+        provider,
+        model: IMAGE_DESCRIPTION_FEATURE.model,
+        promptRevision: IMAGE_CLOUD_DESCRIPTION_PROMPT_REVISION,
+        resultSchemaRevision: IMAGE_CLOUD_DESCRIPTION_RESULT_SCHEMA_REVISION,
+        inputFingerprint: fingerprint,
+      },
+    });
+    await assertAttention(false, true);
+    expect(
+      (
+        await getDb(ctx.db)
+          .select()
+          .from(imageProcessingJob)
+          .where(eq(imageProcessingJob.id, refusedJobId))
+      )[0],
+    ).toEqual(retainedRefusal);
+    const [cloud] = await getDb(ctx.db)
+      .select()
+      .from(aiAnalysis)
+      .where(eq(aiAnalysis.entityId, refusedImageId));
+    if (!cloud) throw new Error("Expected retained cloud analysis");
+    const changes = [
+      { inputFingerprint: fingerprint.replace(hash, "c".repeat(64)) },
+      { model: "synthetic-retired-model" },
+      { deletedAt: new Date() },
+      { inputFingerprint: "synthetic-invalid-json" },
+      { inputFingerprint: '"synthetic-json-scalar"' },
+      {
+        inputFingerprint: fingerprint.replace(
+          IMAGE_DESCRIPTION_FEATURE.model,
+          "synthetic-fingerprint-model",
+        ),
+      },
+      { inputFingerprint: fingerprint.slice(0, -1) + ',"unknown":true}' },
+      {
+        inputFingerprint: fingerprint.replace(
+          '"normalizationRevision":1',
+          '"normalizationRevision":0',
+        ),
+      },
+    ];
+    for (const change of changes) {
+      await getDb(ctx.db)
+        .update(aiAnalysis)
+        .set(change)
+        .where(eq(aiAnalysis.id, cloud.id));
+      await assertAttention(true, false);
+      await getDb(ctx.db)
+        .update(aiAnalysis)
+        .set({
+          inputFingerprint: cloud.inputFingerprint,
+          model: cloud.model,
+          deletedAt: cloud.deletedAt,
+        })
+        .where(eq(aiAnalysis.id, cloud.id));
+    }
+    await getDb(ctx.db)
+      .update(imageProcessingJob)
+      .set({
+        lastError: "structured_output_invalid: Synthetic parsing failure",
+      })
+      .where(eq(imageProcessingJob.id, refusedJobId));
+    await assertAttention(true, true);
+    await getDb(ctx.db)
+      .update(imageProcessingJob)
+      .set({
+        state: "pending",
+        failures: JOB_NEEDS_ATTENTION_ATTEMPTS,
+        lastError: "guardrail_violation: Synthetic transient history",
+      })
+      .where(eq(imageProcessingJob.id, refusedJobId));
+    await assertAttention(true, true);
+    await getDb(ctx.db)
+      .update(imageProcessingJob)
+      .set({ state: "failed", lastError: retainedRefusal.lastError })
+      .where(eq(imageProcessingJob.id, refusedJobId));
+    const cutoutLease = await claimImageProcessingJob(ctx.db, {
+      jobId: refused.jobId,
+      kinds: ["subject_lift"],
+      leaseMs: 60000,
+    });
+    if (!cutoutLease) throw new Error("Expected cutout lease");
+    await completeImageProcessingJob(ctx.db, {
+      result: {
+        jobId: refused.jobId,
+        attemptId: cutoutLease.attemptId,
+        completedAt: new Date().toISOString(),
+        outcome: {
+          kind: "subject_lift",
+          status: "failed",
+          reason: "Synthetic output failure",
+          retryable: false,
+        },
+      },
+    });
+    await assertAttention(true, true);
+    expect(
+      await retryImageProcessingNow(ctx.db, { imageId: refusedImageId }),
+    ).toEqual(expect.arrayContaining([refusedJobId]));
   });
 
   it("settles retained negative cutouts in bounded repair without changing attempts or live and failed work", async () => {
