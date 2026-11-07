@@ -68,6 +68,10 @@ test("understand maintenance, preview a manual recipe repair, and verify its sto
   await more.getByRole("link", { name: "All work", exact: true }).click();
   const summary = page.getByRole("table", { name: "Work items by reason" });
   await expect(summary).toBeVisible();
+  await page.screenshot({
+    path: testInfo.outputPath("work-summary.png"),
+    fullPage: true,
+  });
   const count = summary.getByRole("button").first();
   const expectedCount = Number((await count.innerText()).replaceAll(",", ""));
   const drilled = page.waitForResponse((response) =>
@@ -98,6 +102,10 @@ test("understand maintenance, preview a manual recipe repair, and verify its sto
     .locator("[data-pivot-cell]:not([aria-disabled=true])")
     .first();
   await expect(cell).toBeVisible();
+  await page.screenshot({
+    path: testInfo.outputPath("work-pivot.png"),
+    fullPage: true,
+  });
   await cell.focus();
   await page.keyboard.press("ArrowRight");
   await cell.focus();
@@ -127,7 +135,9 @@ test("understand maintenance, preview a manual recipe repair, and verify its sto
   expect(new URL(page.url()).searchParams.get("entity")).toBeTruthy();
   await page.reload();
   await expect(
-    page.getByRole("button", { name: "Records", exact: true }),
+    page
+      .getByRole("group", { name: "Work queue layout" })
+      .getByRole("button", { name: "Records", exact: true }),
   ).toHaveAttribute("aria-pressed", "true");
   await gotoAuthenticatedPage(page, "/activity");
 
@@ -213,6 +223,17 @@ test("understand maintenance, preview a manual recipe repair, and verify its sto
   ).toBe(true);
   await page.screenshot({
     path: testInfo.outputPath("work-phone.png"),
+    fullPage: true,
+  });
+  await gotoAuthenticatedPage(page, "/work-queue?layout=pivot");
+  await expect(page.locator("[data-pivot-cell]").first()).toBeVisible();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
+  await page.screenshot({
+    path: testInfo.outputPath("work-pivot-phone.png"),
     fullPage: true,
   });
   await gotoAuthenticatedPage(page, "/settings#maintenance");

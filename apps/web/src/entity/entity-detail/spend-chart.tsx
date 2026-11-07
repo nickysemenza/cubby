@@ -168,7 +168,7 @@ export function MonthlySpendChart({
                       ? "bg-chart-negative"
                       : month.month === last?.month
                         ? "bg-chart-1"
-                        : "bg-chart-seq-3",
+                        : "bg-chart-1/75",
                   )}
                   style={{
                     bottom: month.cents > 0 ? `${100 - zero}%` : undefined,
