@@ -437,10 +437,10 @@ test("connects Google and retains Gmail MIME evidence without economic writes", 
     .last()
     .click();
   await page
-    .getByRole("button", { name: "Show Search coverage", exact: true })
+    .getByRole("checkbox", { name: "Show Search coverage", exact: true })
     .click();
   await page
-    .getByRole("button", { name: "Show Linked Emails", exact: true })
+    .getByRole("checkbox", { name: "Show Linked Emails", exact: true })
     .click();
   await page.keyboard.press("Escape");
   await row.getByRole("button", { name: /^Search coverage for/ }).click();
