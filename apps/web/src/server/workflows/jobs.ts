@@ -16,6 +16,7 @@ import type { Database } from "~/server/db";
 import { DERIVED_REBUILD_LEASE_SECONDS } from "~/server/db/derived-rebuild-schema";
 import { cloudImageDrain } from "~/server/domains/image-processing/service/cloud-drain";
 import { deliverPurchaseDispatch } from "~/server/domains/purchase-agent/service/dispatch";
+import { fundingResumeInput } from "~/server/domains/run/repo/execution-context";
 import { runAiEvaluationExecution } from "~/server/domains/run/service/ai-evaluation-execution";
 import { aiRefreshDiscoveryDrain } from "~/server/domains/run/service/ai-refresh";
 import { connectionDiscoveryDrain } from "~/server/domains/run/service/derived-discovery";
@@ -102,7 +103,7 @@ export const productionJobHandlers: JobHandlers = {
   ),
   "run.funding-resume": defineJobHandler(
     // Rows enqueued before window keys still carry their Run; the handler resumes all.
-    z.object({ runId: z.uuid().optional(), until: z.iso.datetime() }),
+    fundingResumeInput,
     async (db, _claim, { until }) => {
       // A budget raise brings every queued Job forward and resumes paused
       // work itself. This timer keeps its window end, so a re-exhaustion in

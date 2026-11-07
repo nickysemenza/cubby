@@ -364,7 +364,16 @@ never-exhausting work belongs to its subject and survives a Run cancel.
 
 `run.funding-resume` is keyed by funding window, not Run: its one handler
 resumes every funding-paused Run. A funding-paused import stays `paused_auth`
-rather than stopping for review. Run control refusals are
+rather than stopping for review. The Workflow boundary translates wrapped AI
+budget stops into `ai_funding_window` Job deferrals at the same window end plus
+60 seconds as the resume owner; provider funding/configuration stops defer until
+the provider retry time. Neither consumes an attempt or discards frozen input,
+page evidence or the Job cursor. Generic early retries leave a funding-paused Run
+waiting while its funding-resume Job is pending; explicit `run_now_paid` authority
+can launch it immediately. An explicit budget increase also restores funding-paused
+discovery before bringing queued Jobs forward; member pauses remain stopped.
+Automatic mailbox admission joins the retained Run.
+Run control refusals are
 `RUN_CONTROL_REFUSED` (409), never 500.
 
 ## Image processing

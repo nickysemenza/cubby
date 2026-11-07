@@ -696,6 +696,7 @@ export async function finishMailDiscovery(
     .update(runTable)
     .set({
       status: "completed",
+      dispatchError: null,
       endedAt: now,
       routine: claimed.progress.saved === 0 && claimed.progress.events === 0,
       progress: patchProgress({ phase: "completed" }),
