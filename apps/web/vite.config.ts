@@ -220,6 +220,53 @@ function cfSentryShim(): Plugin {
   };
 }
 
+function entryPreloadDependencies(): Plugin {
+  return {
+    name: "entry-preload-dependencies",
+    apply: "build",
+    // The preload lists are edited after hashing; policy changes need new URLs.
+    augmentChunkHash: () => entryPreloadDependencies.toString(),
+    applyToEnvironment: (environment) => environment.name === "client",
+    generateBundle: {
+      order: "pre",
+      handler(_options, bundle) {
+        const entries = Object.values(bundle).filter(
+          (chunk) => chunk.type === "chunk" && chunk.isEntry,
+        );
+        const closures = entries.map((entry) => {
+          const imports = new Set<string>();
+          const visit = (file: string) => {
+            if (imports.has(file)) return;
+            const chunk = bundle[file];
+            if (chunk?.type !== "chunk") return;
+            imports.add(file);
+            chunk.imports.forEach(visit);
+          };
+          visit(entry.fileName);
+          return imports;
+        });
+        // Every entry loads these modules before its dynamic imports run.
+        // Keep HTML preloads and CSS; neither is guaranteed by JS evaluation.
+        const entryImports = new Set<string>();
+        for (const file of closures[0] ?? []) {
+          if (closures.every((closure) => closure.has(file)))
+            entryImports.add(file);
+        }
+        // Vite reads this callback in its following generateBundle hook.
+        const preload = this.environment.config.build.modulePreload;
+        if (preload) {
+          preload.resolveDependencies = (_url, dependencies, { hostType }) =>
+            hostType === "js"
+              ? dependencies.filter(
+                  (dependency) => !entryImports.has(dependency),
+                )
+              : dependencies;
+        }
+      },
+    },
+  };
+}
+
 export default defineConfig(async ({ command }) => {
   const local =
     command === "serve" || process.env.CUBBY_DEV_PREVIEW_BUILD === "true";
@@ -346,6 +393,7 @@ export default defineConfig(async ({ command }) => {
         : [],
     },
     plugins: [
+      entryPreloadDependencies(),
       // Permit the JS Self-Profiling API in dev (`window.__jsProfile`, see
       // lib/perf/js-self-profile.ts). The header must be on the SSR document, and
       // `server.headers` doesn't reach TanStack Start's response — set it via
