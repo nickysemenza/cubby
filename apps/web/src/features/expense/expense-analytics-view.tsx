@@ -164,6 +164,9 @@ export function ExpenseAnalyticsView() {
           includeSubSpendingCategories: filter.spendingCategory
             ? "false"
             : prev.includeSubSpendingCategories,
+          includeSubProductCategories: filter.productCategory
+            ? "false"
+            : prev.includeSubProductCategories,
           // Exact month bounds supersede a relative date preset.
           date: filter.dateFrom || filter.dateTo ? undefined : prev.date,
           ...filter,
@@ -211,6 +214,9 @@ export function ProjectExpenseAnalytics({ projectId }: { projectId: string }) {
           ...scope,
           includeSubProjects: filter.project ? "false" : undefined,
           includeSubSpendingCategories: filter.spendingCategory
+            ? "false"
+            : undefined,
+          includeSubProductCategories: filter.productCategory
             ? "false"
             : undefined,
           ...filter,

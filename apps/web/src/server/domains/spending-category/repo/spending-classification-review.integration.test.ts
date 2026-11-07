@@ -1,5 +1,9 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { sql } from "drizzle-orm";
+import { createEntity } from "tooling/factories/create";
+import { createRepoIdentity } from "tooling/factories/repo";
+import { taxonomyShortcode } from "tooling/product-category-fixtures";
+import { buildKernelContext } from "tooling/scenarios/context";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -12,6 +16,10 @@ import {
   executeEntity,
 } from "~/server/entity-kernel";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import {
+  createProductIdentityFixture,
+  makeProductInput,
+} from "~/server/testing/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 import {
@@ -156,6 +164,199 @@ describe("reviewed spending classification", () => {
     ).toBeNull();
   });
 
+  // Parent edits change inherited historical money just like mapping edits;
+  // both must pass the same review and preserve explicit Expense decisions.
+  it("reviews subtree moves, rejects stale topology, and applies the exact parent and mapping", async () => {
+    const oldSpend = parseShortcodeFor(
+      "spendingCategory",
+      (
+        await createEntity(
+          buildKernelContext(ctx.db, ctx.actor.userId),
+          "spendingCategory",
+          {
+            name: "Fixture home spending",
+          },
+        )
+      ).id,
+    );
+    const newSpend = parseShortcodeFor(
+      "spendingCategory",
+      (
+        await createEntity(
+          buildKernelContext(ctx.db, ctx.actor.userId),
+          "spendingCategory",
+          {
+            name: "Fixture workshop spending",
+          },
+        )
+      ).id,
+    );
+    const oldRoot = await createRepoIdentity(ctx, "productCategory", {
+      name: "Fixture old root",
+      spendingCategoryMode: "mapped",
+      spendingCategoryId: oldSpend,
+    });
+    const newRoot = await createRepoIdentity(ctx, "productCategory", {
+      name: "Fixture new root",
+      spendingCategoryMode: "mapped",
+      spendingCategoryId: newSpend,
+    });
+    const branch = await createRepoIdentity(ctx, "productCategory", {
+      name: "Fixture moved branch",
+      parentId: oldRoot.output.id,
+    });
+    const leaf = await createRepoIdentity(ctx, "productCategory", {
+      name: "Fixture moved leaf",
+      parentId: branch.output.id,
+    });
+    const item = await createProductIdentityFixture(
+      ctx.db,
+      makeProductInput({
+        name: "Fixture movable item",
+        categoryId: leaf.output.id,
+      }),
+      ctx.actor,
+    );
+    const inherited = await createRepoIdentity(ctx, "expense", {
+      name: "Fixture inherited refund",
+      productId: item.id,
+      cost: -20,
+      costType: "tools",
+      trade: "other",
+    });
+    const explicit = await createRepoIdentity(ctx, "expense", {
+      name: "Fixture saved purpose",
+      productId: item.id,
+      cost: 10,
+      costType: "tools",
+      trade: "other",
+      spendingCategoryId: oldSpend,
+    });
+    const move = {
+      action: "productCategory" as const,
+      productCategoryId: branch.output.id,
+      parentId: newRoot.output.id,
+      spendingCategoryMode: "inherit" as const,
+      spendingCategoryId: null,
+    };
+    const ordinaryMove = () =>
+      executeEntity(context(), {
+        action: "update",
+        entity: "productCategory",
+        id: branch.output.id,
+        data: { parentId: newRoot.output.id },
+      });
+    await expect(ordinaryMove()).rejects.toThrow(/Preview and apply/);
+    const preview = await previewSpendingClassificationReview(ctx.db, move);
+    expect(preview.changedExpenseCount).toBe(1);
+    expect(preview.categoryDeltas).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          spendingCategoryId: oldSpend,
+          deltaCents: "2000",
+        }),
+        expect.objectContaining({
+          spendingCategoryId: newSpend,
+          deltaCents: "-2000",
+        }),
+      ]),
+    );
+    const readBranch = async () =>
+      (
+        await unwrapDb(ctx.db).execute(
+          sql`SELECT "parentId", "spendingCategoryMode", "spendingCategoryId" FROM "ProductCategory" WHERE id=${branch.entityId}`,
+          "objects",
+        )
+      )[0];
+    expect(await readBranch()).toMatchObject({ parentId: oldRoot.entityId });
+
+    // Unused categories retain ordinary CRUD, and a topology change invalidates
+    // a pending review even when its immediate allocation totals stay equal.
+    const unused = await createRepoIdentity(ctx, "productCategory", {
+      name: "Fixture unused branch",
+      parentId: oldRoot.output.id,
+    });
+    const current = await previewSpendingClassificationReview(ctx.db, move);
+    await executeEntity(context(), {
+      action: "update",
+      entity: "productCategory",
+      id: unused.output.id,
+      data: { parentId: null },
+    });
+    await expect(
+      applySpendingClassificationReview(context(), {
+        request: move,
+        fingerprint: current.fingerprint,
+      }),
+    ).rejects.toThrow(/changed/i);
+    expect(await readBranch()).toMatchObject({ parentId: oldRoot.entityId });
+    const fresh = await previewSpendingClassificationReview(ctx.db, move);
+    await applySpendingClassificationReview(context(), {
+      request: move,
+      fingerprint: fresh.fingerprint,
+    });
+    expect(await readBranch()).toMatchObject({
+      parentId: newRoot.entityId,
+      spendingCategoryMode: "inherit",
+      spendingCategoryId: null,
+    });
+    const resolved = await unwrapDb(ctx.db).execute(
+      sql`SELECT e.id, e.cost, e."spendingCategoryId", c.shortcode AS category FROM "Expense" e LEFT JOIN "SpendingCategory" c ON c.id=${effectiveExpenseSpendingCategorySql("e")} WHERE e.id IN (${inherited.entityId}, ${explicit.entityId})`,
+      "objects",
+    );
+    expect(resolved).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: inherited.entityId,
+          cost: -20,
+          spendingCategoryId: null,
+          category: newSpend,
+        }),
+        expect.objectContaining({
+          id: explicit.entityId,
+          cost: 10,
+          category: oldSpend,
+        }),
+      ]),
+    );
+
+    // Omission preserves the parent; explicit null moves to the root while
+    // changing the mapping in that same reviewed write.
+    const mappingOnly = {
+      action: "productCategory" as const,
+      productCategoryId: branch.output.id,
+      spendingCategoryMode: "inherit" as const,
+      spendingCategoryId: null,
+    };
+    const mappingPreview = await previewSpendingClassificationReview(
+      ctx.db,
+      mappingOnly,
+    );
+    await applySpendingClassificationReview(context(), {
+      request: mappingOnly,
+      fingerprint: mappingPreview.fingerprint,
+    });
+    expect(await readBranch()).toMatchObject({ parentId: newRoot.entityId });
+    const rootMove = {
+      ...move,
+      parentId: null,
+      spendingCategoryMode: "mapped" as const,
+      spendingCategoryId: newSpend,
+    };
+    const rootPreview = await previewSpendingClassificationReview(
+      ctx.db,
+      rootMove,
+    );
+    await applySpendingClassificationReview(context(), {
+      request: rootMove,
+      fingerprint: rootPreview.fingerprint,
+    });
+    expect(await readBranch()).toMatchObject({
+      parentId: null,
+      spendingCategoryMode: "mapped",
+    });
+  });
+
   it("refuses taxonomy changes that would change Food allocation semantics", async () => {
     const food = await unwrapDb(ctx.db).query.productCategory.findFirst({
       where: {
@@ -180,6 +381,32 @@ describe("reviewed spending classification", () => {
           "productCategory",
           tools.shortcode,
         ),
+      }),
+    ).rejects.toThrow("feature");
+
+    const branch = await createRepoIdentity(ctx, "productCategory", {
+      name: "Fixture inherited Food branch",
+      parentId: taxonomyShortcode("food"),
+    });
+    const leaf = await createRepoIdentity(ctx, "productCategory", {
+      name: "Fixture inherited Food leaf",
+      parentId: branch.output.id,
+    });
+    await createProductIdentityFixture(
+      ctx.db,
+      makeProductInput({
+        name: "Fixture unbooked Food item",
+        categoryId: leaf.output.id,
+      }),
+      ctx.actor,
+    );
+    await expect(
+      previewSpendingClassificationReview(ctx.db, {
+        action: "productCategory",
+        productCategoryId: branch.output.id,
+        parentId: null,
+        spendingCategoryMode: "inherit",
+        spendingCategoryId: null,
       }),
     ).rejects.toThrow("feature");
   });

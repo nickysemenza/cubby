@@ -59,6 +59,11 @@ export function expenseDerivedReadSql(
     derivedReads[read].categories ||
     scope?.spendingCategoryIds !== undefined ||
     scope?.categoryPresence !== undefined;
+  const productCategories =
+    read === "shares" ||
+    scope?.productCategoryIds !== undefined ||
+    scope?.productCategoryPresence !== undefined ||
+    scope?.productCategoryRemainders !== undefined;
   const trades =
     categories ||
     scope?.trades !== undefined ||
@@ -74,6 +79,7 @@ export function expenseDerivedReadSql(
     preparedSource ??
     expenseJointAllocationSql(expenseIds, draft, {
       categories,
+      productCategories,
       trades,
       projects,
       principals: derivedReads[read].principals,
@@ -313,6 +319,15 @@ export function expenseDerivedBatchesSql<
               ? [...scope.spendingCategoryIds].sort()
               : undefined,
             categoryPresence: scope.categoryPresence,
+            productCategoryIds: scope.productCategoryIds
+              ? [...scope.productCategoryIds].sort()
+              : undefined,
+            productCategoryPresence: scope.productCategoryPresence,
+            productCategoryRemainders: scope.productCategoryRemainders
+              ? [...scope.productCategoryRemainders].sort()
+              : undefined,
+            tradePresence: scope.tradePresence,
+            costTypePresence: scope.costTypePresence,
             trades: scope.trades ? [...scope.trades].sort() : undefined,
             costTypes: scope.costTypes
               ? [...scope.costTypes].sort()

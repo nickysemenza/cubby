@@ -49,7 +49,14 @@ const data: ExpenseAnalyticsOut = {
 };
 
 const emptyPair = {
-  current: { actual: 0, committed: 0, credits: 0, net: 0, count: 0 },
+  current: {
+    actual: 0,
+    committed: 0,
+    credits: 0,
+    net: 0,
+    count: 0,
+    unpricedCount: 0,
+  },
   previous: null,
 };
 const analyze: ExpenseAnalyzeReadyOut = {

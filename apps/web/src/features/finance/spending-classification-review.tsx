@@ -1,5 +1,10 @@
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
-import type { SpendingCategoryShortcode } from "@cubby/schemas/identifiers";
+import type {
+  ProductCategoryShortcode,
+  SpendingCategoryShortcode,
+  ExpenseShortcode,
+} from "@cubby/schemas/identifiers";
+import { productCategoryShortcode } from "@cubby/schemas/identifiers";
 import {
   spendingCategoryMappingMode,
   vendorSpendingProfile,
@@ -16,6 +21,8 @@ import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import { useEntityMetadata } from "~/entity/metadata";
 import { buildRecordComboboxItem } from "~/entity/picker/combobox-builders";
 import { EntityReferencePicker } from "~/entity/picker/entity-reference-picker";
+import { Picker as RecordPicker } from "~/entity/picker/picker";
+import { referenceEntitySearch } from "~/entity/picker/reference-entity-search";
 import { SpendingCategoryLabel } from "~/entity/presentation/spending-category-label";
 import { spendingClassification } from "~/integrations/tanstack-query/generated/domains/spendingClassification.gen";
 import { formatCurrency } from "~/lib/number-format";
@@ -33,6 +40,8 @@ const MAPPING_MODE_OPTIONS: readonly PickerOption[] = [
   { value: "blocked", label: "Keep unresolved" },
 ];
 
+const CategorySearch = referenceEntitySearch("productCategory");
+
 const SPENDING_PROFILE_OPTIONS: readonly PickerOption[] = [
   { value: "unspecified", label: "Unspecified" },
   { value: "mixed_retail", label: "Mixed retailer" },
@@ -44,13 +53,16 @@ const SPENDING_PROFILE_OPTIONS: readonly PickerOption[] = [
 function ClassificationReview({
   initial,
   initialCategory,
+  initialParent,
 }: {
   initial: SpendingClassificationReviewInput;
   initialCategory?: ComboboxItem<SpendingCategoryShortcode> | null;
+  initialParent?: ComboboxItem<ProductCategoryShortcode> | null;
 }) {
   const mappingId = useId();
   const profileId = useId();
   const [request, setRequest] = useState(initial);
+  const [parent, setParent] = useState(initialParent ?? null);
   const [category, setCategory] =
     useState<ComboboxItem<SpendingCategoryShortcode> | null>(() => {
       if (initialCategory !== undefined) return initialCategory;
@@ -79,9 +91,11 @@ function ClassificationReview({
   return (
     <div className="max-w-2xl space-y-4">
       <p className="text-sm text-muted-foreground">
-        {request.action === "spendingCategoryMerge"
-          ? "Every Expense, Purchase, transaction, merchant default, and Product Category mapping in the merged categories moves to the kept category, including past spending."
-          : "Defaults update past and future Expenses. Explicit Expense categories stay in place."}{" "}
+        {request.action === "expenses"
+          ? "Remove the selected lines' saved spending categories and resolve them again from item detail and eligible defaults. Recorded money stays unchanged."
+          : request.action === "spendingCategoryMerge"
+            ? "Every Expense, Purchase, transaction, merchant default, and Product Category mapping in the merged categories moves to the kept category, including past spending."
+            : "Defaults update past and future Expenses. Explicit Expense categories stay in place."}{" "}
         Review the change before applying it.
       </p>
       {request.action === "productCategory" && (
@@ -108,6 +122,29 @@ function ClassificationReview({
           />
         </div>
       )}
+      {request.action === "productCategory" && (
+        <CategorySearch>
+          {({ items, ...search }) => (
+            <RecordPicker
+              {...search}
+              entity="productCategory"
+              items={items}
+              label="Parent category"
+              value={parent}
+              disabled={busy}
+              clearable
+              placeholder="Root category"
+              setValue={(item) => {
+                const parentId = item
+                  ? productCategoryShortcode.parse(item.id)
+                  : null;
+                setParent(item && parentId ? { ...item, id: parentId } : null);
+                setDraft({ ...request, parentId });
+              }}
+            />
+          )}
+        </CategorySearch>
+      )}
       {request.action === "vendor" && (
         <div className="space-y-1 text-sm">
           <span>Merchant context</span>
@@ -128,6 +165,7 @@ function ClassificationReview({
         </div>
       )}
       {request.action !== "products" &&
+        request.action !== "expenses" &&
         request.action !== "spendingCategoryMerge" &&
         (request.action !== "productCategory" ||
           request.spendingCategoryMode === "mapped") && (
@@ -164,18 +202,17 @@ function ClassificationReview({
         <div className="space-y-3 border-t pt-4" aria-live="polite">
           <p className="text-sm">
             {review.changedExpenseCount} of {review.expenseCount} Expenses
-            change classification. Unclassified:{" "}
+            change classification. Uncategorized or incomplete:{" "}
             {review.beforeUncategorizedExpenseCount} →{" "}
             {review.afterUncategorizedExpenseCount}.{" "}
             {review.unpricedExpenseCount > 0 &&
               `${review.unpricedExpenseCount} unpriced Expenses are excluded from dollar totals.`}
           </p>
           <Description size="xs">
-            Amounts include recorded and planned Expenses. Expense totals stay
-            the same.
+            All history, including planned. Expense totals stay the same.
           </Description>
           <StaticTable
-            rows={review.categoryDeltas}
+            rows={review.categoryDeltas.filter((row) => row.deltaCents !== "0")}
             rowKey={(row) => row.spendingCategoryId ?? "unknown"}
             className="text-sm"
             columns={[
@@ -189,7 +226,7 @@ function ClassificationReview({
                       name={row.spendingCategoryName}
                     />
                   ) : (
-                    <span className="text-muted-foreground">Unclassified</span>
+                    <span className="text-muted-foreground">Uncategorized</span>
                   ),
               },
               {
@@ -200,6 +237,13 @@ function ClassificationReview({
                 cell: (row) => formatCurrency(Number(row.beforeCents) / 100),
               },
               {
+                id: "delta",
+                header: "Change",
+                headClassName: "text-right",
+                cellClassName: "text-right tabular-nums",
+                cell: (row) => formatCurrency(Number(row.deltaCents) / 100),
+              },
+              {
                 id: "after",
                 header: "After",
                 headClassName: "text-right",
@@ -208,6 +252,9 @@ function ClassificationReview({
               },
             ]}
           />
+          {review.categoryDeltas.every((row) => row.deltaCents === "0") && (
+            <Description>No category dollar totals change.</Description>
+          )}
           <Button
             disabled={busy || apply.isSuccess}
             onClick={() =>
@@ -239,6 +286,15 @@ export function ProductCategoryClassification({
 
   return (
     <ClassificationReview
+      key={record.id}
+      initialParent={
+        record.parentId
+          ? {
+              id: record.parentId,
+              name: fieldValueOf(record.fields.parentName) ?? "Parent category",
+            }
+          : null
+      }
       initialCategory={
         effectiveRecordSpendingCategoryId
           ? buildRecordComboboxItem(queryClient, "spendingCategory", {
@@ -253,7 +309,21 @@ export function ProductCategoryClassification({
         productCategoryId: record.id,
         spendingCategoryMode: record.spendingCategoryMode,
         spendingCategoryId: effectiveRecordSpendingCategoryId,
+        parentId: record.parentId,
       }}
+    />
+  );
+}
+
+/** Reset only the member-selected lines; uncertain saved intent stays intact. */
+export function ExpenseItemDetailReview({
+  expenseIds,
+}: {
+  expenseIds: ExpenseShortcode[];
+}) {
+  return (
+    <ClassificationReview
+      initial={{ action: "expenses", expenseIds, spendingCategoryId: null }}
     />
   );
 }

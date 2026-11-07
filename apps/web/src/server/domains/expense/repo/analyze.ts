@@ -1,3 +1,4 @@
+import { expenseProductCategoryRemainderSchema } from "@cubby/schemas/expense-fields";
 /**
  * Complete, bounded aggregates for the interactive Expense analyzer.
  *
@@ -86,6 +87,7 @@ type AggregateRow = {
   credits: number;
   net: number;
   count: number;
+  unpricedCount?: number;
 };
 type BucketRow = AggregateRow & { key: string; label: string };
 type CellRow = AggregateRow & { rowKey: string; columnKey: string | null };
@@ -101,6 +103,19 @@ const dimensionSpecs = {
   trade: {
     key: sql<string>`allocation.trade`,
     label: sql<string>`allocation.trade`,
+    relation: "allocation",
+  },
+  productCategory: {
+    key: sql<string>`coalesce(allocation."productCategoryShortcode", '__' || allocation."productCategoryRemainder" || '__')`,
+    label: sql<string>`coalesce(allocation."productCategoryName", CASE allocation."productCategoryRemainder"
+      WHEN ${expenseProductCategoryRemainderSchema.enum.productless} THEN 'No Product'
+      WHEN ${expenseProductCategoryRemainderSchema.enum.deleted_product} THEN 'Deleted Product'
+      WHEN ${expenseProductCategoryRemainderSchema.enum.uncategorized_product} THEN 'Product without category'
+      WHEN ${expenseProductCategoryRemainderSchema.enum.deleted_category} THEN 'Deleted Product Category'
+      WHEN ${expenseProductCategoryRemainderSchema.enum.unknown_refund} THEN 'Unidentified refund'
+      WHEN ${expenseProductCategoryRemainderSchema.enum.unclassified} THEN 'Unresolved receipt role'
+      WHEN ${expenseProductCategoryRemainderSchema.enum.no_principal} THEN 'No principal line'
+      WHEN ${expenseProductCategoryRemainderSchema.enum.unknown_allocation} THEN 'Unknown principal weights' END)`,
     relation: "allocation",
   },
   costType: {
@@ -183,6 +198,7 @@ const zeroAggregate = (): ExpenseAnalyzeAggregate => ({
   credits: 0,
   net: 0,
   count: 0,
+  unpricedCount: 0,
 });
 
 const aggregate = (row: AggregateRow | undefined): ExpenseAnalyzeAggregate =>
@@ -193,6 +209,7 @@ const aggregate = (row: AggregateRow | undefined): ExpenseAnalyzeAggregate =>
         credits: Number(row.credits),
         net: Number(row.net),
         count: Number(row.count),
+        unpricedCount: Number(row.unpricedCount ?? 0),
       }
     : zeroAggregate();
 
@@ -205,6 +222,7 @@ const addAggregate = (
   credits: left.credits + right.credits,
   net: left.net + right.net,
   count: left.count + right.count,
+  unpricedCount: left.unpricedCount + right.unpricedCount,
 });
 
 const subtractAggregate = (
@@ -216,6 +234,7 @@ const subtractAggregate = (
   credits: left.credits - right.credits,
   net: left.net - right.net,
   count: left.count - right.count,
+  unpricedCount: left.unpricedCount - right.unpricedCount,
 });
 
 const bucketFilter = (
@@ -231,6 +250,14 @@ const bucketFilter = (
       break;
     case "costType":
       filter.costType = key;
+      break;
+    case "productCategory":
+      if (key.startsWith("__"))
+        filter.productCategoryRemainder = key.slice(2, -2);
+      else {
+        filter.productCategory = key;
+        filter.includeSubProductCategories = "false";
+      }
       break;
     case "spendingCategory":
       filter.spendingCategory = key;
@@ -255,8 +282,11 @@ const dimensionColumns = (dimension: DirectDimension, rollup: Rollup) =>
 const isAllocatedDimension = (dimension: Dimension) =>
   dimension === "project" ||
   dimension === "spendingCategory" ||
+  dimension === "productCategory" ||
   dimension === "trade" ||
   dimension === "costType";
+
+const unpricedCount = sql<number>`count(distinct ${expense.id}) filter (where ${expense.cost} IS NULL)::int`;
 
 function scopeAggregateQuery(
   db: Database,
@@ -265,7 +295,7 @@ function scopeAggregateQuery(
   prepared?: ExpenseDerivedBatchRead,
 ) {
   const read = prepared ?? expenseDerivedCostRead(db, allocationScope);
-  return read.select(read.aggregate).where(where);
+  return read.select({ ...read.aggregate, unpricedCount }).where(where);
 }
 
 function allocatedAggregateQuery(
@@ -276,7 +306,7 @@ function allocatedAggregateQuery(
   prepared?: ExpenseDerivedBatchRead,
 ) {
   return getDb(db)
-    .select(expenseShareAggregateFields())
+    .select({ ...expenseShareAggregateFields(), unpricedCount })
     .from(expense)
     .innerJoin(
       prepared?.allocations ??
@@ -310,6 +340,7 @@ function groupedDimensionQuery(
         key: spec.key,
         label: spec.label,
         ...expenseShareAggregateFields(),
+        unpricedCount,
       })
       .from(expense)
       .innerJoin(
@@ -337,18 +368,25 @@ function groupedDimensionQuery(
         rootSpendingCategoryJoins.root.on,
       )
       .$dynamic();
-    return query
-      .where(
-        and(
-          where,
-          isNotNull(spec.key),
-          allocationScope
-            ? expenseAllocationScopeConditionSql("allocation", allocationScope)
-            : undefined,
-        ),
-      )
-      .groupBy(spec.key, spec.label)
-      .orderBy(spec.label);
+    return (
+      query
+        .where(
+          and(
+            where,
+            isNotNull(spec.key),
+            allocationScope
+              ? expenseAllocationScopeConditionSql(
+                  "allocation",
+                  allocationScope,
+                )
+              : undefined,
+          ),
+        )
+        // Bound vocabulary values receive new parameter indexes when repeated.
+        // Group by the selected expressions so PostgreSQL compares one identity.
+        .groupBy(sql`1`, sql`2`)
+        .orderBy(sql`2`)
+    );
   }
   const charge = alias(purchase, "analyzeDimensionCharge");
   const read = prepared ?? expenseDerivedCostRead(db, allocationScope);
@@ -357,6 +395,7 @@ function groupedDimensionQuery(
       key: spec.key,
       label: spec.label,
       ...read.aggregate,
+      unpricedCount,
     })
     .leftJoin(
       project,
@@ -396,6 +435,7 @@ function groupedCellsQuery(
         rowKey: row.key,
         columnKey: column.key,
         ...expenseShareAggregateFields(),
+        unpricedCount,
       })
       .from(expense)
       .innerJoin(
@@ -449,6 +489,7 @@ function groupedCellsQuery(
       rowKey: row.key,
       columnKey: column.key,
       ...read.aggregate,
+      unpricedCount,
     })
     .leftJoin(
       project,
@@ -484,7 +525,10 @@ function allocatedGridCountQuery(
     .map((spec) => isNotNull(spec.key));
   const charge = alias(purchase, "analyzeGridCountCharge");
   const query = getDb(db)
-    .select({ count: sql<number>`count(distinct ${expense.id})::int` })
+    .select({
+      count: sql<number>`count(distinct ${expense.id})::int`,
+      unpricedCount,
+    })
     .from(expense)
     .innerJoin(
       prepared?.allocations ??
@@ -803,6 +847,7 @@ export type ExpenseAnalysisPeriod = {
   causes: ExpenseAnalysisCauses;
   /** Distinct Expenses in an allocated grid; absent when cells partition rows. */
   gridCount?: number;
+  gridUnpricedCount?: number;
 };
 
 const asOneDimensionCells = (rows: BucketRow[]): CellRow[] =>
@@ -899,6 +944,9 @@ export const loadExpenseAnalysisPeriod = async (
     gridCount: allocated
       ? Number(projections.gridCount[0]?.count ?? 0)
       : undefined,
+    gridUnpricedCount: allocated
+      ? Number(projections.gridCount[0]?.unpricedCount ?? 0)
+      : undefined,
     causes: analysisCausesFromRows(projections),
   };
 };
@@ -908,8 +956,9 @@ const analysisLimitResult = (
   columnCount: number,
   cellCount: number,
   columnDimension: ExpenseAnalyzeColumnDimension | null | undefined,
+  rowDimension?: ExpenseAnalyzeRowDimension,
 ): ExpenseAnalyzeOut | null => {
-  if (rowCount > ROW_LIMIT) {
+  if (rowDimension !== "productCategory" && rowCount > ROW_LIMIT) {
     return {
       status: "too_large",
       reason: "row_limit",
@@ -925,7 +974,10 @@ const analysisLimitResult = (
       observedAtLeast: columnCount,
     };
   }
-  if (cellCount > CELL_LIMIT) {
+  if (
+    cellCount > CELL_LIMIT &&
+    !(rowDimension === "productCategory" && columnDimension == null)
+  ) {
     return {
       status: "too_large",
       reason: "cell_limit",
@@ -1060,6 +1112,7 @@ export const buildExpenseAnalysisGrid = (
   previous: ExpenseAnalysisPeriod | null,
   comparison: ExpenseAnalysisComparison,
   columnDimension: ExpenseAnalyzeColumnDimension | null | undefined,
+  rowDimension?: ExpenseAnalyzeRowDimension,
 ) => {
   const rowMap = new Map(
     [...current.rows, ...(previous?.rows ?? [])].map((row) => [row.key, row]),
@@ -1082,7 +1135,11 @@ export const buildExpenseAnalysisGrid = (
   ) =>
     period?.gridCount === undefined
       ? total
-      : { ...total, count: period.gridCount };
+      : {
+          ...total,
+          count: period.gridCount,
+          unpricedCount: period.gridUnpricedCount ?? total.unpricedCount,
+        };
   const gridCurrent = withGridCount(
     cells.reduce(
       (total, cell) => addAggregate(total, cell.current),
@@ -1111,6 +1168,7 @@ export const buildExpenseAnalysisGrid = (
       columnMap.size,
       mergedCells.count,
       columnDimension,
+      rowDimension,
     ),
   };
 };

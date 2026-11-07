@@ -179,6 +179,7 @@ const expenseAnalyzeDefinition = workflow<Database, ExpenseAnalyzeInput>(
       periods.previous,
       comparison,
       input.columnDimension,
+      input.rowDimension,
     ),
   )
   .branch("withinGridLimits", {

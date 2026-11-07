@@ -587,41 +587,6 @@ export const updateProductCategory = defineMutationWriter({
     actor: ActorContext,
   ) => {
     const id = await resolveOrThrow(db, "productCategory", shortcode);
-    if (
-      data.spendingCategoryMode !== undefined ||
-      data.spendingCategoryId !== undefined
-    ) {
-      const [current] = await unwrapDb(db)
-        .select({
-          mode: productCategory.spendingCategoryMode,
-          target: productCategory.spendingCategoryId,
-        })
-        .from(productCategory)
-        .where(and(eq(productCategory.id, id), notDeleted(productCategory)))
-        .limit(1);
-      if (!current) throw new Error("Product category not found");
-      const target =
-        data.spendingCategoryId === undefined
-          ? current.target
-          : data.spendingCategoryId === null
-            ? null
-            : await resolveOrThrow(
-                db,
-                "spendingCategory",
-                data.spendingCategoryId,
-              );
-      if (
-        (data.spendingCategoryMode ?? current.mode) !== current.mode ||
-        target !== current.target
-      ) {
-        const affected = await unwrapDb(db).execute(
-          sql`SELECT 1 FROM "Expense" e JOIN "Product" p ON p.id=e."productId"
-        WHERE ${notDeleted("e")} AND ${notDeleted("p")} AND p."categoryId" IN ${hierarchyDescendantsSql("productCategory", [id])} LIMIT 1`,
-          "objects",
-        );
-        if (affected.length) assertReviewedSpendingClassification(db);
-      }
-    }
     await withTransaction(db, async (tx) => {
       const parentId =
         data.parentId === undefined
@@ -659,6 +624,19 @@ export const updateProductCategory = defineMutationWriter({
               );
       const spendingCategoryMode =
         data.spendingCategoryMode ?? before.spendingCategoryMode;
+      if (
+        (parentId !== undefined && parentId !== before.parentId) ||
+        spendingCategoryMode !== before.spendingCategoryMode ||
+        (spendingCategoryId !== undefined &&
+          spendingCategoryId !== before.spendingCategoryId)
+      ) {
+        const affected = await unwrapDb(tx).execute(
+          sql`SELECT 1 FROM "Expense" e JOIN "Product" p ON p.id=e."productId"
+          WHERE ${notDeleted("e")} AND ${notDeleted("p")} AND p."categoryId" IN ${hierarchyDescendantsSql("productCategory", [id])} LIMIT 1`,
+          "objects",
+        );
+        if (affected.length) assertReviewedSpendingClassification(tx);
+      }
       if (
         (spendingCategoryMode === "mapped") !==
         ((spendingCategoryId === undefined

@@ -435,6 +435,7 @@ export const expenseFilterFields = {
 };
 export const expenseFiltersSchema = z.object(expenseFilterFields);
 export type ExpenseFilters = z.infer<typeof expenseFiltersSchema>;
+export type { ExpenseProductCategoryRemainder } from "./expense-fields";
 
 export type ExpenseSortField = GeneratedEntitySortField<"expense">;
 
@@ -588,6 +589,7 @@ export type ExpenseAnalyticsOut = z.infer<typeof expenseAnalyticsOut>;
 
 export const expenseAnalyzeRowDimensionSchema = z.enum([
   "spendingCategory",
+  "productCategory",
   "trade",
   "costType",
   "month",
@@ -600,6 +602,7 @@ export type ExpenseAnalyzeRowDimension = z.infer<
 
 export const expenseAnalyzeColumnDimensionSchema = z.enum([
   "spendingCategory",
+  "productCategory",
   "trade",
   "costType",
   "month",
@@ -682,6 +685,7 @@ export type ExpenseAnalyzeInput = z.infer<typeof expenseAnalyzeInput>;
 
 export const expenseAnalyzeAggregate = z.object({
   ...expenseAggregateFields,
+  unpricedCount: z.number().int().nonnegative().default(0),
 });
 export type ExpenseAnalyzeAggregate = z.infer<typeof expenseAnalyzeAggregate>;
 

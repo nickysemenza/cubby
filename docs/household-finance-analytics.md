@@ -25,6 +25,29 @@ Category** bars open the Ledger on that root with subcategories included;
 Transaction-only categories (income, payment artifacts) have no Expense rows
 and so never appear.
 
+Product Category is a share-level row or column dimension over the same
+allocation relation. Shared tax, shipping, fees and discounts carry their
+principal's Product Category; a saved Gifts purpose can therefore appear as
+Gifts × Tools. Product Category rows contain only their own category's money.
+The mapping editor rolls these disjoint amounts up in integer cents, while
+ordinary analytics keep their selected date and other filters.
+
+Named remainder buckets distinguish no Product, a deleted Product, an
+uncategorized Product, a deleted Category, an unidentified refund, an unresolved
+receipt role, no principal, and unknown allocation weights. Unknown refunds on
+positive baskets carry no inferred Product Category. A known Product Category
+on an unpriced principal remains known, but its amount is unavailable;
+`unpricedCount` marks incomplete dollar totals and is not additive across
+allocation buckets. No price or product is invented.
+
+Each bucket carries a Ledger filter over allocation shares. Product Category
+filters support exact categories or subtrees, presence and named remainders;
+they join the same scope as Spending Category, Project, trade and cost type.
+Scoped totals and links therefore retain the bucket's exact cents without
+changing Purchase weights. Exclude and Match-all filters retain their ordinary
+whole-Expense fallback. The Product Category axis is bounded by the live
+taxonomy rather than the generic 200-row limit.
+
 ## Money flow
 
 The Sankey runs funder → project bucket → root Spending Category over the

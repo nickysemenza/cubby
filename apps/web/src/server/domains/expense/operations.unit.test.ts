@@ -21,7 +21,14 @@ const input: ExpenseAnalyzeInput = {
 
 describe("expense workflow observability", () => {
   it("records bounded result shape without filter values", () => {
-    const zero = { actual: 0, committed: 0, credits: 0, net: 0, count: 0 };
+    const zero = {
+      actual: 0,
+      committed: 0,
+      credits: 0,
+      net: 0,
+      count: 0,
+      unpricedCount: 0,
+    };
     const result = {
       status: "ready",
       rowDimension: "trade",

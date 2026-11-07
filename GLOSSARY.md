@@ -3,6 +3,15 @@
 Vocabulary for household categories and storage roles. Shared domain concepts,
 including Brand, Seller, Inventory and Tags, live in [Terminology](docs/guide/terminology.md).
 
+## Classification
+
+**Product Category**:
+A classification of what a Product is, independent of why it was purchased.
+
+**Spending Category**:
+A classification of what an Expense's money was spent on, including an explicit
+purpose such as Gifts. It can be known even when individual Products are unknown.
+
 ## Storage locations
 
 **Bulk storage location**:

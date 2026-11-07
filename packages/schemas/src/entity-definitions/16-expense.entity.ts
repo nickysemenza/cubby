@@ -1175,6 +1175,8 @@ Rules:
         repository: {
           project: { reference: "project" },
           spendingCategory: { reference: "spendingCategory" },
+          productCategory: { reference: "productCategory" },
+          productCategoryRemainder: "text",
           trade: "text",
           costType: "text",
         },
@@ -1195,6 +1197,10 @@ Rules:
       // All four match on the same allocation share.
       projectFilter: { via: "allocationShares.project" },
       spendingCategoryFilter: { via: "allocationShares.spendingCategory" },
+      productCategoryFilter: { via: "allocationShares.productCategory" },
+      productCategoryRemainder: {
+        via: "allocationShares.productCategoryRemainder",
+      },
       tradeFilter: { via: "allocationShares.trade" },
       costTypeFilter: { via: "allocationShares.costType" },
     },
@@ -1647,6 +1653,41 @@ Rules:
         deriveSchema: true,
         schemaDescription: "Substring match on url",
         anyOf: ["url"],
+      },
+      {
+        columnId: "productCategoryId",
+        urlKey: "productCategory",
+        kind: "idMulti",
+        placeholder: "Filter by Product Category...",
+        optionsKey: "productCategory",
+        brandRef: { entity: "productCategory" },
+        deriveSchema: true,
+        derived: "productCategoryFilter",
+        nullable: {
+          field: "productCategoryPresenceFilter",
+          label: "Product Category",
+        },
+      },
+      {
+        columnId: "productCategoryRemainder",
+        kind: "multiselect",
+        schemaRef: {
+          module: "@cubby/schemas/expense-fields",
+          export: "expenseProductCategoryRemainderSchema",
+        },
+        placeholder: "Filter by Product Category remainder...",
+        deriveSchema: true,
+        derived: "productCategoryRemainder",
+        options: [
+          { value: "productless", label: "No Product" },
+          { value: "deleted_product", label: "Deleted Product" },
+          { value: "uncategorized_product", label: "Product without category" },
+          { value: "deleted_category", label: "Deleted Product Category" },
+          { value: "unknown_refund", label: "Unidentified refund" },
+          { value: "unclassified", label: "Unresolved receipt role" },
+          { value: "no_principal", label: "No principal line" },
+          { value: "unknown_allocation", label: "Unknown principal weights" },
+        ],
       },
       {
         columnId: "spendingCategoryId",

@@ -9,25 +9,37 @@ import {
 import { expect, test } from "./support/e2e-test";
 import { createFixtureGraph } from "./fixtures/core";
 
-// The browser owns reviewed apply and visible stale-preview feedback. Taxonomy
-// reassignment, reset, refunds and exact money stay in spending-classification-
-// review.integration.test.ts and spending-classification-review-equivalence.integration.test.ts.
+// The browser owns hierarchy search, actual-allocation inspection, reviewed
+// apply/reset and stale-preview feedback. Refund arithmetic and topology
+// enforcement stay in the review integration owners.
 test("reviews historical item classification and preserves explicit purpose", async ({
   page,
   baseURL,
-}) => {
+}, testInfo) => {
   const headers = { Origin: baseURL! };
   const categoryName = "Synthetic classification clothing";
-  const { clothing, gifts, productCategory, expense } =
+  const parentName = "Synthetic classification items";
+  const childName = "Synthetic classification shoes";
+  const siblingName = "Synthetic classification bags";
+  const giftsName = "Synthetic classification gifts";
+  const { clothing, gifts, expense, explicitExpense } =
     await createFixtureGraph(page, async (create) => {
       const { id: clothing } = await create("spendingCategory", {
         name: categoryName,
       });
       const { id: gifts } = await create("spendingCategory", {
-        name: "Synthetic classification gifts",
+        name: giftsName,
+      });
+      const { id: parent } = await create("productCategory", {
+        name: parentName,
       });
       const { id: productCategory } = await create("productCategory", {
-        name: "Synthetic classification shoes",
+        name: childName,
+        parentId: parent,
+      });
+      await create("productCategory", {
+        name: siblingName,
+        parentId: parent,
       });
       const { id: vendor } = await create("vendor", {
         name: "Synthetic classification mixed shop",
@@ -51,7 +63,17 @@ test("reviews historical item classification and preserves explicit purpose", as
         productId: product,
         purchaseId: purchase,
       });
-      return { clothing, gifts, productCategory, expense };
+      const { id: explicitExpense } = await create("expense", {
+        name: "Synthetic classification gift boots",
+        cost: 25,
+        date: "2026-09-01",
+        costType: "materials",
+        trade: "other",
+        productId: product,
+        purchaseId: purchase,
+        spendingCategoryId: gifts,
+      });
+      return { clothing, gifts, expense, explicitExpense };
     });
 
   const patch = async (
@@ -63,8 +85,8 @@ test("reviews historical item classification and preserves explicit purpose", as
     });
     expect(response.ok(), await response.text()).toBeTruthy();
   };
-  const read = async () => {
-    const response = await entityApi(page.request).get("expense", expense, {});
+  const read = async (id = expense) => {
+    const response = await entityApi(page.request).get("expense", id, {});
     expect(response.ok(), await response.text()).toBeTruthy();
     return z
       .object({
@@ -77,9 +99,76 @@ test("reviews historical item classification and preserves explicit purpose", as
   };
   await gotoAuthenticatedPage(
     page,
-    `/product-categories/${productCategory}`,
-    page.getByRole("button", { name: "Preview historical impact" }),
+    "/product-categories?view=hierarchy",
+    page.getByRole("table", { name: "Product category mappings", exact: true }),
   );
+  const tree = page.getByRole("table", {
+    name: "Product category mappings",
+    exact: true,
+  });
+  await page
+    .getByPlaceholder("Find a category or branch…", { exact: true })
+    .fill("classification shoes");
+  await expect(
+    tree.getByRole("link", { name: parentName, exact: true }),
+  ).toBeVisible();
+  await expect(
+    tree.getByRole("link", { name: childName, exact: true }),
+  ).toBeVisible();
+  await expect(
+    tree.getByRole("link", { name: siblingName, exact: true }),
+  ).toHaveCount(0);
+  const child = tree
+    .getByRole("row")
+    .filter({ has: page.getByRole("link", { name: childName, exact: true }) });
+  await child
+    .getByRole("cell", { name: "Missing", exact: true })
+    .first()
+    .click();
+  const allocations = page.getByRole("region", {
+    name: "Where this branch's money lands",
+    exact: true,
+  });
+  await expect(
+    allocations.getByRole("link", { name: "$60.00", exact: true }),
+  ).toBeVisible();
+  await expect(
+    allocations.getByRole("row").filter({ hasText: giftsName }),
+  ).toContainText("$25.00");
+  await allocations
+    .getByRole("button", { name: giftsName, exact: true })
+    .click();
+  await expect(
+    page
+      .getByRole("region", {
+        name: `Contributing branches · ${giftsName}`,
+        exact: true,
+      })
+      .getByRole("row")
+      .filter({ hasText: childName }),
+  ).toContainText("$25.00");
+  await expect(
+    page.getByRole("combobox", { name: "Parent category", exact: true }),
+  ).toBeVisible();
+
+  const viewport = page.viewportSize();
+  const desktopPath = ".impeccable/review/category-mapping-desktop.png";
+  await page.screenshot({ path: desktopPath, fullPage: true });
+  await testInfo.attach("Category mapping desktop", {
+    path: desktopPath,
+    contentType: "image/png",
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(
+    page.getByRole("dialog", { name: childName, exact: true }),
+  ).toBeVisible();
+  const phonePath = ".impeccable/review/category-mapping-mobile.png";
+  await page.screenshot({ path: phonePath, fullPage: true });
+  await testInfo.attach("Category mapping phone", {
+    path: phonePath,
+    contentType: "image/png",
+  });
+  if (viewport) await page.setViewportSize(viewport);
   await chooseOption(
     page,
     page.getByRole("combobox", {
@@ -128,6 +217,15 @@ test("reviews historical item classification and preserves explicit purpose", as
       },
     },
   });
+  expect(await read(explicitExpense)).toMatchObject({
+    cost: 25,
+    fields: {
+      spendingCategoryId: {
+        current: { assignment: { kind: "value", value: gifts } },
+        result: { decision: { outcome: { kind: "value", value: gifts } } },
+      },
+    },
+  });
   await patch(expense, { spendingCategoryId: gifts });
   expect(await read()).toMatchObject({
     fields: {
@@ -139,6 +237,50 @@ test("reviews historical item classification and preserves explicit purpose", as
             provenance: { kind: "own" },
           },
         },
+      },
+    },
+  });
+  await gotoAuthenticatedPage(
+    page,
+    `/expenses/${explicitExpense}`,
+    page.getByRole("button", { name: "Use item detail", exact: true }),
+  );
+  await page
+    .getByRole("button", { name: "Use item detail", exact: true })
+    .click();
+  await page
+    .getByRole("button", { name: "Preview historical impact", exact: true })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "Apply reviewed change", exact: true }),
+  ).toBeVisible();
+  expect(await read(explicitExpense)).toMatchObject({
+    cost: 25,
+    fields: {
+      spendingCategoryId: {
+        current: { assignment: { kind: "value", value: gifts } },
+      },
+    },
+  });
+  await page
+    .getByRole("button", { name: "Apply reviewed change", exact: true })
+    .click();
+  await expect
+    .poll(async () => read(explicitExpense))
+    .toMatchObject({
+      cost: 25,
+      fields: {
+        spendingCategoryId: {
+          current: { assignment: { kind: "inherit" } },
+          result: { decision: { outcome: { kind: "value", value: clothing } } },
+        },
+      },
+    });
+  expect(await read()).toMatchObject({
+    cost: 61,
+    fields: {
+      spendingCategoryId: {
+        current: { assignment: { kind: "value", value: gifts } },
       },
     },
   });

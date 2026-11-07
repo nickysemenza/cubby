@@ -1,6 +1,7 @@
 import type { ExpenseLineKind } from "@cubby/schemas/expense-line-kind";
 import { expenseFiltersSchema } from "@cubby/schemas/project";
 import { eq, sql } from "drizzle-orm";
+import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -12,6 +13,10 @@ import {
 } from "~/server/domains/expense/repo/analyze";
 import { expenseDerivedValueSql } from "~/server/domains/expense/repo/expense-derived-read";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import {
+  createProductIdentityFixture,
+  makeProductInput,
+} from "~/server/testing/repo.fixtures";
 
 import {
   loadExpenseJointAllocations,
@@ -28,7 +33,9 @@ const line = (
     typeof expense.$inferInsert,
     "purchaseId" | "projectId" | "spendingCategoryId"
   > &
-    Partial<Pick<typeof expense.$inferInsert, "trade" | "costType">>,
+    Partial<
+      Pick<typeof expense.$inferInsert, "trade" | "costType" | "productId">
+    >,
 ) =>
   insertWithShortcode(ctx.db, "expense", {
     name,
@@ -66,15 +73,35 @@ const fixture = async () => {
   return { projects, categories, purchase, vendor };
 };
 
+const productFixture = async (name: string) => {
+  const category = await createRepoEntity(ctx, "productCategory", {
+    name: `Synthetic ${name} category`,
+  });
+  const product = await createProductIdentityFixture(
+    ctx.db,
+    makeProductInput({
+      name: `Synthetic ${name} Product`,
+      categoryId: category.output.id,
+    }),
+    ctx.actor,
+  );
+  return { category, product };
+};
+
 describe("joint expense spending allocation", () => {
   it("rounds once by stable principal IDs and groups a Project/category grid without fanout", async () => {
     const { projects, categories, purchase } = await fixture();
+    const identities = await Promise.all([
+      productFixture("tool"),
+      productFixture("book"),
+    ]);
     const principal = await Promise.all(
       [0, 1, 2, 3].map((index) =>
         line(`Synthetic item ${index}`, 1, "principal", {
           purchaseId: purchase.id,
           projectId: projects[Math.floor(index / 2)]!.id,
           spendingCategoryId: categories[index % 2]!.id,
+          productId: identities[index % 2]!.product.entityId,
         }),
       ),
     );
@@ -127,6 +154,31 @@ describe("joint expense spending allocation", () => {
       4.01,
     );
     expect(grid.scope.net).toBeCloseTo(4.01);
+    const productGrid = await loadExpenseAnalysisPeriod(
+      ctx.db,
+      where,
+      where,
+      "productCategory",
+      "spendingCategory",
+    );
+    expect(productGrid.cells).toHaveLength(2);
+    expect(productGrid.cells.map((cell) => cell.columnKey).sort()).toEqual(
+      categories.map((category) => category.shortcode).sort(),
+    );
+    expect(
+      productGrid.cells.reduce(
+        (sum, cell) => sum + Math.round(cell.net * 100),
+        0,
+      ),
+    ).toBe(401);
+    expect(
+      rows.every(
+        (row) =>
+          row.productCategoryId !== null &&
+          row.productCategoryRemainder === null,
+      ),
+    ).toBe(true);
+
     await unwrapDb(ctx.db)
       .update(expense)
       .set({
@@ -150,7 +202,9 @@ describe("joint expense spending allocation", () => {
 
   it("keeps unknown refund adjustments uncategorized while ordinary discounts conserve signed cents", async () => {
     const { projects, categories, purchase, vendor } = await fixture();
+    const identity = await productFixture("refund");
     await line("Synthetic retained item", 10, "principal", {
+      productId: identity.product.entityId,
       purchaseId: purchase.id,
       projectId: projects[0]!.id,
       spendingCategoryId: categories[0]!.id,
@@ -188,6 +242,20 @@ describe("joint expense spending allocation", () => {
         incomplete: false,
       }),
     ]);
+    const joint = await loadExpenseJointAllocations(ctx.db, [
+      tax.id,
+      discount.id,
+    ]);
+    expect(joint.find((row) => row.expenseId === tax.id)).toMatchObject({
+      productCategoryId: null,
+      productCategoryRemainder: "unknown_refund",
+      attributedCents: -3n,
+    });
+    expect(joint.find((row) => row.expenseId === discount.id)).toMatchObject({
+      productCategoryId: identity.category.entityId,
+      productCategoryRemainder: null,
+      attributedCents: -1n,
+    });
     const refundPurchase = await insertWithShortcode(ctx.db, "purchase", {
       vendorId: vendor.id,
       date: "2026-09-20",
@@ -216,7 +284,9 @@ describe("joint expense spending allocation", () => {
       purchaseId: purchase.id,
       spendingCategoryId: categories[0]!.id,
     });
+    const identity = await productFixture("unpriced");
     const unpriced = await line("Synthetic unpriced item", null, "principal", {
+      productId: identity.product.entityId,
       purchaseId: purchase.id,
     });
     const fee = await line("Synthetic unweighted fee", 0.07, "fee", {
@@ -238,6 +308,8 @@ describe("joint expense spending allocation", () => {
         expect.objectContaining({
           expenseId: fee.id,
           principalExpenseId: null,
+          productCategoryId: null,
+          productCategoryRemainder: "unknown_allocation",
           sourceCents: 7n,
           attributedCents: 7n,
           projectId: projects[0]!.id,
@@ -254,6 +326,8 @@ describe("joint expense spending allocation", () => {
         }),
         expect.objectContaining({
           expenseId: unpriced.id,
+          productCategoryId: identity.category.entityId,
+          productCategoryRemainder: null,
           principalExpenseId: unpriced.id,
           attributedCents: null,
           incomplete: true,
@@ -261,6 +335,19 @@ describe("joint expense spending allocation", () => {
       ]),
     );
     expect(rows).toHaveLength(3);
+    const where = eq(expense.id, unpriced.id);
+    const unpricedGrid = await loadExpenseAnalysisPeriod(
+      ctx.db,
+      where,
+      where,
+      "productCategory",
+      null,
+    );
+    expect(unpricedGrid.rows).toMatchObject([
+      { key: identity.category.output.id, net: 0, unpricedCount: 1 },
+    ]);
+    expect(unpricedGrid.scope.unpricedCount).toBe(1);
+
     expect(
       rows.reduce((sum, row) => sum + (row.attributedCents ?? 0n), 0n),
     ).toBe(5n);

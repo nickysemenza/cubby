@@ -1,10 +1,10 @@
 import type { ListSlotId } from "@cubby/schemas/entity-manifest";
 
 import type { ListSlotComponent } from "~/entity/entity-list/list-slot-types";
-import { HierarchyView } from "~/features/product-category/hierarchy-view";
+import { CategoryMappingWorkspace } from "~/features/product-category/mapping-workspace";
 
 const ProductCategoryHierarchySlot: ListSlotComponent = () => (
-  <HierarchyView entity="productCategory" />
+  <CategoryMappingWorkspace />
 );
 
 export const productCategoryListSlots = {
