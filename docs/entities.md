@@ -1842,7 +1842,17 @@ save/manage interface. Timeline retains its own arrangement and disables Group
 by. Native ranked search temporarily suspends grouping and restores it afterwards.
 
 A reference to a hierarchical entity can use an absolute ancestor `level`
-(1 = root). Shallower values group under themselves. Calendar buckets are day,
+(1 = root). Shallower values group under themselves. Web Display → Group exposes
+Grouping level in each selected hierarchical field's submenu: Exact uses the
+assigned value, Top level uses the root, and Level 2 and deeper use that absolute
+depth. The selected level is shown beside the field. Entering Pivot defaults
+Category dimensions without an explicit level to Top level; adding Category
+while in Pivot does the same. Other fields and grouped-list defaults are unchanged.
+Existing Pivot URLs retain their encoded grouping, and explicit levels survive
+layout changes. Exact remains selectable in Pivot. These choices use the same
+server summaries, distinct margins and descendant filters as other grouping;
+no client-side sum substitutes for authoritative counts or percentages.
+Calendar buckets are day,
 week, month, quarter, and year; an omitted bucket on a date field means day.
 Plain dates keep their calendar value, while timestamps use the configured
 household timezone. Nulls and empty memberships use the explicit no-value

@@ -121,7 +121,21 @@ function ListViewMenu({ entity }: { entity: BrowserRoutedEntity }) {
       return;
     }
     setDensity("cards");
-    navigate({ view: next === defaultView ? undefined : next });
+    navigate({
+      view: next === defaultView ? undefined : next,
+      ...(next === PIVOT_VIEW_ID && search.view !== PIVOT_VIEW_ID
+        ? {
+            groupBy: dimensions.map((dimension) => {
+              const choice = grouping.find(({ key }) => key === dimension.key);
+              return choice?.filter?.columnId === "categoryId" &&
+                choice.levels > 0 &&
+                dimension.level === undefined
+                ? { ...dimension, level: 1 }
+                : dimension;
+            }),
+          }
+        : {}),
+    });
   };
   const SelectedIcon = selectedOption?.icon;
   const viewLabel = selectedOption?.label ?? selected;
@@ -258,7 +272,11 @@ function ListGroupMenu({ entity }: { entity: BrowserRoutedEntity }) {
                               key: choice.key,
                               ...(choice.buckets.length
                                 ? { bucket: "month" }
-                                : {}),
+                                : search.view === PIVOT_VIEW_ID &&
+                                    choice.filter?.columnId === "categoryId" &&
+                                    choice.levels > 0
+                                  ? { level: 1 }
+                                  : {}),
                             },
                           ],
                     )
@@ -290,65 +308,86 @@ function ListGroupMenu({ entity }: { entity: BrowserRoutedEntity }) {
               <DropdownMenuSubmenu key={dimension.key}>
                 <DropdownMenuSubmenuTrigger>
                   {index + 1}. {choice.label}
+                  {choice.levels > 0 && (
+                    <span className="ml-auto text-xs text-muted-foreground">
+                      {dimension.level
+                        ? groupLevelLabel(dimension.level)
+                        : "Exact"}
+                    </span>
+                  )}
                 </DropdownMenuSubmenuTrigger>
                 <DropdownMenuSubmenuContent>
-                  <DropdownMenuItem
-                    disabled={index === 0}
-                    onClick={() => move(index, -1)}
-                  >
-                    Move up
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    disabled={index === dimensions.length - 1}
-                    onClick={() => move(index, 1)}
-                  >
-                    Move down
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() =>
-                      apply(
-                        dimensions.filter((_, position) => position !== index),
-                      )
-                    }
-                  >
-                    Remove grouping
-                  </DropdownMenuItem>
-                  {choice.levels > 0 && <DropdownMenuSeparator />}
-                  {choice.levels > 0 && (
+                  <DropdownMenuGroup>
                     <DropdownMenuItem
-                      onClick={() => update(index, { key: dimension.key })}
+                      disabled={index === 0}
+                      onClick={() => move(index, -1)}
                     >
-                      Exact {choice.label.toLowerCase()}
+                      Move up
                     </DropdownMenuItem>
-                  )}
-                  {Array.from({ length: choice.levels }, (_, level) => (
                     <DropdownMenuItem
-                      key={level}
-                      aria-label={`Group ${choice.label} at ${groupLevelLabel(level + 1)}`}
+                      disabled={index === dimensions.length - 1}
+                      onClick={() => move(index, 1)}
+                    >
+                      Move down
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
                       onClick={() =>
-                        update(index, { key: dimension.key, level: level + 1 })
+                        apply(
+                          dimensions.filter(
+                            (_, position) => position !== index,
+                          ),
+                        )
                       }
                     >
-                      {groupLevelLabel(level + 1)}
-                      {dimension.level === level + 1 && (
-                        <CheckIcon className="ml-auto size-3.5" />
-                      )}
+                      Remove grouping
                     </DropdownMenuItem>
-                  ))}
-                  {choice.buckets.length > 0 && <DropdownMenuSeparator />}
-                  {choice.buckets.map((bucket) => (
-                    <DropdownMenuItem
-                      key={bucket}
-                      onClick={() =>
-                        update(index, { key: dimension.key, bucket })
-                      }
-                    >
-                      By {bucket}
-                      {dimension.bucket === bucket && (
-                        <CheckIcon className="ml-auto size-3.5" />
-                      )}
-                    </DropdownMenuItem>
-                  ))}
+                    {choice.levels > 0 && (
+                      <>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuLabel>Grouping level</DropdownMenuLabel>
+                        <DropdownMenuItem
+                          aria-label={`Group ${choice.label} at exact value`}
+                          onClick={() => update(index, { key: dimension.key })}
+                        >
+                          Exact {choice.label.toLowerCase()}
+                          {dimension.level === undefined && (
+                            <CheckIcon className="ml-auto size-3.5" />
+                          )}
+                        </DropdownMenuItem>
+                      </>
+                    )}
+                    {Array.from({ length: choice.levels }, (_, level) => (
+                      <DropdownMenuItem
+                        key={level}
+                        aria-label={`Group ${choice.label} at ${groupLevelLabel(level + 1)}`}
+                        onClick={() =>
+                          update(index, {
+                            key: dimension.key,
+                            level: level + 1,
+                          })
+                        }
+                      >
+                        {groupLevelLabel(level + 1)}
+                        {dimension.level === level + 1 && (
+                          <CheckIcon className="ml-auto size-3.5" />
+                        )}
+                      </DropdownMenuItem>
+                    ))}
+                    {choice.buckets.length > 0 && <DropdownMenuSeparator />}
+                    {choice.buckets.map((bucket) => (
+                      <DropdownMenuItem
+                        key={bucket}
+                        onClick={() =>
+                          update(index, { key: dimension.key, bucket })
+                        }
+                      >
+                        By {bucket}
+                        {dimension.bucket === bucket && (
+                          <CheckIcon className="ml-auto size-3.5" />
+                        )}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuGroup>
                 </DropdownMenuSubmenuContent>
               </DropdownMenuSubmenu>
             );
