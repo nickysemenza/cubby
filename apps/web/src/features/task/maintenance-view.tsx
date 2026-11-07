@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { EmbeddedEntityList } from "~/entity/entity-list/generic-entity-list";
 import type { ListSlotProps } from "~/entity/entity-list/list-slot-types";
+import { ExpenseLedgerSummary } from "~/features/expense/list-columns";
 import { task } from "~/integrations/tanstack-query/generated/domains/task.gen";
 import { householdLocalDate } from "~/lib/household-date";
 import { StaticTable } from "~/ui/data-table/static-table";
@@ -34,6 +35,11 @@ export function MaintenanceView({
       ? search.maintenanceYear
       : Number(householdLocalDate().slice(0, 4));
   const projectIds = history.data?.projectIds ?? [];
+  const expenseFilters = {
+    projectId: projectIds,
+    dateFrom: `${year}-01-01`,
+    dateTo: `${year}-12-31`,
+  };
   return (
     <Stack gap="lg">
       <Description>
@@ -163,7 +169,7 @@ export function MaintenanceView({
       <Section
         title="Purchase spending"
         headingAs="h2"
-        caption="Item assignments and proportional adjustment shares use the ordinary Expense project allocation."
+        caption="The summary counts only allocated project shares. Rows retain full expense amounts; open Project allocation to inspect shared tax or discounts."
       >
         <Row gap="sm" align="center">
           <label htmlFor="maintenance-year">Spending year</label>
@@ -182,14 +188,13 @@ export function MaintenanceView({
           />
         </Row>
         {projectIds.length > 0 && (
+          <ExpenseLedgerSummary filters={expenseFilters} />
+        )}
+        {projectIds.length > 0 && (
           <EmbeddedEntityList
             entity="expense"
             pageSize={20}
-            filters={{
-              projectId: projectIds,
-              dateFrom: `${year}-01-01`,
-              dateTo: `${year}-12-31`,
-            }}
+            filters={expenseFilters}
             columns={[
               "name",
               "cost",
