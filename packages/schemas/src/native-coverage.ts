@@ -573,7 +573,6 @@ export const nativeCoverage = {
     ...ownedElsewhere([
       "location.visualizations",
       "meal.nutrition",
-      "productCategory.hierarchy",
       "project.overview",
       "project.schedule",
       "planting.schedule",
