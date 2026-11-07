@@ -33,7 +33,6 @@ import { householdDaySqlText, uuidArrayParam } from "~/server/db/helpers/query";
 import { type RepositoryQueryTransaction as DrizzleTransaction } from "~/server/db/repository-access.boundary";
 import { repositoryQueries as unwrapDb } from "~/server/db/repository-access.boundary";
 import { emailAcceptedEvidenceSql } from "~/server/domains/email/repo/email-sql";
-import { loadStoredDerived } from "~/server/generic/derived/repo/read";
 import type { PageStoredMeta } from "~/server/generic/derived/repo/read-context";
 
 /**
@@ -419,7 +418,7 @@ export async function readCachedEmailPurchaseLinks(
   db: Database | DrizzleTransaction,
   emails: readonly { id: string; ledgerPartyId: string }[],
   scope: EmailPurchaseScope | null,
-  started?: Promise<PageStoredMeta>,
+  started: Promise<PageStoredMeta>,
 ): Promise<
   Map<
     string,
@@ -431,18 +430,13 @@ export async function readCachedEmailPurchaseLinks(
     }
   >
 > {
-  const stored = started
-    ? await started
-    : await loadStoredDerived(
-        db,
-        "email",
-        emails.map((row) => row.id),
-        ["relationshipFacts"],
-      );
+  const stored = await started;
   const results = emails.flatMap((email) => {
     const read = stored.get(email.id)?.get("relationshipFacts");
-    const parsed = emailRelationshipResult.safeParse(read?.value);
-    return read?.resultExists && read.computedAt && parsed.success
+    if (!read)
+      throw new Error("Email stored input was not loaded: relationshipFacts");
+    const parsed = emailRelationshipResult.safeParse(read.value);
+    return read.resultExists && read.computedAt && parsed.success
       ? [{ email, read, result: parsed.data, computedAt: read.computedAt }]
       : [];
   });

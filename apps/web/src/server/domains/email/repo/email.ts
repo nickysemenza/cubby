@@ -437,6 +437,7 @@ const emailRead: ListReadOptions<EmailRow> = {
           reviewedClassificationReason:
             loaded.reviews.get(row.id)?.reason ?? null,
         }),
+        { storedKeys: ["relationshipFacts"] },
       ),
     ];
   },

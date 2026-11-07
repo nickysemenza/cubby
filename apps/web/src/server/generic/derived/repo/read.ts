@@ -19,7 +19,6 @@ import { type AnyColumn, type SQL, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import {
-  entityStoredDerivedDeclarations,
   type EntityStoredDerivedDeclaration,
   storedDerived,
 } from "~/server/db/derived-declarations";
@@ -214,34 +213,6 @@ const valueRow = z.object({
   attribution: fieldWorkAttribution.nullable(),
 });
 
-/** Page readers start this with their ids beside hydration, never once per row. */
-export function loadPageStoredMeta(
-  db: RepositoryQueryInput,
-  entity: Entity,
-  ids: readonly string[],
-): Promise<PageStoredMeta> {
-  // Internal publications can contain unfenced findings; only model consumers
-  // admit their values into public read contexts. Domain readers name other keys explicitly.
-  const exposed = new Set<string>(
-    entityFieldModels[entity].fields.flatMap((field) => [
-      field.key,
-      ...(field.readKey ? [field.readKey] : []),
-      ...(field.storedKey ? [field.storedKey] : []),
-    ]),
-  );
-  const keys = entityStoredDerivedDeclarations()
-    .filter(
-      (declaration) =>
-        declaration.entity === entity &&
-        exposed.has(declaration.key) &&
-        (declaration.publishes === "derivedValue" ||
-          declaration.recordSource !== null ||
-          declaration.snapshotSource !== undefined),
-    )
-    .map((declaration) => declaration.key);
-  return loadStoredDerived(db, entity, ids, keys);
-}
-
 /**
  * Stored values and their meta for a page of records, in one statement. A
  * record without a row reads as missing; a queued mark as stale; a mark with
@@ -329,20 +300,22 @@ export async function loadStoredDerived(
 
 /** Raw repository hydration of declared projections; public envelopes retain availability. */
 export async function loadStoredFieldProjections(
-  db: RepositoryQueryInput,
   entity: Entity,
   ids: readonly string[],
-  started?: Promise<PageStoredMeta>,
+  started: Promise<PageStoredMeta>,
+  requested: readonly string[],
 ): Promise<Map<string, CurrentReadFacts>> {
-  const fields = entityFieldModels[entity].fields.filter(
-    (field) => field.storedPath,
-  );
-  const reads = await (started ??
-    loadStoredDerived(db, entity, ids, [
-      ...new Set(
-        fields.flatMap((field) => (field.storedKey ? [field.storedKey] : [])),
-      ),
-    ]));
+  const fields = entityFieldModels[entity].fields.filter((field) => {
+    const key = field.readKey ?? field.key;
+    return field.storedPath && requested.includes(key);
+  });
+  const reads = await started;
+  for (const id of ids)
+    for (const field of fields)
+      if (field.storedKey && !reads.get(id)?.has(field.storedKey))
+        throw new Error(
+          `Stored projection was not loaded: ${entity}.${field.storedKey}`,
+        );
   return new Map(
     ids.map((id) => [
       id,

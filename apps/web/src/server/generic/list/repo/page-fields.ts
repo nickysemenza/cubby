@@ -6,7 +6,7 @@ import { entityStoredDerivedDeclarations } from "~/server/db/derived-declaration
 import type { RepositoryQueryInput } from "~/server/db/repository-access.boundary";
 import { loadCurrentAssignmentFacts } from "~/server/generic/derived/repo/assignment-read";
 import {
-  loadPageStoredMeta,
+  loadStoredDerived,
   type PageStoredMeta,
 } from "~/server/generic/derived/repo/read";
 import type {
@@ -57,7 +57,7 @@ export async function withPageFields<Row>(
   const [data, storedRows, ownership, assignments] = await Promise.all([
     hydrate(),
     demand.facts
-      ? (started ?? loadPageStoredMeta(db, entity, ids))
+      ? (started ?? loadStoredDerived(db, entity, ids, demand.facts.stored))
       : Promise.resolve(
           new Map<string, ReadonlyMap<string, StoredDerivedRead>>(),
         ),
@@ -77,6 +77,10 @@ export async function withPageFields<Row>(
         )
       : Promise.resolve(new Map<string, CurrentReadFacts>()),
   ]);
+  for (const id of ids)
+    for (const key of demand.facts?.stored ?? [])
+      if (!storedRows.get(id)?.has(key))
+        throw new Error(`Stored field was not loaded: ${entity}.${key}`);
   let stored = storedRows;
   const recordPublications = entityStoredDerivedDeclarations().filter(
     (declaration) =>

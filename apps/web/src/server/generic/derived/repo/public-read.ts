@@ -347,12 +347,28 @@ export async function publicFieldEnvelopeBatch({
   const requested = new Map<ShortcodeEntity, Set<string>>();
   const requestedFields = new Map<ShortcodeEntity, Set<string>>();
   const needsFacts = new Set<ReadNode>();
+  // Rows sharing a field schema have the same demand within this response.
+  const demands = new Map<
+    ShortcodeEntity,
+    Map<z.ZodObject, ReturnType<typeof compileReadDemand>>
+  >();
+  const demandFor = (entity: ShortcodeEntity, fields: z.ZodObject) => {
+    let schemas = demands.get(entity);
+    if (!schemas) {
+      schemas = new Map();
+      demands.set(entity, schemas);
+    }
+    let demand = schemas.get(fields);
+    if (!demand) {
+      demand = compileReadDemand(entity, Object.keys(fields.shape));
+      schemas.set(fields, demand);
+    }
+    return demand;
+  };
   const collect = (node: ReadNode) => {
     const fields = node.schema.shape.fields;
     const demand =
-      fields instanceof z.ZodObject
-        ? compileReadDemand(node.entity, Object.keys(fields.shape))
-        : null;
+      fields instanceof z.ZodObject ? demandFor(node.entity, fields) : null;
     // Synthesized media envelopes use already loaded row values, not field facts.
     if (demand?.facts) {
       needsFacts.add(node);

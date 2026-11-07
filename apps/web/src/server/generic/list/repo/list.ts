@@ -83,7 +83,7 @@ import {
   dataQualitySortResolver,
 } from "~/server/generic/data-quality/repo/sql";
 import {
-  loadPageStoredMeta,
+  loadStoredDerived,
   storedFieldAvailableSql,
   type PageStoredMeta,
 } from "~/server/generic/derived/repo/read";
@@ -215,6 +215,7 @@ interface ListHydration<Row, Out> {
    * `context` holds the request's prepared derived-field data.
    */
   derived?: boolean;
+  storedKeys?: readonly string[];
   hydrate: (
     rows: Row[],
     projection: ListProjection,
@@ -1378,6 +1379,7 @@ export function listScaffold<
           tieBreaker: readDeclaration.tieBreaker,
           ...readRows(db, context),
           derived: true,
+          storedKeys: plan.storedKeys(projection),
           hydrate: (rows, selected, hydration, prefetched) =>
             plan.read(db, rows, selected, hydration, "stored", prefetched),
           prefetch: (ids, selected, stored) =>
@@ -1441,10 +1443,15 @@ export function listScaffold<
           );
       if (rows.length === 0) return { data: [] };
       const ids = rows.map((row) => listRowIdSchema.parse(row).id);
-      const stored =
-        includeFieldReads && demand.facts
-          ? loadPageStoredMeta(db, entity, ids)
-          : undefined;
+      const storedKeys = [
+        ...new Set([
+          ...(includeFieldReads ? (demand.facts?.stored ?? []) : []),
+          ...plan.storedKeys(projection, "detail"),
+        ]),
+      ];
+      const stored = storedKeys.length
+        ? loadStoredDerived(db, entity, ids, storedKeys)
+        : undefined;
       stored?.catch(() => undefined);
       const prefetched = plan.prefetch(
         db,
@@ -1757,6 +1764,12 @@ export function listScaffold<
       // The id/count projection binds no fields, so it carries no envelope.
       const demand = compileReadDemand(entity, projection);
       const withEnvelope = Boolean(spec.derived) && demand.facts !== null;
+      const storedKeys = [
+        ...new Set([
+          ...(withEnvelope ? (demand.facts?.stored ?? []) : []),
+          ...(spec.storedKeys ?? []),
+        ]),
+      ];
       const readLoadedPage =
         loadIds && !spec.count
           ? () =>
@@ -1789,8 +1802,8 @@ export function listScaffold<
                     : page.offset + page.limit < count;
                 const pageIds = ids.slice(0, page.limit).map((row) => row.id);
                 // The envelope's stored meta needs only ids: read it beside the rows.
-                storedMeta = withEnvelope
-                  ? loadPageStoredMeta(db, entity, pageIds)
+                storedMeta = storedKeys.length
+                  ? loadStoredDerived(db, entity, pageIds, storedKeys)
                   : undefined;
                 prefetched = spec.prefetch?.(pageIds, projection, storedMeta);
                 // Awaited after hydration; this only keeps an early failure handled.
@@ -1916,9 +1929,9 @@ export function listScaffold<
             };
           return withListReadTracing({ rows: data.length }, async () => {
             const context = await hydrationContext;
-            if (withEnvelope) {
+            if (withEnvelope || storedKeys.length) {
               const ids = data.map((row) => listRowIdSchema.parse(row).id);
-              storedMeta ??= loadPageStoredMeta(db, entity, ids);
+              storedMeta ??= loadStoredDerived(db, entity, ids, storedKeys);
               storedMeta.catch(() => {
                 // SILENT: withPageFields awaits this same promise and surfaces its failure.
               });
