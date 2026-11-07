@@ -587,6 +587,7 @@ describe("scheduled Gmail discovery", () => {
     await listMailDiscovery(ctx.db, state.params, seam);
     await saveMailDiscoveryBatch(ctx.db, state.params, 0, seam);
     await saveMailDiscoveryBatch(ctx.db, state.params, 0, seam);
+    expect(research).toHaveBeenCalledOnce();
     await finishMailDiscovery(ctx.db, state.params);
     await continueMailDiscovery(ctx.db, state.params);
     const successor = (await created())[1];
@@ -594,10 +595,57 @@ describe("scheduled Gmail discovery", () => {
     expect((await readRun(successor.runId)).input).toMatchObject({
       executionPolicy: "import",
     });
+    const [mailbox] = await getDb(ctx.db).select().from(mailboxCursor);
+    if (!mailbox?.coverage)
+      throw new Error("Synthetic mailbox coverage missing");
+    // Freeze another targeted page; a separate pass can move its opaque cursor
+    // while this retained page waits for funding or admission.
+    await getDb(ctx.db)
+      .update(mailboxCursor)
+      .set({
+        coverage: { ...mailbox.coverage, nextLane: "scan" },
+      })
+      .where(eq(mailboxCursor.id, mailbox.id));
     await listMailDiscovery(ctx.db, successor, seam);
+    const frozen = mailboxDiscoveryProgress.parse(
+      (await readRun(successor.runId)).progress,
+    ).page;
+    if (!frozen?.scopedKey) throw new Error("Synthetic targeted page missing");
+    const intervening = {
+      ...frozen.startCoverage,
+      history: { historyId: "160", pageToken: null, targetHistoryId: null },
+      nextLane: "history" as const,
+      scoped: frozen.startCoverage.scoped.map((query) =>
+        query.key === frozen.scopedKey
+          ? { ...query, pageToken: "intervening-partial-page", emailCount: 40 }
+          : query,
+      ),
+    };
+    await getDb(ctx.db)
+      .update(mailboxCursor)
+      .set({ coverage: intervening })
+      .where(eq(mailboxCursor.id, mailbox.id));
     await saveMailDiscoveryBatch(ctx.db, successor, 0, seam);
+    await saveMailDiscoveryBatch(ctx.db, successor, 0, seam);
+    expect(
+      (await getDb(ctx.db).select().from(mailboxCursor))[0]?.coverage,
+    ).toEqual(intervening);
+    await finishMailDiscovery(ctx.db, successor);
+    const completed = await readRun(successor.runId);
+    expect(completed).toMatchObject({
+      status: "completed",
+      progress: { pagesDone: 1 },
+    });
+    expect(completed.input).toEqual((await readRun(state.params.runId)).input);
+    expect(completed.progressHistory).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ phase: "page_saved" }),
+      ]),
+    );
     expect(relevance).toHaveBeenCalledOnce();
-    expect(research).toHaveBeenCalledOnce();
+    // Each distinct targeted page checks durable child admission; page replay
+    // and reused classification create no extra source or prediction.
+    expect(research).toHaveBeenCalledTimes(2);
     expect(await getDb(ctx.db).select().from(orderMail)).toHaveLength(1);
     expect((await getDb(ctx.db).select().from(emailTable))[0]).toMatchObject({
       classification: "related",
