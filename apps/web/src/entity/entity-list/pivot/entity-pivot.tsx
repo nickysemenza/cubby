@@ -6,6 +6,7 @@ import { cn } from "cn";
 import { type KeyboardEvent, useMemo, useRef, useState } from "react";
 
 import type { GroupSummaryModel } from "~/entity/entity-list/group-drill-down";
+import { GroupValueLabel } from "~/entity/entity-list/group-value-label";
 import { formatCount, formatPercent } from "~/lib/number-format";
 import { Picker } from "~/ui/combobox/picker";
 import { useIsMobile } from "~/ui/hooks/use-mobile";
@@ -172,7 +173,7 @@ export function EntityPivot({
       <Mark
         aria-hidden
         className={cn(
-          "inline size-3",
+          "inline size-3 shrink-0",
           sorted ? "text-foreground" : "text-muted-foreground/40",
         )}
       />
@@ -368,11 +369,15 @@ export function EntityPivot({
                 ) : (
                   <button
                     type="button"
-                    className="inline-flex items-center gap-1"
+                    className="inline-flex max-w-full items-center gap-1"
                     aria-label={sortLabel(column.key, column.data.label)}
                     onClick={() => toggleSort(column.key)}
                   >
-                    {column.data.label}
+                    <GroupValueLabel
+                      depth={1}
+                      value={column.key}
+                      label={column.data.label}
+                    />
                     {sortMark(column.key)}
                   </button>
                 )
@@ -380,12 +385,16 @@ export function EntityPivot({
               renderRowHeader={({ data: { row, parent } }) =>
                 parent ? (
                   <span className="block pl-5 font-normal text-muted-foreground">
-                    {row.label}
+                    <GroupValueLabel
+                      depth={2}
+                      value={row.key}
+                      label={row.label}
+                    />
                   </span>
                 ) : row.children.length > 0 ? (
                   <button
                     type="button"
-                    className="inline-flex items-center gap-1"
+                    className="inline-flex max-w-full items-center gap-1"
                     aria-expanded={open.has(row.key)}
                     onClick={() =>
                       setOpen((previous) => {
@@ -401,10 +410,20 @@ export function EntityPivot({
                     ) : (
                       <CaretRightIcon aria-hidden className="size-3" />
                     )}
-                    {row.label}
+                    <GroupValueLabel
+                      depth={0}
+                      value={row.key}
+                      label={row.label}
+                    />
                   </button>
                 ) : (
-                  <span className="block pl-4">{row.label}</span>
+                  <span className="block pl-4">
+                    <GroupValueLabel
+                      depth={0}
+                      value={row.key}
+                      label={row.label}
+                    />
+                  </span>
                 )
               }
               renderCell={renderCell}

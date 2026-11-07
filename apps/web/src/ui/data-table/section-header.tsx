@@ -25,6 +25,8 @@ export interface SectionColumnTotal {
 
 interface SectionHeaderProps {
   title: string;
+  /** Noninteractive identity presentation; title remains the accessible name. */
+  labelContent?: ReactNode;
   count: number;
   depth?: number;
   collapsed?: boolean;
@@ -58,6 +60,7 @@ const ACTION_CLASS =
  */
 export function SectionHeader({
   title,
+  labelContent,
   count,
   depth = 0,
   collapsed = false,
@@ -117,10 +120,10 @@ export function SectionHeader({
                   !collapsed && "rotate-90",
                 )}
               />
-              <span className="truncate">{title}</span>
+              <span className="truncate">{labelContent ?? title}</span>
             </button>
           ) : (
-            title
+            (labelContent ?? title)
           )}
         </h3>
         <span className="text-xs text-muted-foreground tabular-nums">

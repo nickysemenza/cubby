@@ -23,10 +23,12 @@ export interface GroupConfig {
   canFilter?: (group: ListGroupSummary) => boolean;
   hide?: (group: ListGroupSummary) => (() => void) | undefined;
   /**
-   * A section's own header content: `aside` beside its label and count (a
+   * A section's own header content: `labelContent` decorates the plain label,
+   * `aside` sits beside its label and count (a
    * record link the label cannot carry), `actions` at its trailing edge.
    */
   header?: (group: ListGroupSummary) => {
+    labelContent?: ReactNode;
     aside?: ReactNode;
     actions?: ReactNode;
     /** Totals the desktop band prints under their own columns. */
@@ -44,6 +46,7 @@ export interface GroupColumnTotal {
 export interface GroupSection<T> {
   key: string;
   label: string;
+  labelContent?: ReactNode;
   /** The section's rows in the whole filtered set, loaded or not. */
   count: number;
   depth: number;

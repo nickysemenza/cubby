@@ -22,6 +22,7 @@ import {
   groupRootField,
   withGroupFilters,
 } from "~/entity/entity-list/group-drill-down";
+import { GroupValueLabel } from "~/entity/entity-list/group-value-label";
 import {
   listReadNeedsCount,
   listReadVisibility,
@@ -696,6 +697,13 @@ export function useEntityList<
           });
       },
       header: (group) => ({
+        labelContent: (
+          <GroupValueLabel
+            depth={group.path.length - 1}
+            value={group.path.at(-1) ?? ""}
+            label={group.label}
+          />
+        ),
         aside: (
           <>
             {group.overlapping && (

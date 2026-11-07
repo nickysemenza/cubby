@@ -324,6 +324,15 @@ attachments. A header with a thumbnail omits its duplicate generic title mark.
 
 ### Record pill display images
 
+Grouping labels use `GroupValueLabel` for the same canonical image-or-entity
+mark beside their existing text. `GroupLabelsProvider` batches record-valued
+group identities from the loaded summaries, including nested dimensions;
+labels never fetch imagery or metadata themselves. Pivot row, column and
+sub-row headers, grouped table/card/shelf sections and board headings share
+this presentation. Marks keep a compact, stable footprint without adding record
+links or changing sort, disclosure, filtering or drag behavior. Missing images
+retain the canonical entity mark; no-value, date and scalar groups stay text.
+
 `EntityPill` uses the shared canonical display-image context, including borrowed
 images along declared relationship paths. Collection owners prepare image refs
 for their loaded rows through `EntityDisplayImagesProvider`; audit feeds do this

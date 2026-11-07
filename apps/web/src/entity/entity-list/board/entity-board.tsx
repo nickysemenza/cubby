@@ -63,6 +63,7 @@ import {
 import { Description } from "~/ui/text/description";
 import { DenseCellContext } from "~/ui/values/stacked-value";
 
+import { GroupLabelsProvider, GroupValueLabel } from "../group-value-label";
 import { listGroupBy } from "../list-grouping";
 import type { ListSlotProps } from "../list-slot-types";
 import {
@@ -340,32 +341,42 @@ export function EntityBoard({
           </Button>
         </p>
       ) : (
-        <DndContext
-          sensors={sensors}
-          onDragEnd={onDragEnd}
-          collisionDetection={rectIntersection}
+        <GroupLabelsProvider
+          grouping={metadata.listFields.grouping}
+          groupBy={[{ key: choice.key }]}
+          groups={groups
+            .slice(groupPage * 12, (groupPage + 1) * 12)
+            .map((group) => ({ path: [group.key] }))}
         >
-          <div className="flex max-w-full items-start gap-2 overflow-x-auto pb-2">
-            {groups.slice(groupPage * 12, (groupPage + 1) * 12).map((group) => (
-              <BoardGroup
-                key={`${JSON.stringify(queryInput.filters)}:${choice.key}:${group.key}`}
-                entity={entity}
-                view={view}
-                group={group}
-                filters={queryInput.filters}
-                groupBy={choice.key}
-                filterField={field}
-                filterColumn={choice.filter.columnId}
-                groups={groups}
-                move={move}
-                moveToGroup={moveToGroup}
-                pending={pending}
-                canMove={canMove}
-                acceptsNoValue={choice.filter.noValue}
-              />
-            ))}
-          </div>
-        </DndContext>
+          <DndContext
+            sensors={sensors}
+            onDragEnd={onDragEnd}
+            collisionDetection={rectIntersection}
+          >
+            <div className="flex max-w-full items-start gap-2 overflow-x-auto pb-2">
+              {groups
+                .slice(groupPage * 12, (groupPage + 1) * 12)
+                .map((group) => (
+                  <BoardGroup
+                    key={`${JSON.stringify(queryInput.filters)}:${choice.key}:${group.key}`}
+                    entity={entity}
+                    view={view}
+                    group={group}
+                    filters={queryInput.filters}
+                    groupBy={choice.key}
+                    filterField={field}
+                    filterColumn={choice.filter.columnId}
+                    groups={groups}
+                    move={move}
+                    moveToGroup={moveToGroup}
+                    pending={pending}
+                    canMove={canMove}
+                    acceptsNoValue={choice.filter.noValue}
+                  />
+                ))}
+            </div>
+          </DndContext>
+        </GroupLabelsProvider>
       )}
       {groups.length > 12 && (
         <div className="flex gap-2">
@@ -461,7 +472,7 @@ function BoardGroup({
       className="w-60 shrink-0 rounded-[var(--brand-web-radius-panel)] bg-muted/50 p-1"
     >
       <h2 className="flex h-(--table-row-height) items-center justify-between gap-2 px-1 text-xs font-medium">
-        <span className="truncate">{group.label}</span>
+        <GroupValueLabel depth={0} value={group.key} label={group.label} />
         <span className="font-normal text-muted-foreground tabular-nums">
           {group.count}
         </span>

@@ -1539,6 +1539,7 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
             >
               <SectionHeader
                 title={item.title}
+                labelContent={item.labelContent}
                 count={item.count}
                 depth={item.depth}
                 collapsed={item.collapsed}
