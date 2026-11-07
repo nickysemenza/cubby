@@ -1394,14 +1394,15 @@ describe("entity display image resolver", () => {
         imageId: photo.id,
         sortOrder: 0,
       });
-      await createExpense(
-        ctx.db,
-        makeExpenseInput({
-          projectId: owner.shortcode,
-          productId: purchasedProduct.id,
-        }),
-        ctx.actor,
-      );
+      for (let repeat = 0; repeat < 2; repeat++)
+        await createExpense(
+          ctx.db,
+          makeExpenseInput({
+            projectId: owner.shortcode,
+            productId: purchasedProduct.id,
+          }),
+          ctx.actor,
+        );
       const vendor = await insertWithShortcode(ctx.db, "vendor", {
         name: `Synthetic vendor ${crypto.randomUUID()}`,
       });
