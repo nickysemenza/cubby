@@ -330,7 +330,7 @@ export function CategoryMappingWorkspace() {
         helper.accessor((row) => fieldValueOf(row.fields.productCount), {
           id: "products",
           header: "Products",
-          meta: { mobile: { slot: "meta", priority: 30 } },
+          meta: { numeric: true, mobile: { slot: "meta", priority: 30 } },
         }),
       );
       add(
@@ -340,7 +340,7 @@ export function CategoryMappingWorkspace() {
           {
             id: "net",
             header: "Subtree net",
-            meta: { mobile: { slot: "trailing", priority: 10 } },
+            meta: { numeric: true, mobile: { slot: "trailing", priority: 10 } },
             cell: ({ getValue, row }) =>
               getValue() === null
                 ? "Unavailable"

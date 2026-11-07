@@ -200,6 +200,16 @@ function ClassificationReview({
       {preview.error && <ErrorDisplay error={preview.error} />}
       {review && (
         <div className="space-y-3 border-t pt-4" aria-live="polite">
+          {request.action === "productCategory" &&
+            request.parentId !== undefined && (
+              <Description>
+                Requested parent:{" "}
+                {request.parentId === null
+                  ? "Root category"
+                  : (parent?.name ?? request.parentId)}
+                . This move applies with the reviewed mapping.
+              </Description>
+            )}
           <p className="text-sm">
             {review.changedExpenseCount} of {review.expenseCount} Expenses
             change classification. Uncategorized or incomplete:{" "}
@@ -312,7 +322,6 @@ export function ProductCategoryClassification({
           record.spendingCategoryMode === "mapped"
             ? effectiveRecordSpendingCategoryId
             : null,
-        parentId: record.parentId,
       }}
     />
   );

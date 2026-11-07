@@ -253,12 +253,15 @@ export const expenseJointAllocationSql = (
         WHEN e."cost" < 0 AND e."lineKind" <> ${expenseLineKindSchema.enum.discount} AND coalesce(d.has_positive, false) THEN NULL
         ELSE w."spendingCategoryId"
       END AS "spendingCategoryId",
-      -- An unidentified refund on a positive basket cannot name what was returned.
+      -- Incomplete item evidence leaves ancillary Product identity unknown;
+      -- existing weights still conserve the same cents across the other axes.
       CASE WHEN e."cost" < 0 AND e."lineKind" <> ${expenseLineKindSchema.enum.discount} AND coalesce(d.has_positive, false)
-        THEN NULL ELSE w."productCategoryId" END AS "productCategoryId",
+        THEN NULL
+        WHEN d.has_unpriced_principal OR d.has_unclassified THEN NULL
+        ELSE w."productCategoryId" END AS "productCategoryId",
       CASE WHEN e."cost" < 0 AND e."lineKind" <> ${expenseLineKindSchema.enum.discount} AND coalesce(d.has_positive, false)
         THEN ${expenseProductCategoryRemainderSchema.enum.unknown_refund}
-        WHEN w.basis = ${allocationBasis.default} AND d.has_unpriced_principal THEN ${expenseProductCategoryRemainderSchema.enum.unknown_allocation}
+        WHEN d.has_unpriced_principal OR d.has_unclassified THEN ${expenseProductCategoryRemainderSchema.enum.unknown_allocation}
         ELSE coalesce(w."productCategoryRemainder",
           CASE WHEN w."productCategoryId" IS NULL THEN ${expenseProductCategoryRemainderSchema.enum.no_principal} END)
         END AS "productCategoryRemainder",

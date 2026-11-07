@@ -361,6 +361,60 @@ describe("joint expense spending allocation", () => {
     ]);
     expect(await loadExpenseJointAllocations(ctx.db, [])).toEqual([]);
     expect((await loadExpenseSpendingAllocations(ctx.db, [])).size).toBe(0);
+
+    const pricedIdentity = await productFixture("priced");
+    const priced = await line("Synthetic priced item", 100, "principal", {
+      purchaseId: purchase.id,
+      productId: pricedIdentity.product.entityId,
+      projectId: projects[1]!.id,
+      spendingCategoryId: categories[1]!.id,
+    });
+    const tax = await line("Synthetic mixed unpriced tax", 8, "tax", {
+      purchaseId: purchase.id,
+    });
+    const mixed = await loadExpenseJointAllocations(ctx.db, [
+      priced.id,
+      unpriced.id,
+      fee.id,
+      tax.id,
+    ]);
+    expect(mixed.find((row) => row.expenseId === tax.id)).toMatchObject({
+      principalExpenseId: priced.id,
+      productCategoryId: null,
+      productCategoryRemainder: "unknown_allocation",
+      attributedCents: 800n,
+      projectId: projects[1]!.id,
+      spendingCategoryId: categories[1]!.id,
+      trade: "other",
+      costType: "materials",
+      basis: "positive",
+    });
+    expect(
+      mixed.reduce((sum, row) => sum + (row.attributedCents ?? 0n), 0n),
+    ).toBe(10807n);
+    const mixedWhere = eq(expense.purchaseId, purchase.id);
+    const mixedGrid = await loadExpenseAnalysisPeriod(
+      ctx.db,
+      mixedWhere,
+      mixedWhere,
+      "productCategory",
+      null,
+    );
+    expect(mixedGrid.rows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          key: pricedIdentity.category.output.id,
+          net: 100,
+        }),
+        expect.objectContaining({
+          key: identity.category.output.id,
+          net: 0,
+          unpricedCount: 1,
+        }),
+        expect.objectContaining({ key: "__unknown_allocation__", net: 8.07 }),
+      ]),
+    );
+    expect(mixedGrid.scope.net).toBe(108.07);
   });
   it("gives adjustments on an order with no item line the order's own non-statement category", async () => {
     const { categories, vendor } = await fixture();
@@ -433,6 +487,47 @@ describe("joint expense spending allocation", () => {
         incomplete: true,
       }),
     ]);
+
+    const identity = await productFixture("unresolved role");
+    const principal = await line(
+      "Synthetic known item beside unresolved role",
+      100,
+      "principal",
+      {
+        purchaseId: unresolved.id,
+        productId: identity.product.entityId,
+        spendingCategoryId: categories[0]!.id,
+      },
+    );
+    const roleShares = await loadExpenseJointAllocations(ctx.db, [
+      unresolvedFee.id,
+    ]);
+    expect(roleShares).toMatchObject([
+      {
+        principalExpenseId: principal.id,
+        productCategoryId: null,
+        productCategoryRemainder: "unknown_allocation",
+        attributedCents: 50n,
+        spendingCategoryId: categories[0]!.id,
+        basis: "positive",
+      },
+    ]);
+    const roleWhere = eq(expense.purchaseId, unresolved.id);
+    const roleGrid = await loadExpenseAnalysisPeriod(
+      ctx.db,
+      roleWhere,
+      roleWhere,
+      "productCategory",
+      null,
+    );
+    expect(roleGrid.rows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ key: identity.category.output.id, net: 100 }),
+        expect.objectContaining({ key: "__unknown_allocation__", net: 0.5 }),
+        expect.objectContaining({ key: "__unclassified__", net: 2 }),
+      ]),
+    );
+    expect(roleGrid.scope.net).toBe(102.5);
     // A statement-sourced Purchase category is evidence, never an input.
     expect(map.get(sourced.id)).toEqual([
       expect.objectContaining({
