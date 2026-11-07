@@ -1,9 +1,11 @@
 import CubbyKit
 import SwiftUI
 
-/// The pinned header of one grouped-list section: its label and its count over the whole
-/// filtered set. When the grouped field declares a filter, tapping the header offers "Filter to
-/// this" (keep only this section) and "Hide" (keep the grouping, drop this section).
+/// The pinned header of one grouped-list section: its label, its count over the whole filtered
+/// set, and the server's totals for summed rail columns at the rail's own widths, so totals align
+/// with the values beneath them. When the grouped field declares a filter, tapping the header
+/// offers "Filter to this" (keep only this section) and "Hide" (keep the grouping, drop this
+/// section).
 struct EntityListSectionHeader: View {
     /// Each action is present only when the Group by choice's filter can express it.
     struct Actions {
@@ -21,6 +23,10 @@ struct EntityListSectionHeader: View {
     let section: EntityListSection
     let entity: EntityKey
     var actions = Actions()
+    /// One cell per rail column; a column without a server total keeps its width blank.
+    var totals: [RecordRailCell] = []
+    @Environment(\.dynamicTypeSize) private var textSize
+    @ScaledMetric(relativeTo: .subheadline) private var railScale: CGFloat = 1
 
     var body: some View {
         Group {
@@ -57,23 +63,54 @@ struct EntityListSectionHeader: View {
                 .font(.caption)
                 .monospacedDigit()
                 .foregroundStyle(.secondary)
-            Spacer(minLength: 0)
             if actionable {
                 Image(systemName: "ellipsis")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .accessibilityHidden(true)
             }
+            Spacer(minLength: 0)
+            if totals.contains(where: { $0.value != nil }) {
+                if textSize.isAccessibilitySize {
+                    Text(
+                        totals.compactMap { cell in cell.value.map { "\(cell.label) \($0)" } }.joined(
+                            separator: " · ")
+                    )
+                    .font(.caption.weight(.semibold))
+                    .monospacedDigit()
+                } else {
+                    HStack(spacing: FieldGuideTokens.Space.sm) {
+                        ForEach(totals) { cell in
+                            Text(cell.value ?? "")
+                                .font(.caption.weight(.semibold))
+                                .monospacedDigit()
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.8)
+                                .frame(width: cell.width * railScale, alignment: .trailing)
+                                .accessibilityLabel(cell.value.map { "\(cell.label) total \($0)" } ?? "")
+                        }
+                    }
+                }
+            }
         }
         // A list section header dims its content's hierarchical styles, and a Menu label (unlike
         // a Button's) does not reset them; anchor the hierarchy so the label reads as primary.
         .foregroundStyle(Color.primary)
         .padding(.horizontal, FieldGuideTokens.Space.md)
-        .padding(.vertical, FieldGuideTokens.Space.sm)
-        .frame(maxWidth: .infinity, minHeight: FieldGuideTokens.touchTarget, alignment: .leading)
+        .padding(.vertical, FieldGuideTokens.Space.xs)
+        // A compact 28-point header; one with actions keeps the 44-point phone target.
+        .frame(maxWidth: .infinity, minHeight: minHeight(actionable: actionable), alignment: .leading)
         .background(.bar)
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
+    }
+
+    private func minHeight(actionable: Bool) -> CGFloat {
+        #if os(iOS)
+            actionable ? FieldGuideTokens.touchTarget : 28
+        #else
+            28
+        #endif
     }
 }
 
@@ -81,7 +118,11 @@ struct EntityListSectionHeader: View {
     VStack(spacing: 0) {
         EntityListSectionHeader(
             section: EntityListSection(id: "PCT-OUTER", label: "Outerwear", count: 4, rows: []),
-            entity: .inventory, actions: .init(filter: {}, hide: {}))
+            entity: .inventory, actions: .init(filter: {}, hide: {}),
+            totals: [
+                RecordRailCell(id: "qty", label: "Qty", value: nil, sub: nil, width: 44),
+                RecordRailCell(id: "value", label: "Value", value: "$163.00", sub: nil, width: 72),
+            ])
         EntityListSectionHeader(
             section: EntityListSection(
                 id: EntityListSection.noValueKey, label: "No placement", count: 2, rows: []),

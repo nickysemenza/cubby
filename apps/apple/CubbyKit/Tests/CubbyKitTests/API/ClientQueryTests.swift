@@ -106,6 +106,56 @@ struct ClientQueryTests {
         #expect(body["data"] == .object(["parentId": .null]))
     }
 
+    /// Merge is irreversible: a value kept from a merged-away record lands on the survivor first,
+    /// then the same kernel merge web sends folds the others in.
+    @MainActor @Test func mergeUpdatesSurvivorBeforeKernelMerge() async throws {
+        defer { QueryStub.handler.withLock { $0 = nil } }
+        let inputs = Mutex<[JSONValue]>([])
+        QueryStub.handler.withLock { handler in
+            handler = { request in
+                let envelope =
+                    (try? Self.requestBody(request)).flatMap {
+                        try? JSONDecoder().decode(JSONValue.self, from: $0)
+                    }
+                    ?? .null
+                inputs.withLock { $0.append(envelope["input"] ?? .null) }
+                guard envelope["operation"]?.stringValue == "entity.mergePreview" else {
+                    return (
+                        200, Data(#"{"action":"update","entity":"product","item":{"id":"PRD-3456"}}"#.utf8)
+                    )
+                }
+                return (
+                    200,
+                    Data(
+                        #"""
+                        {"entity":"product","suggestedKeepId":"PRD-3456",
+                         "candidates":[
+                           {"id":"PRD-2345","name":"Lantern","connectionCount":1,"createdAt":"2026-09-01T00:00:00.000Z"},
+                           {"id":"PRD-3456","name":"Lantern","connectionCount":4,"createdAt":"2026-08-01T00:00:00.000Z"}],
+                         "conflicts":[{"field":"model","label":"Model","values":[
+                           {"id":"PRD-2345","value":"L-200","display":"L-200"},
+                           {"id":"PRD-3456","value":"L-100","display":"L-100"}]}]}
+                        """#.utf8)
+                )
+            }
+        }
+        let model = EntityMergeModel(
+            descriptor: EntityCatalog[.product], ids: ["PRD-2345", "PRD-3456"], client: try makeClient())
+        await model.load()
+        #expect(model.keepID == "PRD-3456")
+        model.choices["model"] = "PRD-2345"
+        #expect(await model.merge())
+        let sent = inputs.withLock { $0 }
+        #expect(sent.count == 3)
+        #expect(sent[1]["action"]?.stringValue == "update")
+        #expect(sent[1]["id"]?.stringValue == "PRD-3456")
+        #expect(sent[1]["data"] == .object(["model": .string("L-200")]))
+        #expect(sent[2]["action"]?.stringValue == "merge")
+        #expect(
+            sent[2]["data"]
+                == .object(["keepId": .string("PRD-3456"), "mergeIds": .array([.string("PRD-2345")])]))
+    }
+
     @Test func relationRowsSendsTargetedPagination() async throws {
         let (request, body) = try await captureBody(
             returning: Data(

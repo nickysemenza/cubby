@@ -758,6 +758,8 @@ extra query, and a narrow `fields` read adds the rule fields. Clients render
 the kernel merge's suggested survivor (most live incoming connections, then
 oldest, then lowest code) and every scalar update field the candidates disagree
 on; keeping a loser's value is an update of the survivor before the merge.
+The kernel `merge` verb is in entity-kernel.json wherever the merge operation is
+kernel-owned, so native dispatches the same `entity.mutate` merge web sends.
 Web record-level slot actions render once in the detail header through
 `DetailActionTarget` (`apps/web/src/entity/entity-detail/detail-action-bar.tsx`).
 `reportDetailActions` identifies record-level report commands and diagnostic
@@ -1145,7 +1147,7 @@ unique single-column foreign-key indexes supply the existing semantics;
 `semanticRole: "externalIdentifier" | "attachment"` marks ambiguous fields.
 Shareable references remain editable.
 
-The web `bulkEdit` action and MCP expose that same roster. The web dialog uses
+The web `bulkEdit` action, MCP and native (`bulkFields` in the generated entity-kernel.json) expose that same roster. The web dialog uses
 normal intent controls, unchanged/set/clear assignment modes, and submits only
 touched fields. Nullable scalar controls share the form's empty `null` baseline;
 initialization or resetting another field must never stage a clear. Explicit

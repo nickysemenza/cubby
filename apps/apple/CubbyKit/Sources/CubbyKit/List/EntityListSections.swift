@@ -16,9 +16,14 @@ public struct EntityListSection: Identifiable, Sendable, Hashable {
     /// so its filter keeps "Include sub-…" on.
     public let subtree: Bool
     public let rows: [EntityRow]
+    /// The server's per-section sums over the whole filtered set, keyed by metric (a summed
+    /// rail field's key); absent when the grouped read carried none.
+    public let sums: [String: Double]
 
     public init(
-        id: String, label: String, count: Int, subtree: Bool = false, path: [String]? = nil, rows: [EntityRow]
+        id: String, label: String, count: Int, subtree: Bool = false, path: [String]? = nil,
+        rows: [EntityRow],
+        sums: [String: Double] = [:]
     ) {
         self.id = id
         self.path = path ?? [id]
@@ -26,13 +31,14 @@ public struct EntityListSection: Identifiable, Sendable, Hashable {
         self.count = count
         self.subtree = subtree
         self.rows = rows
+        self.sums = sums
     }
 
     /// Leaf paths are explicit; roots remain unique while an overlapping row
     /// appears once in each section that contains its membership.
     public static func sections(
         rows: [EntityRow], groups: [(key: String, path: [String], label: String, count: Int, subtree: Bool)],
-        memberships: [(id: String, path: [String])]
+        memberships: [(id: String, path: [String])], sums: [[String]: [String: Double]] = [:]
     ) -> [EntityListSection] {
         let byID = Dictionary(rows.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
         return groups.compactMap { group in
@@ -52,7 +58,7 @@ public struct EntityListSection: Identifiable, Sendable, Hashable {
             }
             return .init(
                 id: group.key, label: labels.joined(separator: " / "), count: group.count,
-                subtree: group.subtree, path: group.path, rows: loaded)
+                subtree: group.subtree, path: group.path, rows: loaded, sums: sums[group.path] ?? [:])
         }
     }
 
