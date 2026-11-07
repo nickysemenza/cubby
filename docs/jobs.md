@@ -554,9 +554,9 @@ blocked), and no live Job or unresolved image job remains. Effective request
 receipts and cancellation follow evaluation tally semantics. Retry handoffs can
 transfer responsibility to another owner and must resolve to retained evaluations;
 an applicable request receipt still takes precedence. Malformed, missing, self-linked or cyclic targets,
-and chains exceeding 64 edges, keep recovery visible. Owned retries insert fresh
-replacements atomically; requested retries can reuse existing work, so the read
-checks paths rather than assuming creation-time order. Paid `result_ready` work
+and chains exceeding 64 edges, keep recovery visible. Current writers create
+forward-only handoffs; the path checks defend against manual repairs and future
+writers too. Paid `result_ready` work
 and current failures retain recovery. These are single-statement projections;
 evaluation-only settlement becomes visible on the next poll without a synthetic
 Run change or badge-only relaunch. Failed status, diagnostics, results, requests,

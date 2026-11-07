@@ -112,37 +112,41 @@ export function evaluationRosterExists(scope: EvaluationScope): SQL<boolean> {
 
 /**
  * Current failures/pending work and uncertain handoffs keep recovery visible.
- * Owned retry writers insert fresh rows atomically; requested retries can reuse
- * existing work or transfer demand to another owner. Scoped request receipts
- * still win when present. Missing targets, cycles and paths beyond 64 edges fail closed.
+ * Current writers create forward-only handoffs. Validate retained paths against
+ * manual repairs and future writers too; scoped request receipts still win.
+ * Missing targets, cycles and paths beyond 64 edges fail closed.
  */
 export function evaluationRecoveryExists(scope: EvaluationScope): SQL<boolean> {
   const { from, scopeWhere, state, receipt } = reads(scope);
   const validRetry = hasEvaluationRetryReceipt(sql`walk.receipt`);
+  const nextReceipt =
+    scope.source === "owned"
+      ? sql`next.receipt`
+      : sql`CASE WHEN scoped_target.id IS NOT NULL THEN scoped_target.receipt ELSE next.receipt END`;
+  const scopedTarget =
+    scope.source === "owned"
+      ? sql``
+      : sql`LEFT JOIN roster scoped_target ON scoped_target.id = next.id`;
   return sql<boolean>`EXISTS (
     WITH RECURSIVE roster AS MATERIALIZED (
       SELECT ${outer(aiEvaluation.id)} AS id, ${state} AS state, ${receipt} AS receipt
       FROM ${from} WHERE ${scopeWhere}
     ), walk AS (
-      SELECT id, receipt, ARRAY[id] AS path, false AS cycle FROM roster
+      SELECT id, receipt, ARRAY[id] AS path, false AS cycle, false AS dangling FROM roster
       WHERE receipt ? 'retryEvaluationId'
       UNION ALL
-      SELECT next.id, CASE WHEN scoped_target.id IS NOT NULL
-        THEN scoped_target.receipt ELSE next.receipt END,
-        walk.path || next.id, next.id = ANY(walk.path)
-      FROM walk JOIN ${aiEvaluation} next ON next.id = CASE WHEN ${validRetry}
+      SELECT next.id, ${nextReceipt}, walk.path || next.id,
+        next.id = ANY(walk.path), next.id IS NULL
+      FROM walk LEFT JOIN ${aiEvaluation} next ON next.id = CASE WHEN ${validRetry}
         THEN (walk.receipt->>'retryEvaluationId')::uuid END
-      LEFT JOIN roster scoped_target ON scoped_target.id = next.id
-      WHERE NOT walk.cycle AND cardinality(walk.path) < 66
+      ${scopedTarget}
+      WHERE NOT walk.cycle AND NOT walk.dangling AND cardinality(walk.path) < 66
         AND walk.receipt ? 'retryEvaluationId'
     )
     SELECT 1 FROM roster WHERE NOT ${hasEvaluationRetryReceipt(sql`roster.receipt`)}
       AND state NOT IN (${aiEvaluationState.enum.completed}, ${aiEvaluationState.enum.blocked}, ${aiEvaluationState.enum.obsolete}, ${aiEvaluationState.enum.cancelled})
     UNION ALL
-    SELECT 1 FROM walk WHERE cycle OR cardinality(path) >= 66
-      OR (receipt ? 'retryEvaluationId' AND (NOT ${validRetry}
-        OR NOT EXISTS (SELECT 1 FROM ${aiEvaluation} replacement WHERE replacement.id =
-          CASE WHEN ${validRetry} THEN (walk.receipt->>'retryEvaluationId')::uuid END)))
+    SELECT 1 FROM walk WHERE cycle OR dangling OR cardinality(path) >= 66
   )`;
 }
 

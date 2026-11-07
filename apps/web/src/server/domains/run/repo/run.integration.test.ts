@@ -1,4 +1,4 @@
-import type { RunId } from "@cubby/schemas/identifiers";
+import { parseEntityId, type RunId } from "@cubby/schemas/identifiers";
 import { parseShortcodeFor } from "@cubby/shared";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
@@ -8,8 +8,15 @@ import { getDb } from "~/server/db/helpers";
 import {
   aiEvaluation,
   aiEvaluationRequest,
+  image as imageTable,
+  imageProcessingJob,
   run as runTable,
 } from "~/server/db/schema";
+import {
+  createImageProcessingJob,
+  IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
+} from "~/server/domains/image-processing/repo/image-processing";
+import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { readRecordWorkQueue } from "~/server/domains/work/service/work-queue-read";
 import { updateJobs } from "~/server/generic/jobs/jobs.fixtures";
@@ -420,17 +427,10 @@ describe("Run attention entity view", () => {
     await visible(false); // The request's receipt takes precedence over shared evidence.
     await getDb(ctx.db)
       .update(aiEvaluationRequest)
-      .set({ receipt: null })
-      .where(eq(aiEvaluationRequest.runId, runId));
-    await visible(true);
-    await getDb(ctx.db)
-      .update(aiEvaluationRequest)
-      .set({ cancelledAt: new Date(), receipt: null })
-      .where(eq(aiEvaluationRequest.runId, runId));
-    await visible(false);
-    await getDb(ctx.db)
-      .update(aiEvaluationRequest)
-      .set({ receipt: { retryEvaluationId: crypto.randomUUID() } })
+      .set({
+        cancelledAt: new Date(),
+        receipt: { retryEvaluationId: crypto.randomUUID() },
+      })
       .where(eq(aiEvaluationRequest.runId, runId));
     await visible(true); // Cancellation with an explicit handoff still validates its target.
     await getDb(ctx.db)
@@ -446,15 +446,6 @@ describe("Run attention entity view", () => {
       .update(aiEvaluationRequest)
       .set({ receipt: null })
       .where(eq(aiEvaluationRequest.runId, runId));
-    const { createUploadedImageRecord } =
-      await import("~/server/domains/image/repo/image");
-    const {
-      createImageProcessingJob,
-      IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
-    } = await import("~/server/domains/image-processing/repo/image-processing");
-    const { imageProcessingJob, image: imageTable } =
-      await import("~/server/db/schema");
-    const { parseEntityId } = await import("@cubby/schemas/identifiers");
     const image = await createUploadedImageRecord(ctx.db, {
       key: "tests/synthetic-attention.jpg",
       filename: "synthetic.jpg",

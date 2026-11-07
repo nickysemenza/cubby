@@ -25,7 +25,7 @@ export const memberStoppedRunPredicate = (failureCode: SQL): SQL<boolean> =>
   sql<boolean>`(${failureCode} IS NOT DISTINCT FROM ${"user_cancelled"} OR ${failureCode} IS NOT DISTINCT FROM ${"dispatch_aborted"})`;
 
 /** Settled AI history closes recovery only; it never rewrites the failed Run. */
-function settledAiRunPredicate(input: {
+export function settledAiRunPredicate(input: {
   id: SQL;
   purpose: SQL;
   status: SQL;
@@ -49,17 +49,4 @@ function settledAiRunPredicate(input: {
           sql`${item.state} NOT IN (${imageProcessingJobState.enum.ready}, ${imageProcessingJobState.enum.skipped})`,
       )
       .exists()})`;
-}
-
-/** Shared stopped-state recovery policy; stalled execution and source review stay independent. */
-export function stoppedRunRecoveryPredicate(input: {
-  id: SQL;
-  purpose: SQL;
-  status: SQL;
-  failureCode: SQL;
-  retiredAt: SQL;
-}): SQL<boolean> {
-  return sql<boolean>`(NOT ${memberStoppedRunPredicate(input.failureCode)}
-    AND NOT ${retiredRunPredicate(input.retiredAt)}
-    AND NOT ${settledAiRunPredicate(input)})`;
 }
