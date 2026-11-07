@@ -72,6 +72,19 @@ describe("Run AI work cancel", () => {
         state: "queued",
         result: null,
       });
+    const [superseded] = await getDb(ctx.db)
+      .select({ id: aiEvaluation.id })
+      .from(aiEvaluation)
+      .where(eq(aiEvaluation.runId, runId))
+      .limit(1);
+    await getDb(ctx.db)
+      .update(aiEvaluation)
+      .set({
+        state: "cancelled",
+        runAt: null,
+        error: "Superseded by synthetic evidence",
+      })
+      .where(eq(aiEvaluation.id, superseded!.id));
     await cancelRunAiWork(ctx.db, runId, "Cancelled by a member");
     // Retrying failures must not re-admit the work the member stopped.
     await readmitFailedAiWork(ctx.db, runId, {
@@ -98,14 +111,6 @@ describe("Run AI work cancel", () => {
       .update(runStep)
       .set({ state: "failed" })
       .where(eq(runStep.runId, runId));
-    await expect(
-      controlWorkflowRun(
-        ctx.db,
-        ctx.actor,
-        { runPublicId: cancelled!.code, action: "retry" },
-        "sweep",
-      ),
-    ).rejects.toThrow("Cancelled AI work stays stopped");
     await expect(retryRunStep(ctx.db, runId, "field_evaluate")).rejects.toThrow(
       "Cancelled AI work stays stopped",
     );
@@ -117,6 +122,38 @@ describe("Run AI work cancel", () => {
           .where(eq(run.id, runId))
       )[0],
     ).toEqual({ status: "failed", failureCode: "user_cancelled" });
+    await controlWorkflowRun(
+      ctx.db,
+      ctx.actor,
+      { runPublicId: cancelled!.code, action: "retry" },
+      "sweep",
+    );
+    const restarted = await getDb(ctx.db)
+      .select({
+        id: aiEvaluation.id,
+        state: aiEvaluation.state,
+        receipt: aiEvaluation.receipt,
+      })
+      .from(aiEvaluation)
+      .where(eq(aiEvaluation.runId, runId));
+    expect(restarted.filter((item) => item.state === "cancelled")).toHaveLength(
+      120,
+    );
+    expect(restarted.filter((item) => item.state === "queued")).toHaveLength(
+      119,
+    );
+    expect(restarted.find((item) => item.id === superseded!.id)).toMatchObject({
+      state: "cancelled",
+      receipt: null,
+    });
+    expect(
+      (
+        await getDb(ctx.db)
+          .select({ status: run.status })
+          .from(run)
+          .where(eq(run.id, runId))
+      )[0]?.status,
+    ).toBe("running");
   });
 
   it("keeps work another live requester still wants", async () => {

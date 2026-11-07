@@ -6,7 +6,7 @@ import {
   type RunControlAction,
 } from "@cubby/schemas/run-fields";
 import { runStepState } from "@cubby/schemas/run-step";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, or, sql } from "drizzle-orm";
 
 import {
   dropAiEvaluationWork,
@@ -23,6 +23,8 @@ import { cancelRunJobs, pauseJob } from "~/server/generic/jobs/repo/operator";
 
 import type { ExecutedRunPurpose } from "./contract";
 import { launchWorkflowRun, recordRunProgress } from "./lifecycle";
+
+const MEMBER_CANCELLED_AI_WORK = "Cancelled by a member";
 
 /** Kinds whose evaluations name the Run as owner; a Sweep owns its connection evaluations. */
 const ownsAiWork = (purpose: ExecutedRunPurpose) =>
@@ -138,6 +140,7 @@ export async function controlWorkflowRun(
         owned: ownsAiWork(purpose),
         requested: requestsAiWork(purpose),
         attempt: row.attempt,
+        reviveCancelled: row.failureCode === "user_cancelled",
       });
       if (row.failureCode === "user_cancelled" && admitted === 0) {
         const [failedStep] = await database
@@ -148,7 +151,7 @@ export async function controlWorkflowRun(
         if (!failedStep)
           throw createAppError(
             "RUN_CONTROL_REFUSED",
-            "Cancelled AI work stays stopped; start a new Run to evaluate that scope again.",
+            "This cancelled Run has no re-admissible work; start a new Run to evaluate that scope again.",
           );
       }
     }
@@ -207,7 +210,7 @@ export async function controlWorkflowRun(
           eq(runStep.state, runStepState.enum.running),
         ),
       );
-    return cancelRunAiWork(tx, row.id, "Cancelled by a member", {
+    return cancelRunAiWork(tx, row.id, MEMBER_CANCELLED_AI_WORK, {
       owned: ownsAiWork(purpose),
       requested: requestsAiWork(purpose),
     });
@@ -265,7 +268,8 @@ export async function cancelRunAiWork(
 }
 
 /**
- * Re-admits a Run's failed AI work as linked replacements; cancellations stay stopped:
+ * Re-admits failed AI work as linked replacements. Only an explicit retry of a
+ * member-cancelled Run revokes that member stop; superseded work stays stopped:
  * owned evaluations copy into the Run, requested ones re-request shared work.
  */
 export async function readmitFailedAiWork(
@@ -275,7 +279,13 @@ export async function readmitFailedAiWork(
     owned,
     requested,
     attempt,
-  }: { owned: boolean; requested: boolean; attempt: number },
+    reviveCancelled = false,
+  }: {
+    owned: boolean;
+    requested: boolean;
+    attempt: number;
+    reviveCancelled?: boolean;
+  },
 ): Promise<number> {
   const database = getDb(db);
   let admitted = 0;
@@ -287,7 +297,15 @@ export async function readmitFailedAiWork(
       .where(
         and(
           eq(aiEvaluation.runId, runId),
-          eq(aiEvaluation.state, "failed"),
+          or(
+            eq(aiEvaluation.state, "failed"),
+            reviveCancelled
+              ? and(
+                  eq(aiEvaluation.state, "cancelled"),
+                  eq(aiEvaluation.error, MEMBER_CANCELLED_AI_WORK),
+                )
+              : undefined,
+          ),
           sql`${aiEvaluation.receipt}->>'retryEvaluationId' IS NULL`,
         ),
       );
@@ -330,11 +348,22 @@ export async function readmitFailedAiWork(
   for (const item of await requestedAiEvaluations(db, runId, {
     currentOnly: true,
   })) {
-    if (item.state !== "failed") continue;
+    if (
+      item.state !== "failed" &&
+      !(
+        reviveCancelled &&
+        item.state === "cancelled" &&
+        item.error === MEMBER_CANCELLED_AI_WORK
+      )
+    )
+      continue;
     const replacement = await enqueueAiEvaluation(db, {
       runId,
       executionKind: item.executionKind,
-      shareKey: item.shareKey ?? item.workKey,
+      shareKey:
+        item.state === "cancelled"
+          ? `${item.workKey}:member-retry:${attempt + 1}`
+          : (item.shareKey ?? item.workKey),
       feature: item.feature,
       target: item.target,
       provenance: item.provenance,

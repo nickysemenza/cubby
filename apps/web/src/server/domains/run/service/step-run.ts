@@ -549,7 +549,7 @@ export async function retryRunStep(db: Database, runId: RunId, key: string) {
     );
     if (step && step.failed === 0)
       throw new Error(
-        "Cancelled AI work stays stopped; start a new Run to evaluate that scope again.",
+        "Cancelled AI work stays stopped; use Retry run to explicitly restart member-cancelled work.",
       );
   }
   // One maintenance pass at a time (Run_one_active_maintenance).
