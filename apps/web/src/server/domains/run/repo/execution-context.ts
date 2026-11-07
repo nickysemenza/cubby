@@ -77,6 +77,7 @@ export async function pauseExecutionRun(
       endedAt: sql`CASE WHEN ${recoverable} THEN NULL ELSE ${new Date().toISOString()}::timestamp END`,
       failureCode: "execution_limit",
       dispatchError: message,
+      progress: sql`CASE WHEN ${run.purpose} = ${runPurpose.enum.mail_discovery} THEN ${run.progress} - 'fundingReleasedAt' ELSE ${run.progress} END`,
       updatedAt: new Date(),
     })
     .where(
@@ -107,15 +108,12 @@ export const fundingResumeInput = z.object({
 });
 
 /** Explicit budget raises release discovery without reopening member stops. */
-export async function resumeFundingPausedDiscovery(db: Database, now: Date) {
+export async function releaseFundingPausedDiscovery(db: Database, now: Date) {
   const successor = alias(run, "funding_successor");
   const resumed = await unwrapDb(db)
     .update(run)
     .set({
-      status: "running",
-      failureCode: null,
-      dispatchError: null,
-      endedAt: null,
+      progress: sql`coalesce(${run.progress}, '{}'::jsonb) || jsonb_build_object('fundingReleasedAt', ${now.toISOString()}::text)`,
       updatedAt: now,
     })
     .where(

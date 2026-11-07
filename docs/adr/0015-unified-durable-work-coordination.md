@@ -156,7 +156,8 @@ history before its column is removed.
 
 Funding pauses persist a deferred `run.funding-resume` Job at the funding window
 end. The handler resumes the domain, including dispatch regeneration for
-funding-paused imports. Explicit budget increases still resume immediately;
+funding-paused imports. Explicit budget increases release work immediately;
+discovery claims serialize retained pages through mailbox admission before running.
 manual pauses remain stopped. No funding or generic recovery alarm is retained
 in the gateway DO.
 

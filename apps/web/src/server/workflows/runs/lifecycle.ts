@@ -16,6 +16,7 @@ import {
 import { related, outer } from "~/server/db/helpers/related";
 import { run as runTable } from "~/server/db/retained-tables";
 import { recordRunProgress as recordProgress } from "~/server/domains/run/repo/run-progress";
+import { createAppError } from "~/server/errors/app-error";
 import { findPgError } from "~/server/errors/db-errors";
 import { currentJobExecution } from "~/server/generic/jobs/context";
 import { JobRetryableError } from "~/server/generic/jobs/errors";
@@ -166,7 +167,7 @@ export async function launchWorkflowRun(
         endedAt: null,
         failureCode: null,
         dispatchError: null,
-        progress: sql`coalesce(${runTable.progress}, '{}'::jsonb) || jsonb_build_object('attempt', ${execution.generation}::int)`,
+        progress: sql`(coalesce(${runTable.progress}, '{}'::jsonb) - 'fundingReleasedAt') || jsonb_build_object('attempt', ${execution.generation}::int)`,
       })
       .where(eq(runTable.id, input.runId));
     if (!input.automatic) {
@@ -193,6 +194,19 @@ export async function launchWorkflowRun(
       ).wakeJobs({ source: "run-launch" });
     });
     return { attempt: execution.generation, instanceId: execution.id };
+  }).catch((error: unknown) => {
+    const pg = findPgError(error);
+    if (
+      !input.automatic &&
+      pg?.code === "23505" &&
+      pg.constraint?.startsWith("Run_one_active_")
+    )
+      throw createAppError(
+        "RUN_CONTROL_REFUSED",
+        "Another active Run owns this admission slot; retry after it finishes",
+        error,
+      );
+    throw error;
   });
 }
 
@@ -216,11 +230,14 @@ function currentRunClaim(params: WorkflowRunParams) {
 export async function resumeClaimedWorkflowRun(
   db: Database,
   params: WorkflowRunParams,
+  reason: "job_failed" | "funding_ready" = "job_failed",
 ): Promise<void> {
   const current = currentRunClaim(params);
   if (
     !current ||
-    (current.claim.generation === 1 && current.claim.attempts === 0)
+    (reason === "job_failed" &&
+      current.claim.generation === 1 &&
+      current.claim.attempts === 0)
   )
     return;
   try {
@@ -235,13 +252,19 @@ export async function resumeClaimedWorkflowRun(
           endedAt: null,
           failureCode: null,
           dispatchError: null,
-          progress: sql`coalesce(${runTable.progress}, '{}'::jsonb) || jsonb_build_object('attempt', ${current.claim.generation}::int)`,
+          progress: sql`(coalesce(${runTable.progress}, '{}'::jsonb) - 'fundingReleasedAt') || jsonb_build_object('attempt', ${current.claim.generation}::int)`,
         })
         .where(
           and(
             eq(runTable.id, runEntityId.parse(params.runId)),
-            eq(runTable.status, "failed"),
-            eq(runTable.failureCode, "job_failed"),
+            eq(
+              runTable.status,
+              reason === "funding_ready" ? "paused_auth" : "failed",
+            ),
+            eq(
+              runTable.failureCode,
+              reason === "funding_ready" ? "execution_limit" : "job_failed",
+            ),
             isNull(runTable.deletedAt),
             isNull(runTable.retiredAt),
             not(successor),

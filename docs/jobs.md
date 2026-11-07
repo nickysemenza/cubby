@@ -367,7 +367,9 @@ failed outer Email gates, preserving checkpoints, attempts and errors. Reopened
 location work is staggered over fifteen minutes without advancing an existing
 future deadline. When the recovered universal Job executes, its matching Run reconciled to
 `job_failed` returns to running under the Job fence. Another active Run owning
-the admission slot causes retry backoff until it finishes;
+the admission slot causes retry backoff until it finishes. Admission waits
+reserve exactly one further attempt, rather than conserving the ordinary failure
+budget;
 member-controlled, retired and superseded Runs are excluded. Member
 pauses/cancellations and running leases keep their states.
 
@@ -389,8 +391,15 @@ Resume makes its retained queued/backing-off Job due immediately, preserving
 its generation, attempts and cursor and clearing the old wait reason; the next
 page still checks current funding
 and may pause again. Resume creates no paid grant; `run_now_paid` uses its explicit
-paid authority. An explicit budget increase also restores funding-paused
-discovery before bringing queued Jobs forward; member pauses remain stopped.
+paid authority. An explicit budget increase releases funding-paused discovery
+before bringing queued Jobs forward; its claim admits one retained page per
+mailbox, while contenders keep retrying under the same Job fence. Until admitted,
+a released discovery reads as paused rather than waiting for funding. The release
+marker stays out of the public checkpoint and grants no overage. A fresh funding
+stop clears it, keeping the funding owner's frozen deadline for the next wait.
+Wait publication locks the Run before the Job, so a concurrent release cannot be
+overwritten by the older timer. A raise that precedes the funding stop itself
+does not release that later stop. Member pauses remain stopped.
 Automatic mailbox admission joins the retained Run.
 Run control refusals are
 `RUN_CONTROL_REFUSED` (409), never 500.

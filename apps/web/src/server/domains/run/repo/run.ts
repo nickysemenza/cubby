@@ -240,10 +240,18 @@ const runRead = {
  * window reads as waiting for funding rather than review or authorization.
  */
 function runDisplayStatusOf(
-  row: Pick<RunRow, "status" | "failureCode">,
+  row: Pick<RunRow, "status" | "failureCode" | "purpose" | "progress">,
   hasSuccessor: boolean,
 ) {
   const status = runStatus.parse(row.status);
+  if (
+    row.purpose === "mail_discovery" &&
+    status === "paused_auth" &&
+    row.failureCode === "execution_limit" &&
+    z.object({ fundingReleasedAt: z.iso.datetime() }).safeParse(row.progress)
+      .success
+  )
+    return "paused" as const;
   if (
     row.failureCode === "execution_limit" &&
     (status === "needs_review" || status === "paused_auth")
