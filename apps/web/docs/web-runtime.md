@@ -397,6 +397,8 @@ with a zero item budget.
 It does not hydrate graph nodes, previews or images; the Relations tab owns its
 item page. Purchase, Account and Transaction primary lists use declared field
 projections even though they supply deletion/filter configuration overrides.
+Recipe's Tags and Servings overrides also use the declared projection; Servings
+includes its structured-yield input so quantities such as cookies remain read-only.
 Stored publications load once per page for the envelope and admitted bindings'
 combined key demand. Every binding consuming the shared stored map declares its
 keys, including Email relationship facts and Product pricing/food inputs.

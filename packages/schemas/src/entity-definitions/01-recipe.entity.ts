@@ -32,6 +32,10 @@ export const { definition, readSchemas } = defineEntityModel(
         module: "~/features/recipe/list-columns",
         export: "recipeListOverride",
       },
+      listReadProjection: {
+        module: "~/entity/entity-list/list-read-demand",
+        export: "declaredListReadProjection",
+      },
       basePath: "recipes",
       createOverride: "page",
       detail: null,
@@ -243,6 +247,8 @@ export const { definition, readSchemas } = defineEntityModel(
           display: {
             columnGroup: "Recipe",
             width: "xs",
+            // The list's structured-yield branch is intentionally read-only.
+            readFields: ["yield"],
             mobile: { slot: "trailing", priority: 5, interactive: true },
           },
           resolution: { reset: { servings: null }, redundancy: "eligible" },

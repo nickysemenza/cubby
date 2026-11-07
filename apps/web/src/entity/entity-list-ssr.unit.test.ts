@@ -172,6 +172,9 @@ describe("ensureEntityListSsr", () => {
       expect.arrayContaining(["url", "status", "filename"]),
     );
     expect(imageFields).not.toContain("images");
+    expect(declaredListReadProjection(metadataClient, "recipe")).toEqual(
+      expect.arrayContaining(["yield", "servings", "tags", "updatedAt"]),
+    );
     expect(
       declaredListReadProjection(metadataClient, "purchase", {
         expenseTotal: false,
