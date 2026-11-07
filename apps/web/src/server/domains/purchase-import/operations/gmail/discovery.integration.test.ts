@@ -627,6 +627,170 @@ describe("scheduled Gmail discovery", () => {
     );
   });
 
+  it("retains discovery through wrapped funding and provider stops without spending attempts", async () => {
+    const { AiBudgetExhaustedError } = await import("~/server/ai/budget");
+    const { GatewayProviderStopError } =
+      await import("~/server/ai/gateway-egress-client");
+    const { wrapAiGatewayError } = await import("~/server/ai/gateway-error");
+    const { pauseForFunding } =
+      await import("~/server/domains/run/repo/execution-context");
+    const { controlWorkflowRun } =
+      await import("~/server/workflows/runs/control");
+    const { advanceJob } = await import("~/server/generic/jobs/service/jobs");
+    const { runJobHandler } =
+      await import("~/server/workflows/runs/job-execution");
+    const discovery = await import("./discovery");
+    const state = await seed();
+    const key = `run:${state.params.runId}`;
+    const execution = (await readJobs(ctx.db, { key }))[0];
+    if (!execution) throw new Error("Synthetic Job missing");
+    const advance = () =>
+      advanceJob(ctx.db, execution.id, { "run.execute": runJobHandler });
+    const windowEnd = new Date(Date.now() + 3_600_000).toISOString();
+    const until = new Date(Date.parse(windowEnd) + 60_000);
+    const budget = new AiBudgetExhaustedError(
+      {
+        windowStart: new Date().toISOString(),
+        windowEnd,
+        credit: { limitUsd: 1, spentUsd: 1 },
+        openaiCredit: { limitUsd: 1, spentUsd: 1 },
+        plan: { limitUsd: 1, spentUsd: 1 },
+        paid: { limitUsd: 1, spentUsd: 1 },
+      },
+      "HTTP 400: Synthetic missing default BYOK credential",
+      new Date(Date.now() + 900_000).toISOString(),
+    );
+    let stop: Error | undefined = budget;
+    const relevance = vi.fn(async () => {
+      if (stop) {
+        if (stop === budget)
+          await pauseForFunding(
+            ctx.db,
+            runEntityId.parse(state.params.runId),
+            budget,
+          );
+        throw wrapAiGatewayError(stop, {
+          model: "gpt-6-sol",
+          provider: "synthetic",
+          route: "structured-chat",
+          feature: "mailbox-relevance",
+          operation: "classify",
+        });
+      }
+      return { classification: "related" as const };
+    });
+    const seam: DiscoveryPorts = {
+      ...ports(gmail()),
+      triage: async () => "uncertain",
+      relevance,
+    };
+    const realList = discovery.listMailDiscovery;
+    const realSave = discovery.saveMailDiscoveryBatch;
+    const list = vi
+      .spyOn(discovery, "listMailDiscovery")
+      .mockImplementation((db, params) => realList(db, params, seam));
+    const save = vi
+      .spyOn(discovery, "saveMailDiscoveryBatch")
+      .mockImplementation((db, params, index) =>
+        realSave(db, params, index, seam),
+      );
+    try {
+      expect(await advance()).toBe("succeeded");
+      const retained = await readRun(state.params.runId);
+      const checkpoint = (await readJobs(ctx.db, { key }))[0]?.cursor;
+      expect(await advance()).toBe("deferred");
+      const paused = await readRun(state.params.runId);
+      expect(paused).toMatchObject({
+        status: "paused_auth",
+        failureCode: "execution_limit",
+        input: retained.input,
+        progress: retained.progress,
+        dispatchError: expect.stringContaining(
+          "Synthetic missing default BYOK credential",
+        ),
+      });
+      expect((await readJobs(ctx.db, { key }))[0]).toMatchObject({
+        state: "queued",
+        attempts: 0,
+        cursor: checkpoint,
+        availableAt: until,
+        waitReason: "ai_funding_window",
+      });
+      expect(
+        (await readJobs(ctx.db, { kind: "run.funding-resume" }))[0]
+          ?.availableAt,
+      ).toEqual(until);
+      expect(await startMailDiscovery(ctx.db)).toEqual({
+        started: 0,
+        running: 1,
+      });
+      expect(await startMailDiscovery(ctx.db)).toEqual({
+        started: 0,
+        running: 1,
+      });
+      expect(await created()).toHaveLength(1);
+      // A generic early retry must not restore the Run or call the provider.
+      await updateJobs(ctx.db, { key }, { availableAt: new Date() });
+      // Retry-now can also advance the funding owner's queue admission; its
+      // frozen input still owns the actual funding deadline.
+      await updateJobs(
+        ctx.db,
+        { kind: "run.funding-resume" },
+        { availableAt: new Date() },
+      );
+      const calls = relevance.mock.calls.length;
+      expect(await advance()).toBe("deferred");
+      expect(relevance).toHaveBeenCalledTimes(calls);
+      expect((await readRun(state.params.runId)).status).toBe("paused_auth");
+      expect((await readJobs(ctx.db, { key }))[0]?.availableAt).toEqual(until);
+      // Explicit paid authority restores the Run even while the funding owner waits.
+      await controlWorkflowRun(
+        ctx.db,
+        ctx.actor,
+        {
+          runPublicId: paused.shortcode,
+          action: "run_now_paid",
+          paidOverBudgetUsd: 1,
+        },
+        "mail_discovery",
+      );
+      await updateJobs(ctx.db, { key }, { availableAt: new Date() });
+      const provider = new GatewayProviderStopError(
+        "configuration",
+        403,
+        "Synthetic provider configuration unavailable",
+      );
+      stop = provider;
+      expect(await advance()).toBe("deferred");
+      expect((await readJobs(ctx.db, { key }))[0]).toMatchObject({
+        attempts: 0,
+        cursor: checkpoint,
+        availableAt: new Date(provider.retryAt),
+        waitReason: "provider_capacity",
+      });
+      expect(await readRun(state.params.runId)).toMatchObject({
+        status: "running",
+        dispatchError: expect.stringContaining(
+          "Synthetic provider configuration unavailable",
+        ),
+      });
+      // Ordinary faults still spend the existing Job attempt budget.
+      stop = new Error("Synthetic ordinary fault");
+      await updateJobs(ctx.db, { key }, { availableAt: new Date() });
+      expect(await advance()).toBe("failed");
+      expect((await readJobs(ctx.db, { key }))[0]?.attempts).toBe(1);
+      stop = undefined;
+      await updateJobs(ctx.db, { key }, { availableAt: new Date() });
+      expect(await advance()).toBe("succeeded");
+      expect(await getDb(ctx.db).select().from(orderMail)).toHaveLength(1);
+      expect((await readRun(state.params.runId)).input).toEqual(retained.input);
+      expect(await getDb(ctx.db).select().from(emailTable)).toHaveLength(1);
+    } finally {
+      list.mockRestore();
+      save.mockRestore();
+    }
+  });
+
   it.each(["paused", "cancelled"] satisfies ("paused" | "cancelled")[])(
     "preserves failed discovery for its recovery Job and respects a %s stop",
     async (stoppedState) => {

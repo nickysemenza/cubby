@@ -1,13 +1,18 @@
 import { runEntityId } from "@cubby/schemas/identifiers";
 import { jobWaitReason } from "@cubby/schemas/job";
 import { RUN_KINDS } from "@cubby/schemas/run-fields";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
+import { findErrorCause } from "~/lib/error-diagnostics";
+import { AiBudgetExhaustedError } from "~/server/ai/budget";
+import { GatewayProviderStopError } from "~/server/ai/gateway-egress-client";
 import { getDb } from "~/server/db/helpers";
 import { run } from "~/server/db/retained-tables";
 import { readRun } from "~/server/domains/run/repo/ai-work-state";
+import { fundingResumeAt } from "~/server/domains/run/repo/execution-context";
 import { JobPausedError, JobDeferredError } from "~/server/generic/jobs/errors";
+import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 import { defineJobHandler } from "~/server/generic/jobs/service/jobs";
 import type { PreparedJobPage } from "~/server/generic/jobs/types";
 import { EXECUTED_RUN_PURPOSES } from "~/server/workflows/runs/contract";
@@ -48,11 +53,45 @@ export const runJobHandler = defineJobHandler(
         if (
           before?.status === "paused_auth" &&
           before.failureCode === "execution_limit"
-        )
-          await getDb(db)
-            .update(run)
-            .set({ status: "running" })
-            .where(eq(run.id, input.runId));
+        ) {
+          // Generic retry-now can advance this Job, but only the funding owner
+          // or an explicit Run launch may lift a still-pending funding pause.
+          const pending = (
+            await readJobs(
+              db,
+              {
+                kind: "run.funding-resume",
+                states: ["queued", "retry_wait", "running"],
+              },
+              { order: ["availableAt"] },
+            )
+          )
+            .map(
+              (job) =>
+                new Date(
+                  z.object({ until: z.iso.datetime() }).parse(job.input).until,
+                ),
+            )
+            .find((until) => until > new Date());
+          if (pending)
+            throw new JobDeferredError(
+              before.dispatchError ?? "Run awaits its funding window",
+              pending,
+              "ai_funding_window",
+            );
+          await context.fenced(async (tx) => {
+            await getDb(tx)
+              .update(run)
+              .set({ status: "running" })
+              .where(
+                and(
+                  eq(run.id, input.runId),
+                  eq(run.status, "paused_auth"),
+                  eq(run.failureCode, "execution_limit"),
+                ),
+              );
+          });
+        }
         const execution = RUN_KINDS[input.purpose].execution;
         if (execution === "steps") {
           const next = await (
@@ -148,7 +187,42 @@ export const runJobHandler = defineJobHandler(
           },
         };
       },
-    ),
+    ).catch(async (error: unknown) => {
+      const budget = findErrorCause(
+        error,
+        (cause): cause is AiBudgetExhaustedError =>
+          cause instanceof AiBudgetExhaustedError,
+      );
+      const provider = findErrorCause(
+        error,
+        (cause): cause is GatewayProviderStopError =>
+          cause instanceof GatewayProviderStopError,
+      );
+      const deferred = budget
+        ? new JobDeferredError(
+            error instanceof Error ? error.message : budget.message,
+            fundingResumeAt(budget.status.windowEnd),
+            "ai_funding_window",
+          )
+        : provider
+          ? new JobDeferredError(
+              error instanceof Error ? error.message : provider.message,
+              new Date(provider.retryAt),
+              "provider_capacity",
+            )
+          : undefined;
+      if (!deferred) throw error;
+      if (provider && !budget)
+        await context.fenced(async (tx) => {
+          await getDb(tx)
+            .update(run)
+            .set({ dispatchError: deferred.message })
+            .where(and(eq(run.id, input.runId), eq(run.status, "running")));
+        });
+      // Keep the typed provider cause and raw gateway diagnostic at this seam.
+      deferred.cause = error;
+      throw deferred;
+    }),
 );
 
 async function assertNotPaused(
