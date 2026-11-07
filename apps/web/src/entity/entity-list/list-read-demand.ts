@@ -4,6 +4,36 @@ import type { QueryClient } from "@tanstack/react-query";
 
 import { entityMetadata } from "~/entity/metadata";
 
+export const DEFAULT_LIST_COLUMN_VISIBILITY = {
+  createdAt: false,
+  updatedAt: false,
+} as const;
+
+/** Preloads and mounted tables expose explicitly sorted audit columns alike. */
+export const listReadVisibility = (
+  visibility: Readonly<Record<string, boolean>>,
+  sortedFields: readonly string[],
+  defaultSort: string,
+) => ({
+  ...DEFAULT_LIST_COLUMN_VISIBILITY,
+  ...visibility,
+  ...Object.fromEntries(
+    sortedFields
+      .filter(
+        (key) =>
+          (key === "createdAt" || key === "updatedAt") &&
+          !(sortedFields.length === 1 && key === defaultSort),
+      )
+      .map((key) => [key, true]),
+  ),
+});
+
+/** Search alone keeps relevance paging; other filters need exact membership counts. */
+export const listReadNeedsCount = (
+  primarySearchKey: string | undefined,
+  filterIds: readonly string[],
+): boolean => filterIds.some((id) => id !== primarySearchKey);
+
 export type ListReadProjection = (
   queryClient: QueryClient,
   entity: Entity,
@@ -14,7 +44,7 @@ export type ListReadProjection = (
 export const declaredListReadProjection: ListReadProjection = (
   queryClient,
   entity,
-  visibility = {},
+  visibility = DEFAULT_LIST_COLUMN_VISIBILITY,
 ) => {
   const metadata = entityMetadata(queryClient, entity);
   const rootOf = (path: string | null | undefined) =>
@@ -86,8 +116,7 @@ export const declaredListReadProjection: ListReadProjection = (
     const label = rootOf(field.display.labelPath);
     if (label) wanted.add(label);
   }
-  // The route-primary roster explicitly shows these standard columns; an
-  // embedded caller can hide them without changing server filter semantics.
+  // Audit columns are requested only when the shared presentation exposes them.
   if (visibility.createdAt !== false) wanted.add("createdAt");
   if (visibility.updatedAt !== false) wanted.add("updatedAt");
   return [...wanted].sort();

@@ -333,6 +333,24 @@ describe("automatic field assignments", () => {
           await loadCurrentFieldOwnership(ctx.db, "product", [state.recordId!])
         ).get(state.recordId!)?.categoryId,
       ).toEqual({ kind: "automatic", receiptId: state.id, confidence: 0.9 });
+      expect(
+        (
+          await loadCurrentFieldOwnership(
+            ctx.db,
+            "product",
+            [state.recordId!],
+            ["categoryId"],
+          )
+        ).get(state.recordId!)?.categoryId,
+      ).toEqual({ kind: "automatic", receiptId: state.id, confidence: 0.9 });
+      expect(
+        await loadCurrentFieldOwnership(
+          ctx.db,
+          "product",
+          [state.recordId!],
+          ["id"],
+        ),
+      ).toEqual(new Map());
       const list = async () =>
         executeEntity(kernelCtx(ctx), {
           action: "list",

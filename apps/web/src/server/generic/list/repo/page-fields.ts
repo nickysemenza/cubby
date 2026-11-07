@@ -11,8 +11,14 @@ import {
 } from "~/server/generic/derived/repo/read";
 import type {
   CurrentReadFacts,
+  CurrentFieldOwnership,
+  StoredDerivedRead,
   PageFieldReadContexts,
 } from "~/server/generic/derived/repo/read-context";
+import {
+  compileReadDemand,
+  type ReadDemand,
+} from "~/server/generic/list/repo/read-demand";
 import { loadCurrentFieldOwnership } from "~/server/generic/suggestions/repo/automatic-fields";
 
 const identitySchema = z.object({ id: z.string(), shortcode: z.string() });
@@ -24,9 +30,18 @@ export async function withPageFields<Row>(
   entity: Entity,
   rows: readonly unknown[],
   hydrate: () => Promise<Row[]> | Row[],
-  /** The page's stored meta, when the caller started it with the page ids. */
-  started?: Promise<PageStoredMeta>,
-  startedOwnership?: ReturnType<typeof loadCurrentFieldOwnership>,
+  {
+    stored: started,
+    ownership: startedOwnership,
+    projection,
+    demand: suppliedDemand,
+  }: {
+    /** The page's stored meta, when the caller started it with the page ids. */
+    stored?: Promise<PageStoredMeta>;
+    ownership?: ReturnType<typeof loadCurrentFieldOwnership>;
+    projection?: readonly string[];
+    demand?: ReadDemand;
+  } = {},
 ): Promise<{ data: Row[]; fieldReads: PageFieldReadContexts }> {
   const identities = rows.map((row) => {
     const identity = identitySchema.parse(row);
@@ -37,12 +52,20 @@ export async function withPageFields<Row>(
     };
   });
   const ids = identities.map((identity) => identity.internalId);
+  const demand = suppliedDemand ?? compileReadDemand(entity, projection);
   const shortcodeEntity = z.enum(shortcodeEntities).safeParse(entity);
   const [data, storedRows, ownership, assignments] = await Promise.all([
     hydrate(),
-    started ?? loadPageStoredMeta(db, entity, ids),
-    startedOwnership ?? loadCurrentFieldOwnership(db, entity, ids),
-    shortcodeEntity.success
+    demand.facts
+      ? (started ?? loadPageStoredMeta(db, entity, ids))
+      : Promise.resolve(
+          new Map<string, ReadonlyMap<string, StoredDerivedRead>>(),
+        ),
+    demand.facts && demand.facts.ownership.length
+      ? (startedOwnership ??
+        loadCurrentFieldOwnership(db, entity, ids, demand.facts.ownership))
+      : Promise.resolve(new Map<string, CurrentFieldOwnership>()),
+    demand.facts && shortcodeEntity.success
       ? loadCurrentAssignmentFacts(
           db,
           shortcodeEntity.data,
@@ -50,13 +73,16 @@ export async function withPageFields<Row>(
           new Map(
             identities.map((identity) => [identity.internalId, identity.raw]),
           ),
+          demand.facts.assignments,
         )
       : Promise.resolve(new Map<string, CurrentReadFacts>()),
   ]);
   let stored = storedRows;
   const recordPublications = entityStoredDerivedDeclarations().filter(
     (declaration) =>
-      declaration.entity === entity && declaration.recordSource !== null,
+      declaration.entity === entity &&
+      declaration.recordSource !== null &&
+      demand.facts?.stored.includes(declaration.key),
   );
   if (recordPublications.length > 0) {
     const publications = new Map(storedRows);
@@ -112,6 +138,7 @@ export async function withPageFields<Row>(
       identities.map((identity) => [
         identity.id,
         {
+          covered: demand.envelope,
           raw: { ...identity.raw, ...assignments.get(identity.internalId) },
           stored: stored.get(identity.internalId) ?? new Map(),
           ownership: ownership.get(identity.internalId) ?? {},

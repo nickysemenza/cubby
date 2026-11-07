@@ -22,7 +22,11 @@ import {
   groupRootField,
   withGroupFilters,
 } from "~/entity/entity-list/group-drill-down";
-import type { ListReadProjection } from "~/entity/entity-list/list-read-demand";
+import {
+  listReadNeedsCount,
+  listReadVisibility,
+  type ListReadProjection,
+} from "~/entity/entity-list/list-read-demand";
 import {
   getEntityFilters,
   manifestFilterFields,
@@ -572,25 +576,14 @@ export function useEntityList<
   // by must be on screen. The entity's own default order does not count: most
   // lists open newest-first, which would put the date back on every one of them.
   const entityDefaultSort = defaultSortFor(queryClient, entity);
-  const sortedAudit = tableState.sorting
-    .map(({ id }) => id)
-    .filter(
-      (id) =>
-        (id === "createdAt" || id === "updatedAt") &&
-        !(tableState.sorting.length === 1 && id === entityDefaultSort),
-    )
-    .join(",");
   const columnVisibilityWithSort = useMemo(
     () =>
-      sortedAudit
-        ? {
-            ...visibility.columnVisibility,
-            ...Object.fromEntries(
-              sortedAudit.split(",").map((id) => [id, true]),
-            ),
-          }
-        : visibility.columnVisibility,
-    [sortedAudit, visibility.columnVisibility],
+      listReadVisibility(
+        visibility.columnVisibility,
+        tableState.sorting.map(({ id }) => id),
+        entityDefaultSort,
+      ),
+    [entityDefaultSort, tableState.sorting, visibility.columnVisibility],
   );
   const requestedFields = useMemo(
     () => readProjection?.(queryClient, entity, columnVisibilityWithSort),
@@ -607,8 +600,9 @@ export function useEntityList<
   const [resultMembership, setResultMembership] =
     useState<ListResultMembership>("known");
   const primarySearchKey = metadata.summary.primarySearch?.key;
-  const hasActiveFilter = tableState.columnFilters.some(
-    (filter) => filter.id !== primarySearchKey,
+  const hasActiveFilter = listReadNeedsCount(
+    primarySearchKey,
+    tableState.columnFilters.map((filter) => filter.id),
   );
   const infiniteResult = useInfiniteTableList<TFilters, TRow>({
     queryOptions: pageQueryOptions,

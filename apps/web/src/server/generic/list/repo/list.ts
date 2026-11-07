@@ -92,6 +92,7 @@ import { relatedWhereConditions } from "~/server/generic/entity-links/repo/relat
 import type { EvidenceLoader } from "~/server/generic/field-explanation/repo/field-explanation-evidence";
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
 import { withPageFields } from "~/server/generic/list/repo/page-fields";
+import { compileReadDemand } from "~/server/generic/list/repo/read-demand";
 import {
   lexicalEligibility,
   lexicalRelevance,
@@ -224,6 +225,7 @@ interface ListHydration<Row, Out> {
   prefetch?: (
     ids: readonly string[],
     projection: ListProjection,
+    stored?: Promise<PageStoredMeta>,
   ) => ListPagePrefetch;
   /** A context the repository already built for its own where-builder. */
   context?: ListContext;
@@ -1336,7 +1338,11 @@ export function listScaffold<
       > = {},
     ) {
       const plan = readPlan();
-      const projection = request.projection ?? plan.fields.list;
+      const projection = compileReadDemand(
+        entity,
+        request.projection ?? plan.fields.list,
+        plan.fields.detail,
+      ).projection;
       plan.validate(projection);
       const scoped = { ...request, projection };
       // Prepared derived values a projection reads render into its select.
@@ -1359,8 +1365,8 @@ export function listScaffold<
           derived: true,
           hydrate: (rows, selected, hydration, prefetched) =>
             plan.read(db, rows, selected, hydration, "stored", prefetched),
-          prefetch: (ids, selected) =>
-            plan.prefetch(db, ids, selected, "stored", "list", context),
+          prefetch: (ids, selected, stored) =>
+            plan.prefetch(db, ids, selected, "stored", "list", context, stored),
         }),
         totals,
       ]);
@@ -1376,6 +1382,7 @@ export function listScaffold<
     async fieldReads(
       db: RepositoryQueryInput,
       codes: readonly string[],
+      keys?: readonly string[],
     ): Promise<PageFieldReadContexts> {
       if (!codes.length) return new Map();
       const source: PgTable = table;
@@ -1385,7 +1392,9 @@ export function listScaffold<
         .where(
           and(inArray(table.shortcode, [...codes]), scaffold.plan({}).where),
         );
-      return (await withPageFields(db, entity, rows, () => [])).fieldReads;
+      return (
+        await withPageFields(db, entity, rows, () => [], { projection: keys })
+      ).fieldReads;
     },
 
     async get(
@@ -1397,6 +1406,11 @@ export function listScaffold<
     ): Promise<{ data: ListReadRow[]; fieldReads?: PageFieldReadContexts }> {
       if (codes.length === 0) return { data: [] };
       const plan = readPlan();
+      projection = compileReadDemand(
+        entity,
+        projection,
+        plan.fields.detail,
+      ).projection;
       plan.validate(projection);
       const context = (
         await scaffold.context(db, {
@@ -1414,10 +1428,26 @@ export function listScaffold<
             projection,
           );
       if (rows.length === 0) return { data: [] };
+      const demand = compileReadDemand(entity, projection);
+      const ids = rows.map((row) => listRowIdSchema.parse(row).id);
+      const stored =
+        includeFieldReads && demand.facts
+          ? loadPageStoredMeta(db, entity, ids)
+          : undefined;
+      stored?.catch(() => undefined);
+      const prefetched = plan.prefetch(
+        db,
+        ids,
+        projection,
+        "live",
+        "detail",
+        context,
+        stored,
+      );
       const hydrate = () =>
-        plan.read(db, rows, projection, context, "live", undefined, "detail");
+        plan.read(db, rows, projection, context, "live", prefetched, "detail");
       return includeFieldReads
-        ? withPageFields(db, entity, rows, hydrate)
+        ? withPageFields(db, entity, rows, hydrate, { stored, demand })
         : { data: await hydrate() };
     },
 
@@ -1714,7 +1744,8 @@ export function listScaffold<
         | ReturnType<typeof loadCurrentFieldOwnership>
         | undefined;
       // The id/count projection binds no fields, so it carries no envelope.
-      const withEnvelope = Boolean(spec.derived) && projection.length > 0;
+      const demand = compileReadDemand(entity, projection);
+      const withEnvelope = Boolean(spec.derived) && demand.facts !== null;
       const readLoadedPage =
         loadIds && !spec.count
           ? () =>
@@ -1746,15 +1777,20 @@ export function listScaffold<
                     ? ids.length > page.limit
                     : page.offset + page.limit < count;
                 const pageIds = ids.slice(0, page.limit).map((row) => row.id);
-                prefetched = spec.prefetch?.(pageIds, projection);
                 // The envelope's stored meta needs only ids: read it beside the rows.
                 storedMeta = withEnvelope
                   ? loadPageStoredMeta(db, entity, pageIds)
                   : undefined;
+                prefetched = spec.prefetch?.(pageIds, projection, storedMeta);
                 // Awaited after hydration; this only keeps an early failure handled.
                 storedMeta?.catch(() => undefined);
                 currentOwnership = withEnvelope
-                  ? loadCurrentFieldOwnership(db, entity, pageIds)
+                  ? loadCurrentFieldOwnership(
+                      db,
+                      entity,
+                      pageIds,
+                      demand.facts?.ownership,
+                    )
                   : undefined;
                 currentOwnership?.catch(() => undefined);
                 const data = await loadIds(pageIds, projection);
@@ -1875,20 +1911,17 @@ export function listScaffold<
               storedMeta.catch(() => {
                 // SILENT: withPageFields awaits this same promise and surfaces its failure.
               });
-              prefetched ??= spec.prefetch?.(ids, projection);
-              if (prefetched) prefetched.page.stored = storedMeta;
+              prefetched ??= spec.prefetch?.(ids, projection, storedMeta);
             }
             const hydrate = () =>
               spec.hydrate(data, projection, context, prefetched);
             const complete = withEnvelope
-              ? await withPageFields(
-                  db,
-                  entity,
-                  data,
-                  hydrate,
-                  storedMeta,
-                  currentOwnership,
-                )
+              ? await withPageFields(db, entity, data, hydrate, {
+                  stored: storedMeta,
+                  ownership: currentOwnership,
+                  projection,
+                  demand,
+                })
               : { data: await hydrate(), fieldReads: undefined };
             const hydrated = complete.data;
             if (!parent)

@@ -52,6 +52,7 @@ export const repositoryOwners = [
   "src/server/generic/derived/repo/envelope.ts",
   "src/server/generic/derived/repo/public-read.ts",
   "src/server/generic/list/repo/page-fields.ts",
+  "src/server/generic/list/repo/read-demand.ts",
   "src/server/domains/image-processing/repo/image-representations.ts",
   "src/server/generic/relatedness/repo/relationship-query.ts",
   "src/server/db/computed/source-transaction-settlement-sql.ts",

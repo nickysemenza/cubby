@@ -50,6 +50,8 @@ export type CurrentReadFacts = Readonly<z.output<typeof currentReadFacts>>;
 
 /** Internal page facts; never part of a transport response. */
 export type FieldReadContext = Readonly<{
+  /** Governed fields whose assignment and ownership facts were loaded. */
+  covered: readonly string[];
   raw: CurrentReadFacts;
   stored: ReadonlyMap<string, StoredDerivedRead>;
   ownership: CurrentFieldOwnership;

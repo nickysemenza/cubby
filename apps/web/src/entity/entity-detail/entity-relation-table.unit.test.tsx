@@ -193,7 +193,8 @@ describe("EntityRelationTable", () => {
         },
       }),
     );
-    const list = entityList.list.withTransport(async () => ({
+    const list = entityList.list.withTransport(async ({ input }) => ({
+      selectedFields: input.fields,
       items: rows,
       meta: {
         hasNextPage: false,
@@ -264,7 +265,8 @@ describe("EntityRelationTable", () => {
         displayLabel: "Role order",
       },
     });
-    const list = entityList.list.withTransport(async () => ({
+    const list = entityList.list.withTransport(async ({ input }) => ({
+      selectedFields: input.fields,
       items: [row],
       meta: {
         hasNextPage: false,
@@ -309,6 +311,7 @@ describe("EntityRelationTable", () => {
     const list = entityList.list.withTransport(async ({ input }) => {
       inputs.push(input as EntityListInputByEntity["task"]);
       return {
+        selectedFields: input.fields,
         items: [],
         meta: {
           hasNextPage: false,
@@ -328,8 +331,11 @@ describe("EntityRelationTable", () => {
       />,
       { wrapper: harness.wrapper },
     );
-    await waitFor(() => expect(inputs.length).toBeGreaterThan(0));
+    await waitFor(() => expect(inputs).toHaveLength(1));
     const [input] = inputs;
+    expect(input?.fields).toContain("due");
+    expect(input?.fields).not.toContain("createdAt");
+    expect(input?.fields).not.toContain("updatedAt");
     expect(input?.entity).toBe("task");
     expect(input?.filters).toMatchObject({ projectId: "PRJ-TEST" });
     // Project → Tasks declares status grouping and newest-due-first order.
@@ -342,7 +348,8 @@ describe("EntityRelationTable", () => {
   });
 
   it("keeps the journal's own single-line empty copy instead of the generic sentence", async () => {
-    const list = entityList.list.withTransport(async () => ({
+    const list = entityList.list.withTransport(async ({ input }) => ({
+      selectedFields: input.fields,
       items: [],
       meta: {
         hasNextPage: false,
@@ -380,7 +387,8 @@ describe("EntityRelationTable", () => {
       id: testShortcode("task", "TSK-TEST"),
       status: "not_started" as const,
     };
-    const list = entityList.list.withTransport(async () => ({
+    const list = entityList.list.withTransport(async ({ input }) => ({
+      selectedFields: input.fields,
       items: [task],
       meta: {
         hasNextPage: false,

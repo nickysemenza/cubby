@@ -32,6 +32,7 @@ export async function loadCurrentAssignmentFacts(
   entity: ShortcodeEntity,
   ids: readonly string[],
   projected: ReadonlyMap<string, CurrentReadFacts> = new Map(),
+  requested?: readonly string[],
 ): Promise<ReadonlyMap<string, CurrentReadFacts>> {
   const table = alias(SHORTCODE_TABLE[entity], "assignment_facts");
   const storedColumns: Readonly<Record<string, AnyColumn | undefined>> =
@@ -45,30 +46,32 @@ export async function loadCurrentAssignmentFacts(
       ),
     ]),
   ];
-  const slots = keys.flatMap((key) => {
-    const storage = model.storage.find((field) => field.key === key);
-    if (storage?.specialized === "amount-columns") {
-      const value = storedColumns[`${key}Value`];
-      const unit = storedColumns[`${key}Unit`];
-      if (!value || !unit)
-        throw new Error(
-          `Current ${entity}.${key} requires its declared amount columns`,
-        );
-      return [{ key, value: amountJsonSql(value, unit) }];
-    }
-    const column = storedColumns[key];
-    return column
-      ? [
-          {
-            key,
-            value:
-              storage?.specialized === "minor-unit-money"
-                ? sql`${column}::numeric / 100`
-                : sql`${column}`,
-          },
-        ]
-      : [];
-  });
+  const slots = keys
+    .filter((key) => requested === undefined || requested.includes(key))
+    .flatMap((key) => {
+      const storage = model.storage.find((field) => field.key === key);
+      if (storage?.specialized === "amount-columns") {
+        const value = storedColumns[`${key}Value`];
+        const unit = storedColumns[`${key}Unit`];
+        if (!value || !unit)
+          throw new Error(
+            `Current ${entity}.${key} requires its declared amount columns`,
+          );
+        return [{ key, value: amountJsonSql(value, unit) }];
+      }
+      const column = storedColumns[key];
+      return column
+        ? [
+            {
+              key,
+              value:
+                storage?.specialized === "minor-unit-money"
+                  ? sql`${column}::numeric / 100`
+                  : sql`${column}`,
+            },
+          ]
+        : [];
+    });
   if (!ids.length) return new Map();
   const columns = slots.flatMap(({ key, value }) => [sql`${key}::text`, value]);
   const rows = slots.length
@@ -91,7 +94,10 @@ export async function loadCurrentAssignmentFacts(
     raw: { ...projected.get(id), ...stored.get(id) },
   }));
   const references = model.fields.filter(
-    (field) => field.kind === "identifier" && field.reference,
+    (field) =>
+      field.kind === "identifier" &&
+      field.reference &&
+      (requested === undefined || requested.includes(field.key)),
   );
   const referenceIds = new Set<string>();
   for (const fact of facts)

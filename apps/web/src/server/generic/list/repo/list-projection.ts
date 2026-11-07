@@ -472,8 +472,9 @@ export function listReadPlan<Row>(
     qualitySource: "stored" | "live" = "stored",
     scope: "list" | "detail" = "list",
     context = ListContext.empty,
+    stored?: Promise<PageStoredMeta>,
   ): ListPagePrefetch => {
-    const page = { db, ids, projection, context };
+    const page = { db, ids, projection, context, stored };
     const settled = <V>(promise: Promise<V>) => {
       promise.catch(() => {
         // SILENT: `read` awaits and surfaces this rejection; only a page

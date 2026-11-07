@@ -1,17 +1,21 @@
+import { fieldEnvelopeReadSchema } from "@cubby/schemas/entity-field-envelopes";
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 
 import {
   findOrCreateIngredient,
   readIngredientDetail,
 } from "~/server/domains/ingredient/repo/crud";
 import { createInventoryEntry } from "~/server/domains/inventory/repo/crud";
+import { productScaffold } from "~/server/domains/product/repo/crud";
 import {
   readRecipeById,
   updateRecipe,
 } from "~/server/domains/recipe/repo/crud";
+import { publicFieldEnvelopeBatch } from "~/server/generic/derived/repo/public-read";
 import { readPublicEntityRows } from "~/server/generic/derived/service/public-read";
 import {
   createRecipeFixture,
@@ -80,6 +84,42 @@ describe("nested field envelope reads", () => {
     expect(row.location).not.toHaveProperty("valuation");
     expect(row.location).not.toHaveProperty("aiDescription");
     expect(row).not.toHaveProperty("fieldResolutions");
+    const narrow = await productScaffold.fieldReads(
+      ctx.db,
+      [product.id],
+      ["brandId"],
+    );
+    const prior = narrow.get(product.id);
+    if (!prior) throw new Error("Synthetic narrow context missing");
+    const schema = fieldEnvelopeReadSchema("inventory", "detail");
+    if (!(schema instanceof z.ZodObject))
+      throw new Error("Inventory read requires an object schema");
+    const [wider] = await publicFieldEnvelopeBatch({
+      db: ctx.db,
+      reads: [
+        { entity: "inventory", schema, row: { ...raw, attachments: [] } },
+      ],
+      contexts: new Map([
+        [
+          "product",
+          new Map([
+            [
+              product.id,
+              {
+                ...prior,
+                raw: { ...prior.raw, price: 99 },
+              },
+            ],
+          ]),
+        ],
+      ]),
+    });
+    expect(
+      fieldValueOf(
+        fieldEnvelopeReadSchema("inventory", "detail").parse(wider).product
+          .fields.price,
+      ),
+    ).toBe(13);
   });
 
   it("projects repeated identities while preserving each nested snapshot", async () => {

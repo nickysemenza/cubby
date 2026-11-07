@@ -1,5 +1,9 @@
 import { generatedEntityFieldModels } from "./generated/entity-field-model.gen";
-export { entityFieldAssignmentKeys } from "./generated/entity-field-envelope-assignments.gen";
+export {
+  entityFieldAssignmentKeys,
+  entityFieldEnvelopeKeys,
+  entityFieldEnvelopeDependencies,
+} from "./generated/entity-field-envelope-assignments.gen";
 
 export {
   generatedEntityFieldModels as entityFieldModels,
