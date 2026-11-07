@@ -126,8 +126,11 @@ The existing browser Sentry scope records the guarded decision in a
 decision does not prove the reload completed or recovered. Denied session-storage
 access declines recovery without breaking router setup.
 Specialist list columns are declared as `route.listColumns` source references.
-The account menu loads after hydration behind its existing SSR placeholder;
-its session-dependent controls do not belong in the Worker render closure.
+The account menu loads from an effect after hydration behind its existing SSR
+placeholder; its session-dependent controls do not belong in the Worker render
+closure. Do not commit a new shell Suspense fallback for this control: React's
+retry throttle can hold hydration of independent route boundaries. Reuse the loaded
+component on remount and rethrow import failures to the existing error boundary.
 Interaction-only registry dialogs stay lazy with a local Suspense boundary
 inside their open/selected state. Loading a dialog must not suspend the action
 host or page. Feature installation stays synchronous and idempotent so child
