@@ -143,6 +143,9 @@ test("reviews historical item classification and preserves explicit purpose", as
   await expect(
     tree.getByRole("link", { name: childName, exact: true }),
   ).toBeVisible();
+  await expect(parent.getByText("Ancestor", { exact: true })).toBeInViewport({
+    ratio: 1,
+  });
   await expect(
     tree.getByRole("link", { name: siblingName, exact: true }),
   ).toHaveCount(0);

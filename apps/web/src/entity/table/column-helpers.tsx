@@ -317,7 +317,7 @@ export function createNameColumn<T extends BaseRow>(
       // entity's name column renders exactly as before (no extra markup).
       const wrapWithSuffix = (nameEl: ReactNode) =>
         prefix || suffix ? (
-          <Row align="center" gap="xs" className="min-w-0">
+          <Row align="center" gap="xs" className="w-full min-w-0">
             {prefix}
             <span className="min-w-0 flex-1 truncate">{nameEl}</span>
             {suffix}
