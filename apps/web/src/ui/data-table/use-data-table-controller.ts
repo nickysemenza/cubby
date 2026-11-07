@@ -319,6 +319,7 @@ export function useDataTableController<TItem extends RowData>({
     cellSelectionContainerProps,
     emptyColumns,
     revealEmptyColumns,
+    resetRevealedEmpty: () => setRevealedEmpty(new Set()),
     unpaintedColumns,
     colSpan,
     columnsKey,

@@ -21,6 +21,7 @@ import type {
 import type {
   FilterConfig,
   MobileColumnMeta,
+  CubbyColumnMeta,
 } from "~/ui/data-table/table-meta";
 
 export interface RelatedPreviewState {
@@ -31,6 +32,7 @@ export interface RelatedPreviewState {
 }
 
 interface RelatedPreviewColumnMeta {
+  headerEntity: NonNullable<CubbyColumnMeta["headerEntity"]>;
   columnGroup?: string;
   filterConfig?: FilterConfig;
   mobile: MobileColumnMeta;
@@ -80,6 +82,7 @@ export function useRelatedPreviewColumnDefs<TData extends { id: string }>({
           ? manifestFilterConfig(queryClient, entity, columnId, filterOptions)
           : undefined;
         const meta: RelatedPreviewColumnMeta = {
+          headerEntity: view.target,
           columnGroup: view.columnGroup,
           mobile: { slot: "meta", priority: 80 },
         };

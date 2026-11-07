@@ -148,6 +148,36 @@ it.each([1440, 402])(
       ),
     );
     expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width);
+    if (width !== 402) return;
+    fireEvent.click(screen.getByRole("button", { name: "Filter" }));
+    const filters = await screen.findByRole("dialog", { name: "Filter" });
+    const brandLabel = within(filters).getByText("Brand", { exact: true });
+    const brand = brandLabel.closest("button");
+    if (!brand) throw new Error("Brand filter has no field control");
+    expect(brand).toHaveTextContent("record");
+    fireEvent.click(brand);
+    const editor = await screen.findByRole("dialog", {
+      name: "Filter by Brand",
+    });
+    expect(within(editor).getByText(/Is \/ is not/)).toBeVisible();
+    fireEvent.click(within(editor).getByRole("button", { name: "Close" }));
+    fireEvent.click(screen.getByRole("button", { name: "Filter" }));
+    const reopened = await screen.findByRole("dialog", { name: "Filter" });
+    fireEvent.click(within(reopened).getByRole("button", { name: "Columns" }));
+    const columns = await screen.findByRole("dialog", { name: "Columns" });
+    fireEvent.click(
+      within(columns).getByRole("checkbox", { name: "Hide Cost" }),
+    );
+    expect(
+      await within(columns).findByRole("checkbox", { name: "Show Cost" }),
+    ).not.toBeChecked();
+    fireEvent.click(
+      within(columns).getByRole("checkbox", { name: "Show Cost" }),
+    );
+    expect(
+      await within(columns).findByRole("checkbox", { name: "Hide Cost" }),
+    ).toBeChecked();
+    expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width);
   },
 );
 
@@ -231,6 +261,41 @@ it("fits populated declared money, count, date and identifier columns", async ()
   );
   expect(row?.querySelector('[data-cell-col="primaryGtin"]')).toHaveTextContent(
     "8905",
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Display" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Columns…" }));
+  const columns = await screen.findByRole("dialog", { name: "Columns" });
+  fireEvent.click(within(columns).getByRole("checkbox", { name: "Hide Cost" }));
+  await waitFor(() =>
+    expect(row?.querySelector('[data-cell-col="cost"]')).toBeNull(),
+  );
+  expect(
+    within(columns).getByRole("checkbox", { name: "Show Cost" }),
+  ).not.toBeChecked();
+  fireEvent.click(within(columns).getByRole("checkbox", { name: "Show Cost" }));
+  await waitFor(() =>
+    expect(row?.querySelector('[data-cell-col="cost"]')).toHaveTextContent(
+      "$12.00",
+    ),
+  );
+  const vendors = within(columns).getByRole("checkbox", {
+    name: "Show Vendors",
+  });
+  fireEvent.click(vendors);
+  await waitFor(() =>
+    expect(
+      document.querySelector(
+        'thead th[data-column-id="related:product.vendors"] [data-header-entity] svg',
+      ),
+    ).not.toBeNull(),
+  );
+  fireEvent.click(
+    within(columns).getByRole("button", { name: "Restore default layout" }),
+  );
+  await waitFor(() =>
+    expect(
+      within(columns).getByRole("checkbox", { name: "Show Vendors" }),
+    ).not.toBeChecked(),
   );
 });
 

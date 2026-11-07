@@ -942,13 +942,11 @@ function PanelSection({
   );
 }
 
-/**
- * One field in the panel: type glyph, label, and its value only while
- * active. Clicking expands its editor in place, one row at a time.
- */
+/** Readable types remain visible beside active values as well as empty fields. */
 function filterTypeLabel(field: FilterBarField): string {
   if (field.dateRange) return "date range";
   if (field.numberRange) return "number range";
+  if (field.referenceEntity) return "record";
   return {
     entity: "record",
     enum: "choice",
@@ -958,6 +956,29 @@ function filterTypeLabel(field: FilterBarField): string {
     number: "number",
     text: "text",
   }[field.valueType ?? "enum"];
+}
+
+/** Describe only controls that the shared value editor actually renders. */
+function filterOperationsLabel(field: FilterBarField): string {
+  if (field.type === "text") return "Contains text";
+  if (field.type === "multiselect") {
+    const operations = [field.exclude ? "Is / is not" : "Is"];
+    if (field.matchAll && !field.freeText)
+      operations.push("match any / match all");
+    if (field.subtree && !field.freeText) operations.push(field.subtree.label);
+    if (field.freeText) operations.push("comma-separated values");
+    return operations.join(" · ");
+  }
+  if (isTriState(field))
+    return [
+      "Any",
+      ...(field.options ?? [])
+        .filter((option) => !option.meta)
+        .map((option) => option.label),
+    ].join(" / ");
+  if (field.numberRange) return "Minimum / maximum · either bound is optional";
+  if (field.dateRange) return "From / to · fixed or relative dates";
+  return "Choose one value";
 }
 
 function FilterMark({
@@ -1029,24 +1050,23 @@ function PanelRow({
           aria-expanded={triState ? undefined : open}
           aria-controls={open && !triState ? editorId : undefined}
           aria-label={summary ? `${label}: ${summary}` : label}
-          title={summary ? `${label}: ${summary}` : undefined}
+          aria-description={filterTypeLabel(field)}
+          title={summary ? `${label}: ${summary}` : label}
           className="flex min-h-6.5 min-w-0 flex-1 items-center gap-2 text-left text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring max-sm:min-h-11"
           onClick={triState ? undefined : onToggle}
         >
-          <span className={cn("shrink-0", summary && "font-medium")}>
+          <span className={cn("min-w-0 truncate", summary && "font-medium")}>
             {label}
           </span>
-          {!triState &&
-            (summary ? (
-              <span className="ml-auto flex min-w-0 items-center gap-1 font-medium">
-                <FilterMark field={field} filter={filter} />
-                <span className="truncate">{summary}</span>
-              </span>
-            ) : (
-              <span className="ml-auto shrink-0 rounded-[4px] border border-border px-1 text-2xs leading-4 text-muted-foreground">
-                {filterTypeLabel(field)}
-              </span>
-            ))}
+          <span className="shrink-0 text-xs text-muted-foreground">
+            {filterTypeLabel(field)}
+          </span>
+          {!triState && summary && (
+            <span className="ml-auto flex min-w-0 items-center gap-1 font-medium">
+              <FilterMark field={field} filter={filter} />
+              <span className="truncate">{summary}</span>
+            </span>
+          )}
         </Label>
         {triState && <div className="ml-auto">{children}</div>}
       </div>
@@ -1172,7 +1192,13 @@ export function FiltersPanel({
               All filters
             </button>
             <div className="mb-3 flex items-center justify-between gap-2">
-              <h3 className="text-sm font-semibold">{labelOf(focusedField)}</h3>
+              <h3 className="flex min-w-0 flex-wrap items-center gap-2 text-sm font-semibold">
+                <FilterTypeGlyph field={focusedField} />
+                {labelOf(focusedField)}
+                <span className="text-xs font-normal text-muted-foreground">
+                  {filterTypeLabel(focusedField)}
+                </span>
+              </h3>
               {isFieldActive(filtersByField.get(focusedField.key)) && (
                 <button
                   type="button"
@@ -1183,6 +1209,11 @@ export function FiltersPanel({
                 </button>
               )}
             </div>
+            {!focusedField.unsupportedReason && (
+              <p className="mb-2 text-xs text-muted-foreground">
+                {filterOperationsLabel(focusedField)}
+              </p>
+            )}
             <FilterFieldEditor
               key={focusedField.key}
               field={focusedField}
@@ -1888,17 +1919,28 @@ export function MobileFilterTier<TData extends RowData>({
         }
       >
         {editingField ? (
-          <FilterFieldEditor
-            field={editingField}
-            filter={filtersByField.get(editingField.key)}
-            setValues={(values) => {
-              setValues(editingField, values);
-            }}
-            clear={() => {
-              clear(editingField);
-              setView("fields");
-            }}
-          />
+          <div>
+            <p className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
+              <FilterTypeGlyph field={editingField} />
+              {filterTypeLabel(editingField)}
+            </p>
+            {!editingField.unsupportedReason && (
+              <p className="mb-2 text-xs text-muted-foreground">
+                {filterOperationsLabel(editingField)}
+              </p>
+            )}
+            <FilterFieldEditor
+              field={editingField}
+              filter={filtersByField.get(editingField.key)}
+              setValues={(values) => {
+                setValues(editingField, values);
+              }}
+              clear={() => {
+                clear(editingField);
+                setView("fields");
+              }}
+            />
+          </div>
         ) : view === "columns" ? (
           <TableLayoutCustomizer table={table} />
         ) : (
@@ -1913,8 +1955,12 @@ export function MobileFilterTier<TData extends RowData>({
                   disabled={Boolean(field.unsupportedReason)}
                   onClick={() => setView(field.key)}
                 >
-                  <span className="font-medium">
+                  <FilterTypeGlyph field={field} />
+                  <span className="min-w-0 truncate font-medium">
                     {field.label ?? field.key}
+                  </span>
+                  <span className="shrink-0 text-xs text-muted-foreground">
+                    {filterTypeLabel(field)}
                   </span>
                   <span className="min-w-0 truncate text-muted-foreground">
                     {field.unsupportedReason ?? filterSummary(field, filter)}

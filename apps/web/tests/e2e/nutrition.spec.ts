@@ -70,7 +70,7 @@ test("nutrition matrix preserves zero and exposes focused and catalog nutrients"
   await expect(contributions).toContainText("25–50 mg known · partial");
   await page.getByRole("button", { name: /^Columns/ }).click();
   await expect(
-    page.getByRole("button", { name: "Show Zinc (mg)", exact: true }),
+    page.getByRole("checkbox", { name: "Show Zinc (mg)", exact: true }),
   )
     .toBeVisible()
     .catch(async (error) => {
@@ -86,7 +86,7 @@ test("nutrition matrix preserves zero and exposes focused and catalog nutrients"
       });
     });
   await page
-    .getByRole("button", { name: "Show Zinc (mg)", exact: true })
+    .getByRole("checkbox", { name: "Show Zinc (mg)", exact: true })
     .click();
   await page.keyboard.press("Escape");
   await expect(table.getByRole("columnheader", { name: /Zinc/ })).toBeVisible();

@@ -132,6 +132,8 @@ export interface CubbyColumnMeta<TData = CellData> {
    * the same entity.
    */
   countOf?: Entity;
+  /** Header and column-manager identity, without changing cell link marks. */
+  headerEntity?: Entity;
   /**
    * Every value links to one entity's records: the header paints that
    * entity's icon once and each link drops its generic icon
