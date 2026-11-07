@@ -1,3 +1,5 @@
+import type { PgTable } from "drizzle-orm/pg-core";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { moneyToMinor } from "@cubby/shared";
 import { resolveProductBrandName } from "~/server/domains/vendor/repo/product-brand";
 import { publishEntityConnection } from "~/server/domains/connection/repo/entity-connections";
@@ -208,7 +210,10 @@ export async function seedPurchaseHeicAttachment(page: Page, name: string) {
   });
   const db = getDb(getFixtureDb());
   const owner = await db.query.purchase.findFirst({
-    where: eq(schema.purchase.shortcode, purchase.id),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(table, eq(schema.purchase.shortcode, purchase.id)),
+    },
     columns: { id: true },
   });
   if (!owner) throw new Error("Seeded purchase did not resolve");

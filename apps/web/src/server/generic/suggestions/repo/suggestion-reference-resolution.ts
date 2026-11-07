@@ -24,12 +24,15 @@ export async function readSuggestionRecordRefs(
 ) {
   if (!ids.length)
     return new Map<string, z.infer<typeof suggestionRecordRef>[]>();
-  const { rows } = await unwrapDb(db).execute<{
+  const rows = await unwrapDb(db).execute<{
     id: string;
     refs: unknown;
-  }>(sql`
+  }>(
+    sql`
     SELECT s.id, ${suggestionRecordsSql(entities)} AS refs FROM "Suggestion" s
-    WHERE s.id = ANY(${uuidArrayParam(ids)})`);
+    WHERE s.id = ANY(${uuidArrayParam(ids)})`,
+    "objects",
+  );
   return resolveStoredRecordRefs(db, rows);
 }
 

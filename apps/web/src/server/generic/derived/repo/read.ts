@@ -258,7 +258,8 @@ export async function loadStoredDerived(
   const out = new Map<string, Map<string, StoredDerivedRead>>();
   if (ids.length === 0 || declarations.length === 0) return out;
   // Snapshot freshness belongs to the coarse hourly pass, never retained tickets.
-  const result = await unwrapDb(db).execute(sql`
+  const result = await unwrapDb(db).execute(
+    sql`
     WITH keys AS (SELECT * FROM (VALUES ${sql.join(
       declarations.map(({ key }) => sql`(${key}::text)`),
       sql`, `,
@@ -279,8 +280,10 @@ export async function loadStoredDerived(
           ),
           sql` UNION ALL `,
         )}
-      ) v ON true`);
-  for (const row of z.array(valueRow).parse(result.rows)) {
+      ) v ON true`,
+    "objects",
+  );
+  for (const row of z.array(valueRow).parse(result)) {
     const byKey = out.get(row.entityId) ?? new Map();
     const metadata = storedFieldDecision.safeParse(row.decidedBy);
     const decision = decisionSchema.safeParse(

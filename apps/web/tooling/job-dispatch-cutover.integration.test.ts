@@ -9,8 +9,10 @@ import { withMigrationDatabase } from "./test-database-lease";
 // pauses while transport and its redundant accounting are retired together.
 it("preserves populated dispatch history and pending intent through the Job cutover", async () => {
   await withMigrationDatabase(async (client) => {
-    const db = drizzle(client);
-    await migrateDatabase(db, { through: "0006_financial_evidence_entities" });
+    const db = drizzle({ client: client, paramsInErrors: true });
+    await migrateDatabase(db, {
+      through: "20261022163202_0006_financial_evidence_entities",
+    });
     const ids = [1, 2, 3, 4].map(
       (n) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`,
     );
@@ -54,7 +56,9 @@ it("preserves populated dispatch history and pending intent through the Job cuto
     await client.query(`INSERT INTO "Job" (key,kind,input,state,attempts,error) VALUES
       ('synthetic-retained-page','embedding.refresh','{"entityKind":"product","entityId":"00000000-0000-4000-8000-000000000099"}','retry_wait',2,'Synthetic provider diagnostic')`);
     // The coarse-Jobs carry (0048) retires per-item embedding Jobs.
-    await migrateDatabase(db, { through: "0045_field_envelope_decisions" });
+    await migrateDatabase(db, {
+      through: "20261027025727_0045_field_envelope_decisions",
+    });
     const history = await client.query(
       `SELECT "entityId",changes FROM "AuditLog" WHERE "entityKind"='run' ORDER BY "entityId"`,
     );

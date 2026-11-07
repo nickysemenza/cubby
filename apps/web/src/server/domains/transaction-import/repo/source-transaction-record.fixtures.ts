@@ -8,11 +8,13 @@ import {
 import { rawSourceTransactionRecordOut } from "@cubby/schemas/source-transaction-record-raw-read";
 import { rawTransactionImportOut } from "@cubby/schemas/transaction-import-raw-read";
 import { eq } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { buildKernelContext } from "tooling/scenarios/context";
 import { TEST_ACTOR } from "tooling/test-setup";
 
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { sourceTransactionRecord, transactionImport } from "~/server/db/schema";
 import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-runtime.gen";
 
@@ -76,12 +78,19 @@ export async function createFinancialEvidenceFixture(db: Database) {
     }),
     TEST_ACTOR,
   );
-  if (!receipt.batchId) throw new Error("Synthetic evidence import missing");
+  const batchId = receipt.batchId;
+  if (!batchId) throw new Error("Synthetic evidence import missing");
   const record = await getDb(db).query.sourceTransactionRecord.findFirst({
-    where: eq(sourceTransactionRecord.batchId, receipt.batchId),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(table, eq(sourceTransactionRecord.batchId, batchId)),
+    },
   });
   const collection = await getDb(db).query.transactionImport.findFirst({
-    where: eq(transactionImport.id, receipt.batchId),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(table, eq(transactionImport.id, batchId)),
+    },
   });
   if (!record || !collection)
     throw new Error("Synthetic evidence graph missing");

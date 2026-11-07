@@ -230,11 +230,11 @@ export async function touchingSuggestionFamilies(
   if (!scope.entity && !scope.records) return null;
   if (scope.records?.length === 0)
     return new Map<string, readonly SuggestionFamily[]>();
-  const { rows } = await unwrapDb(db).execute<{
+  const rows = await unwrapDb(db).execute<{
     id: string;
     family: SuggestionFamily;
     immutableFamily: SuggestionFamily;
-  }>(touchingSuggestionQuery(db, scope));
+  }>(touchingSuggestionQuery(db, scope), "objects");
   return new Map(
     rows.map((row) => [row.id, [row.family, row.immutableFamily]]),
   );

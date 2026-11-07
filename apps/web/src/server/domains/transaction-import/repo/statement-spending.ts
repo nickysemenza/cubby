@@ -2,10 +2,12 @@ import type { FinancialSpendingAdvice } from "@cubby/schemas/financial-booking";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { StatementTransactionJudgment } from "@cubby/schemas/statement-suggestion";
 import { eq } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 
 import { forEachConcurrently } from "~/lib/concurrency-limiter";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { financialAccount, financialTransaction } from "~/server/db/schema";
 import {
   previewFinancialSpending,
@@ -27,10 +29,16 @@ export async function prepareStatementSpending(
   const account = page
     ? page.accounts.get(judgment.accountId)
     : await getDb(db).query.financialAccount.findFirst({
-        where: eq(
-          financialAccount.id,
-          parseEntityId("financialAccount", judgment.accountId),
-        ),
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(
+              table,
+              eq(
+                financialAccount.id,
+                parseEntityId("financialAccount", judgment.accountId),
+              ),
+            ),
+        },
       });
   if (!account) return null;
   const targetId = spendingTarget(judgment);
@@ -39,10 +47,16 @@ export async function prepareStatementSpending(
       ? page.transactions.get(targetId)
       : await getDb(db)
           .query.financialTransaction.findFirst({
-            where: eq(
-              financialTransaction.id,
-              parseEntityId("financialTransaction", targetId),
-            ),
+            where: {
+              RAW: (table: PgTable) =>
+                relationalSql(
+                  table,
+                  eq(
+                    financialTransaction.id,
+                    parseEntityId("financialTransaction", targetId),
+                  ),
+                ),
+            },
           })
           .then((row) => (row ? transactionDollars(row) : row))
     : null;

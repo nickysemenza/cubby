@@ -51,7 +51,7 @@ import {
   SQL,
   sql,
 } from "drizzle-orm";
-import type { PgColumn, PgSelect, PgTable } from "drizzle-orm/pg-core";
+import type { PgColumn, PgAsyncSelect, PgTable } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
 import type { ListFacet } from "~/contracts/entity-list.contract";
@@ -236,7 +236,7 @@ interface ListHydration<Row, Out> {
    * The joins `where` reads beyond the root table, for the group summary
    * query; required with `count` when the list can group.
    */
-  joins?: (query: PgSelect) => PgSelect;
+  joins?: (query: PgAsyncSelect) => PgAsyncSelect;
 }
 
 type ListSpec<Row, Out> = ListHydration<Row, Out> & ListSelection<Row>;
@@ -426,7 +426,7 @@ type CompiledDerivedSql = {
 
 interface ListFilterPlan {
   where: SQL | undefined;
-  joins: ((query: PgSelect) => PgSelect) | undefined;
+  joins: ((query: PgAsyncSelect) => PgAsyncSelect) | undefined;
   order: (sorts: SortParams[], opts?: ListOrderByOpts) => SQL[];
 }
 

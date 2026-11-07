@@ -26,6 +26,7 @@ import type {
   Trade,
 } from "@cubby/schemas/project";
 import { and, asc, inArray, isNotNull, isNull, ne, sql } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 
 import type { Database } from "~/server/db";
 import { effectiveFieldSql } from "~/server/db/computed/effective-field";
@@ -36,6 +37,7 @@ import {
   plannedExpense,
 } from "~/server/db/computed/expense-aggregate-sql";
 import { getDb, notDeleted, uuidArrayParam } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { expense, project, task } from "~/server/db/schema";
 import {
   executeExpenseDerivedBatch,
@@ -75,11 +77,18 @@ export async function projectPortfolioAnalytics(
         .map((row) => row.id)
     : undefined;
   const projectRows = await getDb(db).query.project.findMany({
-    where: and(
-      buildDashboardProjectWhere(filters, completionIds),
-      selection ? inArray(project.shortcode, [...selection]) : undefined,
-    ),
-    orderBy: [asc(project.name)],
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          and(
+            buildDashboardProjectWhere(filters, completionIds),
+            selection ? inArray(project.shortcode, [...selection]) : undefined,
+          ),
+        ),
+    },
+    orderBy: (table: PgTable) =>
+      [[asc(project.name)]].flat().map((value) => relationalSql(table, value)),
     columns: { id: true, shortcode: true, name: true },
   });
   const ids = projectRows.map((r) => r.id);

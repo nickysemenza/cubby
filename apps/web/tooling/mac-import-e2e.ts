@@ -680,7 +680,9 @@ async function main(): Promise<void> {
                   connectionString: databaseUrl,
                 });
                 try {
-                  await seedBaseWorld(drizzle(pool));
+                  await seedBaseWorld(
+                    drizzle({ client: pool, paramsInErrors: true }),
+                  );
                 } finally {
                   await pool.end();
                 }

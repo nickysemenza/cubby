@@ -6,8 +6,10 @@ import { withMigrationDatabase } from "./test-database-lease";
 
 it("retains Vendor evidence and Product references when enforcing live names", async () => {
   await withMigrationDatabase(async (client) => {
-    const db = drizzle(client);
-    await migrateDatabase(db, { through: "0037_derived_values" });
+    const db = drizzle({ client: client, paramsInErrors: true });
+    await migrateDatabase(db, {
+      through: "20261025215135_0037_derived_values",
+    });
     const live = "00000000-0000-4000-8000-000000000011";
     const retired = "00000000-0000-4000-8000-000000000012";
     const product = "00000000-0000-4000-8000-000000000013";
@@ -30,7 +32,9 @@ it("retains Vendor evidence and Product references when enforcing live names", a
     );
     const vendors = await client.query(`SELECT * FROM "Vendor" ORDER BY id`);
     const products = await client.query(`SELECT * FROM "Product" ORDER BY id`);
-    await migrateDatabase(db, { through: "0038_unique_live_vendor_names" });
+    await migrateDatabase(db, {
+      through: "20261026034823_0038_unique_live_vendor_names",
+    });
     expect(
       (await client.query(`SELECT * FROM "Vendor" ORDER BY id`)).rows,
     ).toEqual(vendors.rows);

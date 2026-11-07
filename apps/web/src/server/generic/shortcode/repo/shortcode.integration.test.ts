@@ -438,14 +438,17 @@ describe("schema-level invariants", () => {
   it("has a non-partial unique index for every shortcode table", async () => {
     // A partial index would silently restore the pre-cutover hole: codes
     // becoming available again once their owner is soft-deleted.
-    const { rows: found } = await getDb(ctx.db).execute<{
+    const found = await getDb(ctx.db).execute<{
       indexname: string;
       partial: boolean;
-    }>(sql`
+    }>(
+      sql`
       SELECT indexname, indexdef LIKE '%WHERE%' AS partial
       FROM pg_indexes
       WHERE schemaname = 'public' AND indexname LIKE '%\\_shortcode\\_unique'
-    `);
+    `,
+      "objects",
+    );
     // One per payload table plus the identity table, which alone still holds
     // a hard-deleted payload's code.
     expect(found).toHaveLength(PUBLIC_SHORTCODE_PREFIXES.length + 1);

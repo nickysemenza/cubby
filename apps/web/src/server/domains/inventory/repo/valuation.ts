@@ -1,3 +1,5 @@
+import type { InventoryId, ProductId } from "@cubby/schemas/identifiers";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 /**
  * Inventory valuation: live computation and the published read projection.
  *
@@ -14,12 +16,10 @@
  * call into lib compute, and a `*.service.ts` here would be the empty
  * pass-through the boundary rule forbids (`price-sync.ts` is the precedent).
  */
-
-import type { InventoryId, ProductId } from "@cubby/schemas/identifiers";
-import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { inventoryValuationFacts } from "@cubby/schemas/inventory-fields";
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { and, type AnyColumn, inArray, type SQL, sql } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { uniq } from "es-toolkit";
 import { z } from "zod";
 
@@ -27,6 +27,7 @@ import { computeInventoryValuations } from "~/lib/price-mapping-utils";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { notDeleted, unwrapDb } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { inventoryEntry, product } from "~/server/db/schema";
 import { loadExactEffectivePrices } from "~/server/domains/product/repo/pricing";
 import { getProductUnitMappingsByProductIds } from "~/server/domains/product/repo/unit-mappings";
@@ -58,7 +59,13 @@ const loadValuationGraphs = async (
   if (ids.length === 0) return new Map();
 
   const rows = await unwrapDb(db).query.product.findMany({
-    where: and(inArray(product.id, ids), notDeleted(product)),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          and(inArray(product.id, ids), notDeleted(product)),
+        ),
+    },
     // `shortcode` alongside id/price because `getAllUnitMappingsFromProduct`
     // stamps it into the synthesized edge's provenance — handing it a uuid
     // there is a trap this repo has closed before.

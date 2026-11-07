@@ -66,10 +66,13 @@ export async function readMutationReceiptFields(
     sql`${key}::text`,
     value,
   ]);
-  const result = await getDb(db).execute(sql`SELECT saved.shortcode AS id,
+  const result = await getDb(db).execute(
+    sql`SELECT saved.shortcode AS id,
     jsonb_build_object(${sql.join(entries, sql`, `)}) AS values
-    FROM ${table} saved WHERE saved.id=${entityId}::uuid AND ${notDeleted("saved")} LIMIT 1`);
-  const [row] = z.array(rowSchema).parse(result.rows);
+    FROM ${table} saved WHERE saved.id=${entityId}::uuid AND ${notDeleted("saved")} LIMIT 1`,
+    "objects",
+  );
+  const [row] = z.array(rowSchema).parse(result);
   if (!row) throw new Error(`Saved ${entity} is no longer live: ${entityId}`);
   const item: z.infer<typeof entityMutationItem> = {
     id: row.id,

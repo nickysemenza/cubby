@@ -1,10 +1,9 @@
+import type { CookbookId, IngredientId } from "@cubby/schemas/identifiers";
+import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 /**
  * Recipe analytics and query operations.
  * Ingredient co-occurrence, tags, and other analytics.
  */
-
-import type { CookbookId, IngredientId } from "@cubby/schemas/identifiers";
-import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type {
   IngredientCooccurrence,
   IngredientEdge,
@@ -20,9 +19,11 @@ import type {
   RecipeDepNode,
 } from "@cubby/schemas/recipe-dependency-graph";
 import { and, desc, eq, inArray } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 
 import type { Database } from "~/server/db";
 import { getDb, notDeleted } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
   cookbook,
   recipe,
@@ -42,14 +43,22 @@ export const getIngredientCooccurrence = async (
 
   // Limit the graph source to recent recipes to bound the query.
   const recipes = await dbClient.query.recipe.findMany({
-    where: notDeleted(recipe),
-    orderBy: desc(recipe.updatedAt),
+    where: {
+      RAW: (table: PgTable) => relationalSql(table, notDeleted(recipe)),
+    },
+    orderBy: (table: PgTable) =>
+      [desc(recipe.updatedAt)]
+        .flat()
+        .map((value) => relationalSql(table, value)),
     limit: 500,
     with: {
       sections: {
         // Exclude soft-deleted sections/usages so the cooccurrence counts don't
         // include ingredients that were removed from these (live) recipes.
-        where: notDeleted(recipeSection),
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(table, notDeleted(recipeSection)),
+        },
         with: {
           ingredients: {
             // Only the nested ingredient's id/name/recipeId is read below — never
@@ -58,7 +67,10 @@ export const getIngredientCooccurrence = async (
             // back through Hyperdrive; Drizzle still pulls the FK to hydrate the
             // relation.
             columns: {},
-            where: notDeleted(recipeSectionIngredient),
+            where: {
+              RAW: (table: PgTable) =>
+                relationalSql(table, notDeleted(recipeSectionIngredient)),
+            },
             with: {
               ingredient: {
                 columns: {
@@ -202,7 +214,9 @@ const getCookbookNameMap = async (
   db: Database,
 ): Promise<Map<CookbookId, { name: string; shortcode: string }>> => {
   const rows = await getDb(db).query.cookbook.findMany({
-    where: notDeleted(cookbook),
+    where: {
+      RAW: (table: PgTable) => relationalSql(table, notDeleted(cookbook)),
+    },
     columns: { id: true, shortcode: true, name: true },
   });
   return new Map(
@@ -231,21 +245,33 @@ export const getRecipeDependencyGraph = async (
   };
 
   const recipes = await dbClient.query.recipe.findMany({
-    where: cookbookId
-      ? and(notDeleted(recipe), eq(recipe.cookbookId, cookbookId))
-      : notDeleted(recipe),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          cookbookId
+            ? and(notDeleted(recipe), eq(recipe.cookbookId, cookbookId))
+            : notDeleted(recipe),
+        ),
+    },
     columns: { id: true, shortcode: true, name: true, cookbookId: true },
     with: {
       sections: {
         // Exclude soft-deleted sections/usages so removed sub-recipe links
         // don't produce phantom edges (matches getIngredientCooccurrence).
-        where: notDeleted(recipeSection),
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(table, notDeleted(recipeSection)),
+        },
         with: {
           ingredients: {
             // Only si.ingredient is read — drop the heavy RSI line columns
             // (rawLine, amounts) from the marshalled payload.
             columns: {},
-            where: notDeleted(recipeSectionIngredient),
+            where: {
+              RAW: (table: PgTable) =>
+                relationalSql(table, notDeleted(recipeSectionIngredient)),
+            },
             with: {
               ingredient: { columns: { recipeId: true, deletedAt: true } },
             },
@@ -287,13 +313,19 @@ export const getRecipeDependencyGraph = async (
   // Resolve names for sub-recipes outside the current scope (cookbook filter).
   if (externalSubIds.size > 0) {
     const externals = await dbClient.query.recipe.findMany({
-      where: and(
-        notDeleted(recipe),
-        inArray(
-          recipe.id,
-          [...externalSubIds].map((id) => parseEntityId("recipe", id)),
-        ),
-      ),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(
+              notDeleted(recipe),
+              inArray(
+                recipe.id,
+                [...externalSubIds].map((id) => parseEntityId("recipe", id)),
+              ),
+            ),
+          ),
+      },
       columns: { id: true, shortcode: true, name: true, cookbookId: true },
     });
     for (const e of externals) {
@@ -327,21 +359,33 @@ export const getIngredientUsage = async (
 ): Promise<IngredientUsage> => {
   const dbClient = getDb(db);
   const recipes = await dbClient.query.recipe.findMany({
-    where: cookbookId
-      ? and(notDeleted(recipe), eq(recipe.cookbookId, cookbookId))
-      : notDeleted(recipe),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          cookbookId
+            ? and(notDeleted(recipe), eq(recipe.cookbookId, cookbookId))
+            : notDeleted(recipe),
+        ),
+    },
     columns: { id: true },
     with: {
       sections: {
         // Exclude soft-deleted sections/usages so usage counts don't include
         // ingredients removed from these live recipes (matches cooccurrence).
-        where: notDeleted(recipeSection),
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(table, notDeleted(recipeSection)),
+        },
         with: {
           ingredients: {
             // Only si.ingredient is read — drop the heavy RSI line columns
             // (rawLine, amounts) from the marshalled payload.
             columns: {},
-            where: notDeleted(recipeSectionIngredient),
+            where: {
+              RAW: (table: PgTable) =>
+                relationalSql(table, notDeleted(recipeSectionIngredient)),
+            },
             with: {
               ingredient: {
                 columns: {
@@ -403,7 +447,9 @@ export const getAllTags = async (db: Database): Promise<string[]> => {
   const dbClient = getDb(db);
 
   const recipesWithTags = await dbClient.query.recipe.findMany({
-    where: notDeleted(recipe),
+    where: {
+      RAW: (table: PgTable) => relationalSql(table, notDeleted(recipe)),
+    },
     columns: { tags: true },
   });
 

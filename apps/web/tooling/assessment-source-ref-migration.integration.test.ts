@@ -7,8 +7,10 @@ import { withMigrationDatabase } from "./test-database-lease";
 
 it("indexes long retained source references without changing evidence or unfinished work", async () => {
   await withMigrationDatabase(async (client) => {
-    const db = drizzle(client);
-    await migrateDatabase(db, { through: "0067_foreign_receipt_coverage" });
+    const db = drizzle({ client: client, paramsInErrors: true });
+    await migrateDatabase(db, {
+      through: "20261103233330_0067_foreign_receipt_coverage",
+    });
     const id = "00000000-0000-4000-8000-000000000101";
     const longText = Array.from({ length: 512 }, (_, index) =>
       createHash("sha256")
@@ -54,7 +56,7 @@ it("indexes long retained source references without changing evidence or unfinis
     });
     const before = await retained();
     await migrateDatabase(db, {
-      through: "0068_assessment_settlement_source_index",
+      through: "20261104013801_0068_assessment_settlement_source_index",
     });
     expect(await retained()).toEqual(before);
     expect(
@@ -75,7 +77,9 @@ it("indexes long retained source references without changing evidence or unfinis
       ],
     );
     const beforeWaits = await retained();
-    await migrateDatabase(db, { through: "0069_work_item_coverage_waits" });
+    await migrateDatabase(db, {
+      through: "20261104040731_0069_work_item_coverage_waits",
+    });
     expect(await retained()).toEqual(beforeWaits);
     expect(
       (
@@ -132,7 +136,7 @@ it("indexes long retained source references without changing evidence or unfinis
     });
     const beforeDurableWork = await durableWork();
     await migrateDatabase(db, {
-      through: "0070_image_description_capture_scope",
+      through: "20261104074943_0070_image_description_capture_scope",
     });
     expect(await retained()).toEqual(beforeCapture);
     expect(await durableWork()).toEqual(beforeDurableWork);
@@ -155,7 +159,7 @@ it("indexes long retained source references without changing evidence or unfinis
       ).rows;
     const beforeStates = await states();
     await migrateDatabase(db, {
-      through: "0071_assessment_existing_membership_indexes",
+      through: "20261104105841_0071_assessment_existing_membership_indexes",
     });
     expect(await retained()).toEqual(beforeMembership);
     expect(await durableWork()).toEqual(beforeMembershipWork);
@@ -201,7 +205,9 @@ it("indexes long retained source references without changing evidence or unfinis
     const beforePublications = await retained();
     const beforePublicationWork = await durableWork();
     const beforePublicationStates = await states();
-    await migrateDatabase(db, { through: "0072_assessment_read_publications" });
+    await migrateDatabase(db, {
+      through: "20261104163856_0072_assessment_read_publications",
+    });
     const afterPublications = await retained();
     expect(afterPublications.assessments).toEqual(
       beforePublications.assessments,

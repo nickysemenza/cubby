@@ -7,6 +7,7 @@ import {
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { contributionRole } from "@cubby/schemas/ledger-party";
 import { eq, sql } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { createEntity } from "tooling/factories/create";
 import { createRepoIdentity } from "tooling/factories/repo";
 import { buildKernelContext } from "tooling/scenarios/context";
@@ -18,6 +19,7 @@ import {
   databaseForTransaction,
   withSnapshotWrite,
 } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
   expense,
   expenseAttribution,
@@ -1585,7 +1587,13 @@ describe("shared spending booking", () => {
     await commitFinancialSpending(ctx.db, fresh, ctx.actor);
     expect(
       await getDb(ctx.db).query.vendor.findFirst({
-        where: eq(vendorTable.shortcode, competing.output.id),
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(
+              table,
+              eq(vendorTable.shortcode, competing.output.id),
+            ),
+        },
       }),
     ).toMatchObject({ aliases: ["SYNTHETIC HARBOR 008"] });
   });
@@ -1618,14 +1626,20 @@ describe("shared spending booking", () => {
     ).rejects.toThrow("Synthetic outer transaction refused");
     expect(
       await getDb(ctx.db).query.vendor.findFirst({
-        where: eq(vendorTable.name, "Synthetic River"),
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(table, eq(vendorTable.name, "Synthetic River")),
+        },
       }),
     ).toBeUndefined();
     expect(await getDb(ctx.db).select().from(expense)).toEqual([]);
     await commitFinancialSpending(ctx.db, plan, ctx.actor);
     expect(
       await getDb(ctx.db).query.vendor.findFirst({
-        where: eq(vendorTable.name, "Synthetic River"),
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(table, eq(vendorTable.name, "Synthetic River")),
+        },
       }),
     ).toMatchObject({
       aliases: ["SYNTHETIC RIVER 009"],

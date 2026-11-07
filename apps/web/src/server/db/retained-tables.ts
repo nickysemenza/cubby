@@ -346,6 +346,7 @@ export const entityAttachment = pgTable(
           attachmentTargets()[entityAttachmentStorage.image.targetEntity][
             entityAttachmentStorage.image.targetColumn
           ],
+        { name: "EntityAttachment_imageId_Image_id_fk" },
       ),
     role: text("role", { enum: entityAttachmentRoleValues })
       .notNull()
@@ -493,13 +494,20 @@ export const ledgerSourceClaim = pgTable(
     id: pkUuid(),
     expenseId: uuid("expenseId")
       .$type<ExpenseId>()
-      .references(() => expense.id),
+      .references(() => expense.id, {
+        name: "LedgerSourceClaim_expenseId_Expense_id_fk",
+      }),
     ledgerTransferId: uuid("ledgerTransferId")
       .$type<LedgerTransferId>()
-      .references(() => ledgerTransfer.id),
+      .references(() => ledgerTransfer.id, {
+        name: "LedgerSourceClaim_ledgerTransferId_LedgerTransfer_id_fk",
+      }),
     source: text("source")
       .notNull()
-      .references(() => externalSource.slug, { onUpdate: "cascade" }),
+      .references(() => externalSource.slug, {
+        name: "LedgerSourceClaim_source_ExternalSource_slug_fk",
+        onUpdate: "cascade",
+      }),
     sourceKey: text("sourceKey").notNull(),
     sourceKeyVersion: integer("sourceKeyVersion").notNull(),
     normalizedEvidence: jsonb("normalizedEvidence")
@@ -625,7 +633,7 @@ export const aiUsage = pgTable(
     /** The member or agent session that spent this; automatic work has none. */
     runId: uuid("runId")
       .$type<RunId>()
-      .references(() => run.id),
+      .references(() => run.id, { name: "AiUsage_runId_Run_id_fk" }),
     jobKind: text("jobKind"),
     jobId: text("jobId"),
     inputTokens: integer("inputTokens"),
@@ -705,14 +713,17 @@ export const mcpToolCall = pgTable(
     userId: text("userId")
       .notNull()
       .$type<UserId>()
-      .references(() => user.id),
+      .references(() => user.id, { name: "McpToolCall_userId_user_id_fk" }),
     // Deliberately not an FK: revoking a dynamically registered OAuth client
     // deletes it, while historical usage must retain the caller identity.
     clientId: text("clientId"),
     // The in-app agent's Run; null for external clients.
     runId: uuid("runId")
       .$type<RunId>()
-      .references(() => run.id, { onDelete: "set null" }),
+      .references(() => run.id, {
+        name: "McpToolCall_runId_Run_id_fk",
+        onDelete: "set null",
+      }),
     // Null on rows from before these were recorded: that history cannot be split.
     action: text("action"),
     errorKind: text("errorKind").$type<McpToolErrorKind>(),
@@ -753,17 +764,23 @@ export const auditLog = pgTable(
     userId: text("userId")
       .notNull()
       .$type<UserId>()
-      .references(() => user.id),
+      .references(() => user.id, { name: "AuditLog_userId_user_id_fk" }),
     channel: text("channel").notNull().$type<AuditChannel>().default("web"),
     // Deliberately not an FK: revoking an OAuth client deletes it, while the
     // audit trail must keep the caller identity.
     oauthClientId: text("oauthClientId"),
     deviceId: uuid("deviceId")
       .$type<DeviceId>()
-      .references(() => device.id, { onDelete: "set null" }),
+      .references(() => device.id, {
+        name: "AuditLog_deviceId_Device_id_fk",
+        onDelete: "set null",
+      }),
     runId: uuid("runId")
       .$type<RunId>()
-      .references(() => run.id, { onDelete: "set null" }),
+      .references(() => run.id, {
+        name: "AuditLog_runId_Run_id_fk",
+        onDelete: "set null",
+      }),
     createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
   },
   (table) => [

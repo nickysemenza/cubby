@@ -43,17 +43,20 @@ describe("combined entity records", () => {
         ctx.actor,
       );
     }
-    const result = await getDb(ctx.db).execute(sql`
+    const result = await getDb(ctx.db).execute(
+      sql`
       EXPLAIN (ANALYZE, FORMAT JSON) ${await buildEntityRecordsQuery(
         entityRecordsInputSchema.parse({ kind: "product", pageSize: 3 }),
       )}
-    `);
+    `,
+      "objects",
+    );
     type Plan = {
       "Parent Relationship"?: string;
       "Actual Loops": number;
       Plans?: Plan[];
     };
-    const document = result.rows[0]!["QUERY PLAN"] as { Plan: Plan }[];
+    const document = result[0]!["QUERY PLAN"] as { Plan: Plan }[];
     const loops: number[] = [];
     const visit = (plan: Plan) => {
       if (plan["Parent Relationship"] === "SubPlan")

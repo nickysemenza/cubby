@@ -8,7 +8,7 @@ import { parseArgs } from "node:util";
 import { sql } from "drizzle-orm";
 import { readMigrationFiles, type MigrationMeta } from "drizzle-orm/migrator";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
-import { PgDialect } from "drizzle-orm/pg-core";
+import { migrate } from "drizzle-orm/pg-core/async";
 
 import { z } from "zod";
 
@@ -20,44 +20,27 @@ export const MIGRATIONS_FOLDER = fileURLToPath(
   new URL("../drizzle", import.meta.url),
 );
 
-const readMigrationJournal = (migrationsFolder: string) => {
-  const { entries } = z
-    .object({
-      entries: z.array(
-        z.object({
-          idx: z.number().int().nonnegative(),
-          when: z.number().int(),
-          tag: z.string().min(1),
-        }),
-      ),
-    })
-    .parse(
-      JSON.parse(
-        readFileSync(join(migrationsFolder, "meta/_journal.json"), "utf8"),
-      ),
-    );
-  return entries;
-};
-
-/**
- * Drizzle's migrator applies every journal entry newer than the LAST
- * bookkeeping row's `created_at` and never compares hashes. A database whose
- * rows are not exactly a prefix of this journal (legacy rows from another
- * era, an edited migration, a push-built schema with no rows) would have
- * migrations re-applied or silently skipped, so refuse it instead.
- */
+/** Validate named history and SQL hashes before the migrator upgrades bookkeeping. */
 export async function assertMigrationBookkeeping(
   db: NodePgDatabase,
-  journal: readonly MigrationMeta[],
+  migrations: readonly MigrationMeta[],
   migrationsFolder?: string,
-): Promise<number> {
+): Promise<string[]> {
   const { rows: bookkeeping } = await db.execute<{ exists: boolean }>(
     sql`SELECT to_regclass('drizzle.__drizzle_migrations') IS NOT NULL AS exists`,
   );
+  // to_jsonb also reads legacy ledgers that do not have the name column yet.
   const applied = bookkeeping[0]?.exists
     ? (
-        await db.execute<{ hash: string; created_at: string }>(
-          sql`SELECT hash, created_at FROM drizzle.__drizzle_migrations ORDER BY created_at, id`,
+        await db.execute<{
+          hash: string;
+          created_at: string;
+          name: string | null;
+          has_name: boolean;
+        }>(
+          // oxlint-disable-next-line cubby/no-raw-enum-literal-in-sql -- Ledger metadata key, not a household enum.
+          sql`SELECT hash, created_at, to_jsonb(m)->>'name' AS name, to_jsonb(m) ? 'name' AS has_name
+          FROM drizzle.__drizzle_migrations m ORDER BY created_at, id`,
         )
       ).rows
     : [];
@@ -66,22 +49,24 @@ export async function assertMigrationBookkeeping(
       SELECT count(*)::int AS count FROM pg_class c
       JOIN pg_namespace n ON n.oid = c.relnamespace
       WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p')`);
-    if ((rows[0]?.count ?? 0) === 0) return 0;
+    if ((rows[0]?.count ?? 0) === 0) return [];
     throw new Error(
-      "Refusing to migrate: public has tables but drizzle.__drizzle_migrations records no migrations " +
-        "(a push-built database). Rebuild it with `pnpm dev reset`.",
+      "Refusing to migrate: public has tables but drizzle.__drizzle_migrations records no migrations (a push-built database).",
     );
   }
-  // Baseline adoption is enabled only by the migration runner. Inspection-only
-  // callers of this assertion must never mutate bookkeeping.
+  // A v1 ledger with an unnamed receipt would make the native migrator replay it.
+  if (applied.some((row) => row.has_name && !row.name))
+    throw new Error(
+      "Refusing to migrate: a v1 bookkeeping row has no migration name.",
+    );
   const baselinePath =
     migrationsFolder === undefined
       ? undefined
-      : join(migrationsFolder, "meta/_baseline.json");
+      : join(migrationsFolder, "baseline.json");
   if (
     baselinePath &&
     existsSync(baselinePath) &&
-    applied[0]?.hash !== journal[0]?.hash
+    applied[0]?.hash !== migrations[0]?.hash
   ) {
     const baseline = z
       .object({
@@ -93,37 +78,44 @@ export async function assertMigrationBookkeeping(
     const digest = createHash("sha256")
       .update(applied.map((row) => `${row.created_at}:${row.hash}\n`).join(""))
       .digest("hex");
-    const first = journal[0];
+    const first = migrations[0];
     if (
       first &&
       first.hash === baseline.baselineHash &&
       applied.length === baseline.retiredCount &&
       digest === baseline.retiredDigest
     ) {
-      // Only the complete, byte-for-byte retired ledger can adopt this baseline.
-      // No baseline DDL or seed writes run against the existing public schema.
+      // Only the complete retired ledger can adopt the baseline, without replaying DDL.
       await db.transaction(async (tx) => {
         await tx.execute(sql`DELETE FROM drizzle.__drizzle_migrations`);
-        await tx.execute(sql`INSERT INTO drizzle.__drizzle_migrations (hash, created_at)
-          VALUES (${first.hash}, ${first.folderMillis})`);
+        await tx.execute(
+          applied[0]?.has_name
+            ? sql`INSERT INTO drizzle.__drizzle_migrations (hash, created_at, name, applied_at)
+              VALUES (${first.hash}, ${first.folderMillis}, ${first.name}, NULL)`
+            : sql`INSERT INTO drizzle.__drizzle_migrations (hash, created_at)
+              VALUES (${first.hash}, ${first.folderMillis})`,
+        );
       });
-      return 1;
+      return [first.name];
     }
   }
-  applied.forEach((row, index) => {
-    const expected = journal[index];
-    if (
-      !expected ||
-      Number(row.created_at) !== expected.folderMillis ||
-      row.hash !== expected.hash
-    )
+  const names = new Set<string>();
+  for (const row of applied) {
+    const expected = row.name
+      ? migrations.find((entry) => entry.name === row.name)
+      : migrations.find(
+          (entry) =>
+            entry.hash === row.hash &&
+            entry.folderMillis ===
+              Math.floor(Number(row.created_at) / 1000) * 1000,
+        );
+    if (!expected || expected.hash !== row.hash || names.has(expected.name))
       throw new Error(
-        `Refusing to migrate: bookkeeping row ${index + 1} (created_at ${row.created_at}) does not match ` +
-          `journal entry ${index} (${expected ? `when ${expected.folderMillis}` : "none"}); ` +
-          "committed migrations are immutable and the bookkeeping must be a prefix of the journal.",
+        "Refusing to migrate: unknown, edited or duplicate applied migration; committed SQL and migration names are immutable.",
       );
-  });
-  return applied.length;
+    names.add(expected.name);
+  }
+  return [...names];
 }
 
 /** A lock wait that timed out, or a deadlock Postgres broke by aborting this statement. */
@@ -162,7 +154,7 @@ export async function retryingLockContention<T>(
   }
 }
 
-/** Advance through an inclusive journal boundary; omitted means every pending migration. */
+/** Advance through an inclusive migration boundary; omitted means every pending migration. */
 export async function migrateDatabase(
   db: NodePgDatabase,
   options: {
@@ -173,49 +165,39 @@ export async function migrateDatabase(
   } = {},
 ): Promise<void> {
   const migrationsFolder = options.migrationsFolder ?? MIGRATIONS_FOLDER;
-  const journal = readMigrationFiles({ migrationsFolder });
-  const entries = readMigrationJournal(migrationsFolder);
-  const tags = new Set<string>();
-  entries.forEach((entry, index) => {
-    const previous = entries[index - 1];
-    if (
-      entry.idx !== index ||
-      tags.has(entry.tag) ||
-      (previous && entry.when <= previous.when)
-    )
-      throw new Error(
-        `Refusing to migrate: journal entry ${entry.tag} must have contiguous indexes, unique tags and strictly increasing timestamps.`,
-      );
-    tags.add(entry.tag);
-  });
+  const migrations = readMigrationFiles({ migrationsFolder });
   const boundary =
     options.through === undefined
-      ? journal.length - 1
-      : entries.findIndex((entry) => entry.tag === options.through);
+      ? migrations.length - 1
+      : migrations.findIndex((entry) => entry.name === options.through);
   if (options.through !== undefined && boundary < 0)
     throw new Error(
-      `Refusing to migrate: --through=${options.through} is not an exact migration tag in the journal.`,
+      `Refusing to migrate: --through=${options.through} is not an exact migration folder name.`,
     );
-  const appliedCount = await assertMigrationBookkeeping(
-    db,
-    journal,
-    migrationsFolder,
+  const applied = new Set(
+    await assertMigrationBookkeeping(db, migrations, migrationsFolder),
   );
-  if (appliedCount > boundary + 1)
+  if (migrations.slice(boundary + 1).some((entry) => applied.has(entry.name)))
     throw new Error(
-      `Refusing to migrate: database is already beyond --through=${options.through}; last applied migration is ${entries[appliedCount - 1]?.tag}. No migrations were applied.`,
+      `Refusing to migrate: database is already beyond --through=${options.through}. No migrations were applied.`,
     );
   await ensureDbExtensions(db);
-  // Reuse Drizzle's transaction and bookkeeping engine with only the allowed prefix.
-  // SAFETY: PgDialect implements this same NodePgSession at runtime; its
-  // default PgQueryResultHKT signature loses the concrete driver variance.
-  const session = db._.session as Parameters<PgDialect["migrate"]>[1];
-  const pending = journal.slice(appliedCount, boundary + 1);
-  // Each attempt is one transaction: contention rolls back all of it, including
-  // earlier pending migrations it holds, and the next attempt rereads bookkeeping.
-  const retryTransaction = (migrations: typeof journal) =>
+  // SAFETY: the concrete node-postgres HKT is the engine's runtime database;
+  // its generic query-result signature loses the concrete driver's variance.
+  const migrationDb = db as Parameters<typeof migrate>[1];
+  // Upgrade the complete applied ledger before limiting execution to the boundary.
+  // Passing only applied files lets Drizzle backfill names without executing DDL.
+  await migrate(
+    migrations.filter((entry) => applied.has(entry.name)),
+    migrationDb,
+    { migrationsFolder },
+  );
+  const pending = migrations
+    .slice(0, boundary + 1)
+    .filter((entry) => !applied.has(entry.name));
+  const retryTransaction = (batch: MigrationMeta[]) =>
     retryingLockContention(
-      () => new PgDialect().migrate(migrations, session, { migrationsFolder }),
+      () => migrate(batch, migrationDb, { migrationsFolder }),
       {
         retries: TRANSACTION_LOCK_RETRIES,
         delayMs: options.lockRetryDelayMs ?? TRANSACTION_LOCK_RETRY_DELAY_MS,
@@ -226,7 +208,7 @@ export async function migrateDatabase(
       migration.sql[0]?.includes("-- cubby:transaction-per-statement"),
     )
   ) {
-    await retryTransaction(journal.slice(0, boundary + 1));
+    await retryTransaction(pending);
     return;
   }
   for (const migration of pending) {
@@ -235,7 +217,7 @@ export async function migrateDatabase(
       continue;
     }
     // Opt-in backfills must be restartable: a crash leaves committed batches
-    // but no journal receipt. Each statement therefore has to be idempotent.
+    // but no migration receipt. Each statement therefore has to be idempotent.
     for (const statement of migration.sql) {
       if (statement.includes("-- cubby:outside-transaction")) {
         await db.execute(sql.raw(statement));
@@ -246,7 +228,9 @@ export async function migrateDatabase(
         remaining = await retryingLockContention(() =>
           db.transaction(async (tx) => {
             await tx.execute(sql`SET LOCAL lock_timeout = '2s'`);
-            const result = await tx.execute(sql.raw(statement));
+            const result = await tx.execute<{ remaining: boolean }>(
+              sql.raw(statement),
+            );
             return statement.includes("-- cubby:repeat-batch")
               ? z.object({ remaining: z.boolean() }).parse(result.rows[0])
                   .remaining
@@ -255,8 +239,8 @@ export async function migrateDatabase(
         );
       } while (remaining);
     }
-    await db.execute(sql`INSERT INTO drizzle.__drizzle_migrations (hash, created_at)
-      VALUES (${migration.hash}, ${migration.folderMillis})`);
+    await db.execute(sql`INSERT INTO drizzle.__drizzle_migrations (hash, created_at, name)
+      VALUES (${migration.hash}, ${migration.folderMillis}, ${migration.name})`);
   }
 }
 
@@ -287,7 +271,7 @@ export function resolveTargetUrl(target: string | undefined): string {
     return url;
   }
   throw new Error(
-    "Usage: db-migrate.ts --target=dev|production [--through=exact-journal-tag] (production also needs PRODUCTION_DIRECT_DATABASE_URL)",
+    "Usage: db-migrate.ts --target=dev|production [--through=exact-migration-folder] (production also needs PRODUCTION_DIRECT_DATABASE_URL)",
   );
 }
 
@@ -299,7 +283,9 @@ async function main(): Promise<void> {
     connectionString: resolveTargetUrl(values.target),
   });
   try {
-    await migrateDatabase(drizzle(pool), { through: values.through });
+    await migrateDatabase(drizzle({ client: pool, paramsInErrors: true }), {
+      through: values.through,
+    });
     console.log(
       `[db-migrate] ${values.target} database is current${values.through === undefined ? "" : ` through ${values.through}`}`,
     );

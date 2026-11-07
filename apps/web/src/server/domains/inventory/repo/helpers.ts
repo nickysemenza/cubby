@@ -1,5 +1,6 @@
 import type { LocationId, ProductId } from "@cubby/schemas/identifiers";
 import { and, eq } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
@@ -8,6 +9,7 @@ import {
   notDeleted,
   unwrapDb,
 } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { inventoryEntry, location, product } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
 
@@ -46,9 +48,16 @@ export const assertLiveTargets = async (
   targets: { productId?: ProductId; locationId?: LocationId },
 ) => {
   const client = unwrapDb(db);
-  if (targets.productId !== undefined) {
+  const { productId, locationId } = targets;
+  if (productId !== undefined) {
     const live = await client.query.product.findFirst({
-      where: and(eq(product.id, targets.productId), notDeleted(product)),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(eq(product.id, productId), notDeleted(product)),
+          ),
+      },
       columns: { id: true },
     });
     if (!live) {
@@ -58,9 +67,15 @@ export const assertLiveTargets = async (
       );
     }
   }
-  if (targets.locationId !== undefined) {
+  if (locationId !== undefined) {
     const live = await client.query.location.findFirst({
-      where: and(eq(location.id, targets.locationId), notDeleted(location)),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(eq(location.id, locationId), notDeleted(location)),
+          ),
+      },
       columns: { id: true, parentId: true },
     });
     if (!live) {

@@ -7,10 +7,12 @@ import {
 } from "@cubby/schemas/identifiers";
 import { MEAL_TYPE_LABELS } from "@cubby/schemas/meal-classification";
 import { and, eq, isNotNull, or } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 
 import { shiftPlainDate } from "~/lib/household-date";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { notDeleted, withTransaction } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { meal, task } from "~/server/db/schema";
 import {
   type CalDavWrite,
@@ -50,7 +52,9 @@ export async function visitCalDavProjection(
     async (tx) => {
       for (let offset = 0; ; offset += PAGE_SIZE) {
         const page = await tx.query.meal.findMany({
-          where: notDeleted(meal),
+          where: {
+            RAW: (table: PgTable) => relationalSql(table, notDeleted(meal)),
+          },
           columns: {
             shortcode: true,
             name: true,
@@ -76,10 +80,16 @@ export async function visitCalDavProjection(
       }
       for (let offset = 0; ; offset += PAGE_SIZE) {
         const page = await tx.query.task.findMany({
-          where: and(
-            notDeleted(task),
-            or(isNotNull(task.dueDate), isNotNull(task.dueEndDate)),
-          ),
+          where: {
+            RAW: (table: PgTable) =>
+              relationalSql(
+                table,
+                and(
+                  notDeleted(task),
+                  or(isNotNull(task.dueDate), isNotNull(task.dueEndDate)),
+                ),
+              ),
+          },
           columns: {
             shortcode: true,
             name: true,

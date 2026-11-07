@@ -225,11 +225,10 @@ describe("Gmail ingestion and attachment storage", () => {
     };
     // Capture inputs append independently; existing execution rows are untouched.
     const jobs = async () =>
-      (
-        await getDb(ctx.db).execute(
-          sql`SELECT key, generation, xmin::text AS xmin FROM "Job" WHERE kind = 'derived.drain' ORDER BY key`,
-        )
-      ).rows;
+      await getDb(ctx.db).execute(
+        sql`SELECT key, generation, xmin::text AS xmin FROM "Job" WHERE kind = 'derived.drain' ORDER BY key`,
+        "objects",
+      );
     await saveMailboxMetadata(ctx.db, metadata);
     const originalEmail = await readEmail(ctx.db, identity);
     expect(originalEmail).not.toBeNull();

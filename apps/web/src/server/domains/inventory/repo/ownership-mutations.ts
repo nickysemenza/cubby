@@ -2,6 +2,7 @@ import type { ActorContext } from "@cubby/schemas/context";
 import type { ExpenseId, InventoryId } from "@cubby/schemas/identifiers";
 import type { InventoryOwnershipSelection } from "@cubby/schemas/inventory-ownership";
 import { and, asc, eq } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
@@ -11,6 +12,7 @@ import {
   updateAndReturn,
   withTransaction,
 } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { expense, inventoryEntry } from "~/server/db/schema";
 import { readExpenseById } from "~/server/domains/expense/repo/crud";
 import { replaceExpenseAttributionRole } from "~/server/domains/expense/repo/expense-attribution";
@@ -284,7 +286,13 @@ export const confirmInventoryOwnership = async (
 ): Promise<InventoryId[]> =>
   await withSerializableConfirmation(db, async (tx) => {
     const row = await tx.query.inventoryEntry.findFirst({
-      where: and(eq(inventoryEntry.id, id), notDeleted(inventoryEntry)),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(eq(inventoryEntry.id, id), notDeleted(inventoryEntry)),
+          ),
+      },
     });
     if (!row) {
       throw createAppError("INVENTORY_NOT_FOUND", "Inventory entry not found");
@@ -334,16 +342,25 @@ export const confirmInventoryExpenseBeneficiary = async (
 ) =>
   await withSerializableConfirmation(db, async (tx) => {
     const inventory = await tx.query.inventoryEntry.findFirst({
-      where: and(
-        eq(inventoryEntry.id, inventoryId),
-        notDeleted(inventoryEntry),
-      ),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(eq(inventoryEntry.id, inventoryId), notDeleted(inventoryEntry)),
+          ),
+      },
     });
     if (!inventory) {
       throw createAppError("INVENTORY_NOT_FOUND", "Inventory entry not found");
     }
     const targetExpense = await tx.query.expense.findFirst({
-      where: and(eq(expense.id, expenseId), notDeleted(expense)),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(eq(expense.id, expenseId), notDeleted(expense)),
+          ),
+      },
       columns: { productId: true },
     });
     if (!targetExpense) {

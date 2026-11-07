@@ -1,9 +1,11 @@
 import { and, asc, eq, exists, sql } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { alias } from "drizzle-orm/pg-core";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb, notDeleted } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { email, task } from "~/server/db/schema";
 import { emailScaffold } from "~/server/domains/email/repo/email";
 import { projectScaffold } from "~/server/domains/project/repo/lookup";
@@ -71,7 +73,7 @@ describe("list selection and relation loading", () => {
           load: async (where) =>
             (
               await getDb(ctx.db).query.task.findMany({
-                where,
+                where: { RAW: (table: PgTable) => relationalSql(table, where) },
                 with: { parentTask: true },
               })
             ).reverse(),

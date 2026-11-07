@@ -11,9 +11,8 @@ import type {
 } from "./caldav-types";
 import { calendarProjectionSchema } from "./caldav-types";
 import type { StoredCalendarDocument } from "./contracts";
-import migration from "./migrations/0000_bright_tyger_tiger.sql?raw";
-import resetMigration from "./migrations/0001_watery_tomas.sql?raw";
-import journal from "./migrations/meta/_journal.json";
+import migration from "./migrations/20260907210455_bright_tyger_tiger/migration.sql?raw";
+import resetMigration from "./migrations/20260908023453_watery_tomas/migration.sql?raw";
 import {
   calendarMeta,
   calendarResources,
@@ -26,13 +25,15 @@ import {
 export class CalendarSqlStore {
   private readonly db;
   constructor(storage: DurableObjectStorage) {
-    this.db = drizzle(storage);
+    this.db = drizzle(storage, { paramsInErrors: true });
   }
 
   async migrate() {
     await migrate(this.db, {
-      journal,
-      migrations: { m0000: migration, m0001: resetMigration },
+      migrations: {
+        "20260907210455_bright_tyger_tiger": migration,
+        "20260908023453_watery_tomas": resetMigration,
+      },
     });
     this.db.insert(calendarMeta).values({ id: 1 }).onConflictDoNothing().run();
   }

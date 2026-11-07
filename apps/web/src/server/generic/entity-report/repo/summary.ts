@@ -38,7 +38,8 @@ export async function productSellersReport(
   productId: ProductId,
   code: string,
 ): Promise<ReportBlock[]> {
-  const result = await unwrapDb(db).execute(sql`
+  const result = await unwrapDb(db).execute(
+    sql`
     SELECT v."shortcode" AS id, v."name", count(DISTINCT p."id")::int AS count, count(*) OVER ()::int AS "sellerCount",
       max(p."date")::text AS "lastPurchase"
     FROM "Expense" e
@@ -48,8 +49,10 @@ export async function productSellersReport(
     GROUP BY v."id", v."shortcode", v."name"
     ORDER BY count(DISTINCT p."id") DESC, max(p."date") DESC NULLS LAST, v."shortcode" ASC
     LIMIT 3
-  `);
-  const rows = z.array(sellerRow).parse(result.rows);
+  `,
+    "objects",
+  );
+  const rows = z.array(sellerRow).parse(result);
   return [
     {
       kind: "records",
@@ -391,7 +394,8 @@ async function serviceChargesSummary(
   code: string,
 ): Promise<ReportBlock[]> {
   const [totalsResult, historyResult, latestResult] = await Promise.all([
-    unwrapDb(db).execute(sql`
+    unwrapDb(db).execute(
+      sql`
       SELECT count(*) FILTER (WHERE e."cost" > 0)::int AS charges,
         count(*) FILTER (WHERE e."cost" < 0)::int AS credits,
         count(*) FILTER (WHERE e."cost" IS NULL)::int AS unpriced,
@@ -401,22 +405,30 @@ async function serviceChargesSummary(
         , avg(e."cost") FILTER (WHERE e."cost" > 0)::double precision AS average
       FROM "Expense" e
       WHERE e."productId" = ${productId} AND ${notDeleted("e")} AND ${sql.raw(actualExpenseSql("e"))}
-    `),
-    unwrapDb(db).execute(sql`
+    `,
+      "objects",
+    ),
+    unwrapDb(db).execute(
+      sql`
       SELECT e."shortcode" AS id, e."date"::text AS date, e."cost"::double precision AS cost
       FROM "Expense" e
       WHERE e."productId" = ${productId} AND ${notDeleted("e")} AND ${sql.raw(actualExpenseSql("e"))}
       ORDER BY e."date" DESC NULLS LAST, e."id" DESC
       LIMIT 12
-    `),
-    unwrapDb(db).execute(sql`
+    `,
+      "objects",
+    ),
+    unwrapDb(db).execute(
+      sql`
       SELECT e."shortcode" AS id, e."date"::text AS date, e."cost"::double precision AS cost
       FROM "Expense" e
       WHERE e."productId" = ${productId} AND ${notDeleted("e")} AND ${sql.raw(actualExpenseSql("e"))}
         AND e."date" IS NOT NULL AND e."cost" > 0
       ORDER BY e."date" DESC, e."id" DESC
       LIMIT 1
-    `),
+    `,
+      "objects",
+    ),
   ]);
   const totals = z
     .object({
@@ -428,14 +440,14 @@ async function serviceChargesSummary(
       spent: z.number().nullable(),
       average: z.number().nullable(),
     })
-    .parse(totalsResult.rows[0]);
+    .parse(totalsResult[0]);
   const expenseRow = z.object({
     id: z.string(),
     date: z.string().nullable(),
     cost: z.number().nullable(),
   });
-  const history = z.array(expenseRow).parse(historyResult.rows);
-  const latest = z.array(expenseRow).parse(latestResult.rows)[0];
+  const history = z.array(expenseRow).parse(historyResult);
+  const latest = z.array(expenseRow).parse(latestResult)[0];
   return [
     {
       kind: "stats",

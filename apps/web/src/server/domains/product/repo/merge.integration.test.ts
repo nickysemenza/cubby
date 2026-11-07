@@ -2,11 +2,13 @@ import { GTIN_SOURCE } from "@cubby/schemas/external-id";
 import type { ProductId } from "@cubby/schemas/identifiers";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { and, asc, eq, inArray } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { taxonomyId } from "tooling/product-category-fixtures";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb, notDeleted } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
   suggestionTable,
   entityAttachment,
@@ -167,10 +169,16 @@ describe("mergeProducts", () => {
     }
 
     const before = await getDb(ctx.db).query.entityAttachment.findMany({
-      where: and(
-        inArray(entityAttachment.entityId, [keeper.id, incoming.id]),
-        notDeleted(entityAttachment),
-      ),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(
+              inArray(entityAttachment.entityId, [keeper.id, incoming.id]),
+              notDeleted(entityAttachment),
+            ),
+          ),
+      },
       columns: { entityId: true, imageId: true },
     });
     expect(before).toHaveLength(2);
@@ -210,17 +218,29 @@ describe("mergeProducts", () => {
       TEST_ACTOR,
     );
     const saved = await getDb(ctx.db).query.product.findFirst({
-      where: eq(product.id, keeper.id),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(table, eq(product.id, keeper.id)),
+      },
       columns: { name: true, aliases: true },
     });
     expect(saved?.name).toBe("ForgeWear pocket tee black small");
     expect(saved?.aliases).toContain("Dark pocket shirt from photo");
     const after = await getDb(ctx.db).query.entityAttachment.findMany({
-      where: and(
-        eq(entityAttachment.entityId, keeper.id),
-        notDeleted(entityAttachment),
-      ),
-      orderBy: [asc(entityAttachment.sortOrder)],
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(
+              eq(entityAttachment.entityId, keeper.id),
+              notDeleted(entityAttachment),
+            ),
+          ),
+      },
+      orderBy: (table: PgTable) =>
+        [[asc(entityAttachment.sortOrder)]]
+          .flat()
+          .map((value) => relationalSql(table, value)),
       columns: { imageId: true },
     });
     expect(after.map((row) => row.imageId).sort()).toEqual(
@@ -234,10 +254,16 @@ describe("mergeProducts", () => {
 
   const liveExternalIds = (productId: ProductId) =>
     getDb(ctx.db).query.entityExternalId.findMany({
-      where: and(
-        eq(entityExternalId.entityId, productId),
-        notDeleted(entityExternalId),
-      ),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(
+              eq(entityExternalId.entityId, productId),
+              notDeleted(entityExternalId),
+            ),
+          ),
+      },
       columns: {
         source: true,
         kind: true,
@@ -249,10 +275,16 @@ describe("mergeProducts", () => {
 
   const liveEntries = (productId: ProductId) =>
     getDb(ctx.db).query.inventoryEntry.findMany({
-      where: and(
-        eq(inventoryEntry.productId, productId),
-        notDeleted(inventoryEntry),
-      ),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(
+              eq(inventoryEntry.productId, productId),
+              notDeleted(inventoryEntry),
+            ),
+          ),
+      },
       columns: {
         id: true,
         locationId: true,
@@ -342,7 +374,10 @@ describe("mergeProducts", () => {
     );
     expect(
       await getDb(ctx.db).query.planting.findFirst({
-        where: eq(planting.shortcode, planted.id),
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(table, eq(planting.shortcode, planted.id)),
+        },
         columns: { sourceProductId: true },
       }),
     ).toEqual({ sourceProductId: loser.id });
@@ -390,7 +425,10 @@ describe("mergeProducts", () => {
     ).rejects.toThrow(/planting source Product must be a garden product/);
     expect(
       await getDb(ctx.db).query.product.findFirst({
-        where: eq(product.id, keeper.id),
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(table, eq(product.id, keeper.id)),
+        },
         columns: { categoryId: true },
       }),
     ).toEqual({ categoryId: taxonomyId("tools") });
@@ -398,12 +436,21 @@ describe("mergeProducts", () => {
 
   const liveUnitMappings = (productId: ProductId) =>
     getDb(ctx.db).query.productUnitMappings.findMany({
-      where: and(
-        eq(productUnitMappings.productId, productId),
-        notDeleted(productUnitMappings),
-      ),
-      columns: { a: true, b: true, source: true },
-      orderBy: [asc(productUnitMappings.createdAt)],
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(
+              eq(productUnitMappings.productId, productId),
+              notDeleted(productUnitMappings),
+            ),
+          ),
+      },
+      columns: { id: true },
+      orderBy: (table: PgTable) =>
+        [[asc(productUnitMappings.createdAt)]]
+          .flat()
+          .map((value) => relationalSql(table, value)),
     });
 
   it("fills a purchase-created survivor's empty brandName from the photo-created loser", async () => {
@@ -423,7 +470,10 @@ describe("mergeProducts", () => {
 
     expect(summary.carriedFields).toContain("brandId");
     const survivor = await getDb(ctx.db).query.product.findFirst({
-      where: eq(product.id, keeper.id),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(table, eq(product.id, keeper.id)),
+      },
       columns: { brandId: true },
     });
     expect(survivor?.brandId).toBe(
@@ -472,7 +522,10 @@ describe("mergeProducts", () => {
       summary.carriedFields.length,
     );
     const rows = await getDb(ctx.db).query.product.findMany({
-      where: eq(product.model, "DCD791D2"),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(table, eq(product.model, "DCD791D2")),
+      },
       columns: {
         id: true,
         aliases: true,
@@ -489,11 +542,17 @@ describe("mergeProducts", () => {
     expect(survivor?.notes).toBe("From the retailer import");
     expect(summary.carriedFields).not.toContain("upc");
     const survivorGtins = await getDb(ctx.db).query.entityExternalId.findMany({
-      where: and(
-        eq(entityExternalId.entityId, keeper.id),
-        eq(entityExternalId.source, GTIN_SOURCE),
-        notDeleted(entityExternalId),
-      ),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(
+              eq(entityExternalId.entityId, keeper.id),
+              eq(entityExternalId.source, GTIN_SOURCE),
+              notDeleted(entityExternalId),
+            ),
+          ),
+      },
       columns: { externalId: true, isPrimary: true },
     });
     expect(survivorGtins).toEqual([
@@ -634,10 +693,16 @@ describe("mergeProducts", () => {
     );
 
     const liveImages = await getDb(ctx.db).query.entityAttachment.findMany({
-      where: and(
-        eq(entityAttachment.entityId, keeper.id),
-        notDeleted(entityAttachment),
-      ),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(
+              eq(entityAttachment.entityId, keeper.id),
+              notDeleted(entityAttachment),
+            ),
+          ),
+      },
       columns: { imageId: true },
     });
     expect(liveImages).toEqual([{ imageId: keeperImage.id }]);
@@ -830,7 +895,9 @@ describe("mergeProducts", () => {
 
     // Nothing was written — the whole merge rolls back.
     const survivor = await getDb(ctx.db).query.product.findFirst({
-      where: eq(product.id, loser.id),
+      where: {
+        RAW: (table: PgTable) => relationalSql(table, eq(product.id, loser.id)),
+      },
       columns: { deletedAt: true },
     });
     expect(survivor?.deletedAt).toBeNull();
@@ -886,7 +953,10 @@ describe("mergeProducts", () => {
       ).rejects.toThrow(/contain itself/);
 
       const dead = await getDb(ctx.db).query.product.findFirst({
-        where: eq(product.id, leaf.id),
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(table, eq(product.id, leaf.id)),
+        },
         columns: { deletedAt: true },
       });
       expect(dead?.deletedAt).toBeNull();
@@ -992,7 +1062,10 @@ describe("mergeProducts", () => {
       // the fill-never-overwrite carry has to treat it as a donor.
       expect(summary.carriedFields).toContain("stockTracked");
       const survivor = await getDb(ctx.db).query.product.findFirst({
-        where: eq(product.id, keeper.id),
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(table, eq(product.id, keeper.id)),
+        },
         columns: { stockTracked: true },
       });
       expect(survivor?.stockTracked).toBe(false);

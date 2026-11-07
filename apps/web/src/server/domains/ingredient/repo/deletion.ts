@@ -1,17 +1,18 @@
+import type { ActorContext } from "@cubby/schemas/context";
+import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 /**
  * Ingredient soft-delete with dependency guards.
  * The declared policy refuses live products and meal food entries and clears
  * plant links; only recipe usage needs its own three-level liveness guard.
  */
-
-import type { ActorContext } from "@cubby/schemas/context";
-import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type { IngredientId } from "@cubby/schemas/identifiers";
 import { and, eq, inArray } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import { assertNoDependents, notDeleted, unwrapDb } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
   ingredient,
   recipe,
@@ -91,7 +92,10 @@ const refuseLiveRecipeUsage = async (
     offendingParentIds: used.map((row) => row.ingredientId),
     fetchNames: (failedIds: IngredientId[]) =>
       tx.query.ingredient.findMany({
-        where: inArray(ingredient.id, failedIds),
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(table, inArray(ingredient.id, failedIds)),
+        },
         columns: { name: true },
       }),
     reason: "INGREDIENT_HAS_RECIPES",

@@ -467,10 +467,13 @@ export async function photoImportRelationExists(
         AND ${notDeleted("s")}
         AND t."shortcode" = ${targetCode}`;
   });
-  const result = await getDb(db).execute(sql`
+  const result = await getDb(db).execute(
+    sql`
     SELECT EXISTS(${sql.join(selects, sql` UNION ALL `)}) AS "related"
-  `);
-  return z.object({ related: z.boolean() }).parse(result.rows[0]).related;
+  `,
+    "objects",
+  );
+  return z.object({ related: z.boolean() }).parse(result[0]).related;
 }
 
 export async function attachImportedGalleryImages<E extends GalleryEntity>(

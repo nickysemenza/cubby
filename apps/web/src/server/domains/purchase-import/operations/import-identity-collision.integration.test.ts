@@ -290,8 +290,8 @@ describe("purchase import identifier collisions", () => {
   }
 
   const waiting = async (query: ReturnType<typeof sql>) => {
-    const result = await getDb(ctx.db).execute(query);
-    return z.object({ count: z.number() }).parse(result.rows[0]).count;
+    const result = await getDb(ctx.db).execute(query, "objects");
+    return z.object({ count: z.number() }).parse(result[0]).count;
   };
 
   it("serializes a concurrent canonical identifier insertion", async () => {

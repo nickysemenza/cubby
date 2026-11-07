@@ -4,12 +4,14 @@ import {
 } from "@cubby/schemas/ai";
 import { moneyToMinor } from "@cubby/shared";
 import { eq } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
 import type { DecisionPort } from "~/server/ai/decision-model";
 import { getDb } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
   financialTransaction,
   financialTransactionAllocation,
@@ -242,7 +244,10 @@ describe("reviewed linked finance category suggestions", () => {
     });
     const vendorDefaults = () =>
       getDb(ctx.db).query.vendor.findFirst({
-        where: eq(vendorTable.id, f.vendor.id),
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(table, eq(vendorTable.id, f.vendor.id)),
+        },
         columns: { defaultSpendingCategoryId: true, spendingProfile: true },
       });
     const before = await vendorDefaults();

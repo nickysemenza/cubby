@@ -3,6 +3,7 @@ import { generateShortcode } from "@cubby/shared";
 import type { AiModelPricing } from "@cubby/shared/ai/pricing";
 
 import { createDatabase } from "~/server/db/database-runtime";
+import { relationalSchema } from "~/server/db/schema";
 type ModelCost = NonNullable<AiModelPricing[keyof AiModelPricing]["cost"]>;
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
@@ -11,7 +12,6 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi, afterEach, beforeEach } from "vitest";
 import { z } from "zod";
 
-import { drizzleSchema as schema } from "~/server/db/drizzle-schema";
 import { getDb } from "~/server/db/helpers";
 import {
   aiUsage,
@@ -143,7 +143,8 @@ describe("listAiUsageForRun", () => {
     });
     const client = drizzle({
       client: pool,
-      schema,
+      relations: relationalSchema,
+      paramsInErrors: true,
       logger: {
         logQuery: (text, params) => statements.push({ text, params }),
       },

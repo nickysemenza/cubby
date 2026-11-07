@@ -8,8 +8,10 @@ import { withMigrationDatabase } from "./test-database-lease";
 // work; rebuilding projections overwrites historical evidence or review authority.
 it("carries populated history and pending paid work into the unified job cutover", async () => {
   await withMigrationDatabase(async (client) => {
-    const db = drizzle(client);
-    await migrateDatabase(db, { through: "0003_explicit_field_publication" });
+    const db = drizzle({ client: client, paramsInErrors: true });
+    await migrateDatabase(db, {
+      through: "20261021060244_0003_explicit_field_publication",
+    });
     const runId = "00000000-0000-4000-8000-000000000901";
     const assessmentId = "00000000-0000-4000-8000-000000000902";
     const evaluationId = "00000000-0000-4000-8000-000000000903";
@@ -261,7 +263,7 @@ it("carries populated history and pending paid work into the unified job cutover
       )
     ).rows;
 
-    await migrateDatabase(db, { through: "0005_thin_blink" });
+    await migrateDatabase(db, { through: "20261022045556_0005_thin_blink" });
 
     expect(
       (

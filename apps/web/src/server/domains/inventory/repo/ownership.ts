@@ -22,6 +22,7 @@ import { ledgerPartyKind } from "@cubby/schemas/ledger-party";
 import { OWNER_FILTER_HOUSEHOLD } from "@cubby/shared";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { and, eq, inArray, lte, sql } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { alias } from "drizzle-orm/pg-core";
 
 import { householdLocalDate } from "~/lib/household-date";
@@ -33,6 +34,7 @@ import {
 import { declaredStoredSourceSql } from "~/server/db/derived-source-sql";
 import { notDeleted, unwrapDb } from "~/server/db/helpers";
 import { quotedTable } from "~/server/db/helpers/related";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
   entityLink,
   expense,
@@ -1030,7 +1032,13 @@ export async function loadEffectiveInventoryOwnershipById(
   id: InventoryId,
 ): Promise<EffectiveInventoryOwnership | null> {
   const row = await unwrapDb(db).query.inventoryEntry.findFirst({
-    where: and(eq(inventoryEntry.id, id), notDeleted(inventoryEntry)),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          and(eq(inventoryEntry.id, id), notDeleted(inventoryEntry)),
+        ),
+    },
     columns: {
       id: true,
       productId: true,
@@ -1047,7 +1055,13 @@ export async function assertIndividualOwner(
   ownerId: LedgerPartyId,
 ): Promise<void> {
   const row = await db.query.ledgerParty.findFirst({
-    where: and(eq(ledgerParty.id, ownerId), notDeleted(ledgerParty)),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          and(eq(ledgerParty.id, ownerId), notDeleted(ledgerParty)),
+        ),
+    },
     columns: { kind: true },
   });
   if (!row || !isIndividual(row)) {

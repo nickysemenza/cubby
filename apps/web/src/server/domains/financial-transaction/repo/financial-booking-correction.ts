@@ -9,6 +9,7 @@ import {
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { cents } from "@cubby/shared";
 import { and, eq } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
@@ -18,6 +19,7 @@ import {
   withSnapshotWrite,
   databaseForTransaction,
 } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { financialTransaction, purchase } from "~/server/db/schema";
 import {
   deleteExpenses,
@@ -58,14 +60,25 @@ async function reimbursementDestination(
     );
   const purchaseId = await resolveOrThrow(db, "purchase", purchaseCode);
   const target = await getDb(db).query.purchase.findFirst({
-    where: and(eq(purchase.id, purchaseId), notDeleted(purchase)),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          and(eq(purchase.id, purchaseId), notDeleted(purchase)),
+        ),
+    },
   });
   if (!target) return fail("The original Purchase is no longer live.");
   const spendingCategoryId = target.spendingCategoryId;
   const category = spendingCategoryId
     ? await getDb(db).query.spendingCategory.findFirst({
-        where: (category, { eq }) =>
-          and(eq(category.id, spendingCategoryId), notDeleted(category)),
+        where: {
+          RAW: (category, { eq }) =>
+            relationalSql(
+              category,
+              and(eq(category.id, spendingCategoryId), notDeleted(category)),
+            ),
+        },
       })
     : null;
   const categoryName = category?.name ?? null;
@@ -76,8 +89,13 @@ async function reimbursementDestination(
   let trade = target.defaultTrade;
   if (target.defaultProjectId) {
     const project = await getDb(db).query.project.findFirst({
-      where: (project, { eq }) =>
-        and(eq(project.id, target!.defaultProjectId!), notDeleted(project)),
+      where: {
+        RAW: (project, { eq }) =>
+          relationalSql(
+            project,
+            and(eq(project.id, target!.defaultProjectId!), notDeleted(project)),
+          ),
+      },
     });
     projectName = project?.name ?? null;
     trade ??= project?.defaultTrade ?? null;
@@ -105,10 +123,16 @@ export async function previewFinancialBookingCorrection(
   );
   const row = await getDb(db)
     .query.financialTransaction.findFirst({
-      where: and(
-        eq(financialTransaction.id, id),
-        notDeleted(financialTransaction),
-      ),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(
+              eq(financialTransaction.id, id),
+              notDeleted(financialTransaction),
+            ),
+          ),
+      },
     })
     .then((row) => (row ? transactionDollars(row) : row));
   if (!row || row.status !== "posted" || row.ledgerTransferId)
@@ -146,8 +170,13 @@ export async function previewFinancialBookingCorrection(
     );
   const allocations = await getDb(db)
     .query.financialTransactionAllocation.findMany({
-      where: (allocation, { eq }) =>
-        and(eq(allocation.transactionId, id), notDeleted(allocation)),
+      where: {
+        RAW: (allocation, { eq }) =>
+          relationalSql(
+            allocation,
+            and(eq(allocation.transactionId, id), notDeleted(allocation)),
+          ),
+      },
     })
     .then((rows) => rows.map(allocationDollars));
   if (
@@ -229,10 +258,16 @@ export async function commitFinancialBookingCorrection(
       );
       const current = await getDb(txDb)
         .query.financialTransaction.findFirst({
-          where: and(
-            eq(financialTransaction.id, transactionId),
-            notDeleted(financialTransaction),
-          ),
+          where: {
+            RAW: (table: PgTable) =>
+              relationalSql(
+                table,
+                and(
+                  eq(financialTransaction.id, transactionId),
+                  notDeleted(financialTransaction),
+                ),
+              ),
+          },
         })
         .then((row) => (row ? transactionDollars(row) : row));
       if (current?.bookingCorrectionReceipt) {

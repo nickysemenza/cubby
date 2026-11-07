@@ -1,3 +1,5 @@
+import type { PgTable } from "drizzle-orm/pg-core";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { and, asc, eq } from "drizzle-orm";
 import { entityExternalId, financialAccount } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/db/helpers";
@@ -162,7 +164,13 @@ test("a new account must choose its identity kind instead of getting a default",
   await expect(dialog).toBeHidden();
   const stored = await getDb(getFixtureDb()).query.financialAccount.findFirst({
     with: { providerVendor: { columns: { shortcode: true } } },
-    where: and(eq(financialAccount.name, name), notDeleted(financialAccount)),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          and(eq(financialAccount.name, name), notDeleted(financialAccount)),
+        ),
+    },
   });
   expect(stored).toMatchObject({
     identity: { kind: "credit_card", network: null },

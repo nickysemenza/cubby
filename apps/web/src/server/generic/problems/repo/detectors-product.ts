@@ -32,6 +32,7 @@ import {
   or,
   sql,
 } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { uniq } from "es-toolkit";
 import { z } from "zod";
 
@@ -47,6 +48,7 @@ import {
 } from "~/server/db/computed/product-brand-sql";
 import { categorySummarySql } from "~/server/db/computed/product-category-sql";
 import { getDb, notDeleted } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
   entityLink,
   expense,
@@ -518,10 +520,15 @@ export const loadProductsForCoverage = async (
   productIds?: readonly ProductId[],
 ) => {
   const rows = await getDb(db).query.product.findMany({
-    where:
-      productIds == null
-        ? notDeleted(product)
-        : and(notDeleted(product), inArray(product.id, [...productIds])),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          productIds == null
+            ? notDeleted(product)
+            : and(notDeleted(product), inArray(product.id, [...productIds])),
+        ),
+    },
     columns: {
       id: true,
       name: true,
@@ -535,13 +542,28 @@ export const loadProductsForCoverage = async (
       categoryId: true,
     },
     extras: {
-      brandName: productBrandNameSql(product.brandId).as("brandName"),
-      brandCode: productBrandCodeSql(product.brandId).as("brandCode"),
-      category: categorySummarySql(sql`${product.categoryId}`).as("category"),
+      brandName: (table: PgTable) =>
+        relationalSql(
+          table,
+          productBrandNameSql(product.brandId).as("brandName"),
+        ),
+      brandCode: (table: PgTable) =>
+        relationalSql(
+          table,
+          productBrandCodeSql(product.brandId).as("brandCode"),
+        ),
+      category: (table: PgTable) =>
+        relationalSql(
+          table,
+          categorySummarySql(sql`${product.categoryId}`).as("category"),
+        ),
     },
     with: {
       unitMappings: {
-        where: notDeleted(productUnitMappings),
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(table, notDeleted(productUnitMappings)),
+        },
         columns: {
           aValue: true,
           aUnit: true,
@@ -635,7 +657,13 @@ export const findLinkedProductIds = async (
   ingredientId: IngredientId,
 ): Promise<ProductId[]> => {
   const linked = await getDb(db).query.product.findMany({
-    where: and(eq(product.ingredientId, ingredientId), notDeleted(product)),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          and(eq(product.ingredientId, ingredientId), notDeleted(product)),
+        ),
+    },
     columns: { id: true },
   });
   return linked.map((p) => p.id);

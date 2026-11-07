@@ -1,16 +1,20 @@
 import { drizzle } from "drizzle-orm/node-postgres";
 import { describe, expect, it } from "vitest";
 
+import { relationalSchema } from "~/server/db/schema";
+
 import type { DatabaseRuntime } from "./database-runtime";
 import type { RequestDbRole } from "./db-pg-tracing";
 import {
   DatabaseRuntimeResolver,
   type RequestDatabaseRuntimeScope,
 } from "./db-runtime-resolver";
-import * as schema from "./schema";
 
 const databaseRuntime = (): DatabaseRuntime => {
-  const client = drizzle.mock({ schema });
+  const client = drizzle.mock({
+    relations: relationalSchema,
+    paramsInErrors: true,
+  });
   return { client, withConnection: (fn) => fn(client) };
 };
 

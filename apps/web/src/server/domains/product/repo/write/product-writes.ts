@@ -23,6 +23,7 @@ import type {
 } from "@cubby/schemas/product-raw-read";
 import type { FoodSummary } from "@cubby/usda";
 import { eq, and } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { uniq } from "es-toolkit";
 
 import type { ListReadRow } from "~/entity/model/list-read-fields";
@@ -36,6 +37,7 @@ import {
   runAfterCommit,
   databaseForTransaction,
 } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { product as productTable } from "~/server/db/schema";
 import { foodLookupParamFromProduct } from "~/server/domains/product/repo/helpers";
 import { productUnitPriceDetailFields } from "~/server/domains/product/repo/list-enrichment";
@@ -76,7 +78,13 @@ const readProductMutationSnapshot = async (
   id: ProductId,
 ): Promise<ProductMutationSnapshot> => {
   const current = await getDb(db).query.product.findFirst({
-    where: and(eq(productTable.id, id), notDeleted(productTable)),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          and(eq(productTable.id, id), notDeleted(productTable)),
+        ),
+    },
     columns: { shortcode: true },
     with: { ingredient: { columns: { shortcode: true, deletedAt: true } } },
   });

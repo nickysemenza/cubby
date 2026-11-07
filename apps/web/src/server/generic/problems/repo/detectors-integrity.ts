@@ -60,6 +60,7 @@ import { allEntities, entityManifest } from "@cubby/schemas/entity-manifest";
 import type { EntityRef } from "@cubby/schemas/identifiers";
 import { parseEntityRef, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { ProblemsFast } from "@cubby/schemas/problems-raw-read";
+import { getColumnTable } from "drizzle-orm";
 import { is, type SQL, sql } from "drizzle-orm";
 import { getTableConfig, PgTable } from "drizzle-orm/pg-core";
 
@@ -121,12 +122,12 @@ function buildEdgeAuditSpecs(): EdgeAuditSpec[] {
       if (semantics.liveness.kind === "allow-target-deleted") continue;
 
       const column = edge.column;
-      if (!is(column.table, PgTable)) {
+      if (!is(getColumnTable(column), PgTable)) {
         throw new Error(
           `Edge "${edgeKey}"'s column is not attached to a PgTable — cannot derive its source table.`,
         );
       }
-      const sourceTableConfig = getTableConfig(column.table);
+      const sourceTableConfig = getTableConfig(getColumnTable(column));
       const sourceTableName = sourceTableConfig.name;
       const sourceColumnName = column.name;
       const sourceIdColumnName =
@@ -307,19 +308,19 @@ export const findReferentialLivenessViolations = async (
   );
 
   const [detailResult, countResult] = await Promise.all([
-    dbClient.execute<DetailRow>(detailQuery),
-    dbClient.execute<CountRow>(countQuery),
+    dbClient.execute<DetailRow>(detailQuery, "objects"),
+    dbClient.execute<CountRow>(countQuery, "objects"),
   ]);
 
   const countByKey = new Map(
-    countResult.rows.map((r) => [specKey(r), Number(r.count)]),
+    countResult.map((r) => [specKey(r), Number(r.count)]),
   );
   const shownByKey = new Map<string, number>();
-  for (const row of detailResult.rows) {
+  for (const row of detailResult) {
     shownByKey.set(specKey(row), (shownByKey.get(specKey(row)) ?? 0) + 1);
   }
 
-  return detailResult.rows.map((row): ReferentialLivenessViolation => {
+  return detailResult.map((row): ReferentialLivenessViolation => {
     const spec = specByKey.get(specKey(row));
     if (!spec) {
       throw new Error(

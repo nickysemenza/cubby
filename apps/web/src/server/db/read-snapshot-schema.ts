@@ -68,6 +68,7 @@ export const productReadSnapshot = pgTable(
   },
   (table) => [
     foreignKey({
+      name: "ProductReadSnapshot_entityId_kind_Entity_id_kind_fk",
       columns: [table.entityId, table.kind],
       foreignColumns: [entityIdentity.id, entityIdentity.kind],
     }).onDelete("cascade"),
@@ -92,6 +93,7 @@ export const inventoryReadSnapshot = pgTable(
   },
   (table) => [
     foreignKey({
+      name: "InventoryReadSnapshot_entityId_kind_Entity_id_kind_fk",
       columns: [table.entityId, table.kind],
       foreignColumns: [entityIdentity.id, entityIdentity.kind],
     }).onDelete("cascade"),
@@ -116,6 +118,7 @@ export const locationReadSnapshot = pgTable(
   },
   (table) => [
     foreignKey({
+      name: "LocationReadSnapshot_entityId_kind_Entity_id_kind_fk",
       columns: [table.entityId, table.kind],
       foreignColumns: [entityIdentity.id, entityIdentity.kind],
     }).onDelete("cascade"),
@@ -153,6 +156,7 @@ export const projectReadSnapshot = pgTable(
   },
   (table) => [
     foreignKey({
+      name: "ProjectReadSnapshot_entityId_kind_Entity_id_kind_fk",
       columns: [table.entityId, table.kind],
       foreignColumns: [entityIdentity.id, entityIdentity.kind],
     }).onDelete("cascade"),
@@ -179,6 +183,7 @@ export const expenseReadSnapshot = pgTable(
   },
   (table) => [
     foreignKey({
+      name: "ExpenseReadSnapshot_entityId_kind_Entity_id_kind_fk",
       columns: [table.entityId, table.kind],
       foreignColumns: [entityIdentity.id, entityIdentity.kind],
     }).onDelete("cascade"),
@@ -205,6 +210,7 @@ export const emailReadSnapshot = pgTable(
   },
   (table) => [
     foreignKey({
+      name: "EmailReadSnapshot_entityId_kind_Entity_id_kind_fk",
       columns: [table.entityId, table.kind],
       foreignColumns: [entityIdentity.id, entityIdentity.kind],
     }).onDelete("cascade"),
@@ -229,6 +235,7 @@ export const shipmentReadSnapshot = pgTable(
   },
   (table) => [
     foreignKey({
+      name: "ShipmentReadSnapshot_entityId_kind_Entity_id_kind_fk",
       columns: [table.entityId, table.kind],
       foreignColumns: [entityIdentity.id, entityIdentity.kind],
     }).onDelete("cascade"),

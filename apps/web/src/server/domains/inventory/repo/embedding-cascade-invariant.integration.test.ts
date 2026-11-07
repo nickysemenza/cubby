@@ -37,12 +37,14 @@ import { taskCreateInput } from "@cubby/schemas/entities/task";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import type { SearchableEntity } from "@cubby/schemas/search";
 import { and, eq } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import type { TestDbContext } from "tooling/test-setup";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { mock } from "~/lib/test/mock-schema";
 import { getDb } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
   entityEmbedding,
   entityLink,
@@ -107,10 +109,16 @@ const embeddingProbes = (ctx: TestDbContext) => {
     ) =>
       (
         await getDb(ctx.db).query.entityEmbedding.findFirst({
-          where: and(
-            eq(entityEmbedding.entityKind, entityKind),
-            eq(entityEmbedding.entityId, entityId),
-          ),
+          where: {
+            RAW: (table: PgTable) =>
+              relationalSql(
+                table,
+                and(
+                  eq(entityEmbedding.entityKind, entityKind),
+                  eq(entityEmbedding.entityId, entityId),
+                ),
+              ),
+          },
           columns: { deletedAt: true },
         })
       )?.deletedAt,
@@ -257,20 +265,31 @@ describe("removal entrypoints reach the shared cascade (no orphans)", () => {
     await deleteTasks(ctx.db, [parentTask.id], TEST_ACTOR);
 
     const parentRow = await getDb(ctx.db).query.task.findFirst({
-      where: eq(task.id, parentTaskId),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(table, eq(task.id, parentTaskId)),
+      },
     });
     const subtaskRow = await getDb(ctx.db).query.task.findFirst({
-      where: eq(task.id, subtaskId),
+      where: {
+        RAW: (table: PgTable) => relationalSql(table, eq(task.id, subtaskId)),
+      },
     });
     expect(parentRow?.deletedAt).not.toBeNull();
     expect(subtaskRow?.deletedAt).not.toBeNull();
 
     // Dependency links soft-delete with their task (EntityLink, ADR 0007).
     const remainingEdges = await getDb(ctx.db).query.entityLink.findMany({
-      where: and(
-        eq(entityLink.fromEntityId, subtaskId),
-        liveLinks("taskDependency"),
-      ),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(
+              eq(entityLink.fromEntityId, subtaskId),
+              liveLinks("taskDependency"),
+            ),
+          ),
+      },
     });
     expect(remainingEdges).toHaveLength(0);
 
@@ -300,7 +319,10 @@ describe("removal entrypoints reach the shared cascade (no orphans)", () => {
       );
     }
     const absorbedEntry = await getDb(ctx.db).query.inventoryEntry.findFirst({
-      where: eq(inventoryEntry.productId, loser.id),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(table, eq(inventoryEntry.productId, loser.id)),
+      },
       columns: { id: true },
     });
     if (!absorbedEntry) throw new Error("Expected a loser inventory entry");

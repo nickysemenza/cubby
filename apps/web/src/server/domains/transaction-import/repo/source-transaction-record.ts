@@ -125,7 +125,7 @@ export async function getSourceTransactionRecordSummary(
   filters: SourceTransactionRecordLegacyFilters,
 ) {
   const where = and(...buildConditions(filters))!;
-  const { rows } = await unwrapDb(db).execute<{
+  const rows = await unwrapDb(db).execute<{
     total: number;
     matched: number;
     held: number;
@@ -141,7 +141,8 @@ export async function getSourceTransactionRecordSummary(
     ignoredAmount: string;
     supersededAmount: string;
     unmatchedCharges: number;
-  }>(sql`
+  }>(
+    sql`
     SELECT
       count(*)::int AS total,
       COALESCE(sum(amount), 0) AS "amountTotal",
@@ -162,7 +163,9 @@ export async function getSourceTransactionRecordSummary(
       ${FROM_WITH_REFS}
       WHERE ${where}
     ) t
-  `);
+  `,
+    "objects",
+  );
   const row = rows[0];
   return {
     total: Number(row?.total ?? 0),
@@ -222,7 +225,7 @@ export async function findSourceTransactionRecordDrift(
   // One extra group so `truncated` reports the cut rather than implying the
   // sweep came back clean.
   const probe = input.limit + 1;
-  const { rows } = await unwrapDb(db).execute<{
+  const rows = await unwrapDb(db).execute<{
     source: string;
     accountDescriptor: string;
     statementDate: SourceTransactionRecordSqlValue;
@@ -235,7 +238,8 @@ export async function findSourceTransactionRecordDrift(
     disposition: string;
     importFingerprint: string;
     createdAt: SourceTransactionRecordSqlValue;
-  }>(sql`
+  }>(
+    sql`
     WITH eligible AS (
       SELECT id, source, "chargeKey", "accountDescriptor", "statementDate", "providerAmount", "createdAt"
       FROM ${sourceObservationFrom} WHERE ${where}
@@ -273,7 +277,9 @@ export async function findSourceTransactionRecordDrift(
     WHERE ${where}
     ORDER BY d."firstSeen" DESC, "SourceTransactionRecord"."createdAt" ASC,
              "SourceTransactionRecord"."externalId" ASC
-  `);
+  `,
+    "objects",
+  );
 
   const byGroup = new Map<string, SourceTransactionRecordDriftCandidate>();
   for (const row of rows) {

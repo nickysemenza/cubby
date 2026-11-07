@@ -1,10 +1,12 @@
 import { gardenEntryKind } from "@cubby/schemas/garden-fields";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { sql, and, eq, inArray } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { alias } from "drizzle-orm/pg-core";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { unwrapDb, notDeleted } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
   planting as searchTableplanting,
   plant as searchTableplant,
@@ -39,15 +41,21 @@ async function loadEmbeddingText(
 ): Promise<SearchableEntityText[]> {
   const queryConfig = withOptionalLimit(
     {
-      where: and(
-        notDeleted(gardenEntry),
-        options.ids?.length
-          ? inArray(
-              gardenEntry.id,
-              options.ids.map((id) => parseEntityId("gardenEntry", id)),
-            )
-          : undefined,
-      ),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(
+              notDeleted(gardenEntry),
+              options.ids?.length
+                ? inArray(
+                    gardenEntry.id,
+                    options.ids.map((id) => parseEntityId("gardenEntry", id)),
+                  )
+                : undefined,
+            ),
+          ),
+      },
       columns: {
         id: true,
         kind: true,

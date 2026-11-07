@@ -28,16 +28,22 @@ test("preserves residual allocations and saves a reviewed split without booking 
     merchant: "Synthetic processor alias",
     postedDate: "2026-10-20",
   });
-  await getDb(db).execute(sql`
+  await getDb(db).execute(
+    sql`
     INSERT INTO "FinancialTransactionAllocation" ("transactionId", "purchaseId", "amountMinor")
     VALUES (${partial.id}, ${seed.second.id}, 1500)
-  `);
+  `,
+    "objects",
+  );
   const acceptedAllocations = () =>
-    getDb(db).execute(sql`
+    getDb(db).execute(
+      sql`
     SELECT "transactionId", "purchaseId", ("amountMinor"::numeric/100)::float8 AS amount FROM "FinancialTransactionAllocation"
     WHERE "transactionId" IN (${partial.id}) AND "deletedAt" IS NULL
     ORDER BY "transactionId", "purchaseId"
-  `);
+  `,
+      "objects",
+    );
   const acceptedBefore = await acceptedAllocations();
   await gotoDetailActions(
     page,
@@ -110,19 +116,25 @@ test("preserves residual allocations and saves a reviewed split without booking 
   await expect(
     dialog.getByRole("spinbutton", { name: "Amount 2", exact: true }),
   ).toHaveValue("42.50");
-  expect((await acceptedAllocations()).rows).toEqual(acceptedBefore.rows);
-  const allocationsBeforeApproval = await getDb(db).execute(sql`
+  expect(await acceptedAllocations()).toEqual(acceptedBefore);
+  const allocationsBeforeApproval = await getDb(db).execute(
+    sql`
     SELECT count(*)::int AS count FROM "FinancialTransactionAllocation"
     WHERE "transactionId" IN (${seed.transaction.id})
       AND "deletedAt" IS NULL
-  `);
-  expect(allocationsBeforeApproval.rows).toEqual([{ count: 0 }]);
-  const ledgerBeforeApproval = await getDb(db).execute(sql`
+  `,
+    "objects",
+  );
+  expect(allocationsBeforeApproval).toEqual([{ count: 0 }]);
+  const ledgerBeforeApproval = await getDb(db).execute(
+    sql`
     SELECT count(*)::int AS count FROM "Expense"
     WHERE "purchaseId" IN (${seed.first.id}, ${seed.second.id})
       AND "deletedAt" IS NULL
-  `);
-  expect(ledgerBeforeApproval.rows).toEqual([{ count: 0 }]);
+  `,
+    "objects",
+  );
+  expect(ledgerBeforeApproval).toEqual([{ count: 0 }]);
   await dialog.getByRole("button").filter({ hasText: "$91.00" }).click();
   await expect(
     dialog.getByRole("textbox", { name: "Purchase code 1" }),
@@ -132,20 +144,26 @@ test("preserves residual allocations and saves a reviewed split without booking 
     .fill(seed.second.shortcode);
   await dialog.getByRole("button", { name: "Save allocation" }).click();
   await expect(dialog).toHaveCount(0);
-  const reviewedAllocations = await getDb(db).execute(sql`
+  const reviewedAllocations = await getDb(db).execute(
+    sql`
     SELECT "purchaseId", ("amountMinor"::numeric/100)::float8 AS amount FROM "FinancialTransactionAllocation"
     WHERE "transactionId" = ${seed.transaction.id} AND "deletedAt" IS NULL
     ORDER BY amount
-  `);
-  expect(reviewedAllocations.rows).toEqual([
+  `,
+    "objects",
+  );
+  expect(reviewedAllocations).toEqual([
     { purchaseId: seed.first.id, amount: 42.5 },
     { purchaseId: seed.second.id, amount: 48.5 },
   ]);
-  const ledgerAfterApproval = await getDb(db).execute(sql`
+  const ledgerAfterApproval = await getDb(db).execute(
+    sql`
     SELECT count(*)::int AS count FROM "Expense"
     WHERE "purchaseId" IN (${seed.first.id}, ${seed.second.id})
       AND "deletedAt" IS NULL
-  `);
-  expect(ledgerAfterApproval.rows).toEqual(ledgerBeforeApproval.rows);
-  expect((await acceptedAllocations()).rows).toEqual(acceptedBefore.rows);
+  `,
+    "objects",
+  );
+  expect(ledgerAfterApproval).toEqual(ledgerBeforeApproval);
+  expect(await acceptedAllocations()).toEqual(acceptedBefore);
 });

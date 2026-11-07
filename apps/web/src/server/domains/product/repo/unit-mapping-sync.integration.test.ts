@@ -1,10 +1,12 @@
 import type { ProductId } from "@cubby/schemas/identifiers";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { and, asc, eq } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb, notDeleted } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { productUnitMappings } from "~/server/db/schema";
 import {
   createProduct,
@@ -30,11 +32,20 @@ describe("syncProductUnitMappings row identity", () => {
   const liveMappingRows = (productId: ProductId) =>
     getDb(ctx.db)
       .query.productUnitMappings.findMany({
-        where: and(
-          eq(productUnitMappings.productId, productId),
-          notDeleted(productUnitMappings),
-        ),
-        orderBy: [asc(productUnitMappings.createdAt)],
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(
+              table,
+              and(
+                eq(productUnitMappings.productId, productId),
+                notDeleted(productUnitMappings),
+              ),
+            ),
+        },
+        orderBy: (table: PgTable) =>
+          [[asc(productUnitMappings.createdAt)]]
+            .flat()
+            .map((value) => relationalSql(table, value)),
       })
       .then((rows) =>
         rows.map((row) => ({

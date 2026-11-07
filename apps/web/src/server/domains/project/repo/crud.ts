@@ -13,6 +13,7 @@ import {
   type RawProjectOut,
 } from "@cubby/schemas/work-raw-read";
 import { and, eq, inArray, sql } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import { effectiveFieldSql } from "~/server/db/computed/effective-field";
@@ -24,6 +25,7 @@ import {
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { expense, project, task } from "~/server/db/schema";
 import { effectiveExpenseProjectSql } from "~/server/domains/expense/repo/expense-inheritance";
 import { resolveMemberAssignee } from "~/server/domains/ledger-party/repo/ledger-party-reference";
@@ -155,9 +157,13 @@ async function wouldCreateProjectCycle(
   let hops = 0;
   while (currentId && hops < MAX_PROJECT_TREE_DEPTH) {
     if (currentId === projectId) return true;
+    const ancestorId: ProjectId = currentId;
     const row: { parentProjectId: ProjectId | null } | undefined =
       await tx.query.project.findFirst({
-        where: eq(project.id, currentId),
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(table, eq(project.id, ancestorId)),
+        },
         columns: { parentProjectId: true },
       });
     currentId = row?.parentProjectId ?? null;
@@ -498,7 +504,10 @@ const refuseEffectiveMembers =
       offendingParentIds: (await fetch(tx, ids)).map((row) => row.projectId),
       fetchNames: (failedIds) =>
         tx.query.project.findMany({
-          where: inArray(project.id, failedIds),
+          where: {
+            RAW: (table: PgTable) =>
+              relationalSql(table, inArray(project.id, failedIds)),
+          },
           columns: { name: true },
         }),
       reason,

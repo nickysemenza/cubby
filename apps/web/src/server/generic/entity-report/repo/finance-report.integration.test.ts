@@ -3,11 +3,13 @@ import type { ProjectId, PurchaseId } from "@cubby/schemas/identifiers";
 import { recordSourceTransactionRecordsInput } from "@cubby/schemas/source-transaction-record";
 import { moneyToMinor } from "@cubby/shared";
 import { eq } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
   purchase as purchaseTable,
   sourceTransactionRecord,
@@ -166,8 +168,12 @@ describe("finance entity reports", () => {
       .select(sourceObservationColumns)
       .from(sourceObservationFrom)
       .where(eq(sourceTransactionRecord.batchId, revised.batchId));
+    const firstBatchId = first.batchId;
     const collection = await getDb(ctx.db).query.transactionImport.findFirst({
-      where: eq(transactionImport.id, first.batchId),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(table, eq(transactionImport.id, firstBatchId)),
+      },
     });
     if (!revision || !collection)
       throw new Error("Expected retained synthetic evidence");

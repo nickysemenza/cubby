@@ -12,7 +12,7 @@ import {
 export const user = pgTable("user", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
-  email: text("email").notNull().unique(),
+  email: text("email").notNull().unique("user_email_unique"),
   emailVerified: boolean("email_verified").default(false).notNull(),
   image: text("image"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -25,7 +25,7 @@ export const user = pgTable("user", {
 export const session = pgTable("session", {
   id: text("id").primaryKey(),
   expiresAt: timestamp("expires_at").notNull(),
-  token: text("token").notNull().unique(),
+  token: text("token").notNull().unique("session_token_unique"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at")
     .$onUpdate(() => /* @__PURE__ */ new Date())
@@ -34,7 +34,10 @@ export const session = pgTable("session", {
   userAgent: text("user_agent"),
   userId: text("user_id")
     .notNull()
-    .references(() => user.id, { onDelete: "cascade" }),
+    .references(() => user.id, {
+      name: "session_user_id_user_id_fk",
+      onDelete: "cascade",
+    }),
 });
 
 export const account = pgTable("account", {
@@ -43,7 +46,10 @@ export const account = pgTable("account", {
   providerId: text("provider_id").notNull(),
   userId: text("user_id")
     .notNull()
-    .references(() => user.id, { onDelete: "cascade" }),
+    .references(() => user.id, {
+      name: "account_user_id_user_id_fk",
+      onDelete: "cascade",
+    }),
   accessToken: text("access_token"),
   refreshToken: text("refresh_token"),
   idToken: text("id_token"),
@@ -79,7 +85,10 @@ export const passkey = pgTable(
     publicKey: text("public_key").notNull(),
     userId: text("user_id")
       .notNull()
-      .references(() => user.id, { onDelete: "cascade" }),
+      .references(() => user.id, {
+        name: "passkey_user_id_user_id_fk",
+        onDelete: "cascade",
+      }),
     credentialID: text("credential_id").notNull(),
     counter: integer("counter").notNull(),
     deviceType: text("device_type").notNull(),
@@ -106,7 +115,10 @@ export const apikey = pgTable("apikey", {
   // user id, so the FK + cascade preserves the prior delete-cascade behavior.
   referenceId: text("reference_id")
     .notNull()
-    .references(() => user.id, { onDelete: "cascade" }),
+    .references(() => user.id, {
+      name: "apikey_reference_id_user_id_fk",
+      onDelete: "cascade",
+    }),
   // Required by the plugin (defaults to "default"); identifies the key's config group.
   configId: text("config_id").notNull().default("default"),
   refillInterval: integer("refill_interval"),
@@ -152,7 +164,9 @@ export const oauthClient = pgTable(
   "oauth_client",
   {
     id: text("id").primaryKey(),
-    clientId: text("client_id").notNull().unique(),
+    clientId: text("client_id")
+      .notNull()
+      .unique("oauth_client_client_id_unique"),
     clientSecret: text("client_secret"),
     clientDiscoveryId: text("client_discovery_id"),
     disabled: boolean("disabled").default(false),
@@ -163,7 +177,9 @@ export const oauthClient = pgTable(
     clientCredentialsScopes: text("client_credentials_scopes")
       .array()
       .default([]),
-    userId: text("user_id").references(() => user.id),
+    userId: text("user_id").references(() => user.id, {
+      name: "oauth_client_user_id_user_id_fk",
+    }),
     createdAt: timestamp("created_at"),
     updatedAt: timestamp("updated_at"),
     name: text("name"),
@@ -199,7 +215,9 @@ export const oauthClient = pgTable(
 // `validAudiences` list. A null policy value inherits the plugin-level default.
 export const oauthResource = pgTable("oauth_resource", {
   id: text("id").primaryKey(),
-  identifier: text("identifier").notNull().unique(),
+  identifier: text("identifier")
+    .notNull()
+    .unique("oauth_resource_identifier_unique"),
   name: text("name").notNull(),
   accessTokenTtl: integer("access_token_ttl"),
   refreshTokenTtl: integer("refresh_token_ttl"),
@@ -225,10 +243,16 @@ export const oauthClientResource = pgTable(
     id: text("id").primaryKey(),
     clientId: text("client_id")
       .notNull()
-      .references(() => oauthClient.clientId, { onDelete: "cascade" }),
+      .references(() => oauthClient.clientId, {
+        name: "oauth_client_resource_client_id_oauth_client_client_id_fk",
+        onDelete: "cascade",
+      }),
     resourceId: text("resource_id")
       .notNull()
-      .references(() => oauthResource.identifier, { onDelete: "cascade" }),
+      .references(() => oauthResource.identifier, {
+        name: "oauth_client_resource_resource_id_oauth_resource_identifier_fk",
+        onDelete: "cascade",
+      }),
     metadata: jsonb("metadata"),
     createdAt: timestamp("created_at"),
   },
@@ -248,18 +272,23 @@ export const oauthRefreshToken = pgTable(
   "oauth_refresh_token",
   {
     id: text("id").primaryKey(),
-    token: text("token").notNull().unique(),
+    token: text("token").notNull().unique("oauth_refresh_token_token_unique"),
     // Note: the plugin's FKs point at oauthClient.clientId (a unique non-PK
     // column), not oauthClient.id.
     clientId: text("client_id")
       .notNull()
-      .references(() => oauthClient.clientId),
+      .references(() => oauthClient.clientId, {
+        name: "oauth_refresh_token_client_id_oauth_client_client_id_fk",
+      }),
     sessionId: text("session_id").references(() => session.id, {
+      name: "oauth_refresh_token_session_id_session_id_fk",
       onDelete: "set null",
     }),
     userId: text("user_id")
       .notNull()
-      .references(() => user.id),
+      .references(() => user.id, {
+        name: "oauth_refresh_token_user_id_user_id_fk",
+      }),
     referenceId: text("reference_id"),
     authorizationCodeId: text("authorization_code_id"),
     resources: text("resources").array(),
@@ -291,19 +320,26 @@ export const oauthAccessToken = pgTable(
   "oauth_access_token",
   {
     id: text("id").primaryKey(),
-    token: text("token").unique(),
+    token: text("token").unique("oauth_access_token_token_unique"),
     clientId: text("client_id")
       .notNull()
-      .references(() => oauthClient.clientId),
+      .references(() => oauthClient.clientId, {
+        name: "oauth_access_token_client_id_oauth_client_client_id_fk",
+      }),
     sessionId: text("session_id").references(() => session.id, {
+      name: "oauth_access_token_session_id_session_id_fk",
       onDelete: "set null",
     }),
-    userId: text("user_id").references(() => user.id),
+    userId: text("user_id").references(() => user.id, {
+      name: "oauth_access_token_user_id_user_id_fk",
+    }),
     referenceId: text("reference_id"),
     authorizationCodeId: text("authorization_code_id"),
     resources: text("resources").array(),
     requestedUserInfoClaims: text("requested_user_info_claims").array(),
-    refreshId: text("refresh_id").references(() => oauthRefreshToken.id),
+    refreshId: text("refresh_id").references(() => oauthRefreshToken.id, {
+      name: "oauth_access_token_refresh_id_oauth_refresh_token_id_fk",
+    }),
     expiresAt: timestamp("expires_at"),
     createdAt: timestamp("created_at"),
     revoked: timestamp("revoked"),
@@ -329,8 +365,12 @@ export const oauthConsent = pgTable(
     id: text("id").primaryKey(),
     clientId: text("client_id")
       .notNull()
-      .references(() => oauthClient.clientId),
-    userId: text("user_id").references(() => user.id),
+      .references(() => oauthClient.clientId, {
+        name: "oauth_consent_client_id_oauth_client_client_id_fk",
+      }),
+    userId: text("user_id").references(() => user.id, {
+      name: "oauth_consent_user_id_user_id_fk",
+    }),
     referenceId: text("reference_id"),
     resources: text("resources").array(),
     requestedUserInfoClaims: text("requested_user_info_claims").array(),

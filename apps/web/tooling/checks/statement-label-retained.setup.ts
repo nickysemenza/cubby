@@ -1,3 +1,4 @@
+import { relationalSchema } from "~/server/db/schema";
 import { randomBytes } from "node:crypto";
 import { buildActorContext } from "@cubby/schemas/context";
 import { testUserId } from "@cubby/schemas/testing";
@@ -69,13 +70,23 @@ async function freshDatabase() {
     async ({ databaseUrl }) =>
       new Pool({ connectionString: databaseUrl, max: 8 }),
   );
-  const client = drizzle({ client: pool, schema });
+  const client = drizzle({
+    client: pool,
+    relations: relationalSchema,
+    paramsInErrors: true,
+  });
   const db = createDatabase(() => ({
     client,
     withConnection: async (run) => {
       const connection = await pool.connect();
       try {
-        return await run(drizzle({ client: connection, schema }));
+        return await run(
+          drizzle({
+            client: connection,
+            relations: relationalSchema,
+            paramsInErrors: true,
+          }),
+        );
       } finally {
         connection.release();
       }

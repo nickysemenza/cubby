@@ -69,10 +69,11 @@ async function replacementDecisionClosure(
   ids: readonly SourceTransactionRecordId[],
 ) {
   if (!ids.length) return [];
-  const { rows } = await unwrapDb(tx).execute<{
+  const rows = await unwrapDb(tx).execute<{
     id: SourceTransactionRecordId;
     occurrenceId: string | null;
-  }>(sql`
+  }>(
+    sql`
     WITH RECURSIVE decisions AS (
       SELECT r.id, r."occurrenceId", r."supersededByRowId", ARRAY[r.id] AS visited FROM ${sourceObservations} r
       WHERE r.id IN (${sql.join(
@@ -83,7 +84,9 @@ async function replacementDecisionClosure(
       SELECT r.id, r."occurrenceId", r."supersededByRowId", decisions.visited || r.id
       FROM decisions JOIN ${sourceObservations} r ON r.id = decisions."supersededByRowId"
       WHERE NOT r.id = ANY(decisions.visited)
-    ) SELECT DISTINCT id, "occurrenceId" FROM decisions`);
+    ) SELECT DISTINCT id, "occurrenceId" FROM decisions`,
+    "objects",
+  );
   return rows;
 }
 
@@ -283,8 +286,9 @@ export async function updateSourceObservationJudgments(
     selected.some((row) => row.occurrenceId === owner.id),
   )) {
     const sameOccurrence = successor?.occurrenceId === owner.id;
-    const { rows: history } = await db.execute<{ held: boolean }>(
+    const history = await db.execute<{ held: boolean }>(
       sql`SELECT ${sourceOccurrenceHasUnresolvedHistory(sql`${owner.id}::uuid`, sql`${owner.acceptedTransactionId}::uuid`)} AS held`,
+      "objects",
     );
     const values = {
       ...financial,

@@ -27,6 +27,7 @@ import {
 } from "@cubby/schemas/location-raw-read";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import { and, eq, gt, inArray, isNotNull, sql } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { alias, QueryBuilder } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
@@ -54,6 +55,7 @@ import {
   withTransactionOn,
 } from "~/server/db/helpers";
 import { outer } from "~/server/db/helpers/related";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
   aiAnalysis,
   inventoryReadSnapshot,
@@ -177,10 +179,16 @@ const throwIfDuplicateLocation = async (
   // `lower(name) = lower($1)` rather than ilike, so the planner uses the same
   // functional index that raised the violation (see findOrCreateLocationByName).
   const existing = await unwrapDb(db).query.location.findFirst({
-    where: and(
-      sql`lower(${location.name}) = lower(${name})`,
-      notDeleted(location),
-    ),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          and(
+            sql`lower(${location.name}) = lower(${name})`,
+            notDeleted(location),
+          ),
+        ),
+    },
     columns: { name: true, shortcode: true },
   });
   throw createAppError(
@@ -354,7 +362,10 @@ export const ensureGlobalUnknownLocation = async (
 ) => {
   const findUnknown = () =>
     getDb(db).query.location.findFirst({
-      where: isGlobalUnknownLocation(),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(table, isGlobalUnknownLocation()),
+      },
       columns: { id: true },
     });
 
@@ -477,7 +488,13 @@ export const updateLocation = defineMutationWriter({
 
     const runUpdate = async (tx: DrizzleTransaction) => {
       const before = await tx.query.location.findFirst({
-        where: and(eq(location.id, id), notDeleted(location)),
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(
+              table,
+              and(eq(location.id, id), notDeleted(location)),
+            ),
+        },
       });
       const parentId = await resolveUpdatedParentId(tx);
       // `type` (form factor) and `productId` (identity) are independent facts
@@ -694,10 +711,16 @@ const loadLocationRelation = async <
   key: K,
 ) => {
   const rows = await unwrapDb(db).query.location.findMany({
-    where: inArray(
-      location.id,
-      ids.map((id) => parseEntityId("location", id)),
-    ),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          inArray(
+            location.id,
+            ids.map((id) => parseEntityId("location", id)),
+          ),
+        ),
+    },
     columns: { id: true },
     // SAFETY: the computed key is `key`, so the object is exactly that pick.
     with: { [key]: relations.location.list.with[key] } as Pick<
@@ -910,7 +933,10 @@ const loadLocationCoverImages = async (
   ];
   if (!codes.length) return new Map();
   const rows = await getDb(db).query.image.findMany({
-    where: inArray(image.shortcode, codes),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(table, inArray(image.shortcode, codes)),
+    },
   });
   const records = await hydrateImageReadProjection(
     db,
@@ -1106,10 +1132,16 @@ export const findLocationsNeedingAiDescription = async (
   const dbClient = getDb(db);
 
   const locations = await dbClient.query.location.findMany({
-    where: and(
-      notDeleted(location),
-      sql`${locationAiDescriptionSql(location.id)} IS NULL`,
-    ),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          and(
+            notDeleted(location),
+            sql`${locationAiDescriptionSql(location.id)} IS NULL`,
+          ),
+        ),
+    },
     columns: { id: true, name: true },
     with: {
       images: {
@@ -1138,7 +1170,10 @@ const loadLocationTree = async (
   id: LocationId,
 ): Promise<RawLocationDetail> => {
   const res = await unwrapDb(db).query.location.findFirst({
-    where: and(eq(location.id, id), notDeleted(location)),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(table, and(eq(location.id, id), notDeleted(location))),
+    },
     ...relations.location.full,
   });
 
@@ -1171,7 +1206,10 @@ const loadLocationTree = async (
     const parentsById = new Map(
       (
         await unwrapDb(db).query.location.findMany({
-          where: inArray(location.id, parentChainIds),
+          where: {
+            RAW: (table: PgTable) =>
+              relationalSql(table, inArray(location.id, parentChainIds)),
+          },
           ...relations.location.withImages,
         })
       ).map((parent) => [parent.id, parent]),

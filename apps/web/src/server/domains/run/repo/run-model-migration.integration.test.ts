@@ -51,7 +51,7 @@ describe("evaluation page admission cutover", () => {
       .where(eq(run.id, owner));
     const migration = readFileSync(
       new URL(
-        "../../../../../drizzle/0044_evaluation_page_admission.sql",
+        "../../../../../drizzle/20261026232833_0044_evaluation_page_admission/migration.sql",
         import.meta.url,
       ),
       "utf8",

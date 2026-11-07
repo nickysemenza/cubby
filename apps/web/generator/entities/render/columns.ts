@@ -54,7 +54,6 @@ const literalDefaultExpression = (value: DeclarationValue): string => {
 export const renderStorageColumn = (
   entity: CompiledEntity,
   field: EntityStorageField,
-  reference: (entity: string, column?: string) => string,
 ): string => {
   const column = JSON.stringify(field.column);
   if (field.specialized === "amount-columns") {
@@ -90,7 +89,7 @@ export const renderStorageColumn = (
     if (referenceIdType !== undefined && referenceIdType !== null)
       expression += `.$type<${referenceIdType}>()`;
   } else if (field.kind === "text-array") {
-    expression = `text(${column}).array()`;
+    expression = `text(${column})`;
   } else if (field.kind === "text") {
     expression = `text(${column})`;
   } else if (field.kind === "number") {
@@ -114,7 +113,8 @@ export const renderStorageColumn = (
     expression = enumColumnExpression(entity, field) ?? `text(${column})`;
   }
   if (field.type)
-    expression += `.$type<${field.type.export}${field.type.array ? "[]" : ""}>()`;
+    expression += `.$type<${field.type.export}${field.type.array && field.kind !== "text-array" ? "[]" : ""}>()`;
+  if (field.kind === "text-array") expression += ".array()";
   if (
     field.key !== "id" &&
     field.key !== "shortcode" &&
@@ -128,8 +128,6 @@ export const renderStorageColumn = (
     expression += `.default(sql\`${field.defaultSql}\`)`;
   if (field.specialized === "updated-at")
     expression += ".$onUpdate(() => new Date())";
-  if (field.reference !== null)
-    expression += `.references(${reference(field.reference, field.referenceOptions?.column)}${field.referenceOptions?.onUpdate || field.referenceOptions?.onDelete ? `, ${JSON.stringify({ onUpdate: field.referenceOptions.onUpdate, onDelete: field.referenceOptions.onDelete })}` : ""})`;
   return `${JSON.stringify(field.key)}:${expression}`;
 };
 

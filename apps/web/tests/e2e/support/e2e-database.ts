@@ -17,7 +17,9 @@ export async function createE2EDatabase(): Promise<DatabaseLease> {
     try {
       // Seeded in the checked-out database rather than the IntegreSQL template
       // so a cached older template is repaired before a worker starts.
-      await seedBaseWorld(drizzleNodePostgres(seedPool));
+      await seedBaseWorld(
+        drizzleNodePostgres({ client: seedPool, paramsInErrors: true }),
+      );
       // Every worker must start without corpus products, regardless of shard.
       const { rows } = await seedPool.query<{ count: string }>(
         'SELECT count(*)::text AS count FROM "Product"',

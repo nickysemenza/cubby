@@ -34,7 +34,7 @@ export class AiResponseCacheDurableObject
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
-    this.db = drizzle(ctx.storage);
+    this.db = drizzle(ctx.storage, { paramsInErrors: true });
     void ctx.blockConcurrencyWhile(async () => {
       await initializeResponseCache(ctx.storage);
       this.db

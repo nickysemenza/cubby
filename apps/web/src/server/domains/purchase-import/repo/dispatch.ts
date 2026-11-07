@@ -50,15 +50,18 @@ export async function dispatchStartedRun(
 /** Only the current unstarted generation can inherit terminal Job diagnostics. */
 export async function reconcilePurchaseDispatches(db: Database) {
   await withTransaction(db, async (tx) => {
-    const { rows } = await tx.execute<{
+    const rows = await tx.execute<{
       id: RunId;
       purpose: string;
-    }>(sql`UPDATE "Run" r SET status=${runStatus.enum.dispatch_failed}, "failureCode"=${runStatus.enum.dispatch_failed},
+    }>(
+      sql`UPDATE "Run" r SET status=${runStatus.enum.dispatch_failed}, "failureCode"=${runStatus.enum.dispatch_failed},
     "dispatchError"=j.error, "endedAt"=now(), "updatedAt"=now()
     FROM "Job" j WHERE j.kind='purchase.dispatch' AND j.state=${jobState.enum.failed} AND j."runId"=r.id
       AND j.input->>'type'='start_or_resume' AND j.input->>'eventId'=r."dispatchEventId"
       AND r.status=${runStatus.enum.running} AND r."coordinatorStartedAt" IS NULL AND r."retiredAt" IS NULL AND ${notDeleted("r")}
-      RETURNING r.id, r.purpose`);
+      RETURNING r.id, r.purpose`,
+      "objects",
+    );
     // Its coordinator never started, so nothing else would ever admit these Emails.
     for (const { id, purpose } of rows)
       if (purpose === "mail_import")

@@ -36,10 +36,12 @@ import {
   type RawProjectListItemOut,
 } from "@cubby/schemas/work-raw-read";
 import { and, inArray } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 
 import { groupForest } from "~/lib/forest";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { project } from "~/server/db/schema";
 
 import { projectScaffold } from "./lookup";
@@ -87,8 +89,9 @@ export const projectTreePage = async (
   const [matchingRows, sums] = await Promise.all([
     getDb(db).query.project.findMany({
       columns: { id: true, parentProjectId: true },
-      where: whereClause,
-      orderBy: orderByArray,
+      where: { RAW: (table: PgTable) => relationalSql(table, whereClause) },
+      orderBy: (table: PgTable) =>
+        [orderByArray].flat().map((value) => relationalSql(table, value)),
     }),
     projectScaffold
       .totals(db, filters, context)
@@ -124,8 +127,12 @@ export const projectTreePage = async (
   // allowed to NARROW the matching set, never widen it.
   const rows = await getDb(db).query.project.findMany({
     columns: { id: true },
-    where: and(inArray(project.id, [...keep]), whereClause),
-    orderBy: orderByArray,
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(table, and(inArray(project.id, [...keep]), whereClause)),
+    },
+    orderBy: (table: PgTable) =>
+      [orderByArray].flat().map((value) => relationalSql(table, value)),
   });
 
   return {

@@ -9,8 +9,10 @@
  * primary table's alias, which breaks a correlated subquery over another table.
  */
 import { type AnyColumn, type SQL, sql } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 
 import { notDeleted } from "~/server/db/helpers/predicates";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { location } from "~/server/db/retained-tables";
 
 /** The analysis feature id `describeLocation` writes under. */
@@ -32,5 +34,9 @@ export const locationAiDescriptionSql = (
  * as the row's `aiDescription`, where the mappers have always read it.
  */
 export const locationAiDescriptionExtras = {
-  aiDescription: locationAiDescriptionSql(location.id).as("aiDescription"),
+  aiDescription: (table: PgTable) =>
+    relationalSql(
+      table,
+      locationAiDescriptionSql(location.id).as("aiDescription"),
+    ),
 };

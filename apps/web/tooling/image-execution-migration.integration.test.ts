@@ -20,8 +20,10 @@ const identity = (
 
 it("moves open image execution onto ImageProcessingJob with backoff, failures and live leases intact", async () => {
   await withMigrationDatabase(async (client) => {
-    const db = drizzle(client);
-    await migrateDatabase(db, { through: "0072_assessment_read_publications" });
+    const db = drizzle({ client: client, paramsInErrors: true });
+    await migrateDatabase(db, {
+      through: "20261104163856_0072_assessment_read_publications",
+    });
     const id = (n: number) =>
       `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
     const imageId = id(1);
@@ -124,7 +126,9 @@ it("moves open image execution onto ImageProcessingJob with backoff, failures an
       )
     ).rows;
 
-    await migrateDatabase(db, { through: "0073_image_jobs_own_execution" });
+    await migrateDatabase(db, {
+      through: "20261105070438_0073_image_jobs_own_execution",
+    });
 
     const rows = (
       await client.query(
@@ -193,8 +197,10 @@ it("moves open image execution onto ImageProcessingJob with backoff, failures an
 
 it("refuses the cutover while a member's pause holds open image work", async () => {
   await withMigrationDatabase(async (client) => {
-    const db = drizzle(client);
-    await migrateDatabase(db, { through: "0072_assessment_read_publications" });
+    const db = drizzle({ client: client, paramsInErrors: true });
+    await migrateDatabase(db, {
+      through: "20261104163856_0072_assessment_read_publications",
+    });
     const imageId = "00000000-0000-4000-8000-000000000001";
     const jobId = "00000000-0000-4000-8000-000000000002";
     const executionId = "00000000-0000-4000-8000-000000000003";
@@ -217,7 +223,9 @@ it("refuses the cutover while a member's pause holds open image work", async () 
       [executionId, `image-processing:${jobId}`],
     );
     await expect(
-      migrateDatabase(db, { through: "0073_image_jobs_own_execution" }),
+      migrateDatabase(db, {
+        through: "20261105070438_0073_image_jobs_own_execution",
+      }),
     ).rejects.toThrow("paused image Job");
   });
 });
@@ -239,9 +247,9 @@ it.each([
   "survives a live writer crossing its locks (%s)",
   async (_order, first, second) => {
     await withMigrationDatabase(async (client, databaseUrl) => {
-      const db = drizzle(client);
+      const db = drizzle({ client: client, paramsInErrors: true });
       await migrateDatabase(db, {
-        through: "0072_assessment_read_publications",
+        through: "20261104163856_0072_assessment_read_publications",
       });
       const id = (n: number) =>
         `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
@@ -269,7 +277,7 @@ it.each([
         await writer.query("BEGIN");
         await writer.query(first);
         const migrating = migrateDatabase(db, {
-          through: "0073_image_jobs_own_execution",
+          through: "20261105070438_0073_image_jobs_own_execution",
         });
         await new Promise((resolve) => setTimeout(resolve, 300));
         // Whichever side Postgres aborts, the writer's own transaction ends and the
@@ -295,8 +303,10 @@ it.each([
 
 it("carries an owed embedding from its WorkItem onto its SearchDocument", async () => {
   await withMigrationDatabase(async (client) => {
-    const db = drizzle(client);
-    await migrateDatabase(db, { through: "0076_drop_dead_columns" });
+    const db = drizzle({ client: client, paramsInErrors: true });
+    await migrateDatabase(db, {
+      through: "20261105074121_0076_drop_dead_columns",
+    });
     const productId = "00000000-0000-4000-8000-000000000001";
     await identity(client, "product", productId, "PRD-SYNTH1");
     await client.query(
@@ -328,7 +338,9 @@ it("carries an owed embedding from its WorkItem onto its SearchDocument", async 
        VALUES ('00000000-0000-4000-8000-000000000002', 'JOB-SYNTH1', 'embedding:refresh', 'embedding.refresh', 'running', '{}')`,
     );
 
-    await migrateDatabase(db, { through: "0077_embedding_work_on_owner_rows" });
+    await migrateDatabase(db, {
+      through: "20261105083922_0077_embedding_work_on_owner_rows",
+    });
 
     expect(
       (
@@ -379,8 +391,10 @@ it("carries an owed embedding from its WorkItem onto its SearchDocument", async 
 
 it("moves owed AI evaluations onto their rows and keeps paid results and parked work", async () => {
   await withMigrationDatabase(async (client) => {
-    const db = drizzle(client);
-    await migrateDatabase(db, { through: "0077_embedding_work_on_owner_rows" });
+    const db = drizzle({ client: client, paramsInErrors: true });
+    await migrateDatabase(db, {
+      through: "20261105083922_0077_embedding_work_on_owner_rows",
+    });
     const id = (n: number) =>
       `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
     await client.query(`INSERT INTO "user" (id, name, email)
@@ -426,7 +440,7 @@ it("moves owed AI evaluations onto their rows and keeps paid results and parked 
     const before = await paid();
 
     await migrateDatabase(db, {
-      through: "0078_ai_evaluations_own_their_work",
+      through: "20261105085501_0078_ai_evaluations_own_their_work",
     });
 
     expect(await paid()).toEqual(before);
@@ -470,9 +484,9 @@ it("moves owed AI evaluations onto their rows and keeps paid results and parked 
 
 it("retires the Job entity without deleting a row, and new Jobs need no identity", async () => {
   await withMigrationDatabase(async (client) => {
-    const db = drizzle(client);
+    const db = drizzle({ client: client, paramsInErrors: true });
     await migrateDatabase(db, {
-      through: "0085_automatic_ai_evaluations_have_no_run",
+      through: "20261105122502_0085_automatic_ai_evaluations_have_no_run",
     });
     const id = "00000000-0000-4000-8000-000000000001";
     await identity(client, "job", id, "JOB-SYNTH1");
@@ -482,7 +496,9 @@ it("retires the Job entity without deleting a row, and new Jobs need no identity
       [id],
     );
 
-    await migrateDatabase(db, { through: "0088_job_is_no_longer_an_entity" });
+    await migrateDatabase(db, {
+      through: "20261105141819_0088_job_is_no_longer_an_entity",
+    });
 
     expect(
       (
@@ -511,9 +527,9 @@ it("retires the Job entity without deleting a row, and new Jobs need no identity
 
 it("deletes old Job identities and leaves unfinished Jobs and their attempts", async () => {
   await withMigrationDatabase(async (client) => {
-    const db = drizzle(client);
+    const db = drizzle({ client: client, paramsInErrors: true });
     await migrateDatabase(db, {
-      through: "0085_automatic_ai_evaluations_have_no_run",
+      through: "20261105122502_0085_automatic_ai_evaluations_have_no_run",
     });
     const id = "00000000-0000-4000-8000-000000000001";
     await identity(client, "job", id, "JOB-SYNTH1");
@@ -523,13 +539,15 @@ it("deletes old Job identities and leaves unfinished Jobs and their attempts", a
       [id],
     );
     await migrateDatabase(db, {
-      through: "0091_drop_columns_that_hold_nothing",
+      through: "20261105154131_0091_drop_columns_that_hold_nothing",
     });
     await client.query(
       `INSERT INTO "JobLaneAdmission" (lane, "ownedStreak") VALUES ('synthetic', 1)`,
     );
 
-    await migrateDatabase(db, { through: "0092_drop_job_identities" });
+    await migrateDatabase(db, {
+      through: "20261105155008_0092_drop_job_identities",
+    });
 
     expect(
       (
@@ -555,8 +573,10 @@ it("deletes old Job identities and leaves unfinished Jobs and their attempts", a
 
 it("refuses to retire an unfinished Job of a retired kind", async () => {
   await withMigrationDatabase(async (client) => {
-    const db = drizzle(client);
-    await migrateDatabase(db, { through: "0092_drop_job_identities" });
+    const db = drizzle({ client: client, paramsInErrors: true });
+    await migrateDatabase(db, {
+      through: "20261105155008_0092_drop_job_identities",
+    });
     await client.query(
       `INSERT INTO "Job" (key, kind, state, input, attempts) VALUES
        ('synthetic:done', 'ai-refresh.activate', 'completed', '{}', 1),
@@ -564,7 +584,9 @@ it("refuses to retire an unfinished Job of a retired kind", async () => {
     );
 
     await expect(
-      migrateDatabase(db, { through: "0093_retire_two_job_kinds" }),
+      migrateDatabase(db, {
+        through: "20261105163958_0093_retire_two_job_kinds",
+      }),
     ).rejects.toThrow("Failed query");
 
     expect(
@@ -579,8 +601,10 @@ it("refuses to retire an unfinished Job of a retired kind", async () => {
 
 it("retires two Job kinds and leaves paused work", async () => {
   await withMigrationDatabase(async (client) => {
-    const db = drizzle(client);
-    await migrateDatabase(db, { through: "0092_drop_job_identities" });
+    const db = drizzle({ client: client, paramsInErrors: true });
+    await migrateDatabase(db, {
+      through: "20261105155008_0092_drop_job_identities",
+    });
     await client.query(
       `INSERT INTO "Job" (key, kind, state, input, attempts) VALUES
        ('synthetic:correction', 'assessment.correction', 'completed', '{}', 1),
@@ -588,7 +612,9 @@ it("retires two Job kinds and leaves paused work", async () => {
        ('synthetic:paused', 'run.execute', 'paused', '{}', 2)`,
     );
 
-    await migrateDatabase(db, { through: "0093_retire_two_job_kinds" });
+    await migrateDatabase(db, {
+      through: "20261105163958_0093_retire_two_job_kinds",
+    });
 
     expect(
       (
@@ -614,14 +640,18 @@ it("retires two Job kinds and leaves paused work", async () => {
 
 it("drops Job's unread columns and keeps paused work and its attempts", async () => {
   await withMigrationDatabase(async (client) => {
-    const db = drizzle(client);
-    await migrateDatabase(db, { through: "0093_retire_two_job_kinds" });
+    const db = drizzle({ client: client, paramsInErrors: true });
+    await migrateDatabase(db, {
+      through: "20261105163958_0093_retire_two_job_kinds",
+    });
     await client.query(
       `INSERT INTO "Job" (key, kind, state, input, attempts, "subjectKind", "subjectId")
        VALUES ('synthetic:paused', 'run.execute', 'paused', '{}', 2, 'image', 'synthetic')`,
     );
 
-    await migrateDatabase(db, { through: "0094_drop_unread_job_columns" });
+    await migrateDatabase(db, {
+      through: "20261105170357_0094_drop_unread_job_columns",
+    });
 
     expect(
       (
@@ -634,8 +664,8 @@ it("drops Job's unread columns and keeps paused work and its attempts", async ()
 });
 
 describe("dropping WorkItem, JobInvalidationCapture and PhotoGroupSourceEvidence", () => {
-  const PREDECESSOR = "0102_drop_retired_project_start_snapshot";
-  const DROP = "0103_drop_workitem_capture_evidence";
+  const PREDECESSOR = "20261106010801_0102_drop_retired_project_start_snapshot";
+  const DROP = "20261106012350_0103_drop_workitem_capture_evidence";
   const UNDECLARED =
     "WorkItem holds a ticket for a target that is not declared";
   const RETIRED = [
@@ -644,7 +674,11 @@ describe("dropping WorkItem, JobInvalidationCapture and PhotoGroupSourceEvidence
     "PhotoGroupSourceEvidence",
   ];
   const refused = (client: Client, message: string) =>
-    expect(migrateDatabase(drizzle(client), { through: DROP })).rejects.toThrow(
+    expect(
+      migrateDatabase(drizzle({ client: client, paramsInErrors: true }), {
+        through: DROP,
+      }),
+    ).rejects.toThrow(
       expect.objectContaining({
         cause: expect.objectContaining({
           message: expect.stringContaining(message),
@@ -680,7 +714,9 @@ describe("dropping WorkItem, JobInvalidationCapture and PhotoGroupSourceEvidence
       [drain, target],
     );
   const populated = async (client: Client) => {
-    await migrateDatabase(drizzle(client), { through: PREDECESSOR });
+    await migrateDatabase(drizzle({ client: client, paramsInErrors: true }), {
+      through: PREDECESSOR,
+    });
     await ticket(client, "product.dataQuality");
     await ticket(client, "product.dataQuality@4");
   };
@@ -692,7 +728,9 @@ describe("dropping WorkItem, JobInvalidationCapture and PhotoGroupSourceEvidence
         `INSERT INTO "Job" (key, kind, state, input, attempts)
          VALUES ('synthetic:paused', 'run.execute', 'paused', '{}', 2)`,
       );
-      await migrateDatabase(drizzle(client), { through: DROP });
+      await migrateDatabase(drizzle({ client: client, paramsInErrors: true }), {
+        through: DROP,
+      });
       expect(await allGone(client)).toBe(true);
       expect(
         (
@@ -706,12 +744,16 @@ describe("dropping WorkItem, JobInvalidationCapture and PhotoGroupSourceEvidence
 
   it("drops a new database's own seeded tickets", async () => {
     await withMigrationDatabase(async (client) => {
-      await migrateDatabase(drizzle(client), { through: PREDECESSOR });
+      await migrateDatabase(drizzle({ client: client, paramsInErrors: true }), {
+        through: PREDECESSOR,
+      });
       expect(
         (await client.query(`SELECT count(*)::int AS n FROM "WorkItem"`))
           .rows[0].n,
       ).toBeGreaterThan(0);
-      await migrateDatabase(drizzle(client), { through: DROP });
+      await migrateDatabase(drizzle({ client: client, paramsInErrors: true }), {
+        through: DROP,
+      });
       expect(await allGone(client)).toBe(true);
     });
   });
@@ -724,9 +766,12 @@ describe("dropping WorkItem, JobInvalidationCapture and PhotoGroupSourceEvidence
       try {
         await writer.query("BEGIN");
         await ticket(writer, "synthetic.undeclared");
-        const outcome = migrateDatabase(drizzle(client), {
-          through: DROP,
-        }).catch((error: unknown) => error);
+        const outcome = migrateDatabase(
+          drizzle({ client: client, paramsInErrors: true }),
+          {
+            through: DROP,
+          },
+        ).catch((error: unknown) => error);
         // Long enough for the migration to be waiting on this writer's lock.
         await new Promise((resolve) => setTimeout(resolve, 300));
         await writer.query("COMMIT");
@@ -747,11 +792,15 @@ describe("dropping WorkItem, JobInvalidationCapture and PhotoGroupSourceEvidence
         `CREATE VIEW synthetic_blocker AS SELECT target FROM "WorkItem"`,
       );
       await expect(
-        migrateDatabase(drizzle(client), { through: DROP }),
+        migrateDatabase(drizzle({ client: client, paramsInErrors: true }), {
+          through: DROP,
+        }),
       ).rejects.toThrow("Failed query");
       expect(await allKept(client)).toBe(true);
       await client.query(`DROP VIEW synthetic_blocker`);
-      await migrateDatabase(drizzle(client), { through: DROP });
+      await migrateDatabase(drizzle({ client: client, paramsInErrors: true }), {
+        through: DROP,
+      });
       expect(await allGone(client)).toBe(true);
     });
   });
@@ -759,12 +808,16 @@ describe("dropping WorkItem, JobInvalidationCapture and PhotoGroupSourceEvidence
   it("is a no-op on a rerun after a commit whose receipt was lost", async () => {
     await withMigrationDatabase(async (client) => {
       await populated(client);
-      await migrateDatabase(drizzle(client), { through: DROP });
+      await migrateDatabase(drizzle({ client: client, paramsInErrors: true }), {
+        through: DROP,
+      });
       await client.query(
         `DELETE FROM drizzle.__drizzle_migrations
          WHERE created_at = (SELECT max(created_at) FROM drizzle.__drizzle_migrations)`,
       );
-      await migrateDatabase(drizzle(client), { through: DROP });
+      await migrateDatabase(drizzle({ client: client, paramsInErrors: true }), {
+        through: DROP,
+      });
       expect(await allGone(client)).toBe(true);
     });
   });

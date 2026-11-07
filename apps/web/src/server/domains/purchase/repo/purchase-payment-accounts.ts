@@ -1,3 +1,5 @@
+import type { RelationMutationOut } from "@cubby/schemas/common";
+import type { ActorContext } from "@cubby/schemas/context";
 /**
  * Purchase → paying FinancialAccount. A member's explicit links are the only
  * stored rows; with none, the order's paying accounts derive on read from its
@@ -5,9 +7,6 @@
  * or the order's member corrects them without a recompute. Re-import
  * never touches a link: no source claim owns it.
  */
-
-import type { RelationMutationOut } from "@cubby/schemas/common";
-import type { ActorContext } from "@cubby/schemas/context";
 import {
   type FinancialAccountId,
   parseShortcodeFor,
@@ -15,11 +14,13 @@ import {
 } from "@cubby/schemas/identifiers";
 import type { PurchasePaymentAccountOut } from "@cubby/schemas/purchase";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { uniq } from "es-toolkit";
 
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import { getDb, notDeleted, withTransaction } from "~/server/db/helpers";
 import { quotedTable } from "~/server/db/helpers/related";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { entityLink, financialAccount, purchase } from "~/server/db/schema";
 import { purchasePayingAccountIdsSql } from "~/server/domains/financial-transaction/repo/settlement-conflicts";
 import { linkRelationAdapter } from "~/server/entity-kernel/repo/relation-mutation-adapter";
@@ -144,7 +145,13 @@ async function preflightAttach(
     accounts.filter((row) => row.deletedAt === null).map((row) => row.id),
   );
   const livePurchase = await dbc.query.purchase.findFirst({
-    where: and(eq(purchase.id, purchaseId), notDeleted(purchase)),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          and(eq(purchase.id, purchaseId), notDeleted(purchase)),
+        ),
+    },
     columns: { id: true },
   });
   const already = await linkedAccountIds(dbc, purchaseId, requested);

@@ -1,3 +1,5 @@
+import type { PgTable } from "drizzle-orm/pg-core";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import type { Page } from "@playwright/test";
 import { fileURLToPath } from "node:url";
 import { publishProductPair } from "~/server/domains/product/repo/match/product-match-candidate";
@@ -156,7 +158,10 @@ test("applies selected notes to a resolved historical Product without changing i
   const context = await createEvidenceHarnessContext(page);
   const db = getDb(context.db);
   const product = await db.query.product.findFirst({
-    where: eq(schema.product.shortcode, existing.id),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(table, eq(schema.product.shortcode, existing.id)),
+    },
   });
   expect(product).toMatchObject({
     name: `${name} shirt`,
@@ -164,7 +169,10 @@ test("applies selected notes to a resolved historical Product without changing i
   });
   if (!product) throw new Error("Reviewed Product missing after approval");
   const stock = await db.query.inventoryEntry.findMany({
-    where: eq(schema.inventoryEntry.productId, product.id),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(table, eq(schema.inventoryEntry.productId, product.id)),
+    },
   });
   expect(stock).toHaveLength(1);
   expect(stock[0]).toMatchObject({
@@ -524,17 +532,29 @@ test("reviews, approves, and discards proposed photo groups on the photo-invento
     page.getByText("Completed", { exact: true }).first(),
   ).toBeVisible({ timeout: 10_000 });
   const savedProduct = await getDb(db).query.product.findFirst({
-    where: eq(schema.product.name, correctedName),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(table, eq(schema.product.name, correctedName)),
+    },
   });
   expect(savedProduct).toBeDefined();
   expect(
     await getDb(db).query.inventoryEntry.findMany({
-      where: eq(schema.inventoryEntry.productId, savedProduct!.id),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            eq(schema.inventoryEntry.productId, savedProduct!.id),
+          ),
+      },
     }),
   ).toMatchObject([{ amountValue: 2, amountUnit: "each" }]);
   expect(
     await getDb(db).query.product.findMany({
-      where: eq(schema.product.name, g2Name),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(table, eq(schema.product.name, g2Name)),
+      },
     }),
   ).toEqual([]);
 });
@@ -711,7 +731,10 @@ test("reviews an occupied location and adds the photo count to its chosen stock 
   );
   const stockRows = () =>
     db.query.inventoryEntry.findMany({
-      where: eq(schema.inventoryEntry.productId, productId),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(table, eq(schema.inventoryEntry.productId, productId)),
+      },
     });
   const before = await stockRows();
   expect(before).toHaveLength(1);
@@ -1421,7 +1444,10 @@ test("a member creates a Product from own item and label photos without an impor
 
   const { db } = await createEvidenceHarnessContext(page);
   const saved = await getDb(db).query.product.findFirst({
-    where: eq(schema.product.name, name),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(table, eq(schema.product.name, name)),
+    },
   });
   expect(saved).toBeDefined();
   await gotoAuthenticatedPage(page, `/products/${saved!.shortcode}`);

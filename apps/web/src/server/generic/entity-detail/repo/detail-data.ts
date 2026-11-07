@@ -93,7 +93,8 @@ export async function getMonthlyExpenseSpend(
     WHERE ${source.where} AND ${sql.raw(actualExpenseSql("t"))}
   `,
   );
-  const result = await unwrapDb(db).execute(sql`
+  const result = await unwrapDb(db).execute(
+    sql`
     WITH months AS (
       SELECT generate_series(date_trunc(${"month"}, ${today}::date) - interval '11 months', date_trunc(${"month"}, ${today}::date), interval '1 month')::date AS month
     ), lines AS (${sql.join(lines, sql` UNION `)})
@@ -101,8 +102,10 @@ export async function getMonthlyExpenseSpend(
       coalesce(round(sum(lines."cost")::numeric * 100), 0)::float AS cents
     FROM months LEFT JOIN lines ON lines."date" >= months.month AND lines."date" < months.month + interval '1 month'
     GROUP BY months.month ORDER BY months.month
-  `);
-  return monthlyExpenseSpendOutputSchema.parse(result.rows);
+  `,
+    "objects",
+  );
+  return monthlyExpenseSpendOutputSchema.parse(result);
 }
 
 /** Keyset pagination is applied after deduplicating and merging every source. */
@@ -153,14 +156,17 @@ export async function getDetailActivity(
   const cursor = input.cursor
     ? cursorSchema.parse(JSON.parse(decodeBase64UrlText(input.cursor)))
     : null;
-  const result = await unwrapDb(db).execute(sql`
+  const result = await unwrapDb(db).execute(
+    sql`
     WITH events AS (${sql.join(queries, sql` UNION `)})
     SELECT id, kind, entity, shortcode, title, subtitle, "allDay", "amountCents",
       to_char(date, 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') AS date FROM events
     ${cursor ? sql`WHERE (date, id) < (${cursor.date}::timestamptz AT TIME ZONE 'UTC', ${cursor.id})` : sql``}
     ORDER BY date DESC, id DESC LIMIT ${input.limit + 1}
-  `);
-  const rows = z.array(activityRowSchema).parse(result.rows);
+  `,
+    "objects",
+  );
+  const rows = z.array(activityRowSchema).parse(result);
   const items = rows.slice(0, input.limit).map((row) => ({
     ...row,
     date: row.date,

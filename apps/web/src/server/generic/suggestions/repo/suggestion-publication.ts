@@ -177,7 +177,7 @@ export async function lockSuggestionSlots<
     names.map((name) => sql`s.data->>${name}`),
     sql`, `,
   );
-  const { rows } = await client.execute<SuggestionRow & { slot: string[] }>(
+  const rows = await client.execute<SuggestionRow & { slot: string[] }>(
     sql`
     SELECT s.id::text AS id, s.status, s.active, s.fingerprint, s.suppression, s.data,
       s.data->>'evidenceFingerprint' AS "evidenceFingerprint",
@@ -197,6 +197,7 @@ export async function lockSuggestionSlots<
     ORDER BY s."createdAt" DESC, s.id DESC
     FOR UPDATE OF s
   `,
+    "objects",
   );
   // SAFETY: a family without `row` keeps the default `Row = SuggestionRow`.
   const toRow = family.row ?? ((row: SuggestionRow) => row as Row);

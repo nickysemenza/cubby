@@ -119,7 +119,7 @@ export async function listAutomaticDecisions(
   const totals = await Promise.all(
     branches.map(({ count }) => unwrapDb(db).execute<{ count: number }>(count)),
   );
-  const { rows } = await unwrapDb(db).execute<{
+  const rows = await unwrapDb(db).execute<{
     id: string;
     family: unknown;
     judgment: unknown;
@@ -132,12 +132,15 @@ export async function listAutomaticDecisions(
     status: string;
     applicationVerified: boolean;
     refs: unknown;
-  }>(sql`
+  }>(
+    sql`
     SELECT * FROM (${sql.join(
       branches.map(({ page }) => sql`(${page})`),
       sql` UNION ALL `,
     )}) decisions
-    ORDER BY "sortAt" DESC, id DESC LIMIT ${input.limit} OFFSET ${input.offset}`);
+    ORDER BY "sortAt" DESC, id DESC LIMIT ${input.limit} OFFSET ${input.offset}`,
+    "objects",
+  );
   const suggestionIds = rows
     .filter((row) => row.refs === null)
     .map((row) => row.id);

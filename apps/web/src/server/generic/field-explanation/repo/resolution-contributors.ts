@@ -10,6 +10,7 @@ import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { itemizationExpectation } from "@cubby/schemas/purchase-evidence-policy";
 import { humanize } from "@cubby/shared";
 import { and, eq, sql } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
 import { formatCurrency } from "~/lib/number-format";
@@ -21,6 +22,7 @@ import {
   sqlEnumConstant,
 } from "~/server/db/helpers";
 import { actualExpenseSql } from "~/server/db/helpers/predicates";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { inventoryEntry, location } from "~/server/db/schema";
 import { readExpense } from "~/server/domains/expense/repo/crud";
 import { loadExpenseSpendingCategoryEvidence } from "~/server/domains/expense/repo/expense-category-resolution";
@@ -124,7 +126,8 @@ async function expenseProjectSteps(
 ): Promise<FieldSteps> {
   const entity = "expense";
 
-  const result = await unwrapDb(db).execute(sql`
+  const result = await unwrapDb(db).execute(
+    sql`
       SELECT p.shortcode AS "purchaseCode",pc.shortcode AS "purchaseProject",
         hp.shortcode AS "foodProject",hp.name AS "foodName",e."lineKind"
       FROM "Expense" e
@@ -132,7 +135,9 @@ async function expenseProjectSteps(
       LEFT JOIN "Project" pc ON pc.id=p."defaultProjectId" AND ${notDeleted("pc")}
       CROSS JOIN LATERAL (SELECT e."lineKind",e."productId",NULL::uuid AS "projectId",NULL::uuid AS "purchaseId") food_candidate
       LEFT JOIN "Project" hp ON hp.id=${effectiveExpenseProjectSql("food_candidate")} AND ${notDeleted("hp")}
-      WHERE e.shortcode=${shortcode} AND ${notDeleted("e")}`);
+      WHERE e.shortcode=${shortcode} AND ${notDeleted("e")}`,
+    "objects",
+  );
   const row = z
     .object({
       purchaseCode: z.string().nullable(),
@@ -142,7 +147,7 @@ async function expenseProjectSteps(
       lineKind: z.string(),
     })
     .optional()
-    .parse(result.rows[0]);
+    .parse(result[0]);
   const principal = row?.lineKind === "principal";
   return {
     steps: [
@@ -212,10 +217,16 @@ async function inventoryOwnershipFieldSteps(
   resolution: FieldResolution | null,
 ): Promise<FieldSteps> {
   const row = await getDb(db).query.inventoryEntry.findFirst({
-    where: and(
-      eq(inventoryEntry.shortcode, shortcode),
-      notDeleted(inventoryEntry),
-    ),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          and(
+            eq(inventoryEntry.shortcode, shortcode),
+            notDeleted(inventoryEntry),
+          ),
+        ),
+    },
     columns: {
       id: true,
       productId: true,
@@ -268,12 +279,15 @@ async function fieldSteps(
     };
   }
   if (plan?.kind === "policy") {
-    const result = await unwrapDb(db).execute(sql`
+    const result = await unwrapDb(db).execute(
+      sql`
       SELECT v.shortcode AS "vendorCode",${vendorItemizationPolicySql("v")} AS "vendorPolicy",
         c.shortcode AS "categoryCode",c."itemizationExpectation" AS "categoryPolicy"
       FROM "Purchase" p LEFT JOIN "Vendor" v ON v.id=p."vendorId" AND ${notDeleted("v")}
       LEFT JOIN "SpendingCategory" c ON c.id=p."spendingCategoryId" AND ${notDeleted("c")}
-      WHERE p.shortcode=${shortcode} AND ${notDeleted("p")}`);
+      WHERE p.shortcode=${shortcode} AND ${notDeleted("p")}`,
+      "objects",
+    );
     const row = z
       .object({
         vendorCode: z.string().nullable(),
@@ -282,7 +296,7 @@ async function fieldSteps(
         categoryPolicy: z.string().nullable(),
       })
       .optional()
-      .parse(result.rows[0]);
+      .parse(result[0]);
     const steps: Step[] = [
       selfStep(entity, resolution),
       ...(row?.vendorCode
@@ -336,8 +350,9 @@ async function fieldSteps(
     const row = (
       await unwrapDb(db).execute(
         sql`SELECT p.shortcode,p."defaultTrade" AS trade FROM "Expense" e JOIN "Purchase" p ON p.id=e."purchaseId" AND ${notDeleted("p")} WHERE e.shortcode=${shortcode} AND ${notDeleted("e")} AND e."lineKind"=${"principal"}`,
+        "objects",
       )
-    ).rows[0];
+    )[0];
     const purchase = z
       .object({ shortcode: z.string(), trade: z.string().nullable() })
       .safeParse(row);
@@ -407,7 +422,8 @@ async function allocatedExpenseEvidence(
         : field === "trade"
           ? sql`to_jsonb(a.trade)`
           : sql`to_jsonb(a."costType")`;
-  const result = await unwrapDb(db).execute(sql`
+  const result = await unwrapDb(db).execute(
+    sql`
     WITH shares AS (${expenseJointAllocationSql(selection)}), evidence AS (
       SELECT a.*,${value} AS value,e.shortcode,e.name,p.shortcode AS "purchaseCode",
         COALESCE(p."displayLabel",p."orderId") AS "purchaseName"
@@ -416,7 +432,9 @@ async function allocatedExpenseEvidence(
     ) SELECT shortcode,name,"purchaseCode","purchaseName",value,"attributedCents",basis,incomplete,"categoryIncomplete",
       (SELECT count(*)::int FROM evidence) AS total,
       (SELECT count(DISTINCT value) FILTER (WHERE value <> 'null'::jsonb)::int FROM evidence) AS distinct_values
-    FROM evidence ORDER BY shortcode NULLS LAST LIMIT ${CONTRIBUTOR_LIMIT + 1}`);
+    FROM evidence ORDER BY shortcode NULLS LAST LIMIT ${CONTRIBUTOR_LIMIT + 1}`,
+    "objects",
+  );
   const rows = z
     .array(
       z.object({
@@ -433,7 +451,7 @@ async function allocatedExpenseEvidence(
         distinct_values: z.number(),
       }),
     )
-    .parse(result.rows);
+    .parse(result);
   const contributors: NonNullable<Evidence["contributors"]> = [];
   const codes = new Set<string>();
   for (const row of rows) collectCodes(row.value, codes);
@@ -540,7 +558,8 @@ async function productPriceEvidence(
   shortcode: string,
   resolution: FieldResolution,
 ): Promise<{ evidence: Evidence; truncated: boolean }> {
-  const result = await unwrapDb(db).execute(sql`
+  const result = await unwrapDb(db).execute(
+    sql`
     ${kitAncestorCteSql(sql`SELECT p.id,p.id,1::numeric,1::numeric,0 FROM "Product" p WHERE p.shortcode=${shortcode} AND ${notDeleted("p")}`)}
     SELECT e.shortcode,e.name,e.cost,e."productQuantity",p.shortcode AS "productCode",p.name AS "productName",
       ka."costWeight"::double precision AS "costWeight",ka."unitWeight"::double precision AS "unitWeight",ka.depth,
@@ -548,7 +567,9 @@ async function productPriceEvidence(
     FROM kit_anc ka JOIN "Product" p ON p.id=ka."productId" AND ${notDeleted("p")}
     JOIN "Expense" e ON e."productId"=ka."productId" AND ${notDeleted("e")}
       AND ${sql.raw(actualExpenseSql("e"))} AND e."lineKind"=${sqlEnumConstant(expenseLineKindSchema, expenseLineKindSchema.enum.principal)} AND e.cost>0
-    ORDER BY ka.depth,e.date DESC NULLS LAST,e.shortcode LIMIT ${CONTRIBUTOR_LIMIT + 1}`);
+    ORDER BY ka.depth,e.date DESC NULLS LAST,e.shortcode LIMIT ${CONTRIBUTOR_LIMIT + 1}`,
+    "objects",
+  );
   const rows = z
     .array(
       z.object({
@@ -564,7 +585,7 @@ async function productPriceEvidence(
         total: z.number(),
       }),
     )
-    .parse(result.rows);
+    .parse(result);
   const steps: Step[] = [
     selfStep("product", resolution),
     {
@@ -650,7 +671,8 @@ async function transactionPolicyEvidence(
   shortcode: string,
   resolution: FieldResolution,
 ): Promise<{ evidence: Evidence; truncated: boolean }> {
-  const result = await unwrapDb(db).execute(sql`
+  const result = await unwrapDb(db).execute(
+    sql`
     WITH policies AS (
       SELECT p.shortcode,COALESCE(p."displayLabel",p."orderId",p.shortcode) AS name,
         ${purchaseEvidenceFieldResolutionsSql("p")}->'itemizationExpectation' AS resolution
@@ -659,7 +681,9 @@ async function transactionPolicyEvidence(
       JOIN "Purchase" p ON p.id=a."purchaseId" AND ${notDeleted("p")}
       WHERE t.shortcode=${shortcode} AND ${notDeleted("t")}
     ) SELECT shortcode,name,resolution,count(*) OVER()::int AS total
-    FROM policies ORDER BY shortcode LIMIT ${CONTRIBUTOR_LIMIT + 1}`);
+    FROM policies ORDER BY shortcode LIMIT ${CONTRIBUTOR_LIMIT + 1}`,
+    "objects",
+  );
   const rows = z
     .array(
       z.object({
@@ -669,14 +693,17 @@ async function transactionPolicyEvidence(
         total: z.number(),
       }),
     )
-    .parse(result.rows);
-  const categoryResult = await unwrapDb(db).execute(sql`
+    .parse(result);
+  const categoryResult = await unwrapDb(db).execute(
+    sql`
     SELECT c.shortcode,c."itemizationExpectation" AS value,
       ${linkedPurchaseItemizationExpectationSql("t")} AS "linkedValue",
       ${linkedPurchaseItemizationSourceSql("t")} AS "linkedSource"
     FROM "FinancialTransaction" t
     LEFT JOIN "SpendingCategory" c ON c.id=t."spendingCategoryId" AND ${notDeleted("c")}
-    WHERE t.shortcode=${shortcode} AND ${notDeleted("t")}`);
+    WHERE t.shortcode=${shortcode} AND ${notDeleted("t")}`,
+    "objects",
+  );
   const category = z
     .object({
       shortcode: z.string().nullable(),
@@ -685,7 +712,7 @@ async function transactionPolicyEvidence(
       linkedSource: fieldResolutionSchema.shape.sourceEntity,
     })
     .optional()
-    .parse(categoryResult.rows[0]);
+    .parse(categoryResult[0]);
   const linkedValue = category?.linkedValue ?? null;
   const steps: Step[] = [
     ...(resolution.mode === "allocated"
@@ -794,8 +821,13 @@ async function productOwnersEvidence(
 ): Promise<{ evidence: Evidence; truncated: boolean }> {
   const productId = (
     await getDb(db).query.product.findFirst({
-      where: (table, { and: both, eq: equals, isNull }) =>
-        both(equals(table.shortcode, shortcode), isNull(table.deletedAt)),
+      where: {
+        RAW: (table, { and: both, eq: equals, isNull }) =>
+          relationalSql(
+            table,
+            both(equals(table.shortcode, shortcode), isNull(table.deletedAt)),
+          ),
+      },
       columns: { id: true },
     })
   )?.id;

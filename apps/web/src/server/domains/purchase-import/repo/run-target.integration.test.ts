@@ -8,6 +8,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { aiUsage, auditLog, photoRunImage } from "~/server/db/schema";
 import { runHandlers } from "~/server/domains/run/operations/run.server";
 import { getRunWorkProgress } from "~/server/domains/run/repo/work-progress";
@@ -162,7 +163,9 @@ describe("run.reportDeviceWork", () => {
       actorUserId: ctx.actor.userId,
     });
     const runRow = await getDb(ctx.db).query.run.findFirst({
-      where: (table, { eq }) => eq(table.id, run.id),
+      where: {
+        RAW: (table, { eq }) => relationalSql(table, eq(table.id, run.id)),
+      },
       columns: { shortcode: true },
     });
     const image = await insertWithShortcode(ctx.db, "image", {

@@ -22,14 +22,17 @@ const publicationRow = workDiagnosticCounts.extend({
 
 /** Keep the unbounded finding payload inside SQL; only compact publication metadata crosses here. */
 export const loadWorkDiagnosticFacts = async (db: Database) => {
-  const result = await getDb(db).execute(sql`
+  const result = await getDb(db).execute(
+    sql`
     SELECT p.id, v.value->'counts' AS counts, v."computedAt", v."decidedBy",
       false AS pending, false AS stale, NULL::text AS error
     FROM "Project" p
     LEFT JOIN LATERAL (${declaredStoredSourceSql("project", "workDiagnosticFacts", sql`p.id`)}) v ON true
     WHERE p.shortcode = ${HOUSEHOLD_PROJECT_SHORTCODE} AND ${notDeleted("p")}
-    LIMIT 1`);
-  const row = z.array(publicationRow).parse(result.rows)[0];
+    LIMIT 1`,
+    "objects",
+  );
+  const row = z.array(publicationRow).parse(result)[0];
   if (!row) return null;
   const decision = storedFieldDecision.safeParse(row.decidedBy);
   return {

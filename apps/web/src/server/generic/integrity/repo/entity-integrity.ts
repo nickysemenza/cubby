@@ -4,6 +4,7 @@ import type {
 } from "@cubby/schemas/entity-integrity";
 import { allEntities, entityManifest } from "@cubby/schemas/entity-manifest";
 import { entityInspectorMetadata } from "@cubby/schemas/entity-manifest";
+import { getColumnTable } from "drizzle-orm";
 import { is } from "drizzle-orm";
 import { getTableConfig, PgTable } from "drizzle-orm/pg-core";
 import { sumBy } from "es-toolkit";
@@ -21,7 +22,7 @@ function physicalEdgesFor(
 
   return Object.entries(edges).map(([edgeKey, edge]) => {
     const column = edge.column;
-    if (!is(column.table, PgTable)) {
+    if (!is(getColumnTable(column), PgTable)) {
       throw new Error(`Edge "${edgeKey}" is not attached to a PgTable.`);
     }
     const entry = Object.entries(semantics).find(
@@ -33,7 +34,7 @@ function physicalEdgesFor(
     return {
       edgeKey,
       targetEntity: entity,
-      sourceTable: getTableConfig(column.table).name,
+      sourceTable: getTableConfig(getColumnTable(column)).name,
       sourceColumn: column.name,
       constrained: edge.unconstrained !== true,
       semantics: entry,

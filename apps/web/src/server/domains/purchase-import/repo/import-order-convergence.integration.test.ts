@@ -4,6 +4,7 @@ import { financialBookingInput } from "@cubby/schemas/financial-booking";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { recordSourceTransactionRecordsInput } from "@cubby/schemas/source-transaction-record";
 import { and, eq, isNull } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import {
   completeDescribeImageJobs,
   convergenceNames,
@@ -29,6 +30,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import type { Database } from "~/server/db";
 import { drizzleSchema as schema } from "~/server/db/drizzle-schema";
 import { getDb, notDeleted } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { emailScaffold } from "~/server/domains/email/repo/email";
 import {
   commitFinancialBooking,
@@ -375,7 +377,10 @@ async function createConvergenceHarness(ctx: TestDbContext) {
       actor,
     );
     const account = await database.query.financialAccount.findFirst({
-      where: eq(schema.financialAccount.id, cardId),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(table, eq(schema.financialAccount.id, cardId)),
+      },
     });
     const evidence = recorded.batchId
       ? (
@@ -412,19 +417,31 @@ async function createConvergenceHarness(ctx: TestDbContext) {
       }),
     });
     const transaction = await database.query.financialTransaction.findFirst({
-      where: and(
-        eq(schema.financialTransaction.accountId, cardId),
-        notDeleted(schema.financialTransaction),
-      ),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(
+              eq(schema.financialTransaction.accountId, cardId),
+              notDeleted(schema.financialTransaction),
+            ),
+          ),
+      },
     });
     if (!transaction) throw new Error("Imported statement transaction missing");
     const receipt = retailerDone
       ? await database.query.purchase.findFirst({
-          where: and(
-            eq(schema.purchase.vendorId, vendorId),
-            eq(schema.purchase.orderId, orderId),
-            notDeleted(schema.purchase),
-          ),
+          where: {
+            RAW: (table: PgTable) =>
+              relationalSql(
+                table,
+                and(
+                  eq(schema.purchase.vendorId, vendorId),
+                  eq(schema.purchase.orderId, orderId),
+                  notDeleted(schema.purchase),
+                ),
+              ),
+          },
         })
       : undefined;
     if (retailerDone && !receipt)

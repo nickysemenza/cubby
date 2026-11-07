@@ -108,16 +108,18 @@ export async function declaredResetPreview(
     "resolve" in source
       ? await source.resolve(db, field, internalId, declaration.reset ?? {})
       : await (async () => {
-          const rows = await repositoryQueries(db).execute(sql`SELECT
+          const rows = await repositoryQueries(db).execute(
+            sql`SELECT
     ${source.resolution("reset_row", field)} AS resolution
     FROM ${table} AS reset_original
     CROSS JOIN LATERAL jsonb_populate_record(NULL::${table},
       to_jsonb(reset_original) || ${JSON.stringify(declaration.reset)}::jsonb) AS reset_row
     WHERE reset_original.id = ${internalId}::uuid
-      ${softDelete ? sql`AND ${notDeleted("reset_original")}` : sql``}`);
-          if (!rows.rows[0])
-            throw new Error("Reset preview record was not found");
-          return fieldResolutionSchema.parse(rows.rows[0].resolution);
+      ${softDelete ? sql`AND ${notDeleted("reset_original")}` : sql``}`,
+            "objects",
+          );
+          if (!rows[0]) throw new Error("Reset preview record was not found");
+          return fieldResolutionSchema.parse(rows[0].resolution);
         })();
   const [publicValue] = await explanationReferenceValues(db, [
     { value: resolution.value, source: resolution.sourceEntity },

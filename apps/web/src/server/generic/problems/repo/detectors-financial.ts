@@ -59,11 +59,12 @@ export async function findInvalidFinancialJson(
 export async function findDuplicateFinancialTransactionSourceRefs(
   db: Database,
 ): Promise<ProblemItem<"duplicateFinancialTransactionSourceRefs">[]> {
-  const { rows } = await getDb(db).execute<{
+  const rows = await getDb(db).execute<{
     source: string;
     value: string;
     transactions: string[];
-  }>(sql`
+  }>(
+    sql`
     SELECT alias.source,alias.value,array_agg(DISTINCT target.shortcode ORDER BY target.shortcode) AS transactions
     FROM "FinancialEvidenceAlias" alias
     JOIN "FinancialTransaction" target ON target.id=alias."historicalTransactionId" AND ${notDeleted("target")}
@@ -71,7 +72,9 @@ export async function findDuplicateFinancialTransactionSourceRefs(
       -- includes-deleted: retained source aliases remain evidence rather than non-occurrence ownership.
       AND NOT EXISTS(SELECT 1 FROM "FinancialEvidenceAlias" observation WHERE observation.source=alias.source AND observation.value=alias.value AND observation."observationId" IS NOT NULL)
     GROUP BY alias.source,alias.value HAVING count(DISTINCT target.id)>1
-    ORDER BY alias.source,alias.value`);
+    ORDER BY alias.source,alias.value`,
+    "objects",
+  );
   return rows.map((row) => ({
     source: row.source,
     externalId: row.value,

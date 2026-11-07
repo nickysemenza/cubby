@@ -2,6 +2,7 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { describe, expect, it, vi } from "vitest";
 
 import { withConnection } from "~/server/db";
+import { relationalSchema } from "~/server/db/schema";
 
 import { Database } from "./database";
 import {
@@ -9,10 +10,12 @@ import {
   resolveDatabaseRuntime,
   type DatabaseRuntime,
 } from "./database-runtime";
-import * as schema from "./schema";
 
 const databaseRuntime = (): DatabaseRuntime => {
-  const client = drizzle.mock({ schema });
+  const client = drizzle.mock({
+    relations: relationalSchema,
+    paramsInErrors: true,
+  });
   return {
     client,
     withConnection: (fn) => fn(client),

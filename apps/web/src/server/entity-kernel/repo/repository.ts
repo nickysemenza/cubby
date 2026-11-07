@@ -120,9 +120,10 @@ export const createEntityRowFetcher =
     id: string,
   ): Promise<InferSelectModel<T> | undefined> => {
     // SAFETY: every accepted concrete PgTable has a full column selection.
+    const queryTable: PgTable = table;
     const rows = await repositoryQueries(db)
-      .select(getTableColumns(table))
-      .from(table as PgTable)
+      .select(getTableColumns(queryTable))
+      .from(queryTable)
       .where(and(eq(table.id, id), notDeleted(table)))
       .limit(1);
     // SAFETY: the explicit projection contains exactly this table's stored columns.

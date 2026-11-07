@@ -1,11 +1,13 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { eq } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { getDb } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { ingredient } from "~/server/db/schema";
 import { findOrCreateIngredient } from "~/server/domains/ingredient/repo/crud";
 import { createInventoryEntry } from "~/server/domains/inventory/repo/crud";
@@ -351,7 +353,10 @@ describe("summary mutation output demand", () => {
     expect(result).toEqual({ id: seeded.shortcode });
     expect(
       await getDb(ctx.db).query.ingredient.findFirst({
-        where: eq(ingredient.id, seeded.id),
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(table, eq(ingredient.id, seeded.id)),
+        },
         columns: { name: true },
       }),
     ).toEqual({ name: "Synthetic renamed ingredient" });

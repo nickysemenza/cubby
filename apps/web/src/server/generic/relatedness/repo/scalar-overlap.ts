@@ -24,7 +24,8 @@ export async function readScalarOverlaps(
   const table = entityManifest[entity].dbTable;
   if (!table)
     throw new Error(`Relatedness requires a stored entity: ${entity}`);
-  const result = await repositoryQueries(db).execute(sql`
+  const result = await repositoryQueries(db).execute(
+    sql`
     WITH source_values AS (
       SELECT DISTINCT value FROM ${sql.identifier(table)} source
       CROSS JOIN LATERAL jsonb_array_elements_text(to_jsonb(source.${sql.identifier(signal.field)})) value
@@ -42,6 +43,8 @@ export async function readScalarOverlaps(
     SELECT "entityId", array_agg(value ORDER BY value) AS values
     FROM overlaps JOIN eligible USING (value)
     GROUP BY "entityId" ORDER BY "entityId"
-  `);
-  return result.rows.map((row) => overlapRow.parse(row));
+  `,
+    "objects",
+  );
+  return result.map((row) => overlapRow.parse(row));
 }

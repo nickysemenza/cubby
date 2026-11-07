@@ -31,12 +31,15 @@ describe("wish candidates", () => {
       [[null], null],
       [[], null],
     ] as const) {
-      const result = await getDb(ctx.db).execute(sql`
+      const result = await getDb(ctx.db).execute(
+        sql`
         SELECT ${wishPriceRangeSql(sql`price`)} AS range
         FROM jsonb_array_elements_text(${JSON.stringify(prices)}::jsonb) item
         CROSS JOIN LATERAL (SELECT item::double precision AS price) p
-      `);
-      expect(result.rows[0]?.range).toEqual(expected);
+      `,
+        "objects",
+      );
+      expect(result[0]?.range).toEqual(expected);
     }
     const priced = await createProduct(
       ctx.db,

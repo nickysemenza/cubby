@@ -3,9 +3,11 @@ import type {
   SearchableEntityRef,
 } from "@cubby/schemas/search";
 import { and, eq, inArray, sql } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { notDeleted, unwrapDb, withTransaction } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { entityEmbedding, searchDocument } from "~/server/db/schema";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import {
@@ -109,10 +111,16 @@ export async function getEntityEmbeddingDeletedAtForRef(
   ref: SearchableEntityRef,
 ): Promise<Date | null | undefined> {
   const row = await unwrapDb(db).query.entityEmbedding.findFirst({
-    where: and(
-      eq(entityEmbedding.entityKind, ref.entityKind),
-      eq(entityEmbedding.entityId, ref.entityId),
-    ),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          and(
+            eq(entityEmbedding.entityKind, ref.entityKind),
+            eq(entityEmbedding.entityId, ref.entityId),
+          ),
+        ),
+    },
     columns: { deletedAt: true },
   });
   return row?.deletedAt;

@@ -608,7 +608,8 @@ async function resolveRankedDisplayImages(
   const borrowedImages = branchSql.length
     ? sql`UNION ALL ${sql.join(branchSql, sql` UNION ALL `)}`
     : sql``;
-  const result = await unwrapDb(db).execute(sql`
+  const result = await unwrapDb(db).execute(
+    sql`
     WITH ${refsSql}
     ${expenseProjectRelation}
     ${sourceMerchantImagesSql(sourceTypes.has("sourceTransactionRecord"))}
@@ -658,9 +659,11 @@ async function resolveRankedDisplayImages(
         : sql``
     }
     FROM refs
-  `);
+  `,
+    "objects",
+  );
 
-  const rows = z.array(displayImageRowSchema).parse(result.rows);
+  const rows = z.array(displayImageRowSchema).parse(result);
   const ranked = new Map(
     rows.map((row) => [
       row.refKey,

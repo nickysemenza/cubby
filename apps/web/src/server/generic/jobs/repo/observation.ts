@@ -60,7 +60,8 @@ async function readImageStreams(db: Database, now: Date): Promise<StreamRow[]> {
   const finished = sql`p.state IN (${imageProcessingJobState.enum.ready}, ${imageProcessingJobState.enum.skipped})`;
   const claimable = sql`p.state = ${pending} AND coalesce(p."leaseUntil", p."runAt") <= ${at}`;
   const later = sql`p.state = ${pending} AND p."leaseUntil" IS NULL AND p."runAt" > ${at}`;
-  const { rows } = await getDb(db).execute<StreamRow>(sql`
+  const rows = await getDb(db).execute<StreamRow>(
+    sql`
     SELECT 'image.' || p.lane AS kind,
       count(*) FILTER (WHERE p.state = ${pending} AND p."leaseUntil" > ${at})::int AS "running",
       count(*) FILTER (WHERE ${claimable})::int AS "due",
@@ -90,7 +91,9 @@ async function readImageStreams(db: Database, now: Date): Promise<StreamRow[]> {
       OR EXISTS (SELECT 1 FROM "ImageProcessingAttempt" a
         WHERE a."jobId" = p.id AND a.state = ${imageProcessingAttemptState.enum.failed}
           AND a."completedAt" > ${since(RECENT_MINUTES.failed)})
-    GROUP BY p.lane`);
+    GROUP BY p.lane`,
+    "objects",
+  );
   return rows;
 }
 
@@ -103,12 +106,13 @@ async function readEmbeddingStreams(
   const since = (minutes: number) =>
     sql`${at} - ${minutes} * interval '1 minute'`;
   const empty = { paused: 0, runs: null };
-  const { rows } = await getDb(db).execute<
+  const rows = await getDb(db).execute<
     Omit<StreamRow, "paused" | "runs" | "failed" | "kind"> & {
       cleanupDue: number;
       cleanupLater: number;
     }
-  >(sql`
+  >(
+    sql`
     WITH owed AS MATERIALIZED (
       SELECT "embeddingDueAt" AS due, "embeddingAttempts" AS attempts,
         coalesce("embeddingLeaseUntil" > ${at}, false) AS leased
@@ -131,7 +135,9 @@ async function readEmbeddingStreams(
       (SELECT max(at) FROM indexed) AS "lastCompletedAt",
       (SELECT min(due) FROM owed WHERE due <= ${at} AND NOT leased) AS "oldestDueAt",
       (SELECT count(*)::int FROM retired WHERE coalesce(retry <= ${at}, true)) AS "cleanupDue",
-      (SELECT count(*)::int FROM retired WHERE retry > ${at}) AS "cleanupLater"`);
+      (SELECT count(*)::int FROM retired WHERE retry > ${at}) AS "cleanupLater"`,
+    "objects",
+  );
   const row = rows[0];
   if (!row) return [];
   const { cleanupDue, cleanupLater, ...refresh } = row;
@@ -165,7 +171,8 @@ async function readAiEvaluationStreams(
   const held = sql`e."leaseUntil" > ${at}`;
   const later = sql`${owed} AND NOT coalesce(${held}, false) AND e."runAt" > ${at}`;
   const claimable = sql`${owed} AND NOT coalesce(${held}, false) AND e."runAt" <= ${at}`;
-  const { rows } = await getDb(db).execute<StreamRow>(sql`
+  const rows = await getDb(db).execute<StreamRow>(
+    sql`
     SELECT 'ai.evaluation:' || e.feature AS kind,
       count(*) FILTER (WHERE ${held})::int AS "running",
       count(*) FILTER (WHERE ${claimable})::int AS "due",
@@ -189,7 +196,9 @@ async function readAiEvaluationStreams(
       ) AS "runs"
     FROM "AiEvaluation" e
     WHERE ${owed} OR e."updatedAt" > ${since(RECENT_MINUTES.failed)}
-    GROUP BY e.feature`);
+    GROUP BY e.feature`,
+    "objects",
+  );
   return rows;
 }
 

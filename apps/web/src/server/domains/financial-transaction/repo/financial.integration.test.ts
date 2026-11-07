@@ -958,13 +958,16 @@ describe("financial repositories — critical invariants", () => {
         rows: input.rows.slice(0, 1),
       })
     ).rows[0]!.proposed;
-    const { rows: retained } = await getDb(ctx.db).execute<{
+    const retained = await getDb(ctx.db).execute<{
       externalId: string;
-    }>(sql`
+    }>(
+      sql`
       SELECT r."chargeKey" AS "externalId" FROM ${sourceObservations} r
       JOIN "TransactionImport" i ON i.id = r."batchId"
       WHERE i.fingerprint = ${fingerprints[0]} AND r."deletedAt" IS NULL
-    `);
+    `,
+      "objects",
+    );
 
     const [sourceRow] = (
       await listSourceTransactionRecords(ctx.db, {

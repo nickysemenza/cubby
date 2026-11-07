@@ -381,21 +381,27 @@ async function identityCandidates(
   observations: readonly ShipmentObservationInput[],
   notificationDate: string | null,
 ) {
-  const dates = await getDb(db).execute(sql`SELECT
+  const dates = await getDb(db).execute(
+    sql`SELECT
     min(shipment_event_day(e))::text AS first, max(shipment_event_day(e))::text AS last
-    FROM jsonb_array_elements(${JSON.stringify(observations)}::jsonb) e`);
-  const observedWindow = identityWindowSchema.parse(dates.rows[0]);
+    FROM jsonb_array_elements(${JSON.stringify(observations)}::jsonb) e`,
+    "objects",
+  );
+  const observedWindow = identityWindowSchema.parse(dates[0]);
   const window = {
     first: observedWindow.first ?? notificationDate,
     last: observedWindow.last ?? notificationDate,
   };
-  // oxlint-disable-next-line cubby/no-raw-enum-literal-in-sql -- carrier is the existing identity JSON object's key, not a carrier-role value.
-  const result = await getDb(db).execute(sql`SELECT id, shortcode, purchase_id,
+  const result = await getDb(db).execute(
+    // oxlint-disable-next-line cubby/no-raw-enum-literal-in-sql -- carrier is the existing identity JSON object's key, not a carrier-role value.
+    sql`SELECT id, shortcode, purchase_id,
     first_day::text, last_day::text, carrier_conflict FROM shipment_identity_candidates(
     (SELECT coalesce(jsonb_agg(jsonb_build_object('trackingNumber', r->>'trackingNumber',
       'carrier', shipment_carrier_key(r->>'carrier'))), '[]'::jsonb)
      FROM jsonb_array_elements(${JSON.stringify(references.map((ref) => ({ trackingNumber: ref.number, carrier: ref.carrier })))}::jsonb) r),
-    ${window.first}::date, ${window.last}::date)`);
+    ${window.first}::date, ${window.last}::date)`,
+    "objects",
+  );
   return {
     window,
     candidates: z
@@ -409,7 +415,7 @@ async function identityCandidates(
           carrier_conflict: z.boolean(),
         }),
       )
-      .parse(result.rows),
+      .parse(result),
   };
 }
 
@@ -517,8 +523,9 @@ async function retainedPackageShipment(
       (
         await getDb(db).execute(
           sql`SELECT first_day::text AS first, last_day::text AS last FROM shipment_identity_window(${candidate.id}::uuid)`,
+          "objects",
         )
-      ).rows[0],
+      )[0],
     );
     return Boolean(
       period.first &&
@@ -1243,8 +1250,9 @@ async function writeShipmentEvidence(
             (
               await database.execute(
                 sql`SELECT first_day::text AS first, last_day::text AS last FROM shipment_identity_window(${row.id}::uuid)`,
+                "objects",
               )
-            ).rows[0],
+            )[0],
           )
         : null;
       let carrierIssue: string | null = sourceBindingAmbiguous

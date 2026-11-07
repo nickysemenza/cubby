@@ -8,8 +8,10 @@ import { withMigrationDatabase } from "./test-database-lease";
 // ambiguous ownership and a deleted frontier. All original evidence must survive.
 it("promotes only proven occurrence identity and retains unresolved history without money effects", async () => {
   await withMigrationDatabase(async (client) => {
-    const db = drizzle(client);
-    await migrateDatabase(db, { through: "0097_ledger_transfer_minor_units" });
+    const db = drizzle({ client: client, paramsInErrors: true });
+    await migrateDatabase(db, {
+      through: "20261105170357_0097_ledger_transfer_minor_units",
+    });
     await client.query(
       `INSERT INTO "ExternalSource" (slug,label) VALUES ('monarch','Synthetic bank')`,
     );
@@ -205,7 +207,9 @@ it("promotes only proven occurrence identity and retains unresolved history with
       [cancelledRun],
     );
     await expect(
-      migrateDatabase(db, { through: "0098_source_occurrence_ownership" }),
+      migrateDatabase(db, {
+        through: "20261105170357_0098_source_occurrence_ownership",
+      }),
     ).rejects.toThrow("Financial refresh has unfinished steps");
     await client.query(
       `UPDATE "Job" SET state='cancelled' WHERE key='synthetic-occurrence-cancel'`,
@@ -214,7 +218,9 @@ it("promotes only proven occurrence identity and retains unresolved history with
       `UPDATE "SourceTransactionRecord" SET amount=10.010000000000002,"providerAmount"=-10.010000000000002 WHERE "rowPosition"=1`,
     );
     await expect(
-      migrateDatabase(db, { through: "0098_source_occurrence_ownership" }),
+      migrateDatabase(db, {
+        through: "20261105170357_0098_source_occurrence_ownership",
+      }),
     ).rejects.toThrow("independent IEEE");
     expect(
       (
@@ -231,7 +237,9 @@ it("promotes only proven occurrence identity and retains unresolved history with
         `SELECT jsonb_agg(to_jsonb(r) ORDER BY id) AS rows FROM "SourceTransactionRecord" r`,
       )
     ).rows[0].rows;
-    await migrateDatabase(db, { through: "0098_source_occurrence_ownership" });
+    await migrateDatabase(db, {
+      through: "20261105170357_0098_source_occurrence_ownership",
+    });
     expect(
       (
         await client.query(
@@ -364,9 +372,9 @@ it("promotes only proven occurrence identity and retains unresolved history with
 
 it("gives unproven bank records one held owner without changing evidence or financial decisions", async () => {
   await withMigrationDatabase(async (client) => {
-    const db = drizzle(client);
+    const db = drizzle({ client: client, paramsInErrors: true });
     await migrateDatabase(db, {
-      through: "0106_transaction_amount_minor_units",
+      through: "20261106015941_0106_transaction_amount_minor_units",
     });
     await client.query(
       `INSERT INTO "ExternalSource" (slug,label) VALUES ('monarch','Synthetic bank')`,
@@ -392,7 +400,7 @@ it("gives unproven bank records one held owner without changing evidence or fina
       await client.query(`SELECT * FROM "TransactionImportRecord"`)
     ).rows;
     await migrateDatabase(db, {
-      through: "0107_source_judgment_owner_cutover",
+      through: "20261106041138_0107_source_judgment_owner_cutover",
     });
     const { rows: owners } =
       await client.query(`SELECT o.shortcode,o."identityKind",o."reviewState",o.disposition,o."dispositionNote",o."acceptedTransactionId"
@@ -443,7 +451,7 @@ it("gives unproven bank records one held owner without changing evidence or fina
       client.query(`UPDATE "SourceTransactionRecord" SET "occurrenceId"=NULL`),
     ).rejects.toThrow(/not-null/);
     await migrateDatabase(db, {
-      through: "0107_source_judgment_owner_cutover",
+      through: "20261106041138_0107_source_judgment_owner_cutover",
     });
     expect(
       (await client.query(`SELECT count(*)::int n FROM "SourceOccurrence"`))

@@ -1,8 +1,10 @@
 import { eq, sql } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { product } from "~/server/db/schema";
 import {
   createProductFixture as createProduct,
@@ -21,7 +23,10 @@ describe("Product.kind", () => {
   const kindOf = async (entityId: (typeof product.$inferSelect)["id"]) =>
     (
       await getDb(ctx.db).query.product.findFirst({
-        where: eq(product.id, entityId),
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(table, eq(product.id, entityId)),
+        },
         columns: { kind: true },
       })
     )?.kind;

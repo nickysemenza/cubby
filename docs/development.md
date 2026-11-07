@@ -237,7 +237,7 @@ stored releases; a new object name would abandon their loaded state.
 
 Relational Durable Object stores use `drizzle-orm/durable-sqlite` for ordinary
 queries and checked-in Drizzle migrations for schema evolution. Calendar,
-AI response cache, AI Gateway egress, database freshness, and USDA release each
+AI response cache, AI Gateway egress, and USDA release each
 own their schema and migration history. Key/value session storage remains
 key/value. Raw SQL is appropriate for migration DDL, unsupported SQLite features
 such as FTS, or a materially clearer expression; document the reason rather
@@ -245,7 +245,7 @@ than maintaining a second ordinary CRUD path.
 
 Generate a store's next migration with
 `pnpm --dir apps/web exec drizzle-kit generate --config=<store-config>` using
-its `drizzle.*.config.ts`. Inspect the SQL, journal and latest snapshot together,
+its `drizzle.*.config.ts`. Inspect the SQL and snapshot graph together,
 and bundle the new SQL in that store's migration imports. Applied migrations
 are immutable. Run migrations under `blockConcurrencyWhile` during object
 initialization before accepting storage operations. Keep synchronous critical
@@ -254,7 +254,7 @@ queries are equivalent.
 
 The initial adoption is complete for the existing relational stores. One-time
 pre-journal catalog checks and frozen predecessor fixtures have been removed;
-the preserving baseline SQL, journals and snapshots remain. Fresh objects run
+the preserving baseline SQL and snapshots remain. Fresh objects run
 the full migration history, and existing objects run only pending migrations.
 Keep populated-predecessor coverage with future schema changes and preserve
 stored columns until an explicit migration removes them. Drizzle migrations

@@ -20,6 +20,7 @@ import {
 } from "@cubby/schemas/identifiers";
 import { moneyToMinor } from "@cubby/shared";
 import { and, eq, inArray, sql } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { capitalize, sortBy, uniq } from "es-toolkit";
 import { z } from "zod";
 
@@ -34,6 +35,7 @@ import {
   withTransaction,
 } from "~/server/db/helpers";
 import { quotedTable } from "~/server/db/helpers/related";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
   financialTransaction,
   financialTransactionAllocation,
@@ -717,10 +719,16 @@ export const updateFinancialTransaction = defineMutationWriter({
         );
       const before = await tx.query.financialTransaction
         .findFirst({
-          where: and(
-            eq(financialTransaction.id, id),
-            notDeleted(financialTransaction),
-          ),
+          where: {
+            RAW: (table: PgTable) =>
+              relationalSql(
+                table,
+                and(
+                  eq(financialTransaction.id, id),
+                  notDeleted(financialTransaction),
+                ),
+              ),
+          },
         })
         .then((row) => (row ? transactionDollars(row) : row));
       if (!before)
@@ -741,11 +749,16 @@ export const updateFinancialTransaction = defineMutationWriter({
         ].includes(data.kind)
       ) {
         const liveBooking = await tx.query.expense.findFirst({
-          where: (expense, { eq }) =>
-            and(
-              eq(expense.bookingTransactionCode, shortcode),
-              notDeleted(expense),
-            ),
+          where: {
+            RAW: (expense, { eq }) =>
+              relationalSql(
+                expense,
+                and(
+                  eq(expense.bookingTransactionCode, shortcode),
+                  notDeleted(expense),
+                ),
+              ),
+          },
         });
         if (liveBooking)
           throw createAppError(

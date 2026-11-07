@@ -210,8 +210,9 @@ describe("entity display image resolver", () => {
     await addHistory(purchase.output.id);
     const presence = await getDb(ctx.db).execute(
       sql`SELECT ${entityDisplayImagePresenceSql("sourceTransactionRecord", sql`${record.id}::uuid`)} AS present`,
+      "objects",
     );
-    expect(presence.rows).toEqual([{ present: true }]);
+    expect(presence).toEqual([{ present: true }]);
     const otherSeller = await createRepoEntity(ctx, "vendor", {
       name: "Synthetic competing seller",
     });
@@ -1561,10 +1562,13 @@ describe("entity display image resolver", () => {
       expect(rows[0]?.displayImages).toEqual([expectedDisplayImage(photo)]);
       expect(rows[1]?.displayImages).toEqual([]);
       // Image-presence filters read the same inherited relation.
-      const presence = await getDb(ctx.db).execute(sql`SELECT
+      const presence = await getDb(ctx.db).execute(
+        sql`SELECT
         ${entityDisplayImagePresenceSql("project", sql`${owner.id}::uuid`)} AS owner,
-        ${entityDisplayImagePresenceSql("project", sql`${unrelated.id}::uuid`)} AS unrelated`);
-      expect(presence.rows).toEqual([{ owner: true, unrelated: false }]);
+        ${entityDisplayImagePresenceSql("project", sql`${unrelated.id}::uuid`)} AS unrelated`,
+        "objects",
+      );
+      expect(presence).toEqual([{ owner: true, unrelated: false }]);
     });
   });
 

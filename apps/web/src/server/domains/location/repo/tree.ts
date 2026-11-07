@@ -17,6 +17,7 @@ import type {
 import { locationType } from "@cubby/schemas/location-fields";
 import type { RawLocationDetail } from "@cubby/schemas/location-raw-read";
 import { and, count, eq, inArray, sql } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -25,6 +26,7 @@ import { locationAiDescriptionSql } from "~/server/db/computed/location-ai-descr
 import { productBrandNameSql } from "~/server/db/computed/product-brand-sql";
 import { categorySummarySql } from "~/server/db/computed/product-category-sql";
 import { getDb, notDeleted, relations, unwrapDb } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
   entityAttachment,
   type image,
@@ -92,7 +94,8 @@ export const buildLocationTree = async (db: Database, rootId?: LocationId) => {
   // Drizzle doesn't support recursive CTEs in the query builder,
   // so we'll use raw SQL for the recursive query
   // Excludes soft-deleted locations
-  const res = await getDb(db).execute(sql`
+  const res = await getDb(db).execute(
+    sql`
     WITH RECURSIVE location_tree AS (
       -- Base case: the anchor location, or every root (excludes soft-deleted)
       SELECT
@@ -114,12 +117,14 @@ export const buildLocationTree = async (db: Database, rootId?: LocationId) => {
     SELECT lt.*, ${locationAiDescriptionSql(sql`lt."id"`)} AS "aiDescription"
     FROM location_tree lt
     ORDER BY lt.depth, lt.name
-  `);
+  `,
+    "objects",
+  );
 
   const locationsMap = new Map<LocationId, LocationWithParentChild>();
   const rootLocations: LocationWithParentChild[] = [];
 
-  const locationRows = z.array(locationTreeRowSchema).parse(res.rows);
+  const locationRows = z.array(locationTreeRowSchema).parse(res);
 
   // Every tree row may be a physical instance of a Product. Hydrate those
   // identity products (and their displayable cover) as one batch rather than
@@ -132,12 +137,24 @@ export const buildLocationTree = async (db: Database, rootId?: LocationId) => {
   const loadIdentityProducts = () =>
     productIds.length > 0
       ? getDb(db).query.product.findMany({
-          where: and(inArray(product.id, productIds), notDeleted(product)),
+          where: {
+            RAW: (table: PgTable) =>
+              relationalSql(
+                table,
+                and(inArray(product.id, productIds), notDeleted(product)),
+              ),
+          },
           extras: {
-            brandName: productBrandNameSql(product.brandId).as("brandName"),
-            category: categorySummarySql(sql`${product.categoryId}`).as(
-              "category",
-            ),
+            brandName: (table: PgTable) =>
+              relationalSql(
+                table,
+                productBrandNameSql(product.brandId).as("brandName"),
+              ),
+            category: (table: PgTable) =>
+              relationalSql(
+                table,
+                categorySummarySql(sql`${product.categoryId}`).as("category"),
+              ),
           },
         })
       : Promise.resolve([]);
@@ -151,10 +168,16 @@ export const buildLocationTree = async (db: Database, rootId?: LocationId) => {
           // `notDeleted` filter, which would otherwise clobber the id predicate
           // and fetch every location's images.
           ...relations.location.withImages.with.images,
-          where: and(
-            inArray(entityAttachment.entityId, locationIds),
-            notDeleted(entityAttachment),
-          ),
+          where: {
+            RAW: (table: PgTable) =>
+              relationalSql(
+                table,
+                and(
+                  inArray(entityAttachment.entityId, locationIds),
+                  notDeleted(entityAttachment),
+                ),
+              ),
+          },
         })
       : Promise.resolve([]);
   const [
@@ -263,7 +286,8 @@ export const getLocationInventoryBreakdown = async (
   rootId: LocationId,
 ): Promise<LocationInventoryBreakdownOut | null> => {
   const dbClient = getDb(db);
-  const treeResult = await dbClient.execute(sql`
+  const treeResult = await dbClient.execute(
+    sql`
     WITH RECURSIVE location_tree AS (
       SELECT l."id", l."parentId", l."shortcode", l."name", 0 AS depth
       FROM ${location} l
@@ -278,8 +302,10 @@ export const getLocationInventoryBreakdown = async (
     )
     SELECT "id", "parentId", "shortcode", "name"
     FROM location_tree
-  `);
-  const rows = z.array(breakdownLocationRowSchema).parse(treeResult.rows);
+  `,
+    "objects",
+  );
+  const rows = z.array(breakdownLocationRowSchema).parse(treeResult);
   if (rows.length === 0) return null;
 
   const ids = rows.map((row) => row.id);
@@ -375,7 +401,8 @@ export const loadLocationAncestorsWithIds = async (
   const byId = new Map<LocationId, LocationAncestorRung[]>();
   if (ids.length === 0) return byId;
 
-  const res = await getDb(db).execute(sql`
+  const res = await getDb(db).execute(
+    sql`
     WITH RECURSIVE ancestors AS (
       -- Base case: the seed rows themselves, carrying their own id as \`root\`
       -- so every ancestor stays attributable to the row that asked for it.
@@ -412,11 +439,13 @@ export const loadLocationAncestorsWithIds = async (
     FROM ancestors
     WHERE depth > 0
     ORDER BY root, depth DESC
-  `);
+  `,
+    "objects",
+  );
 
   // `depth DESC` already puts the outermost ancestor first, so each group is
   // root → immediate parent in arrival order.
-  for (const row of z.array(ancestorRowSchema).parse(res.rows)) {
+  for (const row of z.array(ancestorRowSchema).parse(res)) {
     const chain = byId.get(row.root);
     const rung: LocationAncestorRung = {
       locationId: row.locationId,
@@ -474,9 +503,13 @@ export const wouldCreateParentCycle = async (
     if (currentId === locationId) {
       return true; // Found a cycle
     }
+    const ancestorId: LocationId = currentId;
     const parentLocation: { parentId: LocationId | null } | undefined =
       await unwrapDb(db).query.location.findFirst({
-        where: eq(location.id, currentId),
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(table, eq(location.id, ancestorId)),
+        },
         columns: { parentId: true },
       });
     currentId = parentLocation?.parentId ?? null;

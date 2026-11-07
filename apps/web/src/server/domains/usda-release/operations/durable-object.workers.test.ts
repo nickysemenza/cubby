@@ -173,6 +173,18 @@ describe("USDA release Durable Object", () => {
       lines.slice(6),
     ]);
     await stub.status();
+    // Reopen populated storage with the v0 ledger: v1 must name receipts without replaying DDL.
+    await runInDurableObject(object, (_instance, state) => {
+      state.storage.sql.exec(
+        "ALTER TABLE __drizzle_migrations DROP COLUMN name",
+      );
+      state.storage.sql.exec(
+        "ALTER TABLE __drizzle_migrations DROP COLUMN applied_at",
+      );
+      state.storage.sql.exec(
+        "UPDATE __drizzle_migrations SET created_at = created_at + 123",
+      );
+    });
     await evictDurableObject(object);
     await settle({ object, stub });
     const page = await stub.search({

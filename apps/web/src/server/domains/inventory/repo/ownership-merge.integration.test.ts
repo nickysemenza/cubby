@@ -4,11 +4,13 @@ import type {
   ProductId,
 } from "@cubby/schemas/identifiers";
 import { and, eq } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { amountFromColumns } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { inventoryEntry } from "~/server/db/schema";
 import { createInventoryEntry } from "~/server/domains/inventory/repo/crud";
 import {
@@ -72,11 +74,18 @@ describe("inventory ownership through product and ledger-party merges", () => {
 
   const liveRows = async (productId: ProductId) =>
     await getDb(ctx.db).query.inventoryEntry.findMany({
-      where: and(
-        eq(inventoryEntry.productId, productId),
-        notDeleted(inventoryEntry),
-      ),
-      orderBy: inventoryEntry.id,
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(
+              eq(inventoryEntry.productId, productId),
+              notDeleted(inventoryEntry),
+            ),
+          ),
+      },
+      orderBy: (table: PgTable) =>
+        [inventoryEntry.id].flat().map((value) => relationalSql(table, value)),
     });
 
   it("folds product inventory only when location, placement, and raw owner are compatible", async () => {

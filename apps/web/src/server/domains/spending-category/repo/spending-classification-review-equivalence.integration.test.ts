@@ -17,6 +17,7 @@ import { describe, expect, it } from "vitest";
 
 import type { Database } from "~/server/db";
 import { unwrapDb } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
   expense as expenseTable,
   product as productTable,
@@ -120,7 +121,10 @@ async function seedTaxonomy(db: Database, { next, pick }: Random) {
   }));
   await insertRows(db, spendingCategory, "spendingCategory", spend);
   const food = await unwrapDb(db).query.productCategory.findFirst({
-    where: (category, { eq }) => eq(category.feature, "food"),
+    where: {
+      RAW: (category, { eq }) =>
+        relationalSql(category, eq(category.feature, "food")),
+    },
   });
   const categories: (ReturnType<typeof identity<"productCategory">> & {
     name: string;

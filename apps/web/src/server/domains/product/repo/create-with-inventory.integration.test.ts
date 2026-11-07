@@ -103,21 +103,27 @@ describe("atomic staged-photo Product and Inventory capture", () => {
         .from(image)
         .where(eq(image.id, staged.id)),
     ).toEqual([{ status: "PENDING" }]);
-    const beforeRetry = await getDb(ctx.db).execute(sql`
+    const beforeRetry = await getDb(ctx.db).execute(
+      sql`
       SELECT count(*)::int AS count FROM "InventoryEntry" WHERE "deletedAt" IS NULL
-    `);
-    expect(beforeRetry.rows).toEqual([{ count: 0 }]);
+    `,
+      "objects",
+    );
+    expect(beforeRetry).toEqual([{ count: 0 }]);
 
     const captured = await capture({
       ...request,
       inventory: { ...request.inventory, locationId: available.id },
     });
-    const graph = await getDb(ctx.db).execute(sql`
+    const graph = await getDb(ctx.db).execute(
+      sql`
       SELECT (SELECT count(*)::int FROM "Product" WHERE name = ${name} AND "deletedAt" IS NULL) AS products,
         (SELECT count(*)::int FROM "InventoryEntry" WHERE "deletedAt" IS NULL) AS inventory,
         (SELECT count(*)::int FROM "EntityAttachment" WHERE "imageId" = ${staged.id} AND "deletedAt" IS NULL) AS attachments
-    `);
-    expect(graph.rows).toEqual([{ products: 1, inventory: 1, attachments: 1 }]);
+    `,
+      "objects",
+    );
+    expect(graph).toEqual([{ products: 1, inventory: 1, attachments: 1 }]);
     expect(captured.product.inventoryEntry.map((entry) => entry.id)).toEqual([
       captured.inventory.id,
     ]);

@@ -925,17 +925,18 @@ describe("Email Purchase links", () => {
       );
     const statement = sql`SELECT ${emailLinkedSql()} AS linked FROM "Email"
       WHERE "Email"."shortcode" = ${f.email}`;
-    expect((await getDb(ctx.db).execute(statement)).rows).toEqual([
+    expect(await getDb(ctx.db).execute(statement, "objects")).toEqual([
       { linked: true },
     ]);
     const result = await getDb(ctx.db).execute(
       sql`EXPLAIN (ANALYZE, FORMAT JSON) ${statement}`,
+      "objects",
     );
     const plans = z
       .array(
         z.object({ "QUERY PLAN": z.array(z.object({ Plan: z.unknown() })) }),
       )
-      .parse(result.rows);
+      .parse(result);
     const nodeSchema = z.object({
       "Relation Name": z.string().optional(),
       "Actual Rows": z.number().default(0),
@@ -1019,11 +1020,12 @@ describe("Email Purchase links", () => {
     });
     await getDb(ctx.db).execute(sql`ANALYZE "ImportSourceClaim"`);
     const statement = sql`SELECT ${emailLinkedSql()} AS linked FROM "Email" WHERE "Email".shortcode = ${f.email}`;
-    expect((await getDb(ctx.db).execute(statement)).rows).toEqual([
+    expect(await getDb(ctx.db).execute(statement, "objects")).toEqual([
       { linked: true },
     ]);
     const result = await getDb(ctx.db).execute(
       sql`EXPLAIN (ANALYZE, FORMAT JSON) ${statement}`,
+      "objects",
     );
     const nodeSchema = z.object({
       Alias: z.string().optional(),
@@ -1045,7 +1047,7 @@ describe("Email Purchase links", () => {
       .array(
         z.object({ "QUERY PLAN": z.array(z.object({ Plan: z.unknown() })) }),
       )
-      .parse(result.rows);
+      .parse(result);
     for (const row of plans)
       row["QUERY PLAN"].forEach(({ Plan }) => visit(Plan));
     expect(visited).toBeLessThan(20);

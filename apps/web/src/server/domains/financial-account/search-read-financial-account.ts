@@ -4,10 +4,12 @@ import type {
 } from "@cubby/schemas/financial-account";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { sql, and, inArray } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { alias } from "drizzle-orm/pg-core";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { unwrapDb, notDeleted } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { financialAccount as searchTablefinancialAccount } from "~/server/db/schema";
 import { financialAccount } from "~/server/db/schema";
 import { withOptionalLimit } from "~/server/generic/embedding/repo/embedding-load-options";
@@ -49,15 +51,23 @@ async function loadEmbeddingText(
 ): Promise<SearchableEntityText[]> {
   const queryConfig = withOptionalLimit(
     {
-      where: and(
-        notDeleted(financialAccount),
-        options.ids?.length
-          ? inArray(
-              financialAccount.id,
-              options.ids.map((id) => parseEntityId("financialAccount", id)),
-            )
-          : undefined,
-      ),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(
+              notDeleted(financialAccount),
+              options.ids?.length
+                ? inArray(
+                    financialAccount.id,
+                    options.ids.map((id) =>
+                      parseEntityId("financialAccount", id),
+                    ),
+                  )
+                : undefined,
+            ),
+          ),
+      },
       with: { providerVendor: { columns: { name: true } } },
       columns: {
         id: true,

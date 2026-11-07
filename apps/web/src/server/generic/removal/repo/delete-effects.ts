@@ -1,5 +1,6 @@
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
+import { getColumnTable } from "drizzle-orm";
 import { getTableColumns } from "drizzle-orm";
 import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
 
@@ -69,7 +70,7 @@ export async function executeDeleteWithEffects<
             edge as keyof (typeof INCOMING_EDGES)[E]
           ] as IncomingEdge;
           // SAFETY: INCOMING_EDGES is built only from Postgres schema columns.
-          const table = incoming.column.table as PgTable;
+          const table = getColumnTable(incoming.column) as PgTable;
           // SAFETY: INCOMING_EDGES is built only from Postgres schema columns.
           const column = incoming.column as PgColumn;
           const includeDeleted = !("deletedAt" in getTableColumns(table));

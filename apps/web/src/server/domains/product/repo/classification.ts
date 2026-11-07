@@ -6,9 +6,11 @@ import {
   projectResourceFeatureLabels,
 } from "@cubby/schemas/product-category-relations";
 import { and, eq } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 
 import type { DrizzleTransaction } from "~/server/db";
 import { notDeleted } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
   entityExternalId,
   entityLink,
@@ -35,15 +37,27 @@ export async function assertProductCategoryChange(
   requestedCategoryId: ProductCategoryId | null,
 ): Promise<ProductCategoryId | null> {
   const current = await tx.query.product.findFirst({
-    where: and(eq(product.id, productId), notDeleted(product)),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          and(eq(product.id, productId), notDeleted(product)),
+        ),
+    },
     columns: { fdc_id: true, ingredientId: true },
   });
   if (!current) throw createAppError("PRODUCT_NOT_FOUND", "Product not found");
   const externalIds = await tx.query.entityExternalId.findMany({
-    where: and(
-      eq(entityExternalId.entityId, productId),
-      notDeleted(entityExternalId),
-    ),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          and(
+            eq(entityExternalId.entityId, productId),
+            notDeleted(entityExternalId),
+          ),
+        ),
+    },
   });
   const categoryId = await resolveProductCategory(
     tx,
@@ -56,7 +70,13 @@ export async function assertProductCategoryChange(
   );
   const feature = await getCategoryFeature(tx, categoryId);
   const projectUsage = await tx.query.entityLink.findFirst({
-    where: and(eq(entityLink.toEntityId, productId), liveLinks("projectTool")),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          and(eq(entityLink.toEntityId, productId), liveLinks("projectTool")),
+        ),
+    },
     columns: { id: true },
   });
   if (projectUsage && !isProjectResourceFeature(feature)) {
@@ -66,7 +86,13 @@ export async function assertProductCategoryChange(
     );
   }
   const gardenSource = await tx.query.planting.findFirst({
-    where: and(eq(planting.sourceProductId, productId), notDeleted(planting)),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          and(eq(planting.sourceProductId, productId), notDeleted(planting)),
+        ),
+    },
     columns: { id: true },
   });
   if (gardenSource && !isPlantingSourceFeature(feature)) {

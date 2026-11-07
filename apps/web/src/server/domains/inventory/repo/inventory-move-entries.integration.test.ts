@@ -5,11 +5,13 @@ import type {
 } from "@cubby/schemas/identifiers";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { and, eq } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { amountFromColumns } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { auditLog, inventoryEntry } from "~/server/db/schema";
 import { moveInventoryEntries } from "~/server/domains/inventory/repo/bulk";
 import { createInventoryEntry } from "~/server/domains/inventory/repo/crud";
@@ -78,10 +80,16 @@ describe("moveInventoryEntries", () => {
 
   const liveAt = async (locationId: LocationId) => {
     const rows = await getDb(ctx.db).query.inventoryEntry.findMany({
-      where: and(
-        eq(inventoryEntry.locationId, locationId),
-        notDeleted(inventoryEntry),
-      ),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(
+              eq(inventoryEntry.locationId, locationId),
+              notDeleted(inventoryEntry),
+            ),
+          ),
+      },
       columns: {
         id: true,
         productId: true,
@@ -99,10 +107,16 @@ describe("moveInventoryEntries", () => {
 
   const auditFor = (entityId: InventoryId) =>
     getDb(ctx.db).query.auditLog.findMany({
-      where: and(
-        eq(auditLog.entityKind, "inventory"),
-        eq(auditLog.entityId, entityId),
-      ),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(
+              eq(auditLog.entityKind, "inventory"),
+              eq(auditLog.entityId, entityId),
+            ),
+          ),
+      },
       columns: { action: true },
     });
 
@@ -135,7 +149,10 @@ describe("moveInventoryEntries", () => {
     // not soft-deleted: a zero-quantity ghost is hidden by notDeleted() but
     // resurfaces in valuation and duplicate scans.
     const goneA = await getDb(ctx.db).query.inventoryEntry.findFirst({
-      where: eq(inventoryEntry.id, fromA),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(table, eq(inventoryEntry.id, fromA)),
+      },
     });
     expect(goneA).toBeUndefined();
     expect((await auditFor(fromA)).map((row) => row.action)).toContain(

@@ -1,9 +1,11 @@
 import { eq } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { task } from "~/server/db/schema";
 
 import { reorderTasks, readTask } from "./crud";
@@ -127,7 +129,10 @@ describe("server-owned task placement", () => {
       ),
     ).rejects.toThrow(/trade/iu);
     const stored = await getDb(ctx.db).query.task.findFirst({
-      where: eq(task.shortcode, inherited.output.id),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(table, eq(task.shortcode, inherited.output.id)),
+      },
     });
     expect(stored?.projectId).not.toBeNull();
     expect(stored?.trade).toBeNull();

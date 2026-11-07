@@ -29,7 +29,9 @@ it("seeds connected performance history readable by the real Work queue", async 
     userId: ctx.actor.userId,
   });
   await seedPerformanceCorpus(ctx.db, ctx.actor.userId, { bundles: 2 });
-  const roster = await getDb(ctx.db).execute(sql`SELECT count(*)::int AS count
+  const roster = await getDb(ctx.db).execute<{
+    count: number;
+  }>(sql`SELECT count(*)::int AS count
     FROM "Run" r JOIN "Email" e ON e."runId" = r.id
     JOIN "OrderMail" m ON m.id=e."orderMailId" AND m."rawChecksum"=e.checksum
     WHERE r.input->'sources' @> jsonb_build_array(jsonb_build_object('orderMailId', e."orderMailId", 'checksum', e.checksum))`);

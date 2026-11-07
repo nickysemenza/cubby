@@ -132,7 +132,7 @@ export async function leaseTemplateDatabase<T>(
   }
 }
 
-/** Migration rehearsals start empty and apply their own committed journal boundary. */
+/** Migration rehearsals start empty and apply their own exact migration folder boundary. */
 export async function withMigrationDatabase<T>(
   run: (client: Client, databaseUrl: string) => Promise<T>,
 ): Promise<T> {
@@ -255,7 +255,10 @@ export async function leaseNamedDatabase<T>(
     const client = new Client({ connectionString: databaseUrl });
     await client.connect();
     try {
-      await (options.migrate ?? ((c) => migrateDatabase(drizzle(c))))(client);
+      await (
+        options.migrate ??
+        ((c) => migrateDatabase(drizzle({ client: c, paramsInErrors: true })))
+      )(client);
     } finally {
       await client.end();
     }

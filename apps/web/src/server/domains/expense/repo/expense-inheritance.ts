@@ -16,7 +16,8 @@ import type {
   PurchaseId,
 } from "@cubby/schemas/identifiers";
 import type { Trade } from "@cubby/schemas/project";
-import { sql, type SQL } from "drizzle-orm";
+import { getTableName, sql, type SQL } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { effectiveFieldSql } from "~/server/db/computed/effective-field";
@@ -154,7 +155,7 @@ export const effectiveExpenseTradeSql = (
 };
 
 /** Scalar extras used by relational Expense reads. */
-export const expenseInheritanceReadExtras = (alias = "expense") => {
+const expenseInheritanceReadProjection = (alias: string) => {
   const spendingCategoryId = effectiveExpenseSpendingCategorySql(alias);
   const fallbackSpendingCategoryId = fallbackExpenseSpendingCategorySql(alias);
   const projectId = effectiveExpenseProjectSql(alias);
@@ -253,6 +254,43 @@ export const expenseInheritanceReadExtras = (alias = "expense") => {
     tradeResolutionSource: tradeSource.as("tradeResolutionSource"),
   };
 };
+
+/** Scalar extras bind to the current relational row, including nested reads. */
+export const expenseInheritanceReadExtras = () => ({
+  spendingCategoryResolution: (table: PgTable) =>
+    expenseInheritanceReadProjection(getTableName(table))
+      .spendingCategoryResolution,
+  spendingCategoryShortcode: (table: PgTable) =>
+    expenseInheritanceReadProjection(getTableName(table))
+      .spendingCategoryShortcode,
+  spendingCategoryName: (table: PgTable) =>
+    expenseInheritanceReadProjection(getTableName(table)).spendingCategoryName,
+  storedSpendingCategoryShortcode: (table: PgTable) =>
+    expenseInheritanceReadProjection(getTableName(table))
+      .storedSpendingCategoryShortcode,
+  fallbackSpendingCategoryShortcode: (table: PgTable) =>
+    expenseInheritanceReadProjection(getTableName(table))
+      .fallbackSpendingCategoryShortcode,
+  effectiveProjectId: (table: PgTable) =>
+    expenseInheritanceReadProjection(getTableName(table)).effectiveProjectId,
+  effectiveProjectShortcode: (table: PgTable) =>
+    expenseInheritanceReadProjection(getTableName(table))
+      .effectiveProjectShortcode,
+  effectiveProjectName: (table: PgTable) =>
+    expenseInheritanceReadProjection(getTableName(table)).effectiveProjectName,
+  effectiveTrade: (table: PgTable) =>
+    expenseInheritanceReadProjection(getTableName(table)).effectiveTrade,
+  fallbackProjectShortcode: (table: PgTable) =>
+    expenseInheritanceReadProjection(getTableName(table))
+      .fallbackProjectShortcode,
+  fallbackTrade: (table: PgTable) =>
+    expenseInheritanceReadProjection(getTableName(table)).fallbackTrade,
+  projectResolutionSource: (table: PgTable) =>
+    expenseInheritanceReadProjection(getTableName(table))
+      .projectResolutionSource,
+  tradeResolutionSource: (table: PgTable) =>
+    expenseInheritanceReadProjection(getTableName(table)).tradeResolutionSource,
+});
 
 export type ExpenseInheritanceTuple = {
   lineKind: ExpenseLineKind;

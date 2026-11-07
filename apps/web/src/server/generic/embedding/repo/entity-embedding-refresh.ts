@@ -76,11 +76,13 @@ export async function seedEntityEmbedding(
   return withTransactionDatabase(
     isTransaction(db) ? databaseForTransaction(db) : db,
     async (tx) => {
-      const live = await unwrapDb(tx)
-        .execute(sql`SELECT id FROM "SearchDocument"
+      const live = await unwrapDb(tx).execute(
+        sql`SELECT id FROM "SearchDocument"
       WHERE "entityKind"=${input.entityKind} AND "entityId"=${input.entityId}::uuid
-        AND "semanticText"=${input.embeddingText} AND ${notDeleted("SearchDocument")} LIMIT 1 FOR UPDATE`);
-      if (!live.rows.length)
+        AND "semanticText"=${input.embeddingText} AND ${notDeleted("SearchDocument")} LIMIT 1 FOR UPDATE`,
+        "objects",
+      );
+      if (!live.length)
         throw new Error(
           "Synthetic embedding needs a matching live search document",
         );

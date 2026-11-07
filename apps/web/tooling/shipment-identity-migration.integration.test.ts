@@ -7,8 +7,10 @@ import { withMigrationDatabase } from "./test-database-lease";
 // Identity enforcement must not erase pre-existing duplicates or their reviewed evidence.
 it("preserves populated duplicate shipment evidence when installing identity enforcement", async () => {
   await withMigrationDatabase(async (client) => {
-    const db = drizzle(client);
-    await migrateDatabase(db, { through: "0062_source_claim_family_fanout" });
+    const db = drizzle({ client: client, paramsInErrors: true });
+    await migrateDatabase(db, {
+      through: "20261030032333_0062_source_claim_family_fanout",
+    });
     const id = (n: number) =>
       `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
     await client.query(
@@ -101,7 +103,9 @@ it("preserves populated duplicate shipment evidence when installing identity enf
       return values;
     };
     const before = await snapshot();
-    await migrateDatabase(db, { through: "0063_shipment_tracking_identity" });
+    await migrateDatabase(db, {
+      through: "20261103160623_0063_shipment_tracking_identity",
+    });
     expect(await snapshot()).toEqual(before);
     const triggers =
       await client.query(`SELECT count(*)::int AS count FROM pg_trigger

@@ -1,8 +1,8 @@
+import { relationalSchema } from "~/server/db/schema";
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg, { type Pool } from "pg";
 import { afterAll, afterEach, vi } from "vitest";
 import type { DatabaseRuntime } from "../src/server/db/database-runtime";
-import { drizzleSchema as schema } from "../src/server/db/drizzle-schema";
 import { createPostgresPool } from "./postgres-pool";
 import { closeTestDb } from "./test-setup";
 
@@ -87,13 +87,20 @@ const createModuleDatabase = (): ModuleDatabase => {
       get client() {
         return (state.client ??= drizzle({
           client: connectModulePool(state),
-          schema,
+          relations: relationalSchema,
+          paramsInErrors: true,
         }));
       },
       withConnection: async (fn) => {
         const connection = await connectModulePool(state).connect();
         try {
-          return await fn(drizzle({ client: connection, schema }));
+          return await fn(
+            drizzle({
+              client: connection,
+              relations: relationalSchema,
+              paramsInErrors: true,
+            }),
+          );
         } finally {
           connection.release();
         }

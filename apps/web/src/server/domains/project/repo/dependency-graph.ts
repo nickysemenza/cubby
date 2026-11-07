@@ -7,10 +7,12 @@ import type {
   ProjectGraphEdge,
   ProjectGraphNode,
 } from "@cubby/schemas/project-dependency-graph";
+import type { PgTable } from "drizzle-orm/pg-core";
 
 import type { Database } from "~/server/db";
 import { effectiveFieldSql } from "~/server/db/computed/effective-field";
 import { getDb, notDeleted } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { entityLink, project, task } from "~/server/db/schema";
 import { liveLinks } from "~/server/generic/entity-links/repo/entity-links";
 
@@ -59,7 +61,9 @@ const fetchGraphRows = async (db: Database): Promise<GraphRows> => {
   const [projects, tasks, projectDependencies, taskDependencies] =
     await Promise.all([
       dbClient.query.project.findMany({
-        where: notDeleted(project),
+        where: {
+          RAW: (table: PgTable) => relationalSql(table, notDeleted(project)),
+        },
         columns: {
           id: true,
           shortcode: true,

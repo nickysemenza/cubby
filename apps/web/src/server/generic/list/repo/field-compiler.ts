@@ -670,9 +670,10 @@ export const loadDeclaredRollups = async (
       ),
       sql`, `,
     )} FROM ${table} WHERE ${id} = ANY(${uuidArrayParam(ids)})`,
+    "objects",
   );
   return new Map(
-    rows.rows.map((raw) => {
+    rows.map((raw) => {
       const { id: rowId, ...values } = rollupRow.parse(raw);
       return [rowId, new Map(Object.entries(values))];
     }),

@@ -152,7 +152,7 @@ describe("stored Purchase quality", () => {
     );
     await refresh();
     const [published] = await unwrapDb(ctx.db)
-      .execute(
+      .execute<{ rulesVersion: string }>(
         sql`SELECT "rulesVersion"::text AS "rulesVersion" FROM "QualitySnapshot"
           WHERE "entityId" = ${order.entityId}`,
       )

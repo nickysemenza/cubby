@@ -4,11 +4,13 @@ import { expenseCostSign } from "@cubby/schemas/project";
 import type { ExpenseFilters } from "@cubby/schemas/project";
 import { rawExpenseListItemOut } from "@cubby/schemas/work-raw-read";
 import { and, eq, inArray, type SQL, sql } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { QueryBuilder } from "drizzle-orm/pg-core";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { getDb, notDeleted, relations, unwrapDb } from "~/server/db/helpers";
 import { quotedTable, related } from "~/server/db/helpers/related";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
   expense,
   project,
@@ -380,7 +382,10 @@ const loadExpenseJoinedRows = async (
     ids.length === 0
       ? []
       : await unwrapDb(db).query.expense.findMany({
-          where: inArray(expense.id, [...ids]),
+          where: {
+            RAW: (table: PgTable) =>
+              relationalSql(table, inArray(expense.id, [...ids])),
+          },
           extras: expenseInheritanceReadExtras(),
           with: {
             project: declared.project,

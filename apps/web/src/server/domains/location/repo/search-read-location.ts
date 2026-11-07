@@ -1,11 +1,13 @@
 import { entitySchema } from "@cubby/schemas/entity";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { sql, and, inArray } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { alias } from "drizzle-orm/pg-core";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { locationAiDescriptionExtras } from "~/server/db/computed/location-ai-description";
 import { unwrapDb, notDeleted } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { location as searchTablelocation } from "~/server/db/schema";
 import { location } from "~/server/db/schema";
 import { withOptionalLimit } from "~/server/generic/embedding/repo/embedding-load-options";
@@ -22,15 +24,21 @@ async function loadEmbeddingText(
 ): Promise<SearchableEntityText[]> {
   const queryConfig = withOptionalLimit(
     {
-      where: and(
-        notDeleted(location),
-        options.ids?.length
-          ? inArray(
-              location.id,
-              options.ids.map((id) => parseEntityId("location", id)),
-            )
-          : undefined,
-      ),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(
+              notDeleted(location),
+              options.ids?.length
+                ? inArray(
+                    location.id,
+                    options.ids.map((id) => parseEntityId("location", id)),
+                  )
+                : undefined,
+            ),
+          ),
+      },
       columns: {
         id: true,
         name: true,

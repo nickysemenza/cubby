@@ -346,7 +346,7 @@ describe("PostgreSQL pool shutdown", () => {
 
         socket.uncork();
         await ending;
-        const observer = await getDb(ctx.db).execute(
+        const observer = await getDb(ctx.db).execute<{ "?column?": number }>(
           sql`SELECT 1 FROM pg_stat_activity WHERE pid = ${pid}`,
         );
         expect(observer.rows).toHaveLength(0);

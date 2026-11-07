@@ -6,6 +6,7 @@ import {
 import type { ProjectOptionsOut } from "@cubby/schemas/project";
 import type { Trade } from "@cubby/schemas/project";
 import { and, inArray, sql } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { uniq } from "es-toolkit";
 
 import type { Database } from "~/server/db";
@@ -15,6 +16,7 @@ import {
   unwrapDb,
   uuidArrayParam,
 } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { expense, project } from "~/server/db/schema";
 import { projectNameOptionsExcluding } from "~/server/domains/project/repo/lookup";
 
@@ -220,7 +222,13 @@ const readSources = async (db: Database, ids: readonly ExpenseShortcode[]) =>
   ids.length === 0
     ? []
     : getDb(db).query.expense.findMany({
-        where: and(inArray(expense.shortcode, [...ids]), notDeleted(expense)),
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(
+              table,
+              and(inArray(expense.shortcode, [...ids]), notDeleted(expense)),
+            ),
+        },
         extras: expenseInheritanceReadExtras(),
         with: { product: { columns: { kind: true } } },
       });

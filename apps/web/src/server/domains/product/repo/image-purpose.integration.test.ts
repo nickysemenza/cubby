@@ -1,9 +1,11 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { and, eq } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb, notDeleted } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { entityAttachment } from "~/server/db/schema";
 import {
   createOrReuseAttachedImage,
@@ -89,11 +91,17 @@ describe("pending Product image roles", () => {
     );
 
     const row = await getDb(ctx.db).query.entityAttachment.findFirst({
-      where: and(
-        eq(entityAttachment.entityId, product.entityId),
-        eq(entityAttachment.imageId, label.id),
-        notDeleted(entityAttachment),
-      ),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(
+              eq(entityAttachment.entityId, product.entityId),
+              eq(entityAttachment.imageId, label.id),
+              notDeleted(entityAttachment),
+            ),
+          ),
+      },
       columns: { purpose: true },
     });
     expect(row?.purpose).toBe("label");

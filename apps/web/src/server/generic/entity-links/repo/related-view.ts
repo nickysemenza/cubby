@@ -396,8 +396,8 @@ async function loadOneRows(
     WHERE rn <= 3
     ORDER BY "sourceId", rn
   `;
-  const result = await getDb(db).execute(query);
-  return previewRowSchema.array().parse(result.rows);
+  const result = await getDb(db).execute(query, "objects");
+  return previewRowSchema.array().parse(result);
 }
 
 export async function loadRelatedPreviews(
@@ -483,8 +483,8 @@ export async function loadRelatedBranch(
     ORDER BY "sortValue" ${sql.raw(view.sortDirection)}, "label", "id"
     LIMIT ${input.limit} OFFSET ${input.offset}
   `;
-  const result = await getDb(db).execute(query);
-  const rows = branchRowSchema.array().parse(result.rows);
+  const result = await getDb(db).execute(query, "objects");
+  const rows = branchRowSchema.array().parse(result);
   const displayImages = await resolveEntityDisplayImages(
     db,
     rows.map((row) => ({
@@ -573,8 +573,8 @@ export async function loadRelatedOptions(
     ORDER BY "label", "id"
     LIMIT ${input.limit}
   `;
-  const result = await getDb(db).execute(query);
-  const rows = optionRowSchema.array().parse(result.rows);
+  const result = await getDb(db).execute(query, "objects");
+  const rows = optionRowSchema.array().parse(result);
   return rows.map((row) => ({
     entity: view.targetEntity,
     id: row.id,
@@ -834,8 +834,8 @@ export async function loadRelatedSummary(
     SELECT paged.*, totals.*, (SELECT count(*)::int FROM grouped) AS "count"
     FROM totals LEFT JOIN paged ON TRUE
   `;
-  const result = await getDb(db).execute(query);
-  const rows = summaryRowSchema.array().parse(result.rows);
+  const result = await getDb(db).execute(query, "objects");
+  const rows = summaryRowSchema.array().parse(result);
   const first = rows[0];
   const zeroTotals = {
     expenseCount: 0,

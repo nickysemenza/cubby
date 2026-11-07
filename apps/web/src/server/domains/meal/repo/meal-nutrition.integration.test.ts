@@ -11,10 +11,12 @@ import {
   withMacros,
 } from "@cubby/schemas/nutrition";
 import { and, eq, isNull } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import {
   captureBackgroundQueue,
@@ -316,7 +318,10 @@ describe("meal nutrition service", () => {
 
     expect(
       await getDb(ctx.db).query.recipe.findFirst({
-        where: eq(recipe.id, staleRecipe.id),
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(table, eq(recipe.id, staleRecipe.id)),
+        },
         columns: { totalsComputedAt: true },
       }),
     ).toEqual({ totalsComputedAt: null });
@@ -459,7 +464,10 @@ describe("meal nutrition service", () => {
       totals: { cost: { lower: 0.5 }, nutrition: { kcal: { lower: 100 } } },
     });
     const stored = await getDb(ctx.db).query.mealFoodEntry.findFirst({
-      where: eq(mealFoodEntry.id, saved.id),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(table, eq(mealFoodEntry.id, saved.id)),
+      },
       columns: { amountValue: true, amountUnit: true },
     });
     expect(stored).toEqual({ amountValue: 25, amountUnit: "g" });
@@ -562,7 +570,10 @@ describe("meal nutrition service", () => {
     });
     expect(
       await getDb(ctx.db).query.mealFoodEntry.findFirst({
-        where: eq(mealFoodEntry.id, saved.id),
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(table, eq(mealFoodEntry.id, saved.id)),
+        },
         columns: { amountValue: true, amountUnit: true },
       }),
     ).toEqual({ amountValue: 1, amountUnit: "cup" });

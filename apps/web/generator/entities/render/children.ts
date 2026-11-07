@@ -15,13 +15,6 @@ const sqlTemplate = (value: string) => {
   }
   return `sql\`${rendered}${escapeTemplate(value.slice(cursor))}\``;
 };
-const actions = (ref: { onDelete?: string; onUpdate?: string }) =>
-  Object.fromEntries(
-    Object.entries(ref).filter(
-      ([key]) => key === "onDelete" || key === "onUpdate",
-    ),
-  );
-
 export const childTableDependencies = (
   tables: readonly ChildTableMetadata[],
 ) => [
@@ -81,13 +74,17 @@ export const renderChildTables = (
           value += `.generatedAlwaysAs(${sqlTemplate(expression)})`;
         }
         if (column.onUpdateNow) value += ".$onUpdate(() => new Date())";
-        if (column.reference) {
-          const policy = actions(column.reference);
-          value += `.references((): AnyPgColumn => ${column.reference.table}.${column.reference.column}${Object.keys(policy).length ? `, ${JSON.stringify(policy)}` : ""})`;
-        }
         return `${JSON.stringify(column.key)}:${value}`;
       });
       const constraints = [
+        ...table.columns.flatMap((column) => {
+          const ref = column.reference;
+          if (!ref) return [];
+          return [
+            `foreignKey({name:[${JSON.stringify(table.name)}, ${JSON.stringify(column.name ?? column.key)},getTableName(${ref.table}),${JSON.stringify(ref.column)},"fk"].join("_").slice(0,63),columns:[table.${column.key}],foreignColumns:[${ref.table}.${ref.column}]})${ref.onDelete ? `.onDelete(${JSON.stringify(ref.onDelete)})` : ""}${ref.onUpdate ? `.onUpdate(${JSON.stringify(ref.onUpdate)})` : ""}`,
+          ];
+        }),
+
         ...table.indexes.map((index) => {
           const parts = index.on.map((part) =>
             "column" in part
@@ -105,7 +102,7 @@ export const renderChildTables = (
             `foreignKey({name:${JSON.stringify(fk.name)},columns:[${fk.columns.map((key) => `table.${key}`).join(",")}],foreignColumns:[${fk.references.map((key) => `${fk.table}.${key}`).join(",")}]})${fk.onDelete ? `.onDelete(${JSON.stringify(fk.onDelete)})` : ""}${fk.onUpdate ? `.onUpdate(${JSON.stringify(fk.onUpdate)})` : ""}`,
         ),
       ];
-      return `export const ${table.exportName} = pgTable(${JSON.stringify(table.name)},{${columns.join(",")}},(${constraints.some((constraint) => /\btable\b/.test(constraint)) ? "table" : "_table"})=>[${constraints.join(",")}]);`;
+      return `export const ${table.exportName} = pgTable(${JSON.stringify(table.name)},{${columns.join(",")}},(${constraints.some((constraint) => /\btable\b/.test(constraint)) ? "table" : "_table"}):PgTableExtraConfigValue[]=>[${constraints.join(",")}]);`;
     })
     .join("\n\n");
 
@@ -113,10 +110,32 @@ export const renderChildRelations = (
   tables: readonly ChildTableMetadata[],
 ): string =>
   tables
-    .map((table) => {
-      return table.relations.length
-        ? `\nexport const ${table.exportName}Relations = relations(${table.exportName}, ({ ${[...new Set(table.relations.map(({ kind }) => kind))].join(", ")} }) => ({${table.relations.map((relation) => `${JSON.stringify(relation.name)}:${relation.kind}(${relation.table}${relation.fields ? `,{fields:[${relation.fields.map((key) => `${table.exportName}.${key}`).join(",")}],references:[${relation.references!.map((key) => `${relation.table}.${key}`).join(",")}]${relation.relationName ? `,relationName:${JSON.stringify(relation.relationName)}` : ""}}` : relation.relationName ? `,{relationName:${JSON.stringify(relation.relationName)}}` : ""})`).join(",")}}));`
-        : "";
-    })
-    .filter(Boolean)
-    .join("\n\n");
+    .filter((table) => table.relations.length > 0)
+    .map(
+      (table) =>
+        `${table.exportName}: {${table.relations
+          .map((relation) => {
+            const config = [
+              ...(relation.fields
+                ? [
+                    `from:[${relation.fields.map((key) => `r.${table.exportName}.${key}`).join(",")}]`,
+                    `to:[${relation.references!.map((key) => `r.${relation.table}.${key}`).join(",")}]`,
+                    ...(relation.kind === "one" &&
+                    relation.fields.every(
+                      (key) =>
+                        table.columns.find((column) => column.key === key)
+                          ?.notNull,
+                    )
+                      ? ["optional:false"]
+                      : []),
+                  ]
+                : []),
+              ...(relation.relationName
+                ? [`alias:${JSON.stringify(relation.relationName)}`]
+                : []),
+            ];
+            return `${JSON.stringify(relation.name)}:r.${relation.kind}.${relation.table}({${config.join(",")}})`;
+          })
+          .join(",")}}`,
+    )
+    .join(",\n");

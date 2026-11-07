@@ -81,8 +81,9 @@ describe("hourly deterministic rebuild", () => {
     expect(skipped?.error).toContain("repeated isolate termination");
     const retained = await getDb(ctx.db).execute(
       sql`SELECT price AS value FROM "ProductReadSnapshot" WHERE "entityId" = ${sorted[1]}::uuid`,
+      "objects",
     );
-    expect(retained.rows).toEqual([{ value: 12 }]);
+    expect(retained).toEqual([{ value: 12 }]);
     // Crossing an hour with failures must resume the committed cursor.
     await getDb(ctx.db).execute(
       sql`UPDATE "DerivedRebuild" SET "startedAt" = (now() AT TIME ZONE 'UTC') - interval '2 hours'`,
@@ -176,14 +177,18 @@ describe("hourly deterministic rebuild", () => {
     });
     expect(finished?.finishedAt).not.toBeNull();
     expect(finished?.error).toContain("Synthetic provider unavailable");
-    const output = await getDb(ctx.db).execute(sql`SELECT
+    const output = await getDb(ctx.db).execute(
+      sql`SELECT
       EXISTS (SELECT 1 FROM "QualitySnapshot" WHERE "entityId" = ${product.entityId}::uuid) AS quality,
-      EXISTS (SELECT 1 FROM "SearchDocument" WHERE "entityId" = ${product.entityId}::uuid AND "deletedAt" IS NULL) AS search`);
-    expect(output.rows).toEqual([{ quality: true, search: true }]);
+      EXISTS (SELECT 1 FROM "SearchDocument" WHERE "entityId" = ${product.entityId}::uuid AND "deletedAt" IS NULL) AS search`,
+      "objects",
+    );
+    expect(output).toEqual([{ quality: true, search: true }]);
     const later = await getDb(ctx.db).execute(
       sql`SELECT price AS value FROM "ProductReadSnapshot" WHERE "entityId" = ${ids[2]}::uuid`,
+      "objects",
     );
-    expect(later.rows).toEqual([{ value: 12 }]);
+    expect(later).toEqual([{ value: 12 }]);
     // A failed completed pass cannot bypass the hourly gate or schedule a new full pass.
     await getDb(ctx.db).execute(
       sql`UPDATE "DerivedRebuild" SET "startedAt" = now() AT TIME ZONE 'UTC'`,

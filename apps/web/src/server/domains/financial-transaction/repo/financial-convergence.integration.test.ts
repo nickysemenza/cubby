@@ -2,12 +2,14 @@ import { financialSpendingAdvice } from "@cubby/schemas/financial-booking";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import type { ExtractedOrderCandidate } from "@cubby/schemas/purchase-import";
 import { eq } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import type { DecisionPort } from "~/server/ai/decision-model";
 import { getDb, notDeleted } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
   expense,
   financialTransactionAllocation,
@@ -136,10 +138,16 @@ describe("server verified financial convergence", () => {
     expect(
       (
         await getDb(ctx.db).query.financialTransactionAllocation.findMany({
-          where: eq(
-            financialTransactionAllocation.transactionId,
-            transaction.entityId,
-          ),
+          where: {
+            RAW: (table: PgTable) =>
+              relationalSql(
+                table,
+                eq(
+                  financialTransactionAllocation.transactionId,
+                  transaction.entityId,
+                ),
+              ),
+          },
           columns: { confirmsMerchant: true },
         })
       ).map((row) => row.confirmsMerchant),
@@ -683,10 +691,16 @@ describe("server verified financial convergence", () => {
     expect(
       (
         await getDb(ctx.db).query.financialTransactionAllocation.findMany({
-          where: eq(
-            financialTransactionAllocation.transactionId,
-            transaction.entityId,
-          ),
+          where: {
+            RAW: (table: PgTable) =>
+              relationalSql(
+                table,
+                eq(
+                  financialTransactionAllocation.transactionId,
+                  transaction.entityId,
+                ),
+              ),
+          },
           columns: { confirmsMerchant: true },
         })
       ).map((row) => row.confirmsMerchant),
@@ -820,7 +834,10 @@ describe("server verified financial convergence", () => {
     );
     expect(
       await getDb(ctx.db).query.purchase.findFirst({
-        where: eq(purchaseTable.id, purchase.entityId),
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(table, eq(purchaseTable.id, purchase.entityId)),
+        },
       }),
     ).toMatchObject({ orderId: candidate.orderId });
     expect(

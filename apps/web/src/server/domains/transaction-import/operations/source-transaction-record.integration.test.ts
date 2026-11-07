@@ -116,6 +116,7 @@ describe("finance.record source and Job lifecycle contention", () => {
   it("rolls back captured intent with rejected operation admission without an external writer", async () => {
     const before = await getDb(ctx.db).execute(
       sql`SELECT key, generation, xmin::text AS xmin FROM "Job" ORDER BY key`,
+      "objects",
     );
     const invalidate = changes.recordChange;
     const capture = vi
@@ -144,22 +145,24 @@ describe("finance.record source and Job lifecycle contention", () => {
         error: { message: "Synthetic capture rejection" },
       });
       expect(
-        (
-          await getDb(ctx.db).execute(
-            sql`SELECT key, generation, xmin::text AS xmin FROM "Job" ORDER BY key`,
-          )
-        ).rows,
-      ).toEqual(before.rows);
+        await getDb(ctx.db).execute(
+          sql`SELECT key, generation, xmin::text AS xmin FROM "Job" ORDER BY key`,
+          "objects",
+        ),
+      ).toEqual(before);
       // The rolled-back capture left no wake behind.
       expect(
         (
-          await getDb(ctx.db).execute(sql`SELECT
+          await getDb(ctx.db).execute(
+            sql`SELECT
         (SELECT count(*)::int FROM "TransactionImport") AS imports,
         (SELECT count(*)::int FROM "TransactionImportRecord") AS memberships,
         (SELECT count(*)::int FROM "SourceTransactionRecord") AS records,
         (SELECT count(*)::int FROM "Run" WHERE purpose = 'sweep') AS sweeps,
-        (SELECT count(*)::int FROM "Expense") AS expenses`)
-        ).rows[0],
+        (SELECT count(*)::int FROM "Expense") AS expenses`,
+            "objects",
+          )
+        )[0],
       ).toEqual({
         imports: 0,
         memberships: 0,
@@ -250,14 +253,17 @@ describe("finance.record source and Job lifecycle contention", () => {
         });
       const read = async () =>
         (
-          await getDb(ctx.db).execute(sql`SELECT
+          await getDb(ctx.db).execute(
+            sql`SELECT
       (SELECT count(*)::int FROM "TransactionImport") AS imports,
       (SELECT count(*)::int FROM "TransactionImportRecord") AS memberships,
       (SELECT count(*)::int FROM "SourceTransactionRecord") AS records,
       (SELECT count(*)::int FROM "Run" WHERE purpose = 'sweep') AS sweeps,
       (SELECT count(*)::int FROM "Job" WHERE kind = 'run.execute') AS "sweepJobs",
-      (SELECT count(*)::int FROM "Expense") AS expenses`)
-        ).rows[0];
+      (SELECT count(*)::int FROM "Expense") AS expenses`,
+            "objects",
+          )
+        )[0];
       let attempts = 0;
       const invalidate = changes.recordChange;
       const warnings = vi
@@ -279,8 +285,9 @@ describe("finance.record source and Job lifecycle contention", () => {
             (
               await getDb(ctx.db).execute(
                 sql`SELECT generation, xmin::text AS xmin FROM "Job" WHERE key = 'synthetic:unrelated-work'`,
+                "objects",
               )
-            ).rows[0],
+            )[0],
           );
       const claim =
         change === "renew" ? await claimJob(ctx.db, search.id) : null;
@@ -294,8 +301,9 @@ describe("finance.record source and Job lifecycle contention", () => {
             (
               await repositoryQueries(db).execute(
                 sql`SELECT pg_backend_pid() AS pid`,
+                "objects",
               )
-            ).rows[0],
+            )[0],
           ).pid;
       const originalTuple = await searchTuple();
       const racing = vi

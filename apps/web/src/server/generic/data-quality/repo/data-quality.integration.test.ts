@@ -950,8 +950,9 @@ describe("data quality: gap count and status SQL planning", () => {
     const plannerKb = async (expression: SQL, t: ScoredTable) => {
       const result = await unwrapDb(ctx.db).execute(
         sql`EXPLAIN (MEMORY, FORMAT JSON) SELECT ${expression} FROM ${t}`,
+        "objects",
       );
-      return explained.parse(result.rows[0]?.["QUERY PLAN"])[0].Planning[
+      return explained.parse(result[0]?.["QUERY PLAN"])[0].Planning[
         "Memory Used"
       ];
     };

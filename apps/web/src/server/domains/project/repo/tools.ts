@@ -43,6 +43,7 @@ import {
   or,
   sql,
 } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { uniq } from "es-toolkit";
 import type { z } from "zod";
 
@@ -61,6 +62,7 @@ import {
   productBrandCodeSql,
 } from "~/server/db/computed/product-brand-sql";
 import { getDb, notDeleted, withTransaction } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
   entityLink,
   expense,
@@ -666,7 +668,13 @@ async function preflightAttachProjectResources(
   const requested = uniq([...productIds]);
   const { rows, codeById } = await loadRelationProducts(dbc, requested);
   const liveProject = await dbc.query.project.findFirst({
-    where: and(eq(project.id, projectId), notDeleted(project)),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          and(eq(project.id, projectId), notDeleted(project)),
+        ),
+    },
     columns: { id: true },
   });
   const alreadyLive = await liveResourceProductIds(dbc, projectId, requested);
@@ -1021,7 +1029,10 @@ async function liveProjectCodes(
       .map((row) => row.projectId);
     if (projectIds.length === 0) return [];
     const rows = await tx.query.project.findMany({
-      where: inArray(project.id, projectIds),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(table, inArray(project.id, projectIds)),
+      },
       columns: { shortcode: true },
     });
     return rows.map((row) => row.shortcode).sort();
@@ -1041,7 +1052,13 @@ async function assertReusableResource(
   role: string,
 ): Promise<{ shortcode: string }> {
   const row = await dbc.query.product.findFirst({
-    where: and(eq(product.id, productId), notDeleted(product)),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          and(eq(product.id, productId), notDeleted(product)),
+        ),
+    },
     columns: { shortcode: true, categoryId: true },
   });
   if (!row) {
@@ -1088,11 +1105,23 @@ async function assertUsagePair(
 ): Promise<{ productCode: string }> {
   const [liveProject, liveProduct] = await Promise.all([
     tx.query.project.findFirst({
-      where: and(eq(project.id, projectId), notDeleted(project)),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(eq(project.id, projectId), notDeleted(project)),
+          ),
+      },
       columns: { id: true },
     }),
     tx.query.product.findFirst({
-      where: and(eq(product.id, productId), notDeleted(product)),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(eq(product.id, productId), notDeleted(product)),
+          ),
+      },
       columns: { shortcode: true, categoryId: true },
     }),
   ]);
@@ -1136,11 +1165,17 @@ export async function setProjectToolUsage(
     const { productCode } = await assertUsagePair(tx, projectId, productId);
 
     const existing = await tx.query.entityLink.findFirst({
-      where: and(
-        eq(entityLink.fromEntityId, projectId),
-        eq(entityLink.toEntityId, productId),
-        liveLinks("projectTool"),
-      ),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(
+              eq(entityLink.fromEntityId, projectId),
+              eq(entityLink.toEntityId, productId),
+              liveLinks("projectTool"),
+            ),
+          ),
+      },
       columns: { id: true },
     });
 
@@ -1202,7 +1237,13 @@ export async function setProductProjectUses(
       desired.length === 0
         ? []
         : await tx.query.project.findMany({
-            where: and(inArray(project.id, desired), notDeleted(project)),
+            where: {
+              RAW: (table: PgTable) =>
+                relationalSql(
+                  table,
+                  and(inArray(project.id, desired), notDeleted(project)),
+                ),
+            },
             columns: { id: true, shortcode: true },
           });
     if (liveProjects.length !== desired.length) {
@@ -1731,10 +1772,24 @@ export async function listProductProjectUses(
   const dbc = getDb(db);
   const productRow = await dbc.query.product.findFirst({
     extras: {
-      brandName: productBrandNameSql(product.brandId).as("brandName"),
-      brandCode: productBrandCodeSql(product.brandId).as("brandCode"),
+      brandName: (table: PgTable) =>
+        relationalSql(
+          table,
+          productBrandNameSql(product.brandId).as("brandName"),
+        ),
+      brandCode: (table: PgTable) =>
+        relationalSql(
+          table,
+          productBrandCodeSql(product.brandId).as("brandCode"),
+        ),
     },
-    where: and(eq(product.id, productId), notDeleted(product)),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          and(eq(product.id, productId), notDeleted(product)),
+        ),
+    },
     columns: {
       shortcode: true,
       categoryId: true,
