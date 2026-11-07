@@ -160,10 +160,11 @@ At startup it prints whether Foundation Models can describe images in this proce
 the exact reason (`SystemLanguageModel.default.availability` or a missing `.vision` capability).
 That value is what the hello advertises as `actualImageDescription.available`. After that it
 prints each worker phase change and one line per job: kind, job id, outcome, reason, duration.
-Image descriptions require all structured fields. A Foundation Models parsing failure is
-reported as terminal `structured_output_invalid` with the model's raw parsing diagnostic;
-partial descriptions are never adopted or automatically retried. Context exhaustion retains
-its separate bounded recovery with a smaller image and response budget.
+Image descriptions require all structured fields; partial descriptions are never adopted.
+A parsing failure with an incomplete response at its output cap retries once with a larger
+bounded budget. Other parsing failures remain terminal `structured_output_invalid`, preserving
+the model's raw diagnostic. Context exhaustion keeps its smaller-image recovery; both paths
+share the [two-attempt limit](../../docs/jobs.md#image-processing).
 `--once` exits after the worker has been connected for `--idle-seconds` (default 10) with no
 outstanding job and no unacknowledged result. A job counts as outstanding while it is queued,
 running, or being recorded, and it stays outstanding across a reconnect. It exits 1 if any job

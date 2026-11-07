@@ -394,12 +394,19 @@ without discarding its evidence or allowing maintenance to immediately settle it
 A changed source or new processor revision is new work, and
 a newer Apple build's first pull makes backing-off device work due.
 On-device descriptions use a fresh session, a full-frame image bounded to 1024 pixels,
-and an explicit response budget of at most 512 tokens, reserved from the runtime
+and an initial explicit response budget of at most 512 tokens, reserved from the runtime
 model context size. A context overflow retries once with 512 pixels and half the
 response budget. Persistent failures retain the reported context/token counts and
 remain visibly failed until explicit retry or changed source/processor inputs;
-no cloud fallback or fabricated description is used. Structured parsing failures are
-terminal and preserve the original raw diagnostic in the existing server reason.
+no cloud fallback or fabricated description is used. A structured parsing failure
+retries only when the latest structured response is explicitly incomplete and
+session output usage reaches the configured response cap. That fresh-session retry
+keeps the image size and raises the output budget to at most 1,024 tokens, bounded
+by one quarter of runtime context. There are at most two attempts total: context
+shrinking and truncation recovery cannot chain. Unknown/complete response metadata,
+below-cap output, arbitrary malformed parsing, and repeated truncation remain
+terminal. No partial result is adopted. Terminal parsing failures preserve the
+original raw diagnostic in the existing server reason.
 Before releasing the failed session, native code appends fixed metadata: attempted
 image dimensions and response budget, session output usage, latest-response
 structure availability, completion and root shape, presence and shapes of the
