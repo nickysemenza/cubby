@@ -3,7 +3,9 @@ import SwiftUI
 
 /// Merge for a selection of two or more records: the server's preview (`entity.mergePreview`)
 /// with its suggested survivor preselected and switchable, a value choice for each conflicting
-/// field, then one irreversible confirmation before the same kernel merge web sends.
+/// field, each merged-away record's connections with the server's disposition (moved, kept on the
+/// merged record, discarded, blocking), and the server's blockers, which keep Merge off. One
+/// irreversible confirmation sends the same kernel merge web sends, chosen values included.
 struct EntityMergeSheet: View {
     @Bindable var model: EntityMergeModel
     let onFinished: () -> Void
@@ -25,7 +27,7 @@ struct EntityMergeSheet: View {
                     }
                     ToolbarItem(placement: .confirmationAction) {
                         Button("Merge…") { confirming = true }
-                            .disabled(model.preview == nil || model.keepID == nil || model.isMerging)
+                            .disabled(!model.canMerge)
                             .accessibilityIdentifier("merge.start")
                     }
                 }
@@ -45,11 +47,12 @@ struct EntityMergeSheet: View {
                     .accessibilityIdentifier("merge.confirm")
                 } message: {
                     Text(
-                        "The other records are removed and their connections move to \(survivorName). This can't be undone."
+                        "The other records are removed and their connections follow the preview. This can't be undone."
                     )
                 }
                 .interactiveDismissDisabled(model.isMerging)
                 .task { if model.preview == nil { await model.load() } }
+                .task(id: model.keepID) { await model.refreshPlan() }
         }
         #if os(macOS)
             .frame(minWidth: 460, minHeight: 380)
@@ -73,6 +76,18 @@ struct EntityMergeSheet: View {
                     Section {
                         ActionFailureNotice(title: "Couldn't merge", message: failure, canRetry: false)
                     }
+                }
+                if !model.blockers.isEmpty {
+                    Section {
+                        ForEach(model.blockers, id: \.self) { blocker in
+                            Label(blocker, systemImage: "exclamationmark.octagon")
+                                .foregroundStyle(FieldGuideTokens.destructive)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    } header: {
+                        Text("Can't merge into \(survivorName)")
+                    }
+                    .accessibilityIdentifier("merge.blockers")
                 }
                 Section {
                     Picker("Keep", selection: $model.keepID) {
@@ -111,15 +126,75 @@ struct EntityMergeSheet: View {
                     } header: {
                         Text("Different values")
                     } footer: {
-                        Text("The kept record takes the value you choose before the merge.")
+                        Text("The kept record takes the value you choose as part of the merge.")
                     }
                 }
+                connectionsSection
             }
             .formStyle(.grouped)
         } else if let error = model.loadError {
             LoadFailureView(title: "Couldn't load the merge preview", message: error) { await model.load() }
         } else {
             LoadingIndicator.screen(label: "Loading merge preview")
+        }
+    }
+
+    /// Each merged-away record's incoming connections with what the merge does to them, as the
+    /// server declares it; the merge re-checks before it runs.
+    @ViewBuilder
+    private var connectionsSection: some View {
+        let mergedAway = model.mergedAway
+        Section {
+            if mergedAway.allSatisfy({ $0.connections.isEmpty }) {
+                Text("Nothing points at the records being merged.")
+                    .foregroundStyle(.secondary)
+            }
+            ForEach(mergedAway, id: \.id) { candidate in
+                if !candidate.connections.isEmpty {
+                    Text(candidate.name ?? candidate.id)
+                        .font(.fieldGuideLabel)
+                        .foregroundStyle(.secondary)
+                    ForEach(candidate.connections, id: \.edgeKey) { group in
+                        connectionRow(group)
+                    }
+                }
+            }
+        } header: {
+            Text("Connections")
+        } footer: {
+            Text("From the server's merge rules. The merge checks again before it runs.")
+        }
+        .accessibilityIdentifier("merge.connections")
+    }
+
+    private func connectionRow(_ group: EntityConnectionGroup) -> some View {
+        let blocking = group.disposition?.effect == .block
+        return VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
+            LabeledContent("\(group.label) (\(group.count.formatted()))") {
+                Text(dispositionPhrase(group.disposition?.effect))
+                    .foregroundStyle(blocking ? FieldGuideTokens.destructive : .secondary)
+            }
+            if let description = group.disposition?.description {
+                Text(description)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    /// Web's impact-preview wording for the server's disposition effect.
+    private func dispositionPhrase(_ effect: OperationEffect?) -> String {
+        switch effect {
+        case .repoint?: "Moves to \(survivorName)"
+        case .moveDedupe?: "Merged into the matching record"
+        case .preserve?: "Stays on the merged record"
+        case .softDelete?: "Deleted with it"
+        case .hardDelete?: "Permanently removed"
+        case .detach?: "Link is cleared"
+        case .block?: "Blocks the merge"
+        case .unrecognized(let raw)?: raw
+        case nil: "No impact recorded"
         }
     }
 

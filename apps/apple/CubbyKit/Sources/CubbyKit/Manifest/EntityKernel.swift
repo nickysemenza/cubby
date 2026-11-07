@@ -180,15 +180,20 @@ extension EntityDescriptor {
         return updated.count
     }
 
-    /// `entity.mutate` merge: folds `mergeIds` into `keepId` and removes them. Irreversible: only the
-    /// merge sheet calls it, after its explicit confirmation.
-    func merge(keepID: String, mergeIDs: [String], client: CubbyClient) async throws {
+    /// `entity.mutate` merge: folds `mergeIds` into `keepId` and removes them. `survivorValues` are
+    /// the conflicting fields' chosen candidate values; the server applies them in the merge's
+    /// transaction, so a refused merge changes nothing. Irreversible: only the merge sheet calls
+    /// it, after its explicit confirmation.
+    func merge(
+        keepID: String, mergeIDs: [String], survivorValues: [String: JSONValue], client: CubbyClient
+    ) async throws {
         try require(.merge)
-        _ = try await mutate(
-            [
-                "action": "merge", "entity": .string(key.rawValue),
-                "data": ["keepId": .string(keepID), "mergeIds": .array(mergeIDs.map { .string($0) })],
-            ], client)
+        var command: [String: JSONValue] = [
+            "action": "merge", "entity": .string(key.rawValue),
+            "data": ["keepId": .string(keepID), "mergeIds": .array(mergeIDs.map { .string($0) })],
+        ]
+        if !survivorValues.isEmpty { command["survivorValues"] = .object(survivorValues) }
+        _ = try await mutate(.object(command), client)
     }
 
     /// `entity.mutate` delete. Destructive: only the hero-action runner calls it, behind an

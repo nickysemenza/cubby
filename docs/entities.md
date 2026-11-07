@@ -763,8 +763,17 @@ reason }]` for the union of hero and list verbs. The server evaluates them in
 extra query, and a narrow `fields` read adds the rule fields. Clients render
 `enabled`/`reason` and derive no availability. `entity.mergePreview` returns
 the kernel merge's suggested survivor (most live incoming connections, then
-oldest, then lowest code) and every scalar update field the candidates disagree
-on; keeping a loser's value is an update of the survivor before the merge.
+oldest, then lowest code), every scalar update field the candidates disagree
+on, each candidate's incoming connections with the merge disposition
+`entity.connections` reports, and `blockers` for merging into the optional
+`keepId` (default the suggestion): live `block` dispositions on the other
+candidates plus the merge port's own `blockers` rules (Product editions, kit
+cycles, classification). Keeping a loser's value is the merge's
+`survivorValues` (`{ field: value }`): each key must be a field the preview
+reports as a conflict and each value one a candidate holds, checked before the
+merge; the kernel update applies them to the survivor after the merge in the
+same transaction, so a refused merge leaves the survivor unchanged and a value
+from a merged-away record no longer collides with its live unique key.
 The kernel `merge` verb is in entity-kernel.json wherever the merge operation is
 kernel-owned, so native dispatches the same `entity.mutate` merge web sends.
 Web record-level slot actions render once in the detail header through
@@ -1179,7 +1188,10 @@ the batch instead of treating it as empty.
 
 Every exposed field has a usable normal editor control. Only assignment mode
 companions are folded into their owning value controls; bulk rendering never
-silently omits a genuine update field.
+silently omits a genuine update field. Native bulk edit sets or clears single
+values (structured values included) and adds/removes value collections and
+multi-references with the record editor's controls; a keyed structured
+collection opens web's bulk edit.
 Structured additions and removals use the normal editor's wire normalization;
 empty optional lists are omitted. The dialog sends removals before additions so
 a held keyed item can change atomically, and labels removal controls visibly.

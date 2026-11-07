@@ -62,6 +62,11 @@ const executeSearch = async (
 };
 
 type MergeCommand = Extract<EntityMutationCommand, { action: "merge" }>;
+/** The `{keepId, mergeIds}` every kernel merge input shares; the port re-parses it. */
+const mergePlanSchema = z.object({
+  keepId: z.string().min(1),
+  mergeIds: z.array(z.string().min(1)).min(1),
+});
 const executeMerge = bindWorkflow(
   workflow<EntityKernelContext, MergeCommand>("entity.merge")
     .call("owner", async (_, { input }) => {
@@ -77,22 +82,67 @@ const executeMerge = bindWorkflow(
     })
     .commit("merged", async ({ context }, { input, owner }) =>
       withTransactionDatabase(context.db, async (db) => {
-        const merged = await owner.operation.execute(
-          {
-            ...context,
-            db,
-            services: {
-              ...context.services,
-              recipeCosting: context.services.recipeCosting.bindTo(db),
-            },
+        const writeContext = {
+          ...context,
+          db,
+          services: {
+            ...context.services,
+            recipeCosting: context.services.recipeCosting.bindTo(db),
           },
-          input.data,
-        );
+        };
+        const survivor =
+          input.survivorValues && Object.keys(input.survivorValues).length > 0
+            ? mergePlanSchema.parse(input.data)
+            : null;
+        // Checked against the live candidates before the merge removes them.
+        // Loaded lazily: the preview reads the edge source, whose lifecycle
+        // registry needs the kernel bindings this module helps initialize.
+        const survivorValues =
+          survivor && input.survivorValues
+            ? await (
+                await import("~/server/generic/merge/repo/merge-preview")
+              ).checkSurvivorValues(
+                db,
+                {
+                  entity: input.entity,
+                  keepId: survivor.keepId,
+                  mergeIds: survivor.mergeIds,
+                  survivorValues: input.survivorValues,
+                },
+                async (entity, code) =>
+                  (
+                    await executeEntityAs(writeContext, "get", {
+                      entity,
+                      id: code,
+                      missing: "null",
+                    })
+                  ).item,
+              )
+            : null;
+        const merged = await owner.operation.execute(writeContext, input.data);
+        // After the merge, so a value taken from a merged-away candidate no
+        // longer collides with that candidate's live unique key (Vendor names).
+        if (survivor && survivorValues) {
+          // The kernel update parses `data` with the entity's update schema.
+          await ENTITY_KERNEL_OPERATIONS[input.entity].update(writeContext, {
+            id: survivor.keepId,
+            data: survivorValues,
+          });
+        }
         await recordChange(db, {
           kind: "source",
           categories: [owner.binding.entity],
         });
-        return merged;
+        return survivor && survivorValues
+          ? {
+              ...merged,
+              item:
+                (await owner.operation.readKeeper(
+                  writeContext,
+                  survivor.keepId,
+                )) ?? merged.item,
+            }
+          : merged;
       }),
     )
     // Inside a caller's transaction the R2 delete waits for its commit.
@@ -123,6 +173,18 @@ const executeMerge = bindWorkflow(
       }),
     ),
 );
+
+/**
+ * The merge port's own refusals for one plan (`entity.mergePreview`
+ * blockers beyond blocking connection dispositions).
+ */
+export const entityMergeBlockers = async (
+  ctx: EntityKernelContext,
+  entity: MergeCommand["entity"],
+  plan: { keepId: string; mergeIds: string[] },
+): Promise<string[]> =>
+  (await ENTITY_KERNEL_BINDINGS[entity].mergeOperation?.blockers(ctx, plan)) ??
+  [];
 
 /**
  * The kernel `resolve` action over the declared `capabilities.resolve`. A

@@ -139,9 +139,34 @@ describe("entity edge source", () => {
     const preview = await previewEntityMerge(
       ctx.db,
       { entity: "product", ids: [spare.id, item.id] },
-      async (_entity, code) => ({ name: names.get(code), notes: "Same" }),
+      {
+        readRecord: async (_entity, code) => ({
+          name: names.get(code),
+          notes: "Same",
+        }),
+        connections: (code) =>
+          getEntityConnections(
+            ctx.db,
+            { id: code, operation: "merge", limitPerGroup: 5 },
+            kernelScaffold,
+          ),
+        mergeBlockers: async (_entity, plan) => [
+          `merge rule for ${plan.mergeIds.join(", ")}`,
+        ],
+      },
     );
     expect(preview.suggestedKeepId).toBe(item.id);
+    expect(preview.keepId).toBe(item.id);
+    // The stocked survivor's own stock carries the merge disposition web's
+    // impact preview shows; the merged-away spare has nothing incoming.
+    expect(preview.candidates[1]?.connections).toContainEqual(
+      expect.objectContaining({
+        edgeKey: "InventoryEntry.productId",
+        disposition: expect.objectContaining({ effect: expect.any(String) }),
+      }),
+    );
+    expect(preview.candidates[0]?.connections).toEqual([]);
+    expect(preview.blockers).toEqual([`merge rule for ${spare.id}`]);
     expect(preview.candidates).toEqual([
       expect.objectContaining({ id: spare.id, connectionCount: 0 }),
       expect.objectContaining({

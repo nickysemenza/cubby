@@ -66,11 +66,16 @@ describe("spending category merge", () => {
       name: `${name} ${crypto.randomUUID()}`,
       ...extra,
     });
-  const merge = (keepId: string, mergeIds: string[]) =>
+  const merge = (
+    keepId: string,
+    mergeIds: string[],
+    survivorValues?: Record<string, string>,
+  ) =>
     executeEntity(context(), {
       action: "merge",
       entity: "spendingCategory",
       data: { keepId, mergeIds },
+      survivorValues,
     });
 
   async function referencesTo(loserId: SpendingCategoryId) {
@@ -222,8 +227,17 @@ describe("spending category merge", () => {
     const pets = await category("Synthetic pets");
     const pet = await category("Synthetic pet");
     const child = await category("Synthetic pet toys", { parentId: pet.id });
-    const result = await merge(pets.shortcode, [pet.shortcode]);
-    expect(result.action === "merge" && result.item.id).toBe(pets.shortcode);
+    // A survivor value must be one a candidate holds.
+    await expect(
+      merge(pets.shortcode, [pet.shortcode], { name: "Synthetic invented" }),
+    ).rejects.toThrow(/one of the merge candidates' values/);
+    const result = await merge(pets.shortcode, [pet.shortcode], {
+      name: pet.name,
+    });
+    expect(result.action === "merge" && result.item).toMatchObject({
+      id: pets.shortcode,
+      name: pet.name,
+    });
     const [row] = await unwrapDb(ctx.db)
       .select({ parentId: spendingCategory.parentId })
       .from(spendingCategory)
