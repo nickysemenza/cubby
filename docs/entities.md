@@ -392,6 +392,9 @@ each field's own assignment, effective value and fallback once per outer row
 before formatting public provenance.
 A one-row materialized CTE prevents repeated JSON projections from rerunning
 the same inheritance subqueries, preserving the existing statement snapshot.
+Public-reference and source-identity lookups cast the canonical JSON UUID back
+to UUID rather than casting the primary-key column to text, retaining indexed
+lookups as the surrounding entity tables grow.
 
 An inherited value has one implementation: the field's `resolution.inherit`
 declaration (`packages/schemas/src/entity-definitions/definition.ts`) and its

@@ -75,8 +75,9 @@ function sourceEntities(
 function publicValue(chain: GeneratedInherit, value: SQL): SQL {
   if (chain.reference === null) return value;
   const { table, from } = referenceTable(chain.reference);
+  // Canonical reference ids are UUIDs; keep the indexed column uncast.
   const code = (id: SQL) =>
-    sql`(SELECT ${table.shortcode} FROM ${from} WHERE ${table.id}::text = ${id} AND ${notDeleted(table)})`;
+    sql`(SELECT ${table.shortcode} FROM ${from} WHERE ${table.id} = (${id})::uuid AND ${notDeleted(table)})`;
   if (chain.empty === "array")
     return sql`(SELECT COALESCE(jsonb_agg(${code(sql`item.id`)} ORDER BY item.position), '[]'::jsonb) FROM jsonb_array_elements_text(${value}) WITH ORDINALITY item(id, position))`;
   return sql`to_jsonb(${code(sql`${value} #>> '{}'`)})`;
@@ -98,7 +99,7 @@ async function resolutionSql(
   const identities = await Promise.all(
     sourceEntities(entity, chain).map(async (target) => {
       const { table, from } = referenceTable(target);
-      return sql`WHEN ${sourceKind} = ${target} THEN (SELECT jsonb_build_object(${sourceKeys.entityKind}::text, ${target}::text, ${sourceKeys.entityId}::text, ${table.shortcode}, ${sourceKeys.name}::text, ${await labelSql(target, "r")}) FROM ${from} WHERE ${table.id}::text = ${sourceId} AND ${notDeleted(table)})`;
+      return sql`WHEN ${sourceKind} = ${target} THEN (SELECT jsonb_build_object(${sourceKeys.entityKind}::text, ${target}::text, ${sourceKeys.entityId}::text, ${table.shortcode}, ${sourceKeys.name}::text, ${await labelSql(target, "r")}) FROM ${from} WHERE ${table.id} = (${sourceId})::uuid AND ${notDeleted(table)})`;
     }),
   );
   const hierarchy = chain.from.find((item) => item.kind === "hierarchy");
