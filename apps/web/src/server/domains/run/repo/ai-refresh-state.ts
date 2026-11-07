@@ -124,7 +124,7 @@ async function slotAdmissions(
   const history = await getDb(db)
     .select({ item: aiEvaluation, failureCode: run.failureCode })
     .from(aiEvaluation)
-    .innerJoin(run, eq(run.id, aiEvaluation.runId))
+    .leftJoin(run, eq(run.id, aiEvaluation.runId))
     .where(
       inArray(
         aiEvaluation.slotKey,

@@ -583,6 +583,10 @@ Declined input (`blocked`, `obsolete`, or cancelled as superseded) receives at
 most three automatic attempts; member-cancelled Runs veto automatic
 readmission. Attempt suffixes keep work keys unique without receipt chains.
 Explicit member retries retain their `retryEvaluationId` receipt.
+Admission includes automatic evaluations without a Run: unchanged queued or
+completed input is skipped before taking the scheduling lock, and changed input
+updates the queued slot in place. Run failure codes still fence member-cancelled
+work.
 
 ### Embedding execution
 
