@@ -148,6 +148,36 @@ it.each([1440, 402])(
       ),
     );
     expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width);
+    if (width !== 402) return;
+    fireEvent.click(screen.getByRole("button", { name: "Filter" }));
+    const filters = await screen.findByRole("dialog", { name: "Filter" });
+    const brandLabel = within(filters).getByText("Brand", { exact: true });
+    const brand = brandLabel.closest("button");
+    if (!brand) throw new Error("Brand filter has no field control");
+    expect(brand).toHaveTextContent("record");
+    fireEvent.click(brand);
+    const editor = await screen.findByRole("dialog", {
+      name: "Filter by Brand",
+    });
+    expect(within(editor).getByText(/Is \/ is not/)).toBeVisible();
+    fireEvent.click(within(editor).getByRole("button", { name: "Close" }));
+    fireEvent.click(screen.getByRole("button", { name: "Filter" }));
+    const reopened = await screen.findByRole("dialog", { name: "Filter" });
+    fireEvent.click(within(reopened).getByRole("button", { name: "Columns" }));
+    const columns = await screen.findByRole("dialog", { name: "Columns" });
+    fireEvent.click(
+      within(columns).getByRole("checkbox", { name: "Hide Cost" }),
+    );
+    expect(
+      await within(columns).findByRole("checkbox", { name: "Show Cost" }),
+    ).not.toBeChecked();
+    fireEvent.click(
+      within(columns).getByRole("checkbox", { name: "Show Cost" }),
+    );
+    expect(
+      await within(columns).findByRole("checkbox", { name: "Hide Cost" }),
+    ).toBeChecked();
+    expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width);
   },
 );
 

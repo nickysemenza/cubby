@@ -1039,7 +1039,8 @@ function PanelRow({
           type={triState ? undefined : "button"}
           aria-expanded={triState ? undefined : open}
           aria-controls={open && !triState ? editorId : undefined}
-          aria-label={`${label}, ${filterTypeLabel(field)}${summary ? `: ${summary}` : ""}`}
+          aria-label={summary ? `${label}: ${summary}` : label}
+          aria-description={filterTypeLabel(field)}
           title={summary ? `${label}: ${summary}` : label}
           className="flex min-h-6.5 min-w-0 flex-1 items-center gap-2 text-left text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring max-sm:min-h-11"
           onClick={triState ? undefined : onToggle}
@@ -1908,17 +1909,28 @@ export function MobileFilterTier<TData extends RowData>({
         }
       >
         {editingField ? (
-          <FilterFieldEditor
-            field={editingField}
-            filter={filtersByField.get(editingField.key)}
-            setValues={(values) => {
-              setValues(editingField, values);
-            }}
-            clear={() => {
-              clear(editingField);
-              setView("fields");
-            }}
-          />
+          <div>
+            <p className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
+              <FilterTypeGlyph field={editingField} />
+              {filterTypeLabel(editingField)}
+            </p>
+            {!editingField.unsupportedReason && (
+              <p className="mb-2 text-xs text-muted-foreground">
+                {filterOperationsLabel(editingField)}
+              </p>
+            )}
+            <FilterFieldEditor
+              field={editingField}
+              filter={filtersByField.get(editingField.key)}
+              setValues={(values) => {
+                setValues(editingField, values);
+              }}
+              clear={() => {
+                clear(editingField);
+                setView("fields");
+              }}
+            />
+          </div>
         ) : view === "columns" ? (
           <TableLayoutCustomizer table={table} />
         ) : (
@@ -1933,8 +1945,12 @@ export function MobileFilterTier<TData extends RowData>({
                   disabled={Boolean(field.unsupportedReason)}
                   onClick={() => setView(field.key)}
                 >
-                  <span className="font-medium">
+                  <FilterTypeGlyph field={field} />
+                  <span className="min-w-0 truncate font-medium">
                     {field.label ?? field.key}
+                  </span>
+                  <span className="shrink-0 text-xs text-muted-foreground">
+                    {filterTypeLabel(field)}
                   </span>
                   <span className="min-w-0 truncate text-muted-foreground">
                     {field.unsupportedReason ?? filterSummary(field, filter)}

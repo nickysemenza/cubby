@@ -102,7 +102,7 @@ function SortableColumn<TData extends RowData>({
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
       className={cn(
-        "grid min-h-8 grid-cols-[auto_auto_minmax(0,1fr)_auto] items-center gap-2 border-b border-border px-1 md:min-h-6",
+        "grid min-h-(--table-row-height) grid-cols-[auto_auto_minmax(0,1fr)_auto] items-center gap-2 border-b border-border px-1 max-md:min-h-11",
         !shown && "bg-muted text-muted-foreground",
         isDragging && "z-50 opacity-70",
       )}
