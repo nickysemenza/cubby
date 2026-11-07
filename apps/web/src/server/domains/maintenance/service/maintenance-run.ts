@@ -34,7 +34,7 @@ import { runFailureText } from "~/server/workflows/runs/lifecycle";
 const PENDING_UPLOAD_HOURS = 24;
 /** Inline EXIF attempts before a non-404 failure becomes `extraction_failed`. */
 const EXIF_ATTEMPTS = 3;
-// Transcript preservation holds retirement until the retention policy is decided.
+// Transcript preservation holds the former 24-hour retirement policy pending a decision.
 const RETIRE_COORDINATORS_AFTER_MS: number | null = null;
 
 /** External seams a test replaces; everything else runs for real. */

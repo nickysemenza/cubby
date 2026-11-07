@@ -974,6 +974,8 @@ The maintenance `coordinators` step does no retirement, for both scheduled and
 manual passes; all other steps continue normally. The retirement mechanism is
 retained, but its previous 24-hour threshold is disabled. No Run status,
 transcript, source evidence, finding or paid result is changed by this hold.
+The retirement pass's automatic closure of legacy execution alerts on already
+retired Runs is also suspended; those findings remain stored.
 
 ## Deadline scheduling and idle recovery
 

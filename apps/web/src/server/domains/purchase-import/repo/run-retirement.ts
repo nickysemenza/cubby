@@ -1,7 +1,8 @@
 /**
  * Coordinator disposal for settled agent Runs. A Mail import transcript holds
- * the Email text the agent read, so it is destroyed once its Run settles;
+ * the Email text the agent read. Disposal destroys that retained conversation;
  * `Run.retiredAt` records that the coordinator can never execute again.
+ * Automatic disposal is on hold; docs/jobs.md owns the retention policy.
  */
 import { suggestionStatus } from "@cubby/schemas/ai";
 import { runEntityId } from "@cubby/schemas/identifiers";
