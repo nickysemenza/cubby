@@ -181,7 +181,8 @@ describe("vendor Mail search status", () => {
           })
         ).data.map((row) => [row.name, row.mailSearch]),
       );
-    expect(await states()).toEqual({
+    const allStates = await states();
+    expect(allStates).toEqual({
       "Generic / Unbranded": null,
       "Synthetic Done Vendor": "done",
       "Synthetic Moved Vendor": "not_started",
@@ -191,6 +192,23 @@ describe("vendor Mail search status", () => {
       "Synthetic Unresearched Vendor": null,
       "Synthetic Untouched Vendor": "not_started",
     });
+    const pagedStates = [];
+    for (
+      let pageIndex = 0;
+      pageIndex < Object.keys(allStates).length;
+      pageIndex++
+    ) {
+      const page = await vendorScaffold.read(ctx.db, {
+        filters: {},
+        sorts: [{ orderBy: "name", direction: "asc" }],
+        pagination: { pageIndex, pageSize: 1 },
+      });
+      expect(page.data).toHaveLength(1);
+      pagedStates.push(...page.data.map((row) => [row.name, row.mailSearch]));
+    }
+    expect(Object.fromEntries(pagedStates)).toEqual(allStates);
+    const single = await vendorScaffold.get(ctx.db, [partial.shortcode]);
+    expect(single.data[0]?.mailSearch).toBe(allStates[partial.name]);
     expect(Object.keys(await states(["in_progress", "done"]))).toEqual([
       "Synthetic Done Vendor",
       "Synthetic Partial Vendor",

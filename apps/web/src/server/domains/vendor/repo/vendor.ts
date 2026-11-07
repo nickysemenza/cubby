@@ -432,8 +432,8 @@ async function loadVendorMailSearch(
 const vendorMailSearchSql = (states: Record<string, MailSearchState>) =>
   sql<MailSearchState | null>`(${JSON.stringify(states)}::jsonb ->> (${sql.raw('"Vendor"."id"')}::text))`;
 
-// An id-restricted read (a list enrichment page) selects only those rows, so
-// it needs only their states; loading every Vendor ran per enrichment page.
+// Query membership needs the whole filtered population; projection-only reads
+// load their page's states through the binding below.
 const requestedIds = z.object({ ids: z.array(z.string()).optional() });
 const vendorMailSearch = listPrepare((db, values) =>
   loadVendorMailSearch(db, undefined, requestedIds.parse(values).ids),
@@ -463,7 +463,9 @@ export const vendorScaffold = listScaffold("vendor", vendor, {
     missingItemizationCount: vendorMissingItemizationCount,
     // A vendor with no purchases leads a newest-first list.
     latestPurchaseDate: { sql: vendorLatestPurchaseDate, nulls: "high" },
-    mailSearch: vendorMailSearch.value(vendorMailSearchSql),
+    mailSearch: vendorMailSearch.value(vendorMailSearchSql, {
+      projection: "binding",
+    }),
     needsClassification: sql`${vendor.defaultSpendingCategoryId} IS NULL`,
     hasLogo: sql`${vendorHasDisplayableLogo}`,
   },
@@ -481,6 +483,18 @@ export const vendorScaffold = listScaffold("vendor", vendor, {
       },
     },
     bindings: (bind) => [
+      bind
+        .ids(({ db, ids, context }) =>
+          context.has(vendorMailSearch)
+            ? Promise.resolve(context.get(vendorMailSearch))
+            : loadVendorMailSearch(
+                db,
+                ids.map((id) => parseEntityId("vendor", id)),
+              ),
+        )
+        .fields(rawVendorOut.pick({ mailSearch: true }), (row, states) => ({
+          mailSearch: states[row.id] ?? null,
+        })),
       bind
         .ids(({ db, ids }) =>
           vendorStatementLabels(
