@@ -229,7 +229,8 @@ and stand aside (transparent, click-through) over clipped text, where the cell
 spill draws them after the full value. Missing derived values use the shared
 `MissingFieldValue` icon with a focusable explanation: idle means “Not calculated yet”, queued and waiting work use a clock,
 only an observed current execution spins, and failures retain their unavailable
-label and error control. Status explanations use the body font even in numeric columns. Retain existing values
+label and error control. Explanation buttons retain 44px targets on phones and
+coarse pointers. Status explanations use the body font even in numeric columns. Retain existing values
 during refreshes. A derived value reads muted and
 suggestion marks stay in flow. Rich reference cells put their edit pencil in
 that same `CellFrame overlay` rail so it cannot intercept a category link or

@@ -130,7 +130,7 @@ export function MissingFieldValue({
           <button
             type="button"
             aria-label={label}
-            className="inline-flex shrink-0 items-center font-sans text-muted-foreground"
+            className="inline-flex shrink-0 items-center justify-center font-sans text-muted-foreground max-md:min-h-11 max-md:min-w-11 pointer-coarse:min-h-11 pointer-coarse:min-w-11"
           />
         }
       >
