@@ -405,10 +405,16 @@ export function savedFieldQuestionScheduler(
       manifest: current.manifest,
       record: async (request) => {
         // A failed union must retain the singleton's error and sibling isolation.
-        const shared = await (records ??= loadRecords().catch(() => null));
-        return shared
-          ? (shared.get(entityRefKey(request.entity, request.recordId)) ?? null)
-          : readFieldRecord(db, request, ports);
+        const shared = await (records ??= loadRecords().catch((error) => {
+          log.warn("Saved field input batch fell back to narrow reads", {
+            error: scrubErrorMessage(String(error)),
+          });
+          return null;
+        }));
+        return (
+          shared?.get(entityRefKey(request.entity, request.recordId)) ??
+          readFieldRecord(db, request, ports)
+        );
       },
     });
     if (
