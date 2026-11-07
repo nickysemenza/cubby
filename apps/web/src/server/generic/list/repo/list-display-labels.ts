@@ -55,9 +55,7 @@ export const expectedQuantityLabel = (
     .join(" ");
 
 /** Shelf minus ledger, signed so a surplus reads differently from a deficit. */
-export const quantityVarianceLabel = (
-  variance: number | null,
-): string | null =>
+export const quantityVarianceLabel = (variance: number | null): string | null =>
   variance === null
     ? null
     : `${variance > 0 ? "+" : ""}${wasmFormat.format_number(variance)}`;

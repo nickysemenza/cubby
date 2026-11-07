@@ -80,25 +80,23 @@ const realFetch = vi.hoisted(() => {
 });
 function stubInferenceFetch(inference: typeof fetch) {
   const decisionCost = { input: 1, output: 2 };
-  vi.stubGlobal(
-    "fetch",
-    async (input: RequestInfo | URL, init?: RequestInit) =>
-      String(input).includes("models.dev")
-        ? Response.json({
-            openai: {
-              models: {
-                "gpt-6-sol": { cost: decisionCost },
-                "text-embedding-3-small": { cost: { input: 0.02, output: 0 } },
-              },
+  vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) =>
+    String(input).includes("models.dev")
+      ? Response.json({
+          openai: {
+            models: {
+              "gpt-6-sol": { cost: decisionCost },
+              "text-embedding-3-small": { cost: { input: 0.02, output: 0 } },
             },
-            "cloudflare-ai-gateway": {
-              models: { "typesafe/jev": { cost: decisionCost } },
-            },
-            "cloudflare-workers-ai": {
-              models: { "@cf/cloudflare/clef": { cost: decisionCost } },
-            },
-          })
-        : inference(input, init),
+          },
+          "cloudflare-ai-gateway": {
+            models: { "typesafe/jev": { cost: decisionCost } },
+          },
+          "cloudflare-workers-ai": {
+            models: { "@cf/cloudflare/clef": { cost: decisionCost } },
+          },
+        })
+      : inference(input, init),
   );
 }
 beforeEach(() => stubInferenceFetch(realFetch));

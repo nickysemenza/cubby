@@ -12,6 +12,7 @@ import {
   useFormState,
   useController,
   useWatch,
+  type FieldError,
   type FieldValues,
   type UseFormReturn,
 } from "react-hook-form";
@@ -152,7 +153,12 @@ function CollectionEditor({
     control: props.form.control,
     name: props.path,
   });
-  const error = z.string().safeParse(get(errors, props.path)?.message).data;
+  // RHF 7.91's `get` defaults to `unknown`; name the FieldError result.
+  const error = z
+    .string()
+    .safeParse(
+      get<typeof errors, FieldError | undefined>(errors, props.path)?.message,
+    ).data;
   const parsed = collectionEditSchema.safeParse(raw);
   if (!parsed.success)
     return (
@@ -752,7 +758,12 @@ function VariantEditor({
     name: asPath(path),
   });
   // An unchosen required variant is rejected at the value itself, not at its tag.
-  const error = get(errors, path) ?? get(errors, `${path}.${discriminator}`);
+  const error =
+    get<typeof errors, FieldError | undefined>(errors, path) ??
+    get<typeof errors, FieldError | undefined>(
+      errors,
+      `${path}.${discriminator}`,
+    );
   const title = label || discriminator;
   return (
     <div className="space-y-3">

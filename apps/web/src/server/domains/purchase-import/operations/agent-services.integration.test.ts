@@ -30,16 +30,14 @@ vi.hoisted(() => vi.resetModules());
 afterAll(() => vi.resetModules());
 beforeEach(() => {
   const realFetch = globalThis.fetch;
-  vi.stubGlobal(
-    "fetch",
-    async (input: RequestInfo | URL, init?: RequestInit) =>
-      String(input).includes("models.dev")
-        ? Response.json({
-            openai: {
-              models: { "gpt-6-sol": { cost: { input: 2, output: 10 } } },
-            },
-          })
-        : realFetch(input, init),
+  vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) =>
+    String(input).includes("models.dev")
+      ? Response.json({
+          openai: {
+            models: { "gpt-6-sol": { cost: { input: 2, output: 10 } } },
+          },
+        })
+      : realFetch(input, init),
   );
 });
 

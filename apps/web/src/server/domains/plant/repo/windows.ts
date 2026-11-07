@@ -226,10 +226,7 @@ export type ExpectedHarvest = {
   summary: string;
 };
 
-const packetRange = (
-  min: number | null,
-  max: number | null,
-): DayRange | null =>
+const packetRange = (min: number | null, max: number | null): DayRange | null =>
   min === null && max === null ? null : [min ?? max!, max ?? min!];
 
 const formatDay = (date: string): string => formatCalendarDay(date, "monthDay");
