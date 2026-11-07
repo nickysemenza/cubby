@@ -685,6 +685,13 @@ transaction pairs, avoiding repeated record lookups for every historical link.
 Both alias routes retain their tombstones and deduplicate the same complete
 observation/transaction set before ordering the public codes.
 
+Source-record display media shares one settlement expansion across its image
+branches. It fences only requested observation roots and retains all of their
+accepted and historical transaction links, including retained alias tombstones.
+Historical binding rows join live transactions once before the page's alias
+lookups, avoiding repeated scans of the source/kind/value index. These are read
+projections in one statement snapshot; they never establish accepted ownership.
+
 Transaction imports are read-only outside intake. Neither generic create,
 update, merge nor delete changes their metadata or membership. Intake owns
 resumption, count/completion updates and source-confirmed withdrawal; deleting

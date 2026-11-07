@@ -39,7 +39,7 @@ import { z } from "zod";
 
 import { getR2PublicUrl } from "~/server/clients/r2-public-url";
 import type { Database, DrizzleTransaction } from "~/server/db";
-import { sourceTransactionSettlements } from "~/server/db/computed/source-transaction-settlement-sql";
+import { sourceTransactionSettlementsForRecords } from "~/server/db/computed/source-transaction-settlement-sql";
 import { entityIdentity } from "~/server/db/entity-identity-schema";
 import { notDeleted, unwrapDb } from "~/server/db/helpers";
 import { mapImages } from "~/server/db/helpers/transform";
@@ -374,7 +374,7 @@ let compiledDisplayBranches: readonly DisplayBranch[] | undefined;
 /** Rebind both image candidates and their dependencies through accepted evidence. */
 const acceptedTransactionBranch = (branch: SQL): SQL => sql`
         SELECT media.*
-        FROM (${sourceTransactionSettlements}) accepted
+        FROM source_display_settlements accepted
         JOIN LATERAL (
           SELECT candidate.*
           FROM (SELECT ${entitySchema.enum.financialTransaction}::text AS "entityKind",
@@ -451,6 +451,17 @@ function compileDisplayBranches(): readonly DisplayBranch[] {
   ];
 }
 
+/** Reuse one page-scoped transaction reach across every source image branch. */
+const sourceDisplaySettlementsSql = (enabled: boolean): SQL =>
+  enabled
+    ? sql`, source_display_settlements AS MATERIALIZED (
+        ${sourceTransactionSettlementsForRecords(sql`
+          SELECT refs."entityId" FROM refs
+          WHERE refs."entityKind"=${entitySchema.enum.sourceTransactionRecord}
+        `)}
+      )`
+    : sql``;
+
 /** One history scan for all source-record merchants requested by this image batch. */
 const sourceMerchantImagesSql = (enabled: boolean): SQL => {
   if (!enabled) return sql``;
@@ -489,6 +500,7 @@ export const entityDisplayImagePresenceSql = (entity: Entity, id: SQL): SQL => {
   if (branches.length === 0) return sql`false`;
   return sql`EXISTS (
     WITH refs AS (SELECT ${entity}::text AS "entityKind", ${id} AS "entityId")
+    ${sourceDisplaySettlementsSql(entity === "sourceTransactionRecord")}
     ${expenseRelation}
     ${sourceMerchantImagesSql(entity === "sourceTransactionRecord")}
     ${inheritedRelations}
@@ -695,6 +707,7 @@ async function resolveRankedDisplayMedia(
   const result = await unwrapDb(db).execute(
     sql`
     WITH ${refsSql}
+    ${sourceDisplaySettlementsSql(sourceTypes.has("sourceTransactionRecord"))}
     ${inheritedRelationsSql(selectedBranches)}
     ${expenseProjectRelation}
     ${sourceMerchantImagesSql(sourceTypes.has("sourceTransactionRecord"))}
