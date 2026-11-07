@@ -184,7 +184,8 @@ async function readAiEvaluationStreams(
       count(*) FILTER (WHERE e.state = ${aiEvaluationState.enum.completed} AND e."updatedAt" > ${since(RECENT_MINUTES.pace)})::int AS "completedPace",
       count(*) FILTER (WHERE e.state = ${aiEvaluationState.enum.completed} AND e."updatedAt" > ${since(RECENT_MINUTES.completed)})::int AS "completed",
       count(*) FILTER (WHERE e.state = ${aiEvaluationState.enum.failed} AND e."updatedAt" > ${since(RECENT_MINUTES.failed)})::int AS "failed",
-      max(e."updatedAt") FILTER (WHERE e.state = ${aiEvaluationState.enum.completed}) AS "lastCompletedAt",
+      -- Evidence invalidation finishes owed work without publishing a value.
+      max(e."updatedAt") FILTER (WHERE e.state IN (${aiEvaluationState.enum.completed}, ${aiEvaluationState.enum.obsolete})) AS "lastCompletedAt",
       min(e."runAt") FILTER (WHERE ${claimable}) AS "oldestDueAt",
       ARRAY(
         SELECT r.shortcode FROM "AiEvaluation" stream

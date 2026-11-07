@@ -11,7 +11,7 @@ import { aiEvaluation, aiEvaluationRequest } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { updateJobs } from "~/server/generic/jobs/jobs.fixtures";
 
-import { readBackgroundWorkStatus } from "./observation";
+import { readBackgroundWorkStatus, readWorkActivity } from "./observation";
 import { enqueueJob } from "./producer";
 
 const minutesAgo = (minutes: number, now: Date) =>
@@ -111,7 +111,7 @@ describe("background work status", () => {
     expect((await readBackgroundWorkStatus(ctx.db, now)).stuck).toEqual([]);
   });
 
-  it("keeps retry history out of stuck work while preserving another requester's failure", async () => {
+  it("keeps current failures visible and recognizes obsolete work finishing", async () => {
     const now = new Date();
     const retryReceipt = { retryEvaluationId: crypto.randomUUID() };
     const rows = await getDb(ctx.db)
@@ -187,5 +187,34 @@ describe("background work status", () => {
           .from(aiEvaluation)
       ).every((row) => row.state === "failed"),
     ).toBe(true);
+
+    await getDb(ctx.db)
+      .update(aiEvaluation)
+      .set({ state: "obsolete", runAt: null, updatedAt: minutesAgo(40, now) });
+    await getDb(ctx.db)
+      .update(aiEvaluation)
+      .set({ state: "queued", runAt: minutesAgo(40, now), receipt: null })
+      .where(eq(aiEvaluation.id, rows[0]!.id));
+    const stopped = async () =>
+      (await readBackgroundWorkStatus(ctx.db, now)).stuck.filter(
+        (item) => item.key === "ai.evaluation:field-suggestion",
+      );
+    expect(await stopped()).toHaveLength(1);
+    await getDb(ctx.db)
+      .update(aiEvaluation)
+      .set({ updatedAt: minutesAgo(1, now) })
+      .where(eq(aiEvaluation.id, rows[1]!.id));
+    expect(await stopped()).toEqual([]);
+    const activity = await readWorkActivity(ctx.db, now);
+    expect(
+      activity.streams.find(
+        (stream) => stream.kind === "ai.evaluation:field-suggestion",
+      ),
+    ).toMatchObject({
+      due: 1,
+      completed: 0,
+      completedPerMinute: 0,
+      lastCompletedAt: minutesAgo(1, now).toISOString(),
+    });
   });
 });

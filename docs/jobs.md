@@ -968,6 +968,11 @@ snapshot of what is running, which reads as stopped between a drain's bursts:
   retries on its own, so it needs three failures in a row. Paused Runs are a
   member's choice and are never stuck.
 
+For AI evaluations, settling obsolete evidence also advances the last-finished
+signal: a queue retiring stale inputs is moving. It does not count as a completed
+value or increase the published-value pace. Blocked admission and member
+cancellation do not advance that signal.
+
 Due for 15 minutes while still completing reads as catching up. Copy lives on the
 kind (`stuck` in `JOB_KIND_POLICY`); an undeclared kind falls back to its label so
 it cannot be silently invisible. The read probes indexes per drain and priority
