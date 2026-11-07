@@ -129,12 +129,54 @@ describe("stampGeneration", () => {
         },
       },
       async () => "host-generation",
+      "00000000-0000-4000-8000-000000000002",
     );
     expect(stamped._runExecution).toEqual({
-      runId: "00000000-0000-4000-8000-000000000001",
+      runId: "00000000-0000-4000-8000-000000000002",
       operationId: "synthetic-operation",
       generation: "host-generation",
     });
+    // Mail can omit host-known identity. Source and replay arguments must
+    // survive stamping unchanged, including after a different claim.
+    const args = {
+      action: "mail_resolve",
+      input: {
+        mailboxId: "synthetic-mailbox",
+        messageId: "original-email",
+        checksum: "c".repeat(64),
+      },
+      _runExecution: { operationId: "original-operation" },
+    };
+    const bound = await stampGeneration(
+      args,
+      async () => "host-generation",
+      "00000000-0000-4000-8000-000000000002",
+    );
+    expect(bound.input).toEqual(args.input);
+    expect(bound._runExecution).toEqual({
+      operationId: "original-operation",
+      runId: "00000000-0000-4000-8000-000000000002",
+      generation: "host-generation",
+    });
+    expect(
+      await stampGeneration(
+        args,
+        async () => "host-generation",
+        "00000000-0000-4000-8000-000000000002",
+      ),
+    ).toEqual(bound);
+    const nested = {
+      action: args.action,
+      input: { ...args.input, _runExecution: args._runExecution },
+    };
+    expect(
+      await stampGeneration(
+        nested,
+        async () => "host-generation",
+        "00000000-0000-4000-8000-000000000002",
+      ),
+    ).toEqual(bound);
+    expect(nested.input._runExecution).toEqual(args._runExecution);
   });
 
   it("leaves a member's public run code alone", async () => {

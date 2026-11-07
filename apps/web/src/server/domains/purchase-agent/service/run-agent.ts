@@ -497,6 +497,8 @@ export class PurchaseImportRunAgent
           ...runAgentTools(
             () => this.services(),
             (api, context) => this.toolProgressStamp(api, context),
+            purpose,
+            (error) => this.report(error),
             (request) => escalation.escalate(request),
           ),
           ...(attempts
@@ -700,6 +702,7 @@ export class PurchaseImportRunAgent
         mcpTools,
         () => this.services(),
         (api, context) => this.toolGeneration(api, context),
+        purpose === "mail_import" ? runId : undefined,
       ),
     );
     if (workflow.skills)

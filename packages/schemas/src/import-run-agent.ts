@@ -42,7 +42,7 @@ export function importRunIdFromAgentIdentity(
   return runEntityId.safeParse(instanceId.slice(colon + 1)).data;
 }
 
-/** The host-owned tools every agent mounts (apps/web/src/server/domains/purchase-agent/service/tools.ts). */
+/** Host-owned import tools; each purpose selects its model-facing subset. */
 const RUN_AGENT_TOOLS = [
   "claim_next_import_work",
   "report_agent_progress",
@@ -117,6 +117,8 @@ export type ImportRunAgentConfig = {
    */
   mcpActions: readonly CubbyMcpToolAction[];
   mcpTools: readonly CubbyMcpToolName[];
+  /** Compact capability actions whose complete inputs the agent uses routinely. */
+  mcpInputActions?: readonly CubbyMcpToolAction[];
   /**
    * What each request carries of earlier claimed work items: `current` sends
    * only the latest claim onward, since each Email is independent and durable
@@ -189,9 +191,14 @@ export const importRunAgentManifest = {
     escalationModel: "claude-opus-5-5",
     escalationAlternative: "gpt-6-sol",
     effort: "medium",
-    agentTools: [...RUN_AGENT_TOOLS, ESCALATE_TOOL, EXTRACT_ORDER_TOOL],
+    agentTools: [
+      ...RUN_AGENT_TOOLS.filter((tool) => tool !== "report_agent_progress"),
+      ESCALATE_TOOL,
+      EXTRACT_ORDER_TOOL,
+    ],
     mcpActions: MAIL_IMPORT_MCP_ACTIONS,
     mcpTools: toolsOf(MAIL_IMPORT_MCP_ACTIONS),
+    mcpInputActions: ["purchase_import.mail_resolve", "shipments.record"],
     workItemContext: "current",
     entityRead: MAIL_IMPORT_ENTITY_READ,
   },

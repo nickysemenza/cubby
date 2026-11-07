@@ -58,71 +58,61 @@ function importOrder(
       messageId: source.messageId,
     }),
     ...(options.gate ? [{ gate: options.gate }] : []),
-    mcp(
-      `${prefix}-prepare`,
-      "purchase_import",
-      { $runId: true },
-      {
-        action: "prepare",
-        orders: [
-          {
-            vendorId: vendor.shortcode,
-            stableOrderId: `${prefix}-order`,
-            itemOperationId: `${prefix}-prepare:order`,
-            source: {
-              kind: "mail_message",
-              externalKey: `gmail:${source.mailboxId}:${source.messageId}`,
-              checksum,
-            },
-            evidenceChecksum: checksum,
-            extractionRevision: "synthetic@1",
-            extraction: {
-              status: "ready",
-              candidate: {
-                orderId: source.orderId,
-                orderedAt: "2026-09-10T15:00:00.000Z",
-                merchant: vendor.name,
-                currency: "USD",
-                printedGrandTotal: 5,
-                lines: [
-                  {
-                    title: itemTitle,
-                    amount: 5,
-                    lineKind: "principal",
-                    quantity: 1,
-                    sku: "HERB-1",
-                  },
-                ],
-                payments: [],
-                allShipmentsDelivered: false,
-              },
-            },
-            lineIds: [`${prefix}-order:line-1`],
-            primaryDocumentImageId: null,
-            screenshotImageId: null,
+    mcp(`${prefix}-prepare`, "purchase_import", undefined, {
+      action: "prepare",
+      orders: [
+        {
+          vendorId: vendor.shortcode,
+          stableOrderId: `${prefix}-order`,
+          itemOperationId: `${prefix}-prepare:order`,
+          source: {
+            kind: "mail_message",
+            externalKey: `gmail:${source.mailboxId}:${source.messageId}`,
+            checksum,
           },
-        ],
-      },
-    ),
-    mcp(
-      `${prefix}-commit`,
-      "purchase_import",
-      { $runId: true },
-      {
-        action: "commit",
-        prepareOperationId: `${prefix}-prepare`,
-        defaultTrade: "other",
-        resolutions: [
-          {
-            stableOrderId: `${prefix}-order`,
-            stableLineId: `${prefix}-order:line-1`,
-            resolution: options.productId
-              ? { kind: "existing", productId: options.productId }
-              : { kind: "new" },
+          evidenceChecksum: checksum,
+          extractionRevision: "synthetic@1",
+          extraction: {
+            status: "ready",
+            candidate: {
+              orderId: source.orderId,
+              orderedAt: "2026-09-10T15:00:00.000Z",
+              merchant: vendor.name,
+              currency: "USD",
+              printedGrandTotal: 5,
+              lines: [
+                {
+                  title: itemTitle,
+                  amount: 5,
+                  lineKind: "principal",
+                  quantity: 1,
+                  sku: "HERB-1",
+                },
+              ],
+              payments: [],
+              allShipmentsDelivered: false,
+            },
           },
-        ],
-      },
-    ),
+          lineIds: [`${prefix}-order:line-1`],
+          primaryDocumentImageId: null,
+          screenshotImageId: null,
+        },
+      ],
+    }),
+    mcp(`${prefix}-commit`, "purchase_import", undefined, {
+      action: "commit",
+      prepareOperationId: `${prefix}-prepare`,
+      defaultTrade: "other",
+      resolutions: [
+        {
+          stableOrderId: `${prefix}-order`,
+          stableLineId: `${prefix}-order:line-1`,
+          resolution: options.productId
+            ? { kind: "existing", productId: options.productId }
+            : { kind: "new" },
+        },
+      ],
+    }),
     { check: `${prefix}-commit`, includes: "created" },
   ];
 }

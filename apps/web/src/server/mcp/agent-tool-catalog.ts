@@ -18,16 +18,17 @@ import {
 
 /**
  * The tools a purchase agent mounts, each narrowed to its `allowed` actions:
- * what `tools/list` answers that agent, and what the agent mounts without
- * listing (`purchaseAgentToolCatalog`).
+ * shared by `tools/list` and the coordinator's model-facing catalog. The host
+ * can additionally publish common inputs and omit identity it supplies itself.
  */
 export function purchaseAgentTools(
   allowed: ReadonlySet<string>,
   entityRead?: EntityReadView,
+  inputActions: readonly string[] = [],
 ) {
   return compiledMcpTools(MCP_TOOL_BINDINGS, MCP_TOOL_DECLARATIONS).flatMap(
     (tool) => {
-      const narrowed = narrowedToolSchema(tool, allowed);
+      const narrowed = narrowedToolSchema(tool, allowed, inputActions);
       if (!narrowed) return [];
       if (tool.name !== "entity_read" || !entityRead)
         return [
@@ -193,9 +194,39 @@ function narrowedEntityRead(
   };
 }
 
-/** The MCP tools a run purpose's agent mounts, as `tools/list` describes them. */
+/** Model-facing MCP inputs, with Mail's delegated identity supplied by the host. */
 export function purchaseAgentToolCatalog(purpose: AgentImportRunPurpose) {
-  const { mcpActions, entityRead }: ImportRunAgentConfig =
+  const { mcpActions, entityRead, mcpInputActions }: ImportRunAgentConfig =
     importRunAgentManifest[purpose];
-  return purchaseAgentTools(new Set(mcpActions), entityRead);
+  return purchaseAgentTools(
+    new Set(mcpActions),
+    entityRead,
+    mcpInputActions,
+  ).map((tool) => {
+    if (purpose !== "mail_import") return tool;
+    const schema = tool.inputSchema;
+    const properties = schema.properties;
+    if (!isJsonObject(properties)) return tool;
+    const envelope = properties._runExecution;
+    if (!isJsonObject(envelope) || !isJsonObject(envelope.properties))
+      return tool;
+    // The delegation binds one immutable Run; source identity/checksum and
+    // operation IDs remain explicit so a recovered call cannot follow a new claim.
+    const {
+      run: _run,
+      runId: _runId,
+      generation: _generation,
+      ...fields
+    } = envelope.properties;
+    return {
+      ...tool,
+      inputSchema: {
+        ...schema,
+        properties: {
+          ...properties,
+          _runExecution: { ...envelope, properties: fields },
+        },
+      },
+    };
+  });
 }
