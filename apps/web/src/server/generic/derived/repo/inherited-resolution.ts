@@ -119,7 +119,12 @@ async function resolutionSql(
     chain,
     sql`facts.fallback->${decisionKeys.value}`,
   );
-  return sql`(SELECT jsonb_build_object(
+  // Keep repeated JSON projections from rerunning the inherited-value subqueries.
+  return sql`(WITH facts AS MATERIALIZED (
+    SELECT ${own.explicit} AS explicit, to_jsonb(${own.value}) AS stored,
+      to_jsonb(${effectiveFieldSql(entity, field, alias)}) AS value,
+      ${inheritedFieldDecisionSql(entity, field, alias)} AS fallback
+  ) SELECT jsonb_build_object(
     ${resolutionKeys.mode}::text, CASE WHEN facts.explicit THEN CASE WHEN facts.stored IS NULL OR facts.stored = 'null'::jsonb THEN ${sqlEnumConstant(mode, mode.enum.none)} ELSE ${sqlEnumConstant(mode, mode.enum.explicit)} END ELSE ${sqlEnumConstant(mode, mode.enum.inherit)} END,
     ${resolutionKeys.storedValue}::text, ${stored}, ${resolutionKeys.value}::text, ${value}, ${resolutionKeys.fallbackValue}::text, ${fallback},
     ${resolutionKeys.source}::text, CASE WHEN facts.explicit THEN ${`${entitySummary[entity].singular} override`} ELSE ${sourceLabel} END,
@@ -128,9 +133,7 @@ async function resolutionSql(
     ${resolutionKeys.canReset}::text, facts.explicit AND ${model.resolution.none ? sql`true` : sql`facts.fallback->>${decisionKeys.kind} = ${decision.shape.kind.value}`}
   ) || CASE WHEN NOT facts.explicit AND facts.fallback->>'reason' IN (${sqlEnumConstant(fieldEmptyReason, fieldEmptyReason.enum.explicit_none)}, ${sqlEnumConstant(fieldEmptyReason, fieldEmptyReason.enum.not_applicable)})
     THEN jsonb_build_object(${resolutionKeys.emptyReason}::text, facts.fallback->>'reason') ELSE '{}'::jsonb END
-  FROM (SELECT ${own.explicit} AS explicit, to_jsonb(${own.value}) AS stored,
-    to_jsonb(${effectiveFieldSql(entity, field, alias)}) AS value,
-    ${inheritedFieldDecisionSql(entity, field, alias)} AS fallback) facts)`;
+  FROM facts)`;
 }
 
 /** No per-entity roster: every declared inherited field participates. */
