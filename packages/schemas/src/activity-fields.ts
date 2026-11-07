@@ -387,9 +387,10 @@ export const RUN_KINDS = {
       },
       {
         key: "coordinators",
-        scope: "Preserves coordinator transcripts while retirement is on hold.",
-        label: "Coordinator retirement",
-        purpose: "Retirement is on hold pending a retention decision.",
+        scope: "Preserves coordinator transcripts until explicit retirement.",
+        label: "Coordinator retention",
+        purpose:
+          "Automatic retirement is disabled; retirement requires an explicit member decision.",
         action: "Preserving coordinator transcripts",
         unit: "coordinators",
         input: once,

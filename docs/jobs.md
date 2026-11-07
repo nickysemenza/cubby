@@ -117,6 +117,15 @@ cancellations remain stopped. Retry failed on a cancelled Sweep step with
 no failed items directs the member to Retry run. Actual failures remain
 retryable without reviving the cancelled remainder.
 A retained step with zero committed pages still retries its full failed roster.
+
+A legacy failed Mail reclassification with no durable roster can be closed by
+an explicitly authorized historical correction after every original identity
+and execution-time checksum is proven handled by retained checkpoint evidence
+and completed linked continuations. This rewrites the request's stored status
+to completed; its original checkpoint, notes and end time remain unchanged.
+The checkpoint can remain incomplete while the linked continuations establish
+fulfillment. Linkage also includes child usage in the parent's cost rollup.
+
 Mailbox discovery acquires at most five messages from its frozen provider page
 per Job claim. Its durable message offset resumes the remaining messages without
 replaying the completed prefix; absent offsets on retained pages mean zero.
@@ -969,11 +978,11 @@ tallies do not imply a fixed total or ETA. Image maintenance classification
 counts use the current processor revision and can overlap; uncertain cutout
 eligibility does not imply a human review queue.
 
-Coordinator transcript retirement is on hold pending a retention decision.
+Coordinator transcripts are preserved until explicit member-authorized retirement.
 The maintenance `coordinators` step does no retirement, for both scheduled and
 manual passes; all other steps continue normally. The retirement mechanism is
 retained, but its previous 24-hour threshold is disabled. No Run status,
-transcript, source evidence, finding or paid result is changed by this hold.
+transcript, source evidence, finding or paid result is changed by this policy.
 The retirement pass's automatic closure of legacy execution alerts on already
 retired Runs is also suspended; those findings remain stored.
 
