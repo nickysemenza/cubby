@@ -47,7 +47,10 @@ import {
   appSettings,
 } from "~/server/db/schema";
 import { setMailImport } from "~/server/domains/purchase-import/repo/mail-import-settings";
-import { inferFieldSuggestions } from "~/server/domains/run/operations/ai.server";
+import {
+  inferFieldSuggestions,
+  inferFieldSuggestionsBatch,
+} from "~/server/domains/run/operations/ai.server";
 import { writeRunningAttemptProgress as writeRunningAttemptProgressImplementation } from "~/server/domains/run/repo/ai-work-state";
 import {
   resumeAutomaticAi,
@@ -335,6 +338,16 @@ describe("targeted prompt refresh", () => {
         context: kernelCtx(ctx),
         suggestPorts: {
           ...categoryPorts(0.97).suggestPorts,
+          registry: {
+            ...categoryPorts(0.97).suggestPorts.registry,
+            "product.growsPlantId": {
+              ...categoryPorts(0.97).suggestPorts.registry[
+                "product.categoryId"
+              ],
+              entity: "plant" as const,
+              roster: async () => [],
+            },
+          },
           ...(outcome === "empty"
             ? {
                 decisionPort: async (input: Parameters<DecisionPort>[0]) => ({
@@ -366,6 +379,10 @@ describe("targeted prompt refresh", () => {
             : {}),
         },
       };
+      const categoryRefreshTarget = and(
+        fieldRefreshTarget,
+        sql`${aiEvaluation.target}->>${fieldTarget.keyof().enum.field} = 'categoryId'`,
+      );
       const draft = {
         entity: "product" as const,
         basisMode: "suggested" as const,
@@ -392,17 +409,27 @@ describe("targeted prompt refresh", () => {
         await getDb(ctx.db)
           .select()
           .from(aiEvaluation)
-          .where(fieldRefreshTarget),
+          .where(categoryRefreshTarget),
       ).toEqual([]);
-      await inferFieldSuggestions(
+      const batch = await inferFieldSuggestionsBatch(
         kernelCtx(ctx),
-        { ...draft, entityId: item.id, savedRecord: true },
+        {
+          items: [
+            {
+              ...draft,
+              entityId: item.id,
+              savedRecord: true,
+              targets: ["categoryId", "growsPlantId"],
+            },
+          ],
+        },
         ports.suggestPorts,
       );
+      expect(batch.results.every((result) => result.ok)).toBe(true);
       const [evaluation] = await getDb(ctx.db)
         .select()
         .from(aiEvaluation)
-        .where(fieldRefreshTarget);
+        .where(categoryRefreshTarget);
       expect(evaluation?.snapshot).toMatchObject({
         basis: {
           name: "Synthetic canonical groceries",
@@ -412,6 +439,39 @@ describe("targeted prompt refresh", () => {
         currentValue: null,
       });
       expect(evaluation?.runId).toBeNull();
+      const [plant] = await getDb(ctx.db)
+        .select()
+        .from(aiEvaluation)
+        .where(
+          and(
+            fieldRefreshTarget,
+            sql`${aiEvaluation.target}->>${fieldTarget.keyof().enum.field} = 'growsPlantId'`,
+          ),
+        );
+      expect(plant).toBeDefined();
+      // Fresh singleton questions must retain each union read's exact fingerprint.
+      for (const row of [evaluation!, plant!]) {
+        if (row.target.kind !== "field")
+          throw new Error("Expected field target");
+        await inferFieldSuggestions(
+          kernelCtx(ctx),
+          {
+            ...draft,
+            entityId: item.id,
+            savedRecord: true,
+            targets: [row.target.field],
+          },
+          ports.suggestPorts,
+        );
+        expect(
+          (
+            await getDb(ctx.db)
+              .select()
+              .from(aiEvaluation)
+              .where(eq(aiEvaluation.id, row.id))
+          )[0],
+        ).toMatchObject({ id: row.id, workKey: row.workKey });
+      }
       const repeatWhileBusy = async (row: typeof evaluation) => {
         await withTransactionDatabase(ctx.db, async (tx) => {
           await lockAiRefreshScheduling(tx);
@@ -431,15 +491,24 @@ describe("targeted prompt refresh", () => {
         .update(product)
         .set({ name: "Synthetic updated groceries" })
         .where(eq(product.id, item.entityId));
-      await inferFieldSuggestions(
+      await inferFieldSuggestionsBatch(
         kernelCtx(ctx),
-        { ...draft, entityId: item.id, savedRecord: true },
+        {
+          items: [
+            {
+              ...draft,
+              entityId: item.id,
+              savedRecord: true,
+              targets: ["categoryId", "growsPlantId"],
+            },
+          ],
+        },
         ports.suggestPorts,
       );
       const [updated] = await getDb(ctx.db)
         .select()
         .from(aiEvaluation)
-        .where(fieldRefreshTarget);
+        .where(categoryRefreshTarget);
       expect(updated).toMatchObject({
         id: evaluation!.id,
         runId: null,
@@ -447,14 +516,23 @@ describe("targeted prompt refresh", () => {
       });
       expect(updated?.workKey).not.toBe(evaluation!.workKey);
       expect(await productCategoryId(ctx.db, item.id)).toBeNull();
+      // The real feature page executes both fields, re-preparing their narrow inputs.
       await executeAiRefreshTarget(ctx.db, evaluation!.id, ports);
+      expect(
+        (
+          await getDb(ctx.db)
+            .select()
+            .from(aiEvaluation)
+            .where(eq(aiEvaluation.id, plant!.id))
+        )[0],
+      ).toMatchObject({ state: "completed", receipt: { outcome: "settled" } });
       expect(await productCategoryId(ctx.db, item.id)).toBe(
         outcome === "applied" ? taxonomyId("food") : null,
       );
       const [completed] = await getDb(ctx.db)
         .select()
         .from(aiEvaluation)
-        .where(fieldRefreshTarget);
+        .where(categoryRefreshTarget);
       expect(completed?.state).toBe("completed");
       await repeatWhileBusy(completed);
       await inferFieldSuggestions(
@@ -466,7 +544,7 @@ describe("targeted prompt refresh", () => {
         await getDb(ctx.db)
           .select()
           .from(aiEvaluation)
-          .where(fieldRefreshTarget),
+          .where(categoryRefreshTarget),
       ).toHaveLength(1);
     },
   );

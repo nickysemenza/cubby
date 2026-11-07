@@ -520,6 +520,10 @@ Product source by shortcode and carries that source's ID into the candidate
 aggregates, avoiding a separate identity query for every roster. This keeps
 live-row and legacy-code handling at the read boundary.
 Field suggestion batches carry those resolved subject IDs into correction checks.
+Saved questions share activation and canonical input reads within the request,
+loading the union of declared context keys once per entity. Per-field preparation
+and queue admission stay independent; answers, member review state and commit
+fences are never shared. A union failure falls back to narrow question reads.
 Product report slots share their request's identity dependency, including stock,
 pricing, use and evidence summaries; standalone summary reads still resolve their
 own subject.

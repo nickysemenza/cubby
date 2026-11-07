@@ -181,33 +181,66 @@ function kernel(
   };
 }
 
-async function prepareField(
-  db: Database,
-  target: Extract<AiEvaluationTarget, { kind: "field" }>,
-  ports: AiRefreshPorts,
-) {
-  const parsedEntity = fieldSuggestionsInput.shape.entity.safeParse(
-    target.entity,
-  );
-  if (!parsedEntity.success) return null;
-  const entity = parsedEntity.data;
-  const ref = parseEntityRef(entity, target.recordId);
-  const codes = await lookupShortcodes(db, [ref]);
-  const publicId = codes.get(entityRefKey(entity, target.recordId));
-  if (!publicId) return null;
-  const context = kernel(db, ports);
+type FieldTarget = Extract<AiEvaluationTarget, { kind: "field" }>;
+
+function fieldReadRequest(target: FieldTarget) {
+  const parsed = fieldSuggestionsInput.shape.entity.safeParse(target.entity);
+  if (!parsed.success) return null;
+  const entity = parsed.data;
   const policy = decisionCatalogRows().find(
     (row) => row.entity === entity && row.field === target.field,
   );
   if (!policy) return null;
   const policyKeys = [...policy.basis.map((row) => row.key), target.field];
-  const [record] = await readSelectedEntityRecords({
-    context,
+  return {
     entity,
+    recordId: target.recordId,
+    policyKeys,
+    keys: fieldSuggestionContextKeys(entity, policyKeys),
+  };
+}
+
+type FieldReadRequest = NonNullable<ReturnType<typeof fieldReadRequest>>;
+
+async function readFieldRecord(
+  db: Database,
+  request: FieldReadRequest,
+  ports: AiRefreshPorts,
+) {
+  const codes = await lookupShortcodes(db, [
+    parseEntityRef(request.entity, request.recordId),
+  ]);
+  const publicId = codes.get(entityRefKey(request.entity, request.recordId));
+  if (!publicId) return null;
+  const [record] = await readSelectedEntityRecords({
+    context: kernel(db, ports),
+    entity: request.entity,
     ids: [publicId],
-    fields: fieldSuggestionContextKeys(entity, policyKeys),
+    fields: request.keys,
   });
-  if (!record) return null;
+  return record ? { publicId, record } : null;
+}
+
+async function prepareField(
+  db: Database,
+  target: FieldTarget,
+  ports: AiRefreshPorts,
+  started?: {
+    manifest: NonNullable<
+      Awaited<ReturnType<typeof currentAiRefreshActivation>>
+    >["manifest"];
+    record: (request: FieldReadRequest) => ReturnType<typeof readFieldRecord>;
+  },
+) {
+  const request = fieldReadRequest(target);
+  if (!request) return null;
+  const { entity, policyKeys } = request;
+  const loaded = await (started
+    ? started.record(request)
+    : readFieldRecord(db, request, ports));
+  if (!loaded) return null;
+  const { publicId, record } = loaded;
+  const context = kernel(db, ports);
   const governedFields = entityFieldEnvelopeFields[entity];
   const valueOf = (key: string) => {
     if (!Object.hasOwn(governedFields, key)) return record[key];
@@ -246,8 +279,10 @@ async function prepareField(
     decisionModelOverride: ports.suggestPorts?.decisionModel,
     currentValue: valueOf(target.field) ?? null,
   });
-  const activation = await readAiRefreshActivation(db);
-  const manifest = activation?.manifest ?? (await compiledRefreshManifest());
+  const manifest =
+    started?.manifest ??
+    (await readAiRefreshActivation(db))?.manifest ??
+    (await compiledRefreshManifest());
   const prepared = await withAiInputs(true, () =>
     suggestFields(
       db,
@@ -312,30 +347,94 @@ async function currentAiRefreshActivation(db: Database) {
 /** Live saved-record questions enqueue the same canonical work as discovery.
  * Client draft basis and the inactive interactive prediction never authorize writes.
  */
-export async function scheduleSavedFieldQuestion(
+export function savedFieldQuestionScheduler(
   db: Database,
-  target: Extract<AiEvaluationTarget, { kind: "field" }>,
+  targets: readonly FieldTarget[],
   ports: AiRefreshPorts = {},
 ) {
-  const activation = await currentAiRefreshActivation(db);
-  if (!activation) return;
-  const prepared = await prepareField(db, target, ports);
-  if (
-    !prepared ||
-    (prepared.snapshot.currentValue !== null &&
-      prepared.snapshot.currentValue !== "")
-  )
-    return;
-  const result = await scheduleAutomaticEvaluations(db, [
-    { target, provenance: prepared.provenance, snapshot: prepared.snapshot },
-  ]);
-  if (result.kind === "deferred")
-    log.info("Saved field evaluation scheduling deferred", {
-      reason: result.reason,
-      entity: target.entity,
-      recordId: target.recordId,
-      field: target.field,
+  let activation: ReturnType<typeof currentAiRefreshActivation> | undefined;
+  let records:
+    | Promise<Awaited<ReturnType<typeof loadRecords>> | null>
+    | undefined;
+  const requests = targets.flatMap((target) => {
+    const request = fieldReadRequest(target);
+    return request ? [request] : [];
+  });
+  async function loadRecords() {
+    const found = new Map<
+      string,
+      NonNullable<Awaited<ReturnType<typeof readFieldRecord>>>
+    >();
+    const codes = await lookupShortcodes(
+      db,
+      requests.map((request) =>
+        parseEntityRef(request.entity, request.recordId),
+      ),
+    );
+    for (const entity of new Set(requests.map((request) => request.entity))) {
+      const group = requests.filter((request) => request.entity === entity);
+      const ids = [
+        ...new Set(
+          group.flatMap((request) => {
+            const code = codes.get(entityRefKey(entity, request.recordId));
+            return code ? [code] : [];
+          }),
+        ),
+      ];
+      if (!ids.length) continue;
+      const rows = await readSelectedEntityRecords({
+        context: kernel(db, ports),
+        entity,
+        ids,
+        fields: [...new Set(group.flatMap((request) => request.keys))],
+      });
+      const byId = new Map(rows.map((row) => [row.id, row]));
+      for (const request of group) {
+        const key = entityRefKey(entity, request.recordId);
+        const publicId = codes.get(key);
+        const record = publicId ? byId.get(publicId) : undefined;
+        if (publicId && record) found.set(key, { publicId, record });
+      }
+    }
+    return found;
+  }
+  return async (target: FieldTarget) => {
+    const current = await (activation ??= currentAiRefreshActivation(db));
+    if (!current) return;
+    const prepared = await prepareField(db, target, ports, {
+      manifest: current.manifest,
+      record: async (request) => {
+        // A failed union must retain the singleton's error and sibling isolation.
+        const shared = await (records ??= loadRecords().catch((error) => {
+          log.warn("Saved field input batch fell back to narrow reads", {
+            error: scrubErrorMessage(String(error)),
+          });
+          return null;
+        }));
+        return (
+          shared?.get(entityRefKey(request.entity, request.recordId)) ??
+          readFieldRecord(db, request, ports)
+        );
+      },
     });
+    if (
+      !prepared ||
+      (prepared.snapshot.currentValue !== null &&
+        prepared.snapshot.currentValue !== "")
+    )
+      return;
+    // Admission and field-specific fences remain independent, including capacity deferral.
+    const result = await scheduleAutomaticEvaluations(db, [
+      { target, provenance: prepared.provenance, snapshot: prepared.snapshot },
+    ]);
+    if (result.kind === "deferred")
+      log.info("Saved field evaluation scheduling deferred", {
+        reason: result.reason,
+        entity: target.entity,
+        recordId: target.recordId,
+        field: target.field,
+      });
+  };
 }
 
 async function scheduleProductIdentityDiscovery(

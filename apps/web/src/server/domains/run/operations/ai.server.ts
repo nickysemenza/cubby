@@ -81,6 +81,7 @@ import {
   resumeAutomaticAi,
   stopAutomaticAi,
 } from "~/server/domains/run/repo/automatic-ai-stop";
+import type { savedFieldQuestionScheduler } from "~/server/domains/run/service/ai-refresh";
 import { publicFieldEnvelopeBatch } from "~/server/generic/derived/repo/public-read";
 import {
   resolveAllOrThrow,
@@ -232,6 +233,26 @@ export const backfillLocationDescriptionsWorkflow = bindCoordinatorStream(
     signal,
   }),
 );
+function savedFieldTargets(
+  input: FieldSuggestionsInput,
+  recordId: string | null | undefined,
+) {
+  if (
+    input.savedRecord !== true ||
+    !recordId ||
+    input.basisMode !== "suggested" ||
+    input.decisionModel
+  )
+    return [];
+  return input.targets.map((field) => ({
+    kind: "field" as const,
+    entity: input.entity,
+    recordId,
+    field,
+    suggestionIds: [],
+  }));
+}
+
 /** AI reads are authoritative: suggestions must see the row just written. */
 export const inferFieldSuggestions = async (
   context: Pick<AuthenticatedOperationContext, "db" | "actorContext">,
@@ -240,6 +261,7 @@ export const inferFieldSuggestions = async (
   prepared?: {
     manifest: Awaited<ReturnType<typeof producingAiManifest>>;
     recordId?: Awaited<ReturnType<typeof resolveOrThrow>>;
+    scheduleSavedField?: ReturnType<typeof savedFieldQuestionScheduler>;
   },
 ) => {
   const owner = aiCallOwner(context.actorContext);
@@ -249,26 +271,16 @@ export const inferFieldSuggestions = async (
     ? (prepared?.recordId ??
       (await resolveOrThrow(context.db, input.entity, input.entityId)))
     : null;
-  if (
-    input.savedRecord === true &&
-    recordId &&
-    input.basisMode === "suggested" &&
-    !input.decisionModel
-  ) {
-    const { scheduleSavedFieldQuestion } =
-      await import("~/server/domains/run/service/ai-refresh");
-    for (const field of input.targets)
-      await scheduleSavedFieldQuestion(
-        context.db,
-        {
-          kind: "field",
-          entity: input.entity,
-          recordId,
-          field,
-          suggestionIds: [],
-        },
-        { suggestPorts: ports },
-      );
+  const targets = savedFieldTargets(input, recordId);
+  if (targets.length) {
+    const schedule =
+      prepared?.scheduleSavedField ??
+      (
+        await import("~/server/domains/run/service/ai-refresh")
+      ).savedFieldQuestionScheduler(context.db, targets, {
+        suggestPorts: ports,
+      });
+    for (const target of targets) await schedule(target);
   }
   const captured = await withAiInputs(false, () =>
     suggestFields(context.db, owner, input, {
@@ -556,6 +568,19 @@ export async function inferFieldSuggestionsBatch(
     );
     for (const [code, id] of resolved) recordIds.set(code, id);
   }
+  const savedTargets = input.items.flatMap((item) =>
+    savedFieldTargets(
+      item,
+      item.entityId ? recordIds.get(item.entityId) : undefined,
+    ),
+  );
+  const scheduleSavedField = savedTargets.length
+    ? (
+        await import("~/server/domains/run/service/ai-refresh")
+      ).savedFieldQuestionScheduler(context.db, savedTargets, {
+        suggestPorts: ports,
+      })
+    : undefined;
   const usages = new Map<string, AiSelectionUsage>();
   const results = await withFieldSuggestionBatch(() =>
     settleDecisionWorkItems(input.items, async (item) => {
@@ -582,6 +607,7 @@ export async function inferFieldSuggestionsBatch(
         {
           manifest,
           recordId: item.entityId ? recordIds.get(item.entityId) : undefined,
+          scheduleSavedField,
         },
       );
     }),
