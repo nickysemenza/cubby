@@ -316,6 +316,7 @@ targets:
       - path: App/Tests/Photo/Review/PhotoDestinationOptionTests.swift
       - path: App/Tests/Photo/Review/PhotoEntityChooserModelTests.swift
       - path: App/Tests/Photo/PhotoTestStores.swift
+      - path: App/Tests/Photo/PhotoMatchExportTests.swift
       - path: App/Tests/AppShell/AppInstallationIDTests.swift
       - path: CubbyKit/Tests/CubbyKitTests/Support/Gate.swift
     dependencies:

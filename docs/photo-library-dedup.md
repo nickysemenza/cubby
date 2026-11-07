@@ -161,7 +161,10 @@ than PhotoKit's rendered JPEG, preserving PNG alpha and source metadata. Live
 Photos contribute their still image, and unsupported or
 over-50-MiB files fail explicitly. Subject lifting is an intentional full-resolution
 edit. Temporary encoded files remain alive through retries and are removed when
-their last owning reference is released.
+their last owning reference is released. Materialization uses UUID-only disk
+names while preserving the original filename as metadata, so a long source name
+cannot exceed filesystem limits. Diagnostic exports use a bounded filename with
+an extension derived from the retained content type.
 
 Destination creation uses the generic image-ingress declaration. Garden-entry
 creation and capture-date prefills follow [Garden](garden.md#native-photo-import-and-calendar).

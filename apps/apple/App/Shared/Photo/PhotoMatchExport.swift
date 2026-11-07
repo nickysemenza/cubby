@@ -53,7 +53,8 @@ nonisolated final class PhotoMatchExport: Sendable {
                 urls.append(url)
             }
             if let file {
-                let url = directory.appendingPathComponent("materialized-" + file.url.lastPathComponent)
+                let suffix = UTType(mimeType: file.contentType)?.preferredFilenameExtension ?? "bin"
+                let url = directory.appendingPathComponent("materialized." + suffix)
                 try FileManager.default.copyItem(at: file.url, to: url)
                 urls.append(url)
             }

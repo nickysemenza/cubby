@@ -284,13 +284,15 @@ struct PhotoImportRunUploaderTests {
         defer { PhotoImportRunUploaderStub.handler.withLock { $0 = nil } }
         let script = RunUploaderScript()
         PhotoImportRunUploaderStub.handler.withLock { $0 = script.handler }
+        let failedPhoto = try photo("bad")
+        let failedURL = failedPhoto.file.url
         let fail = Mutex<Bool>(true)
         let puts = Mutex<Int>(0)
         let uploader = PhotoImportRunUploader(
             client: try makeClient(),
             put: { file, _, _ in
                 puts.withLock { $0 += 1 }
-                if file.lastPathComponent.hasSuffix("-bad.jpg"),
+                if file == failedURL,
                     fail.withLock({ pending in
                         let previous = pending
                         pending = false
@@ -300,7 +302,7 @@ struct PhotoImportRunUploaderTests {
                     throw URLError(.networkConnectionLost)
                 }
             }, analyze: { input in fakeAnalysis(for: input.id) })
-        let photos = try [photo("bad")] + (0..<104).map { try photo("good-\($0)") }
+        let photos = try [failedPhoto] + (0..<104).map { try photo("good-\($0)") }
         await #expect(throws: PhotoImportRunUploader.Failure.self) {
             _ = try await uploader.upload(photos, runID: "RUN-TEST", performLocalAnalysis: false)
         }
@@ -320,12 +322,14 @@ struct PhotoImportRunUploaderTests {
         defer { PhotoImportRunUploaderStub.handler.withLock { $0 = nil } }
         let script = RunUploaderScript()
         PhotoImportRunUploaderStub.handler.withLock { $0 = script.handler }
+        let failedPhoto = try photo("bad")
+        let failedURL = failedPhoto.file.url
         let uploader = PhotoImportRunUploader(
             client: try makeClient(),
             put: { file, _, _ in
-                if file.lastPathComponent.hasSuffix("-bad.jpg") { throw URLError(.networkConnectionLost) }
+                if file == failedURL { throw URLError(.networkConnectionLost) }
             }, analyze: { input in fakeAnalysis(for: input.id) })
-        let photos = try [photo("bad")] + (0..<104).map { try photo("later-\($0)") }
+        let photos = try [failedPhoto] + (0..<104).map { try photo("later-\($0)") }
         await #expect(throws: PhotoImportRunUploader.Failure.self) {
             _ = try await uploader.upload(photos, runID: "RUN-TEST", performLocalAnalysis: false)
         }

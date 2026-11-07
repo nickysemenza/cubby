@@ -52,6 +52,7 @@ struct PhotoMatchExportTests {
             #expect(exportedImage.width == image.width)
             #expect(exportedImage.height == image.height)
             #expect(try PerceptualHash64.compute(exportedImage) == PerceptualHash64.compute(image))
+            #expect(sharingLease.urls[2].pathExtension == "png")
             #expect(try Data(contentsOf: sharingLease.urls[2]) == Data(contentsOf: file.url))
             try await sharingLease.save(in: savedParent)
             withExtendedLifetime(sharingLease) {

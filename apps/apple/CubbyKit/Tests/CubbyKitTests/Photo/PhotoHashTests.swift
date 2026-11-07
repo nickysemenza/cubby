@@ -255,8 +255,10 @@ struct PhotoFileTests {
     @Test func materializationPreservesBytesAndMetadata() throws {
         let bytes = try ImageEncoding.encode(
             TestImages.canvas(width: 321, height: 123, subject: true), as: .png)
+        let filename = String(repeating: "s", count: 218) + ".png"
         let photo = try PhotoFile.materialize(
-            bytes, filename: "original.png", contentType: "image/png")
+            bytes, filename: filename, contentType: "image/png")
+        #expect(photo.filename == filename)
         #expect(try Data(contentsOf: photo.url) == bytes)
         #expect(photo.contentType == "image/png")
         #expect(photo.size == bytes.count)
@@ -265,6 +267,11 @@ struct PhotoFileTests {
         let thumbnail = try photo.thumbnail()
         #expect(thumbnail.width <= 256)
         #expect(thumbnail.height <= 256)
+        let copy = try PhotoFile.materialize(from: photo.url, filename: filename)
+        #expect(copy.filename == filename)
+        #expect(try Data(contentsOf: copy.url) == bytes)
+        #expect(copy.width == photo.width && copy.height == photo.height)
+        #expect(try photo.decodeFullResolution().width == 321)
     }
 
     @Test func temporaryMaterializationLivesUntilItsLastValueCopy() throws {
