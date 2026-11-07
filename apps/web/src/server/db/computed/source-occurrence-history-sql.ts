@@ -1,7 +1,9 @@
+import type { SourceTransactionRecordId } from "@cubby/schemas/identifiers";
 import { sourceOccurrenceReviewState } from "@cubby/schemas/source-occurrence-fields";
 import { sql, type SQL } from "drizzle-orm";
 
 import { notDeleted } from "~/server/db/helpers/predicates";
+import { uuidArrayParam } from "~/server/db/helpers/query";
 
 /** Historical bindings block automatic acceptance; they never establish the owner. */
 export const sourceOccurrenceHasUnresolvedHistory = (
@@ -50,8 +52,10 @@ export const sourceOccurrencesWithUnresolvedHistory = sql`(
     AND NOT COALESCE(owner."identityProof"->'resolvedHistoricalTransactionIds' ? evidence."historicalTransactionId"::text,false)
 )`;
 
-/** Materialize the original closure before root filters can make it a per-row expansion. */
-export const sourceObservationHistoricalLinks = sql`(
+/** Page scope limits final roots, never the sibling evidence or ownership fence. */
+export const sourceObservationHistoricalLinks = (
+  observationIds?: readonly SourceTransactionRecordId[],
+) => sql`(
   WITH evidence_history AS MATERIALIZED (${directHistoricalEvidence}),
   key_history AS MATERIALIZED (
     SELECT sibling.source, sibling.value, evidence."historicalTransactionId", evidence.code
@@ -73,11 +77,13 @@ export const sourceObservationHistoricalLinks = sql`(
     FROM "FinancialEvidenceAlias" observed
     JOIN history_keys keys ON keys.source=observed.source AND keys.value=observed.value
     WHERE observed."observationId" IS NOT NULL
+      ${observationIds === undefined ? sql`` : sql`AND observed."observationId"=ANY(${uuidArrayParam(observationIds)})`}
     UNION
     SELECT record.id, observed.source, observed.value
     FROM "SourceTransactionRecord" record
     JOIN "FinancialEvidenceAlias" observed ON observed."occurrenceId"=record."occurrenceId"
     JOIN history_keys keys ON keys.source=observed.source AND keys.value=observed.value
+    ${observationIds === undefined ? sql`` : sql`WHERE record.id=ANY(${uuidArrayParam(observationIds)})`}
   ),
   history AS MATERIALIZED (
     SELECT DISTINCT observed."observationId", history."historicalTransactionId", history.code

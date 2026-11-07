@@ -24,6 +24,7 @@ import {
   sourceObservationHistoricalLinks,
 } from "~/server/db/computed/source-occurrence-history-sql";
 import { notDeleted } from "~/server/db/helpers/predicates";
+import { uuidArrayParam } from "~/server/db/helpers/query";
 import { sourceTransactionRecord } from "~/server/db/retained-tables";
 import { sqlEnumConstant } from "~/server/db/sql-enum";
 
@@ -67,7 +68,9 @@ export const sourceObservationIdentities = sql`(
   FROM "SourceTransactionRecord" r JOIN "SourceOccurrence" o ON o.id=r."occurrenceId"
 )`;
 
-export const sourceObservations = sql`(SELECT observation.*,
+const sourceObservationRead = (
+  observationIds?: readonly SourceTransactionRecordId[],
+) => sql`(SELECT observation.*,
   CASE WHEN observation.disposition = ${sqlEnumConstant(sourceTransactionRecordDisposition, sourceTransactionRecordDisposition.enum.ignored)} THEN ${sqlEnumConstant(sourceTransactionRecordDisposition, sourceTransactionRecordDisposition.enum.ignored)}
     WHEN observation."supersededByRowId" IS NOT NULL THEN ${sourceTransactionRecordMatchState.enum.superseded}
     WHEN observation."transactionShortcode" IS NULL AND (observation."reviewState" <> ${sourceOccurrenceReviewState.enum.ready} OR cardinality(observation."historicalTransactionIds") > 0 OR observation."acceptedTransactionId" IS NOT NULL) THEN ${sourceTransactionRecordMatchState.enum.held}
@@ -79,8 +82,16 @@ export const sourceObservations = sql`(SELECT observation.*,
       coalesce(history.codes, ARRAY[]::text[]) AS "historicalTransactionIds"
     FROM ${sourceObservationFacts} facts
     LEFT JOIN ${sourceOccurrencesWithUnresolvedHistory} unresolved ON unresolved.id=facts."occurrenceId"
-    LEFT JOIN ${sourceObservationHistoricalLinks} history ON history."observationId"=facts.id
+    LEFT JOIN ${sourceObservationHistoricalLinks(observationIds)} history ON history."observationId"=facts.id
+    ${observationIds === undefined ? sql`` : sql`WHERE facts.id=ANY(${uuidArrayParam(observationIds)})`}
   ) observation)`;
+
+export const sourceObservations = sourceObservationRead();
+
+/** Page states share the global policy but expand history only for their roots. */
+export const sourceObservationsForPage = (
+  observationIds: readonly SourceTransactionRecordId[],
+): SQL => sourceObservationRead(observationIds);
 
 /** Hash the complete negative fence once; never re-run history closure for each suggestion. */
 export const sourceReadyOccurrenceIds = sql`-- includes-deleted: reserved ownership and stored review state remain binding after tombstoning.

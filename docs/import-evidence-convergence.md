@@ -669,10 +669,13 @@ occurrence siblings and collection memberships, and does not depend on a retaine
 legacy charge-key string. One and many-record badges use the same bounded record
 expansion. Work retains the narrower account-owned statement reach.
 
-Read projections materialize retained historical closure before applying root
-predicates. List filters use the generic whole-list value set; state sorts use
-uncorrelated membership sets. Page bindings load states and historical links in
-one batch rather than a scalar subquery per observation. They preserve the point acceptance
+Whole-list projections materialize retained historical closure before applying
+root predicates. List filters use the generic whole-list value set; state sorts
+use uncorrelated membership sets. Page bindings restrict final observation-key
+roots before materializing historical transaction pairs, and return only those
+requested observations. Sibling evidence and unresolved ownership fences retain
+their complete inputs. States and historical links load in one batch rather than
+a scalar subquery per observation. They preserve the point acceptance
 check's live-binding/transaction rules and retained alias provenance. Historical
 links remain presentation and negative ownership fences, never accepted ownership.
 The page binding owns projected match state. The main SELECT omits its redundant
