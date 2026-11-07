@@ -42,6 +42,7 @@ const REPRESENTATIVE_KINDS = [
 ] as const satisfies readonly (typeof listEntities)[number][];
 
 const mediaFields = new Set([
+  "displayCover",
   "displayImages",
   "images",
   "labelImages",
@@ -209,6 +210,23 @@ describe("entity_read field selection", () => {
         },
       },
     });
+    const covered = await read({
+      action: "list",
+      entity: "purchase",
+      fields: ["displayCover"],
+    });
+    expect(covered.isError).not.toBe(true);
+    expect(rows.parse(covered.structuredContent).items).toEqual([
+      { id: purchase.shortcode, displayCover: { image: null, count: 0 } },
+    ]);
+    const detailCover = await read({
+      action: "get",
+      entity: "purchase",
+      id: purchase.shortcode,
+      fields: ["displayCover"],
+    });
+    expect(detailCover.isError).toBe(true);
+    expect(JSON.stringify(detailCover)).toContain("MCP_FIELD_UNKNOWN");
     const got = await read({
       action: "get",
       entity: "purchase",

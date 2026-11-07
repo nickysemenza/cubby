@@ -22,6 +22,7 @@ export type ReadSelection =
 
 /** Image payloads and counters stay out of compact MCP field selections. */
 const imagePayloadFields = new Set([
+  "displayCover",
   "displayImages",
   "images",
   "labelImages",

@@ -1,4 +1,3 @@
-import { displayImagesField } from "@cubby/schemas/display-images";
 import { isSlotListView } from "@cubby/schemas/entity-definitions/definition";
 import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import { shortcodeEntities } from "@cubby/schemas/entity-roster";
@@ -23,7 +22,6 @@ import {
   type ListReadProjection,
 } from "~/entity/entity-list/list-read-demand";
 import { ListTotalSummary } from "~/entity/entity-list/list-total-summary";
-import { readRecordField } from "~/entity/entity-references";
 import { getEntityFilters } from "~/entity/filter-manifest";
 import { compileFilterCodec, sortToParam } from "~/entity/filters";
 import { generatedBrowserCrudEntities } from "~/entity/generated/entity-routes.gen";
@@ -55,7 +53,6 @@ import { declaredColumnExplanation } from "~/entity/table/column-explanation";
 import {
   createImageColumn,
   isImageColumnId,
-  hasDisplayImages,
 } from "~/entity/table/column-helpers";
 import { DataTableToolbar } from "~/entity/table/data-table-toolbar";
 import { TableEmptyState } from "~/entity/table/entity-empty-states";
@@ -203,16 +200,6 @@ function useListColumns(
           entity,
           id: imageId,
           explanation: declaredColumnExplanation(queryClient, entity, imageId),
-          getImages: (row) => {
-            const effectiveRowDisplayImages = readRecordField(
-              row,
-              "displayImages",
-              displayImagesField.nullish(),
-            );
-            return hasDisplayImages(row)
-              ? (effectiveRowDisplayImages ?? [])
-              : [];
-          },
         }),
       );
       composed.visit(add);

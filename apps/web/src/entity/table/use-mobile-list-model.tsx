@@ -1,4 +1,3 @@
-import { displayImagesField } from "@cubby/schemas/display-images";
 import type { Entity } from "@cubby/schemas/entity";
 import { fieldEnvelopeFor, fieldValueOf } from "@cubby/schemas/field-envelope";
 import {
@@ -18,6 +17,7 @@ import {
   isInspectableFieldProvenance,
 } from "~/entity/fields/field-provenance";
 import { fieldResolutionFor } from "~/entity/fields/field-resolution";
+import { rowDisplayCover } from "~/entity/model/row-display-cover";
 import { extractEntityTitle } from "~/ui/data-table/entity-utils";
 import type { MobileMetaValue } from "~/ui/data-table/mobile-card";
 import type { MobileColumnMeta, MobileSlot } from "~/ui/data-table/table-meta";
@@ -153,13 +153,11 @@ function rowHasImage(original: RowData): boolean {
   if (!parsed.success) return false;
   const row = parsed.data;
   // A selected cover slot is authoritative even before it has a usable result.
-  if (Object.hasOwn(row.fields ?? {}, "displayImages")) {
-    const envelope = fieldEnvelopeFor(row, "displayImages");
-    return envelope
-      ? (displayImagesField.nullable().parse(fieldValueOf(envelope))?.length ??
-          0) > 0
-      : false;
-  }
+  if (
+    Object.hasOwn(original, "displayCover") ||
+    Object.hasOwn(row.fields ?? {}, "displayImages")
+  )
+    return rowDisplayCover(original).image !== null;
   const hasImages = (record: unknown) => {
     const envelope = fieldEnvelopeFor(record, "images");
     return envelope

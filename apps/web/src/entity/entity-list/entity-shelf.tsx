@@ -1,7 +1,5 @@
-import { displayImagesField } from "@cubby/schemas/display-images";
 import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import { entityRoster } from "@cubby/schemas/entity-roster";
-import { fieldEnvelopeFor, fieldValueOf } from "@cubby/schemas/field-envelope";
 import {
   preferredImageUrl,
   publicImageUrl,
@@ -14,6 +12,7 @@ import { z } from "zod";
 import { entities, entityDetailParams } from "~/entity/entities";
 import type { InfiniteScrollControls } from "~/entity/hooks/use-infinite-table-list";
 import { useEntityMetadata } from "~/entity/metadata";
+import { rowDisplayCover } from "~/entity/model/row-display-cover";
 import { EntityEmptyState } from "~/entity/table/entity-empty-states";
 import { ShelfCard, ShelfGrid } from "~/entity/table/shelf";
 import type { GroupConfig } from "~/ui/data-table/use-grouped-list";
@@ -46,14 +45,8 @@ const imageBrowserMedia = publicImageUrlSummary.extend({
 // cutout when one is ready and the image is not pinned to its original.
 function shelfImages(entity: BrowserRoutedEntity, row: ShelfRow) {
   if (entity !== "image") {
-    const envelope = fieldEnvelopeFor(row, "displayImages");
-    const images = envelope
-      ? displayImagesField.nullable().parse(fieldValueOf(envelope))
-      : null;
-    return (images ?? []).map((image) => ({
-      id: image.id,
-      url: preferredImageUrl(image),
-    }));
+    const { image } = rowDisplayCover(row);
+    return image ? [{ id: image.id, url: preferredImageUrl(image) }] : [];
   }
   const image = imageBrowserMedia.safeParse(row);
   const url = image.success ? publicImageUrl(image.data) : undefined;
@@ -121,7 +114,11 @@ export function EntityShelf<TRow extends { id: string }>({
                 : entityDetailParams(row.id)
             }
             image={images[0]?.url}
-            extraCount={images.length - 1}
+            extraCount={
+              (entity === "image"
+                ? images.length
+                : rowDisplayCover(row).count) - 1
+            }
             title={shelfTitle(entity, row)}
             subtitle={recordCaption(queryClient, entity, row)}
             entity={entity}

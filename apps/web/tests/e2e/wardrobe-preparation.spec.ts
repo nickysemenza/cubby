@@ -65,13 +65,18 @@ test("taxonomy edits keep product classification paths and labels separate from 
   const productId = product.id;
   const itemImageName = `wardrobe-item-${suffix}`;
   const labelImageName = `wardrobe-label-${suffix}`;
-  const [itemImage, labelImage] = await Promise.all([
+  const [itemImage, labelImage, extraImage] = await Promise.all([
     seedImagePrerequisite(itemImageName, e2eRuntime.objectStorageUrl),
     seedImagePrerequisite(labelImageName, e2eRuntime.objectStorageUrl),
+    seedImagePrerequisite(
+      `wardrobe-extra-${suffix}`,
+      e2eRuntime.objectStorageUrl,
+    ),
   ]);
   await Promise.all([
     attachProductImagePrerequisite(page, itemImage.id, productId, "item"),
     attachProductImagePrerequisite(page, labelImage.id, productId, "label"),
+    attachProductImagePrerequisite(page, extraImage.id, productId, "item"),
   ]);
   await gotoAuthenticatedPage(
     page,
@@ -130,4 +135,21 @@ test("taxonomy edits keep product classification paths and labels separate from 
     labels.getByRole("img", { name: `${itemImageName}.png` }),
   ).toHaveCount(0);
   await page.getByTestId("detail-spec-plate").scrollIntoViewIfNeeded();
+  await gotoAuthenticatedPage(
+    page,
+    `/products?searchQuery=${encodeURIComponent(productName)}`,
+  );
+  const row = page.getByRole("row").filter({ hasText: productName });
+  await expect(row).toHaveCount(1);
+  await expect(row.getByText("+1", { exact: true })).toBeVisible();
+  await row
+    .getByRole("button", { name: "Why this image", exact: true })
+    .click();
+  const chain = page
+    .getByRole("dialog")
+    .filter({ hasText: "Display image sources" });
+  await expect(chain.getByRole("img")).toHaveCount(2);
+  await expect(
+    chain.getByRole("img", { name: "Chosen cover", exact: true }),
+  ).toBeVisible();
 });

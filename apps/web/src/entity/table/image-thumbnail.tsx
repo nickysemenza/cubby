@@ -5,6 +5,7 @@ import { EntityCover } from "~/entity/components/entity-cover";
 import { ROW_DENSITY } from "~/ui/data-table/density";
 
 interface ImageThumbnailProps {
+  imageCount?: number;
   images: Array<ImageUrlSummary & { id?: string; filename?: string }>;
   alt?: string;
   lazyPreview?: boolean;
@@ -16,6 +17,7 @@ interface ImageThumbnailProps {
 /** Image thumbnail that fills the cell height (cell must have h-px trick). */
 export const ImageThumbnail = ({
   images,
+  imageCount,
   alt = "Image",
   lazyPreview = false,
   preview = true,
@@ -25,6 +27,7 @@ export const ImageThumbnail = ({
     <div className="flex h-full items-center justify-center">
       <EntityCover
         images={images}
+        imageCount={imageCount}
         alt={alt}
         entity={entity}
         preview={preview}

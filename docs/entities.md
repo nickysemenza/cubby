@@ -2179,8 +2179,18 @@ its outer mutation supplies loading state and presentation only.
 
 ## List reads
 
+Generic browser rosters explicitly request the optional root `displayCover`:
+its canonical first image and complete deduplicated count. It shares the full
+image resolver's candidates and ordering; only the winning image is joined to
+representation metadata and serialized. Empty covers are `{ image: null, count: 0 }`.
+Complete list reads, detail reads, native reads and full MCP reads retain unchanged
+`displayImages` arrays. The cover is list-only, is never a field envelope, and is
+absent unless requested. Thumbnail badges retain the full count; image-chain
+popovers still load every image. Cover-only reads hydrate the selected image's
+representations without resolving or attaching a partial `displayImages` array.
+
 Browser roster projections include the synthesized Quality column when readable
-and not explicitly hidden, alongside identity and display images. Its field
+and not explicitly hidden, alongside identity and the display cover. Its field
 facts must load even though it has no ordinary manifest field declaration.
 
 A request for direct physical fields with no admitted bindings or field facts

@@ -1,5 +1,6 @@
 import {
   displayImagesField,
+  type DisplayCover,
   type DisplayImageSummary,
 } from "@cubby/schemas/display-images";
 import {
@@ -497,21 +498,20 @@ export const entityDisplayImagePresenceSql = (entity: Entity, id: SQL): SQL => {
   )`;
 };
 
+const rankedImageSchema = z.object({
+  id: imageShortcode,
+  key: z.string(),
+  useOriginal: z.boolean(),
+  derivativeKey: z.string().nullable(),
+  priority: z.number(),
+  sourceId: z.string().nullable(),
+});
 const displayImageRowSchema = z.object({
   entityKind: entitySchema,
   entityId: z.string(),
   refKey: z.string(),
   representations: z.array(imageRepresentationRow).optional(),
-  images: z.array(
-    z.object({
-      id: imageShortcode,
-      key: z.string(),
-      useOriginal: z.boolean(),
-      derivativeKey: z.string().nullable(),
-      priority: z.number(),
-      sourceId: z.string().nullable(),
-    }),
-  ),
+  images: z.array(rankedImageSchema),
 });
 
 /**
@@ -533,7 +533,7 @@ async function resolveDisplayImageListsFromSqlRefs(
   refsSql: SQL,
   sourceTypes: ReadonlySet<Entity>,
 ): Promise<Map<string, DisplayImageSummary[]>> {
-  const { ranked } = await resolveRankedDisplayImages(db, refsSql, sourceTypes);
+  const { ranked } = await resolveRankedDisplayMedia(db, refsSql, sourceTypes);
   return new Map(
     [...ranked].map(([key, images]) => [key, images.map(({ image }) => image)]),
   );
@@ -554,7 +554,7 @@ export async function resolveEntityDisplayImageChain(
   ref: EntityDisplayImageRef,
 ): Promise<RankedDisplayImage[]> {
   const key = entityRefKey(ref.entityKind, ref.entityId);
-  const { ranked } = await resolveRankedDisplayImages(
+  const { ranked } = await resolveRankedDisplayMedia(
     db,
     sql`refs("entityKind", "entityId", "refKey") AS (VALUES (${ref.entityKind}::text, ${ref.entityId}::uuid, ${key}::text))`,
     new Set([ref.entityKind]),
@@ -587,13 +587,15 @@ export async function loadDisplayImageSources(
   );
 }
 
-async function resolveRankedDisplayImages(
+async function resolveRankedDisplayMedia(
   db: Database | DrizzleTransaction,
   refsSql: SQL,
   sourceTypes: ReadonlySet<Entity>,
   includeAttachments = false,
+  mode: "full" | "cover" = "full",
 ): Promise<{
   ranked: Map<string, RankedDisplayImage[]>;
+  counts: Map<string, number>;
   representations: Map<string, ImageRepresentations>;
 }> {
   // Unrelated entity arms still incur planner/JIT costs even when their WHERE
@@ -646,29 +648,7 @@ async function resolveRankedDisplayImages(
   const borrowedImages = branchSql.length
     ? sql`UNION ALL ${sql.join(branchSql, sql` UNION ALL `)}`
     : sql``;
-  const result = await unwrapDb(db).execute(
-    sql`
-    WITH ${refsSql}
-    ${inheritedRelationsSql(selectedBranches)}
-    ${expenseProjectRelation}
-    ${sourceMerchantImagesSql(sourceTypes.has("sourceTransactionRecord"))}
-    SELECT refs."entityKind", refs."entityId"::text AS "entityId", refs."refKey", (
-      SELECT COALESCE(
-        json_agg(
-          json_build_object(
-            'id', candidates.shortcode,
-            'key', candidates.key,
-            'useOriginal', selected_image."useOriginal",
-            'derivativeKey', derivative.key,
-            'priority', candidates.priority,
-            'sourceId', candidates."group0Id"
-          )
-          ORDER BY candidates.priority, ${displayGroupOrder("candidates")},
-                   candidates."sortOrder", candidates."createdAt", candidates."imageId"
-        ),
-        '[]'::json
-      )
-      FROM (
+  const candidates = sql`
         SELECT DISTINCT ON (raw_candidates."imageId") raw_candidates.*
         FROM (
         SELECT i.key, i.shortcode, 0 AS priority, ${displayGroupColumns([])}, 0 AS "sortOrder", i."createdAt", i.id AS "imageId"
@@ -680,15 +660,46 @@ async function resolveRankedDisplayImages(
         ORDER BY raw_candidates."imageId", raw_candidates.priority,
                  ${displayGroupOrder("raw_candidates")},
                  raw_candidates."sortOrder", raw_candidates."createdAt"
-      ) candidates
-      JOIN "Image" selected_image ON selected_image.id = candidates."imageId"
+  `;
+  const order = sql`candidates.priority, ${displayGroupOrder("candidates")},
+                    candidates."sortOrder", candidates."createdAt", candidates."imageId"`;
+  const image = sql`json_build_object(
+            'id', candidates.shortcode,
+            'key', candidates.key,
+            'useOriginal', selected_image."useOriginal",
+            'derivativeKey', derivative.key,
+            'priority', candidates.priority,
+            'sourceId', candidates."group0Id"
+          )`;
+  const joins = sql`      JOIN "Image" selected_image ON selected_image.id = candidates."imageId"
       LEFT JOIN "ImageDerivative" derivative
         ON derivative."imageId" = selected_image.id
        AND derivative.purpose = 'transparent'
        AND derivative."sourceContentHash" = selected_image.sha256
        AND derivative."processorRevision" = ${IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION}
-       AND derivative.status = 'ready'
-    ) AS images ${
+       AND derivative.status = 'ready'`;
+  // Count after image deduplication; the unique derivative join cannot add rows.
+  const selectedMedia =
+    mode === "cover"
+      ? sql`COALESCE((
+        SELECT json_build_object(${"image"}::text, ${image}, ${"count"}::text, candidates.total)
+        FROM (
+          SELECT candidates.*, count(*) OVER () AS total
+          FROM (${candidates}) candidates ORDER BY ${order} LIMIT 1
+        ) candidates ${joins}
+      ), json_build_object(${"image"}::text, NULL, ${"count"}::text, 0)) AS cover`
+      : sql`(
+        SELECT COALESCE(json_agg(${image} ORDER BY ${order}), '[]'::json)
+        FROM (${candidates}) candidates ${joins}
+      ) AS images`;
+  const result = await unwrapDb(db).execute(
+    sql`
+    WITH ${refsSql}
+    ${inheritedRelationsSql(selectedBranches)}
+    ${expenseProjectRelation}
+    ${sourceMerchantImagesSql(sourceTypes.has("sourceTransactionRecord"))}
+    SELECT refs."entityKind", refs."entityId"::text AS "entityId", refs."refKey",
+    ${selectedMedia} ${
       includeAttachments
         ? sql`, (
       SELECT COALESCE(json_agg(attachment), '[]'::json)
@@ -700,8 +711,25 @@ async function resolveRankedDisplayImages(
   `,
     "objects",
   );
-
-  const rows = z.array(displayImageRowSchema).parse(result);
+  const counts = new Map<string, number>();
+  const normalized =
+    mode === "cover"
+      ? z
+          .array(
+            displayImageRowSchema.omit({ images: true }).extend({
+              cover: z.object({
+                image: rankedImageSchema.nullable(),
+                count: z.number().int().nonnegative(),
+              }),
+            }),
+          )
+          .parse(result)
+          .map(({ cover, ...row }) => {
+            counts.set(row.refKey, cover.count);
+            return { ...row, images: cover.image ? [cover.image] : [] };
+          })
+      : result;
+  const rows = z.array(displayImageRowSchema).parse(normalized);
   const ranked = new Map(
     rows.map((row) => [
       row.refKey,
@@ -732,6 +760,7 @@ async function resolveRankedDisplayImages(
   );
   return {
     ranked,
+    counts,
     representations: imageRepresentationsFromRows(
       rows.flatMap((row) => row.representations ?? []),
     ),
@@ -743,19 +772,13 @@ export interface EntityDisplayMedia {
   readonly representations: ReadonlyMap<string, ImageRepresentations>;
 }
 
-/** Resolve canonical display images and requested attachment representations in one query. */
-export async function resolveEntityDisplayMedia(
-  db: Database | DrizzleTransaction,
-  refs: readonly EntityDisplayImageRef[],
-  options: { attachments?: boolean } = {},
-): Promise<EntityDisplayMedia> {
+function displayMediaRefs(refs: readonly EntityDisplayImageRef[]) {
   const supported = [
     ...new Map(
       refs.map((ref) => [entityRefKey(ref.entityKind, ref.entityId), ref]),
     ).values(),
   ];
-  if (supported.length === 0)
-    return { displayImages: new Map(), representations: new Map() };
+  if (supported.length === 0) return null;
   const values = sql.join(
     supported.map(
       (ref) =>
@@ -763,10 +786,25 @@ export async function resolveEntityDisplayMedia(
     ),
     sql`, `,
   );
-  const resolved = await resolveRankedDisplayImages(
+  return {
+    refsSql: sql`refs("entityKind", "entityId", "refKey") AS (VALUES ${values})`,
+    sourceTypes: new Set(supported.map((ref) => ref.entityKind)),
+  };
+}
+
+/** Resolve canonical display images and requested attachment representations in one query. */
+export async function resolveEntityDisplayMedia(
+  db: Database | DrizzleTransaction,
+  refs: readonly EntityDisplayImageRef[],
+  options: { attachments?: boolean } = {},
+): Promise<EntityDisplayMedia> {
+  const scope = displayMediaRefs(refs);
+  if (scope === null)
+    return { displayImages: new Map(), representations: new Map() };
+  const resolved = await resolveRankedDisplayMedia(
     db,
-    sql`refs("entityKind", "entityId", "refKey") AS (VALUES ${values})`,
-    new Set(supported.map((ref) => ref.entityKind)),
+    scope.refsSql,
+    scope.sourceTypes,
     options.attachments === true,
   );
   return {
@@ -778,6 +816,42 @@ export async function resolveEntityDisplayMedia(
     ),
     representations: resolved.representations,
   };
+}
+
+export interface EntityDisplayCovers {
+  readonly displayCovers: ReadonlyMap<string, DisplayCover>;
+  readonly representations: ReadonlyMap<string, ImageRepresentations>;
+}
+
+/** The same ranked policy, returning only its first image and complete count. */
+export async function resolveEntityDisplayCovers(
+  db: Database | DrizzleTransaction,
+  refs: readonly EntityDisplayImageRef[],
+): Promise<EntityDisplayCovers> {
+  const scope = displayMediaRefs(refs);
+  if (scope === null)
+    return { displayCovers: new Map(), representations: new Map() };
+  const resolved = await resolveRankedDisplayMedia(
+    db,
+    scope.refsSql,
+    scope.sourceTypes,
+    false,
+    "cover",
+  );
+  const displayCovers = new Map(
+    [...resolved.ranked].map(([key, images]) => [
+      key,
+      {
+        image: images[0]?.image ?? null,
+        count: resolved.counts.get(key) ?? 0,
+      },
+    ]),
+  );
+  const representations = new Map<string, ImageRepresentations>();
+  for (const { image } of displayCovers.values())
+    if (image?.representations)
+      representations.set(image.id, image.representations);
+  return { displayCovers, representations };
 }
 
 /** Public shortcodes join durable identities inside the image query. */

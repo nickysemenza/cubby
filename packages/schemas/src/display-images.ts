@@ -20,7 +20,14 @@ export type DisplayImageSummary = z.infer<typeof displayImageSummary>;
  * The entity's displayable images in display order, resolved server-side by
  * one policy (`resolveEntityDisplayImages`): its own gallery/cover, or a
  * linked product's when `capabilities.images` is `"borrowed"`. Every
- * `displayImages` manifest entity's list row carries this; `[0]` is the cover.
+ * `displayImages` manifest entity's complete list row carries this; `[0]` is the cover.
  * Web and native thumbnails read it and derive nothing themselves.
  */
 export const displayImagesField = z.array(displayImageSummary);
+
+/** Explicit list projection: canonical first image and full deduplicated count. */
+export const displayCoverField = z.object({
+  image: displayImageSummary.nullable(),
+  count: z.number().int().nonnegative(),
+});
+export type DisplayCover = z.infer<typeof displayCoverField>;

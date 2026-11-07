@@ -42,7 +42,8 @@ export function compileListReadSchema(schema: z.ZodObject) {
     schema,
     omittable: new Set(
       Object.keys(schema.shape).filter(
-        (key) => schema.shape[key] instanceof z.ZodOptional,
+        (key) =>
+          key !== "displayCover" && schema.shape[key] instanceof z.ZodOptional,
       ),
     ),
   };

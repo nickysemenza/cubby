@@ -402,6 +402,16 @@ replace this fresh decision read or the receiving command's current-stock checks
 
 ## List loading and enrichment
 
+Generic browser rosters explicitly request the optional root `displayCover`:
+its canonical first image and complete deduplicated count. It shares the full
+image resolver's candidates and ordering; only the winning image is joined to
+representation metadata and serialized. Empty covers are `{ image: null, count: 0 }`.
+Complete list reads, detail reads, native reads and full MCP reads retain unchanged
+`displayImages` arrays. The cover is list-only, is never a field envelope, and is
+absent unless requested. Thumbnail badges retain the full count; image-chain
+popovers still load every image. Cover-only reads hydrate the selected image's
+representations without resolving or attaching a partial `displayImages` array.
+
 The inspector overview and detail relation headings request graph branch counts
 with a zero item budget.
 It does not hydrate graph nodes, previews or images; the Relations tab owns its

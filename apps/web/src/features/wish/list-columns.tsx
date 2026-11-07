@@ -15,6 +15,7 @@ import {
 } from "~/entity/entity-media/entity-display-images";
 import { relationshipFieldProvenance } from "~/entity/fields/field-provenance";
 import { useFilterOptions } from "~/entity/hooks/use-filter-options";
+import { rowDisplayCover } from "~/entity/model/row-display-cover";
 import { renderOptionCell } from "~/entity/table/column-helpers";
 import { ImageThumbnail } from "~/entity/table/image-thumbnail";
 import {
@@ -80,11 +81,13 @@ const WISH_PREVIEW = {
 } as const;
 
 function WishRowCover({ row }: { row: WishRow }) {
+  const cover = row.kind === "wish" ? rowDisplayCover(row.wish) : null;
   return row.kind === "wish" ? (
     <ImageThumbnail
       // The server merges every candidate's photos in candidate order, so a
       // collapsed wish's "+N" badge reads as "more options".
-      images={fieldValueOf(row.wish.fields.displayImages) ?? []}
+      images={cover?.image ? [cover.image] : []}
+      imageCount={cover?.count}
       alt="Candidate product image"
       lazyPreview
       entity="product"
