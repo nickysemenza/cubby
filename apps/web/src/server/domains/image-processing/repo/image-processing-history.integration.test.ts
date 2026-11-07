@@ -46,6 +46,7 @@ import {
   completeImageProcessingJob,
   getLeasedImageProcessingJobContext,
   retryImageProcessingNow,
+  retireObsoleteImageProcessingJobs,
 } from "./image-processing";
 import {
   assignImageProcessingExecutor,
@@ -667,6 +668,16 @@ describe("image execution history conservation", () => {
       .set({ sha256: "b".repeat(64) })
       .where(eq(image.id, source.id));
     expect(await retryImageProcessingNow(ctx.db, { imageId })).toEqual([]);
+    expect(await retireObsoleteImageProcessingJobs(ctx.db, { jobId })).toBe(1);
+    const [retired] = await getDb(ctx.db)
+      .select()
+      .from(imageProcessingJob)
+      .where(eq(imageProcessingJob.id, jobId));
+    expect(retired).toMatchObject({
+      state: "skipped",
+      lastError: "Old source failed",
+    });
+    expect(retired?.result).toMatchObject({ reason: "Old source failed" });
     await getDb(ctx.db)
       .update(image)
       .set({ sha256: "a".repeat(64) })

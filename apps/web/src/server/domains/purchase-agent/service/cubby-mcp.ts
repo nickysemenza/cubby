@@ -234,6 +234,15 @@ export function photoCoordinatorToolResult(
       (group) => group.conflict?.length,
     ).length,
     failedGroupCount: list.proposals.filter((group) => group.lastError).length,
+    // Repair the first outstanding groups, then read again for the next batch.
+    groupsNeedingRepair: list.proposals
+      .filter((group) => group.conflict?.length || group.lastError)
+      .slice(0, 8)
+      .map((group) => ({
+        groupKey: group.groupKey,
+        conflict: group.conflict?.slice(0, 8) ?? null,
+        lastError: group.lastError?.slice(0, 2000) ?? null,
+      })),
     ...(written
       ? {
           savedGroupKeys: submitted.groups

@@ -367,9 +367,11 @@ still run independently for every image. Other executor skips, including
 stored `failed` retains the diagnostic, reported result and attempt history. The displayed
 state derives from the Job (`image-job-state.ts`): `leased` for a live lease,
 `waiting_for_device` for parked device work, `pending`, and `failed` ("Needs
-attention (retrying)") once a job failed `JOB_NEEDS_ATTENTION_ATTEMPTS` times in a row
+attention") once a job failed `JOB_NEEDS_ATTENTION_ATTEMPTS` times in a row
 or its execution stopped; transient failures keep retrying. An executor's `retryable: false`
-stops automatic dispatch for these source/processor inputs; a missing
+stops automatic dispatch for these source/processor inputs. Storage verification
+failures retry; a verified content mismatch stops. Superseded failed jobs retire
+as skipped while retaining their diagnostics and results. A missing
 subject-lift derivative is rebuilt. Explicit image retry reopens a negative cutout
 without discarding its evidence or allowing maintenance to immediately settle it again.
 A changed source or new processor revision is new work, and

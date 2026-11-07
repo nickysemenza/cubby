@@ -510,7 +510,7 @@ export async function retireObsoleteImageProcessingJobs(
   const dbc = getDb(db);
   const scoped = "jobId" in input;
   const obsolete = and(
-    eq(imageProcessingJob.state, "pending"),
+    inArray(imageProcessingJob.state, ["pending", "failed"]),
     scoped ? eq(imageProcessingJob.id, input.jobId) : undefined,
     // includes-deleted: retire work whose source image was removed.
     sql`EXISTS (SELECT 1 FROM ${image} WHERE ${image.id}=${imageProcessingJob.imageId} AND (${obsoleteImageProcessingSource()} OR NOT ${currentImageProcessingProcessor()}))`,
@@ -534,7 +534,7 @@ export async function retireObsoleteImageProcessingJobs(
         state: "skipped",
         completedAt: new Date(),
         leaseUntil: null,
-        lastError: "Image source, type or processor is obsolete",
+        lastError: sql`coalesce(${imageProcessingJob.lastError}, 'Image source, type or processor is obsolete')`,
       })
       .where(batch ? inArray(imageProcessingJob.id, batch) : obsolete)
       .returning({ id: imageProcessingJob.id }),

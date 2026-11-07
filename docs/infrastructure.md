@@ -165,7 +165,10 @@ Its checked-in configuration is part of `apps/web/cloudflare.config.ts`:
   and each OpenAI request keys `prompt_cache_key` to the Run
   (`withWorkItemCaching`), so the prefix can be read from cache on each Email.
   Photo inventory reconstructs bounded context from uncovered photos and its
-  durable boundary proposal. Publishing a page resets model input; accumulated
+  durable boundary proposal. Compact proposal responses include up to eight
+  groups needing repair, with conflict identities and bounded error text; the
+  coordinator repairs them and reads again for further failures.
+  Publishing a page resets model input; accumulated
   candidate lookups also have a byte budget. The stored transcript remains the
   evidence history, while proposals and their atomic boundary checkpoint own
   recovery. Public external-agent full-scan pagination remains available;

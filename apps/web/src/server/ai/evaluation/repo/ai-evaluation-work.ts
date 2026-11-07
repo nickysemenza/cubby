@@ -199,7 +199,7 @@ export async function deferAiEvaluationFeature(
     .set({
       runAt: until,
       waitCause: cause,
-      error,
+      error: sql`CASE WHEN ${aiEvaluation.leaseToken} = ${token}::uuid THEN ${error} ELSE ${aiEvaluation.error} END`,
       leaseToken: null,
       leaseUntil: null,
     })

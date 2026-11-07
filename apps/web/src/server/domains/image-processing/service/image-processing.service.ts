@@ -109,6 +109,8 @@ export async function scheduleAppleImageDescriptionEvaluation(
   return scheduled;
 }
 
+class TransparentOutputMismatchError extends Error {}
+
 async function verifyTransparentOutput(
   key: string,
   result: Extract<
@@ -134,7 +136,9 @@ async function verifyTransparentOutput(
     inspected.height !== result.height ||
     !hasTransparency
   )
-    throw new Error("Transparent output does not match the leased command");
+    throw new TransparentOutputMismatchError(
+      "Transparent output does not match the leased command",
+    );
   return {
     sha256: inspected.sha256,
     contentType: "image/png" as const,
@@ -336,7 +340,10 @@ async function prepareSubjectLiftCompletion(
         outcome: {
           kind: "subject_lift",
           status: "failed",
-          retryable: false,
+          retryable:
+            error instanceof TransparentOutputMismatchError
+              ? false
+              : SERVER_FAILURE_RETRYABLE,
           reason,
         },
       },
