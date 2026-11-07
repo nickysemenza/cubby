@@ -8,6 +8,7 @@ import { runEntityId, vendorShortcode } from "@cubby/schemas/identifiers";
 import {
   mailboxDiscoveryInput,
   mailboxDiscoveryProgress,
+  summarizeDiscoveryProgress,
 } from "@cubby/schemas/mailbox-research";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
@@ -28,6 +29,7 @@ import { setMailImport } from "~/server/domains/purchase-import/repo/mail-import
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { updateJobs } from "~/server/generic/jobs/jobs.fixtures";
 import { readJobs } from "~/server/generic/jobs/repo/job-reads";
+import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { withJobFixtureExecution } from "~/server/testing/background-queue";
 import {
@@ -627,7 +629,7 @@ describe("scheduled Gmail discovery", () => {
     );
   });
 
-  it("retains discovery through wrapped funding and provider stops without spending attempts", async () => {
+  it("retains discovery through funding releases, provider waits and mailbox contention", async () => {
     const { AiBudgetExhaustedError } = await import("~/server/ai/budget");
     const { GatewayProviderStopError } =
       await import("~/server/ai/gateway-egress-client");
@@ -661,6 +663,7 @@ describe("scheduled Gmail discovery", () => {
       new Date(Date.now() + 900_000).toISOString(),
     );
     let stop: Error | undefined = budget;
+    let releaseAtPublication = false;
     const relevance = vi.fn(async () => {
       if (stop) {
         if (stop === budget)
@@ -694,11 +697,24 @@ describe("scheduled Gmail discovery", () => {
       .mockImplementation((db, params, index) =>
         realSave(db, params, index, seam),
       );
+    const realPrepare = runJobHandler.prepare;
+    const prepare = vi
+      .spyOn(runJobHandler, "prepare")
+      .mockImplementation(async (...args) => {
+        const prepared = await realPrepare(...args);
+        if (releaseAtPublication) {
+          releaseAtPublication = false;
+          await (
+            await import("~/server/domains/run/service/ai-work")
+          ).resumeFundingPausedRuns(ctx.db, { anyWindow: true });
+        }
+        return prepared;
+      });
     try {
       expect(await advance()).toBe("succeeded");
       const retained = await readRun(state.params.runId);
       const checkpoint = (await readJobs(ctx.db, { key }))[0]?.cursor;
-      expect(await advance()).toBe("deferred");
+      expect(await advance()).toBe("succeeded");
       const paused = await readRun(state.params.runId);
       expect(paused).toMatchObject({
         status: "paused_auth",
@@ -739,22 +755,146 @@ describe("scheduled Gmail discovery", () => {
         { availableAt: new Date() },
       );
       const calls = relevance.mock.calls.length;
-      expect(await advance()).toBe("deferred");
+      expect(await advance()).toBe("succeeded");
       expect(relevance).toHaveBeenCalledTimes(calls);
       expect((await readRun(state.params.runId)).status).toBe("paused_auth");
       expect((await readJobs(ctx.db, { key }))[0]?.availableAt).toEqual(until);
+      // Retained funding pages can share a mailbox; releasing them must serialize admission.
+      const waitingRun = await ensureRun(ctx.db, ctx.actor, {
+        purpose: "mail_discovery",
+        trigger: "scheduled",
+        status: "completed",
+        input: mailboxDiscoveryInput.parse(retained.input),
+        execution: false,
+      });
+      await getDb(ctx.db)
+        .update(run)
+        .set({
+          status: "paused_auth",
+          failureCode: "execution_limit",
+          dispatchError: paused.dispatchError,
+          endedAt: null,
+          progress: retained.progress,
+        })
+        .where(eq(run.id, waitingRun));
+      await enqueueJob(ctx.db, {
+        key: `run:${waitingRun}`,
+        kind: "run.execute",
+        runId: waitingRun,
+        input: { runId: waitingRun, purpose: "mail_discovery" },
+        availableAt: until,
+      });
+      // Natural expiry must also serialize first-generation, zero-attempt work.
+      await updateJobs(
+        ctx.db,
+        { kind: "run.funding-resume" },
+        {
+          input: { until: new Date(Date.now() - 1_000).toISOString() },
+        },
+      );
+      await launchWorkflowRun(ctx.db, {
+        runId: waitingRun,
+        purpose: "mail_discovery",
+      });
+      for (let attempt = 1; attempt <= 4; attempt++) {
+        await updateJobs(ctx.db, { key }, { availableAt: new Date() });
+        expect(await advance()).toBe("failed");
+        expect((await readJobs(ctx.db, { key }))[0]).toMatchObject({
+          state: "retry_wait",
+          attempts: attempt,
+          generation: 1,
+          input: execution.input,
+          cursor: checkpoint,
+        });
+      }
+      expect(relevance).toHaveBeenCalledTimes(calls);
+      expect(await readRun(state.params.runId)).toMatchObject({
+        status: "paused_auth",
+        input: retained.input,
+        progress: retained.progress,
+      });
+      await pauseForFunding(ctx.db, waitingRun, budget);
+      await updateJobs(
+        ctx.db,
+        { kind: "run.funding-resume" },
+        {
+          input: { until: until.toISOString() },
+        },
+      );
       // Raising the budget releases discovery without granting per-Run overage.
       const { resumeFundingPausedRuns } =
         await import("~/server/domains/run/service/ai-work");
       await resumeFundingPausedRuns(ctx.db, { anyWindow: true });
       expect(await readRun(state.params.runId)).toMatchObject({
-        status: "running",
-        failureCode: null,
-        dispatchError: null,
+        status: "paused_auth",
+        failureCode: "execution_limit",
+        progress: {
+          ...retained.progress,
+          fundingReleasedAt: expect.any(String),
+        },
       });
-      expect(await advance()).toBe("deferred");
+      await launchWorkflowRun(ctx.db, {
+        runId: waitingRun,
+        purpose: "mail_discovery",
+      });
+      const released = await readRun(state.params.runId);
+      const { readRun: readPublicRun } =
+        await import("~/server/domains/run/repo/run");
+      expect(await readPublicRun(ctx.db, released.shortcode)).toMatchObject({
+        displayStatus: "paused",
+      });
+      expect(
+        summarizeDiscoveryProgress(
+          mailboxDiscoveryProgress.parse(released.progress),
+        ),
+      ).not.toHaveProperty("fundingReleasedAt");
+      await expect(
+        controlWorkflowRun(
+          ctx.db,
+          ctx.actor,
+          {
+            runPublicId: released.shortcode,
+            action: "resume",
+          },
+          "mail_discovery",
+        ),
+      ).rejects.toMatchObject({ reason: "RUN_CONTROL_REFUSED" });
+      expect(await readRun(state.params.runId)).toEqual(released);
+      expect(await advance()).toBe("failed");
+      expect(relevance).toHaveBeenCalledTimes(calls);
+      await controlWorkflowRun(
+        ctx.db,
+        ctx.actor,
+        {
+          runPublicId: (await readRun(waitingRun)).shortcode,
+          action: "cancel",
+        },
+        "mail_discovery",
+      );
+      const cancelled = await readRun(waitingRun);
+      await resumeFundingPausedRuns(ctx.db, { anyWindow: true });
+      expect(await readRun(waitingRun)).toEqual(cancelled);
+      await updateJobs(ctx.db, { key }, { availableAt: new Date() });
+      expect(await advance()).toBe("succeeded");
       expect(relevance).toHaveBeenCalledTimes(calls + 1);
       expect((await readRun(state.params.runId)).status).toBe("paused_auth");
+      expect((await readRun(state.params.runId)).progress).not.toHaveProperty(
+        "fundingReleasedAt",
+      );
+      // Release after prepare, before publication: a pre-throw check misses this race.
+      await resumeFundingPausedRuns(ctx.db, { anyWindow: true });
+      releaseAtPublication = true;
+      expect(await advance()).toBe("deferred");
+      expect(
+        (await readJobs(ctx.db, { key }))[0]?.availableAt.getTime(),
+      ).toBeLessThanOrEqual(Date.now());
+      expect((await readRun(state.params.runId)).progress).toHaveProperty(
+        "fundingReleasedAt",
+      );
+      expect(await advance()).toBe("succeeded");
+      expect((await readRun(state.params.runId)).progress).not.toHaveProperty(
+        "fundingReleasedAt",
+      );
       // Explicit paid authority restores the Run even while the funding owner waits.
       await controlWorkflowRun(
         ctx.db,
@@ -804,6 +944,7 @@ describe("scheduled Gmail discovery", () => {
     } finally {
       list.mockRestore();
       save.mockRestore();
+      prepare.mockRestore();
     }
   });
 

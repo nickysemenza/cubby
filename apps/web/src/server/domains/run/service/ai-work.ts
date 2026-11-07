@@ -275,7 +275,7 @@ export async function resumeFundingPausedRuns(
   const discoveries = anyWindow
     ? await (
         await import("~/server/domains/run/repo/execution-context")
-      ).resumeFundingPausedDiscovery(db, now)
+      ).releaseFundingPausedDiscovery(db, now)
     : 0;
   const moved = anyWindow
     ? await (

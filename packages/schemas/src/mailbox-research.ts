@@ -190,6 +190,8 @@ export const mailboxDiscoveryInput = z.object({
 });
 export const mailboxDiscoveryProgress = z.object({
   attempt: z.number().int().nonnegative(),
+  /** An explicit budget raise releases admission, never the next funding check. */
+  fundingReleasedAt: z.iso.datetime().optional(),
   phase: z.enum(["listing", "fetching", "completed", "failed", "paused"]),
   pagesDone: z.number().int().nonnegative().default(0),
   page: mailboxPage.optional(),
@@ -813,7 +815,7 @@ export const mailboxCoverageSummary = mailboxCoverage
     }),
   });
 export const mailboxDiscoveryProgressSummary = mailboxDiscoveryProgress
-  .omit({ page: true })
+  .omit({ page: true, fundingReleasedAt: true })
   .extend({
     page: z
       .object({
@@ -851,12 +853,13 @@ export const summarizeDiscoveryProgress = ({
   ...progress
 }: z.infer<typeof mailboxDiscoveryProgress>): z.infer<
   typeof mailboxDiscoveryProgressSummary
-> => ({
-  ...progress,
-  page: page
-    ? { messageCount: page.messageIds.length, eventCount: page.events.length }
-    : null,
-});
+> =>
+  mailboxDiscoveryProgressSummary.parse({
+    ...progress,
+    page: page
+      ? { messageCount: page.messageIds.length, eventCount: page.events.length }
+      : null,
+  });
 
 export {
   mailSearchState,

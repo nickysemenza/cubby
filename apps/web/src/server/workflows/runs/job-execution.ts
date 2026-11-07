@@ -1,5 +1,6 @@
-import { runEntityId } from "@cubby/schemas/identifiers";
+import { runEntityId, type RunId } from "@cubby/schemas/identifiers";
 import { jobWaitReason } from "@cubby/schemas/job";
+import { mailboxDiscoveryProgress } from "@cubby/schemas/mailbox-research";
 import { RUN_KINDS } from "@cubby/schemas/run-fields";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
@@ -31,6 +32,44 @@ const mailCursor = z.object({
   index: z.number().int().nonnegative(),
   more: z.boolean().optional(),
 });
+const fundingRelease = mailboxDiscoveryProgress.pick({
+  fundingReleasedAt: true,
+});
+
+function fundingWait(
+  runId: RunId,
+  cursor: PreparedJobPage["page"]["cursor"],
+  until: Date,
+  message: string,
+  cause?: unknown,
+): PreparedJobPage {
+  return {
+    page: {
+      done: false,
+      ...(cursor === null ? {} : { cursor }),
+      waitUntil: until,
+      waitReason: "ai_funding_window",
+    },
+    publish: async (tx) => {
+      // Release locks this Run before moving queued Jobs forward. Holding it
+      // through publication prevents an old timer from overwriting that wake.
+      const [owner] = await getDb(tx)
+        .select({ progress: run.progress })
+        .from(run)
+        .where(eq(run.id, runId))
+        .for("share");
+      if (fundingRelease.safeParse(owner?.progress).data?.fundingReleasedAt) {
+        const due = new JobDeferredError(
+          message,
+          new Date(),
+          "ai_funding_window",
+        );
+        due.cause = cause;
+        throw due;
+      }
+    },
+  };
+}
 
 /**
  * One handler executes every kind its manifest entry gives an `execution`:
@@ -72,24 +111,17 @@ export const runJobHandler = defineJobHandler(
             .map((job) => new Date(fundingResumeInput.parse(job.input).until))
             .filter((until) => until > new Date())
             .sort((left, right) => left.getTime() - right.getTime())[0];
-          if (pending)
-            throw new JobDeferredError(
-              before.dispatchError ?? "Run awaits its funding window",
+          if (
+            pending &&
+            !fundingRelease.safeParse(before.progress).data?.fundingReleasedAt
+          )
+            return fundingWait(
+              input.runId,
+              claim.cursor,
               pending,
-              "ai_funding_window",
+              before.dispatchError ?? "Run awaits its funding window",
             );
-          await context.fenced(async (tx) => {
-            await getDb(tx)
-              .update(run)
-              .set({ status: "running" })
-              .where(
-                and(
-                  eq(run.id, input.runId),
-                  eq(run.status, "paused_auth"),
-                  eq(run.failureCode, "execution_limit"),
-                ),
-              );
-          });
+          await resumeClaimedWorkflowRun(db, params, "funding_ready");
         }
         const execution = RUN_KINDS[input.purpose].execution;
         if (execution === "steps") {
@@ -197,6 +229,14 @@ export const runJobHandler = defineJobHandler(
         (cause): cause is GatewayProviderStopError =>
           cause instanceof GatewayProviderStopError,
       );
+      if (budget && input.purpose === "mail_discovery")
+        return fundingWait(
+          input.runId,
+          claim.cursor,
+          fundingResumeAt(budget.status.windowEnd),
+          error instanceof Error ? error.message : budget.message,
+          error,
+        );
       const deferred = budget
         ? new JobDeferredError(
             error instanceof Error ? error.message : budget.message,
