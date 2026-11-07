@@ -1377,7 +1377,6 @@ export const { definition, readSchemas } = defineEntityModel(
           columnId: "accountId",
           kind: "idMulti",
           placeholder: "Filter by account...",
-          optionsKey: "account",
           brandRef: { entity: "financialAccount" },
           deriveSchema: true,
         },

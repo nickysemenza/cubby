@@ -438,6 +438,9 @@ type EntityFilterDescriptorMetadata = {
   options: readonly EntityInspectorOption[] | null;
   optionsRef: EntityPortSourceRef | null;
   optionsKey: string | null;
+  optionSource?: NonNullable<
+    EntityDeclarationMetadata["filters"]
+  >["descriptors"][number]["optionSource"];
 
   label: string | null;
   schemaDescription: string | null;

@@ -341,6 +341,11 @@ export function FindSuggestionsDialog({
               className="w-64"
               entity="financialAccount"
               items={accountSource.items}
+              hasNextPage={accountSource.hasNextPage}
+              isFetchingNextPage={accountSource.isFetchingNextPage}
+              onLoadMore={accountSource.onLoadMore}
+              error={accountSource.error}
+              onRetry={accountSource.onRetry}
               isLoading={accountSource.isLoading}
               onSearchChange={accountSource.onSearchChange}
               onOpenChange={accountSource.onOpenChange}
@@ -371,6 +376,11 @@ export function FindSuggestionsDialog({
               className="w-64"
               entity="financialAccount"
               items={accountSource.items}
+              hasNextPage={accountSource.hasNextPage}
+              isFetchingNextPage={accountSource.isFetchingNextPage}
+              onLoadMore={accountSource.onLoadMore}
+              error={accountSource.error}
+              onRetry={accountSource.onRetry}
               isLoading={accountSource.isLoading}
               onSearchChange={accountSource.onSearchChange}
               onOpenChange={accountSource.onOpenChange}

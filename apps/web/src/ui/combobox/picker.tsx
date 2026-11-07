@@ -78,6 +78,11 @@ interface PickerCommonProps<TId extends string> {
   onCreateNew?: (name: string) => Promise<ComboboxItem<TId>>;
   isLoading?: boolean;
   error?: string | null;
+  hasNextPage?: boolean;
+  isFetchingNextPage?: boolean;
+  onLoadMore?: () => void;
+  onRetry?: () => void;
+
   renderItem?: (item: ComboboxItem<TId>) => React.ReactNode;
   compact?: boolean;
   openOnMount?: boolean;
@@ -724,6 +729,100 @@ type CreatePickerItem<TId extends string> = {
   onCreate: (name: string) => Promise<ComboboxItem<TId>>;
 };
 
+/** Only scroll events request another page; mounting a short list never drains it. */
+function usePickerPaging({
+  hasNextPage,
+  isFetchingNextPage,
+  isLoading,
+  error,
+  onLoadMore,
+  query,
+  count,
+}: Pick<
+  PickerCommonProps<string>,
+  "hasNextPage" | "isFetchingNextPage" | "isLoading" | "error" | "onLoadMore"
+> & { query: string; count: number }) {
+  const requested = React.useRef(false);
+  React.useEffect(() => {
+    if (!isFetchingNextPage) requested.current = false;
+  }, [isFetchingNextPage, query, count]);
+  const loadMore = () => {
+    if (
+      !hasNextPage ||
+      !onLoadMore ||
+      isLoading ||
+      isFetchingNextPage ||
+      error ||
+      requested.current
+    )
+      return;
+    // Lock before the provider rerenders with its pending state.
+    requested.current = true;
+    onLoadMore();
+  };
+  const onScroll: React.UIEventHandler<HTMLDivElement> = (event) => {
+    const list = event.currentTarget;
+    if (
+      list.scrollTop > 0 &&
+      list.scrollHeight - list.scrollTop - list.clientHeight < 64
+    )
+      loadMore();
+  };
+  return { loadMore, onScroll };
+}
+
+function PickerRosterStatus({
+  isLoading,
+  isFetchingNextPage,
+  error,
+  hasNextPage,
+  onLoadMore,
+  onRetry,
+}: Pick<
+  PickerCommonProps<string>,
+  | "isLoading"
+  | "isFetchingNextPage"
+  | "error"
+  | "hasNextPage"
+  | "onLoadMore"
+  | "onRetry"
+>) {
+  if (
+    !isLoading &&
+    !isFetchingNextPage &&
+    !error &&
+    !(hasNextPage && onLoadMore)
+  )
+    return null;
+  const actionClass =
+    "min-h-(--control-height-sm) rounded-sm px-1.5 text-sm underline underline-offset-2 hover:bg-accent focus-visible:outline-2 focus-visible:outline-ring max-sm:min-h-11 max-sm:min-w-11";
+  return (
+    <div className="flex shrink-0 flex-wrap items-center gap-2 border-t border-border px-1.5 py-1 text-sm">
+      {error ? (
+        <span role="alert" className="min-w-0 break-words text-destructive">
+          {error}
+        </span>
+      ) : null}
+      {isLoading || isFetchingNextPage ? (
+        <output className="flex items-center gap-2 text-muted-foreground">
+          <Spinner aria-hidden="true" />{" "}
+          {isFetchingNextPage ? "Loading more…" : "Searching…"}
+        </output>
+      ) : error ? (
+        onRetry ? (
+          <button type="button" className={actionClass} onClick={onRetry}>
+            Retry
+          </button>
+        ) : null
+      ) : hasNextPage && onLoadMore ? (
+        <button type="button" className={actionClass} onClick={onLoadMore}>
+          Load more
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 /** The popup owns result status and the create transition; the input owns focus. */
 function SearchPickerPopup<TId extends string>({
   anchorRef,
@@ -744,6 +843,10 @@ function SearchPickerPopup<TId extends string>({
   changeOpen,
   isLoading,
   error,
+  hasNextPage,
+  isFetchingNextPage,
+  onLoadMore,
+  onRetry,
   emptyMessage,
   create,
   header,
@@ -767,6 +870,11 @@ function SearchPickerPopup<TId extends string>({
   changeOpen: (open: boolean) => void;
   isLoading?: boolean;
   error?: string | null;
+  hasNextPage?: boolean;
+  isFetchingNextPage?: boolean;
+  onLoadMore?: () => void;
+  onRetry?: () => void;
+
   emptyMessage: string;
   create: CreatePickerItem<TId> | null;
   header?: React.ReactNode;
@@ -819,7 +927,15 @@ function SearchPickerPopup<TId extends string>({
       setIsCreating(false);
     }
   };
-  const showStatus = isLoading || error;
+  const paging = usePickerPaging({
+    hasNextPage,
+    isFetchingNextPage,
+    isLoading,
+    error,
+    onLoadMore,
+    query,
+    count: orderedItems.length,
+  });
   return (
     <ComboboxPrimitive.Portal>
       <ComboboxPrimitive.Positioner
@@ -859,7 +975,11 @@ function SearchPickerPopup<TId extends string>({
               {clearLabel}
             </button>
           ) : null}
-          <ComboboxPrimitive.List ref={listRef} className={listClass}>
+          <ComboboxPrimitive.List
+            ref={listRef}
+            className={listClass}
+            onScroll={paging.onScroll}
+          >
             {orderedItems.map((item, index) => (
               <React.Fragment key={item.id}>
                 <PickerRowPreamble
@@ -893,21 +1013,18 @@ function SearchPickerPopup<TId extends string>({
               </React.Fragment>
             ))}
           </ComboboxPrimitive.List>
-          {showStatus ? (
-            <div className="shrink-0 border-t border-[var(--border)] px-2.5 py-2 text-sm">
-              {isLoading ? (
-                <span className="flex items-center gap-2 text-muted-foreground">
-                  <Spinner /> Searching…
-                </span>
-              ) : error ? (
-                <span className="text-destructive">{error}</span>
-              ) : null}
-            </div>
-          ) : null}
+          <PickerRosterStatus
+            isLoading={isLoading}
+            isFetchingNextPage={isFetchingNextPage}
+            error={error}
+            hasNextPage={hasNextPage}
+            onLoadMore={onLoadMore ? paging.loadMore : undefined}
+            onRetry={onRetry}
+          />
           {/* The mounted `Combobox.Empty` part registers the popup's empty
               state; a plain element lets Escape close the parent dialog. */}
           <ComboboxPrimitive.Empty>
-            {!isLoading && !error ? (
+            {!isLoading && !isFetchingNextPage && !hasNextPage && !error ? (
               <div className="shrink-0 border-t border-[var(--border)] px-2.5 py-2 text-sm text-muted-foreground">
                 {emptyMessage}
               </div>
@@ -984,6 +1101,10 @@ function SearchPicker<TId extends string>({
   onCreateNew,
   isLoading,
   error,
+  hasNextPage,
+  isFetchingNextPage,
+  onLoadMore,
+  onRetry,
   renderItem,
   compact,
   openOnMount,
@@ -1182,6 +1303,10 @@ function SearchPicker<TId extends string>({
       changeOpen={changeOpen}
       isLoading={isLoading}
       error={error}
+      hasNextPage={hasNextPage}
+      isFetchingNextPage={isFetchingNextPage}
+      onLoadMore={onLoadMore}
+      onRetry={onRetry}
       emptyMessage={emptyMessage}
       create={
         canCreate && onCreateNew
@@ -1273,6 +1398,10 @@ function InlinePicker<TId extends string>({
   onSearchChange,
   isLoading,
   error,
+  hasNextPage,
+  isFetchingNextPage,
+  onLoadMore,
+  onRetry,
   renderItem,
   disabled,
   className,
@@ -1306,6 +1435,15 @@ function InlinePicker<TId extends string>({
     () => sortByGroup(visibleItems),
     [visibleItems],
   );
+  const paging = usePickerPaging({
+    hasNextPage,
+    isFetchingNextPage,
+    isLoading,
+    error,
+    onLoadMore,
+    query,
+    count: orderedItems.length,
+  });
   const layout = pickerRowLayout(orderedItems);
   const shared = {
     inline: true,
@@ -1357,7 +1495,10 @@ function InlinePicker<TId extends string>({
           className="sr-only"
         />
       )}
-      <ComboboxPrimitive.List className="max-h-64 overflow-y-auto overscroll-contain rounded-sm outline-none [input:focus-visible+&]:ring-2 [input:focus-visible+&]:ring-ring">
+      <ComboboxPrimitive.List
+        onScroll={paging.onScroll}
+        className="max-h-64 overflow-y-auto overscroll-contain rounded-sm outline-none [input:focus-visible+&]:ring-2 [input:focus-visible+&]:ring-ring"
+      >
         {orderedItems.map((item, index) => (
           <React.Fragment key={item.id}>
             <PickerRowPreamble item={item} previous={orderedItems[index - 1]} />
@@ -1407,17 +1548,19 @@ function InlinePicker<TId extends string>({
           </React.Fragment>
         ))}
       </ComboboxPrimitive.List>
-      {isLoading || error ? (
-        <div className="px-1.5 py-1.5 text-xs">
-          {isLoading ? (
-            <span className="flex items-center gap-2 text-muted-foreground">
-              <Spinner /> Searching…
-            </span>
-          ) : (
-            <span className="text-destructive">{error}</span>
-          )}
-        </div>
-      ) : orderedItems.length === 0 ? (
+      <PickerRosterStatus
+        isLoading={isLoading}
+        isFetchingNextPage={isFetchingNextPage}
+        error={error}
+        hasNextPage={hasNextPage}
+        onLoadMore={onLoadMore ? paging.loadMore : undefined}
+        onRetry={onRetry}
+      />
+      {!isLoading &&
+      !isFetchingNextPage &&
+      !hasNextPage &&
+      !error &&
+      orderedItems.length === 0 ? (
         <div className="px-1.5 py-1.5 text-xs text-muted-foreground">
           No {noun} found.
         </div>

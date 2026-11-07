@@ -66,7 +66,7 @@ function PartProjectPicker({
   projectId: string;
   onChange: (projectId: string) => void;
 }) {
-  const { dialog, items, onSearchChange, isLoading, onOpenChange } =
+  const { dialog, items, onSearchChange, isLoading, onOpenChange, ...paging } =
     useEntityListSource("project");
   const selectedId = projectId ? parseShortcodeFor("project", projectId) : null;
   const selected = selectedId
@@ -85,6 +85,7 @@ function PartProjectPicker({
         items={items}
         value={selected}
         setValue={(item) => onChange(item?.id ?? "")}
+        {...paging}
         onSearchChange={onSearchChange}
         isLoading={isLoading}
         onOpenChange={onOpenChange}

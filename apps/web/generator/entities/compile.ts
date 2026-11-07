@@ -1557,6 +1557,7 @@ const filterDescriptor = (
     options,
     optionsRef,
     optionsKey: value.optionsKey ?? null,
+    ...(value.optionSource ? { optionSource: value.optionSource } : {}),
     label: value.label ?? null,
     schemaDescription: value.schemaDescription ?? null,
     deriveSchema: value.deriveSchema ?? false,

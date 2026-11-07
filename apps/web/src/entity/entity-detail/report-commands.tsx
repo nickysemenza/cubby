@@ -365,7 +365,7 @@ function CommandRecordOperand({
   const Search = requireReferenceEntitySearch(entity);
   return (
     <Search>
-      {({ items, onSearchChange, onOpenChange, isLoading }) => (
+      {({ items, onSearchChange, onOpenChange, isLoading, ...paging }) => (
         <Picker
           entity={entity}
           label={input.label}
@@ -375,6 +375,7 @@ function CommandRecordOperand({
             setPicked(item);
             onChange(item?.id);
           }}
+          {...paging}
           onSearchChange={onSearchChange}
           onOpenChange={onOpenChange}
           isLoading={isLoading}

@@ -1,11 +1,13 @@
 import type { Confidence } from "@cubby/schemas/ai";
 import type { UsdaFoodListRow } from "@cubby/schemas/usda";
 import type { DataType } from "@cubby/usda";
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { z } from "zod";
 
 import { VerbButton } from "~/entity/actions/action-verb-ui";
+import { flattenUniquePageItems } from "~/entity/hooks/infinite-page-utils";
 import {
   AiProposalCard,
   AiProvenance,
@@ -22,6 +24,7 @@ import { Description } from "~/ui/text/description";
 import type { ComboboxItem } from "../../ui/combobox/combobox-types";
 import { Picker } from "../../ui/combobox/picker";
 import { UsdaFoodResultRow } from "../presentation/usda-food-result-row";
+import { pickerQueryState } from "./entity-search-hooks";
 
 interface UsdaFoodSearchFieldProps {
   /**
@@ -90,45 +93,66 @@ export function UsdaFoodSearchField({
       ? undefined
       : searchQuery.trim() || initialQuery?.trim() || undefined;
 
-  const { data, isLoading } = useQuery({
-    ...usdaFood.list.queryOptions({
-      // foodsOnly hides the Foundation sampling pipeline + experimental records,
-      // which are provenance noise, not pickable foods. dataTypes narrows further
-      // (e.g. "Generic" surfaces the reference foods branded items out-rank).
-      filters: {
-        nameFilter: effectiveQuery,
-        foodsOnly: true,
-        dataTypes: SCOPE_DATA_TYPES[scope],
+  const roster = useInfiniteQuery({
+    ...usdaFood.list.infiniteQueryOptions(
+      {
+        // foodsOnly hides the Foundation sampling pipeline + experimental records,
+        // which are provenance noise, not pickable foods. dataTypes narrows further
+        // (e.g. "Generic" surfaces the reference foods branded items out-rank).
+        filters: {
+          nameFilter: effectiveQuery,
+          foodsOnly: true,
+          dataTypes: SCOPE_DATA_TYPES[scope],
+        },
+        // Rank by FTS relevance so the best name match leads (not alphabetical).
+        sort: [{ orderBy: "relevance", direction: "asc" }],
+        pagination: { pageIndex: 0, pageSize: 25 },
       },
-      // Rank by FTS relevance so the best name match leads (not alphabetical).
-      sort: [{ orderBy: "relevance", direction: "asc" }],
-      pagination: { pageIndex: 0, pageSize: 25 },
-    }),
+      {
+        pageParamSchema: z.number().int().nonnegative(),
+        initialPageParam: 0,
+        page: (input, pageIndex) => ({
+          ...input,
+          pagination: { ...input.pagination, pageIndex },
+        }),
+        getNextPageParam: (page) =>
+          page.meta.hasNextPage ? page.meta.pageIndex + 1 : undefined,
+      },
+    ),
     // Skip FTS entirely when the input is a URL/id — getByID drives the list.
     enabled: parsedFdcId == null,
   });
 
-  const { data: byIdFood, isLoading: byIdLoading } = useQuery({
+  const exact = useQuery({
     // Disabled queries still construct and validate their options. USDA ids
     // are positive integers, so keep the dormant key schema-valid.
     ...usdaFood.detail.queryOptions({ id: parsedFdcId ?? 1 }),
     enabled: parsedFdcId != null,
   });
 
+  const byIdFood = exact.data;
   const foods = useMemo(
     (): UsdaFoodListRow[] =>
-      parsedFdcId != null ? (byIdFood ? [byIdFood] : []) : (data?.items ?? []),
-    [parsedFdcId, byIdFood, data],
+      parsedFdcId != null
+        ? byIdFood
+          ? [byIdFood]
+          : []
+        : (roster.data?.pages.flatMap((page) => page.items) ?? []),
+    [parsedFdcId, byIdFood, roster.data],
   );
   const foodsById = useMemo(
     () => new Map(foods.map((food) => [String(food.fdc_id), food])),
     [foods],
   );
 
-  const items: ComboboxItem[] = foods.map((food) => ({
-    id: String(food.fdc_id),
-    name: food.foodInfo.description,
-  }));
+  const items: ComboboxItem[] = flattenUniquePageItems([
+    {
+      items: foods.map((food) => ({
+        id: String(food.fdc_id),
+        name: food.foodInfo.description,
+      })),
+    },
+  ]);
 
   // Shared by manual pick and AI: reflect the choice in the combobox and notify parent.
   const applyFood = useCallback(
@@ -190,7 +214,15 @@ export function UsdaFoodSearchField({
           <Picker
             label="USDA food"
             items={items}
-            isLoading={parsedFdcId != null ? byIdLoading : isLoading}
+            {...(parsedFdcId != null
+              ? {
+                  isLoading: exact.isLoading,
+                  error: exact.error?.message ?? null,
+                  onRetry: () => {
+                    void exact.refetch();
+                  },
+                }
+              : pickerQueryState(roster))}
             onSearchChange={setSearchQuery}
             value={value}
             renderItem={(item) => {

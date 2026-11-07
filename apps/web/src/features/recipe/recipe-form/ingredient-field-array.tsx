@@ -145,6 +145,7 @@ const IngredientEntityPicker: FC<{
     isLoading,
     onCreateNew,
     onOpenChange,
+    ...paging
   } = useEntityListSource("ingredient");
   return (
     <>
@@ -155,6 +156,7 @@ const IngredientEntityPicker: FC<{
         form={form}
         name={`${path}.ingredient`}
         items={items}
+        {...paging}
         onSearchChange={onSearchChange}
         isLoading={isLoading}
         onCreateNew={onCreateNew}
@@ -180,7 +182,7 @@ const RecipeEntityPicker: FC<{
 }> = ({ form, sectionIndex, ingredientIndex }) => {
   const path =
     `sections.${sectionIndex}.ingredients.${ingredientIndex}` as const;
-  const { dialog, items, onSearchChange, isLoading, onOpenChange } =
+  const { dialog, items, onSearchChange, isLoading, onOpenChange, ...paging } =
     useEntityListSource("recipe");
   return (
     <>
@@ -191,6 +193,7 @@ const RecipeEntityPicker: FC<{
         form={form}
         name={`${path}.recipe`}
         items={items}
+        {...paging}
         onSearchChange={onSearchChange}
         isLoading={isLoading}
         onOpenChange={onOpenChange}

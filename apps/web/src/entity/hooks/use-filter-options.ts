@@ -23,8 +23,8 @@ import {
  * `JSON.stringify` on one throws "Converting circular structure to JSON" (a
  * fiber node points back at its DOM node) — which took the whole expenses
  * ledger down the moment the vendor roster started carrying brand marks.
- * Skipping it is also correct, not just safe: an option's icon is derived from
- * its value, so it can't change while every field below stays put.
+ * Canonical record pictures stay in `thumb.imageUrl`, so image hydration
+ * invalidates the memo without serializing React fallback elements.
  */
 export function useFilterOptions(
   map: RuntimeFilterOptions,
@@ -42,8 +42,13 @@ export function useFilterOptions(
         item.group,
         item.depth,
         item.rowLabel,
+        item.thumb?.imageUrl,
+        item.thumb?.shape,
       ]),
       Array.isArray(source) ? false : source.isLoading,
+      Array.isArray(source) ? false : source.isFetchingNextPage,
+      Array.isArray(source) ? false : source.hasNextPage,
+      Array.isArray(source) ? null : source.error,
     ]),
   );
   // oxlint-disable-next-line react/exhaustive-deps -- intentional - using the serialized key for deep comparison, mirrors useStandardColumns' `stableFilters`

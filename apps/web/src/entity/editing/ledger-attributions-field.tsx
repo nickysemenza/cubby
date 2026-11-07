@@ -40,7 +40,7 @@ function LedgerAttributionRowFields({
   onChangeRows: (rows: LedgerAttributionRow[]) => void;
   disabled?: boolean;
 }) {
-  const { dialog, items, onSearchChange, isLoading, onOpenChange } =
+  const { dialog, items, onSearchChange, isLoading, onOpenChange, ...paging } =
     useEntityListSource("ledgerParty");
   return (
     <div className="flex items-center gap-2">
@@ -51,6 +51,7 @@ function LedgerAttributionRowFields({
         disabled={disabled}
         placeholder="Unattributed share"
         items={items}
+        {...paging}
         onSearchChange={onSearchChange}
         isLoading={isLoading}
         onOpenChange={onOpenChange}

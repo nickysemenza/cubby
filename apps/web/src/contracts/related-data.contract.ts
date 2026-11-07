@@ -1,8 +1,6 @@
 import {
   relatedBranchInput,
   relatedBranchOutput,
-  relatedOptionsInput,
-  relatedOptionsOutput,
   relatedPreviewInput,
   relatedPreviewOutput,
   relatedSummaryInput,
@@ -21,10 +19,6 @@ export const relatedDataContract = defineContract(
     branch: query({
       input: relatedBranchInput,
       output: relatedBranchOutput,
-    }),
-    options: query({
-      input: relatedOptionsInput,
-      output: relatedOptionsOutput,
     }),
     summary: query({
       input: relatedSummaryInput,

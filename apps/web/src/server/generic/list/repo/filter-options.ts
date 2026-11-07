@@ -42,6 +42,7 @@ import { projectNameOptions } from "~/server/domains/project/repo/lookup";
 import { getAllTags as getAllRecipeTags } from "~/server/domains/recipe/repo/queries";
 import { resolveEntityDisplayImages } from "~/server/entity-kernel/repo/entity-display-image";
 import type { kernelScaffold as kernelScaffoldType } from "~/server/entity-kernel/scaffolds";
+import { loadRelatedOptions } from "~/server/generic/entity-links/repo/related-view";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import {
   SHORTCODE_TABLE,
@@ -465,6 +466,7 @@ export async function getFilterOptions(
   db: Database,
   input: FilterOptionsInput,
 ): Promise<FilterOptionsOut> {
+  if (input.source === "relation") return loadRelatedOptions(db, input);
   if (input.source === "tags") return getTagFilterOptions(db, input);
   if (input.source === "entity") {
     const withDates = input.include.includes("dates");

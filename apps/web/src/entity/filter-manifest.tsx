@@ -82,6 +82,9 @@ export const getEntityFilters = (
         columnId: descriptor.columnId,
         kind: descriptor.kind,
         placeholder: descriptor.placeholder,
+        ...(descriptor.optionSource
+          ? { optionSource: descriptor.optionSource }
+          : {}),
         ...(descriptor.field === null ? {} : { field: descriptor.field }),
         ...(descriptor.urlKey === descriptor.columnId
           ? {}

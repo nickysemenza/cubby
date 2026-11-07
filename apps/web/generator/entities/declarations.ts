@@ -73,6 +73,7 @@ export type FilterDescriptor = Readonly<{
     | null;
   optionsRef: SourceRef | null;
   optionsKey: string | null;
+  optionSource?: Readonly<{ kind: "relation"; relationKey: string }>;
   label: string | null;
   schemaDescription: string | null;
   deriveSchema: boolean;

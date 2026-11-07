@@ -4,9 +4,11 @@ import type {
   FilterOptionProjection,
 } from "@cubby/schemas/filter-options";
 import type { ExpenseShortcode } from "@cubby/schemas/identifiers";
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 
+import { useLoadAllPages } from "~/entity/hooks/use-all-entity-records";
+import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-options";
 import { entityFilterOptions } from "~/integrations/tanstack-query/generated/domains/entityFilterOptions.gen";
 
 const NO_ITEMS: FilterOptionItem[] = [];
@@ -15,7 +17,7 @@ const NO_ITEMS: FilterOptionItem[] = [];
  * The whole (small, personal-household) roster for a shortcode entity, with
  * optional per-row projections (`count`, `logo`, `kind`, `emoji`, `dates`) —
  * the one client integration point over `getFilterOptions` for a
- * picker/chart that wants every row up front, unlike the search-as-you-type
+ * chart that needs a complete identity map, unlike the search-as-you-type
  * combobox path (`useEntityListSource`). Replaces the former
  * `project.options`/`ledgerParty.options` procedures.
  */
@@ -30,8 +32,8 @@ export function useEntityOptions(
   } = {},
 ) {
   const { include = [], excludeExpenseId, enabled = true } = options;
-  const query = useQuery({
-    ...entityFilterOptions.filterOptions.queryOptions({
+  const query = useInfiniteQuery({
+    ...cursorQueryOptions(entityFilterOptions.filterOptions, {
       source: "entity",
       entity,
       search: "",
@@ -42,9 +44,21 @@ export function useEntityOptions(
     }),
     enabled,
   });
+  useLoadAllPages(query, enabled);
+  const items = useMemo(
+    () => query.data?.pages.flatMap((page) => page.items) ?? NO_ITEMS,
+    [query.data],
+  );
   return {
-    items: query.data?.items ?? NO_ITEMS,
-    isLoading: query.isLoading,
+    items,
+    isLoading:
+      enabled &&
+      !query.isError &&
+      (query.isPending || query.hasNextPage || query.isFetchingNextPage),
+    error: query.error,
+    onRetry: () => {
+      void query.refetch();
+    },
   };
 }
 
@@ -53,13 +67,13 @@ const NO_TAG_OPTIONS: Array<{ value: string; label: string }> = [];
 /**
  * The recipe/product tag universe as `{value,label}` options — feeds each
  * list's Tags filter (`optionsKey: "tags"`). Product tags carry a usage
- * count baked into the label (unlike recipe tags): with free-text tags the
+ * count alongside the label (unlike recipe tags): with free-text tags the
  * count is what exposes a near-duplicate ("M18 (13)" next to a stray "m18
  * (1)") before it spreads. Replaces `recipe.getAllTags`/`product.tagOptions`.
  */
 export function useTagOptions(entity: "recipe" | "product", enabled = true) {
-  const query = useQuery({
-    ...entityFilterOptions.filterOptions.queryOptions({
+  const query = useInfiniteQuery({
+    ...cursorQueryOptions(entityFilterOptions.filterOptions, {
       source: "tags",
       entity,
       search: "",
@@ -68,16 +82,27 @@ export function useTagOptions(entity: "recipe" | "product", enabled = true) {
     }),
     enabled,
   });
+  useLoadAllPages(query, enabled);
   const options = useMemo(
     () =>
-      query.data?.items.map((item) => ({
-        value: item.id,
-        label:
-          item.count !== undefined
-            ? `${item.label} (${item.count})`
-            : item.label,
-      })) ?? NO_TAG_OPTIONS,
+      query.data?.pages
+        .flatMap((page) => page.items)
+        .map((item) => ({
+          value: item.id,
+          label: item.label,
+          hint: item.count === undefined ? undefined : String(item.count),
+        })) ?? NO_TAG_OPTIONS,
     [query.data],
   );
-  return { options, isLoading: query.isLoading };
+  return {
+    options,
+    isLoading:
+      enabled &&
+      !query.isError &&
+      (query.isPending || query.hasNextPage || query.isFetchingNextPage),
+    error: query.error,
+    onRetry: () => {
+      void query.refetch();
+    },
+  };
 }

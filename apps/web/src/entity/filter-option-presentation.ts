@@ -1,6 +1,9 @@
 import type { Entity } from "@cubby/schemas/entity";
 import type { FilterOptionItem } from "@cubby/schemas/filter-options";
-import type { ImageUrlSummary } from "@cubby/schemas/image-summary";
+import {
+  preferredImageUrl,
+  type ImageUrlSummary,
+} from "@cubby/schemas/image-summary";
 import { createElement } from "react";
 
 import type { PickerOption } from "~/ui/combobox/picker-option";
@@ -18,13 +21,16 @@ export function recordFilterOption(
     label: item.label,
     detail: item.detail,
     hint: item.count == null ? undefined : String(item.count),
-    icon: createElement(EntityIdentityMark, {
-      entity,
-      id: item.id,
-      name: item.label,
-      displayImage,
-      emoji: item.emoji,
-      size: "pill",
-    }),
+    thumb: {
+      imageUrl: displayImage ? preferredImageUrl(displayImage) : null,
+      fallback: createElement(EntityIdentityMark, {
+        entity,
+        id: item.id,
+        name: item.label,
+        displayImage: null,
+        emoji: item.emoji,
+        size: "pill",
+      }),
+    },
   };
 }

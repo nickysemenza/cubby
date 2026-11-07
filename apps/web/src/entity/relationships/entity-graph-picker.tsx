@@ -1,11 +1,14 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { useDebouncedValue } from "@tanstack/react-pacer";
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 
 import { entityLabel } from "~/entity/entities";
-import { search } from "~/integrations/tanstack-query/generated/domains/search.gen";
-import { getAppErrorDetails } from "~/lib/error-utils";
+import {
+  pagination,
+  pickerLexicalQueryOptions,
+  pickerQueryState,
+} from "~/entity/picker/entity-search-hooks";
 import { Picker } from "~/ui/combobox/picker";
 
 /** Uses the canonical lexical search rather than downloading entity lists. */
@@ -20,16 +23,16 @@ export function EntityGraphPicker({
 }) {
   const [draft, setDraft] = useState("");
   const [query] = useDebouncedValue(draft, { wait: 200 });
-  const results = useQuery({
-    ...search.find.queryOptions({
+  const results = useInfiniteQuery({
+    ...pickerLexicalQueryOptions({
       query: query.trim() || "inactive-search",
-      limit: 20,
+      limit: pagination.pageSize,
     }),
     enabled: query.trim().length > 0,
   });
   const items = useMemo(
     () =>
-      (results.data ?? []).map((hit) => ({
+      (results.data?.items ?? []).map((hit) => ({
         id: hit.id,
         name: hit.title,
         secondary: entityLabel(hit.entityKind),
@@ -44,10 +47,11 @@ export function EntityGraphPicker({
       items={items}
       value={null}
       onSearchChange={setDraft}
-      isLoading={results.isFetching}
-      error={results.isError ? getAppErrorDetails(results.error).message : null}
+      {...pickerQueryState(results)}
       setValue={(item) => {
-        const hit = results.data?.find((result) => result.id === item?.id);
+        const hit = results.data?.items.find(
+          (result) => result.id === item?.id,
+        );
         if (hit) onSelect({ entity: hit.entityKind, id: hit.id });
       }}
     />

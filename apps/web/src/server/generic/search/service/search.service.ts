@@ -54,6 +54,7 @@ export type InternalSearchCandidate = z.output<typeof candidateSchema>;
 export type InternalSearchHit = SearchHit & { entityId: string };
 type ServiceSearchQueryInput = Omit<SearchQueryInput, "limit"> & {
   limit?: number;
+  offset?: number;
 };
 
 export interface RelatedSearchPort {
@@ -232,7 +233,13 @@ export async function findLexicalSearchCandidates(
         )})
         AND sd."normalizedText" % ${normalized}
       ORDER BY sd."normalizedText" <-> ${normalized}
-      LIMIT ${Math.min(limit * 4, 200)}
+      ${
+        // Paged discovery must rank the complete fuzzy population on every
+        // page; a per-page candidate limit would hide later matches.
+        input.offset === undefined
+          ? sql`LIMIT ${Math.min(limit * 4, 200)}`
+          : sql``
+      }
     ),
     candidates AS (
       SELECT sd.id
@@ -306,7 +313,7 @@ export async function findLexicalSearchCandidates(
       ts_rank_cd(sd."searchVector", q.query) DESC,
       similarity(sd."normalizedText", ${normalized}) DESC,
       sd."updatedAt" DESC, e."shortcode" ASC
-    LIMIT ${limit}
+    LIMIT ${limit} OFFSET ${input.offset ?? 0}
   `,
       );
       span.setAttributes({

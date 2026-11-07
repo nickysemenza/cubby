@@ -31,6 +31,11 @@ export function useProductCategories(enabled = true) {
         (query.isPending || query.hasNextPage || query.isFetchingNextPage),
     ),
     error: query.error,
+    onRetry: () => {
+      if (query.isFetching) return;
+      if (query.isFetchNextPageError) void query.fetchNextPage();
+      else void query.refetch();
+    },
     isComplete:
       !query.isPending &&
       !query.hasNextPage &&

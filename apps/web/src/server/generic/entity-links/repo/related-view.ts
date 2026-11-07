@@ -1,10 +1,12 @@
 import { type Entity, entityRefKey } from "@cubby/schemas/entity";
 import { entityManifest } from "@cubby/schemas/entity-manifest";
 import type {
+  FilterOptionsInput,
+  FilterOptionsOut,
+} from "@cubby/schemas/filter-options";
+import type {
   RelatedBranchInput,
   RelatedBranchOutput,
-  RelatedOptionsInput,
-  RelatedOptionsOutput,
   RelatedPreviewGroup,
   RelatedPreviewInput,
   RelatedSummaryInput,
@@ -197,6 +199,7 @@ const SQL_RELATED_VIEWS = {
 } as const satisfies Record<RelatedViewKey, RelatedViewSqlPresentation>;
 
 /** The view's own restriction as an ANDable clause, or nothing. */
+/** A WHERE-clause suffix, including its own conjunction when present. */
 const viewWhere = (view: RelatedViewSqlPresentation): SQL =>
   view.where ? sql`AND ${sql.raw(view.where)}` : sql``;
 
@@ -555,32 +558,54 @@ export const relatedSortExpression = (
 
 export async function loadRelatedOptions(
   db: Database,
-  input: RelatedOptionsInput,
-): Promise<RelatedOptionsOutput> {
+  input: Extract<FilterOptionsInput, { source: "relation" }>,
+): Promise<FilterOptionsOut> {
   const view = sqlRelatedView(input.relationKey);
-  const search = input.search?.trim();
-  const query = sql`
-    SELECT
-      t."shortcode" AS "id",
-      ${sql.raw(view.label)}::text AS "label",
-      count(DISTINCT s."id")::int AS "count"
-    FROM ${sql.raw(`"${view.sourceTable}"`)} s
-    ${compiledRelatedJoins(input.relationKey)}
-    WHERE ${notDeleted("s")}
-      ${viewWhere(view)}
-      ${search ? sql`AND ${sql.raw(view.label)} ILIKE ${ilikeContains(search)}` : sql``}
-    GROUP BY t."shortcode", ${sql.raw(view.label)}
-    ORDER BY "label", "id"
-    LIMIT ${input.limit}
-  `;
-  const result = await getDb(db).execute(query, "objects");
-  const rows = optionRowSchema.array().parse(result);
-  return rows.map((row) => ({
-    entity: view.targetEntity,
-    id: row.id,
-    label: row.label,
-    count: Number(row.count),
-  }));
+  const search = input.search.trim();
+  const load = async (selectedOnly: boolean) => {
+    const result = await getDb(db).execute(
+      sql`
+      SELECT t."shortcode" AS "id", ${sql.raw(view.label)}::text AS "label",
+        count(DISTINCT s."id")::int AS "count"
+      FROM ${sql.raw(`"${view.sourceTable}"`)} s
+      ${compiledRelatedJoins(input.relationKey)}
+      WHERE ${notDeleted("s")} ${viewWhere(view)}
+        ${
+          selectedOnly
+            ? sql`AND t."shortcode" IN (${sql.join(
+                input.selectedIds.map((id) => sql`${id}`),
+                sql`, `,
+              )})`
+            : search
+              ? sql`AND (${sql.raw(view.label)} ILIKE ${ilikeContains(search)} OR t."shortcode" ILIKE ${ilikeContains(search)})`
+              : sql``
+        }
+      GROUP BY t."shortcode", ${sql.raw(view.label)}
+      ORDER BY "label", "id"
+      LIMIT ${selectedOnly ? input.selectedIds.length : input.limit + 1}
+      OFFSET ${selectedOnly ? 0 : Number(input.cursor ?? "0")}
+    `,
+      "objects",
+    );
+    return optionRowSchema.array().parse(result);
+  };
+  // Selected records use the same eligibility predicate, independently of search/page.
+  const [rows, selected] = await Promise.all([
+    load(false),
+    input.selectedIds.length ? load(true) : [],
+  ]);
+  const items = new Map(rows.slice(0, input.limit).map((row) => [row.id, row]));
+  for (const row of selected) items.set(row.id, row);
+  return {
+    items: [...items.values()].map((row) => ({
+      ...row,
+      count: Number(row.count),
+    })),
+    nextCursor:
+      rows.length > input.limit
+        ? String(Number(input.cursor ?? "0") + input.limit)
+        : null,
+  };
 }
 
 type SummaryDefinition = {

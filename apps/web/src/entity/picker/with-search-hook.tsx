@@ -5,10 +5,11 @@ import type {
   ShortcodeFor,
 } from "@cubby/schemas/identifiers";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import type { ComponentProps } from "react";
 import type { ReactNode } from "react";
 import { Suspense, useMemo } from "react";
+import { z } from "zod";
 
 import { captureRequest } from "~/entity/editing/editor-requests";
 import type { EntityEditDialog as EntityEditDialogComponent } from "~/entity/editing/entity-edit-dialog";
@@ -33,6 +34,7 @@ import {
 } from "./combobox-builders";
 import {
   pagination,
+  pickerQueryState,
   resolveBlankFilterKey,
   useEntitySearchRows,
   type EntitySearchScope,
@@ -56,6 +58,11 @@ export interface EntitySearchResult<TId extends string> {
   items: ComboboxItem<TId>[];
   onSearchChange: (query: string) => void;
   isLoading: boolean;
+  hasNextPage?: boolean;
+  isFetchingNextPage?: boolean;
+  onLoadMore?: () => void;
+  error?: string | null;
+  onRetry?: () => void;
   onCreateNew?: (name: string) => Promise<ComboboxItem<TId>>;
   // Wire this to the combobox's open/close so the options query stays
   // deferred until the user actually opens the picker (off the page's
@@ -142,8 +149,8 @@ function manifestListSource<E extends ManifestPickerEntity>(entity: E) {
   ) {
     const queryClient = useQueryClient();
     useEntityMetadata(entity);
-    const { data, isLoading } = useQuery({
-      ...entityListFor(entity).queryOptions(
+    const query = useInfiniteQuery({
+      ...entityListFor(entity).infiniteQueryOptions(
         // SAFETY: every filter key comes from this entity's manifest filter
         // descriptors or its declared dependent-field scope; the route parser
         // validates the input again.
@@ -155,8 +162,10 @@ function manifestListSource<E extends ManifestPickerEntity>(entity: E) {
       enabled,
     });
     return {
-      data: data?.items.map((item) => pickerRecord.parse(item)),
-      isLoading,
+      data: query.data?.pages.flatMap((page) =>
+        page.items.map((item) => pickerRecord.parse(item)),
+      ),
+      ...pickerQueryState(query),
     };
   };
 }
@@ -191,17 +200,33 @@ function manifestConfig<E extends ManifestPickerEntity>(
  * keystroke.
  */
 function useLocationListSource(searchQuery: string, enabled: boolean) {
-  const { data, isLoading } = useQuery({
-    ...location.search.queryOptions({
-      filters: { nameFilter: searchQuery },
-      pagination,
-      // Explicit: the list factory's default direction is `desc` (right for a
-      // `createdAt` table, backwards for a name-ordered typeahead).
-      sort: { orderBy: "name", direction: "asc" },
-    }),
+  const query = useInfiniteQuery({
+    ...location.search.infiniteQueryOptions(
+      {
+        filters: { nameFilter: searchQuery },
+        pagination,
+        sort: { orderBy: "name", direction: "asc" },
+      },
+      {
+        pageParamSchema: z.number().int().nonnegative(),
+        initialPageParam: 0,
+        page: (input, pageIndex) => ({
+          ...input,
+          pagination: { ...pagination, pageIndex },
+        }),
+        getNextPageParam: () => undefined,
+      },
+    ),
+    getNextPageParam: (page, _pages, pageIndex) =>
+      (pageIndex + 1) * pagination.pageSize < page.count
+        ? pageIndex + 1
+        : undefined,
     enabled,
   });
-  return { data: data?.data, isLoading };
+  return {
+    data: query.data?.pages.flatMap((page) => page.data),
+    ...pickerQueryState(query),
+  };
 }
 
 /**
@@ -210,14 +235,26 @@ function useLocationListSource(searchQuery: string, enabled: boolean) {
  * for both the blank and the typed query — `splitBlankTyped: false` below.
  */
 function useProductListSource(searchQuery: string, enabled: boolean) {
-  const { data, isLoading } = useQuery({
-    ...product.search.queryOptions({
-      filters: { nameFilter: searchQuery },
-      pagination,
-    }),
+  const query = useInfiniteQuery({
+    ...product.search.infiniteQueryOptions(
+      { filters: { nameFilter: searchQuery }, pagination },
+      {
+        pageParamSchema: z.number().int().nonnegative(),
+        initialPageParam: 0,
+        page: (input, pageIndex) => ({
+          ...input,
+          pagination: { ...pagination, pageIndex },
+        }),
+        getNextPageParam: (page) =>
+          page.meta.hasNextPage ? page.meta.pageIndex + 1 : undefined,
+      },
+    ),
     enabled,
   });
-  return { data: data?.items, isLoading };
+  return {
+    data: query.data?.pages.flatMap((page) => page.items),
+    ...pickerQueryState(query),
+  };
 }
 
 const locationConfig = (
@@ -314,6 +351,11 @@ export function useEntityListSource<E extends EntitySearchEntity>(
   const {
     items,
     isLoading,
+    hasNextPage,
+    isFetchingNextPage,
+    onLoadMore,
+    error,
+    onRetry,
     onSearchChange,
     onOpenChange,
     onCreateNew,
@@ -346,6 +388,11 @@ export function useEntityListSource<E extends EntitySearchEntity>(
   return {
     items,
     isLoading,
+    hasNextPage,
+    isFetchingNextPage,
+    onLoadMore,
+    error,
+    onRetry,
     onSearchChange,
     onOpenChange,
     onCreateNew,

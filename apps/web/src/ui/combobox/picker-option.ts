@@ -17,6 +17,8 @@ export interface PickerOption {
   label: string;
   /** Leading glyph — a trade icon, a category mark, a vendor's brand logo. */
   icon?: React.ReactNode;
+  /** Canonical record media, retained as data for asynchronous image updates. */
+  thumb?: ComboboxItem["thumb"];
   color?: string;
   role?: string;
   /**
@@ -84,22 +86,24 @@ export function pickerOptionItem(option: PickerOption): ComboboxItem {
     ...(parseShortcode(option.value) && { shortcode: option.value }),
     // An option's colour tints its glyph; only a glyph-less option shows the
     // colour as a swatch, so a row never carries both marks.
-    ...(option.icon != null
-      ? {
-          icon: createElement(
-            "span",
-            {
-              "aria-hidden": true,
-              "data-enum-option-icon": "",
-              className: "flex items-center [&>svg]:size-3.5!",
-              style: { color: option.color },
-            },
-            option.icon,
-          ),
-        }
-      : option.color
-        ? { color: option.color }
-        : {}),
+    ...(option.thumb
+      ? { thumb: option.thumb }
+      : option.icon != null
+        ? {
+            icon: createElement(
+              "span",
+              {
+                "aria-hidden": true,
+                "data-enum-option-icon": "",
+                className: "flex items-center [&>svg]:size-3.5!",
+                style: { color: option.color },
+              },
+              option.icon,
+            ),
+          }
+        : option.color
+          ? { color: option.color }
+          : {}),
     ...(option.detail && { detail: option.detail }),
     ...(Object.keys(presentation).length > 0 && { presentation }),
   };

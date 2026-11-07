@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
+  act,
   fireEvent,
   render as renderUi,
   screen,
@@ -659,6 +660,100 @@ describe("inline option picker", () => {
     fireEvent.keyDown(input, { key: "Enter" });
     await waitFor(() => expect(onValueChange).toHaveBeenCalledWith("open"));
   });
+});
+
+describe("paged option picker", () => {
+  it.each(["inline", "field"] as const)(
+    "%s browses another page and recovers a failed read without losing picks",
+    async (presentation) => {
+      const load = vi.fn();
+      const retry = vi.fn();
+      let failPage = () => {};
+      function PagedHarness() {
+        const [phase, setPhase] = useState<
+          "ready" | "loading" | "failed" | "complete"
+        >("ready");
+        const [values, setValues] = useState<string[]>(["first"]);
+        failPage = () => setPhase("failed");
+        return (
+          <OptionPicker
+            presentation={presentation}
+            multiple
+            checklist
+            label="Tools"
+            options={
+              phase === "complete"
+                ? [
+                    { value: "first", label: "Drill" },
+                    { value: "second", label: "Saw" },
+                  ]
+                : [{ value: "first", label: "Drill" }]
+            }
+            values={values}
+            onValuesChange={setValues}
+            hasNextPage={phase !== "complete"}
+            isFetchingNextPage={phase === "loading"}
+            error={
+              phase === "failed"
+                ? "Roster read failed: synthetic gateway error"
+                : null
+            }
+            onLoadMore={() => {
+              load();
+              setPhase("loading");
+            }}
+            onRetry={() => {
+              retry();
+              setPhase("complete");
+            }}
+          />
+        );
+      }
+      render(<PagedHarness />);
+      if (presentation === "field")
+        openPicker(screen.getByRole("combobox", { name: "Tools" }));
+      const list = await screen.findByRole("listbox");
+      expect(load).not.toHaveBeenCalled();
+      expect(screen.getByRole("button", { name: "Load more" })).toBeVisible();
+      // jsdom has no layout; supply the scroll container's measured geometry.
+      Object.defineProperties(list, {
+        clientHeight: { configurable: true, value: 200 },
+        scrollHeight: { configurable: true, value: 500 },
+        scrollTop: { configurable: true, writable: true, value: 280 },
+      });
+      fireEvent.scroll(list);
+      fireEvent.scroll(list);
+      expect(load).toHaveBeenCalledTimes(1);
+      expect(screen.getByText("Loading more…")).toBeVisible();
+      expect(screen.getByRole("option", { name: "Drill" })).toHaveAttribute(
+        "aria-selected",
+        "true",
+      );
+      await act(async () => failPage());
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        "Roster read failed: synthetic gateway error",
+      );
+      expect(screen.getByRole("option", { name: "Drill" })).toHaveAttribute(
+        "aria-selected",
+        "true",
+      );
+      fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+      expect(retry).toHaveBeenCalledTimes(1);
+      fireEvent.click(await screen.findByRole("option", { name: "Saw" }));
+      await waitFor(() =>
+        expect(screen.getByRole("option", { name: "Saw" })).toHaveAttribute(
+          "aria-selected",
+          "true",
+        ),
+      );
+      expect(screen.getByRole("option", { name: "Drill" })).toHaveAttribute(
+        "aria-selected",
+        "true",
+      );
+      expect(screen.queryByRole("alert")).toBeNull();
+      expect(screen.queryByRole("button", { name: "Load more" })).toBeNull();
+    },
+  );
 });
 
 it("keeps freeform text and fills a suggestion", async () => {
