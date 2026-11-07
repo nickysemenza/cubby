@@ -28,6 +28,10 @@
  *   - `wrapFetchWithSentry` — server.ts, behind `isCfBuild ? … : …`, so also
  *     never called in this build. Identity is the correct fallback regardless:
  *     `withSentry` already wraps the worker's fetch.
+ *   - `_INTERNAL_wrapServerEntryWithSentryTunnel` — `@sentry/tanstackstart-react`
+ *     ≥11.10 wires TanStack Start's default server entry through this. On CF,
+ *     identity is correct: `withSentry` already wraps the worker fetch and the
+ *     Node tunnel route does not apply.
  *
  * Adding a new `Sentry.*` call to isomorphic or server code means adding it
  * here too. vite.config.ts fails the SSR build on IMPORT_IS_UNDEFINED so a
@@ -48,4 +52,9 @@ export function init(_options?: SentryInitOptions): void {}
 /** Identity: the worker's fetch is already wrapped by `withSentry`. */
 export function wrapFetchWithSentry<T>(handler: T): T {
   return handler;
+}
+
+/** Identity: CF already wraps fetch; the Sentry tunnel route is Node SSR wiring. */
+export function _INTERNAL_wrapServerEntryWithSentryTunnel<T>(entry: T): T {
+  return entry;
 }

@@ -33,17 +33,22 @@ const context = BACKGROUND_CONTEXT;
 
 class TestPiHarness extends PiHarness {
   // Exercise the real cache while isolating its Cloudflare lifecycle seam.
+  // agents ≥0.32 wake errors emit on lifecycle.events; keep a no-op bus.
   override get lifecycle(): LifecycleServices {
-    return fromPartial({ ready: async () => {}, storage: {} });
+    return fromPartial({
+      ready: async () => {},
+      storage: {},
+      events: { emit: () => {} },
+    });
   }
 }
 
 function host(storage: DurableMemoryStorage, opened = (_pi: Harness) => {}) {
   const harness = new TestPiHarness({
-    harness: async ({ context }) => {
+    harness: async ({ context, onWake }) => {
       const pi = await Harness.open(
         storage,
-        { models: createModels(), registry: createRegistry() },
+        { models: createModels(), registry: createRegistry(), onWake },
         context,
       );
       opened(pi);
@@ -99,10 +104,11 @@ describe("pi session recovery", () => {
       await initialize.promise;
       return fromPartial(storage);
     });
+    // agents ≥0.32 awaits the failed pi's close before reopening.
     const replacement = harness.pi();
-    await entered.promise;
     close.resolve();
     await first?.closed;
+    await entered.promise;
     initialize.resolve();
     const second = await replacement;
     expect((await harness.pi()) === second).toBe(true);
@@ -123,8 +129,9 @@ describe("pi session recovery", () => {
     );
     storage.failReads = false;
     const disposing = harness.dispose();
-    const second = await harness.pi();
+    // Reopen waits on the gated close; unblock it before awaiting pi().
     close.resolve();
+    const second = await harness.pi();
     await disposing;
     await first.closed;
     expect((await harness.pi()) === second).toBe(true);

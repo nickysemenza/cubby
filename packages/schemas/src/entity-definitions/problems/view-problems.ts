@@ -52,44 +52,43 @@ export interface ViewProblemDeclaration {
  * second place to register it and therefore no way for the two to disagree.
  */
 export function viewProblemDeclarations(): ViewProblemDeclaration[] {
-  const declarations = Object.entries(viewManifest).flatMap(
-    ([entity, views]) =>
-      !isEntity(entity)
-        ? []
-        : (views ?? []).flatMap((view) => {
-            if (!("problem" in view) || !view.problem) return [];
-            const problem = view.problem;
-            if (!problem) return [];
-            const viewSort = "sort" in view ? view.sort : undefined;
-            const viewLayout = "layout" in view ? view.layout : undefined;
-            const source: EntityProblemSource = {
-              kind: "entity",
+  const declarations = Object.entries(viewManifest).flatMap(([entity, views]) =>
+    !isEntity(entity)
+      ? []
+      : (views ?? []).flatMap((view) => {
+          if (!("problem" in view) || !view.problem) return [];
+          const problem = view.problem;
+          if (!problem) return [];
+          const viewSort = "sort" in view ? view.sort : undefined;
+          const viewLayout = "layout" in view ? view.layout : undefined;
+          const source: EntityProblemSource = {
+            kind: "entity",
+            entity,
+            filters: view.filters.map(({ id, value }) => ({
+              id,
+              value: typeof value === "string" ? value : [...value],
+            })),
+          };
+          if (viewSort) source.sort = viewSort.map((sort) => ({ ...sort }));
+          if (viewLayout?.columnVisibility) {
+            source.columnVisibility = viewLayout.columnVisibility;
+          }
+          return [
+            {
               entity,
-              filters: view.filters.map(({ id, value }) => ({
-                id,
-                value: typeof value === "string" ? value : [...value],
-              })),
-            };
-            if (viewSort) source.sort = viewSort.map((sort) => ({ ...sort }));
-            if (viewLayout?.columnVisibility) {
-              source.columnVisibility = viewLayout.columnVisibility;
-            }
-            return [
-              {
-                entity,
-                viewId: view.id,
-                sort: source.sort,
-                problem: defineProblem({
-                  ...problem,
-                  problemClass: PROBLEM_CLASS[problem.key],
-                  executionLane: "views",
-                  continuation: { kind: "entity-list" },
-                  freshness: { kind: "live" },
-                  source,
-                }),
-              },
-            ];
-          }),
+              viewId: view.id,
+              sort: source.sort,
+              problem: defineProblem({
+                ...problem,
+                problemClass: PROBLEM_CLASS[problem.key],
+                executionLane: "views",
+                continuation: { kind: "entity-list" },
+                freshness: { kind: "live" },
+                source,
+              }),
+            },
+          ];
+        }),
   );
   validateProblemQueries(declarations.map(({ problem }) => problem));
   return declarations;

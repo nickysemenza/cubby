@@ -108,15 +108,7 @@ export async function readMailRuleCandidates(
     : [];
   const imported = new Set(accepted.map((row) => row.purchaseId));
   return rows.flatMap(
-    ({
-      id,
-      shortcode,
-      vendorId,
-      vendorShortcode,
-      orderId,
-      date,
-      ...account
-    }) =>
+    ({ id, shortcode, vendorId, vendorShortcode, orderId, date, ...account }) =>
       vendorId && orderId
         ? [
             {

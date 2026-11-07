@@ -38,20 +38,18 @@ import {
 vi.hoisted(() => {
   vi.resetModules();
   const realFetch = globalThis.fetch;
-  vi.stubGlobal(
-    "fetch",
-    async (input: RequestInfo | URL, init?: RequestInit) =>
-      String(input).includes("models.dev")
-        ? Response.json({
-            openai: {
-              models: {
-                "gpt-6-sol": {
-                  cost: { input: 2, output: 10, cache_read: 0.2 },
-                },
+  vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) =>
+    String(input).includes("models.dev")
+      ? Response.json({
+          openai: {
+            models: {
+              "gpt-6-sol": {
+                cost: { input: 2, output: 10, cache_read: 0.2 },
               },
             },
-          })
-        : realFetch(input, init),
+          },
+        })
+      : realFetch(input, init),
   );
 });
 
@@ -59,12 +57,10 @@ function stubPricingCatalog(catalog: {
   openai: { models: Record<string, { cost: ModelCost }> };
 }) {
   const realFetch = globalThis.fetch;
-  vi.stubGlobal(
-    "fetch",
-    async (input: RequestInfo | URL, init?: RequestInit) =>
-      String(input).includes("models.dev")
-        ? Response.json(catalog)
-        : realFetch(input, init),
+  vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) =>
+    String(input).includes("models.dev")
+      ? Response.json(catalog)
+      : realFetch(input, init),
   );
 }
 beforeEach(() =>

@@ -908,8 +908,8 @@ export function listScaffold<
             project,
           ),
           ...(scored
-            ? dataQualityFilterPredicates(scored, table, filters).map(
-                (value) => (value && project ? project(value) : value),
+            ? dataQualityFilterPredicates(scored, table, filters).map((value) =>
+                value && project ? project(value) : value,
               )
             : []),
           ...auditDateWhereConditions(

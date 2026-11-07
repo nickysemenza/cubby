@@ -221,10 +221,7 @@ const researchSummary = (run: RunDetail) => {
     .filter(Boolean)
     .join(" · ");
 };
-const targetBadge = (
-  target: RunDetail["targets"][number],
-  research: boolean,
-) =>
+const targetBadge = (target: RunDetail["targets"][number], research: boolean) =>
   target.outcome && researchOutcomes.has(target.outcome)
     ? badge(
         phaseLabel(target.outcome),

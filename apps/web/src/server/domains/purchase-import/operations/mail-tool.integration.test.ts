@@ -1092,18 +1092,17 @@ describe("public mail tool", () => {
         async (content) =>
           content.includes("Synthetic promotion") ? "unrelated" : "related",
       );
-      const list = vi.fn<GmailProvider["listMessages"]>(
-        async ({ pageToken }) =>
-          pageToken
-            ? { messages: [{ id: "synthetic-second" }] }
-            : {
-                messages: [
-                  { id: "synthetic-first" },
-                  { id: "synthetic-negative" },
-                  { id: "synthetic-trash" },
-                ],
-                nextPageToken: "synthetic-google-page",
-              },
+      const list = vi.fn<GmailProvider["listMessages"]>(async ({ pageToken }) =>
+        pageToken
+          ? { messages: [{ id: "synthetic-second" }] }
+          : {
+              messages: [
+                { id: "synthetic-first" },
+                { id: "synthetic-negative" },
+                { id: "synthetic-trash" },
+              ],
+              nextPageToken: "synthetic-google-page",
+            },
       );
       const provider = fromPartial<GmailProvider>({
         listMessages: list,
