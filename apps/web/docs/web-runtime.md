@@ -486,6 +486,10 @@ Image bindings start from the scaffold's page-ID prefetch rather than waiting
 for public row codes. Analysis includes live Product labels and verified
 correction receipts without dependent reader queries; embedded-media callers
 can still select the same readers by public Image codes.
+Nested image hydration skips scalar leaves and only attempts the Image schema
+on objects carrying both reference properties. It still walks unrelated objects
+for nested images, validates every candidate and replaces stale representations
+from authoritative results without changing the original values or gallery size.
 Stored metadata uses internal page IDs. Columns,
 captions and providers consume the shared page projection; actions reload complete
 records. There is no client field-readiness
