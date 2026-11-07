@@ -628,7 +628,7 @@ Rules:
         provenance: {
           kind: "derived",
           sources: [
-            { entity: "product", relation: "products" },
+            { entity: "product" },
             { label: "Descendant Product Categories" },
           ],
         },

@@ -125,7 +125,8 @@ one mapping workspace, with Tree and Flat arrangements. Existing Mappings links
 (`?view=hierarchy`) open that table. Filters, saved views, matching-row selection
 and applicable bulk actions remain owned by the generic list. Tree search keeps
 matching rows' ancestors as context; context rows are excluded from
-selection. Only rows with children have expand controls.
+selection. Only rows with children have expand controls. Phone rows retain
+ancestor labels and readable mapping provenance beneath their summaries.
 
 Product Categories show one effective Spending Category, its source/state,
 subtree Product counts and allocation-based subtree net spending. The inspector's

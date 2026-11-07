@@ -83,6 +83,7 @@ export function ProductCategoryConnections({ id }: { id: CategoryRow["id"] }) {
               <dt className="text-muted-foreground">Products in this branch</dt>
               <dd className="tabular-nums">
                 <Link
+                  className="underline underline-offset-4"
                   to="/products"
                   search={{ category: id, includeSubProductCategories: "true" }}
                 >
@@ -137,6 +138,7 @@ export function ProductCategoryConnections({ id }: { id: CategoryRow["id"] }) {
                   )?.current;
                   return (
                     <Link
+                      className="underline underline-offset-4"
                       to="/expenses"
                       search={{
                         productCategory: id,
@@ -207,7 +209,11 @@ export function ContributingCategories({
         <Description>
           Contributing branches are unavailable because this report exceeds its
           limit.{" "}
-          <Link to="/expenses" search={{ ...bucket.filter, view: "table" }}>
+          <Link
+            className="underline underline-offset-4"
+            to="/expenses"
+            search={{ ...bucket.filter, view: "table" }}
+          >
             Open this spending category in the Ledger.
           </Link>
         </Description>
@@ -236,6 +242,7 @@ export function ContributingCategories({
                 )?.current;
                 return (
                   <Link
+                    className="underline underline-offset-4"
                     to="/expenses"
                     search={{ ...bucket.filter, ...row.filter, view: "table" }}
                   >

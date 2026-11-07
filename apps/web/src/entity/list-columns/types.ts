@@ -52,6 +52,7 @@ export type ListOverrideWorkbenchProps<TData extends BaseListRow> = Partial<
     | "contextualStatus"
     | "filterOptionHints"
     | "getMobileDetailsHref"
+    | "renderMobileRowFooter"
     | "getRowClassName"
     | "showCellSelectionStats"
     | "verticalAlign"

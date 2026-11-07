@@ -218,6 +218,26 @@ test("reviews historical item classification and preserves explicit purpose", as
     .getByRole("list", { name: "Product Categories list", exact: true })
     .getByRole("button", { name: new RegExp(`^${childName} `) });
   await expect(mobileChild).toBeVisible();
+  const phoneParent = page
+    .getByRole("list", { name: "Product Categories list", exact: true })
+    .getByRole("listitem")
+    .filter({
+      has: page.getByRole("button", { name: new RegExp(`^${parentName} `) }),
+    });
+  await expect(
+    phoneParent.getByText("Ancestor", { exact: true }),
+  ).toBeVisible();
+  const phoneChild = page
+    .getByRole("list", { name: "Product Categories list", exact: true })
+    .getByRole("listitem")
+    .filter({
+      has: page.getByRole("button", { name: new RegExp(`^${childName} `) }),
+    });
+  await expect(
+    phoneChild.getByText(`Inherited from ${parentName}`, { exact: true }),
+  ).toBeVisible();
+  await page.mouse.move(0, 0);
+
   const phoneTreePath = ".impeccable/review/category-mapping-mobile-tree.png";
   await page.screenshot({ path: phoneTreePath, fullPage: true });
   await testInfo.attach("Category mapping phone tree", {
@@ -432,7 +452,14 @@ test("reviews historical item classification and preserves explicit purpose", as
     path: spendingDesktopPath,
     contentType: "image/png",
   });
+  await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole("button", { name: "Close panel", exact: true }).click();
+  await expect(
+    page
+      .getByRole("list", { name: "Spending Categories list", exact: true })
+      .getByText("Ancestor", { exact: true }),
+  ).toBeVisible();
+  if (viewport) await page.setViewportSize(viewport);
   await page
     .getByRole("textbox", { name: /Search/ })
     .fill("classification gifts");

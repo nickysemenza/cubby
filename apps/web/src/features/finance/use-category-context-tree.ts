@@ -120,6 +120,8 @@ function useCategoryWorkbench<
     );
   }, [nested, scope, hasFilters, rows, table]);
   return {
+    renderMobileRowFooter: (row: CategoryContextRow<T>) =>
+      row.categoryContext ? "Ancestor" : null,
     getRowClassName: (row: { original: CategoryContextRow<T> }) =>
       row.original.categoryContext ? "text-muted-foreground" : undefined,
   };

@@ -23,6 +23,7 @@ import {
   type CubbyColumnCollection,
 } from "~/ui/data-table/table-features";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
+import { Stack } from "~/ui/layout";
 import { SidePanel } from "~/ui/overlays/side-panel";
 import { Description } from "~/ui/text/description";
 
@@ -47,10 +48,51 @@ function ProductCategoryInspector({
   );
 }
 
+function MappingSource({ row }: { row: CategoryRow }) {
+  const mapping = row.spendingCategoryMapping;
+  if (mapping?.state === "direct") return <>Set here</>;
+  if (mapping?.source)
+    return (
+      <span>
+        {mapping.state === "blocked" ? "Blocked at" : "Inherited from"}{" "}
+        <EntityRefLink
+          entity="productCategory"
+          id={mapping.source.id}
+          name={mapping.source.name}
+        />
+      </span>
+    );
+  return <>{mapping?.state === "blocked" ? "Blocked" : "Missing"}</>;
+}
+
+function productCategoryPhoneFooter(row: CategoryTreeRow) {
+  const target = row.spendingCategoryMapping?.category;
+  return (
+    <Stack gap="xs" className="text-sm text-muted-foreground">
+      {row.categoryContext && <span className="block">Ancestor</span>}
+      <div>
+        <MappingSource row={row} />
+      </div>
+      {target && (
+        <div>
+          Spending default:{" "}
+          <EntityRefLink
+            entity="spendingCategory"
+            id={target.id}
+            name={target.name}
+          />
+        </div>
+      )}
+    </Stack>
+  );
+}
+
 const PREVIEW = {
   responsiveInspector: true,
   mobileBehavior: "sheet",
-  renderInspector: ProductCategoryInspector,
+  renderInspector: (props: EntityPreviewRendererProps) => (
+    <ProductCategoryInspector {...props} />
+  ),
 } as const;
 
 export const productCategoryListOverride = defineListOverride<
@@ -101,26 +143,8 @@ export const productCategoryListOverride = defineListOverride<
                 enableSorting: false,
                 meta: {
                   provenance: null,
-                  mobile: { slot: "meta", priority: 10 },
                 },
-                cell: ({ row }) => {
-                  const mapping = row.original.spendingCategoryMapping;
-                  if (mapping?.state === "direct") return "Set here";
-                  if (mapping?.source)
-                    return (
-                      <span>
-                        {mapping.state === "blocked"
-                          ? "Blocked at"
-                          : "Inherited from"}{" "}
-                        <EntityRefLink
-                          entity="productCategory"
-                          id={mapping.source.id}
-                          name={mapping.source.name}
-                        />
-                      </span>
-                    );
-                  return mapping?.state === "blocked" ? "Blocked" : "Missing";
-                },
+                cell: ({ row }) => <MappingSource row={row.original} />,
               },
             ),
           );
@@ -143,7 +167,12 @@ export const productCategoryListOverride = defineListOverride<
       compose,
       list,
       tree: hierarchy.tree,
-      useWorkbench: hierarchy.useWorkbench,
+      useWorkbench(list) {
+        return {
+          ...hierarchy.useWorkbench(list),
+          renderMobileRowFooter: productCategoryPhoneFooter,
+        };
+      },
       above: () => (
         <>
           <CategoryWorkspaceArrangement

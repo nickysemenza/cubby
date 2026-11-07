@@ -116,7 +116,9 @@ function SpendingCategoryInspector({
 const PREVIEW = {
   responsiveInspector: true,
   mobileBehavior: "sheet",
-  renderInspector: SpendingCategoryInspector,
+  renderInspector: (props: EntityPreviewRendererProps) => (
+    <SpendingCategoryInspector {...props} />
+  ),
 } as const;
 
 export const spendingCategoryListOverride = defineListOverride<

@@ -51,7 +51,11 @@ export function CategorySpendingRemainders({
       {data && (
         <>
           <Description>
-            <Link to="/expenses" search={{ view: "table" }}>
+            <Link
+              className="underline underline-offset-4"
+              to="/expenses"
+              search={{ view: "table" }}
+            >
               All booked net:{" "}
               {formatCurrency(
                 Math.round(data.totals.scope.current.net * 100) / 100,
@@ -70,6 +74,7 @@ export function CategorySpendingRemainders({
                 return (
                   <li key={row.key}>
                     <Link
+                      className="underline underline-offset-4"
                       to="/expenses"
                       search={{ ...row.filter, view: "table" }}
                     >

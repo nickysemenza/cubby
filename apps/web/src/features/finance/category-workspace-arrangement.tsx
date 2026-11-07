@@ -28,7 +28,7 @@ export function CategoryWorkspaceArrangement({
           Flat
         </Button>
       </fieldset>
-      <span className="text-sm text-muted-foreground">
+      <span className="hidden text-sm text-muted-foreground md:inline">
         Select a row to inspect mappings and spending.
       </span>
       <a
