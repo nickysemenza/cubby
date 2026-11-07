@@ -14,6 +14,8 @@ type AiGatewayBinding = NonNullable<ReturnType<typeof getAiGateway>>;
 beforeEach(async () => {
   vi.stubEnv("CI", "");
   vi.stubEnv("AI_GATEWAY_API_KEY", "synthetic-gateway-token");
+  // Setup may have loaded the environment before this file supplied its token.
+  vi.resetModules();
   ({ setCfEnv } = await import("~/server/cf-env"));
   ({ gatewayFetch } = await import("./gateway"));
 });
