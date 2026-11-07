@@ -978,11 +978,11 @@ tallies do not imply a fixed total or ETA. Image maintenance classification
 counts use the current processor revision and can overlap; uncertain cutout
 eligibility does not imply a human review queue.
 
-Coordinator transcript retirement is on hold pending a retention decision.
+Coordinator transcripts are preserved until explicit member-authorized retirement.
 The maintenance `coordinators` step does no retirement, for both scheduled and
 manual passes; all other steps continue normally. The retirement mechanism is
 retained, but its previous 24-hour threshold is disabled. No Run status,
-transcript, source evidence, finding or paid result is changed by this hold.
+transcript, source evidence, finding or paid result is changed by this policy.
 The retirement pass's automatic closure of legacy execution alerts on already
 retired Runs is also suspended; those findings remain stored.
 
