@@ -28,12 +28,16 @@ export function MaintenanceView({
     maintenanceProjectSearch: filters.maintenanceProjectSearch ?? "maintenance",
   };
   const history = useQuery(task.maintenanceHistory.queryOptions(scope));
+  // Declared slot-only search keys use the generated urlStringParam codec.
+  const requestedYear =
+    typeof search.maintenanceYear === "string"
+      ? Number(search.maintenanceYear)
+      : NaN;
   const year =
-    typeof search.maintenanceYear === "number" &&
-    Number.isInteger(search.maintenanceYear) &&
-    search.maintenanceYear >= 1900 &&
-    search.maintenanceYear <= 9999
-      ? search.maintenanceYear
+    Number.isInteger(requestedYear) &&
+    requestedYear >= 1900 &&
+    requestedYear <= 9999
+      ? requestedYear
       : Number(householdLocalDate().slice(0, 4));
   const projectIds = history.data?.projectIds ?? [];
   const expenseFilters = {
@@ -182,7 +186,7 @@ export function MaintenanceView({
         <SpendingYearField
           key={year}
           year={year}
-          onCommit={(value) => navigate({ maintenanceYear: value })}
+          onCommit={(value) => navigate({ maintenanceYear: String(value) })}
         />
         {projectIds.length > 0 && (
           <ExpenseLedgerSummary filters={expenseFilters} />
