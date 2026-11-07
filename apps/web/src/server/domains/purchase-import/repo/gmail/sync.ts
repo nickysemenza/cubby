@@ -99,11 +99,15 @@ export function rebaseMailboxPage({
     const current = next.scoped.find((query) => query.key === page.scopedKey);
     if (
       !restoreScopedQuery &&
-      current?.completed &&
-      before?.query === current.query
+      before &&
+      after &&
+      current &&
+      before.query === current.query &&
+      after.query === before.query &&
+      (current.completed || current.pageToken !== before.pageToken)
     ) {
-      // The retained page's messages were processed, but a newer pass already
-      // finished this search. Keep its cursor/receipt and do not credit twice.
+      // Every frozen message was handled before rebasing. Preserve the shared
+      // position without inferring token order or crediting this page twice.
       const { scopedKey: _settledKey, ...settled } = page;
       return { ...settled, startCoverage: coverage, nextCoverage: coverage };
     }

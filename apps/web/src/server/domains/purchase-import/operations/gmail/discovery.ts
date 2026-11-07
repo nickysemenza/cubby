@@ -670,7 +670,8 @@ export async function saveMailDiscoveryBatch(
       await recordRunProgress(tx, {
         runId: current.row.id,
         eventId: `gmail:${params.attempt}:page:${index}`,
-        generation: `workflow:${params.attempt}`,
+        // Discovery progress is fenced by its universal Job generation.
+        generation: `job:${params.attempt}`,
         sequence: index + 1,
         phase: "page_saved",
         detail: `Processed Gmail page ${index + 1}; ${ingested.orderMailIds.length} sources retained, ${ingested.unrelated.length} unrelated messages`,
@@ -709,7 +710,7 @@ export async function finishMailDiscovery(
       {
         runId: finished.id,
         eventId: `gmail:${params.attempt}:completed`,
-        generation: `workflow:${params.attempt}`,
+        generation: `job:${params.attempt}`,
         sequence: claimed.progress.pagesDone + 1,
         phase: "completed",
         detail: "Gmail discovery pass completed",

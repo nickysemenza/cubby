@@ -141,6 +141,39 @@ describe("durable Gmail page acquisition", () => {
     expect(creditScopedPage(rebased, 1, new Date())).toEqual(
       scoped.nextCoverage,
     );
+    const partial = {
+      ...coverage,
+      scoped: coverage.scoped.map((query) => ({
+        ...query,
+        pageToken: "intervening-partial-page",
+        emailCount: 40,
+      })),
+    };
+    const settled = rebaseMailboxPage({
+      page: scoped,
+      coverage: partial,
+      restoreScopedQuery: false,
+    });
+    expect(settled).not.toBeNull();
+    if (!settled)
+      throw new Error(
+        "Handled page must preserve an intervening partial cursor",
+      );
+    expect(settled).not.toHaveProperty("scopedKey");
+    expect(creditScopedPage(settled, 1, new Date())).toEqual(partial);
+    expect(
+      rebaseMailboxPage({
+        page: scoped,
+        coverage: {
+          ...coverage,
+          scoped: coverage.scoped.map((query) => ({
+            ...query,
+            emailCount: 40,
+          })),
+        },
+        restoreScopedQuery: false,
+      }),
+    ).toBeNull();
     expect(
       rebaseMailboxPage({
         page: scoped,
