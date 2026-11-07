@@ -34,7 +34,8 @@ import { runFailureText } from "~/server/workflows/runs/lifecycle";
 const PENDING_UPLOAD_HOURS = 24;
 /** Inline EXIF attempts before a non-404 failure becomes `extraction_failed`. */
 const EXIF_ATTEMPTS = 3;
-const RETIRE_COORDINATORS_AFTER_MS = 24 * 60 * 60_000;
+// Transcript preservation holds retirement until the retention policy is decided.
+const RETIRE_COORDINATORS_AFTER_MS: number | null = null;
 
 /** External seams a test replaces; everything else runs for real. */
 export type MaintenancePorts = {
@@ -315,6 +316,7 @@ export function maintenanceStepDrivers(
       return { done: await advanceWaitingPhotoRuns(db) };
     }),
     coordinators: onceStep(async ({ db }) => {
+      if (RETIRE_COORDINATORS_AFTER_MS === null) return { done: 0 };
       const { retireCoordinators } =
         await import("~/server/workflows/catch-up");
       const retired = await retireCoordinators(

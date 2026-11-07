@@ -2,9 +2,10 @@ import { imageId, type RunId } from "@cubby/schemas/identifiers";
 import { runStepDeclaration } from "@cubby/schemas/run-fields";
 import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
+import * as cfEnv from "~/server/cf-env";
 import { getDb } from "~/server/db/helpers";
 import { image, imageProcessingJob, run } from "~/server/db/schema";
 import {
@@ -222,6 +223,23 @@ describe("maintenance Run", () => {
       .from(run)
       .where(eq(run.purpose, "maintenance"));
     expect(passes).toHaveLength(1);
+    const coordinatorBinding = vi
+      .spyOn(cfEnv, "getPurchaseImportRunAgentNamespace")
+      .mockImplementation(() => {
+        throw new Error("Transcript retirement must remain on hold");
+      });
+    try {
+      const id = await runIdOf(first.runId);
+      await drive(id, only("coordinators", {}));
+      expect((await readRunSteps(ctx.db, id))[0]).toMatchObject({
+        state: "done",
+        done: 0,
+        failed: 0,
+      });
+      expect(coordinatorBinding).not.toHaveBeenCalled();
+    } finally {
+      coordinatorBinding.mockRestore();
+    }
   });
 
   // Image provider capacity belongs to child Jobs; the maintenance pass only
