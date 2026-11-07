@@ -1,6 +1,7 @@
 import type { TaskFilters } from "@cubby/schemas/project";
 import { countLabel } from "@cubby/shared/pluralize";
 import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { EmbeddedEntityList } from "~/entity/entity-list/generic-entity-list";
@@ -55,7 +56,13 @@ export function MaintenanceView({
             ...scope,
             status: ["not_started", "in_progress", "later", "blocked"],
           }}
-          columns={["name", "status", "due", "subjectProductId", "projectId"]}
+          columns={[
+            "name",
+            "status",
+            "dueDate",
+            "subjectProductId",
+            "projectId",
+          ]}
         />
       </Section>
       <Section
@@ -70,6 +77,7 @@ export function MaintenanceView({
         ) : (
           <StaticTable
             rows={history.data.groups}
+            emptyMessage="No completed maintenance work in this task scope."
             rowKey={(row) => JSON.stringify([row.name, row.subjectProductId])}
             columns={[
               {
@@ -171,22 +179,11 @@ export function MaintenanceView({
         headingAs="h2"
         caption="The summary counts only allocated project shares. Rows retain full expense amounts; open Project allocation to inspect shared tax or discounts."
       >
-        <Row gap="sm" align="center">
-          <label htmlFor="maintenance-year">Spending year</label>
-          <Input
-            id="maintenance-year"
-            type="number"
-            min={1900}
-            max={9999}
-            value={year}
-            onChange={(event) => {
-              const value = Number(event.target.value);
-              if (Number.isInteger(value) && value >= 1900 && value <= 9999)
-                navigate({ maintenanceYear: value });
-            }}
-            className="w-24"
-          />
-        </Row>
+        <SpendingYearField
+          key={year}
+          year={year}
+          onCommit={(value) => navigate({ maintenanceYear: value })}
+        />
         {projectIds.length > 0 && (
           <ExpenseLedgerSummary filters={expenseFilters} />
         )}
@@ -207,5 +204,39 @@ export function MaintenanceView({
         )}
       </Section>
     </Stack>
+  );
+}
+
+function SpendingYearField({
+  year,
+  onCommit,
+}: {
+  year: number;
+  onCommit: (year: number) => void;
+}) {
+  const [draft, setDraft] = useState(String(year));
+  const commit = () => {
+    const value = Number(draft);
+    if (Number.isInteger(value) && value >= 1900 && value <= 9999)
+      onCommit(value);
+    else setDraft(String(year));
+  };
+  return (
+    <Row gap="sm" align="center">
+      <label htmlFor="maintenance-year">Spending year</label>
+      <Input
+        id="maintenance-year"
+        type="number"
+        min={1900}
+        max={9999}
+        value={draft}
+        onChange={(event) => setDraft(event.target.value)}
+        onBlur={commit}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") event.currentTarget.blur();
+        }}
+        className="w-24"
+      />
+    </Row>
   );
 }

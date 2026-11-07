@@ -102,6 +102,7 @@ describe("native presentation coverage", () => {
       "detailSlot vendor.spending-classification",
       "listSlot expense.analytics",
       "listSlot project.analytics",
+      "listSlot task.maintenance",
       "sectionAction linkExpenses",
       "sectionAction linkProducts",
       "sectionAction matchStatement",

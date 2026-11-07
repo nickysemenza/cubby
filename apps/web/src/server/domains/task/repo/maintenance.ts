@@ -18,6 +18,7 @@ export function maintenanceHistory(
 ): z.infer<typeof maintenanceHistoryGroup>[] {
   const groups = new Map<string, z.infer<typeof maintenanceHistoryGroup>>();
   for (const task of tasks) {
+    if (task.status !== "done") continue;
     const key = JSON.stringify([task.name, task.subjectProductId]);
     const group = groups.get(key) ?? {
       name: task.name,
@@ -29,10 +30,8 @@ export function maintenanceHistory(
       medianIntervalDays: null,
     };
     group.taskIds.push(task.id);
-    if (task.status === "done") {
-      if (task.completedOn) group.completedDates.push(task.completedOn);
-      else group.undatedCompletions++;
-    }
+    if (task.completedOn) group.completedDates.push(task.completedOn);
+    else group.undatedCompletions++;
     groups.set(key, group);
   }
   for (const group of groups.values()) {
