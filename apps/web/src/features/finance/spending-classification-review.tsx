@@ -320,6 +320,7 @@ export function ProductCategoryClassification({
           : null
       }
       initial={{
+        // Only the parent picker adds parentId; mapping edits must not restore stale topology.
         action: "productCategory",
         productCategoryId: record.id,
         spendingCategoryMode: record.spendingCategoryMode,
