@@ -61,7 +61,8 @@ import {
   type AiEmbeddingFeature,
   type AiFeature,
   type AiStructuredFeature,
-} from "./feature-identity";
+} from "~/server/ai/policy/feature-identity";
+
 import {
   usdaFoodSpec,
   usdaMatchSubject,
@@ -130,7 +131,7 @@ export type {
   AiEmbeddingFeature,
   AiFeature,
   AiStructuredFeature,
-} from "./feature-identity";
+} from "~/server/ai/policy/feature-identity";
 
 // ---------------------------------------------------------------------------
 // Decision tier — Jev/Clef trial on Workers AI. Closed-set classification and

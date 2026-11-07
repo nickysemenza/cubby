@@ -71,7 +71,19 @@ import {
 } from "~/server/ai/budget";
 import type { GatewayCallOptions, GatewayMetadata } from "~/server/ai/gateway";
 import { wrapAiGatewayError } from "~/server/ai/gateway-error";
-import { MODEL_FOR_TIER } from "~/server/ai/policy/feature-identity";
+import {
+  MODEL_FOR_TIER,
+  type AiChatRequest,
+  type AiContentPart,
+  type AiDocumentPart,
+  type AiImagePart,
+  type AiMessage,
+} from "~/server/ai/policy/feature-identity";
+export type {
+  AiChatRequest,
+  AiImagePart,
+  AiMessage,
+} from "~/server/ai/policy/feature-identity";
 import type {
   AiChatFeature,
   AiFeature,
@@ -89,41 +101,6 @@ import { inspectImageFile } from "~/server/domains/image/repo/image-integrity";
 import { JobDeferredError } from "~/server/generic/jobs/errors";
 
 import { isGatewayAdmissionWait } from "./gateway-egress-client";
-
-/** One part of a user message's content: text, or an image/document fetched by URL. */
-interface AiTextPart {
-  type: "text";
-  content: string;
-}
-export interface AiImagePart {
-  type: "image";
-  source:
-    | { type: "url"; value: string; mimeType?: string }
-    | { type: "inline"; value: string; mimeType: string };
-}
-/** A document (e.g. a PDF receipt). Resolved the same way as an image — see
- * {@link resolveImageContent} — since pi-ai's `Message` has no document
- * content type; the shared OpenAI provider (`@cubby/shared/ai/pi-providers`)
- * rewrites the resulting PDF image block into the Responses `input_file`. */
-interface AiDocumentPart {
-  type: "document";
-  source: { type: "url" | "inline"; value: string; mimeType: string };
-}
-type AiContentPart = AiTextPart | AiImagePart | AiDocumentPart;
-/** Every message `runStructuredFeature` sends is a single-turn user prompt —
- * no caller here carries a multi-turn conversation with prior assistant
- * turns, so this intentionally only models `role: "user"`. */
-export interface AiMessage {
-  role: "user";
-  content: string | AiContentPart[];
-}
-
-/** Everything a `chat()` call needs that the feature record does not own:
- * the prompt itself. Request builders in `clients/ai.ts` return this. */
-export interface AiChatRequest {
-  systemPrompts: string[];
-  messages: AiMessage[];
-}
 
 /** What one call site supplies about *this* call. */
 export interface AiRunContext<T = unknown> extends Pick<

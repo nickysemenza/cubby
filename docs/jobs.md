@@ -400,7 +400,8 @@ or type excluded: device work on a source type no device command carries, such a
 A subject lift's `no_subject` or `not_suitable` result is final for that source hash
 and processor revision. Its negative evidence and attempt history stay recorded;
 the derivative is skipped and the original remains usable. Apple descriptions
-still run independently for every image. Other executor skips, including
+run independently for every image, with the narrow cloud-satisfaction rule below.
+Other executor skips, including
 `unsupported_format`, become deterministic failures with their reason preserved. A
 stored `failed` retains the diagnostic, reported result and attempt history. The displayed
 state derives from the Job (`image-job-state.ts`): `leased` for a live lease,
@@ -420,8 +421,17 @@ On-device descriptions use a fresh session, a full-frame image bounded to 1024 p
 and an initial explicit response budget of at most 512 tokens, reserved from the runtime
 model context size. A context overflow retries once with 512 pixels and half the
 response budget. Persistent failures retain the reported context/token counts and
-remain visibly failed until explicit retry or changed source/processor inputs;
-no cloud fallback or fabricated description is used. A structured parsing failure
+remain visibly failed until explicit retry or changed source/processor inputs.
+A stored terminal Apple `guardrail_violation: ` refusal at the current processor
+revision leaves automatic Work failure attention and the image's processing issue
+when a retained, undeleted current preferred cloud description covers the same
+source hash. Both views use the same evidence predicate, including provider,
+model, prompt, schema and normalization revisions. This accepts the existing
+deterministic stop for those inputs; it does not establish inability on every OS
+or future instruction revision. The failed image-job diagnostic check, reason,
+attempts and explicit retry remain available. Parsing failures, model `refusal`,
+pending retrying work and failed subject lifts remain actionable. No additional
+cloud request or fabricated description is introduced. A structured parsing failure
 retries only when the latest structured response is explicitly incomplete and
 session output usage reaches the configured response cap. That fresh-session retry
 keeps the image size and raises the output budget to at most 1,024 tokens, bounded

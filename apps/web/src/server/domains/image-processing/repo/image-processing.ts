@@ -19,8 +19,6 @@ import {
   imageDescriptionAnalysis,
   selectImageDescription,
   type ImageDescriptionResult,
-  IMAGE_DESCRIPTION_PROMPT_REVISION,
-  IMAGE_DESCRIPTION_RESULT_SCHEMA_REVISION,
   imageProcessingSource,
 } from "@cubby/schemas/image-processing";
 import type {
@@ -80,18 +78,29 @@ import { aiAnalysis, image } from "~/server/db/schema";
 import {
   isCurrentPreferredImageDescription,
   parseImageDescriptionInputFingerprint,
-  preferredImageDescriptionPolicy,
 } from "~/server/domains/image-processing/repo/description-policy";
 import {
   imageRepresentationRowsSql,
   imageRepresentationRow,
   imageRepresentationsFromRows,
 } from "~/server/domains/image-processing/repo/image-representations";
+import {
+  IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
+  IMAGE_DESCRIPTION_PROCESSOR_REVISION,
+  IMAGE_IDENTIFICATION_PROCESSOR_REVISION,
+  IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION,
+} from "~/server/domains/image-processing/repo/processor-policy";
 import { readConfirmedDescription } from "~/server/domains/image/repo/image-description-read";
 import { MAIL_ATTACHMENT_UPLOAD_REASON } from "~/server/domains/mail/repo/mail-attachment-uploads";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { JobSupersededError } from "~/server/generic/jobs/errors";
 import { findOrCreateWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+export {
+  IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
+  IMAGE_DESCRIPTION_PROCESSOR_REVISION,
+  IMAGE_IDENTIFICATION_PROCESSOR_REVISION,
+  IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION,
+} from "~/server/domains/image-processing/repo/processor-policy";
 
 import {
   imageJobClaimable,
@@ -173,8 +182,6 @@ function imageProcessingLane(job: {
   return "cloud";
 }
 
-// Cloud eligibility no longer gates Apple subject lifting; prior skipped work can be rescheduled.
-export const IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION = 2;
 // This policy revision changes eligibility, not the cutout format or algorithm.
 export const compatibleSubjectLiftOutputs = [
   1,
@@ -195,50 +202,6 @@ const retainedNegativeSubjectLift = () =>
       negativeSubjectLiftReasons,
     ),
   );
-
-/**
- * Jobs are unique by an integer revision. Derive that revision from every
- * cloud-analysis input that changes the result so a model, provider, prompt,
- * schema, or rendition revision creates fresh work without touching cutouts.
- */
-function stableProcessorRevision(identity: string): number {
-  let hash = 0x811c9dc5;
-  for (const character of identity) {
-    hash ^= character.charCodeAt(0);
-    hash = Math.imul(hash, 0x01000193);
-  }
-  return (hash >>> 0) % 2_000_000_000 || 1;
-}
-
-export const IMAGE_DESCRIPTION_PROCESSOR_REVISION = stableProcessorRevision(
-  [
-    "cloud",
-    preferredImageDescriptionPolicy.provider,
-    preferredImageDescriptionPolicy.model,
-    preferredImageDescriptionPolicy.promptRevision,
-    preferredImageDescriptionPolicy.resultSchemaRevision,
-    `orientation-rendition-v${preferredImageDescriptionPolicy.normalizationRevision}`,
-  ].join("/"),
-);
-/** Separate identity keeps opt-in Apple evaluations from replacing cloud work. */
-export const IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION =
-  stableProcessorRevision(
-    [
-      "apple",
-      IMAGE_DESCRIPTION_PROMPT_REVISION,
-      IMAGE_DESCRIPTION_RESULT_SCHEMA_REVISION,
-      "actual-image-description-v1",
-    ].join("/"),
-  );
-
-export const IMAGE_IDENTIFICATION_PROCESSOR_REVISION = stableProcessorRevision(
-  [
-    "cloud",
-    IMAGE_IDENTIFICATION_MODEL,
-    IMAGE_IDENTIFICATION_PROMPT_REVISION,
-    IMAGE_IDENTIFICATION_RESULT_SCHEMA_REVISION,
-  ].join("/"),
-);
 
 const currentImageProcessingProcessor = () => sql<boolean>`(
   (${imageProcessingJob.kind} = ${imageProcessingJobKind.enum.subject_lift}
