@@ -68,6 +68,11 @@ export async function advanceAiWorkRun(
       owner.id,
       params.attempt,
     );
+    // An empty retained roster cannot establish that the original scope finished.
+    if (!summary.hasRoster)
+      throw new Error(
+        "AI refresh has no durable evaluation roster; refusing to complete an unknown scope.",
+      );
     const complete = summary.pending.length === 0;
     const failed = summary.progress.failed > 0;
     const written = await writeRunningAttemptProgress(

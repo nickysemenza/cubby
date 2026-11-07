@@ -15,6 +15,7 @@ import {
   dropAiEvaluationWork,
   markAiEvaluationWork,
 } from "~/server/ai/evaluation/repo/ai-evaluation-work";
+import { runEvaluationRosterExists } from "~/server/ai/evaluation/repo/evaluation-tally";
 import type { Database } from "~/server/db";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import { ledgerParty, runStep, run as runTable } from "~/server/db/schema";
@@ -62,6 +63,10 @@ export async function controlWorkflowRun(
       actorUserId: runTable.actorUserId,
       memberUserId: ledgerParty.userId,
       attempt: sql<number>`coalesce((${runTable.progress}->>'attempt')::int, 0)`,
+      hasAiRoster:
+        purpose === "ai_refresh" && input.action === "retry"
+          ? runEvaluationRosterExists(sql`${runTable.id}`)
+          : sql<boolean>`true`,
     })
     .from(runTable)
     .leftJoin(ledgerParty, eq(ledgerParty.id, runTable.ledgerPartyId))
@@ -124,6 +129,11 @@ export async function controlWorkflowRun(
       throw createAppError(
         "RUN_CONTROL_REFUSED",
         `Only a failed Run can be retried (${row.status})`,
+      );
+    if (purpose === "ai_refresh" && !row.hasAiRoster)
+      throw createAppError(
+        "RUN_CONTROL_REFUSED",
+        "This AI refresh Run has no durable evaluation roster; its original scope cannot be recovered.",
       );
     if (purpose === "mail_reclassify") {
       const { requestedAiEvaluations } =
