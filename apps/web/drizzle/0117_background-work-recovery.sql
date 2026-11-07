@@ -1,3 +1,8 @@
+-- Keep eligibility, member controls and slot admission stable through this repair.
+-- The normal migration runner holds these locks through its transaction commit.
+LOCK TABLE "Run", "AiEvaluationRequest", "AiEvaluation", "ImageProcessingJob"
+  IN SHARE ROW EXCLUSIVE MODE;
+--> statement-breakpoint
 -- Terminal evaluations cannot owe execution. Retain every result and receipt.
 UPDATE "AiEvaluation"
 SET "runAt" = NULL, "leaseToken" = NULL, "leaseUntil" = NULL,
