@@ -18,8 +18,12 @@ import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { readRecordWorkQueue } from "~/server/domains/work/service/work-queue-read";
 import { updateJobs } from "~/server/generic/jobs/jobs.fixtures";
+import { readJob } from "~/server/generic/jobs/repo/job-reads";
 import { enqueueJob } from "~/server/generic/jobs/repo/producer";
+import { advanceJob } from "~/server/generic/jobs/service/jobs";
 import type { ShortcodeGeneratorPort } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { controlWorkflowRun } from "~/server/workflows/runs/control";
+import { runJobHandler } from "~/server/workflows/runs/job-execution";
 
 import { readRun, runScaffold } from "./run";
 
@@ -248,7 +252,7 @@ describe("Run lineage and waiting-on reads", () => {
 describe("Run attention entity view", () => {
   const ctx = withTestDb();
   // Recovery must preserve paid answers and uncertain history while settled work leaves Needs you.
-  it("projects historical recovery from declared execution and retained obligations without changing history", async () => {
+  it("projects historical recovery and refuses an unknown scope", async () => {
     const runId = await ensureRun(ctx.db, ctx.actor, {
       purpose: "ai_refresh",
       trigger: "scheduled",
@@ -285,6 +289,41 @@ describe("Run attention entity view", () => {
       ).toEqual(history);
     };
     await visible(true); // No durable owned roster.
+    await expect(
+      controlWorkflowRun(
+        ctx.db,
+        ctx.actor,
+        { runPublicId: history.shortcode, action: "retry" },
+        "ai_refresh",
+      ),
+    ).rejects.toThrow("no durable evaluation roster");
+    await visible(true);
+    expect(await readJob(ctx.db, { runId })).toBeNull();
+
+    const emptyJobOwner = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "ai_refresh",
+      trigger: "scheduled",
+      execution: false,
+    });
+    const execution = await enqueueJob(ctx.db, {
+      key: `run:${emptyJobOwner}`,
+      kind: "run.execute",
+      runId: emptyJobOwner,
+      input: { runId: emptyJobOwner, purpose: "ai_refresh" },
+    });
+    await advanceJob(ctx.db, execution.id, { "run.execute": runJobHandler });
+    expect(await readJob(ctx.db, { id: execution.id })).toMatchObject({
+      state: "retry_wait",
+      error: expect.stringContaining("no durable evaluation roster"),
+    });
+    expect(
+      (
+        await getDb(ctx.db)
+          .select()
+          .from(runTable)
+          .where(eq(runTable.id, emptyJobOwner))
+      )[0]?.status,
+    ).not.toBe("completed");
     const [item] = await getDb(ctx.db)
       .insert(aiEvaluation)
       .values({
@@ -483,6 +522,23 @@ describe("Run attention entity view", () => {
           .where(eq(aiEvaluation.id, item.id))
       )[0]?.result,
     ).toEqual(item.result);
+
+    await expect(
+      controlWorkflowRun(
+        ctx.db,
+        ctx.actor,
+        { runPublicId: history.shortcode, action: "retry" },
+        "ai_refresh",
+      ),
+    ).resolves.toBeUndefined();
+    expect(
+      (
+        await getDb(ctx.db)
+          .select()
+          .from(runTable)
+          .where(eq(runTable.id, runId))
+      )[0]?.status,
+    ).toBe("running");
 
     const historicalId = await ensureRun(ctx.db, ctx.actor, {
       purpose: "derived_refresh",

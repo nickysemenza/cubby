@@ -110,6 +110,11 @@ export function evaluationRosterExists(scope: EvaluationScope): SQL<boolean> {
   return sql<boolean>`EXISTS (SELECT 1 FROM ${from} WHERE ${scopeWhere})`;
 }
 
+/** Historical handoffs still prove a roster; absence of current work does not. */
+export function runEvaluationRosterExists(runId: RunId | SQL): SQL<boolean> {
+  return sql<boolean>`(${evaluationRosterExists({ runId, source: "owned" })} OR ${evaluationRosterExists({ runId, source: "requested" })})`;
+}
+
 /**
  * Current failures/pending work and uncertain handoffs keep recovery visible.
  * Current writers create forward-only handoffs. Validate retained paths against

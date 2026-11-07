@@ -118,6 +118,11 @@ no failed items directs the member to Retry run. Actual failures remain
 retryable without reviving the cancelled remainder.
 A retained step with zero committed pages still retries its full failed roster.
 
+AI refresh recovery requires a durable owned or requested evaluation roster,
+including terminal rows and retry handoffs. With no roster, Retry run refuses
+before launching, and the execution driver retains a raw failure rather than
+completing an unknown scope. Historical discovery metadata is not a target roster.
+
 A legacy failed Mail reclassification with no durable roster can be closed by
 an explicitly authorized historical correction after every original identity
 and execution-time checksum is proven handled by retained checkpoint evidence

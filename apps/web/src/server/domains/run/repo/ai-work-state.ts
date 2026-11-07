@@ -5,6 +5,7 @@ import type { PgUpdateSetSource } from "drizzle-orm/pg-core";
 
 import { guardAiEvaluation } from "~/server/ai/evaluation/repo/ai-evaluation";
 import { PENDING_AI_STATES } from "~/server/ai/evaluation/repo/ai-evaluation-requests";
+import { runEvaluationRosterExists } from "~/server/ai/evaluation/repo/evaluation-tally";
 import type { Database } from "~/server/db";
 import {
   getDb,
@@ -212,6 +213,7 @@ export async function readAiRefreshWorkSummary(
     .limit(10);
   const [diagnostic] = await getDb(db)
     .select({
+      hasRoster: runEvaluationRosterExists(runId),
       text: sql<
         string | null
       >`string_agg(${aiEvaluation.error}, ${"\n"} ORDER BY ${aiEvaluation.createdAt}, ${aiEvaluation.id})`,
@@ -226,6 +228,7 @@ export async function readAiRefreshWorkSummary(
     .limit(2);
   const tally = new Map(counts.map((row) => [row.state, row.count]));
   return {
+    hasRoster: diagnostic?.hasRoster ?? false,
     pending,
     failureText: diagnostic?.text ?? null,
     progress: aiRefreshProgress.parse({
