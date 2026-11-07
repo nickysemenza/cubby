@@ -229,11 +229,12 @@ export function runAgentTools(
     api: ToolExecutionApi,
     context: Context,
   ) => Promise<RunProgressStamp>,
+  purpose: AgentImportRunPurpose,
+  report: <TError>(error: TError) => void,
   /** Move the current work item to the escalation model (`escalation.ts`). */
   escalate?: (
     request: z.infer<ToolInputs["escalate_import_work"]>,
   ) => Promise<object>,
-  purpose: AgentImportRunPurpose = "photo_inventory",
 ): ToolRegistration[] {
   return [
     tool("escalate_import_work", {
@@ -265,17 +266,23 @@ export function runAgentTools(
           const subject = claimed.success
             ? claimed.data.email.subject?.trim().slice(0, 500)
             : undefined;
-          await step(api, context, "claim-progress", async () =>
-            services().updateAgentProgress({
-              ...(await progressStamp(api, context)),
-              eventId: `${operationId}:progress`,
-              phase: claimed.success ? "investigating" : "reconciling",
-              ...(subject ? { currentItem: subject } : {}),
-              detail: claimed.success
-                ? "Processing admitted Email evidence"
-                : "Checking Email import outcomes",
-            }),
-          );
+          try {
+            await step(api, context, "claim-progress", async () =>
+              services().updateAgentProgress({
+                ...(await progressStamp(api, context)),
+                eventId: `${operationId}:progress`,
+                phase: claimed.success ? "investigating" : "reconciling",
+                ...(subject ? { currentItem: subject } : {}),
+                detail: claimed.success
+                  ? "Processing admitted Email evidence"
+                  : "Checking Email import outcomes",
+              }),
+            );
+          } catch (error) {
+            // Observability must not turn a durable successful claim into a
+            // tool error that asks the model to claim the Email again.
+            report(error);
+          }
         }
         // The run ended (for example an outdated Mac stopped it): nothing to claim.
         return result(output, claimStopped(output));

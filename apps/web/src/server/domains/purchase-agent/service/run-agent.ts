@@ -497,8 +497,9 @@ export class PurchaseImportRunAgent
           ...runAgentTools(
             () => this.services(),
             (api, context) => this.toolProgressStamp(api, context),
-            (request) => escalation.escalate(request),
             purpose,
+            (error) => this.report(error),
+            (request) => escalation.escalate(request),
           ),
           ...(attempts
             ? [importExtractedOrderTool(runId, attempts.ordinaryEvidence)]

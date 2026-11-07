@@ -109,9 +109,14 @@ pending: nothing here starts Product research.
    `mcpFetch`). Instructions: `.agents/skills/purchase-import/references/mail-import.md`
    via `server/domains/purchase-agent/service/import-run-workflows.ts`.
    Memoized claims publish host-owned progress, heartbeat and work samples.
+   Progress publication is best-effort: a telemetry failure never turns a
+   successful durable claim into a tool error. RunOperation activity also
+   contributes to the existing stale-run check.
    Mail has no model-directed progress or approval pause. The MCP adapter binds
    the Run and request generation; Email identities, checksums and replay ids
    stay explicit, so an old call cannot silently follow a newer claim.
+   The host normalizes a Mail envelope returned inside a compact action's
+   `input` to the root before signing its originating generation.
    `mail_resolve` and `shipments.record` publish their complete input schemas
    to the coordinator; other compact actions retain `describe`. Shared
    instructions precede dynamic context without changing cache accounting or

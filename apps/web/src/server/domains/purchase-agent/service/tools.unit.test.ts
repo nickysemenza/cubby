@@ -21,12 +21,19 @@ const tools = (services: RunServices) =>
   runAgentTools(
     () => services,
     async () => ({ generation: "synthetic-generation", sequence: 1 }),
+    "photo_inventory",
+    (error) => {
+      throw error;
+    },
   );
 describe("run agent tool behavior", () => {
   // Claims must refresh liveness without a model progress call; replay must
   // not publish a new progress sequence or repeat its work.
-  it("records Mail claim progress once and preserves its generation on replay", async () => {
+  it("preserves a successful Mail claim through progress failure and replay", async () => {
     const reports: Parameters<RunServices["updateAgentProgress"]>[0][] = [];
+    const failures: unknown[] = [];
+    const unavailable = new Error("Synthetic progress write unavailable");
+    let progressAttempts = 0;
     let claims = 0;
     const services = fromPartial<RunServices>({
       claimNextWork: async () => {
@@ -36,6 +43,7 @@ describe("run agent tool behavior", () => {
       updateAgentProgress: async (
         report: Parameters<RunServices["updateAgentProgress"]>[0],
       ) => {
+        if (progressAttempts++ === 0) throw unavailable;
         reports.push(report);
         return { recorded: true };
       },
@@ -43,12 +51,17 @@ describe("run agent tool behavior", () => {
     const claim = runAgentTools(
       () => services,
       async () => ({ generation: "original-generation", sequence: 2 }),
-      undefined,
       "mail_import",
+      (error) => {
+        failures.push(error);
+      },
     ).find((candidate) => candidate.name === "claim_next_import_work");
     if (!claim) throw new Error("Missing Mail claim tool");
     const api = fakeApi();
     const result = await claim.execute({}, api, BACKGROUND_CONTEXT);
+    expect(result.control).toBeUndefined();
+    expect(failures).toEqual([unavailable]);
+    expect(await claim.execute({}, api, BACKGROUND_CONTEXT)).toEqual(result);
     expect(await claim.execute({}, api, BACKGROUND_CONTEXT)).toEqual(result);
     expect(claims).toBe(1);
     expect(reports).toEqual([

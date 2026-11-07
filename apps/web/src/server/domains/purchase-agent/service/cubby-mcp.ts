@@ -295,7 +295,11 @@ export async function stampGeneration(
   generation: () => Promise<string | undefined> | undefined,
   runId?: string,
 ): Promise<JsonObject> {
-  const envelope = args._runExecution;
+  const nested = runId && isJsonObject(args.input) ? args.input : undefined;
+  const envelope =
+    args._runExecution === undefined
+      ? nested?._runExecution
+      : args._runExecution;
   if (!isJsonObject(envelope)) return args;
   const { generation: _claimed, ...claimed } = envelope;
   const { run: _publicRun, ...withoutRun } = claimed;
@@ -307,6 +311,15 @@ export async function stampGeneration(
   const stamped = await generation();
   return {
     ...args,
+    // Describe may place the envelope inside a compact action's input. Mail
+    // signs it at the root before the server flattens that input.
+    ...(nested && isJsonObject(nested._runExecution)
+      ? {
+          input: Object.fromEntries(
+            Object.entries(nested).filter(([key]) => key !== "_runExecution"),
+          ),
+        }
+      : {}),
     _runExecution: stamped ? { ...rest, generation: stamped } : rest,
   };
 }

@@ -165,6 +165,18 @@ describe("stampGeneration", () => {
         "00000000-0000-4000-8000-000000000002",
       ),
     ).toEqual(bound);
+    const nested = {
+      action: args.action,
+      input: { ...args.input, _runExecution: args._runExecution },
+    };
+    expect(
+      await stampGeneration(
+        nested,
+        async () => "host-generation",
+        "00000000-0000-4000-8000-000000000002",
+      ),
+    ).toEqual(bound);
+    expect(nested.input._runExecution).toEqual(args._runExecution);
   });
 
   it("leaves a member's public run code alone", async () => {
