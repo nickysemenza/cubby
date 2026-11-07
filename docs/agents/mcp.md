@@ -160,7 +160,10 @@ Output validation and domain refusals do not advertise input-schema recovery.
 Every MCP principal carries a wall-clock budget (`MCP_TOOL_DEADLINE_MS` in
 `apps/web/src/server/http/authenticate.ts`): 18 s for reads, 45 s
 for reads that declare `modelBacked` (the decision model's 30 s retry budget plus database
-work), and 230 s for writes. An action that can wait on the decision model or another model
+work), and 230 s for writes. Authentication and the runner share
+[`ai/policy/decision-deadline.ts`](../../apps/web/src/server/ai/policy/decision-deadline.ts),
+keeping deadline reads independent of AI execution initialization.
+An action that can wait on the decision model or another model
 declares `modelBacked: true` on its contract member; today
 those are `entity_read.preview`, `ai_read.suggest_fields`,
 `entity_graph.discover` and `purchase_import_read.mail_triage_preview`. The

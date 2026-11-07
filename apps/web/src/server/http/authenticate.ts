@@ -4,7 +4,7 @@ import { runEntityId, userId } from "@cubby/schemas/identifiers";
 // Static on purpose, like request-context: a lazy auth import inside a Worker
 // request left the purchase agent's MCP tool calls unanswered (#2536).
 import { getAuth } from "~/lib/auth";
-import { DECISION_DEADLINE_MS } from "~/server/ai/decision-model";
+import { DECISION_DEADLINE_MS } from "~/server/ai/policy/decision-deadline";
 import { AppError } from "~/server/errors/app-error";
 import { appleClientUpdateRequired } from "~/server/http/apple-client-gate";
 import {
