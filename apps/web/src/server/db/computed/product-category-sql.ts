@@ -88,17 +88,17 @@ export const categoryStockTrackingSql = (
     WITH ih_stock_facts AS MATERIALIZED (
       SELECT ${value} AS value, ${source} AS source
     ), ih_stock_ladder AS MATERIALIZED (
-      SELECT * FROM ${ladder}
+      SELECT * FROM ${ladder} ih_l
     )
     SELECT jsonb_build_object(
-      'value', facts.value,
+      'value', ih_facts.value,
       'id', ih_pd."shortcode",
       ${"name"}::text, ih_pd."name",
-      ${"evaluation"}::text, (SELECT jsonb_agg(jsonb_build_object('entityKind', ${entitySchema.enum.productCategory}::text, 'entityId', ih_pc."shortcode", ${"name"}::text, ih_pc."name", 'value', l."value", ${"assigned"}::text, l."decides") ORDER BY l."depth")
-        FROM ih_stock_ladder l JOIN "ProductCategory" ih_pc ON ih_pc."id" = l."id" WHERE l."depth" >= ${minDepth})
+      ${"evaluation"}::text, (SELECT jsonb_agg(jsonb_build_object('entityKind', ${entitySchema.enum.productCategory}::text, 'entityId', ih_pc."shortcode", ${"name"}::text, ih_pc."name", 'value', ih_l."value", ${"assigned"}::text, ih_l."decides") ORDER BY ih_l."depth")
+        FROM ih_stock_ladder ih_l JOIN "ProductCategory" ih_pc ON ih_pc."id" = ih_l."id" WHERE ih_l."depth" >= ${minDepth})
     )
-    FROM ih_stock_facts facts
-    LEFT JOIN "ProductCategory" ih_pd ON ih_pd."id" = (facts.source->>'id')::uuid
+    FROM ih_stock_facts ih_facts
+    LEFT JOIN "ProductCategory" ih_pd ON ih_pd."id" = (ih_facts.source->>'id')::uuid
     WHERE EXISTS (SELECT 1 FROM ih_stock_ladder ih_pe WHERE ih_pe."depth" >= ${minDepth})
   )`;
 };
