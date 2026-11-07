@@ -31,7 +31,7 @@ export const quotedTable = (table: PgTable): string =>
 /** The outer list row's column, always table-qualified. */
 /** Retains column identity so a relational query can bind its own row alias. */
 export class OuterColumnSql extends SQL {
-  // Drizzle's instanceof checks use entityKind, including across module reloads.
+  // SQL's inherited Symbol.hasInstance uses entityKind across module reloads.
   static override readonly [entityKind] = "CubbyOuterColumnSql";
   constructor(readonly column: AnyColumn) {
     super([

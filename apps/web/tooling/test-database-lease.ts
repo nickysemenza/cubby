@@ -132,7 +132,7 @@ export async function leaseTemplateDatabase<T>(
   }
 }
 
-/** Migration rehearsals start empty and apply their own committed journal boundary. */
+/** Migration rehearsals start empty and apply their own exact migration folder boundary. */
 export async function withMigrationDatabase<T>(
   run: (client: Client, databaseUrl: string) => Promise<T>,
 ): Promise<T> {

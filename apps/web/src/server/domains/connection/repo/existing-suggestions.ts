@@ -151,11 +151,12 @@ function existingConnectionSuggestionIds(
   );
   // Each endpoint can match many publications. Keep its indexed identity probe
   // parameterized rather than hashing the pair population for a large roster.
+  // The computed ID needs an alias when the union is exposed as a CTE.
   const pairIds = getDb(db)
     .select({
       id: sql<
         typeof suggestionTable.$inferSelect.id
-      >`${pairMembership}.${sql.identifier("id")}`,
+      >`${pairMembership}.${sql.identifier("id")}`.as("id"),
     })
     .from(sql`(${sourceIds}) AS ${requestedPairs}`)
     .innerJoinLateral(

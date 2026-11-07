@@ -85,7 +85,10 @@ function resolveIntegrations(
 
 function migrationIdentity(repoRoot: string) {
   const migrationsRoot = path.join(repoRoot, "apps/web/drizzle");
-  const migrations = readMigrationFiles({ migrationsFolder: migrationsRoot });
+  // Configuration-only callers may describe a checkout before its files exist.
+  const migrations = existsSync(migrationsRoot)
+    ? readMigrationFiles({ migrationsFolder: migrationsRoot })
+    : [];
   return {
     migrationCount: migrations.length,
     migrationHash: migrations.at(-1)?.hash ?? "",

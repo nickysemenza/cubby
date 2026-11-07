@@ -365,7 +365,7 @@ describe("locationScaffold.where", () => {
         lastBulkInventoryTo: "2026-01-01",
         lastBulkInventoryPresenceFilter: "none",
       } as const,
-      contains: 'or "Location"."lastBulkInventory" is null',
+      contains: 'or (("Location"."lastBulkInventory" is null))',
     },
     {
       name: "direct item count",
@@ -637,7 +637,7 @@ describe("expenseScaffold.prepareWhere", () => {
 
   it("ORs several name terms", async () => {
     expect(await where({ search: ["vacuum", "dust extractor"] })).toMatch(
-      /"Expense"\."name" ilike \$\d+ or "Expense"\."name" ilike \$\d+/,
+      /\("Expense"\."name" ilike \$\d+\) or \("Expense"\."name" ilike \$\d+\)/,
     );
   });
 
@@ -745,7 +745,7 @@ describe("task prepareWhere", () => {
     ).not.toContain("WITH RECURSIVE descendants");
     expect(
       await where({ projectId: [project], projectIdPresenceFilter: "none" }),
-    ).toMatch(/ or not exists/i);
+    ).toMatch(/ or \(not exists/i);
   });
 
   it.each([

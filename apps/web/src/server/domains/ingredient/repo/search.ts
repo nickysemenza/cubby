@@ -23,6 +23,7 @@ import type { RawRecipeTopLevel as RecipeTopLevel } from "@cubby/schemas/recipe-
 import {
   and,
   eq,
+  getTableName,
   inArray,
   isNotNull,
   isNull,
@@ -194,11 +195,10 @@ export const enrichmentWorkbenchIngredients = async (
   // Recipe-scoped worklist (?recipe=<id>): an empty set means the recipe tree has
   // no leaf ingredients — return early rather than emit `IN ()`.
   if (opts?.restrictToIds && opts.restrictToIds.length === 0) return [];
-  // The relational query builder rewrites column refs in a custom orderBy/extras
-  // to the root alias, so these correlated subqueries MUST be raw strings
-  // hand-qualified to "ingredient"."id" (see ingredientList's orderBy note).
-  const ref = '"ingredient"."id"';
-  const recipeCountSql = liveRecipeCountForIngredientSql(ref);
+  // Raw correlated subqueries must use the alias assigned by the RQB callback.
+  const ref = (table: PgTable) => `"${getTableName(table)}"."id"`;
+  const recipeCountSql = (table: PgTable) =>
+    liveRecipeCountForIngredientSql(ref(table));
   const rows = await getDb(db).query.ingredient.findMany({
     columns: { id: true, shortcode: true },
     where: {
@@ -208,7 +208,7 @@ export const enrichmentWorkbenchIngredients = async (
           and(
             isNull(ingredient.recipeId),
             notDeleted(ingredient),
-            sql.raw(`${recipeCountSql} > 0`),
+            sql.raw(`${recipeCountSql(table)} > 0`),
             opts?.restrictToIds
               ? inArray(ingredient.id, opts.restrictToIds)
               : undefined,
@@ -219,20 +219,19 @@ export const enrichmentWorkbenchIngredients = async (
       recipeCount: (table: PgTable) =>
         relationalSql(
           table,
-          sql<number>`${sql.raw(recipeCountSql)}`.as("recipeCount"),
+          sql<number>`${sql.raw(recipeCountSql(table))}`.as("recipeCount"),
         ),
       cookbookOnly: (table: PgTable) =>
         relationalSql(
           table,
-          sql<boolean>`${sql.raw(cookbookOnlyForIngredientSql(ref))}`.as(
+          sql<boolean>`${sql.raw(cookbookOnlyForIngredientSql(ref(table)))}`.as(
             "cookbookOnly",
           ),
         ),
     },
-    orderBy: (table: PgTable) =>
-      [[sql.raw(`${recipeCountSql} desc nulls last`)]]
-        .flat()
-        .map((value) => relationalSql(table, value)),
+    orderBy: (table: PgTable) => [
+      sql.raw(`${recipeCountSql(table)} desc nulls last`),
+    ],
   });
   const records = await getIngredientsByIDsLean(
     db,

@@ -83,7 +83,7 @@ describe("list field compiler", () => {
     // The path starts at the outer row's own reference, not a second read
     // of the root by id.
     expect(renderWhereSql(clause)).toMatch(
-      /^\(SELECT lf2\."name" FROM "Product" lf1 JOIN "ProductCategory" lf2 .*WHERE \("InventoryEntry"\."productId" = lf1\."id"\) AND lf1\."deletedAt" IS NULL\) asc nulls last$/i,
+      /^\(SELECT lf2\."name" FROM "Product" lf1 JOIN "ProductCategory" lf2 .*WHERE \("InventoryEntry"\."productId" = lf1\."id"\) AND \(lf1\."deletedAt" IS NULL\)\) asc nulls last$/i,
     );
     expect(renderWhereSql(clause)).not.toContain('"InventoryEntry" lf0');
   });
@@ -166,7 +166,7 @@ describe("list field compiler", () => {
       { orderBy: "expenseCount", direction: "desc" },
     ]);
     expect(renderWhereSql(count)).toMatch(
-      /^\(SELECT count\(\*\)::int FROM "Expense" ru1 WHERE \(ru1\."purchaseId" = "Purchase"\."id"\) AND ru1\."deletedAt" IS NULL\) desc nulls last$/i,
+      /^\(SELECT count\(\*\)::int FROM "Expense" ru1 WHERE \(ru1\."purchaseId" = "Purchase"\."id"\) AND \(ru1\."deletedAt" IS NULL\)\) desc nulls last$/i,
     );
     const [total] = scaffold.orderBy([
       { orderBy: "expenseTotal", direction: "asc" },

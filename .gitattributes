@@ -1,4 +1,4 @@
 # Generated outputs are gitignored (`pnpm generate` writes them on install and
 # before build, typecheck and test). These remaining ones are committed.
 # Drizzle v1 snapshots retain the generation graph.
-**/snapshot.json linguist-generated -diff
+**/snapshot.json linguist-generated
