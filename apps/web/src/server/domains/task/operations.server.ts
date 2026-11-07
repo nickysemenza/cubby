@@ -11,6 +11,7 @@ import { reorderTasks } from "~/server/domains/task/repo/crud";
 import { taskScaffold } from "~/server/domains/task/repo/lookup";
 import { getTaskSummary } from "~/server/domains/task/repo/summary";
 import { getTaskTimeline } from "~/server/domains/task/repo/timeline";
+import { getMaintenanceHistory } from "~/server/domains/task/service/maintenance";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { readPublicEntityRows } from "~/server/generic/derived/service/public-read";
 import { listAll } from "~/server/generic/list/repo/list-all";
@@ -53,6 +54,8 @@ export const taskBulkReorderWorkflow = Object.assign(
 );
 
 export const taskHandlers = implementOperationDomain(taskContract, {
+  maintenanceHistory: (context, input) =>
+    getMaintenanceHistory(context.db, input),
   listActionable: async (context, input) => {
     const result = await listActionableTasks(context.db, input ?? {});
     const rows = await readPublicEntityRows({

@@ -104,6 +104,68 @@ const productGetResultSchema = z.object({
 describe("MCP entity kernel boundary", () => {
   const ctx = withTestDb("mcp");
 
+  it("records maintenance completion dates through MCP without replacing deadlines", async () => {
+    const entityKernel = entityKernelContextSchema.parse(
+      createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
+    );
+    const created = await callKernel(
+      {
+        action: "create",
+        entity: "task",
+        data: {
+          name: "Clean synthetic gutters",
+          trade: "other",
+          status: "done",
+          completedOn: "2030-03-02",
+          due: { start: "2030-03-01", end: null },
+        },
+      },
+      entityKernel,
+    );
+    expect(created.isError).not.toBe(true);
+    const id = idResultSchema.parse(created.structuredContent).item.id;
+    const read = await callKernel(
+      {
+        action: "get",
+        entity: "task",
+        id,
+        resultDetail: "full",
+        fields: ["completedOn", "due", "status"],
+      },
+      entityKernel,
+    );
+    expect(read.isError).not.toBe(true);
+    expect(read.structuredContent).toMatchObject({
+      item: {
+        completedOn: "2030-03-02",
+        due: { start: "2030-03-01", end: null },
+        status: "done",
+      },
+    });
+    const reopened = await callKernel(
+      { action: "update", entity: "task", id, data: { status: "not_started" } },
+      entityKernel,
+    );
+    expect(reopened.isError).not.toBe(true);
+    const after = await callKernel(
+      {
+        action: "get",
+        entity: "task",
+        id,
+        resultDetail: "full",
+        fields: ["completedOn", "due", "status"],
+      },
+      entityKernel,
+    );
+    expect(after.structuredContent).toMatchObject({
+      item: {
+        completedOn: "2030-03-02",
+        due: { start: "2030-03-01", end: null },
+        status: "not_started",
+      },
+    });
+  });
+
   it("filters source observation identities exactly across revisions and account scopes", async () => {
     const context = entityKernelContextSchema.parse(
       createTestRequestContext(ctx.db, {

@@ -9,7 +9,8 @@ Keep the maintenance record, product identity, and inventory receipt separate.
 
 1. Find the existing annual maintenance Project using the action, subject, and
    stated year. Search before creating; ask when more than one live Project is
-   plausible. A dated completed action becomes a done Task with that due date.
+   plausible. A dated completed action becomes a done Task with `completedOn` set to that
+   calendar day. Keep its existing deadline separate; planned work uses `due`.
 2. Read the Project's live Tasks once, then compare each proposed action and
    durable subject in memory. Reuse a clear same-date duplicate; a similar event
    on another date is new.
@@ -29,5 +30,6 @@ Keep the maintenance record, product identity, and inventory receipt separate.
    with `cost: null` and no `date`; that adds to the ledger, not to Inventory.
 
 Read back the affected Tasks and any Product, Expense, or Inventory row in
-batched id reads. Confirm the date, status, Project, durable subject, quantity,
+batched id reads. Confirm `completedOn` for completed work or `due` for planned work, status,
+Project, durable subject, quantity,
 and Location; report skipped inventory or unresolved identity plainly.

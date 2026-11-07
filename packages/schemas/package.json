@@ -180,6 +180,7 @@
     "./expense-line-kind": "./src/expense-line-kind.ts",
     "./expense-fields": "./src/expense-fields.ts",
     "./expense-beneficiaries": "./src/expense-beneficiaries.ts",
+    "./household-maintenance": "./src/household-maintenance.ts",
     "./project": "./src/project.ts",
     "./project-fields": "./src/project-fields.ts",
     "./project-output-fields": "./src/project-output-fields.ts",

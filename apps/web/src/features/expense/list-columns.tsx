@@ -85,7 +85,7 @@ function useExpenseFacetHints(filters: ExpenseFilters) {
  * line reports on exactly the rows above it. Prior values stay, dimmed by the
  * footer, while the next summary loads; a failed read says so.
  */
-function ExpenseLedgerSummary({ filters }: { filters: ExpenseFilters }) {
+export function ExpenseLedgerSummary({ filters }: { filters: ExpenseFilters }) {
   const summaryQuery = useQuery({
     ...expense.spendSummary.queryOptions(filters),
     placeholderData: keepPreviousData,

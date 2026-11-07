@@ -441,7 +441,11 @@ const listSlots = {
     schedule: projectList("schedule"),
     analytics: projectList("analytics"),
   },
-  task: { calendar: taskList("calendar"), agenda: taskList("agenda") },
+  task: {
+    calendar: taskList("calendar"),
+    agenda: taskList("agenda"),
+    maintenance: taskList("maintenance"),
+  },
 } satisfies ListSlotTable;
 
 /** Each declared work action's lazily loaded performer, by action id. */

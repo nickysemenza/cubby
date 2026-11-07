@@ -24,6 +24,7 @@ import { imageOut } from "./field-primitives.js";
 import { CURRENT_MEMBER_FILTER } from "@cubby/shared";
 import { FILTER_NONE } from "../filter-sentinel-fields.js";
 import { z } from "zod";
+import { plainDate } from "../base-entity";
 const inheritanceModeSchema = z.enum(["inherit", "explicit"]);
 /** A parent's subtasks; subtasks have none of their own. */
 const SUBTASKS = { table: "Task", from: "parentTaskId", to: "id" } as const;
@@ -47,7 +48,7 @@ export const { definition, readSchemas } = defineEntityModel({
         {
           id: "schedule",
           title: "Schedule",
-          fields: ["due"],
+          fields: ["due", "completedOn"],
         },
         {
           id: "ordering",
@@ -158,7 +159,7 @@ export const { definition, readSchemas } = defineEntityModel({
           kind: "fields",
           id: "schedule",
           title: "Schedule",
-          fields: ["due"],
+          fields: ["due", "completedOn"],
         },
         {
           kind: "fields",
@@ -173,6 +174,14 @@ export const { definition, readSchemas } = defineEntityModel({
       // its project filters select.
       scopes: { projectScope: { via: "project", filters: "project" } },
       savedViews: [
+        {
+          id: "maintenance",
+          label: "Maintenance",
+          description: "Household upkeep, history, and allocated spending",
+          filters: [{ id: "maintenanceProjectSearch", value: "maintenance" }],
+          view: "maintenance",
+          pin: { surface: "home", order: 6 },
+        },
         {
           id: "my-tasks",
           label: "My tasks",
@@ -228,6 +237,12 @@ export const { definition, readSchemas } = defineEntityModel({
           searchKeys: ["period", "calendarDate"],
         },
         { kind: "slot", id: "agenda", label: "Next" },
+        {
+          kind: "slot",
+          id: "maintenance",
+          label: "Maintenance",
+          searchKeys: ["maintenanceYear"],
+        },
         {
           kind: "board",
           id: "board",
@@ -582,6 +597,18 @@ export const { definition, readSchemas } = defineEntityModel({
           update: dateRangeSchema.nullable().optional(),
         },
       },
+      {
+        key: "completedOn",
+        kind: "date",
+        nullable: true,
+        control: { kind: "date", required: false },
+        display: { columnGroup: "Work", format: "plainDate" },
+        validation: {
+          read: plainDate.nullable(),
+          create: plainDate.nullable().optional(),
+          update: plainDate.nullable().optional(),
+        },
+      },
       { output: false, key: "dueDate", kind: "date", nullable: true },
       { output: false, key: "dueEndDate", kind: "date", nullable: true },
       {
@@ -750,6 +777,7 @@ export const { definition, readSchemas } = defineEntityModel({
       "parentTaskId",
       "dueDate",
       "dueEndDate",
+      "completedOn",
       { key: "trade", specialized: "enum:trade" },
       { key: "sortOrder", specialized: "double-precision" },
       { key: "createdAt" },
@@ -768,6 +796,7 @@ export const { definition, readSchemas } = defineEntityModel({
       completion: { type: "enum", options: ["open", "done"] },
       topLevel: { type: "boolean" },
       subjectName: { via: "subject.name" },
+      maintenanceProjectName: { via: "project.name" },
     },
     sort: {
       fields: [
@@ -797,6 +826,7 @@ export const { definition, readSchemas } = defineEntityModel({
           "assigneeMode",
           "trade",
           "due",
+          "completedOn",
           "pendingImageIds",
         ],
         full: [
@@ -810,6 +840,7 @@ export const { definition, readSchemas } = defineEntityModel({
           "assigneeMode",
           "trade",
           "due",
+          "completedOn",
 
           "notes",
           "pendingImageIds",
@@ -862,6 +893,14 @@ export const { definition, readSchemas } = defineEntityModel({
     audit: true,
     schema: { module: "@cubby/schemas/project", export: "taskFilterFields" },
     descriptors: [
+      {
+        columnId: "maintenanceProjectSearch",
+        field: "maintenanceProjectSearch",
+        kind: "text",
+        deriveSchema: true,
+        anyOf: ["maintenanceProjectName"],
+        placeholder: "Search maintenance project names...",
+      },
       {
         columnId: "assigneeId",
         urlKey: "assignee",
