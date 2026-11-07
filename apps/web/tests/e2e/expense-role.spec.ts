@@ -168,7 +168,6 @@ test("capture keeps pending role controls available and saves an explicitly sele
   await page
     .getByRole("menuitem", { name: "Mark purchased", exact: true })
     .click();
-  await waitForFormHydration(page);
   await expect(dialog.getByLabel("Cost", { exact: true })).toHaveValue("2.13");
   await dialog.getByLabel("Cost", { exact: true }).fill("3.27");
   await dialog
