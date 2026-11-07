@@ -44,8 +44,22 @@ test("unclassified Expense explains its role gap and resolution preserves money"
   await gotoAuthenticatedPage(page, `/expenses?q=${encodeURIComponent(name)}`);
   const row = page.getByRole("row").filter({ hasText: name });
   await expect(row).toContainText("$2.13");
+  // A new record can precede its stored quality publication; the table hides
+  // empty columns, and the lazy explanation can replace the unloaded value.
+  if (!(await page.getByRole("columnheader", { name: /Quality/ }).count())) {
+    await page.getByRole("button", { name: /empty columns hidden/ }).click();
+    await page.getByRole("menuitem", { name: "Quality", exact: true }).click();
+  }
   await openCellExplanation(row, /How (data )?quality is determined/);
   const explanation = page.locator('[data-slot="popover-content"]:visible');
+  await expect(explanation).toContainText(
+    /Receipt role|The displayed value has been replaced/,
+  );
+  const refresh = explanation.getByRole("button", {
+    name: "Refresh value and explanation",
+    exact: true,
+  });
+  if (await refresh.count()) await refresh.click();
   await expect(explanation).toContainText("Receipt role");
   await expect(
     explanation.locator('[data-quality-check="expense_receipt_role"]'),

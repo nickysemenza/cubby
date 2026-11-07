@@ -290,6 +290,9 @@ Markdown links. Do not add a second accept/clear/accept cycle: the existing
 restoration; `availability-explanation.integration.test.ts` owns MCP set/clear,
 blank-note refusal and stale evidence. Dedicated native active-exception clearing
 is no longer sampled; native stale clearing and server active clearing remain.
+Quality explanation journeys reveal the empty Quality column when a new record
+has no publication yet, and use the supported value-and-explanation refresh when
+the lazy explanation observes a newer result.
 
 AI usage recent-call browser coverage retains transport/status filtering before
 the row limit, search/Clear, refreshed provider choices and visible cost evidence.
