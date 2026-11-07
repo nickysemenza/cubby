@@ -83,15 +83,22 @@ export const categoryStockTrackingSql = (
     "stockTracked",
     categoryIdExpr,
   );
-  const decider = (column: "shortcode" | "name") =>
-    sql`(SELECT ih_pd.${sql.identifier(column)} FROM "ProductCategory" ih_pd WHERE ih_pd."id" = (${source}->>'id')::uuid)`;
+  // Keep the deciding source and evaluated ladder from being repeated per JSON field.
   return sql<CategoryStockTracking | null>`(
+    WITH ih_stock_facts AS MATERIALIZED (
+      SELECT ${value} AS value, ${source} AS source
+    ), ih_stock_ladder AS MATERIALIZED (
+      SELECT * FROM ${ladder} ih_l
+    )
     SELECT jsonb_build_object(
-      'value', ${value},
-      'id', ${decider("shortcode")},
-      ${"name"}::text, ${decider("name")},
-      ${"evaluation"}::text, (SELECT jsonb_agg(jsonb_build_object('entityKind', ${entitySchema.enum.productCategory}::text, 'entityId', ih_pc."shortcode", ${"name"}::text, ih_pc."name", 'value', l."value", ${"assigned"}::text, l."decides") ORDER BY l."depth")
-        FROM ${ladder} l JOIN "ProductCategory" ih_pc ON ih_pc."id" = l."id" WHERE l."depth" >= ${minDepth})
-    ) WHERE EXISTS (SELECT 1 FROM ${ladder} ih_pe WHERE ih_pe."depth" >= ${minDepth})
+      'value', ih_facts.value,
+      'id', ih_pd."shortcode",
+      ${"name"}::text, ih_pd."name",
+      ${"evaluation"}::text, (SELECT jsonb_agg(jsonb_build_object('entityKind', ${entitySchema.enum.productCategory}::text, 'entityId', ih_pc."shortcode", ${"name"}::text, ih_pc."name", 'value', ih_l."value", ${"assigned"}::text, ih_l."decides") ORDER BY ih_l."depth")
+        FROM ih_stock_ladder ih_l JOIN "ProductCategory" ih_pc ON ih_pc."id" = ih_l."id" WHERE ih_l."depth" >= ${minDepth})
+    )
+    FROM ih_stock_facts ih_facts
+    LEFT JOIN "ProductCategory" ih_pd ON ih_pd."id" = (ih_facts.source->>'id')::uuid
+    WHERE EXISTS (SELECT 1 FROM ih_stock_ladder ih_pe WHERE ih_pe."depth" >= ${minDepth})
   )`;
 };
