@@ -369,6 +369,10 @@ rather than stopping for review. Run control refusals are
 
 ## Image processing
 
+Apple image processing stages source bytes under a UUID-only temporary filename.
+The original filename remains metadata; long source names must not make a valid
+image fail materialization before decoding or subject lifting.
+
 Image processing retains every outcome. `ImageProcessingJob.state` stores
 `pending` while open, `ready`, `failed` for a deterministic refusal needing
 explicit retry, or `skipped` for a completed negative

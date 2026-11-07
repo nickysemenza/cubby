@@ -103,7 +103,8 @@ public struct PhotoFile: Sendable, Hashable {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("CubbyPhotos", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let destination = directory.appendingPathComponent(UUID().uuidString + "-" + safeFilename(filename))
+        // Keep source names as metadata: adding a prefix can exceed the filesystem component limit.
+        let destination = directory.appendingPathComponent(UUID().uuidString)
         do {
             try data.write(to: destination, options: .atomic)
             return try inspect(
@@ -137,8 +138,7 @@ public struct PhotoFile: Sendable, Hashable {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("CubbyPhotos", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
-        let destination = directory.appendingPathComponent(
-            UUID().uuidString + "-" + safeFilename(source.filename))
+        let destination = directory.appendingPathComponent(UUID().uuidString)
         do {
             try FileManager.default.copyItem(at: sourceURL, to: destination)
             return try inspect(
@@ -322,10 +322,6 @@ public struct PhotoFile: Sendable, Hashable {
         formatter.timeZone = .current
         formatter.dateFormat = "yyyy:MM:dd HH:mm:ss"
         return formatter.date(from: value)
-    }
-
-    private static func safeFilename(_ filename: String) -> String {
-        URL(fileURLWithPath: filename).lastPathComponent.replacingOccurrences(of: "/", with: "-")
     }
 
     public static func == (lhs: Self, rhs: Self) -> Bool {
