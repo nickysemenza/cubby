@@ -118,7 +118,7 @@ public struct FoundationModelsImageDescriber: CompanionImageDescribing {
                 return try await generate(prepared, responseBudget)
             } catch let failure as StructuredOutputFailure {
                 let largerBudget = min(1024, contextSize / 4)
-                // An incomplete latest response at the cap proves truncation, not a bad schema.
+                // An incomplete latest response at the cap justifies one larger request.
                 // Reserve at least three quarters of the context for input and never replay twice.
                 if index == 0, failure.isTruncated, largerBudget > responseBudget {
                     responseBudget = largerBudget
