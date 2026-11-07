@@ -20,7 +20,15 @@ import {
   type WorkSourceActionId,
 } from "@cubby/schemas/work-queue";
 import { workQueueGapChecks } from "@cubby/schemas/work-queue-policy";
-import { eq, isNull, or, sql, type SQL, type AnyColumn } from "drizzle-orm";
+import {
+  and,
+  eq,
+  isNull,
+  or,
+  sql,
+  type SQL,
+  type AnyColumn,
+} from "drizzle-orm";
 import { alias, PgDialect, type PgTable } from "drizzle-orm/pg-core";
 
 import type { Database } from "~/server/db";
@@ -323,7 +331,14 @@ export const entityProblemSources = (
             sql`${sql.identifier(factName)}`,
             sql`${sql.identifier(factName)}.code = ${read.table.shortcode}`,
           )
-          .where(recordScope(scope, sql`${read.table.shortcode}`));
+          // Only possible candidates need labels and routing. Keep unresolved
+          // matches so missing publications still contribute coverage warnings.
+          .where(
+            and(
+              recordScope(scope, sql`${read.table.shortcode}`),
+              or(...Object.values(columns)),
+            ),
+          );
         return [
           { name: factName, sql: sql`${factQuery}` },
           { name: baseName, sql: sql`${root}` },

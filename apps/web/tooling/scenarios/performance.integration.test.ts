@@ -28,14 +28,14 @@ it("seeds connected performance history readable by the real Work queue", async 
     name: "Synthetic performance member",
     userId: ctx.actor.userId,
   });
-  await seedPerformanceCorpus(ctx.db, ctx.actor.userId, { bundles: 2 });
+  await seedPerformanceCorpus(ctx.db, ctx.actor.userId, { bundles: 3 });
   const roster = await getDb(ctx.db).execute<{
     count: number;
   }>(sql`SELECT count(*)::int AS count
     FROM "Run" r JOIN "Email" e ON e."runId" = r.id
     JOIN "OrderMail" m ON m.id=e."orderMailId" AND m."rawChecksum"=e.checksum
     WHERE r.input->'sources' @> jsonb_build_array(jsonb_build_object('orderMailId', e."orderMailId", 'checksum', e.checksum))`);
-  expect(roster.rows[0]).toMatchObject({ count: 10 });
+  expect(roster.rows[0]).toMatchObject({ count: 15 });
   const [historical] = await getDb(ctx.db)
     .select({ shortcode: run.shortcode })
     .from(run)
@@ -55,7 +55,7 @@ it("seeds connected performance history readable by the real Work queue", async 
     pagination: { pageIndex: 0, pageSize: 25 },
     projection: ["dataQuality"],
   });
-  expect(parcels.count).toBe(1);
+  expect(parcels.count).toBe(2);
   expect(dataQuality.parse(parcels.data[0]?.dataQuality).gaps).not.toEqual([]);
   const queue = await readWorkQueue(ctx.db, {
     input: workQueueInput.parse({ pageSize: 25 }),
