@@ -161,6 +161,17 @@ describe("durable Gmail page acquisition", () => {
       );
     expect(settled).not.toHaveProperty("scopedKey");
     expect(creditScopedPage(settled, 1, new Date())).toEqual(partial);
+    const pruned = { ...partial, scoped: [] };
+    const settledPruned = rebaseMailboxPage({
+      page: scoped,
+      coverage: pruned,
+      restoreScopedQuery: false,
+    });
+    expect(settledPruned).not.toBeNull();
+    if (!settledPruned)
+      throw new Error("Handled page must not restore a pruned search");
+    expect(settledPruned).not.toHaveProperty("scopedKey");
+    expect(creditScopedPage(settledPruned, 1, new Date())).toEqual(pruned);
     expect(
       rebaseMailboxPage({
         page: scoped,
