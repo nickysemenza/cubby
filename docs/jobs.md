@@ -369,8 +369,11 @@ budget stops into `ai_funding_window` Job deferrals at the same window end plus
 60 seconds as the resume owner; provider funding/configuration stops defer until
 the provider retry time. Neither consumes an attempt or discards frozen input,
 page evidence or the Job cursor. Generic early retries leave a funding-paused Run
-waiting while its funding-resume Job is pending; explicit `run_now_paid` authority
-can launch it immediately. An explicit budget increase also restores funding-paused
+waiting while its funding-resume Job is pending. An explicit Run launch or
+Resume makes its retained queued/backing-off Job due immediately, preserving
+its generation, attempts and cursor; the next page still checks current funding
+and may pause again. Resume creates no paid grant; `run_now_paid` uses its explicit
+paid authority. An explicit budget increase also restores funding-paused
 discovery before bringing queued Jobs forward; member pauses remain stopped.
 Automatic mailbox admission joins the retained Run.
 Run control refusals are

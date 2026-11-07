@@ -149,6 +149,42 @@ describe("Run Job admission", () => {
     expect(launches[0]?.instanceId).toBe(launches[1]?.instanceId);
     const [execution] = await readJobs(ctx.db, { key: `run:${id}` });
     if (!execution) throw new Error("Missing execution");
+    const fundingDeadline = new Date(Date.now() + 3_600_000);
+    const cursor = { after: "synthetic-funded-page" };
+    await updateJobs(
+      ctx.db,
+      { id: execution.id },
+      {
+        availableAt: fundingDeadline,
+        waitReason: "ai_funding_window",
+        attempts: 1,
+        cursor,
+      },
+    );
+    await launchWorkflowRun(ctx.db, {
+      runId: id,
+      purpose: "maintenance",
+      automatic: true,
+    });
+    const [waiting] = await readJobs(ctx.db, { key: `run:${id}` });
+    expect(waiting?.availableAt).toEqual(fundingDeadline);
+    await getDb(ctx.db)
+      .update(run)
+      .set({
+        status: "paused_auth",
+        failureCode: "execution_limit",
+      })
+      .where(eq(run.id, id));
+    await launchWorkflowRun(ctx.db, { runId: id, purpose: "maintenance" });
+    const [resumed] = await readJobs(ctx.db, { key: `run:${id}` });
+    expect(resumed).toMatchObject({
+      id: execution.id,
+      generation: execution.generation,
+      attempts: 1,
+      cursor,
+    });
+    if (!resumed) throw new Error("Missing resumed execution");
+    expect(resumed.availableAt.getTime()).toBeLessThanOrEqual(Date.now());
     const claimed = await claimJob(ctx.db, execution.id);
     if (!claimed) throw new Error("Missing claim");
     const [owner] = await getDb(ctx.db)
