@@ -3,7 +3,6 @@ import { aiGatewayId, CF_ACCOUNT_ID } from "@cubby/shared/ai/gateway-metadata";
 import {
   creditRefusedResponse,
   isInferenceFundingRefusal,
-  runUniversalGateway,
   runNativeGateway,
   workersAiModel,
   workersAiRunRequest,
@@ -366,6 +365,10 @@ export class AiGatewayEgressDurableObject extends DurableObject<Env> {
         throw new Error(
           "Named subscriber-credit BYOK requires the AI_GATEWAY_API_KEY Worker secret for native gateway authentication",
         );
+      if (provider !== "workers-ai" && !this.env.AI_GATEWAY_API_KEY)
+        throw new Error(
+          "Paid third-party AI requires the AI_GATEWAY_API_KEY Worker secret for native gateway authentication",
+        );
       const byokRequest = byokJev
         ? workersAiRunRequest({
             accountId: CF_ACCOUNT_ID,
@@ -378,29 +381,23 @@ export class AiGatewayEgressDurableObject extends DurableObject<Env> {
         : null;
       // Require stored TypeSafe credentials; never spend Unified Billing credits.
       byokRequest?.init.headers.set("cf-aig-no-wholesale", "true");
+      // Native passthrough preserves credit aliases and unaliased paid fallback.
       const response = byokRequest
         ? await fetch(byokRequest.url, byokRequest.init)
-        : credit
-          ? await runNativeGateway({
+        : provider === "workers-ai"
+          ? await this.env.AI.run(workersAiModel(endpoint), query, {
+              gateway: { id: gatewayId, ...controls },
+              returnRawResponse: true,
+              signal: controller.signal,
+            })
+          : await runNativeGateway({
               accountId: CF_ACCOUNT_ID,
               gatewayId,
               provider,
               token: this.env.AI_GATEWAY_API_KEY,
               request: outbound,
               controls,
-            })
-          : provider === "workers-ai"
-            ? await this.env.AI.run(workersAiModel(endpoint), query, {
-                gateway: { id: gatewayId, ...controls },
-                returnRawResponse: true,
-                signal: controller.signal,
-              })
-            : await runUniversalGateway(
-                this.env.AI.gateway(gatewayId),
-                provider,
-                outbound,
-                { id: gatewayId, ...controls },
-              );
+            });
       if (!(response instanceof Response))
         throw new Error("AI Gateway returned no raw Response");
       if (credit && response.ok)

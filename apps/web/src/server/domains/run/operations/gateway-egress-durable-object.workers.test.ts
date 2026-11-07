@@ -43,25 +43,13 @@ describe("Claude credit refusal", () => {
   it("records a Console limit until its named date and refuses later credit requests without calling Anthropic", async () => {
     const stub = env.AI_GATEWAY_EGRESS.getByName(crypto.randomUUID());
     await runInDurableObject(stub, async (instance) => {
-      const unified: unknown[] = [];
       Object.defineProperty(instance, "env", {
-        value: {
-          AI_GATEWAY_API_KEY: "synthetic-gateway-token",
-          AI: {
-            gateway: () => ({
-              run: async (request: unknown) => {
-                unified.push(request);
-                return new Response("synthetic unified response");
-              },
-            }),
-          },
-        },
+        value: { AI_GATEWAY_API_KEY: "synthetic-gateway-token" },
       });
       const upstream = vi
         .spyOn(globalThis, "fetch")
-        .mockImplementation(
-          async () => new Response(CONSOLE_LIMIT, { status: 400 }),
-        );
+        .mockResolvedValueOnce(new Response(CONSOLE_LIMIT, { status: 400 }))
+        .mockResolvedValue(new Response("synthetic unified response"));
       try {
         const first = await instance.fetch(creditRequest());
         expect(first.status).toBe(400);
@@ -85,7 +73,12 @@ describe("Claude credit refusal", () => {
 
         const paid = await instance.fetch(egressRequest({}));
         expect(await paid.text()).toBe("synthetic unified response");
-        expect(unified).toHaveLength(1);
+        expect(upstream).toHaveBeenCalledTimes(2);
+        expect(
+          new Headers(upstream.mock.calls[1]?.[1]?.headers).has(
+            "cf-aig-byok-alias",
+          ),
+        ).toBe(false);
       } finally {
         upstream.mockRestore();
       }
@@ -317,35 +310,31 @@ describe("shared Gateway admission", () => {
   it("forwards provider headers and releases the durable permit when a stream completes or cancellation rejects", async () => {
     const stub = env.AI_GATEWAY_EGRESS.getByName(crypto.randomUUID());
     await runInDurableObject(stub, async (instance) => {
-      const calls: unknown[] = [];
+      const calls: Request[] = [];
       let failCancel = false;
       let cancellationFailed = false;
+      const runtime = { AI_GATEWAY_API_KEY: "synthetic-gateway-key" };
       Object.defineProperty(instance, "env", {
-        value: {
-          AI: {
-            gateway: () => ({
-              run: async (request: unknown) => {
-                calls.push(request);
-                return new Response(
-                  failCancel
-                    ? new ReadableStream({
-                        start(controller) {
-                          controller.enqueue(new Uint8Array([1]));
-                        },
-                        cancel() {
-                          cancellationFailed = true;
-                          throw new Error(
-                            "Synthetic upstream cancellation failure",
-                          );
-                        },
-                      })
-                    : "synthetic response",
-                );
-              },
-            }),
-          },
-        },
+        value: runtime,
       });
+      const upstream = vi
+        .spyOn(globalThis, "fetch")
+        .mockImplementation(async (input, init) => {
+          calls.push(new Request(input, init));
+          return new Response(
+            failCancel
+              ? new ReadableStream({
+                  start(controller) {
+                    controller.enqueue(new Uint8Array([1]));
+                  },
+                  cancel() {
+                    cancellationFailed = true;
+                    throw new Error("Synthetic upstream cancellation failure");
+                  },
+                })
+              : "synthetic response",
+          );
+        });
       const request = () =>
         new Request("https://gateway.internal/egress", {
           method: "POST",
@@ -363,20 +352,32 @@ describe("shared Gateway admission", () => {
             },
           }),
         });
-      expect(await (await instance.fetch(request())).text()).toBe(
-        "synthetic response",
-      );
-      expect(calls[0]).toMatchObject({
-        headers: { "anthropic-version": "2023-06-01" },
-      });
-      failCancel = true;
-      const response = await instance.fetch(request());
-      await Promise.allSettled([
-        response.body!.cancel("synthetic cancellation"),
-      ]);
-      expect(cancellationFailed).toBe(true);
-      for (let i = 0; i < 4; i++)
-        expect((await instance.admit("unified")).kind).toBe("admitted");
+      try {
+        expect(await (await instance.fetch(request())).text()).toBe(
+          "synthetic response",
+        );
+        expect(calls[0]?.url).toMatch(/\/cubby\/anthropic\/v1\/messages$/);
+        expect(calls[0]?.headers.get("anthropic-version")).toBe("2023-06-01");
+        expect(calls[0]?.headers.get("cf-aig-authorization")).toBe(
+          "Bearer synthetic-gateway-key",
+        );
+        expect(calls[0]?.headers.has("cf-aig-byok-alias")).toBe(false);
+        expect(calls[0]?.headers.has("cf-aig-no-wholesale")).toBe(false);
+        failCancel = true;
+        const response = await instance.fetch(request());
+        await Promise.allSettled([
+          response.body!.cancel("synthetic cancellation"),
+        ]);
+        expect(cancellationFailed).toBe(true);
+        runtime.AI_GATEWAY_API_KEY = "";
+        await expect(instance.fetch(request())).rejects.toThrow(
+          "Paid third-party AI requires the AI_GATEWAY_API_KEY Worker secret",
+        );
+        for (let i = 0; i < 4; i++)
+          expect((await instance.admit("unified")).kind).toBe("admitted");
+      } finally {
+        upstream.mockRestore();
+      }
     });
   });
 });

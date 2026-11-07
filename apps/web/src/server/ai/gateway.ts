@@ -12,11 +12,8 @@ import {
   type GatewayControls,
   type GatewayFetchRequest,
   type GatewayFetchRoutes,
-  gatewayControlHeaders,
   gatewayFetchThrough,
-  gatewayProviderUrl,
   type GatewayResponseObservers,
-  runUniversalGateway,
   runNativeGateway,
   type WorkersAiRunGateway,
   workersAiModel,
@@ -175,13 +172,10 @@ async function workersAiFetch(
 /**
  * The one AI Gateway transport: a `fetch` any provider SDK can be handed.
  *
- * In prod the Worker's `env.AI` binding carries the request — Workers AI
- * models through `AI.run` scoped to the `cubby` gateway, every other provider
- * over `env.AI.gateway("cubby")`'s Universal endpoint — so the Worker's own
- * identity authenticates and unified billing / BYOK apply, with no token in
- * the request. A Node process without the binding falls back to REST with
- * `AI_GATEWAY_API_KEY`: the gateway's provider route, or the account
- * `/ai/run` for Workers AI.
+ * Workers AI models use `AI.run` scoped to the `cubby` gateway. Third-party
+ * models use native provider passthrough authenticated by `AI_GATEWAY_API_KEY`,
+ * both inside the coordinated Worker and in the Node fallback. Credit requests
+ * select their named alias; paid requests rely on Unified Billing without it.
  *
  * Every branch returns the gateway's `Response` untouched, so streaming bodies
  * pass straight through to the SDK.
@@ -255,36 +249,14 @@ export function gatewayFetch(
           id: aiGatewayId(controls.metadata.environment),
           ...controls,
         });
-      if (
-        opts.funding === "subscriber_credit" ||
-        opts.funding === "openai_credit"
-      )
-        return runNativeGateway({
-          accountId: CF_ACCOUNT_ID,
-          gatewayId: aiGatewayId(controls.metadata.environment),
-          token: requiredApiKey(),
-          provider,
-          request,
-          controls,
-        });
-      const gateway = getAiGateway(aiGatewayId(controls.metadata.environment));
-      if (gateway)
-        return runUniversalGateway(gateway, provider, request, controls);
-      const headers = request.headers;
-      headers.set("cf-aig-authorization", `Bearer ${requiredApiKey()}`);
-      for (const [name, value] of Object.entries(
-        gatewayControlHeaders(controls),
-      ))
-        headers.set(name, value);
-      return fetch(
-        gatewayProviderUrl({
-          accountId: CF_ACCOUNT_ID,
-          gatewayId: aiGatewayId(controls.metadata.environment),
-          provider,
-          endpoint: request.endpoint,
-        }),
-        { ...request.init, headers, signal: request.signal },
-      );
+      return runNativeGateway({
+        accountId: CF_ACCOUNT_ID,
+        gatewayId: aiGatewayId(controls.metadata.environment),
+        token: requiredApiKey(),
+        provider,
+        request,
+        controls,
+      });
     },
   });
 }
@@ -292,8 +264,8 @@ export function gatewayFetch(
 /**
  * Whether {@link gatewayFetch} can reach the gateway at all.
  *
- * The same branch decision, asked ahead of time: the binding authenticates
- * itself, and only the REST fallback needs `AI_GATEWAY_API_KEY`. Callers that
+ * A test peer, Workers AI binding or REST token supplies a reachable transport.
+ * Third-party sends still require `AI_GATEWAY_API_KEY`. Callers that
  * degrade instead of failing (semantic search hides itself when embeddings are
  * unavailable) ask here rather than re-deriving the rule, which is how the old
  * embeddings client came to treat a bindingless prod Worker as unconfigured.

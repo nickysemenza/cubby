@@ -138,7 +138,7 @@ export const getImageProcessingNamespace = () => currentEnv()?.IMAGE_PROCESSING;
 /**
  * The optional Workers AI binding (`env.AI`) from the Worker environment. The
  * transport shim in `~/server/ai/gateway` runs Workers AI models on it
- * directly and reaches every other provider through `getAiGateway`.
+ * directly; third-party models use native provider passthrough.
  */
 export const getAi = () => currentEnv()?.AI;
 
