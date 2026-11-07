@@ -132,6 +132,11 @@ Interaction-only registry dialogs stay lazy with a local Suspense boundary
 inside their open/selected state. Loading a dialog must not suspend the action
 host or page. Feature installation stays synchronous and idempotent so child
 lookups see registered components before rendering.
+The default row inspector loads behind its own closeable panel boundary. Row
+intent warms its code with the existing detail prefetch; opening starts both
+together so the lazy module does not delay the record read. Custom inspectors
+and phone detail navigation do not preload the default inspector. Exception
+notes load Markdown only when shown, retaining the plain note while it loads.
 The generated route component imports only its own override and passes it to
 `listPage`; the generic list must never import an all-entity column registry.
 Shared cells live with their generic feature (for example, the unit-mappings
