@@ -387,10 +387,11 @@ short-circuiting and soft-delete behavior.
 
 Lazy field evidence uses the field’s `explanation.evidence` strategy for specialist contributions and walks `resolution.inherit` directly for hierarchies and ordered reference paths. Strategies describe evidence semantics rather than entity callbacks.
 
-Task's SQL resolver computes each inherited field's own assignment, effective
-value and fallback once per outer row before formatting public provenance.
+The generic inherited-resolution compiler (currently used by Task) computes
+each field's own assignment, effective value and fallback once per outer row
+before formatting public provenance.
 A one-row materialized CTE prevents repeated JSON projections from rerunning
-the same inheritance subqueries; the values retain one statement snapshot.
+the same inheritance subqueries, preserving the existing statement snapshot.
 
 An inherited value has one implementation: the field's `resolution.inherit`
 declaration (`packages/schemas/src/entity-definitions/definition.ts`) and its
