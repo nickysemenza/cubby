@@ -648,6 +648,10 @@ publication. A serialization conflict replays the DB-only callback, lease and
 authority checks, settlement receipt and activation fence in a fresh transaction;
 inference and retained paid-result storage stay outside that boundary. A
 caller-owned transaction still owns its recovery and is not replayed locally.
+Field publication re-reads the declaration's read path, including mutation aliases
+such as `ingredientId` exposed as `ingredient.id`. A loaded nullable relation is
+empty; an absent root or missing governed result remains unavailable and cannot
+authorize a proposal.
 
 Failures map at the drain seam: invalidated evidence settles the evaluation
 `obsolete` as a publication outcome; AI budget, provider capacity and AI

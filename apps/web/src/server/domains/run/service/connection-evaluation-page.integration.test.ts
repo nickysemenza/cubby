@@ -26,6 +26,7 @@ import {
   purchase as purchaseTable,
   orderMailEvent,
   run,
+  suggestionTable,
 } from "~/server/db/schema";
 import * as connectionRepo from "~/server/domains/connection/repo/entity-connections";
 import { readEntityConnections } from "~/server/domains/connection/repo/entity-connections";
@@ -176,7 +177,7 @@ describe("connection evaluation pages", () => {
   }
 
   /** Records each paid decision request; embedding requests stay unrecorded. */
-  function decisionEnvironment() {
+  function decisionEnvironment(chooseIngredient = false) {
     const index = createInMemoryVectorizeIndex();
     const config = getSemanticEmbeddingConfig();
     const values = Array.from({ length: config.dimensions }, (_, axis) =>
@@ -218,9 +219,14 @@ describe("connection evaluation pages", () => {
                 answers: Object.fromEntries(
                   Object.entries(questions).map(([key, question]) => {
                     const choices = Object.keys(question.criteria);
-                    const selected = choices.includes("none")
-                      ? "none"
-                      : choices.at(-1);
+                    const selected =
+                      chooseIngredient &&
+                      metadata.operation ===
+                        "suggestFields.product.ingredientId"
+                        ? choices.find((choice) => choice !== "none")
+                        : choices.includes("none")
+                          ? "none"
+                          : choices.at(-1);
                     return [
                       key,
                       {
@@ -542,7 +548,7 @@ describe("connection evaluation pages", () => {
 
   it("packs Product identity and field questions across the page at the gateway", async () => {
     await setup();
-    const { requests, embed } = decisionEnvironment();
+    const { requests, embed } = decisionEnvironment(true);
     const products: Awaited<ReturnType<typeof createProductIdentityFixture>>[] =
       [];
     for (const suffix of ["alpha", "beta", "gamma", "delta"])
@@ -596,6 +602,29 @@ describe("connection evaluation pages", () => {
     expect(captured).toEqual(expected);
     expect(await runPage(ids)).toBe("succeeded");
     expect(new Set(await states(ids))).toEqual(new Set(["completed"]));
+    expect(
+      await getDb(ctx.db)
+        .select({
+          recordId: suggestionTable.recordId,
+          field: suggestionTable.field,
+          status: suggestionTable.status,
+        })
+        .from(suggestionTable)
+        .where(
+          inArray(
+            suggestionTable.recordId,
+            products.map((item) => item.entityId),
+          ),
+        ),
+    ).toEqual(
+      expect.arrayContaining(
+        products.map((item) => ({
+          recordId: item.entityId,
+          field: "ingredientId",
+          status: "pending",
+        })),
+      ),
+    );
     // A port bypasses DecisionRequestBatch. Inspect actual gateway requests
     // instead, so separate per-source usage objects cannot silently regress it.
     for (const operation of [

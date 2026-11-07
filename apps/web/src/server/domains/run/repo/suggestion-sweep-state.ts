@@ -1,11 +1,12 @@
 import type { FieldSuggestionsInput } from "@cubby/schemas/ai";
 import { entityFieldEnvelopeFields } from "@cubby/schemas/entity-field-envelopes";
-import { fieldEnvelopeFor, fieldValueOf } from "@cubby/schemas/field-envelope";
+import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { RunId } from "@cubby/schemas/identifiers";
 import { parseEntityId, parseEntityRef } from "@cubby/schemas/identifiers";
 import { and, eq, inArray, isNotNull, or, isNull } from "drizzle-orm";
 import { z } from "zod";
 
+import { fieldEnvelopeAtPath, readPathValue } from "~/entity/read-path";
 import type { UnparsedError } from "~/lib/error-utils";
 import type { Database } from "~/server/db";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
@@ -139,11 +140,18 @@ export async function saveSweepSuggestions(
           runId: runId ?? context.actorContext.runId,
         },
       };
+      const model = entityFieldModels[input.entity].fields.find(
+        (field) => field.key === input.field,
+      );
+      const path = model?.display.readPath ?? model?.readKey;
+      const root = path?.split(/[.[]/u, 1)[0];
+      if (!path || !root)
+        throw new Error("Suggestion field has no declared read path");
       const [record] = await readSelectedEntityRecords({
         context: txContext,
         entity: input.entity,
         ids: [publicId],
-        fields: [input.field],
+        fields: [root],
       });
       if (!record)
         throw new JobEvidenceObsoleteError(
@@ -151,18 +159,21 @@ export async function saveSweepSuggestions(
         );
       const governed = Object.hasOwn(
         entityFieldEnvelopeFields[input.entity],
-        input.field,
+        root,
       );
-      const envelope = fieldEnvelopeFor(record, input.field);
+      const envelope = fieldEnvelopeAtPath(record, path);
+      const currentValue = readPathValue(record, path);
       // Unavailable evidence is neither empty nor obsolete. It fails this target
-      // alone, so a shared publication chunk splits and its siblings still commit.
-      if (governed && (!envelope || envelope.result.kind === "missing"))
+      // alone. Mutation aliases such as ingredientId read an ordinary nullable
+      // relation; a loaded null root is empty, but a missing root is unavailable.
+      if (
+        envelope?.result.kind === "missing" ||
+        (governed && !envelope) ||
+        (currentValue === undefined && readPathValue(record, root) !== null)
+      )
         throw new JobTargetError(
           "Suggestion target field result is unavailable",
         );
-      const currentValue = governed
-        ? envelope && fieldValueOf(envelope)
-        : record[input.field];
       if (
         canonicalJson(z.json().parse(currentValue ?? null)) !==
         canonicalJson(input.currentValue)
