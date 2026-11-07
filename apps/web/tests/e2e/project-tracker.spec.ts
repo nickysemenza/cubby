@@ -176,7 +176,10 @@ test("maintenance keeps explicit completion history across spending years", asyn
   await page.getByLabel("Spending year").pressSequentially("2030");
   await expect(page.getByLabel("Spending year")).toHaveValue("2030");
   await page.getByLabel("Spending year").press("Tab");
-  await expect(page).toHaveURL(/maintenanceYear=2030/);
+  await expect(page).toHaveURL(
+    (url) =>
+      JSON.parse(url.searchParams.get("maintenanceYear") ?? "null") === "2030",
+  );
   await expect(row).toContainText("3 dated completions");
   const spending = page.locator("section").filter({
     has: page.getByRole("heading", {
@@ -190,7 +193,10 @@ test("maintenance keeps explicit completion history across spending years", asyn
   ).toContainText("$12.00");
   await page.getByLabel("Spending year").fill("2031");
   await page.getByLabel("Spending year").press("Enter");
-  await expect(page).toHaveURL(/maintenanceYear=2031/);
+  await expect(page).toHaveURL(
+    (url) =>
+      JSON.parse(url.searchParams.get("maintenanceYear") ?? "null") === "2031",
+  );
   await expect(spending.getByText(expenseName, { exact: true })).toHaveCount(0);
   await expect(row).toContainText("3 dated completions");
   await expect(
