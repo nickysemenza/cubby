@@ -17,6 +17,7 @@ import type { Database } from "~/server/db";
 import {
   getDb,
   withTransactionDatabase,
+  withSnapshotWriteDatabase,
   runAfterCommit,
 } from "~/server/db/helpers";
 import { uuidArrayParam } from "~/server/db/helpers/query";
@@ -283,7 +284,7 @@ export async function settleAiEvaluations(
   );
 }
 
-/** A single evaluation's guarded write; `continue` keeps it pending for more units. */
+/** DB-only publication replays its guards and receipt together; paid inference stays outside. */
 export async function publishAiEvaluation<T>(
   db: Database,
   id: string,
@@ -291,7 +292,7 @@ export async function publishAiEvaluation<T>(
   work: (tx: Database) => Promise<T>,
   settlement: "complete" | "continue" = "complete",
 ) {
-  return withTransactionDatabase(
+  return withSnapshotWriteDatabase(
     db,
     async (tx) => {
       const { row } = await guardAiEvaluation(tx, id, token);

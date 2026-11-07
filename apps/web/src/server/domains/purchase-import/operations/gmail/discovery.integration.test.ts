@@ -5,7 +5,10 @@
  * targeted search falls through to whole-mailbox history or searches a Vendor
  * name; completed coverage keeps chaining passes; one mailbox starves another. */
 import { runEntityId, vendorShortcode } from "@cubby/schemas/identifiers";
-import { mailboxDiscoveryProgress } from "@cubby/schemas/mailbox-research";
+import {
+  mailboxDiscoveryInput,
+  mailboxDiscoveryProgress,
+} from "@cubby/schemas/mailbox-research";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
@@ -22,6 +25,7 @@ import {
 } from "~/server/db/schema";
 import { readRetainedMail } from "~/server/domains/mail/repo/retained-mail";
 import { setMailImport } from "~/server/domains/purchase-import/repo/mail-import-settings";
+import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { updateJobs } from "~/server/generic/jobs/jobs.fixtures";
 import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
@@ -623,31 +627,88 @@ describe("scheduled Gmail discovery", () => {
     );
   });
 
-  it("preserves a waiting Job and projects a terminal Job's raw diagnostic", async () => {
-    const state = await seed();
-    await updateJobs(
-      ctx.db,
-      { key: `run:${state.params.runId}` },
-      {
+  it.each(["paused", "cancelled"] satisfies ("paused" | "cancelled")[])(
+    "preserves failed discovery for its recovery Job and respects a %s stop",
+    async (stoppedState) => {
+      const state = await seed();
+      await listMailDiscovery(ctx.db, state.params, ports(gmail()));
+      await updateJobs(
+        ctx.db,
+        { key: `run:${state.params.runId}` },
+        {
+          state: "retry_wait",
+          availableAt: new Date(Date.now() + 3_600_000),
+        },
+      );
+      expect((await reconcileWorkflowRuns(ctx.db)).reconciled).toBe(0);
+      expect((await readRun(state.params.runId)).status).toBe("running");
+      await updateJobs(
+        ctx.db,
+        { key: `run:${state.params.runId}` },
+        { state: "failed", error: "HTTP 503: Synthetic ended execution" },
+      );
+      expect((await reconcileWorkflowRuns(ctx.db)).reconciled).toBe(1);
+      expect(await readRun(state.params.runId)).toMatchObject({
+        status: "failed",
+        endedAt: expect.any(Date),
+        failureCode: "job_failed",
+        dispatchError: "HTTP 503: Synthetic ended execution",
+      });
+      const retained = await readRun(state.params.runId);
+      const availableAt = new Date(Date.now() + 60_000);
+      await updateJobs(
+        ctx.db,
+        { key: `run:${state.params.runId}` },
+        {
+          state: "retry_wait",
+          attempts: 3,
+          availableAt,
+          leaseToken: null,
+          leaseExpiresAt: null,
+        },
+      );
+      // App-open discovery must leave the free slot for the retained Job, even
+      // while its retry backoff has not elapsed.
+      expect(await startMailDiscovery(ctx.db)).toEqual({
+        started: 0,
+        running: 1,
+      });
+      expect(await created()).toHaveLength(1);
+      const predecessor = await ensureRun(ctx.db, ctx.actor, {
+        purpose: "mail_discovery",
+        trigger: "scheduled",
+        status: "completed",
+        input: mailboxDiscoveryInput.parse(retained.input),
+      });
+      await continueMailDiscovery(ctx.db, { runId: predecessor, attempt: 1 });
+      expect(await created()).toHaveLength(2);
+      expect(await readRun(state.params.runId)).toMatchObject({
+        status: "failed",
+        input: retained.input,
+        progress: retained.progress,
+      });
+      expect(
+        (await readJobs(ctx.db, { key: `run:${state.params.runId}` }))[0],
+      ).toMatchObject({
         state: "retry_wait",
-        availableAt: new Date(Date.now() + 3_600_000),
-      },
-    );
-    expect((await reconcileWorkflowRuns(ctx.db)).reconciled).toBe(0);
-    expect((await readRun(state.params.runId)).status).toBe("running");
-    await updateJobs(
-      ctx.db,
-      { key: `run:${state.params.runId}` },
-      { state: "failed", error: "HTTP 503: Synthetic ended execution" },
-    );
-    expect((await reconcileWorkflowRuns(ctx.db)).reconciled).toBe(1);
-    expect(await readRun(state.params.runId)).toMatchObject({
-      status: "failed",
-      endedAt: expect.any(Date),
-      failureCode: "job_failed",
-      dispatchError: "HTTP 503: Synthetic ended execution",
-    });
-  });
+        attempts: 3,
+        availableAt,
+      });
+      // A member stop cannot hold fresh admission hostage or be resumed by it.
+      await updateJobs(
+        ctx.db,
+        { key: `run:${state.params.runId}` },
+        { state: stoppedState },
+      );
+      await continueMailDiscovery(ctx.db, { runId: predecessor, attempt: 1 });
+      expect(await created()).toHaveLength(3);
+      expect((await readRun(state.params.runId)).status).toBe("failed");
+      expect(
+        (await readJobs(ctx.db, { key: `run:${state.params.runId}` }))[0]
+          ?.state,
+      ).toBe(stoppedState);
+    },
+  );
 
   it("alternates verified Vendor history with new mail and continues only while coverage remains", async () => {
     const state = await seed({ targeted: false });

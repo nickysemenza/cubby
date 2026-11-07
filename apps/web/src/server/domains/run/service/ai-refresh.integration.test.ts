@@ -18,6 +18,7 @@ import type { DecisionPort } from "~/server/ai/decision-model";
 import {
   guardAiEvaluation,
   publishAiEvaluation,
+  storeAiEvaluationResult,
 } from "~/server/ai/evaluation/repo/ai-evaluation";
 import { aiEvaluationItem } from "~/server/ai/evaluation/service/ai-evaluation-drain.fixtures";
 import {
@@ -1386,6 +1387,84 @@ describe("targeted prompt refresh", () => {
     ).toHaveLength(0);
   });
 
+  it("replays a singleton publication on a fresh snapshot and retains its stored decision", async () => {
+    const item = await productFixture(ctx, "Synthetic singleton recovery");
+    await startSuggestionSweep(
+      ctx.db,
+      {
+        entity: "product",
+        fields: ["categoryId"],
+        filters: { ids: [item.id] },
+      },
+      { context: kernelCtx(ctx), ...categoryPorts(0.6) },
+    );
+    await activateAiRefresh(ctx.db, "synthetic-singleton-recovery", {
+      enabled: true,
+    });
+    await discoverAiRefreshNow(ctx.db, {
+      context: kernelCtx(ctx),
+      suggestPorts: categoryPorts(0.6).suggestPorts,
+    });
+    const [evaluation] = await getDb(ctx.db)
+      .select()
+      .from(aiEvaluation)
+      .where(fieldRefreshTarget);
+    const [stored] = await getDb(ctx.db)
+      .select({ id: product.id })
+      .from(product)
+      .where(eq(product.name, "Synthetic singleton recovery"));
+    const decision = { syntheticDecision: true };
+    let publications = 0;
+    await withClaimedAiEvaluation(ctx.db, evaluation!.id, async (claimed) => {
+      expect(await storeAiEvaluationResult(ctx.db, claimed, decision)).toBe(
+        true,
+      );
+      await publishAiEvaluation(
+        ctx.db,
+        claimed.id,
+        claimed.attemptToken,
+        async (tx) => {
+          publications++;
+          const [before] = await getDb(tx)
+            .select({ name: product.name })
+            .from(product)
+            .where(eq(product.id, stored!.id));
+          if (publications === 1) {
+            // The outer snapshot predates this committed row version, so its
+            // following UPDATE raises a real PostgreSQL 40001.
+            await getDb(ctx.db)
+              .update(product)
+              .set({ name: "Synthetic concurrent singleton write" })
+              .where(eq(product.id, stored!.id));
+          }
+          await getDb(tx)
+            .update(product)
+            .set({ name: "Synthetic committed singleton publication" })
+            .where(eq(product.id, stored!.id));
+          return { observedName: before!.name };
+        },
+      );
+    });
+    expect(publications).toBe(2);
+    const [settled] = await getDb(ctx.db)
+      .select()
+      .from(aiEvaluation)
+      .where(eq(aiEvaluation.id, evaluation!.id));
+    expect(settled).toMatchObject({
+      state: "completed",
+      result: decision,
+      receipt: { observedName: "Synthetic concurrent singleton write" },
+    });
+    expect(
+      (
+        await getDb(ctx.db)
+          .select({ name: product.name })
+          .from(product)
+          .where(eq(product.id, stored!.id))
+      )[0]?.name,
+    ).toBe("Synthetic committed singleton publication");
+  });
+
   it("leaves activation unlocked during publication work and fences deactivation before commit", async () => {
     const item = await productFixture(ctx, "Synthetic publication fence");
     await startSuggestionSweep(
@@ -1448,7 +1527,7 @@ describe("targeted prompt refresh", () => {
           },
         ),
       ),
-    ).rejects.toMatchObject({ cause: { code: "40001" } });
+    ).rejects.toThrow("Automatic AI refresh is disabled");
     expect(probeError).toBeUndefined();
     expect(callbackRan).toBe(true);
     expect(

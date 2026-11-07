@@ -33,6 +33,25 @@ struct CompanionImageProcessorTests {
         #expect(attempts[0].0 == 1024 && attempts[0].1 == 512)
         #expect(attempts[1].0 == 512 && attempts[1].1 == 256)
         #expect(result.cutoutEligibility == .ineligible)
+
+        let rawContent = #"{"description":"A metal tool marked 3/8"}"#
+        attempts = []
+        do {
+            _ = try await FoundationModelsImageDescriber.describeWithRecovery(image, contextSize: 8192) {
+                input, maximum in
+                attempts.append((input.width, maximum))
+                throw GeneratedContent.ParsingError(
+                    rawContent: rawContent,
+                    debugDescription: "Synthetic missing required cutoutEligibility property")
+            }
+            Issue.record("An incomplete structured response must fail")
+        } catch CompanionImageDescriptionFailure.model(let reason, let retryable) {
+            #expect(!retryable)
+            #expect(reason.contains("structured_output_invalid"))
+            #expect(reason.contains("cutoutEligibility"))
+            #expect(reason.contains("3/8"))
+        }
+        #expect(attempts.count == 1)
     }
 
     @Test("Decodes a checksum-verified AVIF catalog source")
@@ -95,8 +114,13 @@ struct CompanionImageProcessorTests {
 
     // Regression: an unclassified model error was reported as a retryable `processing_failed`
     // with no message, so a deterministic failure was re-leased forever.
-    @Test("Reports a deterministic model failure verbatim and does not retry it")
-    func reportsDeterministicModelFailure() async throws {
+    @Test(
+        "Reports a deterministic model failure verbatim and does not retry it",
+        arguments: [
+            "context_size_exceeded: Content contains 8193 tokens",
+            "structured_output_invalid: Synthetic missing required cutoutEligibility property",
+        ])
+    func reportsDeterministicModelFailure(reason: String) async throws {
         let bytes = try Self.syntheticAVIF()
         let processor = CompanionImageProcessor(
             download: { _ in bytes },
@@ -116,14 +140,13 @@ struct CompanionImageProcessorTests {
         let result = try await CompanionImageCommandExecutor(
             processor: processor,
             describer: FailingDescriber(
-                failure: .model(
-                    reason: "context_size_exceeded: Content contains 8193 tokens", retryable: false))
+                failure: .model(reason: reason, retryable: false))
         ).execute(command)
         let encoded = String(
             decoding: try JSONEncoder.companionImageProcessing.encode(result), as: UTF8.self)
         #expect(encoded.contains("\"status\":\"failed\""))
         #expect(encoded.contains("\"retryable\":false"))
-        #expect(encoded.contains("context_size_exceeded: Content contains 8193 tokens"))
+        #expect(encoded.contains(reason))
     }
 
     @Test("Uploads a transparent PNG derived from an unchanged source", .requiresVisionHardware)

@@ -639,6 +639,12 @@ before inference, and a stopped requester parks its item. A paid answer is
 written as `result_ready` through `ctx.fenced` before publication, so a later
 publication failure reuses it instead of buying it again.
 
+Single-evaluation publication owns the same bounded snapshot recovery as paged
+publication. A serialization conflict replays the DB-only callback, lease and
+authority checks, settlement receipt and activation fence in a fresh transaction;
+inference and retained paid-result storage stay outside that boundary. A
+caller-owned transaction still owns its recovery and is not replayed locally.
+
 Failures map at the drain seam: invalidated evidence settles the evaluation
 `obsolete` as a publication outcome; AI budget, provider capacity and AI
 Gateway admission throw `JobDeferredError`, which stops the page without

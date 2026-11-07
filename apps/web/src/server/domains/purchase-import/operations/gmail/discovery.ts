@@ -36,6 +36,7 @@ import {
 } from "~/server/domains/purchase-import/repo/controlled-mail-import";
 import {
   listGmailSyncTargets,
+  mailDiscoveryRecoveryWakeAt,
   type GmailSyncTarget,
 } from "~/server/domains/purchase-import/repo/gmail/targets";
 import {
@@ -50,6 +51,7 @@ import { recordRunProgress } from "~/server/domains/run/repo/run-progress";
 import { isUniqueViolation } from "~/server/errors/db-errors";
 import { reportServerError } from "~/server/errors/report-error";
 import { currentJobExecution } from "~/server/generic/jobs/context";
+import { wakeAt } from "~/server/workflows/background-tasks/publish";
 import type { WorkflowRunParams } from "~/server/workflows/runs/contract";
 import {
   claimWorkflowRun,
@@ -240,6 +242,18 @@ async function fundingPausedDiscovery(
   return row;
 }
 
+async function yieldToMailDiscoveryRecovery(
+  db: Database,
+  target: Pick<GmailSyncTarget, "ledgerPartyId" | "mailboxId">,
+): Promise<boolean> {
+  const at = await mailDiscoveryRecoveryWakeAt(db, target);
+  if (!at) return false;
+  // Only the existing Job's fenced claim may restore its Run. Starting another
+  // automatic owner here would take the unique mailbox slot ahead of that claim.
+  await wakeAt(at, { source: "mail-discovery.recovery" });
+  return true;
+}
+
 /**
  * Starts discovery for each eligible mailbox. A mailbox whose discovery is
  * waiting for free AI capacity keeps that Run instead of starting another;
@@ -294,6 +308,13 @@ export async function startMailDiscovery(
         purpose: "mail_discovery",
       });
       started += 1;
+      continue;
+    }
+    if (
+      !options.paidGrant &&
+      (await yieldToMailDiscoveryRecovery(db, target))
+    ) {
+      running += 1;
       continue;
     }
     let runId;
@@ -722,6 +743,13 @@ export async function continueMailDiscovery(
   }
   // A selected Vendor finishes in this Run; it never fans out to the history lane.
   if (input.controlled) return;
+  if (
+    await yieldToMailDiscoveryRecovery(db, {
+      ledgerPartyId: previous.ledgerPartyId,
+      mailboxId: input.mailboxId,
+    })
+  )
+    return;
   const clientKey = `mailbox-continuation:${previous.id}`;
   const [existing] = await getDb(db)
     .select()
