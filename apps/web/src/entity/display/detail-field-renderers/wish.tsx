@@ -31,7 +31,6 @@ function WishCandidateRow({ candidate }: { candidate: WishCandidateOut }) {
             <ImageThumbnail
               images={images}
               alt={candidate.name}
-              lazyPreview
               entity="product"
             />
           </span>

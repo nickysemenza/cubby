@@ -21,7 +21,7 @@ import { formatCurrency } from "~/lib/number-format";
 import { FieldRecordValue } from "~/ui/derived/record-value";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { useIsMobile } from "~/ui/hooks/use-mobile";
-import { ImageWithPreview } from "~/ui/media/image-with-preview";
+import { Image } from "~/ui/media/image";
 import { Button } from "~/ui/primitives/button";
 import { tryFormatAmount } from "~/ui/text/format-amount";
 import { NoneValue } from "~/ui/text/none-value";
@@ -344,13 +344,14 @@ const LocationOverview = memo(function LocationOverview({
           {(fieldValueOf(location.fields.images) ?? []).map((image) => {
             const url = publicImageUrl(image);
             return url ? (
-              <ImageWithPreview
+              <Image
                 key={image.id}
                 src={url}
                 alt={`${location.name} photo`}
                 to="/images/$shortcode"
                 params={{ shortcode: image.id }}
                 size={64}
+                displayWidth={64}
               />
             ) : (
               <span key={image.id}>{fieldEmptyLabel(image.fields.url)}</span>
@@ -417,12 +418,13 @@ function InventoryContentsRow({ item }: { item: InventoryItemForTree }) {
   return (
     <li className="flex min-w-0 items-center gap-2 border-t border-border px-2 py-1">
       {images[0] ? (
-        <ImageWithPreview
+        <Image
           src={images[0].url}
           alt={item.productName}
           to="/products/$shortcode"
           params={{ shortcode: item.productId }}
           size={32}
+          displayWidth={32}
         />
       ) : (
         <EntityIcon
