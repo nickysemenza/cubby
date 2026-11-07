@@ -91,12 +91,12 @@ export async function prioritizeJob(
 
 /**
  * Queued or backing-off Jobs whose key is in `keys` (a key subquery) become
- * due now; typed waits and attempts stay.
+ * due now; prior attempts and errors stay, and the old wait reason clears.
  */
 export async function makeJobsDueNow(db: RepositoryQueryInput, keys: SQL) {
   await repositoryQueries(db)
     .update(job)
-    .set({ availableAt: new Date() })
+    .set({ availableAt: new Date(), waitReason: null })
     .where(
       and(
         inArray(job.state, ["queued", "retry_wait"]),

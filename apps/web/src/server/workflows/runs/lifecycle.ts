@@ -23,7 +23,11 @@ import {
   lockUnchangedJob,
   stoppedRunExecutions,
 } from "~/server/generic/jobs/repo/job-reads";
-import { prioritizeJob, retryJob } from "~/server/generic/jobs/repo/operator";
+import {
+  makeJobsDueNow,
+  prioritizeJob,
+  retryJob,
+} from "~/server/generic/jobs/repo/operator";
 import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 import { assertWorkflowEffect } from "~/server/workflows/runs/execution";
 
@@ -166,6 +170,9 @@ export async function launchWorkflowRun(
       })
       .where(eq(runTable.id, input.runId));
     if (!input.automatic) {
+      // An explicit launch releases the retained Job's backoff without resetting
+      // its attempt, cursor or the funding preflights on the next page.
+      await makeJobsDueNow(tx, sql`SELECT ${execution.key}::text`);
       // Items parked while this Run was stopped return at its priority.
       const pending = await getDb(tx).execute<{
         id: string;
