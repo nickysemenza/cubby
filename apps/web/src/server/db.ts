@@ -92,7 +92,11 @@ export const withRequestDb = async <T>(
   connections: RequestDbConnections,
   fn: () => Promise<T>,
 ): Promise<T> => {
-  const holder: RequestDatabaseRuntimeScope = { connections, runtimes: {} };
+  const holder: RequestDatabaseRuntimeScope = {
+    kind: "http",
+    connections,
+    runtimes: {},
+  };
   return requestDbStore.run(holder, fn);
 };
 
@@ -110,6 +114,7 @@ export const withInvocationDb = async <T>(
   const invocationConnection =
     getBackgroundDatabaseConnectionString() ?? connectionString;
   const holder: RequestDatabaseRuntimeScope = {
+    kind: "background",
     connections: {
       strong: invocationConnection,
       boundedStale: invocationConnection,

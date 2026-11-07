@@ -3,10 +3,16 @@ import type { RequestDbRole } from "./db-pg-tracing";
 
 /**
  * Sockets one Worker request may open, inside the Worker connection ceiling:
- * three strong plus one bounded-stale, four total. Two slots remain for
+ * two strong plus two bounded-stale, four total. Two slots remain for
  * subrequests (providers, Durable Objects, storage and telemetry).
  */
 const WORKER_REQUEST_CONNECTIONS = {
+  strong: 2,
+  "bounded-stale": 2,
+} as const satisfies Record<RequestDbRole, number>;
+
+// Background invocations keep their existing transaction parallelism.
+const BACKGROUND_CONNECTIONS = {
   strong: 3,
   "bounded-stale": 1,
 } as const satisfies Record<RequestDbRole, number>;
@@ -22,6 +28,7 @@ export interface RequestDbConnections {
 }
 
 export interface RequestDatabaseRuntimeScope {
+  kind: "http" | "background";
   connections: RequestDbConnections;
   runtimes: Partial<Record<RequestDbRole, DatabaseRuntime>>;
   clientOrdinal?: number;
@@ -72,7 +79,9 @@ export class DatabaseRuntimeResolver {
       // budgets use SET LOCAL inside their transaction, never session overrides here.
       const runtime = this.#createRuntime(
         connectionString,
-        WORKER_REQUEST_CONNECTIONS[role],
+        (scope.kind === "background"
+          ? BACKGROUND_CONNECTIONS
+          : WORKER_REQUEST_CONNECTIONS)[role],
         role,
         () => (scope.clientOrdinal = (scope.clientOrdinal ?? 0) + 1),
         scope.connections.poolIdleTimeoutMs,
