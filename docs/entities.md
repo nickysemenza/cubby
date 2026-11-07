@@ -2220,6 +2220,10 @@ their row/resolver value rather than acquiring a missing-publication receipt.
 Projectors declare cross-field dependencies beside
 their source reference; generation rejects unknown fields and cycles.
 
+The batch serializer retains each root schema's output type after validation.
+Public read wrappers return those validated roots without parsing them again;
+envelope construction, entity projectors and compact leaves keep their validation.
+
 The scaffold compiles one filter plan for repository readers, with population,
 related scopes, result availability, joins and ordering under one owner. Declared
 rollups and result projections cannot be silently replaced by repository SQL.
