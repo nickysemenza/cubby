@@ -161,6 +161,7 @@ export async function readEntityGraph(
 ): Promise<EntityGraphOutput> {
   const offset = input.offset ?? 0;
   const limit = input.limit ?? 25;
+  const countOnly = limit === 0;
   const nodes = new Map<string, EntityGraphNode>();
   const imageRefs = new Map<string, EntityRef>();
   const edges = new Map<string, EntityGraphEdge>();
@@ -175,8 +176,8 @@ export async function readEntityGraph(
     // Append-only roots have no deletedAt column; liveness belongs to the manifest.
     const rootRows = await unwrapDb(db).execute(
       sql`
-      SELECT "id" AS "dbId", "shortcode" AS "id", ${await labelSql(rootEntity, "")} AS "label",
-        ${metadataFor(rootEntity, "")} AS "metadata"
+      SELECT "id" AS "dbId", "shortcode" AS "id", ${countOnly ? sql`''` : await labelSql(rootEntity, "")} AS "label",
+        ${countOnly ? sql`'{}'::jsonb` : metadataFor(rootEntity, "")} AS "metadata"
       FROM ${sql.raw(`"${rootTable}"`)}
       WHERE "shortcode" IN (${sql.join(
         requestedRoots.map((root) => sql`${root.entityId}`),
@@ -201,7 +202,7 @@ export async function readEntityGraph(
         label: row.label,
         metadata: row.metadata,
       }));
-    for (const root of liveRoots) {
+    for (const root of countOnly ? [] : liveRoots) {
       imageRefs.set(entityRefKey(rootEntity, root.ref.entityId), {
         entityKind: rootEntity,
         entityId: root.dbId,
@@ -247,8 +248,8 @@ export async function readEntityGraph(
         return sql`
             SELECT s."shortcode" AS "rootShortcode", ${relationship.key}::text AS "relationshipKey", ${relationship.target}::text AS "targetEntity",
               t."id"::text AS "targetId", t."shortcode" AS "targetShortcode",
-              ${await labelSql(relationship.target, "t")} AS "label",
-              ${metadataFor(relationship.target)} AS "metadata", ${source.key}::text AS "sourceKey"
+              ${countOnly ? sql`''` : await labelSql(relationship.target, "t")} AS "label",
+              ${countOnly ? sql`'{}'::jsonb` : metadataFor(relationship.target)} AS "metadata", ${source.key}::text AS "sourceKey"
             FROM ${sql.raw(`"${traversal.rootTable}"`)} s
             ${traversal.joins}
             WHERE s."shortcode" IN (${sql.join(
@@ -260,8 +261,30 @@ export async function readEntityGraph(
       }),
     );
     await options.beforeQuery?.();
+    const branchKeys = sql.join(
+      liveRoots.flatMap((root) =>
+        relationships.map(
+          (relationship) => sql`(${root.ref.entityId}, ${relationship.key})`,
+        ),
+      ),
+      sql`, `,
+    );
     const result = await unwrapDb(db).execute(
-      sql`
+      countOnly
+        ? sql`
+        WITH raw_related AS (${sql.join(sourceRows, sql` UNION ALL `)}), totals AS (
+          SELECT "rootShortcode", "relationshipKey",
+            count(DISTINCT ("targetEntity", "targetId"))::int AS "totalCount"
+          FROM raw_related GROUP BY "rootShortcode", "relationshipKey"
+        ), branches("rootShortcode", "relationshipKey") AS (VALUES ${branchKeys})
+        SELECT branches."rootShortcode", branches."relationshipKey",
+          NULL::text AS "targetEntity", NULL::text AS "targetId", NULL::text AS "targetShortcode",
+          NULL::text AS "label", NULL::jsonb AS "metadata", NULL::text[] AS "sourceKeys",
+          COALESCE(totals."totalCount", 0)::int AS "totalCount"
+        FROM branches LEFT JOIN totals USING ("rootShortcode", "relationshipKey")
+        ORDER BY branches."rootShortcode", branches."relationshipKey"
+      `
+        : sql`
           WITH raw_related AS (${sql.join(sourceRows, sql` UNION ALL `)}), related AS (
             SELECT "rootShortcode", "relationshipKey", "targetEntity", "targetId", "targetShortcode", "label", "metadata",
               array_agg(DISTINCT "sourceKey") AS "sourceKeys"
@@ -274,15 +297,7 @@ export async function readEntityGraph(
           ), totals AS (
             SELECT "rootShortcode", "relationshipKey", max("totalCount")::int AS "totalCount"
             FROM ranked GROUP BY "rootShortcode", "relationshipKey"
-          ), branches("rootShortcode", "relationshipKey") AS (VALUES ${sql.join(
-            liveRoots.flatMap((root) =>
-              relationships.map(
-                (relationship) =>
-                  sql`(${root.ref.entityId}, ${relationship.key})`,
-              ),
-            ),
-            sql`, `,
-          )}) SELECT branches."rootShortcode", branches."relationshipKey", ranked."targetEntity", ranked."targetId", ranked."targetShortcode", ranked."label", ranked."metadata", ranked."sourceKeys",
+          ), branches("rootShortcode", "relationshipKey") AS (VALUES ${branchKeys}) SELECT branches."rootShortcode", branches."relationshipKey", ranked."targetEntity", ranked."targetId", ranked."targetShortcode", ranked."label", ranked."metadata", ranked."sourceKeys",
             COALESCE(totals."totalCount", 0)::int AS "totalCount"
           FROM branches LEFT JOIN totals USING ("rootShortcode", "relationshipKey")
           LEFT JOIN ranked ON ranked."rootShortcode" = branches."rootShortcode" AND ranked."relationshipKey" = branches."relationshipKey"
@@ -321,7 +336,7 @@ export async function readEntityGraph(
         );
         const totalCount = allBranchRows[0]?.totalCount ?? 0;
         const nextOffset =
-          offset + branchRows.length < totalCount
+          !countOnly && offset + branchRows.length < totalCount
             ? offset + branchRows.length
             : null;
         branches.push({
@@ -449,7 +464,7 @@ export async function readEntityGraph(
   });
   let images: Awaited<ReturnType<typeof resolveEntityDisplayImages>> =
     new Map();
-  if (options.includeImages) {
+  if (options.includeImages && outputNodes.length > 0) {
     try {
       await options.beforeQuery?.();
       images = await resolveEntityDisplayImages(

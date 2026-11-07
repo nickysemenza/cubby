@@ -392,6 +392,14 @@ replace this fresh decision read or the receiving command's current-stock checks
 
 ## List loading and enrichment
 
+The inspector overview and detail relation headings request graph branch counts
+with a zero item budget.
+It does not hydrate graph nodes, previews or images; the Relations tab owns its
+item page. Purchase, Account and Transaction primary lists use declared field
+projections even though they supply deletion/filter configuration overrides.
+Named list renderers add their catalog-owned input paths, preserving logos,
+external links and reconciliation facts when neighboring columns are hidden.
+
 SSR preloads and mounted lists share audit-column visibility, explicit sort
 demand and filter-count policy so their first page has one query identity.
 Embedded relation tables request their declared columns through the same list

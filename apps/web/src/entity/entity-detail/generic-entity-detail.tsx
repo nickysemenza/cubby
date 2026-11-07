@@ -442,7 +442,7 @@ function useRelationCounts(
     ...operations.graph.queryOptions({
       roots: [{ entityKind: entity, entityId: id }],
       relationshipKeys: [...relations],
-      limit: 1,
+      limit: 0,
     }),
     enabled,
   });

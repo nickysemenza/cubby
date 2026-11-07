@@ -441,12 +441,25 @@ export function resolveFieldDisplay(
     }
     return enabled;
   };
+  const list = resolve("list");
+  const detail = resolve("detail");
+  const renderer = field.display.renderer?.list;
+  const readFields = [
+    ...new Set([
+      ...(field.display.readFields ?? []),
+      ...(rendererReadInputs("list", renderer ?? "") ?? []).flatMap((input) => {
+        const root = input.path.split(".")[0]?.split("[")[0];
+        return root ? [root] : [];
+      }),
+    ]),
+  ];
   return {
     ...field,
     display: {
       ...field.display,
-      list: resolve("list"),
-      detail: resolve("detail"),
+      list,
+      detail,
+      ...(readFields.length ? { readFields } : {}),
     },
   };
 }

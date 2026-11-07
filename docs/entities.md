@@ -2237,7 +2237,8 @@ Browser rosters can send an explicit `fields` projection through the same
 selected reader used by narrow consumers. Their result carries `selectedFields`
 and honestly partial rows, with the requested canonical field envelopes rather
 than a new envelope format. The pure read plan is shared by SSR and the mounted
-list, so their default cache keys agree. It includes visible declared fields,
+list, so their default cache keys agree. Named list renderers contribute the
+inputs owned by the shared renderer coverage catalog. It includes visible declared fields,
 identity and image requirements, and explicit specialist/action dependencies;
 membership, sorting, grouping and totals retain independent server predicates.
 An entity route with specialist columns opts in through its declaration's
@@ -4236,7 +4237,10 @@ through it.
 
 Agents read declared relations, including multi-hop paths the physical graph has no
 edge for, through `entity_graph_read.graph`. Declaring a relation on an entity is
-enough: web, native and MCP read it from the same compiled roster.
+enough: web, native and MCP read it from the same compiled roster. A zero graph
+item budget returns exact branch counts with empty node, edge and item arrays,
+without labels, previews or image hydration. Count-only branches have no next
+offset; positive budgets retain ordinary graph pagination.
 
 The orphan finder restricts graph arms to edges touching its checked kinds
 before reading rows. Polymorphic source arms remain eligible because their

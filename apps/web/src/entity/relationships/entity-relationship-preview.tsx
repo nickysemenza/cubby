@@ -6,7 +6,7 @@ import { entityGraph } from "~/integrations/tanstack-query/generated/domains/ent
 import { Row } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 
-/** The overview and Relations tab share one cached manifest-backed read. */
+/** The overview requests counts; the Relations tab owns its graph items. */
 export function EntityRelationshipPreview({
   entity,
   sourceId,
@@ -23,7 +23,7 @@ export function EntityRelationshipPreview({
   const query = useQuery(
     operations.graph.queryOptions({
       roots: [{ entityKind: entity, entityId: sourceId }],
-      limit: 12,
+      limit: 0,
     }),
   );
   if (query.isPending)

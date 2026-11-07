@@ -1,3 +1,4 @@
+import { entityGraphInputSchema } from "@cubby/schemas/entity-graph";
 import { testShortcode } from "@cubby/schemas/testing";
 import { and, eq } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
@@ -99,6 +100,25 @@ describe("entity graph repository", () => {
         limit: 1,
       });
     const initial = await read();
+    const counts = await getEntityGraph(
+      ctx.db,
+      entityGraphInputSchema.parse({
+        roots: [{ entityKind: "product", entityId: product.id }],
+        relationshipKeys: ["inventory"],
+        limit: 0,
+      }),
+    );
+    expect(counts).toMatchObject({ nodes: [], edges: [], truncated: false });
+    expect(counts.branches).toMatchObject([
+      {
+        relationshipKey: "inventory",
+        totalCount: 2,
+        nextOffset: null,
+        items: [],
+        edgeIds: [],
+      },
+    ]);
+
     expect(initial.nodes.every((node) => node.image?.url === cover.url)).toBe(
       true,
     );
