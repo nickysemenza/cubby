@@ -1635,6 +1635,30 @@ describe("entity display image resolver", () => {
           ])
         ).get(entityRefKey("task", bareTask.entityId)),
       ).toEqual(expectedImageUrl(direct));
+      await insertEntityAttachments(ctx.db, {
+        entityId: bareTask.entityId,
+        imageId: direct.id,
+      });
+      const refs = [
+        { entityKind: "task" as const, entityId: bareTask.entityId },
+        { entityKind: "project" as const, entityId: project.entityId },
+      ];
+      const full = await resolveEntityDisplayMedia(ctx.db, refs);
+      const covers = await resolveEntityDisplayCovers(ctx.db, refs);
+      const taskImages = full.displayImages.get(
+        entityRefKey("task", bareTask.entityId),
+      );
+      expect(taskImages).toEqual([
+        expectedDisplayImage(direct),
+        expectedDisplayImage(oldLogo),
+        expectedDisplayImage(newLogo),
+      ]);
+      expect(
+        covers.displayCovers.get(entityRefKey("task", bareTask.entityId)),
+      ).toEqual({
+        image: taskImages?.[0],
+        count: taskImages?.length,
+      });
     });
 
     // An inherited Task project joins through a statement-local effective

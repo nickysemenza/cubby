@@ -1259,6 +1259,11 @@ The expense connector's Project scope comes from those compiled path prefixes,
 including inherited Task Projects. Its prefilter uses that reachable set;
 the canonical household fallback keeps its existing wider candidates.
 Adding unrelated batch companions cannot change a record's images.
+Branches anchored by the same first Project hop share that Project's image
+candidates across the batch. Each record still combines its own and borrowed
+images with the canonical ordering and deduplication, so an overlapping image
+counts once and its earliest source wins. Presence checks keep their inline
+existence path.
 Source transaction records reuse the accepted-settlement relation to borrow the
 linked FinancialTransaction’s canonical images, including Purchase and Vendor
 fallbacks. When those yield no image, a unique supported merchant inference
