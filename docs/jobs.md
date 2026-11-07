@@ -551,8 +551,9 @@ Runs attention share the stopped-state policy. A failed `ai_refresh` Run with
 `ai_work_failed` also stops advertising recovery when it has a durable owned
 roster, all current owned and requested evaluations are terminal (including
 blocked), and no live Job or unresolved image job remains. Effective request
-receipts and cancellation follow evaluation tally semantics. Retry handoffs must
-resolve within their scope; malformed, missing, self-linked or cyclic targets,
+receipts and cancellation follow evaluation tally semantics. Retry handoffs can
+transfer responsibility to another owner and must resolve to retained evaluations;
+an applicable request receipt still takes precedence. Malformed, missing, self-linked or cyclic targets,
 and chains exceeding 64 edges, keep recovery visible. Owned retries insert fresh
 replacements atomically; requested retries can reuse existing work, so the read
 checks paths rather than assuming creation-time order. Paid `result_ready` work

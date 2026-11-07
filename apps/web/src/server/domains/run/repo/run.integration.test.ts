@@ -370,11 +370,17 @@ describe("Run attention entity view", () => {
       .set({ receipt: null })
       .where(eq(aiEvaluation.id, replacement.id));
     await visible(false);
+    const replacementOwner = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "ai_refresh",
+      trigger: "scheduled",
+      execution: false,
+    });
     const [last] = await getDb(ctx.db)
       .insert(aiEvaluation)
       .values({
         ...item,
         id: crypto.randomUUID(),
+        runId: replacementOwner,
         workKey: crypto.randomUUID(),
         state: "completed",
         receipt: null,
@@ -385,7 +391,7 @@ describe("Run attention entity view", () => {
       .update(aiEvaluation)
       .set({ receipt: { retryEvaluationId: last.id } })
       .where(eq(aiEvaluation.id, replacement.id));
-    await visible(false); // A two-edge handoff remains settled.
+    await visible(false); // A handoff can transfer responsibility to another owner.
 
     const [shared] = await getDb(ctx.db)
       .insert(aiEvaluation)
@@ -431,7 +437,7 @@ describe("Run attention entity view", () => {
       .update(aiEvaluationRequest)
       .set({ receipt: { retryEvaluationId: last.id } })
       .where(eq(aiEvaluationRequest.runId, runId));
-    await visible(true); // A target outside the request roster is ambiguous.
+    await visible(false); // The explicit handoff does not require an old-owner request.
     await getDb(ctx.db)
       .insert(aiEvaluationRequest)
       .values({ runId, evaluationId: last.id });

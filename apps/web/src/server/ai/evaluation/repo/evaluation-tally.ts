@@ -113,8 +113,8 @@ export function evaluationRosterExists(scope: EvaluationScope): SQL<boolean> {
 /**
  * Current failures/pending work and uncertain handoffs keep recovery visible.
  * Owned retry writers insert fresh rows atomically; requested retries can reuse
- * existing work. Walk the scoped graph rather than assuming timestamp order.
- * Missing scope targets, cycles and paths beyond 64 edges fail closed.
+ * existing work or transfer demand to another owner. Scoped request receipts
+ * still win when present. Missing targets, cycles and paths beyond 64 edges fail closed.
  */
 export function evaluationRecoveryExists(scope: EvaluationScope): SQL<boolean> {
   const { from, scopeWhere, state, receipt } = reads(scope);
@@ -127,9 +127,12 @@ export function evaluationRecoveryExists(scope: EvaluationScope): SQL<boolean> {
       SELECT id, receipt, ARRAY[id] AS path, false AS cycle FROM roster
       WHERE receipt ? 'retryEvaluationId'
       UNION ALL
-      SELECT next.id, next.receipt, walk.path || next.id, next.id = ANY(walk.path)
-      FROM walk JOIN roster next ON next.id = CASE WHEN ${validRetry}
+      SELECT next.id, CASE WHEN scoped_target.id IS NOT NULL
+        THEN scoped_target.receipt ELSE next.receipt END,
+        walk.path || next.id, next.id = ANY(walk.path)
+      FROM walk JOIN ${aiEvaluation} next ON next.id = CASE WHEN ${validRetry}
         THEN (walk.receipt->>'retryEvaluationId')::uuid END
+      LEFT JOIN roster scoped_target ON scoped_target.id = next.id
       WHERE NOT walk.cycle AND cardinality(walk.path) < 66
         AND walk.receipt ? 'retryEvaluationId'
     )
@@ -138,7 +141,7 @@ export function evaluationRecoveryExists(scope: EvaluationScope): SQL<boolean> {
     UNION ALL
     SELECT 1 FROM walk WHERE cycle OR cardinality(path) >= 66
       OR (receipt ? 'retryEvaluationId' AND (NOT ${validRetry}
-        OR NOT EXISTS (SELECT 1 FROM roster replacement WHERE replacement.id =
+        OR NOT EXISTS (SELECT 1 FROM ${aiEvaluation} replacement WHERE replacement.id =
           CASE WHEN ${validRetry} THEN (walk.receipt->>'retryEvaluationId')::uuid END)))
   )`;
 }
