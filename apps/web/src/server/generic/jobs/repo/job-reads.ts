@@ -16,6 +16,7 @@ import {
   type SQL,
 } from "drizzle-orm";
 
+import { related } from "~/server/db/helpers/related";
 import {
   repositoryQueries,
   type RepositoryQueryInput,
@@ -25,6 +26,15 @@ import { job, run } from "~/server/db/retained-tables";
 import type { JobRow } from "./queue";
 
 export type { JobRow };
+
+/** Any retained execution obligation, including paused and not-yet-due retries. */
+export const runHasLiveJobs = (runId: SQL): SQL<boolean> =>
+  related(job, (item) => sql`${item.runId} = ${runId}`)
+    .where(
+      (item) =>
+        sql`${item.state} IN (${jobState.enum.queued}, ${jobState.enum.retry_wait}, ${jobState.enum.running}, ${jobState.enum.paused})`,
+    )
+    .exists();
 
 /** Jobs by identity and state; every key narrows, an empty filter is every Job. */
 export type JobFilter = {

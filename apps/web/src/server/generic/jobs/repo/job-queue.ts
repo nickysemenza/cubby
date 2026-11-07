@@ -35,6 +35,7 @@ import { run } from "~/server/db/schema";
 import { imageJobWaitingOnReasonSql } from "~/server/domains/image-processing/repo/image-job-state";
 import {
   memberStoppedRunPredicate,
+  stoppedRunRecoveryPredicate,
   retiredRunPredicate,
 } from "~/server/domains/run/repo/work-attention";
 import { recordChange } from "~/server/generic/changes/repo/change";
@@ -121,7 +122,7 @@ export function runNeedsAttentionSql(): SQL<boolean> {
     (next) => sql`${next.predecessorRunId} = ${outer(run.id)}`,
   ).exists();
   return sql<boolean>`(NOT ${memberStoppedRunPredicate(sql`${run.failureCode}`)} AND NOT ${retiredRunPredicate(sql`${run.retiredAt}`)}
-    AND (${runStalledSql()} OR (${run.status} IN (${runStatus.enum.paused},${runStatus.enum.paused_auth},${runStatus.enum.needs_review},${runStatus.enum.failed},${runStatus.enum.dispatch_failed}) AND NOT ${successor})))`;
+    AND (${runStalledSql()} OR (${run.status} IN (${runStatus.enum.paused},${runStatus.enum.paused_auth},${runStatus.enum.needs_review},${runStatus.enum.failed},${runStatus.enum.dispatch_failed}) AND NOT ${successor} AND ${stoppedRunRecoveryPredicate({ id: outer(run.id), purpose: sql`${run.purpose}`, status: sql`${run.status}`, failureCode: sql`${run.failureCode}`, retiredAt: sql`${run.retiredAt}` })})))`;
 }
 
 /** One Run's demand as a predicate on "Job". */

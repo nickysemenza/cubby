@@ -546,11 +546,22 @@ off to a replacement, or after all remaining live requesters have handed off.
 A shared failure remains visible while any uncancelled requester still needs
 that original evaluation. Retry history and diagnostics remain stored.
 Runs explicitly cancelled or aborted by a member, and permanently retired
-coordinators, remain in history without advertising execution recovery. The
-Runs attention view and Work sources share their member-stop and retirement
-predicates. Source Problems, findings and pending photo proposals retain their
-independent review paths. These projections do not retire coordinators or
-delete conversations.
+coordinators, remain in history without advertising execution recovery. Work and
+Runs attention share the stopped-state policy. A failed `ai_refresh` Run with
+`ai_work_failed` also stops advertising recovery when it has a durable owned
+roster, all current owned and requested evaluations are terminal (including
+blocked), and no live Job or unresolved image job remains. Effective request
+receipts and cancellation follow evaluation tally semantics. Retry handoffs must
+resolve within their scope; malformed, missing, self-linked or cyclic targets,
+and chains exceeding 64 edges, keep recovery visible. Owned retries insert fresh
+replacements atomically; requested retries can reuse existing work, so the read
+checks paths rather than assuming creation-time order. Paid `result_ready` work
+and current failures retain recovery. These are single-statement projections;
+evaluation-only settlement becomes visible on the next poll without a synthetic
+Run change or badge-only relaunch. Failed status, diagnostics, results, requests,
+member cancellations and conversations remain stored. Stalled execution, source
+Problems, findings and pending photo proposals retain independent review paths.
+These projections do not retire coordinators.
 
 ## Producers
 
