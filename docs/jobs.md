@@ -616,7 +616,7 @@ record (~55k), which starved every other kind for days.
 Each AI evaluation slot identifies feature, entity, record, field and (for a
 Product pair) the other Product. A generated text key uses UTF-8 length prefixes;
 input and option fingerprints remain execution evidence, outside the slot key.
-A partial unique index permits one `queued` row per slot; retry and lease state
+A partial unique index permits one `queued` row per slot and execution kind; retry and lease state
 live on the evaluation's work item, never in `AiEvaluation.state`. The pending
 share-key lookup is nonunique: a `result_ready` row keeps its paid result while
 a queued successor waits in the same slot. Changed input updates the queued
@@ -624,7 +624,9 @@ row's snapshot, target, provenance and work key in place, clears any result,
 receipt or error captured for its older input, and re-marks its item so an
 attempt in flight cannot publish. Completed current input is not queued again
 for `ai_refresh`. Member-initiated sweep, reclassification and retry requests
-get a fresh evaluation; pending slots can still be shared. Reverting after
+get a fresh evaluation; pending slots can be shared only within the same
+execution kind. Discovery audit receipts never reuse reclassification work, even
+when both describe the same Email and feature. Reverting after
 another input was evaluated creates a new row and reuses the AI response cache.
 Declined input (`blocked`, `obsolete`, or cancelled as superseded) receives at
 most three automatic attempts; member-cancelled Runs veto automatic

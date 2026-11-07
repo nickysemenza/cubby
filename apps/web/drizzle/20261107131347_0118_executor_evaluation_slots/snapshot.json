@@ -1,0 +1,58 @@
+{
+  "type": "diff",
+  "version": "9",
+  "dialect": "postgres",
+  "id": "440c09ca-667c-46a9-b761-024ff26ef449",
+  "prevIds": [
+    "50686d74-5875-4de1-b808-3e264fcfbc76"
+  ],
+  "footprints": [
+    {
+      "statementType": "recreate_index",
+      "statementTarget": [
+        "index",
+        "public",
+        "AiEvaluation",
+        "AiEvaluation_open_slot_key"
+      ],
+      "writes": [
+        "s|idx|public.AiEvaluation_open_slot_key",
+        "n|idx|public.AiEvaluation_open_slot_key",
+        "e|idx|public.AiEvaluation_open_slot_key",
+        "n|rel|public.AiEvaluation_open_slot_key"
+      ],
+      "reads": [
+        "n|tbl|public.AiEvaluation",
+        "n|sch|public",
+        "n|col|public.AiEvaluation.slotKey",
+        "n|col|public.AiEvaluation.executionKind"
+      ],
+      "sharedWrites": [],
+      "sqlHash": "83d572f5fbfd9f3e"
+    }
+  ],
+  "deltas": [
+    {
+      "op": "alter",
+      "key": "indexes\u0000[\"public\",\"AiEvaluation_open_slot_key\"]",
+      "set": {
+        "columns": [
+          {
+            "value": "slotKey",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          },
+          {
+            "value": "executionKind",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ]
+      }
+    }
+  ]
+}

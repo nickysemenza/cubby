@@ -126,9 +126,12 @@ async function slotAdmissions(
     .from(aiEvaluation)
     .leftJoin(run, eq(run.id, aiEvaluation.runId))
     .where(
-      inArray(
-        aiEvaluation.slotKey,
-        unique.map(([key]) => key),
+      and(
+        eq(aiEvaluation.executionKind, "ai_refresh"),
+        inArray(
+          aiEvaluation.slotKey,
+          unique.map(([key]) => key),
+        ),
       ),
     )
     .orderBy(desc(aiEvaluation.createdAt), desc(aiEvaluation.id));
@@ -295,6 +298,7 @@ export async function insertEvaluationTargets(
         .values(
           fresh.map((entry) => ({
             runId: runId ? runEntityId.parse(runId) : null,
+            executionKind: "ai_refresh" as const,
             feature: targetFeature(entry.input.target),
             workKey: entry.workKey,
             target: entry.input.target,

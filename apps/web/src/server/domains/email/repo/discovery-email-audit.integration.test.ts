@@ -3,7 +3,7 @@ import {
   mailboxDiscoveryInput,
   MAILBOX_RESEARCH_VERSION,
 } from "@cubby/schemas/mailbox-research";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { expect, it } from "vitest";
 
@@ -17,15 +17,17 @@ import {
 import { recordDeletedHistoryEvent } from "~/server/domains/purchase-import/operations/gmail/discovery";
 import { originalChecksum } from "~/server/domains/purchase-import/repo/gmail/checksum";
 import { normalizeMessage } from "~/server/domains/purchase-import/repo/gmail/normalize";
+import { prepareReclassification } from "~/server/domains/purchase-import/repo/gmail/reclassification-work";
 import { HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION } from "~/server/domains/purchase-import/repo/mail-source-identity";
 import { ingestGmailMessages } from "~/server/domains/purchase-import/service/gmail/ingest";
+import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { loadMailDiscoveryRead } from "~/server/domains/run/repo/run-discovery-read";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 // Reused verdicts need membership in every handling Run; later Email writes cannot rewrite those outcomes.
 // Audit reads must page stored evidence, expose historical gaps, and refuse a foreign member.
 const ctx = withTestDb();
-it("retains reused discovery decisions per Run alongside current state without inference", async () => {
+it("retains reused discovery decisions without consuming queued reclassification or invoking inference", async () => {
   const party = await insertWithShortcode(ctx.db, "ledgerParty", {
     name: "Synthetic discovery owner",
     kind: "member",
@@ -65,6 +67,23 @@ it("retains reused discovery decisions per Run alongside current state without i
     executionPolicy: "classification_only",
     status: "blocked",
   });
+  const reclassificationId = await ensureRun(ctx.db, ctx.actor, {
+    purpose: "mail_reclassify",
+    trigger: "manual",
+    execution: false,
+    input: {
+      kind: "mail_reclassify",
+      mode: "relevance",
+      mailboxId,
+      emails: [{ emailId: selected.id, checksum }],
+    },
+  });
+  await prepareReclassification(ctx.db, reclassificationId, [selected]);
+  const [queuedBefore] = await getDb(ctx.db)
+    .select()
+    .from(aiEvaluation)
+    .where(eq(aiEvaluation.runId, reclassificationId));
+  if (!queuedBefore) throw new Error("Missing queued reclassification");
   const owners = [];
   for (let index = 0; index < 2; index++) {
     const owner = await insertWithShortcode(ctx.db, "run", {
@@ -110,6 +129,49 @@ it("retains reused discovery decisions per Run alongside current state without i
       .update(run)
       .set({ status: "completed" })
       .where(eq(run.id, owner.id));
+  }
+  expect(
+    (
+      await getDb(ctx.db)
+        .select()
+        .from(aiEvaluation)
+        .where(eq(aiEvaluation.id, queuedBefore.id))
+    )[0],
+  ).toEqual(queuedBefore);
+  const requests = await getDb(ctx.db)
+    .select({
+      runId: aiEvaluationRequest.runId,
+      evaluationId: aiEvaluation.id,
+      executionKind: aiEvaluation.executionKind,
+      state: aiEvaluation.state,
+      receipt: aiEvaluation.receipt,
+    })
+    .from(aiEvaluationRequest)
+    .innerJoin(
+      aiEvaluation,
+      eq(aiEvaluation.id, aiEvaluationRequest.evaluationId),
+    )
+    .where(
+      inArray(aiEvaluationRequest.runId, [
+        reclassificationId,
+        ...owners.map((owner) => owner.id),
+      ]),
+    );
+  expect(
+    requests
+      .filter((request) => request.runId === reclassificationId)
+      .map((request) => request.evaluationId),
+  ).toEqual([queuedBefore.id]);
+  for (const owner of owners) {
+    const handled = requests.filter((request) => request.runId === owner.id);
+    expect(handled).toHaveLength(2);
+    for (const request of handled) {
+      expect(request).toMatchObject({
+        executionKind: "mail_discovery",
+        state: "completed",
+      });
+      expect(request.receipt).not.toBeNull();
+    }
   }
   await getDb(ctx.db)
     .update(email)
