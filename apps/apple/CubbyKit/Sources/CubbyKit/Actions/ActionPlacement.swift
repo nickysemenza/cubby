@@ -125,7 +125,8 @@ public struct ActionPlacement: Sendable {
         let flows = records.filter { if case .plan(let plan) = $0.kind { plan.isFlow } else { false } }
         let handoffs = records.filter { !flows.contains($0) }
         let listDelete = presentation.listActions.contains("delete") ? resolver.delete : nil
-        let detailDelete = presentation.heroActions.contains { $0.rawValue == "delete" } ? resolver.delete : nil
+        let detailDelete =
+            presentation.heroActions.contains { $0.rawValue == "delete" } ? resolver.delete : nil
 
         // List row.
         let swipeOverride = presentation.listSwipe
@@ -140,11 +141,13 @@ public struct ActionPlacement: Sendable {
         let trailingIDs =
             swipeOverride?.trailing
             ?? ((listDelete.map { [$0.id] } ?? []) + listVerbs.filter(\.isDestructive).map(\.id))
-        let trailing = trailingIDs.compactMap { $0 == "delete" ? listDelete : resolver.verb($0) }.filter(\.enabled)
+        let trailing = trailingIDs.compactMap { $0 == "delete" ? listDelete : resolver.verb($0) }.filter(
+            \.enabled)
         rowCommand = presentation.listRowCommand.flatMap(resolver.verb)
 
         let rowVerbs = unique(listVerbs.filter { !$0.isDestructive }, presentation.listQuickActions ?? [])
-        let editSelect = [resolver.edit].compactMap { $0 }
+        let editSelect =
+            [resolver.edit].compactMap { $0 }
             + [resolver.kernel("select", .select, "Select", "checkmark.circle")]
         let destructiveRow = ([listDelete].compactMap { $0 } + listVerbs.filter(\.isDestructive))
         contextMenu = [
@@ -169,7 +172,8 @@ public struct ActionPlacement: Sendable {
         actionBar = Array(
             (quick + (routine + flows + fields).map { $0.with(.tonal) }).prefix(4))
         let addPhoto =
-            entity.key.acceptsImageAttach ? resolver.kernel("addPhoto", .addPhoto, "Add photo", "camera") : nil
+            entity.key.acceptsImageAttach
+            ? resolver.kernel("addPhoto", .addPhoto, "Add photo", "camera") : nil
         self.more = [
             detailVerbs.filter { !$0.isDestructive },
             flows + [addPhoto].compactMap { $0 },
@@ -180,7 +184,11 @@ public struct ActionPlacement: Sendable {
         sectionHandoffs = Dictionary(
             grouping: handoffs,
             by: { action in
-                if case .plan(let plan) = action.kind, case .handoff(let section, _) = plan.kind { section } else { "" }
+                if case .plan(let plan) = action.kind, case .handoff(let section, _) = plan.kind {
+                    section
+                } else {
+                    ""
+                }
             })
     }
 
@@ -189,7 +197,9 @@ public struct ActionPlacement: Sendable {
     public static func selectionBar(entity: EntityDescriptor, rows: [EntityRow]) -> [PlacedAction] {
         let presentation = entity.presentation
         let native = entity.key.nativeActions
-        let resolvers = rows.map { Resolver(entity: entity, raw: $0.raw, availability: $0.actionAvailability) }
+        let resolvers = rows.map {
+            Resolver(entity: entity, raw: $0.raw, availability: $0.actionAvailability)
+        }
         let template = Resolver(entity: entity, raw: [:], availability: nil)
         // Available only when every selected row allows it; the first refusal gives the reason.
         func combined(_ make: (Resolver) -> PlacedAction?) -> PlacedAction? {
@@ -231,7 +241,9 @@ private struct Resolver {
     init(entity: EntityDescriptor, raw: JSONValue, availability: [ActionAvailability]?) {
         self.entity = entity
         self.raw = raw
-        server = availability.map { Dictionary($0.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first }) }
+        server = availability.map {
+            Dictionary($0.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        }
     }
 
     /// The server's answer for `id`, else the plan's requirement. A preset field write the record
@@ -277,7 +289,8 @@ private struct Resolver {
 
     func kernel(_ id: String, _ kind: PlacedAction.Kind, _ label: String, _ symbol: String) -> PlacedAction {
         let (enabled, reason) = availability(id, plan: nil)
-        return PlacedAction(id: id, kind: kind, label: label, symbol: symbol, enabled: enabled, reason: reason)
+        return PlacedAction(
+            id: id, kind: kind, label: label, symbol: symbol, enabled: enabled, reason: reason)
     }
 
     func quickField(_ key: String) -> PlacedAction? {
@@ -287,8 +300,12 @@ private struct Resolver {
             prominence: .tonal)
     }
 
-    var copyLink: PlacedAction { PlacedAction(id: "copyLink", kind: .copyLink, label: "Copy link", symbol: "link") }
-    var share: PlacedAction { PlacedAction(id: "share", kind: .share, label: "Share", symbol: "square.and.arrow.up") }
+    var copyLink: PlacedAction {
+        PlacedAction(id: "copyLink", kind: .copyLink, label: "Copy link", symbol: "link")
+    }
+    var share: PlacedAction {
+        PlacedAction(id: "share", kind: .share, label: "Share", symbol: "square.and.arrow.up")
+    }
     var openOnWeb: PlacedAction {
         PlacedAction(id: "openOnWeb", kind: .openOnWeb, label: "Open on web", symbol: "safari")
     }
@@ -304,7 +321,8 @@ extension PlacedAction {
 
     fileprivate func disabled(_ reason: String?, enabled: Bool = false) -> PlacedAction {
         PlacedAction(
-            id: id, kind: kind, label: label, symbol: symbol, enabled: enabled, reason: enabled ? nil : reason,
+            id: id, kind: kind, label: label, symbol: symbol, enabled: enabled,
+            reason: enabled ? nil : reason,
             isDestructive: isDestructive, prominence: prominence)
     }
 }

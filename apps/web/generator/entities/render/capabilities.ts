@@ -63,7 +63,8 @@ type KernelHttpAction =
   | "create"
   | "update"
   | "bulkUpdate"
-  | "delete";
+  | "delete"
+  | "merge";
 export type KernelActions = Readonly<
   Record<string, readonly KernelHttpAction[]>
 >;
@@ -100,6 +101,7 @@ export const kernelHttpActionsFor = (
         "update",
         "bulkUpdate",
         "delete",
+        "merge",
       ] as const)
         if (executable.includes(action)) verbs.push(action);
       return [[entity.key, verbs]];

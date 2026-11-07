@@ -40,7 +40,8 @@ struct ActionPlacementTests {
         let tile = unlinked.actionBar.first { $0.id == "receive" }
         #expect(tile?.enabled == false && tile?.reason != nil)
         #expect(!ids(unlinked.leadingSwipe).contains("receive"))
-        let linked = ActionPlacement(entity: EntityCatalog[.expense], raw: ["id": "EXP-1", "productId": "PRD-1"])
+        let linked = ActionPlacement(
+            entity: EntityCatalog[.expense], raw: ["id": "EXP-1", "productId": "PRD-1"])
         #expect(linked.rowCommand?.enabled == true)
         #expect(linked.leadingSwipe.first?.id == "receive")
     }
@@ -50,7 +51,9 @@ struct ActionPlacementTests {
         let booked = ActionPlacement(entity: entity, raw: ["status": "posted", "kind": "purchase"])
         #expect(booked.sectionHandoffs["overview"]?.map(\.id) == ["reviewBooking"])
         #expect(booked.more.joined().contains { $0.id == "reviewBooking" })
-        for raw: JSONValue in [["status": "void", "kind": "purchase"], ["status": "posted", "kind": "account_transfer"]] {
+        for raw: JSONValue in [
+            ["status": "void", "kind": "purchase"], ["status": "posted", "kind": "account_transfer"],
+        ] {
             #expect(ActionPlacement(entity: entity, raw: raw).sectionHandoffs.isEmpty)
         }
         let location = ActionPlacement(entity: EntityCatalog[.location], raw: [:])

@@ -1,5 +1,6 @@
 import CubbyKit
 import Foundation
+import SwiftUI
 
 /// The native counterpart of the web recipe-source renderer. It deliberately decodes only the
 /// small source envelope needed by list/detail presentation, rather than inventing a Recipe model
@@ -263,6 +264,116 @@ struct EntityRowPresentation: Sendable, Hashable {
                 inherited: inherited)
         }
         return nil
+    }
+
+    /// A row's status word and glyph, shown only when the record is not in the declared quiet
+    /// (expected) state. The status field is the one whose options declare `quiet`, else the
+    /// declared hero chip.
+    struct Status: Sendable, Hashable {
+        let fieldKey: String
+        let text: String
+        let option: LabeledOption?
+    }
+
+    static func statusField(descriptor: EntityDescriptor) -> FieldDescriptor? {
+        descriptor.fields.first { $0.valueOptions?.contains { $0.quiet == true } == true }
+            ?? descriptor.presentation.heroChip.flatMap(descriptor.field)
+    }
+
+    static func status(descriptor: EntityDescriptor, row: EntityRow) -> Status? {
+        guard let field = statusField(descriptor: descriptor),
+            let fact = fact(field.key, descriptor: descriptor, row: row),
+            isVisibleListFactValue(fact.value)
+        else { return nil }
+        let option =
+            EntityFieldValue.option(in: row.raw, field: field, surface: "list")
+            ?? field.valueOptions?.first { $0.label == fact.value }
+        if option?.quiet == true { return nil }
+        return Status(fieldKey: field.key, text: option?.label ?? fact.value, option: option)
+    }
+
+    /// The declared `list.rail` columns for `row`: each column's value and sub value from the
+    /// list projection, sized by the field's `display.width` bucket so values align down the list.
+    static func rail(descriptor: EntityDescriptor, row: EntityRow) -> [RecordRailCell] {
+        (descriptor.presentation.listRail ?? []).prefix(2).compactMap { column in
+            guard let field = descriptor.field(column.field) else { return nil }
+            let value = fact(field.key, descriptor: descriptor, row: row)
+            let day = value.flatMap { railDay(field, fact: $0, row: row) }
+            let shown = value.map { fact in
+                day.flatMap { DatePresentation.absolute(of: $0, compact: true) } ?? fact.value
+            }
+            // A deadline without a declared sub value shows how far off it is ("3d ago").
+            let sub =
+                column.sub.flatMap { fact($0, descriptor: descriptor, row: row) }.map(railText)
+                ?? (field.dateRangeSemantics == "deadline"
+                    ? day.flatMap { DatePresentation.value($0, compact: true)?.relative } : nil)
+            return RecordRailCell(
+                id: field.key, label: field.columnHeader,
+                value: shown.flatMap { isVisibleListFactValue($0) ? $0 : nil },
+                sub: sub.flatMap { isVisibleListFactValue($0) ? $0 : nil },
+                width: railWidth(field), tone: railTone(field, value: value, day: day))
+        }
+    }
+
+    /// The calendar value a date rail compares against: a date's own value, else a range's end
+    /// (its start when open-ended).
+    private static func railDay(_ field: FieldDescriptor, fact: Fact, row: EntityRow) -> String? {
+        if let date = fact.dateValue { return date }
+        guard field.kind == .dateRange, let range = field.surfaceValue(in: row.raw, surface: "list") else {
+            return nil
+        }
+        return range["end"]?.stringValue ?? range["start"]?.stringValue
+    }
+
+    /// The rail's fixed width: the declared bucket, else a width for the field's kind (a count
+    /// is narrow, money and dates take the default).
+    static func railWidth(_ field: FieldDescriptor) -> CGFloat {
+        if let bucket = field.width { return RecordRowMetrics.railWidth(bucket: bucket) }
+        let money = field.format == "currency" || field.format == "signedCurrency"
+        if field.kind == .number, !money { return RecordRowMetrics.railWidth(bucket: "xs") }
+        if field.kind == .date || field.kind == .timestamp || field.kind == .dateRange {
+            return RecordRowMetrics.railWidth(bucket: "sm")
+        }
+        return RecordRowMetrics.railWidth(bucket: nil)
+    }
+
+    /// A rail date reads as its compact calendar day; other values print as the list worded them.
+    private static func railText(_ fact: Fact) -> String {
+        if let date = fact.dateValue, let day = DatePresentation.absolute(of: date, compact: true) {
+            return day
+        }
+        return fact.value
+    }
+
+    /// Condition tone, always paired with the value's own sign or wording: a refund's minus sign
+    /// reads muted, and a passed deadline (worded "… ago") reads destructive.
+    private static func railTone(_ field: FieldDescriptor, value: Fact?, day: String?) -> RecordRailCell.Tone
+    {
+        guard let value else { return .plain }
+        if field.format == "signedCurrency" || field.format == "currency",
+            value.value.hasPrefix("-") || value.value.hasPrefix("−")
+        {
+            return .muted
+        }
+        if field.dateRangeSemantics == "deadline", let date = day,
+            DatePresentation.value(date, compact: true)?.relative.hasSuffix("ago") == true
+        {
+            return .destructive
+        }
+        return .plain
+    }
+
+    /// The rail totals a group header shows: the server's per-section sum for each column
+    /// declared `total: "sum"`, worded with the field's own list format.
+    static func railTotals(descriptor: EntityDescriptor, sums: [String: Double]) -> [RecordRailCell] {
+        (descriptor.presentation.listRail ?? []).prefix(2).compactMap { column in
+            guard let field = descriptor.field(column.field) else { return nil }
+            let total =
+                column.total == "sum"
+                ? sums[field.key].flatMap { EntityFieldValue.text(.number($0), field: field) } : nil
+            return RecordRailCell(
+                id: field.key, label: field.columnHeader, value: total, sub: nil, width: railWidth(field))
+        }
     }
 
     static func listContextKeys(descriptor: EntityDescriptor) -> Set<String> {

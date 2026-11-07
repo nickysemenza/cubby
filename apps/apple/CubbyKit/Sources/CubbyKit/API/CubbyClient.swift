@@ -150,10 +150,27 @@ public actor CubbyClient {
         return try await descriptor.bulkUpdate(.object(data), ids: ids, client: self)
     }
 
+    /// The server's merge preview for `ids`: its suggested survivor and the scalar fields the
+    /// candidates disagree on, each candidate's value worded by the server.
+    public func mergePreview(_ key: EntityKey, ids: [String]) async throws -> EntityMergePreviewOut {
+        try await native_entity_mergePreview(body: .init(entity: key, ids: ids))
+    }
+
+    /// The kernel merge web runs: `mergeIDs` fold into `keepID`. Irreversible; the merge sheet
+    /// calls it only after the person confirms.
+    public func merge(_ descriptor: EntityDescriptor, keepID: String, mergeIDs: [String]) async throws {
+        try await descriptor.merge(keepID: keepID, mergeIDs: mergeIDs, client: self)
+    }
+
     /// `entity.mutate` delete. Destructive: only `HeroActionRunner` calls it, and only after
     /// the person confirmed behind the connection-impact preview.
     public func delete(_ descriptor: EntityDescriptor, id: String) async throws {
         return try await descriptor.delete(id: id, client: self)
+    }
+
+    /// One kernel delete for a confirmed list selection.
+    public func delete(_ descriptor: EntityDescriptor, ids: [String]) async throws {
+        return try await descriptor.delete(ids: ids, client: self)
     }
 
     /// One image with its owning records through the kernel `get` every entity shares. The
