@@ -584,8 +584,19 @@ export function listScaffold<
     const schema = listEntity
       ? ENTITY_LIST_READ_SCHEMAS[listEntity].schema
       : null;
+    const columns = getTableColumns(table);
+    // Bindings and field facts may read columns absent from the projection.
+    // Only direct physical-field reads have a closed set of row inputs here.
+    const narrow =
+      listEntity !== null &&
+      !readPlan().hasBindings(projection) &&
+      compileReadDemand(entity, projection).facts === null &&
+      projection.every((key) => Object.hasOwn(columns, key));
     const selected = new Map<string, SQL | PgColumn>(
-      Object.entries(getTableColumns(table)),
+      Object.entries(columns).filter(
+        ([key]) =>
+          !narrow || key === "id" || key === "shortcode" || wanted.has(key),
+      ),
     );
     for (const stored of fieldModel?.storage ?? []) {
       if (stored.specialized !== "minor-unit-money") continue;
@@ -606,7 +617,10 @@ export function listScaffold<
     }
     for (const [key, value] of Object.entries(readDeclaration.columns ?? {}))
       // A key outside the read schema is a helper column a binding reads.
-      if (wanted.has(key) || !schema || !Object.hasOwn(schema.shape, key))
+      if (
+        wanted.has(key) ||
+        (!narrow && (!schema || !Object.hasOwn(schema.shape, key)))
+      )
         selected.set(key, typeof value === "function" ? value(context) : value);
     return Object.fromEntries(selected);
   };
