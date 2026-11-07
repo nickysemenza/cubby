@@ -85,7 +85,13 @@ function useExpenseFacetHints(filters: ExpenseFilters) {
  * line reports on exactly the rows above it. Prior values stay, dimmed by the
  * footer, while the next summary loads; a failed read says so.
  */
-export function ExpenseLedgerSummary({ filters }: { filters: ExpenseFilters }) {
+export function ExpenseLedgerSummary({
+  filters,
+  wrap = false,
+}: {
+  filters: ExpenseFilters;
+  wrap?: boolean;
+}) {
   const summaryQuery = useQuery({
     ...expense.spendSummary.queryOptions(filters),
     placeholderData: keepPreviousData,
@@ -100,7 +106,13 @@ export function ExpenseLedgerSummary({ filters }: { filters: ExpenseFilters }) {
         ? "Unavailable"
         : "…";
   return (
-    <div className="whitespace-nowrap [&_dl]:flex-nowrap [&_dl]:text-xs">
+    <div
+      className={
+        wrap
+          ? "[&_dl]:text-xs"
+          : "whitespace-nowrap [&_dl]:flex-nowrap [&_dl]:text-xs"
+      }
+    >
       <KeyNumbers
         layout="inline"
         label="Spend summary"

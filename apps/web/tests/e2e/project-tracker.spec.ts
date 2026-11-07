@@ -116,6 +116,35 @@ test("maintenance keeps explicit completion history across spending years", asyn
   const project = await createEntityFixture(page, "project", {
     name: `2031 routine maintenance ${suffix}`,
   });
+  const undatedName = `Service synthetic ventilation ${suffix}`;
+  await createEntityFixture(page, "task", {
+    trade: "other",
+    name: undatedName,
+    projectId: project.id,
+    status: "done",
+  });
+  await createEntityFixture(page, "task", {
+    trade: "other",
+    name: `Replace synthetic sink filter ${suffix}`,
+    projectId: project.id,
+    status: "not_started",
+    due: { start: "2031-03-01", end: null },
+  });
+  const maintenancePath = `/tasks?view=maintenance&maintenanceProjectSearch=${suffix}`;
+  await gotoAuthenticatedPage(
+    page,
+    maintenancePath,
+    page.getByRole("heading", { name: "Observed cadence", exact: true }),
+  );
+  const initialCadence = page.getByRole("region", {
+    name: "Observed cadence",
+    exact: true,
+  });
+  await expect(initialCadence).toContainText("Insufficient history");
+  await expect(initialCadence.getByRole("table")).toHaveCount(0);
+  await expect(
+    page.getByRole("region", { name: "Completed work", exact: true }),
+  ).toContainText(undatedName);
   const name = `Clean synthetic gutters ${suffix}`;
   for (const completedOn of ["2030-01-01", "2030-04-01", "2031-01-01"]) {
     await createEntityFixture(page, "task", {
@@ -159,19 +188,25 @@ test("maintenance keeps explicit completion history across spending years", asyn
   });
   await gotoAuthenticatedPage(
     page,
-    "/tasks?view=maintenance",
+    maintenancePath,
     page.getByRole("heading", { name: "Observed cadence", exact: true }),
   );
   const cadence = page.locator("section").filter({
     has: page.getByRole("heading", { name: "Observed cadence", exact: true }),
   });
   const row = cadence
-    .getByRole("row")
+    .getByRole("listitem")
     .filter({ has: page.getByText(name, { exact: true }) });
+  await expect(
+    cadence.getByRole("listitem").filter({ hasText: undatedName }),
+  ).toHaveCount(0);
+  await row.getByRole("button", { name: "3 dated completions" }).click();
   await expect(row).toContainText("3 dated completions");
   await expect(row).toContainText("2 intervals");
   await expect(row).toContainText("1 undated completion excluded");
-  await expect(row).toContainText("2030-01-01, 2030-04-01, 2031-01-01");
+  await expect(row).toContainText("Jan 1, 2030");
+  await expect(row).toContainText("Apr 1, 2030");
+  await expect(row).toContainText("Jan 1, 2031");
   await page.getByLabel("Spending year").fill("");
   await page.getByLabel("Spending year").pressSequentially("2030");
   await expect(page.getByLabel("Spending year")).toHaveValue("2030");
@@ -200,6 +235,14 @@ test("maintenance keeps explicit completion history across spending years", asyn
   await expect(spending.getByText(expenseName, { exact: true })).toHaveCount(0);
   await expect(row).toContainText("3 dated completions");
   await expect(
-    cadence.getByRole("row").filter({ hasText: `${name} east side` }),
+    cadence.getByRole("listitem").filter({ hasText: `${name} east side` }),
   ).toContainText("Insufficient history");
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () => document.documentElement.scrollWidth <= window.innerWidth,
+      ),
+    )
+    .toBe(true);
 });

@@ -9,13 +9,19 @@ import type { ListSlotProps } from "~/entity/entity-list/list-slot-types";
 import { ExpenseLedgerSummary } from "~/features/expense/list-columns";
 import { task } from "~/integrations/tanstack-query/generated/domains/task.gen";
 import { householdLocalDate } from "~/lib/household-date";
-import { StaticTable } from "~/ui/data-table/static-table";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
 import { Row, Section, Stack } from "~/ui/layout";
+import { Disclosure } from "~/ui/layout/disclosure";
 import { Input } from "~/ui/primitives/input";
+import { RecordList, RecordRow } from "~/ui/records/record-list";
 import { Description } from "~/ui/text/description";
 import { DateDisplay } from "~/ui/values/date-display";
+
+const taskColumnVisibility = {
+  dataQuality: false,
+  "related:task.blockedBy": false,
+};
 
 /** Spending's year never narrows the cross-year completion evidence. */
 export function MaintenanceView({
@@ -40,6 +46,14 @@ export function MaintenanceView({
       ? requestedYear
       : Number(householdLocalDate().slice(0, 4));
   const projectIds = history.data?.projectIds ?? [];
+  const datedGroups =
+    history.data?.groups.filter((group) => group.completedDates.length > 0) ??
+    [];
+  const undatedCount =
+    history.data?.groups.reduce(
+      (count, group) => count + group.undatedCompletions,
+      0,
+    ) ?? 0;
   const expenseFilters = {
     projectId: projectIds,
     dateFrom: `${year}-01-01`,
@@ -48,14 +62,14 @@ export function MaintenanceView({
   return (
     <Stack gap="lg">
       <Description>
-        Tasks and spending in projects whose names contain “maintenance”.
-        Completion history spans all years. Purchases describe project spending,
-        not proof a part was installed.
+        Household upkeep, completion history, and project spending.
       </Description>
       <Section title="Planned work" headingAs="h2">
         <EmbeddedEntityList
           entity="task"
-          pageSize={20}
+          pageSize={10}
+          initialColumnVisibility={taskColumnVisibility}
+          sort={[{ id: "dueDate", desc: false }]}
           filters={{
             ...scope,
             status: ["not_started", "in_progress", "later", "blocked"],
@@ -72,129 +86,148 @@ export function MaintenanceView({
       <Section
         title="Observed cadence"
         headingAs="h2"
-        caption="Exact task names and the same optional Product only. Dates are recorded completions, not deadlines. Similar names remain separate."
+        caption="Based on recorded work dates across all years. Similar task names stay separate."
       >
         {history.isPending ? (
           <SimpleLoading />
         ) : history.isError ? (
           <ErrorDisplay error={history.error} />
         ) : (
-          <StaticTable
-            rows={history.data.groups}
-            emptyMessage="No completed maintenance work in this task scope."
-            rowKey={(row) => JSON.stringify([row.name, row.subjectProductId])}
-            columns={[
-              {
-                id: "work",
-                header: "Work",
-                cell: (row) => (
-                  <Stack gap="xs">
-                    <span>{row.name}</span>
-                    {row.subjectProductId && (
-                      <EntityRefLink
-                        entity="product"
-                        data={{
-                          id: row.subjectProductId,
-                          name: row.subjectProductName ?? row.subjectProductId,
-                        }}
-                      />
-                    )}
-                  </Stack>
-                ),
-              },
-              {
-                id: "last",
-                header: "Last recorded completion",
-                cell: (row) =>
-                  row.completedDates.at(-1) ? (
-                    <DateDisplay start={row.completedDates.at(-1)!} />
-                  ) : (
-                    "Not recorded"
-                  ),
-              },
-              {
-                id: "cadence",
-                header: "Observed interval",
-                cell: (row) =>
-                  row.medianIntervalDays === null
-                    ? "Insufficient history"
-                    : `About ${Math.round(row.medianIntervalDays)} days (median)`,
-              },
-              {
-                id: "evidence",
-                header: "Evidence",
-                cell: (row) => (
-                  <Stack gap="xs">
-                    <span>
-                      {countLabel(
-                        row.completedDates.length,
-                        "dated completion",
-                      )}{" "}
-                      ·{" "}
-                      {countLabel(
-                        Math.max(0, row.completedDates.length - 1),
-                        "interval",
-                      )}
-                    </span>
-                    <span>
-                      {row.completedDates.join(", ") || "No completion dates"}
-                    </span>
-                    {row.undatedCompletions > 0 && (
-                      <span>
-                        {countLabel(
-                          row.undatedCompletions,
-                          "undated completion",
-                        )}{" "}
-                        excluded
-                      </span>
-                    )}
-                  </Stack>
-                ),
-              },
-            ]}
-          />
+          <>
+            {datedGroups.length > 0 ? (
+              <RecordList
+                aria-label="Recorded maintenance cadence"
+                columns={[
+                  { id: "last", label: "Last completed" },
+                  { id: "interval", label: "Observed interval" },
+                  { id: "history", label: "History" },
+                ]}
+              >
+                {datedGroups.map((group) => (
+                  <RecordRow
+                    key={JSON.stringify([group.name, group.subjectProductId])}
+                    primary={<span className="break-words">{group.name}</span>}
+                    secondary={
+                      group.subjectProductId ? (
+                        <EntityRefLink
+                          entity="product"
+                          data={{
+                            id: group.subjectProductId,
+                            name:
+                              group.subjectProductName ??
+                              group.subjectProductId,
+                          }}
+                        />
+                      ) : undefined
+                    }
+                    clip={false}
+                    facts={[
+                      {
+                        id: "last",
+                        label: "Last completed",
+                        value: (
+                          <DateDisplay start={group.completedDates.at(-1)!} />
+                        ),
+                      },
+                      {
+                        id: "interval",
+                        label: "Observed interval",
+                        value:
+                          group.medianIntervalDays === null ? (
+                            <span className="text-muted-foreground">
+                              Insufficient history
+                            </span>
+                          ) : (
+                            `About ${Math.round(group.medianIntervalDays)} days`
+                          ),
+                      },
+                      {
+                        id: "history",
+                        label: "History",
+                        value: (
+                          <Disclosure
+                            summary={countLabel(
+                              group.completedDates.length,
+                              "dated completion",
+                            )}
+                          >
+                            <Stack gap="xs">
+                              <span>
+                                {group.medianIntervalDays === null
+                                  ? "No interval yet"
+                                  : `Median of ${countLabel(group.completedDates.length - 1, "interval")}`}
+                              </span>
+                              {group.completedDates.map((date) => (
+                                <DateDisplay key={date} start={date} />
+                              ))}
+                              {group.undatedCompletions > 0 && (
+                                <span>
+                                  {countLabel(
+                                    group.undatedCompletions,
+                                    "undated completion",
+                                  )}{" "}
+                                  excluded
+                                </span>
+                              )}
+                            </Stack>
+                          </Disclosure>
+                        ),
+                      },
+                    ]}
+                  />
+                ))}
+              </RecordList>
+            ) : (
+              <Description>
+                Insufficient history. Record a completion date to start building
+                a work history; two dates are needed to observe an interval.
+              </Description>
+            )}
+            {undatedCount > 0 && (
+              <Description>
+                {countLabel(undatedCount, "completed task")} without a work
+                date. These remain in Completed work and are excluded from
+                cadence.
+              </Description>
+            )}
+          </>
         )}
       </Section>
       <Section
         title="Completed work"
         headingAs="h2"
-        caption="Record Completed on when the work date is known. Existing deadlines are preserved separately."
+        caption="All years. Open a task to record its Completed on date; deadlines stay separate."
       >
         <EmbeddedEntityList
           entity="task"
-          pageSize={20}
+          pageSize={8}
+          initialColumnVisibility={taskColumnVisibility}
+          sort={[{ id: "completedOn", desc: true }]}
           filters={{ ...scope, status: ["done"] }}
           columns={["name", "completedOn", "subjectProductId", "projectId"]}
         />
       </Section>
-      <Section title="Maintenance projects" headingAs="h2">
-        {projectIds.length > 0 ? (
-          <EmbeddedEntityList
-            entity="project"
-            pageSize={10}
-            filters={{ ids: projectIds }}
-          />
-        ) : (
-          <Description>No maintenance projects loaded.</Description>
-        )}
-      </Section>
       <Section
         title="Purchase spending"
         headingAs="h2"
-        caption="The summary counts only allocated project shares. Rows retain full expense amounts; open Project allocation to inspect shared tax or discounts."
+        caption="Allocated project shares. Purchases record spending, not completed work."
+        actions={
+          <SpendingYearField
+            key={year}
+            year={year}
+            onCommit={(value) => navigate({ maintenanceYear: String(value) })}
+          />
+        }
       >
-        <SpendingYearField
-          key={year}
-          year={year}
-          onCommit={(value) => navigate({ maintenanceYear: String(value) })}
-        />
         {projectIds.length > 0 && (
-          <ExpenseLedgerSummary filters={expenseFilters} />
+          <ExpenseLedgerSummary filters={expenseFilters} wrap />
         )}
         {projectIds.length > 0 && (
           <EmbeddedEntityList
             entity="expense"
-            pageSize={20}
+            initialColumnVisibility={{ dataQuality: false }}
+            pageSize={8}
+            sort={[{ id: "date", desc: true }]}
             filters={expenseFilters}
             columns={[
               "name",
@@ -205,6 +238,22 @@ export function MaintenanceView({
               "productId",
             ]}
           />
+        )}
+      </Section>
+      <Section
+        title="Maintenance projects"
+        headingAs="h2"
+        count={projectIds.length}
+        disclosure={{}}
+      >
+        {projectIds.length > 0 ? (
+          <EmbeddedEntityList
+            entity="project"
+            pageSize={10}
+            filters={{ ids: projectIds }}
+          />
+        ) : (
+          <Description>No maintenance projects loaded.</Description>
         )}
       </Section>
     </Stack>

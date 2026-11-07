@@ -5212,7 +5212,10 @@ across years. It performs no normalization, semantic matching, or fuzzy merging.
 Distinct same-day completion dates count once; the observed interval is the
 median positive interval between those dates. One date has insufficient history;
 undated completions are counted and excluded. Supporting dates and interval
-counts remain visible. This describes observations, not a recommended service
+counts remain available in each row’s History disclosure. Groups without a
+recorded date stay in Completed work and contribute to one undated summary,
+not an empty cadence row. The view keeps task lists short and paginated, and
+folds Project browsing below spending. This describes observations, not a recommended service
 interval, deadline, recurring schedule, or stock assertion.
 
 The spending-year control filters only the ordinary Expense list, by allocation

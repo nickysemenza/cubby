@@ -804,6 +804,7 @@ export const { definition, readSchemas } = defineEntityModel({
         "name",
         "status",
         "dueDate",
+        "completedOn",
         "trade",
         "projectId",
         "subjectProductId",
