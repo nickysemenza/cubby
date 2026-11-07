@@ -137,6 +137,8 @@ intent warms its code with the existing detail prefetch; opening starts both
 together so the lazy module does not delay the record read. Custom inspectors
 and phone detail navigation do not preload the default inspector. Exception
 notes load Markdown only when shown, retaining the plain note while it loads.
+An open inspector owns its prefetched read before its observer mounts; hover-out
+must not cancel that read as inactive during the code load.
 The generated route component imports only its own override and passes it to
 `listPage`; the generic list must never import an all-entity column registry.
 Shared cells live with their generic feature (for example, the unit-mappings

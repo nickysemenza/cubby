@@ -178,12 +178,20 @@ function renderDefaultInspector({
   preview,
   onClose,
 }: EntityPreviewRendererProps) {
+  const label = entityLabel(preview.entityKind);
   return (
     <Suspense
       fallback={
         <SidePanel
-          label={`${entityLabel(preview.entityKind)} inspector`}
-          title={preview.name ?? "Loading inspector…"}
+          label={`${label} inspector`}
+          eyebrow={label}
+          title={
+            preview.name ?? (
+              <span className="font-normal text-muted-foreground">
+                Loading {label.toLowerCase()}…
+              </span>
+            )
+          }
           code={preview.id}
           onClose={onClose}
           closeLabel="Close inspector"
@@ -251,7 +259,10 @@ export function useEntityPreview(
   const browserOperations =
     options?.browserOperations ?? productionBrowserOperations;
   const intentRef = useRef<PreviewIntent | null>(null);
+  const openPreviewRef = useRef<PreviewState | null>(null);
+  openPreviewRef.current = isInspectorOpen ? preview : null;
 
+  // Hover warms every preview's data; clicks call this only for the default inspector.
   const prefetchPreview = useCallback(
     (target: PreviewState) => {
       if (
@@ -278,7 +289,12 @@ export function useEntityPreview(
   const stopIntent = useCallback(
     (intent: PreviewIntent, cancelStarted: boolean) => {
       if (intent.timer) clearTimeout(intent.timer);
-      if (cancelStarted && intent.started) {
+      const open = openPreviewRef.current;
+      // A lazy inspector owns its read before its query observer has mounted.
+      const opened =
+        open?.entityKind === intent.preview.entityKind &&
+        open.id === intent.preview.id;
+      if (cancelStarted && intent.started && !opened) {
         void browserOperations.cancelPrefetch(intent.queryKey);
       }
       if (intentRef.current === intent) intentRef.current = null;
