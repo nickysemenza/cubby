@@ -36,6 +36,7 @@ import {
 } from "~/server/db/helpers";
 import { suggestionTable } from "~/server/db/schema";
 import { variantVerification } from "~/server/domains/product/repo/product-variant-evidence";
+import { JobEvidenceObsoleteError } from "~/server/generic/jobs/errors";
 import { publishSuggestions } from "~/server/generic/suggestions/repo/suggestion";
 import {
   suggestionRecordId,
@@ -425,7 +426,10 @@ export async function publishProductPair(
 ): Promise<ProductMatchCandidateRow & { created: boolean }> {
   return withTransactionDatabase(db, async (tx) => {
     const pair = await prepareProductIdentityPair(tx, input.productIds);
-    if (!pair) throw new Error("Product identity target no longer exists");
+    if (!pair)
+      throw new JobEvidenceObsoleteError(
+        "Product identity target no longer exists",
+      );
     const key = productPairKey(...input.productIds);
     const fences = await productIdentityEvidenceFences(tx, [
       { key, productIds: input.productIds },
@@ -434,7 +438,9 @@ export async function publishProductPair(
       { key, input, pair, fence: fences.get(key) ?? "" },
     ]);
     if (!result?.valid)
-      throw new Error("Product pair evidence changed during inference");
+      throw new JobEvidenceObsoleteError(
+        "Product pair evidence changed during inference",
+      );
     return result.row;
   });
 }
@@ -468,7 +474,10 @@ export async function upsertAgentProductMatch(
   const { prepareProductIdentityPair } =
     await import("./product-identity-snapshot");
   const prepared = await prepareProductIdentityPair(database, input.productIds);
-  if (!prepared) throw new Error("Product identity target no longer exists");
+  if (!prepared)
+    throw new JobEvidenceObsoleteError(
+      "Product identity target no longer exists",
+    );
   return publishProductPair(database, {
     ...input,
     source: "agent",

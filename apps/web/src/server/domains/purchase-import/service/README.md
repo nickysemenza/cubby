@@ -59,6 +59,9 @@ pending: nothing here starts Product research.
    mail keeps only its provider identity. Coverage is checkpointed with a
    compare-and-swap in the same transaction as the page's events
    (`gmail/persistence.ts`).
+   An unattended retained page whose exact search already completed in newer
+   coverage settles its processed messages without rewinding or crediting that
+   search twice. Member-controlled scans still refuse changed selected coverage.
    A member's **Reclassify** (`gmail/reclassify.ts`, MCP `purchase_import.email_reclassify`)
    reruns these stages, including the relevance model, for up to 200 selected
    Emails through the same ingest path in its `reclassify` mode: the result is

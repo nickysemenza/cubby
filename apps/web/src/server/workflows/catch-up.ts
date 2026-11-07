@@ -18,7 +18,7 @@ export async function requestCatchUp(
   const claimedAt = new Date();
   if (!(await claimCatchUp(db, claimedAt))) return { status: "recent" };
   try {
-    await recoverMissedWork(db, undefined, { daily: false, wake: false });
+    await recoverMissedWork(db, { daily: false, wake: false });
     // A wake alone cannot discover new mail without a durable admission task.
     await (
       await import("~/server/workflows/background-tasks/publish")
@@ -42,33 +42,24 @@ export async function requestCatchUp(
 /** Admit periodic families and drain due Jobs; stopped work needs explicit retry. */
 export async function recoverMissedWork(
   db: Database,
-  coordinatorRetireBefore?: Date,
   { daily = true, wake = true }: { daily?: boolean; wake?: boolean } = {},
 ) {
-  const obligations = await Promise.allSettled([
-    (async () => {
-      const { reconcileWorkflowRuns } =
-        await import("~/server/workflows/runs/lifecycle");
-      // Every bounded page is owed; don't stop after the first hundred Runs.
-      let after: string | null = null;
-      do {
-        after = (await reconcileWorkflowRuns(db, after)).next;
-      } while (after);
-    })(),
-  ]);
-  if (wake || obligations.some((result) => result.status === "rejected"))
-    await (
-      await import("~/server/workflows/background-tasks/publish")
-    ).wakeJobs({ source: daily ? "daily-recovery" : "app-open-recovery" });
-  const errors = obligations.flatMap((result) =>
-    result.status === "rejected" ? [result.reason] : [],
-  );
-  if (errors.length)
-    throw new AggregateError(errors, "Background recovery failed");
-  // Operator recovery with its own fixed cutoff; the nightly retirement is
-  // a maintenance step.
-  if (coordinatorRetireBefore)
-    await retireCoordinators(db, coordinatorRetireBefore);
+  let failed = true;
+  try {
+    const { reconcileWorkflowRuns } =
+      await import("~/server/workflows/runs/lifecycle");
+    // Every bounded page is owed; don't stop after the first hundred Runs.
+    let after: string | null = null;
+    do {
+      after = (await reconcileWorkflowRuns(db, after)).next;
+    } while (after);
+    failed = false;
+  } finally {
+    if (wake || failed)
+      await (
+        await import("~/server/workflows/background-tasks/publish")
+      ).wakeJobs({ source: daily ? "daily-recovery" : "app-open-recovery" });
+  }
 }
 
 /** Expires stale import Runs and projects terminal Job outcomes; every Run is kept. */

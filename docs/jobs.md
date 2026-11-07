@@ -354,21 +354,22 @@ rather than stopping for review. Run control refusals are
 
 ## Image processing
 
-Image processing is never abandoned. `ImageProcessingJob.state` stores only
-the outcome: `pending` while open, `ready`, or `skipped` for a completed negative
+Image processing retains every outcome. `ImageProcessingJob.state` stores
+`pending` while open, `ready`, `failed` for a deterministic refusal needing
+explicit retry, or `skipped` for a completed negative
 subject lift or a moot ending (image deleted, upload replaced, processor superseded,
 or type excluded: device work on a source type no device command carries, such as a GIF).
 A subject lift's `no_subject` or `not_suitable` result is final for that source hash
 and processor revision. Its negative evidence and attempt history stay recorded;
 the derivative is skipped and the original remains usable. Apple descriptions
 still run independently for every image. Other executor skips, including
-`unsupported_format`, become retryable failures with their reason preserved. A
-stored `failed` is a legacy state of a superseded processor. The displayed
+`unsupported_format`, become deterministic failures with their reason preserved. A
+stored `failed` retains the diagnostic, reported result and attempt history. The displayed
 state derives from the Job (`image-job-state.ts`): `leased` for a live lease,
 `waiting_for_device` for parked device work, `pending`, and `failed` ("Needs
 attention (retrying)") once a job failed `JOB_NEEDS_ATTENTION_ATTEMPTS` times in a row
-or its execution stopped; it keeps retrying. An executor's `retryable: false`
-(say `deadline_exceeded`) retries later with its cause recorded; a missing
+or its execution stopped; transient failures keep retrying. An executor's `retryable: false`
+stops automatic dispatch for these source/processor inputs; a missing
 subject-lift derivative is rebuilt. Explicit image retry reopens a negative cutout
 without discarding its evidence or allowing maintenance to immediately settle it again.
 A changed source or new processor revision is new work, and
@@ -377,7 +378,8 @@ On-device descriptions use a fresh session, a full-frame image bounded to 1024 p
 and an explicit response budget of at most 512 tokens, reserved from the runtime
 model context size. A context overflow retries once with 512 pixels and half the
 response budget. Persistent failures retain the reported context/token counts and
-return to durable server backoff; no cloud fallback or fabricated description is used.
+remain visibly failed until explicit retry or changed source/processor inputs;
+no cloud fallback or fabricated description is used.
 
 Recurring image-execution repair also settles retained negative cutout failures in
 bounded batches. This negative-outcome pass requires the current source/revision and the matching settled
@@ -598,6 +600,16 @@ records the provider's total tokens once. Embeddings remain outside frontier
 funding caps.
 
 ## AI evaluation drains
+
+Expected evidence invalidation is a typed obsolete outcome, including acquisition
+eligibility that changed while inference ran. Ordinary provider text never decides
+obsoletion. Funding/configuration refusal defers the affected feature without
+spending target attempts; it preserves the configured provider route and probes
+again after a bounded wait. Gateway admission carries its actual retry time.
+Prepared paid siblings publish before a provider stop defers the remaining work.
+Publication checks exact chunk leases under the ordered target locks, including
+expiry; preparation still checks the whole claimed page. Atomic evidence,
+activation, member-stop and receipt fences remain in the publication transaction.
 
 `ai/evaluation` owns the drain, its items and evaluation pages. Run authority
 (live Run checks, pausing, funding resumption, the workflow fence around one

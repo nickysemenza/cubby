@@ -204,12 +204,12 @@ describe("image execution history conservation", () => {
         },
       },
     });
-    // A non-retryable report is not terminal: the job stays open and backs off.
+    // A deterministic failure stays recorded until the member explicitly retries.
     const [open] = await getDb(ctx.db)
       .select({ state: imageProcessingJob.state })
       .from(imageProcessingJob)
       .where(eq(imageProcessingJob.id, jobId));
-    expect(open?.state).toBe("pending");
+    expect(open?.state).toBe("failed");
     const submission = await createImageProcessingSubmission(ctx.db);
     const imageId = parseEntityId("image", source.id);
     // Every open job of the image is retried now, the Apple description too.

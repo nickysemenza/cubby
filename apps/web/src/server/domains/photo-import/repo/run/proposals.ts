@@ -694,6 +694,66 @@ export async function listPhotoGroupProposals(
   return buildList(db, await loadRun(db, runShortcode));
 }
 
+/** A page and its mutable boundary share the proposal writer's Run lock. */
+export async function readRemainingPhotoRunContext(
+  db: Database,
+  publicId: string,
+): Promise<{
+  images: PhotoRunImage[];
+  totalImages: number;
+  defaults: PhotoRunDefaults | null;
+  boundaryGroup: PhotoGroupProposal | null;
+}> {
+  return withTransactionDatabase(db, async (txDb) => {
+    const run = await loadRun(txDb, publicId);
+    const [locked] = await getDb(txDb)
+      .select({ input: runTable.input })
+      .from(runTable)
+      .where(eq(runTable.id, run.id))
+      .for("update");
+    run.input = storedPhotoRunInput.parse(locked?.input ?? null);
+    const [images, rows, processing] = await Promise.all([
+      loadRunImages(txDb, run.id),
+      loadProposalRows(txDb, run.id),
+      loadPhotoRunImages(txDb, run),
+    ]);
+    const assigned = new Set(
+      rows.flatMap((row) =>
+        [...row.images, ...row.skip].map((entry) => entry.imageId),
+      ),
+    );
+    const pending = new Set(
+      images.ordered
+        .filter(
+          (entry) =>
+            (entry.state === "pending" ||
+              (run.status === "needs_review" &&
+                entry.state === "unresolved")) &&
+            !assigned.has(entry.imageId),
+        )
+        .map((entry) => entry.shortcode),
+    );
+    // Member edits and settlement close the boundary. Their photos remain
+    // assigned, so a resumed coordinator cannot reconsider that decision.
+    const boundary = rows.find(
+      (row) =>
+        row.groupKey === run.input?.groupingBoundaryGroupKey &&
+        row.state === "proposed" &&
+        (row.origin === "coordinator" || row.origin === "external_agent"),
+    );
+    return {
+      images: processing.filter((entry) => pending.has(entry.id)),
+      totalImages: images.ordered.length,
+      defaults: run.input?.defaults ?? null,
+      boundaryGroup: boundary
+        ? ((
+            await toViews(txDb, [boundary], images.byId, run.status, processing)
+          )[0] ?? null)
+        : null,
+    };
+  });
+}
+
 export async function readPhotoRunDefaults(db: Database, publicId: string) {
   return (await loadRun(db, publicId)).input?.defaults ?? null;
 }
@@ -1138,6 +1198,46 @@ async function prefillPhotoGroupBrand(
   }
 }
 
+/** Called inside the proposal transaction while its Run row is locked. */
+async function publishPhotoGroupingBoundary(
+  db: Database,
+  run: LoadedRun,
+  groupKey: string | null,
+  origin: PhotoGroupProposalOrigin | null,
+): Promise<void> {
+  if (origin !== "coordinator" && origin !== "external_agent")
+    throw new Error("Only an agent can publish a grouping boundary");
+  if (groupKey !== null) {
+    const boundary = (await loadProposalRows(db, run.id)).find(
+      (row) => row.groupKey === groupKey,
+    );
+    if (
+      !boundary ||
+      boundary.state !== "proposed" ||
+      (boundary.origin !== "coordinator" &&
+        boundary.origin !== "external_agent")
+    )
+      throw new Error(
+        "The grouping boundary must name a mutable agent proposal",
+      );
+  }
+  const stored = run.input ?? {
+    kind: "photo_inventory" as const,
+    processor: null,
+    batches: [],
+  };
+  await getDb(db)
+    .update(runTable)
+    .set({
+      input: {
+        ...stored,
+        groupingBoundaryGroupKey: groupKey,
+      },
+      updatedAt: new Date(),
+    })
+    .where(eq(runTable.id, run.id));
+}
+
 /**
  * Create or replace `proposed` groups by groupKey and drop `removeGroupKeys`,
  * atomically, then re-check that every image sits in at most one live
@@ -1379,6 +1479,13 @@ export async function proposePhotoGroups(
       );
       await upsertProposal(txDb, run.id, entry, origin);
     }
+    if (input.boundaryGroupKey !== undefined)
+      await publishPhotoGroupingBoundary(
+        txDb,
+        run,
+        input.boundaryGroupKey,
+        origin,
+      );
     return frozen;
   });
   return { ...(await buildList(db, run)), frozenGroupKeys };

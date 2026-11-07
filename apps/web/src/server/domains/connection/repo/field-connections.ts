@@ -20,6 +20,7 @@ import {
 import { suggestionTable } from "~/server/db/schema";
 import { saveSweepSuggestions } from "~/server/domains/run/repo/suggestion-sweep-state";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
+import { JobEvidenceObsoleteError } from "~/server/generic/jobs/errors";
 import { SHORTCODE_TABLE } from "~/server/generic/shortcode/repo/shortcode-tables";
 import { transitionSuggestionStates } from "~/server/generic/suggestions/repo/suggestion-state";
 import { canonicalJson } from "~/server/lib/canonical-json";
@@ -144,13 +145,17 @@ export async function saveConnectionFieldGuard(
     .object({ source: z.json(), target: z.json() })
     .parse(basis);
   if (canonicalJson(parsedBasis.source) !== canonicalJson(input.before.source))
-    throw new Error("Connection source changed during inference");
+    throw new JobEvidenceObsoleteError(
+      "Connection source changed during inference",
+    );
   const servedTarget = input.before.targets.get(candidate.target.entityId);
   if (
     servedTarget === undefined ||
     canonicalJson(servedTarget) !== canonicalJson(parsedBasis.target)
   )
-    throw new Error("Connection target changed during inference");
+    throw new JobEvidenceObsoleteError(
+      "Connection target changed during inference",
+    );
   const evidence = connectionSuggestionEvidence.parse({
     version: 1,
     candidate,
@@ -178,7 +183,9 @@ export async function saveConnectionFieldGuard(
       return withTransactionDatabase(context.db, async (db) => {
         const current = await captureConnectionBasis(db, candidate, true);
         if (canonicalJson(current) !== canonicalJson(basis))
-          throw new Error("Connection evidence changed during inference");
+          throw new JobEvidenceObsoleteError(
+            "Connection evidence changed during inference",
+          );
         await saveSweepSuggestions(db, runId, publication, entries, null, {
           ...context,
           db,

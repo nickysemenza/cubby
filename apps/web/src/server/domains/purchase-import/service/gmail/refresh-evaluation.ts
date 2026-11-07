@@ -10,6 +10,7 @@ import {
   latestClassificationObservation,
   loadEmailRefreshTarget,
 } from "~/server/domains/purchase-import/repo/gmail/refresh-evaluation-state";
+import { JobEvidenceObsoleteError } from "~/server/generic/jobs/errors";
 
 import { gmailProviderForUser } from "../../repo/gmail/provider";
 import { ingestGmailMessages } from "./ingest";
@@ -33,12 +34,16 @@ export async function refreshEmailEvaluation(
     current.member ||
     current.item.classification !== "uncertain"
   )
-    throw new Error("AI evaluation member decision is obsolete");
+    throw new JobEvidenceObsoleteError(
+      "AI evaluation member decision is obsolete",
+    );
   const snapshot = z
     .object({ checksum: z.string().nullable() })
     .parse(evaluation.snapshot);
   if (snapshot.checksum !== current.item.checksum)
-    throw new Error("AI evaluation target changed during inference");
+    throw new JobEvidenceObsoleteError(
+      "AI evaluation target changed during inference",
+    );
   const observation = await latestClassificationObservation(
     db,
     current.item.id,

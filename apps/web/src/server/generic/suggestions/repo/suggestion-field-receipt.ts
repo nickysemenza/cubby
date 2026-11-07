@@ -16,6 +16,7 @@ import { suggestionTable } from "~/server/db/schema";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { SHORTCODE_TABLE } from "~/server/generated/shortcode-tables.gen";
 import { latestFieldWrite } from "~/server/generic/audit-log/repo/field-write";
+import { JobEvidenceObsoleteError } from "~/server/generic/jobs/errors";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import {
   assertApplicationReceipt,
@@ -68,7 +69,10 @@ export async function acknowledgeSavedField(
       .where(eq(table.id, id))
       .for("update")
       .limit(1);
-    if (!row) throw new Error("The saved field target no longer exists");
+    if (!row)
+      throw new JobEvidenceObsoleteError(
+        "The saved field target no longer exists",
+      );
     if (subject.recordId !== null && subject.recordId !== id)
       throw new Error(
         "The saved field target differs from the original Suggestion",

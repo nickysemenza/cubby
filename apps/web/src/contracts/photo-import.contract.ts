@@ -15,6 +15,7 @@ import {
   commitPhotoGroupOutput,
   listPhotoGroupProposalsInput,
   photoGroupProposalList,
+  photoGroupingBoundary,
   photoProductCandidateSearchInput,
   photoRunContextImage,
   proposePhotoGroupsInput,
@@ -54,9 +55,8 @@ import { defineContract, mutation, query } from "~/contracts/define";
 const sha256Schema = z.string().regex(/^[0-9a-f]{64}$/);
 
 /**
- * Every photo-context page stays in the coordinator's context for the rest of
- * the run, so a page is bounded: 100 photos (the native picker's maximum) stay
- * well inside the photo model's context window.
+ * One request carries one page and its durable boundary proposal. The full
+ * transcript remains available independently of the coordinator input.
  */
 const PHOTO_CONTEXT_PAGE_MAX = 100;
 const perceptualHashSchema = z.string().regex(/^[0-9a-f]{16}$/);
@@ -576,12 +576,14 @@ export const photoImportContract = defineContract(
     /** One bounded page of a run's photos in capture order, with owner and notes. */
     runContext: query({
       description:
-        "One photo-inventory run's owner, notes, and one page of its photos in capture order (undated photos last) with their capture time, cloud descriptions and recognized text. Pass `nextCursor` back as `cursor` until it is null; an item photographed across a page boundary continues on the next page. Set `withImageUrls` only if you can open images. Read this before proposing groups.",
+        "One photo-inventory run's owner, notes, and one page of its photos in capture order (undated photos last) with their capture time, cloud descriptions and recognized text. Pass `nextCursor` back as `cursor` until it is null; an item photographed across a page boundary continues on the next page. Set `remaining: true` to resume from durable grouping progress: only uncovered photos are paged, and `boundaryGroup` carries the last mutable provisional item. After proposing a page, repeat remaining mode with no cursor; other proposals and member decisions stay assigned. Set `withImageUrls` only if you can open images. Read this before proposing groups.",
       input: z.object({
         runId: runShortcode,
         cursor: z.number().int().nonnegative().optional(),
         limit: z.number().int().min(1).max(PHOTO_CONTEXT_PAGE_MAX).optional(),
         withImageUrls: z.boolean().optional(),
+        /** Resume from durable proposals rather than scanning already grouped photos. */
+        remaining: z.boolean().optional(),
       }),
       output: z.object({
         runId: runShortcode,
@@ -589,6 +591,9 @@ export const photoImportContract = defineContract(
         notes: z.string().nullable(),
         defaults: photoRunDefaults.nullish(),
         totalImages: z.number().int().nonnegative(),
+        remaining: z.boolean(),
+        boundaryGroup: photoGroupingBoundary.nullable(),
+        boundaryReviewRequired: z.string().nullable(),
         nextCursor: z.number().int().nonnegative().nullable(),
         images: z.array(photoRunContextImage),
       }),
@@ -608,7 +613,7 @@ export const photoImportContract = defineContract(
     /** Upsert proposed groups for human review; writes no Product or Inventory. */
     proposeGroups: mutation({
       description:
-        "Propose how a run's images group into items, for a human to review and approve on the run page — nothing is written to Products or Inventory until approval, which runs photo_run.commit_group with each group's payload. Each group has commit_group's shape (minus runId) plus optional `evidence` (why these photos are one item, and why this Product). Upserts by groupKey: a still-`proposed` group is replaced; a `committed` or `discarded` groupKey is left untouched and returned in `frozenGroupKeys`. `removeGroupKeys` drops proposed groups. Every image must be a `pending` target of the run and, across the run's proposed groups after this call, appear in exactly one group (attached or skipped) — otherwise the whole call is refused. Returns every proposal plus the pending images no group mentions yet.",
+        "Propose how a run's images group into items, for a human to review and approve on the run page — nothing is written to Products or Inventory until approval, which runs photo_run.commit_group with each group's payload. Each group has commit_group's shape (minus runId) plus optional `evidence` (why these photos are one item, and why this Product). Upserts by groupKey: a still-`proposed` group is replaced; a `committed` or `discarded` groupKey is left untouched and returned in `frozenGroupKeys`. `removeGroupKeys` drops proposed groups. Every image must be a `pending` target of the run and, across the run's proposed groups after this call, appear in exactly one group (attached or skipped) — otherwise the whole call is refused. For paged grouping, save the last provisional group too and set `boundaryGroupKey` to its key in this same mutation; null closes the boundary on the final page. The boundary must name a mutable agent proposal. Returns every proposal plus the pending images no group mentions yet.",
       input: proposePhotoGroupsInput,
       output: proposePhotoGroupsOutput,
       invalidates: ["runOnly"],

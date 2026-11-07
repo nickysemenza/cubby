@@ -3341,7 +3341,7 @@ const PROCESSING_LABEL = {
   leased: "Processing",
   ready: "Done",
   skipped: "Skipped",
-  failed: "Needs attention (retrying)",
+  failed: "Needs attention",
 } satisfies Record<ImageProcessingJobState, string>;
 const DESCRIPTION_BLOCKING = new Set<ImageProcessingJobState>([
   "pending",

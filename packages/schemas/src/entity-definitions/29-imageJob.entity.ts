@@ -53,10 +53,9 @@ const stateOptions = [
     color: "neutral-status",
   },
   {
-    // Image work never ends as failed: after repeated failures it keeps
-    // retrying with backoff and asks for attention.
+    // Deterministic refusals stop; repeated transient failures still retry.
     value: "failed",
-    label: "Needs attention (retrying)",
+    label: "Needs attention",
     color: "destructive",
   },
 ] satisfies {

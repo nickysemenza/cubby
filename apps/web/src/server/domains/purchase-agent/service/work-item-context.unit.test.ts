@@ -8,7 +8,10 @@ import type { Message } from "@earendil-works/pi-ai";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { describe, expect, it } from "vitest";
 
-import { currentWorkItemMessages } from "./work-item-context";
+import {
+  currentPhotoWorkItemMessages,
+  currentWorkItemMessages,
+} from "./work-item-context";
 
 const user = (text: string): Message =>
   fromPartial({ role: "user", content: text, timestamp: 0 });
@@ -95,4 +98,70 @@ describe("currentWorkItemMessages", () => {
       ...claim("c2"),
     ]);
   });
+});
+
+it("recovers photo pages from durable boundaries while retaining the full evidence transcript", () => {
+  const kickoff = user("Group these photos.");
+  const member = user("Keep the synthetic blue variant separate.");
+  const legacy = [kickoff, ...read("old-page"), member];
+  const recovery = currentPhotoWorkItemMessages(legacy);
+  expect(recovery).toContain(kickoff);
+  expect(recovery).toContain(member);
+  expect(recovery.some((message) => message.role === "toolResult")).toBe(false);
+  const page = (id: string, boundaryGroup: unknown) => [
+    call(id, "mcp__cubby__photo_run_read"),
+    outcome(
+      id,
+      "mcp__cubby__photo_run_read",
+      JSON.stringify({
+        remaining: true,
+        images: [{ id: "IMG-4K7M" }],
+        boundaryGroup,
+      }),
+    ),
+  ];
+  const first = [...legacy, ...page("p1", null), ...read("candidate")];
+  const publication = [
+    call("save", "mcp__cubby__photo_run"),
+    outcome(
+      "save",
+      "mcp__cubby__photo_run",
+      JSON.stringify({ savedGroupKeys: ["boundary"] }),
+    ),
+  ];
+  expect(
+    currentPhotoWorkItemMessages([...first, ...publication]).some(
+      (message) => message.role === "toolResult",
+    ),
+  ).toBe(false);
+  const boundary = {
+    groupKey: "boundary",
+    evidence: "Synthetic tag continues this garment",
+  };
+  const current = page("p2", boundary);
+  const transcript = [...first, ...publication, ...current];
+  expect(currentPhotoWorkItemMessages(transcript)).toEqual([
+    kickoff,
+    member,
+    ...current,
+  ]);
+  expect(transcript).toContain(first[1]);
+  const lookup = (id: string) => [
+    call(id, "mcp__cubby__photo_run_read"),
+    outcome(
+      id,
+      "mcp__cubby__photo_run_read",
+      "synthetic lookup ".repeat(3_000),
+    ),
+  ];
+  const bounded = currentPhotoWorkItemMessages([
+    ...transcript,
+    ...lookup("earlier-candidates"),
+    ...lookup("latest-candidates"),
+  ]);
+  expect(
+    bounded
+      .filter((message) => message.role === "toolResult")
+      .map((message) => message.toolCallId),
+  ).toEqual(["p2", "latest-candidates"]);
 });

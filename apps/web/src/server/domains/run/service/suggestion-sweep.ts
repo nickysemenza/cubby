@@ -46,7 +46,10 @@ import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
 import { readSelectedEntityRecords } from "~/server/entity-kernel/selected-read";
 import { latestFieldWrite } from "~/server/generic/audit-log/repo/field-write";
-import { JobTargetError } from "~/server/generic/jobs/errors";
+import {
+  JobEvidenceObsoleteError,
+  JobTargetError,
+} from "~/server/generic/jobs/errors";
 import { resolveLiveShortcodes } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { fieldInputFingerprint } from "~/server/generic/suggestions/repo/field-input-fence";
 import { fieldReviewIdentity } from "~/server/generic/suggestions/repo/field-suggestion-review";
@@ -348,7 +351,10 @@ export async function executeSuggestionSweepTarget(
   const policy = decisionCatalogRows().find(
     (row) => row.entity === input.entity && row.field === queuedTarget.field,
   );
-  if (!policy) throw new Error("Suggestion field policy no longer exists");
+  if (!policy)
+    throw new JobEvidenceObsoleteError(
+      "Suggestion field policy no longer exists",
+    );
   const policyKeys = [
     ...policy.basis.map((row) => row.key),
     queuedTarget.field,
@@ -360,7 +366,8 @@ export async function executeSuggestionSweepTarget(
     ids: [queuedTarget.id],
     fields: basisKeys,
   });
-  if (!record) throw new Error("Suggestion target no longer exists");
+  if (!record)
+    throw new JobEvidenceObsoleteError("Suggestion target no longer exists");
   const valueOf = (key: string) => {
     if (!Object.hasOwn(entityFieldEnvelopeFields[input.entity], key))
       return record[key];
@@ -403,7 +410,9 @@ export async function executeSuggestionSweepTarget(
     (await latestFieldWrite(db, input.entity, target.entityId, target.field))
       ?.id !== (fieldDecisionId ?? undefined)
   )
-    throw new Error("Suggestion member decision changed during inference");
+    throw new JobEvidenceObsoleteError(
+      "Suggestion member decision changed during inference",
+    );
   let saved = sweepResult.safeParse(item.result);
   if (!saved.success) {
     const manifest = await producingAiManifest(db);
@@ -479,7 +488,9 @@ export async function executeSuggestionSweepTarget(
         target.field,
       )) !== preparedFingerprint
     )
-      throw new Error("Suggestion basis changed during inference");
+      throw new JobEvidenceObsoleteError(
+        "Suggestion basis changed during inference",
+      );
     const diagnostics = [...result.diagnostics];
     const outcome = await publishSweepSuggestions(
       tx,

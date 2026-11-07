@@ -121,10 +121,10 @@ export type ImportRunAgentConfig = {
   mcpInputActions?: readonly CubbyMcpToolAction[];
   /**
    * What each request carries of earlier claimed work items: `current` sends
-   * only the latest claim onward, since each Email is independent and durable
-   * records carry what earlier ones settled; `all` keeps every item.
+   * only the latest claim onward, since each Email is independent. Photo
+   * pages reload durable proposals and their pending boundary after publication.
    */
-  workItemContext: "current" | "all";
+  workItemContext: "current" | "photo_page";
   /**
    * What `entity_read` serves this purpose's agent. Its per-kind list filters
    * are most of the mounted schema, resent on every call, so the agent's copy
@@ -184,7 +184,7 @@ export const importRunAgentManifest = {
     agentTools: RUN_AGENT_TOOLS,
     mcpActions: PHOTO_MCP_ACTIONS,
     mcpTools: toolsOf(PHOTO_MCP_ACTIONS),
-    workItemContext: "all",
+    workItemContext: "photo_page",
   },
   mail_import: {
     model: "gpt-6-luna",

@@ -341,6 +341,8 @@ export const proposePhotoGroupsInput = z
     runId: runShortcode,
     _runExecution: purchaseImportRunExecution.optional(),
     groups: z.array(photoGroupProposalGroup).max(200).default([]),
+    /** Persist the last provisional item atomically with this page; null closes it. */
+    boundaryGroupKey: z.string().trim().min(1).max(200).nullable().optional(),
     /** Proposed groups to drop entirely (their images become unassigned). */
     removeGroupKeys: z
       .array(z.string().trim().min(1).max(200))
@@ -470,6 +472,20 @@ export const photoGroupProposal = z.object({
   updatedAt: z.string(),
 });
 export type PhotoGroupProposal = z.infer<typeof photoGroupProposal>;
+
+/** Writable boundary facts; review-only presentation and enrichment stay out of model input. */
+export const photoGroupingBoundary = photoGroupProposal.pick({
+  groupKey: true,
+  state: true,
+  origin: true,
+  images: true,
+  skip: true,
+  product: true,
+  inventory: true,
+  review: true,
+  evidence: true,
+  updatedAt: true,
+});
 
 export const photoGroupProposalList = z.object({
   runId: runShortcode,

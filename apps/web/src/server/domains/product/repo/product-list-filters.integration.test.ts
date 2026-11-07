@@ -177,6 +177,24 @@ describe("product list declared filters", () => {
     expect((await list({ kitAccounting: false })).map((row) => row.id)).toEqual(
       [],
     );
+    // Unlinked ownership exits must not turn every other Product's membership into SQL NULL.
+    const disposalVendor = await createRepoEntity(ctx, "vendor", {
+      name: "Synthetic disposal vendor",
+    });
+    const disposalPurchase = await createRepoEntity(ctx, "purchase", {
+      vendorId: disposalVendor.output.id,
+    });
+    await createRepoEntity(
+      ctx,
+      "expense",
+      makeExpenseInput({
+        name: "Synthetic unlinked disposal",
+        productId: null,
+        purchaseId: disposalPurchase.output.id,
+        productQuantity: null,
+        cost: -5,
+      }),
+    );
     await drainStoredDerived(ctx.db);
     expect((await list({ kitAccounting: true })).map((row) => row.id)).toEqual([
       w.kit.id,

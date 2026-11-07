@@ -95,6 +95,7 @@ import {
   semanticCoveragePending,
 } from "~/server/generic/embedding/repo/entity-embedding";
 import { withJobPhase } from "~/server/generic/jobs/context";
+import { JobEvidenceObsoleteError } from "~/server/generic/jobs/errors";
 import type { JobContext } from "~/server/generic/jobs/types";
 import {
   lookupShortcodes,
@@ -740,7 +741,9 @@ export async function executeAiRefreshTarget(
     !prepared ||
     prepared.provenance.inputFingerprint !== claimed.provenance.inputFingerprint
   )
-    throw new Error("AI evaluation target changed during inference");
+    throw new JobEvidenceObsoleteError(
+      "AI evaluation target changed during inference",
+    );
   const previous = await suggestionStatesById(db, target.suggestionIds);
   if (
     previous.length !== target.suggestionIds.length ||
@@ -750,7 +753,9 @@ export async function executeAiRefreshTarget(
         !["pending", "superseded", "applied"].includes(row.status),
     )
   )
-    throw new Error("AI evaluation member decision is obsolete");
+    throw new JobEvidenceObsoleteError(
+      "AI evaluation member decision is obsolete",
+    );
   let result = fieldResult.safeParse(claimed.result);
   if (!result.success) {
     const evaluated = await withAiInputs(false, () =>
@@ -812,7 +817,9 @@ export async function executeAiRefreshTarget(
       !now ||
       now.provenance.inputFingerprint !== claimed.provenance.inputFingerprint
     )
-      throw new Error("AI evaluation target changed during inference");
+      throw new JobEvidenceObsoleteError(
+        "AI evaluation target changed during inference",
+      );
     const decision = saved.output.suggestions[snapshot.field];
     const model =
       saved.provenance.model ?? snapshot.decisionModelOverride ?? "unknown";
@@ -978,7 +985,7 @@ function productEvaluationPageAdapter(
                 (emptyFences.has(entry.key) &&
                   emptyFences.get(entry.key) !== entry.fence)
               )
-                throw new Error(
+                throw new JobEvidenceObsoleteError(
                   "Product identity evidence changed during inference",
                 );
               if (target.target.kind === "product_pair") {
@@ -992,7 +999,7 @@ function productEvaluationPageAdapter(
                     target.evaluation.provenance.inputFingerprint ||
                   frozen.fingerprint !== current.fingerprint
                 )
-                  throw new Error(
+                  throw new JobEvidenceObsoleteError(
                     "Product pair evidence changed during inference",
                   );
                 // Persisted JSONB ordering is part of the existing standalone question.
@@ -1016,7 +1023,7 @@ function productEvaluationPageAdapter(
                 if (
                   fingerprint !== target.evaluation.provenance.inputFingerprint
                 )
-                  throw new Error(
+                  throw new JobEvidenceObsoleteError(
                     "AI evaluation target changed during inference",
                   );
               }
@@ -1393,7 +1400,7 @@ async function stageProductEnrollment(
                       ),
                   )
                 )
-                  throw new Error(
+                  throw new JobEvidenceObsoleteError(
                     "Product identity evidence changed during inference",
                   );
                 const exact = chunk.flatMap((edge) =>
@@ -1405,7 +1412,7 @@ async function stageProductEnrollment(
                     (result) => !result.valid,
                   )
                 )
-                  throw new Error(
+                  throw new JobEvidenceObsoleteError(
                     "Product identity evidence changed during inference",
                   );
                 await enqueueAiEvaluations(
@@ -1506,7 +1513,9 @@ function connectionEvaluationPageAdapter(
   // A fresh adapter owns each page; catalog evidence never crosses a drain page.
   const fieldGuardTargets: ConnectionFieldGuardTargets = new Map();
   const changed = () =>
-    new Error("Connection discovery source changed during evaluation");
+    new JobEvidenceObsoleteError(
+      "Connection discovery source changed during evaluation",
+    );
   const usageGroups = new Map<AiRunContext, Map<string, AiRunContext>>();
   const operationUsage = (
     page: AiRunContext,
@@ -1713,7 +1722,9 @@ function connectionEvaluationPageAdapter(
           pairs.slice(offset, offset + 25),
         );
         if (results.some((result) => !result.valid))
-          throw new Error("Product pair evidence changed during inference");
+          throw new JobEvidenceObsoleteError(
+            "Product pair evidence changed during inference",
+          );
       }
 
       const published: EvaluationPagePublication[] = [];

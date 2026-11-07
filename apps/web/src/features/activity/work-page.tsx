@@ -132,6 +132,7 @@ function StuckSection({
   items: readonly WorkStuckItem[];
   onRetried: () => void;
 }) {
+  const [expanded, setExpanded] = useState(false);
   return (
     <Section
       headingAs="h2"
@@ -140,14 +141,21 @@ function StuckSection({
       ruled
     >
       <ul>
-        {items.slice(0, STUCK_ROW_CAP).map((item) => (
+        {(expanded ? items : items.slice(0, STUCK_ROW_CAP)).map((item) => (
           <StuckRow key={item.key} item={item} onRetried={onRetried} />
         ))}
       </ul>
       {items.length > STUCK_ROW_CAP ? (
-        <p className="mt-2 text-muted-foreground">
-          {items.length - STUCK_ROW_CAP} more not shown
-        </p>
+        <Button
+          variant="ghost"
+          size="sm"
+          aria-expanded={expanded}
+          onClick={() => setExpanded(!expanded)}
+        >
+          {expanded
+            ? "Show fewer"
+            : `Show ${items.length - STUCK_ROW_CAP} more`}
+        </Button>
       ) : null}
     </Section>
   );
