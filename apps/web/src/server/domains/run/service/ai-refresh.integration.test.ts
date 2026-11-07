@@ -80,7 +80,11 @@ import {
 } from "~/server/testing/repo.fixtures";
 import { readSuggestionDecisions } from "~/server/testing/suggestion-decisions.fixtures";
 
-import { settleAppliedFieldRefresh } from "../repo/ai-refresh-state";
+import { lockAiRefreshScheduling } from "../repo/ai-refresh-admission";
+import {
+  scheduleAutomaticEvaluations,
+  settleAppliedFieldRefresh,
+} from "../repo/ai-refresh-state";
 import { scheduleConnectionRefresh } from "../repo/connection-refresh";
 import type { AiEvaluationPorts } from "./ai-evaluation-execution";
 import {
@@ -319,65 +323,153 @@ describe("targeted prompt refresh", () => {
 
   // Failure: saved-record list questions publish only inactive live predictions,
   // or a client draft becomes the automatic write's authoritative snapshot.
-  it("schedules saved live questions from canonical data while drafts stay interactive", async () => {
-    const item = await productFixture(ctx, "Synthetic canonical groceries");
-    await activateAiRefresh(ctx.db, "synthetic-live-question", {
-      enabled: true,
-      startDiscovery: false,
-    });
-    const ports = {
-      context: kernelCtx(ctx),
-      suggestPorts: categoryPorts(0.97).suggestPorts,
-    };
-    const draft = {
-      entity: "product" as const,
-      basisMode: "suggested" as const,
-      targets: ["categoryId"],
-      basis: { name: "Synthetic client-only draft", categoryId: null },
-    };
-    await inferFieldSuggestions(kernelCtx(ctx), draft, ports.suggestPorts);
-    await inferFieldSuggestions(
-      kernelCtx(ctx),
-      { ...draft, entityId: item.id, basisMode: "provided", savedRecord: true },
-      ports.suggestPorts,
-    );
-    await inferFieldSuggestions(
-      kernelCtx(ctx),
-      { ...draft, entityId: item.id },
-      ports.suggestPorts,
-    );
-    expect(
-      await getDb(ctx.db).select().from(aiEvaluation).where(fieldRefreshTarget),
-    ).toEqual([]);
-    await inferFieldSuggestions(
-      kernelCtx(ctx),
-      { ...draft, entityId: item.id, savedRecord: true },
-      ports.suggestPorts,
-    );
-    const [evaluation] = await getDb(ctx.db)
-      .select()
-      .from(aiEvaluation)
-      .where(fieldRefreshTarget);
-    expect(evaluation?.snapshot).toMatchObject({
-      basis: {
-        name: "Synthetic canonical groceries",
-        categoryId: null,
-        __resolutionContext: expect.stringContaining('"categoryId"'),
-      },
-      currentValue: null,
-    });
-    expect(await productCategoryId(ctx.db, item.id)).toBeNull();
-    await executeAiRefreshTarget(ctx.db, evaluation!.id, ports);
-    expect(await productCategoryId(ctx.db, item.id)).toBe(taxonomyId("food"));
-    await inferFieldSuggestions(
-      kernelCtx(ctx),
-      { ...draft, entityId: item.id, savedRecord: true },
-      ports.suggestPorts,
-    );
-    expect(
-      await getDb(ctx.db).select().from(aiEvaluation).where(fieldRefreshTarget),
-    ).toHaveLength(1);
-  });
+  it.each(["applied", "empty"] as const)(
+    "schedules saved live questions from canonical data while drafts stay interactive (%s)",
+    async (outcome) => {
+      const item = await productFixture(ctx, "Synthetic canonical groceries");
+      await activateAiRefresh(ctx.db, "synthetic-live-question", {
+        enabled: true,
+        startDiscovery: false,
+      });
+      const ports = {
+        context: kernelCtx(ctx),
+        suggestPorts: {
+          ...categoryPorts(0.97).suggestPorts,
+          ...(outcome === "empty"
+            ? {
+                decisionPort: async (input: Parameters<DecisionPort>[0]) => ({
+                  answers: {
+                    selection: {
+                      type: "choice" as const,
+                      choice: "none",
+                      confidence: 0.9,
+                      probabilities: Object.fromEntries(
+                        Object.keys(input.questions.selection.criteria).map(
+                          (key) => [
+                            key,
+                            key === "none"
+                              ? 0.9
+                              : 0.1 /
+                                Math.max(
+                                  1,
+                                  Object.keys(
+                                    input.questions.selection.criteria,
+                                  ).length - 1,
+                                ),
+                          ],
+                        ),
+                      ),
+                    },
+                  },
+                }),
+              }
+            : {}),
+        },
+      };
+      const draft = {
+        entity: "product" as const,
+        basisMode: "suggested" as const,
+        targets: ["categoryId"],
+        basis: { name: "Synthetic client-only draft", categoryId: null },
+      };
+      await inferFieldSuggestions(kernelCtx(ctx), draft, ports.suggestPorts);
+      await inferFieldSuggestions(
+        kernelCtx(ctx),
+        {
+          ...draft,
+          entityId: item.id,
+          basisMode: "provided",
+          savedRecord: true,
+        },
+        ports.suggestPorts,
+      );
+      await inferFieldSuggestions(
+        kernelCtx(ctx),
+        { ...draft, entityId: item.id },
+        ports.suggestPorts,
+      );
+      expect(
+        await getDb(ctx.db)
+          .select()
+          .from(aiEvaluation)
+          .where(fieldRefreshTarget),
+      ).toEqual([]);
+      await inferFieldSuggestions(
+        kernelCtx(ctx),
+        { ...draft, entityId: item.id, savedRecord: true },
+        ports.suggestPorts,
+      );
+      const [evaluation] = await getDb(ctx.db)
+        .select()
+        .from(aiEvaluation)
+        .where(fieldRefreshTarget);
+      expect(evaluation?.snapshot).toMatchObject({
+        basis: {
+          name: "Synthetic canonical groceries",
+          categoryId: null,
+          __resolutionContext: expect.stringContaining('"categoryId"'),
+        },
+        currentValue: null,
+      });
+      expect(evaluation?.runId).toBeNull();
+      const repeatWhileBusy = async (row: typeof evaluation) => {
+        await withTransactionDatabase(ctx.db, async (tx) => {
+          await lockAiRefreshScheduling(tx);
+          await expect(
+            scheduleAutomaticEvaluations(ctx.db, [
+              {
+                target: row!.target,
+                provenance: row!.provenance,
+                snapshot: row!.snapshot,
+              },
+            ]),
+          ).resolves.toEqual({ kind: "unchanged" });
+        });
+      };
+      await repeatWhileBusy(evaluation);
+      await getDb(ctx.db)
+        .update(product)
+        .set({ name: "Synthetic updated groceries" })
+        .where(eq(product.id, item.entityId));
+      await inferFieldSuggestions(
+        kernelCtx(ctx),
+        { ...draft, entityId: item.id, savedRecord: true },
+        ports.suggestPorts,
+      );
+      const [updated] = await getDb(ctx.db)
+        .select()
+        .from(aiEvaluation)
+        .where(fieldRefreshTarget);
+      expect(updated).toMatchObject({
+        id: evaluation!.id,
+        runId: null,
+        snapshot: { basis: { name: "Synthetic updated groceries" } },
+      });
+      expect(updated?.workKey).not.toBe(evaluation!.workKey);
+      expect(await productCategoryId(ctx.db, item.id)).toBeNull();
+      await executeAiRefreshTarget(ctx.db, evaluation!.id, ports);
+      expect(await productCategoryId(ctx.db, item.id)).toBe(
+        outcome === "applied" ? taxonomyId("food") : null,
+      );
+      const [completed] = await getDb(ctx.db)
+        .select()
+        .from(aiEvaluation)
+        .where(fieldRefreshTarget);
+      expect(completed?.state).toBe("completed");
+      await repeatWhileBusy(completed);
+      await inferFieldSuggestions(
+        kernelCtx(ctx),
+        { ...draft, entityId: item.id, savedRecord: true },
+        ports.suggestPorts,
+      );
+      expect(
+        await getDb(ctx.db)
+          .select()
+          .from(aiEvaluation)
+          .where(fieldRefreshTarget),
+      ).toHaveLength(1);
+    },
+  );
 
   // Failure: background admission hides an otherwise valid interactive answer.
   it.each(["capacity", "obsolete policy"] as const)(
