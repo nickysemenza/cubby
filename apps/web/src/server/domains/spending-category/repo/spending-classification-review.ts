@@ -20,7 +20,7 @@ import {
   withTransactionDatabase,
   withSnapshotWriteDatabase,
 } from "~/server/db/helpers";
-import { product, entityExternalId } from "~/server/db/schema";
+import { product, productCategory, entityExternalId } from "~/server/db/schema";
 import {
   spendingClassificationRevision,
   type ExpenseSpendingCategoryResolutionDraft,
@@ -33,6 +33,7 @@ import {
   type ExpenseJointAllocationRow,
 } from "~/server/domains/expense/repo/expense-project-allocation";
 import {
+  assertValidParent,
   getCategoryFeature,
   resolveProductCategory,
 } from "~/server/domains/product-category/repo/product-category";
@@ -118,10 +119,55 @@ async function draftFor(
       "productCategory",
       request.productCategoryId,
     );
+    const parentId =
+      request.parentId === undefined
+        ? undefined
+        : request.parentId === null
+          ? null
+          : await resolveOrThrow(db, "productCategory", request.parentId);
+    if (parentId !== undefined) {
+      await assertValidParent(db, id, parentId);
+      const [current] = await unwrapDb(db)
+        .select({
+          parentId: productCategory.parentId,
+          feature: productCategory.feature,
+        })
+        .from(productCategory)
+        .where(and(eq(productCategory.id, id), notDeleted(productCategory)));
+      if (!current) return fail("Product category is no longer live.");
+      if (
+        current.parentId !== parentId &&
+        current.feature === null &&
+        ((await getCategoryFeature(db, id)) === "food") !==
+          ((await getCategoryFeature(db, parentId)) === "food")
+      ) {
+        // A descendant's own feature stops inheritance from the moved root.
+        // Only Products whose chain crosses that root can change Food status.
+        const affected = await unwrapDb(db).execute(
+          sql`
+          WITH RECURSIVE unbound AS (
+            SELECT c.id FROM "ProductCategory" c
+            WHERE c.id = ${id}::uuid AND ${notDeleted("c")} AND c.feature IS NULL
+            UNION
+            SELECT c.id FROM "ProductCategory" c JOIN unbound u ON c."parentId" = u.id
+            WHERE ${notDeleted("c")} AND c.feature IS NULL
+          )
+          SELECT 1 FROM "Product" p WHERE ${notDeleted("p")}
+            AND p."categoryId" IN (SELECT id FROM unbound) LIMIT 1
+        `,
+          "objects",
+        );
+        if (affected.length)
+          fail(
+            "A reviewed spending reassignment cannot change the Food feature; Project and Trade impact require a separate review.",
+          );
+      }
+    }
     return {
       productCategories: [
         {
           id,
+          ...(parentId === undefined ? {} : { parentId }),
           spendingCategoryMode: request.spendingCategoryMode,
           spendingCategoryId: request.spendingCategoryId
             ? await resolveOrThrow(
@@ -494,6 +540,9 @@ export async function applyReviewedSpendingClassificationPolicy(
       entity: "productCategory",
       id: request.productCategoryId,
       data: {
+        ...(request.parentId === undefined
+          ? {}
+          : { parentId: request.parentId }),
         spendingCategoryMode: request.spendingCategoryMode,
         spendingCategoryId: request.spendingCategoryId,
       },

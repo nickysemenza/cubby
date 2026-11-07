@@ -7,6 +7,21 @@ export const costTypeValues = ["materials", "tools", "services"] as const;
 export const costTypeSchema = z.enum(costTypeValues);
 export type CostType = z.infer<typeof costTypeSchema>;
 
+/** Why a canonical allocation share has no live Product Category identity. */
+export const expenseProductCategoryRemainderSchema = z.enum([
+  "productless",
+  "deleted_product",
+  "uncategorized_product",
+  "deleted_category",
+  "unknown_refund",
+  "unclassified",
+  "no_principal",
+  "unknown_allocation",
+]);
+export type ExpenseProductCategoryRemainder = z.infer<
+  typeof expenseProductCategoryRemainderSchema
+>;
+
 export const COST_TYPE_LABELS = {
   materials: "Materials",
   tools: "Tools",

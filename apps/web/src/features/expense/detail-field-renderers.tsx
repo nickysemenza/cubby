@@ -1,12 +1,13 @@
-import { fieldDecisionOf } from "@cubby/schemas/field-envelope";
+import { fieldDecisionOf, fieldValueOf } from "@cubby/schemas/field-envelope";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { renderDetailFieldValue } from "~/entity/display/entity-display";
 import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import { useEntityMetadata } from "~/entity/metadata";
+import { ExpenseItemDetailReview } from "~/features/finance/spending-classification-review";
 import { formatCurrency } from "~/lib/number-format";
-import { Stack } from "~/ui/layout";
+import { Disclosure, Stack } from "~/ui/layout";
 import { Description } from "~/ui/text/description";
 
 import type { EntityDetailFieldRenderers } from "../../entity/display/detail-field-renderers/index";
@@ -67,9 +68,27 @@ function ExpenseCategoryField({ expense }: { expense: ExpenseOut }) {
   const categoryField = metadata.fields.fields.find(
     (field) => field.key === "spendingCategoryId",
   );
-  return categoryField
-    ? renderDetailFieldValue(queryClient, "expense", expense, categoryField)
-    : null;
+  if (!categoryField) return null;
+  const saved = expense.fields.spendingCategoryId.current.assignment;
+  const canUseDetail =
+    saved?.kind === "value" &&
+    saved.value !== null &&
+    fieldValueOf(expense.fields.lineKind) === "principal";
+  return (
+    <Stack gap="xs">
+      {renderDetailFieldValue(queryClient, "expense", expense, categoryField)}
+      {canUseDetail && (
+        <Disclosure summary="Use item detail">
+          <Description>
+            Review removing this line's saved spending category. Product,
+            purchase and merchant rules will resolve it again; recorded money
+            stays unchanged.
+          </Description>
+          <ExpenseItemDetailReview expenseIds={[expense.id]} />
+        </Disclosure>
+      )}
+    </Stack>
+  );
 }
 
 export const expenseDetailFields = {

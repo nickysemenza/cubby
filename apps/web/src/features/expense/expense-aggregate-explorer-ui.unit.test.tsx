@@ -11,7 +11,14 @@ import {
 } from "./expense-aggregate-explorer";
 import type { ExpenseAnalyzeConfig } from "./expense-analyze-config";
 
-const aggregate = { actual: 10, committed: 0, credits: 0, net: 10, count: 1 };
+const aggregate = {
+  actual: 10,
+  committed: 0,
+  credits: 0,
+  net: 10,
+  count: 1,
+  unpricedCount: 0,
+};
 const ready = {
   status: "ready",
   rowDimension: "trade",
@@ -45,20 +52,48 @@ const ready = {
   },
   reconciliation: {
     tail: {
-      current: { actual: 0, committed: 0, credits: 0, net: 0, count: 0 },
+      current: {
+        actual: 0,
+        committed: 0,
+        credits: 0,
+        net: 0,
+        count: 0,
+        unpricedCount: 0,
+      },
       previous: null,
     },
     causes: {
       unallocated: {
-        current: { actual: 0, committed: 0, credits: 0, net: 0, count: 0 },
+        current: {
+          actual: 0,
+          committed: 0,
+          credits: 0,
+          net: 0,
+          count: 0,
+          unpricedCount: 0,
+        },
         previous: null,
       },
       unattributedProject: {
-        current: { actual: 0, committed: 0, credits: 0, net: 0, count: 0 },
+        current: {
+          actual: 0,
+          committed: 0,
+          credits: 0,
+          net: 0,
+          count: 0,
+          unpricedCount: 0,
+        },
         previous: null,
       },
       unattributedVendor: {
-        current: { actual: 0, committed: 0, credits: 0, net: 0, count: 0 },
+        current: {
+          actual: 0,
+          committed: 0,
+          credits: 0,
+          net: 0,
+          count: 0,
+          unpricedCount: 0,
+        },
         previous: null,
       },
     },

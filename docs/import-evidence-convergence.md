@@ -495,8 +495,10 @@ The browser reopens settlement review with fresh candidates and their accepted
 splits. Allocation writes use the catalog mutation's cache invalidation; the
 dialog does not issue a second invalidation after the same accepted write.
 
-SpendingCategory is independent of ProductCategory. Purchase defaults flow to
-Expense lines unless a line has its own category. Itemization expectation resolves
+SpendingCategory is independent of ProductCategory. Explicit Expense categories
+win; Product Category mappings and eligible merchant context precede Purchase
+fallbacks, as defined by [spending classification](spending-classification.md).
+Itemization expectation resolves
 from transaction/Purchase overrides, Vendor, then spending category, and decides
 whether a Purchase should be itemized. A Vendor's explicit value wins; otherwise
 its order evidence supplies it (an online account expects item lines, no order

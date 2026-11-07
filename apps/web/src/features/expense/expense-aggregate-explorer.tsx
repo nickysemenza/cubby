@@ -39,6 +39,7 @@ import { Row, Stack } from "~/ui/layout";
 import { CrossTabTable } from "~/ui/matrix/cross-tab-table";
 import { Button } from "~/ui/primitives/button";
 import { Switch } from "~/ui/primitives/switch";
+import { Description } from "~/ui/text/description";
 
 import {
   canSwapExpenseAnalyzeAxes,
@@ -70,6 +71,7 @@ const ROW_DIMENSIONS: readonly {
   { value: "costType", label: "Cost category" },
   { value: "month", label: "Month" },
   { value: "spendingCategory", label: "Spending category" },
+  { value: "productCategory", label: "Product category" },
   { value: "project", label: "Project" },
   { value: "vendor", label: "Vendor" },
 ];
@@ -82,6 +84,7 @@ const COLUMN_DIMENSIONS: readonly {
   { value: "costType", label: "Cost category" },
   { value: "month", label: "Month" },
   { value: "spendingCategory", label: "Spending category" },
+  { value: "productCategory", label: "Product category" },
 ];
 
 const PROJECTIONS: readonly {
@@ -100,6 +103,7 @@ const EMPTY_AGGREGATE: ExpenseAnalyzeAggregate = {
   credits: 0,
   net: 0,
   count: 0,
+  unpricedCount: 0,
 };
 
 function ExpenseAnalysisResult({
@@ -260,6 +264,7 @@ function addAggregate(
     credits: left.credits + right.credits,
     net: left.net + right.net,
     count: left.count + right.count,
+    unpricedCount: left.unpricedCount + right.unpricedCount,
   };
 }
 
@@ -996,6 +1001,13 @@ export function ExpenseAggregateExplorer({
 
   return (
     <Stack gap="md">
+      {query.data?.status === "ready" &&
+        query.data.totals.scope.current.unpricedCount > 0 && (
+          <Description>
+            Dollar totals exclude unknown amounts. Unpriced entries remain in
+            their categories and Ledger results.
+          </Description>
+        )}
       <Row align="center" gap="xs" className="flex-wrap">
         <label htmlFor={rowsId} className="text-xs">
           Rows

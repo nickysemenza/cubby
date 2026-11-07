@@ -116,7 +116,7 @@ export const { definition, readSchemas } = defineEntityModel({
           filters: [{ id: "needsClassification", value: "true" }],
         },
       ],
-      views: ["table", { kind: "slot", id: "hierarchy", label: "Hierarchy" }],
+      views: ["table", { kind: "slot", id: "hierarchy", label: "Mappings" }],
       tree: {},
     },
   },

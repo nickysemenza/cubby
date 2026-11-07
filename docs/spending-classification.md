@@ -4,6 +4,25 @@ An Expense records money and owns its spending classification. A Product
 Category describes a thing. Product Category mappings connect those two
 vocabularies without making a mixed retailer's entire order one category.
 
+Reports use Spending Categories whether a Purchase has item lines or only a
+lump amount. Without item evidence, classify only as specifically as the known
+purchase evidence supports; a mixed retailer's name alone does not establish
+its basket contents. Keep unresolved money visible in totals.
+
+Later itemization can refine historical allocation when the resulting lines have
+no explicit category override. A lump's saved category is currently copied to
+its replacement principal lines, so those lines retain it until a reviewed reset;
+uncertain assignment origin is not permission to discard the saved choice.
+Classification changes preserve money. Explicit Expense purposes remain
+authoritative: a drill bought as a gift stays a tool in the Product catalog and
+Gifts in spending. A Purchase category remains a fallback, not an overriding
+purpose for every item. Receipt detail is not required to participate in
+high-level analytics.
+
+Keep Product Categories and Spending Categories distinct. Maintain mappings at
+the broadest applicable Product Category and inherit the nearest mapping down
+its branch, with narrower assignments and blocks expressing exceptions.
+
 The resolver uses an explicit Expense category first, then narrow food/merchant
 context, the nearest Product Category mapping, a stored Purchase fallback, and
 a selective merchant default. Unresolved values remain unresolved. A blocked
@@ -43,8 +62,9 @@ explicit save; API audit provenance alone cannot establish statement origin.
 
 Shared tax, shipping, tips, fees, and ordinary discounts are allocated once to
 principal Expense lines in whole cents. The principal Expense ID breaks rounding
-ties. Project, Spending Category, trade, and cost type reports group those same
-joint allocations: each share carries its principal's trade and cost type,
+ties. Project, Spending Category, Product Category, trade, and cost type reports
+group those same joint allocations: each share carries its principal's Product
+Category, trade and cost type,
 unless the adjustment names its own trade, which claims the whole charge at the
 adjustment's own cost type. A share with no principal reports under no trade
 and the adjustment's own cost type, and under the Purchase's own Spending
@@ -79,7 +99,7 @@ adjustment with unknown principal weights can remain partially classified.
 
 ## Reviewed changes
 
-Product Category mappings and merchant policies affecting existing Expenses use
+Product Category mappings, parent moves, and merchant policies affecting existing Expenses use
 `spendingClassification.preview` and `spendingClassification.apply`. The preview
 reports classification counts and signed category deltas; apply rechecks its
 fingerprint inside a serializable transaction before audited entity writes.
@@ -91,6 +111,24 @@ reach, requires a fresh review; an edit to any other Expense does not. Only
 those Expenses are resolved before and after; household totals come from one
 aggregated allocation pass. Classification review is web-only; native hands
 the vendor and category sections off to web.
+
+Parent previews include the moved subtree and reject changes to live Products'
+effective Food behavior. Ordinary writes cannot move or remap categories with
+Expense history around review. The web **Use item detail** action previews and
+clears only selected Expenses' saved category overrides, then resolves them from
+item detail and eligible fallbacks; it never changes their money or clears
+Purchase defaults. A stale preview and a forbidden feature or category change
+surface the owning operation's raw error.
+
+The Product Category **Mappings** view searches the complete tree locally,
+retaining matching rows' ancestors. It shows effective mapping and source,
+subtree Product counts, and allocation-based subtree net spending labelled
+**All history, including planned**. Ancestor amounts include descendants and
+must not be added together. Selecting a branch shows its actual Spending
+Category outcomes and the branches contributing to a selected spending bucket;
+these amounts can differ from the configured default. The view reuses the
+canonical tree read and batched allocation analysis, with no row-level finance
+queries or stored spending summaries.
 
 Merging Spending Categories is keeper-wins: every incoming reference (explicit
 Expense categories, Purchase defaults, Financial Transactions, merchant

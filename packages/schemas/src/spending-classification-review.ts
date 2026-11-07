@@ -25,6 +25,7 @@ export const spendingClassificationReviewInput = z
       .object({
         action: z.literal("productCategory"),
         productCategoryId: productCategoryShortcode,
+        parentId: productCategoryShortcode.nullable().optional(),
         spendingCategoryMode: spendingCategoryMappingMode,
         spendingCategoryId: spendingCategoryShortcode.nullable().default(null),
       })

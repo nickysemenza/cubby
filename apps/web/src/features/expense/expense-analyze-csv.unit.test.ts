@@ -12,6 +12,7 @@ const aggregate = (net: number, count = 1) => ({
   credits: 0,
   net,
   count,
+  unpricedCount: 0,
 });
 
 const compared = {

@@ -14,6 +14,7 @@ import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
   expense,
   project,
+  productCategory,
   purchase,
   spendingCategory,
 } from "~/server/db/schema";
@@ -62,6 +63,9 @@ export const resolveExpenseProjectAllocationScope = async (
   db: Database,
   filters: ExpenseFilters,
 ): Promise<ExpenseAllocationProjectScope | undefined> => {
+  // Exclude and Match all select whole Expenses through the declared row set.
+  // An any-of share scope would silently discard part of those selected rows.
+  if (hasUnscopedAllocationFilters(filters)) return undefined;
   const codes = filters.projectId ? [filters.projectId].flat() : [];
   const ids = await resolveAllPresent(db, "project", codes);
   let selectedIds = ids;
@@ -98,6 +102,24 @@ export const resolveExpenseProjectAllocationScope = async (
             )
         ).map((row) => row.id)
       : selectedCategoryIds;
+  const productCategoryCodes = filters.productCategoryId
+    ? [filters.productCategoryId].flat()
+    : [];
+  const selectedProductCategoryIds = (
+    await resolveAllPresent(db, "productCategory", productCategoryCodes)
+  ).map((id) => parseEntityId("productCategory", id));
+  const productCategoryIds =
+    selectedProductCategoryIds.length > 0 &&
+    filters.includeSubProductCategories !== false
+      ? (
+          await getDb(db)
+            .select({ id: productCategory.id })
+            .from(productCategory)
+            .where(
+              sql`${productCategory.id} IN ${hierarchyDescendantsSql("productCategory", selectedProductCategoryIds)}`,
+            )
+        ).map((row) => row.id)
+      : selectedProductCategoryIds;
   // Trade and cost type follow the same per-share split as category: an
   // adjustment matches through the shares it allocates to its principals.
   const trades = filters.trade ? [filters.trade].flat() : [];
@@ -107,6 +129,9 @@ export const resolveExpenseProjectAllocationScope = async (
     !filters.projectPresenceFilter &&
     categoryCodes.length === 0 &&
     !filters.spendingCategoryPresenceFilter &&
+    productCategoryCodes.length === 0 &&
+    !filters.productCategoryPresenceFilter &&
+    !filters.productCategoryRemainder &&
     trades.length === 0 &&
     !filters.tradePresenceFilter &&
     costTypes.length === 0 &&
@@ -120,6 +145,13 @@ export const resolveExpenseProjectAllocationScope = async (
     presence: filters.projectPresenceFilter,
     spendingCategoryIds: categoryCodes.length ? categoryIds : undefined,
     categoryPresence: filters.spendingCategoryPresenceFilter,
+    productCategoryIds: productCategoryCodes.length
+      ? productCategoryIds
+      : undefined,
+    productCategoryPresence: filters.productCategoryPresenceFilter,
+    productCategoryRemainders: filters.productCategoryRemainder
+      ? [filters.productCategoryRemainder].flat()
+      : undefined,
     trades: trades.length ? trades : undefined,
     tradePresence: filters.tradePresenceFilter,
     costTypes: costTypes.length ? costTypes : undefined,
@@ -178,6 +210,9 @@ const allocationShares = listPrepare(async (_db, values) => ({
   bound: allocationBound(values),
   projects: readsShare(values, "project"),
   categories: readsShare(values, "spendingCategory"),
+  productCategories:
+    readsShare(values, "productCategory") ||
+    readsShare(values, "productCategoryRemainder"),
   trades: readsShare(values, "trade"),
 }));
 
@@ -189,9 +224,11 @@ export const expenseScaffold = listScaffold("expense", expense, {
   derived: rowDerived,
   rows: {
     allocationShares: allocationShares.rows(
-      ({ bound, projects, categories, trades }) =>
+      ({ bound, projects, categories, productCategories, trades }) =>
         sql`SELECT share."expenseId" AS "owner", share."projectId" AS "project",
-          share."spendingCategoryId" AS "spendingCategory", share.trade AS "trade",
+          share."spendingCategoryId" AS "spendingCategory",
+          share."productCategoryId" AS "productCategory",
+          share."productCategoryRemainder" AS "productCategoryRemainder", share.trade AS "trade",
           share."costType" AS "costType"
         FROM (${expenseJointAllocationSql(
           bound === undefined ? undefined : { select: bound },
@@ -199,6 +236,7 @@ export const expenseScaffold = listScaffold("expense", expense, {
           {
             projects,
             categories,
+            productCategories,
             trades: categories || trades,
             principals: false,
           },
@@ -341,6 +379,10 @@ const scopedAllocationKeys = new Set([
   "spendingCategoryId",
   "spendingCategoryPresenceFilter",
   "includeSubSpendingCategories",
+  "productCategoryId",
+  "productCategoryPresenceFilter",
+  "includeSubProductCategories",
+  "productCategoryRemainder",
   "trade",
   "tradePresenceFilter",
   "costType",
@@ -360,12 +402,18 @@ const filterShareKeys = [...shareKeys].filter(
  * keeps every allocation filter in the where, so the read selects the
  * expenses the list does.
  */
-export const analyticsFilters = (filters: ExpenseFilters): ExpenseFilters => {
+const hasUnscopedAllocationFilters = (filters: ExpenseFilters): boolean => {
   const values = listFilterValues.parse(filters);
-  const unscoped = filterShareKeys.some(
-    (key) => !scopedAllocationKeys.has(key) && values[key] !== undefined,
+  return filterShareKeys.some(
+    (key) =>
+      !scopedAllocationKeys.has(key) &&
+      values[key] !== undefined &&
+      !(key.endsWith("Match") && values[key] === "any"),
   );
-  if (unscoped) return filters;
+};
+
+export const analyticsFilters = (filters: ExpenseFilters): ExpenseFilters => {
+  if (hasUnscopedAllocationFilters(filters)) return filters;
   const scoped: Partial<ExpenseFilters> = { ...filters };
   for (const key of filterShareKeys)
     if (Object.hasOwn(scoped, key)) Reflect.deleteProperty(scoped, key);

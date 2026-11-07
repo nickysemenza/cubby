@@ -75,7 +75,11 @@ type ExpenseAnalyzeDateScope = Pick<
 const isColumnDimension = (
   dimension: ExpenseAnalyzeRowDimension,
 ): dimension is ExpenseAnalyzeColumnDimension =>
-  dimension === "trade" || dimension === "costType" || dimension === "month";
+  dimension === "trade" ||
+  dimension === "costType" ||
+  dimension === "month" ||
+  dimension === "spendingCategory" ||
+  dimension === "productCategory";
 
 export function normalizeExpenseAnalyzeConfig(
   config: ExpenseAnalyzeConfig,
