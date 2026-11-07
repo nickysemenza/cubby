@@ -110,13 +110,14 @@ export function runStalledSql(now = new Date()): SQL<boolean> {
   )`;
 }
 
-/** A stopped Run with a retry successor leaves the member's attention roster. */
+/** Member cancellations stay in history; retry successors take over stopped work. */
 export function runNeedsAttentionSql(): SQL<boolean> {
   const successor = related(
     run,
     (next) => sql`${next.predecessorRunId} = ${outer(run.id)}`,
   ).exists();
-  return sql<boolean>`(${runStalledSql()} OR (${run.status} IN (${runStatus.enum.paused},${runStatus.enum.paused_auth},${runStatus.enum.needs_review},${runStatus.enum.failed},${runStatus.enum.dispatch_failed}) AND NOT ${successor}))`;
+  return sql<boolean>`(${run.failureCode} IS DISTINCT FROM ${"user_cancelled"}
+    AND (${runStalledSql()} OR (${run.status} IN (${runStatus.enum.paused},${runStatus.enum.paused_auth},${runStatus.enum.needs_review},${runStatus.enum.failed},${runStatus.enum.dispatch_failed}) AND NOT ${successor})))`;
 }
 
 /** One Run's demand as a predicate on "Job". */
