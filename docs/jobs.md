@@ -648,6 +648,9 @@ publication. A serialization conflict replays the DB-only callback, lease and
 authority checks, settlement receipt and activation fence in a fresh transaction;
 inference and retained paid-result storage stay outside that boundary. A
 caller-owned transaction still owns its recovery and is not replayed locally.
+Automatic application propagates serialization failures to that owner, including
+preflight failures before review's savepoint. An aborted serialization attempt is
+never converted to an ordinary policy refusal and then used for more publication.
 Field publication re-reads the declaration's read path, including mutation aliases
 such as `ingredientId` exposed as `ingredient.id`. A loaded nullable relation is
 empty; an absent root or missing governed result remains unavailable and cannot

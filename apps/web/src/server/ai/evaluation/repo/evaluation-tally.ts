@@ -17,6 +17,7 @@ import { and, eq, sql, type SQL, type SQLWrapper } from "drizzle-orm";
 import type { SelectedFields } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
+import { hasEvaluationRetryReceipt } from "~/server/ai/evaluation/repo/ai-evaluation-requests";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
 import { aiEvaluation, aiEvaluationRequest } from "~/server/db/schema";
@@ -61,8 +62,6 @@ function reads(scope: EvaluationScope) {
         string | null
       >`(CASE WHEN ${aiEvaluationRequest.cancelledAt} IS NOT NULL
         THEN ${"Cancelled by a member"} ELSE ${aiEvaluation.error} END)`;
-  const retried = sql`(jsonb_typeof(${receipt}) = 'object'
-    AND ${uuidString(sql`(${receipt} -> 'retryEvaluationId')`)})`;
   return {
     state,
     receipt,
@@ -81,7 +80,7 @@ function reads(scope: EvaluationScope) {
         : scope.executionKind
           ? sql`${aiEvaluation.executionKind} = ${scope.executionKind}`
           : undefined,
-      sql`NOT coalesce(${retried}, false)`,
+      sql`NOT ${hasEvaluationRetryReceipt(receipt)}`,
     ),
     query<S extends SelectedFields>(db: Database, selection: S) {
       const base = getDb(db).select(selection).from(aiEvaluation).$dynamic();

@@ -13,6 +13,8 @@ import {
   inArray,
   isNull,
   sql,
+  type SQL,
+  type SQLWrapper,
 } from "drizzle-orm";
 import { z } from "zod";
 
@@ -27,6 +29,12 @@ import {
   aiEvaluationRequest,
   run,
 } from "~/server/db/retained-tables";
+
+/** Retry handoffs cease to be current work only when their receipt names a UUID. */
+export const hasEvaluationRetryReceipt = (receipt: SQLWrapper): SQL<boolean> =>
+  sql<boolean>`coalesce(jsonb_typeof(${receipt}) = 'object'
+    AND jsonb_typeof(${receipt}->'retryEvaluationId') = 'string'
+    AND (${receipt}->>'retryEvaluationId') ~ ${z.regexes.uuid().source}, false)`;
 
 /** Matches AiEvaluation's generated SQL key, including UTF-8 length prefixes. */
 export const evaluationSlotKey = ({

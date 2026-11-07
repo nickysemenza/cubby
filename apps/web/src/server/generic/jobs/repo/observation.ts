@@ -14,10 +14,10 @@ import type { WorkActivity } from "@cubby/schemas/job";
 import type { WorkStuckItem } from "@cubby/schemas/work-status";
 import { ACTIVE_RUN_STATUSES } from "@cubby/shared/client-constants";
 import { countLabel } from "@cubby/shared/pluralize";
-import { sql, type SQL } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
-import { z } from "zod";
 
+import { hasEvaluationRetryReceipt as retried } from "~/server/ai/evaluation/repo/ai-evaluation-requests";
 import type { Database } from "~/server/db/database";
 import { derivedRebuild } from "~/server/db/derived-rebuild-schema";
 import { notDeleted } from "~/server/db/helpers/predicates";
@@ -409,8 +409,6 @@ export async function readRebuildObservation(db: Database) {
 
 async function readFailedWork(db: Database, now: Date) {
   const since = new Date(now.getTime() - 7 * 24 * 60 * 60_000).toISOString();
-  const retried = (receipt: SQL) =>
-    sql`coalesce((${receipt}->>'retryEvaluationId') ~ ${z.regexes.uuid().source}, false)`;
   const rows = await getDb(db).execute<{
     kind: string;
     count: number;

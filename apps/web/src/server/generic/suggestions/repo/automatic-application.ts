@@ -17,6 +17,7 @@ import { unwrapDb } from "~/server/db/helpers";
 import { systemActor } from "~/server/domains/run/repo/ensure-run";
 import type { StatementSuggestionScope } from "~/server/domains/transaction-import/repo/statement-input";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
+import { isSerializationFailure } from "~/server/errors/db-errors";
 import {
   AUTOMATIC_RULES,
   type AutomaticRuleMatch,
@@ -206,6 +207,9 @@ export async function applyAutomaticRules(
       );
       outcome.applied.push(row.id);
     } catch (error) {
+      // Preflight runs before review's savepoint. Its serialization failure may
+      // abort the caller's transaction, whose owner must receive the replay signal.
+      if (isSerializationFailure(error)) throw error;
       if (
         (
           await import("~/server/workflows/runs/execution")
