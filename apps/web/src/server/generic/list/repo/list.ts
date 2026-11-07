@@ -120,6 +120,7 @@ import {
   declaredRollups,
   declaredResultProjections,
   derivedSelectSql,
+  derivedValueSet,
   derivedValueSql,
   groupSql,
   type ListGroupSql,
@@ -562,7 +563,9 @@ export function listScaffold<
         ? undefined
         : new Set([
             ...Object.keys(getTableColumns(table)),
-            ...Object.keys(derivedFields),
+            ...Object.keys(derivedFields).filter(
+              (key) => derivedValueSet(derivedSql, key) === null,
+            ),
             ...Object.keys(readDeclaration.columns ?? {}),
           ]),
     );

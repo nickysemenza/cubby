@@ -2812,8 +2812,9 @@ one shape:
   together, as Missing valuation is `priceable` with `unpriceable`. A value
   may be `{ value, set }`: `set` selects `("id", "value")` for the whole list
   and its filters match `id IN (SELECT "id" FROM set WHERE …)`, so one
-  set-based walk serves the filter while sort, group, and projection read the
-  per-row `value`, which must agree with it row for row. A filter's `value IN (…)`
+  set-based walk serves the filter while sort and group read the per-row
+  `value`, which must agree with it row for row. A read binding supplies the
+  projected value; set-valued keys must be covered by one. A filter's `value IN (…)`
   pushes into a set whose branches expose `value` from an indexed column, so
   purchase `effectivePurchaser` reads only the requested parties'
   candidates before confirming them. A `text` value that holds a record's
