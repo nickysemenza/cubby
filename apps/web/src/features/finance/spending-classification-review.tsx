@@ -308,7 +308,10 @@ export function ProductCategoryClassification({
         action: "productCategory",
         productCategoryId: record.id,
         spendingCategoryMode: record.spendingCategoryMode,
-        spendingCategoryId: effectiveRecordSpendingCategoryId,
+        spendingCategoryId:
+          record.spendingCategoryMode === "mapped"
+            ? effectiveRecordSpendingCategoryId
+            : null,
         parentId: record.parentId,
       }}
     />
