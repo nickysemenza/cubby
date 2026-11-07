@@ -942,7 +942,7 @@ describe("canonical Product Cost", () => {
         />
       </>,
     );
-    expect(screen.getByText("Updating…")).toBeVisible();
+    expect(screen.getByLabelText("Queued for refresh")).toBeVisible();
     view.rerender(
       <>
         <ProductCostValue
@@ -960,6 +960,8 @@ describe("canonical Product Cost", () => {
         />
       </>,
     );
-    expect(screen.queryByText("Updating…")).not.toBeInTheDocument();
+    expect(
+      screen.queryByLabelText("Queued for refresh"),
+    ).not.toBeInTheDocument();
   });
 });
