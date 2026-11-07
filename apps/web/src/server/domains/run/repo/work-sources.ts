@@ -9,7 +9,10 @@ import { householdDaySql } from "~/server/db/helpers/query";
 import { related, outer } from "~/server/db/helpers/related";
 import { run, run as runTable } from "~/server/db/schema";
 import { activeFindingSql } from "~/server/domains/purchase-import/repo/finding-expiry";
-import { attentionStatePredicate } from "~/server/domains/run/repo/work-attention";
+import {
+  attentionStatePredicate,
+  memberStoppedRunPredicate,
+} from "~/server/domains/run/repo/work-attention";
 import { workRunReviewRead } from "~/server/domains/run/repo/work-owners";
 import { recordScope } from "~/server/generic/work-queue/repo/work-declarations";
 import {
@@ -90,7 +93,7 @@ const account: WorkSource = {
       .from(workRunReviewRead().table)
       .where(
         and(
-          sql`${notDeleted(alias(run, "Run"))} AND "Run"."failureCode" IS DISTINCT FROM 'user_cancelled' AND "Run"."failureCode" IS DISTINCT FROM 'dispatch_aborted' AND (
+          sql`${notDeleted(alias(run, "Run"))} AND NOT ${memberStoppedRunPredicate(sql`"Run"."failureCode"`)} AND (
         (${attentionStatePredicate(sql`"Run".status`)} AND NOT ("Run".status = ${runStatus.enum.needs_review} AND "Run"."failureCode" IS NOT DISTINCT FROM 'execution_limit')
           AND NOT EXISTS (SELECT 1 FROM "RunFinding" finding WHERE finding."runId" = "Run".id AND ${activeFindingSql("finding")}))
         OR ("Run".purpose = ${runPurpose.enum.photo_inventory} AND EXISTS (

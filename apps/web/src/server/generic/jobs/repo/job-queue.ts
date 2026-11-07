@@ -33,6 +33,7 @@ import { outer, related } from "~/server/db/helpers/related";
 import { job } from "~/server/db/retained-tables";
 import { run } from "~/server/db/schema";
 import { imageJobWaitingOnReasonSql } from "~/server/domains/image-processing/repo/image-job-state";
+import { memberStoppedRunPredicate } from "~/server/domains/run/repo/work-attention";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import {
   JOB_KIND_POLICY,
@@ -116,7 +117,7 @@ export function runNeedsAttentionSql(): SQL<boolean> {
     run,
     (next) => sql`${next.predecessorRunId} = ${outer(run.id)}`,
   ).exists();
-  return sql<boolean>`(${run.failureCode} IS DISTINCT FROM ${"user_cancelled"}
+  return sql<boolean>`(NOT ${memberStoppedRunPredicate(sql`${run.failureCode}`)}
     AND (${runStalledSql()} OR (${run.status} IN (${runStatus.enum.paused},${runStatus.enum.paused_auth},${runStatus.enum.needs_review},${runStatus.enum.failed},${runStatus.enum.dispatch_failed}) AND NOT ${successor})))`;
 }
 

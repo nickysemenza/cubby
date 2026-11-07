@@ -248,16 +248,23 @@ describe("Run attention entity view", () => {
       trigger: "manual",
       execution: false,
     });
-    const cancelled = await ensureRun(ctx.db, ctx.actor, {
-      purpose: "ai_suggest",
-      trigger: "manual",
-      execution: false,
-    });
-    const [cancelledHistory] = await getDb(ctx.db)
-      .update(runTable)
-      .set({ status: "failed", failureCode: "user_cancelled" })
-      .where(eq(runTable.id, cancelled))
-      .returning({ code: runTable.shortcode });
+    const stoppedHistories = [];
+    for (const failureCode of ["user_cancelled", "dispatch_aborted"]) {
+      const cancelled = await ensureRun(ctx.db, ctx.actor, {
+        purpose: "ai_suggest",
+        trigger: "manual",
+        execution: false,
+      });
+      const [history] = await getDb(ctx.db)
+        .update(runTable)
+        .set({ status: "failed", failureCode })
+        .where(eq(runTable.id, cancelled))
+        .returning({
+          code: runTable.shortcode,
+          failureCode: runTable.failureCode,
+        });
+      stoppedHistories.push(history!);
+    }
     const old = new Date(Date.now() - 60 * 60_000);
     await getDb(ctx.db)
       .update(runTable)
@@ -284,9 +291,11 @@ describe("Run attention entity view", () => {
     expect(page.data).toHaveLength(2);
     expect(page.data.map((row) => row.stalled)).toEqual([true, false]);
     expect(page.data.map((row) => row.status)).toEqual(["running", "failed"]);
-    expect(await readRun(ctx.db, cancelledHistory!.code)).toMatchObject({
-      status: "failed",
-      failureCode: "user_cancelled",
-    });
+    for (const history of stoppedHistories) {
+      expect(await readRun(ctx.db, history.code)).toMatchObject({
+        status: "failed",
+        failureCode: history.failureCode,
+      });
+    }
   });
 });
