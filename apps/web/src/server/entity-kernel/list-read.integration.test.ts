@@ -12,8 +12,13 @@ import { declaredListReadProjection } from "~/entity/entity-list/list-read-deman
 import { getEntityFilters } from "~/entity/filter-manifest";
 import { buildFiltersFromManifest } from "~/entity/filters";
 import { viewsForEntity } from "~/entity/model/view-manifest";
+import { imageListReadProjection } from "~/features/image/list-read";
+import { ingredientListReadProjection } from "~/features/ingredient/list-read";
+import { locationListReadProjection } from "~/features/location/list-read";
+import { mealListReadProjection } from "~/features/meal/list-read";
 import { productListReadProjection } from "~/features/product/list-read";
 import { getDb } from "~/server/db/helpers";
+import { upsertCookbook } from "~/server/domains/cookbook/repo/cookbook";
 import { createInventoryEntry } from "~/server/domains/inventory/repo/crud";
 import { setInventoryOwnership } from "~/server/domains/inventory/repo/ownership-mutations";
 import { createLedgerParty } from "~/server/domains/ledger-party/repo/ledger-party";
@@ -23,6 +28,10 @@ import { selectedFieldEnvelopeSchema } from "~/server/generic/derived/repo/publi
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { drainStoredDerived } from "~/server/testing/background-queue";
+import {
+  makeCookbookExtraction,
+  makeCookbookRecipe,
+} from "~/server/testing/repo.fixtures";
 import {
   createLocationFixture,
   createProductIdentityFixture,
@@ -342,6 +351,26 @@ describe("complete list composition", () => {
   // a merge-capable identity and money.
   it("returns complete canonical rows and matching selected fields in one list read", async () => {
     await seedReferenceUniverse(ctx.db);
+    await upsertCookbook(
+      ctx.db,
+      {
+        name: "Synthetic projection cookbook",
+        sourceLabel: "synthetic.epub",
+        author: ["Synthetic author"],
+        rawJson: makeCookbookExtraction([
+          makeCookbookRecipe("Synthetic recipe", ["1 cup flour"]),
+        ]),
+      },
+      ctx.actor,
+    );
+    const projections = new Map([
+      ["product", productListReadProjection],
+      ["image", imageListReadProjection],
+      ["ingredient", ingredientListReadProjection],
+      ["location", locationListReadProjection],
+      ["meal", mealListReadProjection],
+    ]);
+
     const context = buildKernelContext(ctx.db);
     for (const entity of [
       "product",
@@ -351,6 +380,12 @@ describe("complete list composition", () => {
       "financialAccount",
       "financialTransaction",
       "recipe",
+      "image",
+      "ingredient",
+      "cookbook",
+      "location",
+      "meal",
+      "task",
     ] as const) {
       const full = await executeEntity(context, {
         action: "list",
@@ -372,9 +407,10 @@ describe("complete list composition", () => {
         expect(row).not.toHaveProperty("derived");
       }
       const fields =
-        entity === "product"
-          ? (productListReadProjection(queryClient, entity) ?? [])
-          : (declaredListReadProjection(queryClient, entity) ?? []);
+        (projections.get(entity) ?? declaredListReadProjection)(
+          queryClient,
+          entity,
+        ) ?? [];
       const selected = await listOperations(entity).listFields(
         context,
         { filters: {}, pagination: { pageIndex: 0, pageSize: 2 } },

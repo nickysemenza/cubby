@@ -15,6 +15,10 @@ import { entityMetadata, entityMetadataQueryOptions } from "~/entity/metadata";
 import { publicEntityMetadataLoaders } from "~/entity/metadata-loader";
 import { installEntityMetadataTransport } from "~/entity/metadata-transport";
 import { entityListDefaultSort } from "~/entity/sortable-fields";
+import { imageListReadProjection } from "~/features/image/list-read";
+import { ingredientListReadProjection } from "~/features/ingredient/list-read";
+import { locationListReadProjection } from "~/features/location/list-read";
+import { mealListReadProjection } from "~/features/meal/list-read";
 import { productListReadProjection } from "~/features/product/list-read";
 import { infiniteOperationQueryKey } from "~/integrations/tanstack-query/operation-catalog";
 import { loadEntityMetadata } from "~/server/entity-kernel/metadata/loader.server";
@@ -167,6 +171,47 @@ describe("ensureEntityListSsr", () => {
         dataQuality: false,
       }),
     ).not.toContain("dataQuality");
+    expect(
+      imageListReadProjection(metadataClient, "image", {
+        entity: false,
+        url: false,
+      }),
+    ).toEqual(expect.arrayContaining(["url", "status", "representations"]));
+    expect(
+      imageListReadProjection(metadataClient, "image", { entity: false }),
+    ).not.toContain("associations");
+    expect(
+      locationListReadProjection(metadataClient, "location", {
+        parent: false,
+        type: false,
+      }),
+    ).toEqual(expect.arrayContaining(["parent", "type"]));
+    expect(
+      locationListReadProjection(metadataClient, "location"),
+    ).not.toContain("inventoryEntries");
+    expect(
+      locationListReadProjection(metadataClient, "location", {
+        children: true,
+        inventoryEntries: true,
+      }),
+    ).toEqual(expect.arrayContaining(["children", "inventoryEntries"]));
+    expect(
+      ingredientListReadProjection(metadataClient, "ingredient", {
+        appearsInRecipes: false,
+      }),
+    ).toContain("product");
+    expect(
+      mealListReadProjection(metadataClient, "meal", {
+        name: false,
+        date: false,
+      }),
+    ).toEqual(expect.arrayContaining(["name", "date"]));
+    expect(declaredListReadProjection(metadataClient, "task")).toEqual(
+      expect.arrayContaining(["subtaskCount", "doneSubtaskCount"]),
+    );
+    expect(declaredListReadProjection(metadataClient, "cookbook")).toEqual(
+      expect.arrayContaining(["sourceRecipeCount", "needsReextract"]),
+    );
     const imageFields = declaredListReadProjection(metadataClient, "image");
     expect(imageFields).toEqual(
       expect.arrayContaining(["url", "status", "filename"]),

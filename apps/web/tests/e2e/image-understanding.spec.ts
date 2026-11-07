@@ -1,3 +1,6 @@
+import type { Request } from "@playwright/test";
+import { z } from "zod";
+import { dispatchesOperation } from "./support/dispatch-wire";
 import { eq, and } from "drizzle-orm";
 import {
   image,
@@ -234,4 +237,42 @@ test("image results compare descriptions and require explicit attachment confirm
     .click();
   await expect(page).toHaveURL(/\/image-jobs\/IPR-[A-Z0-9]{5}$/);
   await expect(page.locator("#attempts")).toBeVisible();
+
+  let listRequests = 0;
+  const trackLists = (request: Request) => {
+    if (
+      dispatchesOperation(
+        request,
+        "entity.list",
+        ({ input }) =>
+          z.object({ entity: z.literal("image") }).safeParse(input).success,
+      )
+    )
+      listRequests++;
+  };
+  page.on("request", trackLists);
+  await gotoAuthenticatedPage(page, "/images?view=shelf");
+  const media = page.getByRole("img", { name: row.filename, exact: true });
+  await expect(media).toBeVisible();
+  await expect
+    .poll(() =>
+      media.evaluate(
+        (node) =>
+          node instanceof HTMLImageElement &&
+          node.complete &&
+          node.naturalWidth > 0,
+      ),
+    )
+    .toBe(true);
+  page.off("request", trackLists);
+  // The mounted shelf consumes the server's opening page without a second list read.
+  expect(listRequests).toBe(0);
+  await gotoAuthenticatedPage(page, "/images?view=table");
+  const imageRow = page.getByRole("row").filter({ hasText: row.filename });
+  await expect(
+    imageRow.getByRole("link", {
+      name: "Synthetic utility jacket",
+      exact: true,
+    }),
+  ).toBeVisible();
 });

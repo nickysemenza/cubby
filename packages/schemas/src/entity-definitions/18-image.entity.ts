@@ -48,7 +48,7 @@ export const { definition, readSchemas } = defineEntityModel(
         export: "imageListOverride",
       },
       basePath: "images",
-      // The photo library's index stays hand-written over its own filters.
+      // The upload dialog owns this route's create trigger.
       list: null,
     },
     table: "Image",

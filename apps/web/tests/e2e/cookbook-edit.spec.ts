@@ -58,4 +58,12 @@ test("a cookbook is retitled from its page and a recipe is re-pointed to it from
   await expect(
     page.getByRole("link", { name: `${name} other`, exact: true }).first(),
   ).toHaveAttribute("href", new RegExp(`/cookbooks/${other.id}`));
+
+  await gotoAuthenticatedPage(
+    page,
+    `/cookbooks?name=${encodeURIComponent(retitled)}&view=table`,
+  );
+  const bookRow = page.getByRole("row").filter({ hasText: retitled });
+  await expect(bookRow).toBeVisible();
+  await expect(bookRow).toContainText("0 / 2");
 });

@@ -124,3 +124,31 @@ export const declaredListReadProjection: ListReadProjection = (
   if (visibility.updatedAt !== false) wanted.add("updatedAt");
   return [...wanted].sort();
 };
+
+/** Specialist row consumers share the same projection in loaders and mounted lists. */
+export function specialistListReadProjection({
+  always = [],
+  whenShown = {},
+  whenRevealed = {},
+}: {
+  always?: readonly string[];
+  whenShown?: Readonly<Record<string, readonly string[]>>;
+  whenRevealed?: Readonly<Record<string, readonly string[]>>;
+}): ListReadProjection {
+  return (queryClient, entity, visibility = DEFAULT_LIST_COLUMN_VISIBILITY) => {
+    const fields = declaredListReadProjection(queryClient, entity, visibility);
+    if (!fields) return undefined;
+    return [
+      ...new Set([
+        ...fields,
+        ...always,
+        ...Object.entries(whenShown).flatMap(([column, keys]) =>
+          visibility[column] === false ? [] : keys,
+        ),
+        ...Object.entries(whenRevealed).flatMap(([column, keys]) =>
+          visibility[column] === true ? keys : [],
+        ),
+      ]),
+    ].sort();
+  };
+}

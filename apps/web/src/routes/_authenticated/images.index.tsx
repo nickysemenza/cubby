@@ -5,6 +5,7 @@ import { entitySearch } from "~/entity/generated/entity-search.gen";
 import { ensureEntityMetadata } from "~/entity/metadata";
 import { listPage } from "~/entity/routing/list-page";
 import { imageListOverride } from "~/features/image/list-columns";
+import { imageListReadProjection } from "~/features/image/list-read";
 import { UploadImageDialog } from "~/features/image/upload-image-dialog";
 import { pageTitle } from "~/lib/page-title";
 
@@ -13,6 +14,7 @@ import { pageTitle } from "~/lib/page-title";
 const ImagesPage = listPage({
   entity: "image",
   override: imageListOverride,
+  readProjection: imageListReadProjection,
   actions: () => <UploadImageDialog />,
 });
 
@@ -22,7 +24,7 @@ export const Route = createFileRoute("/_authenticated/images/")({
   validateSearch: entitySearch.image.schema,
   search: { middlewares: [stripSearchParams(entitySearch.image.defaults)] },
   loaderDeps: ({ search }) => search,
-  loader: entityListLoader("image"),
+  loader: entityListLoader("image", imageListReadProjection),
   head: () => ({ meta: [{ title: pageTitle("Images") }] }),
   component: ImagesPage,
 });

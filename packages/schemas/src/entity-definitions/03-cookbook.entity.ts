@@ -18,6 +18,10 @@ export const { definition, readSchemas } = defineEntityModel(
         module: "~/features/cookbook/list-columns",
         export: "cookbookListOverride",
       },
+      listReadProjection: {
+        module: "~/entity/entity-list/list-read-demand",
+        export: "declaredListReadProjection",
+      },
       basePath: "cookbooks",
     },
     table: "Cookbook",
@@ -175,6 +179,7 @@ export const { definition, readSchemas } = defineEntityModel(
           kind: "number",
           display: {
             columnGroup: "Contents",
+            readFields: ["sourceRecipeCount", "needsReextract"],
             columnBar: true,
             mobile: { slot: "trailing", priority: 10 },
           },

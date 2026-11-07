@@ -399,6 +399,14 @@ item page. Purchase, Account and Transaction primary lists use declared field
 projections even though they supply deletion/filter configuration overrides.
 Recipe's Tags and Servings overrides also use the declared projection; Servings
 includes its structured-yield input so quantities such as cookies remain read-only.
+Specialist projections extend the same declared demand with row consumers and
+visibility-owned relation inputs. Image's loader and mounted roster share that
+projection, including preferred media representations even when URL is hidden.
+Location omits its default-hidden children and inventory payloads until revealed;
+row-action inputs remain loaded when their columns are hidden. Ingredient unit
+mappings retain linked Products, and Meal rename/delete retains name and date.
+Task progress and Cookbook extraction counts declare dependencies on their owning
+Name and Recipes columns.
 Stored publications load once per page for the envelope and admitted bindings'
 combined key demand. Every binding consuming the shared stored map declares its
 keys, including Email relationship facts and Product pricing/food inputs.
