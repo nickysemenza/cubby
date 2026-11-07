@@ -124,7 +124,7 @@ Product Categories and Spending Categories use their ordinary category tables as
 one mapping workspace, with Tree and Flat arrangements. Existing Mappings links
 (`?view=hierarchy`) open that table. Filters, saved views, matching-row selection
 and applicable bulk actions remain owned by the generic list. Tree search keeps
-matching rows' ancestors as read-only context; context rows are excluded from
+matching rows' ancestors as context; context rows are excluded from
 selection. Only rows with children have expand controls.
 
 Product Categories show one effective Spending Category, its source/state,
@@ -141,7 +141,7 @@ provenance, actual Spending Category outcomes and canonical reviewed mapping or
 parent edits. Spending Categories show actual contributing Product Category
 branches and productless/unresolved evidence, separately from configured
 incoming mappings, and retain the existing itemization, Product expectation and
-stock policies. Configured mappings are defaults, not money outcomes. Complete
+stock policies. The Needs policies queue uses the existing data-gap filters. Configured mappings are defaults, not money outcomes. Complete
 ancestry and allocation reads are batched, with no row-level finance queries or
 stored spending summaries.
 

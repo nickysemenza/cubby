@@ -56,9 +56,9 @@ export function useCategorySpending<
   return {
     totals,
     records: taxonomy.records,
-    isLoading: taxonomy.isLoading,
+    isLoading: taxonomy.isLoading || analysis.isPending,
     error: analysis.error ?? taxonomy.error,
     status: analysis.data?.status,
-    refetch: analysis.refetch,
+    refetch: () => Promise.all([analysis.refetch(), taxonomy.refetch()]),
   };
 }

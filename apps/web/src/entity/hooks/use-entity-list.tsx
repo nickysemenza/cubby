@@ -1140,6 +1140,11 @@ export function useEntityList<
       refreshControls,
       groupConfig,
       nestToggle,
+      // A sheet inspector owns the phone tap; do not synthesize a detail link.
+      navigation:
+        previewOptions?.mobileBehavior === "sheet"
+          ? { kind: "none" }
+          : undefined,
     },
     currentFilters,
     mappingsMap,

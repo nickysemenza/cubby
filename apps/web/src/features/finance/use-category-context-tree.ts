@@ -11,7 +11,7 @@ export type CategoryContextRow<T> = T & {
   categoryContext?: boolean;
 };
 
-/** Matching rows keep their filter membership; ancestors are read-only context. */
+/** Matching rows keep their filter membership; ancestors are excluded from selection. */
 export function useCategoryContextTree<
   T extends BaseListRow & { parentId?: string | null },
 >(catalog: readonly T[], nested: boolean) {

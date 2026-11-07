@@ -119,6 +119,7 @@ const PREVIEW = {
   renderInspector: SpendingCategoryInspector,
 } as const;
 const VISIBILITY = {
+  dataQuality: false,
   productCategories: false,
   itemizationExpectation: false,
   productExpectation: false,
@@ -165,13 +166,15 @@ export const spendingCategoryListOverride = defineListOverride<
                 },
                 cell: ({ getValue, row }) =>
                   getValue() === null
-                    ? "Unavailable"
+                    ? spending.isLoading
+                      ? "Loading…"
+                      : "Unavailable"
                     : `${formatCurrency(getValue() ?? 0)}${spending.totals?.incomplete.has(row.original.id) ? " + unknown" : ""}`,
               },
             ),
           );
         }),
-      [spending.totals],
+      [spending.totals, spending.isLoading],
     );
     const list = useMemo(
       () => ({
@@ -201,13 +204,16 @@ export const spendingCategoryListOverride = defineListOverride<
             }
           />
           <Description>
-            All history, including planned. Net spending includes descendants;
-            parent totals already include their children. Mappings counts
-            configured incoming Product Categories for each category itself.
-            Table filters change visible categories, not historical review
-            scope.
+            All history, including planned. Net spending includes descendants.
+            Mappings counts configured Product Categories for each category
+            itself.
           </Description>
-          {spending.error && <ErrorDisplay error={spending.error} />}
+          {spending.error && (
+            <ErrorDisplay
+              error={spending.error}
+              onRetry={() => void spending.refetch()}
+            />
+          )}
           {spending.status === "too_large" && (
             <Description>
               Spending is unavailable because the report exceeds its limit.

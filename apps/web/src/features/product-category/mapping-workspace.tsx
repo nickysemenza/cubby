@@ -38,6 +38,7 @@ export function ProductCategoryConnections({ id }: { id: CategoryRow["id"] }) {
   const mapping = record.data?.spendingCategoryMapping;
   return (
     <Stack gap="md">
+      {record.isPending && <Description>Loading category mapping…</Description>}
       {record.data && (
         <Section title="Configured mapping" headingAs="h3">
           <dl className="space-y-2 text-sm">
@@ -92,7 +93,12 @@ export function ProductCategoryConnections({ id }: { id: CategoryRow["id"] }) {
         title="Where this branch's money lands"
         caption="All history, including planned. Actual allocations can differ from the configured mapping."
       >
-        {analysis.error && <ErrorDisplay error={analysis.error} />}
+        {analysis.error && (
+          <ErrorDisplay
+            error={analysis.error}
+            onRetry={() => void analysis.refetch()}
+          />
+        )}
         {analysis.isPending && (
           <Description>Loading spending allocations…</Description>
         )}
@@ -150,7 +156,12 @@ export function ProductCategoryConnections({ id }: { id: CategoryRow["id"] }) {
         filters do not narrow the changes being reviewed.
       </Description>
       <Section title="Review mapping or parent change" headingAs="h3">
-        {record.error && <ErrorDisplay error={record.error} />}
+        {record.error && (
+          <ErrorDisplay
+            error={record.error}
+            onRetry={() => void record.refetch()}
+          />
+        )}
         {record.data && <ProductCategoryClassification record={record.data} />}
       </Section>
     </Stack>
@@ -178,7 +189,12 @@ export function ContributingCategories({
       title={`Contributing branches · ${bucket.label}`}
       caption="All product branches for this spending category, including entries without product detail."
     >
-      {query.error && <ErrorDisplay error={query.error} />}
+      {query.error && (
+        <ErrorDisplay
+          error={query.error}
+          onRetry={() => void query.refetch()}
+        />
+      )}
       {query.isPending && (
         <Description>Loading contributing branches…</Description>
       )}

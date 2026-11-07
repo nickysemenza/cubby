@@ -41,7 +41,7 @@ export const { definition, readSchemas } = defineEntityModel({
         {
           kind: "records",
           id: "expenses",
-          title: "Expenses",
+          title: "Expense overrides",
           viewKey: "relation:expenses",
         },
         {
@@ -111,6 +111,23 @@ export const { definition, readSchemas } = defineEntityModel({
       ],
     },
     list: {
+      savedViews: [
+        {
+          id: "needs-policies",
+          label: "Needs policies",
+          description:
+            "Categories missing an itemization or Product expectation",
+          filters: [
+            {
+              id: "dataGaps",
+              value: [
+                "spending_category_itemization_expectation",
+                "spending_category_product_expectation",
+              ],
+            },
+          ],
+        },
+      ],
       primarySearch: {
         key: "name",
         placeholder: "Search spending categories...",

@@ -70,6 +70,30 @@ export const productCategoryListOverride = defineListOverride<
           const helper = createCubbyColumnHelper<CategoryTreeRow>();
           add(
             helper.accessor(
+              (row) =>
+                spending.totals
+                  ? (spending.totals.cents.get(row.id) ?? 0) / 100
+                  : null,
+              {
+                id: "subtreeNet",
+                header: "Subtree net",
+                enableSorting: false,
+                meta: {
+                  provenance: null,
+                  numeric: true,
+                  mobile: { slot: "trailing", priority: 10 },
+                },
+                cell: ({ getValue, row }) =>
+                  getValue() === null
+                    ? spending.isLoading
+                      ? "Loading…"
+                      : "Unavailable"
+                    : `${formatCurrency(getValue() ?? 0)}${spending.totals?.incomplete.has(row.original.id) ? " + unknown" : ""}`,
+              },
+            ),
+          );
+          add(
+            helper.accessor(
               (row) => row.spendingCategoryMapping?.state ?? "unmapped",
               {
                 id: "mappingSource",
@@ -100,34 +124,13 @@ export const productCategoryListOverride = defineListOverride<
               },
             ),
           );
-          add(
-            helper.accessor(
-              (row) =>
-                spending.totals
-                  ? (spending.totals.cents.get(row.id) ?? 0) / 100
-                  : null,
-              {
-                id: "subtreeNet",
-                header: "Subtree net",
-                enableSorting: false,
-                meta: {
-                  provenance: null,
-                  numeric: true,
-                  mobile: { slot: "trailing", priority: 10 },
-                },
-                cell: ({ getValue, row }) =>
-                  getValue() === null
-                    ? "Unavailable"
-                    : `${formatCurrency(getValue() ?? 0)}${spending.totals?.incomplete.has(row.original.id) ? " + unknown" : ""}`,
-              },
-            ),
-          );
         }),
-      [spending.totals],
+      [spending.totals, spending.isLoading],
     );
     const list = useMemo(
       () => ({
         preview: PREVIEW,
+        initialColumnVisibility: { feature: false, dataQuality: false },
         nameSuffix: (row: CategoryTreeRow) =>
           row.categoryContext ? (
             <span className="text-xs text-muted-foreground">Ancestor</span>
@@ -153,11 +156,15 @@ export const productCategoryListOverride = defineListOverride<
           />
           <Description>
             All history, including planned. Products and net spending include
-            descendants; parent totals already include their children. Ancestor
-            rows provide context and are excluded from selection. Table filters
-            change visible categories, not historical review scope.
+            descendants. Display filters change rows, not historical review
+            scope.
           </Description>
-          {spending.error && <ErrorDisplay error={spending.error} />}
+          {spending.error && (
+            <ErrorDisplay
+              error={spending.error}
+              onRetry={() => void spending.refetch()}
+            />
+          )}
           {spending.status === "too_large" && (
             <Description>
               Spending is unavailable because the report exceeds its limit.

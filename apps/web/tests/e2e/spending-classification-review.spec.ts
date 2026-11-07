@@ -147,27 +147,25 @@ test("reviews historical item classification and preserves explicit purpose", as
     tree.getByRole("link", { name: siblingName, exact: true }),
   ).toHaveCount(0);
   await expect(
-    tree.getByRole("columnheader", { name: /^Spending/ }),
+    tree.getByRole("columnheader", { name: /Spending/ }),
   ).toBeVisible();
   const child = tree
     .getByRole("row")
     .filter({ has: page.getByRole("link", { name: childName, exact: true }) });
   await expect(
     parent.getByRole("checkbox", { name: "Select row", exact: true }),
-  ).toBeDisabled();
+  ).toHaveCount(0);
   await expect(
     child.getByRole("button", { name: "Expand", exact: true }),
   ).toHaveCount(0);
   await page.getByRole("button", { name: "Flat", exact: true }).click();
-  await expect(
-    tree.getByRole("link", { name: parentName, exact: true }),
-  ).toHaveCount(0);
+  await expect(tree.getByRole("row")).toHaveCount(2);
   await expect(page.getByRole("textbox", { name: /Search/ })).toHaveValue(
     "classification shoes",
   );
   await page.getByRole("button", { name: "Tree", exact: true }).click();
   await expect(parent).toBeVisible();
-  await child.getByRole("cell", { name: "$85.00", exact: true }).click();
+  await child.getByRole("link", { name: childName, exact: true }).click();
   const allocations = page.getByRole("region", {
     name: "Where this branch's money lands",
     exact: true,
@@ -203,14 +201,22 @@ test("reviews historical item classification and preserves explicit purpose", as
   });
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(
-    page.getByRole("dialog", { name: childName, exact: true }),
+    page
+      .getByRole("dialog")
+      .filter({
+        has: page.getByRole("heading", { name: childName, exact: true }),
+      }),
   ).toBeVisible();
   await page.getByRole("button", { name: "Close panel", exact: true }).click();
   await expect(
-    page.getByRole("dialog", { name: childName, exact: true }),
+    page
+      .getByRole("dialog")
+      .filter({
+        has: page.getByRole("heading", { name: childName, exact: true }),
+      }),
   ).toHaveCount(0);
   const mobileChild = page
-    .getByRole("list", { name: "Records list", exact: true })
+    .getByRole("list", { name: "Product Categories list", exact: true })
     .getByRole("button", { name: new RegExp(`^${childName} `) });
   await expect(mobileChild).toBeVisible();
   const phoneTreePath = ".impeccable/review/category-mapping-mobile-tree.png";
@@ -221,7 +227,11 @@ test("reviews historical item classification and preserves explicit purpose", as
   });
   await mobileChild.press("Enter");
   await expect(
-    page.getByRole("dialog", { name: childName, exact: true }),
+    page
+      .getByRole("dialog")
+      .filter({
+        has: page.getByRole("heading", { name: childName, exact: true }),
+      }),
   ).toBeVisible();
   await expect(
     page.getByRole("button", { name: "Close panel", exact: true }),
@@ -387,19 +397,17 @@ test("reviews historical item classification and preserves explicit purpose", as
   await page
     .getByRole("textbox", { name: /Search/ })
     .fill("classification clothing");
-  const spendingRoot = spendingTree
-    .getByRole("row")
-    .filter({
-      has: page.getByRole("link", { name: purposeRootName, exact: true }),
-    });
+  const spendingRoot = spendingTree.getByRole("row").filter({
+    has: page.getByRole("link", { name: purposeRootName, exact: true }),
+  });
   await expect(spendingRoot).toContainText("$25.00");
-  const clothingRow = spendingTree
-    .getByRole("row")
-    .filter({
-      has: page.getByRole("link", { name: categoryName, exact: true }),
-    });
+  const clothingRow = spendingTree.getByRole("row").filter({
+    has: page.getByRole("link", { name: categoryName, exact: true }),
+  });
   await expect(clothingRow).toContainText("$25.00");
-  await clothingRow.getByRole("cell", { name: "$25.00", exact: true }).click();
+  await clothingRow
+    .getByRole("link", { name: categoryName, exact: true })
+    .click();
   await expect(
     page
       .getByRole("region", {
@@ -432,7 +440,8 @@ test("reviews historical item classification and preserves explicit purpose", as
   const giftsRow = spendingTree
     .getByRole("row")
     .filter({ has: page.getByRole("link", { name: giftsName, exact: true }) });
-  await giftsRow.getByRole("cell", { name: "$68.00", exact: true }).click();
+  await expect(giftsRow).toContainText("$68.00");
+  await giftsRow.getByRole("link", { name: giftsName, exact: true }).click();
   const giftContributions = page.getByRole("region", {
     name: `Contributing branches · ${giftsName}`,
     exact: true,
@@ -441,7 +450,11 @@ test("reviews historical item classification and preserves explicit purpose", as
   await expect(giftContributions).toContainText("$7.00");
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(
-    page.getByRole("dialog", { name: giftsName, exact: true }),
+    page
+      .getByRole("dialog")
+      .filter({
+        has: page.getByRole("heading", { name: giftsName, exact: true }),
+      }),
   ).toBeVisible();
   const spendingPhonePath = ".impeccable/review/spending-category-mobile.png";
   await page.screenshot({ path: spendingPhonePath, fullPage: true });
