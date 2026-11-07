@@ -9,20 +9,24 @@ import { ArrowCounterClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowC
 import { ArrowDownIcon } from "@phosphor-icons/react/dist/csr/ArrowDown";
 import { ArrowUpIcon } from "@phosphor-icons/react/dist/csr/ArrowUp";
 import { DotsSixVerticalIcon } from "@phosphor-icons/react/dist/csr/DotsSixVertical";
-import { EyeSlashIcon } from "@phosphor-icons/react/dist/csr/EyeSlash";
 import { PushPinSlashIcon } from "@phosphor-icons/react/dist/csr/PushPinSlash";
 import { SidebarIcon } from "@phosphor-icons/react/dist/csr/Sidebar";
 import { SidebarSimpleIcon } from "@phosphor-icons/react/dist/csr/SidebarSimple";
 import type { RowData } from "@tanstack/react-table";
 import { cn } from "cn";
+import { useState } from "react";
 
 import { MoreMenuTrigger } from "~/ui/navigation/more-menu-trigger";
 import { Button } from "~/ui/primitives/button";
+import { Checkbox } from "~/ui/primitives/checkbox";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuGroup,
+  DropdownMenuLabel,
 } from "~/ui/primitives/dropdown-menu";
+import { Input } from "~/ui/primitives/input";
 import { Description } from "~/ui/text/description";
 
 import {
@@ -36,6 +40,8 @@ import {
   moveColumn,
   useColumnLayoutDndProps,
 } from "./column-layout";
+import { ColumnEntityMark, columnTypeLabel } from "./column-presentation";
+import { useColumnVisibility } from "./column-visibility-context";
 import { columnLabel } from "./data-table-view-options";
 import type {
   CubbyColumn as Column,
@@ -58,6 +64,14 @@ function SortableColumn<TData extends RowData>({
   regionColumns: Column<TData>[];
   table: Table<TData>;
 }) {
+  const visibility = useColumnVisibility();
+  const automatic =
+    column.getIsVisible() && visibility.emptyColumns.includes(column.id);
+  const shown = column.getIsVisible() && !automatic;
+  const toggle = (visible: boolean) => {
+    column.toggleVisibility(visible);
+    if (visible) visibility.reveal([column.id]);
+  };
   const region = columnRegion(column);
   const locked = isLockedColumn(column);
   const index = regionColumns.findIndex((item) => item.id === column.id);
@@ -88,13 +102,14 @@ function SortableColumn<TData extends RowData>({
       ref={setNodeRef}
       style={{ transform: CSS.Transform.toString(transform), transition }}
       className={cn(
-        "grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-1 border border-border bg-background px-1 py-1",
+        "grid min-h-8 grid-cols-[auto_auto_minmax(0,1fr)_auto] items-center gap-2 border-b border-border px-1 md:min-h-6",
+        !shown && "bg-muted text-muted-foreground",
         isDragging && "z-50 opacity-70",
       )}
       data-column-id={column.id}
     >
       {locked ? (
-        <span aria-hidden className="size-7" />
+        <span aria-hidden className="size-6" />
       ) : (
         <Button
           variant="ghost"
@@ -107,82 +122,44 @@ function SortableColumn<TData extends RowData>({
           <DotsSixVerticalIcon className="size-3.5" />
         </Button>
       )}
-      <span className="truncate text-xs">
-        {columnLabel(column)}
-        {!column.getIsVisible() && (
-          <span className="ml-1 text-muted-foreground">Hidden</span>
+      <Checkbox
+        checked={shown}
+        disabled={!column.getCanHide()}
+        aria-label={`${shown ? "Hide" : "Show"} ${columnLabel(column)}`}
+        onCheckedChange={toggle}
+      />
+      <div className="flex min-w-0 items-center gap-1.5 text-xs">
+        <ColumnEntityMark
+          meta={column.columnDef.meta}
+          className="size-3.5 shrink-0"
+        />
+        <span className="truncate">{columnLabel(column)}</span>
+        {!shown && (
+          <span className="shrink-0 text-2xs">
+            {automatic ? "Empty in these rows" : "Hidden"}
+          </span>
         )}
-      </span>
-      {!locked && (
-        <div className="hidden items-center md:flex">
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label={`Move ${columnLabel(column)} earlier`}
-            disabled={index === 0}
-            onClick={() => move(-1)}
-          >
-            <ArrowUpIcon className="size-3" />
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label={`Move ${columnLabel(column)} later`}
-            disabled={index === regionColumns.length - 1}
-            onClick={() => move(1)}
-          >
-            <ArrowDownIcon className="size-3" />
-          </Button>
-          {region !== "start" && (
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label={`Pin ${columnLabel(column)} to start`}
-              onClick={() => pin("start")}
-            >
-              <SidebarIcon className="size-3" />
-            </Button>
-          )}
-          {region !== "end" && (
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label={`Pin ${columnLabel(column)} to end`}
-              onClick={() => pin("end")}
-            >
-              <SidebarSimpleIcon className="size-3" />
-            </Button>
-          )}
-          {region !== "center" && (
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label={`Unpin ${columnLabel(column)}`}
-              onClick={() => pin("center")}
-            >
-              <PushPinSlashIcon className="size-3" />
-            </Button>
-          )}
-          {column.getCanHide() && (
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label={`${column.getIsVisible() ? "Hide" : "Show"} ${columnLabel(column)}`}
-              onClick={() => column.toggleVisibility()}
-            >
-              <EyeSlashIcon className="size-3" />
-            </Button>
-          )}
-        </div>
-      )}
+        <span className="ml-auto shrink-0 text-2xs text-muted-foreground">
+          {columnTypeLabel(column.columnDef.meta)}
+        </span>
+        {locked && (
+          <span className="text-2xs text-muted-foreground">Fixed</span>
+        )}
+      </div>
       {!locked && (
         <DropdownMenu>
           <MoreMenuTrigger
             size="icon-sm"
-            className="md:hidden"
             aria-label={`Actions for ${columnLabel(column)}`}
           />
           <DropdownMenuContent align="end" className="w-52">
+            <DropdownMenuGroup>
+              <DropdownMenuLabel>
+                {column.columnDef.meta?.columnGroup
+                  ? `Pinning moves ${column.columnDef.meta.columnGroup}`
+                  : "Column position"}
+              </DropdownMenuLabel>
+            </DropdownMenuGroup>
             <DropdownMenuItem disabled={index === 0} onClick={() => move(-1)}>
               <ArrowUpIcon className="size-3.5" />
               Move earlier
@@ -213,9 +190,8 @@ function SortableColumn<TData extends RowData>({
               </DropdownMenuItem>
             )}
             {column.getCanHide() && (
-              <DropdownMenuItem onClick={() => column.toggleVisibility()}>
-                <EyeSlashIcon className="size-3.5" />
-                {column.getIsVisible() ? "Hide" : "Show"} {columnLabel(column)}
+              <DropdownMenuItem onClick={() => toggle(!shown)}>
+                {shown ? "Hide" : "Show"} {columnLabel(column)}
               </DropdownMenuItem>
             )}
           </DropdownMenuContent>
@@ -230,12 +206,17 @@ function Zone<TData extends RowData>({
   label,
   columns,
   table,
+  search,
 }: {
+  search: string;
   region: Region;
   label: string;
   columns: Column<TData>[];
   table: Table<TData>;
 }) {
+  const visibility = useColumnVisibility();
+  const isShown = (column: Column<TData>) =>
+    column.getIsVisible() && !visibility.emptyColumns.includes(column.id);
   const movable = columns.filter((column) => !isLockedColumn(column));
   const bands = columnBands(columns);
   const { setNodeRef, isOver } = useDroppable({
@@ -247,102 +228,111 @@ function Zone<TData extends RowData>({
       <h3 className="text-xs font-medium text-muted-foreground">{label}</h3>
       <div
         ref={setNodeRef}
-        className={cn(
-          "min-h-9 space-y-1 border border-dashed border-border p-1",
-          isOver && "border-primary bg-primary/5",
-        )}
+        className={cn("min-h-6", isOver && "border-primary bg-primary/5")}
       >
         <SortableContext
           items={columns.map((column) => column.id)}
           strategy={verticalListSortingStrategy}
         >
-          {bands.map((band, bandIndex) => (
-            <div key={band.columns[0]?.id} className="space-y-1">
-              {band.label && (
-                <div className="flex items-center gap-1 px-1 py-1 text-xs">
-                  <span className="min-w-0 flex-1 truncate font-medium">
-                    {band.label}
-                  </span>
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label={`Move ${band.label} group earlier`}
-                    disabled={
-                      bandIndex === 0 ||
-                      bands[bandIndex - 1]?.columns.some(isLockedColumn)
-                    }
-                    onClick={() => {
-                      const first = band.columns[0];
-                      const target = bands[bandIndex - 1]?.columns[0];
-                      if (first && target)
-                        moveColumn(table, {
-                          kind: "reorder-group",
-                          id: first.id,
-                          over: target.id,
-                        });
-                    }}
-                  >
-                    <ArrowUpIcon className="size-3" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    aria-label={`Move ${band.label} group later`}
-                    disabled={
-                      bandIndex === bands.length - 1 ||
-                      bands[bandIndex + 1]?.columns.some(isLockedColumn)
-                    }
-                    onClick={() => {
-                      const first = band.columns[0];
-                      const target = bands[bandIndex + 1]?.columns[0];
-                      if (first && target)
-                        moveColumn(table, {
-                          kind: "reorder-group",
-                          id: first.id,
-                          over: target.id,
-                        });
-                    }}
-                  >
-                    <ArrowDownIcon className="size-3" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    aria-label={`${band.columns.some((column) => column.getIsVisible()) ? "Hide" : "Show"} ${band.label} group`}
-                    onClick={() => {
-                      const visible = !band.columns.some((column) =>
-                        column.getIsVisible(),
-                      );
-                      table.setColumnVisibility((current) => ({
-                        ...current,
-                        ...Object.fromEntries(
-                          band.columns
-                            .filter((column) => column.getCanHide())
-                            .map((column) => [column.id, visible]),
-                        ),
-                      }));
-                    }}
-                  >
-                    {band.columns.some((column) => column.getIsVisible())
-                      ? "Hide"
-                      : "Show"}
-                  </Button>
-                </div>
-              )}
-              {band.columns.map((column) => (
-                <SortableColumn
-                  key={column.id}
-                  column={column}
-                  regionColumns={movable.filter(
-                    (item) =>
-                      item.columnDef.meta?.columnGroup ===
-                      column.columnDef.meta?.columnGroup,
+          {bands.map(
+            (band, bandIndex) =>
+              band.columns.some((column) =>
+                columnLabel(column).toLowerCase().includes(search),
+              ) && (
+                <div key={band.columns[0]?.id}>
+                  {band.label && (
+                    <div className="flex items-center gap-1 px-1 py-1 text-xs">
+                      <span className="min-w-0 flex-1 truncate font-medium">
+                        {band.label}
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label={`Move ${band.label} group earlier`}
+                        disabled={
+                          bandIndex === 0 ||
+                          bands[bandIndex - 1]?.columns.some(isLockedColumn)
+                        }
+                        onClick={() => {
+                          const first = band.columns[0];
+                          const target = bands[bandIndex - 1]?.columns[0];
+                          if (first && target)
+                            moveColumn(table, {
+                              kind: "reorder-group",
+                              id: first.id,
+                              over: target.id,
+                            });
+                        }}
+                      >
+                        <ArrowUpIcon className="size-3" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        aria-label={`Move ${band.label} group later`}
+                        disabled={
+                          bandIndex === bands.length - 1 ||
+                          bands[bandIndex + 1]?.columns.some(isLockedColumn)
+                        }
+                        onClick={() => {
+                          const first = band.columns[0];
+                          const target = bands[bandIndex + 1]?.columns[0];
+                          if (first && target)
+                            moveColumn(table, {
+                              kind: "reorder-group",
+                              id: first.id,
+                              over: target.id,
+                            });
+                        }}
+                      >
+                        <ArrowDownIcon className="size-3" />
+                      </Button>
+                      <Checkbox
+                        aria-label={`Show ${band.label} group`}
+                        checked={band.columns.every(isShown)}
+                        indeterminate={
+                          band.columns.some(isShown) &&
+                          !band.columns.every(isShown)
+                        }
+                        disabled={
+                          !band.columns.some((column) => column.getCanHide())
+                        }
+                        onCheckedChange={(visible) => {
+                          table.setColumnVisibility((current) => ({
+                            ...current,
+                            ...Object.fromEntries(
+                              band.columns
+                                .filter((column) => column.getCanHide())
+                                .map((column) => [column.id, visible]),
+                            ),
+                          }));
+                          if (visible)
+                            visibility.reveal(
+                              band.columns.map((column) => column.id),
+                            );
+                        }}
+                      />
+                    </div>
                   )}
-                  table={table}
-                />
-              ))}
-            </div>
-          ))}
+                  {band.columns
+                    .filter((column) =>
+                      columnLabel(column).toLowerCase().includes(search),
+                    )
+                    .map((column) => (
+                      <SortableColumn
+                        key={column.id}
+                        column={column}
+                        regionColumns={movable.filter(
+                          (item) =>
+                            item.columnDef.meta?.columnGroup ===
+                            column.columnDef.meta?.columnGroup,
+                        )}
+                        table={table}
+                      />
+                    ))}
+                </div>
+              ),
+          )}
         </SortableContext>
       </div>
     </section>
@@ -354,6 +344,8 @@ export default function TableLayoutCustomizer<TData extends RowData>({
 }: {
   table: Table<TData>;
 }) {
+  const visibility = useColumnVisibility();
+  const [search, setSearch] = useState("");
   const columns = columnsByRegion(table);
   const dndProps = useColumnLayoutDndProps("layout position");
 
@@ -373,11 +365,20 @@ export default function TableLayoutCustomizer<TData extends RowData>({
 
   const reset = () => {
     const defaults = table.options.meta?.defaultLayout;
-    if (defaults) applyColumnLayout(table, defaults);
+    if (defaults) {
+      applyColumnLayout(table, defaults);
+      visibility.reset();
+    }
   };
 
   return (
     <div className="space-y-2 p-2">
+      <Input
+        aria-label="Search columns"
+        placeholder="Search columns…"
+        value={search}
+        onChange={(event) => setSearch(event.target.value)}
+      />
       {table
         .getAllLeafColumns()
         .some((column) => column.columnDef.meta?.columnGroup) && (
@@ -388,18 +389,21 @@ export default function TableLayoutCustomizer<TData extends RowData>({
       )}
       <DndContext {...dndProps} onDragEnd={onDragEnd}>
         <Zone
+          search={search.trim().toLowerCase()}
           region="start"
           label="Pinned start"
           columns={columns.start}
           table={table}
         />
         <Zone
+          search={search.trim().toLowerCase()}
           region="center"
           label="Unpinned"
           columns={columns.center}
           table={table}
         />
         <Zone
+          search={search.trim().toLowerCase()}
           region="end"
           label="Pinned end"
           columns={columns.end}

@@ -29,6 +29,10 @@ import { type ReactNode, useRef } from "react";
 
 import { EntityIcon } from "~/entity/entities";
 import { FieldProvenance } from "~/entity/fields/field-provenance";
+import {
+  ColumnEntityMark,
+  columnEntityTarget,
+} from "~/ui/data-table/column-presentation";
 import { Button } from "~/ui/primitives/button";
 import {
   DropdownMenu,
@@ -134,15 +138,11 @@ function headerContent<TData extends RowData>(
   const label =
     meta?.shortHeader ??
     flexRender(header.column.columnDef.header, header.getContext());
-  if (!meta?.linksTo) return label;
+  if (!columnEntityTarget(meta)) return label;
   return (
     <>
       <span data-header-entity="" className="mr-1 inline-flex align-[-2px]">
-        <EntityIcon
-          entity={meta.linksTo}
-          aria-hidden="true"
-          className="size-3.5"
-        />
+        <ColumnEntityMark meta={meta} />
       </span>
       {label}
     </>

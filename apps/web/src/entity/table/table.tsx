@@ -1,7 +1,7 @@
 import type { Entity } from "@cubby/schemas/entity";
+import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 
 import "../../ui/data-table/table.css";
-import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 import { ListIcon } from "@phosphor-icons/react/dist/csr/List";
 import { ListDashesIcon } from "@phosphor-icons/react/dist/csr/ListDashes";
 import type { CellSelectionState, RowData } from "@tanstack/react-table";
@@ -11,7 +11,7 @@ import { cn } from "cn";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { entities, isBrowserRoutedEntity } from "~/entity/entities";
+import { entities, EntityIcon, isBrowserRoutedEntity } from "~/entity/entities";
 import { usePageIdentity, usePageWorkbenchTarget } from "~/entity/page/page";
 import { ProposalCountProvider } from "~/entity/suggestions/proposal-counts";
 import {
@@ -20,6 +20,8 @@ import {
   RecordSuggestionBoundary,
 } from "~/entity/suggestions/record-suggestions";
 import type { QueryTiming } from "~/lib/query-timing";
+import { ColumnMarkContext } from "~/ui/data-table/column-presentation";
+import { ColumnVisibilityContext } from "~/ui/data-table/column-visibility-context";
 import {
   StaticTable,
   type StaticTableColumn,
@@ -849,6 +851,12 @@ function TableWithEntityActions({
   );
 }
 
+function renderColumnMark(entity: Entity, className: string) {
+  return (
+    <EntityIcon entity={entity} aria-hidden="true" className={className} />
+  );
+}
+
 export default function RTable<TItem extends RowData>(
   props: RTableProps<TItem>,
 ) {
@@ -956,7 +964,7 @@ export default function RTable<TItem extends RowData>(
   ]);
   return (
     <ValueChangeScope.Provider value={scope}>
-      {content}
+      <ColumnMarkContext value={renderColumnMark}>{content}</ColumnMarkContext>
     </ValueChangeScope.Provider>
   );
 }
@@ -1014,6 +1022,7 @@ function DesktopTableView<TItem extends RowData>({
     cellSelectionContainerProps,
     emptyColumns,
     revealEmptyColumns,
+    resetRevealedEmpty,
     unpaintedColumns,
     columnSizeVars,
     isDebugEnabled,
@@ -1048,7 +1057,13 @@ function DesktopTableView<TItem extends RowData>({
       : { singular: "record", plural: "records" };
 
   return (
-    <>
+    <ColumnVisibilityContext
+      value={{
+        emptyColumns,
+        reveal: revealEmptyColumns,
+        reset: resetRevealedEmpty,
+      }}
+    >
       {externalToolbar && desktopToolbar ? (
         <div className="hidden shrink-0 border-b border-hairline-soft bg-card md:block [&:empty]:hidden">
           {desktopToolbar}
@@ -1165,7 +1180,7 @@ function DesktopTableView<TItem extends RowData>({
           ) : null}
         </div>
       </CellSelectionContext.Provider>
-    </>
+    </ColumnVisibilityContext>
   );
 }
 
