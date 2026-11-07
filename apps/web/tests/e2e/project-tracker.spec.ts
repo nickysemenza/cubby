@@ -185,6 +185,9 @@ test("maintenance keeps explicit completion history across spending years", asyn
     }),
   });
   await expect(spending.getByText(expenseName, { exact: true })).toBeVisible();
+  await expect(
+    spending.getByRole("region", { name: "Spend summary" }),
+  ).toContainText("$12.00");
   await page.getByLabel("Spending year").fill("2031");
   await page.getByLabel("Spending year").press("Enter");
   await expect(page).toHaveURL(/maintenanceYear=2031/);
