@@ -403,6 +403,9 @@ keys, including Email relationship facts and Product pricing/food inputs.
 Consumers reject unloaded keys; missing publications retain loaded-absence receipts.
 Named list renderers add their catalog-owned input paths, preserving logos,
 external links and reconciliation facts when neighboring columns are hidden.
+Read plans construct strict binding schemas once. Envelope serialization compiles
+field demand once per entity and field-schema identity within each response;
+the memo retains no record values and ends with that response.
 
 SSR preloads and mounted lists share audit-column visibility, explicit sort
 demand and filter-count policy so their first page has one query identity.

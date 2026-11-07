@@ -209,7 +209,7 @@ export function listReadPlan<Row>(
     return {
       load: get,
       fields: (picked, value, bindingOptions) => ({
-        schema: picked,
+        schema: picked.strict(),
         scope: bindingOptions?.scope,
         storedKeys: bindingOptions?.storedKeys,
         prefetch: prefetchPage
@@ -234,7 +234,7 @@ export function listReadPlan<Row>(
       ) => z.output<z.ZodObject<Fields>>,
       bindingOptions?: BindingOptions,
     ): ListReadBinding<Row> => ({
-      schema: picked,
+      schema: picked.strict(),
       scope: bindingOptions?.scope,
       storedKeys: bindingOptions?.storedKeys,
       value: (row, _page, context) => value(row, context),
@@ -802,9 +802,7 @@ export function listReadPlan<Row>(
                   `Requested record field was not loaded: ${key}`,
                 );
             }
-            const parsed = sourceRecord.parse(
-              binding.schema.strict().parse(value),
-            );
+            const parsed = sourceRecord.parse(binding.schema.parse(value));
             for (const [key, field] of Object.entries(parsed))
               if (wanted(projection, key))
                 result[key] = schema.shape[key].parse(field);
