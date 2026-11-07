@@ -557,6 +557,13 @@ export function listReadPlan<Row>(
     fields,
     unloaded,
     validate,
+    /** A binding receives the repository row and may read unprojected columns. */
+    hasBindings: (projection: ListProjection): boolean =>
+      bindings.some((binding) =>
+        Object.keys(binding.schema.shape).some((key) =>
+          wanted(projection, key),
+        ),
+      ),
     prefetch,
     async read(
       db: Database | DrizzleTransaction,

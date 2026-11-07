@@ -2157,6 +2157,15 @@ its outer mutation supplies loading state and presentation only.
 
 ## List reads
 
+Browser roster projections include the synthesized Quality column when readable
+and not explicitly hidden, alongside identity and display images. Its field
+facts must load even though it has no ordinary manifest field declaration.
+
+A request for direct physical fields with no admitted bindings or field facts
+selects only those fields plus its internal id and public shortcode. These closed reads
+also omit unrelated helper expressions. Requests that need bindings or field
+facts keep their existing row inputs.
+
 Selected reads compile envelope demand from the manifest, including projector and
 classification dependencies. Governed fields retain assignment refusal and
 automatic ownership even when neighboring columns are omitted. Identity-only

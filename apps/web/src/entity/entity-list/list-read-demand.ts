@@ -68,6 +68,9 @@ export const declaredListReadProjection: ListReadProjection = (
     ...metadata.fields.output,
     ...metadata.envelopeFields,
   ]);
+  // Standard columns also inject Quality without a declared entity field.
+  if (visibility.dataQuality !== false && readable.has("dataQuality"))
+    wanted.add("dataQuality");
   for (const field of metadata.fields.fields) {
     if (!field.display.list) continue;
     const column = field.display.columnId ?? field.key;
