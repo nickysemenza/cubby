@@ -17,7 +17,11 @@ import {
 import { entityDetailInputSchema } from "~/entity/model/detail-contracts";
 import { loadEntityDetailSchemas } from "~/entity/model/read-schemas/loaders";
 import { getEntityCounts } from "~/server/domains/dashboard/repo/dashboard";
-import { executeEntity, executeEntityAs } from "~/server/entity-kernel";
+import {
+  entityMergeBlockers,
+  executeEntity,
+  executeEntityAs,
+} from "~/server/entity-kernel";
 import {
   entityBrowserMutationCommandSchema,
   entityBrowserMutationResultSchema,
@@ -125,13 +129,23 @@ export const entityGraphHandlers = implementOperationDomain(
     connections: (context, input) =>
       getEntityConnections(context.db, input, kernelScaffold),
     mergePreview: (context, input) =>
-      previewEntityMerge(context.db, input, async (entity, code) => {
-        const result = await executeEntityAs(context, "get", {
-          entity,
-          id: code,
-          missing: "null",
-        });
-        return result.item;
+      previewEntityMerge(context.db, input, {
+        readRecord: async (entity, code) => {
+          const result = await executeEntityAs(context, "get", {
+            entity,
+            id: code,
+            missing: "null",
+          });
+          return result.item;
+        },
+        connections: (code) =>
+          getEntityConnections(
+            context.db,
+            { id: code, operation: "merge", limitPerGroup: 5 },
+            kernelScaffold,
+          ),
+        mergeBlockers: (entity, plan) =>
+          entityMergeBlockers(context, entity, plan),
       }),
     relation: async (context, input) => {
       // The parse brands the ids; the input's entity is a union, so the

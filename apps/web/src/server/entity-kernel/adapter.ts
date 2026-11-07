@@ -240,6 +240,15 @@ export interface EntityMergePort<
     entityId: EntityInternalId<E> | null;
     detachedImageKeys: string[];
   }>;
+  /**
+   * Member-worded refusals this merge plan would raise from the entity's own
+   * rules (beyond blocking connection dispositions), for `entity.mergePreview`.
+   * Read-only and advisory: `execute` re-validates.
+   */
+  blockers?: (
+    ctx: EntityKernelContext,
+    input: ZodOutput<SInput>,
+  ) => Promise<string[]>;
 }
 
 export interface EntityKernelCoreBinding<

@@ -29,7 +29,11 @@ import {
 
 import { deleteProducts, productScaffold, readProduct } from "./crud";
 import { PRODUCT_DELETE_EDGE_POLICY } from "./edge-roles";
-import { mergeProducts, PRODUCT_MERGE_EDGE_POLICY } from "./merge";
+import {
+  mergeProducts,
+  PRODUCT_MERGE_EDGE_POLICY,
+  previewMergeProducts,
+} from "./merge";
 
 const productShortcodes = bindShortcodeResolver("product");
 
@@ -160,6 +164,16 @@ export const productRepository = defineRepository("product", {
         entityId: summary.keepEntityId,
         detachedImageKeys: [],
       };
+    },
+    // Edition, kit-cycle and classification refusals, from the same plan
+    // `mergeProducts` writes against.
+    blockers: async (ctx, input) => {
+      const [keepId, mergeIds] = await Promise.all([
+        productShortcodes.one(ctx.db, input.keepId),
+        productShortcodes.all(ctx.db, input.mergeIds),
+      ]);
+      const preview = await previewMergeProducts(ctx.db, { keepId, mergeIds });
+      return preview.blockers.map((blocker) => blocker.label);
     },
   },
 });

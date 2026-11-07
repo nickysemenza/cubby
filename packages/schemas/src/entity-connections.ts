@@ -74,6 +74,8 @@ export const entityMergePreviewInput = z.object({
     .min(2)
     .max(20)
     .refine((ids) => new Set(ids).size === ids.length, "ids must be distinct"),
+  /** The survivor `blockers` are evaluated for; defaults to `suggestedKeepId`. */
+  keepId: z.string().min(1).optional(),
 });
 export type EntityMergePreviewInput = z.input<typeof entityMergePreviewInput>;
 
@@ -83,6 +85,12 @@ export const entityMergeCandidate = z.object({
   /** Live incoming physical connections: the edges a merge repoints. */
   connectionCount: z.number().int().nonnegative(),
   createdAt: z.iso.datetime(),
+  /**
+   * Incoming groups with the merge's declared disposition for this candidate
+   * as a merged-away record (`entity.connections` with `operation: "merge"`):
+   * moved to the survivor, kept on the merged record, discarded, or blocking.
+   */
+  connections: z.array(entityConnectionGroup),
 });
 
 export const entityMergeConflictValue = z.object({
@@ -106,12 +114,20 @@ export const entityMergePreviewOut = z.object({
   /** Most connections, then oldest, then code: deterministic for a selection. */
   suggestedKeepId: z.string(),
   candidates: z.array(entityMergeCandidate),
+  /** The survivor `blockers` describe: the input `keepId`, else the suggestion. */
+  keepId: z.string(),
   /**
    * Update fields where two or more candidates hold different values. The
-   * merge keeps the survivor's value; another value is chosen by updating
-   * the survivor before merging.
+   * merge keeps the survivor's value unless `entity.mutate` merge names
+   * another candidate's value in `survivorValues`.
    */
   conflicts: z.array(entityMergeConflict),
+  /**
+   * Refusals merging into `keepId` would raise: blocking connections on the
+   * merged-away candidates and the entity's own merge rules. Advisory; the
+   * merge re-validates.
+   */
+  blockers: z.array(z.string()),
 });
 export type EntityMergePreviewOut = z.infer<typeof entityMergePreviewOut>;
 

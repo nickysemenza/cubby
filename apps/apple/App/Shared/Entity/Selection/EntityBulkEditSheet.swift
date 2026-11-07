@@ -2,8 +2,10 @@ import CubbyKit
 import SwiftUI
 
 /// Bulk edit for a selection, mirroring web's: choose one field, then Set value with the record
-/// editor's own control or Clear it. One atomic kernel bulk update carries the change; a refusal
-/// shows the raw diagnostic above the preserved choice and the selection is kept.
+/// editor's own control or Clear it; a text list or multi-reference adds and removes items with
+/// that same control, and a keyed structured collection opens web's bulk edit. One atomic kernel
+/// bulk update carries the change; a refusal shows the raw diagnostic above the preserved choice
+/// and the selection is kept.
 struct EntityBulkEditSheet: View {
     @Bindable var model: EntityBulkEditModel
     let onFinished: () -> Void
@@ -45,9 +47,41 @@ struct EntityBulkEditSheet: View {
                         "Changes \(model.ids.count.formatted()) \(noun) together. If any can't take the value, none change."
                     )
                 }
-                if let field = model.field, model.mode == .set {
-                    Section {
-                        EntityFieldControl(field: field, model: model.draft, pickedTitles: $pickedTitles)
+                if let field = model.field {
+                    switch model.assignment {
+                    case .value?:
+                        if model.mode == .set {
+                            Section {
+                                EntityFieldControl(
+                                    field: field, model: model.draft, pickedTitles: $pickedTitles)
+                            }
+                        }
+                    case .addRemove?:
+                        Section("Add") {
+                            EntityFieldControl(field: field, model: model.draft, pickedTitles: $pickedTitles)
+                        }
+                        .accessibilityIdentifier("bulkEdit.add")
+                        Section {
+                            EntityFieldControl(
+                                field: field, model: model.removeDraft, pickedTitles: $pickedTitles)
+                        } header: {
+                            Text("Remove")
+                        } footer: {
+                            Text("Each record keeps its other \(field.label.lowercased()).")
+                        }
+                        .accessibilityIdentifier("bulkEdit.remove")
+                    case .web?:
+                        Section {
+                            OpenOnWebButton(
+                                target: .route(path: "/\(model.descriptor.basePath)"),
+                                label: "Bulk edit on web")
+                        } footer: {
+                            Text(
+                                "\(field.label) entries are added and removed one by one in web's bulk edit.")
+                        }
+                        .accessibilityIdentifier("bulkEdit.web")
+                    case nil:
+                        EmptyView()
                     }
                 }
                 if let validation = model.validation {
@@ -77,7 +111,7 @@ struct EntityBulkEditSheet: View {
                             }
                         }
                     }
-                    .disabled(model.isSaving || model.fieldKey == nil)
+                    .disabled(!model.canSave)
                     .accessibilityIdentifier("bulkEdit.save")
                 }
             }
