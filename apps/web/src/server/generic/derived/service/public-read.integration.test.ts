@@ -2,7 +2,7 @@ import { fieldEnvelopeReadSchema } from "@cubby/schemas/entity-field-envelopes";
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { withTestDb } from "tooling/test-setup";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
 import {
@@ -15,7 +15,10 @@ import {
   readRecipeById,
   updateRecipe,
 } from "~/server/domains/recipe/repo/crud";
-import { publicFieldEnvelopeBatch } from "~/server/generic/derived/repo/public-read";
+import {
+  publicFieldEnvelopeBatch,
+  selectedFieldEnvelopeSchema,
+} from "~/server/generic/derived/repo/public-read";
 import { readPublicEntityRows } from "~/server/generic/derived/service/public-read";
 import {
   createRecipeFixture,
@@ -94,6 +97,27 @@ describe("nested field envelope reads", () => {
     const schema = fieldEnvelopeReadSchema("inventory", "detail");
     if (!(schema instanceof z.ZodObject))
       throw new Error("Inventory read requires an object schema");
+    const priceContexts = await productScaffold.fieldReads(
+      ctx.db,
+      [product.id],
+      ["price"],
+    );
+    const loadFacts = vi.spyOn(productScaffold, "fieldReads");
+    await publicFieldEnvelopeBatch({
+      db: ctx.db,
+      reads: [
+        {
+          entity: "product",
+          schema: selectedFieldEnvelopeSchema(
+            fieldEnvelopeReadSchema("product", "list"),
+            ["id", "price", "displayImages"],
+          ),
+          row: { ...raw.product, displayImages: [] },
+        },
+      ],
+      contexts: new Map([["product", priceContexts]]),
+    });
+    expect(loadFacts).not.toHaveBeenCalled();
     const [wider] = await publicFieldEnvelopeBatch({
       db: ctx.db,
       reads: [
@@ -114,6 +138,12 @@ describe("nested field envelope reads", () => {
         ],
       ]),
     });
+    expect(loadFacts).toHaveBeenCalledWith(
+      ctx.db,
+      [product.id],
+      expect.arrayContaining(["price"]),
+    );
+    loadFacts.mockRestore();
     expect(
       fieldValueOf(
         fieldEnvelopeReadSchema("inventory", "detail").parse(wider).product

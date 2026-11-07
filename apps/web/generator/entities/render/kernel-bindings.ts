@@ -232,7 +232,7 @@ export const renderKernelBindingsArtifacts = (
       );
       const composed =
         !title || ["inventory", "meal", "run"].includes(entity.key);
-      return `  ${key}: { title: ${composed ? `async () => (await ${load}).title()` : title && entity.table ? `() => sql.raw(${JSON.stringify(`"${entity.table.name}"."${title.column}"::text`)})` : `() => undefined`}, fieldReads: async (db: RepositoryQueryInput, codes: readonly string[]) => (await ${load}).fieldReads(db, codes) },`;
+      return `  ${key}: { title: ${composed ? `async () => (await ${load}).title()` : title && entity.table ? `() => sql.raw(${JSON.stringify(`"${entity.table.name}"."${title.column}"::text`)})` : `() => undefined`}, fieldReads: async (db: RepositoryQueryInput, codes: readonly string[], keys?: readonly string[]) => (await ${load}).fieldReads(db, codes, keys) },`;
     })
     .join("\n");
   const runtimeBindings = kernelEntities

@@ -21,6 +21,7 @@ import type {
   FieldReadContext,
   PageFieldReadContexts,
 } from "~/server/generic/derived/repo/read-context";
+import { compileReadDemand } from "~/server/generic/list/repo/read-demand";
 const rowRecord = z.record(z.string(), z.unknown());
 const rowArray = z.array(z.unknown());
 type ReadRow = z.output<typeof rowRecord>;
@@ -345,14 +346,21 @@ export async function publicFieldEnvelopeBatch({
   );
   const requested = new Map<ShortcodeEntity, Set<string>>();
   const requestedFields = new Map<ShortcodeEntity, Set<string>>();
+  const needsFacts = new Set<ReadNode>();
   const collect = (node: ReadNode) => {
     const fields = node.schema.shape.fields;
-    if (fields instanceof z.ZodObject && Object.keys(fields.shape).length > 0) {
+    const demand =
+      fields instanceof z.ZodObject
+        ? compileReadDemand(node.entity, Object.keys(fields.shape))
+        : null;
+    // Synthesized media envelopes use already loaded row values, not field facts.
+    if (demand?.facts) {
+      needsFacts.add(node);
       const codes = requested.get(node.entity) ?? new Set<string>();
       codes.add(canonicalCode(publicIdentity.parse(node.row).id));
       requested.set(node.entity, codes);
       const keys = requestedFields.get(node.entity) ?? new Set<string>();
-      for (const key of Object.keys(fields.shape)) keys.add(key);
+      for (const key of demand.envelope) keys.add(key);
       requestedFields.set(node.entity, keys);
     }
     for (const child of node.children) collect(child.node);
@@ -395,11 +403,7 @@ export async function publicFieldEnvelopeBatch({
     // Validate that leaf as declared rather than inventing an empty field envelope.
     if (!(fields instanceof z.ZodObject))
       return rowRecord.parse(node.schema.parse(row));
-    if (
-      fields instanceof z.ZodObject &&
-      Object.keys(fields.shape).length > 0 &&
-      !current
-    )
+    if (needsFacts.has(node) && !current)
       throw new Error(
         `Current field facts unavailable for ${node.entity} projection`,
       );
