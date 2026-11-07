@@ -328,16 +328,19 @@ async function applySupersede(
   const { judgment } = proposal;
   const supersede = judgment.supersede!;
   const create = judgment.create!;
-  const { rows: pendingRows } = await unwrapDb(db).execute<{
+  const pendingRows = await unwrapDb(db).execute<{
     source: string;
     externalId: string;
-  }>(sql`
+  }>(
+    sql`
     SELECT source, "externalId" FROM ${sourceObservationFrom}
     WHERE id IN (${sql.join(
       supersede.pendingRowIds.map((id) => sql`${id}::uuid`),
       sql`, `,
     )}) AND ${notDeleted("SourceTransactionRecord")}
-  `);
+  `,
+    "objects",
+  );
   await effects.claimRows();
   for (const source of new Set(pendingRows.map((row) => row.source)))
     await updateSourceTransactionRecords(

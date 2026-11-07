@@ -346,8 +346,9 @@ async function queryWorkQueue(
 
   // Inline source and routing stages so common filters can reach their inputs.
   // Counts and paging share the materialized filtered population below.
-  // oxlint-disable-next-line cubby/no-raw-enum-literal-in-sql -- JSON property names below are the response contract, not vocabulary values.
-  const result = await getDb(db).execute(sql`
+  const result = await getDb(db).execute(
+    // oxlint-disable-next-line cubby/no-raw-enum-literal-in-sql -- JSON property names below are the response contract, not vocabulary values.
+    sql`
     WITH
     ${sql.join(
       [...ctes.values()].map(
@@ -422,7 +423,9 @@ async function queryWorkQueue(
           ORDER BY member.name, member.shortcode) FROM members member WHERE member.shortcode = ANY(page.owner_codes)), '[]'::jsonb),
         'shared', shared, 'amount', amount, 'date', date
       ) ORDER BY position) FROM page), '[]'::jsonb) AS items
-  `);
+  `,
+    "objects",
+  );
 
   const pageRow = z.object({
     source: z.string(),
@@ -455,7 +458,7 @@ async function queryWorkQueue(
         .nullable(),
       items: z.array(pageRow),
     })
-    .parse(result.rows[0]);
+    .parse(result[0]);
 
   const sourceById = new Map(
     composition.sources.map((source) => [source.id, source]),

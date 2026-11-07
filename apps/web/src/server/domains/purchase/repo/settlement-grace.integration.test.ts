@@ -20,16 +20,17 @@ describe("settlement posting grace", () => {
     ) SELECT start, ${awaitingPostingSql(sql`evidence.start`, new Date("2026-10-15T12:00:00Z"))} AS awaiting FROM evidence`;
     const rows = z
       .array(z.object({ awaiting: z.boolean() }))
-      .parse((await getDb(ctx.db).execute(statement)).rows);
+      .parse(await getDb(ctx.db).execute(statement, "objects"));
     expect(rows.map((row) => row.awaiting)).toEqual([false, true, true, true]);
     const result = await getDb(ctx.db).execute(
       sql`EXPLAIN (ANALYZE, FORMAT JSON) ${statement}`,
+      "objects",
     );
     const plans = z
       .array(
         z.object({ "QUERY PLAN": z.array(z.object({ Plan: z.unknown() })) }),
       )
-      .parse(result.rows);
+      .parse(result);
     const nodeSchema = z.object({
       "Node Type": z.string(),
       "Actual Rows": z.number().default(0),
@@ -54,8 +55,8 @@ describe("settlement posting grace", () => {
   it("matches complete business-day counting across weekdays and household midnight", async () => {
     for (let offset = 0; offset < 15; offset++) {
       const now = new Date(Date.UTC(2026, 9, 4 + offset, 12));
-      const result = await getDb(ctx.db)
-        .execute(sql`WITH evidence(start) AS (VALUES
+      const result = await getDb(ctx.db).execute(
+        sql`WITH evidence(start) AS (VALUES
         ('2026-10-05'::date), ('2026-10-06'::date), ('2026-10-07'::date),
         ('2026-10-08'::date), ('2026-10-09'::date), ('2026-10-10'::date),
         ('2026-10-11'::date), (NULL::date), ('2026-11-01'::date)
@@ -63,7 +64,9 @@ describe("settlement posting grace", () => {
         (SELECT count(*) < 2 FROM generate_series(evidence.start + 1,
           ${householdLocalDate(now)}::date - 1, interval '1 day') day
           WHERE extract(isodow FROM day) BETWEEN 1 AND 5) AS expected
-      FROM evidence`);
+      FROM evidence`,
+        "objects",
+      );
       const rows = z
         .array(
           z.object({
@@ -72,7 +75,7 @@ describe("settlement posting grace", () => {
             expected: z.boolean(),
           }),
         )
-        .parse(result.rows);
+        .parse(result);
       expect({
         day: householdLocalDate(now),
         actual: rows.map(({ start, awaiting }) => ({ start, awaiting })),
@@ -92,8 +95,9 @@ describe("settlement posting grace", () => {
     ] as const) {
       const result = await getDb(ctx.db).execute(
         sql`SELECT ${awaitingPostingSql(sql`${start}::date`, new Date(now))} AS awaiting`,
+        "objects",
       );
-      expect(result.rows).toEqual([{ awaiting: expected }]);
+      expect(result).toEqual([{ awaiting: expected }]);
     }
   });
 });

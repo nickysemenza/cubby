@@ -552,13 +552,14 @@ export async function resolveDraftEvidenceFields(
     : null;
   const table = purchase ? "Purchase" : "FinancialTransaction";
   const persisted = id
-    ? await unwrapDb(db).execute(sql`SELECT id,shortcode,
+    ? await unwrapDb(db).execute(
+        sql`SELECT id,shortcode,
     ${purchase ? sql`"vendorId"` : sql`NULL::uuid`} AS "vendorId","spendingCategoryId","itemizationExpectation"
-    FROM ${sql.identifier(table)} WHERE id=${id} AND ${notDeleted(table)}`)
+    FROM ${sql.identifier(table)} WHERE id=${id} AND ${notDeleted(table)}`,
+        "objects",
+      )
     : null;
-  const baseline = persisted?.rows[0]
-    ? draftEvidenceRow.parse(persisted.rows[0])
-    : null;
+  const baseline = persisted?.[0] ? draftEvidenceRow.parse(persisted[0]) : null;
   const foreignId = async (
     field: "vendorId" | "spendingCategoryId",
     entity: "vendor" | "spendingCategory",
@@ -588,10 +589,12 @@ export async function resolveDraftEvidenceFields(
         "ep_draft",
         purchaseId === undefined ? undefined : sql`${purchaseId}::uuid`,
       );
-  const result = await unwrapDb(db)
-    .execute(sql`SELECT ${resolver} AS resolutions FROM (SELECT
+  const result = await unwrapDb(db).execute(
+    sql`SELECT ${resolver} AS resolutions FROM (SELECT
     ${id}::uuid AS id,${baseline?.shortcode ?? null}::text AS shortcode,${vendorId}::uuid AS "vendorId",
-    ${categoryId}::uuid AS "spendingCategoryId",${stored}::text AS "itemizationExpectation") ep_draft`);
-  return z.object({ resolutions: fieldResolutionsSchema }).parse(result.rows[0])
+    ${categoryId}::uuid AS "spendingCategoryId",${stored}::text AS "itemizationExpectation") ep_draft`,
+    "objects",
+  );
+  return z.object({ resolutions: fieldResolutionsSchema }).parse(result[0])
     .resolutions;
 }

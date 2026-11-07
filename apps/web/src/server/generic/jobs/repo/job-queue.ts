@@ -240,7 +240,8 @@ export async function readRunRollups(
         reason: JobWaitingOnReason | null;
         expired: boolean;
         count: number;
-      }>(sql`SELECT d.run_id AS "runId", ${reason} AS reason,
+      }>(
+        sql`SELECT d.run_id AS "runId", ${reason} AS reason,
         ("Job".state = ${jobState.enum.running} AND "Job"."leaseExpiresAt" <= ${at}) AS expired,
         count(*)::int AS count
       FROM ${demand} d JOIN "Job" ON "Job".id = d.job_id
@@ -248,26 +249,37 @@ export async function readRunRollups(
         LIVE_STATES.map((state) => sql`${state}`),
         sql`, `,
       )})
-      GROUP BY 1, 2, 3`),
+      GROUP BY 1, 2, 3`,
+        "objects",
+      ),
       getDb(db).execute<{
         runId: RunId;
         reason: JobWaitingOnReason | null;
         expired: boolean;
         count: number;
-      }>(sql`SELECT p."runId" AS "runId", ${imageJobWaitingOnReasonSql("p", now)} AS reason,
+      }>(
+        sql`SELECT p."runId" AS "runId", ${imageJobWaitingOnReasonSql("p", now)} AS reason,
         coalesce(p."leaseUntil" <= ${at}, false) AS expired,
         count(*)::int AS count
       FROM "ImageProcessingJob" p
       WHERE p."runId" IN (${runList}) AND p.state = ${imageProcessingJobState.enum.pending}
-      GROUP BY 1, 2, 3`),
+      GROUP BY 1, 2, 3`,
+        "objects",
+      ),
       // Epoch milliseconds: the driver would read a zoneless timestamp as local time.
-      getDb(db).execute<{ runId: RunId; last: number | null }>(sql`
+      getDb(db).execute<{ runId: RunId; last: number | null }>(
+        sql`
       SELECT d.run_id AS "runId", (extract(epoch FROM max(greatest("Job"."lastClaimedAt",
           CASE WHEN "Job".state = ${jobState.enum.completed} THEN "Job"."updatedAt" END))) * 1000)::float8 AS last
-      FROM ${demand} d JOIN "Job" ON "Job".id = d.job_id GROUP BY 1`),
-      getDb(db).execute<{ runId: RunId; last: number | null }>(sql`
+      FROM ${demand} d JOIN "Job" ON "Job".id = d.job_id GROUP BY 1`,
+        "objects",
+      ),
+      getDb(db).execute<{ runId: RunId; last: number | null }>(
+        sql`
       SELECT p."runId" AS "runId", (extract(epoch FROM max(greatest(p."dispatchedAt", p."completedAt"))) * 1000)::float8 AS last
-      FROM "ImageProcessingJob" p WHERE p."runId" IN (${runList}) GROUP BY 1`),
+      FROM "ImageProcessingJob" p WHERE p."runId" IN (${runList}) GROUP BY 1`,
+        "objects",
+      ),
       getDb(db)
         .select({
           id: run.id,
@@ -280,7 +292,7 @@ export async function readRunRollups(
         .where(inArray(run.id, ids)),
     ]);
   const lastById = new Map<RunId, Date>();
-  for (const row of [...progress.rows, ...imageProgress.rows]) {
+  for (const row of [...progress, ...imageProgress]) {
     const known = lastById.get(row.runId);
     if (row.last !== null && (!known || known.getTime() < row.last))
       lastById.set(row.runId, new Date(row.last));
@@ -289,7 +301,7 @@ export async function readRunRollups(
   return runs.map((entry) => {
     const counts: RunRollup["counts"] = {};
     let expiredLeases = 0;
-    for (const tally of [...tallies.rows, ...imageTallies.rows]) {
+    for (const tally of [...tallies, ...imageTallies]) {
       if (tally.runId !== entry.id) continue;
       const parsed = jobWaitingOnReason.safeParse(tally.reason);
       if (!parsed.success) continue;

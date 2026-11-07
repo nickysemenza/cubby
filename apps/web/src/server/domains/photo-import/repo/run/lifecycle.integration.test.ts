@@ -6,10 +6,12 @@ import {
 } from "@cubby/schemas/photo-import-run";
 import { generateShortcode } from "@cubby/shared";
 import { and, eq } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
   image,
   imageProcessingJob,
@@ -120,10 +122,16 @@ describe("photo run lifecycle", () => {
     // One member party per login; a test seeding two Runs reuses it.
     const party =
       (await getDb(ctx.db).query.ledgerParty.findFirst({
-        where: and(
-          eq(ledgerParty.userId, ctx.actor.userId),
-          eq(ledgerParty.kind, "member"),
-        ),
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(
+              table,
+              and(
+                eq(ledgerParty.userId, ctx.actor.userId),
+                eq(ledgerParty.kind, "member"),
+              ),
+            ),
+        },
       })) ??
       (await insertWithShortcode(ctx.db, "ledgerParty", {
         name: "Lifecycle Member",

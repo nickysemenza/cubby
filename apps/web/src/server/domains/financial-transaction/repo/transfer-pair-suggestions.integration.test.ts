@@ -82,9 +82,12 @@ async function discoverTransferPairs(
   db: Parameters<typeof generateTransferPairSuggestions>[0],
 ) {
   await generateTransferPairSuggestions(db, { runId: null });
-  const { rows } = await unwrapDb(db).execute<{ judgment: unknown }>(sql`
+  const rows = await unwrapDb(db).execute<{ judgment: unknown }>(
+    sql`
     SELECT judgment FROM "Suggestion" WHERE family = ${suggestionFamily.enum.transfer_pair} AND active AND status = ${suggestionStatus.enum.pending}
-  `);
+  `,
+    "objects",
+  );
   return currentTransferPairs(
     db,
     rows.map((row) => transferPairJudgment.parse(row.judgment).key),
@@ -305,15 +308,18 @@ describe("transfer-pair suggestions", () => {
 
   /** Pending, active publications with their labelled judgments. */
   const pending = async () => {
-    const { rows } = await unwrapDb(ctx.db).execute<{
+    const rows = await unwrapDb(ctx.db).execute<{
       suggestionId: string;
       judgment: unknown;
       fingerprint: string;
-    }>(sql`
+    }>(
+      sql`
       SELECT s.id AS "suggestionId", s.judgment, s.fingerprint FROM "Suggestion" s
       WHERE s.family = ${suggestionFamily.enum.transfer_pair} AND s.active
         AND s.status = ${suggestionStatus.enum.pending}
-    `);
+    `,
+      "objects",
+    );
     return rows.map((row) => ({
       suggestionId: row.suggestionId,
       judgment: transferPairJudgment.parse(row.judgment),
@@ -441,34 +447,38 @@ describe("transfer-pair suggestions", () => {
       .update(sourceTransactionRecord)
       .set({ createdAt: new Date("2100-01-01T00:00:00Z") })
       .where(eq(sourceTransactionRecord.rawDescription, "SYNTHETIC SEED LATE"));
-    const { rows: repeated } = await unwrapDb(ctx.db).execute<{
+    const repeated = await unwrapDb(ctx.db).execute<{
       count: number;
-    }>(sql`
+    }>(
+      sql`
       SELECT count(*)::int AS count FROM ${sourceObservationFrom}
       WHERE "rawDescription"='SYNTHETIC SEED REVISION' AND "sourceCategory" IS NOT NULL
       GROUP BY source,"chargeKey" HAVING count(*) > 1
-    `);
+    `,
+      "objects",
+    );
     expect(repeated).toEqual([{ count: 2 }]);
     for (const scope of [
       { since: null, createdBefore: null },
       { since: null, createdBefore: "2099-01-01T00:00:00Z" },
       { since: "2026-05-05", createdBefore: "2099-01-01T00:00:00Z" },
     ]) {
-      const { rows: expected } = await unwrapDb(ctx.db).execute<{
+      const expected = await unwrapDb(ctx.db).execute<{
         key: string;
-      }>(sql`
+      }>(
+        sql`
         SELECT key FROM (${transferPairSeedKeys(scope)}) seeds ORDER BY key COLLATE "C"
-      `);
+      `,
+        "objects",
+      );
       expect(await countTransferPairSeeds(ctx.db, scope)).toBe(expected.length);
       for (const limit of [1, 3, 128]) {
         const actual: typeof expected = [];
         let after: string | null = null;
         for (;;) {
-          const { rows }: { rows: typeof expected } = await unwrapDb(
-            ctx.db,
-          ).execute<{ key: string }>(
-            transferPairSeedPage({ ...scope, after, limit }),
-          );
+          const rows: { key: string }[] = await unwrapDb(ctx.db).execute<{
+            key: string;
+          }>(transferPairSeedPage({ ...scope, after, limit }), "objects");
           const replay = await unwrapDb(ctx.db).execute<{ key: string }>(
             transferPairSeedPage({ ...scope, after, limit }),
           );

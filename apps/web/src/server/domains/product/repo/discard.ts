@@ -40,6 +40,7 @@ import type {
 } from "@cubby/schemas/product";
 import { tradeSchema, type Trade } from "@cubby/schemas/task-fields";
 import { and, eq, inArray } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { uniq } from "es-toolkit";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -50,6 +51,7 @@ import {
   withTransaction,
   touchUpdatedAt,
 } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { inventoryEntry, product } from "~/server/db/schema";
 import { describeDiscard } from "~/server/domains/product/repo/discard-preview";
 import { loadProductInventoryEntries } from "~/server/domains/product/repo/lookup";
@@ -117,7 +119,13 @@ const writeDiscardLine = async (
   // Re-checked inside the transaction even though the router resolved the
   // shortcode: a preview or a resolve is advisory, the mutation is not.
   const prod = await tx.query.product.findFirst({
-    where: and(eq(product.id, input.productId), notDeleted(product)),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          and(eq(product.id, input.productId), notDeleted(product)),
+        ),
+    },
     columns: { id: true, name: true, shortcode: true },
   });
   if (!prod) {
@@ -153,15 +161,22 @@ const writeDiscardLine = async (
   });
 
   let inventory: DiscardLineResult["inventory"] = null;
-  if (input.inventoryEntryId !== null) {
+  const inventoryEntryId = input.inventoryEntryId;
+  if (inventoryEntryId !== null) {
     // includes-installed: caller names an exact entry by id — an
     // installed fixture must be dischargeable the same as shelf stock.
     const entry = await tx.query.inventoryEntry.findFirst({
-      where: and(
-        eq(inventoryEntry.id, input.inventoryEntryId),
-        eq(inventoryEntry.productId, input.productId),
-        notDeleted(inventoryEntry),
-      ),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(
+              eq(inventoryEntry.id, inventoryEntryId),
+              eq(inventoryEntry.productId, input.productId),
+              notDeleted(inventoryEntry),
+            ),
+          ),
+      },
       columns: {
         id: true,
         shortcode: true,
@@ -257,10 +272,16 @@ const resolveDiscardShelf = async (
     return input.inventoryEntryId;
   }
   const live = await tx.query.inventoryEntry.findMany({
-    where: and(
-      eq(inventoryEntry.productId, input.productId),
-      notDeleted(inventoryEntry),
-    ),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          and(
+            eq(inventoryEntry.productId, input.productId),
+            notDeleted(inventoryEntry),
+          ),
+        ),
+    },
     columns: { id: true },
   });
   if (live.length > 1) {
@@ -351,10 +372,16 @@ export const discardFromInventoryEntries = async (
     }
 
     const entries = await tx.query.inventoryEntry.findMany({
-      where: and(
-        inArray(inventoryEntry.id, [...seen]),
-        notDeleted(inventoryEntry),
-      ),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(
+              inArray(inventoryEntry.id, [...seen]),
+              notDeleted(inventoryEntry),
+            ),
+          ),
+      },
       columns: {
         id: true,
         shortcode: true,
@@ -445,7 +472,13 @@ export const previewProductDiscard = async (
   >,
 ): Promise<ProductDiscardPreviewOut> => {
   const prod = await getDb(db).query.product.findFirst({
-    where: and(eq(product.id, productId), notDeleted(product)),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          and(eq(product.id, productId), notDeleted(product)),
+        ),
+    },
     columns: { name: true },
   });
   if (!prod) {

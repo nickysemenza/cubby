@@ -1,3 +1,5 @@
+import type { PgTable } from "drizzle-orm/pg-core";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { recordSourceTransactionRecordsOut } from "@cubby/schemas/source-transaction-record";
 import { eq } from "drizzle-orm";
 import { getDb } from "~/server/db/helpers";
@@ -41,13 +43,23 @@ test("source evidence uses generic records while provider facts remain immutable
   );
   expect(recorded.ok(), await recorded.text()).toBe(true);
   const receipt = recordSourceTransactionRecordsOut.parse(recorded.body);
-  if (!receipt.batchId) throw new Error("Source evidence collection missing");
+  const batchId = receipt.batchId;
+  if (!batchId) throw new Error("Source evidence collection missing");
   const collection = await getDb(db).query.transactionImport.findFirst({
-    where: eq(schema.transactionImport.shortcode, receipt.batchId),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(table, eq(schema.transactionImport.shortcode, batchId)),
+    },
   });
   if (!collection) throw new Error("Retained transaction import missing");
   const evidence = await getDb(db).query.sourceTransactionRecord.findFirst({
-    where: eq(schema.sourceTransactionRecord.batchId, collection.id),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          eq(schema.sourceTransactionRecord.batchId, collection.id),
+        ),
+    },
   });
   if (!evidence || !collection)
     throw new Error("Retained source evidence missing");
@@ -93,7 +105,13 @@ test("source evidence uses generic records while provider facts remain immutable
       .first(),
   ).toBeVisible();
   const retained = await getDb(db).query.sourceTransactionRecord.findFirst({
-    where: eq(schema.sourceTransactionRecord.id, evidence.id),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          eq(schema.sourceTransactionRecord.id, evidence.id),
+        ),
+    },
   });
   expect(retained).toMatchObject({
     rawDescription: description,
@@ -104,7 +122,13 @@ test("source evidence uses generic records while provider facts remain immutable
   const annotation = await getDb(
     db,
   ).query.sourceObservationAnnotation.findFirst({
-    where: eq(schema.sourceObservationAnnotation.observationId, evidence.id),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          eq(schema.sourceObservationAnnotation.observationId, evidence.id),
+        ),
+    },
   });
   expect(annotation?.notes).toBe("Synthetic judgment reviewed against source");
 

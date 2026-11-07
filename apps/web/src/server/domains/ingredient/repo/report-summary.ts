@@ -19,7 +19,8 @@ export async function ingredientSellersSummary(
   code: string,
 ): Promise<ReportBlock[]> {
   const id = await resolveOrThrow(db, "ingredient", code);
-  const result = await unwrapDb(db).execute(sql`
+  const result = await unwrapDb(db).execute(
+    sql`
     SELECT v."shortcode" AS id, v."name", count(DISTINCT p.id)::int AS count,
       count(*) OVER ()::int AS total, max(p.date)::text AS latest
     FROM "Product" product
@@ -31,8 +32,10 @@ export async function ingredientSellersSummary(
     GROUP BY v.id, v."shortcode", v.name
     ORDER BY count(DISTINCT p.id) DESC, max(p.date) DESC NULLS LAST, v."shortcode"
     LIMIT 3
-  `);
-  const rows = rankedRow.array().parse(result.rows);
+  `,
+    "objects",
+  );
+  const rows = rankedRow.array().parse(result);
   return [
     {
       kind: "records",

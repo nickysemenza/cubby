@@ -25,6 +25,7 @@ import type {
 } from "@cubby/schemas/project";
 import { rawExpenseOut } from "@cubby/schemas/work-raw-read";
 import { and, eq, inArray, sql } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { uniq } from "es-toolkit";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -37,6 +38,7 @@ import {
   touchUpdatedAt,
 } from "~/server/db/helpers";
 import { outer } from "~/server/db/helpers/related";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { expense, product, purchase } from "~/server/db/schema";
 import { replaceExpenseAttributionRole } from "~/server/domains/expense/repo/expense-attribution";
 import {
@@ -397,7 +399,10 @@ const readNestedExpenseAudit = async (
   id: ExpenseId,
 ) => {
   const row = await unwrapDb(db).query.expense.findFirst({
-    where: and(eq(expense.id, id), notDeleted(expense)),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(table, and(eq(expense.id, id), notDeleted(expense))),
+    },
     columns: { id: true },
     with: {
       attributions: {
@@ -490,7 +495,10 @@ export const updateExpense = defineMutationWriter({
         ? await readNestedExpenseAudit(tx, id)
         : undefined;
       const qualityBefore = await tx.query.expense.findFirst({
-        where: and(eq(expense.id, id), notDeleted(expense)),
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(table, and(eq(expense.id, id), notDeleted(expense))),
+        },
         extras: expenseInheritanceReadExtras(),
         columns: {
           cost: true,
@@ -709,7 +717,13 @@ export const updateExpense = defineMutationWriter({
       state: UpdateState,
     ) => {
       const existing = await tx.query.expense.findFirst({
-        where: and(eq(expense.id, state.id), notDeleted(expense)),
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(
+              table,
+              and(eq(expense.id, state.id), notDeleted(expense)),
+            ),
+        },
         columns: { purchaseId: true, date: true },
         with: {
           purchase: {
@@ -1070,7 +1084,13 @@ export const deleteExpensesWithPurchaseEffects = async (
   return await withTransaction(db, async (tx) => {
     const ids = await resolveAllOrThrow(tx, "expense", shortcodes);
     const qualityTargets = await tx.query.expense.findMany({
-      where: and(inArray(expense.id, ids), notDeleted(expense)),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(inArray(expense.id, ids), notDeleted(expense)),
+          ),
+      },
       columns: { shortcode: true, productId: true, purchaseId: true },
     });
     const affectedPurchaseDbIds = uniq(
@@ -1107,20 +1127,32 @@ export const deleteExpensesWithPurchaseEffects = async (
       affectedPurchaseDbIds.length === 0
         ? []
         : await tx.query.purchase.findMany({
-            where: and(
-              inArray(purchase.id, affectedPurchaseDbIds),
-              notDeleted(purchase),
-            ),
+            where: {
+              RAW: (table: PgTable) =>
+                relationalSql(
+                  table,
+                  and(
+                    inArray(purchase.id, affectedPurchaseDbIds),
+                    notDeleted(purchase),
+                  ),
+                ),
+            },
             columns: { id: true, shortcode: true },
           });
     const liveExpensePurchaseIds =
       affectedPurchaseDbIds.length === 0
         ? []
         : await tx.query.expense.findMany({
-            where: and(
-              inArray(expense.purchaseId, affectedPurchaseDbIds),
-              notDeleted(expense),
-            ),
+            where: {
+              RAW: (table: PgTable) =>
+                relationalSql(
+                  table,
+                  and(
+                    inArray(expense.purchaseId, affectedPurchaseDbIds),
+                    notDeleted(expense),
+                  ),
+                ),
+            },
             columns: { purchaseId: true },
           });
     const purchasesWithLiveExpenses = new Set(

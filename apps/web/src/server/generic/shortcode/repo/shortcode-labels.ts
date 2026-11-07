@@ -32,16 +32,19 @@ export async function shortcodeLabels(
       const kind = entitySchema.parse(entity);
       const { dbTable, softDelete } = entityManifest[kind];
       if (!dbTable) return;
-      const rows = await unwrapDb(db).execute(sql`
+      const rows = await unwrapDb(db).execute(
+        sql`
         SELECT t."shortcode" AS code, ${await labelSql(kind, "t")} AS label
         FROM ${sql.identifier(dbTable)} t
         WHERE t."shortcode" IN (${sql.join(
           [...set].map((code) => sql`${code}`),
           sql`, `,
-        )})${softDelete ? sql` AND ${notDeleted("t")}` : sql``}`);
+        )})${softDelete ? sql` AND ${notDeleted("t")}` : sql``}`,
+        "objects",
+      );
       for (const row of z
         .array(z.object({ code: z.string(), label: z.string() }))
-        .parse(rows.rows))
+        .parse(rows))
         labels.set(row.code, row.label);
     }),
   );

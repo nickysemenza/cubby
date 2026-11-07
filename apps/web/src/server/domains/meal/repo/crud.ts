@@ -15,6 +15,7 @@ import {
   type RawUpcomingMealSummary,
 } from "@cubby/schemas/meal-raw-read";
 import { and, asc, eq, gte, inArray, lte, type SQL, sql } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { trimTextSql } from "~/server/db/computed/text-whitespace";
@@ -32,6 +33,7 @@ import {
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { meal, mealRecipe, mealRecipePortion } from "~/server/db/schema";
 import { syncEntityImages } from "~/server/domains/image/repo/entity-image-sync";
 import { mealSearch } from "~/server/domains/meal/repo/search-read-meal";
@@ -132,10 +134,16 @@ export const mealScaffold = listScaffold("meal", meal, {
     bindings: (bind) => {
       const planned = bind.ids(async ({ db, ids }) => {
         const rows = await unwrapDb(db).query.meal.findMany({
-          where: inArray(
-            meal.id,
-            ids.map((id) => parseEntityId("meal", id)),
-          ),
+          where: {
+            RAW: (table: PgTable) =>
+              relationalSql(
+                table,
+                inArray(
+                  meal.id,
+                  ids.map((id) => parseEntityId("meal", id)),
+                ),
+              ),
+          },
           columns: { id: true, shortcode: true },
           with: { recipes: relations.meal.full.with.recipes },
         });
@@ -143,10 +151,16 @@ export const mealScaffold = listScaffold("meal", meal, {
       });
       const attachments = bind.ids(async ({ db, ids }) => {
         const rows = await unwrapDb(db).query.meal.findMany({
-          where: inArray(
-            meal.id,
-            ids.map((id) => parseEntityId("meal", id)),
-          ),
+          where: {
+            RAW: (table: PgTable) =>
+              relationalSql(
+                table,
+                inArray(
+                  meal.id,
+                  ids.map((id) => parseEntityId("meal", id)),
+                ),
+              ),
+          },
           columns: { id: true },
           with: { images: relations.meal.full.with.images },
         });
@@ -239,7 +253,13 @@ export const getUpcomingMealSummary = async (
   limit = 4,
 ): Promise<RawUpcomingMealSummary[]> => {
   const rows = await getDb(db).query.meal.findMany({
-    where: and(gte(meal.date, from), lte(meal.date, to), notDeleted(meal)),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          and(gte(meal.date, from), lte(meal.date, to), notDeleted(meal)),
+        ),
+    },
     orderBy: (m, { asc }) => [asc(m.date), asc(m.sortOrder), asc(m.createdAt)],
     limit,
     columns: {
@@ -251,7 +271,9 @@ export const getUpcomingMealSummary = async (
     },
     with: {
       recipes: {
-        where: notDeleted(mealRecipe),
+        where: {
+          RAW: (table: PgTable) => relationalSql(table, notDeleted(mealRecipe)),
+        },
         columns: { scale: true, deletedAt: true },
         with: {
           recipe: {
@@ -471,7 +493,13 @@ const getMealIdForRecipe = async (
   id: MealRecipeId,
 ): Promise<MealId> => {
   const row = await getDb(db).query.mealRecipe.findFirst({
-    where: and(eq(mealRecipe.id, id), notDeleted(mealRecipe)),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          and(eq(mealRecipe.id, id), notDeleted(mealRecipe)),
+        ),
+    },
     columns: { mealId: true },
   });
   if (!row) {

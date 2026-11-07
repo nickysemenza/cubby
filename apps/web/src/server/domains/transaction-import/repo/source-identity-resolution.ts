@@ -190,10 +190,12 @@ export async function resolveSourceIdentity(
         }
       : input.judgment;
   if (originalOwner.withdrawnAt && input.decision !== "assign") {
-    const { rows: positive } =
-      await db.execute(sql`SELECT 1 FROM "TransactionImportRecord" member
+    const positive = await db.execute(
+      sql`SELECT 1 FROM "TransactionImportRecord" member
       JOIN "TransactionImport" collection ON collection.id=member."importId" AND ${notDeleted("collection")}
-      WHERE member."statementRowId"=${observation.id}::uuid AND collection."observedAt">${originalOwner.withdrawnAt} LIMIT 1`);
+      WHERE member."statementRowId"=${observation.id}::uuid AND collection."observedAt">${originalOwner.withdrawnAt} LIMIT 1`,
+      "objects",
+    );
     if (!positive.length)
       return refuse(
         "A confirmed withdrawal needs retained positive source evidence from after its proof before reappearance can be confirmed.",
@@ -273,14 +275,17 @@ export async function resolveSourceIdentity(
         "Another owner names an exact replacement in this closure; resolve that replacement before consolidation.",
       );
   }
-  const { rows: history } = await db.execute<{ id: string; code: string }>(sql`
+  const history = await db.execute<{ id: string; code: string }>(
+    sql`
     SELECT * FROM (${sourceHistoricalTransactionRows(
       sql`${observation.id}::uuid`,
       sql`ARRAY[${sql.join(
         owners.map((item) => sql`${item.id}::uuid`),
         sql`, `,
       )}]::uuid[]`,
-    )}) history ORDER BY history.id`);
+    )}) history ORDER BY history.id`,
+    "objects",
+  );
   if (
     !sameSet(
       history.map((item) => item.code),
@@ -320,12 +325,15 @@ export async function resolveSourceIdentity(
   if (input.decision === "accept_existing" && !target)
     return refuse("The chosen transaction is no longer live.");
   if (input.decision === "assign") {
-    const { rows: conflicts } = await db.execute(sql`
+    const conflicts = await db.execute(
+      sql`
       SELECT 1 FROM "FinancialEvidenceAlias" evidence
       JOIN "FinancialEvidenceAlias" binding ON binding.source=evidence.source AND binding.value=evidence.value AND ${notDeleted("binding")}
       JOIN "FinancialTransaction" money ON money.id=binding."historicalTransactionId" AND ${notDeleted("money")}
       WHERE evidence."occurrenceId" IN (${originalOwner.id}::uuid, ${owner.id}::uuid)
-        AND money.id IS DISTINCT FROM ${target?.id ?? null}::uuid LIMIT 1`);
+        AND money.id IS DISTINCT FROM ${target?.id ?? null}::uuid LIMIT 1`,
+      "objects",
+    );
     if (conflicts.length)
       return refuse(
         "A direct historical binding names different live money; consolidation cannot resolve it implicitly.",

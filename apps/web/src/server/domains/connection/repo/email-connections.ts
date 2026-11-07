@@ -35,7 +35,8 @@ export async function retrieveEmailConnectionCandidates(
   if (source.entityKind !== "email" && source.entityKind !== "purchase")
     return [];
   const id = await resolveOrThrow(db, source.entityKind, source.entityId);
-  const rows = await getDb(db).execute(sql`
+  const rows = await getDb(db).execute(
+    sql`
     SELECT DISTINCT "Email"."shortcode" AS "emailCode", p."shortcode" AS "purchaseCode"
     FROM "Email"
     CROSS JOIN LATERAL (${emailPurchaseEvidenceSql()}) evidence
@@ -43,9 +44,11 @@ export async function retrieveEmailConnectionCandidates(
     WHERE ${notDeleted("Email")} AND evidence."kind" = ${emailLinkEvidenceKind.enum.suggested}
       AND ${source.entityKind === "email" ? sql`"Email"."id"=${id}::uuid` : sql`p."id"=${id}::uuid`}
     ORDER BY "emailCode", "purchaseCode" LIMIT 20
-  `);
+  `,
+    "objects",
+  );
   const candidates: ConnectionCandidate[] = [];
-  for (const pair of z.array(endpointPair).parse(rows.rows)) {
+  for (const pair of z.array(endpointPair).parse(rows)) {
     const candidate: ConnectionCandidate = {
       relation: "email-purchase",
       source: { entityKind: "email", entityId: pair.emailCode },

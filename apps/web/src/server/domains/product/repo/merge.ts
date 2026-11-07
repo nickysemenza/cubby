@@ -31,6 +31,7 @@ import {
   projectResourceFeatureLabels,
 } from "@cubby/schemas/product-category-relations";
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { sumBy, uniq } from "es-toolkit";
 
 import { wasm } from "~/lib/wasm";
@@ -49,6 +50,7 @@ import {
   notDeleted,
   withTransaction,
 } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
   cookbook,
   entityAttachment,
@@ -786,10 +788,24 @@ async function buildProductMergePlan(
   const productRows = (
     await db.query.product.findMany({
       extras: {
-        brandName: productBrandNameSql(product.brandId).as("brandName"),
-        brandCode: productBrandCodeSql(product.brandId).as("brandCode"),
+        brandName: (table: PgTable) =>
+          relationalSql(
+            table,
+            productBrandNameSql(product.brandId).as("brandName"),
+          ),
+        brandCode: (table: PgTable) =>
+          relationalSql(
+            table,
+            productBrandCodeSql(product.brandId).as("brandCode"),
+          ),
       },
-      where: and(inArray(product.id, requestedIds), notDeleted(product)),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(inArray(product.id, requestedIds), notDeleted(product)),
+          ),
+      },
       columns: {
         id: true,
         shortcode: true,
@@ -831,10 +847,16 @@ async function buildProductMergePlan(
   const ids = [input.keepId, ...liveLoserIds];
   const inventoryRows = (
     await db.query.inventoryEntry.findMany({
-      where: and(
-        inArray(inventoryEntry.productId, ids),
-        notDeleted(inventoryEntry),
-      ),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(
+              inArray(inventoryEntry.productId, ids),
+              notDeleted(inventoryEntry),
+            ),
+          ),
+      },
       columns: {
         id: true,
         productId: true,
@@ -855,10 +877,16 @@ async function buildProductMergePlan(
   const componentRows = await loadComponentRows(db);
   const unitMappingRows = (
     await db.query.productUnitMappings.findMany({
-      where: and(
-        inArray(productUnitMappings.productId, ids),
-        notDeleted(productUnitMappings),
-      ),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(
+              inArray(productUnitMappings.productId, ids),
+              notDeleted(productUnitMappings),
+            ),
+          ),
+      },
       columns: {
         id: true,
         productId: true,
@@ -868,10 +896,10 @@ async function buildProductMergePlan(
         bUnit: true,
         source: true,
       },
-      orderBy: [
-        asc(productUnitMappings.createdAt),
-        asc(productUnitMappings.id),
-      ],
+      orderBy: (table: PgTable) =>
+        [[asc(productUnitMappings.createdAt), asc(productUnitMappings.id)]]
+          .flat()
+          .map((value) => relationalSql(table, value)),
     })
   ).map((row): UnitMappingRow => ({
     id: row.id,
@@ -881,10 +909,16 @@ async function buildProductMergePlan(
   }));
   const externalIdRows = (
     await db.query.entityExternalId.findMany({
-      where: and(
-        inArray(entityExternalId.entityId, ids),
-        notDeleted(entityExternalId),
-      ),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(
+              inArray(entityExternalId.entityId, ids),
+              notDeleted(entityExternalId),
+            ),
+          ),
+      },
       columns: {
         id: true,
         entityId: true,
@@ -894,11 +928,16 @@ async function buildProductMergePlan(
         url: true,
         isPrimary: true,
       },
-      orderBy: [
-        desc(entityExternalId.isPrimary),
-        asc(entityExternalId.createdAt),
-        asc(entityExternalId.id),
-      ],
+      orderBy: (table: PgTable) =>
+        [
+          [
+            desc(entityExternalId.isPrimary),
+            asc(entityExternalId.createdAt),
+            asc(entityExternalId.id),
+          ],
+        ]
+          .flat()
+          .map((value) => relationalSql(table, value)),
     })
   ).map(({ entityId, ...row }): ExternalIdRow => ({
     ...row,
@@ -909,10 +948,16 @@ async function buildProductMergePlan(
   }));
   const imageRows = (
     await db.query.entityAttachment.findMany({
-      where: and(
-        inArray(entityAttachment.entityId, ids),
-        notDeleted(entityAttachment),
-      ),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(
+              inArray(entityAttachment.entityId, ids),
+              notDeleted(entityAttachment),
+            ),
+          ),
+      },
       columns: {
         id: true,
         entityId: true,
@@ -921,10 +966,10 @@ async function buildProductMergePlan(
         createdAt: true,
       },
       with: { image: { columns: { sha256: true } } },
-      orderBy: [
-        asc(entityAttachment.sortOrder),
-        asc(entityAttachment.createdAt),
-      ],
+      orderBy: (table: PgTable) =>
+        [[asc(entityAttachment.sortOrder), asc(entityAttachment.createdAt)]]
+          .flat()
+          .map((value) => relationalSql(table, value)),
     })
   ).map(({ entityId, ...row }): ProductImageAssociationRow => ({
     ...row,
@@ -1197,10 +1242,16 @@ const admitMergedProductCategory = async (
   );
   const feature = await getCategoryFeature(tx, categoryId);
   const keeperGardenSource = await tx.query.planting.findFirst({
-    where: and(
-      eq(planting.sourceProductId, plan.keeper.id),
-      notDeleted(planting),
-    ),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          and(
+            eq(planting.sourceProductId, plan.keeper.id),
+            notDeleted(planting),
+          ),
+        ),
+    },
     columns: { id: true },
   });
   return {
@@ -1577,15 +1628,26 @@ export const mergeProducts = async (
               survivorImagesBefore.map((row) => row.id),
             );
             const afterFold = await tx.query.entityAttachment.findMany({
-              where: and(
-                eq(entityAttachment.entityId, keepId),
-                notDeleted(entityAttachment),
-              ),
+              where: {
+                RAW: (table: PgTable) =>
+                  relationalSql(
+                    table,
+                    and(
+                      eq(entityAttachment.entityId, keepId),
+                      notDeleted(entityAttachment),
+                    ),
+                  ),
+              },
               columns: { id: true },
-              orderBy: [
-                asc(entityAttachment.sortOrder),
-                asc(entityAttachment.createdAt),
-              ],
+              orderBy: (table: PgTable) =>
+                [
+                  [
+                    asc(entityAttachment.sortOrder),
+                    asc(entityAttachment.createdAt),
+                  ],
+                ]
+                  .flat()
+                  .map((value) => relationalSql(table, value)),
             });
             const ordered = [
               ...survivorImagesBefore.map((row) => row.id),

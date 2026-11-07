@@ -19,7 +19,8 @@ export async function cookbookRecentRecipesSummary(
   code: string,
 ): Promise<ReportBlock[]> {
   const id = await resolveOrThrow(db, "cookbook", code);
-  const result = await unwrapDb(db).execute(sql`
+  const result = await unwrapDb(db).execute(
+    sql`
     SELECT r."shortcode" AS id, r.name, count(DISTINCT m.id)::int AS count,
       count(*) OVER ()::int AS total, max(m.date)::text AS latest
     FROM "Recipe" r
@@ -29,8 +30,10 @@ export async function cookbookRecentRecipesSummary(
     GROUP BY r.id, r."shortcode", r.name
     ORDER BY max(m.date) DESC NULLS LAST, r."shortcode"
     LIMIT 3
-  `);
-  const rows = rankedRow.array().parse(result.rows);
+  `,
+    "objects",
+  );
+  const rows = rankedRow.array().parse(result);
   return [
     {
       kind: "records",

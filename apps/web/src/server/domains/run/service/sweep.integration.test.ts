@@ -8,6 +8,7 @@ import {
 } from "@cubby/schemas/suggestion";
 import { sweepStartInput } from "@cubby/schemas/sweep";
 import { eq, sql } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { createRepoEntity } from "tooling/factories/repo";
 import { buildKernelContext } from "tooling/scenarios/context";
 import { withTestDb } from "tooling/test-setup";
@@ -18,6 +19,7 @@ import type { DecisionPort } from "~/server/ai/decision-model";
 import { aiEvaluationItem } from "~/server/ai/evaluation/service/ai-evaluation-drain.fixtures";
 import { activateAiRefresh } from "~/server/ai/repo/ai-refresh";
 import { getDb } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { ledgerParty, run, transactionImport } from "~/server/db/schema";
 import { runHandlers } from "~/server/domains/run/operations/run.server";
 import {
@@ -146,7 +148,10 @@ describe("Sweeps", () => {
     const saved = await recordRows([row(), row()], "synthetic-retained-sweep");
     await recordRows([row(), row(), row()], "synthetic-unrelated-sweep");
     const retained = await getDb(ctx.db).query.transactionImport.findFirst({
-      where: eq(transactionImport.id, saved.batchId!),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(table, eq(transactionImport.id, saved.batchId!)),
+      },
     });
     expect(retained).toBeDefined();
     expect(retained?.completedAt).toBeNull();
@@ -183,7 +188,10 @@ describe("Sweeps", () => {
     expect(started.ok).toBe(true);
     if (!started.ok) return;
     const stored = await getDb(ctx.db).query.run.findFirst({
-      where: eq(run.shortcode, started.data.runId),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(table, eq(run.shortcode, started.data.runId)),
+      },
     });
     expect(sweepRunInput.parse(stored?.input).families).toEqual([
       {
@@ -202,13 +210,19 @@ describe("Sweeps", () => {
     expect(steps[0]).toMatchObject({ done: 2, failed: 0, left: 0 });
     expect(
       await getDb(ctx.db).query.transactionImport.findFirst({
-        where: eq(transactionImport.id, saved.batchId!),
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(table, eq(transactionImport.id, saved.batchId!)),
+        },
       }),
     ).toEqual(retained);
-    const { rows } = await getDb(ctx.db).execute<{ count: number }>(sql`
+    const rows = await getDb(ctx.db).execute<{ count: number }>(
+      sql`
       SELECT count(*)::int AS count FROM ${sourceObservationFrom}
       WHERE "withdrawnAt" IS NOT NULL
-    `);
+    `,
+      "objects",
+    );
     expect(rows[0]?.count).toBe(0);
   });
 
@@ -332,13 +346,16 @@ describe("Sweeps", () => {
         .filter((item) => !selectedIds.has(item.providerTransactionId!))
         .map((item) => item.chargeKey);
       const excludedSuggestions = () =>
-        getDb(ctx.db).execute(sql`
+        getDb(ctx.db).execute(
+          sql`
       SELECT * FROM "Suggestion" WHERE family = ${suggestionFamily.enum.statement_transaction}
         AND data->>${"chargeKey"} IN (${sql.join(
           excludedKeys.map((key) => sql`${key}`),
           sql`, `,
         )}) ORDER BY id
-    `);
+    `,
+          "objects",
+        );
       const before = await excludedSuggestions();
       const collections = await getDb(
         ctx.db,
@@ -363,7 +380,7 @@ describe("Sweeps", () => {
         ],
       });
       expect(await drive(runId)).toBe("finished");
-      expect((await excludedSuggestions()).rows).toEqual(before.rows);
+      expect(await excludedSuggestions()).toEqual(before);
       expect(
         (await readRunSteps(ctx.db, runId)).find(
           (step) => step.key === "statement_holds",
@@ -375,13 +392,16 @@ describe("Sweeps", () => {
         failed: 0,
         left: 0,
       });
-      const { rows: proposed } = await getDb(ctx.db).execute<{
+      const proposed = await getDb(ctx.db).execute<{
         id: string;
-      }>(sql`
+      }>(
+        sql`
       SELECT data->>${"chargeKey"} AS id FROM "Suggestion"
       WHERE family = ${suggestionFamily.enum.statement_transaction} AND active
         AND data->>${"recommended"} = ${"void"}
-    `);
+    `,
+        "objects",
+      );
       expect(proposed.map((item) => item.id).sort()).toEqual(
         observations
           .filter((item) => selectedIds.has(item.providerTransactionId!))
@@ -408,6 +428,7 @@ describe("Sweeps", () => {
     const beforeRuns = await getDb(ctx.db).query.run.findMany();
     const beforeJobs = await getDb(ctx.db).execute(
       sql`SELECT * FROM "Job" ORDER BY id`,
+      "objects",
     );
     for (const importId of [
       "invalid",
@@ -427,8 +448,11 @@ describe("Sweeps", () => {
     }
     expect(await getDb(ctx.db).query.run.findMany()).toEqual(beforeRuns);
     expect(
-      (await getDb(ctx.db).execute(sql`SELECT * FROM "Job" ORDER BY id`)).rows,
-    ).toEqual(beforeJobs.rows);
+      await getDb(ctx.db).execute(
+        sql`SELECT * FROM "Job" ORDER BY id`,
+        "objects",
+      ),
+    ).toEqual(beforeJobs);
   });
 
   const drive = async (runId: string) => {
@@ -488,7 +512,9 @@ describe("Sweeps", () => {
     });
     const stepsBeforePause = await readRunSteps(ctx.db, runId);
     const savedRun = await getDb(ctx.db).query.run.findFirst({
-      where: eq(run.id, runId),
+      where: {
+        RAW: (table: PgTable) => relationalSql(table, eq(run.id, runId)),
+      },
     });
     if (!savedRun) throw new Error("Missing scoped Sweep");
     const request = await memberRequest();
@@ -532,8 +558,9 @@ describe("Sweeps", () => {
       left: 0,
       meta: { input: { mode: "count" } },
     });
-    const { rows } = await getDb(ctx.db).execute<{ count: number }>(
+    const rows = await getDb(ctx.db).execute<{ count: number }>(
       sql`SELECT count(*)::int AS count FROM "Suggestion" WHERE family = ${suggestionFamily.enum.statement_transaction} AND active`,
+      "objects",
     );
     expect(rows[0]?.count).toBe(3);
   });
@@ -546,12 +573,15 @@ describe("Sweeps", () => {
       families: [{ family: "statement_transaction", scope: {} }],
     });
     expect(await drive(runId)).toBe("finished");
-    const { rows: original } = await getDb(ctx.db).execute<{
+    const original = await getDb(ctx.db).execute<{
       source: string;
       chargeKey: string;
-    }>(sql`
+    }>(
+      sql`
       SELECT source, "chargeKey" FROM ${sourceObservationFrom} ORDER BY id LIMIT 1
-    `);
+    `,
+      "objects",
+    );
     const charge = original[0]!;
     // Simulate a committed publication whose after-commit acknowledgement failed.
     await recordRunStepPage(ctx.db, runId, "statement_generate", {
@@ -578,9 +608,12 @@ describe("Sweeps", () => {
       failed: 0,
       meta: { retryRefs: [], retriedFailures: 1 },
     });
-    const { rows: counts } = await getDb(ctx.db).execute<{ count: number }>(sql`
+    const counts = await getDb(ctx.db).execute<{ count: number }>(
+      sql`
       SELECT count(*)::int AS count FROM "Suggestion" WHERE family = ${suggestionFamily.enum.statement_transaction} AND active
-    `);
+    `,
+      "objects",
+    );
     expect(counts[0]?.count).toBe(3);
     await recordRunStepPage(ctx.db, runId, "statement_label", {
       state: "failed",
@@ -621,7 +654,9 @@ describe("Sweeps", () => {
       enabled: true,
     });
     const savedRun = await getDb(ctx.db).query.run.findFirst({
-      where: eq(run.id, runId),
+      where: {
+        RAW: (table: PgTable) => relationalSql(table, eq(run.id, runId)),
+      },
     });
     if (!savedRun) throw new Error("Missing retained retry Run");
     await runHandlers.operations.lifecycle({
@@ -659,8 +694,9 @@ describe("Sweeps", () => {
       families: [{ family: "statement_transaction", scope: {} }],
     });
     await drive(runId);
-    const { rows: waiting } = await getDb(ctx.db).execute<{ id: string }>(
+    const waiting = await getDb(ctx.db).execute<{ id: string }>(
       sql`SELECT id FROM "Suggestion" WHERE family = ${suggestionFamily.enum.statement_transaction} AND active AND (data->>'needsLabel')::boolean ORDER BY "createdAt", id`,
+      "objects",
     );
     expect(waiting).toHaveLength(2);
     // The oldest suggestion's evidence moved after publication.
@@ -695,10 +731,13 @@ describe("Sweeps", () => {
     expect(broken.failed).toHaveLength(1);
     expect(broken.failed[0]?.message).toContain("57014");
     expect(broken.failed[0]?.message).toContain("statement timeout");
-    const { rows: retained } = await getDb(ctx.db).execute<{
+    const retained = await getDb(ctx.db).execute<{
       subject: unknown;
-    }>(sql`SELECT s.subject
-      FROM "Suggestion" s WHERE s.id=${waiting[1]!.id}::uuid`);
+    }>(
+      sql`SELECT s.subject
+      FROM "Suggestion" s WHERE s.id=${waiting[1]!.id}::uuid`,
+      "objects",
+    );
     const later = await recordRows(
       [row({ providerAmount: 40, sourceCategory: null })],
       "synthetic-later-label-arrival",
@@ -730,20 +769,24 @@ describe("Sweeps", () => {
     });
     expect(second.failed).toEqual([]);
     expect(second).toMatchObject({ labelled: 1, stale: 0, next: null });
-    const { rows: remaining } = await getDb(ctx.db).execute<{ count: number }>(
+    const remaining = await getDb(ctx.db).execute<{ count: number }>(
       sql`SELECT count(*)::int AS count FROM "Suggestion" WHERE active AND (data->>'needsLabel')::boolean`,
+      "objects",
     );
     expect(remaining[0]?.count).toBe(2);
   });
 
   const evaluationsOf = async (runId: string) => {
-    const { rows } = await getDb(ctx.db).execute<{
+    const rows = await getDb(ctx.db).execute<{
       id: string;
       state: string;
-    }>(sql`SELECT e.id::text AS id, e.state
+    }>(
+      sql`SELECT e.id::text AS id, e.state
       FROM "AiEvaluation" e
       WHERE e."runId" = ${runId}::uuid
-        OR e.id IN (SELECT "evaluationId" FROM "AiEvaluationRequest" WHERE "runId" = ${runId}::uuid)`);
+        OR e.id IN (SELECT "evaluationId" FROM "AiEvaluationRequest" WHERE "runId" = ${runId}::uuid)`,
+      "objects",
+    );
     const items = await Promise.all(
       rows.map((row) => aiEvaluationItem(ctx.db, row.id)),
     );

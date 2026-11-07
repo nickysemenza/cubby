@@ -71,7 +71,7 @@ describe("child table generation", () => {
     const tables = compileChildTables(children, new Set(["parent"]));
     const source = renderChildTables(tables);
     expect(source).toContain(
-      '.references((): AnyPgColumn => parent.id, {"onDelete":"cascade"})',
+      'columns:[table.parentId],foreignColumns:[parent.id]}).onDelete("cascade")',
     );
     expect(source).toContain(".default(sql`gen_random_uuid()`)");
     expect(source).toContain(".$onUpdate(() => new Date())");

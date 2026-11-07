@@ -4,6 +4,7 @@ import type { RelationshipPathStep } from "@cubby/schemas/entity-integrity";
 import { allEntities, entityManifest } from "@cubby/schemas/entity-manifest";
 import { expenseLineKindSchema } from "@cubby/schemas/expense-line-kind";
 import { relationshipQueryDefinition } from "@cubby/schemas/relationship-query-definitions";
+import { getColumnTable } from "drizzle-orm";
 import { is, type SQL, sql } from "drizzle-orm";
 import { getTableConfig, PgTable } from "drizzle-orm/pg-core";
 
@@ -98,12 +99,12 @@ const edgeIndex = (): ReadonlyMap<string, EdgeSpec> => {
     const edges = INCOMING_EDGES[target];
     for (const [edgeKey, edge] of Object.entries(edges)) {
       const column = edge.column;
-      if (!is(column.table, PgTable)) {
+      if (!is(getColumnTable(column), PgTable)) {
         throw new Error(
           `Relatedness edge ${edgeKey} is not attached to a PgTable`,
         );
       }
-      const config = getTableConfig(column.table);
+      const config = getTableConfig(getColumnTable(column));
       const known = specs.get(edgeKey);
       specs.set(edgeKey, {
         edgeKey,

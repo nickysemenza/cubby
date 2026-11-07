@@ -9,9 +9,9 @@ import { withMigrationDatabase } from "./test-database-lease";
 // open rows without any Job. Every open row must reach a live Job in its lane.
 it("reopens stranded image work into executor lanes without losing history", async () => {
   await withMigrationDatabase(async (client) => {
-    const db = drizzle(client);
+    const db = drizzle({ client: client, paramsInErrors: true });
     await migrateDatabase(db, {
-      through: "0028_job_invalidation",
+      through: "20261025033941_0028_job_invalidation",
     });
     const id = (n: number) =>
       `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
@@ -82,7 +82,9 @@ it("reopens stranded image work into executor lanes without losing history", asy
           ],
         );
     }
-    await migrateDatabase(db, { through: "0029_image_job_lanes" });
+    await migrateDatabase(db, {
+      through: "20261025033941_0029_image_job_lanes",
+    });
     const after = await client.query<{
       id: string;
       state: string;

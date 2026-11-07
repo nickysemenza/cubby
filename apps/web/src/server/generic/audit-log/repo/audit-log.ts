@@ -35,12 +35,14 @@ import {
   or,
   type SQL,
 } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { oauthClient } from "~/server/db/auth.schema";
 import { EDGE_KEY_TARGET_ENTITY } from "~/server/db/entity-incoming-edges";
 import { eqAny, unwrapDb } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { auditLog } from "~/server/db/schema";
 import { resolveEntityDisplayImages } from "~/server/entity-kernel/repo/entity-display-image";
 import { identityShortcodes } from "~/server/entity-kernel/repo/entity-identity";
@@ -495,8 +497,17 @@ export async function getAuditLog(
   }
 
   const entries = await unwrapDb(db).query.auditLog.findMany({
-    where: conditions.length > 0 ? and(...conditions) : undefined,
-    orderBy: [desc(auditLog.createdAt), desc(auditLog.id)],
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          conditions.length > 0 ? and(...conditions) : undefined,
+        ),
+    },
+    orderBy: (table: PgTable) =>
+      [[desc(auditLog.createdAt), desc(auditLog.id)]]
+        .flat()
+        .map((value) => relationalSql(table, value)),
     limit: params.limit + 1, // Fetch one extra to determine if there's more
     with: {
       identity: {

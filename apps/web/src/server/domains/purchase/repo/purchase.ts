@@ -48,6 +48,7 @@ import {
   minorToMoney,
 } from "@cubby/shared";
 import { and, asc, eq, inArray, ne, type SQL, sql } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { uniq } from "es-toolkit";
 import { z } from "zod";
 
@@ -68,6 +69,7 @@ import {
   withTransaction,
 } from "~/server/db/helpers";
 import { outer, related } from "~/server/db/helpers/related";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
   entityAttachment,
   expense,
@@ -755,11 +757,17 @@ export const reclassifyPurchaseDocument = async (
   const imageId = await resolveOrThrow(db, "image", input.imageId);
   await withTransaction(db, async (tx) => {
     const before = await tx.query.entityAttachment.findFirst({
-      where: and(
-        eq(entityAttachment.entityId, id),
-        eq(entityAttachment.imageId, imageId),
-        notDeleted(entityAttachment),
-      ),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(
+              eq(entityAttachment.entityId, id),
+              eq(entityAttachment.imageId, imageId),
+              notDeleted(entityAttachment),
+            ),
+          ),
+      },
     });
     if (!before) {
       throw createAppError(
@@ -955,7 +963,13 @@ export const updatePurchase = defineMutationWriter({
 
     await withTransaction(db, async (tx) => {
       const before = await tx.query.purchase.findFirst({
-        where: and(eq(purchase.id, id), notDeleted(purchase)),
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(
+              table,
+              and(eq(purchase.id, id), notDeleted(purchase)),
+            ),
+        },
       });
       if (!before) {
         throw createAppError("PURCHASE_NOT_FOUND", `Purchase not found: ${id}`);
@@ -1135,7 +1149,13 @@ export const linkExpensesToPurchase = async (
 
   await withTransaction(db, async (tx) => {
     const target = await tx.query.purchase.findFirst({
-      where: and(eq(purchase.id, purchaseId), notDeleted(purchase)),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(eq(purchase.id, purchaseId), notDeleted(purchase)),
+          ),
+      },
       columns: { id: true },
     });
     if (!target) {
@@ -1146,7 +1166,13 @@ export const linkExpensesToPurchase = async (
     }
 
     const before = await tx.query.expense.findMany({
-      where: and(inArray(expense.id, expenseIds), notDeleted(expense)),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(inArray(expense.id, expenseIds), notDeleted(expense)),
+          ),
+      },
       columns: { id: true, productId: true, purchaseId: true },
     });
     if (before.length === 0) return;
@@ -1249,7 +1275,13 @@ export const splitExpense = async (
     db,
     async (tx) => {
       const original = await tx.query.expense.findFirst({
-        where: and(eq(expense.id, expenseId), notDeleted(expense)),
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(
+              table,
+              and(eq(expense.id, expenseId), notDeleted(expense)),
+            ),
+        },
       });
       if (!original) {
         throw createAppError(
@@ -1626,7 +1658,13 @@ const validatePurchaseItemInheritance = async (
   purchaseIds: PurchaseId[],
 ) => {
   const rows = await tx.query.expense.findMany({
-    where: and(inArray(expense.purchaseId, purchaseIds), notDeleted(expense)),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          and(inArray(expense.purchaseId, purchaseIds), notDeleted(expense)),
+        ),
+    },
   });
   for (const row of rows) await validateExpenseInheritance(tx, row);
 };
@@ -1859,10 +1897,16 @@ const moveChargeAllocations = async (
 ) => {
   const movingAllocations =
     await tx.query.financialTransactionAllocation.findMany({
-      where: and(
-        eq(financialTransactionAllocation.purchaseId, deadId),
-        notDeleted(financialTransactionAllocation),
-      ),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(
+              eq(financialTransactionAllocation.purchaseId, deadId),
+              notDeleted(financialTransactionAllocation),
+            ),
+          ),
+      },
       columns: {
         id: true,
         transactionId: true,
@@ -1872,10 +1916,16 @@ const moveChargeAllocations = async (
     });
   const survivorAllocations =
     await tx.query.financialTransactionAllocation.findMany({
-      where: and(
-        eq(financialTransactionAllocation.purchaseId, survivorId),
-        notDeleted(financialTransactionAllocation),
-      ),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(
+              eq(financialTransactionAllocation.purchaseId, survivorId),
+              notDeleted(financialTransactionAllocation),
+            ),
+          ),
+      },
       columns: {
         id: true,
         transactionId: true,
@@ -1922,10 +1972,16 @@ const moveChargeImages = async (
   survivorId: PurchaseId,
 ) => {
   const rows = await tx.query.entityAttachment.findMany({
-    where: and(
-      eq(entityAttachment.entityId, deadId),
-      notDeleted(entityAttachment),
-    ),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          and(
+            eq(entityAttachment.entityId, deadId),
+            notDeleted(entityAttachment),
+          ),
+        ),
+    },
     columns: { imageId: true, sortOrder: true, documentKind: true },
   });
   if (rows.length === 0) return;
@@ -2037,10 +2093,16 @@ export const foldChargeInto = async (
   const movedExpenseProducts =
     moved.length > 0
       ? await tx.query.expense.findMany({
-          where: inArray(
-            expense.id,
-            moved.map((id) => parseEntityId("expense", id)),
-          ),
+          where: {
+            RAW: (table: PgTable) =>
+              relationalSql(
+                table,
+                inArray(
+                  expense.id,
+                  moved.map((id) => parseEntityId("expense", id)),
+                ),
+              ),
+          },
           columns: { productId: true },
         })
       : [];
@@ -2143,10 +2205,16 @@ export const mergePurchases = async (
     );
 
     const rows = await tx.query.purchase.findMany({
-      where: and(
-        inArray(purchase.id, [keepId, ...losers]),
-        notDeleted(purchase),
-      ),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(
+              inArray(purchase.id, [keepId, ...losers]),
+              notDeleted(purchase),
+            ),
+          ),
+      },
       columns: { id: true, vendorId: true, orderId: true, notes: true },
     });
 

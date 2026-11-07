@@ -13,6 +13,7 @@ import type {
 import { ENTITY_NOT_FOUND_REASON } from "@cubby/schemas/identifiers";
 import { type MealFoodAmount } from "@cubby/schemas/meal";
 import { and, eq, inArray, sql } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { uniq } from "es-toolkit";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -26,6 +27,7 @@ import {
   unwrapDb,
   withTransaction,
 } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
   expenseAttribution,
   financialAccount,
@@ -321,15 +323,18 @@ const assertNoAccountHistory = async (
   tx: Database | DrizzleTransaction,
   ids: LedgerPartyId[],
 ) => {
-  const result = await unwrapDb(tx).execute(sql`
+  const result = await unwrapDb(tx).execute(
+    sql`
     SELECT fa.shortcode FROM "FinancialAccount" fa
     JOIN "LedgerParty" party ON party.id = ANY(${uuidArrayParam(ids)})
     WHERE ${notDeleted("fa")} AND (
       fa."authorizedUsers" @> jsonb_build_array(jsonb_build_object('ledgerPartyId', party.shortcode)) OR
       fa."fundingPeriods" @> jsonb_build_array(jsonb_build_object('ledgerPartyId', party.shortcode))
     ) LIMIT 1
-  `);
-  if (result.rows.length)
+  `,
+    "objects",
+  );
+  if (result.length)
     throw createAppError(
       "CONSTRAINT_VIOLATION",
       "Reconcile financial-account user/funding history before deleting, merging, or changing this party's kind.",
@@ -772,12 +777,21 @@ export async function mergeLedgerParties(
         // inheritance rules run per entry.
         "InventoryEntry.ownerLedgerPartyId": async () => {
           const ownedInventory = await tx.query.inventoryEntry.findMany({
-            where: and(
-              inArray(inventoryEntry.ownerLedgerPartyId, loserIds),
-              notDeleted(inventoryEntry),
-            ),
+            where: {
+              RAW: (table: PgTable) =>
+                relationalSql(
+                  table,
+                  and(
+                    inArray(inventoryEntry.ownerLedgerPartyId, loserIds),
+                    notDeleted(inventoryEntry),
+                  ),
+                ),
+            },
             columns: { id: true },
-            orderBy: inventoryEntry.id,
+            orderBy: (table: PgTable) =>
+              [inventoryEntry.id]
+                .flat()
+                .map((value) => relationalSql(table, value)),
           });
           for (const row of ownedInventory) {
             await applyInventoryOwnershipInTransaction(

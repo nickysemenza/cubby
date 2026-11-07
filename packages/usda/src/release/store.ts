@@ -1,5 +1,5 @@
 import { and, asc, count, desc, eq, inArray, sql } from "drizzle-orm";
-import type { BaseSQLiteDatabase } from "drizzle-orm/sqlite-core";
+import type { DrizzleSqliteDODatabase } from "drizzle-orm/durable-sqlite";
 import { z } from "zod";
 import { food as foodTable, foodAlias, releaseState } from "./sql-schema";
 import {
@@ -117,7 +117,7 @@ export class UsdaReleaseStore {
     private readonly sql: ReleaseSql,
     private readonly transaction: <T>(fn: () => T) => T,
     private readonly db: Pick<
-      BaseSQLiteDatabase<"sync", unknown>,
+      DrizzleSqliteDODatabase,
       "select" | "insert" | "update" | "delete"
     >,
   ) {}

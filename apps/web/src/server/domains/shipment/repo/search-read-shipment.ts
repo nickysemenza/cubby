@@ -1,11 +1,13 @@
 import { entitySchema } from "@cubby/schemas/entity";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { sql, and, inArray } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { alias } from "drizzle-orm/pg-core";
 
 import { normalizeSearchText } from "~/lib/search-normalization";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { unwrapDb, notDeleted } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { shipment as searchTableshipment } from "~/server/db/schema";
 import { shipment } from "~/server/db/schema";
 import { withOptionalLimit } from "~/server/generic/embedding/repo/embedding-load-options";
@@ -23,15 +25,21 @@ const loadEmbeddingText = async (
     withOptionalLimit(
       {
         columns: { id: true, name: true, trackingNumber: true, notes: true },
-        where: and(
-          notDeleted(shipment),
-          options.ids?.length
-            ? inArray(
-                shipment.id,
-                options.ids.map((id) => parseEntityId("shipment", id)),
-              )
-            : undefined,
-        ),
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(
+              table,
+              and(
+                notDeleted(shipment),
+                options.ids?.length
+                  ? inArray(
+                      shipment.id,
+                      options.ids.map((id) => parseEntityId("shipment", id)),
+                    )
+                  : undefined,
+              ),
+            ),
+        },
       },
       options.limit,
     ),

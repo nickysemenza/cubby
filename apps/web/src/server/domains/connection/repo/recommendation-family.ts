@@ -92,12 +92,13 @@ export const recommendationFamily: SuggestionFamilyDeclaration<"recommendation">
     if (filters.status !== "pending") return [];
     const run = query.filters.runId;
     // Mirrors readEntityConnectionsBatch's selection; hydration rechecks evidence.
-    const { rows } = await unwrapDb(db).execute<{
+    const rows = await unwrapDb(db).execute<{
       id: string;
       fingerprint: string | null;
       createdAt: Date | string;
       candidate: unknown;
-    }>(sql`
+    }>(
+      sql`
       SELECT s.id, s.fingerprint, s."createdAt", s.evidence->'candidate' AS candidate
       FROM "Suggestion" s
       WHERE s.family = ${suggestionFamily.enum.recommendation} AND s.active
@@ -106,7 +107,9 @@ export const recommendationFamily: SuggestionFamilyDeclaration<"recommendation">
         AND ${reviewFamilyDeclarations.recommendation.scopes.connection}
         AND ${pendingRecommendationEligibility()}
         ${run ? sql`AND s."runId" = (SELECT id FROM "Run" WHERE shortcode = ${run})` : sql``}
-    `);
+    `,
+      "objects",
+    );
     const connectionKeys = rows.flatMap((row) => {
       const parsed = connectionCandidate.safeParse(row.candidate);
       if (!parsed.success) return [];

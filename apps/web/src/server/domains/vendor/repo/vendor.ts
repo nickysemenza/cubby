@@ -751,8 +751,9 @@ export const updateVendor = defineMutationWriter({
       ) {
         const affected = await getDb(db).execute(
           sql`SELECT 1 FROM "Expense" e JOIN "Purchase" p ON p.id=e."purchaseId" WHERE ${notDeleted("e")} AND ${notDeleted("p")} AND p."vendorId"=${id}::uuid LIMIT 1`,
+          "objects",
         );
-        if (affected.rows.length) {
+        if (affected.length) {
           assertReviewedSpendingClassification(db);
           reclassifies = true;
         }

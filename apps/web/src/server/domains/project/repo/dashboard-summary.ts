@@ -31,6 +31,7 @@ import {
   or,
   sql,
 } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { sumBy, uniq } from "es-toolkit";
 
 import { householdDaysFromNow, householdLocalDate } from "~/lib/household-date";
@@ -38,6 +39,7 @@ import type { Database } from "~/server/db";
 import { effectiveFieldSql } from "~/server/db/computed/effective-field";
 import { plannedExpense } from "~/server/db/computed/expense-aggregate-sql";
 import { countWhere, getDb, notDeleted } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { expense, project, task } from "~/server/db/schema";
 import { expenseDerivedCostRead } from "~/server/domains/expense/repo/expense-derived-read";
 import { projectScaffold } from "~/server/domains/project/repo/lookup";
@@ -123,8 +125,11 @@ export async function projectDashboardSummary(
     projectYearRows,
   ] = await Promise.all([
     getDb(db).query.project.findMany({
-      where: scopedWhere,
-      orderBy: [asc(project.name)],
+      where: { RAW: (table: PgTable) => relationalSql(table, scopedWhere) },
+      orderBy: (table: PgTable) =>
+        [[asc(project.name)]]
+          .flat()
+          .map((value) => relationalSql(table, value)),
     }),
     // Portfolio headline stats keep a fixed status. `completedCount` is fully
     // unscoped because its link applies only the Completed saved filter; the

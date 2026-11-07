@@ -1,11 +1,10 @@
+import type { ActorContext } from "@cubby/schemas/context";
+import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 /**
  * Ingredient merge: near-duplicate candidate detection (trigram self-join) and
  * the merge operation that folds aliases + re-points usages/products onto a
  * surviving target before hard-deleting the absorbed rows.
  */
-
-import type { ActorContext } from "@cubby/schemas/context";
-import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type { RecipeId } from "@cubby/schemas/identifiers";
 import {
   type IngredientId,
@@ -14,11 +13,13 @@ import {
 } from "@cubby/schemas/identifiers";
 import { type MergeSummaryOut } from "@cubby/schemas/ingredient";
 import { and, eq, inArray, sql } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { uniq } from "es-toolkit";
 
 import type { Database } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import { getDb, notDeleted, withTransaction } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
   ingredient,
   product,
@@ -211,7 +212,13 @@ export const mergeIngredients = async (
     const targetRec = await conn.query.ingredient.findFirst({
       // notDeleted: a soft-deleted target would otherwise pass validation and
       // recipe lines would re-point onto a row hidden from every normal query.
-      where: and(eq(ingredient.id, target), notDeleted(ingredient)),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(eq(ingredient.id, target), notDeleted(ingredient)),
+          ),
+      },
     });
     if (!targetRec) {
       throw createAppError(
@@ -221,7 +228,13 @@ export const mergeIngredients = async (
     }
 
     const aliasRecs = await conn.query.ingredient.findMany({
-      where: and(inArray(ingredient.id, uniqueAliases), notDeleted(ingredient)),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(inArray(ingredient.id, uniqueAliases), notDeleted(ingredient)),
+          ),
+      },
     });
     // Fail loud on a no-op: any id that didn't resolve to a live ingredient is a
     // typo or already-deleted row, NOT a silent success.

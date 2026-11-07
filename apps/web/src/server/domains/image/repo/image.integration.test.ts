@@ -14,6 +14,7 @@ import { photoRunImageState } from "@cubby/schemas/photo-import-run";
 import { testShortcode } from "@cubby/schemas/testing";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { asc, eq, inArray, sql } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { createRepoEntity } from "tooling/factories/repo";
 import { buildKernelContext } from "tooling/scenarios/context";
 import { withTestDb } from "tooling/test-setup";
@@ -28,6 +29,7 @@ import {
   insertAndReturn,
   withTransaction,
 } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
   entityAttachment,
   image,
@@ -119,7 +121,9 @@ const mkPhotoInventoryRun = async (db: Database) => {
     { purpose: "photo_inventory", trigger: "manual", execution: false },
   );
   const run = await getDb(db).query.run.findFirst({
-    where: eq(runTable.id, id),
+    where: {
+      RAW: (table: PgTable) => relationalSql(table, eq(runTable.id, id)),
+    },
   });
   if (!run) throw new Error("Expected photo inventory Run");
   return run;

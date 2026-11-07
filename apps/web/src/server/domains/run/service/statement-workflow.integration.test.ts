@@ -177,14 +177,17 @@ it("resumes a refused statement Sweep and publishes every batched suggestion", a
       .from(run)
       .where(eq(run.id, runId));
     const steps = await readRunSteps(ctx.db, runId);
-    const { rows } = await getDb(ctx.db).execute<{
+    const rows = await getDb(ctx.db).execute<{
       complete: number;
       pending: number;
-    }>(sql`
+    }>(
+      sql`
       SELECT count(*) FILTER (WHERE NOT coalesce((data->>'needsLabel')::boolean, false))::int AS complete,
         count(*) FILTER (WHERE coalesce((data->>'needsLabel')::boolean, false))::int AS pending
       FROM "Suggestion" WHERE family = ${suggestionFamily.enum.statement_transaction} AND active
-    `);
+    `,
+      "objects",
+    );
     expect(steps.flatMap((step) => step.errors)).toEqual([]);
     expect(saved?.status).toBe("completed");
     expect(

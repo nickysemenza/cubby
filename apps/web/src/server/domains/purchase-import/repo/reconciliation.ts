@@ -19,6 +19,7 @@ import {
 import { tradeSchema } from "@cubby/schemas/task-fields";
 import { moneyToMinor, cents } from "@cubby/shared";
 import { and, asc, eq, inArray, isNotNull, sql } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
@@ -27,6 +28,7 @@ import {
   withTransaction,
 } from "~/server/db/helpers";
 import { outer } from "~/server/db/helpers/related";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
   entityAttachment,
   expense,
@@ -206,13 +208,20 @@ export async function reviewResolution(
     throw new Error(
       "The proposed order identity differs from the accepted Purchase.",
     );
-  if (candidate.orderId !== null && state.target.orderId === null) {
+  const candidateOrderId = candidate.orderId;
+  if (candidateOrderId !== null && state.target.orderId === null) {
     const owner = await tx.query.purchase.findFirst({
-      where: and(
-        eq(purchase.vendorId, state.target.vendorId),
-        eq(purchase.orderId, candidate.orderId),
-        notDeleted(purchase),
-      ),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(
+              eq(purchase.vendorId, state.target.vendorId),
+              eq(purchase.orderId, candidateOrderId),
+              notDeleted(purchase),
+            ),
+          ),
+      },
     });
     if (owner && owner.id !== state.target.id)
       throw new Error(

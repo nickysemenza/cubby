@@ -9,10 +9,12 @@ import type { ProductId } from "@cubby/schemas/identifiers";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { PDF_CONTENT_TYPE } from "@cubby/schemas/image";
 import { and, eq } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { entityLink, image, product } from "~/server/db/schema";
 import { attachPurchaseProducts } from "~/server/domains/purchase/repo/purchase-products";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
@@ -313,10 +315,16 @@ describe("product ⟷ product component links (kit composition)", () => {
       );
 
       const before = await getDb(ctx.db).query.entityLink.findMany({
-        where: and(
-          eq(entityLink.fromEntityId, kit.entityId),
-          ofLinkKind("productComponent"),
-        ),
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(
+              table,
+              and(
+                eq(entityLink.fromEntityId, kit.entityId),
+                ofLinkKind("productComponent"),
+              ),
+            ),
+        },
       });
       expect(before).toHaveLength(2);
 
@@ -326,10 +334,16 @@ describe("product ⟷ product component links (kit composition)", () => {
 
       // The component rows are soft-deleted along with the kit...
       const after = await getDb(ctx.db).query.entityLink.findMany({
-        where: and(
-          eq(entityLink.fromEntityId, kit.entityId),
-          ofLinkKind("productComponent"),
-        ),
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(
+              table,
+              and(
+                eq(entityLink.fromEntityId, kit.entityId),
+                ofLinkKind("productComponent"),
+              ),
+            ),
+        },
       });
       for (const row of after) {
         expect(row.deletedAt).not.toBeNull();
@@ -341,10 +355,16 @@ describe("product ⟷ product component links (kit composition)", () => {
       // reach past the join row to the parts it names.
       const [liveA, liveB] = await Promise.all([
         getDb(ctx.db).query.product.findFirst({
-          where: eq(product.id, partA.entityId),
+          where: {
+            RAW: (table: PgTable) =>
+              relationalSql(table, eq(product.id, partA.entityId)),
+          },
         }),
         getDb(ctx.db).query.product.findFirst({
-          where: eq(product.id, partB.entityId),
+          where: {
+            RAW: (table: PgTable) =>
+              relationalSql(table, eq(product.id, partB.entityId)),
+          },
         }),
       ]);
       expect(liveA?.deletedAt).toBeNull();

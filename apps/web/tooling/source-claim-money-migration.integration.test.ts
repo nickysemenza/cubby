@@ -9,9 +9,9 @@ import { withMigrationDatabase } from "./test-database-lease";
 // while moving an authoritative monetary amount from dollars to integer cents.
 it("preserves source claims and their dollar-number wire through the minor-unit cutover", async () => {
   await withMigrationDatabase(async (client) => {
-    const db = drizzle(client);
+    const db = drizzle({ client: client, paramsInErrors: true });
     await migrateDatabase(db, {
-      through: "0095_stop_diagnostic_ticket_admission",
+      through: "20261105170357_0095_stop_diagnostic_ticket_admission",
     });
     const expense = "00000000-0000-4000-8000-000000000101";
     await client.query(
@@ -72,7 +72,9 @@ it("preserves source claims and their dollar-number wire through the minor-unit 
     );
     await client.query(`UPDATE "Run" SET "endedAt"=now() WHERE id=$1`, [run]);
     await expect(
-      migrateDatabase(db, { through: "0096_source_claim_minor_units" }),
+      migrateDatabase(db, {
+        through: "20261105170357_0096_source_claim_minor_units",
+      }),
     ).rejects.toMatchObject({
       cause: {
         code: "P0001",
@@ -94,7 +96,9 @@ it("preserves source claims and their dollar-number wire through the minor-unit 
         [state],
       );
       await expect(
-        migrateDatabase(db, { through: "0096_source_claim_minor_units" }),
+        migrateDatabase(db, {
+          through: "20261105170357_0096_source_claim_minor_units",
+        }),
       ).rejects.toMatchObject({
         cause: {
           code: "P0001",
@@ -111,7 +115,9 @@ it("preserves source claims and their dollar-number wire through the minor-unit 
       [run],
     );
     await expect(
-      migrateDatabase(db, { through: "0096_source_claim_minor_units" }),
+      migrateDatabase(db, {
+        through: "20261105170357_0096_source_claim_minor_units",
+      }),
     ).rejects.toMatchObject({
       cause: {
         code: "P0001",
@@ -129,7 +135,9 @@ it("preserves source claims and their dollar-number wire through the minor-unit 
       `UPDATE "LedgerSourceClaim" SET "targetAmountAtClaim"=10.010000000001 WHERE "sourceKey"='synthetic-key-0'`,
     );
     await expect(
-      migrateDatabase(db, { through: "0096_source_claim_minor_units" }),
+      migrateDatabase(db, {
+        through: "20261105170357_0096_source_claim_minor_units",
+      }),
     ).rejects.toMatchObject({
       cause: {
         code: "P0001",
@@ -151,7 +159,9 @@ it("preserves source claims and their dollar-number wire through the minor-unit 
       `UPDATE "LedgerSourceClaim" SET "targetAmountAtClaim"=10.010000000000002 WHERE "sourceKey"='synthetic-key-0'`,
     );
     await expect(
-      migrateDatabase(db, { through: "0096_source_claim_minor_units" }),
+      migrateDatabase(db, {
+        through: "20261105170357_0096_source_claim_minor_units",
+      }),
     ).rejects.toMatchObject({
       cause: {
         code: "P0001",
@@ -169,7 +179,9 @@ it("preserves source claims and their dollar-number wire through the minor-unit 
     await client.query(
       `UPDATE "LedgerSourceClaim" SET "targetAmountAtClaim"=10.01 WHERE "sourceKey"='synthetic-key-0'`,
     );
-    await migrateDatabase(db, { through: "0096_source_claim_minor_units" });
+    await migrateDatabase(db, {
+      through: "20261105170357_0096_source_claim_minor_units",
+    });
     const after = await client.query(
       `SELECT (to_jsonb(c) - 'targetAmountMinor') || jsonb_build_object('targetAmountAtClaim', c."targetAmountMinor"::numeric / 100) AS value FROM "LedgerSourceClaim" c ORDER BY id`,
     );

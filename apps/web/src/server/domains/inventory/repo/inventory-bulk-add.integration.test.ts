@@ -7,12 +7,14 @@ import {
   productDiscardInput,
 } from "@cubby/schemas/product";
 import { and, eq } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { collectBulkStream } from "~/lib/bulk-progress";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { amountFromColumns } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
   auditLog,
   inventoryEntry,
@@ -255,10 +257,16 @@ describe("addInventoryEntries", () => {
 
   const rowsAt = async (locationId: LocationId) => {
     const rows = await getDb(ctx.db).query.inventoryEntry.findMany({
-      where: and(
-        eq(inventoryEntry.locationId, locationId),
-        notDeleted(inventoryEntry),
-      ),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(
+              eq(inventoryEntry.locationId, locationId),
+              notDeleted(inventoryEntry),
+            ),
+          ),
+      },
       columns: {
         id: true,
         productId: true,
@@ -357,10 +365,16 @@ describe("addInventoryEntries", () => {
     ]);
 
     const changes = await getDb(ctx.db).query.auditLog.findMany({
-      where: and(
-        eq(auditLog.entityKind, "inventory"),
-        eq(auditLog.entityId, existingId),
-      ),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(
+              eq(auditLog.entityKind, "inventory"),
+              eq(auditLog.entityId, existingId),
+            ),
+          ),
+      },
       columns: { action: true },
     });
     expect(changes.map((row) => row.action)).toContain("update");

@@ -55,6 +55,7 @@ import type {
 } from "@cubby/schemas/identifiers";
 import { attachableImageEntityId } from "@cubby/schemas/image";
 import { recordSourceTransactionRecordsInput } from "@cubby/schemas/source-transaction-record";
+import { getColumnTable } from "drizzle-orm";
 import { eq, getTableColumns, type SQL, sql } from "drizzle-orm";
 import {
   getTableConfig,
@@ -81,6 +82,7 @@ import {
   getDb,
   insertAndReturn,
 } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
   purchase,
   entityExternalId,
@@ -184,7 +186,7 @@ const edgeOf = (entity: EntityKernelEntity, edge: string): IncomingEdge =>
 
 const physical = (edge: IncomingEdge) => {
   const column = edge.column as PgColumn;
-  const table = column.table as PgTable;
+  const table = getColumnTable(column) as PgTable;
   const config = getTableConfig(table);
   const primary =
     config.primaryKeys[0]?.columns.map((c) => c.name) ??
@@ -232,11 +234,10 @@ const insertExternalIdAt = async (
   const [identity] = z
     .array(z.object({ kind: z.string() }))
     .parse(
-      (
-        await getDb(db).execute(
-          sql`SELECT "kind" FROM "Entity" WHERE "id"::text = ${targetId}`,
-        )
-      ).rows,
+      await getDb(db).execute(
+        sql`SELECT "kind" FROM "Entity" WHERE "id"::text = ${targetId}`,
+        "objects",
+      ),
     );
   const kind = Object.entries(EXTERNAL_ID_KINDS).find(([, declaration]) =>
     declaration.entities.some((entity: string) => entity === identity?.kind),
@@ -278,13 +279,14 @@ const insertLinkAt = async (
     entityManifest[atFrom ? declaration.to : declaration.from].dbTable;
   if (!otherTable) return false;
   const [other] = z.array(z.object({ id: z.string() })).parse(
-    (
-      await getDb(db).execute(sql`
+    await getDb(db).execute(
+      sql`
         SELECT o."id"::text AS id FROM ${sql.identifier(otherTable)} o
         WHERE o."deletedAt" IS NULL AND o."id"::text <> ${targetId}
         LIMIT 1
-      `)
-    ).rows,
+      `,
+      "objects",
+    ),
   );
   if (!other) return false;
   return getDb(db)
@@ -310,15 +312,16 @@ const referencedTargets = async (
   const { tableName, columnName, softDeletable, scopeSql } = physical(edge);
   const target = getTableConfig(SHORTCODE_TABLE[entity]).name;
   return idRowsSchema.parse(
-    (
-      await getDb(db).execute(sql`
+    await getDb(db).execute(
+      sql`
         SELECT DISTINCT t."id"::text AS id, t."shortcode" AS shortcode
         FROM ${sql.identifier(tableName)} s
         JOIN ${sql.identifier(target)} t ON t."id"::text = s.${sql.identifier(columnName)}::text
         WHERE t."deletedAt" IS NULL ${entity === "vendor" ? sql`AND t."systemKey" IS NULL` : sql``} ${liveRow(softDeletable)} ${scopeSql}
         ORDER BY 2
-      `)
-    ).rows,
+      `,
+      "objects",
+    ),
   );
 };
 
@@ -330,12 +333,13 @@ const referencingRows = async (
   const { tableName, columnName, scopeSql } = physical(edge);
   return rowsSchema
     .parse(
-      (
-        await getDb(db).execute(sql`
+      await getDb(db).execute(
+        sql`
           SELECT to_jsonb(s.*) AS row FROM ${sql.identifier(tableName)} s
           WHERE s.${sql.identifier(columnName)}::text = ${targetId} ${scopeSql}
-        `)
-      ).rows,
+        `,
+        "objects",
+      ),
     )
     .map(({ row }) => row);
 };
@@ -350,11 +354,10 @@ const rowsByKey = async (
     JSON.stringify(primary.map((name) => row[name]));
   const all = rowsSchema
     .parse(
-      (
-        await getDb(db).execute(
-          sql`SELECT to_jsonb(s.*) AS row FROM ${sql.identifier(tableName)} s`,
-        )
-      ).rows,
+      await getDb(db).execute(
+        sql`SELECT to_jsonb(s.*) AS row FROM ${sql.identifier(tableName)} s`,
+        "objects",
+      ),
     )
     .map(({ row }) => row);
   const byKey = new Map(all.map((row) => [keyOf(row), row]));
@@ -418,13 +421,14 @@ const checkDisposition = async (
 
 const liveTargets = async (db: Database, entity: EntityKernelEntity) =>
   idRowsSchema.parse(
-    (
-      await getDb(db).execute(sql`
+    await getDb(db).execute(
+      sql`
         SELECT t."id"::text AS id, t."shortcode" AS shortcode
         FROM ${sql.identifier(getTableConfig(SHORTCODE_TABLE[entity]).name)} t
         WHERE t."deletedAt" IS NULL ${entity === "vendor" ? sql`AND t."systemKey" IS NULL` : sql``} ORDER BY 2
-      `)
-    ).rows,
+      `,
+      "objects",
+    ),
   );
 
 /** A literal for a required column no reference decides, by column type. */
@@ -478,7 +482,7 @@ const pointEdgeAt = async (
   const attempt = (statement: SQL) =>
     getDb(db)
       .transaction(
-        async (tx) => ((await tx.execute(statement)).rowCount ?? 0) > 0,
+        async (tx) => ((await tx.execute<never>(statement)).rowCount ?? 0) > 0,
       )
       .catch(() => false);
   const repointed = await attempt(sql`
@@ -496,7 +500,9 @@ const pointEdgeAt = async (
   if (edge.scope) return insertLinkAt(db, edge, targetId);
   if (tableName === "EntityExternalId") return insertExternalIdAt(db, targetId);
 
-  const config = getTableConfig((edge.column as PgColumn).table as PgTable);
+  const config = getTableConfig(
+    getColumnTable(edge.column as PgColumn) as PgTable,
+  );
   const values = new Map<string, SQL>();
   for (const fk of config.foreignKeys) {
     const reference = fk.reference();
@@ -504,14 +510,15 @@ const pointEdgeAt = async (
     if (!local?.notNull || local.name === columnName) continue;
     const foreign = getTableConfig(reference.foreignTable).name;
     const [row] = z.array(z.object({ id: z.string() })).parse(
-      (
-        await getDb(db).execute(sql`
+      await getDb(db).execute(
+        sql`
             SELECT f.${sql.identifier(reference.foreignColumns[0]!.name)}::text AS id
             FROM ${sql.identifier(foreign)} f
             WHERE f.${sql.identifier(reference.foreignColumns[0]!.name)}::text <> ${targetId}
             LIMIT 1
-          `)
-      ).rows,
+          `,
+        "objects",
+      ),
     );
     if (!row) return false;
     values.set(local.name, sql`${row.id}`);
@@ -523,11 +530,10 @@ const pointEdgeAt = async (
     const [identity] = z
       .array(z.object({ kind: z.string() }))
       .parse(
-        (
-          await getDb(db).execute(
-            sql`SELECT "kind" FROM "Entity" WHERE "id"::text = ${targetId}`,
-          )
-        ).rows,
+        await getDb(db).execute(
+          sql`SELECT "kind" FROM "Entity" WHERE "id"::text = ${targetId}`,
+          "objects",
+        ),
       );
     if (!identity) return false;
     values.set("entityKind", sql`${identity.kind}`);
@@ -628,13 +634,14 @@ const clearBlockers = async (
         ? sql`AND ${sql.identifier(own.columnName)}::text IS DISTINCT FROM ${targetId}`
         : sql``;
     const [row] = rowsSchema.parse(
-      (
-        await getDb(db).execute(sql`
+      await getDb(db).execute(
+        sql`
           SELECT to_jsonb(s.*) AS row FROM ${sql.identifier(tableName)} s
           WHERE ${sql.identifier(columnName)}::text = ${targetId} ${keep} ${scopeBare}
           LIMIT 1
-        `)
-      ).rows,
+        `,
+        "objects",
+      ),
     );
     if (!row) continue;
     const where = sql`WHERE ${sql.identifier(columnName)}::text = ${targetId} ${keep} ${scopeBare}`;
@@ -946,16 +953,28 @@ async function seedSourceTransactionRecord(db: Database, ids: StagingIds) {
     TEST_ACTOR,
   );
   const predecessor = await getDb(db).query.sourceTransactionRecord.findFirst({
-    where: eq(
-      sourceTransactionRecord.rawDescription,
-      "Synthetic deletion predecessor",
-    ),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          eq(
+            sourceTransactionRecord.rawDescription,
+            "Synthetic deletion predecessor",
+          ),
+        ),
+    },
   });
   const successor = await getDb(db).query.sourceTransactionRecord.findFirst({
-    where: eq(
-      sourceTransactionRecord.rawDescription,
-      "Synthetic deletion successor",
-    ),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          eq(
+            sourceTransactionRecord.rawDescription,
+            "Synthetic deletion successor",
+          ),
+        ),
+    },
   });
   if (!predecessor || !successor)
     throw new Error("Synthetic source record staging failed");
@@ -1049,7 +1068,9 @@ async function seedRunOwnedRows(db: Database, ids: StagingIds, runId: RunId) {
   }
   if (imageId) {
     const owner = await getDb(db).query.run.findFirst({
-      where: eq(runTable.id, runId),
+      where: {
+        RAW: (table: PgTable) => relationalSql(table, eq(runTable.id, runId)),
+      },
     });
     if (!owner) throw new Error("Delete policy import Run missing");
     const photoRun = await insertWithShortcode(db, "run", {
@@ -1120,10 +1141,16 @@ async function seedRunEvidenceRows(
   } = ids;
   if (purchaseId) {
     const imported = await getDb(db).query.purchase.findFirst({
-      where: eq(purchase.id, purchaseId),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(table, eq(purchase.id, purchaseId)),
+      },
     });
     const accepted = await getDb(db).query.importSourceOrder.findFirst({
-      where: eq(importSourceOrder.purchaseId, purchaseId),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(table, eq(importSourceOrder.purchaseId, purchaseId)),
+      },
     });
     if (!imported || !accepted)
       throw new Error("Delete policy imported Purchase missing");

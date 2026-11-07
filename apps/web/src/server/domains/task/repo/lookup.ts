@@ -2,6 +2,7 @@ import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { taskCompletionSchema, taskStatusSchema } from "@cubby/schemas/project";
 import { rawTaskListItemOut } from "@cubby/schemas/work-raw-read";
 import { inArray, isNull, sql } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { effectiveFieldSql } from "~/server/db/computed/effective-field";
@@ -15,6 +16,7 @@ import {
   resolveLiveJoinShortcode,
   unwrapDb,
 } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { task } from "~/server/db/schema";
 import { projectScaffold } from "~/server/domains/project/repo/lookup";
 import { effectiveTaskDueDateSql } from "~/server/domains/task/repo/helpers";
@@ -55,10 +57,16 @@ export const taskScaffold = listScaffold("task", task, {
             (ids.length === 0
               ? []
               : await unwrapDb(db).query.task.findMany({
-                  where: inArray(
-                    task.id,
-                    ids.map((id) => parseEntityId("task", id)),
-                  ),
+                  where: {
+                    RAW: (table: PgTable) =>
+                      relationalSql(
+                        table,
+                        inArray(
+                          task.id,
+                          ids.map((id) => parseEntityId("task", id)),
+                        ),
+                      ),
+                  },
                   columns: { id: true },
                   with: {
                     parentTask: declared.parentTask,

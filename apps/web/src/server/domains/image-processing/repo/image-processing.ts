@@ -46,6 +46,7 @@ import {
   or,
   sql,
 } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
 import {
@@ -67,6 +68,7 @@ import {
   withTransactionDatabase,
   databaseForTransaction,
 } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
   imageDerivative,
   imageProcessingOrphan,
@@ -346,17 +348,23 @@ export async function findCachedImageDescriptionAnalysis(
   },
 ): Promise<ImageDescriptionResult | null> {
   const cached = await getDb(db).query.aiAnalysis.findFirst({
-    where: and(
-      eq(aiAnalysis.entityKind, "image"),
-      eq(aiAnalysis.entityId, input.imageId),
-      eq(aiAnalysis.feature, "image-description"),
-      eq(aiAnalysis.provider, input.provider),
-      eq(aiAnalysis.model, input.model),
-      eq(aiAnalysis.promptVersion, input.promptVersion),
-      eq(aiAnalysis.resultSchemaRevision, input.resultSchemaRevision),
-      eq(aiAnalysis.inputFingerprint, input.inputFingerprint),
-      notDeleted(aiAnalysis),
-    ),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          and(
+            eq(aiAnalysis.entityKind, "image"),
+            eq(aiAnalysis.entityId, input.imageId),
+            eq(aiAnalysis.feature, "image-description"),
+            eq(aiAnalysis.provider, input.provider),
+            eq(aiAnalysis.model, input.model),
+            eq(aiAnalysis.promptVersion, input.promptVersion),
+            eq(aiAnalysis.resultSchemaRevision, input.resultSchemaRevision),
+            eq(aiAnalysis.inputFingerprint, input.inputFingerprint),
+            notDeleted(aiAnalysis),
+          ),
+        ),
+    },
     columns: { result: true },
   });
   const parsed = imageDescriptionResult.safeParse(cached?.result);
@@ -472,15 +480,21 @@ export async function createTransparentDerivativeAndJob(
       })
       .onConflictDoNothing();
     const derivative = await tx.query.imageDerivative.findFirst({
-      where: and(
-        eq(imageDerivative.imageId, input.imageId),
-        eq(imageDerivative.purpose, "transparent"),
-        eq(imageDerivative.sourceContentHash, input.sourceContentHash),
-        eq(
-          imageDerivative.processorRevision,
-          IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION,
-        ),
-      ),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(
+              eq(imageDerivative.imageId, input.imageId),
+              eq(imageDerivative.purpose, "transparent"),
+              eq(imageDerivative.sourceContentHash, input.sourceContentHash),
+              eq(
+                imageDerivative.processorRevision,
+                IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION,
+              ),
+            ),
+          ),
+      },
       columns: { id: true, status: true, failureReason: true },
     });
     if (!derivative) throw new Error("Image derivative was not persisted");
@@ -1693,10 +1707,16 @@ export async function completeImageProcessingJob(
       .for("update", { of: [imageProcessingJob, image] });
     if (!canAdoptCompletion(job, input)) {
       const attempt = await tx.query.imageProcessingAttempt.findFirst({
-        where: and(
-          eq(imageProcessingAttempt.id, input.result.attemptId),
-          eq(imageProcessingAttempt.jobId, input.result.jobId),
-        ),
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(
+              table,
+              and(
+                eq(imageProcessingAttempt.id, input.result.attemptId),
+                eq(imageProcessingAttempt.jobId, input.result.jobId),
+              ),
+            ),
+        },
       });
       if (attempt && !["ready", "skipped", "failed"].includes(attempt.state)) {
         const outcome = input.result.outcome;
@@ -1874,9 +1894,10 @@ export async function loadImageRepresentations(
   if (imageScopeEmpty(shortcodes)) return new Map();
   const result = await unwrapDb(db).execute(
     imageRepresentationRowsSql(shortcodes, compatibleSubjectLiftOutputs),
+    "objects",
   );
   return imageRepresentationsFromRows(
-    z.array(imageRepresentationRow).parse(result.rows),
+    z.array(imageRepresentationRow).parse(result),
   );
 }
 
@@ -1885,7 +1906,10 @@ export async function getImageProcessingReadProjection(
   imageId: ImageId,
 ) {
   const source = await getDb(db).query.image.findFirst({
-    where: and(eq(image.id, imageId), notDeleted(image)),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(table, and(eq(image.id, imageId), notDeleted(image))),
+    },
     columns: { shortcode: true, sha256: true },
   });
   if (!source) throw new Error("Image not found");

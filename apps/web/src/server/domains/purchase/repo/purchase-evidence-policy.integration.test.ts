@@ -67,11 +67,14 @@ describe("purchase evidence policy", () => {
   it("uses explicit Purchase policy before Vendor and category defaults, including unknown", async () => {
     const { purchase } = await fixture();
     const policy = async () => {
-      const result = await unwrapDb(ctx.db).execute(sql`
+      const result = await unwrapDb(ctx.db).execute(
+        sql`
         SELECT ${purchaseItemizationExpectationSql("p")} AS policy
         FROM "Purchase" p WHERE p.id = ${purchase.id}
-      `);
-      return result.rows[0]?.policy;
+      `,
+        "objects",
+      );
+      return result[0]?.policy;
     };
     expect(await policy()).toBe("not_expected");
     await unwrapDb(ctx.db).execute(sql`
@@ -131,15 +134,18 @@ describe("purchase evidence policy", () => {
         ...values,
       });
     const state = async () => {
-      const result = await unwrapDb(ctx.db).execute(sql`
+      const result = await unwrapDb(ctx.db).execute(
+        sql`
         SELECT ${purchaseCoverageSql("p")} AS coverage
         FROM "Purchase" p WHERE p.id = ${purchase.id}
-      `);
+      `,
+        "objects",
+      );
       const quality = (
         await loadDataQualities(ctx.db, "purchase", [purchase.id])
       ).get(purchase.id);
       return {
-        coverage: result.rows[0]?.coverage,
+        coverage: result[0]?.coverage,
         gaps: quality?.gaps.map((gap) => gap.check) ?? [],
       };
     };
@@ -209,18 +215,21 @@ describe("purchase evidence policy", () => {
       });
     const itemization = async () => {
       await publishQualityFixtures(ctx.db, "purchase");
-      const result = await unwrapDb(ctx.db).execute(sql`
+      const result = await unwrapDb(ctx.db).execute(
+        sql`
         SELECT ${purchaseCoverageSql("p")}->>'itemization' AS itemization,
           (SELECT ${financialTransactionItemizationSql("ft.id")}
             FROM "FinancialTransaction" ft WHERE ft.id = ${charge.id}) AS verdict
         FROM "Purchase" p WHERE p.id = ${purchase.id}
-      `);
+      `,
+        "objects",
+      );
       const quality = (
         await loadDataQualities(ctx.db, "purchase", [purchase.id])
       ).get(purchase.id);
       return {
-        coverage: result.rows[0]?.itemization,
-        verdict: result.rows[0]?.verdict,
+        coverage: result[0]?.itemization,
+        verdict: result[0]?.verdict,
         gap: quality?.gaps.some((gap) => gap.check === "purchase_itemization"),
       };
     };
@@ -359,8 +368,9 @@ describe("purchase evidence policy", () => {
         (
           await unwrapDb(ctx.db).execute(
             sql`SELECT ${financialTransactionCoverageSql("t")} AS coverage FROM "FinancialTransaction" t WHERE id = ${transaction.entityId}`,
+            "objects",
           )
-        ).rows[0]?.coverage;
+        )[0]?.coverage;
       expect(await read()).toMatchObject({
         booking: "missing",
         document: "not_expected",
@@ -496,8 +506,9 @@ describe("purchase evidence policy", () => {
       const coverage = (
         await unwrapDb(ctx.db).execute(
           sql`SELECT ${financialTransactionCoverageSql("t")} AS coverage FROM "FinancialTransaction" t WHERE id = ${transaction.entityId}`,
+          "objects",
         )
-      ).rows[0]?.coverage;
+      )[0]?.coverage;
       expect(coverage).toMatchObject(
         role === "reimbursement"
           ? {
@@ -730,13 +741,16 @@ describe("vendor itemization default from order evidence", () => {
           amountMinor: moneyToMinor(25),
         });
       return async () => {
-        const result = await unwrapDb(ctx.db).execute(sql`
+        const result = await unwrapDb(ctx.db).execute(
+          sql`
           SELECT ${purchaseItemizationExpectationSql("p")} AS purchase,
             (SELECT ${financialTransactionCoverageSql("t")}->>'expectation'
              FROM "FinancialTransaction" t WHERE t.id = ${charge.id}) AS transaction
           FROM "Purchase" p WHERE p.id = ${purchase.id}
-        `);
-        return result.rows[0];
+        `,
+          "objects",
+        );
+        return result[0];
       };
     };
     const clear = (vendorId: VendorId) =>
@@ -825,11 +839,14 @@ describe("vendor itemization default from order evidence", () => {
         purchaseId: onlinePurchase.id,
         amountMinor: moneyToMinor(25),
       });
-    const coverage = await unwrapDb(ctx.db).execute(sql`
+    const coverage = await unwrapDb(ctx.db).execute(
+      sql`
       SELECT ${financialTransactionCoverageSql("t")}->>'expectation' AS expectation
       FROM "FinancialTransaction" t WHERE t.id = ${charge.id}
-    `);
-    expect(coverage.rows[0]?.expectation).toBe("required");
+    `,
+      "objects",
+    );
+    expect(coverage[0]?.expectation).toBe("required");
   });
 
   it("never reports a derived value as an order evidence conflict", async () => {

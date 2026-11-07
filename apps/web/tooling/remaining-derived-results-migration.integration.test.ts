@@ -1,3 +1,4 @@
+import { relationalSchema } from "~/server/db/schema";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { expect, it } from "vitest";
 
@@ -13,18 +14,28 @@ import { withMigrationDatabase } from "./test-database-lease";
 
 it("preserves populated predecessor decisions and queued work while initially publishing all six result families", async () => {
   await withMigrationDatabase(async (client, databaseUrl) => {
-    const runtime = drizzle(client);
+    const runtime = drizzle({ client: client, paramsInErrors: true });
     await migrateDatabase(runtime, {
-      through: "0045_field_envelope_decisions",
+      through: "20261027025727_0045_field_envelope_decisions",
     });
     const pool = createPostgresPool({ connectionString: databaseUrl, max: 4 });
     try {
       const db = createDatabase(() => ({
-        client: drizzle({ client: pool, schema }),
+        client: drizzle({
+          client: pool,
+          relations: relationalSchema,
+          paramsInErrors: true,
+        }),
         withConnection: async (run) => {
           const connection = await pool.connect();
           try {
-            return await run(drizzle({ client: connection, schema }));
+            return await run(
+              drizzle({
+                client: connection,
+                relations: relationalSchema,
+                paramsInErrors: true,
+              }),
+            );
           } finally {
             connection.release();
           }
@@ -114,7 +125,7 @@ it("preserves populated predecessor decisions and queued work while initially pu
         await client.query(`SELECT * FROM "JobInvalidationCapture"`)
       ).rows;
       await migrateDatabase(runtime, {
-        through: "0046_remaining_derived_results",
+        through: "20261027141508_0046_remaining_derived_results",
       });
       expect(await retained()).toEqual(before);
       expect(await queued()).toEqual(expect.arrayContaining(queuedBefore));

@@ -19,7 +19,8 @@ export async function vendorFrequentProductsSummary(
   code: string,
 ): Promise<ReportBlock[]> {
   const id = await resolveOrThrow(db, "vendor", code);
-  const result = await unwrapDb(db).execute(sql`
+  const result = await unwrapDb(db).execute(
+    sql`
     SELECT product."shortcode" AS id, product.name,
       count(DISTINCT p.id)::int AS count, count(*) OVER ()::int AS total,
       max(p.date)::text AS latest
@@ -31,8 +32,10 @@ export async function vendorFrequentProductsSummary(
     GROUP BY product.id, product."shortcode", product.name
     ORDER BY count(DISTINCT p.id) DESC, max(p.date) DESC NULLS LAST, product."shortcode"
     LIMIT 3
-  `);
-  const rows = rankedRow.array().parse(result.rows);
+  `,
+    "objects",
+  );
+  const rows = rankedRow.array().parse(result);
   return [
     {
       kind: "records",

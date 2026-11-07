@@ -1,3 +1,4 @@
+import { relationalSchema } from "~/server/db/schema";
 import { createDatabase } from "~/server/db/database-runtime";
 import type { UserId } from "@cubby/schemas/identifiers";
 import { drizzle } from "drizzle-orm/node-postgres";
@@ -6,7 +7,6 @@ import { z } from "zod";
 
 import { Database } from "~/server/db";
 import { tracePool } from "~/server/db/db-pg-tracing";
-import { drizzleSchema as schema } from "~/server/db/drizzle-schema";
 import { executeEntity } from "~/server/entity-kernel";
 import {
   entityBrowserMutationCommandSchema,
@@ -32,7 +32,11 @@ const createdEntitySchema = z.object({ id: z.string().min(1) });
 /** Wrap a plain `pg` pool as the repository-facing `Database` handle scenario builders need. */
 export function buildScenarioDatabase(pool: Pool): Database {
   // The production wrapper: one statement at a time per connection.
-  const client = drizzle(tracePool(pool, "strong"), { schema });
+  const client = drizzle({
+    client: tracePool(pool, "strong"),
+    relations: relationalSchema,
+    paramsInErrors: true,
+  });
   return createDatabase(() => ({
     client,
     withConnection: (run) => run(client),

@@ -1,136 +1,146 @@
+import {
+  generatedRelations,
+  relationTables,
+} from "./generated/entity-tables.gen";
 // Canonical definitions are shared; relational query assembly stays here.
 export * from "~/server/db/retained-tables";
 export * from "./generated/entity-tables.gen";
-export { entityIdentityRelations } from "~/server/db/entity-identity-schema";
-
-import { relations } from "drizzle-orm";
 
 import {
-  auditLog,
-  cookbook,
-  device,
-  entityAttachment,
-  entityExternalId,
-  entityIdentity,
-  expense,
-  externalSource,
-  gardenEntry,
-  image,
-  ledgerSourceClaim,
-  ledgerTransfer,
-  location,
-  meal,
-  product,
-  project,
-  purchase,
-  recipe,
-  run,
-  task,
-  user,
-  vendor,
-} from "~/server/db/retained-tables";
+  defineRelations,
+  type RelationsBuilder,
+  type ExtractTablesFromSchema,
+} from "drizzle-orm";
 
-export const entityExternalIdRelations = relations(
-  entityExternalId,
-  ({ one }) => ({
+const tables = relationTables;
+
+const entityExternalIdRelations = (
+  r: RelationsBuilder<ExtractTablesFromSchema<typeof tables>>,
+) => ({
+  entityExternalId: {
     // Entity ids are unique across tables, so the product side of a row is
     // exact without a kind filter.
-    product: one(product, {
-      fields: [entityExternalId.entityId],
-      references: [product.id],
-      relationName: "productExternalIds",
+    product: r.one.product({
+      from: [r.entityExternalId.entityId],
+      to: [r.product.id],
+      alias: "productExternalIds",
     }),
-    recipe: one(recipe, {
-      fields: [entityExternalId.entityId],
-      references: [recipe.id],
-      relationName: "recipeExternalIds",
+    recipe: r.one.recipe({
+      from: [r.entityExternalId.entityId],
+      to: [r.recipe.id],
+      alias: "recipeExternalIds",
     }),
-    externalSource: one(externalSource, {
-      fields: [entityExternalId.source],
-      references: [externalSource.slug],
+    externalSource: r.one.externalSource({
+      from: [r.entityExternalId.source],
+      to: [r.externalSource.slug],
+      optional: false,
     }),
-  }),
-);
+  },
+});
 
-export const entityAttachmentRelations = relations(
-  entityAttachment,
-  ({ one }) => ({
-    image: one(image, {
-      fields: [entityAttachment.imageId],
-      references: [image.id],
+const entityAttachmentRelations = (
+  r: RelationsBuilder<ExtractTablesFromSchema<typeof tables>>,
+) => ({
+  entityAttachment: {
+    image: r.one.image({
+      from: [r.entityAttachment.imageId],
+      to: [r.image.id],
+      optional: false,
     }),
-    product: one(product, {
-      fields: [entityAttachment.entityId],
-      references: [product.id],
+    product: r.one.product({
+      from: [r.entityAttachment.entityId],
+      to: [r.product.id],
     }),
-    location: one(location, {
-      fields: [entityAttachment.entityId],
-      references: [location.id],
+    location: r.one.location({
+      from: [r.entityAttachment.entityId],
+      to: [r.location.id],
     }),
-    gardenEntry: one(gardenEntry, {
-      fields: [entityAttachment.entityId],
-      references: [gardenEntry.id],
+    gardenEntry: r.one.gardenEntry({
+      from: [r.entityAttachment.entityId],
+      to: [r.gardenEntry.id],
     }),
-    recipe: one(recipe, {
-      fields: [entityAttachment.entityId],
-      references: [recipe.id],
+    recipe: r.one.recipe({
+      from: [r.entityAttachment.entityId],
+      to: [r.recipe.id],
     }),
-    meal: one(meal, {
-      fields: [entityAttachment.entityId],
-      references: [meal.id],
+    meal: r.one.meal({
+      from: [r.entityAttachment.entityId],
+      to: [r.meal.id],
     }),
-    task: one(task, {
-      fields: [entityAttachment.entityId],
-      references: [task.id],
+    task: r.one.task({
+      from: [r.entityAttachment.entityId],
+      to: [r.task.id],
     }),
-    purchase: one(purchase, {
-      fields: [entityAttachment.entityId],
-      references: [purchase.id],
+    purchase: r.one.purchase({
+      from: [r.entityAttachment.entityId],
+      to: [r.purchase.id],
     }),
-    project: one(project, {
-      fields: [entityAttachment.entityId],
-      references: [project.id],
+    project: r.one.project({
+      from: [r.entityAttachment.entityId],
+      to: [r.project.id],
     }),
-    cookbook: one(cookbook, {
-      fields: [entityAttachment.entityId],
-      references: [cookbook.id],
+    cookbook: r.one.cookbook({
+      from: [r.entityAttachment.entityId],
+      to: [r.cookbook.id],
     }),
-    vendor: one(vendor, {
-      fields: [entityAttachment.entityId],
-      references: [vendor.id],
+    vendor: r.one.vendor({
+      from: [r.entityAttachment.entityId],
+      to: [r.vendor.id],
     }),
-  }),
-);
+  },
+});
 
-export const ledgerSourceClaimRelations = relations(
-  ledgerSourceClaim,
-  ({ one }) => ({
-    expense: one(expense, {
-      fields: [ledgerSourceClaim.expenseId],
-      references: [expense.id],
+const ledgerSourceClaimRelations = (
+  r: RelationsBuilder<ExtractTablesFromSchema<typeof tables>>,
+) => ({
+  ledgerSourceClaim: {
+    expense: r.one.expense({
+      from: [r.ledgerSourceClaim.expenseId],
+      to: [r.expense.id],
     }),
-    ledgerTransfer: one(ledgerTransfer, {
-      fields: [ledgerSourceClaim.ledgerTransferId],
-      references: [ledgerTransfer.id],
+    ledgerTransfer: r.one.ledgerTransfer({
+      from: [r.ledgerSourceClaim.ledgerTransferId],
+      to: [r.ledgerTransfer.id],
     }),
-  }),
-);
+  },
+});
 
-export const auditLogRelations = relations(auditLog, ({ one }) => ({
-  identity: one(entityIdentity, {
-    fields: [auditLog.entityId],
-    references: [entityIdentity.id],
-  }),
-  user: one(user, {
-    fields: [auditLog.userId],
-    references: [user.id],
-  }),
-  device: one(device, {
-    fields: [auditLog.deviceId],
-    references: [device.id],
-  }),
-  run: one(run, {
-    fields: [auditLog.runId],
-    references: [run.id],
-  }),
+const auditLogRelations = (
+  r: RelationsBuilder<ExtractTablesFromSchema<typeof tables>>,
+) => ({
+  auditLog: {
+    identity: r.one.entityIdentity({
+      from: [r.auditLog.entityId],
+      to: [r.entityIdentity.id],
+      optional: false,
+    }),
+    user: r.one.user({
+      from: [r.auditLog.userId],
+      to: [r.user.id],
+      optional: false,
+    }),
+    device: r.one.device({
+      from: [r.auditLog.deviceId],
+      to: [r.device.id],
+    }),
+    run: r.one.run({
+      from: [r.auditLog.runId],
+      to: [r.run.id],
+    }),
+  },
+});
+
+export const relationalSchema = defineRelations(tables, (r) => ({
+  ...generatedRelations(r),
+  ...entityExternalIdRelations(r),
+  ...entityAttachmentRelations(r),
+  ...ledgerSourceClaimRelations(r),
+  ...auditLogRelations(r),
+  entityIdentity: {
+    canonical: r.one.entityIdentity({
+      from: r.entityIdentity.mergedIntoId,
+      to: r.entityIdentity.id,
+      alias: "entityCanonical",
+    }),
+  },
 }));

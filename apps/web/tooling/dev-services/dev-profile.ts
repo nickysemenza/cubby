@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
-import { existsSync, realpathSync, readFileSync } from "node:fs";
+import { readMigrationFiles } from "drizzle-orm/migrator";
+import { existsSync, realpathSync } from "node:fs";
 import path from "node:path";
-import { z } from "zod";
 
 import { readSourceIdentity, sourceReleaseVars } from "../source-identity.ts";
 
@@ -85,24 +85,14 @@ function resolveIntegrations(
 
 function migrationIdentity(repoRoot: string) {
   const migrationsRoot = path.join(repoRoot, "apps/web/drizzle");
-  const journalPath = path.join(migrationsRoot, "meta/_journal.json");
-  const migrations = existsSync(journalPath)
-    ? z
-        .object({ entries: z.array(z.object({ tag: z.string() })) })
-        .parse(JSON.parse(readFileSync(journalPath, "utf8"))).entries
+  // Configuration-only callers may describe a checkout before its files exist.
+  const migrations = existsSync(migrationsRoot)
+    ? readMigrationFiles({ migrationsFolder: migrationsRoot })
     : [];
-  const lastMigration = migrations.at(-1);
-  const migrationHash = lastMigration
-    ? createHash("sha256")
-        .update(
-          readFileSync(
-            path.join(migrationsRoot, `${lastMigration.tag}.sql`),
-            "utf8",
-          ),
-        )
-        .digest("hex")
-    : "";
-  return { migrationCount: migrations.length, migrationHash };
+  return {
+    migrationCount: migrations.length,
+    migrationHash: migrations.at(-1)?.hash ?? "",
+  };
 }
 
 interface LocalSettings {

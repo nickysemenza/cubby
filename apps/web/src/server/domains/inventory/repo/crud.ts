@@ -17,6 +17,7 @@ import {
   rawInventoryList,
 } from "@cubby/schemas/inventory-raw-read";
 import { and, eq, inArray, not, sql } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
@@ -37,6 +38,7 @@ import {
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { inventoryEntry, product } from "~/server/db/schema";
 import { inventorySearch } from "~/server/domains/inventory/repo/search-read-inventory";
 import {
@@ -103,7 +105,9 @@ export const checkUniqueProductDuplicate = async (
   locationId: LocationId,
 ): Promise<{ productName: string; locationName: string } | null> => {
   const productData = await getDb(db).query.product.findFirst({
-    where: eq(product.id, productId),
+    where: {
+      RAW: (table: PgTable) => relationalSql(table, eq(product.id, productId)),
+    },
     columns: { expectedQuantity: true, name: true },
   });
 
@@ -112,12 +116,18 @@ export const checkUniqueProductDuplicate = async (
       // Scoped to stock. A spare faucet on the shelf plus one wired into the
       // wall is the normal correct state for a single-unit product, not a
       // duplicate worth warning about.
-      where: and(
-        eq(inventoryEntry.productId, productId),
-        not(eq(inventoryEntry.locationId, locationId)),
-        stockOnly(),
-        notDeleted(inventoryEntry),
-      ),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(
+              eq(inventoryEntry.productId, productId),
+              not(eq(inventoryEntry.locationId, locationId)),
+              stockOnly(),
+              notDeleted(inventoryEntry),
+            ),
+          ),
+      },
       with: {
         location: {
           columns: { name: true },
@@ -206,7 +216,13 @@ export const inventoryScaffold = listScaffold<
       );
       const references = bind.ids(async ({ db, ids }) => {
         const related = await unwrapDb(db).query.inventoryEntry.findMany({
-          where: inArray(inventoryEntry.id, inventoryIds(ids)),
+          where: {
+            RAW: (table: PgTable) =>
+              relationalSql(
+                table,
+                inArray(inventoryEntry.id, inventoryIds(ids)),
+              ),
+          },
           ...relations.inventory.list,
         });
         const prices = await loadStoredDerived(
@@ -221,7 +237,13 @@ export const inventoryScaffold = listScaffold<
       // mappings and its display images, priced live.
       const products = bind.ids(async ({ db, ids }) => {
         const related = await unwrapDb(db).query.inventoryEntry.findMany({
-          where: inArray(inventoryEntry.id, inventoryIds(ids)),
+          where: {
+            RAW: (table: PgTable) =>
+              relationalSql(
+                table,
+                inArray(inventoryEntry.id, inventoryIds(ids)),
+              ),
+          },
           ...relations.inventory.full,
         });
         const [pricing, images] = await Promise.all([
@@ -404,14 +426,20 @@ const assertUpdatedSlotAvailable = async (
   if (!changesInventorySlot(data)) return;
   const targetPlacement = data.placement ?? before.placement;
   const occupant = await getDb(db).query.inventoryEntry.findFirst({
-    where: and(
-      eq(inventoryEntry.productId, data.productId ?? before.productId),
-      eq(inventoryEntry.locationId, data.locationId ?? before.locationId),
-      eq(inventoryEntry.placement, targetPlacement),
-      inventoryOwnershipSlotCondition(ownership),
-      not(eq(inventoryEntry.id, id)),
-      notDeleted(inventoryEntry),
-    ),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          and(
+            eq(inventoryEntry.productId, data.productId ?? before.productId),
+            eq(inventoryEntry.locationId, data.locationId ?? before.locationId),
+            eq(inventoryEntry.placement, targetPlacement),
+            inventoryOwnershipSlotCondition(ownership),
+            not(eq(inventoryEntry.id, id)),
+            notDeleted(inventoryEntry),
+          ),
+        ),
+    },
     columns: { shortcode: true },
   });
   if (occupant) {
@@ -454,7 +482,13 @@ export const updateInventoryEntry = defineMutationWriter({
     });
 
     const before = await getDb(db).query.inventoryEntry.findFirst({
-      where: and(eq(inventoryEntry.id, id), notDeleted(inventoryEntry)),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(eq(inventoryEntry.id, id), notDeleted(inventoryEntry)),
+          ),
+      },
     });
 
     if (!before) {
@@ -582,16 +616,22 @@ export const insertInventoryEntry = async (
 
   const placement = data.placement ?? "stock";
   const occupant = await getDb(db).query.inventoryEntry.findFirst({
-    where: and(
-      eq(inventoryEntry.productId, data.productId),
-      eq(inventoryEntry.locationId, data.locationId),
-      eq(inventoryEntry.placement, placement),
-      inventoryOwnershipSlotCondition({
-        ownershipMode,
-        ownerLedgerPartyId,
-      }),
-      notDeleted(inventoryEntry),
-    ),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          and(
+            eq(inventoryEntry.productId, data.productId),
+            eq(inventoryEntry.locationId, data.locationId),
+            eq(inventoryEntry.placement, placement),
+            inventoryOwnershipSlotCondition({
+              ownershipMode,
+              ownerLedgerPartyId,
+            }),
+            notDeleted(inventoryEntry),
+          ),
+        ),
+    },
     columns: { shortcode: true },
   });
   if (occupant) {
@@ -687,10 +727,16 @@ export const getInventoryForProducts = async (
   if (productIds.length === 0) return [];
 
   const rows = await getDb(db).query.inventoryEntry.findMany({
-    where: and(
-      inArray(inventoryEntry.productId, productIds),
-      notDeleted(inventoryEntry),
-    ),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          and(
+            inArray(inventoryEntry.productId, productIds),
+            notDeleted(inventoryEntry),
+          ),
+        ),
+    },
     columns: { productId: true, amountValue: true, amountUnit: true },
   });
 

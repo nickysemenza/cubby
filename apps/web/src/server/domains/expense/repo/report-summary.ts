@@ -25,16 +25,19 @@ export async function expenseAttributionSummary(
   ];
   const names = new Map<string, string>();
   if (codes.length) {
-    const result = await unwrapDb(db).execute(sql`
+    const result = await unwrapDb(db).execute(
+      sql`
       SELECT "shortcode" AS id, name FROM "LedgerParty"
       WHERE "shortcode" IN (${sql.join(
         codes.map((id) => sql`${id}`),
         sql`, `,
       )}) AND ${notDeleted("LedgerParty")}
-    `);
+    `,
+      "objects",
+    );
     for (const row of z
       .array(z.object({ id: z.string(), name: z.string() }))
-      .parse(result.rows))
+      .parse(result))
       names.set(row.id, row.name);
   }
   return [

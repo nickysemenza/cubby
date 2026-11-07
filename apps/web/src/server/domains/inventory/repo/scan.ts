@@ -1,3 +1,5 @@
+import type { Amount } from "@cubby/schemas/codec";
+import type { ActorContext } from "@cubby/schemas/context";
 /**
  * Reads and writes specific to a location sweep.
  *
@@ -5,9 +7,6 @@
  * caller and one deliberately narrow contract each: stock-only facts, and a
  * verification stamp that never touches the amount.
  */
-
-import type { Amount } from "@cubby/schemas/codec";
-import type { ActorContext } from "@cubby/schemas/context";
 import type {
   InventoryId,
   InventoryShortcode,
@@ -17,11 +16,13 @@ import type {
 } from "@cubby/schemas/identifiers";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { and, eq, inArray } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 
 import type { Database } from "~/server/db";
 import { stockOnly } from "~/server/db/computed/inventory-placement";
 import { getDb, notDeleted, withTransaction } from "~/server/db/helpers";
 import { amountFromColumns } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { inventoryEntry } from "~/server/db/schema";
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
 
@@ -55,12 +56,21 @@ export const getProductStockRows = async (
   productId: ProductId,
 ): Promise<ProductStockRow[]> => {
   const rows = await getDb(db).query.inventoryEntry.findMany({
-    where: and(
-      eq(inventoryEntry.productId, productId),
-      stockOnly(),
-      notDeleted(inventoryEntry),
-    ),
-    orderBy: inventoryEntry.createdAt,
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          and(
+            eq(inventoryEntry.productId, productId),
+            stockOnly(),
+            notDeleted(inventoryEntry),
+          ),
+        ),
+    },
+    orderBy: (table: PgTable) =>
+      [inventoryEntry.createdAt]
+        .flat()
+        .map((value) => relationalSql(table, value)),
     with: { location: true },
   });
 
@@ -116,11 +126,17 @@ export const getLiveStockRowsByIds = async (
   if (shortcodes.length === 0) return [];
 
   const rows = await getDb(db).query.inventoryEntry.findMany({
-    where: and(
-      inArray(inventoryEntry.shortcode, [...shortcodes]),
-      stockOnly(),
-      notDeleted(inventoryEntry),
-    ),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          and(
+            inArray(inventoryEntry.shortcode, [...shortcodes]),
+            stockOnly(),
+            notDeleted(inventoryEntry),
+          ),
+        ),
+    },
     with: { location: true },
   });
 

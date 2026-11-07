@@ -549,7 +549,7 @@ describe("entity table storage", () => {
     const entities = compileEntityDeclarations([declaration, beta], children);
     const source = renderEntityTableArtifacts(entities, children).definitions;
     expect(source).toContain(
-      ".references((): AnyPgColumn => syntheticContent.id)",
+      "columns:[table.contentId], foreignColumns:[syntheticContent.id]",
     );
     expect(() => compileEntityDeclarations([declaration, beta])).toThrow(
       "syntheticContent",

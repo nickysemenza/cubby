@@ -1,10 +1,12 @@
 import type { InventoryId, LocationId } from "@cubby/schemas/identifiers";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { eq } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { amountFromColumns, getDb } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { inventoryEntry, location as locationTable } from "~/server/db/schema";
 import { reconcileLocationSession } from "~/server/domains/inventory/repo/bulk";
 import { createInventoryEntry } from "~/server/domains/inventory/repo/crud";
@@ -74,11 +76,16 @@ describe("reconcileLocationSession", () => {
 
   const readEntry = (id: InventoryId) =>
     getDb(ctx.db).query.inventoryEntry.findFirst({
-      where: eq(inventoryEntry.id, id),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(table, eq(inventoryEntry.id, id)),
+      },
     });
   const readLocation = (id: LocationId) =>
     getDb(ctx.db).query.location.findFirst({
-      where: eq(locationTable.id, id),
+      where: {
+        RAW: (table: PgTable) => relationalSql(table, eq(locationTable.id, id)),
+      },
     });
 
   // The whole point of this test is that B is updated AFTER A, so B holds the

@@ -13,6 +13,7 @@ import { expenseCreateInput } from "@cubby/schemas/project";
 import { purchaseCreateInput } from "@cubby/schemas/purchase";
 import { cents, minorToMoney } from "@cubby/shared";
 import { and, eq, inArray, sql } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { groupBy } from "es-toolkit";
 
 import type { Database } from "~/server/db";
@@ -22,6 +23,7 @@ import {
   withSnapshotWrite,
   databaseForTransaction,
 } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
   expense,
   expenseAttribution,
@@ -103,10 +105,16 @@ async function transactionForBooking(
   );
   const stored = await getDb(db)
     .query.financialTransaction.findFirst({
-      where: and(
-        eq(financialTransaction.id, id),
-        notDeleted(financialTransaction),
-      ),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(
+              eq(financialTransaction.id, id),
+              notDeleted(financialTransaction),
+            ),
+          ),
+      },
     })
     .then((row) => (row ? transactionDollars(row) : row));
   if (!stored) return fail("The financial transaction is no longer live.");
@@ -146,7 +154,13 @@ export async function bookingGraphs(
   const ids = [...new Set(purchaseIds)];
   const storedTargets = ids.length
     ? await getDb(db).query.purchase.findMany({
-        where: and(inArray(purchase.id, ids), notDeleted(purchase)),
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(
+              table,
+              and(inArray(purchase.id, ids), notDeleted(purchase)),
+            ),
+        },
       })
     : [];
   // Retained booking fingerprints keep their original dollar-number shape.
@@ -202,8 +216,13 @@ async function bookingCategory(
     : inheritedCategoryId;
   if (!categoryId) return null;
   const category = await getDb(db).query.spendingCategory.findFirst({
-    where: (category, { eq }) =>
-      and(eq(category.id, categoryId), notDeleted(category)),
+    where: {
+      RAW: (category, { eq }) =>
+        relationalSql(
+          category,
+          and(eq(category.id, categoryId), notDeleted(category)),
+        ),
+    },
   });
   if (!category && input.spendingCategoryId)
     return fail("The spending category is no longer live.");
@@ -364,15 +383,26 @@ export async function previewFinancialBooking(
       input.purchaserId,
     );
     const member = await getDb(db).query.ledgerParty.findFirst({
-      where: and(eq(ledgerParty.id, purchaserId), notDeleted(ledgerParty)),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(eq(ledgerParty.id, purchaserId), notDeleted(ledgerParty)),
+          ),
+      },
     });
     if (member?.kind !== "member")
       return fail("A purchaser override must name a live member LedgerParty.");
   }
   const allocations = await getDb(db)
     .query.financialTransactionAllocation.findMany({
-      where: (allocation, { eq }) =>
-        and(eq(allocation.transactionId, row.id), notDeleted(allocation)),
+      where: {
+        RAW: (allocation, { eq }) =>
+          relationalSql(
+            allocation,
+            and(eq(allocation.transactionId, row.id), notDeleted(allocation)),
+          ),
+      },
       orderBy: (allocation, { asc }) => asc(allocation.purchaseId),
     })
     .then((rows) => rows.map(allocationDollars));
@@ -433,7 +463,10 @@ export async function previewFinancialBooking(
       }))
     : [];
   const account = await getDb(db).query.financialAccount.findFirst({
-    where: (account, { eq }) => eq(account.id, row.accountId),
+    where: {
+      RAW: (account, { eq }) =>
+        relationalSql(account, eq(account.id, row.accountId)),
+    },
     with: { ledgerParty: true },
   });
   const date = row.transactionDate ?? row.postedDate;
@@ -506,7 +539,10 @@ async function replayBooking(db: Database, review: FinancialBookingPreview) {
       "This transaction already has a different reviewed booking. Review its existing Expenses.",
     );
   const account = await getDb(db).query.financialAccount.findFirst({
-    where: (account, { eq }) => eq(account.id, row.accountId),
+    where: {
+      RAW: (account, { eq }) =>
+        relationalSql(account, eq(account.id, row.accountId)),
+    },
     with: { ledgerParty: true },
   });
   const date = row.transactionDate ?? row.postedDate;
@@ -526,8 +562,13 @@ async function replayBooking(db: Database, review: FinancialBookingPreview) {
     return fail("The approved account or purchaser evidence changed.");
   const allocations = await getDb(db)
     .query.financialTransactionAllocation.findMany({
-      where: (allocation, { eq }) =>
-        and(eq(allocation.transactionId, row.id), notDeleted(allocation)),
+      where: {
+        RAW: (allocation, { eq }) =>
+          relationalSql(
+            allocation,
+            and(eq(allocation.transactionId, row.id), notDeleted(allocation)),
+          ),
+      },
     })
     .then((rows) => rows.map(allocationDollars));
   const allocation = allocations[0];

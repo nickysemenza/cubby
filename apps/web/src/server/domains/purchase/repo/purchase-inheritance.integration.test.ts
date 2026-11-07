@@ -7,6 +7,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { getEntityRecommendations } from "~/server/domains/connection/service/connection-recommendations";
 import { expenseHandlers } from "~/server/domains/expense/operations.server";
 import { readExpense, updateExpense } from "~/server/domains/expense/repo/crud";
@@ -227,7 +228,9 @@ describe("purchase inheritance lifecycle", () => {
     );
     expect(
       await getDb(ctx.db).query.expense.findFirst({
-        where: (row, { eq }) => eq(row.id, item.id),
+        where: {
+          RAW: (row, { eq }) => relationalSql(row, eq(row.id, item.id)),
+        },
       }),
     ).toMatchObject({ spendingCategoryId: null });
     await updatePurchase(
@@ -611,7 +614,9 @@ describe("purchase inheritance lifecycle", () => {
     });
     expect(
       await getDb(ctx.db).query.purchase.findFirst({
-        where: (table, { eq }) => eq(table.id, keeper.id),
+        where: {
+          RAW: (table, { eq }) => relationalSql(table, eq(table.id, keeper.id)),
+        },
       }),
     ).toMatchObject({ defaultProjectId: second.id });
   });
@@ -704,7 +709,9 @@ describe("purchase inheritance lifecycle", () => {
     ).rejects.toMatchObject({ reason: "CONSTRAINT_VIOLATION" });
     expect(
       await getDb(ctx.db).query.purchase.findFirst({
-        where: (table, { eq }) => eq(table.id, keeper.id),
+        where: {
+          RAW: (table, { eq }) => relationalSql(table, eq(table.id, keeper.id)),
+        },
       }),
     ).toMatchObject({ deletedAt: null });
   });

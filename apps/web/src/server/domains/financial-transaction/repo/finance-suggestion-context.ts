@@ -122,11 +122,12 @@ export async function loadFinanceSuggestionContext(
   const id = await resolveOrThrow(db, entity, shortcode);
   const database = unwrapDb(db);
   const rootRows = z.array(z.object({ data: evidenceRow })).parse(
-    (
-      await database.execute(sql`
+    await database.execute(
+      sql`
     SELECT to_jsonb(saved) AS data FROM ${sql.identifier(financeTables[entity])} saved WHERE id = ${id} AND ${notDeleted("saved")}
-  `)
-    ).rows,
+  `,
+      "objects",
+    ),
   );
   const row = rootRows[0]?.data;
   if (!row || (entity === "financialTransaction" && row.status === "void"))
@@ -148,20 +149,21 @@ export async function loadFinanceSuggestionContext(
   `
       : sql`SELECT p.id FROM "Purchase" p WHERE p.id = ${entity === "purchase" ? id : (row.purchaseId ?? null)} AND ${notDeleted("p")}`;
   const purchases = rowsSchema.parse(
-    (
-      await database.execute(sql`
+    await database.execute(
+      sql`
     SELECT p.shortcode, p."displayLabel", p."orderId", p.date, p.notes,
       v.shortcode AS "vendorId", v.name AS vendor, v.notes AS "vendorNotes",
       p."spendingCategoryId" AS "storedSpendingCategoryId", p."spendingCategoryOrigin", c.shortcode AS "spendingCategoryId", c.name AS "spendingCategory"
     FROM "Purchase" p LEFT JOIN "Vendor" v ON v.id = p."vendorId" AND ${notDeleted("v")}
     LEFT JOIN "SpendingCategory" c ON c.id = p."spendingCategoryId" AND ${notDeleted("c")}
     WHERE p.id IN (${links}) ORDER BY p.shortcode LIMIT 101
-  `)
-    ).rows,
+  `,
+      "objects",
+    ),
   );
   const lines = rowsSchema.parse(
-    (
-      await database.execute(sql`
+    await database.execute(
+      sql`
     SELECT e.shortcode, e.name, e.cost, e."productQuantity", e.date, e.notes, e."lineKind", e."lineBasis", e."economicRole", e."costType", e.trade,
       p.shortcode AS purchase, g.shortcode AS product, g.name AS "productName", (SELECT b.name FROM "Vendor" b WHERE b.id=g."brandId" AND ${notDeleted("b")}) AS "brandName", g.model, g.notes AS "productNotes",
       pc.shortcode AS "productCategoryId", pc.name AS "productCategory",
@@ -173,27 +175,30 @@ export async function loadFinanceSuggestionContext(
     LEFT JOIN "SpendingCategory" c ON c.id = e."spendingCategoryId" AND ${notDeleted("c")}
     WHERE ${notDeleted("e")} AND ${entity === "expense" ? sql`e.id = ${id}` : sql`e."purchaseId" IN (${links})`}
     ORDER BY e.shortcode LIMIT 201
-  `)
-    ).rows,
+  `,
+      "objects",
+    ),
   );
   const allocations =
     entity === "financialTransaction"
       ? rowsSchema.parse(
-          (
-            await database.execute(sql`
+          await database.execute(
+            sql`
     SELECT p.shortcode AS purchase, (a."amountMinor"::float8 / 100) AS amount FROM "FinancialTransactionAllocation" a JOIN "Purchase" p ON p.id = a."purchaseId"
     WHERE a."transactionId" = ${id} AND ${notDeleted("a")} AND ${notDeleted("p")}
     ORDER BY p.shortcode LIMIT 101
-  `)
-          ).rows,
+  `,
+            "objects",
+          ),
         )
       : [];
   const categories = rowsSchema.parse(
-    (
-      await database.execute(sql`
+    await database.execute(
+      sql`
     SELECT shortcode, name, "parentId" FROM "SpendingCategory" WHERE ${notDeleted("SpendingCategory")} ORDER BY shortcode
-  `)
-    ).rows,
+  `,
+      "objects",
+    ),
   );
   const classificationRevision = await spendingClassificationRevision(db);
   const categoryAllocations =

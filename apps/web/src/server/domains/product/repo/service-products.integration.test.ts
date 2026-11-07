@@ -476,8 +476,9 @@ describe("category-based service Products", () => {
     await drainStoredDerived(ctx.db);
     const physicalCost = await getDb(ctx.db).execute(
       sql`SELECT value FROM "ProductCostView" WHERE "entityId" = ${service.entityId}`,
+      "objects",
     );
-    expect(physicalCost.rows).toEqual([]);
+    expect(physicalCost).toEqual([]);
 
     await updateProduct(
       ctx.db,
@@ -625,8 +626,9 @@ describe("category-based service Products", () => {
       .where(eq(product.id, service.entityId));
     const deleted = await getDb(ctx.db).execute(
       sql`SELECT ${serviceProductIdSql(sql`${service.entityId}::uuid`)} AS service`,
+      "objects",
     );
-    expect(deleted.rows[0]?.service).toBe(false);
+    expect(deleted[0]?.service).toBe(false);
   });
 
   it("excludes planned/deleted charges and keeps unknown evidence explicit beyond the history page", async () => {

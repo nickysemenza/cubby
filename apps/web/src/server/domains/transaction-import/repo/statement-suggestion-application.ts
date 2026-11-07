@@ -49,8 +49,9 @@ export async function loadStatementApplication(
     .from(suggestionTable)
     .where(eq(suggestionTable.id, state.id))
     .limit(1);
-  const { rows: sourceState } = await unwrapDb(db).execute<{ held: boolean }>(
+  const sourceState = await unwrapDb(db).execute<{ held: boolean }>(
     sql`SELECT ${statementSuggestionSourceHeld("s")} AS held FROM "Suggestion" s WHERE s.id=${state.id}::uuid`,
+    "objects",
   );
   if (sourceState[0]?.held)
     throw refuseStatementApplication(SOURCE_HELD_REASON);
@@ -100,11 +101,14 @@ export async function statementApplicationSelection(
   judgment: StatementTransactionJudgment,
   application: StatementTransactionApplication,
 ) {
-  const { rows: accounts } = await unwrapDb(db).execute<{
+  const accounts = await unwrapDb(db).execute<{
     shortcode: string;
-  }>(sql`
+  }>(
+    sql`
     SELECT shortcode FROM "FinancialAccount" WHERE id = ${judgment.accountId}::uuid AND ${notDeleted("FinancialAccount")}
-  `);
+  `,
+    "objects",
+  );
   const accountCode = accounts[0]?.shortcode;
   if (!accountCode)
     throw refuseStatementApplication(
@@ -118,16 +122,19 @@ export async function statementApplicationSelection(
   ];
   const codes = new Map<string, string>();
   if (ids.length) {
-    const { rows } = await unwrapDb(db).execute<{
+    const rows = await unwrapDb(db).execute<{
       id: string;
       shortcode: string;
-    }>(sql`
+    }>(
+      sql`
       SELECT id, shortcode FROM "FinancialTransaction" WHERE ${notDeleted("FinancialTransaction")}
       AND id IN (${sql.join(
         ids.map((id) => sql`${id}::uuid`),
         sql`, `,
       )})
-    `);
+    `,
+      "objects",
+    );
     for (const row of rows) codes.set(String(row.id), row.shortcode);
   }
   const codeOf = (id: string) => {

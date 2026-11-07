@@ -161,8 +161,8 @@ describe("Email data quality", () => {
       });
     await refresh();
     const statement = sql`SELECT "Email".id, ${gapCondition("email", "email_not_imported")} AS gap FROM ${email}`;
-    const rows = await getDb(ctx.db).execute(statement);
-    const gaps = z.array(z.object({ gap: z.boolean() })).parse(rows.rows);
+    const rows = await getDb(ctx.db).execute(statement, "objects");
+    const gaps = z.array(z.object({ gap: z.boolean() })).parse(rows);
     expect(gaps).toHaveLength(6);
     expect(gaps.filter((row) => row.gap)).toHaveLength(4);
     const plain = await emailScaffold.raw(

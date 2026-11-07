@@ -165,7 +165,7 @@ export async function statementSuggestionKeys(
   db: Database,
   filters: StatementSuggestionScope,
 ) {
-  const { rows } = await unwrapDb(db).execute<{
+  const rows = await unwrapDb(db).execute<{
     id: string;
     fingerprint: string | null;
     clean: boolean;
@@ -187,7 +187,8 @@ export async function statementSuggestionKeys(
     candidateCode: string | null;
     matchedRules: string[];
     automaticRule: string | null;
-  }>(sql`
+  }>(
+    sql`
     SELECT s.id, s.fingerprint, (${currentClean}) AS clean,
       ${suggestionField("recommended")} AS recommended,
       s.judgment->>${"reviewReason"} AS "reviewReason",
@@ -205,7 +206,9 @@ export async function statementSuggestionKeys(
     ${FROM}
     ${FIRST_CANDIDATE}
     WHERE ${conditions(filters)}
-  `);
+  `,
+    "objects",
+  );
   return rows.map((row) => ({
     ...row,
     recommended: statementTransactionAction.parse(row.recommended),
@@ -248,11 +251,12 @@ export async function readStatementSuggestions(
   const judgments = page.rows.map((row) =>
     statementTransactionJudgment.parse(row.judgment),
   );
-  const { rows: categoryEvidence } = await unwrapDb(db).execute<{
+  const categoryEvidence = await unwrapDb(db).execute<{
     id: string;
     source: string;
     sourceCategory: string | null;
-  }>(sql`
+  }>(
+    sql`
     WITH roots AS (
       SELECT s.id, s.data->>${"source"} AS source, s.data->>'chargeKey' AS "chargeKey"
       FROM "Suggestion" s WHERE s.id = ANY(${uuidArrayParam(page.rows.map((row) => row.id))})
@@ -275,7 +279,9 @@ export async function readStatementSuggestions(
       ON r.source = members.source AND ${chargeKeyOf("r")} = members."chargeKey"
     WHERE ${notDeleted("r")}
     ORDER BY members.id, r.source, r."sourceCategory" NULLS FIRST
-  `);
+  `,
+    "objects",
+  );
   const categories = new Map<
     string,
     StatementSuggestionOut["sourceCategories"]
@@ -301,16 +307,19 @@ export async function readStatementSuggestions(
   ];
   const codes = new Map<string, string>();
   if (transactionIds.length) {
-    const { rows } = await unwrapDb(db).execute<{
+    const rows = await unwrapDb(db).execute<{
       id: string;
       shortcode: string;
-    }>(sql`
+    }>(
+      sql`
       SELECT id, shortcode FROM "FinancialTransaction"
       WHERE id IN (${sql.join(
         transactionIds.map((id) => sql`${id}::uuid`),
         sql`, `,
       )})
-    `);
+    `,
+      "objects",
+    );
     for (const row of rows) codes.set(String(row.id), row.shortcode);
   }
   const code = (id: string) =>
@@ -324,16 +333,19 @@ export async function readStatementSuggestions(
   ];
   const accountCodes = new Map<string, string>();
   if (transferAccountIds.length) {
-    const { rows } = await unwrapDb(db).execute<{
+    const rows = await unwrapDb(db).execute<{
       id: string;
       shortcode: string;
-    }>(sql`
+    }>(
+      sql`
       SELECT id, shortcode FROM "FinancialAccount"
       WHERE ${notDeleted("FinancialAccount")} AND id IN (${sql.join(
         transferAccountIds.map((id) => sql`${id}::uuid`),
         sql`, `,
       )})
-    `);
+    `,
+      "objects",
+    );
     for (const row of rows) accountCodes.set(String(row.id), row.shortcode);
   }
   return page.rows.map((row, index) => {

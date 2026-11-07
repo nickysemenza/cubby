@@ -1,3 +1,6 @@
+import type { PgTable } from "drizzle-orm/pg-core";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
+import { relationalSchema } from "~/server/db/schema";
 import { createDatabase } from "~/server/db/database-runtime";
 import { createPostgresPool } from "#web/tooling/postgres-pool.ts";
 import "../support/build-constants";
@@ -69,7 +72,11 @@ export function getFixtureDb(): Database {
     max: 8,
     allowExitOnIdle: true,
   });
-  const client = drizzle(pool, { schema });
+  const client = drizzle({
+    client: pool,
+    relations: relationalSchema,
+    paramsInErrors: true,
+  });
   fixtureDb = createDatabase(() => ({
     client,
     withConnection: (run) => run(client),
@@ -207,11 +214,17 @@ export async function ensureMemberParty(page: Page, name: string) {
   const db = getFixtureDb();
   const userId = await fixtureUserId(page);
   const existing = await getDb(db).query.ledgerParty.findFirst({
-    where: and(
-      eq(schema.ledgerParty.userId, userId),
-      eq(schema.ledgerParty.kind, "member"),
-      isNull(schema.ledgerParty.deletedAt),
-    ),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          and(
+            eq(schema.ledgerParty.userId, userId),
+            eq(schema.ledgerParty.kind, "member"),
+            isNull(schema.ledgerParty.deletedAt),
+          ),
+        ),
+    },
   });
   return (
     existing ??

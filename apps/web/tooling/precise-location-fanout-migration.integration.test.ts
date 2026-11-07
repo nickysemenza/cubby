@@ -5,8 +5,10 @@ import { withMigrationDatabase } from "./test-database-lease";
 
 it("preserves retained publications and input identities across precise fanout migrations", async () => {
   await withMigrationDatabase(async (client) => {
-    const db = drizzle(client);
-    await migrateDatabase(db, { through: "0059_sender_attribution_policies" });
+    const db = drizzle({ client: client, paramsInErrors: true });
+    await migrateDatabase(db, {
+      through: "20261029005641_0059_sender_attribution_policies",
+    });
     const id = "00000000-0000-4000-8000-000000000001";
     await client.query(
       `INSERT INTO "Entity" (id,kind,shortcode) VALUES ($1,'product','PRD-SYNTHETIC')`,
@@ -42,7 +44,9 @@ it("preserves retained publications and input identities across precise fanout m
       ).rows,
     });
     const before = await preserved();
-    await migrateDatabase(db, { through: "0060_precise_location_fanout" });
+    await migrateDatabase(db, {
+      through: "20261029130800_0060_precise_location_fanout",
+    });
     expect(await preserved()).toEqual(before);
     // A deleted SourceOrder can leave its UUID ticket owed to the predecessor expansion.
     await client.query(
@@ -53,7 +57,9 @@ it("preserves retained publications and input identities across precise fanout m
       `UPDATE "WorkItem" SET priority=2, attempts=1, "readyAt"=now()+interval '1 day' WHERE target='email.relationshipFacts@8'`,
     );
     const beforeSourceOrder = await preserved();
-    await migrateDatabase(db, { through: "0061_source_order_purchase_fanout" });
+    await migrateDatabase(db, {
+      through: "20261030013309_0061_source_order_purchase_fanout",
+    });
     expect(await preserved()).toEqual(beforeSourceOrder);
     const definition = (
       await client.query(
@@ -73,7 +79,9 @@ it("preserves retained publications and input identities across precise fanout m
       `UPDATE "WorkItem" SET priority=2, attempts=2, "readyAt"=now()+interval '2 days' WHERE target='email.relationshipFacts@7'`,
     );
     const beforeSourceClaim = await preserved();
-    await migrateDatabase(db, { through: "0062_source_claim_family_fanout" });
+    await migrateDatabase(db, {
+      through: "20261030032333_0062_source_claim_family_fanout",
+    });
     expect(await preserved()).toEqual(beforeSourceClaim);
     const claimDefinition = (
       await client.query(
@@ -89,10 +97,12 @@ it("preserves retained publications and input identities across precise fanout m
     expect(claimDefinition).toContain(
       "derived_mark('email.relationshipFacts@11'",
     );
-    await migrateDatabase(db, { through: "0063_shipment_tracking_identity" });
+    await migrateDatabase(db, {
+      through: "20261103160623_0063_shipment_tracking_identity",
+    });
     const beforeObservation = await preserved();
     await migrateDatabase(db, {
-      through: "0064_derived_execution_observation",
+      through: "20261103190622_0064_derived_execution_observation",
     });
     const afterObservation = await preserved();
     const retainedWork = await client.query(
@@ -121,7 +131,7 @@ it("preserves retained publications and input identities across precise fanout m
       `SELECT to_jsonb(a) value FROM "Assessment" a ORDER BY id`,
     );
     await migrateDatabase(db, {
-      through: "0066_assessment_refresh_metadata",
+      through: "20261103215148_0066_assessment_refresh_metadata",
     });
     const afterRefreshMetadata = await preserved();
     expect(

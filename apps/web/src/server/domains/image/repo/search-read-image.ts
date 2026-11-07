@@ -1,10 +1,12 @@
 import { entitySchema } from "@cubby/schemas/entity";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { sql, and, inArray } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { alias } from "drizzle-orm/pg-core";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { unwrapDb, notDeleted } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { image as searchTableimage } from "~/server/db/schema";
 import { image } from "~/server/db/schema";
 import { withOptionalLimit } from "~/server/generic/embedding/repo/embedding-load-options";
@@ -20,15 +22,21 @@ async function loadEmbeddingText(
 ): Promise<SearchableEntityText[]> {
   const queryConfig = withOptionalLimit(
     {
-      where: and(
-        notDeleted(image),
-        options.ids?.length
-          ? inArray(
-              image.id,
-              options.ids.map((id) => parseEntityId("image", id)),
-            )
-          : undefined,
-      ),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(
+              notDeleted(image),
+              options.ids?.length
+                ? inArray(
+                    image.id,
+                    options.ids.map((id) => parseEntityId("image", id)),
+                  )
+                : undefined,
+            ),
+          ),
+      },
       columns: { id: true, filename: true },
     },
     options.limit,

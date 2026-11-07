@@ -280,10 +280,11 @@ export async function executeExpenseDerivedBatches<
 ): Promise<DerivedProjectionResults<Queries>> {
   const result = await unwrapDb(db).execute<DerivedProjectionResults<Queries>>(
     expenseDerivedBatchesSql(db, contexts, projections),
+    "objects",
   );
   // SAFETY: the builder names each JSON array with its projection key and
   // positional aliases reproduce the Drizzle query's declared result fields.
-  return result.rows[0] as DerivedProjectionResults<Queries>;
+  return result[0] as DerivedProjectionResults<Queries>;
 }
 
 /** The executed statement is also available to EXPLAIN at the real batch boundary. */

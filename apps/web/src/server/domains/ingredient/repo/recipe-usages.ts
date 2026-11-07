@@ -1,8 +1,10 @@
 import type { IngredientId } from "@cubby/schemas/identifiers";
 import { and, eq } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 
 import type { Database } from "~/server/db";
 import { getDb, notDeleted } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { recipeSourceRelations } from "~/server/db/helpers/relations";
 import { recipeSectionIngredient } from "~/server/db/schema";
 import { computeRecipeUsages } from "~/server/domains/recipe/repo/helpers";
@@ -12,10 +14,16 @@ export const getRecipeUsagesForIngredient = async (
   ingredientId: IngredientId,
 ) => {
   const rows = await getDb(db).query.recipeSectionIngredient.findMany({
-    where: and(
-      eq(recipeSectionIngredient.ingredientId, ingredientId),
-      notDeleted(recipeSectionIngredient),
-    ),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          and(
+            eq(recipeSectionIngredient.ingredientId, ingredientId),
+            notDeleted(recipeSectionIngredient),
+          ),
+        ),
+    },
     with: {
       recipeSection: {
         with: { recipe: { with: recipeSourceRelations } },

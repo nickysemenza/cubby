@@ -4,12 +4,14 @@ import {
 } from "@cubby/schemas/identifiers";
 import { testUserId } from "@cubby/schemas/testing";
 import { eq, sql } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { createRepoEntity } from "tooling/factories/repo";
 import { taxonomyShortcode } from "tooling/product-category-fixtures";
 import { TEST_USER_ID, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
   suggestionTable,
   entityAttachment,
@@ -518,7 +520,10 @@ describe("product_enrichment.propose_product_match", () => {
     });
     expect(
       await getDb(ctx.db).query.product.findFirst({
-        where: eq(productTable.id, photoId!),
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(table, eq(productTable.id, photoId!)),
+        },
         columns: { deletedAt: true },
       }),
     ).toMatchObject({ deletedAt: expect.any(Date) });

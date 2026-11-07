@@ -1,3 +1,5 @@
+import type { PgTable } from "drizzle-orm/pg-core";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { resolveProductBrandName } from "~/server/domains/vendor/repo/product-brand";
 import { publishEntityConnection } from "~/server/domains/connection/repo/entity-connections";
 import type { EntityOverrides } from "#web/tooling/factories/build.ts";
@@ -177,10 +179,16 @@ export async function seedPlacementReviewPrerequisite(
   name: string,
 ) {
   const existingUnknown = await getDb(getFixtureDb()).query.location.findFirst({
-    where: and(
-      eq(schema.location.name, "Unknown"),
-      isNull(schema.location.deletedAt),
-    ),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          and(
+            eq(schema.location.name, "Unknown"),
+            isNull(schema.location.deletedAt),
+          ),
+        ),
+    },
   });
   const unknown = existingUnknown
     ? { id: existingUnknown.shortcode }

@@ -1,3 +1,5 @@
+import type { IngredientId } from "@cubby/schemas/identifiers";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 /**
  * Ingredient-centric Problems detectors.
  *
@@ -5,11 +7,9 @@
  * unused/redundant aliases (a WASM parse-sweep over every live line), unused
  * ingredients (split by linked-product), and the alias-pruning fix.
  */
-
-import type { IngredientId } from "@cubby/schemas/identifiers";
-import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { IngredientWithUnusedAliases } from "@cubby/schemas/problems-raw-read";
 import { and, eq, isNotNull, isNull, sql } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 
 import { wasm } from "~/lib/wasm";
 import type { Database } from "~/server/db";
@@ -19,6 +19,7 @@ import {
   updateAndReturn,
   withTransaction,
 } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
   ingredient,
   recipe,
@@ -164,10 +165,13 @@ export const pruneUnusedAliases = async (
       if (item.remove.length === 0) continue;
       const removeLower = new Set(item.remove.map((a) => a.toLowerCase()));
       const row = await tx.query.ingredient.findFirst({
-        where: and(
-          eq(ingredient.id, item.ingredientId),
-          notDeleted(ingredient),
-        ),
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(
+              table,
+              and(eq(ingredient.id, item.ingredientId), notDeleted(ingredient)),
+            ),
+        },
         columns: { aliases: true },
       });
       if (!row) continue;

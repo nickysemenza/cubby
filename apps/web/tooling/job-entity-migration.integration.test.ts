@@ -5,8 +5,10 @@ import { withMigrationDatabase } from "./test-database-lease";
 
 it("backfills multiple Job batches without changing execution or retained captures and replays safely", async () => {
   await withMigrationDatabase(async (client) => {
-    const db = drizzle(client);
-    await migrateDatabase(db, { through: "0035_music_category_family" });
+    const db = drizzle({ client: client, paramsInErrors: true });
+    await migrateDatabase(db, {
+      through: "20261025203622_0035_music_category_family",
+    });
     await client.query(`INSERT INTO "Job" (key,kind,input,state,attempts,error,"availableAt","createdAt","updatedAt")
       SELECT 'synthetic:identity:' || n, 'synthetic.migration', jsonb_build_object('page',n),
         CASE WHEN n % 3 = 0 THEN 'paused' WHEN n % 3 = 1 THEN 'retry_wait' ELSE 'completed' END,
@@ -25,7 +27,9 @@ it("backfills multiple Job batches without changing execution or retained captur
         .rows;
     const before = await executions();
     const retained = await captures();
-    await migrateDatabase(db, { through: "0036_job_entity_identity" });
+    await migrateDatabase(db, {
+      through: "20261025205221_0036_job_entity_identity",
+    });
     expect(await executions()).toEqual(before);
     expect(await captures()).toEqual(retained);
     const identity = async () =>
@@ -47,7 +51,9 @@ it("backfills multiple Job batches without changing execution or retained captur
     // Emulate a crash after committed batches but before the journal receipt.
     await client.query(`DELETE FROM drizzle.__drizzle_migrations WHERE created_at = (
       SELECT max(created_at) FROM drizzle.__drizzle_migrations)`);
-    await migrateDatabase(db, { through: "0036_job_entity_identity" });
+    await migrateDatabase(db, {
+      through: "20261025205221_0036_job_entity_identity",
+    });
     expect(await identity()).toEqual(first);
     expect(await executions()).toEqual(before);
   });

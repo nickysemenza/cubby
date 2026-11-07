@@ -2,6 +2,7 @@ import { runShortcode, userId } from "@cubby/schemas/identifiers";
 import { mailboxDiscoveryInput } from "@cubby/schemas/mailbox-research";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { eq } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { type JSONType, z } from "zod";
@@ -9,6 +10,7 @@ import { type JSONType, z } from "zod";
 import { setCfEnv } from "~/server/cf-env";
 import { account, user } from "~/server/db/auth.schema";
 import { getDb } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
   aiUsage,
   appSettings,
@@ -95,7 +97,10 @@ describe("Run lifecycle through MCP", () => {
     const stopped = await call(original.shortcode, "cancel");
     expect(stopped.isError).not.toBe(true);
     const persisted = await getDb(ctx.db).query.run.findFirst({
-      where: eq(runTable.id, original.id),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(table, eq(runTable.id, original.id)),
+      },
     });
     expect(persisted).toMatchObject({
       status: "failed",
@@ -116,7 +121,10 @@ describe("Run lifecycle through MCP", () => {
     });
     expect(
       await getDb(ctx.db).query.run.findFirst({
-        where: eq(runTable.id, original.id),
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(table, eq(runTable.id, original.id)),
+        },
       }),
     ).toMatchObject({
       status: "failed",
@@ -131,10 +139,16 @@ describe("Run lifecycle through MCP", () => {
       .parse(restarted.structuredContent).successor;
     expect(next.publicId).not.toBe(successor.publicId);
     const nextRow = await getDb(ctx.db).query.run.findFirst({
-      where: eq(runTable.shortcode, next.publicId),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(table, eq(runTable.shortcode, next.publicId)),
+      },
     });
     const previous = await getDb(ctx.db).query.run.findFirst({
-      where: eq(runTable.shortcode, successor.publicId),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(table, eq(runTable.shortcode, successor.publicId)),
+      },
     });
     expect(nextRow?.predecessorRunId).toBe(previous?.id);
   });
@@ -225,7 +239,10 @@ describe("Run lifecycle through MCP", () => {
     expect((await call(original.shortcode, "cancel")).isError).toBe(true);
     expect(
       await getDb(ctx.db).query.run.findFirst({
-        where: eq(runTable.id, original.id),
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(table, eq(runTable.id, original.id)),
+        },
       }),
     ).toMatchObject({ status: "running" });
   });

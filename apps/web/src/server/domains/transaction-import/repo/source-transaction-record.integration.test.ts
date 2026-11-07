@@ -334,6 +334,7 @@ describe("statement row ledger", () => {
       .from(sourceObservationAnnotation);
     const moneyBefore = await getDb(ctx.db).execute(
       sql`SELECT (SELECT count(*) FROM "FinancialTransaction") AS transactions,(SELECT count(*) FROM "Expense") AS expenses`,
+      "objects",
     );
     await expect(
       recordSourceTransactionRecords(ctx.db, input, ctx.actor),
@@ -383,12 +384,11 @@ describe("statement row ledger", () => {
       ignoredOwners,
     );
     expect(
-      (
-        await getDb(ctx.db).execute(
-          sql`SELECT (SELECT count(*) FROM "FinancialTransaction") AS transactions,(SELECT count(*) FROM "Expense") AS expenses`,
-        )
-      ).rows,
-    ).toEqual(moneyBefore.rows);
+      await getDb(ctx.db).execute(
+        sql`SELECT (SELECT count(*) FROM "FinancialTransaction") AS transactions,(SELECT count(*) FROM "Expense") AS expenses`,
+        "objects",
+      ),
+    ).toEqual(moneyBefore);
     const [unresolved] = (await listSourceTransactionRecords(ctx.db, {})).data;
     if (!unresolved) throw new Error("Synthetic unresolved evidence missing");
     const account = await createRepoEntity(ctx, "financialAccount", {
@@ -502,7 +502,8 @@ describe("statement row ledger", () => {
       acceptedTransactionId: target.entityId,
     });
     const assertReadProjection = async () => {
-      const { rows } = await getDb(ctx.db).execute(sql`
+      const rows = await getDb(ctx.db).execute(
+        sql`
         SELECT count(*)::int AS differences
         FROM "SourceTransactionRecord" r LEFT JOIN "SourceOccurrence" o ON o.id=r."occurrenceId"
         JOIN ${sourceObservations} projection ON projection.id=r.id
@@ -512,7 +513,9 @@ describe("statement row ledger", () => {
           WHEN o."reviewState"=${sourceOccurrenceReviewState.enum.ready} AND ${sourceOccurrenceHasUnresolvedHistory(sql`o.id`, sql`o."acceptedTransactionId"`)}
           THEN ${sourceOccurrenceReviewState.enum.ownership_conflict} ELSE o."reviewState" END
           OR projection."matchState" IS DISTINCT FROM ${sourceObservationField("matchState", "r")}
-          OR projection."reviewState" IS DISTINCT FROM ${sourceObservationField("reviewState", "r")}`);
+          OR projection."reviewState" IS DISTINCT FROM ${sourceObservationField("reviewState", "r")}`,
+        "objects",
+      );
       expect(rows).toEqual([{ differences: 0 }]);
     };
     const [historicalBinding] = await getDb(ctx.db)
@@ -582,11 +585,10 @@ describe("statement row ledger", () => {
       .returning();
     if (!conflict) throw new Error("Synthetic competing binding missing");
     expect(
-      (
-        await getDb(ctx.db).execute(
-          sql`SELECT "reviewState" FROM ${sourceObservations} r WHERE r."occurrenceId"=${acceptedOwner.id}`,
-        )
-      ).rows,
+      await getDb(ctx.db).execute(
+        sql`SELECT "reviewState" FROM ${sourceObservations} r WHERE r."occurrenceId"=${acceptedOwner.id}`,
+        "objects",
+      ),
     ).toEqual([{ reviewState: "ownership_conflict" }]);
     await assertReadProjection();
     await getDb(ctx.db)
@@ -594,11 +596,10 @@ describe("statement row ledger", () => {
       .set({ deletedAt: new Date() })
       .where(eq(financialEvidenceAlias.id, conflict.id));
     expect(
-      (
-        await getDb(ctx.db).execute(
-          sql`SELECT "reviewState" FROM ${sourceObservations} r WHERE r."occurrenceId"=${acceptedOwner.id}`,
-        )
-      ).rows,
+      await getDb(ctx.db).execute(
+        sql`SELECT "reviewState" FROM ${sourceObservations} r WHERE r."occurrenceId"=${acceptedOwner.id}`,
+        "objects",
+      ),
     ).toEqual([{ reviewState: "ready" }]);
     await getDb(ctx.db)
       .update(financialEvidenceAlias)
@@ -614,11 +615,10 @@ describe("statement row ledger", () => {
       await getDb(ctx.db).select().from(sourceObservationAnnotation),
     ).toEqual(retainedJudgments);
     expect(
-      (
-        await getDb(ctx.db).execute(
-          sql`SELECT count(*)::int AS count FROM "Expense"`,
-        )
-      ).rows,
+      await getDb(ctx.db).execute(
+        sql`SELECT count(*)::int AS count FROM "Expense"`,
+        "objects",
+      ),
     ).toEqual([{ count: 0 }]);
   });
 
@@ -1007,11 +1007,14 @@ describe("statement row ledger", () => {
     expect(
       outcomes.filter((outcome) => outcome.status === "rejected"),
     ).toHaveLength(1);
-    const { rows: violations } = await getDb(ctx.db).execute(sql`
+    const violations = await getDb(ctx.db).execute(
+      sql`
       -- includes-deleted: a concurrent acceptance must never leave a deleted accepted head.
       SELECT count(*)::int AS count FROM "SourceOccurrence" owner
       JOIN "SourceTransactionRecord" head ON head.id=owner."currentObservationId"
-      WHERE owner."acceptedTransactionId" IS NOT NULL AND head."deletedAt" IS NOT NULL`);
+      WHERE owner."acceptedTransactionId" IS NOT NULL AND head."deletedAt" IS NOT NULL`,
+      "objects",
+    );
     expect(violations[0]).toMatchObject({ count: 0 });
     await deleteThroughKernel(ctx.db, ctx.actor, "financialTransaction", [
       transaction.id,
@@ -1187,11 +1190,10 @@ describe("statement row ledger", () => {
       acceptedTransactionId: null,
     });
     expect(
-      (
-        await getDb(ctx.db).execute(
-          sql`SELECT count(*)::int AS count FROM "Expense"`,
-        )
-      ).rows,
+      await getDb(ctx.db).execute(
+        sql`SELECT count(*)::int AS count FROM "Expense"`,
+        "objects",
+      ),
     ).toEqual([{ count: 0 }]);
   });
 
@@ -1406,11 +1408,10 @@ describe("statement row ledger", () => {
     if (!original || !target)
       throw new Error("Synthetic reviewed owners missing");
     expect(target.reviewState).toBe("identity_conflict");
-    const beforeMoney = (
-      await getDb(ctx.db).execute(
-        sql`SELECT to_jsonb(money) value FROM "FinancialTransaction" money`,
-      )
-    ).rows;
+    const beforeMoney = await getDb(ctx.db).execute(
+      sql`SELECT to_jsonb(money) value FROM "FinancialTransaction" money`,
+      "objects",
+    );
     const review = {
       decision: "assign",
       expectedDisposition: "open",
@@ -1497,11 +1498,10 @@ describe("statement row ledger", () => {
       aliasesBeforeReplay,
     );
     expect(
-      (
-        await getDb(ctx.db).execute(
-          sql`SELECT to_jsonb(money) value FROM "FinancialTransaction" money`,
-        )
-      ).rows,
+      await getDb(ctx.db).execute(
+        sql`SELECT to_jsonb(money) value FROM "FinancialTransaction" money`,
+        "objects",
+      ),
     ).toEqual(beforeMoney);
     await expect(
       updateThroughKernel(

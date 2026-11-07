@@ -92,8 +92,9 @@ export async function declaredInheritanceSteps(
       ladder
         ? sql`SELECT p.shortcode,p.name,${shown} AS value,l.decides AS assigned,l.eligible FROM ${inheritanceLadderSql(kind, field, start)} l JOIN ${tableOf(kind)} p ON p.id=l.id ORDER BY l.depth`
         : sql`SELECT p.shortcode,p.name,${shown} AS value,${raw} IS NOT NULL AS assigned,true AS eligible FROM ${tableOf(kind)} p WHERE p.id=${start}${live(kind, "p")}`,
+      "objects",
     );
-    for (const row of z.array(node).parse(result.rows)) {
+    for (const row of z.array(node).parse(result)) {
       const self = kind === entity && row.shortcode === shortcode;
       steps.push({
         title: self ? thisRecord(entity) : row.name,

@@ -1,10 +1,12 @@
 import type { GardenEntryFilters } from "@cubby/schemas/garden-entry";
 import { and, eq } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { buildEntity } from "tooling/factories/build";
 import { taxonomyShortcode } from "tooling/product-category-fixtures";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
   drainDerivedRefreshFrontier,
   captureBackgroundQueue,
@@ -471,7 +473,10 @@ describe("garden workflows", () => {
     const entryId = await resolveLiveShortcode(ctx.db, entry.id, "gardenEntry");
     expect(entryId).not.toBeNull();
     const row = await getDb(ctx.db).query.gardenEntry.findFirst({
-      where: eq(gardenEntry.id, entryId!),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(table, eq(gardenEntry.id, entryId!)),
+      },
       columns: { deletedAt: true },
     });
     expect(row).toMatchObject({ deletedAt: null });
@@ -544,7 +549,10 @@ describe("garden workflows", () => {
     );
     expect(plantedId).not.toBeNull();
     const row = await getDb(ctx.db).query.planting.findFirst({
-      where: eq(planting.id, plantedId!),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(table, eq(planting.id, plantedId!)),
+      },
       columns: { taskId: true, deletedAt: true },
     });
     expect(row).toMatchObject({ taskId: null, deletedAt: null });
@@ -767,7 +775,10 @@ describe("garden workflows", () => {
       const resolved = await resolveLiveShortcode(ctx.db, id, "planting");
       expect(resolved).not.toBeNull();
       const row = await getDb(ctx.db).query.planting.findFirst({
-        where: eq(planting.id, resolved!),
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(table, eq(planting.id, resolved!)),
+        },
         columns: { status: true, finishedOn: true, locationId: true },
       });
       expect(row).toMatchObject({

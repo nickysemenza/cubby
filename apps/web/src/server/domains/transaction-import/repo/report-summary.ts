@@ -38,7 +38,8 @@ export async function importReconciliationSummary(
   );
   // Charge state includes observations outside this collection; IN counts each
   // accepted transaction once even when several retained observations support it.
-  const bookingResult = await unwrapDb(db).execute(sql`
+  const bookingResult = await unwrapDb(db).execute(
+    sql`
     SELECT coverage.booking, count(*)::int AS count
     FROM (
       SELECT ${financialTransactionBookingSql("ft")} AS booking
@@ -53,7 +54,9 @@ export async function importReconciliationSummary(
       )
     ) coverage
     GROUP BY coverage.booking
-  `);
+  `,
+    "objects",
+  );
   const bookingCounts = z
     .array(
       z.object({
@@ -61,15 +64,18 @@ export async function importReconciliationSummary(
         count: z.coerce.number().int().nonnegative(),
       }),
     )
-    .parse(bookingResult.rows);
-  const { rows: heldHistory } = await unwrapDb(db).execute<{
+    .parse(bookingResult);
+  const heldHistory = await unwrapDb(db).execute<{
     historical: number;
     neverMatched: number;
-  }>(sql`
+  }>(
+    sql`
     SELECT count(*) FILTER (WHERE cardinality(r."historicalTransactionIds") > 0)::int AS historical,
       count(*) FILTER (WHERE cardinality(r."historicalTransactionIds") = 0)::int AS "neverMatched"
     FROM "TransactionImportRecord" member JOIN ${sourceObservations} r ON r.id=member."statementRowId"
-    WHERE member."importId"=${storedImportId}::uuid AND ${notDeleted("r")} AND r."matchState"=${sourceTransactionRecordMatchState.enum.held}`);
+    WHERE member."importId"=${storedImportId}::uuid AND ${notDeleted("r")} AND r."matchState"=${sourceTransactionRecordMatchState.enum.held}`,
+    "objects",
+  );
   const bookingLabels = {
     missing: "Unbooked",
     partial: "Partly booked",

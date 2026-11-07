@@ -75,11 +75,10 @@ describe("deterministic cache rebuild", () => {
   const ctx = withTestDb();
 
   const firstCode = async (table: string) => {
-    const [row] = (
-      await getDb(ctx.db).execute(
-        sql`SELECT shortcode FROM ${sql.identifier(table)} ORDER BY id LIMIT 1`,
-      )
-    ).rows;
+    const [row] = await getDb(ctx.db).execute(
+      sql`SELECT shortcode FROM ${sql.identifier(table)} ORDER BY id LIMIT 1`,
+      "objects",
+    );
     return String((row as { shortcode: string }).shortcode);
   };
 
@@ -222,8 +221,8 @@ describe("deterministic cache rebuild", () => {
       throw new Error("Synthetic deterministic pass exceeded its page bound");
     };
     const snapshot = async () => ({
-      values: (
-        await getDb(ctx.db).execute(sql`
+      values: await getDb(ctx.db).execute(
+        sql`
           SELECT * FROM (${sql.join(
             entityStoredDerivedDeclarations()
               .filter((entry) => entry.publishes === "derivedValue")
@@ -233,28 +232,33 @@ describe("deterministic cache rebuild", () => {
             FROM "Entity" e CROSS JOIN LATERAL (${storedSourceSql(entry, sql`e.id`)}) projected WHERE e.kind = ${entry.entity}`,
               ),
             sql` UNION ALL `,
-          )}) values ORDER BY target,id`)
-      ).rows,
-      quality: (
-        await getDb(ctx.db).execute(sql`
-        SELECT "entityId"::text, kind, "rulesVersion", checks FROM "QualitySnapshot" ORDER BY "entityId"`)
-      ).rows,
-      search: (
-        await getDb(ctx.db).execute(sql`
+          )}) values ORDER BY target,id`,
+        "objects",
+      ),
+      quality: await getDb(ctx.db).execute(
+        sql`
+        SELECT "entityId"::text, kind, "rulesVersion", checks FROM "QualitySnapshot" ORDER BY "entityId"`,
+        "objects",
+      ),
+      search: await getDb(ctx.db).execute(
+        sql`
           SELECT "entityKind", "entityId"::text, title, body,
             "semanticText", "normalizedText", "sourceHash"
           FROM "SearchDocument" WHERE "deletedAt" IS NULL
-          ORDER BY "entityKind", "entityId"`)
-      ).rows,
-      coverage: (
-        await getDb(ctx.db).execute(sql`
+          ORDER BY "entityKind", "entityId"`,
+        "objects",
+      ),
+      coverage: await getDb(ctx.db).execute(
+        sql`
           SELECT to_jsonb(c) - 'computedAt' AS value
-          FROM "ProductConversionCoverage" c ORDER BY "productId"`)
-      ).rows,
-      recipes: (
-        await getDb(ctx.db).execute(sql`
-          SELECT id::text, totals FROM "Recipe" WHERE "deletedAt" IS NULL ORDER BY "Recipe".id`)
-      ).rows,
+          FROM "ProductConversionCoverage" c ORDER BY "productId"`,
+        "objects",
+      ),
+      recipes: await getDb(ctx.db).execute(
+        sql`
+          SELECT id::text, totals FROM "Recipe" WHERE "deletedAt" IS NULL ORDER BY "Recipe".id`,
+        "objects",
+      ),
     });
     await drain();
     const incremental = await snapshot();

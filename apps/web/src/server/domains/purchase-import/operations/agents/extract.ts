@@ -19,6 +19,7 @@ import {
   providerFor,
 } from "@cubby/shared/ai/models";
 import { and, eq } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
 import { findErrorCause } from "~/lib/error-diagnostics";
@@ -45,6 +46,7 @@ import { recordAiUsage } from "~/server/ai/usage";
 import { getR2PublicUrl } from "~/server/clients/r2-public-url";
 import type { Database } from "~/server/db";
 import { getDb, notDeleted } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { image } from "~/server/db/schema";
 
 const validateExtraction = (output: ImportExtractionOutcome) => {
@@ -166,12 +168,16 @@ const extractPurchaseText = async (
   const validation = validateExtraction(first);
   if (validation.ok) return first;
 
-  const screenshot = args.screenshotImageId
+  const screenshotImageId = args.screenshotImageId;
+  const screenshot = screenshotImageId
     ? await getDb(args.db).query.image.findFirst({
-        where: and(
-          eq(image.shortcode, args.screenshotImageId),
-          notDeleted(image),
-        ),
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(
+              table,
+              and(eq(image.shortcode, screenshotImageId), notDeleted(image)),
+            ),
+        },
         columns: { key: true },
       })
     : null;

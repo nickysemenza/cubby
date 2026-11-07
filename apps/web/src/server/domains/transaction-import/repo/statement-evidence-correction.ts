@@ -73,10 +73,13 @@ export async function reconcileRecordedFinancialEvidence(
                   )
                   .limit(1)
               : [];
-            const { rows: counts } = await unwrapDb(tx).execute<{
+            const counts = await unwrapDb(tx).execute<{
               count: number;
-            }>(sql`
-            SELECT count(*)::int AS count FROM "TransactionImportRecord" member WHERE member."importId"=${observation.withdrawalImportId}::uuid`);
+            }>(
+              sql`
+            SELECT count(*)::int AS count FROM "TransactionImportRecord" member WHERE member."importId"=${observation.withdrawalImportId}::uuid`,
+              "objects",
+            );
             const parsed = transactionImportInput.shape.coverage.safeParse(
               proof?.coverage,
             );
@@ -96,7 +99,8 @@ export async function reconcileRecordedFinancialEvidence(
                   "Withdrawal requires persisted complete account/window evidence.",
               };
           }
-          const { rows } = await unwrapDb(tx).execute<{ blocked: boolean }>(sql`
+          const rows = await unwrapDb(tx).execute<{ blocked: boolean }>(
+            sql`
           -- includes-deleted: retired observations and bindings remain safety blockers.
           SELECT EXISTS (
             SELECT 1 FROM "SourceOccurrence" other
@@ -114,7 +118,9 @@ export async function reconcileRecordedFinancialEvidence(
             LEFT JOIN "SourceOccurrence" owner ON owner.id = alias."occurrenceId"
             WHERE alias."historicalTransactionId" = ${observation.acceptedTransactionId}::uuid
               AND (owner.id IS NULL OR owner."acceptedTransactionId" IS DISTINCT FROM alias."historicalTransactionId")
-          ) AS blocked`);
+          ) AS blocked`,
+            "objects",
+          );
           return rows[0]?.blocked
             ? {
                 status: "review",

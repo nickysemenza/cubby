@@ -1,6 +1,7 @@
 import type { LocationShortcode } from "@cubby/schemas/identifiers";
 import { parseEntityId, shortcode } from "@cubby/schemas/identifiers";
 import { count, eq } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import {
   raceUniqueInsert,
   TEST_HOME_ID,
@@ -11,6 +12,7 @@ import { describe, expect, it } from "vitest";
 
 import { fieldSuggestSpecFor } from "~/server/ai/field-suggest/registry";
 import { getDb } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { location, product } from "~/server/db/schema";
 import {
   createGardenEntry,
@@ -136,7 +138,10 @@ describe("location storage integrity", () => {
 
   it("enforces the parent foreign key while keeping Home parentless", async () => {
     const home = await getDb(ctx.db).query.location.findFirst({
-      where: eq(location.id, TEST_HOME_ID),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(table, eq(location.id, TEST_HOME_ID)),
+      },
       columns: { parentId: true },
     });
     expect(home?.parentId).toBeNull();

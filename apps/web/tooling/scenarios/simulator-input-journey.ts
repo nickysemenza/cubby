@@ -8,7 +8,6 @@ import { pollUntil } from "@cubby/shared/retry";
 import { APPLE_APP_IDENTITIES } from "@cubby/shared/apple-app-identity";
 import { z } from "zod";
 import { imageId } from "@cubby/schemas/identifiers";
-import { drizzleSchema as schema } from "~/server/db/drizzle-schema";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { listPhotoRunImages } from "~/server/domains/photo-import/repo/run/proposals";
 import { listImageSightings } from "~/server/domains/image/repo/image";
@@ -270,7 +269,7 @@ export async function createSimulatorInputJourney(input: {
       const run = await eventually(
         async () =>
           database.query.run.findFirst({
-            where: eq(schema.run.purpose, "photo_inventory"),
+            where: { RAW: (table) => eq(table.purpose, "photo_inventory") },
           }),
         "native-created photo Run",
       );
@@ -279,10 +278,13 @@ export async function createSimulatorInputJourney(input: {
         return result.length === 25 ? result : undefined;
       }, "native stage/PUT/finalize");
       const stored = await database.query.image.findMany({
-        where: inArray(
-          schema.image.shortcode,
-          images.map((image) => image.id),
-        ),
+        where: {
+          RAW: (table) =>
+            inArray(
+              table.shortcode,
+              images.map((image) => image.id),
+            ),
+        },
       });
       if (
         stored.length !== 25 ||
@@ -338,13 +340,13 @@ export async function createSimulatorInputJourney(input: {
         return found.length === 25 && coveredImages === 25 ? found : undefined;
       }, "native finalization cloud description jobs");
       const products = await database.query.product.findMany({
-        where: notDeleted(schema.product),
+        where: { RAW: (table) => notDeleted(table) },
       });
       const expenses = await database.query.expense.findMany({
-        where: notDeleted(schema.expense),
+        where: { RAW: (table) => notDeleted(table) },
       });
       const inventory = await database.query.inventoryEntry.findMany({
-        where: notDeleted(schema.inventoryEntry),
+        where: { RAW: (table) => notDeleted(table) },
       });
       if (products.length || expenses.length || inventory.length)
         throw new Error(
@@ -353,7 +355,7 @@ export async function createSimulatorInputJourney(input: {
       if (
         (
           await database.query.financialTransaction.findMany({
-            where: notDeleted(schema.financialTransaction),
+            where: { RAW: (table) => notDeleted(table) },
           })
         ).length
       )

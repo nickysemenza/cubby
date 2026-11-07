@@ -116,11 +116,14 @@ describe("search source selection", () => {
     );
     await refreshSearchDocument(ctx.db, "product", overflow.entityId);
     const overflowQuery = "overflow.example";
-    const overflowState = await unwrapDb(ctx.db).execute(sql`
+    const overflowState = await unwrapDb(ctx.db).execute(
+      sql`
       SELECT search_name_prefixes(aliases || keywords) IS NULL AS overflow,
         "searchVector" @@ to_tsquery('simple', ${buildPrefixTsQuery(overflowQuery)}) AS "fullTextMatch"
-      FROM "SearchDocument" WHERE "entityId" = ${overflow.entityId}::uuid`);
-    expect(overflowState.rows[0]).toMatchObject({
+      FROM "SearchDocument" WHERE "entityId" = ${overflow.entityId}::uuid`,
+      "objects",
+    );
+    expect(overflowState[0]).toMatchObject({
       overflow: true,
       fullTextMatch: false,
     });
@@ -221,8 +224,9 @@ describe("search source selection", () => {
       await publish();
       const backoff = await unwrapDb(ctx.db).execute(
         sql`SELECT "embeddingGeneration", "embeddingAttempts", "embeddingError", "embeddingDueAt" = '2099-01-01' AS delayed FROM "SearchDocument" WHERE "entityId" = ${first.source.entityId}::uuid AND "deletedAt" IS NULL`,
+        "objects",
       );
-      expect(backoff.rows).toEqual([
+      expect(backoff).toEqual([
         {
           embeddingGeneration: 1,
           embeddingAttempts: 3,

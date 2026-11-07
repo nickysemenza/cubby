@@ -3,7 +3,7 @@ import { createPostgresPool } from "tooling/postgres-pool";
 
 import type { Database } from "~/server/db";
 import { createDatabase } from "~/server/db/database-runtime";
-import { drizzleSchema as schema } from "~/server/db/drizzle-schema";
+import { relationalSchema } from "~/server/db/schema";
 
 /** Measure actual PostgreSQL wire values, before Drizzle parses JSON columns. */
 export async function measureDatabaseTransfer<T>(
@@ -26,7 +26,11 @@ export async function measureDatabaseTransfer<T>(
       },
     ),
   );
-  const driver = drizzle({ client: pool, schema });
+  const driver = drizzle({
+    client: pool,
+    relations: relationalSchema,
+    paramsInErrors: true,
+  });
   const db = createDatabase(() => ({
     client: driver,
     withConnection: (fn) => fn(driver),

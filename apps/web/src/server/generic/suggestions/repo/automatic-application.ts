@@ -114,7 +114,8 @@ export async function applyAutomaticRules(
 ): Promise<AutomaticRuleOutcome> {
   const outcome: AutomaticRuleOutcome = { applied: [], refused: [] };
   if (!suggestionIds.length) return outcome;
-  const { rows } = await unwrapDb(db).execute<Candidate>(sql`
+  const rows = await unwrapDb(db).execute<Candidate>(
+    sql`
     SELECT s.id, s.family, s.status, s.active, s.data, s.entity, s.field,
       s.kind, s.confidence, s.model, s.fingerprint, s."runId", s.judgment, s.evidence, s.subject
     FROM "Suggestion" s
@@ -122,7 +123,9 @@ export async function applyAutomaticRules(
       suggestionIds.map((id) => sql`${id}::uuid`),
       sql`, `,
     )})
-  `);
+  `,
+    "objects",
+  );
   let base = options.context;
   for (const row of rows) {
     if (!row.active || row.status !== "pending") continue;
@@ -233,13 +236,16 @@ export async function applyAutomaticRulesForCharge(
   importClean = false,
   statementScope?: StatementSuggestionScope,
 ) {
-  const { rows } = await unwrapDb(db).execute<{ id: string }>(sql`
+  const rows = await unwrapDb(db).execute<{ id: string }>(
+    sql`
     SELECT id FROM "Suggestion"
     WHERE family = ${suggestionFamily.enum.statement_transaction} AND active
       AND status = ${suggestionStatus.enum.pending}
       AND data->>${"source"} = ${charge.source} AND data->>${"chargeKey"} = ${charge.chargeKey}
       AND jsonb_array_length(${matchedRulesOf(sql`data`)}) > 0
-  `);
+  `,
+    "objects",
+  );
   return applyAutomaticRules(
     db,
     rows.map((row) => row.id),

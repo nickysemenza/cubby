@@ -150,10 +150,11 @@ describe("loadProductQuantityLedgers", () => {
     });
     const explained = await getDb(ctx.db).execute(
       sql`EXPLAIN (ANALYZE, FORMAT JSON) SELECT ${product.id} FROM ${product} WHERE ${where}`,
+      "objects",
     );
     const plan = z
       .array(z.object({ Plan: planNode }))
-      .parse(explained.rows[0]?.["QUERY PLAN"])[0];
+      .parse(explained[0]?.["QUERY PLAN"])[0];
     let edgeScans = 0;
     const visit = (node: z.infer<typeof planNode>) => {
       if (node["Relation Name"] === "EntityLink")
@@ -204,8 +205,9 @@ describe("loadProductQuantityLedgers", () => {
     });
     const inventory = await getDb(ctx.db).execute(
       sql`SELECT count(*)::int AS n FROM "InventoryEntry" WHERE "productId" = ${prod.entityId}`,
+      "objects",
     );
-    expect(inventory.rows[0]).toMatchObject({ n: 0 });
+    expect(inventory[0]).toMatchObject({ n: 0 });
   });
 
   it("retains unknown ancestor kit quantities on both batch and detail ledgers", async () => {
@@ -280,8 +282,9 @@ describe("loadProductQuantityLedgers", () => {
       (
         await getDb(ctx.db).execute(
           sql`SELECT ${sql.raw(onHandUnitsSql('"Product"'))} AS units, ${sql.raw(quantityVarianceSql('"Product"'))} AS variance FROM "Product" WHERE id=${product.entityId}`,
+          "objects",
         )
-      ).rows[0];
+      )[0];
     expect(await readSql()).toMatchObject({ units: null, variance: null });
     expect(
       (await loadProductQuantitySummaries(ctx.db, [product.entityId])).get(
@@ -564,16 +567,19 @@ describe("loadProductPickerQuantities", () => {
     });
     expect(result.get(mixed.entityId)?.onHand).toEqual({ state: "mixed" });
     const compare = async () => {
-      const rows = await getDb(ctx.db).execute(sql`
+      const rows = await getDb(ctx.db).execute(
+        sql`
         WITH stock AS (${onHandUnitsReadSql()})
         SELECT p.id, ${sql.raw(onHandUnitsSql("p"))} AS scalar,
           stock."onHandUnits" AS batch
         FROM "Product" p LEFT JOIN stock ON stock."productId" = p.id
         WHERE p.id IN (${absent.entityId}, ${counted.entityId}, ${mixed.entityId}, ${installed.entityId})
         ORDER BY p.id
-      `);
-      for (const row of rows.rows) expect(row.batch).toEqual(row.scalar);
-      return rows.rows;
+      `,
+        "objects",
+      );
+      for (const row of rows) expect(row.batch).toEqual(row.scalar);
+      return rows;
     };
     const initial = await compare();
     expect(initial).toHaveLength(4);

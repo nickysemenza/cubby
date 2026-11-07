@@ -21,10 +21,12 @@ import { tradeSchema, type Trade } from "@cubby/schemas/task-fields";
  * accidentally changing row cardinality.
  */
 import { and, inArray, sql } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 
 import type { Database } from "~/server/db";
 import { effectiveFieldSql } from "~/server/db/computed/effective-field";
 import { getDb, notDeleted } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { ledgerParty, product, project, task } from "~/server/db/schema";
 import { inheritedFieldResolutionsSql } from "~/server/generic/derived/repo/inherited-resolution";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
@@ -106,22 +108,40 @@ async function assignmentReferences(
   const [projects, products, assignees] = await Promise.all([
     projectIds.length
       ? getDb(db).query.project.findMany({
-          where: and(inArray(project.id, projectIds), notDeleted(project)),
+          where: {
+            RAW: (table: PgTable) =>
+              relationalSql(
+                table,
+                and(inArray(project.id, projectIds), notDeleted(project)),
+              ),
+          },
           columns: { id: true, shortcode: true, name: true, deletedAt: true },
         })
       : [],
     productIds.length
       ? getDb(db).query.product.findMany({
-          where: and(inArray(product.id, productIds), notDeleted(product)),
+          where: {
+            RAW: (table: PgTable) =>
+              relationalSql(
+                table,
+                and(inArray(product.id, productIds), notDeleted(product)),
+              ),
+          },
           columns: { id: true, shortcode: true, name: true, deletedAt: true },
         })
       : [],
     assigneeIds.length
       ? getDb(db).query.ledgerParty.findMany({
-          where: and(
-            inArray(ledgerParty.id, assigneeIds),
-            notDeleted(ledgerParty),
-          ),
+          where: {
+            RAW: (table: PgTable) =>
+              relationalSql(
+                table,
+                and(
+                  inArray(ledgerParty.id, assigneeIds),
+                  notDeleted(ledgerParty),
+                ),
+              ),
+          },
           columns: { id: true, shortcode: true, name: true, deletedAt: true },
         })
       : [],

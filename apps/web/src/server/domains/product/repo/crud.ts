@@ -61,6 +61,7 @@ import {
   sql,
   type SQL,
 } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { QueryBuilder } from "drizzle-orm/pg-core";
 import { uniq } from "es-toolkit";
 import { z } from "zod";
@@ -98,6 +99,7 @@ import {
   withTransaction,
 } from "~/server/db/helpers";
 import { rankOf } from "~/server/db/helpers/related";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
   cookbook,
   device,
@@ -435,14 +437,25 @@ export const productScaffold = listScaffold<
         grouped(
           ids,
           await unwrapDb(db).query.entityAttachment.findMany({
-            where: and(
-              inArray(entityAttachment.entityId, productIds(ids)),
-              notDeleted(entityAttachment),
-            ),
-            orderBy: [
-              asc(entityAttachment.sortOrder),
-              asc(entityAttachment.createdAt),
-            ],
+            where: {
+              RAW: (table: PgTable) =>
+                relationalSql(
+                  table,
+                  and(
+                    inArray(entityAttachment.entityId, productIds(ids)),
+                    notDeleted(entityAttachment),
+                  ),
+                ),
+            },
+            orderBy: (table: PgTable) =>
+              [
+                [
+                  asc(entityAttachment.sortOrder),
+                  asc(entityAttachment.createdAt),
+                ],
+              ]
+                .flat()
+                .map((value) => relationalSql(table, value)),
             with: { image: true },
           }),
           (row) => row.entityId,
@@ -452,10 +465,16 @@ export const productScaffold = listScaffold<
         grouped(
           ids,
           await unwrapDb(db).query.entityExternalId.findMany({
-            where: and(
-              inArray(entityExternalId.entityId, productIds(ids)),
-              notDeleted(entityExternalId),
-            ),
+            where: {
+              RAW: (table: PgTable) =>
+                relationalSql(
+                  table,
+                  and(
+                    inArray(entityExternalId.entityId, productIds(ids)),
+                    notDeleted(entityExternalId),
+                  ),
+                ),
+            },
           }),
           (row) => row.entityId,
         ),
@@ -464,21 +483,36 @@ export const productScaffold = listScaffold<
         grouped(
           ids,
           await unwrapDb(db).query.productUnitMappings.findMany({
-            where: and(
-              inArray(productUnitMappings.productId, productIds(ids)),
-              notDeleted(productUnitMappings),
-            ),
+            where: {
+              RAW: (table: PgTable) =>
+                relationalSql(
+                  table,
+                  and(
+                    inArray(productUnitMappings.productId, productIds(ids)),
+                    notDeleted(productUnitMappings),
+                  ),
+                ),
+            },
           }),
           (row) => row.productId,
         ),
       );
       const inventory = bind.ids(async ({ db, ids }) => {
         const entries = await unwrapDb(db).query.inventoryEntry.findMany({
-          where: and(
-            inArray(inventoryEntry.productId, productIds(ids)),
-            notDeleted(inventoryEntry),
-          ),
-          orderBy: inventoryEntry.createdAt,
+          where: {
+            RAW: (table: PgTable) =>
+              relationalSql(
+                table,
+                and(
+                  inArray(inventoryEntry.productId, productIds(ids)),
+                  notDeleted(inventoryEntry),
+                ),
+              ),
+          },
+          orderBy: (table: PgTable) =>
+            [inventoryEntry.createdAt]
+              .flat()
+              .map((value) => relationalSql(table, value)),
           with: { location: true },
         });
         const valuations = await loadStoredInventoryValuations(
@@ -560,7 +594,13 @@ export const productScaffold = listScaffold<
           ids.length === 0
             ? []
             : await unwrapDb(db).query.ingredient.findMany({
-                where: and(inArray(ingredient.id, ids), notDeleted(ingredient)),
+                where: {
+                  RAW: (table: PgTable) =>
+                    relationalSql(
+                      table,
+                      and(inArray(ingredient.id, ids), notDeleted(ingredient)),
+                    ),
+                },
               });
         return new Map(loaded.map((row) => [row.id, row]));
       });
@@ -649,10 +689,16 @@ export const productScaffold = listScaffold<
       );
       const servingAsLocations = bind.ids(async ({ db, ids }) => {
         const rows = await unwrapDb(db).query.location.findMany({
-          where: and(
-            inArray(location.productId, productIds(ids)),
-            notDeleted(location),
-          ),
+          where: {
+            RAW: (table: PgTable) =>
+              relationalSql(
+                table,
+                and(
+                  inArray(location.productId, productIds(ids)),
+                  notDeleted(location),
+                ),
+              ),
+          },
         });
         const database = readerDatabase(db);
         const ancestorsById = await loadLocationAncestorsWithIds(
@@ -692,11 +738,20 @@ export const productScaffold = listScaffold<
         grouped(
           ids,
           await unwrapDb(db).query.cookbook.findMany({
-            where: and(
-              inArray(cookbook.productId, productIds(ids)),
-              notDeleted(cookbook),
-            ),
-            orderBy: asc(cookbook.name),
+            where: {
+              RAW: (table: PgTable) =>
+                relationalSql(
+                  table,
+                  and(
+                    inArray(cookbook.productId, productIds(ids)),
+                    notDeleted(cookbook),
+                  ),
+                ),
+            },
+            orderBy: (table: PgTable) =>
+              [asc(cookbook.name)]
+                .flat()
+                .map((value) => relationalSql(table, value)),
           }),
           (row) => row.productId ?? "",
         ),
@@ -994,7 +1049,13 @@ export const getProductsForFoodLookup = async (
 ) => {
   if (ids.length === 0) return [];
   const rows = await getDb(db).query.product.findMany({
-    where: and(inArray(product.id, ids), notDeleted(product)),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          and(inArray(product.id, ids), notDeleted(product)),
+        ),
+    },
     columns: { id: true, fdc_id: true },
   });
   const gtins = await loadPrimaryGtins(
@@ -1150,10 +1211,18 @@ export const productSearch = async (
       orderBy: productListOrderBy(sorts),
       load: (where) =>
         getDb(db).query.product.findMany({
-          where,
+          where: { RAW: (table: PgTable) => relationalSql(table, where) },
           extras: {
-            brandName: productBrandNameSql(product.brandId).as("brandName"),
-            brandCode: productBrandCodeSql(product.brandId).as("brandCode"),
+            brandName: (table: PgTable) =>
+              relationalSql(
+                table,
+                productBrandNameSql(product.brandId).as("brandName"),
+              ),
+            brandCode: (table: PgTable) =>
+              relationalSql(
+                table,
+                productBrandCodeSql(product.brandId).as("brandCode"),
+              ),
           },
         }),
     },
@@ -1202,10 +1271,24 @@ export const getProductPickerItemsByIds = async (
   const rows = await getDb(db).query.product.findMany({
     // `inArray`, NOT sql`col = ANY(${arr})`: drizzle expands a JS array in a
     // template into a row constructor (`ANY(($1, $2))`), which postgres rejects.
-    where: and(inArray(product.id, ids), notDeleted(product)),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          and(inArray(product.id, ids), notDeleted(product)),
+        ),
+    },
     extras: {
-      brandName: productBrandNameSql(product.brandId).as("brandName"),
-      brandCode: productBrandCodeSql(product.brandId).as("brandCode"),
+      brandName: (table: PgTable) =>
+        relationalSql(
+          table,
+          productBrandNameSql(product.brandId).as("brandName"),
+        ),
+      brandCode: (table: PgTable) =>
+        relationalSql(
+          table,
+          productBrandCodeSql(product.brandId).as("brandCode"),
+        ),
     },
     columns: {
       id: true,
@@ -1273,14 +1356,18 @@ async function throwIfDuplicateProduct<TError>(
   // is the backstop `findOrCreateByGtin` recovers a concurrent scan on. It also
   // catches strictly more: the old index compared 12 digits to 13, so two
   // encodings of one barcode both got through.
-  if (constraint.includes("source_kind_externalId") && data.upc) {
+  const upc = data.upc;
+  if (constraint.includes("source_kind_externalId") && upc) {
     const existing = await getDb(db).query.product.findFirst({
-      where: and(productHasGtin(data.upc), notDeleted(product)),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(table, and(productHasGtin(upc), notDeleted(product))),
+      },
       columns: { name: true, shortcode: true },
     });
     throw createAppError(
       "PRODUCT_ALREADY_EXISTS",
-      `Barcode ${displayGtin(data.upc)} is already used by ${
+      `Barcode ${displayGtin(upc)} is already used by ${
         existing
           ? `${existing.shortcode} “${existing.name}”`
           : "another product"
@@ -1295,13 +1382,19 @@ async function throwIfDuplicateProduct<TError>(
     // is always a list/search call to find out what — so name it here. The
     // conflicting row is what the caller needs to merge into, rename, or skip.
     const existing = await getDb(db).query.product.findFirst({
-      where: and(
-        eq(product.name, data.name),
-        data.brandId === null
-          ? sql`${product.brandId} IS NULL`
-          : sql`(${product.brandId}::text = ${data.brandId} OR ${productBrandCodeSql(product.brandId)} = ${data.brandId})`,
-        notDeleted(product),
-      ),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(
+              eq(product.name, data.name),
+              data.brandId === null
+                ? sql`${product.brandId} IS NULL`
+                : sql`(${product.brandId}::text = ${data.brandId} OR ${productBrandCodeSql(product.brandId)} = ${data.brandId})`,
+              notDeleted(product),
+            ),
+          ),
+      },
       columns: { name: true, shortcode: true },
     });
     throw createAppError(
@@ -1760,7 +1853,10 @@ export async function updateProduct<TOutput>(
         { entityId: id, entityKind: "product" },
       ]);
       const beforeProduct = await tx.query.product.findFirst({
-        where: and(eq(product.id, id), notDeleted(product)),
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(table, and(eq(product.id, id), notDeleted(product))),
+        },
       });
 
       if (!beforeProduct) {
@@ -1773,10 +1869,16 @@ export async function updateProduct<TOutput>(
         readOutput && !classificationRequested
           ? []
           : await tx.query.entityExternalId.findMany({
-              where: and(
-                eq(entityExternalId.entityId, id),
-                notDeleted(entityExternalId),
-              ),
+              where: {
+                RAW: (table: PgTable) =>
+                  relationalSql(
+                    table,
+                    and(
+                      eq(entityExternalId.entityId, id),
+                      notDeleted(entityExternalId),
+                    ),
+                  ),
+              },
             });
 
       const { desiredExternalIds, incomingGtin, updateData } =
@@ -1841,27 +1943,44 @@ export async function updateProduct<TOutput>(
       const productImages =
         !readOutput || galleryRequested
           ? await tx.query.entityAttachment.findMany({
-              where: and(
-                eq(entityAttachment.entityId, updated.id),
-                notDeleted(entityAttachment),
-              ),
+              where: {
+                RAW: (table: PgTable) =>
+                  relationalSql(
+                    table,
+                    and(
+                      eq(entityAttachment.entityId, updated.id),
+                      notDeleted(entityAttachment),
+                    ),
+                  ),
+              },
               with: {
                 image: true,
               },
-              orderBy: [
-                asc(entityAttachment.sortOrder),
-                asc(entityAttachment.createdAt),
-              ],
+              orderBy: (table: PgTable) =>
+                [
+                  [
+                    asc(entityAttachment.sortOrder),
+                    asc(entityAttachment.createdAt),
+                  ],
+                ]
+                  .flat()
+                  .map((value) => relationalSql(table, value)),
             })
           : [];
 
       const currentExternalIdRows =
         !readOutput || identifiersRequested
           ? await tx.query.entityExternalId.findMany({
-              where: and(
-                eq(entityExternalId.entityId, updated.id),
-                notDeleted(entityExternalId),
-              ),
+              where: {
+                RAW: (table: PgTable) =>
+                  relationalSql(
+                    table,
+                    and(
+                      eq(entityExternalId.entityId, updated.id),
+                      notDeleted(entityExternalId),
+                    ),
+                  ),
+              },
             })
           : beforeExternalIds;
 
@@ -2016,12 +2135,18 @@ const addExternalIdToSlot = async (
 ) => {
   const { source, kind, externalId } = item.key;
   const slotRows = await tx.query.entityExternalId.findMany({
-    where: and(
-      eq(entityExternalId.entityId, id),
-      eq(entityExternalId.source, source),
-      eq(entityExternalId.kind, kind),
-      notDeleted(entityExternalId),
-    ),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          and(
+            eq(entityExternalId.entityId, id),
+            eq(entityExternalId.source, source),
+            eq(entityExternalId.kind, kind),
+            notDeleted(entityExternalId),
+          ),
+        ),
+    },
   });
   const sameValue = slotRows.find((row) => row.externalId === externalId);
   const isPrimary =
@@ -2072,7 +2197,13 @@ const applyProductExternalIdPatch = async (
   ]);
   const items = normalizedExternalIdPatch(patch);
   const before = await tx.query.entityExternalId.findMany({
-    where: and(eq(entityExternalId.entityId, id), notDeleted(entityExternalId)),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          and(eq(entityExternalId.entityId, id), notDeleted(entityExternalId)),
+        ),
+    },
   });
   assertExternalIdPatchPreconditions(before, items);
   const adds = items.flatMap((item) => (item.op === "add" ? [item] : []));
@@ -2122,13 +2253,19 @@ const applyPrimaryBarcode = async (
   const primary =
     value === null
       ? await tx.query.entityExternalId.findFirst({
-          where: and(
-            eq(entityExternalId.entityId, id),
-            eq(entityExternalId.source, GTIN_SOURCE),
-            eq(entityExternalId.kind, GTIN_KIND),
-            eq(entityExternalId.isPrimary, true),
-            notDeleted(entityExternalId),
-          ),
+          where: {
+            RAW: (table: PgTable) =>
+              relationalSql(
+                table,
+                and(
+                  eq(entityExternalId.entityId, id),
+                  eq(entityExternalId.source, GTIN_SOURCE),
+                  eq(entityExternalId.kind, GTIN_KIND),
+                  eq(entityExternalId.isPrimary, true),
+                  notDeleted(entityExternalId),
+                ),
+              ),
+          },
           columns: { externalId: true },
         })
       : undefined;
@@ -2279,27 +2416,51 @@ const PRODUCT_RETAINING_DEPENDENTS = {
       .where(inArray(importSourceProduct.productId, ids)),
   "Planting.sourceProductId": async (tx, ids) => {
     const rows = await tx.query.planting.findMany({
-      where: and(inArray(planting.sourceProductId, ids), notDeleted(planting)),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(inArray(planting.sourceProductId, ids), notDeleted(planting)),
+          ),
+      },
       columns: { sourceProductId: true },
     });
     return rows.map(({ sourceProductId }) => ({ productId: sourceProductId }));
   },
   "InventoryEntry.productId": (tx, ids) =>
     tx.query.inventoryEntry.findMany({
-      where: and(
-        inArray(inventoryEntry.productId, ids),
-        notDeleted(inventoryEntry),
-      ),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(
+              inArray(inventoryEntry.productId, ids),
+              notDeleted(inventoryEntry),
+            ),
+          ),
+      },
       columns: { productId: true },
     }),
   "Expense.productId": (tx, ids) =>
     tx.query.expense.findMany({
-      where: and(inArray(expense.productId, ids), notDeleted(expense)),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(inArray(expense.productId, ids), notDeleted(expense)),
+          ),
+      },
       columns: { productId: true },
     }),
   "Task.subjectProductId": async (tx, ids) => {
     const rows = await tx.query.task.findMany({
-      where: and(inArray(task.subjectProductId, ids), notDeleted(task)),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(inArray(task.subjectProductId, ids), notDeleted(task)),
+          ),
+      },
       columns: { subjectProductId: true },
     });
     return rows.map(({ subjectProductId }) => ({
@@ -2310,21 +2471,39 @@ const PRODUCT_RETAINING_DEPENDENTS = {
   "EntityLink[purchaseProduct].to": liveLinksToProducts("purchaseProduct"),
   "MealFoodEntry.productId": (tx, ids) =>
     tx.query.mealFoodEntry.findMany({
-      where: and(
-        inArray(mealFoodEntry.productId, ids),
-        notDeleted(mealFoodEntry),
-      ),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(
+              inArray(mealFoodEntry.productId, ids),
+              notDeleted(mealFoodEntry),
+            ),
+          ),
+      },
       columns: { productId: true },
     }),
   "EntityLink[wishCandidate].to": liveLinksToProducts("wishCandidate"),
   "Location.productId": (tx, ids) =>
     tx.query.location.findMany({
-      where: and(inArray(location.productId, ids), notDeleted(location)),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(inArray(location.productId, ids), notDeleted(location)),
+          ),
+      },
       columns: { productId: true },
     }),
   "Cookbook.productId": (tx, ids) =>
     tx.query.cookbook.findMany({
-      where: and(inArray(cookbook.productId, ids), notDeleted(cookbook)),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(inArray(cookbook.productId, ids), notDeleted(cookbook)),
+          ),
+      },
       columns: { productId: true },
     }),
   "EntityLink[productComponent].to": liveLinksToProducts("productComponent"),
@@ -2333,7 +2512,13 @@ const PRODUCT_RETAINING_DEPENDENTS = {
   // this map's exhaustiveness over every retaining edge.
   "Device.productId": (tx, ids) =>
     tx.query.device.findMany({
-      where: and(inArray(device.productId, ids), notDeleted(device)),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(inArray(device.productId, ids), notDeleted(device)),
+          ),
+      },
       columns: { productId: true },
     }),
   // Never read either: a "detach" disposition, cleared below.
@@ -2365,7 +2550,10 @@ const PRODUCT_BLOCK_GUARDS = Object.fromEntries(
         offendingParentIds: (await fetch(tx, ids)).map((d) => d.productId),
         fetchNames: (failedIds) =>
           tx.query.product.findMany({
-            where: inArray(product.id, failedIds),
+            where: {
+              RAW: (table: PgTable) =>
+                relationalSql(table, inArray(product.id, failedIds)),
+            },
             columns: { name: true },
           }),
         reason: disposition.reason,
@@ -2390,7 +2578,10 @@ export const deleteProducts = (
     const ingredientIds = uniq(
       (
         await tx.query.product.findMany({
-          where: inArray(product.id, ids),
+          where: {
+            RAW: (table: PgTable) =>
+              relationalSql(table, inArray(product.id, ids)),
+          },
           columns: { ingredientId: true },
         })
       ).flatMap((row) => row.ingredientId ?? []),

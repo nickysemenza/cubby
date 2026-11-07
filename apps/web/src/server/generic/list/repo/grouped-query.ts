@@ -5,7 +5,7 @@ import {
   listGroupSummarySchema,
 } from "@cubby/schemas/pagination";
 import { sql, type SQL } from "drizzle-orm";
-import type { PgSelect, PgTable } from "drizzle-orm/pg-core";
+import type { PgAsyncSelect, PgTable } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -33,7 +33,7 @@ export async function readGroupedQuery(input: {
   id: SQL;
   code: SQL;
   where: SQL | undefined;
-  joins?: (query: PgSelect) => PgSelect;
+  joins?: (query: PgAsyncSelect) => PgAsyncSelect;
   groups: readonly ListGroupSql[];
   metrics: readonly { key: string; value: SQL }[];
   order: readonly SQL[];
@@ -79,7 +79,7 @@ export async function readGroupedQuery(input: {
     ),
   };
   const initial = unwrapDb(db).select(selection).from(input.source).$dynamic();
-  let query: PgSelect = input.joins ? input.joins(initial) : initial;
+  let query: PgAsyncSelect = input.joins ? input.joins(initial) : initial;
   for (const [index, group] of groups.entries()) {
     if (group.members)
       query = query.leftJoin(

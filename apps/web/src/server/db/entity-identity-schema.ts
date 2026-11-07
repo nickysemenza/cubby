@@ -1,5 +1,5 @@
 import { SHORTCODE_PREFIX, type ShortcodeType } from "@cubby/shared";
-import { type SQL, relations, sql } from "drizzle-orm";
+import { type SQL, sql } from "drizzle-orm";
 import {
   type AnyPgColumn,
   check,
@@ -58,6 +58,7 @@ export const entityIdentity = pgTable(
     deletedAt: timestamp("deletedAt", { mode: "date" }),
     mergedIntoId: uuid("mergedIntoId").references(
       (): AnyPgColumn => entityIdentity.id,
+      { name: "Entity_mergedIntoId_Entity_id_fk" },
     ),
   },
   (table) => [
@@ -89,14 +90,6 @@ export const entityIdentity = pgTable(
     ),
   ],
 );
-
-export const entityIdentityRelations = relations(entityIdentity, ({ one }) => ({
-  canonical: one(entityIdentity, {
-    fields: [entityIdentity.mergedIntoId],
-    references: [entityIdentity.id],
-    relationName: "entityCanonical",
-  }),
-}));
 
 /**
  * The composite FK binding a payload row to its identity. Because it also

@@ -23,6 +23,7 @@ import type { RawRecipeTopLevel as RecipeTopLevel } from "@cubby/schemas/recipe-
 import {
   and,
   eq,
+  getTableName,
   inArray,
   isNotNull,
   isNull,
@@ -30,6 +31,7 @@ import {
   notInArray,
   sql,
 } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { QueryBuilder } from "drizzle-orm/pg-core";
 import { groupBy } from "es-toolkit";
 
@@ -40,6 +42,7 @@ import {
   notDeleted,
   unwrapDb,
 } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { recipeSourceRelations } from "~/server/db/helpers/relations";
 import {
   ingredient,
@@ -192,29 +195,43 @@ export const enrichmentWorkbenchIngredients = async (
   // Recipe-scoped worklist (?recipe=<id>): an empty set means the recipe tree has
   // no leaf ingredients — return early rather than emit `IN ()`.
   if (opts?.restrictToIds && opts.restrictToIds.length === 0) return [];
-  // The relational query builder rewrites column refs in a custom orderBy/extras
-  // to the root alias, so these correlated subqueries MUST be raw strings
-  // hand-qualified to "ingredient"."id" (see ingredientList's orderBy note).
-  const ref = '"ingredient"."id"';
-  const recipeCountSql = liveRecipeCountForIngredientSql(ref);
+  // Raw correlated subqueries must use the alias assigned by the RQB callback.
+  const ref = (table: PgTable) => `"${getTableName(table)}"."id"`;
+  const recipeCountSql = (table: PgTable) =>
+    liveRecipeCountForIngredientSql(ref(table));
   const rows = await getDb(db).query.ingredient.findMany({
     columns: { id: true, shortcode: true },
-    where: and(
-      isNull(ingredient.recipeId),
-      notDeleted(ingredient),
-      sql.raw(`${recipeCountSql} > 0`),
-      opts?.restrictToIds
-        ? inArray(ingredient.id, opts.restrictToIds)
-        : undefined,
-    ),
-    extras: {
-      recipeCount: sql<number>`${sql.raw(recipeCountSql)}`.as("recipeCount"),
-      cookbookOnly:
-        sql<boolean>`${sql.raw(cookbookOnlyForIngredientSql(ref))}`.as(
-          "cookbookOnly",
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          and(
+            isNull(ingredient.recipeId),
+            notDeleted(ingredient),
+            sql.raw(`${recipeCountSql(table)} > 0`),
+            opts?.restrictToIds
+              ? inArray(ingredient.id, opts.restrictToIds)
+              : undefined,
+          ),
         ),
     },
-    orderBy: [sql.raw(`${recipeCountSql} desc nulls last`)],
+    extras: {
+      recipeCount: (table: PgTable) =>
+        relationalSql(
+          table,
+          sql<number>`${sql.raw(recipeCountSql(table))}`.as("recipeCount"),
+        ),
+      cookbookOnly: (table: PgTable) =>
+        relationalSql(
+          table,
+          sql<boolean>`${sql.raw(cookbookOnlyForIngredientSql(ref(table)))}`.as(
+            "cookbookOnly",
+          ),
+        ),
+    },
+    orderBy: (table: PgTable) => [
+      sql.raw(`${recipeCountSql(table)} desc nulls last`),
+    ],
   });
   const records = await getIngredientsByIDsLean(
     db,
@@ -270,7 +287,13 @@ export const getIngredientMatches = async (
   if (names.length === 0) return map;
 
   const rows = await getDb(db).query.ingredient.findMany({
-    where: buildIngredientWhere(true, names[0]!, names.slice(1)),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          buildIngredientWhere(true, names[0]!, names.slice(1)),
+        ),
+    },
     columns: { id: true, shortcode: true, name: true, aliases: true },
   });
 
@@ -409,13 +432,19 @@ const loadIngredientRecipeUsages = async (
   ids: readonly string[],
 ) => {
   const rows = await unwrapDb(db).query.recipeSectionIngredient.findMany({
-    where: and(
-      inArray(
-        recipeSectionIngredient.ingredientId,
-        ids.map((id) => parseEntityId("ingredient", id)),
-      ),
-      notDeleted(recipeSectionIngredient),
-    ),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          and(
+            inArray(
+              recipeSectionIngredient.ingredientId,
+              ids.map((id) => parseEntityId("ingredient", id)),
+            ),
+            notDeleted(recipeSectionIngredient),
+          ),
+        ),
+    },
     with: {
       recipeSection: {
         with: { recipe: { with: recipeSourceRelations } },
@@ -437,10 +466,16 @@ const loadIngredientRecipes = async (
   ids: readonly string[],
 ) => {
   const rows = await unwrapDb(db).query.ingredient.findMany({
-    where: inArray(
-      ingredient.id,
-      ids.map((id) => parseEntityId("ingredient", id)),
-    ),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          inArray(
+            ingredient.id,
+            ids.map((id) => parseEntityId("ingredient", id)),
+          ),
+        ),
+    },
     columns: { id: true },
     with: { recipe: { with: recipeSourceRelations } },
   });

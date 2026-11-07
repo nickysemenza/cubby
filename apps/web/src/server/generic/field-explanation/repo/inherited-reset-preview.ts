@@ -24,9 +24,12 @@ export async function inheritedResetPreview(
 ): Promise<z.output<typeof resultSchema> | null> {
   if (!Object.hasOwn(generatedEntityListFields[entity].inherit, field))
     return declaredResetPreview(db, entity, field, internalId);
-  const rows = await repositoryQueries(db).execute(sql`SELECT
-    ${inheritedFieldDecisionSql(entity, field, { id: sql`${internalId}::uuid` })} AS decision`);
-  const decision = inheritedFieldDecisionSchema.parse(rows.rows[0]?.decision);
+  const rows = await repositoryQueries(db).execute(
+    sql`SELECT
+    ${inheritedFieldDecisionSql(entity, field, { id: sql`${internalId}::uuid` })} AS decision`,
+    "objects",
+  );
+  const decision = inheritedFieldDecisionSchema.parse(rows[0]?.decision);
   const [publicDecision] = await explanationReferenceValues(db, [decision]);
   const current = inheritedFieldDecisionSchema.parse(publicDecision);
   return resultSchema.parse({

@@ -6,8 +6,10 @@ import { withMigrationDatabase } from "./test-database-lease";
 
 it("carries every pending capture and execution through append-only invalidation cutover", async () => {
   await withMigrationDatabase(async (client) => {
-    const db = drizzle(client);
-    await migrateDatabase(db, { through: "0033_refresh_family_policy" });
+    const db = drizzle({ client: client, paramsInErrors: true });
+    await migrateDatabase(db, {
+      through: "20261025064358_0033_refresh_family_policy",
+    });
     const cases = [
       {
         key: "observed",
@@ -108,7 +110,9 @@ it("carries every pending capture and execution through append-only invalidation
         )
       ).rows;
     const before = await executions();
-    await migrateDatabase(db, { through: "0034_append_only_job_invalidation" });
+    await migrateDatabase(db, {
+      through: "20261025125440_0034_append_only_job_invalidation",
+    });
     expect(await executions()).toEqual(before);
     const rows = (
       await client.query<{
@@ -164,13 +168,17 @@ it("carries every pending capture and execution through append-only invalidation
 
 it("refuses orphan invalidation policy without losing predecessor work", async () => {
   await withMigrationDatabase(async (client) => {
-    const db = drizzle(client);
-    await migrateDatabase(db, { through: "0033_refresh_family_policy" });
+    const db = drizzle({ client: client, paramsInErrors: true });
+    await migrateDatabase(db, {
+      through: "20261025064358_0033_refresh_family_policy",
+    });
     await client.query(
       `INSERT INTO "JobInvalidation" (key,revision,"restartsPass") VALUES ('synthetic:orphan',4,true)`,
     );
     await expect(
-      migrateDatabase(db, { through: "0034_append_only_job_invalidation" }),
+      migrateDatabase(db, {
+        through: "20261025125440_0034_append_only_job_invalidation",
+      }),
     ).rejects.toMatchObject({
       cause: {
         code: "P0001",

@@ -33,7 +33,7 @@ branch writes for reconciliation before removing an investigation branch.
 ## Staged and breaking cutovers
 
 One exclusive operator owns a staged cutover, including Actions and local
-applications. Before merging a journal containing an unsafe contraction, set
+applications. Before merging a migration history containing an unsafe contraction, set
 the `cloudflare` GitHub Environment variable `PRODUCTION_MIGRATION_THROUGH` to
 the exact last compatible migration tag. Actions passes this inclusive boundary
 to the existing runner, then deploys the matching code. Leave it set until the
@@ -43,7 +43,7 @@ closed. If no new migration is safe before deploy, use the last already-applied
 tag. Never guess compatibility from a migration's name or SQL keywords.
 From setting the boundary or applying an unmerged expansion until the staged
 PR merges, admit no other `main` merge or Deploy retry: that revision lacks the
-new journal tag and fails closed. Merge the staged PR next.
+new migration folder name and fails closed. Merge the staged PR next.
 
 For a breaking cutover that cannot use this sequence, establish its documented
 writer barrier and apply the authorized migrations manually before merge; the
@@ -61,8 +61,8 @@ locks through the copy/drop commit, and refuse contraction unless all retained
 content has a verified destination. Verify preservation and deployment after
 release; do not overlap a manual schema application with Actions.
 
-For an expand/contract rollout, choose the exact last expand tag from
-`apps/web/drizzle/meta/_journal.json`, excluding the contract migration. Set
+For an expand/contract rollout, choose the exact last expand folder from
+`apps/web/drizzle/`, excluding the contract migration. Set
 `PRODUCTION_MIGRATION_THROUGH` to that tag before merge, then let Actions apply
 the expansion and deploy. To apply the same expansion manually before merge,
 first ensure no Deploy run can overlap, then run:
@@ -71,10 +71,10 @@ first ensure no Deploy run can overlap, then run:
 pnpm --filter @cubby/web db:migrate --target=production --through=EXACT_LAST_EXPAND_TAG
 ```
 
-Replace the placeholder with the complete journal tag, without `.sql`.
+Replace the placeholder with the complete timestamped folder name.
 `--through` is inclusive: every pending predecessor runs, and no later entry
-runs. Unknown tags, non-prefix or changed-hash bookkeeping, and unordered
-journals refuse before any database write. A database already beyond the
+runs. Unknown folder names and unknown, duplicate or changed-hash receipts refuse
+before any migration SQL. A database already beyond the
 requested tag also refuses without mutation; this command never rolls back
 applied migrations. The runner has no dry-run mode.
 
@@ -91,7 +91,7 @@ Read back the transformed data and schema again, then delete the environment
 boundary. A boundary does not identify
 which SQL is compatible with the deployed code; the owner must review that
 boundary before execution. Omitting `--through` retains the usual behavior of
-applying every pending journal entry and is unsuitable for a staged rollout
+applying every pending migration and is unsuitable for a staged rollout
 whose journal already contains an undeployed contract.
 
 ## Dropping a table
@@ -116,13 +116,13 @@ Never pass `--finalize`, never run `snapshots finalize`, and never reset or rest
 onto the production branch. If table-level recovery would not be enough, do not drop
 the table.
 
-`0081_drop_assessment_read` drops `AssessmentReadPublication`,
+`20261105104924_0081_drop_assessment_read` drops `AssessmentReadPublication`,
 `AssessmentReadMembership`, `AssessmentReadDependency` and `AssessmentReadStage`
 this way, and aborts if any holds a row.
 
 ## Suggestion table (0080)
 
-`0080_suggestion_table` moved `Assessment`, `AssessmentState` and `Feedback` to the
+`20261105100922_0080_suggestion_table` moved `Assessment`, `AssessmentState` and `Feedback` to the
 `archive` schema with their foreign keys, triggers and secondary indexes removed. The
 archive stays until the owner decides otherwise; `db:check` covers only `public`.
 
@@ -134,7 +134,7 @@ dropping a foreign key also locks the referenced table.
 
 ## Mail decision owners (0074)
 
-`0074_mail_decision_owners` moves `email_link`, `email_relevance`,
+`20261105072143_0074_mail_decision_owners` moves `email_link`, `email_relevance`,
 `mail_import_outcome` and `run_finding` out of the Assessment ledgers. It runs in
 one transaction with `lock_timeout` 10s per lock. It first takes the
 `email-evidence-write` gate, then locks, in order: Run, LedgerParty, OrderMail,
@@ -201,18 +201,18 @@ journal. Never overlap this sequence with an Actions deploy.
 ## Locks against live queue traffic
 
 A migration that takes `ACCESS EXCLUSIVE` on many tables can deadlock against the
-running Worker's queue traffic on every attempt, as `0037_derived_values` did. Stop
+running Worker's queue traffic on every attempt, as `20261025215135_0037_derived_values` did. Stop
 background work first if locks contend.
 
 ## Migration runner opt-ins
 
-`0036_job_entity_identity` uses the migration runner's explicit
+`20261025205221_0036_job_entity_identity` uses the migration runner's explicit
 `-- cubby:transaction-per-statement` opt-in. Ordinary migrations retain Drizzle's
 transaction behavior. Every opted-in statement must be idempotent: committed
 statements/batches can replay after a failure before the final journal receipt.
 `-- cubby:repeat-batch` repeats a statement whose result is `{ remaining: boolean }`;
 `-- cubby:outside-transaction` is reserved here for concurrent index creation/drop.
-The same journal hash/prefix checks and deployment serialization still apply.
+The same migration name/hash checks and deployment serialization still apply.
 Each statement has a 2-second lock timeout, and the runner retries a statement that
 hits a lock timeout or deadlock whole, about two minutes in all, then stops the
 deployment. Everything committed so far must stay compatible with the running Worker,
@@ -437,7 +437,7 @@ it alongside Actions or another operator.
 
 ## Financial evidence cutover
 
-`0005_thin_blink` follows the unified-Jobs migration and shares its data and
+`20261022045556_0005_thin_blink` follows the unified-Jobs migration and shares its data and
 legacy-queue preservation requirements above. Deploy the matching Worker and updated
 clients together: financial CSV upload operations are removed. Agents parse
 exports with the `financial-evidence-import` skill and submit normalized rows.
@@ -480,11 +480,11 @@ these checks.
 Neon is the only persistent application database; dev and CI databases are
 synthetic and disposable. The current baseline replaces the retired series
 through `0103_statement_charge_history`. Fresh databases apply
-`0000_baseline.sql`, including derived DDL, optional Neon diagnostics, and
+`20261020233250_0000_baseline/migration.sql`, including derived DDL, optional Neon diagnostics, and
 fresh-install Automatic rule defaults. `db:check` compares the resulting
 catalog with `schema.ts` plus desired-state derived DDL.
 
-`meta/_baseline.json` pins the baseline SQL hash and the count and SHA-256
+`baseline.json` pins the baseline SQL hash and the count and SHA-256
 fingerprint of the complete retired ledger. The fingerprint hashes the ordered
 `created_at:hash\n` rows (decimal timestamps, original SQL SHA-256 hashes).
 On encountering that exact ledger, the normal runner transactionally replaces
@@ -492,7 +492,7 @@ only `drizzle.__drizzle_migrations` rows with the baseline record, then applies
 any post-baseline migrations. It never executes baseline SQL on that database,
 changes application data, or resets the database. Partial, edited, extra, or
 unknown histories fail closed. An interrupted transaction retains the old
-ledger; rerunning after successful adoption follows the ordinary prefix path.
+ledger; rerunning after successful adoption follows the ordinary named-history path.
 The baseline hash is immutable after adoption.
 
 Before merging a consolidation, serialize with production deployment and verify
@@ -509,11 +509,34 @@ remain in Git history: remove tests that locate or replay retired SQL in the
 consolidation PR, while retaining domain write/readback coverage for current
 invariants. New migrations get populated-predecessor coverage.
 
-Only the newest schema snapshot is retained. Drizzle Kit uses it to generate
-the next SQL diff; it does not apply snapshots to the database. After generation,
-delete older `*_snapshot.json` files while retaining SQL, `_journal.json`, and
-`_baseline.json`. `db:check` enforces this, and snapshot line diffs are suppressed
-by `.gitattributes`; review the SQL and journal for executable changes.
+### Drizzle v1 history
+
+Migrations live in timestamped folders with immutable `migration.sql` bytes.
+The v1 cutover preserved all 118 PostgreSQL SQL files and each SQLite store's
+SQL. PostgreSQL's previously pruned snapshots are represented by one converted
+format-9 generation baseline at `20261106180850_0116_adr25-l2f-image/snapshot.json`.
+The retained baseline uses v1 serialization after fresh replay and model-built
+catalogs were verified equal, avoiding formatting-only index/check rebuilds.
+The incoming `20261106235744_0117_background-work-recovery` data-only migration
+retains its SQL unchanged and a native v1 custom snapshot after that baseline.
+Earlier SQL folders remain executable history; that generation baseline is not
+an instruction to replay or squash them. Keep every snapshot generated after
+this boundary: format 9 reconstructs later state from the complete graph.
+
+The runner validates applied SQL hashes before allowing Drizzle to add `name`
+and `applied_at` to legacy bookkeeping. Existing timestamps and hashes remain
+intact; new receipts use full folder names. The exact retired-ledger baseline
+adoption above remains available through `baseline.json`. SQLite stores use
+Drizzle's in-place ledger upgrade under their initialization transaction and
+retain object names, bindings and stored rows.
+
+`--through` requires the exact timestamped folder name. Check any production
+`PRODUCTION_MIGRATION_THROUGH` boundary before merging this cutover; an old
+numbered tag must be deliberately translated or cleared by its operator.
+`db:check` checks the snapshot graph against the generated model and compares
+fresh replay with a model-built catalog. Run `drizzle-kit check` for branch
+conflicts. Never run `generate --fix-conflicts` against history a durable
+database has applied: that repair may delete migrations and demand a reset.
 
 ### Declared views during a table reshape
 
@@ -547,11 +570,11 @@ the production branch. If table-level recovery would not be enough, stop and rep
 
 ## Source-claim minor units
 
-`0096_source_claim_minor_units` is a direct contract cutover. The running statement planner and label application read LedgerSourceClaim through booking-lineage checks. Label application also reaches LedgerTransfer through canonical FinancialTransaction read-back. A zero-row result does not establish table independence, so these refresh gates remain until the retained steps are terminal. The release owner
+`20261105170357_0096_source_claim_minor_units` is a direct contract cutover. The running statement planner and label application read LedgerSourceClaim through booking-lineage checks. Label application also reaches LedgerTransfer through canonical FinancialTransaction read-back. A zero-row result does not establish table independence, so these refresh gates remain until the retained steps are terminal. The release owner
 must wait for the active financial refresh's generation and subsequent statement
 steps to reach terminal outcomes before merging it. No writer hold, branch-copy
 rehearsal or dual writer is required. Parent owns merge sequencing with other
-migration lanes; regenerate its journal position on current main before release.
+migration lanes; reconcile its snapshot graph on current main before release.
 The migration takes a short `RunStep` share lock and refuses unfinished financial
 steps in any running Run or the latest statement Run, including a failed Run
 awaiting recovery. A failed parent status does not prove its continuation finished.
@@ -589,7 +612,7 @@ Financial cutover gates recognize only done steps or an ended failed Run with fa
 
 ## Ledger-transfer minor units
 
-`0097_ledger_transfer_minor_units` follows the source-claim migration. Each
+`20261105170357_0097_ledger_transfer_minor_units` follows the source-claim migration. Each
 money cutover releases separately after terminal financial refresh and independent
 money review; the applied migration prefix is immutable.
 It preserves original transfer rows under `archive.LedgerTransfer_dollar_preimage`
@@ -629,7 +652,7 @@ reclassify issuer credits, finish historical reconciliation or enable recurrence
 
 ## Source occurrence ownership (0098)
 
-`0098_source_occurrence_ownership` follows both minor-unit money migrations.
+`20261105170357_0098_source_occurrence_ownership` follows both minor-unit money migrations.
 It is a direct cutover, with the same RunStep gate: all retained financial refresh steps must be terminal.
 
 Retain `archive.SourceTransactionRecord_occurrence_preimage`,
@@ -674,7 +697,7 @@ not authorize a table or retained-work drop.
 
 ## Source judgment-owner cutover
 
-`0107_source_judgment_owner_cutover` gives each previously ownerless bank record a
+`20261106041138_0107_source_judgment_owner_cutover` gives each previously ownerless bank record a
 singleton `unproven` owner, copies its original financial decisions and lifecycle,
 and makes occurrence membership mandatory. It uses the retained financial RunStep
 gate and locks copy sources/destinations before transformation. Independent full-row
@@ -692,7 +715,7 @@ completion. Production application and readback require separate authorization.
 
 ## Suggestion review wire cutover (ADR 0025 L2)
 
-`0111_adr25-l2-suggestions` changes declared review-reference keys on
+`20261106172113_0111_adr25-l2-suggestions` changes declared review-reference keys on
 `AiEvaluation.target`, paid field-result outputs, publication receipts, and field
 Suggestion proposal/outcome envelopes. It locks both owners before reading,
 checks each transformed value by reversing the rename, and compares each full
@@ -722,7 +745,7 @@ There is no household-wide Email evidence gate.
 
 ## Field sweep consolidation (ADR 0025 L2e)
 
-Migration `0115_adr25-l2e-sweep` locks Runs, steps, Jobs and evaluation demand
+Migration `20261106180849_0115_adr25-l2e-sweep` locks Runs, steps, Jobs and evaluation demand
 before copying its verification witnesses. It converts `suggestion_sweep` Runs
 in place to a single field family under `sweep`, updates the execution Job's
 purpose, and records roster/evaluate steps. Run progress and every Job state,

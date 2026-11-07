@@ -20,12 +20,14 @@ import {
 import type { ImageIdentificationResult } from "@cubby/schemas/image-identification";
 import { runPurpose } from "@cubby/schemas/run-fields";
 import { and, asc, eq } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 
 import { operationCommandRequest } from "~/contracts/define";
 import { recipeContract } from "~/contracts/recipe.contract";
 import { computeParseDrift, driftAxes } from "~/lib/parse-drift";
 import type { Database } from "~/server/db";
 import { getDb, mapImages, notDeleted } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
   cookbook,
   entityAttachment,
@@ -153,14 +155,30 @@ export const productCookbooksReport = async (
   productId: ProductId,
 ) => {
   const row = await getDb(db).query.product.findFirst({
-    where: and(eq(product.id, productId), notDeleted(product)),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          and(eq(product.id, productId), notDeleted(product)),
+        ),
+    },
     columns: { id: true },
     with: {
       cookbooks: {
-        where: notDeleted(cookbook),
-        orderBy: asc(cookbook.name),
+        where: {
+          RAW: (table: PgTable) => relationalSql(table, notDeleted(cookbook)),
+        },
+        orderBy: (table: PgTable) =>
+          [asc(cookbook.name)]
+            .flat()
+            .map((value) => relationalSql(table, value)),
         with: {
-          recipes: { where: notDeleted(recipe), columns: { deletedAt: true } },
+          recipes: {
+            where: {
+              RAW: (table: PgTable) => relationalSql(table, notDeleted(recipe)),
+            },
+            columns: { deletedAt: true },
+          },
         },
       },
     },
@@ -259,7 +277,13 @@ export const productRecipeAppearancesReport = async (
   productId: ProductId,
 ) => {
   const row = await getDb(db).query.product.findFirst({
-    where: and(eq(product.id, productId), notDeleted(product)),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          and(eq(product.id, productId), notDeleted(product)),
+        ),
+    },
     columns: { id: true },
     with: {
       ingredient: {
@@ -278,7 +302,13 @@ export const ingredientRecipeUsagesReport = async (
 ) => {
   const id = await resolveOrThrow(db, "ingredient", code);
   const row = await getDb(db).query.ingredient.findFirst({
-    where: and(eq(ingredient.id, id), notDeleted(ingredient)),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          and(eq(ingredient.id, id), notDeleted(ingredient)),
+        ),
+    },
     columns: { id: true, name: true, aliases: true },
   });
   if (!row) return records([], "Not used in any recipes yet.");

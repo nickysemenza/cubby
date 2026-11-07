@@ -15,6 +15,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb, unwrapDb } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
   externalSource,
   financialTransactionAllocation,
@@ -198,10 +199,13 @@ describe("derived field explanations against canonical records", () => {
     id: string;
     shortcode: string;
   }) {
-    const result = await unwrapDb(ctx.db).execute(sql`
+    const result = await unwrapDb(ctx.db).execute(
+      sql`
       SELECT ${expenseSpendingCategoryResolutionSql("e")} AS resolution
-      FROM "Expense" e WHERE e.id=${line.id} AND e."deletedAt" IS NULL`);
-    const canonical = fieldResolutionSchema.parse(result.rows[0]?.resolution);
+      FROM "Expense" e WHERE e.id=${line.id} AND e."deletedAt" IS NULL`,
+      "objects",
+    );
+    const canonical = fieldResolutionSchema.parse(result[0]?.resolution);
     const explanation = await explainField(context(), {
       entityKind: "expense",
       entityId: parseShortcodeFor("expense", line.shortcode),
@@ -813,7 +817,10 @@ describe("derived field explanations against canonical records", () => {
     expect(refreshed.resolutionEvidence?.outcome).toBe("resolved");
     expect(
       await getDb(ctx.db).query.expense.findFirst({
-        where: (expense, { eq }) => eq(expense.id, first.id),
+        where: {
+          RAW: (expense, { eq }) =>
+            relationalSql(expense, eq(expense.id, first.id)),
+        },
         columns: { trade: true },
       }),
     ).toEqual({ trade: null });

@@ -24,6 +24,7 @@ import {
 import {
   PgDialect,
   type PgTable,
+  type PgInsertValue,
   type PgUpdateSetSource,
 } from "drizzle-orm/pg-core";
 import { type JSONType, z } from "zod";
@@ -48,7 +49,7 @@ import { TraceNames, withTrace } from "~/server/observability/tracing";
 export const insertAndReturn = async <T extends PgTable>(
   db: Database | RepositoryQueryTransaction,
   table: T,
-  values: InferInsertModel<T>,
+  values: PgInsertValue<T>,
 ): Promise<InferSelectModel<T>> => {
   return withTrace(TraceNames.db("insert"), async (span) => {
     span.setAttribute("db.table", getTableName(table));
@@ -375,7 +376,7 @@ export interface ImageJoinBinding<
     parentId: GetColumnData<TParentColumn>,
     imageId: ImageId,
     sortOrder: number,
-  ) => InferInsertModel<TTable>;
+  ) => PgInsertValue<TTable>;
   sortOrderUpdate: (sortOrder: number) => PgUpdateSetSource<TTable>;
 }
 

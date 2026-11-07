@@ -6,8 +6,10 @@ import { withMigrationDatabase } from "./test-database-lease";
 
 it("retains Recipe payloads and only backfills missing publication identities", async () => {
   await withMigrationDatabase(async (client) => {
-    const db = drizzle(client);
-    await migrateDatabase(db, { through: "0055_job_lease_holder" });
+    const db = drizzle({ client: client, paramsInErrors: true });
+    await migrateDatabase(db, {
+      through: "20261028152448_0055_job_lease_holder",
+    });
     const fresh = "00000000-0000-4000-8000-000000000001";
     const stale = "00000000-0000-4000-8000-000000000002";
     for (const [id, code, stamp] of [
@@ -44,7 +46,9 @@ it("retains Recipe payloads and only backfills missing publication identities", 
         )
       ).rows;
     const before = await preserved();
-    await migrateDatabase(db, { through: "0056_recipe_publication" });
+    await migrateDatabase(db, {
+      through: "20261028193017_0056_recipe_publication",
+    });
     expect(await preserved()).toEqual(before);
     expect(
       (

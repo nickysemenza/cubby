@@ -1,7 +1,4 @@
 # Generated outputs are gitignored (`pnpm generate` writes them on install and
 # before build, typecheck and test). These remaining ones are committed.
-**/drizzle/meta/*.json linguist-generated
-**/migrations/meta/*.json linguist-generated
-
-# Full schema snapshots are generation inputs, not useful line diffs.
-**/drizzle/meta/*_snapshot.json -diff
+# Drizzle v1 snapshots retain the generation graph.
+**/snapshot.json linguist-generated

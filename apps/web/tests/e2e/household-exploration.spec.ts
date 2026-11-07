@@ -1,3 +1,5 @@
+import type { PgTable } from "drizzle-orm/pg-core";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { eq } from "drizzle-orm";
 import * as schema from "~/server/db/schema";
 import { getDb } from "~/server/db/helpers";
@@ -18,10 +20,19 @@ test("connected household supports wardrobe screenshots and garden exploration",
 }, testInfo) => {
   const db = getDb(getFixtureDb());
   const shirt = await db.query.product.findFirst({
-    where: eq(schema.product.name, "Cedar Cotton Field Shirt"),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          eq(schema.product.name, "Cedar Cotton Field Shirt"),
+        ),
+    },
   });
   const garden = await db.query.location.findFirst({
-    where: eq(schema.location.name, "Cedar Raised Beds"),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(table, eq(schema.location.name, "Cedar Raised Beds")),
+    },
   });
   if (!shirt || !garden)
     throw new Error("Shared exploration household is missing curated records");

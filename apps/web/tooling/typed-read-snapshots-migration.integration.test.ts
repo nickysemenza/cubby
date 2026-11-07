@@ -5,8 +5,10 @@ import { withMigrationDatabase } from "./test-database-lease";
 
 it("carries SQL NULL and JSON null publications through every typed storage shape without changing member rows or tickets", async () => {
   await withMigrationDatabase(async (client) => {
-    const db = drizzle(client);
-    await migrateDatabase(db, { through: "0086_derived_read_views" });
+    const db = drizzle({ client: client, paramsInErrors: true });
+    await migrateDatabase(db, {
+      through: "20261105122502_0086_derived_read_views",
+    });
     const emptyProduct = "00000000-0000-4000-8000-000000000011";
     const valuedProduct = "00000000-0000-4000-8000-000000000012";
     const project = "00000000-0000-4000-8000-000000000013";
@@ -54,7 +56,9 @@ it("carries SQL NULL and JSON null publications through every typed storage shap
       'tickets',(SELECT jsonb_agg(to_jsonb(w) ORDER BY target,ref) FROM "WorkItem" w)) AS value`)
       ).rows;
     const before = await preserved();
-    await migrateDatabase(db, { through: "0087_typed_read_snapshots" });
+    await migrateDatabase(db, {
+      through: "20261105122502_0087_typed_read_snapshots",
+    });
     expect(await preserved()).toEqual(before);
     expect(
       (
@@ -89,9 +93,9 @@ it("carries SQL NULL and JSON null publications through every typed storage shap
 
 it("refuses legacy derived decisions and drops only the retired cache on replay", async () => {
   await withMigrationDatabase(async (client) => {
-    const db = drizzle(client);
+    const db = drizzle({ client: client, paramsInErrors: true });
     await migrateDatabase(db, {
-      through: "0100_payment_evidence_minor_units",
+      through: "20261105233841_0100_payment_evidence_minor_units",
     });
     const product = "00000000-0000-4000-8000-000000000091";
     await client.query(
@@ -127,7 +131,9 @@ it("refuses legacy derived decisions and drops only the retired cache on replay"
       ).rows;
     const before = await retained();
     await expect(
-      migrateDatabase(db, { through: "0101_drop_legacy_derived_values" }),
+      migrateDatabase(db, {
+        through: "20261106005237_0101_drop_legacy_derived_values",
+      }),
     ).rejects.toMatchObject({
       cause: {
         code: "P0001",
@@ -144,11 +150,15 @@ it("refuses legacy derived decisions and drops only the retired cache on replay"
     await client.query(
       `UPDATE "DerivedValue" SET "decidedBy"='{"outcome":{"kind":"value"},"provenance":{"kind":"computed"}}'`,
     );
-    await migrateDatabase(db, { through: "0101_drop_legacy_derived_values" });
+    await migrateDatabase(db, {
+      through: "20261106005237_0101_drop_legacy_derived_values",
+    });
     // Simulate a committed DROP whose journal receipt was lost, so the SQL itself replays.
     await client.query(`DELETE FROM drizzle.__drizzle_migrations
       WHERE created_at = (SELECT max(created_at) FROM drizzle.__drizzle_migrations)`);
-    await migrateDatabase(db, { through: "0101_drop_legacy_derived_values" });
+    await migrateDatabase(db, {
+      through: "20261106005237_0101_drop_legacy_derived_values",
+    });
     expect(
       (
         await client.query(
@@ -162,8 +172,10 @@ it("refuses legacy derived decisions and drops only the retired cache on replay"
 
 it("contracts only the old Project start-date cache while rollups and current overrides keep serving the view", async () => {
   await withMigrationDatabase(async (client) => {
-    const db = drizzle(client);
-    await migrateDatabase(db, { through: "0101_drop_legacy_derived_values" });
+    const db = drizzle({ client: client, paramsInErrors: true });
+    await migrateDatabase(db, {
+      through: "20261106005237_0101_drop_legacy_derived_values",
+    });
     const project = "00000000-0000-4000-8000-000000000092";
     await client.query(
       `INSERT INTO "Entity" (id,kind,shortcode) VALUES ($1,'project','PRJ-SYNTHDROP')`,
@@ -198,7 +210,7 @@ it("contracts only the old Project start-date cache while rollups and current ov
     const before = await retained();
     expect(await value()).toEqual([{ value: "2026-06-01" }]);
     await migrateDatabase(db, {
-      through: "0102_drop_retired_project_start_snapshot",
+      through: "20261106010801_0102_drop_retired_project_start_snapshot",
     });
     expect(await retained()).toEqual(before);
     expect(await value()).toEqual([{ value: "2026-06-01" }]);
@@ -210,7 +222,7 @@ it("contracts only the old Project start-date cache while rollups and current ov
       `DELETE FROM drizzle.__drizzle_migrations WHERE created_at=(SELECT max(created_at) FROM drizzle.__drizzle_migrations)`,
     );
     await migrateDatabase(db, {
-      through: "0102_drop_retired_project_start_snapshot",
+      through: "20261106010801_0102_drop_retired_project_start_snapshot",
     });
     expect(await value()).toEqual([{ value: "2026-01-02" }]);
   });

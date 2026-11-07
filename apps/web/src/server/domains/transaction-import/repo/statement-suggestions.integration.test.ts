@@ -19,6 +19,7 @@ import { workQueueInput } from "@cubby/schemas/work-queue";
 import { DECISION_MODEL } from "@cubby/shared/ai/models";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { and, eq, inArray, sql } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { createEntity } from "tooling/factories/create";
 import { createRepoIdentity } from "tooling/factories/repo";
 import { buildKernelContext } from "tooling/scenarios/context";
@@ -34,6 +35,7 @@ import { activateAiRefresh } from "~/server/ai/repo/ai-refresh";
 import * as cfEnv from "~/server/cf-env";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import * as databaseHelpers from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
   suggestionTable,
   runStep,
@@ -155,7 +157,13 @@ async function statementSpendingAdvice(
   db: Parameters<typeof runStatementLabels>[0],
 ) {
   const category = await getDb(db).query.spendingCategory.findFirst({
-    where: eq(spendingCategory.name, "Synthetic statement spending"),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          eq(spendingCategory.name, "Synthetic statement spending"),
+        ),
+    },
   });
   const advice: NonNullable<
     Parameters<typeof runStatementLabels>[1]
@@ -306,7 +314,13 @@ const accept = async (
   // Unlabelled manual cases explicitly review category/business identity;
   // clean/bulk cases retain the advice carried by their published suggestion.
   const category = await getDb(ctx.db).query.spendingCategory.findFirst({
-    where: eq(spendingCategory.name, "Synthetic statement spending"),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          eq(spendingCategory.name, "Synthetic statement spending"),
+        ),
+    },
   });
   const needsBooking =
     suggestion.create !== null &&
@@ -1417,11 +1431,12 @@ describe("statement Transaction suggestions", () => {
         sourceCategory: "Coffee Shops",
       }),
     ]);
-    const { rows } = await getDb(ctx.db).execute<{
+    const rows = await getDb(ctx.db).execute<{
       source: string;
       chargeKey: string;
     }>(
       sql`SELECT source, "chargeKey" FROM ${sourceObservationFrom} WHERE "deletedAt" IS NULL`,
+      "objects",
     );
     const charges = rows.map(({ source, chargeKey }) => ({
       source,
@@ -1614,13 +1629,16 @@ describe("statement Transaction suggestions", () => {
         }),
       ),
     );
-    const { rows } = await getDb(ctx.db).execute<{
+    const rows = await getDb(ctx.db).execute<{
       source: string;
       externalId: string;
       chargeKey: string;
-    }>(sql`
+    }>(
+      sql`
       SELECT source,"externalId","chargeKey" FROM ${sourceObservationFrom}
-      WHERE "deletedAt" IS NULL ORDER BY source,"chargeKey"`);
+      WHERE "deletedAt" IS NULL ORDER BY source,"chargeKey"`,
+      "objects",
+    );
     await updateSourceTransactionRecords(
       ctx.db,
       {
@@ -1856,13 +1874,16 @@ describe("statement Transaction suggestions", () => {
         }),
       ),
     );
-    const { rows: charges } = await getDb(ctx.db).execute<{
+    const charges = await getDb(ctx.db).execute<{
       source: string;
       chargeKey: string;
-    }>(sql`
+    }>(
+      sql`
       SELECT source, "chargeKey"
       FROM ${sourceObservationFrom} WHERE "deletedAt" IS NULL ORDER BY source, "chargeKey"
-    `);
+    `,
+      "objects",
+    );
     const removeFailure = await rejectStatementPublication(
       ctx,
       charges[0]!.chargeKey,
@@ -3167,7 +3188,13 @@ describe("statement Transaction suggestions", () => {
       expect(Math.max(...requests)).toBeGreaterThan(1);
       expect(requests.length).toBeLessThan(8);
       const category = await getDb(ctx.db).query.spendingCategory.findFirst({
-        where: eq(spendingCategory.name, "Synthetic statement spending"),
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(
+              table,
+              eq(spendingCategory.name, "Synthetic statement spending"),
+            ),
+        },
       });
       if (!category) throw new Error("Synthetic spending category is missing");
       const labelled = await readPendingStatements(ctx);

@@ -4,12 +4,14 @@ import { ingredientShortcode } from "@cubby/schemas/identifiers";
 import type { BackgroundTaskMessage } from "@cubby/schemas/queue-messages";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { eq, sql } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { buildEntity } from "tooling/factories/build";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { setCfEnv } from "~/server/cf-env";
 import { getDb } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { product, ingredient as ingredientTable } from "~/server/db/schema";
 import { findOrCreateIngredient } from "~/server/domains/ingredient/repo/crud";
 import {
@@ -163,7 +165,9 @@ describe("mutation response demand", () => {
     ).rejects.toThrow("expected array");
     expect(
       await getDb(ctx.db).query.product.findFirst({
-        where: eq(product.name, name),
+        where: {
+          RAW: (table: PgTable) => relationalSql(table, eq(product.name, name)),
+        },
         columns: { id: true },
       }),
     ).toBeUndefined();
@@ -188,7 +192,9 @@ describe("mutation response demand", () => {
     ).rejects.toThrow("Unknown mutation response field");
     expect(
       await getDb(ctx.db).query.product.findFirst({
-        where: eq(product.name, name),
+        where: {
+          RAW: (table: PgTable) => relationalSql(table, eq(product.name, name)),
+        },
         columns: { id: true },
       }),
     ).toBeUndefined();
@@ -293,7 +299,10 @@ describe("mutation response demand", () => {
               for (const { body } of messages) {
                 // The queue consumer uses a fresh connection, outside the write transaction.
                 const visible = await getDb(ctx.db).query.product.findFirst({
-                  where: eq(product.name, expectedName),
+                  where: {
+                    RAW: (table: PgTable) =>
+                      relationalSql(table, eq(product.name, expectedName)),
+                  },
                   columns: { name: true },
                 });
                 expect(visible?.name).toBe(expectedName);
@@ -430,15 +439,18 @@ describe("mutation response demand", () => {
           );
         }
         await drainDerivedRefreshFrontier(ctx.db);
-        const stored = await getDb(ctx.db).execute(sql`SELECT document.title,
+        const stored = await getDb(ctx.db).execute(
+          sql`SELECT document.title,
           (SELECT count(*)::int FROM "EntityExternalId" external
             WHERE external."entityId"=identity.id AND external."deletedAt" IS NULL) AS external_ids,
           (SELECT count(*)::int FROM "AuditLog" audit
             WHERE audit."entityKind"=identity.kind AND audit."entityId"=identity.id) AS audits
           FROM "Entity" identity JOIN "SearchDocument" document
             ON document."entityKind"=identity.kind AND document."entityId"=identity.id
-          WHERE identity.shortcode=${id} AND identity.kind=${entity}`);
-        expect(stored.rows).toEqual([
+          WHERE identity.shortcode=${id} AND identity.kind=${entity}`,
+          "objects",
+        );
+        expect(stored).toEqual([
           {
             title: updatedName,
             audits: 2,

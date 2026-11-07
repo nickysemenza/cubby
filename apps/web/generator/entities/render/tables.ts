@@ -16,6 +16,7 @@ import type {
   EntityTableColumn,
   EntityTableIndex,
   EntityTableRelation,
+  EntityStorageField,
 } from "../declarations.ts";
 import {
   TABLE_SQL_PLACEHOLDER,
@@ -110,10 +111,7 @@ const columnBuilders = {
   json: "jsonb",
 } as const;
 
-const renderTableColumn = (
-  column: EntityTableColumn,
-  exportOf: (entity: string) => string,
-) => {
+const renderTableColumn = (column: EntityTableColumn) => {
   const name = JSON.stringify(column.key);
   let expression =
     column.kind === "timestamp"
@@ -123,8 +121,6 @@ const renderTableColumn = (
   if (column.type !== null) expression += `.$type<${column.type.export}>()`;
   if (column.defaultValue !== null)
     expression += `.default(${JSON.stringify(column.defaultValue)})`;
-  if (column.reference !== null)
-    expression += `.references((): AnyPgColumn => ${column.reference === "user" ? "user" : exportOf(column.reference)}.id)`;
   return `${name}:${expression}`;
 };
 
@@ -149,18 +145,55 @@ const renderTable = (
   exportOf: (entity: string) => string,
 ) => {
   const { table } = entity;
-  const reference = (target: string, column = "id") =>
-    `(): AnyPgColumn => ${exportOf(target)}.${column}`;
   const columns = [
     ...entity.fieldModel.storage.map((field) =>
-      renderStorageColumn(entity, field, reference),
+      renderStorageColumn(entity, field),
     ),
-    ...table.columns.map((column) => renderTableColumn(column, exportOf)),
+    ...table.columns.map((column) => renderTableColumn(column)),
   ];
   const hasShortcode = entity.fieldModel.storage.some(
     ({ key }) => key === "shortcode",
   );
+  const columnReferences = [
+    ...entity.fieldModel.storage.flatMap((field) =>
+      field.reference === null
+        ? []
+        : [
+            {
+              key: field.key,
+              column: field.column,
+              target:
+                field.reference === "user" ? "user" : exportOf(field.reference),
+              targetColumn: field.referenceOptions?.column ?? "id",
+              onDelete: field.referenceOptions?.onDelete,
+              onUpdate: field.referenceOptions?.onUpdate,
+            },
+          ],
+    ),
+    ...table.columns.flatMap((column) =>
+      column.reference === null
+        ? []
+        : [
+            {
+              key: column.key,
+              column: column.key,
+              target:
+                column.reference === "user"
+                  ? "user"
+                  : exportOf(column.reference),
+              targetColumn: "id",
+              onDelete: undefined,
+              onUpdate: undefined,
+            },
+          ],
+    ),
+  ];
   const constraints = [
+    ...columnReferences.map(
+      (ref) =>
+        `foreignKey({name: [${JSON.stringify(table.name)}, ${JSON.stringify(ref.column)}, getTableName(${ref.target}), ${JSON.stringify(ref.targetColumn)}, "fk"].join("_").slice(0,63), columns:[table.${ref.key}], foreignColumns:[${ref.target}.${ref.targetColumn}]})${ref.onDelete ? `.onDelete(${JSON.stringify(ref.onDelete)})` : ""}${ref.onUpdate ? `.onUpdate(${JSON.stringify(ref.onUpdate)})` : ""}`,
+    ),
+
     // Whole-table on purpose, soft-deleted rows included: a code is never
     // reused, so a deleted row's code stays a permanent tombstone. A partial
     // `deletedAt IS NULL` index would hand it to a second entity.
@@ -184,33 +217,42 @@ const renderTable = (
         `foreignKey({ name: ${JSON.stringify(key.name)}, columns: [${key.columns.map((column) => `table.${column}`).join(",")}], foreignColumns: [${key.references.map((column) => `${exportOf(key.table)}.${column}`).join(",")}] })${key.onDelete ? `.onDelete(${JSON.stringify(key.onDelete)})` : ""}${key.onUpdate ? `.onUpdate(${JSON.stringify(key.onUpdate)})` : ""}`,
     ),
   ];
-  return `export const ${table.exportName} = pgTable(${JSON.stringify(table.name)}, {${columns.join(",")}}, (${constraints.some((constraint) => /\btable\b/.test(constraint)) ? "table" : "_table"}) => [${constraints.join(",")}]);`;
+  return `export const ${table.exportName} = pgTable(${JSON.stringify(table.name)}, {${columns.join(",")}}, (${constraints.some((constraint) => /\btable\b/.test(constraint)) ? "table" : "_table"}): PgTableExtraConfigValue[] => [${constraints.join(",")}]);`;
 };
 
 const renderRelations = (
   table: CompiledEntityTable,
   exportOf: (entity: string) => string,
+  storage: readonly EntityStorageField[],
 ) => {
   const targetOf = (relation: EntityTableRelation) =>
     "entity" in relation.target
       ? exportOf(relation.target.entity)
       : relation.target.table;
-  const helpers = [...new Set(table.relations.map(({ kind }) => kind))].sort();
   const entries = table.relations.map((relation) => {
     const target = targetOf(relation);
-    if (relation.kind === "many")
-      return `${relation.name}: many(${target}${relation.relationName === null ? "" : `, { relationName: ${JSON.stringify(relation.relationName)} }`})`;
-    if (relation.fields.length === 0) return `${relation.name}: one(${target})`;
     const config = [
-      `fields: [${relation.fields.map((field) => `${table.exportName}.${field}`).join(", ")}]`,
-      `references: [${relation.references.map((column) => `${target}.${column}`).join(", ")}]`,
+      ...(relation.kind === "one" && relation.fields.length > 0
+        ? [
+            `from: [${relation.fields.map((field) => `r.${table.exportName}.${field}`).join(", ")}]`,
+            `to: [${relation.references.map((column) => `r.${target}.${column}`).join(", ")}]`,
+            ...(relation.fields.every(
+              (field) =>
+                table.columns.find((column) => column.key === field)?.notNull ??
+                storage.find((column) => column.key === field)?.nullable ===
+                  false,
+            )
+              ? ["optional: false"]
+              : []),
+          ]
+        : []),
       ...(relation.relationName === null
         ? []
-        : [`relationName: ${JSON.stringify(relation.relationName)}`]),
+        : [`alias: ${JSON.stringify(relation.relationName)}`]),
     ];
-    return `${relation.name}: one(${target}, { ${config.join(", ")} })`;
+    return `${relation.name}: r.${relation.kind}.${target}({ ${config.join(", ")} })`;
   });
-  return `export const ${table.exportName}Relations = relations(${table.exportName}, ({ ${helpers.join(", ")} }) => ({${entries.join(",")}}));`;
+  return `${table.exportName}: {${entries.join(",")}}`;
 };
 
 /** Canonical definitions and downstream relational assembly share one render context. */
@@ -312,9 +354,11 @@ export const renderEntityTableArtifacts = (
   const relationSource =
     tabled
       .filter(({ table }) => table.relations.length > 0)
-      .map(({ table }) => renderRelations(table, exportOf))
-      .join("\n\n") +
-    "\n\n" +
+      .map(({ table, fieldModel }) =>
+        renderRelations(table, exportOf, fieldModel.storage),
+      )
+      .join(",\n") +
+    ",\n" +
     renderChildRelations(declaredChildren);
   const retainedImports = childTables.length
     ? `import { ${childTables.join(", ")} } from "~/server/db/retained-tables";\n`
@@ -326,8 +370,8 @@ export const renderEntityTableArtifacts = (
     generatedHeader +
     storageColumnImportsFor(definitionSource, renderTypeImports(typeImports)) +
     referencedImports(
-      'import { sql } from "drizzle-orm";\n' +
-        'import { type AnyPgColumn, bigint, boolean, check, date, doublePrecision, foreignKey, index, integer, jsonb, pgTable, real, text, timestamp, unique, uniqueIndex, uuid } from "drizzle-orm/pg-core";\n' +
+      'import { sql, getTableName } from "drizzle-orm";\n' +
+        'import { type AnyPgColumn, type PgTableExtraConfigValue, bigint, boolean, check, date, doublePrecision, foreignKey, index, integer, jsonb, pgTable, real, text, timestamp, unique, uniqueIndex, uuid } from "drizzle-orm/pg-core";\n' +
         sharedImports +
         retainedImports,
       definitionSource,
@@ -341,16 +385,13 @@ export const renderEntityTableArtifacts = (
   const relations =
     generatedHeader +
     'export * from "~/server/db/generated/entity-table-definitions.gen";\n' +
-    'import { relations } from "drizzle-orm";\n' +
-    referencedImports(
-      `import { ${[...tableExports].sort().join(", ")} } from "~/server/db/generated/entity-table-definitions.gen";\n` +
-        sharedImports +
-        retainedImports,
-      relationSource,
-    ) +
-    "\n" +
+    'import type { RelationsBuilder, ExtractTablesFromSchema } from "drizzle-orm";\n' +
+    'import * as definitions from "~/server/db/generated/entity-table-definitions.gen";\n' +
+    'import * as retained from "~/server/db/retained-tables";\n' +
+    "export const relationTables = {...definitions, ...retained};\n" +
+    "export const generatedRelations = (r: RelationsBuilder<ExtractTablesFromSchema<typeof relationTables>>) => ({\n" +
     relationSource +
-    "\n";
+    "\n});\n";
   return {
     definitions: rawSource(definitions),
     relations: rawSource(relations),
@@ -383,9 +424,9 @@ export const renderIdentityStorageTablesArtifact = (
         source,
         renderTypeImports(declaredColumnTypeImports(tables)),
       ) +
-      'import { sql } from "drizzle-orm";\n' +
+      'import { sql, getTableName } from "drizzle-orm";\n' +
       referencedImports(
-        'import { type AnyPgColumn, bigint, boolean, check, date, doublePrecision, foreignKey, index, integer, jsonb, pgTable, real, text, timestamp, unique, uniqueIndex, uuid } from "drizzle-orm/pg-core";\n',
+        'import { type AnyPgColumn, type PgTableExtraConfigValue, bigint, boolean, check, date, doublePrecision, foreignKey, index, integer, jsonb, pgTable, real, text, timestamp, unique, uniqueIndex, uuid } from "drizzle-orm/pg-core";\n',
         source,
       ) +
       'import { entityIdentityFk } from "~/server/db/entity-identity-schema";\n\n' +

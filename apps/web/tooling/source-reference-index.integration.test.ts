@@ -8,40 +8,40 @@ import { withMigrationDatabase } from "./test-database-lease";
 // Shared legacy references and noncurrent observations must remain independent.
 it.each([
   {
-    through: "0013_photo_regroup_source_evidence",
-    target: "0016_source_legacy_reference_lookup",
+    through: "20261023011808_0013_photo_regroup_source_evidence",
+    target: "20261023114812_0016_source_legacy_reference_lookup",
     indexName: "SourceTransactionRecord_source_legacyReference_idx",
   },
   {
-    through: "0014_shipment_tracking",
-    target: "0016_source_legacy_reference_lookup",
+    through: "20261023041530_0014_shipment_tracking",
+    target: "20261023114812_0016_source_legacy_reference_lookup",
     indexName: "SourceTransactionRecord_source_legacyReference_idx",
   },
   {
-    through: "0015_statement_label_cursor_work",
-    target: "0016_source_legacy_reference_lookup",
+    through: "20261023114701_0015_statement_label_cursor_work",
+    target: "20261023114812_0016_source_legacy_reference_lookup",
     indexName: "SourceTransactionRecord_source_legacyReference_idx",
   },
   {
-    through: "0013_photo_regroup_source_evidence",
-    target: "0017_transfer_seed_streaming",
+    through: "20261023011808_0013_photo_regroup_source_evidence",
+    target: "20261023114918_0017_transfer_seed_streaming",
     indexName: "SourceTransactionRecord_transfer_seed_idx",
   },
   {
-    through: "0014_shipment_tracking",
-    target: "0017_transfer_seed_streaming",
+    through: "20261023041530_0014_shipment_tracking",
+    target: "20261023114918_0017_transfer_seed_streaming",
     indexName: "SourceTransactionRecord_transfer_seed_idx",
   },
   {
-    through: "0016_source_legacy_reference_lookup",
-    target: "0017_transfer_seed_streaming",
+    through: "20261023114812_0016_source_legacy_reference_lookup",
+    target: "20261023114918_0017_transfer_seed_streaming",
     indexName: "SourceTransactionRecord_transfer_seed_idx",
   },
 ])(
   "preserves populated source references and pending work from $through through $target",
   async ({ through, target, indexName }) => {
     await withMigrationDatabase(async (client) => {
-      const db = drizzle(client);
+      const db = drizzle({ client: client, paramsInErrors: true });
       await migrateDatabase(db, { through });
       const id = (n: number) =>
         `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;

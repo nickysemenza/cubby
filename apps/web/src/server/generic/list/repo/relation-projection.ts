@@ -34,15 +34,18 @@ export async function loadRelationProjection(
     throw new Error(`List reference target has no identity: ${target}`);
   const root = sql.raw(traversal.rootAlias);
   const leaf = sql.raw(traversal.leafAlias);
-  const result = await unwrapDb(db).execute(sql`
+  const result = await unwrapDb(db).execute(
+    sql`
     SELECT ${root}."id" AS "sourceId", ${leaf}."id" AS "targetId"
     FROM ${sql.identifier(traversal.rootTable)} ${root} ${traversal.joins}
     WHERE ${root}."id" IN (${sql.join(
       ids.map((id) => sql`${id}`),
       sql`, `,
     )})
-  `);
+  `,
+    "objects",
+  );
   return new Map(
-    relationRows.parse(result.rows).map((row) => [row.sourceId, row.targetId]),
+    relationRows.parse(result).map((row) => [row.sourceId, row.targetId]),
   );
 }

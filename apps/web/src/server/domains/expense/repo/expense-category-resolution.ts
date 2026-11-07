@@ -311,7 +311,8 @@ export async function loadExpenseSpendingCategoryEvidence(
   db: Database,
   shortcode: string,
 ) {
-  const result = await unwrapDb(db).execute(sql`
+  const result = await unwrapDb(db).execute(
+    sql`
     SELECT (${expenseSpendingCategoryChoiceSql("e", undefined, true)}
       SELECT jsonb_build_object(
         'fallbackSource',${expenseCategorySourceSql()},
@@ -337,10 +338,10 @@ export async function loadExpenseSpendingCategoryEvidence(
         ) step)
       ) FROM chosen f LEFT JOIN "SpendingCategory" c ON c.id=f.category_id
     ) AS evidence
-    FROM "Expense" e WHERE e.shortcode=${shortcode} AND ${notDeleted("e")}`);
-  return result.rows[0]
-    ? categoryEvidenceSchema.parse(result.rows[0].evidence)
-    : null;
+    FROM "Expense" e WHERE e.shortcode=${shortcode} AND ${notDeleted("e")}`,
+    "objects",
+  );
+  return result[0] ? categoryEvidenceSchema.parse(result[0].evidence) : null;
 }
 
 export const effectiveExpenseSpendingCategorySql = (
@@ -372,7 +373,8 @@ export async function resolveAggregateExpenseCategory(
     name: string;
   },
 ): Promise<FieldResolution> {
-  const result = await unwrapDb(db).execute(sql`
+  const result = await unwrapDb(db).execute(
+    sql`
     WITH candidate AS (SELECT ${sqlEnumConstant(expenseLineKindSchema, expenseLineKindSchema.enum.principal)}::text AS "lineKind", NULL::uuid AS "productId",
       ${draft.purchaseId}::uuid AS "purchaseId", ${draft.spendingCategoryId}::uuid AS "spendingCategoryId")
     SELECT ${expenseSpendingCategoryResolutionSql(
@@ -382,20 +384,25 @@ export async function resolveAggregateExpenseCategory(
         : {
             prospectivePurchase: { vendorId: draft.vendorId, name: draft.name },
           },
-    )} AS resolution FROM candidate`);
-  return parseExpenseCategoryResolution(result.rows[0]?.resolution);
+    )} AS resolution FROM candidate`,
+    "objects",
+  );
+  return parseExpenseCategoryResolution(result[0]?.resolution);
 }
 
 /** Fresh review fingerprints include live configured policy, not a cached guess. */
 export async function spendingClassificationRevision(
   db: Database,
 ): Promise<string> {
-  const result = await unwrapDb(db).execute(sql`
+  const result = await unwrapDb(db).execute(
+    sql`
     SELECT jsonb_build_object(
       'categories',(SELECT jsonb_agg(jsonb_build_array(id,name,"parentId") ORDER BY id) FROM "SpendingCategory" WHERE ${notDeleted("SpendingCategory")}),
       'mappings',(SELECT jsonb_agg(jsonb_build_array(id,"parentId",feature,"spendingCategoryMode","spendingCategoryId") ORDER BY id) FROM "ProductCategory" WHERE ${notDeleted("ProductCategory")}),
       'vendors',(SELECT jsonb_agg(jsonb_build_array(id,"spendingProfile","defaultSpendingCategoryId") ORDER BY id) FROM "Vendor" WHERE ${notDeleted("Vendor")})) AS policy
-  `);
-  const policy = z.object({ policy: z.json() }).parse(result.rows[0]).policy;
+  `,
+    "objects",
+  );
+  const policy = z.object({ policy: z.json() }).parse(result[0]).policy;
   return sha256Hex(JSON.stringify(policy));
 }

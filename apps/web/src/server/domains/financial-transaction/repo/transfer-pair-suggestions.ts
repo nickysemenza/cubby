@@ -240,7 +240,7 @@ const categorySignals = (sourceCategory: string | null, amount: number) => {
 
 /** Live accounts; one whose owner is soft-deleted is no leg's account. */
 async function loadAccounts(db: Database) {
-  const { rows } = await unwrapDb(db).execute<{
+  const rows = await unwrapDb(db).execute<{
     id: string;
     shortcode: string;
     name: string;
@@ -249,7 +249,8 @@ async function loadAccounts(db: Database) {
     ownerCode: string | null;
     ownerName: string | null;
     ownerDeleted: boolean;
-  }>(sql`
+  }>(
+    sql`
     SELECT fa.id, fa.shortcode, fa.name, fa.identity->>${"kind"} AS kind,
       lp.id AS "ownerUuid", lp.shortcode AS "ownerCode", lp.name AS "ownerName",
       (fa."ledgerPartyId" IS NOT NULL AND (lp.id IS NULL OR lp."deletedAt" IS NOT NULL)) AS "ownerDeleted"
@@ -257,7 +258,9 @@ async function loadAccounts(db: Database) {
     -- includes-deleted: a deleted owner is read to exclude its accounts.
     LEFT JOIN "LedgerParty" lp ON lp.id = fa."ledgerPartyId"
     WHERE ${notDeleted("fa")}
-  `);
+  `,
+    "objects",
+  );
   const accounts = rows
     .filter((row) => !row.ownerDeleted)
     .map((row): Account => ({
@@ -340,7 +343,7 @@ async function loadTransactionLegs(
         ]
       : []),
   ];
-  const { rows } = await unwrapDb(db).execute<{
+  const rows = await unwrapDb(db).execute<{
     id: string;
     shortcode: string;
     accountId: string;
@@ -351,7 +354,8 @@ async function loadTransactionLegs(
     rawDescription: string | null;
     sourceCategory: string | null;
     notes: string | null;
-  }>(sql`
+  }>(
+    sql`
     SELECT ft.id, ft.shortcode, ft."accountId", (ft."amountMinor"::numeric / 100)::float8 AS amount, ${day}::text AS date,
       ft.kind, ft.merchant, ft."rawDescription", ft."sourceCategory", ft.notes
     FROM "FinancialTransaction" ft
@@ -369,7 +373,9 @@ async function loadTransactionLegs(
         WHERE e."bookingTransactionCode" = ft.shortcode AND ${notDeleted("e")}
       )
       ${conditions.length ? sql`AND ${sql.join(conditions, sql` AND `)}` : sql``}
-  `);
+  `,
+    "objects",
+  );
   const live = rows.flatMap((row) => {
     const account = accounts.byId.get(String(row.accountId));
     const amount = Number(row.amount);
@@ -478,9 +484,8 @@ async function loadStatementLegs(
         WHERE ${notDeleted("seen")} AND ${sql.join(conditions, sql` AND `)}
       )`)
     : CHARGE_STATE;
-  const { rows } = await unwrapDb(db).execute<
-    z.input<typeof observationRow>
-  >(sql`
+  const rows = await unwrapDb(db).execute<z.input<typeof observationRow>>(
+    sql`
     SELECT r."occurrenceId", r."reviewState", r.id::text AS id, r.source, r."externalId", ${chargeKeyOf("r")} AS "chargeKey",
       r."legacyReference", r.current, r."withdrawnAt"::text AS "withdrawnAt",
       r."rowPosition", r."providerTransactionId", r."providerAccountId", r."accountDescriptor",
@@ -495,7 +500,9 @@ async function loadStatementLegs(
     WHERE NOT cs.ignored AND NOT cs.superseded AND cs.shortcode IS NULL
       AND cs."acceptedTransactionId" IS NULL AND cs."reviewState" = ${sqlEnumConstant(sourceOccurrenceReviewState, sourceOccurrenceReviewState.enum.ready)}
     ORDER BY r."createdAt" DESC, r.id
-  `);
+  `,
+    "objects",
+  );
   const byCharge = new Map<string, ObservationRow[]>();
   for (const raw of rows) {
     const row = observationRow.parse(raw);
@@ -1002,12 +1009,12 @@ async function potentialTransferSeeds(db: Database, keys: readonly string[]) {
       : []),
   ];
   if (!selections.length) return new Set<string>();
-  const { rows } = await unwrapDb(db).execute<{
+  const rows = await unwrapDb(db).execute<{
     key: string;
     amount: string | number;
     recordedKind: string | null;
     sourceCategory: string | null;
-  }>(sql.join(selections, sql` UNION ALL `));
+  }>(sql.join(selections, sql` UNION ALL `), "objects");
   return new Set(
     rows.flatMap((row) =>
       isSeed({
@@ -1523,9 +1530,12 @@ export async function refreshTransferPairStatements(
 ) {
   const pending = sql`family = ${suggestionFamily.enum.transfer_pair}
     AND data->>'pairKey' = ${pairKey} AND coalesce((data->>'statementRefreshPending')::boolean, false)`;
-  const { rows } = await unwrapDb(db).execute(sql`
+  const rows = await unwrapDb(db).execute(
+    sql`
     SELECT 1 FROM "Suggestion" WHERE ${pending} LIMIT 1
-  `);
+  `,
+    "objects",
+  );
   if (!rows.length) return false;
   const charges = transferPairSourceCharges(pairKey);
   const {
@@ -1542,9 +1552,12 @@ export async function refreshTransferPairStatements(
     await assertWorkflowEffect(tx);
     const client = getDb(tx);
     await client.execute(pairLock(pairKey));
-    const { rows: receipts } = await client.execute<{ id: string }>(sql`
+    const receipts = await client.execute<{ id: string }>(
+      sql`
       SELECT id FROM "Suggestion" WHERE ${pending} FOR UPDATE
-    `);
+    `,
+      "objects",
+    );
     if (!receipts.length) return false;
     for (const proposal of proposals)
       await publishChargeProposal(tx, proposal, {
@@ -1644,8 +1657,9 @@ async function nextTransferPairSeeds(
     createdBefore?: string | null;
   },
 ) {
-  const { rows } = await unwrapDb(db).execute<{ key: string }>(
+  const rows = await unwrapDb(db).execute<{ key: string }>(
     transferPairSeedPage(input),
+    "objects",
   );
   return rows.map((row) => row.key);
 }
@@ -1655,9 +1669,12 @@ export async function countTransferPairSeeds(
   db: Database,
   input: { since: string | null; createdBefore: string | null },
 ) {
-  const { rows } = await unwrapDb(db).execute<{ count: number }>(sql`
+  const rows = await unwrapDb(db).execute<{ count: number }>(
+    sql`
     SELECT count(*)::int AS count FROM (${transferPairSeedKeys(input)}) seeds
-  `);
+  `,
+    "objects",
+  );
   return rows[0]?.count ?? 0;
 }
 
@@ -1690,10 +1707,13 @@ export async function countTransferPairStates(
   db: Database,
   input: { scope: TransferPairScope; createdBefore: string | null },
 ) {
-  const { rows } = await unwrapDb(db).execute<{ count: number }>(sql`
+  const rows = await unwrapDb(db).execute<{ count: number }>(
+    sql`
     SELECT count(*)::int AS count FROM "Suggestion" s
     WHERE ${retireScope(input.scope, input.createdBefore)}
-  `);
+  `,
+    "objects",
+  );
   return rows[0]?.count ?? 0;
 }
 
@@ -2127,19 +2147,22 @@ async function storedPairs(
   where: SQL,
   status: "pending" | "any" = "pending",
 ): Promise<StoredPair[]> {
-  const { rows } = await unwrapDb(db).execute<{
+  const rows = await unwrapDb(db).execute<{
     id: string;
     fingerprint: string | null;
     data: unknown;
     judgment: unknown;
-  }>(sql`
+  }>(
+    sql`
     SELECT s.id::text AS id, s.fingerprint, s.data, s.judgment
     FROM "Suggestion" s
     WHERE s.family = ${suggestionFamily.enum.transfer_pair} AND s.active
       ${status === "pending" ? sql`AND s.status = ${suggestionStatus.enum.pending}` : sql``}
       AND ${where}
     ORDER BY s.data->>'pairKey'
-  `);
+  `,
+    "objects",
+  );
   return rows.map((row) => ({
     id: row.id,
     fingerprint: row.fingerprint,
@@ -2235,10 +2258,13 @@ async function currentStatementStatus(db: Database, leg: TransferPairLeg) {
       "CONSTRAINT_VIOLATION",
       "A new transfer leg requires retained source identity.",
     );
-  const { rows } = await unwrapDb(db).execute<{ providerStatus: unknown }>(sql`
+  const rows = await unwrapDb(db).execute<{ providerStatus: unknown }>(
+    sql`
     SELECT "providerStatus" FROM ${sourceObservationFrom} WHERE source=${leg.charge.source}
       AND "chargeKey"=${leg.charge.chargeKey} AND current AND "withdrawnAt" IS NULL AND ${notDeleted("SourceTransactionRecord")}
-  `);
+  `,
+    "objects",
+  );
   if (rows.length !== 1)
     throw createAppError(
       "CONSTRAINT_VIOLATION",

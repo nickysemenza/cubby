@@ -21,6 +21,7 @@ import type {
   RawRecipeOutput as RecipeOut,
 } from "@cubby/schemas/recipe-raw-read";
 import { and, eq, inArray, isNotNull, ne, type SQL, sql } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { alias, QueryBuilder } from "drizzle-orm/pg-core";
 import { match, P } from "ts-pattern";
 
@@ -42,6 +43,7 @@ import {
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { recipeSourceRelations } from "~/server/db/helpers/relations";
 import {
   entityAttachment,
@@ -164,7 +166,13 @@ export const getRecipesByIDs = async (
     span.setAttribute("db.table", "recipe");
     span.setAttribute("db.requested_count", ids.length);
     const rows = await getDb(db).query.recipe.findMany({
-      where: and(inArray(recipe.id, ids), notDeleted(recipe)),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(inArray(recipe.id, ids), notDeleted(recipe)),
+          ),
+      },
       ...relations.recipe.list,
     });
     span.setAttribute("db.result_count", rows.length);
@@ -217,7 +225,13 @@ export const getCookbookRecipeTitles = async (
   cookbookId: CookbookId,
 ): Promise<string[]> => {
   const rows = await getDb(db).query.recipe.findMany({
-    where: and(eq(recipe.cookbookId, cookbookId), notDeleted(recipe)),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          and(eq(recipe.cookbookId, cookbookId), notDeleted(recipe)),
+        ),
+    },
     columns: { name: true },
   });
   return rows.map((r) => r.name);
@@ -236,7 +250,13 @@ export const getCookbookRecipesForDiff = async (
   }>
 > => {
   const rows = await getDb(db).query.recipe.findMany({
-    where: and(eq(recipe.cookbookId, cookbookId), notDeleted(recipe)),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          and(eq(recipe.cookbookId, cookbookId), notDeleted(recipe)),
+        ),
+    },
     columns: { id: true, name: true, shortcode: true },
   });
   const recipes = await getRecipesByIDs(
@@ -275,7 +295,13 @@ export const getCookbookRecipeIdsByTitle = async (
   cookbookId: CookbookId,
 ): Promise<Map<string, RecipeId>> => {
   const rows = await getDb(db).query.recipe.findMany({
-    where: and(eq(recipe.cookbookId, cookbookId), notDeleted(recipe)),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          and(eq(recipe.cookbookId, cookbookId), notDeleted(recipe)),
+        ),
+    },
     columns: { id: true, name: true },
   });
   return new Map(rows.map((r) => [normalizeTitle(r.name), r.id]));
@@ -420,10 +446,16 @@ const loadRecipeDetail = async (
   ids: readonly string[],
 ) => {
   const rows = await unwrapDb(db).query.recipe.findMany({
-    where: inArray(
-      recipe.id,
-      ids.map((id) => parseEntityId("recipe", id)),
-    ),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          inArray(
+            recipe.id,
+            ids.map((id) => parseEntityId("recipe", id)),
+          ),
+        ),
+    },
     with: {
       ...recipeSourceRelations,
       sections: relations.recipe.full.with.sections,
@@ -862,7 +894,7 @@ const upsertRecipeMatching = async (
     });
 
   const existingRecipe = await getDb(db).query.recipe.findFirst({
-    where: matchWhere,
+    where: { RAW: (table: PgTable) => relationalSql(table, matchWhere) },
     columns: { id: true, shortcode: true },
   });
   if (existingRecipe) {
@@ -879,7 +911,7 @@ const upsertRecipeMatching = async (
     },
     async (error) => {
       const winner = await getDb(db).query.recipe.findFirst({
-        where: matchWhere,
+        where: { RAW: (table: PgTable) => relationalSql(table, matchWhere) },
         columns: { id: true, shortcode: true },
       });
       if (!winner) throw error;
@@ -989,11 +1021,18 @@ export const updateRecipe = defineMutationWriter({
     const existingRecipe =
       updates.sections !== undefined
         ? await getDb(db).query.recipe.findFirst({
-            where: eq(recipe.id, id),
+            where: {
+              RAW: (table: PgTable) => relationalSql(table, eq(recipe.id, id)),
+            },
             with: { sections: { with: { ingredients: true } } },
           })
         : await getDb(db)
-            .query.recipe.findFirst({ where: eq(recipe.id, id) })
+            .query.recipe.findFirst({
+              where: {
+                RAW: (table: PgTable) =>
+                  relationalSql(table, eq(recipe.id, id)),
+              },
+            })
             .then((row) => (row ? { ...row, sections: [] } : undefined));
 
     if (!existingRecipe) {
@@ -1128,7 +1167,13 @@ export const deleteRecipesByCookbookTx = async (
   actor: ActorContext,
 ): Promise<{ recipeIds: RecipeId[]; detachedImageKeys: string[] }> => {
   const rows = await tx.query.recipe.findMany({
-    where: and(eq(recipe.cookbookId, cookbookId), notDeleted(recipe)),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          and(eq(recipe.cookbookId, cookbookId), notDeleted(recipe)),
+        ),
+    },
     columns: { id: true, shortcode: true },
   });
   const ids = rows.map((r) => r.id);

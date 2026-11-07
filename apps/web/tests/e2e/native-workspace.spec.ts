@@ -1,3 +1,5 @@
+import type { PgTable } from "drizzle-orm/pg-core";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { entityApi } from "./support/entity-api";
 import { eq } from "drizzle-orm";
 
@@ -86,7 +88,10 @@ test("Run evidence uses native bearer cookies and confines the hosted experiment
   // The runner's refusal adds its diagnostics to the same update message.
   expect(await outdatedWrite.json()).toMatchObject(await outdated.json());
   const productRow = await getDb(getFixtureDb()).query.product.findFirst({
-    where: eq(productTable.shortcode, product.id),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(table, eq(productTable.shortcode, product.id)),
+    },
   });
   if (!productRow) throw new Error("Synthetic Product missing");
   await getDb(getFixtureDb()).insert(auditLog).values({

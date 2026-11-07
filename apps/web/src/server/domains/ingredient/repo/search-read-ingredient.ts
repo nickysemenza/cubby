@@ -1,10 +1,12 @@
 import { entitySchema } from "@cubby/schemas/entity";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { isNull, sql, and, inArray } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { alias } from "drizzle-orm/pg-core";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { unwrapDb, notDeleted } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { ingredient as searchTableingredient } from "~/server/db/schema";
 import { ingredient } from "~/server/db/schema";
 import { withOptionalLimit } from "~/server/generic/embedding/repo/embedding-load-options";
@@ -21,16 +23,22 @@ async function loadEmbeddingText(
 ): Promise<SearchableEntityText[]> {
   const queryConfig = withOptionalLimit(
     {
-      where: and(
-        notDeleted(ingredient),
-        isNull(ingredient.recipeId),
-        options.ids?.length
-          ? inArray(
-              ingredient.id,
-              options.ids.map((id) => parseEntityId("ingredient", id)),
-            )
-          : undefined,
-      ),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(
+              notDeleted(ingredient),
+              isNull(ingredient.recipeId),
+              options.ids?.length
+                ? inArray(
+                    ingredient.id,
+                    options.ids.map((id) => parseEntityId("ingredient", id)),
+                  )
+                : undefined,
+            ),
+          ),
+      },
       columns: {
         id: true,
         name: true,

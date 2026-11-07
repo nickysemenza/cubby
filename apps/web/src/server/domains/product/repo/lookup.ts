@@ -11,10 +11,12 @@ import {
 } from "@cubby/schemas/product-raw-read";
 import { type FoodLookupParam, foodLookupParam } from "@cubby/usda";
 import { and, eq, ilike, inArray, or, type SQL, sql } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { match } from "ts-pattern";
 
 import type { Database } from "~/server/db";
 import { escapeLike, getDb, notDeleted } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
   entityExternalId,
   inventoryEntry,
@@ -144,9 +146,19 @@ export const countProductsByFoodIdentifiers = async (
   const lookups = rawLookups.map((lookup) => foodLookupParam.parse(lookup));
   const linkCondition = productFoodLinkCondition(lookups);
   const products = await getDb(db).query.product.findMany({
-    where: and(linkCondition, notDeleted(product)),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(table, and(linkCondition, notDeleted(product))),
+    },
     columns: { fdc_id: true },
-    with: { externalIds: { where: notDeleted(entityExternalId) } },
+    with: {
+      externalIds: {
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(table, notDeleted(entityExternalId)),
+        },
+      },
+    },
   });
   return lookups.map(
     (lookup) =>
@@ -168,7 +180,9 @@ export const getFoodLookupsForLinkedProducts = async (
   db: Database,
 ): Promise<FoodLookupParam[]> => {
   const rows = await getDb(db).query.product.findMany({
-    where: notDeleted(product),
+    where: {
+      RAW: (table: PgTable) => relationalSql(table, notDeleted(product)),
+    },
     columns: { id: true, fdc_id: true },
   });
   const gtins = await loadPrimaryGtins(
@@ -283,11 +297,20 @@ export const loadProductInventoryEntries = async (
   if (ids.length === 0) return out;
 
   const rows = await getDb(db).query.inventoryEntry.findMany({
-    where: and(
-      inArray(inventoryEntry.productId, [...ids]),
-      notDeleted(inventoryEntry),
-    ),
-    orderBy: inventoryEntry.createdAt,
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          and(
+            inArray(inventoryEntry.productId, [...ids]),
+            notDeleted(inventoryEntry),
+          ),
+        ),
+    },
+    orderBy: (table: PgTable) =>
+      [inventoryEntry.createdAt]
+        .flat()
+        .map((value) => relationalSql(table, value)),
     with: { location: true },
   });
   const valuations = await loadStoredInventoryValuations(

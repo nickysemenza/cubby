@@ -1,0 +1,111 @@
+{
+  "dialect": "sqlite",
+  "id": "a98c702f-3469-4ad3-9fa8-c8715aa007fa",
+  "prevIds": ["00000000-0000-0000-0000-000000000000"],
+  "version": "7",
+  "ddl": [
+    {
+      "name": "response_chunks",
+      "entityType": "tables"
+    },
+    {
+      "name": "responses",
+      "entityType": "tables"
+    },
+    {
+      "table": "response_chunks",
+      "name": "key",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "response_chunks",
+      "name": "seq",
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "response_chunks",
+      "name": "value",
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "responses",
+      "name": "key",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "responses",
+      "name": "value",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "responses",
+      "name": "expires_at",
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "responses",
+      "name": "claim_token",
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "responses",
+      "name": "lease_expires_at",
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "entityType": "columns"
+    },
+    {
+      "table": "response_chunks",
+      "name": "response_chunks_key_seq_pk",
+      "columns": ["key", "seq"],
+      "nameExplicit": false,
+      "entityType": "pks"
+    },
+    {
+      "table": "responses",
+      "name": "responses_pk",
+      "columns": ["key"],
+      "nameExplicit": false,
+      "entityType": "pks"
+    }
+  ],
+  "renames": []
+}

@@ -1,11 +1,13 @@
 import { fieldResolutionSchema } from "@cubby/schemas/field-resolution";
 import type { ProductCategoryShortcode } from "@cubby/schemas/identifiers";
 import { and, eq, inArray } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { getDb } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
   auditLog,
   inventoryEntry,
@@ -64,7 +66,10 @@ describe("setProductsStockTracked", () => {
       ctx.actor,
     );
     const inventoryBefore = await getDb(ctx.db).query.inventoryEntry.findFirst({
-      where: eq(inventoryEntry.id, entry.entityId),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(table, eq(inventoryEntry.id, entry.entityId)),
+      },
     });
     if (!inventoryBefore) throw new Error("inventory fixture missing");
 
@@ -103,7 +108,10 @@ describe("setProductsStockTracked", () => {
     ).toHaveLength(0);
 
     const inventoryAfter = await getDb(ctx.db).query.inventoryEntry.findFirst({
-      where: eq(inventoryEntry.id, entry.entityId),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(table, eq(inventoryEntry.id, entry.entityId)),
+      },
     });
     expect(inventoryAfter?.updatedAt).toEqual(inventoryBefore.updatedAt);
   });
@@ -125,7 +133,10 @@ describe("setProductsStockTracked", () => {
     );
 
     const refreshed = await getDb(ctx.db).query.product.findFirst({
-      where: eq(productTable.id, product.entityId),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(table, eq(productTable.id, product.entityId)),
+      },
     });
     expect(refreshed?.stockTracked).toBeNull();
   });

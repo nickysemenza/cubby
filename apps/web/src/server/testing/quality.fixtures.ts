@@ -17,11 +17,10 @@ export async function publishQualityFixtures(db: Database, kind: ScoredEntity) {
   const ids = z
     .array(z.object({ id: z.uuid() }))
     .parse(
-      (
-        await unwrapDb(db).execute(
-          sql`SELECT t.id FROM ${table} t ORDER BY t.id`,
-        )
-      ).rows,
+      await unwrapDb(db).execute(
+        sql`SELECT t.id FROM ${table} t ORDER BY t.id`,
+        "objects",
+      ),
     )
     .map((row) => row.id);
   for (let start = 0; start < ids.length; start += 200) {
@@ -47,9 +46,12 @@ export async function storedQuality(
     }
   | undefined
 > {
-  const result = await unwrapDb(db).execute(sql`
+  const result = await unwrapDb(db).execute(
+    sql`
     SELECT jsonb_build_object('rulesVersion', "rulesVersion", 'checks', checks) AS value FROM "QualitySnapshot"
-     WHERE "entityId" = ${entityId}`);
+     WHERE "entityId" = ${entityId}`,
+    "objects",
+  );
   const [row] = z
     .array(
       z.object({
@@ -59,7 +61,7 @@ export async function storedQuality(
         }),
       }),
     )
-    .parse(result.rows);
+    .parse(result);
   return row?.value;
 }
 
@@ -72,9 +74,10 @@ export async function storedQualityIds(
     kind
       ? sql`SELECT "entityId"::text AS id FROM "QualitySnapshot" WHERE kind = ${kind} ORDER BY 1`
       : sql`SELECT "entityId"::text AS id FROM "QualitySnapshot" ORDER BY 1`,
+    "objects",
   );
   return z
     .array(z.object({ id: z.string() }))
-    .parse(result.rows)
+    .parse(result)
     .map((row) => row.id);
 }

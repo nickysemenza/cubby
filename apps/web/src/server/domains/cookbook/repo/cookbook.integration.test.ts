@@ -4,10 +4,12 @@ import {
 } from "@cubby/schemas/import-recipe";
 import { type CookbookFilters } from "@cubby/schemas/recipe";
 import { and, eq, sql } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
   cookbook,
   entityEmbedding,
@@ -200,7 +202,10 @@ describe("cookbook repository", () => {
       { type: "done", result: { succeeded: 1, failed: 1 } },
     ]);
     const persisted = await getDb(ctx.db).query.recipe.findMany({
-      where: eq(recipe.cookbookId, book.entityId),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(table, eq(recipe.cookbookId, book.entityId)),
+      },
       columns: { name: true },
     });
     expect(persisted).toEqual([{ name: "Streamed Pancakes" }]);
@@ -247,7 +252,10 @@ describe("cookbook repository", () => {
     await stream.return();
 
     const persisted = await getDb(ctx.db).query.recipe.findMany({
-      where: eq(recipe.cookbookId, book.entityId),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(table, eq(recipe.cookbookId, book.entityId)),
+      },
       columns: { name: true },
     });
     expect(persisted).toEqual([{ name: "Close First" }]);
@@ -293,8 +301,13 @@ describe("cookbook repository", () => {
       "cover",
     );
     const covers = await getDb(ctx.db).query.image.findMany({
-      where: (table, { inArray }) =>
-        inArray(table.id, [firstCover.id, redundantCover.id]),
+      where: {
+        RAW: (table, { inArray }) =>
+          relationalSql(
+            table,
+            inArray(table.id, [firstCover.id, redundantCover.id]),
+          ),
+      },
       columns: { id: true, status: true },
     });
     expect(covers_.get(first.entityId)).toBe(firstCover.id);
@@ -410,14 +423,20 @@ describe("cookbook repository", () => {
     );
 
     const sectionsBefore = await getDb(ctx.db).query.recipeSection.findMany({
-      where: eq(recipeSection.recipeId, recipeId),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(table, eq(recipeSection.recipeId, recipeId)),
+      },
     });
     expect(sectionsBefore.length).toBeGreaterThan(0);
     const sectionIds = sectionsBefore.map((s) => s.id);
     const ingredientsBefore = await getDb(
       ctx.db,
     ).query.recipeSectionIngredient.findMany({
-      where: (t, { inArray }) => inArray(t.recipeSectionId, sectionIds),
+      where: {
+        RAW: (t, { inArray }) =>
+          relationalSql(t, inArray(t.recipeSectionId, sectionIds)),
+      },
     });
     expect(ingredientsBefore.length).toBeGreaterThan(0);
 
@@ -447,43 +466,66 @@ describe("cookbook repository", () => {
     expect(deleted.deletedRecipes).toBe(1);
 
     const cookbookRow = await getDb(ctx.db).query.cookbook.findFirst({
-      where: eq(cookbook.id, cookbookId),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(table, eq(cookbook.id, cookbookId)),
+      },
     });
     expect(cookbookRow?.deletedAt).not.toBeNull();
 
     const recipeRow = await getDb(ctx.db).query.recipe.findFirst({
-      where: eq(recipe.id, recipeId),
+      where: {
+        RAW: (table: PgTable) => relationalSql(table, eq(recipe.id, recipeId)),
+      },
     });
     expect(recipeRow?.deletedAt).not.toBeNull();
 
     const sectionsAfter = await getDb(ctx.db).query.recipeSection.findMany({
-      where: eq(recipeSection.recipeId, recipeId),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(table, eq(recipeSection.recipeId, recipeId)),
+      },
     });
     expect(sectionsAfter.every((s) => s.deletedAt !== null)).toBe(true);
 
     const ingredientsAfter = await getDb(
       ctx.db,
     ).query.recipeSectionIngredient.findMany({
-      where: (t, { inArray }) => inArray(t.recipeSectionId, sectionIds),
+      where: {
+        RAW: (t, { inArray }) =>
+          relationalSql(t, inArray(t.recipeSectionId, sectionIds)),
+      },
     });
     expect(ingredientsAfter.every((i) => i.deletedAt !== null)).toBe(true);
 
     const cookbookEmbedding = await getDb(
       ctx.db,
     ).query.entityEmbedding.findFirst({
-      where: and(
-        eq(entityEmbedding.entityKind, "cookbook"),
-        eq(entityEmbedding.entityId, cookbookId),
-      ),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(
+              eq(entityEmbedding.entityKind, "cookbook"),
+              eq(entityEmbedding.entityId, cookbookId),
+            ),
+          ),
+      },
     });
     expect(cookbookEmbedding?.deletedAt).not.toBeNull();
 
     const recipeEmbedding = await getDb(ctx.db).query.entityEmbedding.findFirst(
       {
-        where: and(
-          eq(entityEmbedding.entityKind, "recipe"),
-          eq(entityEmbedding.entityId, recipeId),
-        ),
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(
+              table,
+              and(
+                eq(entityEmbedding.entityKind, "recipe"),
+                eq(entityEmbedding.entityId, recipeId),
+              ),
+            ),
+        },
       },
     );
     expect(recipeEmbedding?.deletedAt).not.toBeNull();

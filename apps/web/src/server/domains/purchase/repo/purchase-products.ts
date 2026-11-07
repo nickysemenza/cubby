@@ -21,6 +21,7 @@ import type {
   PurchaseProductOut,
 } from "@cubby/schemas/purchase";
 import { and, asc, count, eq, inArray, type SQL, sql } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { uniq } from "es-toolkit";
 import { z } from "zod";
 
@@ -33,6 +34,7 @@ import {
 import { productBrandNameSql } from "~/server/db/computed/product-brand-sql";
 import { getDb, notDeleted, withTransaction } from "~/server/db/helpers";
 import { quotedTable } from "~/server/db/helpers/related";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
   entityLink,
   expense,
@@ -574,7 +576,13 @@ async function preflightAttachPurchaseProducts(
   const liveIds = new Set(rows.filter((row) => row.live).map((row) => row.id));
 
   const livePurchase = await dbc.query.purchase.findFirst({
-    where: and(eq(purchase.id, purchaseId), notDeleted(purchase)),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          and(eq(purchase.id, purchaseId), notDeleted(purchase)),
+        ),
+    },
     columns: { id: true },
   });
   const alreadyLive = await livePurchaseProductIds(dbc, purchaseId, requested);

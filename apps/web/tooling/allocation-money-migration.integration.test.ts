@@ -5,9 +5,9 @@ import { withMigrationDatabase } from "./test-database-lease";
 
 it("preserves signed allocation edges and refuses noisy originals without changing ownership", async () => {
   await withMigrationDatabase(async (client) => {
-    const db = drizzle(client);
+    const db = drizzle({ client: client, paramsInErrors: true });
     await migrateDatabase(db, {
-      through: "0104_purchase_total_minor_units",
+      through: "20261106014136_0104_purchase_total_minor_units",
     });
     const uuid = (i: number) =>
       `00000000-0000-4000-8000-${String(i).padStart(12, "0")}`;
@@ -109,14 +109,18 @@ it("preserves signed allocation edges and refuses noisy originals without changi
       [run],
     );
     await expect(
-      migrateDatabase(db, { through: "0105_allocation_minor_units" }),
+      migrateDatabase(db, {
+        through: "20261106015941_0105_allocation_minor_units",
+      }),
     ).rejects.toThrow("Financial refresh has unfinished steps");
     await client.query(
       `UPDATE "Run" SET status='failed',"failureCode"='user_cancelled',"endedAt"=now() WHERE id=$1`,
       [run],
     );
     await expect(
-      migrateDatabase(db, { through: "0105_allocation_minor_units" }),
+      migrateDatabase(db, {
+        through: "20261106015941_0105_allocation_minor_units",
+      }),
     ).rejects.toThrow("Financial refresh has unfinished steps");
     await client.query(
       `UPDATE "Job" SET state='cancelled' WHERE key='allocation-refresh'`,
@@ -131,7 +135,9 @@ it("preserves signed allocation edges and refuses noisy originals without changi
       [uuid(10)],
     );
     await expect(
-      migrateDatabase(db, { through: "0105_allocation_minor_units" }),
+      migrateDatabase(db, {
+        through: "20261106015941_0105_allocation_minor_units",
+      }),
     ).rejects.toThrow("independent IEEE");
     expect(
       (
@@ -144,7 +150,9 @@ it("preserves signed allocation edges and refuses noisy originals without changi
       `UPDATE "FinancialTransactionAllocation" SET amount=10.01 WHERE id=$1`,
       [uuid(10)],
     );
-    await migrateDatabase(db, { through: "0105_allocation_minor_units" });
+    await migrateDatabase(db, {
+      through: "20261106015941_0105_allocation_minor_units",
+    });
     expect(
       (
         await client.query(

@@ -7,12 +7,14 @@ import { ledgerSourceClaimInput } from "@cubby/schemas/ledger-transfer";
 import { importSourceKind } from "@cubby/schemas/purchase-import";
 import { moneyToMinor } from "@cubby/shared";
 import { eq, inArray, sql } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { promoteHistoricalAcceptedOrders } from "tooling/historical-accepted-orders";
 import { withTestDb } from "tooling/test-setup";
 import { beforeAll, describe, expect, it } from "vitest";
 
 import type { Database } from "~/server/db";
 import { getDb, withTransaction } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
   auditLog,
   email as emailTable,
@@ -206,7 +208,10 @@ describe("reviewed accepted source Product association", () => {
     const db = getDb(ctx.db);
     const association = await db.query.importSourceOrder.findFirst();
     const item = await db.query.expense.findFirst({
-      where: eq(expense.name, "Synthetic household item"),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(table, eq(expense.name, "Synthetic household item")),
+      },
     });
     if (!association || !isLiveSourceOrder(association) || !item)
       throw new Error("Synthetic accepted item missing");
@@ -217,7 +222,10 @@ describe("reviewed accepted source Product association", () => {
         .where(eq(expense.id, item.id));
     const retainedItem = multi
       ? await db.query.expense.findFirst({
-          where: eq(expense.name, "Synthetic retained item"),
+          where: {
+            RAW: (table: PgTable) =>
+              relationalSql(table, eq(expense.name, "Synthetic retained item")),
+          },
         })
       : null;
     const resolution = {
@@ -341,7 +349,7 @@ describe("reviewed accepted source Product association", () => {
     const before = await w.snapshot();
     const cutover = readFileSync(
       new URL(
-        "../../../../../drizzle/0024_receipt_expense_binding.sql",
+        "../../../../../drizzle/20261024205947_0024_receipt_expense_binding/migration.sql",
         import.meta.url,
       ),
       "utf8",
@@ -381,13 +389,22 @@ describe("reviewed accepted source Product association", () => {
         mismatch === "canonical" || mismatch === "legacy-canonical";
       const w = await world(false, true, true);
       const original = await w.db.query.sourceOrderObservation.findFirst({
-        where: eq(
-          sourceOrderObservation.id,
-          w.association.acceptedObservationId!,
-        ),
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(
+              table,
+              eq(
+                sourceOrderObservation.id,
+                w.association.acceptedObservationId!,
+              ),
+            ),
+        },
       });
       const target = await w.db.query.purchase.findFirst({
-        where: eq(purchase.id, w.association.purchaseId),
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(table, eq(purchase.id, w.association.purchaseId)),
+        },
       });
       if (!original || !target) throw new Error("Synthetic original missing");
       if (original.extraction.status !== "ready")
@@ -556,7 +573,13 @@ describe("reviewed accepted source Product association", () => {
       expect(
         (
           await w.db.query.importSourceOrder.findFirst({
-            where: eq(importSourceOrder.id, w.association.id),
+            where: {
+              RAW: (table: PgTable) =>
+                relationalSql(
+                  table,
+                  eq(importSourceOrder.id, w.association.id),
+                ),
+            },
           })
         )?.originalOrder,
       ).toEqual(unknown);
@@ -659,10 +682,16 @@ describe("reviewed accepted source Product association", () => {
     async (preparation) => {
       const w = await world();
       const original = await w.db.query.sourceOrderObservation.findFirst({
-        where: eq(
-          sourceOrderObservation.id,
-          w.association.acceptedObservationId!,
-        ),
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(
+              table,
+              eq(
+                sourceOrderObservation.id,
+                w.association.acceptedObservationId!,
+              ),
+            ),
+        },
       });
       if (!original) throw new Error("Synthetic accepted observation missing");
       if (preparation === "missing") {
@@ -674,10 +703,16 @@ describe("reviewed accepted source Product association", () => {
           .where(eq(sourceOrderObservation.id, original.id));
       }
       const retained = await w.db.query.sourceOrderObservation.findFirst({
-        where: eq(sourceOrderObservation.id, original.id),
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(table, eq(sourceOrderObservation.id, original.id)),
+        },
       });
       const target = await w.db.query.purchase.findFirst({
-        where: eq(purchase.id, w.item.purchaseId!),
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(table, eq(purchase.id, w.item.purchaseId!)),
+        },
       });
       if (!target) throw new Error("Synthetic accepted Purchase missing");
       await prepareMemberImport(ctx.db, ctx.actor, {
@@ -966,7 +1001,13 @@ describe("reviewed accepted source Product association", () => {
       expect(
         (
           await w.db.query.importSourceOrder.findFirst({
-            where: eq(importSourceOrder.id, w.association.id),
+            where: {
+              RAW: (table: PgTable) =>
+                relationalSql(
+                  table,
+                  eq(importSourceOrder.id, w.association.id),
+                ),
+            },
           })
         )?.acceptedObservationId,
       ).toBe(unaccepted ? null : w.association.acceptedObservationId);
@@ -1088,7 +1129,10 @@ describe("reviewed accepted source Product association", () => {
             orderId: null,
           });
           const current = await w.db.query.purchase.findFirst({
-            where: eq(purchase.id, survivingPurchase),
+            where: {
+              RAW: (table: PgTable) =>
+                relationalSql(table, eq(purchase.id, survivingPurchase)),
+            },
           });
           if (!current) throw new Error("Synthetic source Purchase missing");
           await mergePurchases(
@@ -1105,11 +1149,17 @@ describe("reviewed accepted source Product association", () => {
             name: `Synthetic merged retailer ${step}`,
           });
           const current = await w.db.query.purchase.findFirst({
-            where: eq(purchase.id, survivingPurchase),
+            where: {
+              RAW: (table: PgTable) =>
+                relationalSql(table, eq(purchase.id, survivingPurchase)),
+            },
           });
           const previous = current
             ? await w.db.query.vendor.findFirst({
-                where: eq(vendorTable.id, current.vendorId),
+                where: {
+                  RAW: (table: PgTable) =>
+                    relationalSql(table, eq(vendorTable.id, current.vendorId)),
+                },
               })
             : null;
           if (!previous) throw new Error("Synthetic source Vendor missing");
@@ -1260,7 +1310,10 @@ describe("reviewed accepted source Product association", () => {
     });
 
     const accounts = await w.db.query.vendorAccount.findMany({
-      where: eq(vendorAccount.ledgerPartyId, w.party.id),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(table, eq(vendorAccount.ledgerPartyId, w.party.id)),
+      },
     });
     expect(
       accounts.filter((row) => row.deletedAt === null).map((row) => row.id),
@@ -1343,7 +1396,10 @@ describe("reviewed accepted source Product association", () => {
     );
     const before = await w.snapshot();
     const aliasedClaim = await w.db.query.importSourceClaim.findFirst({
-      where: eq(importSourceClaim.id, alias.id),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(table, eq(importSourceClaim.id, alias.id)),
+      },
     });
     const review = await w.prepare();
     expect(review.source.externalKey).toBe(root.externalKey);
@@ -1367,7 +1423,10 @@ describe("reviewed accepted source Product association", () => {
     ).toBe(alias.id);
     expect(
       await w.db.query.importSourceClaim.findFirst({
-        where: eq(importSourceClaim.id, alias.id),
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(table, eq(importSourceClaim.id, alias.id)),
+        },
       }),
     ).toEqual(aliasedClaim);
     expect((await w.commit()).alreadyApplied).toBe(true);
@@ -1385,7 +1444,10 @@ describe("reviewed accepted source Product association", () => {
         "c".repeat(64),
       );
       const historical = await w.db.query.importSourceClaim.findFirst({
-        where: eq(importSourceClaim.id, alias.id),
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(table, eq(importSourceClaim.id, alias.id)),
+        },
       });
       const before = await w.snapshot();
       const checksum =
@@ -1420,20 +1482,32 @@ describe("reviewed accepted source Product association", () => {
         revision === "exact" ? "replayed" : "updated",
       );
       const replayRun = await w.db.query.run.findFirst({
-        where: eq(
-          runTable.shortcode,
-          parseShortcodeFor("run", result.prepared.runId),
-        ),
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(
+              table,
+              eq(
+                runTable.shortcode,
+                parseShortcodeFor("run", result.prepared.runId),
+              ),
+            ),
+        },
       });
       if (!replayRun) throw new Error("Synthetic replay Run missing");
       expect(
         await w.db.query.importSourceClaim.findFirst({
-          where: eq(importSourceClaim.id, alias.id),
+          where: {
+            RAW: (table: PgTable) =>
+              relationalSql(table, eq(importSourceClaim.id, alias.id)),
+          },
         }),
       ).toEqual(historical);
       expect(
         await w.db.query.importSourceClaim.findFirst({
-          where: eq(importSourceClaim.id, root.id),
+          where: {
+            RAW: (table: PgTable) =>
+              relationalSql(table, eq(importSourceClaim.id, root.id)),
+          },
         }),
       ).toMatchObject({
         checksum,
@@ -1674,11 +1748,18 @@ describe("reviewed accepted source Product association", () => {
       expect(await refusalSnapshot(w)).toEqual(before);
       expect((await w.commit(resolution)).alreadyApplied).toBe(false);
       const bound = await w.db.query.expense.findFirst({
-        where: eq(expense.id, w.item.id),
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(table, eq(expense.id, w.item.id)),
+        },
       });
-      const created = bound?.productId
+      const boundProductId = bound?.productId;
+      const created = boundProductId
         ? await w.db.query.product.findFirst({
-            where: eq(product.id, bound.productId),
+            where: {
+              RAW: (table: PgTable) =>
+                relationalSql(table, eq(product.id, boundProductId)),
+            },
           })
         : null;
       if (!created) throw new Error("Synthetic bound Product missing");
@@ -1761,7 +1842,10 @@ describe("reviewed accepted source Product association", () => {
     expect(await w.db.select().from(product)).toEqual(productsBefore);
     await w.commit(resolution);
     const created = await w.db.query.product.findFirst({
-      where: eq(product.name, "Synthetic household item"),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(table, eq(product.name, "Synthetic household item")),
+      },
     });
     if (!created) throw new Error("Reviewed accepted Product not created");
     const after = await w.snapshot();
@@ -1878,11 +1962,18 @@ describe("reviewed accepted source Product association", () => {
     const w = await world();
     await w.commit(w.newProductResolution);
     const bound = await w.db.query.expense.findFirst({
-      where: eq(expense.id, w.item.id),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(table, eq(expense.id, w.item.id)),
+      },
     });
-    const created = bound?.productId
+    const boundProductId = bound?.productId;
+    const created = boundProductId
       ? await w.db.query.product.findFirst({
-          where: eq(product.id, bound.productId),
+          where: {
+            RAW: (table: PgTable) =>
+              relationalSql(table, eq(product.id, boundProductId)),
+          },
         })
       : null;
     if (!created) throw new Error("Synthetic created Product missing");
@@ -1953,7 +2044,13 @@ describe("reviewed accepted source Product association", () => {
     extraction: AcceptedExtraction | null,
   ) {
     const primary = await w.db.query.importSourceClaim.findFirst({
-      where: eq(importSourceClaim.id, w.association.sourceClaimId),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            eq(importSourceClaim.id, w.association.sourceClaimId),
+          ),
+      },
     });
     if (!primary) throw new Error("Synthetic primary source missing");
     const mail = await retainedMailFixture(ctx.db, {
@@ -2170,7 +2267,10 @@ describe("reviewed accepted source Product association", () => {
     const result = await w.commit(w.newProductResolution);
     expect(result.alreadyApplied).toBe(false);
     const created = await w.db.query.product.findFirst({
-      where: eq(product.name, "Synthetic household item"),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(table, eq(product.name, "Synthetic household item")),
+      },
     });
     if (!created) throw new Error("Exact new Product not created");
     const after = await w.snapshot();

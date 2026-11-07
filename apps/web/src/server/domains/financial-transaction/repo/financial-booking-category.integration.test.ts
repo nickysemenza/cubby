@@ -1,11 +1,13 @@
 import { financialBookingInput } from "@cubby/schemas/financial-booking";
 import { eq } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { buildEntity } from "tooling/factories/build";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
   expense,
   financialTransaction,
@@ -161,7 +163,10 @@ describe("reviewed booking category and refund capacity", () => {
     expect(preview.purchaserId).toBe(owner.output.id);
     const saved = await commitFinancialBooking(ctx.db, preview, ctx.actor);
     const stored = await getDb(ctx.db).query.purchase.findFirst({
-      where: eq(purchaseTable.shortcode, saved.purchaseId),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(table, eq(purchaseTable.shortcode, saved.purchaseId)),
+      },
     });
     expect(stored?.purchaserOverrideId).not.toBeNull();
   });
@@ -201,7 +206,10 @@ describe("reviewed booking category and refund capacity", () => {
       ).rejects.toMatchObject({ reason: "CONSTRAINT_VIOLATION" });
     }
     const stored = await getDb(ctx.db).query.expense.findMany({
-      where: eq(expense.purchaseId, purchase.id),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(table, eq(expense.purchaseId, purchase.id)),
+      },
     });
     expect(stored).toHaveLength(1);
     expect(stored[0]?.cost).toBe(-25);
@@ -212,7 +220,9 @@ describe("reviewed booking category and refund capacity", () => {
     expect(preview.categoryOverride).toBeNull();
     expect(preview.spendingCategoryId).toBe(category.shortcode);
     const storedPurchase = await getDb(ctx.db).query.purchase.findFirst({
-      where: (row, { eq }) => eq(row.id, purchase.id),
+      where: {
+        RAW: (row, { eq }) => relationalSql(row, eq(row.id, purchase.id)),
+      },
     });
     expect(storedPurchase?.spendingCategoryId).toBeNull();
     if (!result.expenseId) throw new Error("Expected aggregate Expense");
@@ -270,19 +280,32 @@ describe("reviewed booking category and refund capacity", () => {
       }),
     );
     const saved = await commitFinancialBooking(ctx.db, review, ctx.actor);
-    if (!saved.expenseId) throw new Error("Expected aggregate Expense");
+    const savedExpenseId = saved.expenseId;
+    if (!savedExpenseId) throw new Error("Expected aggregate Expense");
     const storedPurchase = await getDb(ctx.db).query.purchase.findFirst({
-      where: (row, { eq }) => eq(row.shortcode, saved.purchaseId),
+      where: {
+        RAW: (row, { eq }) =>
+          relationalSql(row, eq(row.shortcode, saved.purchaseId)),
+      },
     });
     const storedLine = await getDb(ctx.db).query.expense.findFirst({
-      where: eq(expense.shortcode, saved.expenseId),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(table, eq(expense.shortcode, savedExpenseId)),
+      },
     });
     expect(storedPurchase?.spendingCategoryId).toBeNull();
     expect(storedLine?.spendingCategoryId).toBe(category.id);
     const storedSource = await getDb(
       ctx.db,
     ).query.financialTransaction.findFirst({
-      where: eq(financialTransaction.shortcode, source.output.id),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            eq(financialTransaction.shortcode, source.output.id),
+          ),
+      },
     });
     expect(storedSource?.spendingCategoryId).toBe(sourceCategory.id);
   });
@@ -314,10 +337,15 @@ describe("reviewed booking category and refund capacity", () => {
     expect(review.action).toBe("link_existing");
     await commitFinancialBooking(ctx.db, review, ctx.actor);
     const storedLine = await getDb(ctx.db).query.expense.findFirst({
-      where: eq(expense.id, receiptLine.id),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(table, eq(expense.id, receiptLine.id)),
+      },
     });
     const storedPurchase = await getDb(ctx.db).query.purchase.findFirst({
-      where: (row, { eq }) => eq(row.id, purchase.id),
+      where: {
+        RAW: (row, { eq }) => relationalSql(row, eq(row.id, purchase.id)),
+      },
     });
     expect(storedLine?.spendingCategoryId).toBe(otherCategory.id);
     expect(storedPurchase?.spendingCategoryId).toBe(otherCategory.id);
@@ -346,9 +374,13 @@ describe("reviewed booking category and refund capacity", () => {
     });
     expect(review.categoryName).toBeNull();
     await commitFinancialBookingCorrection(ctx.db, review, ctx.actor);
-    if (!booked.expenseId) throw new Error("Expected reimbursement Expense");
+    const bookedExpenseId = booked.expenseId;
+    if (!bookedExpenseId) throw new Error("Expected reimbursement Expense");
     const storedLine = await getDb(ctx.db).query.expense.findFirst({
-      where: eq(expense.shortcode, booked.expenseId),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(table, eq(expense.shortcode, bookedExpenseId)),
+      },
     });
     expect(storedLine?.purchaseId).toBe(purchase.id);
     expect(storedLine?.spendingCategoryId).toBe(category.id);
@@ -407,7 +439,10 @@ describe("reviewed booking category and refund capacity", () => {
     });
     expect(
       await getDb(ctx.db).query.expense.findFirst({
-        where: eq(expense.shortcode, converted.expenseId),
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(table, eq(expense.shortcode, converted.expenseId)),
+        },
       }),
     ).toMatchObject({ deletedAt: expect.any(Date) });
 
@@ -423,7 +458,10 @@ describe("reviewed booking category and refund capacity", () => {
     ).rejects.toThrow(/original booking was edited/);
     expect(
       await getDb(ctx.db).query.expense.findFirst({
-        where: eq(expense.shortcode, stale.expenseId),
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(table, eq(expense.shortcode, stale.expenseId)),
+        },
       }),
     ).toMatchObject({
       deletedAt: null,
@@ -432,7 +470,13 @@ describe("reviewed booking category and refund capacity", () => {
     });
     expect(
       await getDb(ctx.db).query.financialTransaction.findFirst({
-        where: eq(financialTransaction.id, stale.source.entityId),
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(
+              table,
+              eq(financialTransaction.id, stale.source.entityId),
+            ),
+        },
       }),
     ).toMatchObject({ kind: "purchase", ledgerTransferId: null });
   });
@@ -453,8 +497,13 @@ describe("reviewed booking category and refund capacity", () => {
       commitFinancialBooking(ctx.db, review, ctx.actor),
     ).rejects.toMatchObject({ reason: "CONSTRAINT_VIOLATION" });
     const live = await getDb(ctx.db).query.expense.findMany({
-      where: (row, { and, eq, isNull }) =>
-        and(eq(row.purchaseId, purchase.id), isNull(row.deletedAt)),
+      where: {
+        RAW: (row, { and, eq, isNull }) =>
+          relationalSql(
+            row,
+            and(eq(row.purchaseId, purchase.id), isNull(row.deletedAt)),
+          ),
+      },
     });
     expect(live).toEqual([]);
   });

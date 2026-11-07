@@ -86,11 +86,13 @@ export async function loadPublishedQuality(
   if (!ids.length) return [];
   const { table: t } = storedEntryFor(kind);
   const [result, exceptions] = await Promise.all([
-    unwrapDb(db)
-      .execute(sql`SELECT ${t.id}::text AS id, ${t.shortcode} AS shortcode,
+    unwrapDb(db).execute(
+      sql`SELECT ${t.id}::text AS id, ${t.shortcode} AS shortcode,
       coalesce(q.checks, '{}'::jsonb) AS checks
       FROM ${t} LEFT JOIN "QualitySnapshot" q ON q."entityId" = ${t.id} AND q.kind = ${kind}
-      WHERE ${t.id} = ANY(${uuidArrayParam(ids)}) AND ${liveQualityRow(t)}`),
+      WHERE ${t.id} = ANY(${uuidArrayParam(ids)}) AND ${liveQualityRow(t)}`,
+      "objects",
+    ),
     loadExceptions(db, kind, ids),
   ]);
   return z
@@ -101,7 +103,7 @@ export async function loadPublishedQuality(
         checks: z.record(z.string(), entityQualityCheckState),
       }),
     )
-    .parse(result.rows)
+    .parse(result)
     .map((row) => ({
       ...row,
       checks: Object.fromEntries(
@@ -154,7 +156,8 @@ export async function publishQualitySnapshots(
   },
 ): Promise<readonly string[]> {
   if (!ids.length) return [];
-  const result = await unwrapDb(db).execute(sql`
+  const result = await unwrapDb(db).execute(
+    sql`
     WITH input AS MATERIALIZED (
       SELECT * FROM jsonb_to_recordset(${JSON.stringify(rows)}::jsonb)
         AS r("entityId" uuid, kind text, "rulesVersion" integer, checks jsonb)
@@ -174,9 +177,11 @@ export async function publishQualitySnapshots(
       WHERE ("QualitySnapshot".kind, "QualitySnapshot"."rulesVersion", "QualitySnapshot".checks)
         IS DISTINCT FROM (EXCLUDED.kind, EXCLUDED."rulesVersion", EXCLUDED.checks)
       RETURNING "entityId"
-    ) SELECT "entityId" FROM written UNION ALL SELECT "entityId" FROM removed`);
+    ) SELECT "entityId" FROM written UNION ALL SELECT "entityId" FROM removed`,
+    "objects",
+  );
   return z
     .array(z.object({ entityId: z.string() }))
-    .parse(result.rows)
+    .parse(result)
     .map((row) => row.entityId);
 }

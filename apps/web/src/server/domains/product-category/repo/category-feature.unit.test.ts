@@ -1,8 +1,10 @@
-import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
 
-import { drizzleSchema as schema } from "~/server/db/drizzle-schema";
+import { outer } from "~/server/db/helpers/related";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
+import { relationalSchema } from "~/server/db/schema";
 import { product } from "~/server/db/schema";
 
 import { categoryFeatureSql } from "./category-feature";
@@ -11,18 +13,17 @@ import { categoryFeatureSql } from "./category-feature";
  * ⚠️ REGRESSION GUARD: `categoryFeatureSql` (through `effectiveFieldSql`) and
  * `categorySummarySql` inline their depth/feature constants with `sql.raw`
  * instead of `.inlineParams()` because
- * drizzle's relational `extras` path (`mapColumnsInSQLToAlias`, alias.js)
- * rebuilds nested SQL via `sql.join(...)`, which silently drops the inline
- * flag `.inlineParams()` relies on. Under `db.select`, the bug never surfaces
- * — only the relational `extras` path (as `expenseInheritanceReadExtras` and
- * `relations.ts` use these) hits the code path that drops it, which is why
- * both call shapes must be asserted here.
+ * relational expressions must retain the literals when their row alias is
+ * bound. Assert both plain-select and relational extras call shapes.
  */
 describe("categoryFeatureSql", () => {
-  const categoryIdExpr = sql.raw('"product"."categoryId"');
+  const categoryIdExpr = outer(product.categoryId);
 
   it("inlines the depth and feature literals under a plain select", () => {
-    const db = drizzle.mock({ schema });
+    const db = drizzle.mock({
+      relations: relationalSchema,
+      paramsInErrors: true,
+    });
     const built = db
       .select({ x: categoryFeatureSql(categoryIdExpr, "food") })
       .from(product)
@@ -34,11 +35,18 @@ describe("categoryFeatureSql", () => {
   });
 
   it("still inlines the depth and feature literals under the relational extras path", () => {
-    const db = drizzle.mock({ schema });
+    const db = drizzle.mock({
+      relations: relationalSchema,
+      paramsInErrors: true,
+    });
     const built = db.query.product
       .findFirst({
         extras: {
-          x: categoryFeatureSql(categoryIdExpr, "food").as("x"),
+          x: (table: PgTable) =>
+            relationalSql(
+              table,
+              categoryFeatureSql(categoryIdExpr, "food").as("x"),
+            ),
         },
       })
       .toSQL();

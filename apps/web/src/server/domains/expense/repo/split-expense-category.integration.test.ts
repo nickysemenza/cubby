@@ -1,9 +1,11 @@
 import { splitExpenseInput } from "@cubby/schemas/purchase";
 import { and, eq } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb, notDeleted } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { expense } from "~/server/db/schema";
 import { splitExpense } from "~/server/domains/purchase/repo/purchase";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
@@ -112,7 +114,10 @@ describe("atomic split classification intent", () => {
     expect(
       (
         await getDb(ctx.db).query.expense.findFirst({
-          where: eq(expense.id, original.id),
+          where: {
+            RAW: (table: PgTable) =>
+              relationalSql(table, eq(expense.id, original.id)),
+          },
         })
       )?.deletedAt,
     ).not.toBeNull();

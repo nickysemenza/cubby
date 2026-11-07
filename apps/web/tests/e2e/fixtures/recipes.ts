@@ -1,3 +1,5 @@
+import type { PgTable } from "drizzle-orm/pg-core";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { resolveProductBrandName } from "~/server/domains/vendor/repo/product-brand";
 import { upsertCookbook } from "~/server/domains/cookbook/repo/cookbook";
 import {
@@ -187,7 +189,10 @@ export async function seedNutritionPrerequisite(
   );
   const db = getFixtureDb();
   const row = await getDb(db).query.recipe.findFirst({
-    where: eq(schema.recipe.shortcode, recipe.id),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(table, eq(schema.recipe.shortcode, recipe.id)),
+    },
   });
   if (!row) throw new Error("Nutrition recipe fixture missing");
   const context = createTestRequestContext(db, {

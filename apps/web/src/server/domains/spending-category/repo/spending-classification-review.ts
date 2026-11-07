@@ -296,7 +296,8 @@ const householdRow = z.object({
  * reaches the Worker, plus the affected Expenses' own allocations.
  */
 async function householdAllocations(db: Database, scope: readonly ExpenseId[]) {
-  const result = await unwrapDb(db).execute(sql`
+  const result = await unwrapDb(db).execute(
+    sql`
     WITH a AS (${expenseDerivedReadSql("shares")})
     SELECT
       (SELECT count(*) FROM "Expense" WHERE ${notDeleted("Expense")}) AS "expenseCount",
@@ -309,8 +310,10 @@ async function householdAllocations(db: Database, scope: readonly ExpenseId[]) {
         FROM a GROUP BY 1, 2) category_total) AS totals,
       (SELECT coalesce(jsonb_agg(to_jsonb(a)), '[]'::jsonb) FROM a
         WHERE a."expenseId" = ANY(${uuidArrayParam(scope)})) AS scoped
-  `);
-  const row = householdRow.parse(result.rows[0]);
+  `,
+    "objects",
+  );
+  const row = householdRow.parse(result[0]);
   const totals: CategoryTotals = new Map(
     row.totals.map(([code, name, cents]) => [
       code,
@@ -335,7 +338,8 @@ const scopedFactsRow = z.object({
  * hashed set too. The caller compares allocations for every line.
  */
 async function scopedFacts(db: Database, expenseIds: readonly ExpenseId[]) {
-  const result = await unwrapDb(db).execute(sql`
+  const result = await unwrapDb(db).execute(
+    sql`
     WITH f AS (
       SELECT e.id, jsonb_build_object('expense',to_jsonb(e),'product',to_jsonb(g),'purchase',(to_jsonb(p)-'statedTotalMinor')||jsonb_build_object('statedTotal',p."statedTotalMinor"::numeric/100)) AS facts
       FROM "Expense" e
@@ -346,8 +350,10 @@ async function scopedFacts(db: Database, expenseIds: readonly ExpenseId[]) {
     SELECT encode(sha256(convert_to(coalesce(string_agg(
         jsonb_build_array(f.id, f.facts)::text, ${"\n"} ORDER BY f.id), ''), 'UTF8')), 'hex') AS digest
     FROM f
-  `);
-  return scopedFactsRow.parse(result.rows[0]);
+  `,
+    "objects",
+  );
+  return scopedFactsRow.parse(result[0]);
 }
 
 /**
@@ -365,14 +371,13 @@ async function buildPreview(
   const policyRevision = await spendingClassificationRevision(db);
   // Selected Products without Expenses still need stale-review protection.
   const productFacts = draft.products?.length
-    ? (
-        await unwrapDb(db).execute(
-          sql`SELECT to_jsonb(p) AS facts FROM "Product" p WHERE p.id IN (${sql.join(
-            draft.products.map((row) => sql`${row.id}::uuid`),
-            sql`, `,
-          )}) ORDER BY p.id`,
-        )
-      ).rows
+    ? await unwrapDb(db).execute(
+        sql`SELECT to_jsonb(p) AS facts FROM "Product" p WHERE p.id IN (${sql.join(
+          draft.products.map((row) => sql`${row.id}::uuid`),
+          sql`, `,
+        )}) ORDER BY p.id`,
+        "objects",
+      )
     : [];
   const scope = await affectedExpenseIds(db, draft);
   const facts = await scopedFacts(db, scope);

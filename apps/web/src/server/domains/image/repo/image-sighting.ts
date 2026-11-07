@@ -11,10 +11,12 @@ import type {
   ImageSightingReportFields,
 } from "@cubby/schemas/image-sighting";
 import { and, eq, ne, sql } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { uniq } from "es-toolkit";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { notDeleted, unwrapDb, withTransaction } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { device, image, imageSighting } from "~/server/db/schema";
 import { deriveAndStoreImageCapture } from "~/server/domains/image/repo/image-capture-derivation";
 import { createAppError } from "~/server/errors/app-error";
@@ -69,7 +71,13 @@ export async function resolveImportSightingContext(
   if (!installationId) return null;
   const [deviceRow, partyRow] = await Promise.all([
     unwrapDb(db).query.device.findFirst({
-      where: and(eq(device.installationId, installationId), notDeleted(device)),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(eq(device.installationId, installationId), notDeleted(device)),
+          ),
+      },
       columns: { id: true },
     }),
     currentMemberLedgerParty(db, { userId: actorUserId }),

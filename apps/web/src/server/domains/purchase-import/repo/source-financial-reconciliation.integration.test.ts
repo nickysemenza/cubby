@@ -6,11 +6,13 @@ import {
 } from "@cubby/schemas/purchase-import";
 import { moneyToMinor } from "@cubby/shared";
 import { eq } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb, withTransaction } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
   expense,
   expenseAttribution,
@@ -107,7 +109,10 @@ describe("accepted source financial reconciliation", () => {
     await submit();
     const database = getDb(ctx.db);
     const recorded = await database.query.purchase.findFirst({
-      where: eq(purchase.orderId, rewardReceipt.orderId!),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(table, eq(purchase.orderId, rewardReceipt.orderId!)),
+      },
     });
     if (!recorded) throw new Error("Synthetic reward Purchase missing");
     expect(recorded.statedTotal).toBe(19657n);
@@ -212,12 +217,18 @@ describe("accepted source financial reconciliation", () => {
     });
     const database = getDb(ctx.db);
     const accepted = await database.query.purchase.findFirst({
-      where: eq(purchase.orderId, candidate.orderId!),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(table, eq(purchase.orderId, candidate.orderId!)),
+      },
     });
     if (!accepted) throw new Error("Synthetic accepted Purchase missing");
     const state = async () => ({
       purchase: await database.query.purchase.findFirst({
-        where: eq(purchase.id, accepted.id),
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(table, eq(purchase.id, accepted.id)),
+        },
       }),
       source: await database.select().from(importSourceClaim),
       orders: await database.select().from(importSourceOrder),
@@ -1105,7 +1116,13 @@ describe("accepted source financial reconciliation", () => {
       association.originalOrder?.extraction.candidate?.printedGrandTotal,
     ).toBe(45);
     const observation = await database.query.sourceOrderObservation.findFirst({
-      where: eq(sourceOrderObservation.id, association.acceptedObservationId!),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            eq(sourceOrderObservation.id, association.acceptedObservationId!),
+          ),
+      },
     });
     expect(observation?.checksum).toBe("9".repeat(64));
     expect(after.expenses[0]!.cost).toBe(50);

@@ -9,6 +9,7 @@ import { mailResearchRunInput } from "@cubby/schemas/run-fields";
 import { gatewayFetchThrough } from "@cubby/shared/ai/gateway-request";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { and, eq, inArray } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
@@ -19,6 +20,7 @@ import {
   getDb,
   withTransaction,
 } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
   aiUsage,
   orderMail,
@@ -1539,7 +1541,13 @@ describe("mail research admission", () => {
     if (!admitted) throw new Error("Synthetic migrated parent missing");
     const db = getDb(ctx.db);
     const parent = await db.query.run.findFirst({
-      where: eq(run.id, parseEntityId("run", admitted.runId)),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            eq(run.id, parseEntityId("run", admitted.runId)),
+          ),
+      },
     });
     if (!parent) throw new Error("Synthetic migrated parent missing");
     const fingerprint = await sha256Hex(

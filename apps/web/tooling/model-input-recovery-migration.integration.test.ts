@@ -6,8 +6,10 @@ import { withMigrationDatabase } from "./test-database-lease";
 // Retained work must heal without resetting evidence, checkpoints or member controls.
 it("reopens exhausted analysis and serialization work while preserving checkpoints and controls", async () => {
   await withMigrationDatabase(async (client) => {
-    const db = drizzle(client);
-    await migrateDatabase(db, { through: "0108_shipment_capture_text_index" });
+    const db = drizzle({ client: client, paramsInErrors: true });
+    await migrateDatabase(db, {
+      through: "20261106060922_0108_shipment_capture_text_index",
+    });
     const cases = [
       [
         "location",
@@ -132,7 +134,9 @@ it("reopens exhausted analysis and serialization work while preserving checkpoin
         )
       ).rows;
     const before = await read();
-    await migrateDatabase(db, { through: "0109_model_input_recovery" });
+    await migrateDatabase(db, {
+      through: "20261106160341_0109_model_input_recovery",
+    });
     const after = await read();
     expect(
       after.map(

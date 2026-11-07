@@ -41,8 +41,9 @@ async function loadOccurrenceClosures(
     database,
     async (tx) => {
       const query = unwrapDb(tx);
-      const { rows: isolation } = await query.execute(
+      const isolation = await query.execute(
         sql`SELECT current_setting('transaction_isolation') AS level`,
+        "objects",
       );
       if (
         isolation[0]?.level !== "repeatable read" &&
@@ -137,10 +138,11 @@ async function loadOccurrenceClosures(
         ([name, table, value]) =>
           sql`${name}::text, (SELECT coalesce(jsonb_agg(data ORDER BY identity), '[]'::jsonb) FROM (SELECT ${sql.raw(table === "judgments" ? 'r."observationId"::text' : table === "memberships" ? 'jsonb_build_array(r."importId", r."statementRowId")::text' : "r.id::text")} AS identity, ${sql.raw(value)} AS data FROM ${sql.identifier(table)} r ORDER BY identity LIMIT 1001) captured)`,
       );
-      const { rows: loaded } = await query.execute(
+      const loaded = await query.execute(
         sql`${definitions}, bundle AS MATERIALIZED (SELECT jsonb_build_object(${sql.join(sets, sql`, `)}) AS data)
           SELECT txid_current_snapshot()::text AS snapshot,
             CASE WHEN octet_length(data::text) <= 1048576 THEN data END AS sets FROM bundle`,
+        "objects",
       );
       if (loaded[0]?.sets === null)
         return refuse(

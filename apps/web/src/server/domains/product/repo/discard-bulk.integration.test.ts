@@ -1,9 +1,11 @@
 import type { InventoryId } from "@cubby/schemas/identifiers";
 import { eq, inArray } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { expense, inventoryEntry } from "~/server/db/schema";
 import {
   createInventoryFixture as createInventoryEntry,
@@ -55,7 +57,10 @@ describe("discardFromInventoryEntries", () => {
 
   const loadEntry = async (id: InventoryId) =>
     getDb(ctx.db).query.inventoryEntry.findFirst({
-      where: eq(inventoryEntry.id, id),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(table, eq(inventoryEntry.id, id)),
+      },
     });
 
   it.each(["2026-06-03", null])(
@@ -83,10 +88,16 @@ describe("discardFromInventoryEntries", () => {
       expect(result.items).toHaveLength(2);
 
       const lines = await getDb(ctx.db).query.expense.findMany({
-        where: inArray(
-          expense.id,
-          result.items.map((item) => item.expenseId),
-        ),
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(
+              table,
+              inArray(
+                expense.id,
+                result.items.map((item) => item.expenseId),
+              ),
+            ),
+        },
       });
       expect(lines).toHaveLength(2);
       for (const line of lines) {
@@ -143,7 +154,10 @@ describe("discardFromInventoryEntries", () => {
 
     expect((await loadEntry(ok.entry.entityId))?.amountValue).toBe(4);
     const written = await getDb(ctx.db).query.expense.findMany({
-      where: eq(expense.productId, ok.prod.entityId),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(table, eq(expense.productId, ok.prod.entityId)),
+      },
     });
     expect(written).toHaveLength(0);
   });

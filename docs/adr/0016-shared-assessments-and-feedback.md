@@ -791,7 +791,7 @@ completed `assessment.correction` Jobs stay readable.
 
 ## One Suggestion table
 
-`0080_suggestion_table` replaces Assessment, AssessmentState and Feedback with one
+`20261105100922_0080_suggestion_table` replaces Assessment, AssessmentState and Feedback with one
 `Suggestion` table and moves the old tables to the `archive` schema. A row keeps its
 old id. Member and automatic decisions move to `Suggestion.decisions`; projection
 events are not carried, and transitions no longer record any. A replaced row with

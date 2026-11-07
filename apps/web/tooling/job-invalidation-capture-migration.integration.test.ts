@@ -9,8 +9,10 @@ import { withMigrationDatabase } from "./test-database-lease";
 // replaced the marker's write time, and health lost the legacy pending age.
 it("keeps the pending start of markers already ahead of their Job at the cutover", async () => {
   await withMigrationDatabase(async (client) => {
-    const db = drizzle(client);
-    await migrateDatabase(db, { through: "0029_image_job_lanes" });
+    const db = drizzle({ client: client, paramsInErrors: true });
+    await migrateDatabase(db, {
+      through: "20261025033941_0029_image_job_lanes",
+    });
     const families = [
       // [family, observedRevision, marker revision, marker age in minutes]
       ["search", 3, 4, 45],
@@ -33,7 +35,9 @@ it("keeps the pending start of markers already ahead of their Job at the cutover
         [`refresh:${family}`, revision, minutes],
       );
     }
-    await migrateDatabase(db, { through: "0030_job_invalidation_capture" });
+    await migrateDatabase(db, {
+      through: "20261025040753_0030_job_invalidation_capture",
+    });
     const captures = async () =>
       (
         await client.query<{ key: string; revision: number; matches: boolean }>(
@@ -68,8 +72,10 @@ it("keeps the pending start of markers already ahead of their Job at the cutover
 
 it("retires late catalog wrappers per table and keeps the no-op if another function still references it", async () => {
   await withMigrationDatabase(async (client) => {
-    const db = drizzle(client);
-    await migrateDatabase(db, { through: "0098_source_occurrence_ownership" });
+    const db = drizzle({ client: client, paramsInErrors: true });
+    await migrateDatabase(db, {
+      through: "20261105170357_0098_source_occurrence_ownership",
+    });
     await client.query(`
       CREATE TABLE "SyntheticLateEvidence" (value text);
       CREATE TABLE "SyntheticEmptyEvidence" (value text);
@@ -100,7 +106,9 @@ it("retires late catalog wrappers per table and keeps the no-op if another funct
       ).rows;
     const before = await preserved();
     await expect(
-      migrateDatabase(db, { through: "0099_retire_derived_markers" }),
+      migrateDatabase(db, {
+        through: "20261105233841_0099_retire_derived_markers",
+      }),
     ).rejects.toMatchObject({
       cause: {
         code: "P0001",
@@ -123,7 +131,7 @@ it("retires late catalog wrappers per table and keeps the no-op if another funct
     );
     // Replay after committed table drops, with the shared no-op still present.
     await migrateDatabase(db, {
-      through: "0099_retire_derived_markers",
+      through: "20261105233841_0099_retire_derived_markers",
     });
     expect(await preserved()).toEqual(before);
     expect(

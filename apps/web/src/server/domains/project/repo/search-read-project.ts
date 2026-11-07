@@ -1,11 +1,14 @@
 import { entitySchema } from "@cubby/schemas/entity";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { sql, and, inArray } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { alias } from "drizzle-orm/pg-core";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { effectiveFieldSql } from "~/server/db/computed/effective-field";
 import { unwrapDb, notDeleted } from "~/server/db/helpers";
+import { outer } from "~/server/db/helpers/related";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { project as searchTableproject } from "~/server/db/schema";
 import { project } from "~/server/db/schema";
 import { withOptionalLimit } from "~/server/generic/embedding/repo/embedding-load-options";
@@ -22,19 +25,29 @@ async function loadEmbeddingText(
 ): Promise<SearchableEntityText[]> {
   const queryConfig = withOptionalLimit(
     {
-      where: and(
-        notDeleted(project),
-        options.ids?.length
-          ? inArray(
-              project.id,
-              options.ids.map((id) => parseEntityId("project", id)),
-            )
-          : undefined,
-      ),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            and(
+              notDeleted(project),
+              options.ids?.length
+                ? inArray(
+                    project.id,
+                    options.ids.map((id) => parseEntityId("project", id)),
+                  )
+                : undefined,
+            ),
+          ),
+      },
       extras: {
-        resolvedLocations: effectiveFieldSql<string[]>("project", "locations", {
-          id: sql`"project"."id"`,
-        }).as("resolvedLocations"),
+        resolvedLocations: (table: PgTable) =>
+          relationalSql(
+            table,
+            effectiveFieldSql<string[]>("project", "locations", {
+              id: outer(project.id),
+            }).as("resolvedLocations"),
+          ),
       },
       columns: {
         id: true,

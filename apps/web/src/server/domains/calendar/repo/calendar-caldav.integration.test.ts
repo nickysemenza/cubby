@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { runWithExecutionCtx, setCfEnv } from "~/server/cf-env";
 import { withInvocationDb } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import type {
   CalDavResource,
   CalendarProjection,
@@ -71,7 +72,9 @@ describe("CalDAV canonical mutation seam", () => {
       }),
     );
     const audit = await getDb(ctx.db).query.auditLog.findMany({
-      where: (row, { eq }) => eq(row.channel, "caldav"),
+      where: {
+        RAW: (row, { eq }) => relationalSql(row, eq(row.channel, "caldav")),
+      },
     });
     expect(audit).toHaveLength(1);
   });
@@ -120,7 +123,9 @@ describe("CalDAV canonical mutation seam", () => {
       },
     });
     const mealRow = await getDb(ctx.db).query.meal.findFirst({
-      where: (row, { eq }) => eq(row.shortcode, meal.id),
+      where: {
+        RAW: (row, { eq }) => relationalSql(row, eq(row.shortcode, meal.id)),
+      },
     });
     if (!mealRow) throw new Error("meal row missing");
     expect((await readMealById(ctx.db, mealRow.id))?.name).toBeNull();

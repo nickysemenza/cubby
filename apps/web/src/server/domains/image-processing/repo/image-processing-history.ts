@@ -62,7 +62,8 @@ export async function insertImageProcessingAttempt(
   },
 ): Promise<number | null> {
   const dbc = unwrapDb(db);
-  const inserted = await dbc.execute(sql`
+  const inserted = await dbc.execute(
+    sql`
     WITH inserted AS (INSERT INTO "ImageProcessingAttempt"
       (id, "jobId", number, "submissionId", state, executor, "assignedUserId",
        "assignedConnectionId", diagnostics, result, error, "completedAt")
@@ -88,8 +89,10 @@ export async function insertImageProcessingAttempt(
     RETURNING number), counted AS (
       UPDATE "ImageProcessingJob" SET attempts = attempts + 1
       WHERE id = ${input.jobId}::uuid AND EXISTS (SELECT 1 FROM inserted)
-    ) SELECT number FROM inserted`);
-  const row = z.array(z.object({ number: z.number() })).parse(inserted.rows)[0];
+    ) SELECT number FROM inserted`,
+    "objects",
+  );
+  const row = z.array(z.object({ number: z.number() })).parse(inserted)[0];
   if (!row) return null;
   return row.number;
 }

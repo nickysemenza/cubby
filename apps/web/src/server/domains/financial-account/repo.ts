@@ -21,6 +21,7 @@ import {
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
 import { and, eq, sql } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -35,6 +36,7 @@ import {
   unwrapDb,
   withTransaction,
 } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
   financialAccount,
   financialTransaction,
@@ -513,7 +515,10 @@ export const createFinancialAccount = defineMutationWriter({
           );
         }
         const party = await tx.query.ledgerParty.findFirst({
-          where: eq(ledgerParty.id, resolvedLedgerPartyId),
+          where: {
+            RAW: (table: PgTable) =>
+              relationalSql(table, eq(ledgerParty.id, resolvedLedgerPartyId)),
+          },
           columns: { kind: true },
         });
         if (party?.kind !== "member") {
@@ -645,10 +650,16 @@ export const updateFinancialAccount = defineMutationWriter({
           ledgerPartyId === undefined ? before.ledgerPartyId : ledgerPartyId;
         const party = effectivePartyId
           ? await tx.query.ledgerParty.findFirst({
-              where: and(
-                eq(ledgerParty.id, effectivePartyId),
-                notDeleted(ledgerParty),
-              ),
+              where: {
+                RAW: (table: PgTable) =>
+                  relationalSql(
+                    table,
+                    and(
+                      eq(ledgerParty.id, effectivePartyId),
+                      notDeleted(ledgerParty),
+                    ),
+                  ),
+              },
               columns: { kind: true },
             })
           : null;

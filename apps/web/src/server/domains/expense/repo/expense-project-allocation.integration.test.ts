@@ -73,11 +73,12 @@ describe("expense project allocation", () => {
       sql`ANALYZE "Project", "Purchase", "Expense"`,
     );
     const statement = sql`SELECT ${effectiveExpenseProjectSql()} AS "projectId" FROM "Expense"`;
-    expect((await unwrapDb(ctx.db).execute(statement)).rows).toEqual(
+    expect(await unwrapDb(ctx.db).execute(statement, "objects")).toEqual(
       Array.from({ length: 16 }, () => ({ projectId: null })),
     );
     const result = await unwrapDb(ctx.db).execute(
       sql`EXPLAIN (ANALYZE, FORMAT JSON) ${statement}`,
+      "objects",
     );
     const nodeSchema = z.object({
       "Relation Name": z.string().optional(),
@@ -90,7 +91,7 @@ describe("expense project allocation", () => {
       .array(
         z.object({ "QUERY PLAN": z.array(z.object({ Plan: nodeSchema })) }),
       )
-      .parse(result.rows);
+      .parse(result);
     let projectLookups = 0;
     const visit = (node: z.infer<typeof nodeSchema>) => {
       if (node["Relation Name"] === "Project")
@@ -862,7 +863,7 @@ describe("expense project allocation", () => {
     await line(refund.id, "tax", -0.03);
 
     const rows = async (statement: ReturnType<typeof sql>) =>
-      (await unwrapDb(ctx.db).execute(statement)).rows
+      (await unwrapDb(ctx.db).execute(statement, "objects"))
         .map((row) => JSON.stringify(row))
         .sort();
     const allDimensions = { categories: true, trades: true, projects: true };

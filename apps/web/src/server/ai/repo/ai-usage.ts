@@ -312,9 +312,12 @@ export async function listAiUsageForRun(
     database.execute<{
       chargedIncomplete: boolean;
       standardIncomplete: boolean;
-    }>(sql`SELECT
+    }>(
+      sql`SELECT
       (${externalCoverage} OR ${missingImageCoverage(true)}) AS "chargedIncomplete",
-      (${externalCoverage} OR ${missingImageCoverage(false)}) AS "standardIncomplete"`),
+      (${externalCoverage} OR ${missingImageCoverage(false)}) AS "standardIncomplete"`,
+      "objects",
+    ),
     database
       .select({
         feature: aiUsage.feature,
@@ -345,10 +348,10 @@ export async function listAiUsageForRun(
       billingReasons: [],
     }),
     chargedComplete:
-      !coverage.rows[0]?.chargedIncomplete &&
+      !coverage[0]?.chargedIncomplete &&
       (totals[0]?.chargedUnpricedCount ?? 0) === 0,
     standardComplete:
-      !coverage.rows[0]?.standardIncomplete &&
+      !coverage[0]?.standardIncomplete &&
       (totals[0]?.standardUnpricedCount ?? 0) === 0,
     records,
     tokensByModel,

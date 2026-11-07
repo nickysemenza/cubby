@@ -16,6 +16,7 @@ import { ledgerPartyKind } from "@cubby/schemas/ledger-party";
 import { minorToMoney, moneyToMinor, cents } from "@cubby/shared";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { and, eq, sql } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import type { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -27,6 +28,7 @@ import {
   withTransaction,
   withSnapshotWrite,
 } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
   emailFinancialAssociation,
   financialTransaction,
@@ -90,12 +92,18 @@ export async function acceptedAutomaticFacts(
 ) {
   const row = await getDb(db)
     .query.financialTransaction.findFirst({
-      where: eq(financialTransaction.shortcode, transactionId),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            eq(financialTransaction.shortcode, transactionId),
+          ),
+      },
     })
     .then((row) => (row ? transactionDollars(row) : row));
   if (!row) return null;
   const account = await getDb(db).query.financialAccount.findFirst({
-    where: (a, { eq }) => eq(a.id, row.accountId),
+    where: { RAW: (a, { eq }) => relationalSql(a, eq(a.id, row.accountId)) },
   });
   const allocations = await getDb(db)
     .select({
@@ -113,9 +121,13 @@ export async function acceptedAutomaticFacts(
       ),
     )
     .orderBy(financialTransactionAllocation.purchaseId);
-  const target = allocations[0]
+  const firstAllocation = allocations[0];
+  const target = firstAllocation
     ? await getDb(db).query.purchase.findFirst({
-        where: eq(purchase.id, allocations[0].purchaseId),
+        where: {
+          RAW: (table: PgTable) =>
+            relationalSql(table, eq(purchase.id, firstAllocation.purchaseId)),
+        },
       })
     : null;
   const graph = await bookingGraph(db, target?.id ?? null);
@@ -202,7 +214,7 @@ async function verifyMailPayment(
       "The financial Email needs a provider payment identity, literal account, counterparty and date.",
     );
   const account = await tx.query.financialAccount.findFirst({
-    where: (a, { eq }) => eq(a.id, row.accountId),
+    where: { RAW: (a, { eq }) => relationalSql(a, eq(a.id, row.accountId)) },
   });
   if (
     !account ||
@@ -481,7 +493,13 @@ async function runFinancialConvergence(
         );
       const target = purchaseId
         ? await tx.query.purchase.findFirst({
-            where: and(eq(purchase.id, purchaseId), notDeleted(purchase)),
+            where: {
+              RAW: (table: PgTable) =>
+                relationalSql(
+                  table,
+                  and(eq(purchase.id, purchaseId), notDeleted(purchase)),
+                ),
+            },
           })
         : undefined;
       if (
@@ -493,7 +511,13 @@ async function runFinancialConvergence(
         );
       const acceptedVendor = target?.vendorId
         ? await tx.query.vendor.findFirst({
-            where: and(eq(vendor.id, target.vendorId), notDeleted(vendor)),
+            where: {
+              RAW: (table: PgTable) =>
+                relationalSql(
+                  table,
+                  and(eq(vendor.id, target.vendorId), notDeleted(vendor)),
+                ),
+            },
           })
         : undefined;
       if (target && !acceptedVendor)
@@ -649,7 +673,13 @@ export async function refreshAutomaticBookingFingerprint(
 ) {
   const row = await getDb(db)
     .query.financialTransaction.findFirst({
-      where: eq(financialTransaction.shortcode, transactionId),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(
+            table,
+            eq(financialTransaction.shortcode, transactionId),
+          ),
+      },
     })
     .then((row) => (row ? transactionDollars(row) : row));
   if (!row?.bookingDecisionFingerprint?.startsWith("automatic:")) return;

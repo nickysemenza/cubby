@@ -74,6 +74,7 @@ export async function patchEntityRows<T extends PatchTable>(
     const result = await tx
       .select(getTableColumns(table))
       .from(table as PgTable)
+      .$dynamic()
       .where(and(inArray(table.id, [...ids]), notDeleted(table)));
     // SAFETY: The query projects getTableColumns(table); PatchTable requires
     // its id to be a non-null string, preserving this generic row shape.
@@ -86,8 +87,11 @@ export async function patchEntityRows<T extends PatchTable>(
     });
     if (changes.length === 0) return [];
 
+    // Widen only the builder's table metadata; the same table instance owns
+    // both the patch and RETURNING projection.
+    const updateTable: PgTable = table;
     const updated = await tx
-      .update(table)
+      .update(updateTable)
       .set(values)
       .where(
         and(
@@ -98,9 +102,9 @@ export async function patchEntityRows<T extends PatchTable>(
           notDeleted(table),
         ),
       )
-      .returning(getTableColumns(table));
+      .returning();
     // SAFETY: RETURNING projects the same table columns and non-null id as
-    // the pre-update query; the driver union erases this generic relation.
+    // the pre-update query.
     const rows = updated as (InferSelectModel<T> & { id: string })[];
     const written = new Set(rows.map((row) => row.id));
     await logAuditEntries(
@@ -175,11 +179,12 @@ export async function bulkPatchEntities<
     const { table } = spec;
     const values = buildPartialUpdateValues(await spec.values(tx, data));
     const ids = await resolveAllOrThrow(tx, spec.entity, shortcodes);
+    const queryTable: PgTable = table;
     // SAFETY: the explicit projection of the same generic table, whose id and
     // shortcode columns PatchTable/T require.
     const before = (await tx
-      .select(getTableColumns(table))
-      .from(table as PgTable)
+      .select(getTableColumns(queryTable))
+      .from(queryTable)
       .where(and(inArray(table.id, ids), notDeleted(table)))
       .for("update")) as BulkRow<T>[];
     if (before.length !== ids.length) {

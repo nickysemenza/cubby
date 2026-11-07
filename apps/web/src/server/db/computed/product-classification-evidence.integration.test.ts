@@ -1,10 +1,12 @@
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { eq, sql } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { taxonomyId } from "tooling/product-category-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
   aiAnalysis,
   image,
@@ -179,12 +181,19 @@ describe("retained classification evidence", () => {
     // Relational extras rewrite column chunks to the outer Product alias.
     // The nested confirmation proof must preserve its own table references.
     const relational = await getDb(ctx.db).query.product.findFirst({
-      where: eq(productTable.id, product.id),
+      where: {
+        RAW: (table: PgTable) =>
+          relationalSql(table, eq(productTable.id, product.id)),
+      },
       columns: { id: true },
       extras: {
-        classificationEvidence: productClassificationEvidenceSql(
-          sql`${productTable.id}`,
-        ).as("classificationEvidence"),
+        classificationEvidence: (table: PgTable) =>
+          relationalSql(
+            table,
+            productClassificationEvidenceSql(sql`${productTable.id}`).as(
+              "classificationEvidence",
+            ),
+          ),
       },
     });
     expect(relational?.classificationEvidence).toBe(before);

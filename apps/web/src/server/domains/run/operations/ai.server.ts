@@ -440,10 +440,11 @@ export const inferFieldSuggestions = async (
     ];
     const withheldResult = await client.execute(
       sql`SELECT ${or(...withholding)} AS "withheld"`,
+      "objects",
     );
     const [{ withheld }] = z
       .tuple([z.object({ withheld: z.boolean() })])
-      .parse(withheldResult.rows);
+      .parse(withheldResult);
     if (withheld) {
       output.suggestions[field] = null;
       if (output.outcomes)

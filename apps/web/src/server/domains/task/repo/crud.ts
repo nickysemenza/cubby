@@ -21,6 +21,7 @@ import { taskFiltersSchema } from "@cubby/schemas/project";
 import type { Trade } from "@cubby/schemas/task-fields";
 import { rawTaskOut, type RawTaskOut } from "@cubby/schemas/work-raw-read";
 import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { uniq } from "es-toolkit";
 
 import { type ListReadRow } from "~/entity/model/list-read-fields";
@@ -37,6 +38,7 @@ import {
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/db/helpers";
+import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { product, task } from "~/server/db/schema";
 import { syncEntityImages } from "~/server/domains/image/repo/entity-image-sync";
 import { resolveMemberAssignee } from "~/server/domains/ledger-party/repo/ledger-party-reference";
@@ -218,7 +220,10 @@ async function validateParentTask(
   parentTaskId: TaskId | null;
 }> {
   const parent = await tx.query.task.findFirst({
-    where: and(eq(task.id, parentId), notDeleted(task)),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(table, and(eq(task.id, parentId), notDeleted(task))),
+    },
     columns: {
       id: true,
       parentTaskId: true,
@@ -277,7 +282,10 @@ async function assertSubjectProductLive(
   id: ProductId,
 ): Promise<void> {
   const subject = await tx.query.product.findFirst({
-    where: and(eq(product.id, id), notDeleted(product)),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(table, and(eq(product.id, id), notDeleted(product))),
+    },
     columns: { id: true },
   });
   if (!subject) {
@@ -299,7 +307,10 @@ async function assertNoLiveSubtasks(
   id: TaskId,
 ): Promise<void> {
   const subtasks = await tx.query.task.findMany({
-    where: and(eq(task.parentTaskId, id), notDeleted(task)),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(table, and(eq(task.parentTaskId, id), notDeleted(task))),
+    },
     columns: { id: true },
   });
   if (subtasks.length > 0) {
@@ -765,7 +776,10 @@ export const reorderTasks = async (
       });
       if (Object.keys(axisValues).length > 0) {
         const before = await tx.query.task.findFirst({
-          where: and(eq(task.id, moveId), notDeleted(task)),
+          where: {
+            RAW: (table: PgTable) =>
+              relationalSql(table, and(eq(task.id, moveId), notDeleted(task))),
+          },
         });
         const updated = await updateLiveAndReturn(tx, task, axisValues, moveId);
         await assertEffectiveTaskTrade(tx, moveId);
@@ -875,7 +889,13 @@ type TaskQueryClient = DrizzleClient | DrizzleTransaction;
  */
 const liveSubtasks = (dbc: TaskQueryClient, ids: TaskId[]) =>
   dbc.query.task.findMany({
-    where: and(inArray(task.parentTaskId, ids), notDeleted(task)),
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          and(inArray(task.parentTaskId, ids), notDeleted(task)),
+        ),
+    },
     columns: { id: true, shortcode: true, parentTaskId: true },
   });
 
