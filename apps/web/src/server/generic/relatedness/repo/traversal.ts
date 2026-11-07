@@ -68,7 +68,6 @@ export interface Traversal {
   leafTable: string;
   leafAlias: string;
   joins: SQL;
-  usesExpenseProjectRelation: boolean;
   inheritedRelations: readonly InheritedRelation[];
 }
 
@@ -491,11 +490,6 @@ export const compileTraversal = (
     hops,
     leafTable: currentTable,
     leafAlias: currentAlias,
-    usesExpenseProjectRelation: hops.some(
-      (hop) =>
-        hop.relation !== undefined &&
-        hop.relation === aliases?.expenseProjectRelation,
-    ),
     inheritedRelations,
   };
   return { ...traversal, joins: renderJoins(traversal) };

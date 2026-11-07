@@ -7,7 +7,7 @@
   "apps/web/src/server/generic/data-quality/repo/checks/meal.ts": 2,
   "apps/web/src/server/generic/data-quality/repo/checks/recipe.ts": 1,
   "apps/web/src/server/generic/data-quality/repo/checks/vendor.ts": 1,
-  "apps/web/src/server/entity-kernel/repo/entity-display-image.ts": 9,
+  "apps/web/src/server/entity-kernel/repo/entity-display-image.ts": 6,
   "apps/web/src/server/entity-kernel/repo/entity-identity.integration.test.ts": 1,
   "apps/web/src/server/domains/expense/repo/expense-category-resolution.integration.test.ts": 3,
   "apps/web/src/server/domains/expense/repo/expense-category-resolution.ts": 35,

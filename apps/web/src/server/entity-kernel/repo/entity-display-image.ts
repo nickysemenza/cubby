@@ -59,6 +59,7 @@ import { hydrateImageReadProjection } from "~/server/domains/image/repo/image-re
 import { suggestedMerchantVendorCandidatesSql } from "~/server/domains/vendor/repo/merchant-vendor-inference";
 import {
   compileTraversal,
+  renderJoins,
   inheritedRelationSql,
   type InheritedRelation,
 } from "~/server/generic/relatedness/repo/traversal";
@@ -91,7 +92,7 @@ type DisplayPath = Readonly<{
 type DisplayBranch = Readonly<{
   entity: Entity;
   branch: SQL;
-  usesExpenseProjectRelation: boolean;
+  expenseProjectRefs: SQL | null;
   inheritedRelations: readonly InheritedRelation[];
 }>;
 
@@ -298,7 +299,7 @@ const displaySourceBranch = (
   index: number,
 ): Pick<
   DisplayBranch,
-  "branch" | "usesExpenseProjectRelation" | "inheritedRelations"
+  "branch" | "expenseProjectRefs" | "inheritedRelations"
 > => {
   const traversal = compileTraversal(
     source.entity,
@@ -337,8 +338,21 @@ const displaySourceBranch = (
   const createdAt = targetGallery
     ? aliasColumn(attachmentHop!.alias, "createdAt")
     : aliasColumn(groupAlias, "createdAt");
+  const expenseHopIndex = traversal.hops.findIndex(
+    (hop) => hop.relation === EXPENSE_PROJECT_RELATION,
+  );
+  const expenseHop = traversal.hops[expenseHopIndex];
   return {
-    usesExpenseProjectRelation: traversal.usesExpenseProjectRelation,
+    // The same path prefix admits Project dependencies even when only Tasks are requested.
+    expenseProjectRefs:
+      expenseHop === undefined
+        ? null
+        : sql`
+      SELECT ${aliasColumn(expenseHop.fromAlias, "id")} AS "projectId"
+      FROM ${sql.raw(`"${traversal.rootTable}"`)} s
+      ${renderJoins({ hops: traversal.hops.slice(0, expenseHopIndex) })}
+      WHERE refs."entityKind" = ${source.entity}
+        AND s.id = refs."entityId" AND ${rootLiveCondition(source.entity, "s")}`,
     inheritedRelations: traversal.inheritedRelations,
     branch: sql`
         SELECT i.key, i.shortcode, ${source.priority}::integer AS priority,
@@ -356,6 +370,19 @@ const displaySourceBranch = (
 
 let compiledDisplayBranches: readonly DisplayBranch[] | undefined;
 
+/** Rebind both image candidates and their dependencies through accepted evidence. */
+const acceptedTransactionBranch = (branch: SQL): SQL => sql`
+        SELECT media.*
+        FROM (${sourceTransactionSettlements}) accepted
+        JOIN LATERAL (
+          SELECT candidate.*
+          FROM (SELECT ${entitySchema.enum.financialTransaction}::text AS "entityKind",
+                       accepted."transaction" AS "entityId") refs
+          JOIN LATERAL (${branch}) candidate ON true
+        ) media ON true
+        WHERE refs."entityKind" = ${entitySchema.enum.sourceTransactionRecord}
+          AND accepted."record" = refs."entityId"`;
+
 /** Compile SQL after the module graph initializes: traversal and list filters
  * can import each other while repository declarations are being constructed. */
 function displayBranches(): readonly DisplayBranch[] {
@@ -372,7 +399,7 @@ function compileDisplayBranches(): readonly DisplayBranch[] {
             {
               entity,
               branch,
-              usesExpenseProjectRelation: false,
+              expenseProjectRefs: null,
               inheritedRelations: [],
             },
           ];
@@ -391,21 +418,15 @@ function compileDisplayBranches(): readonly DisplayBranch[] {
       .map((transactionBranch): DisplayBranch => ({
         ...transactionBranch,
         entity: "sourceTransactionRecord",
-        branch: sql`
-        SELECT media.*
-        FROM (${sourceTransactionSettlements}) accepted
-        JOIN LATERAL (
-          SELECT candidate.*
-          FROM (SELECT ${entitySchema.enum.financialTransaction}::text AS "entityKind",
-                       accepted."transaction" AS "entityId") refs
-          JOIN LATERAL (${transactionBranch.branch}) candidate ON true
-        ) media ON true
-        WHERE refs."entityKind" = ${entitySchema.enum.sourceTransactionRecord}
-          AND accepted."record" = refs."entityId"`,
+        branch: acceptedTransactionBranch(transactionBranch.branch),
+        expenseProjectRefs:
+          transactionBranch.expenseProjectRefs === null
+            ? null
+            : acceptedTransactionBranch(transactionBranch.expenseProjectRefs),
       })),
     {
       entity: "sourceTransactionRecord",
-      usesExpenseProjectRelation: false,
+      expenseProjectRefs: null,
       inheritedRelations: [],
       branch: sql`
       SELECT candidate.key, candidate.shortcode,
@@ -449,7 +470,7 @@ export const entityDisplayImagePresenceSql = (entity: Entity, id: SQL): SQL => {
     (branch) => branch.entity === entity,
   );
   const expenseRelation = selected.some(
-    (branch) => branch.usesExpenseProjectRelation,
+    (branch) => branch.expenseProjectRefs !== null,
   )
     ? sql`, "${sql.raw(EXPENSE_PROJECT_RELATION)}" AS (
         SELECT e.*, ${effectiveExpenseProjectSql("e")} AS "effectiveProjectId"
@@ -585,10 +606,17 @@ async function resolveRankedDisplayImages(
   // indexes. The effective-project expression still decides precedence; food
   // fallback requires the wider set only when the household project is in refs.
   // Expense is a connector here; Product and Vendor own source ordering.
-  const expenseProjectRelation = selectedBranches.some(
-    ({ usesExpenseProjectRelation }) => usesExpenseProjectRelation,
-  )
-    ? sql`, "${sql.raw(EXPENSE_PROJECT_RELATION)}" AS MATERIALIZED (
+  const projectDependencies = selectedBranches.flatMap(
+    ({ expenseProjectRefs }) =>
+      expenseProjectRefs === null ? [] : [expenseProjectRefs],
+  );
+  const expenseProjectRelation = projectDependencies.length
+    ? sql`, display_expense_project_refs AS MATERIALIZED (
+        SELECT DISTINCT dependency."projectId"
+        FROM refs JOIN LATERAL (
+          ${sql.join(projectDependencies, sql` UNION ALL `)}
+        ) dependency ON true
+      ), "${sql.raw(EXPENSE_PROJECT_RELATION)}" AS MATERIALIZED (
         SELECT DISTINCT effective."effectiveProjectId", effective."productId", effective."deletedAt"
         FROM (SELECT e."productId", e."deletedAt", ${effectiveExpenseProjectSql("e")} AS "effectiveProjectId"
         FROM "Expense" e
@@ -597,20 +625,18 @@ async function resolveRankedDisplayImages(
           AND e."productId" IS NOT NULL
           AND (
             e."projectId" IN (
-              SELECT r."entityId" FROM refs r WHERE r."entityKind" = 'project'
+              SELECT "projectId" FROM display_expense_project_refs
             )
             OR e."purchaseId" IN (
               SELECT purchase.id
               FROM "Purchase" purchase
-              JOIN refs r ON r."entityId" = purchase."defaultProjectId"
-              WHERE r."entityKind" = 'project'
-                AND ${notDeleted("purchase")}
+              JOIN display_expense_project_refs r ON r."projectId" = purchase."defaultProjectId"
+              WHERE ${notDeleted("purchase")}
             )
             OR EXISTS (
               SELECT 1
-              FROM refs r JOIN "Project" household ON household.id = r."entityId"
-              WHERE r."entityKind" = 'project'
-                AND household."shortcode" = ${HOUSEHOLD_PROJECT_SHORTCODE}
+              FROM display_expense_project_refs r JOIN "Project" household ON household.id = r."projectId"
+              WHERE household."shortcode" = ${HOUSEHOLD_PROJECT_SHORTCODE}
                 AND ${notDeleted("household")}
             )
           )
@@ -623,9 +649,9 @@ async function resolveRankedDisplayImages(
   const result = await unwrapDb(db).execute(
     sql`
     WITH ${refsSql}
+    ${inheritedRelationsSql(selectedBranches)}
     ${expenseProjectRelation}
     ${sourceMerchantImagesSql(sourceTypes.has("sourceTransactionRecord"))}
-    ${inheritedRelationsSql(selectedBranches)}
     SELECT refs."entityKind", refs."entityId"::text AS "entityId", refs."refKey", (
       SELECT COALESCE(
         json_agg(
