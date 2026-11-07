@@ -3,7 +3,8 @@ import { aiGatewayId, CF_ACCOUNT_ID } from "@cubby/shared/ai/gateway-metadata";
 import {
   creditRefusedResponse,
   isInferenceFundingRefusal,
-  runNativeGateway,
+  isSubscriberCreditRequest,
+  runProviderGateway,
   workersAiModel,
   workersAiRunRequest,
 } from "@cubby/shared/ai/gateway-request";
@@ -290,10 +291,10 @@ export class AiGatewayEgressDurableObject extends DurableObject<Env> {
     if (byokJev && !this.env.AI_GATEWAY_API_KEY)
       throw new Error("Jev BYOK requires the AI_GATEWAY_API_KEY Worker secret");
     // Stored-key traffic does not consume Unified Billing's capacity window.
-    const credit =
-      (input.provider === "anthropic" || input.provider === "openai") &&
-      input.headers["cf-aig-byok-alias"] === "subscriber-credit" &&
-      input.headers["cf-aig-no-wholesale"] === "true";
+    const credit = isSubscriberCreditRequest(
+      input.provider,
+      new Headers(input.headers),
+    );
     const admitted = await this.admit(
       byokJev
         ? TYPESAFE_BUCKET
@@ -367,7 +368,7 @@ export class AiGatewayEgressDurableObject extends DurableObject<Env> {
         );
       if (provider !== "workers-ai" && !this.env.AI_GATEWAY_API_KEY)
         throw new Error(
-          "Paid third-party AI requires the AI_GATEWAY_API_KEY Worker secret for native gateway authentication",
+          "Paid third-party AI requires the AI_GATEWAY_API_KEY Worker secret for gateway authentication",
         );
       const byokRequest = byokJev
         ? workersAiRunRequest({
@@ -381,7 +382,7 @@ export class AiGatewayEgressDurableObject extends DurableObject<Env> {
         : null;
       // Require stored TypeSafe credentials; never spend Unified Billing credits.
       byokRequest?.init.headers.set("cf-aig-no-wholesale", "true");
-      // Native passthrough preserves credit aliases and unaliased paid fallback.
+      // The shared transport preserves credit aliases and selects dedicated paid REST.
       const response = byokRequest
         ? await fetch(byokRequest.url, byokRequest.init)
         : provider === "workers-ai"
@@ -390,7 +391,7 @@ export class AiGatewayEgressDurableObject extends DurableObject<Env> {
               returnRawResponse: true,
               signal: controller.signal,
             })
-          : await runNativeGateway({
+          : await runProviderGateway({
               accountId: CF_ACCOUNT_ID,
               gatewayId,
               provider,

@@ -2,6 +2,7 @@ import { createParser, type EventSourceMessage } from "eventsource-parser";
 import { z } from "zod";
 
 import type { AiGatewayMetadata } from "./gateway-metadata";
+import { getChatModelConfig, supportedChatModelSchema } from "./models";
 
 /**
  * Pure request-shaping helpers shared by every AI Gateway `fetch` shim (web
@@ -1202,8 +1203,20 @@ export interface UniversalGateway {
   ): Promise<Response>;
 }
 
-/** Named BYOK aliases are honored only by native provider passthrough. */
-export async function runNativeGateway(args: {
+/** The same credit identity owns native routing and shared capacity/cooldowns. */
+export function isSubscriberCreditRequest(
+  provider: string,
+  headers: Headers,
+): boolean {
+  return (
+    (provider === "openai" || provider === "anthropic") &&
+    headers.get("cf-aig-byok-alias") === "subscriber-credit" &&
+    headers.get("cf-aig-no-wholesale") === "true"
+  );
+}
+
+/** Preserve provider wire formats while selecting the funded gateway transport. */
+export async function runProviderGateway(args: {
   accountId: string;
   gatewayId: string;
   token: string;
@@ -1212,21 +1225,49 @@ export async function runNativeGateway(args: {
   controls: GatewayControls;
   fetcher?: typeof fetch;
 }): Promise<Response> {
-  const headers = new Headers(args.request.headers);
-  headers.set("cf-aig-authorization", `Bearer ${args.token}`);
+  const headers = strippedHeaders({ headers: args.request.headers });
+  const endpoint = new URL(`https://gateway.internal/${args.request.endpoint}`);
+  const path = endpoint.pathname.slice(1);
+  // Native and Universal routes can reject paid fallback when named BYOK keys
+  // exist. Dedicated /ai routes consult only default BYOK. Never erase explicit
+  // alias or no-wholesale intent to make a request eligible for paid routing.
+  const paid =
+    !isSubscriberCreditRequest(args.provider, headers) &&
+    !headers.has("cf-aig-byok-alias") &&
+    !headers.has("cf-aig-no-wholesale") &&
+    ((args.provider === "openai" &&
+      (path === "responses" || path === "chat/completions")) ||
+      (args.provider === "anthropic" && path === "v1/messages"));
+  const query = await args.request.query();
+  let body = query;
+  let url = gatewayProviderUrl({ ...args, endpoint: args.request.endpoint });
+  if (paid) {
+    const model = getChatModelConfig(
+      supportedChatModelSchema.parse(query.model),
+    );
+    if (model.gatewayProvider !== args.provider)
+      throw new Error(
+        "Paid gateway model does not match its declared provider",
+      );
+    body = { ...query, model: model.unifiedModelId };
+    const paidPath = path === "v1/messages" ? "messages" : path;
+    url = `https://api.cloudflare.com/client/v4/accounts/${args.accountId}/ai/v1/${paidPath}${endpoint.search}`;
+    headers.delete("cf-aig-authorization");
+    headers.set("authorization", `Bearer ${args.token}`);
+    headers.set("cf-aig-gateway-id", args.gatewayId);
+  } else {
+    headers.set("cf-aig-authorization", `Bearer ${args.token}`);
+  }
   for (const [name, value] of Object.entries(
     gatewayControlHeaders(args.controls),
   ))
     headers.set(name, value);
-  return (args.fetcher ?? fetch)(
-    gatewayProviderUrl({ ...args, endpoint: args.request.endpoint }),
-    {
-      method: args.request.init?.method ?? "POST",
-      headers,
-      body: JSON.stringify(await args.request.query()),
-      signal: args.request.signal,
-    },
-  );
+  return (args.fetcher ?? fetch)(url, {
+    method: args.request.init?.method ?? "POST",
+    headers,
+    body: JSON.stringify(body),
+    signal: args.request.signal,
+  });
 }
 
 /** A provider request over the binding's Universal endpoint. */
