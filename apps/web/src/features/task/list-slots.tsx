@@ -15,6 +15,7 @@ import { useEntityMetadata } from "~/entity/metadata";
 import { entityCalendar } from "~/features/calendar/entity-calendar";
 import { Stack } from "~/ui/layout";
 
+import { MaintenanceView } from "./maintenance-view";
 import { NextTasks } from "./next-tasks";
 import { TasksStatsStrip } from "./tasks-stats-strip";
 
@@ -41,7 +42,14 @@ function TaskAgendaSlot({ search }: ListSlotProps) {
   );
 }
 
+function TaskMaintenanceSlot(props: ListSlotProps) {
+  return (
+    <MaintenanceView {...props} filters={useRendererFilters(props.search)} />
+  );
+}
+
 export const taskListSlots = {
   calendar: entityCalendar("task"),
   agenda: TaskAgendaSlot,
+  maintenance: TaskMaintenanceSlot,
 } satisfies Record<ListSlotId<"task">, ListSlotComponent>;

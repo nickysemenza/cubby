@@ -5191,3 +5191,34 @@ connection reads remain; internal batch hydration remains private to that reader
 Field publication builds an entry for `publishSuggestions`, whose immutable-key
 replay check also owns the field Sweep write. Field review tests hydrate through
 the same key and row readers used by the live queue.
+
+### Household maintenance view
+
+Task's Maintenance saved view is pinned on Home and opens its declared web list
+slot. Membership is explicit project-name search: effective Project names
+containing `maintenance`, case-insensitively. The visible project-name filter
+can narrow that scope. Productless chores use the same Tasks as appliance work;
+there is no separate maintenance Activity entity.
+
+`Task.completedOn` is an optional, member-recorded calendar day, independent of
+`due`. Create/update and the ordinary editor carry it through HTTP and MCP;
+omission preserves it and null clears it. Migration leaves historical values
+unknown. Completion status alone, a deadline, purchase date, or `updatedAt`
+never supplies a completion date. Reopening a Task preserves its recorded date,
+but only done Tasks contribute cadence evidence.
+
+`task.maintenanceHistory` returns exact-title, same-effective-subject groups
+across years. It performs no normalization, semantic matching, or fuzzy merging.
+Distinct same-day completion dates count once; the observed interval is the
+median positive interval between those dates. One date has insufficient history;
+undated completions are counted and excluded. Supporting dates and interval
+counts remain visible. This describes observations, not a recommended service
+interval, deadline, recurring schedule, or stock assertion.
+
+The spending-year control filters only the ordinary Expense list, by allocation
+shares into the matching Projects and Expense date. History remains cross-year.
+Task editing/completion, Project browsing and Expense assignment reuse generic
+embedded lists. Project spending never claims an exact Task-to-purchased-part
+connection. The native slot hands off to web; shared fields and the MCP read use
+the same contracts. No background work, purchases or inventory changes follow
+from opening the view.

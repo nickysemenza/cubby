@@ -107,3 +107,80 @@ test("task detail keeps both ranged due date endpoints editable", async ({
   await expect(page.getByText("2031-09-22")).toHaveCount(0);
   await expect(page.getByText("2031-09-25")).toHaveCount(0);
 });
+
+// Maintenance must keep cross-year evidence separate from spending-year filters.
+test("maintenance keeps explicit completion history across spending years", async ({
+  page,
+}) => {
+  const suffix = Date.now();
+  const project = await createEntityFixture(page, "project", {
+    name: `2031 routine maintenance ${suffix}`,
+  });
+  const name = `Clean synthetic gutters ${suffix}`;
+  for (const completedOn of ["2030-01-01", "2030-04-01", "2031-01-01"]) {
+    await createEntityFixture(page, "task", {
+      trade: "other",
+      name,
+      projectId: project.id,
+      status: "done",
+      completedOn,
+    });
+  }
+  await createEntityFixture(page, "task", {
+    trade: "other",
+    name,
+    projectId: project.id,
+    status: "done",
+    due: { start: "2031-05-01", end: null },
+  });
+  await createEntityFixture(page, "task", {
+    trade: "other",
+    name: `${name} east side`,
+    projectId: project.id,
+    status: "done",
+    completedOn: "2031-02-01",
+  });
+  const purchase = await createEntityFixture(page, "purchase", {
+    orderId: `SYNTHETIC-MAINTENANCE-${suffix}`,
+  });
+  const expenseName = `Synthetic maintenance supply ${suffix}`;
+  await createEntityFixture(page, "expense", {
+    name: expenseName,
+    purchaseId: purchase.id,
+    projectId: project.id,
+    cost: 12,
+    date: "2030-02-01",
+    costType: "materials",
+    trade: "other",
+  });
+  await gotoAuthenticatedPage(page, "/tasks?view=maintenance");
+  const cadence = page
+    .locator("section")
+    .filter({
+      has: page.getByRole("heading", { name: "Observed cadence", exact: true }),
+    });
+  const row = cadence
+    .getByRole("row")
+    .filter({ has: page.getByText(name, { exact: true }) });
+  await expect(row).toContainText("3 dated completions");
+  await expect(row).toContainText("2 intervals");
+  await expect(row).toContainText("1 undated completion excluded");
+  await expect(row).toContainText("2030-01-01, 2030-04-01, 2031-01-01");
+  await page.getByLabel("Spending year").fill("2030");
+  await expect(row).toContainText("3 dated completions");
+  const spending = page
+    .locator("section")
+    .filter({
+      has: page.getByRole("heading", {
+        name: "Purchase spending",
+        exact: true,
+      }),
+    });
+  await expect(spending.getByText(expenseName, { exact: true })).toBeVisible();
+  await page.getByLabel("Spending year").fill("2031");
+  await expect(spending.getByText(expenseName, { exact: true })).toHaveCount(0);
+  await expect(row).toContainText("3 dated completions");
+  await expect(
+    cadence.getByRole("row").filter({ hasText: `${name} east side` }),
+  ).toContainText("Insufficient history");
+});

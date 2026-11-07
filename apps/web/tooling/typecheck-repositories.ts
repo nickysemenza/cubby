@@ -243,6 +243,7 @@ export const repositoryOwners = [
   "src/server/domains/task/repo/blocking-sql.ts",
   "src/server/domains/task/repo/briefing-commands.ts",
   "src/server/domains/task/repo/helpers.ts",
+  "src/server/domains/task/repo/maintenance.ts",
   "src/server/domains/task/repo/summary.ts",
   "src/server/domains/task/repo/today-briefing.ts",
   "src/server/domains/vendor/repo/merchant-vendor-inference.ts",

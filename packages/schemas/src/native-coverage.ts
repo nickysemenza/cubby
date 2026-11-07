@@ -557,6 +557,10 @@ export const nativeCoverage = {
     ),
   },
   listSlot: {
+    "task.maintenance": handoff(
+      { query: { view: "maintenance" }, label: "Open Maintenance on web" },
+      "Maintenance history and project spending are curated on web.",
+    ),
     "project.analytics": handoff(
       { query: { view: "analytics" }, label: "Open project analytics on web" },
       "Portfolio analytics are explored on web.",

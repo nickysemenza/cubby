@@ -385,6 +385,7 @@ const createTaskWithOutput = async <TOutput>(
         data.assigneeMode ??
         (data.assigneeId === undefined ? "inherit" : "explicit"),
       status: data.status,
+      completedOn: data.completedOn,
       projectId,
       projectMode:
         data.projectMode ?? (data.projectId === null ? "inherit" : "explicit"),
@@ -608,6 +609,7 @@ const updateTaskWithOutput = async <TOutput>(
     const updateValues = buildPartialUpdateValues({
       name: data.name,
       status: data.status,
+      completedOn: data.completedOn,
       ...assignments,
       dueDate: data.due === undefined ? undefined : (data.due?.start ?? null),
       dueEndDate: data.due === undefined ? undefined : (data.due?.end ?? null),

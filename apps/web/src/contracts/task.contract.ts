@@ -1,4 +1,5 @@
 import { taskFieldEnvelopeSchemas } from "@cubby/schemas/compiler/generated/entity-field-envelopes/task";
+import { maintenanceHistoryOut } from "@cubby/schemas/household-maintenance";
 import * as schemas from "@cubby/schemas/project";
 import { z } from "zod";
 
@@ -7,6 +8,14 @@ import { defineContract, mutation, query } from "~/contracts/define";
 export const taskContract = defineContract(
   "task",
   {
+    maintenanceHistory: query({
+      exposure: "capability",
+      description:
+        "Observed household maintenance cadence from exact Task titles and optional subject Products. Uses only explicitly recorded completedOn dates on done Tasks; deadlines and purchase dates never establish completion. Returns all supporting dates and undated-completion counts.",
+      input: schemas.taskFiltersSchema,
+      output: maintenanceHistoryOut,
+      cache: { tags: [["task"], ["project"], ["product"]] },
+    }),
     listActionable: query({
       exposure: "capability",
       description:

@@ -1,0 +1,47 @@
+{
+  "type": "diff",
+  "version": "9",
+  "dialect": "postgres",
+  "id": "7d73ef8f-d365-4e1f-a56f-b320a982b1d9",
+  "prevIds": [
+    "440c09ca-667c-46a9-b761-024ff26ef449"
+  ],
+  "footprints": [
+    {
+      "statementType": "add_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "Task",
+        "completedOn"
+      ],
+      "writes": [
+        "s|col|public.Task.completedOn",
+        "n|col|public.Task.completedOn",
+        "e|col|public.Task.completedOn"
+      ],
+      "reads": [
+        "n|tbl|public.Task",
+        "n|sch|public"
+      ]
+    }
+  ],
+  "deltas": [
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "Task",
+        "name": "completedOn",
+        "type": "date",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    }
+  ]
+}

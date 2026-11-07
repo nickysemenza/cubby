@@ -573,3 +573,78 @@ describe("updateTasksInBulk status patch", () => {
     ).rejects.toThrow(testShortcode("task", "TSK-MISSING"));
   });
 });
+
+describe("maintenance history", () => {
+  const ctx = withTestDb();
+
+  it("uses explicit done dates across projects and preserves unknown historical dates", async () => {
+    const { getMaintenanceHistory } =
+      await import("~/server/domains/task/service/maintenance");
+    const { maintenanceHistoryOut } =
+      await import("@cubby/schemas/household-maintenance");
+    const older = await createRepoEntity(ctx, "project", {
+      name: "2030 routine maintenance",
+    });
+    const newer = await createRepoEntity(ctx, "project", {
+      name: "2031 routine maintenance",
+    });
+    const first = await createRepoEntity(ctx, "task", {
+      name: "Clean synthetic gutters",
+      trade: "other",
+      projectId: older.output.id,
+      status: "done",
+      completedOn: "2030-01-01",
+    });
+    await createRepoEntity(ctx, "task", {
+      name: "Clean synthetic gutters",
+      trade: "other",
+      projectId: newer.output.id,
+      status: "done",
+      completedOn: "2030-04-01",
+    });
+    await createRepoEntity(ctx, "task", {
+      name: "Clean synthetic gutters",
+      trade: "other",
+      projectId: newer.output.id,
+      status: "done",
+      completedOn: "2030-04-01",
+    });
+    await createRepoEntity(ctx, "task", {
+      name: "Clean synthetic gutters",
+      trade: "other",
+      projectId: newer.output.id,
+      status: "done",
+      due: { start: "2031-01-01", end: null },
+    });
+    await createRepoEntity(ctx, "task", {
+      name: "Clean synthetic gutters east",
+      trade: "other",
+      projectId: newer.output.id,
+      status: "done",
+      completedOn: "2031-01-01",
+    });
+    const read = maintenanceHistoryOut.parse(
+      await getMaintenanceHistory(ctx.db, {}),
+    );
+    expect(read.projectIds).toEqual(
+      expect.arrayContaining([older.output.id, newer.output.id]),
+    );
+    expect(
+      read.groups.find((group) => group.name === "Clean synthetic gutters"),
+    ).toMatchObject({
+      completedDates: ["2030-01-01", "2030-04-01"],
+      medianIntervalDays: 90,
+      undatedCompletions: 1,
+      subjectProductId: null,
+    });
+    expect(
+      read.groups.find((group) => group.name.endsWith("east")),
+    ).toMatchObject({ medianIntervalDays: null });
+    await updateTask(ctx.db, first.output.id, { completedOn: null }, ctx.actor);
+    expect((await readTask(ctx.db, first.output.id))?.completedOn).toBeNull();
+    const cleared = await getMaintenanceHistory(ctx.db, {});
+    expect(
+      cleared.groups.find((group) => group.name === "Clean synthetic gutters"),
+    ).toMatchObject({ medianIntervalDays: null, undatedCompletions: 2 });
+  });
+});
