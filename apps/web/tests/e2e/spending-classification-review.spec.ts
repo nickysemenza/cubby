@@ -197,6 +197,23 @@ test("reviews historical item classification and preserves explicit purpose", as
   await expect(
     page.getByRole("button", { name: "Close panel", exact: true }),
   ).toBeVisible();
+  const configuredMapping = page.getByRole("region", {
+    name: "Configured mapping",
+    exact: true,
+  });
+  await expect(
+    configuredMapping.getByText(`Inherited from ${parentName}`, {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(
+    configuredMapping
+      .getByRole("term")
+      .filter({ hasText: "Products in this branch" }),
+  ).toBeVisible();
+  await expect(
+    configuredMapping.getByRole("definition").filter({ hasText: /^1$/ }),
+  ).toBeVisible();
   const phonePath = ".impeccable/review/category-mapping-mobile.png";
   await page.screenshot({ path: phonePath, fullPage: true });
   await testInfo.attach("Category mapping phone", {

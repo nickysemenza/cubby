@@ -76,8 +76,38 @@ function SelectedCategory({ id }: { id: CategoryRow["id"] }) {
   );
   const analysis = useQuery(expense.analyze.queryOptions(analysisInput));
   const data = analysis.data?.status === "ready" ? analysis.data : undefined;
+  const mapping = record.data?.spendingCategoryMapping;
   return (
     <Stack gap="md">
+      {record.data && (
+        <Section title="Configured mapping" headingAs="h3">
+          <dl className="space-y-2 text-sm">
+            <div>
+              <dt className="text-muted-foreground">Effective spending</dt>
+              <dd>
+                {mapping?.category?.name ??
+                  (mapping?.state === "blocked" ? "Blocked" : "Missing")}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground">Mapping source</dt>
+              <dd>
+                {mapping?.state === "direct"
+                  ? "Set here"
+                  : mapping?.source
+                    ? `${mapping.state === "blocked" ? "Blocked at" : "Inherited from"} ${mapping.source.name}`
+                    : "No mapping in this branch"}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground">Products in this branch</dt>
+              <dd className="tabular-nums">
+                {fieldValueOf(record.data.fields.productCount)}
+              </dd>
+            </div>
+          </dl>
+        </Section>
+      )}
       <Section
         headingAs="h3"
         title="Where this branch's money lands"
@@ -168,6 +198,15 @@ function ContributingCategories({
       {query.error && <ErrorDisplay error={query.error} />}
       {query.isPending && (
         <Description>Loading contributing branches…</Description>
+      )}
+      {query.data?.status === "too_large" && (
+        <Description>
+          Contributing branches are unavailable because this report exceeds its
+          limit.{" "}
+          <Link to="/expenses" search={{ ...bucket.filter, view: "table" }}>
+            Open this spending category in the Ledger.
+          </Link>
+        </Description>
       )}
       {data && (
         <StaticTable
