@@ -1,4 +1,13 @@
 import type { Entity } from "@cubby/schemas/entity";
+import type { GeneratedListFieldPresentation } from "@cubby/schemas/entity-projection-types";
+import { CalendarBlankIcon } from "@phosphor-icons/react/dist/csr/CalendarBlank";
+import { CurrencyDollarIcon } from "@phosphor-icons/react/dist/csr/CurrencyDollar";
+import { HashIcon } from "@phosphor-icons/react/dist/csr/Hash";
+import { ImageIcon } from "@phosphor-icons/react/dist/csr/Image";
+import { LinkSimpleIcon } from "@phosphor-icons/react/dist/csr/LinkSimple";
+import { ListChecksIcon } from "@phosphor-icons/react/dist/csr/ListChecks";
+import { TextTIcon } from "@phosphor-icons/react/dist/csr/TextT";
+import { ToggleLeftIcon } from "@phosphor-icons/react/dist/csr/ToggleLeft";
 import { createContext, useContext, type ReactNode } from "react";
 
 /** App composition supplies canonical marks without coupling shared UI to entities. */
@@ -10,12 +19,58 @@ import type { CubbyColumnMeta } from "./table-meta";
 
 type ColumnIdentity = Pick<
   CubbyColumnMeta,
-  "headerEntity" | "linksTo" | "countOf"
+  "headerEntity" | "linksTo" | "countOf" | "presentation"
 >;
 
 /** Declaration-owned identity shared by headers and the column manager. */
 export function columnEntityTarget(meta: ColumnIdentity | undefined) {
-  return meta?.headerEntity ?? meta?.linksTo ?? meta?.countOf;
+  return (
+    meta?.presentation?.target ??
+    meta?.headerEntity ??
+    meta?.linksTo ??
+    meta?.countOf
+  );
+}
+
+export const listFieldTypeLabel = (
+  field: Pick<GeneratedListFieldPresentation, "valueType" | "cardinality">,
+) => {
+  if (field.valueType === "record")
+    return field.cardinality === "many" ? "records" : "record";
+  return {
+    text: "text",
+    choice: "choice",
+    boolean: "yes / no",
+    date: "date",
+    number: "number",
+    money: "money",
+    count: "count",
+    structured: "details",
+    images: "images",
+  }[field.valueType];
+};
+
+/** Type marks share the filter editor's visual vocabulary. */
+export function ListFieldTypeMark({
+  valueType,
+  className = "size-3.5",
+}: {
+  valueType: GeneratedListFieldPresentation["valueType"];
+  className?: string;
+}) {
+  const Icon = {
+    record: LinkSimpleIcon,
+    text: TextTIcon,
+    choice: ListChecksIcon,
+    boolean: ToggleLeftIcon,
+    date: CalendarBlankIcon,
+    number: HashIcon,
+    money: CurrencyDollarIcon,
+    count: HashIcon,
+    structured: ListChecksIcon,
+    images: ImageIcon,
+  }[valueType];
+  return <Icon className={className} aria-hidden="true" />;
 }
 
 /** Describe declared value semantics; missing metadata stays unspecified. */
@@ -23,10 +78,16 @@ export function columnTypeLabel(
   meta:
     | Pick<
         CubbyColumnMeta,
-        "headerEntity" | "linksTo" | "countOf" | "valueKind" | "filterConfig"
+        | "headerEntity"
+        | "linksTo"
+        | "countOf"
+        | "valueKind"
+        | "filterConfig"
+        | "presentation"
       >
     | undefined,
 ) {
+  if (meta?.presentation) return listFieldTypeLabel(meta.presentation);
   if (meta?.countOf) return "count";
   if (meta?.headerEntity || meta?.linksTo) return "record";
   if (meta?.valueKind)

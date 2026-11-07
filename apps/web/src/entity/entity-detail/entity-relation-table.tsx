@@ -44,7 +44,6 @@ import {
   connectionRefs,
   ConnectionPaths,
 } from "~/entity/relationships/connection-paths";
-import { defaultSortFor } from "~/entity/sortable-fields";
 import { entityGraph } from "~/integrations/tanstack-query/generated/domains/entityGraph.gen";
 import { entityList } from "~/integrations/tanstack-query/generated/domains/entityList.gen";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
@@ -460,15 +459,7 @@ function StreamedEntityRelationTable(props: EntityRelationTableProps) {
         parseEntityListInput(plan.target, {
           entity: plan.target,
           includeCount: true,
-          fields: projection(
-            queryClient,
-            plan.target,
-            listReadVisibility(
-              {},
-              [plan.sort.field],
-              defaultSortFor(queryClient, plan.target),
-            ),
-          ),
+          fields: projection(queryClient, plan.target, listReadVisibility({})),
           filters: {
             ...buildFiltersFromManifest(
               getEntityFilters(queryClient, plan.target),

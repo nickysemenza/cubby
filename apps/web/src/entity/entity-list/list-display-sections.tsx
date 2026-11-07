@@ -15,9 +15,14 @@ import { TableIcon } from "@phosphor-icons/react/dist/csr/Table";
 import type { Icon } from "@phosphor-icons/react/lib";
 import { useQueryClient } from "@tanstack/react-query";
 
-import { entities } from "~/entity/entities";
-import { useEntityMetadata } from "~/entity/metadata";
+import { entities, EntityIcon } from "~/entity/entities";
+import {
+  useEntityMetadata,
+  listFieldPresentation,
+  listGroupingMenuKey,
+} from "~/entity/metadata";
 import { DisplayRow } from "~/entity/table/display-menu";
+import { ListFieldTypeMark } from "~/ui/data-table/column-presentation";
 import { useIsMobile } from "~/ui/hooks/use-mobile";
 import { Button } from "~/ui/primitives/button";
 import {
@@ -195,6 +200,7 @@ function ListViewMenu({ entity }: { entity: BrowserRoutedEntity }) {
  * with its reason. Absent when the entity declares no grouping.
  */
 function ListGroupMenu({ entity }: { entity: BrowserRoutedEntity }) {
+  const queryClient = useQueryClient();
   const { search, navigate } = useListSearch();
   const { density } = useEntityListCardDensity();
   const { view } = resolveListView(useQueryClient(), entity, search);
@@ -231,6 +237,10 @@ function ListGroupMenu({ entity }: { entity: BrowserRoutedEntity }) {
       return `${choice?.label ?? dimension.key}${dimension.bucket ? ` / ${dimension.bucket}` : dimension.level ? ` / ${groupLevelLabel(dimension.level)}` : ""}`;
     })
     .join(" → ");
+  const membershipGuidance = dimensions.flatMap(({ key }) => {
+    const group = listFieldPresentation(queryClient, entity, key)?.group;
+    return group?.supported && group.description ? [group.description] : [];
+  })[0];
   return (
     <DisplayRow label="Group">
       <DropdownMenu>
@@ -262,56 +272,94 @@ function ListGroupMenu({ entity }: { entity: BrowserRoutedEntity }) {
                 <CheckIcon className="ml-auto size-3.5" />
               )}
             </DropdownMenuItem>
-            {choices.map((choice) => {
-              const index = dimensions.findIndex(
-                ({ key }) => key === choice.key,
-              );
-              const reason = timeline ? TIMELINE_GROUP_REASON : choice.reason;
-              return (
-                <DropdownMenuItem
-                  key={choice.key}
-                  aria-label={`Group by ${choice.label}`}
-                  disabled={
-                    reason !== null || (index < 0 && dimensions.length === 3)
-                  }
-                  aria-current={index >= 0 ? "true" : undefined}
-                  onClick={() =>
-                    apply(
-                      index >= 0
-                        ? dimensions.filter((_, position) => position !== index)
-                        : [
-                            ...dimensions,
-                            {
-                              key: choice.key,
-                              ...(choice.buckets.length
-                                ? { bucket: "month" }
-                                : search.view === PIVOT_VIEW_ID &&
-                                    choice.filter?.columnId === "categoryId" &&
-                                    choice.levels > 0
-                                  ? { level: 1 }
-                                  : {}),
-                            },
-                          ],
-                    )
-                  }
-                >
-                  <span className="flex min-w-0 flex-col">
-                    <span>{choice.label}</span>
-                    {reason && (
-                      <span className="max-w-64 text-xs whitespace-normal text-muted-foreground">
-                        {reason}
+            {choices
+              .filter(
+                (choice) =>
+                  choice.listed ||
+                  dimensions.some(
+                    ({ key }) =>
+                      key === choice.key &&
+                      listGroupingMenuKey(queryClient, entity, key) === key,
+                  ),
+              )
+              .map((choice) => {
+                const presentation = listFieldPresentation(
+                  queryClient,
+                  entity,
+                  choice.key,
+                );
+                const index = dimensions.findIndex(
+                  ({ key }) =>
+                    listGroupingMenuKey(queryClient, entity, key) ===
+                    choice.key,
+                );
+                const reason = timeline ? TIMELINE_GROUP_REASON : choice.reason;
+                return (
+                  <DropdownMenuItem
+                    key={choice.key}
+                    aria-label={`Group by ${choice.label}`}
+                    aria-description={
+                      presentation?.group.supported &&
+                      presentation.group.description
+                        ? presentation.group.description
+                        : (presentation?.description ?? undefined)
+                    }
+                    title={presentation?.description ?? undefined}
+                    disabled={
+                      reason !== null || (index < 0 && dimensions.length === 3)
+                    }
+                    aria-current={index >= 0 ? "true" : undefined}
+                    onClick={() =>
+                      apply(
+                        index >= 0
+                          ? dimensions.filter(
+                              (_, position) => position !== index,
+                            )
+                          : [
+                              ...dimensions,
+                              {
+                                key: choice.key,
+                                ...(choice.buckets.length
+                                  ? { bucket: "month" }
+                                  : search.view === PIVOT_VIEW_ID &&
+                                      choice.filter?.columnId ===
+                                        "categoryId" &&
+                                      choice.levels > 0
+                                    ? { level: 1 }
+                                    : {}),
+                              },
+                            ],
+                      )
+                    }
+                  >
+                    {presentation?.target ? (
+                      <EntityIcon
+                        entity={presentation.target}
+                        aria-hidden="true"
+                        className="size-3.5 shrink-0"
+                      />
+                    ) : (
+                      <ListFieldTypeMark
+                        valueType={presentation?.valueType ?? "text"}
+                      />
+                    )}
+                    <span className="flex min-w-0 flex-col">
+                      <span>{choice.label}</span>
+                      {reason && (
+                        <span className="max-w-64 text-xs whitespace-normal text-muted-foreground">
+                          {reason}
+                        </span>
+                      )}
+                    </span>
+                    {index >= 0 && (
+                      <span className="ml-auto text-xs text-muted-foreground">
+                        {index === 0 ? "1st" : index === 1 ? "2nd" : "3rd"}
+                        <CheckIcon className="ml-1 inline size-3.5" />
                       </span>
                     )}
-                  </span>
-                  {index >= 0 && (
-                    <span className="ml-auto text-xs text-muted-foreground">
-                      {index + 1}
-                      <CheckIcon className="ml-1 inline size-3.5" />
-                    </span>
-                  )}
-                </DropdownMenuItem>
-              );
-            })}
+                  </DropdownMenuItem>
+                );
+              })}
           </DropdownMenuGroup>
           {dimensions.length > 0 && <DropdownMenuSeparator />}
           {dimensions.map((dimension, index) => {
@@ -405,6 +453,11 @@ function ListGroupMenu({ entity }: { entity: BrowserRoutedEntity }) {
               </DropdownMenuSubmenu>
             );
           })}
+          {membershipGuidance && (
+            <p className="max-w-72 px-2 py-1 text-xs text-muted-foreground">
+              {membershipGuidance}
+            </p>
+          )}
         </DropdownMenuContent>
       </DropdownMenu>
     </DisplayRow>

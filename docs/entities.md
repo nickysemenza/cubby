@@ -1826,7 +1826,7 @@ complete sortable-column list.
 `defaultOverride` replaces `createdAt` (or the first sort field), and
 `directionOverride` replaces the field-kind-based direction.
 Every `fields` entry is a `model.fields` key, a `model.derived` key, or a
-`related:<view>` count. A sort whose value is not its stored column (a
+`related:<view>` preview. A sort whose value is not its stored column (a
 vendor's live purchase count, a product's expected-quantity variance, a
 reference ordered by its effective record's name) is a `model.derived` key,
 so no repository resolves a sort by hand. `defineRepository` derives the kernel's
@@ -1838,7 +1838,33 @@ explicit text fields and related paths. The compiler then infers eligible enum,
 reference, boolean, and calendar-date fields. Generated choices carry their filter, no-value label,
 multivalue capability, ancestor levels, and supported date buckets. Unsupported
 SQL sources remain disabled with a reason; the kernel validates the same
-capabilities for every client.
+capabilities for every client. A field omitted from a read projection can still
+be a useful grouping dimension; output policy does not hide its menu choice.
+Deletion timestamps and duplicate path aliases stay out of the menu while their
+accepted keys remain valid. Derived expressions retain their own key identity,
+even when they have identical option lists.
+
+The list-field compiler also owns `listFields.presentation`: semantic labels,
+descriptions, entity targets, value types, cardinality and admitted sort, group
+and filter keys with unavailable reasons. Shared web columns and menus consume
+these facts rather than guessing semantics from storage shape. Relationship
+previews contain records; their existing sort follows the first chip in the
+view's declared order and carries that explanation separately. Sort controls offer supported hidden
+columns independently of column visibility.
+
+`display.value` declares a cell's semantic kind when it differs from its stored
+shape, including the target and cardinality of a structured record link. A
+presence filter still edits yes/no; it does not turn the linked cell into a
+boolean. The compiled filter label names its predicate separately from the cell
+label. Standard image columns retain their media semantics. Reference groups
+whose public title is computed read the existing canonical repository title SQL,
+prepared once through the list context, rather than requiring a stored title.
+
+Grouping menu eligibility is separate from accepted request keys. Internal
+fields and duplicate SQL values are unlisted, retaining existing grouped links
+and supplied views. Authored choices win; otherwise the choice matching its
+filter column wins. Derived aliases bind drill-down through the same compiled
+relationship path, including a stored reference's equivalent related preview.
 
 List requests and supplied views use `groupBy: [{ key, level?, bucket? }]`, with
 at most three unique keys in hierarchy order. Empty or omitted means ungrouped.
@@ -1921,6 +1947,11 @@ filter adapter, so that action is unavailable there. "Hide" is available only
 for a single root value with an exclusion filter; a flat exclusion cannot negate
 a multidimensional path conjunction. Native multidimensional leaf menus are
 disabled for the same reason, while labels retain ancestor context.
+
+Web calls this action "Exclude matching records": it removes whole records,
+including their occurrences in other groups. Collapse changes presentation only.
+Filters and "Filter to this" also select whole records; they do not trim the
+other memberships of a selected record.
 
 Complete matching selection uses `entity.selectionIds`, separately from list
 hydration. Its filters and nesting define the canonical population; bounded

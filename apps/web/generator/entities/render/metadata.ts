@@ -417,6 +417,7 @@ export const renderEntityMetadataArtifacts = (
                 ),
                 structuredSchemas: structuredSchemasForEntity(entity, entities),
                 listFields: {
+                  presentation: entity.listFields.presentation,
                   grouping: entity.listFields.grouping,
                   hierarchy: entity.listFields.hierarchy,
                   subtree: entity.listFields.subtree,

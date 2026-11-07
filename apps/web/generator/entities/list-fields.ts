@@ -4,10 +4,13 @@ import type {
   GeneratedGroupChoice,
   GeneratedInherit,
   GeneratedListScope,
+  GeneratedListFieldPresentation,
+  GeneratedListOperation,
 } from "@cubby/schemas/entity-projection-types";
 import {
   excludableFilterKind,
   filterExcludeField,
+  filterFieldLabel,
 } from "@cubby/schemas/filter-sentinel-fields";
 import { z } from "zod";
 import { humanize } from "@cubby/shared/text-case";
@@ -94,6 +97,10 @@ type InheritSource = GeneratedInherit<string>["from"][number];
 type CompiledInherit = GeneratedInherit<string>;
 
 export type CompiledEntityListFields = Readonly<{
+  /** One semantic vocabulary for column, group, sort and filter renderers. */
+  presentation: Readonly<
+    Record<string, GeneratedListFieldPresentation<string>>
+  >;
   derived: Readonly<Record<string, CompiledListField>>;
   /** `model.rows`, the row sets a `via` may start at. */
   rows: Readonly<Record<string, CompiledRowSet>>;
@@ -458,10 +465,7 @@ const compileVia = (
     terminal: resolved,
     many: many !== null,
     sort: reason("sort"),
-    group:
-      resolved.kind === "record" && resolved.titleColumn === null
-        ? `${current.inspector.singular} has no stored title to group by.`
-        : null,
+    group: null,
   };
 };
 
@@ -1115,7 +1119,9 @@ const compileGroupChoice = (
   const bound = derived[key];
   /**
    * The value filter on the same path: the field's own filter, or for a
-   * one-step reference, the filter on that foreign key.
+   * one-step reference, the filter on that foreign key. Derived aliases match
+   * their compiled path so a stored reference and its related preview share
+   * the same drill-down binding.
    */
   const filterOn = (value: GroupValue | null) => {
     const edge =
@@ -1130,14 +1136,28 @@ const compileGroupChoice = (
         .filter((column) => edge !== undefined && column.column === edge)
         .map((column) => column.key),
     ];
-    return descriptors.find(
-      (candidate) =>
+    return descriptors.find((candidate) => {
+      const alias = candidate.derived ? derived[candidate.derived] : undefined;
+      const samePath =
+        value !== null &&
+        (value.kind === "record" || value.kind === "field") &&
+        alias?.shape === "via" &&
+        alias.target === value.target &&
+        JSON.stringify(alias.steps) === JSON.stringify(value.steps) &&
+        (value.kind === "record"
+          ? alias.terminal.kind === "record"
+          : alias.terminal.kind === "field" &&
+            alias.terminal.column === value.column);
+      return (
         (candidate.kind === "multiselect" || candidate.kind === "idMulti") &&
-        (keys.includes(candidate.columnId) ||
+        (samePath ||
+          candidate.derived === key ||
+          keys.includes(candidate.columnId) ||
           (candidate.field !== null && keys.includes(candidate.field)) ||
           (candidate.stored?.columns.length === 1 &&
-            keys.includes(candidate.stored.columns[0]!))),
-    );
+            keys.includes(candidate.stored.columns[0]!)))
+      );
+    });
   };
   if (field === undefined && bound === undefined)
     throw new EntityDeclarationError(
@@ -1146,7 +1166,11 @@ const compileGroupChoice = (
   const label =
     field?.label ??
     filterOn(null)?.label ??
-    entity.relations.find((relation) => relation.key === key)?.label ??
+    entity.relations.find(
+      (relation) =>
+        relation.key === key ||
+        (bound?.shape === "via" && relation.key === bound.path),
+    )?.label ??
     (bound?.shape === "via"
       ? byKey.get(bound.target)?.inspector.singular
       : undefined) ??
@@ -1185,6 +1209,10 @@ const compileGroupChoice = (
     const descriptor = reason === null ? filterOn(value) : undefined;
     return {
       key,
+      listed:
+        entity.fieldModel.grouping.includes(key) ||
+        (field !== undefined && key !== "deletedAt") ||
+        (bound?.shape === "via" && bound.terminal.kind === "record"),
       label,
       noValueLabel: "Unassigned",
       multiple:
@@ -1252,10 +1280,6 @@ const compileGroupChoice = (
         null,
       );
     }
-    if (via.terminal.titleColumn === null)
-      throw new EntityDeclarationError(
-        `${where}: ${via.target} has no stored title.`,
-      );
     return choice(
       {
         kind: "record",
@@ -1329,7 +1353,263 @@ const compileGroupChoice = (
     );
   }
   throw new EntityDeclarationError(
-    `${where} is not an enum, text, reference or to-one related field.`,
+    `${where} is not an enum, text, reference or groupable related field.`,
+  );
+};
+
+// Derived SQL reads the choice key; identical option lists do not make two
+// derived expressions aliases of one another.
+const groupValueIdentity = (choice: CompiledGroupChoice): string =>
+  JSON.stringify(
+    choice.value?.kind === "derived"
+      ? { ...choice.value, key: choice.key }
+      : choice.value,
+  );
+
+/** Preserve accepted aliases while selecting one menu entry per SQL value. */
+const chooseGroupingMenuEntries = (
+  entity: CompiledEntity,
+  grouping: CompiledGroupChoice[],
+  derived: Readonly<Record<string, CompiledListField>>,
+): void => {
+  // Keep accepted keys for existing links and supplied views, but offer one
+  // choice per SQL value. Prefer authored choices, then the filter's own key.
+  const menuValues = new Map<string, number>();
+  for (const [index, choice] of grouping.entries()) {
+    if (!choice.listed) continue;
+    const value = derived[choice.key];
+    const identity =
+      choice.value !== null
+        ? groupValueIdentity(choice)
+        : JSON.stringify(
+            value?.shape === "via"
+              ? { steps: value.steps, terminal: value.terminal }
+              : { key: choice.key },
+          );
+    const previousIndex = menuValues.get(identity);
+    const previous =
+      previousIndex === undefined ? undefined : grouping[previousIndex];
+    if (previous === undefined) {
+      menuValues.set(identity, index);
+      continue;
+    }
+    const authored = entity.fieldModel.grouping;
+    const preferCurrent =
+      !authored.includes(previous.key) &&
+      (authored.includes(choice.key) ||
+        (choice.filter?.columnId === choice.key &&
+          previous.filter?.columnId !== previous.key));
+    if (preferCurrent) {
+      grouping[previousIndex!] = { ...previous, listed: false };
+      menuValues.set(identity, index);
+    } else {
+      grouping[index] = { ...choice, listed: false };
+    }
+  }
+};
+
+const presentationValueType = ({
+  field,
+  filter,
+  kind,
+  target,
+}: {
+  field: CompiledEntity["fieldModel"]["fields"][number] | undefined;
+  filter: FilterDescriptor | undefined;
+  kind: string | undefined;
+  target: string | null;
+}): GeneratedListFieldPresentation["valueType"] => {
+  if (field?.display.value) return field.display.value.kind;
+  if (field?.display.standard === "image") return "images";
+  if (target !== null) return "record";
+  if (
+    field?.display.format === "currency" ||
+    field?.display.format === "signedCurrency" ||
+    field?.control?.renderer === "money"
+  )
+    return "money";
+  if (
+    kind === "boolean" ||
+    (field === undefined &&
+      (filter?.kind === "boolean" || filter?.kind === "presence"))
+  )
+    return "boolean";
+  if (kind === "date" || kind === "timestamp" || filter?.range?.kind === "date")
+    return "date";
+  if (kind === "number" || filter?.range?.kind === "number")
+    return field?.display.format === "count" ||
+      field?.display.format === "arrayCount"
+      ? "count"
+      : "number";
+  if (
+    kind === "enum" ||
+    field?.display.valueOptions?.length ||
+    filter?.options?.length
+  )
+    return "choice";
+  return kind === "json" ? "structured" : "text";
+};
+
+const presentationCardinality = ({
+  field,
+  value,
+  group,
+  relation,
+  kind,
+}: {
+  field: CompiledEntity["fieldModel"]["fields"][number] | undefined;
+  value: CompiledListField | undefined;
+  group: CompiledGroupChoice | undefined;
+  relation: CompiledEntity["relations"][number] | undefined;
+  kind: string | undefined;
+}): GeneratedListFieldPresentation["cardinality"] =>
+  group?.multiple ||
+  field?.display.standard === "image" ||
+  field?.display.value?.kind === "images" ||
+  (field?.display.value?.kind === "record" && field.display.value.multiple) ||
+  field?.reference?.multiple ||
+  kind === "text-array" ||
+  (value?.shape === "via" && value.many) ||
+  relation?.cardinality === "many"
+    ? "many"
+    : "one";
+
+const presentationTarget = ({
+  field,
+  value,
+  relation,
+  filter,
+}: {
+  field: CompiledEntity["fieldModel"]["fields"][number] | undefined;
+  value: CompiledListField | undefined;
+  relation: CompiledEntity["relations"][number] | undefined;
+  filter: FilterDescriptor | undefined;
+}): string | null =>
+  (field?.display.value?.kind === "record"
+    ? field.display.value.entity
+    : null) ??
+  field?.reference?.entity ??
+  (value?.shape === "via" && value.terminal.kind === "record"
+    ? value.target
+    : null) ??
+  relation?.target ??
+  filter?.brandRef?.entity ??
+  null;
+
+const compileFieldPresentation = (
+  entity: CompiledEntity,
+  derived: Readonly<Record<string, CompiledListField>>,
+  grouping: readonly CompiledGroupChoice[],
+  descriptors: readonly FilterDescriptor[],
+  byKey: ReadonlyMap<string, CompiledEntity>,
+): CompiledEntityListFields["presentation"] => {
+  const menuGroup = (choice: CompiledGroupChoice | undefined) => {
+    if (!choice || choice.listed || choice.value === null) return choice;
+    return (
+      grouping.find(
+        (candidate) =>
+          candidate.listed &&
+          groupValueIdentity(candidate) === groupValueIdentity(choice),
+      ) ?? choice
+    );
+  };
+  const operation = (
+    key: string | undefined,
+    reason: string,
+    description: string | null = null,
+  ): GeneratedListOperation =>
+    key === undefined
+      ? { supported: false, reason }
+      : { supported: true, key, description };
+  const sorts: readonly string[] = entity.fieldModel.sort?.fields ?? [];
+  const keys = new Set([
+    ...entity.fieldModel.fields.map(({ key }) => key),
+    ...Object.keys(derived),
+    ...sorts,
+    ...descriptors.map(({ columnId }) => columnId),
+  ]);
+  return Object.fromEntries(
+    [...keys].map((key) => {
+      const field = entity.fieldModel.fields.find((field) => field.key === key);
+      const value = derived[key];
+      const group = menuGroup(grouping.find((choice) => choice.key === key));
+      const filter =
+        descriptors.find(
+          (candidate) =>
+            candidate.columnId === key ||
+            candidate.derived === key ||
+            candidate.field === key,
+        ) ??
+        descriptors.find(
+          (candidate) => candidate.columnId === group?.filter?.columnId,
+        );
+      const relation = entity.relations.find(
+        (relation) =>
+          key === `related:${entity.key}.${relation.key}` ||
+          (value?.shape === "via" && relation.key === value.path),
+      );
+      const relatedViewSort = key.startsWith("related:");
+      const target = presentationTarget({ field, value, relation, filter });
+      if (target !== null && !byKey.has(target))
+        throw new EntityDeclarationError(
+          `${entity.key}.${key}.display.value names unknown entity ${target}.`,
+        );
+      const kind =
+        field?.kind ??
+        (value?.shape === "value"
+          ? value.type
+          : value?.shape === "via" && value.terminal.kind === "field"
+            ? value.terminal.fieldKind
+            : undefined);
+      const valueType = presentationValueType({ field, filter, kind, target });
+      const presentation: GeneratedListFieldPresentation<string> = {
+        label:
+          (key === entity.inspector.titleField
+            ? `${entity.inspector.singular} name`
+            : undefined) ??
+          group?.label ??
+          field?.label ??
+          relation?.label ??
+          (filter?.columnId === key ? filterFieldLabel(filter) : undefined) ??
+          filter?.label ??
+          humanize(key),
+        description: field?.description ?? null,
+        target,
+        valueType,
+        cardinality: presentationCardinality({
+          field,
+          value,
+          group,
+          relation,
+          kind,
+        }),
+        sort: operation(
+          sorts.includes(key) ? key : undefined,
+          value?.sort ?? "Sorting is unavailable for this field.",
+          relatedViewSort
+            ? "Sorts by the first related record shown in the cell."
+            : null,
+        ),
+        group: operation(
+          group?.reason === null ? group.key : undefined,
+          group?.reason ?? "Grouping is unavailable for this field.",
+          group?.multiple
+            ? "Records may appear in several groups. Filters select whole records and retain their other memberships."
+            : null,
+        ),
+        filter: {
+          ...operation(
+            filter?.columnId,
+            "Filtering is unavailable for this field.",
+            filter?.schemaDescription ?? null,
+          ),
+          label: filter
+            ? filterFieldLabel(filter)
+            : (field?.label ?? humanize(key)),
+        },
+      };
+      return [key, presentation];
+    }),
   );
 };
 
@@ -1634,6 +1914,7 @@ export const compileListFields = (
         context,
       ),
     );
+    chooseGroupingMenuEntries(entity, grouping, derived);
     if (
       new Set(entity.inspector.list.metrics).size !==
       entity.inspector.list.metrics.length
@@ -1674,6 +1955,13 @@ export const compileListFields = (
     });
     validateSavedViewGrouping(entity, grouping, context);
     const listFields: CompiledEntityListFields = {
+      presentation: compileFieldPresentation(
+        entity,
+        derived,
+        grouping,
+        filterDescriptors,
+        byKey,
+      ),
       derived,
       rows,
       terms,

@@ -152,9 +152,14 @@ export function SectionHeader({
             </button>
           ) : null}
           {onHide ? (
-            <button type="button" onClick={onHide} className={ACTION_CLASS}>
+            <button
+              type="button"
+              onClick={onHide}
+              className={ACTION_CLASS}
+              title="Removes matching records from every group. Collapse this section to keep the records and totals unchanged."
+            >
               <EyeSlashIcon aria-hidden className="size-3.5" />
-              Hide
+              Exclude matching records
               <span className="sr-only">: {title}</span>
             </button>
           ) : null}

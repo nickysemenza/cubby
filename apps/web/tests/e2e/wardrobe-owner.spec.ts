@@ -204,7 +204,7 @@ test("wardrobe cards group at a category level and a header filters to that type
 });
 
 // Without the apparel family scope, so an uncategorized owned item shows.
-test("wardrobe cards exclude a clothing type, keep uncategorized items, and a header hides a section", async ({
+test("wardrobe cards exclude a clothing type, keep uncategorized items, and a header excludes matching records", async ({
   page,
 }) => {
   const name = `Wardrobe except ${Date.now()}`;
@@ -281,9 +281,9 @@ test("wardrobe cards exclude a clothing type, keep uncategorized items, and a he
   ).toBeVisible();
   expect(new URL(page.url()).searchParams.get("categoryExclude")).toBeTruthy();
 
-  // Hide keeps the grouping and excludes that section's value too.
+  // Excluding records keeps the grouping and excludes that section's value too.
   await tops.hover();
-  await tops.getByRole("button", { name: /^Hide/ }).click();
+  await tops.getByRole("button", { name: /^Exclude matching records/ }).click();
   await expect(sections).toHaveText([/^Apparel/, /^Unassigned/]);
   const url = new URL(page.url());
   expect(JSON.parse(url.searchParams.get("groupBy") ?? "null")).toEqual([

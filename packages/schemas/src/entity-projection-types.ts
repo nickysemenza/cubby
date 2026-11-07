@@ -292,8 +292,30 @@ type GroupOptions =
   | readonly { readonly value: string; readonly label: string }[]
   | null;
 
+/** Compiled operation admission; renderers never infer eligibility from a label. */
+export type GeneratedListOperation =
+  | {
+      readonly supported: true;
+      readonly key: string;
+      readonly description: string | null;
+    }
+  | { readonly supported: false; readonly reason: string };
+
+export type GeneratedListFieldPresentation<E extends string = Entity> = {
+  readonly label: string;
+  readonly description: string | null;
+  readonly target: E | null;
+  readonly valueType: NonNullable<DeclaredDisplay["value"]>["kind"];
+  readonly cardinality: "one" | "many";
+  readonly sort: GeneratedListOperation;
+  readonly group: GeneratedListOperation;
+  readonly filter: GeneratedListOperation & { readonly label: string };
+};
+
 export type GeneratedGroupChoice<E extends string = Entity> = {
   readonly key: string;
+  /** Menu eligibility is separate from accepting a stable saved-view key. */
+  readonly listed: boolean;
   readonly label: string;
   readonly noValueLabel: string;
   readonly reason: string | null;
@@ -307,7 +329,8 @@ export type GeneratedGroupChoice<E extends string = Entity> = {
         readonly kind: "record";
         readonly steps: readonly RelationshipPathStep[];
         readonly target: E;
-        readonly titleColumn: string;
+        /** Null reads the canonical repository title instead of a physical column. */
+        readonly titleColumn: string | null;
       }
     | {
         readonly kind: "field";

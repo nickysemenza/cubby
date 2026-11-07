@@ -1,4 +1,6 @@
 import type { Entity } from "@cubby/schemas/entity";
+import type { GeneratedListFieldPresentation } from "@cubby/schemas/entity-projection-types";
+import { filterFieldLabel } from "@cubby/schemas/filter-sentinel-fields";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { CURRENT_MEMBER_FILTER, humanize } from "@cubby/shared";
 import type { QueryClient } from "@tanstack/react-query";
@@ -30,9 +32,14 @@ import {
   isMultiFilterKind,
   nullableSentinelOptions,
 } from "./filters";
-import { entityMetadata, type EntityMetadataFor } from "./metadata";
+import {
+  entityMetadata,
+  listFieldPresentation,
+  type EntityMetadataFor,
+} from "./metadata";
 
 export interface FilterSpec extends FilterSpecCore {
+  presentation?: GeneratedListFieldPresentation;
   unsupportedReason?: string;
   group?: string;
   placeholder: string;
@@ -79,6 +86,11 @@ export const getEntityFilters = (
           ? wire.from.endsWith("From") && wire.to.endsWith("To")
           : descriptor.range.kind === "date");
       const spec: FilterSpec = {
+        presentation: listFieldPresentation(
+          queryClient,
+          entity,
+          descriptor.columnId,
+        ),
         columnId: descriptor.columnId,
         kind: descriptor.kind,
         placeholder: descriptor.placeholder,
@@ -238,24 +250,11 @@ const filterTypeForSpec = (
  * shares a label with the relation's picker.
  */
 export const filterSpecLabel = (
-  spec: Pick<FilterSpec, "label" | "placeholder" | "columnId" | "kind">,
-): string => {
-  if (spec.label) return spec.label;
-  // "related … id" names the relation's records; a bare "external id" keeps
-  // its "id".
-  const related = /^(Filter|Search)( by)? related\b/iu.test(spec.placeholder);
-  const noun = spec.placeholder
-    .replace(/^(Filter|Search)( by)?( related)?\s*/iu, "")
-    .replace(
-      related ? /\s*(id|presence)?\.\.\.$/iu : /\s*(presence)?\.\.\.$/iu,
-      "",
-    )
-    .trim();
-  if (!noun) return humanize(spec.columnId);
-  return spec.kind === "presence"
-    ? `Has ${noun.toLowerCase()}`
-    : noun.slice(0, 1).toUpperCase() + noun.slice(1);
-};
+  spec: Pick<
+    FilterSpec,
+    "label" | "placeholder" | "columnId" | "kind" | "presentation"
+  >,
+): string => spec.presentation?.filter.label ?? filterFieldLabel(spec);
 
 /**
  * Options for a picklist kind that declares none. The label already names
@@ -360,6 +359,7 @@ const specFilterConfig = (
   const reference = spec.referenceEntity;
   return {
     placeholder: spec.placeholder,
+    presentation: spec.presentation,
     ...(spec.label ? { label: spec.label } : {}),
     filterType: filterTypeForSpec(spec),
     kind: spec.kind,

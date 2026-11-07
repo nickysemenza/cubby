@@ -1,34 +1,53 @@
+import type { GeneratedListFieldPresentation } from "@cubby/schemas/entity-projection-types";
 import { ArrowDownIcon } from "@phosphor-icons/react/dist/csr/ArrowDown";
 import { ArrowUpIcon } from "@phosphor-icons/react/dist/csr/ArrowUp";
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 import type { RowData } from "@tanstack/react-table";
 import { cn } from "cn";
+import type { ReactNode } from "react";
 
 import { Row, Stack } from "~/ui/layout";
 import { Eyebrow } from "~/ui/text/eyebrow";
 
-import type {
-  CubbyColumn as Column,
-  CubbyTable as ITable,
-} from "./table-features";
+import { ColumnEntityMark, ListFieldTypeMark } from "./column-presentation";
+import type { CubbyTable as ITable } from "./table-features";
 import { mobileColumnLabel } from "./table-meta";
 
-/** The columns a phone may sort by — the same set the desktop headers expose. */
-export function sortableColumns<TItem extends RowData>(
+/** Sort eligibility is independent of whether the member shows the column. */
+export function sortableFields<TItem extends RowData>(
   table: ITable<TItem>,
-): Column<TItem, unknown>[] {
-  const visible = table
-    .getVisibleLeafColumns()
-    .filter((column) => column.getCanSort());
-  // A sort can outlive the column that set it (a saved view, a shared link, a
-  // hidden column). Append it rather than hiding it: the sheet has to be able
-  // to show — and undo — the sort the list is actually in.
-  const activeId = table.state.sorting[0]?.id;
-  if (!activeId || visible.some((column) => column.id === activeId)) {
-    return visible;
-  }
-  const active = table.getColumn(activeId);
-  return active ? [...visible, active] : visible;
+): {
+  id: string;
+  label: string;
+  presentation: GeneratedListFieldPresentation | undefined;
+  desc: boolean;
+}[] {
+  if (table.options.enableSorting === false) return [];
+  const columns = table.getAllLeafColumns();
+  const declared = table.options.meta?.sortFields;
+  if (declared && table.options.manualSorting)
+    return declared.map(({ key, presentation }) => {
+      const column = columns.find((column) => column.id === key);
+      return {
+        id: key,
+        label: presentation.label,
+        presentation,
+        desc: column
+          ? column.getFirstSortDir() === "desc"
+          : ["number", "money", "date", "count"].includes(
+              presentation.valueType,
+            ),
+      };
+    });
+  return columns
+    .filter((column) => column.getCanSort())
+    .map((column) => ({
+      id: column.id,
+      label:
+        column.columnDef.meta?.presentation?.label ?? mobileColumnLabel(column),
+      presentation: column.columnDef.meta?.presentation,
+      desc: column.getFirstSortDir() === "desc",
+    }));
 }
 
 /**
@@ -46,7 +65,7 @@ export function SortSection<TItem extends RowData>({
 }: {
   table: ITable<TItem>;
 }) {
-  const columns = sortableColumns(table);
+  const columns = sortableFields(table);
   if (columns.length === 0) return null;
 
   const [activeSort] = table.state.sorting;
@@ -62,7 +81,7 @@ export function SortSection<TItem extends RowData>({
         // Cleared sort is not "unsorted" — the list falls back to the
         // entity's own default order (see `buildSortsParams`), which is
         // exactly what "reset" should mean here.
-        detail="Newest first"
+        detail="List default order"
         selected={!activeSort}
         onSelect={() => table.setSorting([])}
       />
@@ -71,7 +90,23 @@ export function SortSection<TItem extends RowData>({
         return (
           <SortOption
             key={column.id}
-            label={mobileColumnLabel(column)}
+            label={column.label}
+            mark={
+              column.presentation?.target ? (
+                <ColumnEntityMark
+                  meta={{ presentation: column.presentation }}
+                />
+              ) : (
+                <ListFieldTypeMark
+                  valueType={column.presentation?.valueType ?? "text"}
+                />
+              )
+            }
+            detail={
+              column.presentation?.sort.supported
+                ? (column.presentation.sort.description ?? undefined)
+                : undefined
+            }
             selected={selected}
             direction={selected ? (activeDesc ? "desc" : "asc") : undefined}
             onSelect={() =>
@@ -81,9 +116,7 @@ export function SortSection<TItem extends RowData>({
                   // Re-tapping the current column flips it; a fresh column
                   // opens in whatever direction it reads best in (dates and
                   // money descend, names ascend).
-                  desc: selected
-                    ? !activeDesc
-                    : column.getFirstSortDir() === "desc",
+                  desc: selected ? !activeDesc : column.desc,
                 },
               ])
             }
@@ -101,12 +134,14 @@ export function SortSection<TItem extends RowData>({
  */
 function SortOption({
   label,
+  mark,
   detail,
   selected,
   direction,
   onSelect,
 }: {
   label: string;
+  mark?: ReactNode;
   detail?: string;
   selected: boolean;
   direction?: "asc" | "desc";
@@ -121,11 +156,13 @@ function SortOption({
       justify="between"
       onClick={onSelect}
       aria-pressed={selected}
+      aria-label={`Sort by ${label}`}
       className={cn(
         "min-h-12 w-full border-b border-[var(--border)] px-4 text-left transition-colors active:bg-muted/60",
         selected && "text-primary",
       )}
     >
+      {mark}
       {/* `as="span"`: a <button>'s content model is phrasing content, and the
           primitives default to <div>. */}
       <Stack as="span" gap="tight" className="min-w-0">

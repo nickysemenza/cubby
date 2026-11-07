@@ -44,7 +44,7 @@ import { EntityDisplayImagesProvider } from "~/entity/entity-media/entity-displa
 import { NotApplicableField } from "~/entity/fields/field-applicability";
 import { getEntityFilters } from "~/entity/filter-manifest";
 import { filterUrlKey } from "~/entity/filters";
-import { entityMetadata } from "~/entity/metadata";
+import { entityMetadata, listFieldPresentation } from "~/entity/metadata";
 import { referenceEntitySearch } from "~/entity/picker/reference-entity-search";
 import { ShortcodeProse } from "~/entity/prose/shortcode-prose";
 import { RecordFieldSuggestion } from "~/entity/suggestions/record-suggestions";
@@ -2074,6 +2074,11 @@ export function createEntityDisplayColumns<TRecord extends object>(
       const headerForm = columnHeaderFor(field);
       const add = <TValue,>(column: CubbyColumnDef<TRecord, TValue>) => {
         const meta = { ...column.meta };
+        meta.presentation = listFieldPresentation(
+          queryClient,
+          entity,
+          field.key,
+        );
         if (field.display.columnGroup)
           meta.columnGroup = field.display.columnGroup;
         meta.valueKind = isMoneyField(field)

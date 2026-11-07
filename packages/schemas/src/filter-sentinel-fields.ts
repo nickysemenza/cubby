@@ -9,6 +9,30 @@
  * all as its match key, an excluded value as its Exclude key — so the runtime
  * input schemas never see them.
  */
+import { humanize } from "@cubby/shared/text-case";
+
+/** One label rule for compiled field facts and ad-hoc filter adapters. */
+export const filterFieldLabel = (spec: {
+  label?: string | null;
+  placeholder: string;
+  columnId: string;
+  kind: string;
+}): string => {
+  if (spec.label) return spec.label;
+  const related = /^(Filter|Search)( by)? related\b/iu.test(spec.placeholder);
+  const noun = spec.placeholder
+    .replace(/^(Filter|Search)( by)?( related)?\s*/iu, "")
+    .replace(
+      related ? /\s*(id|presence)?\.\.\.$/iu : /\s*(presence)?\.\.\.$/iu,
+      "",
+    )
+    .trim();
+  if (!noun) return humanize(spec.columnId);
+  return spec.kind === "presence"
+    ? `Has ${noun.toLowerCase()}`
+    : noun.slice(0, 1).toUpperCase() + noun.slice(1);
+};
+
 export const FILTER_ANY = "__any__";
 export const FILTER_NONE = "__none__";
 export const FILTER_ALL = "__all__";

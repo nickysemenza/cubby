@@ -26,6 +26,7 @@ describe("entity cards", () => {
         renderCard={(item) => <div key={item}>{item}</div>}
         grouping={{
           choice: {
+            listed: true,
             key: "category",
             label: "Category",
             noValueLabel: "No category",

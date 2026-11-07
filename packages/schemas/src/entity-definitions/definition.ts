@@ -517,6 +517,29 @@ const buildMetadataSchemas = () => {
       itemsPath: orNull(nonEmptyString()),
       /** List cell formatter chosen by the shared column compiler. */
       format: orNull(z.enum(displayFormats)),
+      /** Cell semantics can differ from storage and from a presence filter. */
+      value: z
+        .discriminatedUnion("kind", [
+          z.strictObject({
+            kind: z.literal("record"),
+            entity: nonEmptyString(),
+            multiple: flag(false),
+          }),
+          z.strictObject({
+            kind: z.enum([
+              "text",
+              "choice",
+              "boolean",
+              "date",
+              "number",
+              "money",
+              "count",
+              "images",
+              "structured",
+            ]),
+          }),
+        ])
+        .optional(),
       /**
        * Semantic renderer ids for values whose presentation cannot be derived
        * from kind/reference/format alone. The manifest chooses the renderer;

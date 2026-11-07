@@ -129,18 +129,18 @@ function SortableColumn<TData extends RowData>({
         onCheckedChange={toggle}
       />
       <div className="flex min-w-0 items-center gap-1.5 text-xs">
-        <ColumnEntityMark
-          meta={column.columnDef.meta}
-          className="size-3.5 shrink-0"
-        />
         <span className="truncate">{columnLabel(column)}</span>
         {!shown && (
           <span className="shrink-0 text-2xs">
             {automatic ? "Empty in these rows" : "Hidden"}
           </span>
         )}
-        <span className="ml-auto shrink-0 text-2xs text-muted-foreground">
+        <span className="ml-auto flex shrink-0 items-center gap-1 text-2xs text-muted-foreground">
           {columnTypeLabel(column.columnDef.meta)}
+          <ColumnEntityMark
+            meta={column.columnDef.meta}
+            className="size-3.5 shrink-0"
+          />
         </span>
         {locked && (
           <span className="text-2xs text-muted-foreground">Fixed</span>
@@ -153,6 +153,30 @@ function SortableColumn<TData extends RowData>({
             aria-label={`Actions for ${columnLabel(column)}`}
           />
           <DropdownMenuContent align="end" className="w-52">
+            {column.columnDef.meta?.presentation &&
+              (column.columnDef.meta.presentation.description ||
+                !column.columnDef.meta.presentation.sort.supported ||
+                !column.columnDef.meta.presentation.group.supported ||
+                !column.columnDef.meta.presentation.filter.supported) && (
+                <Description className="px-2 py-1">
+                  {column.columnDef.meta.presentation.description}
+                  {!column.columnDef.meta.presentation.sort.supported && (
+                    <span className="block">
+                      {column.columnDef.meta.presentation.sort.reason}
+                    </span>
+                  )}
+                  {!column.columnDef.meta.presentation.group.supported && (
+                    <span className="block">
+                      {column.columnDef.meta.presentation.group.reason}
+                    </span>
+                  )}
+                  {!column.columnDef.meta.presentation.filter.supported && (
+                    <span className="block">
+                      {column.columnDef.meta.presentation.filter.reason}
+                    </span>
+                  )}
+                </Description>
+              )}
             <DropdownMenuGroup>
               <DropdownMenuLabel>
                 {column.columnDef.meta?.columnGroup

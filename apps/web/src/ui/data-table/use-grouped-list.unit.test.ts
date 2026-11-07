@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { groupSections, type GroupConfig } from "./use-grouped-list";
 
 const choice: GroupConfig["choice"] = {
+  listed: true,
   key: "type",
   label: "Type",
   noValueLabel: "Unassigned",

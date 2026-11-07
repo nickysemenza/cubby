@@ -316,6 +316,17 @@ Status, enum, category, and suggestion values share `Pill` geometry. Saved statu
 
 ### Records, forms, and tables
 
+List controls share the compiled list-field vocabulary. Columns lead with the
+visibility checkbox and field label; the canonical entity mark follows the
+right-aligned type label. Headers and record links retain leading marks. Group
+and Sort choices lead with the canonical entity or type mark. Group selection
+shows 1st, 2nd and 3rd explicitly; multivalue guidance explains whole-record
+filtering. Column actions disclose field descriptions and unavailable operations.
+Supported hidden fields remain available in Sort. The section action reads
+"Exclude matching records" and explains its effect on every group; Collapse
+closes only that section. Phone controls keep the base target size and grouped
+list layout.
+
 Pending Suggestion counts sit beside a record's identity as quiet, focusable
 badges that open the shared record review in a popover. Record details host
 that review as a section. Automatic decisions have their own RecordList and detail section, with

@@ -10,7 +10,7 @@ import { type RefObject, useMemo, useRef } from "react";
 
 import { getSortableFields } from "~/entity/entities";
 import { manifestFilterConfig } from "~/entity/filter-manifest";
-import { entityMetadata } from "~/entity/metadata";
+import { entityMetadata, listFieldPresentation } from "~/entity/metadata";
 import { RelatedPreviewCell } from "~/entity/table/related-preview-cell";
 import { relatedData } from "~/integrations/tanstack-query/generated/domains/relatedData.gen";
 import type { RuntimeFilterOptions } from "~/ui/combobox/filter-option-types";
@@ -33,6 +33,7 @@ export interface RelatedPreviewState {
 
 interface RelatedPreviewColumnMeta {
   headerEntity: NonNullable<CubbyColumnMeta["headerEntity"]>;
+  presentation?: CubbyColumnMeta["presentation"];
   columnGroup?: string;
   filterConfig?: FilterConfig;
   mobile: MobileColumnMeta;
@@ -83,6 +84,7 @@ export function useRelatedPreviewColumnDefs<TData extends { id: string }>({
           : undefined;
         const meta: RelatedPreviewColumnMeta = {
           headerEntity: view.target,
+          presentation: listFieldPresentation(queryClient, entity, columnId),
           columnGroup: view.columnGroup,
           mobile: { slot: "meta", priority: 80 },
         };

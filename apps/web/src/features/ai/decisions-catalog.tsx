@@ -33,6 +33,7 @@ const decisionScope = (row: DecisionCatalogRow) =>
 
 const ENTITY_CHOICE: GroupConfig["choice"] = {
   key: "entity",
+  listed: true,
   multiple: false,
   dateKind: null,
   buckets: [],

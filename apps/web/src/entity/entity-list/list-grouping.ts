@@ -19,8 +19,10 @@ export const PIVOT_VIEW_ID = "pivot";
 
 /** Two distinct groupable choices make a cross-tab; mirrors the generator. */
 export const pivotAvailable = (
-  grouping: readonly { reason: string | null }[],
-) => grouping.filter(({ reason }) => reason === null).length >= 2;
+  grouping: readonly { reason: string | null; listed: boolean }[],
+) =>
+  grouping.filter(({ reason, listed }) => listed && reason === null).length >=
+  2;
 
 const shareSearchSchema = z.object({
   share: z.enum(PIVOT_SHARES).optional().catch(undefined),

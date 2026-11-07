@@ -1005,6 +1005,7 @@ export const groupSql = (
   derived: AnyDerivedSql,
   table: PgTable,
   context: ListContext,
+  recordTitles: ReadonlyMap<Entity, SQL> = new Map(),
 ): ListGroupSql => {
   const choices: readonly GeneratedGroupChoice[] =
     generatedEntityListFields[entity].grouping;
@@ -1033,6 +1034,16 @@ export const groupSql = (
     );
   switch (value.kind) {
     case "record": {
+      const recordLabel = (id: SQL, stored: (column: string) => SQL): SQL => {
+        if (value.titleColumn !== null) return stored(value.titleColumn);
+        const title = recordTitles.get(value.target);
+        const targetTable = entityManifest[value.target].dbTable;
+        if (!title || !targetTable)
+          throw new Error(
+            `${value.target} canonical group title was not prepared`,
+          );
+        return sql`(SELECT ${title} FROM ${sql.identifier(targetTable)} "__list_record" WHERE "__list_record"."id" = ${id})`;
+      };
       if (choice.multiple) {
         const traversal = compileTraversal(entity, value.steps, "lg", {
           to: value.target,
@@ -1058,14 +1069,17 @@ export const groupSql = (
           label: sql`null::text`,
           order: ["label", "key"],
           subtree: null,
-          members: sql`SELECT DISTINCT ${at("shortcode")}::text AS "key", ${at(value.titleColumn)}::text AS "label", ${level === undefined ? sql`false` : sql`${hierarchyLevelSql(value.target, leafId)} > ${level}::int`} AS "subtree" FROM ${sql.identifier(first.relation ?? first.table)} ${sql.raw(first.alias)} ${renderJoins({ hops: rest })} WHERE (${first.condition})${first.softDelete ? sql` AND ${isNull(sql`${sql.raw(first.alias)}."deletedAt"`)}` : sql``}`,
+          members: sql`SELECT DISTINCT ${at("shortcode")}::text AS "key", ${recordLabel(id, at)}::text AS "label", ${level === undefined ? sql`false` : sql`${hierarchyLevelSql(value.target, leafId)} > ${level}::int`} AS "subtree" FROM ${sql.identifier(first.relation ?? first.table)} ${sql.raw(first.alias)} ${renderJoins({ hops: rest })} WHERE (${first.condition})${first.softDelete ? sql` AND ${isNull(sql`${sql.raw(first.alias)}."deletedAt"`)}` : sql``}`,
         };
       }
       if (level === undefined)
         return {
           choice,
           key: relatedColumnSql(entity, value, table, "shortcode"),
-          label: relatedColumnSql(entity, value, table, value.titleColumn),
+          label: recordLabel(
+            relatedColumnSql(entity, value, table, "id"),
+            (column) => relatedColumnSql(entity, value, table, column),
+          ),
           order: ["label", "key"],
           subtree: null,
         };
@@ -1079,7 +1093,7 @@ export const groupSql = (
       return {
         choice,
         key: column("shortcode"),
-        label: column(value.titleColumn),
+        label: recordLabel(ancestor, column),
         order: ["label", "key"],
         subtree: sql`${hierarchyLevelSql(value.target, id)} > ${level}::int`,
       };

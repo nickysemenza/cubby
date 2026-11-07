@@ -1701,6 +1701,7 @@ Rules:
             listHidden: true,
             labelPath: "food.foodInfo.description",
             renderer: { list: "usda-food-link" },
+            value: { kind: "record", entity: "usda-food" },
           },
           provenance: {
             kind: "derived",

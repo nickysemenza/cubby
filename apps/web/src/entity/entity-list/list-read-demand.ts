@@ -9,23 +9,12 @@ export const DEFAULT_LIST_COLUMN_VISIBILITY = {
   updatedAt: false,
 } as const;
 
-/** Preloads and mounted tables expose explicitly sorted audit columns alike. */
+/** Preloads and mounted tables preserve the same member-owned visibility. */
 export const listReadVisibility = (
   visibility: Readonly<Record<string, boolean>>,
-  sortedFields: readonly string[],
-  defaultSort: string,
 ) => ({
   ...DEFAULT_LIST_COLUMN_VISIBILITY,
   ...visibility,
-  ...Object.fromEntries(
-    sortedFields
-      .filter(
-        (key) =>
-          (key === "createdAt" || key === "updatedAt") &&
-          !(sortedFields.length === 1 && key === defaultSort),
-      )
-      .map((key) => [key, true]),
-  ),
 });
 
 /** Search alone keeps relevance paging; other filters need exact membership counts. */

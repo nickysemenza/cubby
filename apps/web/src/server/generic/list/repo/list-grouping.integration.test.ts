@@ -28,6 +28,7 @@ import { withListGroupBy } from "~/server/generic/list/repo/list";
 import {
   createInventoryFixture,
   createLocationFixture,
+  createPlantFixture,
   createProductFixture,
   listProductsFixture,
   makeExpenseInput,
@@ -654,7 +655,19 @@ describe("expanded grouped list memberships", () => {
   });
 
   it("expands multiple references in SQL and preserves unassigned records", async () => {
-    const first = await product("Reference memberships", null);
+    const plant = await createPlantFixture(
+      ctx.db,
+      { name: "Grouping herb" },
+      ctx.actor,
+    );
+    const first = await createProductFixture(
+      ctx.db,
+      makeProductInput({
+        name: "Reference memberships",
+        growsPlantId: plant.id,
+      }),
+      ctx.actor,
+    );
     const unassigned = await product("Unassigned reference", null);
     const alpha = await location("Reference alpha", "box");
     const beta = await location("Reference beta", "box");
@@ -683,6 +696,20 @@ describe("expanded grouped list memberships", () => {
       { id: first.id, path: [alpha.id] },
       { id: first.id, path: [beta.id] },
       { id: unassigned.id, path: [FILTER_NONE] },
+    ]);
+    // Computed public titles use the canonical repository label, not a new
+    // stored-title requirement or the root Product's label.
+    const byPlant = await executeEntity(kernel(), {
+      action: "list",
+      entity: "product",
+      filters: { ids: [first.id, unassigned.id] },
+      groupBy: [{ key: "growsPlant" }],
+      pagination: { pageIndex: 0, pageSize: 10 },
+    });
+    if (byPlant.action !== "list") throw new Error("expected list");
+    expect(groups(byPlant.meta)).toMatchObject([
+      { key: plant.id, label: "Grouping herb", count: 1 },
+      { key: FILTER_NONE, count: 1 },
     ]);
   });
 

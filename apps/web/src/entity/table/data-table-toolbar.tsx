@@ -16,6 +16,10 @@ import { createPortal } from "react-dom";
 import { viewsForEntity } from "~/entity/model/view-manifest";
 import { usePageWorkbenchTarget } from "~/entity/page/page";
 import { defaultSortFor } from "~/entity/sortable-fields";
+import {
+  ColumnEntityMark,
+  ListFieldTypeMark,
+} from "~/ui/data-table/column-presentation";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Row, Toolbar } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
@@ -35,10 +39,9 @@ import {
 import { isTableLayoutCustomized } from "../../ui/data-table/column-layout";
 import { DataTableViewOptions } from "../../ui/data-table/data-table-view-options";
 import type { FilterSheetSwitch } from "../../ui/data-table/filter-bar";
-import { sortableColumns } from "../../ui/data-table/mobile-sort-sheet";
+import { sortableFields } from "../../ui/data-table/mobile-sort-sheet";
 import type { CubbyTable as Table } from "../../ui/data-table/table-features";
 import TableLayoutCustomizer from "../../ui/data-table/table-layout-customizer";
-import { mobileColumnLabel } from "../../ui/data-table/table-meta";
 import { SavedViewTabs, TableSavedViewsMenuItems } from "./data-table-views";
 import {
   DisplayMenu,
@@ -165,12 +168,12 @@ function ActionsMenu<TData extends RowData>({
  * sort falls back to the entity's declared default order.
  */
 function SortMenu<TData extends RowData>({ table }: { table: Table<TData> }) {
-  const columns = sortableColumns(table);
+  const columns = sortableFields(table);
   if (columns.length === 0) return null;
   const [active] = table.state.sorting;
   const activeColumn = columns.find((column) => column.id === active?.id);
-  const label = activeColumn ? mobileColumnLabel(activeColumn) : "Default";
-  const date = activeColumn?.columnDef.meta?.valueKind === "date";
+  const label = activeColumn?.label ?? "Default";
+  const date = activeColumn?.presentation?.valueType === "date";
   const OrderIcon = active?.desc ? SortDescendingIcon : SortAscendingIcon;
   return (
     <DropdownMenu>
@@ -209,19 +212,35 @@ function SortMenu<TData extends RowData>({ table }: { table: Table<TData> }) {
             return (
               <DropdownMenuItem
                 key={column.id}
+                title={column.presentation?.description ?? undefined}
                 aria-current={current ? "true" : undefined}
                 onClick={() =>
                   table.setSorting([
                     {
                       id: column.id,
-                      desc: current
-                        ? active.desc
-                        : column.getFirstSortDir() === "desc",
+                      desc: current ? active.desc : column.desc,
                     },
                   ])
                 }
               >
-                {mobileColumnLabel(column)}
+                {column.presentation?.target ? (
+                  <ColumnEntityMark
+                    meta={{ presentation: column.presentation }}
+                  />
+                ) : (
+                  <ListFieldTypeMark
+                    valueType={column.presentation?.valueType ?? "text"}
+                  />
+                )}
+                <span className="flex min-w-0 flex-col">
+                  <span>{column.label}</span>
+                  {column.presentation?.sort.supported &&
+                    column.presentation.sort.description && (
+                      <span className="text-xs text-muted-foreground">
+                        {column.presentation.sort.description}
+                      </span>
+                    )}
+                </span>
                 {current && <CheckIcon className="ml-auto size-3.5" />}
               </DropdownMenuItem>
             );
@@ -357,7 +376,7 @@ function QueryTierFieldset<TData extends RowData>({
     isTableLayoutCustomized(table.state, table.options.meta?.defaultLayout) ||
     table.state.sorting.some((sort) => sort.id !== defaultSort) ||
     Boolean(table.options.meta?.grouping?.active);
-  const hasSort = sortableColumns(table).length > 0;
+  const hasSort = sortableFields(table).length > 0;
   // A phone's Filter sheet already carries sort and columns; Display keeps layout
   // and grouping there, and is absent when the list offers neither.
   const displaySections = listQuery?.displaySections ?? ownSections;
