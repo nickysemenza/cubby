@@ -86,6 +86,7 @@ import {
   entityDisplayImagePresenceSql,
   loadDisplayImageSources,
   resolveEntityDisplayImageChain,
+  resolveEntityDisplayMedia,
   resolvePublicEntityDisplayImages,
   resolveEntityDisplayImages,
   resolveEntityAttachments,
@@ -1452,6 +1453,30 @@ describe("entity display image resolver", () => {
       );
       expect(rows[1]?.displayImages).toEqual([expectedDisplayImage(photo)]);
       expect(rows[2]?.displayImages).toEqual([]);
+      const parent = await createRepoEntity(ctx, "task", {
+        name: "Synthetic purchased-photo Task",
+        projectId: inherited.shortcode,
+        trade: "other",
+      });
+      const child = await createRepoEntity(ctx, "task", {
+        name: "Synthetic inherited purchased-photo Task",
+        parentTaskId: parent.output.id,
+        trade: "other",
+      });
+      for (const task of [parent, child]) {
+        const ref = { entityKind: "task", entityId: task.entityId } as const;
+        for (const companion of [undefined, inherited, owner, unrelated]) {
+          const media = await resolveEntityDisplayMedia(ctx.db, [
+            ref,
+            ...(companion
+              ? [{ entityKind: "project" as const, entityId: companion.id }]
+              : []),
+          ]);
+          expect(
+            media.displayImages.get(entityRefKey("task", task.entityId)),
+          ).toEqual([expectedDisplayImage(photo)]);
+        }
+      }
     });
   });
 

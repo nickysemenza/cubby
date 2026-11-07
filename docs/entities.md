@@ -1255,6 +1255,10 @@ Identical expanded paths run only at their earliest priority while traversal
 continues through every declared fallback. Purchased-Product paths share one
 effective Project/Product pair per query, so repeat purchases do not enumerate
 the same gallery again. Product and Vendor source ordering stays authoritative.
+The expense connector's Project scope comes from those compiled path prefixes,
+including inherited Task Projects. Its prefilter uses that reachable set;
+the canonical household fallback keeps its existing wider candidates.
+Adding unrelated batch companions cannot change a record's images.
 Source transaction records reuse the accepted-settlement relation to borrow the
 linked FinancialTransaction’s canonical images, including Purchase and Vendor
 fallbacks. When those yield no image, a unique supported merchant inference

@@ -12,6 +12,8 @@ type AiGatewayBinding = NonNullable<ReturnType<typeof getAiGateway>>;
 // Vitest runs with NODE_ENV=test; a CI runner's own `CI` would otherwise
 // change the expected `environment` between a laptop and GitHub.
 beforeEach(async () => {
+  // Shared unit workers may have loaded the environment before these stubs.
+  vi.resetModules();
   vi.stubEnv("CI", "");
   vi.stubEnv("AI_GATEWAY_API_KEY", "synthetic-gateway-token");
   ({ setCfEnv } = await import("~/server/cf-env"));
