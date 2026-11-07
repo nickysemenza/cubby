@@ -101,13 +101,13 @@ export function rebaseMailboxPage({
       !restoreScopedQuery &&
       before &&
       after &&
-      current &&
-      before.query === current.query &&
       after.query === before.query &&
-      (current.completed || current.pageToken !== before.pageToken)
+      (!current ||
+        (before.query === current.query &&
+          (current.completed || current.pageToken !== before.pageToken)))
     ) {
       // Every frozen message was handled before rebasing. Preserve the shared
-      // position without inferring token order or crediting this page twice.
+      // position without restoring a pruned search or crediting this page twice.
       const { scopedKey: _settledKey, ...settled } = page;
       return { ...settled, startCoverage: coverage, nextCoverage: coverage };
     }

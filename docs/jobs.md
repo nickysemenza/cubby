@@ -146,9 +146,12 @@ When a frozen page is retried after another pass, its checkpoint preserves the
 latest unrelated searches and history. A stopped member-controlled query pruned
 by a later pass can be restored from that Run's frozen scope. An unattended
 targeted page whose messages are all handled may settle against a different
-partial position for the same query and baseline, preserving current coverage
-and adding no shared counts. Opaque tokens establish no order; a reset position
-can enumerate that range again through idempotent ingestion. The Run completes
+partial position for the same query and baseline, or after that search is pruned,
+preserving current coverage and adding no shared counts. A pruned search stays
+absent; settling the handled page does not restore or complete it. A continuation
+carries only unchanged searches still present in current coverage.
+Opaque tokens establish no order; a reset position can enumerate that range again
+through idempotent ingestion. The Run completes
 its one page, not the whole query. Targeted pages carry no history events, so
 history recovery still requires its numeric coverage proof. A controlled page,
 changed query or baseline, and an identical token with rewritten metadata still
