@@ -1483,8 +1483,13 @@ client visits the record. Fresh eligible backlog applies through the same audite
 transaction as new proposals; stale backlog is reevaluated through normal refresh.
 Saved-record list and detail questions opt into canonical background evaluation
 with `savedRecord`; the server prepares evidence from the saved entity rather
-than trusting the client's displayed basis. Interactive form predictions remain
-inactive and never schedule automatic writes, even when editing a saved record.
+than trusting the client's displayed basis. A finite request shares one canonical
+record read per entity for the union of its saved questions' context keys, using
+the system actor. Each field still derives its own basis, resolution evidence,
+audit identity and fingerprint. Discovery and execution always re-read fresh
+inputs. A failed union retries narrow reads so one question cannot hide another's
+raw preparation error. Interactive form predictions remain inactive and never
+schedule automatic writes, even when editing a saved record.
 Admission deferrals keep interactive answers available; the next live question
 retries canonical scheduling. Live scheduling waits for activation to match the
 executable policy, just as recovery does.
