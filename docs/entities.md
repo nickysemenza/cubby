@@ -2761,6 +2761,16 @@ and edits still use canonical entity kinds and ids; occurrence keys distinguish
 Purchase originals, dated refunds, and Planting milestones in layout and day
 membership. Garden feed UIDs are unchanged.
 
+The range hydrates Meals, Tasks and standalone Expenses through selected-field
+scaffold reads derived from their raw schemas. Request only the values used by
+calendar geometry, summaries and source envelopes; dependency collections,
+subtask counts and per-source media hydration do not belong in this read.
+Meals reuse the already selected IDs rather than repeating the date query.
+Resolve canonical images once for the combined range, concurrently with the
+independent spending-context read, then assemble the public source envelopes.
+These internal projections preserve the full range response, including daily
+nutrition totals, image lists, assignment controls and provenance.
+
 Calendar pills show explicitly assigned Projects (excluding inherited defaults)
 and spending beneficiary LedgerParty names, including the contributing lines
 of Purchase occurrences.

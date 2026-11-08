@@ -33,6 +33,7 @@ import {
   type MealType,
   mealTypeRank,
 } from "@cubby/schemas/meal-classification";
+import { rawMealOutput } from "@cubby/schemas/meal-raw-read";
 import type { NutritionTotals } from "@cubby/schemas/nutrition";
 import {
   type RawCalendarScheduleOut,
@@ -68,10 +69,7 @@ import {
   plantingScaffold,
   readPlantingById,
 } from "~/server/domains/garden/repo/garden";
-import {
-  mealScaffold,
-  getMealsByDateRange,
-} from "~/server/domains/meal/repo/crud";
+import { mealScaffold } from "~/server/domains/meal/repo/crud";
 import { projectScaffold } from "~/server/domains/project/repo/lookup";
 import { loadProjectDateWindows } from "~/server/domains/project/repo/subtree";
 // Purchase field reads below resolve through the read ports this scaffold
@@ -152,6 +150,42 @@ const calendarSourceWhere = async (
   return sql`${sourceTables[kind].id} IN ${ids}`;
 };
 
+// Calendar hydration requests only the fields used below. Full entity reads
+// also load media and relation collections that the range never consumes.
+const calendarMealRead = rawMealOutput.pick({
+  id: true,
+  name: true,
+  date: true,
+  mealType: true,
+  mealKind: true,
+  sortOrder: true,
+  recipeNames: true,
+  totals: true,
+  dataQuality: true,
+});
+const calendarTaskRead = rawTaskOut.pick({
+  id: true,
+  name: true,
+  due: true,
+  status: true,
+  trade: true,
+  fieldResolutions: true,
+  projectName: true,
+  subjectProductName: true,
+});
+const calendarExpenseRead = rawExpenseOut.pick({
+  id: true,
+  name: true,
+  date: true,
+  future: true,
+  cost: true,
+  trade: true,
+  vendor: true,
+  fieldResolutions: true,
+  projectName: true,
+  productName: true,
+});
+
 const loadCalendarMeals = async (
   db: Database,
   input: CalendarRangeInput,
@@ -175,18 +209,15 @@ const loadCalendarMeals = async (
   const ids = await (page
     ? query.limit(page.limit).offset(page.offset)
     : query);
-  const rows = ids.length
-    ? await getMealsByDateRange(
-        db,
-        input.startDate,
-        endInclusive,
-        inArray(
-          meal.id,
-          ids.map((row) => row.id),
-        ),
-      )
-    : [];
-  return { rows, hasMore: page !== undefined && ids.length === page.limit };
+  const read = await mealScaffold.getByIds(
+    db,
+    ids.map((row) => row.id),
+    Object.keys(calendarMealRead.shape),
+  );
+  return {
+    rows: read.data.map((row) => calendarMealRead.parse(row)),
+    hasMore: page !== undefined && ids.length === page.limit,
+  };
 };
 
 const loadCalendarTasks = async (
@@ -216,9 +247,10 @@ const loadCalendarTasks = async (
   const read = await taskScaffold.getByIds(
     db,
     ids.map((row) => row.id),
+    Object.keys(calendarTaskRead.shape),
   );
   return {
-    rows: read.data.map((row) => rawTaskOut.parse(row)),
+    rows: read.data.map((row) => calendarTaskRead.parse(row)),
     hasMore: page !== undefined && ids.length === page.limit,
   };
 };
@@ -247,8 +279,9 @@ const loadCalendarExpenses = async (
   const read = await expenseScaffold.getByIds(
     db,
     ids.map((row) => row.id),
+    Object.keys(calendarExpenseRead.shape),
   );
-  return read.data.map((row) => rawExpenseOut.parse(row));
+  return read.data.map((row) => calendarExpenseRead.parse(row));
 };
 
 const loadCalendarPurchaseItems = async (
@@ -337,10 +370,7 @@ const mapMealItems = async (
     endDateExclusive: shiftPlainDate(meal[calendarSources.meal.dates[0]], 1),
     interaction: "move" as const,
     sortOrder: meal.sortOrder,
-    source: rawCalendarMealSource.parse({
-      ...meal,
-      recipeNames: meal.recipes.map((recipe) => recipe.recipe.name),
-    }),
+    source: rawCalendarMealSource.parse(meal),
     displayImages: [],
     mealTotals: meal.totals,
   }));
@@ -577,26 +607,32 @@ async function getCalendarItems(
       ),
     ),
   ];
-  const spendingRows = spendingLineCodes.length
-    ? await getDb(db)
-        .select({
-          shortcode: expense.shortcode,
-          name: expense.name,
-          expenseId: expense.id,
-          projectName: project.name,
-        })
-        .from(expense)
-        .leftJoin(
-          project,
-          and(eq(project.id, expense.projectId), notDeleted(project)),
-        )
-        .where(
-          and(
-            inArray(expense.shortcode, spendingLineCodes),
-            notDeleted(expense),
-          ),
-        )
-    : [];
+  const [spendingRows, covers] = await Promise.all([
+    spendingLineCodes.length
+      ? getDb(db)
+          .select({
+            shortcode: expense.shortcode,
+            name: expense.name,
+            expenseId: expense.id,
+            projectName: project.name,
+          })
+          .from(expense)
+          .leftJoin(
+            project,
+            and(eq(project.id, expense.projectId), notDeleted(project)),
+          )
+          .where(
+            and(
+              inArray(expense.shortcode, spendingLineCodes),
+              notDeleted(expense),
+            ),
+          )
+      : [],
+    resolvePublicEntityDisplayImageLists(
+      db,
+      items.map((item) => ({ entityKind: item.kind, entityId: item.id })),
+    ),
+  ]);
   const spendingByLine = new Map<string, typeof spendingRows>();
   for (const row of spendingRows) {
     const rows = spendingByLine.get(row.shortcode) ?? [];
@@ -606,10 +642,6 @@ async function getCalendarItems(
   type SpendingParty = NonNullable<
     Extract<CalendarItem, { kind: "expense" }>["spendingContext"]
   >["parties"][number];
-  const covers = await resolvePublicEntityDisplayImageLists(
-    db,
-    items.map((item) => ({ entityKind: item.kind, entityId: item.id })),
-  );
   const sourceSchemas = {
     meal: calendarMealSource,
     task: calendarTaskSource,
