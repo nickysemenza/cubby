@@ -41,7 +41,14 @@ import { TruncatedList } from "~/ui/text/truncated-list";
 import { useStableIds } from "../../entity/list-columns/stable-ids";
 import { defineListOverride } from "../../entity/list-columns/types";
 
-type IngredientProduct = IngredientListItem["product"][number];
+type IngredientProduct = NonNullable<
+  IngredientListItem["productSummaries"]
+>[number];
+
+/** Selected rosters use summaries; complete reads retain their Product records. */
+const ingredientProducts = (
+  ingredient: IngredientListItem,
+): IngredientProduct[] => ingredient.productSummaries ?? ingredient.product;
 
 const columnHelper = createCubbyColumnHelper<IngredientListItem>();
 
@@ -143,7 +150,7 @@ export const ingredientListOverride = defineListOverride<
     });
     const getMappings = useCallback(
       (ingredient: IngredientListItem) =>
-        ingredient.product.flatMap((product) =>
+        ingredientProducts(ingredient).flatMap((product) =>
           getAllUnitMappingsFromProduct({
             ...product,
             price: fieldValueOf(product.fields.price),
@@ -182,23 +189,26 @@ export const ingredientListOverride = defineListOverride<
             }),
           );
           add(
-            columnHelper.accessor("product", {
-              id: "product",
-              header: "Product",
-              meta: {
-                columnGroup: "Catalog",
-                provenance: relationshipFieldProvenance(
-                  queryClient,
-                  "ingredient",
-                  "products",
+            columnHelper.accessor(
+              (ingredient) => ingredientProducts(ingredient),
+              {
+                id: "product",
+                header: "Product",
+                meta: {
+                  columnGroup: "Catalog",
+                  provenance: relationshipFieldProvenance(
+                    queryClient,
+                    "ingredient",
+                    "products",
+                  ),
+                  className: "w-72 overflow-hidden",
+                  mobile: { slot: "subtitle", priority: 10 },
+                },
+                cell: (info) => (
+                  <ProductPillsCell products={info.getValue() ?? []} />
                 ),
-                className: "w-72 overflow-hidden",
-                mobile: { slot: "subtitle", priority: 10 },
               },
-              cell: (info) => (
-                <ProductPillsCell products={info.getValue() ?? []} />
-              ),
-            }),
+            ),
           );
         }),
       [queryClient],
@@ -237,7 +247,10 @@ function IngredientFoodHydration({
   children: ReactNode;
 }) {
   const productIds = useMemo(
-    () => data.flatMap((ingredient) => ingredient.product.map((p) => p.id)),
+    () =>
+      data.flatMap((ingredient) =>
+        ingredientProducts(ingredient).map((p) => p.id),
+      ),
     [data],
   );
   const stableIds = useStableIds(productIds);

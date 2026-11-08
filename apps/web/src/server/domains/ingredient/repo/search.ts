@@ -34,6 +34,7 @@ import {
 import type { PgTable } from "drizzle-orm/pg-core";
 import { QueryBuilder } from "drizzle-orm/pg-core";
 import { groupBy } from "es-toolkit";
+import type { z } from "zod";
 
 import { ingredientRepositoryReadSchema } from "~/entity/generated/entity-schema-bindings.ingredient.gen";
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -376,10 +377,14 @@ const ingredientIdsWithCompleteProducts = qb
     ),
   );
 
-/** Each ingredient's live products, read through the Product scaffold. */
-const loadIngredientProducts = async (
+const ingredientProductSummarySchema =
+  rawIngredientList.shape.productSummaries.unwrap().element;
+
+/** Each ingredient's live products, read through the requested Product scaffold projection. */
+const loadIngredientProducts = async <S extends z.ZodObject>(
   db: Database | DrizzleTransaction,
   ids: readonly string[],
+  schema: S,
 ) => {
   // The kernel registry imports every repository. Costing needs only Product;
   // retain lazy loading here to avoid the Ingredient/Product initialization cycle.
@@ -404,13 +409,13 @@ const loadIngredientProducts = async (
   const { data } = await productScaffold.get(
     db,
     links.map((link) => link.shortcode),
-    Object.keys(rawProductWithMappings.shape),
+    Object.keys(schema.shape),
     undefined,
     { includeFieldReads: false },
   );
   const byCode = new Map(
     data.map((row) => {
-      const record = rawProductWithMappings.parse(row);
+      const record = schema.parse(row);
       return [record.id, record] as const;
     }),
   );
@@ -539,8 +544,30 @@ export const ingredientScaffold = listScaffold("ingredient", ingredient, {
     media: true,
     bindings: (bind) => {
       const products = bind.ids(({ db, ids }) =>
-        loadIngredientProducts(db, ids),
+        loadIngredientProducts(db, ids, rawProductWithMappings),
       );
+      const summaries = bind.ids(async (page) => {
+        const projection = page.projection;
+        // Complete Product demand already covers every conversion input.
+        if (
+          !projection ||
+          projection.includes("product") ||
+          projection.includes("nutritionProduct")
+        ) {
+          const loaded = await products.load(page);
+          return new Map(
+            [...loaded].map(([id, rows]) => [
+              id,
+              rows.map((row) => ingredientProductSummarySchema.parse(row)),
+            ]),
+          );
+        }
+        return loadIngredientProducts(
+          page.db,
+          page.ids,
+          ingredientProductSummarySchema,
+        );
+      });
       const foods = bind.ids(async (page) => {
         const loaded = await products.load(page);
         // A read without the kernel's USDA client (a script) reads no foods.
@@ -567,6 +594,11 @@ export const ingredientScaffold = listScaffold("ingredient", ingredient, {
       );
       const recipes = bind.ids(({ db, ids }) => loadIngredientRecipes(db, ids));
       return [
+        summaries.fields(
+          rawIngredientList.pick({ productSummaries: true }),
+          (row, loaded) => ({ productSummaries: loaded.get(row.id) ?? [] }),
+          { scope: "explicit" },
+        ),
         products.fields(
           rawIngredientList.pick({ product: true }),
           (row, loaded) => ({ product: loaded.get(row.id) ?? [] }),

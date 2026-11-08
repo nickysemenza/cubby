@@ -428,6 +428,10 @@ describe("complete list composition", () => {
         fields,
       );
       expect(selected.meta.totalCount).toBe(full.meta.totalCount);
+      expect(fields.includes("productSummaries")).toBe(entity === "ingredient");
+      expect(entity === "ingredient" && fields.includes("product")).toBe(false);
+      for (const row of full.items)
+        expect(row).not.toHaveProperty("productSummaries");
       expect(selected.items).toEqual(
         full.items.map((row) =>
           selectedFieldEnvelopeSchema(
@@ -435,6 +439,15 @@ describe("complete list composition", () => {
             fields,
           ).parse({
             ...row,
+            ...(entity === "ingredient"
+              ? {
+                  productSummaries:
+                    entityFieldEnvelopeSchemas.ingredient.list.shape.productSummaries.parse(
+                      entityFieldEnvelopeSchemas.ingredient.list.parse(row)
+                        .product,
+                    ),
+                }
+              : {}),
             displayCover: (() => {
               const envelope = fieldEnvelopeFor(row, "displayImages");
               const images = envelope

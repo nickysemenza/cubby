@@ -361,6 +361,11 @@ export const { definition, readSchemas } = defineEntityModel(
     fields: {
       embedded: [
         {
+          path: ["productSummaries"],
+          entity: "product",
+          projections: ["list", "mcpList"],
+        },
+        {
           path: ["product"],
           entity: "product",
           projections: ["list", "detail", "mcpList", "mcpDetail"],
