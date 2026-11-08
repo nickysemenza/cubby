@@ -19,8 +19,9 @@ Across workspace packages, use their `@cubby/<package>/<subpath>` exports and
 declare the dependency in the consuming package. Do not add tsconfig mappings
 into another package's source tree or create barrels only to shorten imports.
 Generators and compiler tests use `@cubby/schemas/compiler/…` for authoring
-metadata and declaration inputs. That namespace is excluded from HTTP schema
-name registration: compiler inputs must not change native wire model naming.
+metadata and declaration inputs. Runtime adapters may also use its canonical
+per-entity schemas for internal projections. That namespace is excluded from HTTP
+schema name registration: compiler inputs must not change native wire model naming.
 
 TypeScript `paths` describe resolution; they do not rewrite emitted imports.
 The web Vite and Vitest configurations support the web aliases. Scripts run

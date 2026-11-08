@@ -252,9 +252,6 @@ the root. Traversal follows only supplied, bounded topology and batches current
 facts across all its levels. Explicit embedded paths can name a governed container
 such as Location's installed Product; its effective result retains the nested
 Product envelopes. Compact identity leaves validate without fabricated fields.
-Domain envelope projectors use their own canonical per-entity schemas. Product's
-price-only projection does not import the aggregate envelope-schema roster; both
-paths share the same schema instances.
 Web reference readers normalize effective expanded records and scalar IDs once;
 display consumers enrich normalized targets with allocation and provenance labels
 without reparsing effective values. Expanded targets retain their selected identity,
@@ -2395,6 +2392,10 @@ the envelope constructor applies declared entity projectors before its final
 public-schema parse, and compact leaves keep their validation. Projectors receive
 assembled fields rather than a separately parsed public root; their output never
 bypasses the constructor's final validation.
+
+Domain envelope projectors use their own canonical per-entity schemas. Product's
+price-only projection does not import the aggregate envelope-schema roster; both
+paths share the same schema instances.
 
 The scaffold compiles one filter plan for repository readers, with population,
 related scopes, result availability, joins and ordering under one owner. Declared
