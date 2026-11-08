@@ -7,8 +7,9 @@ import { relations } from "./relations";
 
 /**
  * Guards the soft-delete rule stated at the top of `relations.ts`: a to-many
- * relation over a soft-deletable table must carry `where: notDeleted(table)`, or
- * it silently serves deleted rows.
+ * relation over a soft-deletable table must filter deleted rows — through its
+ * generated relation-level `where`, or a nested `where` in the preset — or it
+ * silently serves deleted rows.
  *
  * Not hypothetical. A missing filter on `ingredient.full.product` shipped (fixed
  * in #1008) and turned every ingredient update into a 500, because
@@ -58,6 +59,12 @@ const withBlockOf = (node: PresetNode): PresetBlock | undefined =>
 const carriesWhere = (node: PresetNode): boolean =>
   node !== true && node.where !== undefined;
 
+/** Generated to-many relations into soft-deletable tables filter at the relation. */
+const relationFiltersDeleted = (relation: { where: unknown }): boolean =>
+  typeof relation.where === "object" &&
+  relation.where !== null &&
+  "deletedAt" in relation.where;
+
 /** Records every to-many soft-deletable relation reached that carries no `where`. */
 const findUnfiltered = (
   tableTsName: string,
@@ -88,6 +95,7 @@ const findUnfiltered = (
       relation instanceof Many &&
       softDeletable &&
       !carriesWhere(node) &&
+      !relationFiltersDeleted(relation) &&
       ALLOWLIST[here] === undefined
     ) {
       // Name the table the fix needs, so the failure is directly actionable —
