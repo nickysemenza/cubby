@@ -1113,10 +1113,6 @@ const imageAssociations = (
 /** Shared relation config for loading entity associations with soft-delete filtering */
 const imageEntityRelations = {
   attachments: {
-    where: {
-      RAW: (table: PgTable) =>
-        relationalSql(table, notDeleted(entityAttachment)),
-    },
     columns: { role: true },
     // One of these is non-null per row: the attachment's subject.
     with: {

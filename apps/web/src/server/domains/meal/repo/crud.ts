@@ -273,9 +273,6 @@ export const getUpcomingMealSummary = async (
     },
     with: {
       recipes: {
-        where: {
-          RAW: (table: PgTable) => relationalSql(table, notDeleted(mealRecipe)),
-        },
         columns: { scale: true, deletedAt: true },
         with: {
           recipe: {

@@ -34,7 +34,6 @@ import {
   image,
   ingredient,
   product,
-  recipe,
 } from "~/server/db/schema";
 import { getImageProcessingReadProjection } from "~/server/domains/image-processing/repo/image-processing";
 import { readImageById } from "~/server/domains/image/repo/image";
@@ -165,18 +164,12 @@ export const productCookbooksReport = async (
     columns: { id: true },
     with: {
       cookbooks: {
-        where: {
-          RAW: (table: PgTable) => relationalSql(table, notDeleted(cookbook)),
-        },
         orderBy: (table: PgTable) =>
           [asc(cookbook.name)]
             .flat()
             .map((value) => relationalSql(table, value)),
         with: {
           recipes: {
-            where: {
-              RAW: (table: PgTable) => relationalSql(table, notDeleted(recipe)),
-            },
             columns: { deletedAt: true },
           },
         },

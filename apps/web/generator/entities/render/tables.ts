@@ -4,9 +4,13 @@ import {
   type ChildTableDeclaration,
 } from "@cubby/schemas/compiler/entity-definitions/child-definition";
 import { validateChildTables } from "../child-tables.ts";
-import { retainedTableExports } from "@cubby/schemas/compiler/child-tables/retained";
+import {
+  retainedSoftDeletedTables,
+  retainedTableExports,
+} from "@cubby/schemas/compiler/child-tables/retained";
 import {
   childTableDependencies,
+  liveRelationWhere,
   renderChildTables,
   renderChildRelations,
 } from "./children.ts";
@@ -224,6 +228,7 @@ const renderRelations = (
   table: CompiledEntityTable,
   exportOf: (entity: string) => string,
   storage: readonly EntityStorageField[],
+  softDeleted: ReadonlySet<string>,
 ) => {
   const targetOf = (relation: EntityTableRelation) =>
     "entity" in relation.target
@@ -249,6 +254,9 @@ const renderRelations = (
       ...(relation.relationName === null
         ? []
         : [`alias: ${JSON.stringify(relation.relationName)}`]),
+      ...(relation.kind === "many" && softDeleted.has(target)
+        ? [liveRelationWhere]
+        : []),
     ];
     return `${relation.name}: r.${relation.kind}.${target}({ ${config.join(", ")} })`;
   });
@@ -351,15 +359,30 @@ export const renderEntityTableArtifacts = (
     ),
   );
   const definitionSource = ownedDefinitions + "\n\n" + childDefinitions;
+  const softDeleted = new Set<string>([
+    ...tabled
+      .filter(({ table, fieldModel }) =>
+        [...table.columns, ...fieldModel.storage].some(
+          (column) => column.key === "deletedAt",
+        ),
+      )
+      .map(({ table }) => table.exportName),
+    ...declaredChildren
+      .filter((table) =>
+        table.columns.some((column) => column.key === "deletedAt"),
+      )
+      .map((table) => table.exportName),
+    ...retainedSoftDeletedTables,
+  ]);
   const relationSource =
     tabled
       .filter(({ table }) => table.relations.length > 0)
       .map(({ table, fieldModel }) =>
-        renderRelations(table, exportOf, fieldModel.storage),
+        renderRelations(table, exportOf, fieldModel.storage, softDeleted),
       )
       .join(",\n") +
     ",\n" +
-    renderChildRelations(declaredChildren);
+    renderChildRelations(declaredChildren, softDeleted);
   const retainedImports = childTables.length
     ? `import { ${childTables.join(", ")} } from "~/server/db/retained-tables";\n`
     : "";

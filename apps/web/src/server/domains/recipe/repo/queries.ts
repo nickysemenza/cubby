@@ -24,12 +24,7 @@ import type { PgTable } from "drizzle-orm/pg-core";
 import type { Database } from "~/server/db";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
-import {
-  cookbook,
-  recipe,
-  recipeSection,
-  recipeSectionIngredient,
-} from "~/server/db/schema";
+import { cookbook, recipe } from "~/server/db/schema";
 
 /**
  * Get ingredient co-occurrence data for building a network graph.
@@ -55,10 +50,6 @@ export const getIngredientCooccurrence = async (
       sections: {
         // Exclude soft-deleted sections/usages so the cooccurrence counts don't
         // include ingredients that were removed from these (live) recipes.
-        where: {
-          RAW: (table: PgTable) =>
-            relationalSql(table, notDeleted(recipeSection)),
-        },
         with: {
           ingredients: {
             // Only the nested ingredient's id/name/recipeId is read below — never
@@ -67,10 +58,6 @@ export const getIngredientCooccurrence = async (
             // back through Hyperdrive; Drizzle still pulls the FK to hydrate the
             // relation.
             columns: {},
-            where: {
-              RAW: (table: PgTable) =>
-                relationalSql(table, notDeleted(recipeSectionIngredient)),
-            },
             with: {
               ingredient: {
                 columns: {
@@ -259,19 +246,11 @@ export const getRecipeDependencyGraph = async (
       sections: {
         // Exclude soft-deleted sections/usages so removed sub-recipe links
         // don't produce phantom edges (matches getIngredientCooccurrence).
-        where: {
-          RAW: (table: PgTable) =>
-            relationalSql(table, notDeleted(recipeSection)),
-        },
         with: {
           ingredients: {
             // Only si.ingredient is read — drop the heavy RSI line columns
             // (rawLine, amounts) from the marshalled payload.
             columns: {},
-            where: {
-              RAW: (table: PgTable) =>
-                relationalSql(table, notDeleted(recipeSectionIngredient)),
-            },
             with: {
               ingredient: { columns: { recipeId: true, deletedAt: true } },
             },
@@ -373,19 +352,11 @@ export const getIngredientUsage = async (
       sections: {
         // Exclude soft-deleted sections/usages so usage counts don't include
         // ingredients removed from these live recipes (matches cooccurrence).
-        where: {
-          RAW: (table: PgTable) =>
-            relationalSql(table, notDeleted(recipeSection)),
-        },
         with: {
           ingredients: {
             // Only si.ingredient is read — drop the heavy RSI line columns
             // (rawLine, amounts) from the marshalled payload.
             columns: {},
-            where: {
-              RAW: (table: PgTable) =>
-                relationalSql(table, notDeleted(recipeSectionIngredient)),
-            },
             with: {
               ingredient: {
                 columns: {

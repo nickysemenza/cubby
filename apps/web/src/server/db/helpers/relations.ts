@@ -12,16 +12,11 @@ import {
  * Usage: spread into query options
  * Example: db.query.ingredient.findFirst({ where: ..., ...relations.ingredient.full })
  *
- * SOFT DELETE: Drizzle's relational queries DO support a `where` on a (to-many)
- * nested relation. Bind its `RAW` predicate to the callback table with
- * `relationalSql` in the `with` block
- * to exclude soft-deleted rows at query time — that's the durable, correct-by-
- * construction mechanism. (The recipe-usage relations below do this.) Note `where`
- * remains attached to the existing to-many presets. When liveness depends on
- * a to-one parent, the transform still filters (see `computeRecipeUsages`). The transform-layer helpers
- * (`mapRelation`, `mapImages`,
- * `Array.filter(deletedAt === null)`) remain as backstops and still cover the
- * relations not yet annotated here.
+ * SOFT DELETE: generated to-many relations into soft-deletable tables carry a
+ * relation-level `deletedAt IS NULL` filter (see the entity table generator), so
+ * nested to-many reads here never repeat it. Add a nested `RAW` filter only for
+ * other conditions (role, kind). To-one relations still resolve deleted parents;
+ * readers project `deletedAt` and decide how to present them.
  */
 // Deep path, never the `db/helpers` barrel: these are top-level const
 // initializations, so an import cycle here is a TDZ crash at startup.
@@ -48,16 +43,10 @@ import {
   cookbook,
   entityAttachment,
   entityExternalId,
-  expenseAttribution,
   image,
   inventoryEntry,
   ledgerSourceClaim,
-  location,
-  mealRecipe,
   product,
-  productUnitMappings,
-  recipeSection,
-  recipeSectionIngredient,
 } from "~/server/db/schema";
 
 /**
@@ -123,10 +112,6 @@ const withProjectAndProductNameOnly = {
       },
     },
     attributions: {
-      where: {
-        RAW: (table: PgTable) =>
-          relationalSql(table, notDeleted(expenseAttribution)),
-      },
       columns: {
         role: true,
         ledgerPartyId: true,
@@ -220,10 +205,6 @@ const withProjectAndParentTaskNameOnly = {
       columns: { name: true, shortcode: true, deletedAt: true },
     },
     images: {
-      where: {
-        RAW: (table: PgTable) =>
-          relationalSql(table, notDeleted(entityAttachment)),
-      },
       orderBy: sectionOrder,
       with: {
         image: true,
@@ -292,16 +273,8 @@ export const relations = {
       with: {
         product: {
           extras: productCategoryProjection,
-          where: {
-            RAW: (table: PgTable) => relationalSql(table, notDeleted(product)),
-          },
           with: {
-            unitMappings: {
-              where: {
-                RAW: (table: PgTable) =>
-                  relationalSql(table, notDeleted(productUnitMappings)),
-              },
-            },
+            unitMappings: {},
             externalIds: {
               where: {
                 RAW: (table: PgTable) =>
@@ -309,10 +282,6 @@ export const relations = {
               },
             },
             images: {
-              where: {
-                RAW: (table: PgTable) =>
-                  relationalSql(table, notDeleted(entityAttachment)),
-              },
               orderBy: sectionOrder,
               with: {
                 image: true,
@@ -322,10 +291,6 @@ export const relations = {
         },
         recipe: { with: recipeSourceRelations },
         recipeSectionIngredient: {
-          where: {
-            RAW: (table: PgTable) =>
-              relationalSql(table, notDeleted(recipeSectionIngredient)),
-          },
           with: {
             recipeSection: {
               with: {
@@ -340,21 +305,13 @@ export const relations = {
       with: {
         product: {
           extras: productCategoryProjection,
-          where: {
-            RAW: (table: PgTable) => relationalSql(table, notDeleted(product)),
-          },
           // Load-bearing for BOTH the Product column's pill (which shows
           // `product[0]` of a possible +9) and the leading thumbnail (which
           // falls back to these images). Unordered, Postgres was free to
           // return a different brand per request.
           orderBy: linkOrder,
           with: {
-            unitMappings: {
-              where: {
-                RAW: (table: PgTable) =>
-                  relationalSql(table, notDeleted(productUnitMappings)),
-              },
-            },
+            unitMappings: {},
             externalIds: {
               where: {
                 RAW: (table: PgTable) =>
@@ -362,10 +319,6 @@ export const relations = {
               },
             },
             images: {
-              where: {
-                RAW: (table: PgTable) =>
-                  relationalSql(table, notDeleted(entityAttachment)),
-              },
               orderBy: sectionOrder,
               with: {
                 image: true,
@@ -381,12 +334,7 @@ export const relations = {
       with: {
         ingredient: true,
         growsPlant: { columns: { shortcode: true } },
-        unitMappings: {
-          where: {
-            RAW: (table: PgTable) =>
-              relationalSql(table, notDeleted(productUnitMappings)),
-          },
-        },
+        unitMappings: {},
         externalIds: {
           where: {
             RAW: (table: PgTable) =>
@@ -396,34 +344,19 @@ export const relations = {
         // Locations that ARE this product — a bin in service, as opposed to
         // `inventoryEntry`, which is stock held somewhere. Scalar columns only;
         // the detail table renders a name, a type and a link.
-        locations: {
-          where: {
-            RAW: (table: PgTable) => relationalSql(table, notDeleted(location)),
-          },
-        },
+        locations: {},
         // Cookbook identities only; recipe counts belong to their owning report.
         cookbooks: {
-          where: {
-            RAW: (table: PgTable) => relationalSql(table, notDeleted(cookbook)),
-          },
           orderBy: (table: PgTable) =>
             [asc(cookbook.name)]
               .flat()
               .map((value) => relationalSql(table, value)),
         },
         inventoryEntry: {
-          where: {
-            RAW: (table: PgTable) =>
-              relationalSql(table, notDeleted(inventoryEntry)),
-          },
           with: {
             location: {
               with: {
                 images: {
-                  where: {
-                    RAW: (table: PgTable) =>
-                      relationalSql(table, notDeleted(entityAttachment)),
-                  },
                   orderBy: sectionOrder,
                   with: {
                     image: true,
@@ -434,10 +367,6 @@ export const relations = {
           },
         },
         images: {
-          where: {
-            RAW: (table: PgTable) =>
-              relationalSql(table, notDeleted(entityAttachment)),
-          },
           orderBy: sectionOrder,
           with: {
             image: true,
@@ -461,21 +390,12 @@ export const relations = {
         ingredient: true,
         growsPlant: { columns: { shortcode: true } },
         images: {
-          where: {
-            RAW: (table: PgTable) =>
-              relationalSql(table, notDeleted(entityAttachment)),
-          },
           orderBy: sectionOrder,
           with: {
             image: true,
           },
         },
-        unitMappings: {
-          where: {
-            RAW: (table: PgTable) =>
-              relationalSql(table, notDeleted(productUnitMappings)),
-          },
-        },
+        unitMappings: {},
         externalIds: {
           where: {
             RAW: (table: PgTable) =>
@@ -483,10 +403,6 @@ export const relations = {
           },
         },
         inventoryEntry: {
-          where: {
-            RAW: (table: PgTable) =>
-              relationalSql(table, notDeleted(inventoryEntry)),
-          },
           with: {
             location: true,
           },
@@ -545,17 +461,9 @@ export const relations = {
         // show, not just a code (same reasoning as `cookbook` above, plus a name).
         forkedFrom: { columns: { shortcode: true, name: true } },
         sections: {
-          where: {
-            RAW: (table: PgTable) =>
-              relationalSql(table, notDeleted(recipeSection)),
-          },
           orderBy: sectionOrder,
           with: {
             ingredients: {
-              where: {
-                RAW: (table: PgTable) =>
-                  relationalSql(table, notDeleted(recipeSectionIngredient)),
-              },
               orderBy: sectionOrder,
               with: {
                 ingredient: {
@@ -568,10 +476,6 @@ export const relations = {
           },
         },
         images: {
-          where: {
-            RAW: (table: PgTable) =>
-              relationalSql(table, notDeleted(entityAttachment)),
-          },
           orderBy: sectionOrder,
           with: {
             image: true,
@@ -591,17 +495,9 @@ export const relations = {
         // show, not just a code (same reasoning as `cookbook` above, plus a name).
         forkedFrom: { columns: { shortcode: true, name: true } },
         sections: {
-          where: {
-            RAW: (table: PgTable) =>
-              relationalSql(table, notDeleted(recipeSection)),
-          },
           orderBy: sectionOrder,
           with: {
             ingredients: {
-              where: {
-                RAW: (table: PgTable) =>
-                  relationalSql(table, notDeleted(recipeSectionIngredient)),
-              },
               orderBy: sectionOrder,
               with: {
                 ingredient: {
@@ -624,9 +520,6 @@ export const relations = {
         parent: true,
         product: locationIdentityProduct,
         children: {
-          where: {
-            RAW: (table: PgTable) => relationalSql(table, notDeleted(location)),
-          },
           with: { product: locationIdentityProduct },
         },
         inventoryEntries: {
@@ -687,10 +580,6 @@ export const relations = {
           // Association rows are soft-deletable independently of the Image, so
           // without this a detached image still renders a thumbnail — and would
           // disagree with `imagePresenceFilter`, which excludes it.
-          where: {
-            RAW: (table: PgTable) =>
-              relationalSql(table, notDeleted(entityAttachment)),
-          },
           orderBy: sectionOrder,
           with: {
             image: true,
@@ -704,9 +593,6 @@ export const relations = {
         parent: true,
         product: locationIdentityProduct,
         children: {
-          where: {
-            RAW: (table: PgTable) => relationalSql(table, notDeleted(location)),
-          },
           extras: locationAiDescriptionExtras,
           with: {
             // Children carry their identity SKU too — the Contents table shows
@@ -714,10 +600,6 @@ export const relations = {
             // child renders an empty type with no name to fall back on.
             product: locationIdentityProduct,
             images: {
-              where: {
-                RAW: (table: PgTable) =>
-                  relationalSql(table, notDeleted(entityAttachment)),
-              },
               orderBy: sectionOrder,
               with: {
                 image: true,
@@ -730,10 +612,6 @@ export const relations = {
         // `directItemCount`; the detail page's Contents table reads the
         // inventory list (which includes installed fixtures) on its own.
         images: {
-          where: {
-            RAW: (table: PgTable) =>
-              relationalSql(table, notDeleted(entityAttachment)),
-          },
           orderBy: sectionOrder,
           with: {
             image: true,
@@ -746,10 +624,6 @@ export const relations = {
       with: {
         product: locationIdentityProduct,
         images: {
-          where: {
-            RAW: (table: PgTable) =>
-              relationalSql(table, notDeleted(entityAttachment)),
-          },
           orderBy: sectionOrder,
           with: {
             image: true,
@@ -783,12 +657,7 @@ export const relations = {
         product: {
           extras: productCategoryProjection,
           with: {
-            unitMappings: {
-              where: {
-                RAW: (table: PgTable) =>
-                  relationalSql(table, notDeleted(productUnitMappings)),
-              },
-            },
+            unitMappings: {},
             externalIds: {
               where: {
                 RAW: (table: PgTable) =>
@@ -796,10 +665,6 @@ export const relations = {
               },
             },
             images: {
-              where: {
-                RAW: (table: PgTable) =>
-                  relationalSql(table, notDeleted(entityAttachment)),
-              },
               orderBy: sectionOrder,
               with: {
                 image: true,
@@ -811,10 +676,6 @@ export const relations = {
           with: {
             product: locationIdentityProduct,
             images: {
-              where: {
-                RAW: (table: PgTable) =>
-                  relationalSql(table, notDeleted(entityAttachment)),
-              },
               orderBy: sectionOrder,
               with: {
                 image: true,
@@ -847,10 +708,6 @@ export const relations = {
     full: {
       with: {
         recipes: {
-          where: {
-            RAW: (table: PgTable) =>
-              relationalSql(table, notDeleted(mealRecipe)),
-          },
           orderBy: sectionOrder,
           with: {
             // Only the fields mealRecipeFields reads — the full recipe body per planned recipe was pure over-fetch (the list shows name + scaled totals).
@@ -874,10 +731,6 @@ export const relations = {
           },
         },
         images: {
-          where: {
-            RAW: (table: PgTable) =>
-              relationalSql(table, notDeleted(entityAttachment)),
-          },
           orderBy: sectionOrder,
           with: {
             image: true,
