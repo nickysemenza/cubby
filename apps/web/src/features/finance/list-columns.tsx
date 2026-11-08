@@ -6,9 +6,7 @@ import type {
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 
-import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
 import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
-import { useDeletableConfig } from "~/entity/hooks/use-deletable-config";
 import { useFilterOptions } from "~/entity/hooks/use-filter-options";
 import { financialTransaction } from "~/integrations/tanstack-query/generated/domains/financialTransaction.gen";
 
@@ -23,11 +21,7 @@ export const financialAccountListOverride = defineListOverride<
   FinancialAccountFilters
 >({
   use() {
-    const deletable = useDeletableConfig({
-      mutationFn: entityMutationOptionsFactory("financialAccount", "delete"),
-      entity: "financialAccount",
-    });
-    const list = useMemo(() => ({ deletable }), [deletable]);
+    const list = useMemo(() => ({ deletable: true as const }), []);
     return { list };
   },
 });
@@ -53,19 +47,12 @@ export const financialTransactionListOverride = defineListOverride<
         hint: `${s.count}`,
       })),
     });
-    const deletable = useDeletableConfig({
-      mutationFn: entityMutationOptionsFactory(
-        "financialTransaction",
-        "delete",
-      ),
-      entity: "financialTransaction",
-    });
     const list = useMemo(
       () => ({
-        deletable,
+        deletable: true as const,
         filterOptions,
       }),
-      [deletable, filterOptions],
+      [filterOptions],
     );
     return { list };
   },
