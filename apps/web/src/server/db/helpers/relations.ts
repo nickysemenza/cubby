@@ -45,7 +45,6 @@ import {
   entityExternalId,
   image,
   inventoryEntry,
-  ledgerSourceClaim,
   product,
 } from "~/server/db/schema";
 
@@ -121,10 +120,6 @@ const withProjectAndProductNameOnly = {
       with: { ledgerParty: { columns: { shortcode: true, deletedAt: true } } },
     },
     sourceClaims: {
-      where: {
-        RAW: (table: PgTable) =>
-          relationalSql(table, notDeleted(ledgerSourceClaim)),
-      },
       columns: {
         source: true,
         sourceKey: true,
@@ -275,12 +270,7 @@ export const relations = {
           extras: productCategoryProjection,
           with: {
             unitMappings: {},
-            externalIds: {
-              where: {
-                RAW: (table: PgTable) =>
-                  relationalSql(table, notDeleted(entityExternalId)),
-              },
-            },
+            externalIds: {},
             images: {
               orderBy: sectionOrder,
               with: {
@@ -312,12 +302,7 @@ export const relations = {
           orderBy: linkOrder,
           with: {
             unitMappings: {},
-            externalIds: {
-              where: {
-                RAW: (table: PgTable) =>
-                  relationalSql(table, notDeleted(entityExternalId)),
-              },
-            },
+            externalIds: {},
             images: {
               orderBy: sectionOrder,
               with: {
@@ -335,12 +320,7 @@ export const relations = {
         ingredient: true,
         growsPlant: { columns: { shortcode: true } },
         unitMappings: {},
-        externalIds: {
-          where: {
-            RAW: (table: PgTable) =>
-              relationalSql(table, notDeleted(entityExternalId)),
-          },
-        },
+        externalIds: {},
         // Locations that ARE this product — a bin in service, as opposed to
         // `inventoryEntry`, which is stock held somewhere. Scalar columns only;
         // the detail table renders a name, a type and a link.
@@ -396,12 +376,7 @@ export const relations = {
           },
         },
         unitMappings: {},
-        externalIds: {
-          where: {
-            RAW: (table: PgTable) =>
-              relationalSql(table, notDeleted(entityExternalId)),
-          },
-        },
+        externalIds: {},
         inventoryEntry: {
           with: {
             location: true,
@@ -566,12 +541,7 @@ export const relations = {
                   ),
               },
               with: {
-                externalIds: {
-                  where: {
-                    RAW: (table: PgTable) =>
-                      relationalSql(table, notDeleted(entityExternalId)),
-                  },
-                },
+                externalIds: {},
               },
             },
           },
@@ -641,12 +611,7 @@ export const relations = {
         product: {
           extras: productCategoryProjection,
           with: {
-            externalIds: {
-              where: {
-                RAW: (table: PgTable) =>
-                  relationalSql(table, notDeleted(entityExternalId)),
-              },
-            },
+            externalIds: {},
           },
         },
         location: true,
@@ -658,12 +623,7 @@ export const relations = {
           extras: productCategoryProjection,
           with: {
             unitMappings: {},
-            externalIds: {
-              where: {
-                RAW: (table: PgTable) =>
-                  relationalSql(table, notDeleted(entityExternalId)),
-              },
-            },
+            externalIds: {},
             images: {
               orderBy: sectionOrder,
               with: {

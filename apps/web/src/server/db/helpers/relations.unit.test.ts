@@ -145,6 +145,21 @@ describe("relation presets", () => {
     expect(violations).toEqual([]);
   });
 
+  it("filters deleted rows at every to-many relation into a soft-deletable table", () => {
+    // The generator's soft-delete roster must track the schema; a table whose
+    // soft-delete column comes from a helper is easy to leave off it.
+    const unfiltered = Object.entries(config).flatMap(([tableName, table]) =>
+      Object.entries(table.relations).flatMap(([name, relation]) =>
+        relation instanceof Many &&
+        getColumns(relation.targetTable).deletedAt !== undefined &&
+        !relationFiltersDeleted(relation)
+          ? [`${tableName}.${name}`]
+          : [],
+      ),
+    );
+    expect(unfiltered).toEqual([]);
+  });
+
   it("walks every relation the presets name", () => {
     expect(unresolved).toEqual([]);
   });

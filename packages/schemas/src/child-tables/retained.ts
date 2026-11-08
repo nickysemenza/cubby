@@ -23,6 +23,8 @@ export const retainedSoftDeletedTables = [
   "aiAnalysis",
   "entityAttachment",
   "entityEmbedding",
+  "entityExternalId",
   "entityLink",
+  "ledgerSourceClaim",
   "searchDocument",
 ] as const satisfies readonly (keyof typeof retainedTableReasons)[];
