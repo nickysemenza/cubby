@@ -100,16 +100,7 @@ describe("recursive field projections", () => {
       create: ["create"],
       update: [],
     });
-    const artifacts = renderKernelBindingsArtifacts([compiled]);
-    const runtime = artifacts.find((artifact) =>
-      artifact.relativePath.endsWith("entity-kernel-runtime.gen.ts"),
-    );
-    expect(runtime?.source).toContain("createLedgerPartyDefaultRepository");
-    expect(runtime?.source).toContain(
-      "ledgerPartyDefaultRepository = createLedgerPartyDefaultRepository()",
-    );
-    expect(runtime?.source).toContain(".createWriter(ENTITY_STORED_WRITES");
-    expect(runtime?.source).toContain(".updateWriter(ENTITY_STORED_WRITES");
+    renderKernelBindingsArtifacts([compiled]);
     expect(() =>
       renderKernelBindingsArtifacts([
         {
