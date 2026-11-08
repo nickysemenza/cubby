@@ -32,6 +32,7 @@ import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { withJobFixtureExecution } from "~/server/testing/background-queue";
+import { controlWorkflowRun } from "~/server/workflows/runs/control";
 import {
   launchWorkflowRun,
   reconcileWorkflowRuns,
@@ -613,6 +614,48 @@ describe("scheduled Gmail discovery", () => {
       const frozen = mailboxDiscoveryProgress.parse(frozenRun.progress).page;
       if (!frozen?.scopedKey)
         throw new Error("Synthetic targeted page missing");
+      const [finishedExecution] = await readJobs(ctx.db, {
+        key: `run:${successor.runId}`,
+      });
+      if (!finishedExecution)
+        throw new Error("Synthetic retained execution missing");
+      await getDb(ctx.db)
+        .update(run)
+        .set({
+          status: "failed",
+          failureCode: "job_failed",
+          endedAt: new Date(),
+        })
+        .where(eq(run.id, runEntityId.parse(successor.runId)));
+      // A terminal transport receipt does not settle the Run's frozen page.
+      await updateJobs(
+        ctx.db,
+        { id: finishedExecution.id },
+        { state: "completed", leaseToken: null, leaseExpiresAt: null },
+      );
+      await controlWorkflowRun(
+        ctx.db,
+        ctx.actor,
+        { runPublicId: frozenRun.shortcode, action: "retry" },
+        "mail_discovery",
+      );
+      const [retriedExecution] = await readJobs(ctx.db, {
+        key: `run:${successor.runId}`,
+      });
+      expect(retriedExecution).toMatchObject({
+        id: finishedExecution.id,
+        state: "queued",
+        generation: finishedExecution.generation + 1,
+        input: finishedExecution.input,
+      });
+      if (!retriedExecution)
+        throw new Error("Synthetic retried execution missing");
+      expect(await readRun(successor.runId)).toMatchObject({
+        status: "running",
+        input: frozenRun.input,
+        progress: { page: frozen, attempt: retriedExecution.generation },
+      });
+      const retry = { ...successor, attempt: retriedExecution.generation };
       const intervening = {
         ...frozen.startCoverage,
         history: { historyId: "160", pageToken: null, targetHistoryId: null },
@@ -635,12 +678,12 @@ describe("scheduled Gmail discovery", () => {
         .update(mailboxCursor)
         .set({ coverage: intervening })
         .where(eq(mailboxCursor.id, mailbox.id));
-      await saveMailDiscoveryBatch(ctx.db, successor, 0, seam);
-      await saveMailDiscoveryBatch(ctx.db, successor, 0, seam);
+      await saveMailDiscoveryBatch(ctx.db, retry, 0, seam);
+      await saveMailDiscoveryBatch(ctx.db, retry, 0, seam);
       expect(
         (await getDb(ctx.db).select().from(mailboxCursor))[0]?.coverage,
       ).toEqual(intervening);
-      await finishMailDiscovery(ctx.db, successor);
+      await finishMailDiscovery(ctx.db, retry);
       const completed = await readRun(successor.runId);
       expect(completed).toMatchObject({
         status: "completed",
@@ -652,7 +695,7 @@ describe("scheduled Gmail discovery", () => {
           expect.objectContaining({ phase: "page_saved" }),
         ]),
       );
-      await continueMailDiscovery(ctx.db, successor);
+      await continueMailDiscovery(ctx.db, retry);
       expect(await created()).toHaveLength(search === "pruned" ? 2 : 3);
       expect(
         (await getDb(ctx.db).select().from(mailboxCursor))[0]?.coverage,
@@ -690,6 +733,29 @@ describe("scheduled Gmail discovery", () => {
     );
     expect((await readRun(state.params.runId)).dispatchError).toContain(
       "Sentry event: ffffffffffffffffffffffffffffffff",
+    );
+    const failed = await readRun(state.params.runId);
+    const [execution] = await readJobs(ctx.db, {
+      key: `run:${state.params.runId}`,
+    });
+    if (!execution) throw new Error("Synthetic execution missing");
+    await updateJobs(
+      ctx.db,
+      { id: execution.id },
+      { state: "completed", leaseToken: null, leaseExpiresAt: null },
+    );
+    const [completedExecution] = await readJobs(ctx.db, { id: execution.id });
+    await expect(
+      controlWorkflowRun(
+        ctx.db,
+        ctx.actor,
+        { runPublicId: failed.shortcode, action: "retry" },
+        "mail_discovery",
+      ),
+    ).rejects.toThrow("Completed Run cannot be relaunched");
+    expect(await readRun(state.params.runId)).toEqual(failed);
+    expect((await readJobs(ctx.db, { id: execution.id }))[0]).toEqual(
+      completedExecution,
     );
   });
 

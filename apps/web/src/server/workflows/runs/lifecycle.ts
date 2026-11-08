@@ -1,5 +1,6 @@
 import { aiEvaluationState } from "@cubby/schemas/ai-evaluation";
 import { runEntityId, type RunId } from "@cubby/schemas/identifiers";
+import { mailboxDiscoveryProgress } from "@cubby/schemas/mailbox-research";
 import { runStepState } from "@cubby/schemas/run-step";
 import { and, or, not, eq, getTableColumns, isNull, sql } from "drizzle-orm";
 
@@ -145,7 +146,13 @@ export async function launchWorkflowRun(
           AND (e."runId"=${input.runId}::uuid OR EXISTS (SELECT 1 FROM "AiEvaluationRequest" r WHERE r."evaluationId"=e.id AND r."runId"=${input.runId}::uuid AND r."cancelledAt" IS NULL)))
         OR EXISTS (SELECT 1 FROM "RunStep" s WHERE s."runId"=${input.runId}::uuid AND s.state=${runStepState.enum.queued})
       ) AS pending`);
-      if (!pending.rows[0]?.pending)
+      // A completed transport Job can leave a failed discovery's frozen page owed.
+      const retainedDiscoveryPage =
+        owner.purpose === "mail_discovery" &&
+        owner.status === "failed" &&
+        mailboxDiscoveryProgress.safeParse(owner.progress).data?.page !==
+          undefined;
+      if (!pending.rows[0]?.pending && !retainedDiscoveryPage)
         throw new Error("Completed Run cannot be relaunched; create a new Run");
       execution = await enqueueJob(tx, {
         key: execution.key,
