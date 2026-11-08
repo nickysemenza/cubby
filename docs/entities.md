@@ -2301,7 +2301,10 @@ their source reference; generation rejects unknown fields and cycles.
 
 The batch serializer retains each root schema's output type after validation.
 Public read wrappers return those validated roots without parsing them again;
-envelope construction, entity projectors and compact leaves keep their validation.
+the envelope constructor applies declared entity projectors before its final
+public-schema parse, and compact leaves keep their validation. Projectors receive
+assembled fields rather than a separately parsed public root; their output never
+bypasses the constructor's final validation.
 
 The scaffold compiles one filter plan for repository readers, with population,
 related scopes, result availability, joins and ordering under one owner. Declared

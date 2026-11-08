@@ -392,8 +392,11 @@ export function buildFieldEnvelopeRow<S extends z.ZodObject>({
   decisions = {},
   results = {},
   resetPreviews = {},
+  project,
 }: {
   schema: S;
+  /** Domain projections run before the final public-schema validation. */
+  project?: (built: FieldReadContext["raw"]) => FieldReadContext["raw"];
   entity: Entity;
   row: FieldReadContext["raw"];
   resolutions?: Readonly<Record<string, FieldResolution>>;
@@ -510,12 +513,13 @@ export function buildFieldEnvelopeRow<S extends z.ZodObject>({
         !Object.hasOwn(fields, key),
     ),
   );
-  return schema.parse({ ...ordinary, fields });
+  const built = { ...ordinary, fields };
+  return schema.parse(project ? project(built) : built);
 }
 
-/** A declared domain projection may use only the facts supplied to the constructor. */
+/** A declared domain projection uses constructor facts; its assembled output is still unvalidated. */
 export type FieldEnvelopeProjector = (
   input: Parameters<typeof buildFieldEnvelopeRow>[0] & {
-    built: ReturnType<typeof buildFieldEnvelopeRow>;
+    built: FieldReadContext["raw"];
   },
-) => ReturnType<typeof buildFieldEnvelopeRow>;
+) => FieldReadContext["raw"];
