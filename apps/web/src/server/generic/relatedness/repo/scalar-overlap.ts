@@ -30,7 +30,7 @@ export async function readScalarOverlaps(
       SELECT DISTINCT value FROM ${sql.identifier(table)} source
       CROSS JOIN LATERAL jsonb_array_elements_text(to_jsonb(source.${sql.identifier(signal.field)})) value
       WHERE source.id = ${sourceId}::uuid AND ${notDeleted("source")}
-    ), overlaps AS (
+    ), candidate_overlaps AS (
       SELECT candidate.id AS "entityId", value
       FROM ${sql.identifier(table)} candidate
       CROSS JOIN LATERAL jsonb_array_elements_text(to_jsonb(candidate.${sql.identifier(signal.field)})) value
@@ -38,10 +38,10 @@ export async function readScalarOverlaps(
       WHERE candidate.id <> ${sourceId}::uuid AND ${notDeleted("candidate")}
       GROUP BY candidate.id, value
     ), eligible AS (
-      SELECT value FROM overlaps GROUP BY value HAVING count(*) <= ${signal.popularityCap}
+      SELECT value FROM candidate_overlaps GROUP BY value HAVING count(*) <= ${signal.popularityCap}
     )
     SELECT "entityId", array_agg(value ORDER BY value) AS values
-    FROM overlaps JOIN eligible USING (value)
+    FROM candidate_overlaps JOIN eligible USING (value)
     GROUP BY "entityId" ORDER BY "entityId"
   `,
     "objects",
