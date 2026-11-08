@@ -1,4 +1,4 @@
-import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
+import { productFieldEnvelopeSchemas } from "@cubby/schemas/compiler/generated/entity-field-envelopes/product";
 import {
   fieldEnvelopeFor,
   fieldValueOf,
@@ -28,7 +28,7 @@ export function projectProductFieldEnvelopes({
   if (!cost && !needsUnitPrice) return built;
   let price = fieldEnvelopeFor(built, "price");
   if (!price) {
-    const productSchema = entityFieldEnvelopeSchemas.product.output;
+    const productSchema = productFieldEnvelopeSchemas.output;
     if (
       !(productSchema instanceof z.ZodObject) ||
       !(productSchema.shape.fields instanceof z.ZodObject)
