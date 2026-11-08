@@ -59,6 +59,9 @@ import {
 type InventoryListItem = z.infer<typeof inventoryListItemOut>;
 type InventoryFilters = EntityListParamsByEntity["inventory"]["filters"];
 
+// The custom dialog label needs its own config, with one stable factory.
+const deleteInventory = entityMutationOptionsFactory("inventory", "delete");
+
 const columnHelper = createCubbyColumnHelper<InventoryListItem>();
 
 function InventoryProductLink({
@@ -123,7 +126,7 @@ export const inventoryListOverride = defineListOverride<
     // Its own config rather than the contract default: the dialog says
     // "Inventory Entry", which is what the row IS.
     const deletable = useDeletableConfig({
-      mutationFn: entityMutationOptionsFactory("inventory", "delete"),
+      mutationFn: deleteInventory,
       entityLabel: "Inventory Entry",
       entity: "inventory",
     });

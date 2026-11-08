@@ -3,7 +3,6 @@ import { useMemo } from "react";
 
 import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
 import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
-import { useDeletableConfig } from "~/entity/hooks/use-deletable-config";
 import { useUpdateMutation } from "~/entity/hooks/use-update-mutation";
 import { mealDateLabel } from "~/features/meal/meal-format";
 
@@ -41,22 +40,17 @@ export const mealListOverride = defineListOverride<MealOut, MealFilters>({
       // oxlint-disable-next-line react/exhaustive-deps -- The fresh wrapper is intentionally excluded; stable semantic members govern this hook.
       [updateMealMutation.mutateAsync],
     );
-    const deletable = useDeletableConfig({
-      mutationFn: entityMutationOptionsFactory("meal", "delete"),
-      entityLabel: "Meal",
-      entity: "meal",
-    });
 
     const list = useMemo(
       () => ({
-        deletable,
+        deletable: true as const,
         nameClassName: "w-56",
         nameEditable,
         // Same fallback the Name column uses, so the confirm dialog names an
         // unnamed meal by its date instead of its id.
         deleteEmptyLabel: mealDateLabel,
       }),
-      [deletable, nameEditable],
+      [nameEditable],
     );
     return { list };
   },

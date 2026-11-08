@@ -6,7 +6,6 @@ import { countLabel } from "@cubby/shared/pluralize";
 import { useMemo } from "react";
 
 import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
-import { useDeletableConfig } from "~/entity/hooks/use-deletable-config";
 import { useUpdateMutation } from "~/entity/hooks/use-update-mutation";
 import type { EntityListParamsByEntity } from "~/entity/model/list-contracts";
 import { formatYield } from "~/entity/presentation/recipe-yield";
@@ -39,13 +38,6 @@ export const recipeListOverride = defineListOverride<
   use() {
     const updateRecipeMutation = useUpdateMutation({
       mutationFn: entityMutationOptionsFactory("recipe", "update"),
-      entity: "recipe",
-    });
-    // Its own config, not the contract default: a recipe write from this
-    // table only moves `recipe.list`, not the meal rollups.
-    const deletable = useDeletableConfig({
-      mutationFn: entityMutationOptionsFactory("recipe", "delete"),
-      entityLabel: "Recipe",
       entity: "recipe",
     });
 
@@ -167,9 +159,9 @@ export const recipeListOverride = defineListOverride<
 
     const list = useMemo(
       () => ({
-        deletable,
+        deletable: true as const,
       }),
-      [deletable],
+      [],
     );
     return { overrides, list };
   },
