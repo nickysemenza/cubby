@@ -10,7 +10,16 @@ import {
   rawProductOutput,
 } from "@cubby/schemas/product-raw-read";
 import { type FoodLookupParam, foodLookupParam } from "@cubby/usda";
-import { and, eq, ilike, inArray, or, type SQL, sql } from "drizzle-orm";
+import {
+  and,
+  eq,
+  ilike,
+  inArray,
+  isNotNull,
+  or,
+  type SQL,
+  sql,
+} from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 import { match } from "ts-pattern";
 
@@ -342,7 +351,7 @@ export async function listProductFdcLinks(
   const rows = await getDb(db)
     .select({ id: product.id, fdcId: product.fdc_id })
     .from(product)
-    .where(and(sql`${product.fdc_id} IS NOT NULL`, notDeleted(product)));
+    .where(and(isNotNull(product.fdc_id), notDeleted(product)));
   return rows.flatMap((row) =>
     row.fdcId === null ? [] : [{ id: row.id, fdcId: row.fdcId }],
   );

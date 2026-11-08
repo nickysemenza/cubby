@@ -15,6 +15,7 @@ import {
   and,
   eq,
   inArray,
+  isNotNull,
   isNull,
   or,
   sql,
@@ -524,7 +525,7 @@ export async function listProductMatchRows(
             )
           : or(
               eq(suggestionTable.status, "pending"),
-              sql`${suggestionTable.suppression} IS NOT NULL`,
+              isNotNull(suggestionTable.suppression),
             ),
         options.actionableOnly
           ? sql`${suggestionTable.data}->>'actionable' = 'true'`

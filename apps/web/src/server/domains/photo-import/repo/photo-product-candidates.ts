@@ -19,7 +19,7 @@ import type {
 import { productListInventoryEntryOut } from "@cubby/schemas/product";
 import type { ProductVariantComparison } from "@cubby/schemas/product-variant-comparison";
 import { importExtractionOutcome } from "@cubby/schemas/purchase-import";
-import { and, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
+import { and, count, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
 
 import type { AiRunContext } from "~/server/ai/run-feature";
 import type { Database } from "~/server/db";
@@ -737,7 +737,7 @@ export async function loadPhotoProductEvidence(
     ? await getDb(db)
         .select({
           productId: expense.productId,
-          count: sql<number>`count(*)::int`,
+          count: count(),
         })
         .from(expense)
         .where(and(notDeleted(expense), inArray(expense.productId, ids)))

@@ -17,7 +17,7 @@ import {
   normalizeGtin,
 } from "@cubby/schemas/external-id";
 import { parseEntityId, type ProductId } from "@cubby/schemas/identifiers";
-import { and, eq, inArray, type SQL, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, type SQL, sql } from "drizzle-orm";
 
 import { entityExternalId } from "~/server/db/external-identifier-tables";
 import { product } from "~/server/db/generated/identity-storage-tables.gen";
@@ -44,7 +44,7 @@ const liveGtinRows = (db: RepositoryQueryInput, ids: ProductId[]) =>
       ),
     )
     .orderBy(
-      sql`${entityExternalId.isPrimary} DESC`,
+      desc(entityExternalId.isPrimary),
       entityExternalId.createdAt,
       entityExternalId.id,
     )

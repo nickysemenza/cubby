@@ -16,7 +16,7 @@ import type {
   PurchaseEvidenceCoverage,
 } from "@cubby/schemas/purchase-evidence-policy";
 import { vendorOrderEvidence } from "@cubby/schemas/vendor-import-fields";
-import { sql, type SQL } from "drizzle-orm";
+import { eq, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db/database";
@@ -193,9 +193,8 @@ const purchaseHasLinkedGoodsSql = (alias: string): SQL => sql`(
 )`;
 
 const purchaseHasForeignItemsSql = (purchaseId: SQL): SQL<boolean> => {
-  const completeSource = related(
-    importSourceOrder,
-    (order) => sql`${order.purchaseId} = ${purchaseId}`,
+  const completeSource = related(importSourceOrder, (order) =>
+    eq(order.purchaseId, purchaseId),
   )
     .where((order) => {
       const principalCount = sql`jsonb_array_length(jsonb_path_query_array(${order.originalOrder}, ${'$.extraction.candidate.lines[*] ? (@.lineKind == "principal")'}::jsonpath))`;

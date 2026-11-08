@@ -22,6 +22,7 @@ import type { SQL } from "drizzle-orm";
 import {
   and,
   asc,
+  count,
   eq,
   gt,
   inArray,
@@ -244,7 +245,7 @@ export async function projectDashboardSummary(
           .select({
             projectId: effectiveFieldSql<ProjectId | null>("task", "projectId"),
             status: task.status,
-            count: sql<number>`count(*)::int`,
+            count: count(),
           })
           .from(task)
           .where(

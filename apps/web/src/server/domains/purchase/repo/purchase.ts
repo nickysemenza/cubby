@@ -47,7 +47,7 @@ import {
   moneyToMinor,
   minorToMoney,
 } from "@cubby/shared";
-import { and, asc, eq, inArray, ne, type SQL, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, ne, type SQL, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 import { uniq } from "es-toolkit";
 import { z } from "zod";
@@ -315,7 +315,7 @@ export const PURCHASE_MERGE_EDGE_POLICY = {
 
 /** Actual spend is always `SUM(Expense.cost)`, never `statedTotal`. */
 const purchaseExpenses = () =>
-  related(expense, (e) => sql`${e.purchaseId} = ${outer(purchase.id)}`);
+  related(expense, (e) => eq(e.purchaseId, outer(purchase.id)));
 const purchaseId = outer(purchase.id);
 
 // Declared rollups (`purchase.model.derived`); the manifest owns their SQL.
@@ -332,7 +332,7 @@ const purchaseExpenseTotal = declaredRollup(
 );
 
 const purchaseUnpricedExpenseCount = purchaseExpenses()
-  .where((e) => sql`${e.cost} IS NULL`)
+  .where((e) => isNull(e.cost))
   .count();
 
 // Settlement compares only incurred spend; future rows cannot have settled.
@@ -355,7 +355,7 @@ const purchaseDocumentCount = declaredRollup(
 );
 
 const purchaseVendor = (options?: { includeDeleted: true }) =>
-  related(vendor, (v) => sql`${v.id} = ${outer(purchase.vendorId)}`, options);
+  related(vendor, (v) => eq(v.id, outer(purchase.vendorId)), options);
 
 const purchaseVendorName = purchaseVendor().value<string>((v) => v.name);
 
@@ -365,14 +365,12 @@ const purchaseVendorShortcode = sql<string>`${purchaseVendor({
   includeDeleted: true,
 }).value((v) => v.shortcode)}`;
 
-const purchaseDefaultProjectShortcode = related(
-  project,
-  (p) => sql`${p.id} = ${outer(purchase.defaultProjectId)}`,
+const purchaseDefaultProjectShortcode = related(project, (p) =>
+  eq(p.id, outer(purchase.defaultProjectId)),
 ).value<string>((p) => p.shortcode);
 
-const purchaseVendorAccountShortcode = related(
-  vendorAccount,
-  (va) => sql`${va.id} = ${outer(purchase.vendorAccountId)}`,
+const purchaseVendorAccountShortcode = related(vendorAccount, (va) =>
+  eq(va.id, outer(purchase.vendorAccountId)),
 ).value<string>((va) => va.shortcode);
 
 const purchaseVendorOrderUrlTemplate = purchaseVendor().value<string>(

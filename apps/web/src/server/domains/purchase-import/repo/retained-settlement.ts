@@ -22,7 +22,17 @@ import {
 } from "@cubby/schemas/purchase-import";
 import { cents, minorToMoney } from "@cubby/shared";
 import { createLogger } from "@cubby/worker-tracing";
-import { and, asc, between, eq, inArray, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  between,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  ne,
+  sql,
+} from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { getDb, notDeleted, withTransaction } from "~/server/db/helpers";
@@ -334,7 +344,7 @@ async function settleableCharges(
           financialTransactionStatus.enum.pending,
           financialTransactionStatus.enum.posted,
         ]),
-        sql`${financialTransaction.ledgerTransferId} IS NULL`,
+        isNull(financialTransaction.ledgerTransferId),
         between(
           sql<string>`coalesce(${financialTransaction.transactionDate}, ${financialTransaction.postedDate})`,
           day(Math.min(...dated) - POSTING_WINDOW_DAYS * DAY_MS),
@@ -472,8 +482,8 @@ async function competingClaimants(
         sql`(${purchasePaymentEvidence.chargedAt} IS NULL
           OR abs(extract(epoch FROM ${purchasePaymentEvidence.chargedAt}) - ${epoch}) <= ${POSTING_WINDOW_DAYS * 86_400})`,
         charge.storedValue
-          ? sql`${purchasePaymentEvidence.tender} <> ${paymentTender.enum.card}`
-          : sql`${purchasePaymentEvidence.tender} <> ${paymentTender.enum.stored_value}`,
+          ? ne(purchasePaymentEvidence.tender, paymentTender.enum.card)
+          : ne(purchasePaymentEvidence.tender, paymentTender.enum.stored_value),
         cards.length > 0
           ? sql`(${purchasePaymentEvidence.cardLastFour} IS NULL
               OR ${purchasePaymentEvidence.cardLastFour} IN (${sql.join(
@@ -935,7 +945,7 @@ export async function settleRetainedPaymentEvidence(
     )
     .where(
       and(
-        sql`${purchasePaymentEvidence.chargedAt} IS NOT NULL`,
+        isNotNull(purchasePaymentEvidence.chargedAt),
         sql`NOT EXISTS (
           SELECT 1 FROM "FinancialTransactionAllocation" fta
           WHERE fta."purchaseId" = ${purchase.id} AND ${notDeleted("fta")}

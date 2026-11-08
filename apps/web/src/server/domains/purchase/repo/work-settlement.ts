@@ -2,7 +2,7 @@ import { entitySchema } from "@cubby/schemas/entity";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import { purchaseFiltersSchema } from "@cubby/schemas/purchase";
 import { workExecutor } from "@cubby/schemas/work-queue";
-import { and, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 import { householdLocalDate } from "~/lib/household-date";
 import { related, quotedTable } from "~/server/db/helpers/related";
@@ -83,9 +83,9 @@ export const plannedPurchaseWorkDeferral = () =>
   )
     .where(
       (planned) =>
-        sql`${planned.date} > ${householdLocalDate(new Date())}::date OR (${related(expense, (line) => sql`${line.purchaseId} = ${planned.id}`).exists()} AND NOT ${related(
+        sql`${planned.date} > ${householdLocalDate(new Date())}::date OR (${related(expense, (line) => eq(line.purchaseId, planned.id)).exists()} AND NOT ${related(
           expense,
-          (line) => sql`${line.purchaseId} = ${planned.id}`,
+          (line) => eq(line.purchaseId, planned.id),
         )
           .where((line) => sql`${line.future} = false`)
           .exists()})`,

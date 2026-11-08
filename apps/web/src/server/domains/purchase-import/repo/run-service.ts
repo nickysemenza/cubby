@@ -1101,8 +1101,7 @@ export async function redispatchBudgetPausedImports(
           not(
             related(
               runTable,
-              (successor) =>
-                sql`${successor.predecessorRunId} = ${outer(runTable.id)}`,
+              (successor) => eq(successor.predecessorRunId, outer(runTable.id)),
               { includeDeleted: true },
             ).exists(),
           ),

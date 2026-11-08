@@ -24,6 +24,7 @@ import { isMiscProduct } from "@cubby/shared";
 import { createLogger } from "@cubby/worker-tracing";
 import {
   and,
+  countDistinct,
   eq,
   gt,
   inArray,
@@ -469,7 +470,7 @@ export const recipeUsageCountsByProduct = async (
   const rows = await getDb(db)
     .select({
       shortcode: product.shortcode,
-      count: sql<number>`count(distinct ${recipe.id})`,
+      count: countDistinct(recipe.id),
     })
     .from(product)
     .leftJoin(

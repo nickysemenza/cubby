@@ -1,6 +1,6 @@
 import type { UserId } from "@cubby/schemas/identifiers";
 import type { ConnectedApp } from "@cubby/schemas/oauth";
-import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, count, desc, eq, isNull, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import { unwrapDb, withTransaction } from "~/server/db/helpers";
@@ -172,7 +172,7 @@ export async function pruneOrphanedOAuthClients(
 
 export async function countOrphanedOAuthClients(db: Database): Promise<number> {
   const [row] = await unwrapDb(db)
-    .select({ count: sql<number>`count(*)::int` })
+    .select({ count: count() })
     .from(oauthClient)
     .where(orphanedClient);
 

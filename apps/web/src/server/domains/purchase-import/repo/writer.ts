@@ -209,9 +209,7 @@ async function assertImportOwnership(
         eq(ledgerParty.id, partyId),
         eq(ledgerParty.kind, "member"),
         notDeleted(ledgerParty),
-        input.vendorAccountId
-          ? sql`${vendorAccount.id} IS NOT NULL`
-          : undefined,
+        input.vendorAccountId ? isNotNull(vendorAccount.id) : undefined,
       ),
     )
     .limit(1);
@@ -1167,9 +1165,7 @@ export async function importVendorOrder(
           eq(ledgerParty.id, partyId),
           eq(ledgerParty.kind, "member"),
           notDeleted(ledgerParty),
-          input.vendorAccountId
-            ? sql`${vendorAccount.id} IS NOT NULL`
-            : undefined,
+          input.vendorAccountId ? isNotNull(vendorAccount.id) : undefined,
         ),
       )
       .limit(1);

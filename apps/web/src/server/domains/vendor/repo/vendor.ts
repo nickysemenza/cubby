@@ -31,7 +31,16 @@ import {
   vendorEmailSenderPolicies,
   vendorAgentHints,
 } from "@cubby/schemas/vendor-import-fields";
-import { and, asc, desc, eq, inArray, isNotNull, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  sql,
+} from "drizzle-orm";
 import { uniqBy } from "es-toolkit";
 import { z } from "zod";
 
@@ -291,9 +300,9 @@ export const VENDOR_MERGE_EDGE_POLICY = {
  * count 0.
  */
 const vendorPurchases = () =>
-  related(purchase, (p) => sql`${p.vendorId} = ${outer(vendor.id)}`);
+  related(purchase, (p) => eq(p.vendorId, outer(vendor.id)));
 const vendorBrandedProducts = () =>
-  related(product, (g) => sql`${g.brandId} = ${outer(vendor.id)}`);
+  related(product, (g) => eq(g.brandId, outer(vendor.id)));
 
 // Declared rollups (`vendor.model.derived`); the manifest owns their SQL.
 const vendorPurchaseCount = declaredRollup("vendor", "purchaseCount", vendor);
@@ -308,13 +317,13 @@ const vendorRole = sql<RawVendorOut["role"]>`(SELECT CASE
     ${vendorBrandedProducts().exists()} AS brand) roles)`;
 
 const vendorBrandCategoryCount = vendorBrandedProducts()
-  .join(productCategory, (pc, g) => sql`${pc.id} = ${g.categoryId}`)
+  .join(productCategory, (pc, g) => eq(pc.id, g.categoryId))
   .countDistinct((pc) => pc.id);
 
 const vendorPurchasedBrandProductCount = vendorBrandedProducts()
   .where((g) =>
-    related(expense, (e) => sql`${e.productId} = ${g.id}`)
-      .join(purchase, (p, e) => sql`${p.id} = ${e.purchaseId}`)
+    related(expense, (e) => eq(e.productId, g.id))
+      .join(purchase, (p, e) => eq(p.id, e.purchaseId))
       .exists(),
   )
   .count();
@@ -322,10 +331,8 @@ const vendorPurchasedBrandProductCount = vendorBrandedProducts()
 // Brand attribution requires a linked live Product. Seller spend also includes
 // unlinked lines; these two sums overlap and must never be added together.
 const vendorBrandSpend = vendorBrandedProducts()
-  .join(expense, (e, g) => sql`${e.productId} = ${g.id}`)
-  .where((e) =>
-    related(purchase, (p) => sql`${p.id} = ${e.purchaseId}`).exists(),
-  )
+  .join(expense, (e, g) => eq(e.productId, g.id))
+  .where((e) => related(purchase, (p) => eq(p.id, e.purchaseId)).exists())
   .sum((e) => e.cost);
 
 const vendorDocumentedPurchaseCount = sql<number>`(SELECT count(*)::int FROM "Purchase" vp
@@ -468,7 +475,7 @@ export const vendorScaffold = listScaffold("vendor", vendor, {
     mailSearch: vendorMailSearch.value(vendorMailSearchSql, {
       projection: "binding",
     }),
-    needsClassification: sql`${vendor.defaultSpendingCategoryId} IS NULL`,
+    needsClassification: isNull(vendor.defaultSpendingCategoryId),
     hasLogo: sql`${vendorHasDisplayableLogo}`,
   },
   read: {

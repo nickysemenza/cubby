@@ -1,5 +1,5 @@
 import type { ScoredEntity } from "@cubby/schemas/data-quality";
-import { sql, type AnyColumn, type SQL } from "drizzle-orm";
+import { isNull, sql, type AnyColumn, type SQL } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 
 /** The columns every scored table exposes to the generic SQL and hydration. */
@@ -11,7 +11,7 @@ export type ScoredTable = PgTable & {
 
 /** Immutable records have no tombstone column. */
 export const liveQualityRow = (t: ScoredTable): SQL =>
-  t.deletedAt ? sql`${t.deletedAt} IS NULL` : sql`TRUE`;
+  t.deletedAt ? isNull(t.deletedAt) : sql`TRUE`;
 
 /** Statement-local evidence explicitly requested by a caller. */
 export type QualityReadContext = {

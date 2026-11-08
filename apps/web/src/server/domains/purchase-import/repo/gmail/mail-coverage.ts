@@ -16,7 +16,16 @@ import {
 } from "@cubby/schemas/mailbox-research";
 import { runPurpose } from "@cubby/schemas/run-fields";
 import { ACTIVE_RUN_STATUSES } from "@cubby/shared/client-constants";
-import { and, desc, eq, isNotNull, isNull, inArray, sql } from "drizzle-orm";
+import {
+  and,
+  count,
+  desc,
+  eq,
+  isNotNull,
+  isNull,
+  inArray,
+  sql,
+} from "drizzle-orm";
 
 import {
   broadcastSender,
@@ -190,7 +199,7 @@ export async function readMailCoverage(
           sql<number>`count(*) FILTER (WHERE ${sellerUnresolved})`.mapWith(
             Number,
           ),
-        scanned: sql<number>`count(*)`.mapWith(Number),
+        scanned: count(),
         classified:
           sql<number>`count(*) FILTER (WHERE ${email.classification} IS NOT NULL)`.mapWith(
             Number,
@@ -294,7 +303,7 @@ export async function readMailCoverage(
       .select({
         parentId: run.parentRunId,
         status: run.status,
-        total: sql<number>`count(*)`.mapWith(Number),
+        total: count(),
       })
       .from(run)
       .where(

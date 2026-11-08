@@ -4,7 +4,16 @@ import type { LocationId, ProductId } from "@cubby/schemas/identifiers";
  * Category distribution, duplicate detection, and backfill operations.
  */
 import type { RawProductCategorySummary } from "@cubby/schemas/product-category-fields";
-import { and, eq, isNull, type SQL, sql } from "drizzle-orm";
+import {
+  and,
+  count,
+  countDistinct,
+  desc,
+  eq,
+  isNull,
+  type SQL,
+  sql,
+} from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 
 import type { Database } from "~/server/db";
@@ -144,7 +153,7 @@ export const countProductsWithNoImagesWithGtin = async (
 ): Promise<number> => {
   const dbClient = getDb(db);
   const [row] = await dbClient
-    .select({ count: sql<number>`count(*)::int` })
+    .select({ count: count() })
     .from(product)
     .where(
       and(
@@ -164,14 +173,14 @@ export const getProductExternalIdSourceOptions = async (
   getDb(db)
     .select({
       source: entityExternalId.source,
-      count: sql<number>`count(distinct ${entityExternalId.entityId})::int`,
+      count: countDistinct(entityExternalId.entityId),
     })
     .from(entityExternalId)
     .innerJoin(product, eq(product.id, entityExternalId.entityId))
     .where(and(notDeleted(entityExternalId), notDeleted(product)))
     .groupBy(entityExternalId.source)
     .orderBy(
-      sql`count(distinct ${entityExternalId.entityId}) DESC`,
+      desc(countDistinct(entityExternalId.entityId)),
       entityExternalId.source,
     );
 

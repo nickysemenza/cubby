@@ -1651,7 +1651,7 @@ async function writeShipmentEvidence(
                 and(
                   sameOccurrence,
                   isNull(shipmentObservation.supersededById),
-                  sql`${shipmentObservation.id} <> ${created.id}`,
+                  ne(shipmentObservation.id, created.id),
                 ),
               );
           insertedObservations++;

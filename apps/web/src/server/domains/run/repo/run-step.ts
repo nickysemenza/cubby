@@ -15,7 +15,7 @@ import {
   runWorkSample,
 } from "@cubby/schemas/run-work-progress";
 import { scrubErrorMessage } from "@cubby/worker-tracing/scrub-error-message";
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, ne, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { getDb, unwrapDb, withTransactionDatabase } from "~/server/db/helpers";
@@ -361,7 +361,7 @@ export async function otherActiveRun(
       and(
         eq(run.purpose, purpose),
         inArray(run.status, ["running", "paused_auth"]),
-        sql`${run.id} <> ${runId}`,
+        ne(run.id, runId),
       ),
     )
     .limit(1);

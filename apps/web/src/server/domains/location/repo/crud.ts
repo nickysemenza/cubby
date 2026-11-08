@@ -26,7 +26,7 @@ import {
   rawLocationList,
 } from "@cubby/schemas/location-raw-read";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
-import { and, eq, gt, inArray, isNotNull, sql } from "drizzle-orm";
+import { and, count, eq, gt, inArray, isNotNull, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 import { alias, QueryBuilder } from "drizzle-orm/pg-core";
 import { z } from "zod";
@@ -1256,7 +1256,7 @@ const loadLocationTree = async (
       ? dbClient
           .select({
             parentId: location.parentId,
-            count: sql<number>`count(*)::int`,
+            count: count(),
           })
           .from(location)
           .where(

@@ -5,7 +5,7 @@ import type {
   ExtractedOrderCandidate,
 } from "@cubby/schemas/purchase-import";
 import { cents } from "@cubby/shared";
-import { sql, type SQL } from "drizzle-orm";
+import { eq, sql, type SQL } from "drizzle-orm";
 
 import {
   importSourceOrder,
@@ -104,10 +104,7 @@ export const foreignReceiptSourceSql = (
 
 /** Pricing protection follows immutable provenance, even after moving/reclassifying the Expense. */
 export const foreignExpenseOriginSql = (expenseId: SQL): SQL<boolean> =>
-  related(
-    importSourceProduct,
-    (binding) => sql`${binding.expenseId} = ${expenseId}`,
-  )
+  related(importSourceProduct, (binding) => eq(binding.expenseId, expenseId))
     .join(
       importSourceOrder,
       (order, binding) => sql`${order.id} = ${binding.sourceOrderId}
@@ -122,10 +119,7 @@ export const foreignReceiptExpenseSql = (row: {
   purchaseId: SQL;
   lineKind: SQL;
 }): SQL<boolean> =>
-  related(
-    importSourceProduct,
-    (binding) => sql`${binding.expenseId} = ${row.id}`,
-  )
+  related(importSourceProduct, (binding) => eq(binding.expenseId, row.id))
     .join(
       importSourceOrder,
       (order, binding) => sql`${order.id} = ${binding.sourceOrderId}

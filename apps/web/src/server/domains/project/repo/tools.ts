@@ -1666,7 +1666,7 @@ export async function suggestProjectTools(
         eq(expense.lineKind, "principal"),
         actualExpense(),
         eq(expense.costType, "tools"),
-        sql`${expense.cost} >= ${EXPENSIVE_TOOL_THRESHOLD}`,
+        gte(expense.cost, EXPENSIVE_TOOL_THRESHOLD),
         notDeleted(expense),
       ),
     );

@@ -57,6 +57,7 @@ import {
   eq,
   inArray,
   isNotNull,
+  ne,
   or,
   sql,
   type SQL,
@@ -1469,7 +1470,7 @@ const assertExternalIdsAvailable = async (
       and(
         notDeleted(entityExternalId),
         exceptProductId
-          ? sql`${entityExternalId.entityId} <> ${exceptProductId}`
+          ? ne(entityExternalId.entityId, exceptProductId)
           : undefined,
         or(
           ...entries.map((entry) =>

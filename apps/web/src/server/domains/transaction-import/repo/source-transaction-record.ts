@@ -7,7 +7,17 @@ import type {
   UpdateSourceTransactionRecordsInput,
 } from "@cubby/schemas/source-transaction-record";
 import { sourceTransactionRecordMatchState } from "@cubby/schemas/source-transaction-record";
-import { and, eq, or, type SQL, sql } from "drizzle-orm";
+import {
+  and,
+  eq,
+  gte,
+  inArray,
+  isNull,
+  lte,
+  or,
+  type SQL,
+  sql,
+} from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import {
@@ -94,15 +104,13 @@ const buildConditions = (
       eq(sourceObservationColumns.dispositionReason, filters.dispositionReason),
     );
   if (filters.matchState)
-    conditions.push(sql`${matchStateSql} = ${filters.matchState}`);
+    conditions.push(eq(matchStateSql, filters.matchState));
   if (filters.dateFrom)
     conditions.push(
-      sql`${sourceTransactionRecord.statementDate} >= ${filters.dateFrom}`,
+      gte(sourceTransactionRecord.statementDate, filters.dateFrom),
     );
   if (filters.dateTo)
-    conditions.push(
-      sql`${sourceTransactionRecord.statementDate} <= ${filters.dateTo}`,
-    );
+    conditions.push(lte(sourceTransactionRecord.statementDate, filters.dateTo));
   conditions.push(
     ...rangeConditions(
       sourceObservationColumns.amount,
@@ -197,18 +205,14 @@ export async function findSourceTransactionRecordDrift(
     // An already-linked predecessor is a settled question. Only the predecessor
     // carries the link, so a resolved pair leaves one live row in its group and
     // the `count(*) > 1` gate drops it.
-    sql`${sourceObservationColumns.supersededByRowId} IS NULL`,
+    isNull(sourceObservationColumns.supersededByRowId),
   ];
   if (input.source)
     conditions.push(eq(sourceTransactionRecord.source, input.source));
   if (input.dateFrom)
-    conditions.push(
-      sql`${sourceTransactionRecord.statementDate} >= ${input.dateFrom}`,
-    );
+    conditions.push(gte(sourceTransactionRecord.statementDate, input.dateFrom));
   if (input.dateTo)
-    conditions.push(
-      sql`${sourceTransactionRecord.statementDate} <= ${input.dateTo}`,
-    );
+    conditions.push(lte(sourceTransactionRecord.statementDate, input.dateTo));
   if (input.importFingerprint)
     conditions.push(observedInImport(input.importFingerprint));
   const where = and(...conditions)!;
@@ -322,16 +326,10 @@ const selectorConditions = (selector: SourceTransactionRecordSelector): SQL => {
       notDeleted(sourceTransactionRecord),
       eq(sourceTransactionRecord.source, selector.source),
       or(
-        sql`${sourceObservationColumns.externalId} IN (${sql.join(
-          selector.externalIds.map((id) => sql`${id}`),
-          sql`, `,
-        )})`,
+        inArray(sourceObservationColumns.externalId, selector.externalIds),
         and(
           eq(sourceObservationColumns.current, true),
-          sql`${sourceObservationColumns.chargeKey} IN (${sql.join(
-            selector.externalIds.map((id) => sql`${id}`),
-            sql`, `,
-          )})`,
+          inArray(sourceObservationColumns.chargeKey, selector.externalIds),
         ),
       ),
     )!;

@@ -9,7 +9,7 @@ import {
   type RunControlAction,
 } from "@cubby/schemas/run-fields";
 import { runStepState } from "@cubby/schemas/run-step";
-import { and, eq, inArray, or, sql } from "drizzle-orm";
+import { and, eq, gt, inArray, isNull, or, sql } from "drizzle-orm";
 
 import {
   dropAiEvaluationWork,
@@ -177,7 +177,7 @@ export async function controlWorkflowRun(
             and(
               eq(runStep.runId, row.id),
               or(
-                sql`${runStep.failed} > 0`,
+                gt(runStep.failed, 0),
                 eq(runStep.state, runStepState.enum.queued),
               ),
             ),
@@ -396,7 +396,7 @@ export async function readmitFailedAiWork(
               ]),
               reviveCancelled
                 ? undefined
-                : sql`${aiEvaluationRequest.cancelledAt} IS NULL`,
+                : isNull(aiEvaluationRequest.cancelledAt),
             ),
           );
         if (requests.length)

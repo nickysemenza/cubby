@@ -136,10 +136,7 @@ export async function prepareFinancialStatementPreview(db: Database) {
     .from(financialAccount)
     .leftJoin(
       vendor,
-      and(
-        sql`${vendor.id} = ${financialAccount.providerVendorId}`,
-        notDeleted(vendor),
-      ),
+      and(eq(vendor.id, financialAccount.providerVendorId), notDeleted(vendor)),
     )
     .where(notDeleted(financialAccount));
   return {
@@ -342,8 +339,11 @@ export async function previewFinancialTransactionImport(
             or(
               ...providerPairs.map((row) =>
                 and(
-                  sql`${sourceObservationColumns.source} = ${row.source}`,
-                  sql`${sourceObservationColumns.providerTransactionId} = ${row.providerTransactionId}`,
+                  eq(sourceObservationColumns.source, row.source),
+                  eq(
+                    sourceObservationColumns.providerTransactionId,
+                    row.providerTransactionId,
+                  ),
                 ),
               ),
             ),

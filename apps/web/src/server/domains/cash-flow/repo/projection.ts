@@ -14,7 +14,7 @@ import {
   HOUSEHOLD_PROJECT_SHORTCODE,
   type ProjectStatus,
 } from "@cubby/schemas/project";
-import { and, inArray, isNull, sql } from "drizzle-orm";
+import { and, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 import { householdLocalDate, shiftPlainDate } from "~/lib/household-date";
@@ -154,13 +154,7 @@ const loadCommitted = (db: Database) =>
       cents: sql<string>`round(sum(${expense.cost})::numeric * 100)::bigint::text`,
     })
     .from(expense)
-    .where(
-      and(
-        notDeleted(expense),
-        plannedExpense(),
-        sql`${expense.cost} IS NOT NULL`,
-      ),
-    )
+    .where(and(notDeleted(expense), plannedExpense(), isNotNull(expense.cost)))
     .groupBy(expense.date);
 
 async function assertRootCategories(db: Database, codes: readonly string[]) {

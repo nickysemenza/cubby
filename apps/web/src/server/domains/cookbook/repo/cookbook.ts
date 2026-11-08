@@ -310,9 +310,8 @@ const getCookbookById = async (db: Database, id: CookbookId) => {
 export const cookbookScaffold = listScaffold("cookbook", cookbook, {
   readSchema: cookbookRepositoryReadSchema,
   derived: {
-    recipeCount: related(
-      recipe,
-      (r) => sql`${r.cookbookId} = ${outer(cookbook.id)}`,
+    recipeCount: related(recipe, (r) =>
+      eq(r.cookbookId, outer(cookbook.id)),
     ).count(),
   },
   read: {

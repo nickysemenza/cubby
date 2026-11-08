@@ -759,7 +759,7 @@ export async function listImageSightings(
     .select()
     .from(imageSighting)
     .where(and(inArray(imageSighting.imageId, [...imageIds])))
-    .orderBy(sql`${imageSighting.observedAt} DESC`, imageSighting.id);
+    .orderBy(desc(imageSighting.observedAt), imageSighting.id);
   const [owners, devices] = await Promise.all([
     lookupEntityReferences(
       db,

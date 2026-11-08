@@ -48,11 +48,11 @@ function emailIntentSubjectSql(id: SQL, originalId: SQL) {
       suggestionFamily.enum.recommendation,
     ]),
     or(
-      sql`${emailReview.emailId} = ${id}`,
+      eq(emailReview.emailId, id),
       and(
         eq(emailReview.family, suggestionFamily.enum.email_link),
         isNull(emailReview.emailId),
-        sql`${emailReview.originalId} = ${originalId}`,
+        eq(emailReview.originalId, originalId),
       ),
     ),
   );
