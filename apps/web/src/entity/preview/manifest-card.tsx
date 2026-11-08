@@ -12,7 +12,7 @@ import {
   entityDetailParams,
   isBrowserRoutedEntity,
 } from "~/entity/entities";
-import { ListLoadingSkeleton } from "~/ui/feedback/loading-skeletons";
+import { DetailSpecPlateLoading } from "~/ui/feedback/loading-skeletons";
 import { Row } from "~/ui/layout";
 import { Image } from "~/ui/media/image";
 import { Description } from "~/ui/text/description";
@@ -265,7 +265,7 @@ function BodyBlockView({ block }: { block: BodyBlock }) {
 // ── Shared bits used by per-entity specs / fetch wrappers ────────────────────
 
 export function PreviewLoading() {
-  return <ListLoadingSkeleton count={3} label="Loading record…" />;
+  return <DetailSpecPlateLoading label="Loading record…" />;
 }
 
 export function PreviewDeleted({ label }: { label: string }) {

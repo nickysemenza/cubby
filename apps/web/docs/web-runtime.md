@@ -415,9 +415,9 @@ replace this fresh decision read or the receiving command's current-stock checks
 
 ## List loading and enrichment
 
-Infinite-query keys own filter, ordering, grouping and projection scope. A new
-scope shows its own cached rows or initial skeletons, never the preceding scope's
-rows or totals. Same-key refreshes retain data and block further offset paging
+The generic `useInfiniteTableList` query keys own filter, ordering, grouping and
+projection scope. A new scope shows its own cached rows or initial skeletons,
+never the preceding scope's rows or totals. Same-key refreshes retain data and block further offset paging
 until reconciliation succeeds. Skullet boxes supply shared list, detail, inspector
 and media placeholders without rendering hidden data readers or persisting shapes.
 

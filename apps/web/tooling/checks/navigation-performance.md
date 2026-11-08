@@ -44,7 +44,10 @@ fixture; its selectors are deliberately illustrative, not a runnable member jour
 `scope` must identify the target's primary content, `useful` a visible populated
 field or row within it, and `control` an enabled primary-content control. Do not
 select the shell, heading, skeleton, generic router `onRendered` event, or
-offscreen enrichment. Route-specific scopes prevent stale source content from
+offscreen enrichment. `tbody tr` is insufficient: virtual spacers and loading rows
+can satisfy it. Select an actual populated identity/field and trial an actionable
+control in that record, then verify the selector under an intentionally slow read.
+Route-specific scopes prevent stale source content from
 satisfying readiness. Both link selectors must uniquely select same-origin
 anchors. SPA samples reject document navigations. The trial click checks hit
 testing and actionability without invoking the control. Combined with shell

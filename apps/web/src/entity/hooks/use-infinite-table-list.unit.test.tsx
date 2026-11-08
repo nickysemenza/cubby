@@ -271,6 +271,7 @@ describe("useInfiniteTableList", () => {
     rerender({ scope: "new" });
 
     await waitFor(() => expect(result.current.isLoading).toBe(true));
+    expect(result.current.infiniteScroll.isTransitioning).toBe(true);
     expect(result.current.data).toEqual([]);
     expect(result.current.sums).toBeUndefined();
     expect(result.current.infiniteScroll.hasNextPage).toBe(false);
@@ -297,6 +298,7 @@ describe("useInfiniteTableList", () => {
     });
     rerender({ scope: "wide" });
     await waitFor(() => expect(result.current.isLoading).toBe(true));
+    expect(result.current.infiniteScroll.isTransitioning).toBe(true);
     expect(result.current.data).toEqual([]);
     act(() =>
       widerPage.resolve({

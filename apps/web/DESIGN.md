@@ -72,7 +72,7 @@ never imply that a computed value has been rebuilt; derived freshness marks
 remain independent.
 
 Loading placeholders use Skullet through the shared Skeleton primitive, with a
-single light, static theme and whole-content reveals. Use its explicit boxes:
+single light, static theme. Use its explicit boxes:
 measured sample rendering must not mount record readers or actions, and automatic
 shape persistence must not introduce browser storage. Keep record geometry and
 accessible region labels; missing images may retain their semantic identity mark.

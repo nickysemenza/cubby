@@ -175,7 +175,6 @@ export function Provider({
             highlight: "var(--brand-paper-alt)",
           },
         }}
-        reveal="together"
       >
         <EntityDisplayImagesProvider refs={[]} collectMountedRefs>
           {children}
