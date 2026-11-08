@@ -296,9 +296,11 @@ export function publicFieldEnvelopeRow(
     ownership: context?.ownership,
     assignments: currentAssignments(entity, row, context?.raw ?? {}),
   } satisfies Parameters<typeof buildFieldEnvelopeRow>[0];
-  const built = buildFieldEnvelopeRow(input);
   const project = entityFieldEnvelopeProjectors[entity];
-  return project ? schema.parse(project({ ...input, built })) : built;
+  return buildFieldEnvelopeRow({
+    ...input,
+    project: project ? (built) => project({ ...input, built }) : undefined,
+  });
 }
 
 /** Selected reads retain only the requested semantic fields, nested when governed. */
