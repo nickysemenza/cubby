@@ -231,9 +231,6 @@ const renderDerivedFilterFields = (
         descriptor.derived !== null,
     )
     .flatMap((descriptor) => {
-      const label =
-        descriptor.nullable?.label ??
-        (descriptor.label ?? descriptor.columnId).toLowerCase();
       // The generated Any value / No value, Match all and Exclude keys ride
       // beside the value key, so a request can say "has a value", "all of
       // these" or "none of these".
@@ -244,12 +241,12 @@ const renderDerivedFilterFields = (
         ...(descriptor.nullable === null
           ? []
           : [
-              `${JSON.stringify(descriptor.nullable.field)}:presenceFilter.describe(${JSON.stringify(`has/none ${label}, ORed with picked values`)})`,
+              `${JSON.stringify(descriptor.nullable.field)}:presenceFilter.describe("has/none, ORed with picked values")`,
             ]),
         ...(descriptor.match === null
           ? []
           : [
-              `${JSON.stringify(descriptor.match.field)}:z.enum(["any","all"]).optional().describe(${JSON.stringify(`all: every picked ${label}`)})`,
+              `${JSON.stringify(descriptor.match.field)}:z.enum(["any","all"]).optional().describe("all: every picked value")`,
             ]),
         // The Exclude key takes the value key's schema.
         ...(descriptor.exclude === null
