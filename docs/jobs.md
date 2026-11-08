@@ -154,6 +154,11 @@ partial position for the same query and baseline, or after that search is pruned
 preserving current coverage and adding no shared counts. A pruned search stays
 absent; settling the handled page does not restore or complete it. A continuation
 carries only unchanged searches still present in current coverage.
+Automatic continuations defer to an existing funding-paused discovery for the
+same member and mailbox. Completing a retained page leaves the next acquisition
+with that owner and its existing resume Job instead of enrolling another pass.
+Continuation idempotency uses `mailbox-continuation:<completed Run id>`;
+descendant readbacks must follow that key as well as explicit parent links.
 Opaque tokens establish no order; a reset position can enumerate that range again
 through idempotent ingestion. The Run completes
 its one page, not the whole query. Targeted pages carry no history events, so

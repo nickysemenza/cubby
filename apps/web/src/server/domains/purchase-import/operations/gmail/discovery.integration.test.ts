@@ -1598,14 +1598,78 @@ describe("scheduled Gmail discovery", () => {
             : { messages: [{ id: "source-one" }] },
       });
       await listMailDiscovery(ctx.db, state.params, ports(provider));
+      const frozenProgress = mailboxDiscoveryProgress.parse(
+        (await readRun(state.params.runId)).progress,
+      );
       await saveMailDiscoveryBatch(ctx.db, state.params, 0, ports(provider));
       await finishMailDiscovery(ctx.db, state.params);
+      const completed = await readRun(state.params.runId);
+      const waitingRun = await ensureRun(ctx.db, ctx.actor, {
+        purpose: "mail_discovery",
+        trigger: "scheduled",
+        status: "completed",
+        input: mailboxDiscoveryInput.parse(completed.input),
+        execution: false,
+      });
+      await getDb(ctx.db)
+        .update(run)
+        .set({
+          status: "paused_auth",
+          failureCode: "execution_limit",
+          progress: { ...frozenProgress, phase: "paused" },
+        })
+        .where(eq(run.id, waitingRun));
+      const until = new Date(Date.now() + 3_600_000);
+      const waitingJob = await enqueueJob(ctx.db, {
+        key: `run:${waitingRun}`,
+        kind: "run.execute",
+        input: { runId: waitingRun, purpose: "mail_discovery" },
+        runId: waitingRun,
+        availableAt: until,
+      });
+      await updateJobs(
+        ctx.db,
+        { id: waitingJob.id },
+        { waitReason: "ai_funding_window" },
+      );
+      const retainedRun = await readRun(waitingRun);
+      const [retainedJob] = await readJobs(ctx.db, { id: waitingJob.id });
       await continueMailDiscovery(ctx.db, state.params);
       await continueMailDiscovery(ctx.db, state.params);
-      expect(await created()).toHaveLength(scanPending ? 2 : 1);
+      expect(
+        await getDb(ctx.db)
+          .select({ id: run.id })
+          .from(run)
+          .where(
+            eq(run.clientKey, `mailbox-continuation:${state.params.runId}`),
+          ),
+      ).toEqual([]);
+      expect(await readRun(waitingRun)).toEqual(retainedRun);
+      expect((await readJobs(ctx.db, { id: waitingJob.id }))[0]).toEqual(
+        retainedJob,
+      );
+      await getDb(ctx.db)
+        .update(run)
+        .set({
+          status: "completed",
+          failureCode: null,
+          progress: completed.progress,
+        })
+        .where(eq(run.id, waitingRun));
+      await updateJobs(
+        ctx.db,
+        { id: waitingJob.id },
+        { state: "completed", waitReason: null },
+      );
+      await continueMailDiscovery(ctx.db, state.params);
+      await continueMailDiscovery(ctx.db, state.params);
+      const admitted = (await created()).filter(
+        (params) => params.runId !== waitingRun,
+      );
+      expect(admitted).toHaveLength(scanPending ? 2 : 1);
       expect(
         await Promise.all(
-          (await created())
+          admitted
             .slice(1)
             .map(async (params) => (await readRun(params.runId)).input),
         ),
