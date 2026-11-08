@@ -508,13 +508,17 @@ describe("stored suggestions in generic list cells", () => {
     );
 
     fireEvent.click(await screen.findByRole("button", { name: "Review" }));
-    fireEvent.click(
-      await screen.findByRole("button", { name: "Use a different value…" }),
-    );
-    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    const chooseDifferent = await screen.findByRole("button", {
+      name: "Use a different value…",
+    });
+    await act(async () => {
+      fireEvent.click(chooseDifferent);
+    });
+    const save = await screen.findByRole("button", { name: "Save changes" });
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
     expect(screen.queryByLabelText("Name")).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Cost")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+    fireEvent.click(save);
     await waitFor(() =>
       expect(review).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -575,10 +579,14 @@ describe("stored suggestions in generic list cells", () => {
     );
 
     fireEvent.click(await screen.findByRole("button", { name: "Review" }));
-    fireEvent.click(
-      await screen.findByRole("button", { name: "Use a different value…" }),
-    );
-    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    const chooseDifferent = await screen.findByRole("button", {
+      name: "Use a different value…",
+    });
+    await act(async () => {
+      fireEvent.click(chooseDifferent);
+    });
+    await screen.findByRole("button", { name: "Save changes" });
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
     expect(screen.getByLabelText("Type")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
     await waitFor(() =>
@@ -644,10 +652,14 @@ describe("stored suggestions in generic list cells", () => {
     );
 
     fireEvent.click(await screen.findByRole("button", { name: "Review" }));
-    fireEvent.click(
-      await screen.findByRole("button", { name: "Use a different value…" }),
-    );
-    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    const chooseDifferent = await screen.findByRole("button", {
+      name: "Use a different value…",
+    });
+    await act(async () => {
+      fireEvent.click(chooseDifferent);
+    });
+    await screen.findByRole("button", { name: "Save transaction" });
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
     expect(
       screen.getByLabelText("Itemization expectation"),
     ).toBeInTheDocument();
