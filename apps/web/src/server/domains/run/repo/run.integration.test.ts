@@ -1,6 +1,7 @@
 import { parseEntityId, type RunId } from "@cubby/schemas/identifiers";
 import { parseShortcodeFor } from "@cubby/shared";
 import { eq } from "drizzle-orm";
+import { createRepoIdentity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -10,6 +11,8 @@ import {
   aiEvaluationRequest,
   image as imageTable,
   imageProcessingJob,
+  ledgerParty,
+  runControlEvent,
   run as runTable,
 } from "~/server/db/schema";
 import { createImageProcessingJob } from "~/server/domains/image-processing/repo/image-processing";
@@ -300,6 +303,64 @@ describe("Run attention entity view", () => {
     await visible(true);
     expect(await readJob(ctx.db, { runId })).toBeNull();
 
+    const member = await createRepoIdentity(ctx, "ledgerParty", {
+      name: "Synthetic recovery member",
+      kind: "member",
+    });
+    await getDb(ctx.db)
+      .update(ledgerParty)
+      .set({ userId: ctx.actor.userId })
+      .where(eq(ledgerParty.shortcode, member.output.id));
+    for (const action of ["run_now_paid", "resume"] as const) {
+      const pausedEmptyId = await ensureRun(ctx.db, ctx.actor, {
+        purpose: "ai_refresh",
+        trigger: "scheduled",
+        execution: false,
+      });
+      const [pausedEmpty] = await getDb(ctx.db)
+        .update(runTable)
+        .set({
+          status: action === "run_now_paid" ? "paused_auth" : "paused",
+          failureCode: action === "run_now_paid" ? "execution_limit" : null,
+        })
+        .where(eq(runTable.id, pausedEmptyId))
+        .returning();
+      if (!pausedEmpty) throw new Error("Missing synthetic paused Run");
+      const pausedExecution = await enqueueJob(ctx.db, {
+        key: `run:${pausedEmptyId}`,
+        kind: "run.execute",
+        runId: pausedEmptyId,
+        input: { runId: pausedEmptyId, purpose: "ai_refresh" },
+      });
+      await updateJobs(ctx.db, { id: pausedExecution.id }, { state: "paused" });
+      const pausedJob = await readJob(ctx.db, { id: pausedExecution.id });
+      await expect(
+        controlWorkflowRun(
+          ctx.db,
+          ctx.actor,
+          { runPublicId: pausedEmpty.shortcode, action },
+          "ai_refresh",
+        ),
+      ).rejects.toThrow("no durable evaluation roster");
+      expect(await readJob(ctx.db, { id: pausedExecution.id })).toEqual(
+        pausedJob,
+      );
+      expect(
+        (
+          await getDb(ctx.db)
+            .select()
+            .from(runTable)
+            .where(eq(runTable.id, pausedEmptyId))
+        )[0],
+      ).toEqual(pausedEmpty);
+      expect(
+        await getDb(ctx.db)
+          .select()
+          .from(runControlEvent)
+          .where(eq(runControlEvent.runId, pausedEmptyId)),
+      ).toEqual([]);
+    }
+
     const emptyJobOwner = await ensureRun(ctx.db, ctx.actor, {
       purpose: "ai_refresh",
       trigger: "scheduled",
@@ -539,6 +600,34 @@ describe("Run attention entity view", () => {
           .where(eq(runTable.id, runId))
       )[0]?.status,
     ).toBe("running");
+
+    const retainedExecution = await readJob(ctx.db, { key: `run:${runId}` });
+    if (!retainedExecution) throw new Error("Missing synthetic retained Job");
+    await getDb(ctx.db)
+      .update(runTable)
+      .set({ status: "paused" })
+      .where(eq(runTable.id, runId));
+    await updateJobs(ctx.db, { id: retainedExecution.id }, { state: "paused" });
+    await expect(
+      controlWorkflowRun(
+        ctx.db,
+        ctx.actor,
+        { runPublicId: history.shortcode, action: "resume" },
+        "ai_refresh",
+      ),
+    ).resolves.toBeUndefined();
+    expect(await readJob(ctx.db, { key: `run:${runId}` })).toMatchObject({
+      id: retainedExecution.id,
+      state: "queued",
+    });
+    expect(
+      (
+        await getDb(ctx.db)
+          .select({ result: aiEvaluation.result })
+          .from(aiEvaluation)
+          .where(eq(aiEvaluation.id, item.id))
+      )[0]?.result,
+    ).toEqual(item.result);
 
     const historicalId = await ensureRun(ctx.db, ctx.actor, {
       purpose: "derived_refresh",
