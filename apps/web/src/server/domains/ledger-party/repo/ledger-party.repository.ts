@@ -6,7 +6,6 @@ import {
   asActor,
   defineRepository,
 } from "~/server/entity-kernel/repo/repository";
-import { ENTITY_SCHEMA_BINDINGS } from "~/server/generated/entity-bindings.gen";
 
 import {
   createLedgerParty,
@@ -20,12 +19,12 @@ import {
 } from "./ledger-party";
 
 const mergeInput = z.object({
-  keepId: ENTITY_SCHEMA_BINDINGS.ledgerParty.id,
-  mergeIds: z.array(ENTITY_SCHEMA_BINDINGS.ledgerParty.id).min(1),
+  keepId: ledgerPartySchemaBindings.id,
+  mergeIds: z.array(ledgerPartySchemaBindings.id).min(1),
 });
 
 const ledgerPartyMergeSummary = z.object({
-  deletedIds: z.array(ENTITY_SCHEMA_BINDINGS.ledgerParty.id),
+  deletedIds: z.array(ledgerPartySchemaBindings.id),
   merged: z.number().int().nonnegative(),
   attributionEdgesRepointed: z.number().int().nonnegative(),
   accountEdgesRepointed: z.number().int().nonnegative(),

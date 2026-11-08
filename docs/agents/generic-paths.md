@@ -110,6 +110,9 @@ and retain their behavior checks; passing the helper's own tests proves only tha
   require a domain override. With no repository port, generation constructs
   the existing scaffold/CRUD/repository binding and refuses unsupported declared
   operations. Public contracts are generated at `@cubby/schemas/entities/<key>`;
+  `~/entity/generated/entity-schema-bindings.<key>.gen` owns the canonical
+  repository validator and compiled read-schema instances; pass those into
+  repository/scaffold constructors instead of importing the aggregate catalog.
   `@cubby/schemas/entity-contracts/<key>` owns generated raw schemas and inferred
   raw types, separately from field envelopes. Runtime repositories import that
   raw namespace. Source bootstrap may retain a pure alias to named `readSchemas`

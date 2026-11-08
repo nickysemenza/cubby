@@ -26,7 +26,7 @@ import { withTrace } from "~/server/observability/tracing";
 
 import type {
   EntityBindingSchemas,
-  EntityKernelCoreBinding,
+  EntityKernelReadBinding,
   EntityKernelContext,
 } from "./adapter";
 import { resolveFilterTokens } from "./filter-tokens";
@@ -63,17 +63,7 @@ const inputSchema = z.object({
 export function defineListOperations<
   E extends ListEntity,
   S extends EntityBindingSchemas,
->(
-  binding: Pick<
-    EntityKernelCoreBinding<E, S>,
-    "entity" | "schemas" | "sort"
-  > & {
-    repository: Pick<
-      EntityKernelCoreBinding<E, S>["repository"],
-      "scaffold" | "listRead"
-    >;
-  },
-) {
+>(binding: EntityKernelReadBinding<E, S>) {
   const parseFilters = (input: z.output<typeof inputSchema>["filters"]) => {
     const { ids, ...rest } = z
       .object({ ids: z.array(z.string()).max(500).optional() })

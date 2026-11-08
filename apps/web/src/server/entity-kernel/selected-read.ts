@@ -24,8 +24,6 @@ export async function readSelectedEntityRecords({
 }): Promise<z.output<typeof selectedEntityRecord>[]> {
   const read = await loadEntityReadBinding(entity);
   const scaffold = read.repository.scaffold;
-  if (!scaffold)
-    throw new Error(`Missing selected read scaffold for ${entity}`);
   const binding = read.schemas;
   const schema = selectedFieldEnvelopeSchema(binding.detail, fields);
   const includeFieldReads = Object.keys(schema.shape.fields.shape).length > 0;

@@ -261,3 +261,11 @@ export interface EntityKernelCoreBinding<
   lifecycle: EntityLifecycleContract;
   repository: EntityRepository<E, S>;
 }
+
+/** The read surface omits lifecycle and mutation ports. */
+export type EntityKernelReadBinding<
+  E extends EntitySchemaBindingEntity,
+  S extends EntityBindingSchemas = SchemasFor<E>,
+> = Pick<EntityKernelCoreBinding<E, S>, "entity" | "schemas" | "sort"> & {
+  repository: Pick<EntityRepository<E, S>, "scaffold" | "listRead">;
+};

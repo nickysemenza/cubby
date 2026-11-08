@@ -48,7 +48,6 @@ import {
   asActor,
 } from "~/server/entity-kernel/repo/repository";
 import { createAppError } from "~/server/errors/app-error";
-import { ENTITY_SCHEMA_BINDINGS } from "~/server/generated/entity-bindings.gen";
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
 import { validateProductPolicy } from "~/server/generic/inheritance/repo/inheritance-validation";
 import { listScaffold } from "~/server/generic/list/repo/list";
@@ -341,7 +340,7 @@ const SPENDING_CATEGORY_MERGE_EDGE_POLICY = {
   OperationDisposition
 >;
 
-const spendingCategoryCode = ENTITY_SCHEMA_BINDINGS.spendingCategory.id;
+const spendingCategoryCode = spendingCategorySchemaBindings.id;
 const mergeInput = z.object({
   keepId: spendingCategoryCode,
   mergeIds: z.array(spendingCategoryCode).min(1),
