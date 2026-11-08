@@ -21,6 +21,7 @@ function groupRecordRef(
 ): EntityRef | undefined {
   const record = choice?.value;
   return (record?.kind === "record" ||
+    record?.kind === "projectedRecord" ||
     record?.kind === "rowRecord" ||
     record?.kind === "relatedRecord") &&
     value !== FILTER_NONE

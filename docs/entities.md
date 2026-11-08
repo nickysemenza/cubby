@@ -1859,6 +1859,8 @@ assignments group together with the values shown in rows. The combined No
 resolved individual owner section includes Household, Unknown and pending
 resolution. Its specialized Owner filter cannot select that exact set, so its
 drill-down and exclusion remain unavailable; known owner sections drill normally.
+Record-valued group headers, including scalar projections, share the canonical
+identity-mark renderer and display-image batch with relationship groups.
 Implicit Group menu choices require a public field surface, canonical reference,
 same-field value filter, or the backing bound of a declared date-range field.
 Storage alone does not expose calculation timestamps, leases or override modes.
