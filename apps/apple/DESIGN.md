@@ -40,8 +40,29 @@ Shelf cards and list rows open records through `Navigator.open(_:from:)`. A root
 
 ## Photo capture and handoff
 
-Capture has one primary Scan action and secondary photo sources that enter the
-existing import-run flow. The sweep location stays visible and editable. Persist
+Capture has one primary Scan action. Its secondary photo sources and All photos
+open the same batch review immediately after selection, without an assign/import
+dialog. Photo rows retain the same layout for one photo or many: a 112-point,
+tappable preview, capture date, independent selection control, and a directly
+tappable destination below. Compact row insets replace the separate hero,
+filmstrip and repeated selection status. Batch destination changes act on exactly
+the selected photos; a row destination change scopes itself to that photo.
+
+Confident record matches propose safe destinations before the final Add action;
+analysis never blocks manual choices or overwrites them. Type-only and uncertain
+matches stay unassigned with direct choose-existing/create-new affordances.
+Undated photos require a member-supplied date where the destination requires one;
+staging preserves that date instead of inventing a capture timestamp.
+Mixed-date related matches resolve separately per capture day; explicitly chosen
+destinations may still combine photos. Add explains remaining destination or
+duplicate decisions beside its control. After commit, show destination summaries
+and links to confirmed records. Refused writes retain the same draft and staged
+uploads; unknown outcomes offer Check status instead of another write.
+
+Import selected belongings is secondary inside review and carries the selected
+photos into the existing durable import setup. Ownership, location, processor and
+notification choices stay there. The new-import action remains in a fixed bottom
+bar while defaults and existing runs scroll. The sweep location stays visible and editable. Persist
 only its id in device preferences; restore it after a successful location load,
 and silently clear it if the location was deleted. Camera and Photos permission
 denials explain the blocked action and offer Open Settings (System Settings on Mac).

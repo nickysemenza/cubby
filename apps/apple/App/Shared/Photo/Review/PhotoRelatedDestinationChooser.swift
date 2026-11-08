@@ -43,9 +43,9 @@ struct PhotoRelatedDestinationChooser: View {
         NavigationStack {
             VStack(spacing: 0) {
                 if !heroItems.isEmpty {
-                    PhotoImportHero(items: heroItems)
+                    PhotoImportHero(items: heroItems, heightCap: (120, 0.14))
                 }
-                PhotoAnalysisDisclosure(manifest: importManifest)
+                if developerOverlays { PhotoAnalysisDisclosure(manifest: importManifest) }
                 Group {
                     if let model, !rows.isEmpty {
                         destinationList(model)
@@ -80,6 +80,9 @@ struct PhotoRelatedDestinationChooser: View {
             #endif
             .searchable(text: $search, prompt: "Search name or shortcode")
             .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
                 if developerOverlays {
                     ToolbarItem { CopyDiagnosticsButton { rankingDiagnostics } }
                 }

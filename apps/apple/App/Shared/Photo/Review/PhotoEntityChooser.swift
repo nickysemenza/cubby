@@ -19,6 +19,21 @@ struct PhotoEntityChooser: View {
 
     private var descriptor: EntityDescriptor { EntityCatalog[key] }
 
+    private var proposedSource: EntityRow? {
+        guard let importManifest else { return nil }
+        if !importManifest.selectedIDs.isEmpty,
+            let group = importManifest.groups.first(where: {
+                $0.source == key && importManifest.selectedIDs.isSubset(of: Set($0.photoIDs))
+            })
+        {
+            return group.sourceRow
+        }
+        guard let suggested = importManifest.selectedSuggestedSource, suggested.type.source == key else {
+            return nil
+        }
+        return suggested.row
+    }
+
     /// The leading "New <entity>" row's affordance: every entity declares a `createSelf` route
     /// (8b), so this is `nil` only if the catalog itself is missing that entity's coverage.
     private var newRecordAffordance: PhotoNewRecordAffordance? {
@@ -46,10 +61,10 @@ struct PhotoEntityChooser: View {
     private var content: some View {
         VStack(spacing: 0) {
             if !heroItems.isEmpty {
-                PhotoImportHero(items: heroItems)
+                PhotoImportHero(items: heroItems, heightCap: (120, 0.14))
             }
             if let importManifest {
-                PhotoAnalysisDisclosure(manifest: importManifest)
+                if developerOverlays { PhotoAnalysisDisclosure(manifest: importManifest) }
                 if importManifest.isResolvingSourceRecord {
                     HStack(spacing: 8) {
                         ProgressView().controlSize(.small)
@@ -61,6 +76,18 @@ struct PhotoEntityChooser: View {
                     .padding(.top, 4)
                     .accessibilityIdentifier("photos.manifest.resolvingSource")
                 }
+            }
+            if let proposedSource {
+                Button {
+                    onSelect(proposedSource)
+                } label: {
+                    Label("Use \(proposedSource.title)", systemImage: "sparkles")
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .frame(minHeight: 44)
+                }
+                .buttonStyle(.borderless)
+                .padding(.horizontal, FieldGuideTokens.Space.md)
+                .accessibilityIdentifier("photos.manifest.suggested-source")
             }
             newRecordRow
             Group {

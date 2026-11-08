@@ -7,17 +7,6 @@ import SwiftUI
 /// Keeping the viewer here means route selection and creation never lose the photo context.
 struct PhotoImportHero: View {
     let items: [PhotoSelectionItem]
-    let selectedIDs: Set<String>
-    /// The manifest's `focusedItemID` keeps the review preview in sync with the focused filmstrip
-    /// photo. `nil` keeps focus local for callers that only display photos here.
-    private let externalFocusedID: Binding<String>?
-    let onToggle: ((String) -> Void)?
-    let compact: Bool
-
-    // Literal default, no init parameter: falls back to `items.first` lazily in `focusedID`
-    // rather than being seeded from `items`/`focusedID` at init, so a reused view can never show
-    // a stale first-photo default from an earlier `items` array. (state-init-ok pattern; nothing
-    // to tag since there is nothing seeded here.)
     @State private var internalFocusedID = ""
     @State private var showingFullScreen = false
 
@@ -27,27 +16,15 @@ struct PhotoImportHero: View {
     let heightCap: (points: CGFloat, fraction: CGFloat)
 
     init(
-        items: [PhotoSelectionItem], selectedIDs: Set<String> = [],
-        focusedID: Binding<String>? = nil,
-        heightCap: (points: CGFloat, fraction: CGFloat) = (220, 0.22),
-        compact: Bool = false,
-        onToggle: ((String) -> Void)? = nil
+        items: [PhotoSelectionItem],
+        heightCap: (points: CGFloat, fraction: CGFloat) = (220, 0.22)
     ) {
         self.items = items
-        self.selectedIDs = selectedIDs
-        self.externalFocusedID = focusedID
         self.heightCap = heightCap
-        self.compact = compact
-        self.onToggle = onToggle
     }
 
     private var focusedID: String {
-        externalFocusedID?.wrappedValue
-            ?? (internalFocusedID.isEmpty ? items.first?.id ?? "" : internalFocusedID)
-    }
-
-    private func setFocusedID(_ id: String) {
-        if let externalFocusedID { externalFocusedID.wrappedValue = id } else { internalFocusedID = id }
+        internalFocusedID.isEmpty ? items.first?.id ?? "" : internalFocusedID
     }
 
     private var focusedItem: PhotoSelectionItem? {
@@ -59,12 +36,8 @@ struct PhotoImportHero: View {
     var body: some View {
         if let focusedItem {
             VStack(spacing: 8) {
-                if compact {
-                    compactPreview(for: focusedItem)
-                } else {
-                    heroButton(for: focusedItem)
-                }
-                filmstrip(focused: focusedItem)
+                heroButton(for: focusedItem)
+                if items.count > 1 { filmstrip(focused: focusedItem) }
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
@@ -74,24 +47,6 @@ struct PhotoImportHero: View {
                 items: items,
                 initialID: focusedItem.id
             )
-        }
-    }
-
-    private func compactPreview(for item: PhotoSelectionItem) -> some View {
-        let position = (items.firstIndex(where: { $0.id == item.id }) ?? 0) + 1
-        return HStack(spacing: 10) {
-            PhotoImportProgressiveImage(item: item, maxPixelSize: 220)
-                .frame(width: 56, height: 56)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
-            Text("Viewing photo \(position) of \(items.count)")
-                .font(.subheadline)
-            Spacer(minLength: 0)
-            Button("View photo", systemImage: "arrow.up.left.and.arrow.down.right") {
-                showingFullScreen = true
-            }
-            .labelStyle(.iconOnly)
-            .accessibilityLabel("View focused photo full screen")
-            .frame(minWidth: 44, minHeight: 44)
         }
     }
 
@@ -134,9 +89,7 @@ struct PhotoImportHero: View {
                         position: index + 1,
                         size: thumbnailSize,
                         isFocused: item.id == focused.id,
-                        isSelected: selectedIDs.contains(item.id),
-                        onFocus: { setFocusedID(item.id) },
-                        onToggle: onToggle.map { toggle in { toggle(item.id) } })
+                        onFocus: { internalFocusedID = item.id })
                 }
             }
             .padding(.horizontal, 16)
@@ -146,17 +99,13 @@ struct PhotoImportHero: View {
     }
 }
 
-/// One filmstrip cell. Focus/selection arrive as plain `Bool`s so the accessibility strings and
-/// symbol styling below are cheap for the type checker (the inline ternaries on
-/// `selectedIDs.contains` pushed the parent `body` past the 200ms limit).
+/// One preview-navigation cell; assignment selection belongs to the review rows.
 private struct PhotoImportFilmstripThumb: View {
     let item: PhotoSelectionItem
     let position: Int
     let size: CGFloat
     let isFocused: Bool
-    let isSelected: Bool
     let onFocus: () -> Void
-    let onToggle: (() -> Void)?
 
     var body: some View {
         HStack(spacing: 2) {
@@ -172,29 +121,15 @@ private struct PhotoImportFilmstripThumb: View {
             .buttonStyle(.plain)
             .accessibilityLabel("View photo \(position)")
             .accessibilityValue(isFocused ? "Focused" : "")
-            .accessibilityHint("Changes the preview; use Select for assignment")
+            .accessibilityHint("Changes the preview")
             .accessibilityIdentifier("photos.import.filmstrip.\(item.id)")
-            if let onToggle {
-                Button(action: onToggle) { selectionMark }
-                    .buttonStyle(.plain)
-                    .frame(width: 44, height: 44)
-                    .accessibilityLabel("Select photo \(position) for assignment")
-                    .accessibilityValue(isSelected ? "Selected" : "Not selected")
-                    .accessibilityAddTraits(isSelected ? .isSelected : [])
-                    .accessibilityIdentifier("photos.import.select.\(item.id)")
-            }
-        }
-    }
 
-    private var selectionMark: some View {
-        Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-            .foregroundStyle(isSelected ? .white : .secondary, isSelected ? .blue : .white)
-            .padding(3)
+        }
     }
 
 }
 
-private struct PhotoImportProgressiveImage: View {
+struct PhotoImportProgressiveImage: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let item: PhotoSelectionItem
     let maxPixelSize: Int
@@ -427,7 +362,7 @@ private struct PhotoImportFullScreenViewer: View {
     }
 }
 
-private extension View {
+extension View {
     @ViewBuilder
     func photoImportViewer(
         isPresented: Binding<Bool>, items: [PhotoSelectionItem], initialID: String

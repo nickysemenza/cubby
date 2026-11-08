@@ -164,9 +164,7 @@ struct PhotoImportFlowTests {
 
         #expect(manifest.needsDestination == [first.id, second.id])
         #expect(!manifest.canCommit)
-        // 5c defaults selection to the focused photo alone; select both explicitly to exercise
-        // the original whole-batch assignment this test covers.
-        manifest.selectedIDs = Set(manifest.items.map(\.id))
+        #expect(manifest.selectedIDs == Set(manifest.items.map(\.id)))
         let option = try #require(manifest.destinationOptions.first)
         manifest.moveSelected(
             to: option,
@@ -177,16 +175,18 @@ struct PhotoImportFlowTests {
         #expect(manifest.needsDestination.isEmpty)
         #expect(manifest.groups.count == 1)
         #expect(manifest.groups[0].photoIDs == [first.id, second.id])
-        #expect(manifest.groups[0].title == "Example  PRD-2345")
+        #expect(manifest.groups[0].title == "Example")
         #expect(manifest.canCommit)
     }
 
-    @Test func defaultSelectionIsTheFocusedPhotoAndAdvancesAfterAssignment() throws {
+    @Test func batchSelectionPersistsWhileFocusAdvancesAfterAssignment() throws {
         let first = try selection(filename: "first.jpg")
         let second = try selection(filename: "second.jpg")
         let manifest = makeManifest(items: [first, second])
 
         #expect(manifest.focusedItemID == first.id)
+        #expect(manifest.selectedIDs == [first.id, second.id])
+        manifest.selectPhotos([first.id])
         #expect(manifest.selectedIDs == [first.id])
 
         let option = try #require(manifest.destinationOptions.first)
@@ -197,10 +197,10 @@ struct PhotoImportFlowTests {
                 raw: ["id": "PRD-2345", "name": "Example"]))
 
         #expect(manifest.focusedItemID == second.id)
-        #expect(manifest.selectedIDs == [second.id])
+        #expect(manifest.selectedIDs == [first.id])
     }
 
-    @Test func finishingAssignmentsKeepsFocusButClearsAssignmentScope() throws {
+    @Test func finishingAssignmentsPreservesBatchSelection() throws {
         let first = try selection(filename: "first.jpg")
         let second = try selection(filename: "second.jpg")
         let manifest = makeManifest(items: [first, second])
@@ -214,11 +214,10 @@ struct PhotoImportFlowTests {
                 raw: ["id": "PRD-2345", "name": "Example"]))
 
         #expect(manifest.focusedItemID == first.id)
-        #expect(manifest.selectedIDs.isEmpty)
-        #expect(manifest.reviewSelectionStatus == "All 2 photos ready to add")
+        #expect(manifest.selectedIDs == [first.id, second.id])
         manifest.toggle(second.id)
         #expect(manifest.focusedItemID == second.id)
-        #expect(manifest.reviewSelectionStatus == "Assigning 1 of 2 photos")
+        #expect(manifest.selectedIDs == [first.id])
     }
 
     /// A1 regression: `scopedCaptureDate` (and therefore every editor/stage prefill) falls back to
@@ -244,14 +243,12 @@ struct PhotoImportFlowTests {
         #expect(body["observedOn"] == .string(PlainDate(captured).rawValue))
     }
 
-    /// Routing analysis may offer a matching record but cannot attach a photo; the explicit
-    /// suggested-record tap is the authorization boundary.
-    @Test func analyzerSuggestionsNeverAttachPhotos() throws {
+    /// Safe suggestions stage for the batch confirmation, but later analysis preserves member edits.
+    @Test func analyzerSuggestionsStagePhotosAndPreserveMemberChoices() async throws {
         let item = try selection(filename: "match.jpg")
         let manifest = makeManifest(items: [item])
-        manifest.selectedIDs = [item.id]
         let option = try #require(
-            manifest.destinationOptions.first { $0.route.kind == .`self` && $0.route.choice != .prompt })
+            manifest.destinationOptions.first { $0.route.kind == .`self` && $0.route.source == .product })
         let row = EntityRow(
             id: "PRD-9999", title: "Example", subtitle: nil, imageURL: nil,
             raw: ["id": "PRD-9999", "name": "Example"])
@@ -259,13 +256,26 @@ struct PhotoImportFlowTests {
         let candidate = PhotoImportManifest.Candidate(option: option, row: row, routing: routing)
         let decision = PhotoRoutingDecision(
             photoID: item.id, routeID: option.id, candidateID: routing.id, explanation: "Matched by test")
+        let client = try routeClient(gardenEntries: [])
 
-        manifest.applyRoutingDecisions([decision], candidates: [routing.id: candidate])
+        await manifest.applyRoutingDecisions([decision], candidates: [routing.id: candidate], client: client)
 
         #expect(manifest.selectedIDs == [item.id])
-        #expect(manifest.groups.isEmpty)
-        #expect(manifest.needsDestination == [item.id])
-        #expect(manifest.selectedSuggestedSource?.row.id == "PRD-9999")
+        #expect(manifest.groups.first?.id == "\(option.id):PRD-9999")
+        #expect(manifest.needsDestination.isEmpty)
+        #expect(!manifest.hasStagedChanges)
+        #expect(manifest.canCommit)
+
+        manifest.moveSelected(
+            to: option,
+            row: EntityRow(
+                id: "PRD-9998", title: "Member choice", subtitle: nil, imageURL: nil,
+                raw: ["id": "PRD-9998", "name": "Member choice"]))
+        await manifest.applyRoutingDecisions([decision], candidates: [routing.id: candidate], client: client)
+        #expect(manifest.groups.first?.id == "\(option.id):PRD-9998")
+        #expect(manifest.hasStagedChanges)
+        manifest.undoLastMove()
+        #expect(manifest.groups.first?.id == "\(option.id):PRD-9999")
     }
 
     /// A1 (Q7b): an undated photo's capture-date-bound field never gets a value from `createPrefill`
@@ -287,6 +297,13 @@ struct PhotoImportFlowTests {
         #expect(
             !PhotoRelatedCreateEditor.hasOnlyOptionalFields(
                 option: option, source: source, captureDate: nil))
+
+        manifest.stageCreate(option: option, source: source, body: ["observedOn": "2026-09-10"])
+        #expect(manifest.createDraftBody(for: item.id)?["observedOn"] == "2026-09-10")
+        let meal = try #require(PhotoImportManifest.createSelfOption(for: .meal))
+        manifest.stageCreate(
+            option: meal, source: nil, body: ["date": "2026-09-11", "name": "Synthetic supper"])
+        #expect(manifest.createDraftBody(for: item.id)?["date"] == "2026-09-11")
     }
 
     /// A2 (Q15c): the caption is a pure function of (time, zone, city) and drops the " in …"
@@ -354,13 +371,23 @@ struct PhotoImportFlowTests {
     }
 
     @Test func chooseSourceRecordAutoResolvesASingleSameDayMatch() async throws {
-        let item = try selection(filename: "match.jpg")
-        let manifest = makeManifest(items: [item])
+        let first = try selection(
+            filename: "first-day.jpg", capturedAt: Date(timeIntervalSince1970: 1_789_000_000))
+        let second = try selection(
+            filename: "second-day.jpg", capturedAt: Date(timeIntervalSince1970: 1_789_086_400))
+        let manifest = makeManifest(items: [first, second])
         let type = try #require(manifest.sourceTypeOptions.first { $0.source == .planting })
         let row = EntityRow(
             id: "PLT-1234", title: "Santa Rosa", subtitle: nil, imageURL: nil,
             raw: ["id": "PLT-1234", "locationId": "LOC-0007"])
         let client = try routeClient(gardenEntries: [(id: "GDE-0001", locationId: "LOC-0007")])
+        PhotoRouteTestProtocol.nextResponse.withLock { next in
+            next = PhotoRouteTestProtocol.response.withLock {
+                Data(
+                    String(decoding: $0, as: UTF8.self).replacingOccurrences(of: "GDE-0001", with: "GDE-0002")
+                        .utf8)
+            }
+        }
 
         let resolution = await manifest.chooseSourceRecord(type, row: row, client: client)
 
@@ -372,10 +399,32 @@ struct PhotoImportFlowTests {
             manifest.destinationOptions.first {
                 $0.route.kind == .existingRelated && $0.route.source == .planting
             })
-        #expect(manifest.groups.first?.id == "\(existing.id):GDE-0001")
+        #expect(manifest.groups.count == 2)
+        #expect(manifest.groups.first(where: { $0.id == "\(existing.id):GDE-0001" })?.photoIDs == [first.id])
+        #expect(manifest.groups.first(where: { $0.id == "\(existing.id):GDE-0002" })?.photoIDs == [second.id])
         #expect(manifest.needsDestination.isEmpty)
-        // Developer overlays layer 2: a single same-day auto-resolve records `.existingSameDay`.
-        #expect(manifest.groups.first?.decision == .existingSameDay(count: 1))
+        #expect(manifest.groups.allSatisfy { $0.decision == .existingSameDay(count: 1) })
+        manifest.undoLastMove()
+        #expect(Set(manifest.needsDestination) == Set([first.id, second.id]))
+
+        let pendingManifest = makeManifest(items: [first, second])
+        _ = try routeClient(gardenEntries: [(id: "GDE-0002", locationId: "LOC-0007")])
+        let laterDayResponse = PhotoRouteTestProtocol.response.withLock { $0 }
+        let mixedClient = try routeClient(gardenEntries: [
+            (id: "GDE-0001", locationId: "LOC-0007"), (id: "GDE-0003", locationId: "LOC-0007"),
+        ])
+        PhotoRouteTestProtocol.nextResponse.withLock { $0 = laterDayResponse }
+        let pending = await pendingManifest.chooseSourceRecord(type, row: row, client: mixedClient)
+        guard case .relatedChooser = pending else {
+            Issue.record("The ambiguous first day must remain available for member review")
+            return
+        }
+        #expect(pendingManifest.needsDestination == [first.id])
+        #expect(pendingManifest.selectedIDs == [first.id])
+        #expect(pendingManifest.groups.first?.photoIDs == [second.id])
+        #expect(pendingManifest.groups.first?.id == "\(existing.id):GDE-0002")
+        pendingManifest.undoLastMove()
+        #expect(Set(pendingManifest.needsDestination) == Set([first.id, second.id]))
     }
 
     @Test func chooseSourceRecordStagesACreateDraftWithThePrefilledBodyWhenNothingMatches() async throws {
@@ -419,6 +468,8 @@ struct PhotoImportFlowTests {
         }
         #expect(option.route.kind == .existingRelated)
         #expect(page == nil)
+        #expect(!manifest.canUndo)
+        #expect(!manifest.hasStagedChanges)
         #expect(manifest.groups.isEmpty)
         #expect(manifest.needsDestination == [item.id])
         #expect(manifest.createDraftBody(for: item.id) == nil)
@@ -649,20 +700,7 @@ struct PhotoImportFlowTests {
     }
 
     @Test func mixedBatchKeepsPartialSourceSuggestionsActionable() throws {
-        let groups = PhotoImportManifest.sourceTypeSuggestionGroups(
-            selectedIDs: ["plant-1", "plant-2", "meal-1", "unknown"],
-            suggestions: [
-                "plant-1": .planting,
-                "plant-2": .planting,
-                "meal-1": .meal,
-            ])
 
-        #expect(groups.count == 2)
-        let planting = try #require(groups.first)
-        #expect(planting.source == .planting)
-        #expect(planting.photoIDs == ["plant-1", "plant-2"])
-        #expect(groups[1].source == .meal)
-        #expect(groups[1].photoIDs == ["meal-1"])
     }
 
     private func selection(filename: String, capturedAt: Date? = nil) throws -> PhotoSelectionItem {
@@ -692,13 +730,14 @@ struct PhotoImportFlowTests {
                 """
             }.joined(separator: ",")
         let json =
-            "{\"items\":[\(items)],\"meta\":{\"pageIndex\":1,\"pageSize\":25,\"totalCount\":\(gardenEntries.count)}}"
+            "{\"items\":[\(items)],\"meta\":{\"pageIndex\":1,\"pageSize\":25,\"totalCount\":\(gardenEntries.count),\"hasNextPage\":false}}"
         PhotoRouteTestProtocol.response.withLock {
             $0 = Data(
                 (statusCode == 200
                     ? "{\"ok\":true,\"data\":\(json)}"
                     : "{\"code\":\"UPSTREAM_ERROR\",\"message\":\"Synthetic lookup refusal\"}").utf8)
         }
+        PhotoRouteTestProtocol.nextResponse.withLock { $0 = nil }
         PhotoRouteTestProtocol.statusCode.withLock { $0 = statusCode }
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [PhotoRouteTestProtocol.self]
@@ -714,6 +753,7 @@ struct PhotoImportFlowTests {
 /// The synchronized response belongs only to this serialized suite; it never reaches a network.
 nonisolated private final class PhotoRouteTestProtocol: URLProtocol, @unchecked Sendable {
     static let response = Mutex(Data())
+    static let nextResponse = Mutex<Data?>(nil)
     static let statusCode = Mutex(200)
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
@@ -722,7 +762,15 @@ nonisolated private final class PhotoRouteTestProtocol: URLProtocol, @unchecked 
             url: request.url!, statusCode: Self.statusCode.withLock { $0 }, httpVersion: nil,
             headerFields: ["Content-Type": "application/json"])!
         client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
-        client?.urlProtocol(self, didLoad: Self.response.withLock { $0 })
+        let data = Self.response.withLock { $0 }
+        if let next = Self.nextResponse.withLock({ value in
+            let next = value
+            value = nil
+            return next
+        }) {
+            Self.response.withLock { $0 = next }
+        }
+        client?.urlProtocol(self, didLoad: data)
         client?.urlProtocolDidFinishLoading(self)
     }
     override func stopLoading() {}

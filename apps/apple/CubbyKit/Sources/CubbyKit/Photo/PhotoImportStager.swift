@@ -149,6 +149,7 @@ public actor PhotoImportTransaction {
     private let deviceID: String?
     private var stagedByClientID: [String: Staged] = [:]
     private var committedClientIDs: [String]?
+    public private(set) var createdDestinations: [String: String] = [:]
 
     public init(
         client: CubbyClient,
@@ -261,8 +262,11 @@ public actor PhotoImportTransaction {
         // receipt; the server commit is a one-shot operation and callers must not auto-retry an
         // ambiguous transport response.
         do {
-            _ = try await client.commitPhotoImport(
+            let result = try await client.commitPhotoImport(
                 PhotoImportCommitInput(deviceId: deviceID, images: images, creates: drafts))
+            createdDestinations = Dictionary(
+                result.createdDestinations.map { ($0.draftId, $0.id) },
+                uniquingKeysWith: { first, _ in first })
         } catch let apiError as CubbyAPIError {
             // A rejected 4xx request has a definite outcome: never route it through the full
             // ambiguous-commit reconciliation below, and never return committed ids for it — for
