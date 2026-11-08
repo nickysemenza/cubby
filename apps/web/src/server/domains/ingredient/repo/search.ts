@@ -550,7 +550,6 @@ export const ingredientScaffold = listScaffold("ingredient", ingredient, {
         const projection = page.projection;
         // Complete Product demand already covers every conversion input.
         if (
-          !projection ||
           projection.includes("product") ||
           projection.includes("nutritionProduct")
         ) {
