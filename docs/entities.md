@@ -2353,6 +2353,9 @@ Complete list reads, detail reads, native reads and full MCP reads retain unchan
 absent unless requested. Thumbnail badges retain the full count; image-chain
 popovers still load every image. Cover-only reads hydrate the selected image's
 representations without resolving or attaching a partial `displayImages` array.
+Product cover-URL bindings reuse the page's resolved display images when the read
+also requests full media. Narrow cover-URL reads retain the canonical cover query;
+full galleries, label attachments and preferred representations are unchanged.
 
 Browser roster projections include the synthesized Quality column when readable
 and not explicitly hidden, alongside identity and the display cover. Its field
