@@ -82,7 +82,7 @@ export async function controlWorkflowRun(
     row.memberUserId !== actor.userId
   )
     throw new Error("Only the member this Run belongs to can control it");
-  // A paused Job can outlive its roster; refuse before relaunch or a paid grant.
+  // A paused Run may have no durable roster; refuse before launch or a paid grant.
   if (!row.hasAiRoster)
     throw createAppError(
       "RUN_CONTROL_REFUSED",
