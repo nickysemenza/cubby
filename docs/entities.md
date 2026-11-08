@@ -5278,6 +5278,8 @@ weight and candidate limit). Product, Recipe and Location additionally declare
 stored tag overlaps as display-only evidence; popularity caps omit ubiquitous
 tag hubs. Generation rejects signals on entities without embeddings and overlap
 fields that are not stored text arrays. No entity-keyed runtime registry is needed.
+The scalar reader uses `candidate_overlaps` for its SQL CTE because PostgreSQL
+reserves `OVERLAPS` as a keyword.
 
 The generic semantic reader shares source readiness, current-vector validation
 and canonical hit hydration with explicit similarity search. Unavailable,
