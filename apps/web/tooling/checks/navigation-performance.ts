@@ -44,6 +44,7 @@ const sampleSchema = z.object({
   usefulInteractiveMs: z.number().nonnegative(),
   operationResponsesByReady: z.number().int().nonnegative(),
   failedHttpResponsesByReady: z.number().int().nonnegative(),
+  contextPageErrorsByReady: z.number().int().nonnegative(),
   cacheEvidence: z.enum([
     "no-operation-response-observed",
     "operation-response-observed",
@@ -205,6 +206,10 @@ async function navigationPerformance() {
             // Request interception disables HTTP caching and invalidates warm measurements.
             const page = await context.newPage();
             page.setDefaultTimeout(30_000);
+            // Recovery during priming also contaminates the measured context.
+            let pageErrors = 0;
+            const observePageError = () => pageErrors++;
+            page.on("pageerror", observePageError);
             if (mode === "warm-spa") {
               await page.goto(scenario.target.path, {
                 waitUntil: "domcontentloaded",
@@ -254,6 +259,7 @@ async function navigationPerformance() {
                   performance.now() - started,
                 );
                 page.off("response", observe);
+                page.off("pageerror", observePageError);
                 return {
                   usefulInteractiveMs,
                   startup: await profile.collect(null),
@@ -282,6 +288,7 @@ async function navigationPerformance() {
                   usefulInteractiveMs,
                   operationResponsesByReady: operations,
                   failedHttpResponsesByReady: failedResponses,
+                  contextPageErrorsByReady: pageErrors,
                   // Absence of responses cannot prove a query-cache hit or an RPC success.
                   cacheEvidence:
                     mode === "warm-spa"
@@ -345,6 +352,10 @@ async function navigationPerformance() {
         (total, sample) => total + sample.failedHttpResponsesByReady,
         0,
       ),
+      contextPageErrorsByReady: matching.reduce(
+        (total, sample) => total + sample.contextPageErrorsByReady,
+        0,
+      ),
     };
   });
   await mkdir(dirname(output), { recursive: true });
@@ -371,6 +382,7 @@ async function navigationPerformance() {
   return groups.some(
     (group) =>
       group.failedHttpResponsesByReady > 0 ||
+      group.contextPageErrorsByReady > 0 ||
       (budget !== null && group.maxMs > budget),
   )
     ? 1

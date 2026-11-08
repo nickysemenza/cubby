@@ -94,6 +94,13 @@ record so review actions and deep links into those slots are available before
 scrolling. Other below-fold journeys navigate or scroll to the retained section
 shell before using its lazy content. Handwritten generic list routes use the
 same metadata admission and first-page loader as generated routes.
+Summary disclosure geometry follows declarations through the first hydration
+render: non-field context after the first four slots starts folded. Only after
+that boundary hydrates may cached report/connection results change which context
+cells fold, disappear, or expose an error or attention note. Streamed results can
+reach the client cache before React hydrates; using them to add or remove a
+summary Suspense boundary during that first render discards the server tree.
+Primary summary reads retain their independent streaming boundaries.
 Query dehydration uses Start's native serializer for Dates, collections and
 shared references. Do not wrap those query values in an additional JSON codec.
 The browser operation HTTP transport speaks the same plain JSON as Apple; each
