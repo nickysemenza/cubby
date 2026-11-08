@@ -1637,6 +1637,28 @@ export function listScaffold<
       const unresolved = scaffold.hasResultFilters(filters)
         ? scaffold.unresolvedWhere(filters, prepared)
         : undefined;
+      const resultKeys = new Set<string>(
+        totals.flatMap((total) =>
+          "requiresResults" in total ? (total.requiresResults ?? []) : [],
+        ),
+      );
+      const currentValues = new Map<string, SQL>();
+      const sharedValues: SQL[] = [];
+      for (const key of keys) {
+        const field = derivedFields[key];
+        if (
+          !resultKeys.has(key) ||
+          field?.shape !== "value" ||
+          field.type !== "number"
+        )
+          continue;
+        const name = sql.identifier(`v${sharedValues.length}`);
+        const value = derivedValueSql(entity, derivedSql, key, prepared);
+        sharedValues.push(
+          sql`${unresolved ? sql`CASE WHEN ${where ?? sql`true`} THEN ${value} END` : value} AS ${name}`,
+        );
+        currentValues.set(key, sql`${sql.identifier("total_values")}.${name}`);
+      }
       const selections: Record<string, SQL<number | boolean>> = {};
       for (const [index, key] of keys.entries()) {
         const stored = fieldModel?.storage.find((field) => field.key === key);
@@ -1645,7 +1667,7 @@ export function listScaffold<
             ? sql<string>`COALESCE(sum(${storedFieldValueSql(entity, `"${getTableName(table)}"`, stored.column, "stored")}) FILTER (WHERE ${where ?? sql`true`}), 0)::text`.mapWith(
                 (value) => minorToMoney(BigInt(value)),
               )
-            : sql<number>`COALESCE(sum((${listMetricSql(entity, key, derivedSql, table, prepared)})::numeric) FILTER (WHERE ${where ?? sql`true`}), 0)::double precision`;
+            : sql<number>`COALESCE(sum((${currentValues.get(key) ?? listMetricSql(entity, key, derivedSql, table, prepared)})::numeric) FILTER (WHERE ${where ?? sql`true`}), 0)::double precision`;
       }
       if (unresolved)
         selections.unresolved = sql<boolean>`COALESCE(bool_or(${unresolved}), false)`;
@@ -1655,7 +1677,8 @@ export function listScaffold<
           const field = derivedFields[key];
           const currentValue =
             field?.shape === "value" && field.type === "number"
-              ? derivedValueSql(entity, derivedSql, key, prepared)
+              ? (currentValues.get(key) ??
+                derivedValueSql(entity, derivedSql, key, prepared))
               : undefined;
           const available = storedFieldAvailableSql(entity, key, table.id, {
             currentValue,
@@ -1669,22 +1692,31 @@ export function listScaffold<
         const live = total.keys.flatMap((key) => {
           const field = derivedFields[key];
           return field?.shape === "value" && field.type === "number"
-            ? [derivedValueSql(entity, derivedSql, key, prepared)]
+            ? [
+                currentValues.get(key) ??
+                  derivedValueSql(entity, derivedSql, key, prepared),
+              ]
             : [];
         });
         // Current authoritative scalars can settle a contribution before publication.
         const ready = or(
-          and(...results),
           live.length === total.keys.length
             ? and(...live.map((value) => sql`${value} IS NOT NULL`))
             : undefined,
+          and(...results),
         );
         selections[`incomplete_${index}`] =
           sql<boolean>`COALESCE(bool_or((${ready}) IS NOT TRUE) FILTER (WHERE ${where ?? sql`true`}), false)`;
       }
-      const [row] = await unwrapDb(db)
-        .select(selections)
-        .from(listTable)
+      const query = unwrapDb(db).select(selections).from(listTable);
+      // OFFSET 0 keeps sums and completeness from rerunning the same row scalar.
+      const summary = sharedValues.length
+        ? query.leftJoinLateral(
+            sql`(SELECT ${sql.join(sharedValues, sql`, `)} OFFSET 0) total_values`,
+            sql`true`,
+          )
+        : query;
+      const [row] = await summary
         // Unknown candidates establish completeness but never enter the known subtotal.
         .where(unresolved ? or(where ?? sql`true`, unresolved) : where);
       const flags = z

@@ -3468,6 +3468,10 @@ reads withhold incomplete keys too. Missing completeness metadata never qualifie
 a displayed subtotal as complete.
 Current authoritative numeric assignments can settle a contribution immediately.
 An old own result suppressed after reset cannot make that contribution complete.
+When a sum and its completeness check reuse a numeric scalar, the aggregate reads
+it once per contributing row through a one-row lateral projection. A planner
+barrier keeps its subqueries from expanding at each reference; unknown candidates
+retain their completeness-only role.
 List pages and record reads carry one typed envelope per governed field. A field whose public name differs from
 its existing cache key declares `storedKey`; the compiler requires a published
 stored value and the serializer carries that snapshot's value, provenance,
@@ -4797,7 +4801,9 @@ control behavior. A child with its own different feature overrides the ancestor.
 Pricing, quantity and ownership SQL share `serviceCategorySql`, which delegates
 to the canonical `categoryFeatureInSql` set predicate. The declaration owns
 nearest live ancestors, depth and cycle guards; the Product predicate retains
-its native live-row check. No separate service membership catalog is stored.
+its native live-row check. Price and cost scalars that already have a Product
+row classify its category and liveness directly rather than rereading that row.
+No separate service membership catalog is stored.
 
 Actual Expenses retain their amounts and quantities (usage, seats or other
 source units). Service quantities do not accumulate acquired stock, establish

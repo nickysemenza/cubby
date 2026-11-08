@@ -8,7 +8,14 @@ import { isServiceProductCategory } from "@cubby/schemas/product-category-fields
 import { productPriceFacts } from "@cubby/schemas/product-fields";
 import type { RawProductOutput } from "@cubby/schemas/product-raw-read";
 import { round2 } from "@cubby/shared";
-import { and, inArray, isNotNull, sql, type SQL } from "drizzle-orm";
+import {
+  and,
+  getTableName,
+  inArray,
+  isNotNull,
+  sql,
+  type SQL,
+} from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
@@ -34,7 +41,10 @@ import {
   projectionRows,
   unitWeighted,
 } from "~/server/domains/product/repo/kit-projection";
-import { serviceProductSqlText } from "~/server/domains/product/repo/service-category";
+import {
+  serviceCategorySql,
+  serviceProductSqlText,
+} from "~/server/domains/product/repo/service-category";
 import {
   storedDerivedSql,
   type StoredDerivedRead,
@@ -452,8 +462,12 @@ const derivedProductPriceSql = (productAlias = '"product"') =>
 export const effectiveProductPriceSql = (productAlias = '"product"') =>
   `(CASE WHEN NOT ${serviceProductSqlText(`${productAlias}."id"`)} THEN COALESCE(${productAlias}."price", ${derivedProductPriceSql(productAlias)}) END)`;
 
+// Keep outer identifiers qualified and retain the id lookup's live-row rule.
+const productTableName = getTableName(product);
+const serviceProductRowSql = sql<boolean>`(${notDeleted(productTableName)} AND ${serviceCategorySql(sql`${sql.identifier(productTableName)}.${sql.identifier(product.categoryId.name)}`)})`;
+
 /** One read precedence for the value, filters, sorting and filtered totals. */
-export const productReadPriceSql: SQL = sql`CASE WHEN NOT ${sql.raw(serviceProductSqlText('"Product"."id"'))} THEN ${storedDerivedSql(
+export const productReadPriceSql: SQL = sql`CASE WHEN NOT ${serviceProductRowSql} THEN ${storedDerivedSql(
   "product",
   "price",
   product.id,
@@ -461,13 +475,13 @@ export const productReadPriceSql: SQL = sql`CASE WHEN NOT ${sql.raw(serviceProdu
 )} END`;
 
 /** Cost sorting selects the same service snapshot or physical valuation as display. */
-export const productReadCostSql: SQL = sql`CASE WHEN ${sql.raw(serviceProductSqlText('"Product"."id"'))}
+export const productReadCostSql: SQL = sql`CASE WHEN ${serviceProductRowSql}
   THEN ${storedDerivedSql("product", "cost", product.id)} ELSE ${productReadPriceSql} END`;
 
 const productPriceSumSql = (whereClause: SQL | undefined): SQL<number> => sql`
   SELECT COALESCE(sum((${productReadPriceSql})::numeric), 0)::double precision AS "priceSum"
   FROM "Product" WHERE ${whereClause ?? sql`TRUE`}
-    AND NOT ${sql.raw(serviceProductSqlText('"Product"."id"'))}`;
+    AND NOT ${serviceProductRowSql}`;
 
 export const loadProductPriceSum = async (
   db: Database | DrizzleTransaction,
