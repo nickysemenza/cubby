@@ -643,7 +643,7 @@ export function useEntityList<
     timing,
     refreshControls,
   } = infiniteResult;
-  const { setColumnFilters } = tableState;
+  const { setColumnFilters, columnFilters } = tableState;
   const [collapsedGroups, setCollapsedGroups] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
@@ -690,7 +690,16 @@ export function useEntityList<
         const field = groupRootField(drill, group.path[0]);
         if (!field) return undefined;
         const valueGroup = { ...group, key: field.key };
-        if (hideSectionValues(field.spec, valueGroup, []) === undefined)
+        const current = columnFilters.find(
+          ({ id }) => id === field.spec.columnId,
+        )?.value;
+        if (
+          hideSectionValues(
+            field.spec,
+            valueGroup,
+            Array.isArray(current) ? current.map(String) : [],
+          ) === undefined
+        )
           return undefined;
         return () =>
           setColumnFilters((previous) => {
@@ -702,6 +711,7 @@ export function useEntityList<
               valueGroup,
               Array.isArray(current) ? current.map(String) : [],
             );
+            if (values === undefined) return previous;
             return [
               ...previous.filter(({ id }) => id !== field.spec.columnId),
               ...(values?.length
@@ -760,6 +770,7 @@ export function useEntityList<
     groupChoice,
     groups,
     setColumnFilters,
+    columnFilters,
     collapsedGroups,
     groupBy,
     infiniteResult.memberships,

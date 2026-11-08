@@ -257,7 +257,22 @@ it.each([1440, 402])(
     );
     fireEvent.click(within(editor).getByRole("button", { name: "Close" }));
     fireEvent.click(screen.getByRole("button", { name: "Filter" }));
-    const reopened = await screen.findByRole("dialog", { name: "Filter" });
+    let reopened = await screen.findByRole("dialog", { name: "Filter" });
+    fireEvent.click(within(reopened).getByRole("button", { name: "Projects" }));
+    const projectEditor = await screen.findByRole("dialog", {
+      name: "Filter by Projects",
+    });
+    const descendants = within(projectEditor).getByRole("switch", {
+      name: "Include sub-projects",
+    });
+    expect(descendants).not.toBeChecked();
+    await userEvent.click(descendants);
+    await waitFor(() => expect(descendants).toBeChecked());
+    fireEvent.click(
+      within(projectEditor).getByRole("button", { name: "Close" }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Filter" }));
+    reopened = await screen.findByRole("dialog", { name: "Filter" });
     fireEvent.click(
       within(reopened).getByRole("button", { name: "Sort by Updated at" }),
     );

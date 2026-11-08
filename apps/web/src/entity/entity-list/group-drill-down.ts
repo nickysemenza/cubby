@@ -7,7 +7,7 @@ import type {
 import type { ColumnFiltersState } from "@tanstack/react-table";
 
 import type { FilterSpec } from "~/entity/filter-manifest";
-import { FILTER_EXACT, FILTER_NONE } from "~/entity/filters";
+import { FILTER_NONE, withSubtree } from "~/entity/filters";
 import type { entityMetadata } from "~/entity/metadata";
 import { shiftPlainDate, shiftPlainDateMonths } from "~/lib/household-date";
 
@@ -78,7 +78,13 @@ export function groupPathFilters(
       if (key !== "true" && key !== "false") return undefined;
       value = key;
     } else {
-      value = spec.subtree && !summary?.subtree ? [key, FILTER_EXACT] : [key];
+      value = spec.subtree
+        ? withSubtree(
+            [key],
+            summary?.subtree === true,
+            spec.subtreeDefault !== false,
+          )
+        : [key];
     }
     filters = [
       ...filters.filter(({ id }) => id !== filter.columnId),

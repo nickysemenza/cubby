@@ -38,6 +38,32 @@ export const FILTER_NONE = "__none__";
 export const FILTER_ALL = "__all__";
 /** A hierarchical reference's "Include sub-…" toggle switched off. */
 export const FILTER_EXACT = "__exact__";
+/** A normally exact relationship filter explicitly includes descendants. */
+export const FILTER_SUBTREE = "__subtree__";
+
+/** Explicit modes override a reference filter's manifest default. */
+export const includesSubtree = (
+  values: readonly string[],
+  defaultValue = true,
+): boolean =>
+  values.includes(FILTER_EXACT)
+    ? false
+    : values.includes(FILTER_SUBTREE)
+      ? true
+      : defaultValue;
+
+export const withSubtree = (
+  values: readonly string[],
+  include: boolean,
+  defaultValue = true,
+): string[] => [
+  ...values.filter(
+    (value) => value !== FILTER_EXACT && value !== FILTER_SUBTREE,
+  ),
+  ...(include === defaultValue
+    ? []
+    : [include ? FILTER_SUBTREE : FILTER_EXACT]),
+];
 /**
  * Marks an excluded value ("is not") in a value filter's list; the codecs
  * move it to the filter's generated Exclude key.

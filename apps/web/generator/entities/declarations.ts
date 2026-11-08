@@ -108,6 +108,7 @@ export type FilterDescriptor = Readonly<{
   exclude: Readonly<{ field: string }> | null;
   /** The generated "Include sub-…" toggle's request key. */
   subtree: string | null;
+  subtreeDefault?: boolean;
   /** Accepts `@me` (ADR 0018). */
   currentMember: boolean;
   /** The declared reason this filter accepts one value, not an any-of. */

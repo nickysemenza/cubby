@@ -1,4 +1,5 @@
 import { entitySchema } from "@cubby/schemas/entity";
+import { testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it, vi } from "vitest";
 
 import { metadataQueryClient } from "#web/tests/entity-metadata.ts";
@@ -101,7 +102,7 @@ describe("resolveDateRange", () => {
       dateTo: "2026-03-31",
     });
   });
-  it("clamps calendar months and years over leap days", () => {
+  it("maps typed groups to exact calendar and record predicates", () => {
     expect(resolveDateRange("1m", "2024-03-31")).toEqual({
       dateFrom: "2024-02-29",
       dateTo: "2024-03-31",
@@ -173,6 +174,40 @@ describe("resolveDateRange", () => {
           filterGetterFromColumnFilters(drilled ?? []),
         ),
       ).toEqual({ usuallyOnHand: value === "true" });
+    }
+    const projectId = testShortcode("project", "PRJ-4K7M");
+    for (const subtree of [false, true]) {
+      const path = [projectId];
+      const drilled = groupPathFilters(
+        {
+          groupBy: [{ key: "related:product.projects", level: 1 }],
+          grouping: entityMetadata(queryClient, "product").listFields.grouping,
+          fields,
+          groups: [
+            {
+              key: JSON.stringify(path),
+              path,
+              label: "Example project",
+              count: 1,
+              parentCount: 1,
+              fraction: 1,
+              overlapping: false,
+              subtree,
+            },
+          ],
+        },
+        path,
+      );
+      expect(drilled).toBeDefined();
+      expect(
+        buildFiltersFromManifest(
+          fields,
+          filterGetterFromColumnFilters(drilled ?? []),
+        ),
+      ).toEqual({
+        projectId: [projectId],
+        ...(subtree ? { includeSubProjects: true } : {}),
+      });
     }
   });
   it("anchors today to the household day across UTC midnight", () => {

@@ -116,7 +116,7 @@ export type CompiledEntityListFields = Readonly<{
     maxDepth: number;
   }> | null;
   /** Filter key → its generated "Include sub-…" toggle's filter key. */
-  subtree: Readonly<Record<string, string>>;
+  subtree: Readonly<Record<string, { key: string; default: boolean }>>;
   /** `model.grouping`, in menu order. */
   grouping: readonly CompiledGroupChoice[];
   metrics: readonly { key: string; label: string; format: string | null }[];
@@ -811,7 +811,7 @@ const toggleDescriptor = (target: CompiledEntity): FilterDescriptor => {
     optionsRef: null,
     optionsKey: null,
     label,
-    schemaDescription: `Include records under each selected ${target.inspector.singular.toLowerCase()} (default true).`,
+    schemaDescription: `Include records under each selected ${target.inspector.singular.toLowerCase()}; the selected filter owns its default.`,
     deriveSchema: true,
     schemaFromRead: false,
     brandRef: null,
@@ -1916,7 +1916,7 @@ export const compileListFields = (
           `${context}.model.sort.fields ${key}: ${reason}`,
         );
     }
-    const subtree: Record<string, string> = {};
+    const subtree: Record<string, { key: string; default: boolean }> = {};
     const toggles: FilterDescriptor[] = [];
     const compiled: FilterDescriptor[] = [];
     for (const unbound of entity.filterDescriptors) {
@@ -1952,17 +1952,24 @@ export const compileListFields = (
             : bound?.shape === "predicate"
               ? (descriptor.brandRef?.entity ?? null)
               : descriptor.stored === null
-                ? null
+                ? (descriptor.brandRef?.entity ?? null)
                 : (entity.fieldModel.storage.find(
                     ({ key }) => key === descriptor.stored?.columns[0],
                   )?.reference ?? null);
       const target = referenced === null ? undefined : byKey.get(referenced);
       if (target?.fieldModel.hierarchy == null) continue;
+      const subtreeDefault =
+        referenced !== null &&
+        (bound !== undefined || descriptor.stored !== null);
       const toggle = toggleDescriptor(target);
-      subtree[descriptor.field ?? descriptor.columnId] = toggle.columnId;
+      subtree[descriptor.field ?? descriptor.columnId] = {
+        key: toggle.columnId,
+        default: subtreeDefault,
+      };
       compiled[compiled.length - 1] = {
         ...descriptor,
         subtree: toggle.columnId,
+        ...(subtreeDefault ? {} : { subtreeDefault: false }),
       };
       if (!toggles.some(({ columnId }) => columnId === toggle.columnId))
         toggles.push(toggle);

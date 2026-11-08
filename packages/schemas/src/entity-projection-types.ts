@@ -506,6 +506,7 @@ type EntityFilterDescriptorMetadata = {
   match: { field: string } | null;
   exclude: { field: string } | null;
   subtree: string | null;
+  subtreeDefault?: boolean;
   currentMember: boolean;
   singleValue: string | null;
   exclusiveGroup: string | null;

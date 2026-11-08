@@ -1,7 +1,8 @@
 import {
   FILTER_ALL,
   FILTER_ANY,
-  FILTER_EXACT,
+  includesSubtree,
+  withSubtree,
   FILTER_LIST_SEPARATOR,
   FILTER_NONE,
   splitTypedList,
@@ -677,9 +678,15 @@ function ChecklistEditor({
           <label className="flex items-center justify-between gap-3 px-1 text-xs">
             {field.subtree.label}
             <Switch
-              checked={!values.includes(FILTER_EXACT)}
+              checked={includesSubtree(values, field.subtree.default !== false)}
               onCheckedChange={(checked: boolean) =>
-                setValues(withMode(values, FILTER_EXACT, !checked))
+                setValues(
+                  withSubtree(
+                    values,
+                    checked,
+                    field.subtree?.default !== false,
+                  ),
+                )
               }
             />
           </label>

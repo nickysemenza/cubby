@@ -275,7 +275,9 @@ export interface DeclaredFilterSet {
     key: string,
   ) => FilterColumn;
   /** The "Include sub-…" toggle key of a filter, when its target nests. */
-  readonly subtree?: (key: string) => string | undefined;
+  readonly subtree?: (
+    key: string,
+  ) => { key: string; default: boolean } | undefined;
   readonly extra?: (
     values: ListFilterValues,
     excluding: boolean,
@@ -283,7 +285,7 @@ export interface DeclaredFilterSet {
   ) => Array<SQL | undefined>;
 }
 
-/** A generated subtree toggle reads absent as on. */
+/** A generated subtree toggle preserves its filter's declared default. */
 const includesDescendants = (
   set: DeclaredFilterSet,
   key: string,
@@ -292,7 +294,7 @@ const includesDescendants = (
   const toggle = set.subtree?.(key);
   return toggle === undefined
     ? false
-    : optionalBoolean.parse(values[toggle]) !== false;
+    : (optionalBoolean.parse(values[toggle.key]) ?? toggle.default);
 };
 
 /** A stored descriptor's include predicate over its resolved column. */
@@ -412,7 +414,7 @@ const excludedFilterRequests = (
         ...(descriptor.wire.kind === "param"
           ? { [descriptor.wire.name]: excluded }
           : {}),
-        ...(toggle === undefined ? {} : { [toggle]: values[toggle] }),
+        ...(toggle === undefined ? {} : { [toggle.key]: values[toggle.key] }),
       },
     ];
   });
@@ -451,7 +453,7 @@ export function compileDeclaredFilters(
 /** The subtree toggles an entity's generated list fields declare. */
 export const entitySubtreeToggle =
   (entity: keyof typeof generatedEntityListFields) =>
-  (key: string): string | undefined =>
+  (key: string): { key: string; default: boolean } | undefined =>
     Object.entries(generatedEntityListFields[entity].subtree).find(
       ([filter]) => filter === key,
     )?.[1];

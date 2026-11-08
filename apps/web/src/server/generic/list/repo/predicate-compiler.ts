@@ -190,7 +190,7 @@ export const descriptorAvailabilitySql = (
   return current ? sql`(${current} IS NOT NULL OR ${available})` : available;
 };
 
-/** A generated subtree toggle reads absent as on. */
+/** A generated subtree toggle preserves its filter's declared default. */
 const subtreeToggle = (
   entity: Entity,
   key: string,
@@ -201,7 +201,7 @@ const subtreeToggle = (
   )?.[1];
   return toggle === undefined
     ? false
-    : optionalBoolean.parse(values[toggle]) !== false;
+    : (optionalBoolean.parse(values[toggle.key]) ?? toggle.default);
 };
 
 /** A condition over a derived value, given the value's SQL. */
@@ -834,7 +834,7 @@ export const rowSetFilterKeys = (
     )?.[1];
     return [
       ...descriptorValueKeys(descriptor),
-      ...(toggle === undefined ? [] : [toggle]),
+      ...(toggle === undefined ? [] : [toggle.key]),
     ];
   }),
   ...Object.entries(generatedEntityListFields[entity].scopes).flatMap(

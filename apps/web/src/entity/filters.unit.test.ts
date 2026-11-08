@@ -13,8 +13,10 @@ import {
   FILTER_ALL,
   FILTER_ANY,
   FILTER_EXACT,
+  FILTER_SUBTREE,
   FILTER_NONE,
   filterGetterFromColumnFilters,
+  hideSectionValues,
   type FilterSpecCore,
   type FilterSearch,
   type FilterValue,
@@ -383,6 +385,26 @@ describe("buildFiltersFromManifest", () => {
           getter({ parent: ["SCAT-4K7M", FILTER_EXACT] }),
         ),
       ).toEqual({ parentId: ["SCAT-4K7M"], includeSubCategories: false });
+      const parent: FilterSpecCore = {
+        columnId: "parent",
+        kind: "idMulti",
+        subtree: "includeSubCategories",
+        exclude: { field: "parentExclude" },
+      };
+      expect(
+        hideSectionValues(parent, { key: "SCAT-4K7M", subtree: false }, []),
+      ).toEqual(["__not__:SCAT-4K7M", FILTER_EXACT]);
+      expect(
+        hideSectionValues(parent, { key: "SCAT-4K7M", subtree: false }, [
+          "SCAT-8P2N",
+        ]),
+      ).toBeUndefined();
+      expect(
+        hideSectionValues(parent, { key: "SCAT-4K7M", subtree: true }, [
+          "SCAT-8P2N",
+          FILTER_EXACT,
+        ]),
+      ).toBeUndefined();
     });
 
     it("keeps @me unbranded only where the descriptor declares it", () => {
@@ -750,6 +772,36 @@ describe("compileFilterCodec", () => {
         columnId === "parent" ? ["SCAT-4K7M", FILTER_EXACT] : undefined,
       ),
     ).toEqual({ parent: "SCAT-4K7M", includeSubCategories: "false" });
+    const exactSpecs = [
+      {
+        columnId: "parent",
+        kind: "idMulti",
+        subtree: "includeSubCategories",
+        subtreeDefault: false,
+      },
+      { columnId: "includeSubCategories", kind: "boolean" },
+    ] as const;
+    const exactCodec = compileFilterCodec(exactSpecs);
+    expect(exactCodec.decode({ parent: "SCAT-4K7M" })).toEqual([
+      { id: "parent", value: ["SCAT-4K7M"] },
+    ]);
+    const expanded = [{ id: "parent", value: ["SCAT-4K7M", FILTER_SUBTREE] }];
+    expect(
+      exactCodec.decode({ parent: "SCAT-4K7M", includeSubCategories: "true" }),
+    ).toEqual(expanded);
+    expect(exactCodec.encode(filterGetterFromColumnFilters(expanded))).toEqual({
+      parent: "SCAT-4K7M",
+      includeSubCategories: "true",
+    });
+    expect(
+      buildFiltersFromManifest(
+        exactSpecs,
+        filterGetterFromColumnFilters(expanded),
+      ),
+    ).toEqual({ parent: ["SCAT-4K7M"], includeSubCategories: true });
+    expect(
+      buildFiltersFromManifest(exactSpecs, getter({ parent: ["SCAT-4K7M"] })),
+    ).toEqual({ parent: ["SCAT-4K7M"] });
   });
 
   it("keeps a folded toggle when its standalone descriptor is also encoded", () => {

@@ -178,6 +178,10 @@ export const getEntityFilters = (
         ...(descriptor.match === null ? {} : { match: descriptor.match }),
         ...(descriptor.exclude === null ? {} : { exclude: descriptor.exclude }),
         ...(descriptor.subtree === null ? {} : { subtree: descriptor.subtree }),
+        ...("subtreeDefault" in descriptor &&
+        descriptor.subtreeDefault === false
+          ? { subtreeDefault: false }
+          : {}),
         ...(descriptor.currentMember ? { currentMember: true } : {}),
         ...(descriptor.singleValue === null ? {} : { singleValue: true }),
         ...(descriptor.exclusiveGroup === null
@@ -285,6 +289,7 @@ const subtreeControl = (
   const toggle = specs.find((candidate) => candidate.columnId === spec.subtree);
   return {
     label: toggle?.label ?? humanize(spec.subtree),
+    default: spec.subtreeDefault !== false,
   };
 };
 
