@@ -1215,7 +1215,7 @@ export async function withListEntityMedia<
 }
 
 /**
- * The cover only — `[0]` of {@link resolveEntityDisplayImageLists} — for
+ * The canonical cover from {@link resolveEntityDisplayCovers}, for
  * callers that render a single mark (search hits, hover cards, audit rows).
  * Refs that resolve to no image are absent from the map.
  */
@@ -1223,16 +1223,16 @@ export async function resolveEntityDisplayImages(
   db: Database | DrizzleTransaction,
   refs: readonly EntityDisplayImageRef[],
 ): Promise<Map<string, ImageUrlSummary>> {
-  const lists = await resolveEntityDisplayImageLists(db, refs);
+  const { displayCovers } = await resolveEntityDisplayCovers(db, refs);
   return new Map(
-    [...lists].flatMap(([key, images]) =>
-      images[0]
+    [...displayCovers].flatMap(([key, { image }]) =>
+      image
         ? [
             [
               key,
               {
-                url: images[0].representations?.preferred ?? images[0].url,
-                representations: images[0].representations,
+                url: image.representations?.preferred ?? image.url,
+                representations: image.representations,
               },
             ],
           ]
