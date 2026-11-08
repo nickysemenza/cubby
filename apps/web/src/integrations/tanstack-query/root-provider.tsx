@@ -4,6 +4,7 @@ import {
   QueryClient,
   QueryClientProvider,
 } from "@tanstack/react-query";
+import { SkulletProvider } from "skullet/react";
 import { z } from "zod";
 
 import { EntityDisplayImagesProvider } from "~/entity/entity-media/entity-display-images";
@@ -165,9 +166,20 @@ export function Provider({
 }) {
   return (
     <QueryClientProvider client={queryClient}>
-      <EntityDisplayImagesProvider refs={[]} collectMountedRefs>
-        {children}
-      </EntityDisplayImagesProvider>
+      <SkulletProvider
+        mode="light"
+        theme={{
+          animation: "none",
+          light: {
+            base: "var(--brand-paper-alt)",
+            highlight: "var(--brand-paper-alt)",
+          },
+        }}
+      >
+        <EntityDisplayImagesProvider refs={[]} collectMountedRefs>
+          {children}
+        </EntityDisplayImagesProvider>
+      </SkulletProvider>
     </QueryClientProvider>
   );
 }

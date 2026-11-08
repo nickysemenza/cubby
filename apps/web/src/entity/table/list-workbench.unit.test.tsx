@@ -253,7 +253,7 @@ describe("child workbench selection scopes", () => {
     };
   }
 
-  it("clears selection and rejects retained actions while another scope's rows are placeholders", async () => {
+  it("clears selection and rejects retained actions while the new scope loads", async () => {
     const child = await mountChild();
     child.select();
     const oldBar = render(child.result.current.model.bulkActionBar);
@@ -264,9 +264,7 @@ describe("child workbench selection scopes", () => {
     expect(
       child.result.current.model.table.getFilteredSelectedRowModel().rows,
     ).toHaveLength(0);
-    expect(
-      child.result.current.model.table.getRowModel().rows[0]?.getCanSelect(),
-    ).toBe(false);
+    expect(child.result.current.model.table.getRowModel().rows).toHaveLength(0);
     fireEvent.click(screen.getByRole("button", { name: "Settle selected" }));
     expect(child.executions()).toBe(0);
     oldBar.unmount();

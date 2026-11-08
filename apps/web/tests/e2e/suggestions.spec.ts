@@ -212,24 +212,11 @@ test("Suggestions lists every family with named records and category pills, and 
 
   // Exclusion survives route validation and a reload, and the shared editor
   // can clear it without losing the scoped proposal.
-  const excludedRead = page.waitForResponse((response) =>
-    dispatchesOperation(
-      response.request(),
-      "suggestions.list",
-      ({ input }) =>
-        z
-          .object({ entityExclude: z.array(z.string()) })
-          .safeParse(input)
-          .data?.entityExclude.includes("product") === true,
-    ),
+  // SSR can supply the scoped read; membership must not depend on a second RPC.
+  await gotoAuthenticatedPage(
+    page,
+    `/suggestions?family=field&record=product:${item.id}&entityExclude=product`,
   );
-  await Promise.all([
-    excludedRead,
-    gotoAuthenticatedPage(
-      page,
-      `/suggestions?family=field&record=product:${item.id}&entityExclude=product`,
-    ),
-  ]);
   await expect(
     page.getByText("No pending suggestions.", { exact: true }),
   ).toBeVisible();

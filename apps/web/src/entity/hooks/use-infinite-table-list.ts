@@ -45,8 +45,6 @@ interface UseInfiniteTableListOptions<
   includeCount?: boolean;
   /** Request page size 0: the counts and group summaries without rows (Pivot). */
   summaryOnly?: boolean;
-  /** Envelopes required by the currently visible columns. Undefined requests complete rows. */
-  requiredFields?: readonly string[];
 }
 
 export interface InfiniteScrollControls<
@@ -55,7 +53,7 @@ export interface InfiniteScrollControls<
   fetchNextPage: () => void;
   hasNextPage: boolean;
   isFetchingNextPage: boolean;
-  /** Previous query rows are visible while a new filter/sort first page loads. */
+  /** The row model is not ready for scope-bound actions. */
   isTransitioning: boolean;
   /**
    * Fetch every remaining page (up to `cap` accumulated rows) so all matching
@@ -225,7 +223,6 @@ export function useInfiniteTableList<
   resultMembership,
   includeCount = false,
   summaryOnly,
-  requiredFields,
 }: UseInfiniteTableListOptions<
   TFilters,
   TData,
@@ -254,26 +251,11 @@ export function useInfiniteTableList<
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
-    isPlaceholderData,
     isRefetching,
     refetch,
   } = useInfiniteQuery({
-    // Filter/sort changes swap the queryKey; without this the accumulated
-    // pages vanish for the refetch window, blanking rows AND the header
-    // count (useEntityList withholds totalCount while isLoading).
-    // Filter changes can retain rows, but revealing a column must not hand its
-    // renderer an older projection that lacks the newly required envelope.
-    placeholderData: (previous) =>
-      previous?.pages.every(
-        (page) =>
-          !page.selectedFields ||
-          (requiredFields !== undefined &&
-            requiredFields.every((field) =>
-              page.selectedFields?.includes(field),
-            )),
-      )
-        ? previous
-        : undefined,
+    // Query keys own filter, sort and projection scope. Retain cached data for
+    // this key on refetch, never rows from a different scope as placeholders.
     queryKey: infiniteQueryKey,
     // The infinite adapter owns a different key but the same operation. Carry
     // the descriptor metadata so root mutation invalidation can still match
@@ -331,12 +313,12 @@ export function useInfiniteTableList<
   }
   const latestStateRef = useRef({
     hasNextPage: hasNextPage ?? false,
-    isTransitioning: isPlaceholderData || isRefetching || Boolean(error),
+    pagingBlocked: isRefetching || Boolean(error),
     pages: infiniteData?.pages,
   });
   latestStateRef.current = {
     hasNextPage: hasNextPage ?? false,
-    isTransitioning: isPlaceholderData || isRefetching || Boolean(error),
+    pagingBlocked: isRefetching || Boolean(error),
     pages: infiniteData?.pages,
   };
 
@@ -348,7 +330,7 @@ export function useInfiniteTableList<
     if (
       (current?.fetchStatus === "fetching" && !nextPageInFlightRef.current) ||
       current?.status === "error" ||
-      latestStateRef.current.isTransitioning ||
+      latestStateRef.current.pagingBlocked ||
       !latestStateRef.current.hasNextPage
     ) {
       return Promise.resolve(null);
@@ -373,7 +355,7 @@ export function useInfiniteTableList<
   const loadAllPages = useCallback(
     async (cap = 3000): Promise<TData[]> => {
       let items = flattenUniquePageItems(latestStateRef.current.pages);
-      if (latestStateRef.current.isTransitioning) return items;
+      if (latestStateRef.current.pagingBlocked) return items;
 
       // Guard against an unbounded loop if the server keeps claiming more.
       let guard = 0;
@@ -400,19 +382,19 @@ export function useInfiniteTableList<
   const infiniteScroll = useMemo<InfiniteScrollControls<TData>>(
     () => ({
       fetchNextPage: guardedFetchNextPage,
-      // Placeholder rows belong to the previous query. Never use their page
-      // metadata to fetch into the new query while its first page is pending.
-      hasNextPage:
-        !isPlaceholderData && !isRefetching && !error && (hasNextPage ?? false),
+      // Reconcile retained pages before requesting offsets from their metadata.
+      hasNextPage: !isRefetching && !error && (hasNextPage ?? false),
       isFetchingNextPage,
-      isTransitioning: isPlaceholderData,
+      // A same-key refresh retains the current row model; only a missing
+      // first page pauses its scope-bound actions.
+      isTransitioning: isLoading,
       loadAllPages,
     }),
     [
       guardedFetchNextPage,
       hasNextPage,
       isFetchingNextPage,
-      isPlaceholderData,
+      isLoading,
       isRefetching,
       error,
       loadAllPages,
@@ -423,9 +405,8 @@ export function useInfiniteTableList<
     pages: infiniteData?.pages,
     data: flatData,
     totalCount,
-    // Placeholder pages belong to the previous query. Their aggregates stay
-    // visible, dimmed through `infiniteScroll.isTransitioning`, until the new
-    // ones arrive: blanking them read as a failure on every filter edit.
+    // Rows and aggregates come from the same query scope. A new scope has no
+    // totals until its first page arrives; a same-key refresh retains both.
     sums: lastMeta?.sums,
     totalLabels: lastMeta?.totalLabels,
     metrics: lastMeta?.metrics,

@@ -1,21 +1,8 @@
 import { useIsFetching } from "@tanstack/react-query";
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode } from "react";
 
+import { useDelayedActive } from "~/ui/hooks/use-delayed-active";
 import { Spinner } from "~/ui/primitives/spinner";
-
-/** Hide fast refreshes and reset the delay after every idle interval. */
-function useDelayedRefresh(active: boolean) {
-  const [visible, setVisible] = useState(false);
-  useEffect(() => {
-    if (!active) {
-      setVisible(false);
-      return;
-    }
-    const timer = setTimeout(() => setVisible(true), 300);
-    return () => clearTimeout(timer);
-  }, [active]);
-  return active && visible;
-}
 
 /** Reserved sidebar space for refresh feedback. */
 export function ShellStatusSlot({ children }: { children: ReactNode }) {
@@ -35,7 +22,7 @@ export function BackgroundRefreshStatus({
     predicate: (query) =>
       query.state.data !== undefined && Boolean(query.meta?.cacheTags?.length),
   });
-  const visible = useDelayedRefresh(fetching > 0);
+  const visible = useDelayedActive(fetching > 0);
   if (!visible) return null;
   return (
     <output

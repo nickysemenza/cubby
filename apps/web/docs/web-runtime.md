@@ -277,8 +277,9 @@ save is complete. Settlement matching starts each review visit from a fresh cand
 selection or draft; cached candidates stay unavailable until that read finishes.
 A paused/offline read cannot satisfy a fresh-baseline gate.
 
-Loaded views retain data during reconciliation. Background refetch feedback belongs
-to the shell status slot; refresh failures and Retry remain inline with the view. Server reads own membership, ordering, counts and paging: a
+Loaded views retain data during same-scope reconciliation. List, inspector and
+detail owners show delayed Updating feedback in a reserved status line; the shell
+retains aggregate Syncing feedback. Refresh failures and Retry remain inline with the view. Server reads own membership, ordering, counts and paging: a
 saved row may briefly remain in its previous position. Do not append offset pages
 while the current list is reconciling or its refresh has failed. Retained
 page refreshes must preserve confirmed fields until the complete replacement arrives.
@@ -367,8 +368,8 @@ before starting another. Own mutations retain their immediate local invalidation
 A hidden tab keeps its socket and drops rings without reading; returning to it
 resynchronizes everything it shows. Subscription recovery on reconnect/resume
 bypasses the ring throttle. Background refetch feedback appears in the reserved
-sidebar status slot (or a BottomNav spinner on mobile) only after 300ms; it never
-inserts a row into page content. A refetch must not read as a first load: record
+sidebar status slot (or a BottomNav spinner on mobile) only after 300ms. Scoped
+list/detail/inspector status uses reserved space, so refresh does not move content. A refetch must not read as a first load: record
 suggestion status shows "Checking suggestions…" only for a question's first ask,
 so a ring cannot flip the line or collapse the Needs-you row.
 Inline refresh errors retain their data and Retry. Native workspace routes have
@@ -413,6 +414,12 @@ every open with zero stale/garbage-collection time. Presentation labels must not
 replace this fresh decision read or the receiving command's current-stock checks.
 
 ## List loading and enrichment
+
+The generic `useInfiniteTableList` query keys own filter, ordering, grouping and
+projection scope. A new scope shows its own cached rows or initial skeletons,
+never the preceding scope's rows or totals. Same-key refreshes retain data and block further offset paging
+until reconciliation succeeds. Skullet boxes supply shared list, detail, inspector
+and media placeholders without rendering hidden data readers or persisting shapes.
 
 Desktop page tables start inside the same `60vh` bound the virtualizer uses
 before measurement. The measured remaining viewport then replaces that bound.

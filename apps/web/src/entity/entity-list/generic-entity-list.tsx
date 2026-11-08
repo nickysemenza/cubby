@@ -5,7 +5,7 @@ import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
 import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { type QueryClient, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, useCallback, useEffect, useMemo, useState } from "react";
 import type { ComponentProps, ReactNode } from "react";
 import { z } from "zod";
 
@@ -885,9 +885,6 @@ function ListFooterContent({
 }) {
   const showingUnresolved = list.resultMembership === "unresolved";
   const unresolved = list.unresolvedCount ?? 0;
-  // A query with no answer yet keeps the last labels it had, dimmed.
-  const labelsRef = useRef(list.totalLabels);
-  if (list.totalLabels) labelsRef.current = list.totalLabels;
   const pending =
     list.workbench.infiniteScroll.isTransitioning || list.workbench.isLoading;
   return (
@@ -900,7 +897,7 @@ function ListFooterContent({
           <ListTotalSummary
             totals={totals}
             metrics={list.metrics}
-            labels={labelsRef.current}
+            labels={list.totalLabels}
             failed={list.workbench.error !== null && !list.totalLabels}
             scopeLabel={
               showingUnresolved

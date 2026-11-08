@@ -228,7 +228,7 @@ describe("useInfiniteTableList", () => {
     expect(result.current.totalCount).toBeUndefined();
   });
 
-  it("keeps stale rows visible but blocks pagination until the new first page swaps in", async () => {
+  it("withholds previous-scope rows and totals until the new first page arrives", async () => {
     const nextFirstPage = Promise.withResolvers<ListQueryResponse<TestRow>>();
     const widerPage = Promise.withResolvers<ListQueryResponse<TestRow>>();
     const requested: string[] = [];
@@ -261,7 +261,6 @@ describe("useInfiniteTableList", () => {
       ({ scope }) =>
         useInfiniteTableList<TestFilters, TestRow>({
           queryOptions,
-          requiredFields: scope === "wide" ? ["id", "food"] : ["id"],
           buildFilters: () => ({ scope }),
           tableState,
         }),
@@ -271,12 +270,10 @@ describe("useInfiniteTableList", () => {
     await waitFor(() => expect(result.current.data).toEqual([{ id: "old-0" }]));
     rerender({ scope: "new" });
 
-    await waitFor(() =>
-      expect(result.current.infiniteScroll.isTransitioning).toBe(true),
-    );
-    expect(result.current.data).toEqual([{ id: "old-0" }]);
-    // The prior totals stay, dimmed by the footer, until the new ones arrive.
-    expect(result.current.sums).toEqual({ cost: 999 });
+    await waitFor(() => expect(result.current.isLoading).toBe(true));
+    expect(result.current.infiniteScroll.isTransitioning).toBe(true);
+    expect(result.current.data).toEqual([]);
+    expect(result.current.sums).toBeUndefined();
     expect(result.current.infiniteScroll.hasNextPage).toBe(false);
     act(() => result.current.infiniteScroll.fetchNextPage());
     expect(requested).not.toContain("new:1");
@@ -301,6 +298,7 @@ describe("useInfiniteTableList", () => {
     });
     rerender({ scope: "wide" });
     await waitFor(() => expect(result.current.isLoading).toBe(true));
+    expect(result.current.infiniteScroll.isTransitioning).toBe(true);
     expect(result.current.data).toEqual([]);
     act(() =>
       widerPage.resolve({

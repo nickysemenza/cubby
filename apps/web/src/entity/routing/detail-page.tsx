@@ -137,6 +137,7 @@ export function detailPage<TQuery extends DetailQueryFactory>({
     return (
       <>
         <QueryRefreshStatus
+          isRefreshing={detailQuery.isFetching}
           error={detailQuery.isRefetchError ? detailQuery.error : undefined}
           onRetry={() => {
             void detailQuery.refetch();

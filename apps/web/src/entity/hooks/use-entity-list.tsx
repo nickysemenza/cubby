@@ -620,7 +620,6 @@ export function useEntityList<
   );
   const infiniteResult = useInfiniteTableList<TFilters, TRow>({
     queryOptions: pageQueryOptions,
-    requiredFields: requestedFields,
     buildFilters: effectiveBuildFilters,
     tableState,
     groupBy,

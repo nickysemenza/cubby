@@ -9,6 +9,7 @@ import {
 } from "react";
 
 import { transformedImageUrl } from "~/lib/image-url";
+import { Skeleton } from "~/ui/primitives/skeleton";
 import {
   Tooltip,
   TooltipContent,
@@ -191,7 +192,7 @@ export function Image({
       style={style}
       aria-hidden
     >
-      {loadingFallback}
+      {loadingFallback ?? <Skeleton className="size-full rounded-none" />}
     </div>
   ) : null;
   const squareStyle = size == null ? undefined : { width: size, height: size };

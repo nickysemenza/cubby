@@ -16,6 +16,7 @@ export function PreviewQuery<T>({
   query: {
     data: T | undefined;
     isLoading: boolean;
+    isFetching?: boolean;
     isError: boolean;
     error?: unknown;
     refetch: () => Promise<PreviewRefetchResult>;
@@ -43,6 +44,7 @@ export function PreviewQuery<T>({
   return (
     <>
       <QueryRefreshStatus
+        isRefreshing={query.isFetching}
         error={query.isError ? query.error : undefined}
         onRetry={() => void query.refetch()}
       />

@@ -327,6 +327,8 @@ being synthetic, so keep it contained:
   script, then start an isolated instance with
   `CUBBY_DEV_INSTANCE=<name> CUBBY_DEV_DB_NAME=cubby_dev_<name> pnpm dev`; it
   seeds nothing into an existing database.
+- [Synthetic browser navigation measurements](../apps/web/tooling/checks/navigation-performance.md)
+  separate primary-content readiness from shell hydration and decoded read latency.
 - `tooling/checks/read-performance.ts` measures default views; sweep sorts by
   sending `sort` (not `sorts`) to `entity.listBase` per declared field. Set
   `log_min_duration_statement` on that database to capture slow statements.
