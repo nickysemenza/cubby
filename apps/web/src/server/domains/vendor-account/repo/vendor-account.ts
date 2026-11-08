@@ -16,6 +16,10 @@ import { vendorAccountCursor } from "@cubby/schemas/vendor-account-fields";
 import { ACTIVE_RUN_STATUSES } from "@cubby/shared/client-constants";
 import { and, count, eq, inArray, max, sql } from "drizzle-orm";
 
+import {
+  vendorAccountRepositoryReadSchema,
+  vendorAccountSchemaBindings,
+} from "~/entity/generated/entity-schema-bindings.vendorAccount.gen";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { vendorAccountLabelSql } from "~/server/db/computed/vendor-account-label";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
@@ -251,6 +255,7 @@ export const vendorAccountScaffold = listScaffold(
   "vendorAccount",
   vendorAccount,
   {
+    readSchema: vendorAccountRepositoryReadSchema,
     derived: {
       displayName: { sql: vendorAccountLabelSql, nulls: "high" },
       lastRunAt: sql`(SELECT max(r."startedAt") FROM "Run" r WHERE r."vendorAccountId" = ${vendorAccount.id})`,
@@ -431,6 +436,7 @@ const updateVendorAccount = defineMutationWriter({
 });
 
 export const vendorAccountRepository = defineRepository("vendorAccount", {
+  schemas: vendorAccountSchemaBindings,
   lifecycle: { delete: VENDOR_ACCOUNT_DELETE_EDGE_POLICY },
   scaffold: vendorAccountScaffold,
   create: asActor(createVendorAccount),

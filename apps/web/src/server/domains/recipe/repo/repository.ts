@@ -1,3 +1,4 @@
+import { recipeSchemaBindings } from "~/entity/generated/entity-schema-bindings.recipe.gen";
 import { defineRepository } from "~/server/entity-kernel/repo/repository";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { bindShortcodeResolver } from "~/server/generic/shortcode/repo/shortcode-resolver";
@@ -13,6 +14,7 @@ import {
 const recipeShortcodes = bindShortcodeResolver("recipe");
 
 export const recipeRepository = defineRepository("recipe", {
+  schemas: recipeSchemaBindings,
   lifecycle: { delete: RECIPE_DELETE_EDGE_POLICY },
   scaffold: recipeScaffold,
   create: async (ctx, data) => {

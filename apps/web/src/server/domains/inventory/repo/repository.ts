@@ -1,5 +1,6 @@
 import type { LedgerPartyId } from "@cubby/schemas/identifiers";
 
+import { inventorySchemaBindings } from "~/entity/generated/entity-schema-bindings.inventory.gen";
 import type { Database } from "~/server/db";
 import type {
   EntityKernelContext,
@@ -70,6 +71,7 @@ const resolveUpdate = async (ctx: EntityKernelContext, data: UpdateInput) => {
 };
 
 export const inventoryRepository = defineRepository("inventory", {
+  schemas: inventorySchemaBindings,
   lifecycle: { delete: INVENTORY_DELETE_EDGE_POLICY },
   scaffold: inventoryScaffold,
   create: async (ctx, data) =>

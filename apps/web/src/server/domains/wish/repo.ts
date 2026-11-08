@@ -20,6 +20,10 @@ import { rawWishListItemOut, rawWishOut } from "@cubby/schemas/wish-raw-read";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 
+import {
+  wishRepositoryReadSchema,
+  wishSchemaBindings,
+} from "~/entity/generated/entity-schema-bindings.wish.gen";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { productBrandNameSql } from "~/server/db/computed/product-brand-sql";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
@@ -204,6 +208,7 @@ const wishPriceMid = sql`((${wishPriceLow} + ${wishPriceHigh}) / 2)`;
 // A price range is an aggregate over candidates, not a column on `Wish`; a
 // wish whose alternatives are all unpriced has no range at all.
 export const wishScaffold = listScaffold("wish", wish, {
+  readSchema: wishRepositoryReadSchema,
   derived: {
     priceRange: wishPriceMid,
     priceLow: wishPriceLow,
@@ -368,6 +373,7 @@ export const updateWish = defineMutationWriter({
 });
 
 export const wishRepository = defineRepository("wish", {
+  schemas: wishSchemaBindings,
   lifecycle: { delete: WISH_DELETE_EDGE_POLICY },
   scaffold: wishScaffold,
   create: asActor(createWish),

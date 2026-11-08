@@ -133,19 +133,9 @@ export const renderEntitySchemaArtifacts = (
 ): EntityArtifacts[] => {
   const projections = entityProjectionMaps(entities);
   const imports = new Map<string, Set<string>>();
-  for (const { contract, filterSchema } of entities) {
+  for (const { contract } of entities) {
     if (contract === null) continue;
-    for (const ref of [
-      contract.create,
-      contract.update,
-      contract.output,
-      contract.list,
-      contract.detail,
-      contract.mcpOutput,
-      contract.mcpList,
-      contract.mcpDetail,
-      filterSchema,
-    ]) {
+    for (const ref of [contract.create, contract.update]) {
       if (ref === null) continue;
       const exports = imports.get(ref.module) ?? new Set<string>();
       exports.add(ref.export);
@@ -172,30 +162,91 @@ export const renderEntitySchemaArtifacts = (
     )
     .join("\n");
   const schemaEntitySpecs = projections.schema;
+  const schemaExpressions = schemaEntitySpecs.map((entity) => {
+    const { contract, filterSchema } = entity;
+    if (entity.bulkUpdateFields !== null && contract.update === null) {
+      throw new EntityDeclarationError(
+        `${entity.key}.bulkUpdate requires an update contract.`,
+      );
+    }
+    const bulkUpdateInput = bulkSchemaFor(entity);
+    const filters =
+      filterSchema === null
+        ? "z.object({})"
+        : entity.descriptor.searchable === true
+          ? `z.object(${filterSchema.export}).extend({searchQuery:z.string().trim().min(1).max(100).optional()})`
+          : `z.object(${filterSchema.export})`;
+    return {
+      entity,
+      expression: `entitySchema(${JSON.stringify(entity.key)},{filters:${filters},createInput:${contract.create?.export ?? "null"},updateInput:${contract.update?.export ?? "null"},bulkUpdateInput:${bulkUpdateInput},output:${contract.output.export},detail:${contract.detail.export},list:${contract.list.export},mcpOutput:${contract.mcpOutput.export},mcpDetail:${contract.mcpDetail.export},mcpList:${contract.mcpList.export}},${entity.key}FieldEnvelopeSchemas)`,
+    };
+  });
   const schemaBindings = schemaEntitySpecs
-    .map((entity) => {
-      const { contract, filterSchema } = entity;
-      if (entity.bulkUpdateFields !== null && contract.update === null) {
-        throw new EntityDeclarationError(
-          `${entity.key}.bulkUpdate requires an update contract.`,
-        );
-      }
-      const bulkUpdateInput = bulkSchemaFor(entity);
-      const filters =
-        filterSchema === null
-          ? "z.object({})"
-          : entity.descriptor.searchable === true
-            ? `z.object(${filterSchema.export}).extend({searchQuery:z.string().trim().min(1).max(100).optional()})`
-            : `z.object(${filterSchema.export})`;
-      return `  ${JSON.stringify(entity.key)}: entitySchema(${JSON.stringify(entity.key)},{filters:${filters},createInput:${contract.create?.export ?? "null"},updateInput:${contract.update?.export ?? "null"},bulkUpdateInput:${bulkUpdateInput},output:${contract.output.export},detail:${contract.detail.export},list:${contract.list.export},mcpOutput:${contract.mcpOutput.export},mcpDetail:${contract.mcpDetail.export},mcpList:${contract.mcpList.export}},entityFieldEnvelopeSchemas[${JSON.stringify(entity.key)}]),`;
-    })
+    .map(({ key }) => `  ${JSON.stringify(key)}: ${key}SchemaBindings,`)
     .join("\n");
   const repositoryListBindings = schemaEntitySpecs
+    .map(({ key }) => `  ${JSON.stringify(key)}: ${key}RepositoryReadSchema,`)
+    .join("\n");
+  const entitySchemaImports = schemaEntitySpecs
     .map(
-      ({ key, contract, inspector }) =>
-        `  ${JSON.stringify(key)}: compileListReadSchema(withEntityListMedia(mergeReadSchemas(${contract.list.export}, ${contract.detail.export}))${treeRowExtension(inspector)}),`,
+      ({ key }) =>
+        `import { ${key}SchemaBindings, ${key}RepositoryReadSchema } from "~/entity/generated/entity-schema-bindings.${key}.gen";`,
     )
     .join("\n");
+  // Read-only loaders and full kernel commands must share canonical schema instances.
+  const entitySchemaArtifacts: EntityArtifacts[] = schemaExpressions.map(
+    ({ entity, expression }) => {
+      const { key, contract, filterSchema, inspector } = entity;
+      const refs = new Map<string, Set<string>>();
+      for (const ref of [
+        contract.create,
+        contract.update,
+        contract.output,
+        contract.list,
+        contract.detail,
+        contract.mcpOutput,
+        contract.mcpList,
+        contract.mcpDetail,
+        filterSchema,
+      ]) {
+        if (ref === null) continue;
+        const names = refs.get(ref.module) ?? new Set<string>();
+        names.add(ref.export);
+        refs.set(ref.module, names);
+      }
+      const imports = [...refs.entries()]
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(
+          ([module, names]) =>
+            `import { ${[...names].sort().join(", ")} } from ${JSON.stringify(module)};`,
+        )
+        .join("\n");
+      const bulkImports = [
+        "bulkUpdateInputSchema",
+        "bulkCollectionPatchSchema",
+      ].filter((name) => expression.includes(name));
+      return {
+        relativePath: `apps/web/src/entity/generated/entity-schema-bindings.${key}.gen.ts`,
+        source: rawSource(
+          generatedHeader +
+            'import { z } from "zod";\n' +
+            'import { entitySchema } from "@cubby/schemas/entity-schema-bindings";\n' +
+            'import { withEntityListMedia } from "@cubby/schemas/entity-read-media";\n' +
+            'import { compileListReadSchema, mergeReadSchemas } from "~/entity/model/list-read-fields";\n' +
+            (bulkImports.length
+              ? `import { ${bulkImports.join(", ")} } from "@cubby/schemas/entity-collection";\n`
+              : "") +
+            (treeRowExtension(inspector)
+              ? 'import { listChildCountSchema } from "@cubby/schemas/pagination";\n'
+              : "") +
+            `import { ${key}FieldEnvelopeSchemas } from "@cubby/schemas/compiler/generated/entity-field-envelopes/${key}";\n` +
+            `${imports}\n` +
+            `export const ${key}SchemaBindings = ${expression};\n` +
+            `export const ${key}RepositoryReadSchema = { entity: ${JSON.stringify(key)}, listKeys: new Set(Object.keys(${key}FieldEnvelopeSchemas.list${treeRowExtension(inspector)}.shape)), ...compileListReadSchema(withEntityListMedia(mergeReadSchemas(${contract.list.export}, ${contract.detail.export}))${treeRowExtension(inspector)}) } as const;\n`,
+        ),
+      };
+    },
+  );
   const bindings = entities
     .filter((entity) => entity.shortcode !== null)
     .map((entity) => {
@@ -337,6 +388,7 @@ export const renderEntitySchemaArtifacts = (
     )
     .join("\n");
   return [
+    ...entitySchemaArtifacts,
     {
       relativePath:
         "apps/web/src/server/generated/entity-write-bindings.gen.ts",
@@ -360,13 +412,11 @@ export const renderEntitySchemaArtifacts = (
           'import { mutationSideEffectsSchema } from "@cubby/schemas/mutation-side-effects";\n' +
           'import { entityMutationItemFor, entityMutationAppliedFields } from "@cubby/schemas/entity-mutation";\n' +
           'import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";\n' +
-          'import { withEntityListMedia } from "@cubby/schemas/entity-read-media";\n' +
-          'import { compileListReadSchema, mergeReadSchemas } from "~/entity/model/list-read-fields";\n' +
           'import { listChildCountSchema, paginatedMetaSchema } from "@cubby/schemas/pagination";\n' +
           'import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";\n' +
           `${schemaImports}\n` +
+          `${entitySchemaImports}\n` +
           'import { z } from "zod";\n\n' +
-          'import { entitySchema } from "@cubby/schemas/entity-schema-bindings";\n\n' +
           "// Generated schema correlations stay one entity per line.\n// oxfmt-ignore\n" +
           `export const ENTITY_SCHEMA_BINDINGS = {\n${schemaBindings}\n} as const;\n` +
           `export const ENTITY_REPOSITORY_READ_SCHEMAS = {\n${repositoryListBindings}\n} as const;\n` +

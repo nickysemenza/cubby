@@ -108,7 +108,7 @@ const readEntityProblem = async (
     projection:
       intent === "ids"
         ? ["id"]
-        : fields && selectedListProjection(entity, fields),
+        : fields && selectedListProjection(scaffold.readSchema, fields),
   } as const;
   const seeds =
     source.entity === "project" && diagnostic?.attentionItems
@@ -117,7 +117,10 @@ const readEntityProblem = async (
   const context = await scaffold.context(db, request, seeds);
   const page = await scaffold.read(db, request, { context });
   return fields
-    ? { ...page, data: selectListReadRows(entity, page.data, fields) }
+    ? {
+        ...page,
+        data: selectListReadRows(scaffold.readSchema, page.data, fields),
+      }
     : page;
 };
 

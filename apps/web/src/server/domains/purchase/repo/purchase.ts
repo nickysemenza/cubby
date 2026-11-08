@@ -52,6 +52,7 @@ import type { PgTable } from "drizzle-orm/pg-core";
 import { uniq } from "es-toolkit";
 import { z } from "zod";
 
+import { purchaseRepositoryReadSchema } from "~/entity/generated/entity-schema-bindings.purchase.gen";
 import { purchaseLabel } from "~/lib/purchase-label";
 import { getR2PublicUrl } from "~/server/clients/r2-public-url";
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -465,6 +466,7 @@ const reconciliationSql = (): SQL => {
 const helperText = z.string().nullable();
 
 export const purchaseScaffold = listScaffold("purchase", purchase, {
+  readSchema: purchaseRepositoryReadSchema,
   derived: {
     reconciliationGap: sql`abs(${purchaseVendorExpenseTotal} - (${purchase.statedTotal}::numeric / 100))`,
     // A purchase with no live vendor leads a descending list.

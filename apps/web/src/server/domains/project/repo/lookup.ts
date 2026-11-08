@@ -8,6 +8,7 @@ import { rawProjectListItemOut } from "@cubby/schemas/work-raw-read";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { QueryBuilder } from "drizzle-orm/pg-core";
 
+import { projectRepositoryReadSchema } from "~/entity/generated/entity-schema-bindings.project.gen";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   getDb,
@@ -80,6 +81,7 @@ const attentionFilterOf = (type: string) =>
   )?.[0];
 
 export const projectScaffold = listScaffold("project", project, {
+  readSchema: projectRepositoryReadSchema,
   derived: {
     image: inArray(project.id, projectIdsWithImages),
     dateRange: ({ from, to }) =>

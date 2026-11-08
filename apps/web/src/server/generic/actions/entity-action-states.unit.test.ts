@@ -2,7 +2,7 @@ import { actionAvailabilityRules } from "@cubby/schemas/action-availability";
 import { describe, expect, it } from "vitest";
 
 import { listEntities } from "~/entity/model/list-contracts";
-import { listReadSchema } from "~/server/generic/list/repo/list-read-schema";
+import { ENTITY_REPOSITORY_READ_SCHEMAS } from "~/server/generated/entity-bindings.gen";
 
 import {
   entityActionReadFields,
@@ -94,7 +94,7 @@ describe("entityActionStates", () => {
   it("reads each rule's field on every list that offers the verb", () => {
     for (const entity of listEntities) {
       const fields = entityActionReadFields(entity);
-      const readable = listReadSchema(entity).shape;
+      const readable = ENTITY_REPOSITORY_READ_SCHEMAS[entity].schema.shape;
       for (const field of fields)
         expect(readable, `${entity}.${field}`).toHaveProperty(field);
     }

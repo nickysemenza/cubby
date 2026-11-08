@@ -35,6 +35,7 @@ import { and, asc, desc, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import { uniqBy } from "es-toolkit";
 import { z } from "zod";
 
+import { vendorRepositoryReadSchema } from "~/entity/generated/entity-schema-bindings.vendor.gen";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
@@ -454,6 +455,7 @@ const vendorHasDisplayableLogo = sql<boolean>`EXISTS (
  * single-record read all select through it.
  */
 export const vendorScaffold = listScaffold("vendor", vendor, {
+  readSchema: vendorRepositoryReadSchema,
   derived: {
     role: vendorRole,
     brandCategoryCount: vendorBrandCategoryCount,

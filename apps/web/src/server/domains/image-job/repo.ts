@@ -14,6 +14,10 @@ import type { ImageProcessingJobState } from "@cubby/schemas/image-processing";
 import { describeJobWaitingOn } from "@cubby/schemas/job";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
+import {
+  imageJobRepositoryReadSchema,
+  imageJobSchemaBindings,
+} from "~/entity/generated/entity-schema-bindings.imageJob.gen";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { notDeleted, unwrapDb } from "~/server/db/helpers";
 import { imageProcessingAttempt } from "~/server/db/image-processing-schema";
@@ -291,6 +295,7 @@ const imageJobRead = {
   },
 } satisfies ListReadOptions<ImageJobRow>;
 const imageJobScaffold = listScaffold("imageJob", imageProcessingJob, {
+  readSchema: imageJobRepositoryReadSchema,
   // Built per read: the derivation compares lease expiry with the read's time.
   derived: { state: listReadValue(() => imageJobDisplayStateSql()) },
   read: {
@@ -300,5 +305,6 @@ const imageJobScaffold = listScaffold("imageJob", imageProcessingJob, {
 });
 
 export const imageJobRepository = defineRepository("imageJob", {
+  schemas: imageJobSchemaBindings,
   scaffold: imageJobScaffold,
 });

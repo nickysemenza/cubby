@@ -24,6 +24,10 @@ import { and, eq, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
+import {
+  financialAccountRepositoryReadSchema,
+  financialAccountSchemaBindings,
+} from "~/entity/generated/entity-schema-bindings.financialAccount.gen";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   effectiveFieldSql,
@@ -159,6 +163,7 @@ export const financialAccountScaffold = listScaffold(
   "financialAccount",
   financialAccount,
   {
+    readSchema: financialAccountRepositoryReadSchema,
     derived: {
       identityKind: sql`"FinancialAccount"."identity"->>${"kind"}`,
       hasSourceAlias: sql`jsonb_array_length("FinancialAccount"."sourceAliases") > 0`,
@@ -731,6 +736,7 @@ export const updateFinancialAccount = defineMutationWriter({
 });
 
 export const financialAccountRepository = defineRepository("financialAccount", {
+  schemas: financialAccountSchemaBindings,
   lifecycle: { delete: FINANCIAL_ACCOUNT_DELETE_EDGE_POLICY },
   scaffold: financialAccountScaffold,
   create: asActor(createFinancialAccount),

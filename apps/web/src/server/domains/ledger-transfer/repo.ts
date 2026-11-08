@@ -17,6 +17,10 @@ import type { LedgerSourceClaimOut } from "@cubby/schemas/ledger-transfer";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
+import {
+  ledgerTransferRepositoryReadSchema,
+  ledgerTransferSchemaBindings,
+} from "~/entity/generated/entity-schema-bindings.ledgerTransfer.gen";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
@@ -100,6 +104,7 @@ export const ledgerTransferScaffold = listScaffold(
   "ledgerTransfer",
   ledgerTransfer,
   {
+    readSchema: ledgerTransferRepositoryReadSchema,
     read: {
       title: sql`(SELECT name FROM "LedgerParty" WHERE id = "LedgerTransfer"."fromPartyId")`,
       // Keys outside the read schema are helper columns the bindings read.
@@ -562,6 +567,7 @@ export const updateLedgerTransfer = defineMutationWriter({
 });
 
 export const ledgerTransferRepository = defineRepository("ledgerTransfer", {
+  schemas: ledgerTransferSchemaBindings,
   lifecycle: { delete: LEDGER_TRANSFER_DELETE_EDGE_POLICY },
   scaffold: ledgerTransferScaffold,
   create: asActor(createLedgerTransfer),

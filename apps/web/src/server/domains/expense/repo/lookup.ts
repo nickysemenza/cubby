@@ -7,6 +7,7 @@ import { and, eq, inArray, type SQL, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 import { QueryBuilder } from "drizzle-orm/pg-core";
 
+import { expenseRepositoryReadSchema } from "~/entity/generated/entity-schema-bindings.expense.gen";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { getDb, notDeleted, relations, unwrapDb } from "~/server/db/helpers";
 import { quotedTable, related } from "~/server/db/helpers/related";
@@ -223,6 +224,7 @@ const allocationShares = listPrepare(async (_db, values) => ({
 const qb = new QueryBuilder();
 
 export const expenseScaffold = listScaffold("expense", expense, {
+  readSchema: expenseRepositoryReadSchema,
   derived: rowDerived,
   rows: {
     allocationShares: allocationShares.rows(

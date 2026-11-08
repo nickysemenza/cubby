@@ -7,6 +7,7 @@ import {
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { productRepositoryReadSchema } from "~/entity/generated/entity-schema-bindings.product.gen";
 import { getDb } from "~/server/db/helpers";
 import { expense, product } from "~/server/db/schema";
 import { updateProductCategory } from "~/server/domains/product-category/repo/product-category";
@@ -139,7 +140,7 @@ describe("category-based service Products", () => {
         filters: { ids: [service.id] },
         sorts: [],
         pagination: { pageIndex: 0, pageSize: 1 },
-        projection: selectedListProjection("product", [
+        projection: selectedListProjection(productRepositoryReadSchema, [
           "pricing",
           "onHandUnits",
           "stockStatusItems",

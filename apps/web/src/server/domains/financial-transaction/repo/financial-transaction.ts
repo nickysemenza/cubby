@@ -24,6 +24,10 @@ import type { PgTable } from "drizzle-orm/pg-core";
 import { capitalize, sortBy, uniq } from "es-toolkit";
 import { z } from "zod";
 
+import {
+  financialTransactionRepositoryReadSchema,
+  financialTransactionSchemaBindings,
+} from "~/entity/generated/entity-schema-bindings.financialTransaction.gen";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { sourceTransactionSettlements } from "~/server/db/computed/source-transaction-settlement-sql";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
@@ -125,6 +129,7 @@ export const financialTransactionScaffold = listScaffold(
   "financialTransaction",
   financialTransaction,
   {
+    readSchema: financialTransactionRepositoryReadSchema,
     rows: {
       settlementRefs: sql`SELECT owner,source,"externalId" FROM ${financialSourceReferenceRows} reference`,
       runStepInputs: runStepInputListRows("financialTransaction"),
@@ -973,6 +978,7 @@ export async function financialTransactionSourceOptions(
 export const financialTransactionRepository = defineRepository(
   "financialTransaction",
   {
+    schemas: financialTransactionSchemaBindings,
     lifecycle: { delete: FINANCIAL_TRANSACTION_DELETE_EDGE_POLICY },
     scaffold: financialTransactionScaffold,
     create: asActor(createFinancialTransaction),

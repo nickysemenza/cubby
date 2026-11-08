@@ -10,6 +10,10 @@ import {
 import { and, desc, inArray, notInArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
+import {
+  runRepositoryReadSchema,
+  runSchemaBindings,
+} from "~/entity/generated/entity-schema-bindings.run.gen";
 import { formatDuration } from "~/lib/format-duration";
 import { aiCostSummarySql } from "~/server/ai/repo/ai-usage";
 import type { Database } from "~/server/db";
@@ -269,6 +273,7 @@ const runPurposeSelection = z
   .passthrough();
 
 export const runScaffold = listScaffold("run", runTable, {
+  readSchema: runRepositoryReadSchema,
   // Automatic work nobody opens: old grouping Runs always, routine passes once they ended,
   // and mail discovery once it completed, since its failures need a member. An explicit
   // purpose or identity filter keeps their history directly accessible.
@@ -309,7 +314,10 @@ export async function getRunHeaderByShortcode(db: Database, shortcode: string) {
     await runScaffold.get(
       db,
       [shortcode],
-      selectedListProjection("run", Object.keys(schema.shape)),
+      selectedListProjection(
+        runRepositoryReadSchema,
+        Object.keys(schema.shape),
+      ),
     )
   ).data;
   return row === undefined ? undefined : schema.parse(row);
@@ -317,6 +325,7 @@ export async function getRunHeaderByShortcode(db: Database, shortcode: string) {
 
 /** Declared `lifecycle: "readOnly"`: the run service and importers own writes. */
 export const runRepository = defineRepository("run", {
+  schemas: runSchemaBindings,
   scaffold: runScaffold,
 });
 

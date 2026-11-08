@@ -1,11 +1,11 @@
 import { plantRawOut as rawPlantOut } from "@cubby/schemas/entity-contracts/plant";
 import { z } from "zod";
 
+import { plantSchemaBindings } from "~/entity/generated/entity-schema-bindings.plant.gen";
 import {
   asActor,
   defineRepository,
 } from "~/server/entity-kernel/repo/repository";
-import { ENTITY_SCHEMA_BINDINGS } from "~/server/generated/entity-bindings.gen";
 
 import {
   createPlant,
@@ -18,18 +18,19 @@ import {
 } from "./plant";
 
 const mergeInput = z.object({
-  keepId: ENTITY_SCHEMA_BINDINGS.plant.id,
-  mergeIds: z.array(ENTITY_SCHEMA_BINDINGS.plant.id).min(1),
+  keepId: plantSchemaBindings.id,
+  mergeIds: z.array(plantSchemaBindings.id).min(1),
 });
 
 const plantMergeSummary = z.object({
-  deletedIds: z.array(ENTITY_SCHEMA_BINDINGS.plant.id),
+  deletedIds: z.array(plantSchemaBindings.id),
   merged: z.number().int().nonnegative(),
   plantingEdgesRepointed: z.number().int().nonnegative(),
   productEdgesRepointed: z.number().int().nonnegative(),
 });
 
 export const plantRepository = defineRepository("plant", {
+  schemas: plantSchemaBindings,
   updatePolicy: { recordFields: [] },
   lifecycle: {
     delete: PLANT_DELETE_EDGE_POLICY,

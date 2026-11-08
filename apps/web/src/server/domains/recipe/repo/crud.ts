@@ -25,6 +25,7 @@ import type { PgTable } from "drizzle-orm/pg-core";
 import { alias, QueryBuilder } from "drizzle-orm/pg-core";
 import { match, P } from "ts-pattern";
 
+import { recipeRepositoryReadSchema } from "~/entity/generated/entity-schema-bindings.recipe.gen";
 import {
   collectSubRecipeIds,
   type RecipeGraphRecipe,
@@ -474,6 +475,7 @@ const loadRecipeDetail = async (
  * resolver, not an images join.
  */
 export const recipeScaffold = listScaffold("recipe", recipe, {
+  readSchema: recipeRepositoryReadSchema,
   derived: {
     costTotal: recipeTotalSql("{cost,lower}"),
     caloriesTotal: recipeTotalSql("{nutrition,kcal,lower}"),

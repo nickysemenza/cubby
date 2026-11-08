@@ -271,11 +271,9 @@ describe("entity list smoke — shared selection/count FROM context", () => {
         >,
       ) => {
         if (listEntity.success) {
-          const page = await listOperations(listEntity.data).listFields(
-            kernelCtx,
-            input,
-            ["id"],
-          );
+          const page = await (
+            await listOperations(listEntity.data)
+          ).listFields(kernelCtx, input, ["id"]);
           return { items: page.items, meta: page.meta };
         }
         return executeEntity(kernelCtx, { action: "list", entity, ...input });

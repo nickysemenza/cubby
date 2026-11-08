@@ -212,7 +212,9 @@ describe("list nesting scope", () => {
     expect(outline(listed.items)).toEqual([[pantry.id, 1]]);
     // Normal browser tables request selected fields; the structural count
     // must survive that projection before a child can be expanded.
-    const selected = await listOperations("productCategory").listFields(
+    const selected = await (
+      await listOperations("productCategory")
+    ).listFields(
       context,
       { filters: { search: "Nesting" }, nesting: { scope: "roots" } },
       ["id", "name"],

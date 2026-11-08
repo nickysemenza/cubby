@@ -9,6 +9,7 @@ import {
 } from "@cubby/schemas/product-raw-read";
 import { z } from "zod";
 
+import { productSchemaBindings } from "~/entity/generated/entity-schema-bindings.product.gen";
 import type { Database } from "~/server/db";
 import {
   createProductWithSideEffects,
@@ -57,6 +58,7 @@ async function linkedProductIngredientIds(db: Database, shortcodes: string[]) {
  * transaction-bound context, and publications wait for its commit.
  */
 export const productRepository = defineRepository("product", {
+  schemas: productSchemaBindings,
   updatePolicy: { recordFields: ["price", "fdc_id", "labelNutrition", "kind"] },
   lifecycle: {
     delete: PRODUCT_DELETE_EDGE_POLICY,

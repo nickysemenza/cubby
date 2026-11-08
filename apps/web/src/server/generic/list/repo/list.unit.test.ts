@@ -1,6 +1,7 @@
 import { and, isNotNull, sql } from "drizzle-orm";
 import { describe, expect, it, vi } from "vitest";
 
+import { taskRepositoryReadSchema } from "~/entity/generated/entity-schema-bindings.task.gen";
 import { task } from "~/server/db/schema";
 import { renderWhereSql } from "~/server/testing/mock-db";
 
@@ -17,6 +18,7 @@ describe("listScaffold", () => {
       sql`(SELECT "Project"."id" FROM "Project" WHERE "Project"."name" = 'Stub scope')`,
   };
   const scaffold = listScaffold("task", task, {
+    readSchema: taskRepositoryReadSchema,
     derived: {
       effectiveTrade: sql`NULL`,
       effectiveDueDate: sql`NULL`,

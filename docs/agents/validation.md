@@ -457,6 +457,12 @@ These clocks do not measure CPU or include synchronous work after the last I/O.
 Subtracting a `Server-Timing` handler duration from browser TTFB does not attribute the
 remainder to platform or network work. Use CPU profiles for that distinction
 ([Workers timers](https://developers.cloudflare.com/workers/runtime-apis/performance/)).
+Local built-Worker controls separate runtime installation from the first application
+read. `unstable_startWorker.ready` confirms Wrangler's proxy, not the user
+runtime's completed reload. Await its `reloadComplete` event before timing
+application initialization and report installation separately. Match executable
+layout, source-map availability and inspector setup across arms; a CPU profile
+started after inspector setup does not measure complete Worker startup.
 Attribute repeated plan work by its relation or alias and owning SQL producer;
 a shared CTE name alone does not establish an identical computation.
 

@@ -4,6 +4,8 @@ import { z } from "zod";
 
 import { metadataQueryClient } from "#web/tests/entity-metadata.ts";
 import { declaredListReadProjection } from "~/entity/entity-list/list-read-demand";
+import { plantRepositoryReadSchema } from "~/entity/generated/entity-schema-bindings.plant.gen";
+import { productRepositoryReadSchema } from "~/entity/generated/entity-schema-bindings.product.gen";
 import { entityMetadata } from "~/entity/metadata";
 import { listEntities } from "~/entity/model/list-contracts";
 import { expenseListReadProjection } from "~/features/expense/list-read";
@@ -14,6 +16,7 @@ import { locationListReadProjection } from "~/features/location/list-read";
 import { mealListReadProjection } from "~/features/meal/list-read";
 import { wishListReadProjection } from "~/features/wish/list-read";
 import { db } from "~/server/db";
+import { ENTITY_REPOSITORY_READ_SCHEMAS } from "~/server/generated/entity-bindings.gen";
 import {
   selectListReadRows,
   validateListReadRows,
@@ -24,11 +27,13 @@ import { listReadPlan, selectedListProjection } from "./list-projection";
 describe("list projection group execution", () => {
   it("starts admitted ID batches before rows arrive and reuses transitive loads only within that page", async () => {
     type Row = { id: string; shortcode: string };
-    const selected = selectedListProjection("plant", ["ingredientName"]);
+    const selected = selectedListProjection(plantRepositoryReadSchema, [
+      "ingredientName",
+    ]);
     const pageIds = ["private-one"];
     let loads = 0;
     const pending = Promise.withResolvers<Map<string, string>>();
-    const plan = listReadPlan<Row>("plant", {
+    const plan = listReadPlan<Row>(plantRepositoryReadSchema, {
       bindings: (bind) => {
         const names = bind.ids(({ ids }) => {
           loads++;
@@ -48,7 +53,7 @@ describe("list projection group execution", () => {
         ];
       },
     });
-    const idsOnly = selectedListProjection("plant", ["id"]);
+    const idsOnly = selectedListProjection(plantRepositoryReadSchema, ["id"]);
     plan.prefetch(db, pageIds, idsOnly);
     plan.prefetch(db, [], selected);
     expect(loads).toBe(0);
@@ -65,20 +70,25 @@ describe("list projection group execution", () => {
   });
 
   it("surfaces an early ID-batch failure when the complete page is read", async () => {
-    const plan = listReadPlan<{ id: string; shortcode: string }>("plant", {
-      bindings: (bind) => {
-        const names = bind.ids(async () => {
-          throw new Error("Synthetic ID batch failure");
-        });
-        return [
-          names.fields(
-            z.object({ ingredientName: z.string().nullable() }),
-            () => ({ ingredientName: null }),
-          ),
-        ];
+    const plan = listReadPlan<{ id: string; shortcode: string }>(
+      plantRepositoryReadSchema,
+      {
+        bindings: (bind) => {
+          const names = bind.ids(async () => {
+            throw new Error("Synthetic ID batch failure");
+          });
+          return [
+            names.fields(
+              z.object({ ingredientName: z.string().nullable() }),
+              () => ({ ingredientName: null }),
+            ),
+          ];
+        },
       },
-    });
-    const projection = selectedListProjection("plant", ["ingredientName"]);
+    );
+    const projection = selectedListProjection(plantRepositoryReadSchema, [
+      "ingredientName",
+    ]);
     // A failed row load can abandon a prefetch before hydration observes it.
     plan.prefetch(db, ["private-abandoned"], projection);
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
@@ -100,7 +110,7 @@ describe("list projection group execution", () => {
   it("assembles only admitted canonical fields and memoizes typed page batches", async () => {
     type Row = { id: string; shortcode: string; ingredientId: string | null };
     let batches = 0;
-    const plan = listReadPlan<Row>("plant", {
+    const plan = listReadPlan<Row>(plantRepositoryReadSchema, {
       references: { ingredientId: { kind: "public" } },
       bindings: (bind) => {
         const batch = bind.batch(async ({ rows }) => {
@@ -119,7 +129,7 @@ describe("list projection group execution", () => {
       { id: "private-one", shortcode: "PLANT-4K7M", ingredientId: null },
       { id: "private-two", shortcode: "PLANT-8R2T", ingredientId: null },
     ];
-    const ids = selectedListProjection("plant", ["id"]);
+    const ids = selectedListProjection(plantRepositoryReadSchema, ["id"]);
     expect(await plan.read(db, rows, ids)).toEqual([
       { id: "PLANT-4K7M" },
       { id: "PLANT-8R2T" },
@@ -128,7 +138,7 @@ describe("list projection group execution", () => {
     expect(
       await plan.read(db, [{ ...rows[0]!, ingredientId: "private-uuid" }], ids),
     ).toEqual([{ id: "PLANT-4K7M" }]);
-    const selected = selectedListProjection("plant", [
+    const selected = selectedListProjection(plantRepositoryReadSchema, [
       "ingredientId",
       "ingredientName",
     ]);
@@ -145,7 +155,7 @@ describe("list projection group execution", () => {
       },
     ]);
     expect(batches).toBe(1);
-    const lookup = listReadPlan<Row>("plant", {
+    const lookup = listReadPlan<Row>(plantRepositoryReadSchema, {
       references: {
         ingredientId: {
           kind: "lookup",
@@ -166,7 +176,7 @@ describe("list projection group execution", () => {
     await expect(
       plan.read(db, [{ ...rows[0]!, ingredientId: "private-uuid" }], selected),
     ).rejects.toThrow("Invalid");
-    const missing = listReadPlan<Row>("product", {
+    const missing = listReadPlan<Row>(productRepositoryReadSchema, {
       bindings: (bind) => [
         bind(rawProductList.pick({ unitPrice: true }).partial(), () => ({})),
       ],
@@ -175,11 +185,11 @@ describe("list projection group execution", () => {
       missing.read(
         db,
         [{ id: "private", shortcode: "PRD-4K7M", ingredientId: null }],
-        selectedListProjection("product", ["unitPrice"]),
+        selectedListProjection(productRepositoryReadSchema, ["unitPrice"]),
       ),
     ).rejects.toThrow("Requested record field was not loaded: unitPrice");
     expect(() =>
-      listReadPlan<Row>("plant", {
+      listReadPlan<Row>(plantRepositoryReadSchema, {
         bindings: (bind) => [
           bind(z.object({ unknownField: z.string() }), () => ({
             unknownField: "x",
@@ -188,7 +198,7 @@ describe("list projection group execution", () => {
       }),
     ).toThrow("Unknown list binding field");
     expect(() =>
-      listReadPlan<Row>("product", {
+      listReadPlan<Row>(productRepositoryReadSchema, {
         bindings: (bind) => [
           bind(rawProductList.pick({ unitPrice: true }), () => ({
             unitPrice: null,
@@ -233,30 +243,39 @@ describe("list projection group execution", () => {
           visible,
         );
         expect(() =>
-          selectedListProjection(entity, demand ?? []),
+          selectedListProjection(
+            ENTITY_REPOSITORY_READ_SCHEMAS[entity],
+            demand ?? [],
+          ),
         ).not.toThrow();
       }
     }
-    const projection = selectedListProjection("product", ["unitPrice"]);
+    const projection = selectedListProjection(productRepositoryReadSchema, [
+      "unitPrice",
+    ]);
     expect(() =>
-      selectListReadRows("product", [{ id: "PRD-4K7M" }], projection),
+      selectListReadRows(
+        productRepositoryReadSchema,
+        [{ id: "PRD-4K7M" }],
+        projection,
+      ),
     ).toThrow("Requested record field was not loaded: unitPrice");
     expect(
       selectListReadRows(
-        "product",
+        productRepositoryReadSchema,
         [{ id: "PRD-4K7M", unitPrice: null }],
         projection,
       ),
     ).toEqual([{ id: "PRD-4K7M", unitPrice: null }]);
     const loaded = { id: "PRD-4K7M", unitPrice: null, unitMappings: [] };
-    expect(validateListReadRows("product", [loaded], projection)).toEqual([
-      loaded,
-    ]);
-    expect(selectListReadRows("product", [loaded], projection)).toEqual([
-      { id: "PRD-4K7M", unitPrice: null },
-    ]);
-    expect(() => selectedListProjection("product", ["unknownField"])).toThrow(
-      "Unknown list field",
-    );
+    expect(
+      validateListReadRows(productRepositoryReadSchema, [loaded], projection),
+    ).toEqual([loaded]);
+    expect(
+      selectListReadRows(productRepositoryReadSchema, [loaded], projection),
+    ).toEqual([{ id: "PRD-4K7M", unitPrice: null }]);
+    expect(() =>
+      selectedListProjection(productRepositoryReadSchema, ["unknownField"]),
+    ).toThrow("Unknown list field");
   });
 });

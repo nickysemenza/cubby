@@ -16,6 +16,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
+import { purchaseRepositoryReadSchema } from "~/entity/generated/entity-schema-bindings.purchase.gen";
 import type { Database } from "~/server/db";
 import { getDb, insertAndReturn, withTransaction } from "~/server/db/helpers";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
@@ -79,7 +80,9 @@ describe("purchase list totals", () => {
       filters: { vendorId },
       sorts: [],
       pagination: { pageIndex: 0, pageSize: 10 },
-      projection: selectedListProjection("purchase", ["spendingCategoryId"]),
+      projection: selectedListProjection(purchaseRepositoryReadSchema, [
+        "spendingCategoryId",
+      ]),
       readIntent: "page",
     });
     expect(page.data).toHaveLength(1);

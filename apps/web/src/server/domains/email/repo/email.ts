@@ -24,6 +24,10 @@ import {
   sql,
 } from "drizzle-orm";
 
+import {
+  emailRepositoryReadSchema,
+  emailSchemaBindings,
+} from "~/entity/generated/entity-schema-bindings.email.gen";
 import { senderAddress, distinctSenderDomain } from "~/lib/vendor/domains";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { notDeleted, unwrapDb } from "~/server/db/helpers";
@@ -483,6 +487,7 @@ const coverageScope = listPrepare(async (db) => {
 });
 
 export const emailScaffold = listScaffold("email", emailTable, {
+  readSchema: emailRepositoryReadSchema,
   rows: {
     coverageCandidates: coverageScope.rows(
       (candidates) => sql`
@@ -533,5 +538,6 @@ export const emailScaffold = listScaffold("email", emailTable, {
 });
 
 export const emailRepository = defineRepository("email", {
+  schemas: emailSchemaBindings,
   scaffold: emailScaffold,
 });

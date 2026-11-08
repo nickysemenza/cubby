@@ -574,6 +574,11 @@ and execution device do not change identity. This projection is not stored.
 Declarations may import shared primitives and cycle-safe field modules. They
 must not import canonical schemas, generated artifacts, server implementations,
 or browser modules. Implementation references remain `{ module, export }` data.
+Canonical entity validators are generated in per-entity schema-binding modules.
+The aggregate imports those same instances rather than rebuilding them. These
+modules contain only schemas and data, so client types can reach them without
+importing server implementations. Nested-envelope metadata is imported separately
+from validators.
 Browser metadata is generated separately and contains no executable schemas.
 The public `@cubby/schemas/entity-metadata/*` alias and compiler-only
 `@cubby/schemas/compiler/generated/entity-metadata/*` alias select the same
@@ -2401,7 +2406,8 @@ The base admits records matching at least one certain or possible Problem before
 selecting labels and routing, so non-candidates do not pay those per-record costs.
 
 Each repository supplies `listScaffold` as its read port to
-`defineRepository`. Its `read` declaration supplies columns and bindings;
+`defineRepository`. Both constructors receive their canonical per-entity schema
+ports explicitly. Its `read` declaration supplies columns and bindings;
 `{ scope: "detail" }` bindings default only on record reads; an explicit page projection can request them. `{ scope: "explicit" }` bindings load only when a projection names their keys, including record reads and write-response hydration. Use explicit scope for bounded verification bundles that require their own snapshot. `scaffold.get`
 and `getByIds` use the same read plan as pages, including for get-by-id.
 See [ADR 0024](adr/0024-repository-read-declaration.md).
@@ -2418,7 +2424,10 @@ Repository `read.title` owns computed SQL labels; otherwise the scaffold
 resolves the declared stored title field. Shortcode lookups, reference pickers
 and record graphs share that title, including Inventory's product and location.
 The existing generated kernel bindings compile stored titles from `titleField` and
-lazily import each repository for composed titles and field contexts. Missing ports
+lazily import each repository for composed titles and field contexts. Selected
+lists, selection identities and internal selected details load the requested
+repository through those same generated loaders; their read interfaces expose no
+write methods. Complete commands retain the aggregate command assembly. Missing ports
 throw; reads never depend on registration or repository initialization order.
 The annotated kernel read boundary also keeps the generated domain loaders out
 of the repository compiler program. Queue and scheduled entry points must retain
@@ -3025,7 +3034,7 @@ one shape:
   terminals remain unavailable for grouping. Value filters generate Any value
   / No value, Match all, and Exclude.
 - `{ type }` is a repository value: the repository passes its SQL as
-  `listScaffold(entity, table, { derived })`, whose argument type is
+  `listScaffold(entity, table, { readSchema, derived })`, whose argument type is
   generated, so a declared key without SQL fails typecheck. A compound value
   (an array of SQL, inventory `amount` as unit then size) orders part by part
   and cannot filter, except a `dateInterval`: its SQL is `[start, end]`, a
@@ -3528,7 +3537,7 @@ the field's read schema. A path row set's table, `where` columns and
 terminals are checked when its SQL renders (`rowSetSql` in
 `field-compiler.ts`), since the generator cannot see the database schema.
 `repository` declares the columns of a relation the repository passes as
-`listScaffold(entity, table, { derived, rows })`, SQL selecting `"owner"`
+`listScaffold(entity, table, { readSchema, derived, rows })`, SQL selecting `"owner"`
 (the list row's id) and each column, a `{ reference }` column holding the
 referenced record's id; the argument type is generated, so a declared row
 set without SQL fails typecheck. It compiles to an uncorrelated
@@ -3612,7 +3621,7 @@ level (`projectScopeKind`). The scope
 compiles to `EXISTS` over the path to a record in the target scaffold's
 `matchingIds`, the live records its `where` selects. The repository passes
 that scaffold as
-`listScaffold(entity, table, { scopes: { projectScope: () => projectScaffold } })`,
+`listScaffold(entity, table, { readSchema, scopes: { projectScope: () => projectScaffold } })`,
 a thunk because the target's repository may import this one; the argument
 type is generated, so a declared scope without its scaffold fails typecheck.
 `scaffold.context` builds the target's context, and the row set a row-set

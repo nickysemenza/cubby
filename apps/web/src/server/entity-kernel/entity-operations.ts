@@ -47,6 +47,7 @@ import {
 } from "~/server/entity-kernel/repo/entity-identity";
 import { AppError, createAppError } from "~/server/errors/app-error";
 import { findPgError } from "~/server/errors/db-errors";
+import { ENTITY_REPOSITORY_READ_SCHEMAS } from "~/server/generated/entity-bindings.gen";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { publicFieldEnvelopeRows } from "~/server/generic/derived/repo/public-read";
 import { detailBreadcrumb } from "~/server/generic/entity-detail/repo/detail-breadcrumb";
@@ -56,7 +57,6 @@ import {
   withChildCounts,
   withDisplayImages,
 } from "~/server/generic/list/repo/list-read-adapters";
-import { listReadSchema } from "~/server/generic/list/repo/list-read-schema";
 import {
   bindWorkflow,
   workflow,
@@ -185,7 +185,9 @@ type MutationReadDemand<Read extends boolean> = Read extends true
 
 const mutationReadFields = (entity: EntityKernelEntity, fields: unknown) => {
   const requested = z.array(z.string()).parse(fields);
-  const allowed = Object.keys(listReadSchema(entity).shape);
+  const allowed = Object.keys(
+    ENTITY_REPOSITORY_READ_SCHEMAS[entity].schema.shape,
+  );
   for (const field of requested) {
     if (!allowed.includes(field))
       throw new Error(`Unknown mutation response field: ${field}`);

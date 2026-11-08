@@ -12,7 +12,8 @@ import { entityFieldModels } from "@cubby/schemas/entity-fields";
  * context natively (`(ctx, …)`); everything a declaration already says is
  * derived rather than restated:
  *
- * - schemas and sort come from the generated roster;
+ * - schemas are supplied by the canonical per-entity module, and sort comes from
+ *   the generated roster;
  * - the kernel actions come from the declaration (`lifecycle: "readOnly"`
  *   exposes get/list only, whatever the spec supplies);
  * - every read — a page, a selected projection, the single-record get and
@@ -75,10 +76,9 @@ import type {
 } from "~/server/entity-kernel/adapter";
 import { deletedWithImages } from "~/server/entity-kernel/adapter";
 import { createAppError } from "~/server/errors/app-error";
-import {
-  ENTITY_SCHEMA_BINDINGS,
-  type EntitySchemaBindingEntity,
-  type EntitySchemaBindingMap,
+import type {
+  EntitySchemaBindingEntity,
+  EntitySchemaBindingMap,
 } from "~/server/generated/entity-bindings.gen";
 import { generatedEntityKernelContractCases } from "~/server/generated/entity-kernel-entities.gen";
 import {
@@ -556,6 +556,7 @@ export type RepositorySpec<
   TMergeItem = never,
   TMergeSummary = never,
 > = {
+  schemas: SchemasFor<E>;
   /** Explicit delete/merge policies override the reference-preserving delete default. */
   lifecycle?: EntityLifecycleContract;
   /** The entity's declared read: list pages, records, totals and facets. */
@@ -776,9 +777,9 @@ export function defineRepository<
       // generated record widens it to the union across entities.
       return row === undefined
         ? null
-        : (ENTITY_SCHEMA_BINDINGS[entity].repositoryDetail.parse(
-            row,
-          ) as ZodOutput<SchemasFor<E>["repositoryDetail"]>);
+        : (spec.schemas.repositoryDetail.parse(row) as ZodOutput<
+            SchemasFor<E>["repositoryDetail"]
+          >);
     },
   };
   // Only the actions the declaration grants reach the kernel; a readOnly
@@ -859,9 +860,7 @@ export function defineRepository<
               ctx,
               // SAFETY: the binding's id schema is SchemasFor<E>'s; the
               // generated record widens it to the union across entities.
-              ENTITY_SCHEMA_BINDINGS[entity].id.parse(keepId) as ZodOutput<
-                SchemasFor<E>["id"]
-              >,
+              spec.schemas.id.parse(keepId) as ZodOutput<SchemasFor<E>["id"]>,
             ),
           blockers: async (
             ctx: EntityKernelContext,
@@ -876,11 +875,7 @@ export function defineRepository<
     lifecycle,
     repository,
     mergeOperation,
-    // Resolved on first use: repository modules are evaluated while the
-    // generated schema bindings may still be initializing.
-    get schemas(): SchemasFor<E> {
-      return ENTITY_SCHEMA_BINDINGS[entity];
-    },
+    schemas: spec.schemas,
     get sort(): EntitySortContract {
       return sortFor(entity);
     },

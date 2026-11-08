@@ -2,8 +2,7 @@ import { z } from "zod";
 
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import type { EntityKernelEntity } from "~/server/entity-kernel/contracts";
-import { kernelScaffold } from "~/server/entity-kernel/scaffolds";
-import { ENTITY_SCHEMA_BINDINGS } from "~/server/generated/entity-bindings.gen";
+import { loadEntityReadBinding } from "~/server/entity-kernel/list-operations";
 import {
   publicFieldEnvelopeRows,
   selectedFieldEnvelopeSchema,
@@ -23,10 +22,9 @@ export async function readSelectedEntityRecords({
   ids: readonly string[];
   fields: readonly string[];
 }): Promise<z.output<typeof selectedEntityRecord>[]> {
-  const scaffold = kernelScaffold(entity);
-  if (!scaffold)
-    throw new Error(`Missing selected read scaffold for ${entity}`);
-  const binding = ENTITY_SCHEMA_BINDINGS[entity];
+  const read = await loadEntityReadBinding(entity);
+  const scaffold = read.repository.scaffold;
+  const binding = read.schemas;
   const schema = selectedFieldEnvelopeSchema(binding.detail, fields);
   const includeFieldReads = Object.keys(schema.shape.fields.shape).length > 0;
   // Input-only context keys remain absent, as they are in a complete public read.

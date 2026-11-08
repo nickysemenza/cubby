@@ -10,7 +10,7 @@ import { entitySummary } from "@cubby/schemas/entity-summary";
 import { listEntities } from "~/entity/model/list-contracts";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { listOperations } from "~/server/entity-kernel/list-operations";
-import { listReadSchema } from "~/server/generic/list/repo/list-read-schema";
+import { loadEntityReadBinding } from "~/server/entity-kernel/list-operations";
 
 /** Reuse the canonical selected-field readers for money, quantities, enums, and progress. */
 export async function withGraphPreviews<
@@ -27,7 +27,10 @@ export async function withGraphPreviews<
         ...(presentation.hero.chip ? [presentation.hero.chip] : []),
       ];
       const fields = entityFieldModels[entity].fields;
-      const allowed = new Set(Object.keys(listReadSchema(entity).shape));
+      const binding = await loadEntityReadBinding(entity);
+      const allowed = new Set(
+        Object.keys(binding.repository.scaffold.readSchema.schema.shape),
+      );
       const keys = [
         ...new Set(
           roster.flatMap((key) => {
@@ -40,7 +43,9 @@ export async function withGraphPreviews<
         .filter((key) => allowed.has(key))
         .slice(0, 12);
       if (!keys.length) return;
-      const result = await listOperations(entity).listFields(
+      const result = await (
+        await listOperations(entity)
+      ).listFields(
         context,
         {
           filters: { ids: nodes.map((node) => node.entityId) },

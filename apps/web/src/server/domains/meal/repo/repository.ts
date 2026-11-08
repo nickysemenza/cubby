@@ -1,3 +1,4 @@
+import { mealSchemaBindings } from "~/entity/generated/entity-schema-bindings.meal.gen";
 import {
   asActor,
   defineRepository,
@@ -15,6 +16,7 @@ import {
 const mealShortcodes = bindShortcodeResolver("meal");
 
 export const mealRepository = defineRepository("meal", {
+  schemas: mealSchemaBindings,
   lifecycle: { delete: MEAL_DELETE_EDGE_POLICY },
   scaffold: mealScaffold,
   create: asActor(createMealWithEntityId),

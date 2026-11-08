@@ -13,6 +13,9 @@ import { countLabel } from "@cubby/shared/pluralize";
 import { sql } from "drizzle-orm";
 import { z } from "zod";
 
+import { emailRepositoryReadSchema } from "~/entity/generated/entity-schema-bindings.email.gen";
+import { productRepositoryReadSchema } from "~/entity/generated/entity-schema-bindings.product.gen";
+import { sourceTransactionRecordRepositoryReadSchema } from "~/entity/generated/entity-schema-bindings.sourceTransactionRecord.gen";
 import { formatCurrency } from "~/lib/number-format";
 import type { Database } from "~/server/db";
 import { unwrapDb } from "~/server/db/helpers";
@@ -120,7 +123,7 @@ export async function productStockSummary(
     sorts: [],
     pagination: { pageIndex: 0, pageSize: 1 },
     readIntent: "page",
-    projection: selectedListProjection("product", [
+    projection: selectedListProjection(productRepositoryReadSchema, [
       "id",
       "onHandUnits",
       "categoryFeature",
@@ -234,7 +237,7 @@ export async function emailSummary(
         : { vendorAccountId: [parseShortcodeFor("vendorAccount", code)] },
     sorts: [{ orderBy: "receivedAt", direction: "desc" }],
     pagination: { pageIndex: 0, pageSize: 3 },
-    projection: selectedListProjection("email", [
+    projection: selectedListProjection(emailRepositoryReadSchema, [
       "id",
       "subject",
       "receivedAt",
@@ -282,12 +285,10 @@ export async function transactionSourcesSummary(
     },
     sorts: [],
     pagination: { pageIndex: 0, pageSize: 3 },
-    projection: selectedListProjection("sourceTransactionRecord", [
-      "id",
-      "displayName",
-      "source",
-      "statementDate",
-    ]),
+    projection: selectedListProjection(
+      sourceTransactionRecordRepositoryReadSchema,
+      ["id", "displayName", "source", "statementDate"],
+    ),
   });
   const rows = z
     .array(
@@ -333,7 +334,7 @@ export async function productPricingSummary(
     sorts: [],
     pagination: { pageIndex: 0, pageSize: 1 },
     readIntent: "page",
-    projection: selectedListProjection("product", [
+    projection: selectedListProjection(productRepositoryReadSchema, [
       "id",
       "purchaseDate",
       "unitPriceLabel",

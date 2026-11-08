@@ -3,10 +3,12 @@ import {
   type ListProjection,
   type ListReadRow,
 } from "~/entity/model/list-read-fields";
-import { ENTITY_REPOSITORY_READ_SCHEMAS } from "~/server/generated/entity-bindings.gen";
+import type { compileListReadSchema } from "~/entity/model/list-read-fields";
 
-export const listReadSchema = (entity: ListEntity) =>
-  ENTITY_REPOSITORY_READ_SCHEMAS[entity].schema;
+export type RepositoryReadSchema = ReturnType<typeof compileListReadSchema> & {
+  readonly entity: ListEntity;
+  readonly listKeys: ReadonlySet<string>;
+};
 
 /** Pick actual loaded fields; a missing dependency must fail instead of producing partial success. */
 export function selectListReadFields(
@@ -24,11 +26,10 @@ export function selectListReadFields(
 
 /** Validate requested fields while retaining loaded dependencies for envelope construction. */
 export function validateListReadRows(
-  entity: ListEntity,
+  read: RepositoryReadSchema,
   rows: ListReadRow[],
   fields: readonly string[],
 ): ListReadRow[] {
-  const read = ENTITY_REPOSITORY_READ_SCHEMAS[entity];
   return rows.map((row) => {
     // An optional field the complete list also omits stays absent; every
     // other field must be loaded. Check raw mapped values before a group's
@@ -46,11 +47,11 @@ export function validateListReadRows(
 
 /** Select only requested fields for internal consumers that do not construct envelopes. */
 export function selectListReadRows(
-  entity: ListEntity,
+  read: RepositoryReadSchema,
   rows: ListReadRow[],
   fields: readonly string[],
 ): ListReadRow[] {
-  return validateListReadRows(entity, rows, fields).map((row) =>
+  return validateListReadRows(read, rows, fields).map((row) =>
     selectListReadFields(
       row,
       fields.filter((field) => Object.hasOwn(row, field)),
@@ -59,9 +60,9 @@ export function selectListReadRows(
 }
 
 export function projectListRows(
-  entity: ListEntity,
+  read: RepositoryReadSchema,
   rows: ListReadRow[],
   projection: ListProjection,
 ) {
-  return validateListReadRows(entity, rows, projection);
+  return validateListReadRows(read, rows, projection);
 }

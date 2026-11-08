@@ -5,6 +5,10 @@ import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type { ShortcodeFor } from "@cubby/schemas/identifiers";
 
+import {
+  shipmentRepositoryReadSchema,
+  shipmentSchemaBindings,
+} from "~/entity/generated/entity-schema-bindings.shipment.gen";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
@@ -26,6 +30,7 @@ import { listScaffold } from "~/server/generic/list/repo/list";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 export const shipmentScaffold = listScaffold("shipment", shipment, {
+  readSchema: shipmentRepositoryReadSchema,
   read: {
     search: shipmentSearch,
     media: true,
@@ -111,6 +116,7 @@ const SHIPMENT_DELETE_EDGE_POLICY = {
 } as const satisfies IncomingEdgePolicy<"shipment", OperationDisposition>;
 
 export const shipmentRepository = defineRepository("shipment", {
+  schemas: shipmentSchemaBindings,
   lifecycle: { delete: SHIPMENT_DELETE_EDGE_POLICY },
   scaffold: shipmentScaffold,
   delete: async (ctx, ids) => {

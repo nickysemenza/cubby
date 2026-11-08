@@ -1,3 +1,4 @@
+import { locationSchemaBindings } from "~/entity/generated/entity-schema-bindings.location.gen";
 import { withTransactionDatabase } from "~/server/db/helpers";
 import { registerLocationImageChange } from "~/server/entity-kernel/repo/mutation-side-effects";
 import { defineRepository } from "~/server/entity-kernel/repo/repository";
@@ -18,6 +19,7 @@ const locationShortcodes = bindShortcodeResolver("location");
  * Location image changes enroll vision analysis in the save transaction.
  */
 export const locationRepository = defineRepository("location", {
+  schemas: locationSchemaBindings,
   lifecycle: { delete: LOCATION_DELETE_EDGE_POLICY },
   scaffold: locationScaffold,
   create: (ctx, data) =>

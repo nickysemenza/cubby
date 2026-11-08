@@ -66,6 +66,7 @@ import { QueryBuilder } from "drizzle-orm/pg-core";
 import { uniq } from "es-toolkit";
 import { z } from "zod";
 
+import { productRepositoryReadSchema } from "~/entity/generated/entity-schema-bindings.product.gen";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import { effectiveFieldSql } from "~/server/db/computed/effective-field";
 import {
@@ -291,6 +292,7 @@ export const productScaffold = listScaffold<
   typeof product,
   ProductReadRow
 >("product", product, {
+  readSchema: productRepositoryReadSchema,
   rows: {
     sellerMemberships: productSellerMembershipsSql,
     spendingEvidence: productSpendingEvidenceSql,

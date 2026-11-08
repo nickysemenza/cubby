@@ -66,7 +66,9 @@ describe("declared list scopes", () => {
     entity: "ingredient" | "task" | "expense",
     filters: ListFilterValues,
   ) => {
-    const pageResult = await listOperations(entity).listFields(
+    const pageResult = await (
+      await listOperations(entity)
+    ).listFields(
       context(),
       {
         filters,

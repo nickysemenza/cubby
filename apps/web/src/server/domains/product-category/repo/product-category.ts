@@ -38,6 +38,10 @@ import {
 } from "drizzle-orm";
 import type { z } from "zod";
 
+import {
+  productCategoryRepositoryReadSchema,
+  productCategorySchemaBindings,
+} from "~/entity/generated/entity-schema-bindings.productCategory.gen";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   effectiveFieldSql,
@@ -403,6 +407,7 @@ export const productCategoryScaffold = listScaffold(
   "productCategory",
   productCategory,
   {
+    readSchema: productCategoryRepositoryReadSchema,
     derived: {
       needsClassification: sql`(${categoryMapping()}->>'state' = 'unmapped')`,
     },
@@ -817,6 +822,7 @@ export async function loadCategorySummaries(
 }
 
 export const productCategoryRepository = defineRepository("productCategory", {
+  schemas: productCategorySchemaBindings,
   lifecycle: { delete: PRODUCT_CATEGORY_DELETE_EDGE_POLICY },
   scaffold: productCategoryScaffold,
   create: asActor(createProductCategory),

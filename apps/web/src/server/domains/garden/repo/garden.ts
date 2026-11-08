@@ -31,6 +31,8 @@ import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 import type { z } from "zod";
 
+import { gardenEntryRepositoryReadSchema } from "~/entity/generated/entity-schema-bindings.gardenEntry.gen";
+import { plantingRepositoryReadSchema } from "~/entity/generated/entity-schema-bindings.planting.gen";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   associatePendingImages,
@@ -800,6 +802,7 @@ export const updateGardenEntry = defineMutationWriter({
 });
 
 export const plantingScaffold = listScaffold("planting", planting, {
+  readSchema: plantingRepositoryReadSchema,
   derived: {
     activeSpan: [
       sql`COALESCE(${planting.sowedOn}, ${planting.transplantedOn}, ${householdDaySql(planting.createdAt)})`,
@@ -870,6 +873,7 @@ export const readPlantingById = plantingReader.getByID;
 const JOURNAL_LINK: EntityLinkKind = "gardenEntryPlanting";
 
 export const gardenEntryScaffold = listScaffold("gardenEntry", gardenEntry, {
+  readSchema: gardenEntryRepositoryReadSchema,
   rows: {
     /**
      * A planting's journal always includes its direct live associations. A

@@ -17,6 +17,7 @@ import {
 import { and, asc, eq, gte, inArray, lte, type SQL, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 
+import { mealRepositoryReadSchema } from "~/entity/generated/entity-schema-bindings.meal.gen";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { trimTextSql } from "~/server/db/computed/text-whitespace";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
@@ -111,6 +112,7 @@ export const MEAL_DELETE_EDGE_POLICY = {
 // `array_position` over that tuple is the same ranking `mealTypeRank`
 // applies client-side. Unslotted meals sort last in both directions.
 export const mealScaffold = listScaffold("meal", meal, {
+  readSchema: mealRepositoryReadSchema,
   derived: {
     mealType: sql`array_position(${sql.raw(
       `ARRAY[${mealTypeValues.map((v) => `'${v}'`).join(",")}]::text[]`,

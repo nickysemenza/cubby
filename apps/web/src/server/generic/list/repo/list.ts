@@ -57,6 +57,7 @@ import type { PgColumn, PgAsyncSelect, PgTable } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
 import type { ListFacet } from "~/contracts/entity-list.contract";
+import { listEntities } from "~/entity/generated/entity-read-keys.gen";
 import type { ListEntity } from "~/entity/model/list-contracts";
 import type { ListReadRow } from "~/entity/model/list-read-fields";
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -77,7 +78,6 @@ import {
   repositoryQueries,
   type RepositoryQueryInput,
 } from "~/server/db/repository-access.boundary";
-import { ENTITY_LIST_READ_SCHEMAS } from "~/server/entity-reads/list-contracts";
 import { createAppError } from "~/server/errors/app-error";
 import { SHORTCODE_TABLE } from "~/server/generated/shortcode-tables.gen";
 import type { QualityReadContext } from "~/server/generic/data-quality/repo/registry";
@@ -95,6 +95,7 @@ import { labelSql } from "~/server/generic/entity-graph/repo/record-label";
 import { relatedWhereConditions } from "~/server/generic/entity-links/repo/related-view";
 import type { EvidenceLoader } from "~/server/generic/field-explanation/repo/field-explanation-evidence";
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
+import type { RepositoryReadSchema } from "~/server/generic/list/repo/list-read-schema";
 import { withPageFields } from "~/server/generic/list/repo/page-fields";
 import { compileReadDemand } from "~/server/generic/list/repo/read-demand";
 import {
@@ -401,6 +402,7 @@ type ListScaffoldOptions<E extends Entity, Row> = ([
   ([GeneratedListScopeKey<E>] extends [never]
     ? { scopes?: ScopesArg<E> }
     : { scopes: ScopesArg<E> }) & {
+    readSchema: RepositoryReadSchema & { readonly entity: E };
     /** Join-implied population constraints shared by rows, facets, and identity reads. */
     population?: <Filters extends object>(filters: Filters) => SQL;
     /** Request options consumed by population rather than tested against each row. */
@@ -447,10 +449,8 @@ type ListReadDeclaration<Row> = ListReadOptions<Row> & {
 
 /** `options` is required exactly when the entity declares SQL it reads. */
 type ListScaffoldArgs<E extends Entity, Row> = [
-  keyof DerivedSqlArg<E> | keyof RowsSqlArg<E> | GeneratedListScopeKey<E>,
-] extends [never]
-  ? [options?: ListScaffoldOptions<E, Row>]
-  : [options: ListScaffoldOptions<E, Row>];
+  options: ListScaffoldOptions<E, Row>,
+];
 
 type CompiledDerivedSql = {
   -readonly [Key in keyof AnyDerivedSql]: AnyDerivedSql[Key];
@@ -490,10 +490,7 @@ export const repositoryConnectionRows = (
 
 /** The canonical list read schema's entity, or null for a non-list entity. */
 const listEntityOf = (entity: Entity): ListEntity | null =>
-  Object.keys(ENTITY_LIST_READ_SCHEMAS).find(
-    (key): key is ListEntity =>
-      key === entity && Object.hasOwn(ENTITY_LIST_READ_SCHEMAS, key),
-  ) ?? null;
+  listEntities.find((key) => key === entity) ?? null;
 
 /**
  * `entity`/`table` scope the helpers to one entity's list. Build once per
@@ -608,7 +605,7 @@ export function listScaffold<
   const readPlan = () => {
     if (!listEntity) throw new Error(`No canonical list schema: ${entity}`);
     if (plan) return plan;
-    plan = listReadPlan<Row>(listEntity, readDeclaration);
+    plan = listReadPlan<Row>(options.readSchema, readDeclaration);
     // A read-schema key that no column, derived value, declared column or
     // binding loads would parse as absent on every read; refuse the plan.
     const missing = plan.unloaded(
@@ -645,9 +642,7 @@ export function listScaffold<
   /** Stored columns, declared derived values and declared columns a projection reads. */
   const readColumns = (projection: ListProjection, context: ListContext) => {
     const wanted = new Set(projection);
-    const schema = listEntity
-      ? ENTITY_LIST_READ_SCHEMAS[listEntity].schema
-      : null;
+    const listKeys = options.readSchema.listKeys;
     const columns = getTableColumns(table);
     // Bindings and field facts may read columns absent from the projection.
     // Only direct physical-field reads have a closed set of row inputs here.
@@ -677,10 +672,7 @@ export function listScaffold<
     }
     for (const [key, value] of Object.entries(readDeclaration.columns ?? {}))
       // A key outside the read schema is a helper column a binding reads.
-      if (
-        wanted.has(key) ||
-        (!narrow && (!schema || !Object.hasOwn(schema.shape, key)))
-      )
+      if (wanted.has(key) || (!narrow && !listKeys.has(key)))
         selected.set(key, typeof value === "function" ? value(context) : value);
     return Object.fromEntries(selected);
   };
@@ -798,6 +790,7 @@ export function listScaffold<
   };
   const scaffold = {
     entity,
+    readSchema: options.readSchema,
 
     repositoryRows(key: string): SQL {
       const entry = rowsSql[key];
@@ -1746,7 +1739,7 @@ export function listScaffold<
       spec: Omit<ListHydration<Raw, Raw>, "hydrate"> & ListSelection<Raw>,
     ) {
       if (request.projection && listEntity)
-        selectedListProjection(listEntity, request.projection);
+        selectedListProjection(options.readSchema, request.projection);
       return scaffold.list(
         db,
         {

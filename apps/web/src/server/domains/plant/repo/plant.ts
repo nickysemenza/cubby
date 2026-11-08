@@ -11,6 +11,7 @@ import {
 import { eq, inArray, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 
+import { plantRepositoryReadSchema } from "~/entity/generated/entity-schema-bindings.plant.gen";
 import { householdLocalDate } from "~/lib/household-date";
 import type { Database } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
@@ -93,6 +94,7 @@ const plantReadOptions = {
   ],
 } satisfies ListReadOptions<PlantRow>;
 export const plantScaffold = listScaffold("plant", plant, {
+  readSchema: plantRepositoryReadSchema,
   read: {
     ...plantReadOptions,
     title: sql`${plant.name}`,

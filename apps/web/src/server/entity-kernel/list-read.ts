@@ -26,7 +26,7 @@ import { withTrace } from "~/server/observability/tracing";
 
 import type {
   EntityBindingSchemas,
-  EntityKernelCoreBinding,
+  EntityKernelReadBinding,
   EntityKernelContext,
 } from "./adapter";
 import { resolveFilterTokens } from "./filter-tokens";
@@ -63,7 +63,7 @@ const inputSchema = z.object({
 export function defineListOperations<
   E extends ListEntity,
   S extends EntityBindingSchemas,
->(binding: EntityKernelCoreBinding<E, S>) {
+>(binding: EntityKernelReadBinding<E, S>) {
   const parseFilters = (input: z.output<typeof inputSchema>["filters"]) => {
     const { ids, ...rest } = z
       .object({ ids: z.array(z.string()).max(500).optional() })
@@ -104,7 +104,10 @@ export function defineListOperations<
       value: unknown,
       fields: readonly string[],
     ) {
-      const projection = selectedListProjection(binding.entity, fields);
+      const projection = selectedListProjection(
+        binding.repository.scaffold.readSchema,
+        fields,
+      );
       const input = inputSchema.parse(value);
       const pagination = input.pagination ?? { pageIndex: 0, pageSize: 50 };
       const scoped = await scopedFilters(context, input);
@@ -140,7 +143,11 @@ export function defineListOperations<
             )
           ? await withRecordEmoji(context.db, binding.entity, result.data)
           : result.data;
-      const selected = validateListReadRows(binding.entity, rows, fields);
+      const selected = validateListReadRows(
+        binding.repository.scaffold.readSchema,
+        rows,
+        fields,
+      );
       const selectedSchema = selectedFieldEnvelopeSchema(
         binding.schemas.list,
         fields,
