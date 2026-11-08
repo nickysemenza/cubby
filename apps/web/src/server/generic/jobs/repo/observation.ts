@@ -23,7 +23,7 @@ import { derivedRebuild } from "~/server/db/derived-rebuild-schema";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { repositoryQueries as getDb } from "~/server/db/repository-access.boundary";
 import { run } from "~/server/db/retained-tables";
-import { appleRefusalCoveredByCloudDescriptionSql } from "~/server/domains/image-processing/repo/processor-policy";
+import { appleFailureCoveredByCloudDescriptionSql } from "~/server/domains/image-processing/repo/processor-policy";
 import { INTERNAL_JOB_KINDS } from "~/server/generic/jobs/kind-policy";
 import { jobDue } from "~/server/generic/jobs/repo/queue";
 
@@ -342,7 +342,11 @@ const workAction = (
   needsAttention = false,
 ): WorkStuckItem["action"] =>
   kind.startsWith("image.")
-    ? { type: "link", label: "View photos", href: "/image-jobs?state=pending" }
+    ? {
+        type: "link",
+        label: "View photos",
+        href: needsAttention ? "/image-jobs?state=failed" : "/image-jobs",
+      }
     : kind.startsWith("embedding.") || kind.startsWith("ai.evaluation")
       ? { type: "none" }
       : {
@@ -438,7 +442,7 @@ async function readFailedWork(db: Database, now: Date) {
           AND ${notDeleted("image_job")} AND EXISTS (SELECT 1 FROM "Image" source
             WHERE source.id = image_job."imageId" AND ${notDeleted("source")}
               AND source.sha256 = image_job."sourceContentHash"
-              AND NOT ${appleRefusalCoveredByCloudDescriptionSql({ jobAlias: "image_job", imageId: sql`source.id`, sourceContentHash: sql`source.sha256` })})
+              AND NOT ${appleFailureCoveredByCloudDescriptionSql({ jobAlias: "image_job", imageId: sql`source.id`, sourceContentHash: sql`source.sha256` })})
       UNION ALL SELECT 'embedding.refresh', "updatedAt", "embeddingError" FROM "SearchDocument"
         WHERE "embeddingDueAt" IS NOT NULL AND "embeddingAttempts" >= ${JOB_NEEDS_ATTENTION_ATTEMPTS}
           AND ${notDeleted("SearchDocument")}

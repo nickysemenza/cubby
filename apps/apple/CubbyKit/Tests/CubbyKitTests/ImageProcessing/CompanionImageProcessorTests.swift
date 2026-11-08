@@ -74,6 +74,16 @@ struct CompanionImageProcessorTests {
             }
         }
 
+        // The SDK accepts an unfinished string as a typed value; that is not a finished answer.
+        let incomplete = try GeneratedContent(json: #"{"description":"A synthetic blue shape"#)
+        #expect(try incomplete.value(String.self, forProperty: "description") == "A synthetic blue shape")
+        #expect(!incomplete.isComplete)
+        #expect(throws: GeneratedContent.ParsingError.self) {
+            try FoundationModelsImageDescriber.requireComplete(incomplete)
+        }
+        try FoundationModelsImageDescriber.requireComplete(
+            GeneratedContent(json: #"{"description":"A synthetic blue shape"}"#))
+
         let rawContent = #"{"description":"A metal tool marked 3/8"}"#
         attempts = []
         do {
@@ -92,6 +102,19 @@ struct CompanionImageProcessorTests {
             #expect(reason.contains("3/8"))
         }
         #expect(attempts.count == 1)
+
+        do {
+            _ = try await FoundationModelsImageDescriber.describeWithRecovery(image, contextSize: 8192) {
+                _, _ in
+                throw LanguageModelError.guardrailViolation(
+                    .init(debugDescription: "Synthetic response-side diagnostic"))
+            }
+            Issue.record("A guardrail refusal must remain a failure")
+        } catch CompanionImageDescriptionFailure.model(let reason, let retryable) {
+            #expect(!retryable)
+            #expect(reason.hasPrefix("guardrail_violation: "))
+            #expect(reason.contains("Synthetic response-side diagnostic"))
+        }
     }
 
     @Test("Decodes a checksum-verified AVIF catalog source")
@@ -351,10 +374,22 @@ struct CompanionImageProcessorTests {
         #expect(await upload.count == 1)
     }
 
-    @Test("Returns no subject without uploading a uniform canvas")
-    func uniformCanvasDoesNotUpload() async throws {
-        let sourceBytes = try ImageEncoding.encode(
-            TestImages.canvas(width: 400, height: 300, subject: false), as: .png)
+    @Test("Returns no subject without uploading a uniform canvas", arguments: [false, true])
+    func uniformCanvasDoesNotUpload(orange: Bool) async throws {
+        let canvas = TestImages.canvas(width: 128, height: 128, subject: false)
+        let image: CGImage
+        if orange {
+            let context = CGContext(
+                data: nil, width: 128, height: 128, bitsPerComponent: 8, bytesPerRow: 0,
+                space: CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue)!
+            context.setFillColor(CGColor(srgbRed: 1, green: 163.0 / 255, blue: 0, alpha: 1))
+            context.fill(CGRect(x: 0, y: 0, width: 128, height: 128))
+            image = context.makeImage()!
+        } else {
+            image = canvas
+        }
+        let sourceBytes = try ImageEncoding.encode(image, as: .png)
         let upload = UploadProbe()
         let processor = CompanionImageProcessor(
             download: { _ in sourceBytes },

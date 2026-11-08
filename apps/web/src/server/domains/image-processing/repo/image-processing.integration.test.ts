@@ -1057,7 +1057,18 @@ describe("durable image representations", () => {
         lastError: "structured_output_invalid: Synthetic parsing failure",
       })
       .where(eq(imageProcessingJob.id, refusedJobId));
-    await assertAttention(true, true);
+    await assertAttention(false, true);
+    // Only these known terminal optional-evaluation failures are cloud-covered.
+    for (const reason of [
+      "refusal: Synthetic model refusal",
+      "timeout: Synthetic timeout",
+    ]) {
+      await getDb(ctx.db)
+        .update(imageProcessingJob)
+        .set({ lastError: reason })
+        .where(eq(imageProcessingJob.id, refusedJobId));
+      await assertAttention(true, true);
+    }
     await getDb(ctx.db)
       .update(imageProcessingJob)
       .set({

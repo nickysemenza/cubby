@@ -45,6 +45,7 @@ type Facts = {
   lastExecutor: string | null;
   deviceRan: boolean;
   state: ImageProcessingJobState;
+  storedState: string;
 };
 
 /**
@@ -63,8 +64,9 @@ const loadFacts = async (
     executor: string | null;
     deviceRan: boolean;
     state: ImageProcessingJobState;
+    storedState: string;
   }>(sql`
-    SELECT j.id, cost.charged, cost.standard,
+    SELECT j.id, j.state AS "storedState", cost.charged, cost.standard,
       coalesce(
         (SELECT a.executor->>${"name"} FROM "ImageProcessingAttempt" a
           WHERE a."jobId" = j.id AND a.executor IS NOT NULL
@@ -108,6 +110,7 @@ const loadFacts = async (
         lastExecutor: row.executor,
         deviceRan: row.deviceRan,
         state: row.state,
+        storedState: row.storedState,
       },
     ]),
   );
@@ -202,11 +205,12 @@ const imageJobRead = {
         rows.map((row) => row.id),
       ),
     );
-    const execution = bind.batch(async ({ db, rows }) => {
-      // `state` arrives as the derived display state (`leased`, `failed`,
-      // ...), so only the stored terminal outcomes rule a row out.
+    const execution = bind.batch(async (page) => {
+      const { db, rows } = page;
+      // Displayed `failed` also includes open retrying work. Only stored pending work waits.
+      const loaded = await facts.load(page);
       const open = rows.filter(
-        (row) => row.state !== "ready" && row.state !== "skipped",
+        (row) => loaded.get(row.id)?.storedState === "pending",
       );
       if (!open.length) return new Map<string, Execution>();
       const now = new Date();

@@ -16,7 +16,7 @@ public struct LiftedImage: Sendable {
     }
 }
 
-/// Foreground-instance lifting with the Swift Vision API, the same effect as pressing and
+/// Foreground-instance lifting with Vision, the same effect as pressing and
 /// holding a subject in Photos. Every instance Vision finds is kept (a multi-pack is one product).
 public enum SubjectLift {
     public enum Background: Sendable, Hashable {
@@ -29,17 +29,24 @@ public enum SubjectLift {
     /// One context for every lift; creating a `CIContext` per call is the expensive part.
     private static let context = CIContext(options: [.cacheIntermediates: false])
 
+    @concurrent
     public static func lift(_ image: CGImage, background: Background = .white, cropToSubject: Bool = true)
         async throws -> LiftedImage
     {
-        let handler = ImageRequestHandler(image)
-        guard let observation = try await handler.perform(GenerateForegroundInstanceMaskRequest()),
+        try Task.checkCancellation()
+        // The Swift request reports requestCancelled for some uniform images with an uncancelled
+        // parent. This API returns the actual empty observation instead; never reinterpret an error.
+        let handler = VNImageRequestHandler(cgImage: image)
+        let request = VNGenerateForegroundInstanceMaskRequest()
+        try handler.perform([request])
+        try Task.checkCancellation()
+        guard let observation = request.results?.first,
             !observation.allInstances.isEmpty
         else {
             return LiftedImage(image: image, foundSubject: false)
         }
         let buffer = try observation.generateMaskedImage(
-            for: observation.allInstances, imageFrom: handler, croppedToInstancesExtent: cropToSubject
+            ofInstances: observation.allInstances, from: handler, croppedToInstancesExtent: cropToSubject
         )
         var lifted = CIImage(cvPixelBuffer: buffer)
         let extent = lifted.extent
