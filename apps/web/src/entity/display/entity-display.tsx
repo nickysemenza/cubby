@@ -976,28 +976,18 @@ function relationCountFilter(
       candidate.kind === "relation" && candidate.relation === source.relation,
   );
   if (section?.kind !== "relation") return null;
-  const target = entityMetadata(
-    queryClient,
-    entity,
-  ).descriptor.relationships.find(
-    (relation) => relation.key === source.relation,
-  )?.target;
-  if (target === undefined || !isBrowserRoutedEntity(target)) return null;
-  const spec = getEntityFilters(queryClient, target).find(
-    (candidate) => candidate.columnId === section.filter.descriptor,
-  );
-  return spec
-    ? {
-        to: entities[target].routes.list,
-        // The count follows the direct reference, so the list opens with the
-        // filter's "Include sub-…" toggle off.
-        search: (id: string) => ({
-          [filterUrlKey(spec)]: id,
-          ...(spec.subtree === undefined ? {} : { [spec.subtree]: "false" }),
-        }),
-        plural: entityPluralLabel(target).toLocaleLowerCase(),
-      }
-    : null;
+  const plan = section.plan;
+  if (!plan || !isBrowserRoutedEntity(plan.target)) return null;
+  return {
+    to: entities[plan.target].routes.list,
+    // The count follows the direct reference, so the list opens with the
+    // filter's "Include sub-…" toggle off.
+    search: (id: string) => ({
+      [plan.urlKey]: id,
+      ...(plan.subtree === null ? {} : { [plan.subtree]: "false" }),
+    }),
+    plural: entityPluralLabel(plan.target).toLocaleLowerCase(),
+  };
 }
 
 /**
