@@ -1,0 +1,58 @@
+{
+  "type": "diff",
+  "version": "9",
+  "dialect": "postgres",
+  "id": "2a92f543-27aa-4ca8-9719-9b89048a2639",
+  "prevIds": [
+    "7d73ef8f-d365-4e1f-a56f-b320a982b1d9"
+  ],
+  "footprints": [
+    {
+      "statementType": "recreate_index",
+      "statementTarget": [
+        "index",
+        "public",
+        "FinancialEvidenceAlias",
+        "FinancialEvidenceAlias_lookup_idx"
+      ],
+      "writes": [
+        "s|idx|public.FinancialEvidenceAlias_lookup_idx",
+        "n|idx|public.FinancialEvidenceAlias_lookup_idx",
+        "e|idx|public.FinancialEvidenceAlias_lookup_idx",
+        "n|rel|public.FinancialEvidenceAlias_lookup_idx"
+      ],
+      "reads": [
+        "n|tbl|public.FinancialEvidenceAlias",
+        "n|sch|public",
+        "n|col|public.FinancialEvidenceAlias.source",
+        "n|col|public.FinancialEvidenceAlias.value"
+      ],
+      "sharedWrites": [],
+      "sqlHash": "093594007e190ab7"
+    }
+  ],
+  "deltas": [
+    {
+      "op": "alter",
+      "key": "indexes\u0000[\"public\",\"FinancialEvidenceAlias_lookup_idx\"]",
+      "set": {
+        "columns": [
+          {
+            "value": "source",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          },
+          {
+            "value": "value",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ]
+      }
+    }
+  ]
+}

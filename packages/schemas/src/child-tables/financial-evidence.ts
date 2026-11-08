@@ -155,9 +155,10 @@ export const financialEvidenceChildren = [
         where:
           "{kind} = 'transaction_ref' AND {deletedAt} IS NULL AND {provenance}->>'kind' = 'explicit_transaction_reference'",
       },
+      // Historical evidence joins source and value across alias kinds.
       {
         name: "FinancialEvidenceAlias_lookup_idx",
-        on: ["source", "kind", "value"],
+        on: ["source", "value"],
       },
       { name: "FinancialEvidenceAlias_observation_idx", on: ["observationId"] },
       {
