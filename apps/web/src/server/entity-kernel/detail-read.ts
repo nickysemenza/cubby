@@ -1,0 +1,112 @@
+import {
+  ENTITY_LABEL,
+  ENTITY_NOT_FOUND_REASON,
+} from "@cubby/schemas/identifiers";
+import { z } from "zod";
+
+import { withUniversalEntityMedia } from "~/server/entity-kernel/repo/entity-display-image";
+import {
+  describeUnresolvableCode,
+  isShortcodeEntity,
+} from "~/server/entity-kernel/repo/entity-identity";
+import { createAppError } from "~/server/errors/app-error";
+import { publicFieldEnvelopeRows } from "~/server/generic/derived/repo/public-read";
+import { detailBreadcrumb } from "~/server/generic/entity-detail/repo/detail-breadcrumb";
+import { bindWorkflow, workflow } from "~/server/workflows/runtime";
+
+import type {
+  EntityBindingSchemas,
+  EntityKernelContext,
+  EntityKernelReadBinding,
+} from "./adapter";
+import type { EntityKernelEntity } from "./contracts";
+import { parseSchema } from "./list-input";
+
+/** Complete commands and lazy detail reads share every get stage and validator. */
+export function defineEntityGet<
+  const E extends EntityKernelEntity,
+  const S extends EntityBindingSchemas,
+>(
+  binding: Pick<
+    EntityKernelReadBinding<E, S>,
+    "entity" | "schemas" | "repository"
+  >,
+) {
+  const resultSchema = z.object({
+    action: z.literal("get"),
+    entity: z.literal(binding.entity),
+    item: z.nullable<S["detail"]>(binding.schemas.detail),
+  });
+  return bindWorkflow(
+    workflow<EntityKernelContext, { id: string; missing: "error" | "null" }>(
+      `${binding.entity}.get`,
+    )
+      .call("id", async (_, { input }) =>
+        parseSchema<S["id"], string>(binding.schemas.id, input.id),
+      )
+      .call("found", async ({ context }, { input, id }) => {
+        // A merged-away or deleted code is simply not found; the message
+        // names the survivor (ADR 0006).
+        const page = await binding.repository.read(context, [id]);
+        const [row] = page.data;
+        return {
+          item:
+            row === undefined
+              ? null
+              : binding.schemas.repositoryDetail.parse(row),
+          fieldReads: page.fieldReads,
+          missingMessage:
+            row === undefined && isShortcodeEntity(binding.entity)
+              ? await describeUnresolvableCode(
+                  context.db,
+                  binding.entity,
+                  input.id,
+                )
+              : null,
+        };
+      })
+      .call("media", async ({ context }, { found }) => {
+        if (found.item === null) return null;
+        const [item] = await withUniversalEntityMedia(
+          context.db,
+          binding.entity,
+          [found.item],
+          true,
+        );
+        const breadcrumb =
+          item === undefined
+            ? undefined
+            : await detailBreadcrumb(context.db, binding.entity, item);
+        return {
+          ...item,
+          ...(breadcrumb === undefined ? {} : { breadcrumb }),
+        };
+      })
+      .call("enveloped", async ({ context }, { found, media }) =>
+        media === null
+          ? null
+          : (
+              await publicFieldEnvelopeRows({
+                db: context.db,
+                entity: binding.entity,
+                schema: binding.schemas.detail,
+                rows: [media],
+                contexts: found.fieldReads,
+              })
+            )[0],
+      )
+      .output(({ input, found, media, enveloped }) => {
+        if (media === null && input.missing !== "null")
+          throw createAppError(
+            ENTITY_NOT_FOUND_REASON[binding.entity],
+            found.missingMessage ??
+              `${ENTITY_LABEL[binding.entity]} ${input.id} not found`,
+          );
+        return resultSchema.parse({
+          action: "get",
+          entity: binding.entity,
+          item: enveloped ?? null,
+        });
+      }),
+  );
+}

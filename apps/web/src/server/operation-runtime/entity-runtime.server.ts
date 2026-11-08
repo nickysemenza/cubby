@@ -2,7 +2,6 @@ import { searchableEntitySchema } from "@cubby/schemas/search";
 import * as drizzle from "drizzle-orm";
 import { z } from "zod";
 
-import { entityDetailContract } from "~/contracts/entity-detail.contract";
 import { entityFilterOptionsContract } from "~/contracts/entity-filter-options.contract";
 import { entityGraphContract } from "~/contracts/entity-graph.contract";
 import { entityInspectorHealthContract } from "~/contracts/entity-inspector-health.contract";
@@ -14,8 +13,6 @@ import {
   entityTimelineInputSchema,
   getEntityTimelineOutputSchema,
 } from "~/entity/generated/entity-timelines.gen";
-import { entityDetailInputSchema } from "~/entity/model/detail-contracts";
-import { loadEntityDetailSchemas } from "~/entity/model/read-schemas/loaders";
 import { getEntityCounts } from "~/server/domains/dashboard/repo/dashboard";
 import {
   entityMergeBlockers,
@@ -28,7 +25,6 @@ import {
 } from "~/server/entity-kernel/contracts";
 import { listEntityRecords } from "~/server/entity-kernel/repo/entity-records";
 import { kernelScaffold } from "~/server/entity-kernel/scaffolds";
-import { entityActionStates } from "~/server/generic/actions/entity-action-states";
 import {
   getDetailActivity,
   getMonthlyExpenseSpend,
@@ -56,31 +52,6 @@ const searchDocumentCountRowSchema = z.object({
   documents: z.number().int().nonnegative(),
   embeddings: z.number().int().nonnegative(),
 });
-
-export const entityDetailHandlers = implementOperationDomain(
-  entityDetailContract,
-  {
-    detail: {
-      // Query-default "context" policy: browser detail reads may ride the
-      // bounded-stale handle; other contexts stay authoritative.
-      input: entityDetailInputSchema,
-      run: async (context, input) => {
-        const schemas = await loadEntityDetailSchemas(input.entity);
-        const result = await executeEntityAs(context, "get", {
-          entity: input.entity,
-          id: input.shortcode,
-          missing: "null",
-        });
-        return result.item === null
-          ? null
-          : schemas.detailOutput.parse({
-              ...result.item,
-              actions: entityActionStates(input.entity, result.item),
-            });
-      },
-    },
-  },
-);
 
 export const entityTimelineHandlers = implementOperationDomain(
   entityTimelineContract,

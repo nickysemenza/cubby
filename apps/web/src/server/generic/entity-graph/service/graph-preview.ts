@@ -10,7 +10,7 @@ import { entitySummary } from "@cubby/schemas/entity-summary";
 import { listEntities } from "~/entity/model/list-contracts";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { listOperations } from "~/server/entity-kernel/list-operations";
-import { loadEntityReadBinding } from "~/server/entity-kernel/list-operations";
+import { loadEntityReadBinding } from "~/server/entity-kernel/read-binding";
 
 /** Reuse the canonical selected-field readers for money, quantities, enums, and progress. */
 export async function withGraphPreviews<

@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import type { EntityKernelEntity } from "~/server/entity-kernel/contracts";
-import { loadEntityReadBinding } from "~/server/entity-kernel/list-operations";
+import { loadEntityReadBinding } from "~/server/entity-kernel/read-binding";
 import {
   publicFieldEnvelopeRows,
   selectedFieldEnvelopeSchema,

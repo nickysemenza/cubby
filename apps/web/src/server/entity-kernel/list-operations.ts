@@ -1,23 +1,8 @@
-import type { z } from "zod";
-
 import type { ListEntity } from "~/entity/model/list-contracts";
 
-import type { EntityBindingSchemas, EntityKernelReadBinding } from "./adapter";
-import type { EntityKernelEntity } from "./contracts";
+import type { EntityBindingSchemas } from "./adapter";
 import { defineListOperations } from "./list-read";
-
-type EntityReadSchemas = EntityBindingSchemas & {
-  id: z.ZodType<string>;
-  filters: z.ZodObject;
-};
-/** Load one canonical repository without admitting its write methods to read callers. */
-export async function loadEntityReadBinding(
-  entity: EntityKernelEntity,
-): Promise<EntityKernelReadBinding<EntityKernelEntity, EntityReadSchemas>> {
-  const bindings =
-    await import("~/server/generated/entity-kernel-bindings.gen");
-  return bindings.repositoryReadBinding(entity).load();
-}
+import { loadEntityReadBinding } from "./read-binding";
 
 type ListOperations = ReturnType<
   typeof defineListOperations<ListEntity, EntityBindingSchemas>

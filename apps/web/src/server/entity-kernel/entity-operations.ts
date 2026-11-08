@@ -1,8 +1,5 @@
 import { entityMutationItem } from "@cubby/schemas/entity-mutation";
-import {
-  ENTITY_LABEL,
-  ENTITY_NOT_FOUND_REASON,
-} from "@cubby/schemas/identifiers";
+import { ENTITY_LABEL } from "@cubby/schemas/identifiers";
 import {
   EMPTY_MUTATION_SIDE_EFFECTS,
   mutationSideEffectsWithWarnings,
@@ -29,10 +26,7 @@ import {
   canUpdateColumns,
   updateColumns,
 } from "~/server/entity-kernel/repo/column-update";
-import {
-  withListEntityMedia,
-  withUniversalEntityMedia,
-} from "~/server/entity-kernel/repo/entity-display-image";
+import { withListEntityMedia } from "~/server/entity-kernel/repo/entity-display-image";
 import {
   normalizeRecordEmoji,
   repositoryRecordInput,
@@ -41,16 +35,11 @@ import {
   auditRecordEmoji,
   normalizeSavedRecordEmoji,
 } from "~/server/entity-kernel/repo/entity-emoji";
-import {
-  describeUnresolvableCode,
-  isShortcodeEntity,
-} from "~/server/entity-kernel/repo/entity-identity";
 import { AppError, createAppError } from "~/server/errors/app-error";
 import { findPgError } from "~/server/errors/db-errors";
 import { ENTITY_REPOSITORY_READ_SCHEMAS } from "~/server/generated/entity-bindings.gen";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { publicFieldEnvelopeRows } from "~/server/generic/derived/repo/public-read";
-import { detailBreadcrumb } from "~/server/generic/entity-detail/repo/detail-breadcrumb";
 import { withListGroupBy } from "~/server/generic/list/repo/list";
 import { listTotalLabels } from "~/server/generic/list/repo/list-display-labels";
 import {
@@ -77,6 +66,7 @@ import {
   entityMutationReadResultSchema,
   entityQueryResultSchema,
 } from "./contracts";
+import { defineEntityGet } from "./detail-read";
 import { resolveFilterTokens } from "./filter-tokens";
 import {
   parseGroupBy,
@@ -337,78 +327,7 @@ const buildEntityOperations = <
   const update = buildUpdateOperation(binding, readMode);
   const updateRow = buildUpdateOperation(binding, false);
   return {
-    get: bindWorkflow(
-      workflow<EntityKernelContext, { id: string; missing: "error" | "null" }>(
-        `${binding.entity}.get`,
-      )
-        .call("id", async (_, { input }) =>
-          parseSchema<S["id"], string>(binding.schemas.id, input.id),
-        )
-        .call("found", async ({ context }, { input, id }) => {
-          // A merged-away or deleted code is simply not found; the message
-          // names the survivor (ADR 0006).
-          const page = await binding.repository.read(context, [id]);
-          const [row] = page.data;
-          return {
-            item:
-              row === undefined
-                ? null
-                : binding.schemas.repositoryDetail.parse(row),
-            fieldReads: page.fieldReads,
-            missingMessage:
-              row === undefined && isShortcodeEntity(binding.entity)
-                ? await describeUnresolvableCode(
-                    context.db,
-                    binding.entity,
-                    input.id,
-                  )
-                : null,
-          };
-        })
-        .call("media", async ({ context }, { found }) => {
-          if (found.item === null) return null;
-          const [item] = await withUniversalEntityMedia(
-            context.db,
-            binding.entity,
-            [found.item],
-            true,
-          );
-          const breadcrumb =
-            item === undefined
-              ? undefined
-              : await detailBreadcrumb(context.db, binding.entity, item);
-          return {
-            ...item,
-            ...(breadcrumb === undefined ? {} : { breadcrumb }),
-          };
-        })
-        .call("enveloped", async ({ context }, { found, media }) =>
-          media === null
-            ? null
-            : (
-                await publicFieldEnvelopeRows({
-                  db: context.db,
-                  entity: binding.entity,
-                  schema: binding.schemas.detail,
-                  rows: [media],
-                  contexts: found.fieldReads,
-                })
-              )[0],
-        )
-        .output(({ input, found, media, enveloped }) => {
-          if (media === null && input.missing !== "null")
-            throw createAppError(
-              ENTITY_NOT_FOUND_REASON[binding.entity],
-              found.missingMessage ??
-                `${ENTITY_LABEL[binding.entity]} ${input.id} not found`,
-            );
-          return entityQueryResultSchema.parse({
-            action: "get",
-            entity: binding.entity,
-            item: enveloped ?? null,
-          });
-        }),
-    ),
+    get: defineEntityGet(binding),
     list: bindWorkflow(
       workflow<EntityKernelContext, EntityListInput>(`${binding.entity}.list`)
         .call("validated", async ({ context }, { input }) => {

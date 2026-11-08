@@ -2414,6 +2414,10 @@ ports explicitly. Its `read` declaration supplies columns and bindings;
 `{ scope: "detail" }` bindings default only on record reads; an explicit page projection can request them. `{ scope: "explicit" }` bindings load only when a projection names their keys, including record reads and write-response hydration. Use explicit scope for bounded verification bundles that require their own snapshot. `scaffold.get`
 and `getByIds` use the same read plan as pages, including for get-by-id.
 See [ADR 0024](adr/0024-repository-read-declaration.md).
+Browser detail requests load only their entity's canonical repository and share
+the complete command's get workflow. Identity validation, missing-record behavior,
+full media, breadcrumbs, field facts and action admission retain the same owners.
+Read-module imports must not initialize mutation or unrelated operation handlers.
 
 Ingredient costing and nutrition graphs retain their graph readers, but source
 Ingredient records and embedded Products from their respective scaffolds. The
