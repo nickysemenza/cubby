@@ -117,6 +117,10 @@ cancellations remain stopped. Retry failed on a cancelled Sweep step with
 no failed items directs the member to Retry run. Actual failures remain
 retryable without reviving the cancelled remainder.
 A retained step with zero committed pages still retries its full failed roster.
+An explicit Retry run can also reopen a completed execution Job when a failed
+Mail discovery Run retains a valid frozen page. The same Job starts a new
+generation while preserving the Run's input and page; page settlement and mailbox
+admission still apply. A completed Job without retained work remains refused.
 
 AI refresh recovery requires a durable owned or requested evaluation roster,
 including terminal rows and retry handoffs. With no roster, Retry run refuses
