@@ -142,6 +142,8 @@ export function storedFieldAvailableSql(
     : null;
 }
 
+const storedProjectionObjectSchema = z.record(z.string(), z.unknown());
+
 /** A projection keeps the exact result revision, provenance and work of its owner. */
 export function projectStoredResult(
   read: StoredDerivedRead,
@@ -149,7 +151,7 @@ export function projectStoredResult(
 ): StoredDerivedRead {
   let value = read.value;
   for (const segment of path) {
-    const object = z.record(z.string(), z.unknown()).safeParse(value);
+    const object = storedProjectionObjectSchema.safeParse(value);
     if (!object.success || !Object.hasOwn(object.data, segment))
       return { ...read, value: null, decision: undefined, resultExists: false };
     value = object.data[segment];

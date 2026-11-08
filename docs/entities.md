@@ -216,7 +216,9 @@ without becoming stored intent.
 Envelope validation graphs are shared by their stored and effective schema
 identities across projections. These weak caches contain schemas only, never
 assignments, controls, results or other record data. Repeated nested reads must
-not rebuild the same validation graph for every list, detail and MCP occurrence.
+not rebuild the same validation graph for every list, detail and MCP occurrence. Stored-result path
+projection and scored-entity checks reuse fixed validators. Path projection still
+validates and clones each segment.
 
 Reset previews use the field's declared `resolution.resetSource` or inheritance
 chain and apply its ordinary reset patch without writing. Expense Project uses
