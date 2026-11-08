@@ -198,6 +198,12 @@ and freezes each compiler-owned slice, and returns them in one local loader read
 Dependencies are not traversed transitively. A document's QueryClient owns the
 complete admitted bundles. Accessors take that explicit scope.
 
+Filter descriptors compile once per admitted metadata slice in browsers and
+Worker isolates, shared by column filters and list controls. Compilation must use
+only frozen declaration data, never session, actor or request state. Replacing
+the slice rebuilds the descriptors; record values and query results are not part
+of that compilation.
+
 The app's wrapper around TanStack's SSR Query integration replaces metadata query
 data with its entity admission identity on the existing initial state, streamed
 batches and pending promises. The browser reconstructs each complete bundle from

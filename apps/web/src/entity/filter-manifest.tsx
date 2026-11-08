@@ -64,13 +64,22 @@ const expandRules = {
   updatedDate: behavior.resolveUpdatedDate,
 };
 
+// Column filters share one compilation; a new metadata admission gets fresh descriptors.
+// Compilation must use only frozen declaration data, never session, actor or request state.
+const filtersByMetadata = new WeakMap<
+  EntityMetadataFor<Entity>,
+  readonly FilterSpec[]
+>();
+
 /** Adapt only the requested compiler slice. Exact wire semantics stay server-owned. */
 export const getEntityFilters = (
   queryClient: QueryClient,
   entity: Entity,
 ): readonly FilterSpec[] => {
   const metadata = entityMetadata(queryClient, entity);
-  return metadata.filterDescriptors.map(
+  const existing = filtersByMetadata.get(metadata);
+  if (existing) return existing;
+  const filters = metadata.filterDescriptors.map(
     (descriptor: FilterDescriptor): FilterSpec => {
       const presets = new Map<string, FilterPatch>(
         (descriptor.options ?? []).flatMap((option) =>
@@ -195,6 +204,8 @@ export const getEntityFilters = (
       return { ...spec, group: filterGroup(spec, metadata.summary) };
     },
   );
+  filtersByMetadata.set(metadata, filters);
+  return filters;
 };
 
 /** One deferred source per reference filter, even when two fields target the same entity. */
