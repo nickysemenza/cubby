@@ -15,6 +15,8 @@ import { createEntityFixture, getFixtureDb } from "./fixtures/core";
 test("Product identifier edits preserve additions and apply explicit identity actions", async ({
   page,
 }) => {
+  const pageErrors: string[] = [];
+  page.on("pageerror", (error) => pageErrors.push(error.message));
   await page.setViewportSize({ width: 390, height: 844 });
   const source = `editor-${Date.now()}`;
   const product = await createEntityFixture(page, "product", {
@@ -47,6 +49,8 @@ test("Product identifier edits preserve additions and apply explicit identity ac
   };
 
   await edit.click();
+  await expect(dialog).toBeVisible();
+  expect(pageErrors).toEqual([]);
   await dialog
     .getByRole("button", { name: "Add identifier", exact: true })
     .click();

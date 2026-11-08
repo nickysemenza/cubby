@@ -439,6 +439,9 @@ export function DetailSummary<E extends GenericDetailEntity>({
       .slice(4)
       .filter((slot) => {
         if (slot.kind === "fields") return false;
+        // Streamed queries may resolve before the first client render. Keep
+        // the server's declaration-only fold until this boundary hydrates.
+        if (!hydrated) return true;
         if (slot.kind === "report") {
           if (reportQuery?.isError) return false;
           const report = reportQuery?.data?.reports.find(

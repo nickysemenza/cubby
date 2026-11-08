@@ -106,7 +106,11 @@ overlap wall time and must not be added to network or document timings. Operatio
 responses are counted only through primary readiness, with no decoding of RPC
 results: no observed response does not establish a cache hit, and an HTTP 200
 does not establish operation success. HTTP failures observed by readiness are
-reported and produce a nonzero exit. Later background failures remain outside
+reported and produce a nonzero exit. `contextPageErrorsByReady` counts page errors
+from context creation through primary readiness, including target/source priming.
+Any page error also produces a nonzero exit: hydration recovery must not count
+as a clean readiness success. Only counts enter the report, never error messages.
+Later background failures remain outside
 the observation window. Use `read-performance.ts` for decoded-operation failure,
 requested-shape, response-byte and database timing evidence.
 
