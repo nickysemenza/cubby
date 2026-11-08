@@ -45,6 +45,7 @@ const modules = import.meta.glob<HandlerModule>([
   "../mcp/mcp.server.ts",
   "../mcp/playbooks.server.ts",
   "./entity-list-runtime.server.ts",
+  "./entity-detail-runtime.server.ts",
   "./entity-runtime.server.ts",
   "!../**/*.test.ts",
 ]);

@@ -267,5 +267,5 @@ export type EntityKernelReadBinding<
   E extends EntitySchemaBindingEntity,
   S extends EntityBindingSchemas = SchemasFor<E>,
 > = Pick<EntityKernelCoreBinding<E, S>, "entity" | "schemas" | "sort"> & {
-  repository: Pick<EntityRepository<E, S>, "scaffold" | "listRead">;
+  repository: Pick<EntityRepository<E, S>, "scaffold" | "listRead" | "read">;
 };

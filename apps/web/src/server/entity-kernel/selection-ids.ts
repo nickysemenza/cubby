@@ -4,7 +4,7 @@ import {
   entitySelectionIdsInputSchema,
   entitySelectionIdsOutputSchema,
 } from "~/contracts/entity-list.contract";
-import { loadEntityReadBinding } from "~/server/entity-kernel/list-operations";
+import { loadEntityReadBinding } from "~/server/entity-kernel/read-binding";
 
 import type { EntityKernelContext } from "./adapter";
 import { resolveFilterTokens } from "./filter-tokens";

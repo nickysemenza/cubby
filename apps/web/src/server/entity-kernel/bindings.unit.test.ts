@@ -6,7 +6,7 @@ import { PgDialect } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
 
 import { mock } from "~/lib/test/mock-schema";
-import { loadEntityReadBinding } from "~/server/entity-kernel/list-operations";
+import { loadEntityReadBinding } from "~/server/entity-kernel/read-binding";
 import {
   ENTITY_SCHEMA_BINDINGS,
   ENTITY_REPOSITORY_READ_SCHEMAS,

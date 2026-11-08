@@ -15,7 +15,7 @@ import { listEntities } from "~/entity/model/list-contracts";
 import type { Database } from "~/server/db";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { listOperations } from "~/server/entity-kernel/list-operations";
-import { loadEntityReadBinding } from "~/server/entity-kernel/list-operations";
+import { loadEntityReadBinding } from "~/server/entity-kernel/read-binding";
 import { findSimilarEntitiesWorkflow } from "~/server/generic/embedding/service/semantic-similarity";
 import {
   findGroupedSearchHits,
