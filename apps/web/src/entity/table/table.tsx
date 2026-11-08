@@ -388,7 +388,8 @@ function TableStatus<TItem extends RowData>({
       <ErrorDisplay error={error} onRetry={refreshControls?.onRefresh} />
     );
   }
-  if (rows.length) return null;
+  if (rows.length)
+    return <QueryRefreshStatus isRefreshing={refreshControls?.isRefreshing} />;
   if (emptyState) return emptyState;
 
   return <TableEmptyState entity={entity} table={table} />;

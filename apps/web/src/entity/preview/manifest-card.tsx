@@ -12,9 +12,9 @@ import {
   entityDetailParams,
   isBrowserRoutedEntity,
 } from "~/entity/entities";
+import { ListLoadingSkeleton } from "~/ui/feedback/loading-skeletons";
 import { Row } from "~/ui/layout";
 import { Image } from "~/ui/media/image";
-import { Spinner } from "~/ui/primitives/spinner";
 import { Description } from "~/ui/text/description";
 import { Eyebrow } from "~/ui/text/eyebrow";
 
@@ -265,11 +265,7 @@ function BodyBlockView({ block }: { block: BodyBlock }) {
 // ── Shared bits used by per-entity specs / fetch wrappers ────────────────────
 
 export function PreviewLoading() {
-  return (
-    <Row align="center" justify="center" className="py-4">
-      <Spinner className="text-muted-foreground" />
-    </Row>
-  );
+  return <ListLoadingSkeleton count={3} label="Loading record…" />;
 }
 
 export function PreviewDeleted({ label }: { label: string }) {

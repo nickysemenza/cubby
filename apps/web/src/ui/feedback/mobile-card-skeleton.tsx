@@ -61,10 +61,10 @@ export function MobileCardSkeletonList({
   hasImage?: boolean;
 }) {
   return (
-    <div>
+    <section aria-label="Loading records" aria-busy="true">
       {Array.from({ length: count }, (_, i) => (
         <MobileCardSkeleton key={i} metaLines={metaLines} hasImage={hasImage} />
       ))}
-    </div>
+    </section>
   );
 }

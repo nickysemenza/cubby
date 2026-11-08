@@ -45,8 +45,6 @@ interface UseInfiniteTableListOptions<
   includeCount?: boolean;
   /** Request page size 0: the counts and group summaries without rows (Pivot). */
   summaryOnly?: boolean;
-  /** Envelopes required by the currently visible columns. Undefined requests complete rows. */
-  requiredFields?: readonly string[];
 }
 
 export interface InfiniteScrollControls<
@@ -55,7 +53,7 @@ export interface InfiniteScrollControls<
   fetchNextPage: () => void;
   hasNextPage: boolean;
   isFetchingNextPage: boolean;
-  /** Previous query rows are visible while a new filter/sort first page loads. */
+  /** A first page or retained data is being refreshed. */
   isTransitioning: boolean;
   /**
    * Fetch every remaining page (up to `cap` accumulated rows) so all matching
@@ -225,7 +223,6 @@ export function useInfiniteTableList<
   resultMembership,
   includeCount = false,
   summaryOnly,
-  requiredFields,
 }: UseInfiniteTableListOptions<
   TFilters,
   TData,
@@ -258,22 +255,8 @@ export function useInfiniteTableList<
     isRefetching,
     refetch,
   } = useInfiniteQuery({
-    // Filter/sort changes swap the queryKey; without this the accumulated
-    // pages vanish for the refetch window, blanking rows AND the header
-    // count (useEntityList withholds totalCount while isLoading).
-    // Filter changes can retain rows, but revealing a column must not hand its
-    // renderer an older projection that lacks the newly required envelope.
-    placeholderData: (previous) =>
-      previous?.pages.every(
-        (page) =>
-          !page.selectedFields ||
-          (requiredFields !== undefined &&
-            requiredFields.every((field) =>
-              page.selectedFields?.includes(field),
-            )),
-      )
-        ? previous
-        : undefined,
+    // Query keys own filter, sort and projection scope. Retain cached data for
+    // this key on refetch, never rows from a different scope as placeholders.
     queryKey: infiniteQueryKey,
     // The infinite adapter owns a different key but the same operation. Carry
     // the descriptor metadata so root mutation invalidation can still match

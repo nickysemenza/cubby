@@ -504,11 +504,6 @@
     box-shadow: var(--shadow-overlay) !important;
   }
 
-  /* Static skeletons avoid ambient animation in read-heavy views. */
-  .skeleton-shimmer {
-    background: var(--brand-paper-alt);
-  }
-
   @keyframes progress-travel {
     from {
       transform: translateX(-100%);

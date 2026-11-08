@@ -63,14 +63,19 @@ Settings and long analytical workspaces (expense analytics, portfolio analytics,
 
 Today/Home titles itself with the household day and keeps Log meal and New task in the page header. A key-numbers strip (Tasks due, Needs you, Spent this month, Pantry on hand) leads, then Today (plain task and project names, with quiet commands) and Needs you side by side as ruled rows, then What changed grouped by household day with the day in a quiet gutter. From 1280px a right rail holds Meals, Money (recorded spend by month), Today’s nutrition, Pantry by location and Your views; below it the rail follows the main column. Records and Insights stay behind disclosure. Every figure is an existing query value; never invent pace, progress scores, risk predictions, or AI panels.
 
-Background refetches use one reserved status line at the bottom of the desktop
-sidebar: a small spinner and muted “Syncing…” after 300ms of continuous activity.
-The collapsed rail and mobile BottomNav show only the spinner. The sidebar slot
-accepts shared shell status content and keeps its idle content mounted while
-Syncing is visible so derived backlog observations survive slow refreshes;
-feedback never inserts progress rows above
-headers, in tables, or in previews. Retained-data refresh errors and Retry stay
-inline. Native workspace routes have no shell feedback.
+Background refetches keep loaded content mounted. Lists, inspector previews and
+full detail pages reserve a compact status line for muted “Updating…” after
+300ms of continuous activity; clearing it does not move the content. Failures
+retain the loaded values, raw diagnostics and Retry. The shell retains its
+reserved Syncing slot for household-wide activity. These browser read states
+never imply that a computed value has been rebuilt; derived freshness marks
+remain independent.
+
+Loading placeholders use Skullet through the shared Skeleton primitive, with a
+single light, static theme and whole-content reveals. Use its explicit boxes:
+measured sample rendering must not mount record readers or actions, and automatic
+shape persistence must not introduce browser storage. Keep record geometry and
+accessible region labels; missing images may retain their semantic identity mark.
 
 Actual value changes use one quiet info-surface tint across table cells, detail
 facts and summary figures. It holds briefly and fades within two seconds without

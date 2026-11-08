@@ -128,6 +128,7 @@
     "react-hook-form": "^7.90.0",
     "react-markdown": "^10.1.0",
     "remark-gfm": "^4.0.1",
+    "skullet": "0.0.3",
     "sonner": "^2.0.8",
     "tailwindcss": "^4.3.4",
     "tldts": "7.4.18",
