@@ -229,6 +229,7 @@ const renderRelations = (
   exportOf: (entity: string) => string,
   storage: readonly EntityStorageField[],
   softDeleted: ReadonlySet<string>,
+  reverseMany: ReadonlySet<string>,
 ) => {
   const targetOf = (relation: EntityTableRelation) =>
     "entity" in relation.target
@@ -260,6 +261,45 @@ const renderRelations = (
     ];
     return `${relation.name}: r.${relation.kind}.${target}({ ${config.join(", ")} })`;
   });
+  // Every declared reference column also gets a to-one relation, named after
+  // the column without its `Id` suffix, unless a declared relation covers it,
+  // the name is taken, or the target's inferred to-many relation back to this
+  // table would become ambiguous.
+  const taken = new Set([
+    ...table.relations.map((relation) => relation.name),
+    ...storage.map((field) => field.key),
+    ...table.columns.map((column) => column.key),
+  ]);
+  const covered = new Set(
+    table.relations.flatMap((relation) =>
+      relation.kind === "one" ? relation.fields : [],
+    ),
+  );
+  const references = [
+    ...storage.map((field) => ({
+      key: field.key,
+      reference: field.reference,
+      nullable: field.nullable,
+      column: field.referenceOptions?.column ?? "id",
+    })),
+    ...table.columns.map((column) => ({
+      key: column.key,
+      reference: column.reference,
+      nullable: !column.notNull,
+      column: "id",
+    })),
+  ];
+  for (const { key, reference, nullable, column } of references) {
+    if (reference === null || covered.has(key) || !key.endsWith("Id")) continue;
+    const name = key.slice(0, -2);
+    const target = reference === "user" ? "user" : exportOf(reference);
+    if (taken.has(name) || reverseMany.has(`${target}->${table.exportName}`))
+      continue;
+    taken.add(name);
+    entries.push(
+      `${name}: r.one.${target}({ from: [r.${table.exportName}.${key}], to: [r.${target}.${column}]${nullable ? "" : ", optional: false"} })`,
+    );
+  }
   return `${table.exportName}: {${entries.join(",")}}`;
 };
 
@@ -374,11 +414,32 @@ export const renderEntityTableArtifacts = (
       .map((table) => table.exportName),
     ...retainedSoftDeletedTables,
   ]);
+  const reverseMany = new Set([
+    ...tabled.flatMap(({ table }) =>
+      table.relations.flatMap((relation) =>
+        relation.kind === "many"
+          ? [`${table.exportName}->${relation.target.table}`]
+          : [],
+      ),
+    ),
+    ...declaredChildren.flatMap((child) =>
+      child.relations.flatMap((relation) =>
+        relation.kind === "many"
+          ? [`${child.exportName}->${relation.table}`]
+          : [],
+      ),
+    ),
+  ]);
   const relationSource =
     tabled
-      .filter(({ table }) => table.relations.length > 0)
       .map(({ table, fieldModel }) =>
-        renderRelations(table, exportOf, fieldModel.storage, softDeleted),
+        renderRelations(
+          table,
+          exportOf,
+          fieldModel.storage,
+          softDeleted,
+          reverseMany,
+        ),
       )
       .join(",\n") +
     ",\n" +

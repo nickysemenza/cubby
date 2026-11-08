@@ -257,8 +257,11 @@ accept a table-name argument must derive it from the callback's table.
 
 Choose the query form in this order:
 
-1. RQB `with`/`columns` for related reads a declared relation covers. Declare
-   a missing relation on the entity rather than joining by hand. Generated
+1. RQB `with`/`columns` for related reads a declared relation covers. Every
+   declared reference column gets a generated to-one relation named after the
+   column without `Id` (`spendingCategoryId` → `spendingCategory`) unless a
+   declared relation covers it or the reverse to-many would become ambiguous.
+   Declare to-many and aliased relations on the entity rather than joining by hand. Generated
    to-many relations into soft-deletable tables already filter
    `deletedAt IS NULL`; a nested `RAW` repeats only other conditions (role,
    kind). To-one relations still return deleted parents, so readers project
