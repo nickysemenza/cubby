@@ -48,7 +48,7 @@ export const buildSortsParams = (
 
 export const defaultPagination: PaginationParams = {
   pageIndex: 0,
-  pageSize: Math.min(100, MAX_PAGE_SIZE),
+  pageSize: Math.min(50, MAX_PAGE_SIZE),
 };
 /**
  * The table's opening sort. `initialSortDesc` defaults to true because that is

@@ -738,10 +738,15 @@ Connection publication retains its small target reference in `Suggestion.data`.
 Queue counts still check live endpoints, decisions and suppression. A missing
 reference falls back to the row's evidence.
 
-Infinite tables use the shared pagination default unless a measured caller
-constraint requires an override. A smaller batch can repeat full population
-reads just to fill the same prefetch runway. Measure first-data latency and
-buffer completion separately; keep the shared prefetch and paging behavior.
+Browser tables use the shared 50-record page unless a measured caller
+constraint requires an override. An infinite table's full opening viewport does not start the
+prefetch runway while its scroll offset is zero. An undersized viewport fills
+immediately; scrolling or restoring a scrolled position enables the shared
+two-pane runway with its 30-row floor. The virtualizer owns the scroll offset:
+do not add row observers or another scroll listener for read scheduling.
+A smaller batch can repeat full population reads just to fill a runway.
+Measure first-data latency and follow-on paging separately; preserve next-page
+serialization, current-scope totals and complete bulk selection.
 
 ## Reuse before writing a helper
 

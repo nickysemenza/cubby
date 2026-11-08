@@ -180,6 +180,7 @@ export function useDataTableController<TItem extends RowData>({
     paneMaxHeight,
     paneRows,
     virtualRowCount,
+    scrollOffset,
     virtualRows,
     totalSize,
     resolveIndex,
@@ -203,6 +204,7 @@ export function useDataTableController<TItem extends RowData>({
     virtualRows,
     rowCount: virtualRowCount,
     visibleRows: paneRows,
+    scrollOffset,
   });
 
   // The table owns its horizontal scroll pane, so it is the only honest

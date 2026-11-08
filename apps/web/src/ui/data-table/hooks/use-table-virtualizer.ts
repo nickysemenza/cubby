@@ -202,6 +202,8 @@ interface UseTableVirtualizerResult {
   paneMaxHeight: number | null;
   /** Rows that fit in the pane's measured height. */
   paneRows: number;
+  /** Current pane offset, including restored navigation position. */
+  scrollOffset: number;
   /** Size of the index space: rows plus any interleaved group headers. */
   virtualRowCount: number;
   /** Currently virtualized rows. */
@@ -374,6 +376,7 @@ export function useTableVirtualizer({
     paneWrapperRef,
     paneMaxHeight,
     paneRows: Math.ceil(paneHeight / rowHeight),
+    scrollOffset: rowVirtualizer.scrollOffset ?? initialOffset,
     virtualRowCount: baseCount,
     virtualRows,
     totalSize,
