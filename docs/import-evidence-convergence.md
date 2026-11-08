@@ -682,8 +682,10 @@ Whole-list projections materialize retained historical closure before applying
 root predicates. List filters use the generic whole-list value set; state sorts
 use uncorrelated membership sets. Page bindings first collect requested roots'
 alias keys, then all matching observation siblings and their observation/occurrence
-evidence. They follow exactly one sibling hop, including siblings outside the
-page and retained alias tombstones. One statement-local relation supplies live
+evidence. The non-unique alias lookup index keys `(source, value)` across kinds
+and tombstones; provenance and ownership uniqueness remain separate constraints.
+Page bindings follow exactly one sibling hop, including siblings outside the page
+and retained alias tombstones. One statement-local relation supplies live
 historical bindings; the occurrence ownership fence reads its direct aliases
 separately, so a fence-only occurrence cannot disappear with the presentation
 frontier. States and historical links load in one batch rather than
@@ -701,8 +703,8 @@ Source-record display media shares one settlement expansion across its image
 branches. It fences only requested observation roots and retains all of their
 accepted and historical transaction links, including retained alias tombstones.
 Historical binding rows join live transactions once before the page's alias
-lookups, avoiding repeated scans of the source/kind/value index. These are read
-projections in one statement snapshot; they never establish accepted ownership.
+lookups, avoiding repeated binding scans. These are read projections in one
+statement snapshot; they never establish accepted ownership.
 
 Transaction imports are read-only outside intake. Neither generic create,
 update, merge nor delete changes their metadata or membership. Intake owns

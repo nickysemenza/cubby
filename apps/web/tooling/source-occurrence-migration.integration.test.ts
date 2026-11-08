@@ -459,3 +459,45 @@ it("gives unproven bank records one held owner without changing evidence or fina
     ).toEqual([{ n: 1 }]);
   });
 });
+
+it("preserves cross-kind evidence and tombstones while replacing the alias key lookup", async () => {
+  await withMigrationDatabase(async (client) => {
+    const db = drizzle({ client, paramsInErrors: true });
+    await migrateDatabase(db, {
+      through: "20261107171449_0119_task_completion_date",
+    });
+    await client.query(
+      `INSERT INTO "ExternalSource" (slug,label) VALUES ('synthetic-key-migration','Synthetic key migration')`,
+    );
+    // Lookup duplicates remain evidence; they must not become an ownership constraint.
+    for (const [index, kind] of [
+      "externalId",
+      "legacyReference",
+      "transaction_ref",
+    ].entries()) {
+      await client.query(
+        `INSERT INTO "FinancialEvidenceAlias" (source,kind,value,"provenanceKey",provenance,"scopeEvidence","deletedAt") VALUES ('synthetic-key-migration',$1,'synthetic-shared-key',$2,$3::jsonb,$4::jsonb,$5)`,
+        [
+          kind,
+          `synthetic-key-migration-${index}`,
+          JSON.stringify({
+            kind: "retained_legacy_binding",
+            note: "Synthetic retained evidence",
+          }),
+          JSON.stringify({ synthetic: true }),
+          index === 2 ? new Date("2026-01-01T00:00:00Z") : null,
+        ],
+      );
+    }
+    const before = (
+      await client.query(`SELECT * FROM "FinancialEvidenceAlias" ORDER BY id`)
+    ).rows;
+    await migrateDatabase(db, {
+      through: "20261108013714_0120_source_alias_key_lookup",
+    });
+    expect(
+      (await client.query(`SELECT * FROM "FinancialEvidenceAlias" ORDER BY id`))
+        .rows,
+    ).toEqual(before);
+  });
+});
