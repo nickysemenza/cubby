@@ -103,7 +103,11 @@ export const problemFilterSemantics = {
     {
       columnId: "lastBulkInventory",
       kind: "range",
-      range: { from: "lastBulkInventoryFrom", to: "lastBulkInventoryTo" },
+      range: {
+        from: "lastBulkInventoryFrom",
+        to: "lastBulkInventoryTo",
+        presence: "lastBulkInventoryPresenceFilter",
+      },
       expand: (value) =>
         value === "60"
           ? {
@@ -158,7 +162,11 @@ export const problemFilterSemantics = {
       columnId: "verifiedAt",
       field: "verified",
       kind: "range",
-      range: { from: "verifiedFrom", to: "verifiedTo" },
+      range: {
+        from: "verifiedFrom",
+        to: "verifiedTo",
+        presence: "verifiedPresenceFilter",
+      },
       expand: (value) =>
         value === "has" || value === "none"
           ? { verifiedPresenceFilter: value }
@@ -239,7 +247,7 @@ export const problemFilterSemantics = {
     {
       columnId: "dueDate",
       kind: "range",
-      range: { from: "dueFrom", to: "dueTo" },
+      range: { from: "dueFrom", to: "dueTo", presence: "duePresenceFilter" },
     },
     { columnId: "completion", kind: "multiselect" },
     {

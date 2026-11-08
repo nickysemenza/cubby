@@ -135,7 +135,7 @@ export type FilterDescriptor = Readonly<{
  */
 export const dateRangeBounds = (
   descriptor: FilterDescriptor,
-): Readonly<{ from: string; to: string }> | null => {
+): Readonly<{ from: string; to: string; presence?: string }> | null => {
   if (descriptor.kind !== "range" || descriptor.wire.kind !== "range")
     return null;
   const { from, to } = descriptor.wire;
@@ -143,7 +143,15 @@ export const dateRangeBounds = (
     descriptor.range === null
       ? from.endsWith("From") && to.endsWith("To")
       : descriptor.range.kind === "date";
-  return dates ? { from, to } : null;
+  return dates
+    ? {
+        from,
+        to,
+        ...(descriptor.wire.presence
+          ? { presence: descriptor.wire.presence }
+          : {}),
+      }
+    : null;
 };
 
 export type EntityPorts = Readonly<

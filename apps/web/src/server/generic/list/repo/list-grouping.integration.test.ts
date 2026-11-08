@@ -921,12 +921,12 @@ describe("grouped SQL metric coverage and calendar boundaries", () => {
       .update(productTable)
       .set({ createdAt: new Date("2026-04-01T00:30:00.000Z") })
       .where(eq(productTable.shortcode, item.id));
-    for (const [bucket, day] of [
-      ["day", "2026-03-31"],
-      ["week", "2026-03-30"],
-      ["month", "2026-03-01"],
-      ["quarter", "2026-01-01"],
-      ["year", "2026-01-01"],
+    for (const [bucket, day, end] of [
+      ["day", "2026-03-31", "2026-03-31"],
+      ["week", "2026-03-30", "2026-04-05"],
+      ["month", "2026-03-01", "2026-03-31"],
+      ["quarter", "2026-01-01", "2026-03-31"],
+      ["year", "2026-01-01", "2026-12-31"],
     ] as const) {
       const result = await executeEntity(kernel(), {
         action: "list",
@@ -936,6 +936,24 @@ describe("grouped SQL metric coverage and calendar boundaries", () => {
       });
       if (result.action !== "list") throw new Error("expected list");
       expect(result.meta.memberships).toEqual([{ id: item.id, path: [day] }]);
+      const drilled = await executeEntity(kernel(), {
+        action: "list",
+        entity: "product",
+        filters: { ids: [item.id], createdFrom: day, createdTo: end },
+      });
+      if (drilled.action !== "list") throw new Error("expected list");
+      expect(drilled.items.map((row) => row.id)).toEqual([item.id]);
     }
+    const nextMonth = await executeEntity(kernel(), {
+      action: "list",
+      entity: "product",
+      filters: {
+        ids: [item.id],
+        createdFrom: "2026-04-01",
+        createdTo: "2026-04-30",
+      },
+    });
+    if (nextMonth.action !== "list") throw new Error("expected list");
+    expect(nextMonth.items).toEqual([]);
   });
 });

@@ -4,7 +4,14 @@ import { describe, expect, it, vi } from "vitest";
 import { metadataQueryClient } from "#web/tests/entity-metadata.ts";
 import { resolveDateRange } from "~/lib/date-range-presets";
 
+import { groupPathFilters } from "./entity-list/group-drill-down";
 import { getEntityFilters } from "./filter-manifest";
+import {
+  buildFiltersFromManifest,
+  filterGetterFromColumnFilters,
+  FILTER_NONE,
+} from "./filters";
+import { entityMetadata } from "./metadata";
 
 const queryClient = await metadataQueryClient();
 
@@ -103,6 +110,70 @@ describe("resolveDateRange", () => {
       dateFrom: "2023-02-28",
       dateTo: "2024-02-29",
     });
+    const fields = getEntityFilters(queryClient, "product");
+    for (const [bucket, start, end] of [
+      ["day", "2026-03-08", "2026-03-08"],
+      ["week", "2026-03-02", "2026-03-08"],
+      ["month", "2024-02-01", "2024-02-29"],
+      ["quarter", "2026-01-01", "2026-03-31"],
+      ["year", "2024-01-01", "2024-12-31"],
+    ] as const) {
+      const drilled = groupPathFilters(
+        {
+          groupBy: [{ key: "createdAt", bucket }],
+          grouping: entityMetadata(queryClient, "product").listFields.grouping,
+          fields,
+          groups: [],
+        },
+        [start],
+      );
+      expect(drilled).toBeDefined();
+      expect(
+        buildFiltersFromManifest(
+          fields,
+          filterGetterFromColumnFilters(drilled ?? []),
+        ),
+      ).toEqual({
+        createdFrom: start,
+        createdTo: end,
+      });
+    }
+    const missingDate = groupPathFilters(
+      {
+        groupBy: [{ key: "purchaseDate", bucket: "month" }],
+        grouping: entityMetadata(queryClient, "product").listFields.grouping,
+        fields,
+        groups: [],
+      },
+      [FILTER_NONE],
+    );
+    expect(missingDate).toBeDefined();
+    expect(
+      buildFiltersFromManifest(
+        fields,
+        filterGetterFromColumnFilters(missingDate ?? []),
+      ),
+    ).toEqual({ purchaseDatePresenceFilter: "none" });
+    const booleanFields = getEntityFilters(queryClient, "ingredient");
+    for (const value of ["true", "false"]) {
+      const drilled = groupPathFilters(
+        {
+          groupBy: [{ key: "usuallyOnHand" }],
+          grouping: entityMetadata(queryClient, "ingredient").listFields
+            .grouping,
+          fields: booleanFields,
+          groups: [],
+        },
+        [value],
+      );
+      expect(drilled).toBeDefined();
+      expect(
+        buildFiltersFromManifest(
+          booleanFields,
+          filterGetterFromColumnFilters(drilled ?? []),
+        ),
+      ).toEqual({ usuallyOnHand: value === "true" });
+    }
   });
   it("anchors today to the household day across UTC midnight", () => {
     vi.useFakeTimers();

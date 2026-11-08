@@ -9,6 +9,7 @@ import type { ColumnFiltersState } from "@tanstack/react-table";
 import type { FilterSpec } from "~/entity/filter-manifest";
 import { FILTER_EXACT, FILTER_NONE } from "~/entity/filters";
 import type { entityMetadata } from "~/entity/metadata";
+import { shiftPlainDate, shiftPlainDateMonths } from "~/lib/household-date";
 
 type GroupingChoice = ReturnType<
   typeof entityMetadata
@@ -23,7 +24,7 @@ export interface GroupDrillContext {
 
 /**
  * The column filters that select exactly one group path's records, or
- * undefined when a dimension cannot be filtered: a bucketed date, a choice
+ * undefined when a dimension cannot be filtered: a choice
  * without a filter mapping, or "no value" where its filter has none. Grouped
  * sections and Pivot cells share this one eligibility rule.
  */
@@ -37,7 +38,7 @@ export function groupPathFilters(
     const choice = context.grouping.find(
       (entry) => entry.key === dimension?.key,
     );
-    const filter = dimension?.bucket ? null : choice?.filter;
+    const filter = choice?.filter;
     const spec = filter
       ? context.fields.find((entry) => entry.columnId === filter.columnId)
       : undefined;
@@ -54,8 +55,31 @@ export function groupPathFilters(
       return undefined;
     // A hierarchy value matches its subtree; a section counting only the
     // value itself narrows to it exactly.
-    const value =
-      spec.subtree && !summary?.subtree ? [key, FILTER_EXACT] : [key];
+    let value: string | string[];
+    if (choice?.dateKind) {
+      if (spec.kind !== "range" || !spec.range) return undefined;
+      if (key === FILTER_NONE) {
+        if (!spec.range.presence) return undefined;
+        value = "none";
+      } else {
+        const bucket = dimension?.bucket ?? "day";
+        const next =
+          bucket === "day" || bucket === "week"
+            ? shiftPlainDate(key, bucket === "day" ? 1 : 7)
+            : shiftPlainDateMonths(
+                key,
+                bucket === "month" ? 1 : bucket === "quarter" ? 3 : 12,
+              );
+        // Range predicates own household-local timestamp boundaries; keep the
+        // bucket as calendar days, including DST and leap-day transitions.
+        value = `${key}..${shiftPlainDate(next, -1)}`;
+      }
+    } else if (spec.kind === "boolean") {
+      if (key !== "true" && key !== "false") return undefined;
+      value = key;
+    } else {
+      value = spec.subtree && !summary?.subtree ? [key, FILTER_EXACT] : [key];
+    }
     filters = [
       ...filters.filter(({ id }) => id !== filter.columnId),
       { id: filter.columnId, value },
