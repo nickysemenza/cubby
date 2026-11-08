@@ -493,7 +493,7 @@ it("preserves cross-kind evidence and tombstones while replacing the alias key l
       await client.query(`SELECT * FROM "FinancialEvidenceAlias" ORDER BY id`)
     ).rows;
     await migrateDatabase(db, {
-      through: "20261108010420_source_alias_key_lookup",
+      through: "20261108013714_0120_source_alias_key_lookup",
     });
     expect(
       (await client.query(`SELECT * FROM "FinancialEvidenceAlias" ORDER BY id`))

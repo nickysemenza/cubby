@@ -684,8 +684,8 @@ use uncorrelated membership sets. Page bindings first collect requested roots'
 alias keys, then all matching observation siblings and their observation/occurrence
 evidence. The non-unique alias lookup index keys `(source, value)` across kinds
 and tombstones; provenance and ownership uniqueness remain separate constraints.
-They follow exactly one sibling hop, including siblings outside the page and
-retained alias tombstones. One statement-local relation supplies live
+Page bindings follow exactly one sibling hop, including siblings outside the page
+and retained alias tombstones. One statement-local relation supplies live
 historical bindings; the occurrence ownership fence reads its direct aliases
 separately, so a fence-only occurrence cannot disappear with the presentation
 frontier. States and historical links load in one batch rather than
