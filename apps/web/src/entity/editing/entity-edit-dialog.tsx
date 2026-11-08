@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, Suspense, use, useEffect, useState } from "react";
 import { z } from "zod";
 
 import { entityDetailFor } from "~/entity/entity-detail";
@@ -7,7 +7,6 @@ import { entityMetadataQueryOptions } from "~/entity/metadata";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Overlay } from "~/ui/overlays/overlay";
 
-import { EntityEditDialogContent } from "./entity-edit-dialog-content";
 import type {
   EntityEditIntent as TypedEntityEditIntent,
   EntityEditResultFor,
@@ -60,14 +59,51 @@ export interface EntityEditDialogProps<E extends EditableEntity> {
 export function EntityEditDialog<E extends EditableEntity>(
   props: EntityEditDialogProps<E>,
 ) {
-  if (!props.open) return null;
-  return <OpenEntityEditDialog {...props} />;
+  if (!props.open || import.meta.env.SSR) return null;
+  return (
+    <Suspense
+      fallback={
+        <Overlay
+          open={props.open}
+          onOpenChange={props.onOpenChange}
+          title="Loading editor…"
+        >
+          <output>Loading editor…</output>
+        </Overlay>
+      }
+    >
+      <OpenEntityEditDialog {...props} />
+    </Suspense>
+  );
+}
+
+let contentModule:
+  | Promise<typeof import("./entity-edit-dialog-content")>
+  | undefined;
+
+function loadEditorContent() {
+  if (!contentModule) {
+    contentModule = import("./entity-edit-dialog-content");
+    // SILENT: Metadata can still be loading when this import rejects. The
+    // content reader retains the rejection and surfaces it through React.
+    void contentModule.catch(() => {});
+  }
+  return contentModule;
+}
+
+function DeferredEntityEditDialogContent<E extends EditableEntity>(
+  props: EntityEditDialogProps<E> & { baseline?: EntityEditRecord },
+) {
+  const { EntityEditDialogContent } = use(loadEditorContent());
+  return <EntityEditDialogContent {...props} />;
 }
 
 /** Picker/calendar dialogs admit their own entity without suspending the action host. */
 function OpenEntityEditDialog<E extends EditableEntity>(
   props: EntityEditDialogProps<E>,
 ) {
+  // Code and metadata start together only after the dialog opens.
+  loadEditorContent();
   const metadata = useQuery(entityMetadataQueryOptions(props.request.entity));
   if (!metadata.data)
     return (
@@ -98,7 +134,7 @@ function OpenEntityEditDialog<E extends EditableEntity>(
     return (
       <EntityEditDialogBaseline {...props} record={props.request.record} />
     );
-  return <EntityEditDialogContent {...props} />;
+  return <DeferredEntityEditDialogContent {...props} />;
 }
 
 const baselineSchema = z.object({ id: z.string() }).passthrough();
@@ -131,7 +167,7 @@ function EntityEditDialogBaseline<E extends EditableEntity>(
       setBaseline(baselineSchema.parse(query.data));
   }, [baseline, query.isSuccess, query.fetchStatus, query.data]);
   if (baseline)
-    return <EntityEditDialogContent {...props} baseline={baseline} />;
+    return <DeferredEntityEditDialogContent {...props} baseline={baseline} />;
   return (
     <Overlay
       open={props.open}
