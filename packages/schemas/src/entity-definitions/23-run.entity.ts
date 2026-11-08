@@ -1207,6 +1207,18 @@ export const { definition, readSchemas } = defineEntityModel({
   filters: {
     descriptors: [
       {
+        columnId: "retirementReason",
+        kind: "multiselect",
+        deriveSchema: true,
+        placeholder: "Filter by retirement reason...",
+      },
+      {
+        columnId: "cause",
+        kind: "multiselect",
+        deriveSchema: true,
+        placeholder: "Filter by cause...",
+      },
+      {
         columnId: "status",
         kind: "multiselect",
         placeholder: "Filter by status...",

@@ -598,12 +598,13 @@ function TypedValuesEditor({
   );
 }
 
-/** Any | Yes | No: a boolean or presence filter holds one value or none. */
+/** Nullable flags use the full picker so missing stays distinct from false. */
 const ANY_SEGMENT = "*any";
 
 const isTriState = (field: FilterBarField): boolean =>
   (field.valueType === "boolean" || field.valueType === "presence") &&
   field.type === "select" &&
+  !(field.options ?? []).some((option) => option.value === FILTER_NONE) &&
   (field.options ?? []).filter((option) => !option.meta).length === 2;
 
 function TriStateEditor({ field, filter, setValues, clear }: FieldEditorProps) {
@@ -644,12 +645,20 @@ function ChecklistEditor({
   const [side, setSide] = useState<FilterSide>(initialSide);
   const values = filter?.values ?? [];
   const roster = visibleOptions(field, filter);
-  // Any value / No value belong to the "is" side.
+  // Missing-value exclusion negates its predicate; Any value stays include-only.
   const isNotRoster = useMemo(
     () =>
-      roster.filter(
-        (option) => option.value !== FILTER_ANY && option.value !== FILTER_NONE,
-      ),
+      roster
+        .filter((option) => option.value !== FILTER_ANY)
+        .map((option) =>
+          option.value === FILTER_NONE
+            ? {
+                ...option,
+                label: "No value",
+                detail: "Excludes matching records from the list.",
+              }
+            : option,
+        ),
     [roster],
   );
   const label = labelOf(field);
@@ -955,7 +964,9 @@ function filterTypeLabel(field: FilterBarField): string {
   if (field.dateRange) return "date range";
   if (field.numberRange) return "number range";
   if (field.valueType === "boolean" || field.valueType === "presence")
-    return "yes / no";
+    return (field.options ?? []).some((option) => option.value === FILTER_NONE)
+      ? "yes / no / missing"
+      : "yes / no";
   if (field.presentation) return listFieldTypeLabel(field.presentation);
   if (field.referenceEntity) return "record";
   return {

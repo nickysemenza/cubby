@@ -343,6 +343,13 @@ export type GeneratedGroupChoice<E extends string = Entity> = {
         readonly titleColumn: string | null;
       }
     | {
+        /** A repository scalar supplies the canonical target UUID. */
+        readonly kind: "projectedRecord";
+        readonly field: string;
+        readonly target: E;
+        readonly titleColumn: string | null;
+      }
+    | {
         readonly kind: "record";
         readonly steps: readonly RelationshipPathStep[];
         readonly target: E;

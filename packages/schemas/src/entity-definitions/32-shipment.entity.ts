@@ -451,6 +451,16 @@ export const { definition, readSchemas } = defineEntityModel({
     },
     descriptors: [
       {
+        columnId: "purchaseAssociationReviewed",
+        kind: "boolean",
+        deriveSchema: true,
+        placeholder: "Filter by purchase association review...",
+        options: [
+          { value: "true", label: "Reviewed" },
+          { value: "false", label: "Not reviewed" },
+        ],
+      },
+      {
         columnId: "firstEventDate",
         label: "First event",
         kind: "range",

@@ -1377,6 +1377,12 @@ Rules:
     },
     descriptors: [
       {
+        columnId: "economicRole",
+        kind: "multiselect",
+        deriveSchema: true,
+        placeholder: "Filter by economic role...",
+      },
+      {
         columnId: "name",
         field: "search",
         urlKey: "q",

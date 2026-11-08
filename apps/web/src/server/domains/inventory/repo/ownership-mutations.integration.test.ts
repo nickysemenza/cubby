@@ -1,3 +1,4 @@
+import { FILTER_NONE } from "@cubby/schemas/filter-sentinel-fields";
 import {
   type EntityId,
   type LedgerPartyShortcode,
@@ -58,6 +59,7 @@ import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { executeEntity } from "~/server/entity-kernel";
 import { buildKernelContext } from "~/server/entity-kernel/reference-universe.fixtures";
 import { executeEntitySelectionIds } from "~/server/entity-kernel/selection-ids";
+import { withListGroupBy } from "~/server/generic/list/repo/list";
 import { selectedListProjection } from "~/server/generic/list/repo/list-projection";
 import { selectListReadRows } from "~/server/generic/list/repo/list-read-schema";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
@@ -344,6 +346,15 @@ describe("inventory ownership mutations", () => {
     await drainStoredDerived(ctx.db);
     const full = await listInventoryFixture(ctx.db, filters, [], page);
     expect(full.data[0]?.ownerLedgerPartyId).toBe(owner.output.id);
+    const grouped = await inventoryScaffold.read(ctx.db, {
+      filters: withListGroupBy(filters, [{ key: "ownerLedgerPartyId" }]),
+      sorts: [],
+      pagination: page,
+    });
+    // Owner grouping must use the same resolved identity as the cell and filter.
+    expect(grouped.groups).toMatchObject([
+      { path: [owner.output.id], count: 1 },
+    ]);
     const read = async (fields: readonly string[]) => {
       const projection = selectedListProjection("inventory", fields);
       const result = await inventoryScaffold.read(ctx.db, {
@@ -1129,6 +1140,25 @@ describe("inventory ownership mutations", () => {
         expect.stringContaining("Filter inherited product"),
       ]),
     );
+    const groupedOwners = () =>
+      inventoryScaffold.read(ctx.db, {
+        filters: withListGroupBy(
+          { productIdFilter: [inherited.product.id, unassigned.product.id] },
+          [{ key: "ownerLedgerPartyId" }],
+        ),
+        sorts: [],
+        pagination: page,
+      });
+    expect((await groupedOwners()).groups).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ path: [buyer.output.id], count: 1 }),
+        expect.objectContaining({
+          path: [FILTER_NONE],
+          label: "No resolved individual owner",
+          count: 1,
+        }),
+      ]),
+    );
     const owned = await productIdsByOwner(ctx.db, [buyer.output.id]);
     expect(owned).toEqual(
       expect.arrayContaining([inherited.product.entityId, unstocked.entityId]),
@@ -1141,6 +1171,10 @@ describe("inventory ownership mutations", () => {
       undefined,
       TEST_ACTOR,
     );
+    // An explicit assignment takes effect before the next ownership publication.
+    expect((await groupedOwners()).groups).toMatchObject([
+      { path: [buyer.output.id], count: 2 },
+    ]);
     await drainStoredDerived(ctx.db);
     expect(await productIdsByOwner(ctx.db, [buyer.output.id])).toContain(
       unassigned.product.entityId,

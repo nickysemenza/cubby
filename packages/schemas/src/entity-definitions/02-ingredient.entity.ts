@@ -416,6 +416,13 @@ export const { definition, readSchemas } = defineEntityModel(
       },
       descriptors: [
         {
+          columnId: "recipeId",
+          kind: "idMulti",
+          deriveSchema: true,
+          brandRef: { entity: "recipe" },
+          placeholder: "Filter by recipe...",
+        },
+        {
           columnId: "name",
           field: "nameFilter",
           kind: "text",

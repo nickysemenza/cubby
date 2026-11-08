@@ -423,15 +423,6 @@ describe("recipeScaffold.where", () => {
     expect(rendered).toContain('"notes"');
   });
 
-  it("overlaps tags and ORs the untagged sentinel (declared stored array filter)", async () => {
-    expect(await where({ tagFilters: ["quick"] })).toContain('"tags" &&');
-    expect(await where({ tagFilters: "quick" })).toContain('"tags" &&');
-    // `tags` is NOT NULL, so untagged means zero-length.
-    expect(await where({ tagsPresenceFilter: "none" })).toContain(
-      'cardinality("Recipe"."tags") = 0',
-    );
-  });
-
   it.each([
     {
       name: "totalMinutesMin",
@@ -481,12 +472,7 @@ describe("productScaffold.where", () => {
     },
   );
 
-  it("overlaps tags with a cardinality sentinel and reads presence filters (declared stored)", async () => {
-    expect(await where({ tagFilters: ["tool"] })).toContain('"tags" &&');
-    // `tags` is NOT NULL with a `{}` default, so untagged is zero-length only.
-    expect(await where({ tagsPresenceFilter: "none" })).toContain(
-      '(cardinality("Product"."tags") = 0)',
-    );
+  it("reads stored scalar presence filters", async () => {
     expect(await where({ modelPresenceFilter: "has" })).toContain(
       '"model" is not null',
     );

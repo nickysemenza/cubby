@@ -121,11 +121,11 @@ describe("import run agent manifest", () => {
     const text = JSON.stringify(agent?.inputSchema);
     const definitions = Object.keys(
       z
-        .object({ definitions: z.record(z.string(), z.unknown()).default({}) })
-        .parse(agent?.inputSchema).definitions,
+        .object({ $defs: z.record(z.string(), z.unknown()).default({}) })
+        .parse(agent?.inputSchema).$defs,
     );
     expect(
-      definitions.filter((name) => !text.includes(`"#/definitions/${name}"`)),
+      definitions.filter((name) => !text.includes(`"#/$defs/${name}"`)),
     ).toEqual([]);
     // Declaration notes about kinds the agent cannot read are dropped.
     const kinds = new Set(memberKeys.keys());

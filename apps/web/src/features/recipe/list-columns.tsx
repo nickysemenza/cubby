@@ -7,8 +7,6 @@ import { useMemo } from "react";
 
 import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
 import { useDeletableConfig } from "~/entity/hooks/use-deletable-config";
-import { useTagOptions } from "~/entity/hooks/use-entity-options";
-import { useFilterOptions } from "~/entity/hooks/use-filter-options";
 import { useUpdateMutation } from "~/entity/hooks/use-update-mutation";
 import type { EntityListParamsByEntity } from "~/entity/model/list-contracts";
 import { formatYield } from "~/entity/presentation/recipe-yield";
@@ -39,22 +37,6 @@ export const recipeListOverride = defineListOverride<
   RecipeFilters
 >({
   use() {
-    const {
-      options: tagOptions,
-      isLoading: tagsLoading,
-      error: tagsError,
-      onRetry: retryTags,
-    } = useTagOptions("recipe");
-    const filterOptions = useFilterOptions({
-      tags: {
-        options: tagOptions,
-        isLoading: tagsLoading,
-        error: tagsError?.message ?? null,
-        onRetry: retryTags,
-        onActivate: () => {},
-      },
-    });
-
     const updateRecipeMutation = useUpdateMutation({
       mutationFn: entityMutationOptionsFactory("recipe", "update"),
       entity: "recipe",
@@ -186,9 +168,8 @@ export const recipeListOverride = defineListOverride<
     const list = useMemo(
       () => ({
         deletable,
-        filterOptions,
       }),
-      [deletable, filterOptions],
+      [deletable],
     );
     return { overrides, list };
   },

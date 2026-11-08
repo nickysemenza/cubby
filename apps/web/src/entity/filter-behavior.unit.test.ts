@@ -188,6 +188,39 @@ describe("resolveDateRange", () => {
       ).toEqual({ usuallyOnHand: value === "true" });
     }
     const projectId = testShortcode("project", "PRJ-4K7M");
+    const taskFields = getEntityFilters(queryClient, "task");
+    const noSubject = groupPathFilters(
+      {
+        groupBy: [{ key: "subjectProductId" }],
+        grouping: entityMetadata(queryClient, "task").listFields.grouping,
+        fields: taskFields,
+        groups: [],
+      },
+      [FILTER_NONE],
+    );
+    expect(noSubject).toBeDefined();
+    expect(
+      buildFiltersFromManifest(
+        taskFields,
+        filterGetterFromColumnFilters(noSubject ?? []),
+      ),
+    ).toEqual({ subjectProductIdPresenceFilter: "none" });
+    const unknownFlag = groupPathFilters(
+      {
+        groupBy: [{ key: "usdaUnavailable" }],
+        grouping: entityMetadata(queryClient, "product").listFields.grouping,
+        fields,
+        groups: [],
+      },
+      [FILTER_NONE],
+    );
+    expect(unknownFlag).toBeDefined();
+    expect(
+      buildFiltersFromManifest(
+        fields,
+        filterGetterFromColumnFilters(unknownFlag ?? []),
+      ),
+    ).toEqual({ usdaUnavailablePresenceFilter: "none" });
     const recipeFields = getEntityFilters(queryClient, "recipe");
     for (const value of ["true", "false"]) {
       const drilled = groupPathFilters(

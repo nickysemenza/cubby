@@ -21,7 +21,6 @@ import {
 } from "~/entity/entity-media/entity-display-images";
 import { relationshipFieldProvenance } from "~/entity/fields/field-provenance";
 import { recordFilterOption } from "~/entity/filter-option-presentation";
-import { useTagOptions } from "~/entity/hooks/use-entity-options";
 import { useFilterOptions } from "~/entity/hooks/use-filter-options";
 import { useNameEditable } from "~/entity/hooks/use-name-editable";
 import { useProductCategories } from "~/entity/hooks/use-product-categories";
@@ -92,13 +91,6 @@ function useProductFilterOptions() {
       current[key] ? current : { ...current, [key]: true },
     );
   }, []);
-  // Runtime picklist for the manifest's `tags` spec (optionsKey: "tags").
-  const {
-    options: tagOptions,
-    isLoading: tagsLoading,
-    error: tagsError,
-    onRetry: retryTags,
-  } = useTagOptions("product", active.tags === true);
   const {
     categories,
     isLoading: categoriesLoading,
@@ -136,7 +128,6 @@ function useProductFilterOptions() {
     [externalIdSourceOptionsQuery.data],
   );
   const options = {
-    tags: tagOptions,
     productCategories: treePickerItems(categories, {
       idOf: (category) => category.id,
       parentIdOf: (category) => {
@@ -171,27 +162,21 @@ function useProductFilterOptions() {
           options,
           onActivate: () => activate(key),
           error:
-            (key === "tags"
-              ? tagsError
-              : key === "externalIdSources"
-                ? externalIdSourceOptionsQuery.error
-                : categoriesError
+            (key === "externalIdSources"
+              ? externalIdSourceOptionsQuery.error
+              : categoriesError
             )?.message ?? null,
           onRetry:
-            key === "tags"
-              ? retryTags
-              : key === "externalIdSources"
-                ? () => {
-                    void externalIdSourceOptionsQuery.refetch();
-                  }
-                : retryCategories,
+            key === "externalIdSources"
+              ? () => {
+                  void externalIdSourceOptionsQuery.refetch();
+                }
+              : retryCategories,
           isLoading:
             active[key] === true &&
-            (key === "tags"
-              ? tagsLoading
-              : key === "externalIdSources"
-                ? externalIdSourceOptionsQuery.isFetching
-                : categoriesLoading),
+            (key === "externalIdSources"
+              ? externalIdSourceOptionsQuery.isFetching
+              : categoriesLoading),
         },
       ]),
     ),

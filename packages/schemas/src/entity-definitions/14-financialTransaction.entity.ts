@@ -1291,6 +1291,12 @@ export const { definition, readSchemas } = defineEntityModel(
       },
       descriptors: [
         {
+          columnId: "itemizationExpectation",
+          kind: "multiselect",
+          deriveSchema: true,
+          placeholder: "Filter by itemization expectation...",
+        },
+        {
           columnId: "runStepInput",
           kind: "text",
           label: "Run step input",

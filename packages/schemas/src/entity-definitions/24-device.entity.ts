@@ -388,6 +388,16 @@ export const { definition, readSchemas } = defineEntityModel({
 
     descriptors: [
       {
+        columnId: "appleIntelligenceAvailable",
+        kind: "boolean",
+        deriveSchema: true,
+        placeholder: "Filter by Apple Intelligence...",
+        options: [
+          { value: "true", label: "Available" },
+          { value: "false", label: "Unavailable" },
+        ],
+      },
+      {
         columnId: "name",
         field: "search",
         urlKey: "q",

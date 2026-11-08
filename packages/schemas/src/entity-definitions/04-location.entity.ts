@@ -794,6 +794,17 @@ Rules:
       },
       descriptors: [
         {
+          columnId: "tags",
+          field: "tagFilters",
+          optionsKey: "tags",
+          kind: "multiselect",
+          deriveSchema: true,
+          stored: { array: true },
+          placeholder: "Filter by tag...",
+          schemaDescription:
+            "Match locations carrying any of these direct tags",
+        },
+        {
           columnId: "image",
           field: "imagePresenceFilter",
           kind: "presence",

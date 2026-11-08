@@ -554,6 +554,7 @@ export function listScaffold<
       listGroupByFromFilters(filters).flatMap(({ key }) => {
         const value = choices.find((choice) => choice.key === key)?.value;
         return (value?.kind === "record" ||
+          value?.kind === "projectedRecord" ||
           value?.kind === "rowRecord" ||
           value?.kind === "relatedRecord") &&
           value.titleColumn === null
@@ -1226,6 +1227,7 @@ export function listScaffold<
           value !== null && "options" in value ? value.options : null;
         const order: ListGroupSql["order"] =
           value?.kind === "record" ||
+          value?.kind === "projectedRecord" ||
           value?.kind === "rowRecord" ||
           value?.kind === "relatedRecord"
             ? ["label", "key"]

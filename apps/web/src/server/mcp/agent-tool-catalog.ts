@@ -95,7 +95,7 @@ const isJsonObject = (value: JSONType | undefined): value is JsonObject =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
 const ENTITY_BRANCH = /\bentity=(\w+)/u;
-const REF = /"\$ref":"#\/definitions\/([^"]+)"/gu;
+const REF = /"\$ref":"#\/(?:definitions|\$defs)\/([^"]+)"/gu;
 
 /** The kind a per-kind branch (labelled `entity=<kind>`) serves. */
 const branchKind = (branch: JSONType) => {
@@ -174,7 +174,8 @@ function narrowedEntityRead(
       },
     ),
   );
-  const { definitions, ...rest } = narrowed;
+  const { definitions: legacyDefinitions, $defs, ...rest } = narrowed;
+  const definitions = $defs ?? legacyDefinitions;
   const root = { ...rest, properties };
   if (!isJsonObject(definitions)) return root;
   const reachable = new Set<string>();
@@ -188,7 +189,7 @@ function narrowedEntityRead(
   }
   return {
     ...root,
-    definitions: Object.fromEntries(
+    [$defs ? "$defs" : "definitions"]: Object.fromEntries(
       Object.entries(definitions).filter(([name]) => reachable.has(name)),
     ),
   };

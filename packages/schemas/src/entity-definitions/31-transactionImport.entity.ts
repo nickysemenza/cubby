@@ -276,6 +276,12 @@ export const { definition, readSchemas } = defineEntityModel({
 
     descriptors: [
       {
+        columnId: "dateKind",
+        kind: "multiselect",
+        deriveSchema: true,
+        placeholder: "Filter by date kind...",
+      },
+      {
         columnId: "label",
         field: "search",
         urlKey: "q",

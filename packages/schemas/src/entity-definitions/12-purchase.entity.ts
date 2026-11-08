@@ -1345,6 +1345,36 @@ export const { definition, readSchemas } = defineEntityModel({
     },
     descriptors: [
       {
+        columnId: "spendingCategoryOrigin",
+        kind: "multiselect",
+        deriveSchema: true,
+        placeholder: "Filter by fallback provenance...",
+        options: [
+          { value: "legacy", label: "Legacy" },
+          { value: "manual", label: "Manual" },
+          { value: "source", label: "Source" },
+        ],
+      },
+      {
+        columnId: "itemizationExpectation",
+        kind: "multiselect",
+        deriveSchema: true,
+        placeholder: "Filter by itemization expectation...",
+      },
+      {
+        columnId: "defaultProjectId",
+        kind: "idMulti",
+        deriveSchema: true,
+        brandRef: { entity: "project" },
+        placeholder: "Filter by default project...",
+      },
+      {
+        columnId: "defaultTrade",
+        kind: "multiselect",
+        deriveSchema: true,
+        placeholder: "Filter by default trade...",
+      },
+      {
         columnId: "purchaserOverrideId",
         placeholder: "Filter by purchaser override...",
         kind: "idMulti",

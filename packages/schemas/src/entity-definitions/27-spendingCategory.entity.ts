@@ -436,6 +436,28 @@ export const { definition, readSchemas } = defineEntityModel({
     audit: true,
     descriptors: [
       {
+        columnId: "itemizationExpectation",
+        kind: "multiselect",
+        deriveSchema: true,
+        placeholder: "Filter by itemization expectation...",
+      },
+      {
+        columnId: "productExpectation",
+        kind: "multiselect",
+        deriveSchema: true,
+        placeholder: "Filter by product expectation...",
+      },
+      {
+        columnId: "stockTracked",
+        kind: "boolean",
+        deriveSchema: true,
+        placeholder: "Filter by stock tracking...",
+        options: [
+          { value: "true", label: "Tracked" },
+          { value: "false", label: "Not tracked" },
+        ],
+      },
+      {
         columnId: "name",
         field: "search",
         urlKey: "q",

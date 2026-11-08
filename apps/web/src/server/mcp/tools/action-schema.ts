@@ -29,7 +29,7 @@ export interface ActionInputSchema {
 // Repeated workflow fields also need sharing: keeping only large entity
 // subtrees shared made a reviewed import action exceed the catalog budget.
 // Short wire-only definition names keep sharing smaller constrained leaves profitable.
-const HOIST_MIN_CHARS = 32;
+const HOIST_MIN_CHARS = 24;
 const ROOT_KEYS = new Set(["action", "_runExecution"]);
 
 function isObject(value: JSONType | undefined): value is JsonObject {
@@ -228,6 +228,32 @@ function hoistRepeats(root: JsonObject): JsonObject {
       } else if (SCHEMA_KEYS.has(key)) walk(entry, "schema", visit);
     }
   };
+  // Exclusion fields share their guidance even when their value constraints
+  // differ. Keep annotations in an allOf branch so draft-7 ref siblings cannot
+  // discard either the guidance or the constraints. The merged tree owns copies.
+  const descriptions = new Map<string, number>();
+  walk(root.properties ?? {}, "map", (schema) => {
+    if (isText(schema.description))
+      descriptions.set(
+        schema.description,
+        (descriptions.get(schema.description) ?? 0) + 1,
+      );
+  });
+  walk(root.properties ?? {}, "map", (schema) => {
+    // Per-entity wrappers keep their label in place for agent narrowing.
+    if (Array.isArray(schema.allOf)) return;
+    const description = schema.description;
+    if (
+      !isText(description) ||
+      (descriptions.get(description) ?? 0) < 3 ||
+      Object.keys(schema).length < 2
+    )
+      return;
+    const constraints = { ...schema };
+    delete constraints.description;
+    for (const key of Object.keys(schema)) delete schema[key];
+    schema.allOf = [{ description }, constraints];
+  });
   const countSchema = (schema: JsonObject) => {
     const text = textOf(schema);
     if (text.length < HOIST_MIN_CHARS) return;
@@ -239,19 +265,23 @@ function hoistRepeats(root: JsonObject): JsonObject {
   for (const definition of Object.values(definitions))
     walk(definition, "schema", countSchema);
   const chosen = new Map<string, string>();
+  let nextName = 0;
   for (const [text, entry] of counts) {
     // A small repeated constraint saves space only when its references and
     // definition key cost less than the copies they replace.
-    const name = `s${chosen.size.toString(36)}`;
+    while (Object.hasOwn(definitions, nextName.toString(36))) nextName += 1;
+    const name = nextName.toString(36);
     const referenceSize = JSON.stringify({
-      $ref: `#/definitions/${name}`,
+      $ref: `#/$defs/${name}`,
     }).length;
     const definitionOverhead = JSON.stringify(name).length + 2;
     if (
       (entry.count - 1) * text.length >
       entry.count * referenceSize + definitionOverhead
-    )
+    ) {
       chosen.set(text, name);
+      nextName += 1;
+    }
   }
   if (chosen.size === 0) return root;
   const replace = (
@@ -374,14 +404,79 @@ export function mergeActionInputSchemas(
   };
   for (const [key, list] of variants)
     properties[key] = mergeProperty(list, actions.length);
-  Object.assign(properties, extraProperties);
-  return hoistRepeats({
+  Object.assign(properties, structuredClone(extraProperties));
+  const shared = hoistRepeats({
     $schema: "http://json-schema.org/draft-07/schema#",
     type: "object",
     properties,
     required: ["action"],
     definitions,
   });
+  // JSON Pointer references resolve under draft-7 and 2020-12. Use the shorter
+  // standard container understood by both MCP client validator paths.
+  return compactSharedDefinitions(shared);
+}
+
+function compactSharedDefinitions(schema: JsonObject): JsonObject {
+  const rewrite = (value: JSONType): JSONType => {
+    if (Array.isArray(value)) return value.map(rewrite);
+    if (!isObject(value)) return value;
+    return Object.fromEntries(
+      Object.entries(value).map(([key, entry]) => [
+        key,
+        key === "$ref" && isText(entry) && entry.startsWith("#/definitions/")
+          ? entry.replace("#/definitions/", "#/$defs/")
+          : rewrite(entry),
+      ]),
+    );
+  };
+  const { definitions, ...root } = schema;
+  const result = rewrite({ ...root, $defs: definitions ?? {} });
+  if (!isObject(result))
+    throw new Error("A JSON Schema root must be an object");
+  const shared = isObject(result.$defs) ? { ...result.$defs } : {};
+  const counts = new Map<string, number>();
+  const count = (value: JSONType): void => {
+    if (Array.isArray(value)) {
+      for (const entry of value) count(entry);
+      return;
+    }
+    if (!isObject(value)) return;
+    if (isText(value.$ref) && value.$ref.startsWith("#/$defs/"))
+      counts.set(value.$ref, (counts.get(value.$ref) ?? 0) + 1);
+    for (const entry of Object.values(value)) count(entry);
+  };
+  count(result);
+  // A nested repeat may have only one reference after its enclosing repeated
+  // schema was hoisted. Inline those definitions instead of paying both costs.
+  const inline = (value: JSONType): JSONType => {
+    if (Array.isArray(value)) return value.map(inline);
+    if (!isObject(value)) return value;
+    if (
+      Object.keys(value).length === 1 &&
+      isText(value.$ref) &&
+      counts.get(value.$ref) === 1
+    ) {
+      const name = value.$ref.slice("#/$defs/".length);
+      const definition = shared[name];
+      if (definition !== undefined) {
+        delete shared[name];
+        return inline(definition);
+      }
+    }
+    return Object.fromEntries(
+      Object.entries(value).map(([key, entry]) => [key, inline(entry)]),
+    );
+  };
+  const body = { ...result };
+  delete body.$defs;
+  const compactBody = inline(body);
+  for (const [name, definition] of Object.entries(shared)) {
+    if (Object.hasOwn(shared, name)) shared[name] = inline(definition);
+  }
+  if (!isObject(compactBody))
+    throw new Error("A JSON Schema root must be an object");
+  return { ...compactBody, $defs: shared };
 }
 
 /**

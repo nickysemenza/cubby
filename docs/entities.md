@@ -1850,6 +1850,17 @@ traversal and drill-down binding; a duplicate `model.derived` alias is not
 required. Equivalent stored-reference and related-path choices share one menu
 entry while retaining accepted keys. Query-backed and external relations do not
 acquire SQL grouping merely because they have a preview.
+
+A stored-result reference with an explicit `storedProjection` and a declared
+scalar list binding groups through that binding's canonical target UUID. It
+does not fall back to the same-named assignment column. Inventory Owner reuses
+the effective-owner filter's identity, so inherited owners and current explicit
+assignments group together with the values shown in rows. The combined No
+resolved individual owner section includes Household, Unknown and pending
+resolution. Its specialized Owner filter cannot select that exact set, so its
+drill-down and exclusion remain unavailable; known owner sections drill normally.
+Record-valued group headers, including scalar projections, share the canonical
+identity-mark renderer and display-image batch with relationship groups.
 Implicit Group menu choices require a public field surface, canonical reference,
 same-field value filter, or the backing bound of a declared date-range field.
 Storage alone does not expose calculation timestamps, leases or override modes.
@@ -3142,6 +3153,24 @@ unavailable when it would change the mode of an existing picked or excluded
 value; it never broadens or narrows the member's other selections implicitly.
 Shared section headers explain unavailable exclusions on focus or click. The
 member can choose the required scope in Filters before excluding the section.
+Nullable Exclude keys also accept `__none__`, negating the canonical missing-value
+predicate. This preserves positive selections, including a missing-only selection
+that becomes empty. Row sets can match both Has and No value; switching to Has
+cannot exclude their missing-value group. Each excluded value and missing-value
+predicate is negated separately, so a matching record disappears from every group.
+Nullable stored flags expose the same presence companion: false matches false,
+and No value matches an undecided value. The shared filter picker keeps those
+choices distinct; grouped drill-down writes the presence key for No value.
+Required references also gain a presence companion when their target supports
+soft deletion. A retained foreign key to a deleted target belongs to No value,
+matching the existing live-reference SQL and group memberships.
+An id filter can declare `subtreeParam` to own its descendant mode independently
+of another filter targeting the same hierarchy. Existing keys keep their defaults.
+Public enum groups reuse their exact filter's labels when the field has no
+authored value labels. Tag rosters load from the declared `optionsKey: "tags"`
+on opening a filter, including embedded lists. Product and Location rosters
+count distinct records. Grouping, array predicates and those rosters trim the
+same whitespace and omit blank values without rewriting stored tags.
 
 ### Background derived data
 

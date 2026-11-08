@@ -1,6 +1,7 @@
 import { rawSource } from "../../artifacts.ts";
 import { entityContractName } from "../contracts.ts";
 import { CURRENT_MEMBER_FILTER } from "@cubby/shared/filter";
+import { FILTER_NONE } from "@cubby/schemas/filter-sentinel-fields";
 import { generatedHeader } from "../../artifacts.ts";
 import { EntityDeclarationError, declarationModules } from "../declarations.ts";
 import type {
@@ -160,7 +161,7 @@ const renderDerivedFilterFields = (
   };
   const valueEntry = (
     descriptor: FilterDescriptor,
-    as?: Readonly<{ name: string; description: string }>,
+    as?: Readonly<{ name: string; description: string; noValue?: boolean }>,
   ): string => {
     const name = as?.name ?? descriptor.field ?? descriptor.columnId;
     const key = JSON.stringify(name);
@@ -186,7 +187,8 @@ const renderDerivedFilterFields = (
         return `${key}:presenceFilter${describe}`;
       case "multiselect":
         needs.oneOrMany = true;
-        return `${key}:oneOrMany(${derivedEnumValues(descriptor, needs, readRef, refAlias)}).optional()${describe}`;
+        if (as?.noValue) needs.z = true;
+        return `${key}:oneOrMany(${derivedEnumValues(descriptor, needs, readRef, refAlias)}${as?.noValue ? `.or(z.literal(${JSON.stringify(FILTER_NONE)}))` : ""}).optional()${describe}`;
       case "range": {
         const bounds = derivedRangeEntry(entity, descriptor, name, needs);
         // A range's declared Any value / No value key rides beside its bounds.
@@ -208,6 +210,7 @@ const renderDerivedFilterFields = (
         // `@me` (declared `currentMember`) and declared sentinels are
         // public tokens beside the shortcodes.
         const tokens = [
+          ...(as?.noValue ? [FILTER_NONE] : []),
           ...(descriptor.currentMember ? [CURRENT_MEMBER_FILTER] : []),
           ...(descriptor.sentinels ?? []).map(({ value }) => value),
         ];
@@ -248,14 +251,17 @@ const renderDerivedFilterFields = (
           : [
               `${JSON.stringify(descriptor.match.field)}:z.enum(["any","all"]).optional().describe("all: every picked value")`,
             ]),
-        // The Exclude key takes the value key's schema.
+        // Nullable Exclude keys add one reserved missing-value token.
         ...(descriptor.exclude === null
           ? []
           : [
               valueEntry(descriptor, {
                 name: descriptor.exclude.field,
+                noValue: descriptor.nullable !== null,
                 description:
-                  "Exclude any listed value; keep rows with no value",
+                  descriptor.nullable !== null
+                    ? `Exclude any listed value; ${FILTER_NONE} excludes records matching the missing-value predicate`
+                    : "Exclude any listed value; keep rows with no value",
               }),
             ]),
       ];

@@ -1169,6 +1169,18 @@ export const { definition, readSchemas } = defineEntityModel({
     schema: { module: "@cubby/schemas/vendor", export: "vendorFilterFields" },
     descriptors: [
       {
+        columnId: "spendingProfile",
+        kind: "multiselect",
+        deriveSchema: true,
+        placeholder: "Filter by spending profile...",
+      },
+      {
+        columnId: "itemizationExpectation",
+        kind: "multiselect",
+        deriveSchema: true,
+        placeholder: "Filter by itemization expectation...",
+      },
+      {
         columnId: "ids",
         kind: "idMulti",
         label: "Vendors",

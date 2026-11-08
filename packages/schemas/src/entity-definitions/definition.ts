@@ -2666,6 +2666,8 @@ const buildMetadataSchemas = () => {
     columnId: nonEmptyString(),
     field: nonEmptyString().nullable().optional(),
     urlKey: nonEmptyString().nullable().optional(),
+    /** A reference filter's independent descendant-mode parameter. */
+    subtreeParam: nonEmptyString().optional(),
     kind: nonEmptyString(),
     placeholder: nonEmptyString(),
     options: z
