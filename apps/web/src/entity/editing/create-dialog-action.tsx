@@ -1,26 +1,11 @@
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
 import { useNavigate, useSearch } from "@tanstack/react-router";
-import type { ComponentProps } from "react";
-import { type ReactNode, Suspense, useState } from "react";
+import { type ReactNode, useState } from "react";
 import { z } from "zod";
 
-import type { EntityEditDialog as EntityEditDialogComponent } from "~/entity/editing/entity-edit-dialog";
+import { EntityEditDialog } from "~/entity/editing/entity-edit-dialog";
 import type { EntityEditDialogRequest } from "~/entity/editing/entity-edit-dialog";
-import { browserOnlyLazy } from "~/lib/browser-only-lazy";
-import { Overlay } from "~/ui/overlays/overlay";
 import { Button } from "~/ui/primitives/button";
-import { Spinner } from "~/ui/primitives/spinner";
-
-const EntityEditDialog = browserOnlyLazy<
-  ComponentProps<typeof EntityEditDialogComponent>
->(
-  import.meta.env.SSR
-    ? null
-    : () =>
-        import("~/entity/editing/entity-edit-dialog").then((module) => ({
-          default: module.EntityEditDialog,
-        })),
-);
 
 const routeSearchValueSchema = z.json();
 type RouteSearchValue = z.infer<typeof routeSearchValueSchema> | undefined;
@@ -94,31 +79,8 @@ export function CreateDialogAction({
         {children}
       </Button>
       {open ? (
-        <Suspense fallback={<CreateDialogLoading onOpenChange={setOpen} />}>
-          <EntityEditDialog open onOpenChange={setOpen} request={request} />
-        </Suspense>
+        <EntityEditDialog open onOpenChange={setOpen} request={request} />
       ) : null}
     </>
-  );
-}
-
-function CreateDialogLoading({
-  onOpenChange,
-}: {
-  onOpenChange: (open: boolean) => void;
-}) {
-  return (
-    <Overlay
-      open
-      onOpenChange={onOpenChange}
-      title="Opening form"
-      description="The editor is loading."
-      cancelLabel="Close"
-    >
-      <output className="flex items-center gap-2 text-sm text-muted-foreground">
-        <Spinner size="sm" aria-hidden="true" />
-        <span className="sr-only">Opening form</span>
-      </output>
-    </Overlay>
   );
 }

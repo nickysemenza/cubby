@@ -1,5 +1,11 @@
 import { vendorOut } from "@cubby/schemas/entities/vendor";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -79,8 +85,10 @@ describe("generic editor save lifecycle", () => {
   it("closes an unchanged edit without writing or invoking entity-result callbacks", async () => {
     const { mutationPort, transport } = editorPort();
     const onSuccess = vi.fn();
-    render(<Editor mutationPort={mutationPort} onSuccess={onSuccess} />, {
-      wrapper: harness.wrapper,
+    await act(async () => {
+      render(<Editor mutationPort={mutationPort} onSuccess={onSuccess} />, {
+        wrapper: harness.wrapper,
+      });
     });
     fireEvent.click(
       await screen.findByRole("button", { name: "Save changes" }),

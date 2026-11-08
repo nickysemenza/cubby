@@ -2,7 +2,13 @@ import { gardenEntryOut } from "@cubby/schemas/entities/gardenEntry";
 import { imageOut } from "@cubby/schemas/image";
 import { productWithMappingsAndFoodOut } from "@cubby/schemas/product";
 import { testShortcode } from "@cubby/schemas/testing";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { fromAny } from "@total-typescript/shoehorn";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -270,15 +276,17 @@ describe("EntityEditDialog thrown submit errors", () => {
       // Not one of `status`'s options: only the update schema catches it.
       seed: fromAny({ status: "bogus" }),
     };
-    render(
-      <EntityEditDialog
-        open
-        onOpenChange={vi.fn()}
-        mutationPort={mutationPort}
-        request={request}
-      />,
-      { wrapper: harness.wrapper },
-    );
+    await act(async () => {
+      render(
+        <EntityEditDialog
+          open
+          onOpenChange={vi.fn()}
+          mutationPort={mutationPort}
+          request={request}
+        />,
+        { wrapper: harness.wrapper },
+      );
+    });
     fireEvent.click(
       await screen.findByRole("button", { name: "Save changes" }),
     );

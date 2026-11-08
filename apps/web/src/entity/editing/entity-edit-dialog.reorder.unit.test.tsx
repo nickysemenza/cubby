@@ -11,7 +11,7 @@ import { entityMutation } from "~/integrations/tanstack-query/generated/domains/
 import { mock } from "~/lib/test/mock-schema";
 import { entityBrowserMutationResultSchema } from "~/server/entity-kernel/contracts";
 
-import { EntityEditDialog } from "./entity-edit-dialog";
+import { EntityEditDialogContent } from "./entity-edit-dialog-content";
 import { createEntityMutationPort } from "./use-entity-commands";
 
 installFeatures();
@@ -83,7 +83,7 @@ describe("EntityEditDialog image reorder", () => {
   it("sends imageOrder as the new order after a reorder and omits it when untouched", async () => {
     const { mutationPort, transport } = locationMutationPort();
     render(
-      <EntityEditDialog
+      <EntityEditDialogContent
         open
         onOpenChange={() => undefined}
         mutationPort={mutationPort}
@@ -125,7 +125,7 @@ describe("EntityEditDialog image reorder", () => {
   it("sends the reordered ids as imageOrder", async () => {
     const { mutationPort, transport } = locationMutationPort();
     render(
-      <EntityEditDialog
+      <EntityEditDialogContent
         open
         onOpenChange={() => undefined}
         mutationPort={mutationPort}

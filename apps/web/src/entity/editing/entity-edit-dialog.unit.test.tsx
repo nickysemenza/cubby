@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { createEditorBrowserTestHarness as createBrowserTestHarness } from "#web/tests/editor-metadata.fixtures.ts";
@@ -21,14 +21,16 @@ afterEach(() => {
 
 describe("EntityEditDialog", () => {
   it("mounts the real capture presentation when opened", async () => {
-    render(
-      <EntityEditDialog
-        open
-        onOpenChange={() => undefined}
-        request={{ entity: "meal", operation: "create", intent: "capture" }}
-      />,
-      { wrapper: harness.wrapper },
-    );
+    await act(async () => {
+      render(
+        <EntityEditDialog
+          open
+          onOpenChange={() => undefined}
+          request={{ entity: "meal", operation: "create", intent: "capture" }}
+        />,
+        { wrapper: harness.wrapper },
+      );
+    });
 
     expect(await screen.findByText("New Meal")).toBeInTheDocument();
     expect(screen.getByLabelText("Date")).toBeInTheDocument();

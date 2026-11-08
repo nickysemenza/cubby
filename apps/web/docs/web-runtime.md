@@ -254,6 +254,12 @@ or rendering the form. Slices contain compiler-owned `createDefaults` and
 contract asynchronously, preserving field paths and pending state. Enum option
 rosters have no global metadata cache; mounted controls memoize their options.
 
+The generic edit dialog owns the code-loading boundary for its heavy content.
+Static action and suggestion callers retain only the lightweight dialog shell.
+Opening starts the content import and entity metadata together; the cached module
+promise preserves the generic form contract while the local Suspense fallback
+keeps loading inside the overlay. Closed dialogs do not load the form runtime.
+
 Suggestions, editor basis helpers and Why-this-value source fields read an admitted
 entity slice from their explicit QueryClient. The sweep menu uses the lean
 suggestion-capable roster and loads selected field details before enabling its

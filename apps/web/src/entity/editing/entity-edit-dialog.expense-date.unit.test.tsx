@@ -7,7 +7,7 @@ import { entityMutation } from "~/integrations/tanstack-query/generated/domains/
 import { mock } from "~/lib/test/mock-schema";
 import { entityBrowserMutationResultSchema } from "~/server/entity-kernel/contracts";
 
-import { EntityEditDialog } from "./entity-edit-dialog";
+import { EntityEditDialogContent } from "./entity-edit-dialog-content";
 import { createEntityMutationPort } from "./use-entity-commands";
 
 let harness: ReturnType<typeof createBrowserTestHarness>;
@@ -37,7 +37,7 @@ function renderExpense(
     execute: (command) => mutation.forEntity(command.entity).call(command),
   });
   render(
-    <EntityEditDialog
+    <EntityEditDialogContent
       open
       onOpenChange={vi.fn()}
       mutationPort={mutationPort}

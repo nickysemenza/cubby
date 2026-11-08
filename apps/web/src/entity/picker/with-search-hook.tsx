@@ -6,19 +6,17 @@ import type {
 } from "@cubby/schemas/identifiers";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useInfiniteQuery } from "@tanstack/react-query";
-import type { ComponentProps } from "react";
 import type { ReactNode } from "react";
-import { Suspense, useMemo } from "react";
+import { useMemo } from "react";
 import { z } from "zod";
 
 import { captureRequest } from "~/entity/editing/editor-requests";
-import type { EntityEditDialog as EntityEditDialogComponent } from "~/entity/editing/entity-edit-dialog";
+import { EntityEditDialog } from "~/entity/editing/entity-edit-dialog";
 import { entityListFor, type EntityListParams } from "~/entity/entity-list";
 import { featureRegistry } from "~/entity/feature-registry";
 import { useEntityMetadata } from "~/entity/metadata";
 import { location } from "~/integrations/tanstack-query/generated/domains/location.gen";
 import { product } from "~/integrations/tanstack-query/generated/domains/product.gen";
-import { browserOnlyLazy } from "~/lib/browser-only-lazy";
 
 import type { ComboboxItem } from "../../ui/combobox/combobox-types";
 import {
@@ -41,17 +39,6 @@ import {
   type PickerSearchEntity,
   type UseEntitySearchConfig,
 } from "./entity-search-hooks";
-
-const EntityEditDialog = browserOnlyLazy<
-  ComponentProps<typeof EntityEditDialogComponent>
->(
-  import.meta.env.SSR
-    ? null
-    : () =>
-        import("~/entity/editing/entity-edit-dialog").then((module) => ({
-          default: module.EntityEditDialog,
-        })),
-);
 
 /** What a picker search source hands its combobox. */
 export interface EntitySearchResult<TId extends string> {
@@ -366,24 +353,22 @@ export function useEntityListSource<E extends EntitySearchEntity>(
   } = useEntitySearchRows(entity, config, scope);
   const dialog =
     isDialogOpen && dialogCreateEntities.has(entity) ? (
-      <Suspense fallback={null}>
-        <EntityEditDialog
-          open
-          onOpenChange={setIsDialogOpen}
-          // Gated on `dialogCreateEntities`, the three editable entities
-          // whose configs declare `createNew: "dialog"`.
-          request={captureRequest(entity as "ingredient", {
-            name: pendingName,
-          })}
-          onSuccess={(result) => {
-            // Save receipts contain the normalized identity/title, not the
-            // detail graph. Resolve before the dialog closes its pending choice.
-            resolveWithEntity(
-              buildRecordComboboxItem(queryClient, entity, result),
-            );
-          }}
-        />
-      </Suspense>
+      <EntityEditDialog
+        open
+        onOpenChange={setIsDialogOpen}
+        // Gated on `dialogCreateEntities`, the three editable entities
+        // whose configs declare `createNew: "dialog"`.
+        request={captureRequest(entity as "ingredient", {
+          name: pendingName,
+        })}
+        onSuccess={(result) => {
+          // Save receipts contain the normalized identity/title, not the
+          // detail graph. Resolve before the dialog closes its pending choice.
+          resolveWithEntity(
+            buildRecordComboboxItem(queryClient, entity, result),
+          );
+        }}
+      />
     ) : null;
   return {
     items,
