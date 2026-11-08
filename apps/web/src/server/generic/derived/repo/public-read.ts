@@ -27,6 +27,7 @@ const rowArray = z.array(z.unknown());
 type ReadRow = z.output<typeof rowRecord>;
 type ReadContainer = ReadRow | z.output<typeof rowArray>;
 const publicIdentity = z.object({ id: z.string() });
+const scoredEntitySchema = z.enum(scoredEntities);
 const canonicalCode = (code: string) => parseShortcode(code)?.shortcode ?? code;
 
 type EmbeddedBinding =
@@ -261,7 +262,7 @@ export function publicFieldEnvelopeRow(
       );
   }
   const quality = stored.get("dataQuality");
-  const scored = z.enum(scoredEntities).safeParse(entity);
+  const scored = scoredEntitySchema.safeParse(entity);
   const fields = schema.shape.fields;
   if (
     quality?.resultExists &&
