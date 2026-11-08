@@ -65,6 +65,7 @@ const expandRules = {
 };
 
 // Column filters share one compilation; a new metadata admission gets fresh descriptors.
+// Compilation must use only frozen declaration data, never session, actor or request state.
 const filtersByMetadata = new WeakMap<
   EntityMetadataFor<Entity>,
   readonly FilterSpec[]
