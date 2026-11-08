@@ -852,6 +852,22 @@ export const { definition, readSchemas } = defineEntityModel({
         stored: true,
       },
       {
+        columnId: "createdAt",
+        label: "Created",
+        kind: "range",
+        deriveSchema: true,
+        stored: true,
+        placeholder: "Filter by created date...",
+      },
+      {
+        columnId: "updatedAt",
+        label: "Updated",
+        kind: "range",
+        deriveSchema: true,
+        stored: true,
+        placeholder: "Filter by updated date...",
+      },
+      {
         columnId: "classification",
         kind: "multiselect",
         placeholder: "Filter by Relevance...",

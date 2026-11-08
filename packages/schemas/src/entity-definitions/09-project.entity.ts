@@ -1481,6 +1481,46 @@ Rules:
         },
       },
       {
+        // The project's own start, not the start rolled up from its tasks or
+        // expenses (`dateRange` matches activity).
+        columnId: "start",
+        label: "Start date",
+        kind: "range",
+        deriveSchema: true,
+        stored: { columns: ["startDate"] },
+        range: { kind: "date" },
+        wire: {
+          kind: "range",
+          from: "startFrom",
+          to: "startTo",
+          presence: "startPresenceFilter",
+        },
+        placeholder: "Filter by start date...",
+        options: [
+          { value: "has", label: "Has start date", meta: true },
+          { value: "none", label: "(none)", meta: true },
+        ],
+      },
+      {
+        columnId: "end",
+        label: "End date",
+        kind: "range",
+        deriveSchema: true,
+        stored: { columns: ["endDate"] },
+        range: { kind: "date" },
+        wire: {
+          kind: "range",
+          from: "endFrom",
+          to: "endTo",
+          presence: "endPresenceFilter",
+        },
+        placeholder: "Filter by end date...",
+        options: [
+          { value: "has", label: "Has end date", meta: true },
+          { value: "none", label: "(none)", meta: true },
+        ],
+      },
+      {
         columnId: "completionYear",
         urlKey: "completed",
         kind: "multiselect",

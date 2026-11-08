@@ -299,6 +299,24 @@ export const { definition, readSchemas } = defineEntityModel({
         placeholder: "Filter observedAt...",
       },
       {
+        columnId: "completedAt",
+        label: "Completed",
+        kind: "range",
+        deriveSchema: true,
+        stored: true,
+        wire: {
+          kind: "range",
+          from: "completedAtFrom",
+          to: "completedAtTo",
+          presence: "completedAtPresenceFilter",
+        },
+        placeholder: "Filter by completion time...",
+        options: [
+          { value: "has", label: "Completed", meta: true },
+          { value: "none", label: "(none)", meta: true },
+        ],
+      },
+      {
         columnId: "sourceTransactionRecordId",
         kind: "idMulti",
         brandRef: { entity: "sourceTransactionRecord" },

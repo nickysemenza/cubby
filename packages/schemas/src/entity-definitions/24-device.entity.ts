@@ -442,6 +442,24 @@ export const { definition, readSchemas } = defineEntityModel({
         currentMember: true,
         deriveSchema: true,
       },
+      {
+        columnId: "lastSeenAt",
+        label: "Last seen",
+        kind: "range",
+        deriveSchema: true,
+        stored: true,
+        wire: {
+          kind: "range",
+          from: "lastSeenAtFrom",
+          to: "lastSeenAtTo",
+          presence: "lastSeenAtPresenceFilter",
+        },
+        placeholder: "Filter by last seen...",
+        options: [
+          { value: "has", label: "Seen", meta: true },
+          { value: "none", label: "(none)", meta: true },
+        ],
+      },
     ],
   },
 
