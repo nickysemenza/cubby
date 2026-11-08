@@ -6,6 +6,7 @@ const base = {
   lastRenderedIndex: 0,
   rowCount: 100,
   visibleRows: 20,
+  scrollOffset: 1,
   hasNextPage: true,
   isFetchingNextPage: false,
   isTransitioning: false,
@@ -45,7 +46,23 @@ describe("shouldPrefetchNextPage", () => {
     expect(shouldPrefetchNextPage({ ...near, hasNextPage: false })).toBe(false);
   });
 
-  it("does nothing before any rows exist", () => {
+  it("fills an undersized pane but leaves a full opening viewport quiet", () => {
+    expect(
+      shouldPrefetchNextPage({
+        ...base,
+        rowCount: 50,
+        lastRenderedIndex: 49,
+        scrollOffset: 0,
+      }),
+    ).toBe(false);
+    expect(
+      shouldPrefetchNextPage({
+        ...base,
+        rowCount: 10,
+        lastRenderedIndex: 9,
+        scrollOffset: 0,
+      }),
+    ).toBe(true);
     expect(shouldPrefetchNextPage({ ...base, rowCount: 0 })).toBe(false);
   });
 });
