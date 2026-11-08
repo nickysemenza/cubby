@@ -442,7 +442,7 @@ it.each([1440, 402])(
         "precision workshop tool",
       ),
     );
-    expect(sheet).toBeVisible();
+    expect(await screen.findByTestId("entity-contact-sheet")).toBeVisible();
     expect(search).toHaveFocus();
     expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width);
     harness?.dispose();
