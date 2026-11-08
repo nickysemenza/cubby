@@ -143,7 +143,9 @@ export type StepPlan = readonly {
 }[];
 
 /** A Sweep runs the declared steps of the families its input chose, in declared order. */
-async function planForRun(owner: RunRow): Promise<StepPlan> {
+async function planForRun(
+  owner: Pick<RunRow, "purpose" | "input">,
+): Promise<StepPlan> {
   if (!isStepRunPurpose(owner.purpose) || !isExecutedRunPurpose(owner.purpose))
     throw new Error(`${owner.purpose} Runs are not executed by run.execute`);
   const families =
@@ -563,6 +565,11 @@ export async function retryRunStep(db: Database, runId: RunId, key: string) {
   if (active)
     throw new Error(
       `Maintenance ${active} is still running or paused; retry this step once it ends.`,
+    );
+  // Retained keys can outlive their executors; refusal must preserve their failure ledger.
+  if (!(await planForRun(owner)).some((entry) => entry.declaration.key === key))
+    throw new Error(
+      "This retained step has no current executor; its failures remain preserved.",
     );
   const reopened = await reopenRunStep(db, runId, key);
   if (!reopened) throw new Error("This step has no failures to retry");

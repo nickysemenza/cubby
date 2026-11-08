@@ -319,6 +319,7 @@ export async function readStepRunOwner(db: Database, runId: RunId) {
     .select({
       id: run.id,
       purpose: run.purpose,
+      input: run.input,
       status: run.status,
       failureCode: run.failureCode,
     })
