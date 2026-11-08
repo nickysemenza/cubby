@@ -407,6 +407,12 @@ export const { definition, readSchemas } = defineEntityModel({
     schema: { module: "@cubby/schemas/plant", export: "plantFilterFields" },
     descriptors: [
       {
+        columnId: "breeding",
+        kind: "multiselect",
+        deriveSchema: true,
+        placeholder: "Filter by breeding...",
+      },
+      {
         columnId: "name",
         field: "search",
         urlKey: "q",

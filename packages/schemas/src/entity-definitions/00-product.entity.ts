@@ -2955,6 +2955,59 @@ Rules:
       },
       descriptors: [
         {
+          columnId: "acquisitionOrigin",
+          kind: "multiselect",
+          deriveSchema: true,
+          placeholder: "Filter by acquisition origin...",
+        },
+        {
+          columnId: "commodity",
+          kind: "boolean",
+          deriveSchema: true,
+          placeholder: "Filter by commodity...",
+          options: [
+            { value: "true", label: "Commodity" },
+            { value: "false", label: "Not a commodity" },
+          ],
+        },
+        {
+          columnId: "usdaUnavailable",
+          kind: "boolean",
+          deriveSchema: true,
+          placeholder: "Filter by USDA availability...",
+          options: [
+            { value: "true", label: "USDA unavailable" },
+            { value: "false", label: "USDA available" },
+          ],
+        },
+        // The exact effective decision (own, else category). The "stockTracked"
+        // presence filter keeps its decided/undecided meaning.
+        {
+          columnId: "stockTrackedDecision",
+          label: "Stock tracking decision",
+          kind: "boolean",
+          deriveSchema: true,
+          stored: { columns: ["stockTracked"] },
+          placeholder: "Filter by stock tracking decision...",
+          schemaDescription:
+            "Filter to products whose effective stock-tracking decision (the Product's own, else its category's) is tracked (true) or not tracked (false). Undecided products match neither.",
+          options: [
+            { value: "true", label: "Tracked" },
+            { value: "false", label: "Not tracked" },
+          ],
+        },
+        // The Locations that are this Product (Location.productId), not where
+        // its stock sits.
+        {
+          columnId: "servingAsLocationId",
+          label: "Serving as location",
+          derived: "servingAsLocations",
+          kind: "idMulti",
+          deriveSchema: true,
+          brandRef: { entity: "location" },
+          placeholder: "Filter by location it serves as...",
+        },
+        {
           columnId: "name",
           field: "nameFilter",
           kind: "text",

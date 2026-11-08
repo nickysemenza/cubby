@@ -290,6 +290,16 @@ export const { definition, readSchemas } = defineEntityModel({
 
     descriptors: [
       {
+        columnId: "inventoryOwnerDefaultEnabled",
+        kind: "boolean",
+        deriveSchema: true,
+        placeholder: "Filter by inventory owner default...",
+        options: [
+          { value: "true", label: "Owner default on" },
+          { value: "false", label: "Owner default off" },
+        ],
+      },
+      {
         columnId: "lastRunAt",
         label: "Last run",
         kind: "range",

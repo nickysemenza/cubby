@@ -739,6 +739,30 @@ Rules:
 
     descriptors: [
       {
+        columnId: "spendingCategoryMode",
+        kind: "multiselect",
+        deriveSchema: true,
+        placeholder: "Filter by spending category mode...",
+      },
+
+      {
+        columnId: "feature",
+        kind: "multiselect",
+        deriveSchema: true,
+        placeholder: "Filter by feature...",
+      },
+
+      {
+        columnId: "stockTracked",
+        kind: "boolean",
+        deriveSchema: true,
+        placeholder: "Filter by stock tracking...",
+        options: [
+          { value: "true", label: "Tracked" },
+          { value: "false", label: "Not tracked" },
+        ],
+      },
+      {
         columnId: "effectiveSpendingCategory",
         field: "effectiveSpendingCategoryId",
         urlKey: "spendingCategory",

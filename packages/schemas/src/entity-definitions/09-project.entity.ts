@@ -1365,6 +1365,12 @@ Rules:
     },
     descriptors: [
       {
+        columnId: "defaultTrade",
+        kind: "multiselect",
+        deriveSchema: true,
+        placeholder: "Filter by default trade...",
+      },
+      {
         columnId: "assigneeId",
         urlKey: "assignee",
         field: "assigneeId",

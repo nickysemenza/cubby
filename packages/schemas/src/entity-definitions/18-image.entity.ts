@@ -809,6 +809,53 @@ export const { definition, readSchemas } = defineEntityModel(
       schema: { module: "@cubby/schemas/image", export: "imageFilterFields" },
       descriptors: [
         {
+          columnId: "metadataOutcome",
+          kind: "multiselect",
+          deriveSchema: true,
+          placeholder: "Filter by metadata outcome...",
+          schemaRef: {
+            module: "@cubby/schemas/image-capture-fields",
+            export: "imageMetadataOutcome",
+          },
+          options: [
+            { value: "original_missing", label: "Original missing" },
+            { value: "extraction_failed", label: "Extraction failed" },
+          ],
+        },
+        {
+          columnId: "renderStatus",
+          kind: "multiselect",
+          deriveSchema: true,
+          placeholder: "Filter by render status...",
+          options: [
+            { value: "unverified", label: "Unverified" },
+            { value: "verified", label: "Verified" },
+            { value: "failed", label: "Failed" },
+          ],
+        },
+        {
+          columnId: "storageStatus",
+          kind: "multiselect",
+          deriveSchema: true,
+          placeholder: "Filter by storage status...",
+          options: [
+            { value: "unverified", label: "Unverified" },
+            { value: "available", label: "Available" },
+            { value: "missing", label: "Missing" },
+            { value: "metadata_mismatch", label: "Metadata mismatch" },
+          ],
+        },
+        {
+          columnId: "useOriginal",
+          kind: "boolean",
+          deriveSchema: true,
+          placeholder: "Filter by original use...",
+          options: [
+            { value: "true", label: "Uses original" },
+            { value: "false", label: "Uses processed" },
+          ],
+        },
+        {
           columnId: "verifiedAt",
           label: "Verified at",
           kind: "range",

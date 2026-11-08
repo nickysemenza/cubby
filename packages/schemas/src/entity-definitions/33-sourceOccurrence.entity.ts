@@ -363,6 +363,38 @@ export const { definition, readSchemas } = defineEntityModel(
       audit: true,
       descriptors: [
         {
+          columnId: "identityKind",
+          kind: "multiselect",
+          deriveSchema: true,
+          placeholder: "Filter by identity kind...",
+        },
+        {
+          columnId: "disposition",
+          kind: "multiselect",
+          deriveSchema: true,
+          placeholder: "Filter by disposition...",
+        },
+        {
+          columnId: "dispositionReason",
+          kind: "multiselect",
+          deriveSchema: true,
+          placeholder: "Filter by disposition reason...",
+        },
+        {
+          columnId: "replacementObservationId",
+          kind: "idMulti",
+          deriveSchema: true,
+          brandRef: { entity: "sourceTransactionRecord" },
+          placeholder: "Filter by replacement observation...",
+        },
+        {
+          columnId: "withdrawalImportId",
+          kind: "idMulti",
+          deriveSchema: true,
+          brandRef: { entity: "transactionImport" },
+          placeholder: "Filter by withdrawal import...",
+        },
+        {
           columnId: "source",
           kind: "text",
           deriveSchema: true,

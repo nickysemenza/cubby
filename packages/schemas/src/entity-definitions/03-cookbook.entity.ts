@@ -338,6 +338,13 @@ export const { definition, readSchemas } = defineEntityModel(
       },
       descriptors: [
         {
+          columnId: "productId",
+          kind: "idMulti",
+          deriveSchema: true,
+          brandRef: { entity: "product" },
+          placeholder: "Filter by product...",
+        },
+        {
           columnId: "importedAt",
           label: "Imported at",
           kind: "range",

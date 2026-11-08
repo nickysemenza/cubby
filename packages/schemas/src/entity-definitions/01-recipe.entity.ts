@@ -997,6 +997,13 @@ export const { definition, readSchemas } = defineEntityModel(
       schema: { module: "@cubby/schemas/recipe", export: "recipeFilterFields" },
       descriptors: [
         {
+          columnId: "forkedFromRecipeId",
+          kind: "idMulti",
+          deriveSchema: true,
+          brandRef: { entity: "recipe" },
+          placeholder: "Filter by forked-from recipe...",
+        },
+        {
           columnId: "name",
           field: "nameFilter",
           kind: "text",
