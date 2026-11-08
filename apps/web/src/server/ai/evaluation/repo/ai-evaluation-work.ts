@@ -17,8 +17,10 @@ import {
 import {
   and,
   asc,
+  eq,
   gt,
   inArray,
+  isNotNull,
   isNull,
   min,
   or,
@@ -56,7 +58,7 @@ export const aiEvaluationAttemptLive = (
 const pendingAndOwed = () =>
   and(
     inArray(aiEvaluation.state, [...PENDING_AI_STATES]),
-    sql`${aiEvaluation.runAt} IS NOT NULL`,
+    isNotNull(aiEvaluation.runAt),
   );
 const claimable = () => sql`(
   ${aiEvaluation.runAt} <= now()
@@ -205,7 +207,7 @@ export async function deferAiEvaluationFeature(
     })
     .where(
       and(
-        sql`${aiEvaluation.feature} = ${feature}`,
+        eq(aiEvaluation.feature, feature),
         pendingAndOwed(),
         or(
           isNull(aiEvaluation.leaseToken),

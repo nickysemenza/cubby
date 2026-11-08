@@ -16,7 +16,16 @@ import {
 import type { WorkStuckItem } from "@cubby/schemas/work-status";
 import { countLabel } from "@cubby/shared/pluralize";
 import { scrubErrorMessage } from "@cubby/worker-tracing/scrub-error-message";
-import { and, inArray, notInArray, or, type SQL, sql } from "drizzle-orm";
+import {
+  and,
+  desc,
+  eq,
+  inArray,
+  notInArray,
+  or,
+  type SQL,
+  sql,
+} from "drizzle-orm";
 
 import type {
   JobFacts,
@@ -142,10 +151,7 @@ function jobSetWhere(
     filter.lanes ? laneWhere(filter.lanes) : undefined,
     filter.kinds ? inArray(job.kind, filter.kinds) : undefined,
     filter.reasons
-      ? sql`${jobWaitingOnReasonSql()} IN (${sql.join(
-          filter.reasons.map((reason) => sql`${reason}`),
-          sql`, `,
-        )})`
+      ? inArray(jobWaitingOnReasonSql(), filter.reasons)
       : undefined,
     runId ? runDemandWhere(runId) : undefined,
     filter.ids ? inArray(job.id, filter.ids) : undefined,
@@ -378,10 +384,14 @@ export async function readStoppedRuns(db: Database, now: Date) {
     .select(columns)
     .from(run)
     .where(
-      sql`${notDeleted(run)} AND ${run.purpose} IN (${purposes})
-        AND ${run.status} = ${runStatus.enum.running} AND ${runStalledSql(now)}`,
+      and(
+        notDeleted(run),
+        inArray(run.purpose, ATTENTION_RUN_PURPOSES),
+        eq(run.status, runStatus.enum.running),
+        runStalledSql(now),
+      ),
     )
-    .orderBy(sql`${run.startedAt} DESC`)
+    .orderBy(desc(run.startedAt))
     .limit(8);
   const failed = await getDb(db)
     .select(columns)
@@ -393,7 +403,7 @@ export async function readStoppedRuns(db: Database, now: Date) {
         AND NOT EXISTS (SELECT 1 FROM "Run" next
           WHERE next."predecessorRunId" = ${run.id} AND ${notDeleted("next")})`,
     )
-    .orderBy(sql`${run.endedAt} DESC`);
+    .orderBy(desc(run.endedAt));
   const failedPurposes = [...new Set(failed.map((row) => row.purpose))];
   const completed = failedPurposes.length
     ? await getDb(db)
@@ -403,10 +413,10 @@ export async function readStoppedRuns(db: Database, now: Date) {
         })
         .from(run)
         .where(
-          sql`${run.status} = ${runStatus.enum.completed} AND ${run.purpose} IN (${sql.join(
-            failedPurposes.map((purpose) => sql`${purpose}`),
-            sql`, `,
-          )})`,
+          and(
+            eq(run.status, runStatus.enum.completed),
+            inArray(run.purpose, failedPurposes),
+          ),
         )
         .groupBy(run.purpose)
     : [];

@@ -19,7 +19,7 @@ import {
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
 import { moneyToMinor } from "@cubby/shared";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 import { capitalize, sortBy, uniq } from "es-toolkit";
 import { z } from "zod";
@@ -923,7 +923,7 @@ const refuseTransferEvidence = async (
     .where(
       and(
         inArray(financialTransaction.id, ids),
-        sql`${financialTransaction.ledgerTransferId} IS NOT NULL`,
+        isNotNull(financialTransaction.ledgerTransferId),
       ),
     )
     .limit(1);

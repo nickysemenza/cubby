@@ -20,7 +20,7 @@ import type { TaskBulkReorderInput } from "@cubby/schemas/project";
 import { taskFiltersSchema } from "@cubby/schemas/project";
 import type { Trade } from "@cubby/schemas/task-fields";
 import { rawTaskOut, type RawTaskOut } from "@cubby/schemas/work-raw-read";
-import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, inArray, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 import { uniq } from "es-toolkit";
 
@@ -191,7 +191,7 @@ export async function taskSubtaskCounts(
   const rows = await getDb(db)
     .select({
       parentTaskId: task.parentTaskId,
-      count: sql<number>`count(*)::int`,
+      count: count(),
       doneCount: sql<number>`count(*) filter (where ${task.status} = ${"done"})::int`,
     })
     .from(task)

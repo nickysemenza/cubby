@@ -268,7 +268,7 @@ const loadCalendarExpenses = async (
     .where(
       and(
         condition,
-        or(isNull(expense.purchaseId), sql`${expense.future} = true`),
+        or(isNull(expense.purchaseId), eq(expense.future, true)),
         sql`NOT (coalesce(${expense.cost}, 0) = 0 AND coalesce(${expense.productQuantity}, 0) < 0)`,
         isNotNull(expense[calendarSources.spending.dates[0]]),
         gte(expense[calendarSources.spending.dates[0]], input.startDate),

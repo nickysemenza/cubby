@@ -15,7 +15,7 @@ import { requiresSuggestionReview } from "@cubby/schemas/field-suggestion-policy
 import { parseEntityRef } from "@cubby/schemas/identifiers";
 import { suggestionChildHandle } from "@cubby/schemas/suggestion";
 import { suggestionFieldCount } from "@cubby/schemas/suggestion-list";
-import { type SQL, and, eq, inArray, sql } from "drizzle-orm";
+import { type SQL, and, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import {
@@ -106,7 +106,7 @@ function reviewableRow(suggestion: SuggestionStateRow, runCode: string | null) {
 }
 /** Saved records are member review candidates. */
 // An answer for an unsaved record has nothing to review against.
-const reviewableSuggestionSql = sql`${suggestionTable.recordId} IS NOT NULL`;
+const reviewableSuggestionSql = isNotNull(suggestionTable.recordId);
 
 type StoredFieldRow = {
   suggestion: SuggestionStateRow;

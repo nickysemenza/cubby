@@ -1,5 +1,5 @@
 import type { ExpenseId, ProjectId } from "@cubby/schemas/identifiers";
-import { and, inArray, isNotNull, sql, type SQL } from "drizzle-orm";
+import { and, count, inArray, isNotNull, sql, type SQL } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 
 import type { Database } from "~/server/db";
@@ -68,7 +68,7 @@ const projectTaskRollupRows = (db: Database) =>
         "projectId",
         "Task",
       ),
-      taskCount: sql<number>`count(*)::int`,
+      taskCount: count(),
       doneTaskCount: sql<number>`count(*) filter (where ${task.status} = ${"done"})::int`,
     })
     .from(task)

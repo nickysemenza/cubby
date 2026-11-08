@@ -91,7 +91,7 @@ export const computeProductReadFacts: DerivedCompute = async (db, ids) => {
             location,
             and(
               notDeleted(location),
-              sql`${location.id} = ${inventoryEntry.locationId}`,
+              eq(location.id, inventoryEntry.locationId),
             ),
           )
           .where(

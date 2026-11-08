@@ -11,7 +11,7 @@ import {
 } from "@cubby/schemas/financial-transaction-fields";
 import { expenseCreateInput } from "@cubby/schemas/project";
 import { cents } from "@cubby/shared";
-import { sql, type SQL } from "drizzle-orm";
+import { and, eq, isNull, sql, type SQL } from "drizzle-orm";
 
 import { actualExpense } from "~/server/db/computed/expense-aggregate-sql";
 import { notDeleted } from "~/server/db/helpers/predicates";
@@ -82,7 +82,7 @@ export type FinancialReconciliationInput = PurchaseFinancialAggregate & {
  * `repo/expense/match.ts` deliberately does NOT use these; see the note there.
  */
 const incurredExpenses = (purchaseId: SQL) =>
-  related(expense, (e) => sql`${e.purchaseId} = ${purchaseId}`).where((e) =>
+  related(expense, (e) => eq(e.purchaseId, purchaseId)).where((e) =>
     actualExpense(e.future),
   );
 
@@ -91,14 +91,14 @@ export const settleableExpenseTotal = (purchaseId: SQL) =>
 
 export const settleableUnpricedExpenseCount = (purchaseId: SQL) =>
   incurredExpenses(purchaseId)
-    .where((e) => sql`${e.cost} IS NULL`)
+    .where((e) => isNull(e.cost))
     .count();
 
 /** Vendor paperwork excludes household reimbursements; spend and settlement
  * continue to include every incurred Expense, including those credits. */
 const vendorExpenses = (purchaseId: SQL) =>
-  related(expense, (e) => sql`${e.purchaseId} = ${purchaseId}`).where(
-    (e) => sql`${e.economicRole} = ${VENDOR_ROLE}`,
+  related(expense, (e) => eq(e.purchaseId, purchaseId)).where((e) =>
+    eq(e.economicRole, VENDOR_ROLE),
   );
 
 const vendorExpenseCost = (cost: SQL) => sql`${cost}::numeric`;
@@ -111,7 +111,7 @@ export const vendorExpenseCount = (purchaseId: SQL) =>
 
 export const vendorUnpricedExpenseCount = (purchaseId: SQL) =>
   vendorExpenses(purchaseId)
-    .where((e) => sql`${e.cost} IS NULL`)
+    .where((e) => isNull(e.cost))
     .count();
 
 /** One scan when a verdict needs the total and both line counts together. */
@@ -272,15 +272,14 @@ export const postedRefundPredicate = (ftxAlias: string) =>
  * liveness.
  */
 export const postedRefundTotal = (purchaseId: SQL) =>
-  related(
-    financialTransactionAllocation,
-    (a) => sql`${a.purchaseId} = ${purchaseId}`,
-  )
+  related(financialTransactionAllocation, (a) => eq(a.purchaseId, purchaseId))
     .where((a) =>
-      related(financialTransaction, (ft) => sql`${ft.id} = ${a.transactionId}`)
-        .where(
-          (ft) =>
-            sql`${ft.kind} = ${financialTransactionKind.enum.refund} AND ${ft.status} = ${status.posted}`,
+      related(financialTransaction, (ft) => eq(ft.id, a.transactionId))
+        .where((ft) =>
+          and(
+            eq(ft.kind, financialTransactionKind.enum.refund),
+            eq(ft.status, status.posted),
+          ),
         )
         .exists(),
     )

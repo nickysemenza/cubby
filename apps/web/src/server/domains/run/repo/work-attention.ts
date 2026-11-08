@@ -7,7 +7,7 @@ import {
   runTrigger,
   type RunKindDeclaration,
 } from "@cubby/schemas/run-fields";
-import { sql, type SQL } from "drizzle-orm";
+import { eq, notInArray, sql, type SQL } from "drizzle-orm";
 
 import {
   evaluationRosterExists,
@@ -29,10 +29,12 @@ const historicalRoutineStepPurposes = Object.entries(RUN_KINDS).flatMap(
 );
 
 const unresolvedImageWorkExists = (id: SQL) =>
-  related(imageProcessingJob, (item) => sql`${item.runId} = ${id}`)
-    .where(
-      (item) =>
-        sql`${item.state} NOT IN (${imageProcessingJobState.enum.ready}, ${imageProcessingJobState.enum.skipped})`,
+  related(imageProcessingJob, (item) => eq(item.runId, id))
+    .where((item) =>
+      notInArray(item.state, [
+        imageProcessingJobState.enum.ready,
+        imageProcessingJobState.enum.skipped,
+      ]),
     )
     .exists();
 

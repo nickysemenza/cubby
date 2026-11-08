@@ -20,7 +20,7 @@ import {
   type FinancialAccountShortcode,
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, isNotNull, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
@@ -685,7 +685,7 @@ export const updateFinancialAccount = defineMutationWriter({
           .where(
             and(
               eq(financialTransaction.accountId, accountId),
-              sql`${financialTransaction.ledgerTransferId} IS NOT NULL`,
+              isNotNull(financialTransaction.ledgerTransferId),
               notDeleted(financialTransaction),
             ),
           )

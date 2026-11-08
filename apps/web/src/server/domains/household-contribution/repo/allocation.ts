@@ -8,7 +8,7 @@ import type {
   ProjectId,
 } from "@cubby/schemas/identifiers";
 import { contributionRole, ledgerPartyKind } from "@cubby/schemas/ledger-party";
-import { and, lte, type SQL, sql } from "drizzle-orm";
+import { and, isNotNull, lte, type SQL, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
@@ -84,7 +84,7 @@ const scopeCondition = (
       : undefined,
     scope.asOf ? lte(expense.date, scope.asOf) : undefined,
     scope.includeFuture ? undefined : actualExpense(),
-    includeUnpriced ? undefined : sql`${expense.cost} IS NOT NULL`,
+    includeUnpriced ? undefined : isNotNull(expense.cost),
   ) ?? sql`true`;
 
 /**

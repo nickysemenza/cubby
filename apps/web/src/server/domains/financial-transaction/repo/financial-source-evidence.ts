@@ -6,7 +6,7 @@ import {
   shortcodeSchema,
   type FinancialTransactionShortcode,
 } from "@cubby/schemas/identifiers";
-import { and, asc, eq, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 
 import { sourceOccurrenceHasUnresolvedHistory } from "~/server/db/computed/source-occurrence-history-sql";
 import { notDeleted } from "~/server/db/helpers/predicates";
@@ -263,7 +263,7 @@ export async function assertFinancialSourceRefsAvailable(
           eq(financialEvidenceAlias.source, ref.source),
           eq(financialEvidenceAlias.value, ref.externalId),
           or(
-            sql`${financialEvidenceAlias.observationId} IS NOT NULL`,
+            isNotNull(financialEvidenceAlias.observationId),
             sql`(${financialEvidenceAlias.deletedAt} IS NULL AND EXISTS(SELECT 1 FROM "FinancialTransaction" bound WHERE bound.id=${financialEvidenceAlias.historicalTransactionId} AND ${notDeleted("bound")}))`,
           ),
         ),

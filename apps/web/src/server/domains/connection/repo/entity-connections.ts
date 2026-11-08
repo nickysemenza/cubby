@@ -14,7 +14,7 @@ import {
   suggestionReviewInput,
   suggestionSubjects,
 } from "@cubby/schemas/suggestion";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
@@ -223,7 +223,7 @@ export async function publishPreparedEntityConnections(
       and(
         eq(suggestionTable.family, "recommendation"),
         eq(suggestionTable.active, true),
-        sql`${suggestionTable.suppression} IS NULL`,
+        isNull(suggestionTable.suppression),
         inArray(suggestionTable.entity, [
           ...new Set(entries.map((entry) => entry.entity)),
         ]),
@@ -361,8 +361,8 @@ async function readEntityConnectionsBatch(
         .where(
           and(
             inArray(entityIdentity.shortcode, endpointCodes),
-            sql`${entityIdentity.deletedAt} IS NULL`,
-            sql`${entityIdentity.mergedIntoId} IS NULL`,
+            isNull(entityIdentity.deletedAt),
+            isNull(entityIdentity.mergedIntoId),
           ),
         )
     : [];
@@ -620,7 +620,7 @@ export async function applyEntityConnection(
           .where(
             and(
               eq(financialTransactionAllocation.transactionId, transactionId),
-              sql`${financialTransactionAllocation.deletedAt} IS NULL`,
+              isNull(financialTransactionAllocation.deletedAt),
             ),
           )
           .limit(1);

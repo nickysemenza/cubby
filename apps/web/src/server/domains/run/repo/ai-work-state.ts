@@ -1,6 +1,15 @@
 import { aiRefreshProgress } from "@cubby/schemas/ai-evaluation";
 import { isMemberStartedRun } from "@cubby/schemas/run-fields";
-import { and, eq, inArray, notExists, or, sql } from "drizzle-orm";
+import {
+  and,
+  count,
+  eq,
+  inArray,
+  isNotNull,
+  notExists,
+  or,
+  sql,
+} from "drizzle-orm";
 import type { PgUpdateSetSource } from "drizzle-orm/pg-core";
 
 import { guardAiEvaluation } from "~/server/ai/evaluation/repo/ai-evaluation";
@@ -201,14 +210,14 @@ export async function readAiRefreshWorkSummary(
     sql`${aiEvaluation.receipt}->>'retryEvaluationId' IS NULL`,
   );
   const counts = await getDb(db)
-    .select({ state: aiEvaluation.state, count: sql<number>`count(*)::int` })
+    .select({ state: aiEvaluation.state, count: count() })
     .from(aiEvaluation)
     .where(where)
     .groupBy(aiEvaluation.state);
   const errors = await getDb(db)
     .select({ error: aiEvaluation.error })
     .from(aiEvaluation)
-    .where(and(where, sql`${aiEvaluation.error} IS NOT NULL`))
+    .where(and(where, isNotNull(aiEvaluation.error)))
     .orderBy(aiEvaluation.createdAt, aiEvaluation.id)
     .limit(10);
   const [diagnostic] = await getDb(db)

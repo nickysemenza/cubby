@@ -1,4 +1,4 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, ne, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { notDeleted, unwrapDb, uuidArrayParam } from "~/server/db/helpers";
@@ -51,7 +51,7 @@ async function loadLedgerTransferQualityRecords(
       and(
         eq(financialTransaction.ledgerTransferId, ledgerTransfer.id),
         notDeleted(financialTransaction),
-        sql`${financialTransaction.status} <> 'void'`,
+        ne(financialTransaction.status, "void"),
       ),
     )
     .where(

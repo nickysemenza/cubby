@@ -21,6 +21,7 @@ import { tradeSchema } from "@cubby/schemas/task-fields";
 import { cents } from "@cubby/shared";
 import {
   and,
+  count,
   desc,
   eq,
   gt,
@@ -99,7 +100,7 @@ export async function refundTally(
   const purchaseId = parseEntityId("purchase", input.purchaseId);
   // Sequential: a transaction handle runs one statement at a time.
   const [booked] = await executor
-    .select({ count: sql<number>`count(*)::int` })
+    .select({ count: count() })
     .from(expense)
     .where(
       and(

@@ -4,7 +4,7 @@ import {
   sourceOccurrenceIdentityKind,
   type SourceIdentityResolution,
 } from "@cubby/schemas/source-occurrence-fields";
-import { and, asc, eq, inArray, or, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNotNull, or, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { DrizzleTransaction } from "~/server/db";
@@ -267,7 +267,7 @@ export async function resolveSourceIdentity(
       .where(
         and(
           eq(sourceOccurrence.supersededByOccurrenceId, originalOwner.id),
-          sql`${sourceOccurrence.replacementObservationId} IS NOT NULL`,
+          isNotNull(sourceOccurrence.replacementObservationId),
         ),
       );
     if (replacements.length)

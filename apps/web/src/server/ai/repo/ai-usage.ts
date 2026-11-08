@@ -8,7 +8,17 @@ import { imageProcessingAttemptState } from "@cubby/schemas/image-processing";
 import { photoRunProcessor } from "@cubby/schemas/photo-run-input";
 import type { AiCostEvidence } from "@cubby/shared/ai/pricing";
 import { encodeBase64Url, decodeBase64UrlText } from "@cubby/shared/base64";
-import { type AnyColumn, and, desc, eq, ilike, lt, or, sql } from "drizzle-orm";
+import {
+  type AnyColumn,
+  and,
+  desc,
+  eq,
+  gte,
+  ilike,
+  lt,
+  or,
+  sql,
+} from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
@@ -157,7 +167,7 @@ export async function summarizeAiUsage(db: Database, days: number) {
       durationMs: sql<string>`coalesce(sum(${aiUsage.durationMs}), 0)::bigint`,
     })
     .from(aiUsage)
-    .where(sql`${aiUsage.createdAt} >= ${since}`)
+    .where(gte(aiUsage.createdAt, since))
     .groupBy(
       usageDayGroup,
       aiUsage.feature,

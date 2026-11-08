@@ -168,9 +168,8 @@ const rowDerived = {
     "spendingCategoryNames",
     sql`${expense.id}`,
   ),
-  projectId: related(
-    project,
-    (p) => sql`${p.id} = ${effectiveExpenseProjectSql(quotedTable(expense))}`,
+  projectId: related(project, (p) =>
+    eq(p.id, effectiveExpenseProjectSql(quotedTable(expense))),
   ).value<string>((p) => p.name),
   costSign: sql`CASE WHEN ${expense.cost} < 0 THEN ${expenseCostSign.enum.negative}::text
     WHEN ${expense.cost} > 0 THEN ${expenseCostSign.enum.positive}::text END`,

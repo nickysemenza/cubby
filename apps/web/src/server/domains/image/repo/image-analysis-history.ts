@@ -3,7 +3,7 @@ import {
   imageDescriptionAnalysis,
   imageDescriptionResult,
 } from "@cubby/schemas/image-processing";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, count, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
@@ -56,10 +56,7 @@ export async function imageAnalysisHistory(
         desc(aiAnalysis.id),
       )
       .limit(input.limit + 1),
-    getDb(db)
-      .select({ total: sql<number>`count(*)::int` })
-      .from(aiAnalysis)
-      .where(predicate),
+    getDb(db).select({ total: count() }).from(aiAnalysis).where(predicate),
     getImageProcessingReadProjection(db, imageId),
   ]);
   const preferred = current.analyses.find((analysis) => analysis.preferred);

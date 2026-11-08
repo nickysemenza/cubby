@@ -25,7 +25,17 @@ import type {
   ProjectPortfolioAnalyticsOut,
   Trade,
 } from "@cubby/schemas/project";
-import { and, asc, inArray, isNotNull, isNull, ne, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  gte,
+  inArray,
+  isNotNull,
+  isNull,
+  lte,
+  ne,
+  sql,
+} from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 
 import type { Database } from "~/server/db";
@@ -145,8 +155,8 @@ export async function projectPortfolioAnalytics(
   const allocationScope = { projectIds: ids };
   const expenseScope = and(
     notDeleted(expense),
-    filters.dateFrom ? sql`${expense.date} >= ${filters.dateFrom}` : undefined,
-    filters.dateTo ? sql`${expense.date} <= ${filters.dateTo}` : undefined,
+    filters.dateFrom ? gte(expense.date, filters.dateFrom) : undefined,
+    filters.dateTo ? lte(expense.date, filters.dateTo) : undefined,
   );
   const expenseScopeWithDate = and(expenseScope, isNotNull(expense.date));
 

@@ -3,7 +3,6 @@
   "apps/web/src/server/domains/product-category/repo/category-connections.ts": 12,
   "apps/web/src/server/generic/data-quality/repo/checks/cookbook.ts": 1,
   "apps/web/src/server/generic/data-quality/repo/checks/image.ts": 3,
-  "apps/web/src/server/generic/data-quality/repo/checks/ledger-transfer.ts": 1,
   "apps/web/src/server/generic/data-quality/repo/checks/meal.ts": 2,
   "apps/web/src/server/generic/data-quality/repo/checks/recipe.ts": 1,
   "apps/web/src/server/generic/data-quality/repo/checks/vendor.ts": 1,
