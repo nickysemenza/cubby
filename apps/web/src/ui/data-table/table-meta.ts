@@ -38,7 +38,7 @@ export interface FilterConfig {
   /** A multi-valued field: the editor offers Match any | Match all. */
   matchAll?: boolean;
   /** A hierarchical reference: the editor shows its "Include sub-…" toggle. */
-  subtree?: { label: string };
+  subtree?: { label: string; default?: boolean };
   /** A value filter with an Exclude key: the editor offers is | is not. */
   exclude?: boolean;
   /** A date range: beside its presets the editor sets `from..to` bounds. */

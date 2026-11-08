@@ -40,8 +40,9 @@ import {
 } from "~/entity/filter-manifest";
 import {
   buildFiltersFromManifest,
+  FILTER_NONE,
   filterGetterFromColumnFilters,
-  hideSectionValues,
+  sectionExclusion,
   summarizeListState,
 } from "~/entity/filters";
 import { loadSelectionRecords } from "~/entity/hooks/selection-records";
@@ -643,7 +644,7 @@ export function useEntityList<
     timing,
     refreshControls,
   } = infiniteResult;
-  const { setColumnFilters } = tableState;
+  const { setColumnFilters, columnFilters } = tableState;
   const [collapsedGroups, setCollapsedGroups] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
@@ -683,32 +684,60 @@ export function useEntityList<
         setColumnFilters((previous) => withGroupFilters(previous, drilled));
       },
       // Flat Exclude filters cannot hide just one nested path without also
-      // hiding its value under other parents. Keep Hide at the root scope.
-      hide: (group) => {
+      // excluding its value under other parents. Keep exclusion at the root scope.
+      exclude: (group) => {
         if (group.path.length !== 1 || group.path[0] === undefined)
-          return undefined;
+          return {
+            excludeReason:
+              "Only top-level sections can exclude records. Collapse this section to close it without changing filters.",
+          };
         const field = groupRootField(drill, group.path[0]);
-        if (!field) return undefined;
+        if (!field)
+          return {
+            excludeReason:
+              "No exact record exclusion is declared for this section.",
+          };
+        // Row-set Has and No value can both match one record. Has is not
+        // their No value predicate's negation, so it cannot exclude this bucket.
+        if (
+          field.key === FILTER_NONE &&
+          groupChoice.value?.kind === "rowRecord"
+        )
+          return {
+            excludeReason:
+              "Records can have both known and missing references. This filter cannot exclude that entire missing-value section exactly.",
+          };
         const valueGroup = { ...group, key: field.key };
-        if (hideSectionValues(field.spec, valueGroup, []) === undefined)
-          return undefined;
-        return () =>
-          setColumnFilters((previous) => {
-            const current = previous.find(
-              ({ id }) => id === field.spec.columnId,
-            )?.value;
-            const values = hideSectionValues(
-              field.spec,
-              valueGroup,
-              Array.isArray(current) ? current.map(String) : [],
-            );
-            return [
-              ...previous.filter(({ id }) => id !== field.spec.columnId),
-              ...(values?.length
-                ? [{ id: field.spec.columnId, value: values }]
-                : []),
-            ];
-          });
+        const current = columnFilters.find(
+          ({ id }) => id === field.spec.columnId,
+        )?.value;
+        const exclusion = sectionExclusion(
+          field.spec,
+          valueGroup,
+          Array.isArray(current) ? current.map(String) : [],
+        );
+        if (exclusion.values === null)
+          return { excludeReason: exclusion.reason };
+        return {
+          onExclude: () =>
+            setColumnFilters((previous) => {
+              const current = previous.find(
+                ({ id }) => id === field.spec.columnId,
+              )?.value;
+              const { values } = sectionExclusion(
+                field.spec,
+                valueGroup,
+                Array.isArray(current) ? current.map(String) : [],
+              );
+              if (values === null) return previous;
+              return [
+                ...previous.filter(({ id }) => id !== field.spec.columnId),
+                ...(values?.length
+                  ? [{ id: field.spec.columnId, value: values }]
+                  : []),
+              ];
+            }),
+        };
       },
       header: (group) => ({
         labelContent: (
@@ -760,6 +789,7 @@ export function useEntityList<
     groupChoice,
     groups,
     setColumnFilters,
+    columnFilters,
     collapsedGroups,
     groupBy,
     infiniteResult.memberships,

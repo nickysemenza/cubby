@@ -1543,7 +1543,8 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
                 collapsed={item.collapsed}
                 onToggle={item.onToggle}
                 onFilter={item.onFilter}
-                onHide={item.onHide}
+                onExclude={item.onExclude}
+                excludeReason={item.excludeReason}
                 aside={item.aside}
                 actions={item.actions}
                 columnTotals={sectionColumnTotals(item.columnTotals)}

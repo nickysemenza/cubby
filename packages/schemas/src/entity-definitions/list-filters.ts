@@ -4,6 +4,9 @@ import {
   FILTER_ALL,
   FILTER_ANY,
   FILTER_EXACT,
+  FILTER_SUBTREE,
+  includesSubtree,
+  withSubtree,
   FILTER_LIST_SEPARATOR,
   joinFilterList,
   FILTER_NONE,
@@ -126,11 +129,13 @@ export interface FilterSpecCore {
    */
   exclude?: { field: string };
   /**
-   * The key of the reference's generated "Include sub-…" toggle (on unless
-   * `false`). Its control sits in this filter's editor, and the column state
-   * carries it as {@link FILTER_EXACT}; the URL keeps the toggle's own key.
+   * The key of the reference's generated "Include sub-…" toggle. Its control
+   * sits in this filter's editor; explicit modes override `subtreeDefault`.
+   * The URL keeps the toggle's own key.
    */
   subtree?: string;
+  /** Older relationship predicates stay exact unless descendants are requested. */
+  subtreeDefault?: boolean;
   /** Offers `@me`, the signed-in member (ADR 0018). */
   currentMember?: boolean;
   /** Token values (Household, Unknown) offered beside the roster and sent
@@ -146,10 +151,17 @@ export interface FilterSpecCore {
  * `buildFiltersFromManifest` partitions them out and emits a `presenceFilter`
  * instead, so the runtime input schemas never see them.
  */
-// `FILTER_EXACT` (an "Include sub-…" toggle switched off) is the one token
-// the URL codec writes under another key: the toggle's own
-// (`includeSubLocations=false`).
-export { FILTER_ALL, FILTER_ANY, FILTER_EXACT, FILTER_NONE };
+// Hierarchy modes use the toggle's own URL key instead of entering its value
+// list (`includeSubLocations=false`, `projectIdIncludeDescendants=true`).
+export {
+  FILTER_ALL,
+  FILTER_ANY,
+  FILTER_EXACT,
+  FILTER_SUBTREE,
+  FILTER_NONE,
+  includesSubtree,
+  withSubtree,
+};
 
 /** The Exclude key a spec can write, or undefined when it cannot exclude. */
 const excludeKey = (spec: FilterSpecCore): string | undefined =>
@@ -159,7 +171,8 @@ const isSentinel = (value: string): boolean =>
   value === FILTER_ANY ||
   value === FILTER_NONE ||
   value === FILTER_ALL ||
-  value === FILTER_EXACT;
+  value === FILTER_EXACT ||
+  value === FILTER_SUBTREE;
 
 /**
  * The two options a `nullable` picklist prepends to its roster.
@@ -267,7 +280,8 @@ export function buildFiltersFromManifest(
             (spec.nullable !== undefined &&
               (value === FILTER_ANY || value === FILTER_NONE)) ||
             (spec.match !== undefined && value === FILTER_ALL) ||
-            (spec.subtree !== undefined && value === FILTER_EXACT),
+            (spec.subtree !== undefined &&
+              (value === FILTER_EXACT || value === FILTER_SUBTREE)),
         );
         const wantsNone = tokens.includes(FILTER_NONE);
         const wantsAny = tokens.includes(FILTER_ANY);
@@ -292,9 +306,13 @@ export function buildFiltersFromManifest(
         if (
           spec.subtree &&
           (parsed.length || excludedParsed.length) &&
-          tokens.includes(FILTER_EXACT)
+          includesSubtree(tokens, spec.subtreeDefault !== false) !==
+            (spec.subtreeDefault !== false)
         )
-          patch[spec.subtree] = false;
+          patch[spec.subtree] = includesSubtree(
+            tokens,
+            spec.subtreeDefault !== false,
+          );
         return Object.keys(patch).length ? patch : undefined;
       })
       .with("range", () => {
@@ -344,34 +362,74 @@ export function buildFiltersFromManifest(
 }
 
 /**
- * "Hide" on a grouped list's section, as the field's next column-filter
+ * Exclude matching records from a grouped section, as its next column-filter
  * value: the section's value joins the excluded ones, so the grouping stays
  * and the section goes. A level section stands for its key's descendants,
  * so "Include sub-…" turns on. The no-value section hides as Any value, or,
- * beside picked values, by dropping No value. Undefined when the filter
- * cannot hide the section.
+ * beside picked values, by dropping No value. Unavailable operations retain
+ * their reason so every shared header can explain the limitation.
  */
-export const hideSectionValues = (
+export const sectionExclusion = (
   spec: FilterSpecCore,
   section: Readonly<{ key: string; subtree?: boolean }>,
   values: readonly string[],
-): string[] | undefined => {
+): { values: string[]; reason: null } | { values: null; reason: string } => {
   if (section.key === FILTER_NONE) {
-    if (!spec.nullable) return undefined;
+    if (!spec.nullable)
+      return {
+        values: null,
+        reason: "This filter cannot exclude missing values.",
+      };
     const rest = values.filter(
       (value) => value !== FILTER_NONE && value !== FILTER_ANY,
     );
     const picked = splitExcluded(rest).included.filter(
       (value) => !isSentinel(value),
     );
-    return picked.length ? rest : [...rest, FILTER_ANY];
+    if (
+      values.includes(FILTER_NONE) &&
+      !values.includes(FILTER_ANY) &&
+      picked.length === 0
+    )
+      return {
+        values: null,
+        reason:
+          "This filter selects only missing values. Changing it to Any value would replace your selection. Clear or change the filter first.",
+      };
+    return {
+      values: picked.length ? rest : [...rest, FILTER_ANY],
+      reason: null,
+    };
   }
-  if (excludeKey(spec) === undefined) return undefined;
+  if (excludeKey(spec) === undefined)
+    return {
+      values: null,
+      reason: "This field does not support record exclusion.",
+    };
+  // Include and exclude share one hierarchy mode. Changing it would also
+  // change an existing selection, so a mixed-scope exclusion is unavailable.
+  if (
+    spec.subtree &&
+    values.some((value) => value !== "" && !isSentinel(value)) &&
+    includesSubtree(values, spec.subtreeDefault !== false) !==
+      (section.subtree === true)
+  )
+    return {
+      values: null,
+      reason: `This section needs Include sub… ${section.subtree ? "on" : "off"}. Changing it here would alter an existing filter. Choose that setting in Filters first.`,
+    };
   const hidden = `${FILTER_NOT_PREFIX}${section.key}`;
   const next = values.includes(hidden) ? [...values] : [...values, hidden];
-  return section.subtree
-    ? next.filter((value) => value !== FILTER_EXACT)
-    : next;
+  return {
+    values: spec.subtree
+      ? withSubtree(
+          next,
+          section.subtree === true,
+          spec.subtreeDefault !== false,
+        )
+      : next,
+    reason: null,
+  };
 };
 
 /**
@@ -578,9 +636,9 @@ export function encodeFilters(
     if (folded.has(filterUrlKey(spec))) continue;
     const raw = get(spec.columnId);
     const all = Array.isArray(raw) ? raw : raw ? [raw] : [];
-    const exact = all.includes(FILTER_EXACT);
+    const subtree = includesSubtree(all, spec.subtreeDefault !== false);
     const { included, excluded } = splitExcluded(
-      all.filter((value) => value !== FILTER_EXACT),
+      all.filter((value) => value !== FILTER_EXACT && value !== FILTER_SUBTREE),
     );
     const exclude = excludeKey(spec);
     const values = included;
@@ -591,9 +649,13 @@ export function encodeFilters(
       : undefined;
     if (exclude)
       params[exclude] = excluded.length ? joinFilterList(excluded) : undefined;
-    if (spec.subtree)
-      params[spec.subtree] =
-        exact && (values.length || excluded.length) ? "false" : undefined;
+    if (spec.subtree) {
+      const explicit =
+        subtree !== (spec.subtreeDefault !== false) &&
+        (values.length || excluded.length);
+      if (explicit) params[spec.subtree] = String(subtree);
+      else if (!(spec.subtree in params)) params[spec.subtree] = undefined;
+    }
   }
   return params;
 }
@@ -606,7 +668,11 @@ export function decodeFilters<TSearch extends {}>(
   const parsedSearch = parseFilterSearch(search);
   const filters: ColumnFilterValue[] = [];
   const present = new Set(specs.map((spec) => spec.columnId));
+  const folded = new Set(
+    specs.flatMap((spec) => (spec.subtree ? [spec.subtree] : [])),
+  );
   for (const spec of specs) {
+    if (folded.has(filterUrlKey(spec))) continue;
     // An alias decodes into its canonical filter's state when that filter is
     // in play, merging with any value the canonical key carries.
     const id =
@@ -623,14 +689,20 @@ export function decodeFilters<TSearch extends {}>(
     ];
     const first = parts[0];
     if (first === undefined) continue;
-    const exact =
-      spec.subtree !== undefined && parsedSearch[spec.subtree] === "false";
+    const subtree =
+      spec.subtree === undefined
+        ? spec.subtreeDefault !== false
+        : parsedSearch[spec.subtree] === "true"
+          ? true
+          : parsedSearch[spec.subtree] === "false"
+            ? false
+            : spec.subtreeDefault !== false;
     // A multi column always holds an array, even for one value — mixing the
     // two shapes is what splits the React Query cache. A single value in a
     // URL or saved view therefore reads as a one-element list.
     const value = isMultiFilterKind(spec.kind)
-      ? exact
-        ? [...parts, FILTER_EXACT]
+      ? spec.subtree
+        ? withSubtree(parts, subtree, spec.subtreeDefault !== false)
         : parts
       : first;
     const existing = filters.find((filter) => filter.id === id);

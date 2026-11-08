@@ -36,6 +36,11 @@ import { expenseDerivedReadSql } from "~/server/domains/expense/repo/expense-der
 import { displayableImageSql } from "~/server/domains/image/repo/image-displayability";
 import { resolveEntityDisplayImages } from "~/server/entity-kernel/repo/entity-display-image";
 import { createAppError } from "~/server/errors/app-error";
+import {
+  entitySubtreeToggle,
+  isHierarchyEntity,
+  requestedIdsSql,
+} from "~/server/generic/list/repo/declared-filters";
 import { compileTraversal } from "~/server/generic/relatedness/repo/traversal";
 import { liveAliasSqlText } from "~/server/lib/live-row";
 
@@ -1010,14 +1015,21 @@ export function relatedWhereConditions<TFilters extends object>(
       const canonicalIds = ids?.map(
         (id) => parseShortcode(id)?.shortcode ?? id,
       );
+      const toggle = entitySubtreeToggle(source)(`${prefix}Id`);
+      const includeDescendants =
+        toggle !== undefined &&
+        (filterValues.get(toggle.key) === true ||
+          (filterValues.get(toggle.key) === undefined && toggle.default));
       const exact = canonicalIds
         ? canonicalIds.length === 0
           ? sql`false`
           : exists(
-              sql`t."shortcode" IN (${sql.join(
-                canonicalIds.map((id) => sql`${id}`),
-                sql`, `,
-              )})`,
+              includeDescendants && isHierarchyEntity(definition.target)
+                ? sql`t."id" IN ${requestedIdsSql(definition.target, canonicalIds, true)}`
+                : sql`t."shortcode" IN (${sql.join(
+                    canonicalIds.map((id) => sql`${id}`),
+                    sql`, `,
+                  )})`,
             )
         : undefined;
       const presencePredicate =

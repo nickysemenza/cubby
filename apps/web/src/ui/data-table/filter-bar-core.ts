@@ -2,6 +2,7 @@ import {
   FILTER_ALL,
   FILTER_ANY,
   FILTER_EXACT,
+  FILTER_SUBTREE,
   FILTER_NOT_PREFIX,
   splitExcluded,
 } from "@cubby/schemas/filter-sentinel-fields";
@@ -60,7 +61,7 @@ type FilterFieldConfig = {
   /** Fields sharing a group hold one value between them: picking replaces. */
   exclusiveGroup?: string;
   /** The "Include sub-…" toggle inside a hierarchical reference's editor. */
-  subtree?: { label: string };
+  subtree?: { label: string; default?: boolean };
   /** Offers is | is not. */
   exclude?: boolean;
   /** A date range: beside its presets the editor sets `from..to` bounds. */
@@ -112,7 +113,11 @@ export function operatorFor(field: FilterBarField): string {
 }
 
 /** Editor modes riding in a value list: they shape a pick but are not one. */
-const MODE_TOKENS: ReadonlySet<string> = new Set([FILTER_ALL, FILTER_EXACT]);
+const MODE_TOKENS: ReadonlySet<string> = new Set([
+  FILTER_ALL,
+  FILTER_EXACT,
+  FILTER_SUBTREE,
+]);
 
 /** A filter is active (counts toward "Clear N", tints its chip) once it has a real value. */
 export function hasFilterValue(filter: Filter): boolean {

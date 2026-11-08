@@ -13,8 +13,10 @@ import {
   FILTER_ALL,
   FILTER_ANY,
   FILTER_EXACT,
+  FILTER_SUBTREE,
   FILTER_NONE,
   filterGetterFromColumnFilters,
+  sectionExclusion,
   type FilterSpecCore,
   type FilterSearch,
   type FilterValue,
@@ -383,6 +385,42 @@ describe("buildFiltersFromManifest", () => {
           getter({ parent: ["SCAT-4K7M", FILTER_EXACT] }),
         ),
       ).toEqual({ parentId: ["SCAT-4K7M"], includeSubCategories: false });
+      const parent: FilterSpecCore = {
+        columnId: "parent",
+        kind: "idMulti",
+        subtree: "includeSubCategories",
+        exclude: { field: "parentExclude" },
+      };
+      expect(
+        sectionExclusion(
+          { ...parent, nullable: { field: "parentPresence", label: "parent" } },
+          { key: FILTER_NONE },
+          [FILTER_NONE],
+        ),
+      ).toMatchObject({
+        values: null,
+        reason: expect.stringContaining("replace your selection"),
+      });
+      expect(
+        sectionExclusion(parent, { key: "SCAT-4K7M", subtree: false }, []),
+      ).toEqual({ values: ["__not__:SCAT-4K7M", FILTER_EXACT], reason: null });
+      expect(
+        sectionExclusion(parent, { key: "SCAT-4K7M", subtree: false }, [
+          "SCAT-8P2N",
+        ]),
+      ).toMatchObject({
+        values: null,
+        reason: expect.stringContaining("would alter an existing filter"),
+      });
+      expect(
+        sectionExclusion(parent, { key: "SCAT-4K7M", subtree: true }, [
+          "SCAT-8P2N",
+          FILTER_EXACT,
+        ]),
+      ).toMatchObject({
+        values: null,
+        reason: expect.stringContaining("would alter an existing filter"),
+      });
     });
 
     it("keeps @me unbranded only where the descriptor declares it", () => {
@@ -750,6 +788,69 @@ describe("compileFilterCodec", () => {
         columnId === "parent" ? ["SCAT-4K7M", FILTER_EXACT] : undefined,
       ),
     ).toEqual({ parent: "SCAT-4K7M", includeSubCategories: "false" });
+    const exactSpecs = [
+      {
+        columnId: "parent",
+        kind: "idMulti",
+        subtree: "includeSubCategories",
+        subtreeDefault: false,
+      },
+      { columnId: "includeSubCategories", kind: "boolean" },
+    ] as const;
+    const exactCodec = compileFilterCodec(exactSpecs);
+    expect(exactCodec.decode({ parent: "SCAT-4K7M" })).toEqual([
+      { id: "parent", value: ["SCAT-4K7M"] },
+    ]);
+    const expanded = [{ id: "parent", value: ["SCAT-4K7M", FILTER_SUBTREE] }];
+    expect(
+      exactCodec.decode({ parent: "SCAT-4K7M", includeSubCategories: "true" }),
+    ).toEqual(expanded);
+    expect(exactCodec.encode(filterGetterFromColumnFilters(expanded))).toEqual({
+      parent: "SCAT-4K7M",
+      includeSubCategories: "true",
+    });
+    expect(
+      buildFiltersFromManifest(
+        exactSpecs,
+        filterGetterFromColumnFilters(expanded),
+      ),
+    ).toEqual({ parent: ["SCAT-4K7M"], includeSubCategories: true });
+    expect(
+      buildFiltersFromManifest(exactSpecs, getter({ parent: ["SCAT-4K7M"] })),
+    ).toEqual({ parent: ["SCAT-4K7M"] });
+    const independent = [
+      { columnId: "parent", kind: "idMulti", subtree: "includeSubCategories" },
+      {
+        columnId: "related",
+        kind: "idMulti",
+        subtree: "relatedIncludeDescendants",
+        subtreeDefault: false,
+      },
+    ] as const;
+    const mixedModes = [
+      { id: "parent", value: ["SCAT-4K7M", FILTER_EXACT] },
+      { id: "related", value: ["SCAT-8P2N", FILTER_SUBTREE] },
+    ];
+    const independentCodec = compileFilterCodec(independent);
+    const encoded = independentCodec.encode(
+      filterGetterFromColumnFilters(mixedModes),
+    );
+    expect(encoded).toEqual({
+      parent: "SCAT-4K7M",
+      includeSubCategories: "false",
+      related: "SCAT-8P2N",
+      relatedIncludeDescendants: "true",
+    });
+    expect(independentCodec.decode(encoded)).toEqual(mixedModes);
+    expect(
+      encodeFilters(
+        [
+          independent[0],
+          { ...independent[1], subtree: "includeSubCategories" },
+        ],
+        getter({ parent: ["SCAT-4K7M", FILTER_EXACT], related: ["SCAT-8P2N"] }),
+      ),
+    ).toMatchObject({ includeSubCategories: "false" });
   });
 
   it("keeps a folded toggle when its standalone descriptor is also encoded", () => {

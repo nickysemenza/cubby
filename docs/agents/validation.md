@@ -150,6 +150,10 @@ Finish source edits and formatting before starting a web build, and keep the
 checkout unchanged through its E2E run. Nx's `build-cf` key is the build's
 content (including tooling and tests under `src`, excluding `apps/web/tests`),
 not the commit; queue the build after implementation lanes settle.
+A skipped `build-cf` task does not establish fresh output. Verify the changed
+bundle and Worker config before serving it; if Nx skips the build, run
+`pnpm --dir apps/web run build:cf` directly. A focused Playwright rerun can then
+use `test:e2e:ci:desktop` against that verified immutable output.
 For test-speed investigations, extract the existing GitHub reports, traces and
 job logs before considering a local run. Label cache replays and timings from
 other revisions; missing timing artifacts do not justify rerunning a whole tier.

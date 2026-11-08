@@ -573,8 +573,12 @@ describe("expanded grouped list memberships", () => {
       }),
       ctx.actor,
     );
+    const projectRoot = await createRepoEntity(ctx, "project", {
+      name: "Grouping project root",
+    });
     const allocationProject = await createRepoEntity(ctx, "project", {
       name: "Grouping allocation project",
+      parentProjectId: projectRoot.output.id,
     });
     const basis = await createRepoEntity(
       ctx,
@@ -615,6 +619,32 @@ describe("expanded grouped list memberships", () => {
       { key: FILTER_NONE, count: 1 },
     ]);
     expect(byAllocatedProject.meta.totalCount).toBe(2);
+    const projectGroups = await executeEntity(kernel(), {
+      action: "list",
+      entity: "product",
+      filters: { ids: [first.id, second.id] },
+      groupBy: [{ key: "related:product.projects", level: 1 }],
+    });
+    if (projectGroups.action !== "list") throw new Error("expected list");
+    expect(groups(projectGroups.meta)).toMatchObject([
+      { key: projectRoot.output.id, count: 1, subtree: true },
+      { key: FILTER_NONE, count: 1 },
+    ]);
+    for (const includeDescendants of [undefined, false, true]) {
+      const drilled = await executeEntity(kernel(), {
+        action: "list",
+        entity: "product",
+        filters: {
+          ids: [first.id, second.id],
+          projectId: [projectRoot.output.id],
+          projectIdIncludeDescendants: includeDescendants,
+        },
+      });
+      if (drilled.action !== "list") throw new Error("expected list");
+      expect(drilled.items.map((row) => row.id)).toEqual(
+        includeDescendants ? [first.id] : [],
+      );
+    }
     const knownParty = await createRepoEntity(ctx, "ledgerParty", {
       name: "Grouping known party",
     });

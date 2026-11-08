@@ -1938,6 +1938,8 @@ fields and duplicate SQL values are unlisted, retaining existing grouped links
 and supplied views. Authored choices win; otherwise the choice matching its
 filter column wins. Derived aliases bind drill-down through the same compiled
 relationship path, including a stored reference's equivalent related preview.
+Calendar aliases must match the grouped value's path or declared key: a date
+window's effective deadline filter cannot stand in for its stored start date.
 
 List requests and supplied views use `groupBy: [{ key, level?, bucket? }]`, with
 at most three unique keys in hierarchy order. Empty or omitted means ungrouped.
@@ -3086,7 +3088,18 @@ the selected records and their live descendants through
 recursive-descendant generator repositories also call directly. The compiler
 adds a boolean `includeSub<Plural>` toggle descriptor ("Include sub-…") for
 each such filter; absent reads as on, and `false` limits the filter to the
-selected records. It replaced the hand-written pairs: inventory's
+selected records for existing stored, derived and predicate bindings. Previously
+exact declared references and related-view filters retain an exact default;
+`true` explicitly includes descendants. New exact relationships own separate
+`<filterKey>IncludeDescendants` parameters, so choosing one relationship's mode
+cannot overwrite another's. Existing target-wide parameter keys stay intact.
+The compiled subtree binding owns both
+the parameter key and default. Browser state uses explicit exact/subtree mode
+tokens only when overriding that default, and URL codecs round-trip the boolean
+under its own key. Ancestor section/Pivot drill-downs request descendants;
+exact leaf sections request the record itself. Existing saved filters keep
+their meaning. Native retains its existing filter controls until it supports
+the explicit default fact. It replaced the hand-written pairs: inventory's
 `locationSubtreeFilter` is `locationIdFilter` with `includeSubLocations`, and
 project's parent filter is the stored `parentProjectId` with
 `includeSubProjects`. A predicate receives the toggle as `includeDescendants`
@@ -3095,6 +3108,11 @@ row-set terminal reference (an image's import run) gets the toggle like a
 `via` path. An inherited reference (task project, a product
 category's effective spending category) is a `via` path through its effective
 edge and gets the toggle like any other.
+Include and exclude share that filter's hierarchy mode. Section exclusion is
+unavailable when it would change the mode of an existing picked or excluded
+value; it never broadens or narrows the member's other selections implicitly.
+Shared section headers explain unavailable exclusions on focus or click. The
+member can choose the required scope in Filters before excluding the section.
 
 ### Background derived data
 

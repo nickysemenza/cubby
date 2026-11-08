@@ -155,6 +155,7 @@ export const renderFilterArtifacts = (
       ...(descriptor.subtree === null
         ? []
         : [`subtree:${JSON.stringify(descriptor.subtree)}`]),
+      ...(descriptor.subtreeDefault === false ? [`subtreeDefault:false`] : []),
       ...(descriptor.currentMember ? ["currentMember:true"] : []),
       ...(descriptor.singleValue === null ? [] : ["singleValue:true"]),
       ...(descriptor.exclusiveGroup === null

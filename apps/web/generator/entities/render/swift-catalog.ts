@@ -254,7 +254,7 @@ const filterJSON = (
   presenceParam: filter.nullable?.field ?? null,
   matchParam: filter.match?.field ?? null,
   excludeParam: filter.exclude?.field ?? null,
-  subtreeParam: filter.subtree,
+  subtreeParam: filter.subtreeDefault === false ? null : filter.subtree,
   currentMember: filter.currentMember,
   singleValue: filter.singleValue !== null,
   // Filter metadata steers web-only rendering.
@@ -847,9 +847,23 @@ const entityJSON = (
         context,
       ),
     ),
-    filters: entity.filterDescriptors.map((filter) =>
-      filterJSON(filter, entityKey, context),
-    ),
+    filters: entity.filterDescriptors
+      // Native's existing toggle assumes descendants by default. Keep exact
+      // filters unchanged until its UI supports the explicit default fact.
+      .filter(
+        (filter) =>
+          !entity.filterDescriptors.some(
+            (owner) =>
+              owner.subtreeDefault === false &&
+              owner.subtree === filter.columnId,
+          ) ||
+          entity.filterDescriptors.some(
+            (owner) =>
+              owner.subtree === filter.columnId &&
+              owner.subtreeDefault !== false,
+          ),
+      )
+      .map((filter) => filterJSON(filter, entityKey, context)),
     relations: entity.relations.map((relation) => ({
       key: relation.key,
       label: relation.label,

@@ -369,7 +369,8 @@ export function ShelfGrid<T>({
                   collapsed={section.collapsed}
                   onToggle={section.onToggle}
                   onFilter={section.onFilter}
-                  onHide={section.onHide}
+                  onExclude={section.onExclude}
+                  excludeReason={section.excludeReason}
                   aside={section.aside}
                   labelledTotals={section.columnTotals}
                   actions={section.actions}

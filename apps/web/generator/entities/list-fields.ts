@@ -116,7 +116,7 @@ export type CompiledEntityListFields = Readonly<{
     maxDepth: number;
   }> | null;
   /** Filter key → its generated "Include sub-…" toggle's filter key. */
-  subtree: Readonly<Record<string, string>>;
+  subtree: Readonly<Record<string, { key: string; default: boolean }>>;
   /** `model.grouping`, in menu order. */
   grouping: readonly CompiledGroupChoice[];
   metrics: readonly { key: string; label: string; format: string | null }[];
@@ -798,8 +798,16 @@ const compatibleKinds = (
   }
 };
 
-const toggleDescriptor = (target: CompiledEntity): FilterDescriptor => {
-  const key = `includeSub${pascal(pluralOf(target))}`;
+const toggleDescriptor = (
+  target: CompiledEntity,
+  owner: FilterDescriptor,
+  defaultValue: boolean,
+): FilterDescriptor => {
+  // Existing target-wide keys retain their contract. New exact filters own
+  // distinct keys so independent relationship modes can round-trip together.
+  const key = defaultValue
+    ? `includeSub${pascal(pluralOf(target))}`
+    : `${owner.field ?? owner.columnId}IncludeDescendants`;
   const label = `Include sub-${pluralOf(target).toLowerCase()}`;
   return {
     columnId: key,
@@ -811,7 +819,7 @@ const toggleDescriptor = (target: CompiledEntity): FilterDescriptor => {
     optionsRef: null,
     optionsKey: null,
     label,
-    schemaDescription: `Include records under each selected ${target.inspector.singular.toLowerCase()} (default true).`,
+    schemaDescription: `Include live descendants for ${filterFieldLabel(owner).toLowerCase()}. Defaults to ${defaultValue}; false matches only selected records.`,
     deriveSchema: true,
     schemaFromRead: false,
     brandRef: null,
@@ -1170,6 +1178,7 @@ const compileGroupChoice = (
         .map((column) => column.key),
     ];
     return descriptors.find((candidate) => {
+      const dateRange = dateRangeBounds(candidate);
       const alias = candidate.derived ? derived[candidate.derived] : undefined;
       const samePath =
         value !== null &&
@@ -1181,17 +1190,20 @@ const compileGroupChoice = (
           ? alias.terminal.kind === "record"
           : alias.terminal.kind === "field" &&
             alias.terminal.column === value.column);
+      // A date alias can name a window's effective end, not this field's
+      // stored start. Its columnId alone cannot prove the same range binding.
       return (
         (candidate.kind === "multiselect" ||
           candidate.kind === "idMulti" ||
           candidate.kind === "boolean" ||
-          dateRangeBounds(candidate) !== null) &&
+          dateRange !== null) &&
         (samePath ||
           candidate.derived === key ||
-          keys.includes(candidate.columnId) ||
-          (candidate.field !== null && keys.includes(candidate.field)) ||
-          (candidate.stored?.columns.length === 1 &&
-            keys.includes(candidate.stored.columns[0]!)))
+          ((dateRange === null || candidate.derived === null) &&
+            (keys.includes(candidate.columnId) ||
+              (candidate.field !== null && keys.includes(candidate.field)) ||
+              (candidate.stored?.columns.length === 1 &&
+                keys.includes(candidate.stored.columns[0]!)))))
       );
     });
   };
@@ -1916,7 +1928,7 @@ export const compileListFields = (
           `${context}.model.sort.fields ${key}: ${reason}`,
         );
     }
-    const subtree: Record<string, string> = {};
+    const subtree: Record<string, { key: string; default: boolean }> = {};
     const toggles: FilterDescriptor[] = [];
     const compiled: FilterDescriptor[] = [];
     for (const unbound of entity.filterDescriptors) {
@@ -1952,17 +1964,32 @@ export const compileListFields = (
             : bound?.shape === "predicate"
               ? (descriptor.brandRef?.entity ?? null)
               : descriptor.stored === null
-                ? null
+                ? (descriptor.brandRef?.entity ?? null)
                 : (entity.fieldModel.storage.find(
                     ({ key }) => key === descriptor.stored?.columns[0],
                   )?.reference ?? null);
       const target = referenced === null ? undefined : byKey.get(referenced);
       if (target?.fieldModel.hierarchy == null) continue;
-      const toggle = toggleDescriptor(target);
-      subtree[descriptor.field ?? descriptor.columnId] = toggle.columnId;
+      const subtreeDefault =
+        referenced !== null &&
+        (bound !== undefined || descriptor.stored !== null);
+      const toggle = toggleDescriptor(target, descriptor, subtreeDefault);
+      subtree[descriptor.field ?? descriptor.columnId] = {
+        key: toggle.columnId,
+        default: subtreeDefault,
+      };
       compiled[compiled.length - 1] = {
         ...descriptor,
         subtree: toggle.columnId,
+        ...(subtreeDefault ? {} : { subtreeDefault: false }),
+        schemaDescription: [
+          descriptor.schemaDescription,
+          subtreeDefault
+            ? `Includes selected ${pluralOf(target).toLowerCase()} and their live descendants by default. Set ${toggle.columnId} to false to match only selected records.`
+            : `Matches only selected ${pluralOf(target).toLowerCase()} by default. Set ${toggle.columnId} to true to include their live descendants.`,
+        ]
+          .filter(Boolean)
+          .join(" "),
       };
       if (!toggles.some(({ columnId }) => columnId === toggle.columnId))
         toggles.push(toggle);
