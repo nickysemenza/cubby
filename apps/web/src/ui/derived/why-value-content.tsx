@@ -1,0 +1,670 @@
+import {
+  scoredEntities,
+  dataQualityGap,
+  dataQualityException,
+} from "@cubby/schemas/data-quality";
+import type { Entity } from "@cubby/schemas/entity";
+import { fieldDecisionOf, fieldValueOf } from "@cubby/schemas/field-envelope";
+import type { ReadableFieldEnvelope } from "@cubby/schemas/field-envelope";
+import {
+  fieldExplanationSource,
+  fieldExplanationInput,
+  type FieldExplanationOutput,
+} from "@cubby/schemas/field-explanation";
+import { humanize, parseShortcode } from "@cubby/shared";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { ReactNode } from "react";
+import { z } from "zod";
+
+import { ExceptionControls } from "~/entity/fields/field-explanation-exception";
+import { useEntityMetadata } from "~/entity/metadata";
+import { useListQuery } from "~/entity/table/list-query-context";
+import { entityRipple } from "~/integrations/tanstack-query/cache-tags";
+import { fieldExplanation } from "~/integrations/tanstack-query/generated/domains/fieldExplanation.gen";
+import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
+import { dataQualityStatusLabel } from "~/lib/data-quality-options";
+import { ErrorDisplay } from "~/ui/feedback/error-display";
+import { Stack } from "~/ui/layout";
+import {
+  Disclosure,
+  DisclosureBody,
+  DisclosureRoot,
+  DisclosureTrigger,
+} from "~/ui/layout/disclosure";
+import { Button } from "~/ui/primitives/button";
+import { PopoverTitle } from "~/ui/primitives/popover";
+import { Facts } from "~/ui/records/facts";
+import { Ledger, LedgerCell, LedgerRow } from "~/ui/records/ledger";
+import { Badge } from "~/ui/reui/badge";
+import { Description } from "~/ui/text/description";
+import JsonRenderer from "~/ui/text/json-renderer";
+import { DateDisplay } from "~/ui/values/date-display";
+
+import { DecisionChain, DerivedFreshness } from "./decision-chain";
+import { DecisionLevels } from "./decision-levels";
+import {
+  ExplanationEntityLink,
+  ReadableExplanationValue,
+} from "./explanation-value";
+import { ImageChain } from "./image-chain";
+import {
+  ResolutionEvidence,
+  sectionLabelClassName,
+} from "./resolution-evidence";
+import { SourceStack } from "./source-stack";
+
+type ExplanationSource = z.infer<typeof fieldExplanationSource>;
+type ExplanationValue = ExplanationSource["value"];
+const explanationRecord = z.record(z.string(), z.json());
+
+const explanationSourceKey = (source: ExplanationSource): string =>
+  [
+    source.label,
+    source.entity?.entityKind ?? "value",
+    source.entity?.entityId ?? JSON.stringify(source.value),
+  ].join(":");
+
+/** Check rows already own the owner's gap and exception facts; related
+ * records remain evidence rather than owner score deductions. */
+function ownCheckFact(value: ExplanationValue, data: FieldExplanationOutput) {
+  const fact = dataQualityGap.safeParse(value);
+  const exception = fact.success ? null : dataQualityException.safeParse(value);
+  const parsed = fact.success
+    ? fact.data
+    : exception?.success
+      ? exception.data
+      : null;
+  return (
+    parsed !== null &&
+    parsed.targetId === data.subject.entityId &&
+    parsed.targetType === data.subject.entityKind &&
+    data.qualityBreakdown?.checks.some((check) => check.check === parsed.check)
+  );
+}
+
+function visibleSources(data: FieldExplanationOutput) {
+  const provenance = fieldDecisionOf(data.envelope)?.provenance;
+  const named =
+    provenance?.kind === "inherited" || provenance?.kind === "default"
+      ? provenance.source
+      : null;
+  return data.sources.flatMap((source) => {
+    if (
+      named &&
+      source.value === null &&
+      source.entity?.entityKind === named.entityKind &&
+      source.entity.entityId === named.entityId
+    )
+      return [];
+    if (!data.qualityBreakdown) return [source];
+    if (ownCheckFact(source.value, data)) return [];
+    const value = Array.isArray(source.value)
+      ? source.value.filter((item) => !ownCheckFact(item, data))
+      : source.value;
+    return value === null || (Array.isArray(value) && value.length === 0)
+      ? []
+      : [{ ...source, value }];
+  });
+}
+
+function ExplanationSources({
+  data,
+  sources,
+}: {
+  data: FieldExplanationOutput;
+  sources: readonly ExplanationSource[];
+}) {
+  const provenance =
+    data.envelope.result.kind === "live"
+      ? data.envelope.result.decision.provenance
+      : null;
+  const winner =
+    provenance?.kind === "inherited" || provenance?.kind === "default"
+      ? provenance.source
+      : null;
+  return (
+    <SourceStack
+      label="Evidence sources"
+      rows={sources.map(
+        (source): Parameters<typeof SourceStack>[0]["rows"][number] => {
+          const record = explanationRecord.safeParse(source.value);
+          const parsedName = record.success
+            ? z.string().safeParse(record.data.name)
+            : null;
+          const name = parsedName?.success ? parsedName.data : null;
+          return {
+            key: explanationSourceKey(source),
+            status:
+              winner &&
+              source.entity?.entityKind === winner.entityKind &&
+              source.entity.entityId === winner.entityId
+                ? "deciding"
+                : "skipped",
+            title: (
+              <>
+                {source.label !== name || !source.entity ? (
+                  <span>{source.label}</span>
+                ) : null}
+                {source.entity ? (
+                  <ExplanationEntityLink
+                    entity={source.entity.entityKind}
+                    id={source.entity.entityId}
+                    name={name}
+                  />
+                ) : null}
+              </>
+            ),
+            children:
+              source.value !== null || source.entity === null ? (
+                <ReadableExplanationValue
+                  value={source.entity ? sourceFacts(source) : source.value}
+                />
+              ) : null,
+          };
+        },
+      )}
+    />
+  );
+}
+
+function sourceFacts(source: ExplanationSource): ExplanationValue {
+  const record = explanationRecord.safeParse(source.value);
+  if (!record.success || !source.entity) return source.value;
+  return Object.fromEntries(
+    Object.entries(record.data).filter(
+      ([key, value]) => key !== "name" && !(value === source.entity?.entityId),
+    ),
+  );
+}
+
+function UnassessedQualityExplanation({
+  entity,
+  id,
+}: Pick<WhyValueProps, "entity" | "id">) {
+  const metadata = useEntityMetadata(entity);
+  const rule = metadata.fields.fields.find(
+    (field) => field.key === "dataQuality",
+  )?.explanation;
+
+  return (
+    <div className="grid min-w-0 gap-3 p-3 text-sm">
+      <PopoverTitle className="text-base font-semibold">
+        Data quality
+      </PopoverTitle>
+      <section className="grid gap-2">
+        <h3 className={sectionLabelClassName}>What this means</h3>
+        <p className="text-lg font-semibold">Not assessed</p>
+        <p className="text-sm leading-relaxed">
+          No quality checks are defined for this entity. Review its fields and
+          supporting records directly.
+        </p>
+        {parseShortcode(id)?.type === entity ? (
+          <ExplanationEntityLink entity={entity} id={id} name="Open record" />
+        ) : null}
+      </section>
+      <section className="grid gap-2 border-t border-border pt-3">
+        <h3 className={sectionLabelClassName}>Technical details</h3>
+        <p className="text-sm leading-relaxed">
+          There are no quality checks for this entity. Not assessed does not
+          mean complete.
+        </p>
+        {rule ? (
+          <p className="font-mono text-xs break-all">
+            Rule: {rule.ruleId} · r{rule.version}
+          </p>
+        ) : null}
+        <Description size="xs">
+          Evaluation: not performed; no checks are defined.
+        </Description>
+      </section>
+    </div>
+  );
+}
+
+type ExplainedCheck = NonNullable<
+  FieldExplanationOutput["qualityBreakdown"]
+>["checks"][number];
+
+function QualityCheckRow({
+  check,
+  entityId,
+  controls = true,
+  controlCheck,
+}: {
+  check: ExplainedCheck;
+  entityId: string;
+  controls?: boolean;
+  controlCheck?: ExplainedCheck;
+}) {
+  return (
+    <LedgerRow
+      title={`${humanize(check.facet)} · ${check.check}`}
+      data-quality-check={check.check}
+    >
+      <LedgerCell slot="primary" className="font-medium">
+        {check.label}
+      </LedgerCell>
+      <LedgerCell
+        slot="trailing"
+        className="flex flex-wrap items-center justify-end gap-2"
+      >
+        <Badge
+          variant={
+            check.state === "gap"
+              ? check.kind === "defect"
+                ? "destructive"
+                : "warning"
+              : check.state === "excepted"
+                ? "secondary"
+                : "positive"
+          }
+        >
+          {check.stateLabel}
+        </Badge>
+      </LedgerCell>
+      {check.state === "gap" ? (
+        <LedgerCell as="div" slot="detail" className="text-xs leading-5">
+          {check.description}
+        </LedgerCell>
+      ) : null}
+      <LedgerCell as="div" slot="actions">
+        {controls ? (
+          <ExceptionControls
+            entityId={entityId}
+            check={controlCheck ?? check}
+          />
+        ) : null}
+      </LedgerCell>
+    </LedgerRow>
+  );
+}
+
+function QualityCalculation({
+  breakdown,
+  entityId,
+  currentControls,
+}: {
+  breakdown: NonNullable<FieldExplanationOutput["qualityBreakdown"]>;
+  entityId: string;
+  currentControls?: readonly ExplainedCheck[];
+}) {
+  return (
+    <section className="grid gap-2 border-t border-border pt-2">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <h3 className={sectionLabelClassName}>Score calculation</h3>
+        <Badge
+          variant={
+            breakdown.status === "complete"
+              ? "positive"
+              : breakdown.status === "defect"
+                ? "destructive"
+                : breakdown.status === "needs_data"
+                  ? "warning"
+                  : "secondary"
+          }
+        >
+          {dataQualityStatusLabel(breakdown.status)}
+        </Badge>
+      </div>
+      <Disclosure summary="All checks">
+        <p className="pb-2 text-xs leading-5 tabular-nums">
+          {breakdown.summary}
+        </p>
+        {breakdown.checks.map((check) => (
+          <p key={check.check} className="text-xs">
+            {check.label} · {check.weightLabel}
+          </p>
+        ))}
+      </Disclosure>
+      <Ledger>
+        {breakdown.checks.map((check) => (
+          <QualityCheckRow
+            key={check.check}
+            check={check}
+            entityId={entityId}
+            controls={
+              currentControls === undefined ||
+              currentControls.some((current) => current.check === check.check)
+            }
+            controlCheck={currentControls?.find(
+              (current) => current.check === check.check,
+            )}
+          />
+        ))}
+      </Ledger>
+    </section>
+  );
+}
+
+type WhyValueProps = {
+  scope?: z.infer<typeof fieldExplanationInput>["scope"];
+  entity: Entity;
+  id: string;
+  field: string;
+  label: string;
+  surface?: "list" | "detail" | "summary";
+  resolution?: ReadableFieldEnvelope | null;
+  onSet?: () => void;
+  pendingSuggestion?: ReactNode;
+  qualityChecks?: NonNullable<
+    FieldExplanationOutput["qualityBreakdown"]
+  >["checks"];
+};
+
+/** Query observers and actions mount only while the explanation is open. */
+export function WhyValueContents({
+  entity,
+  id,
+  field,
+  label,
+  surface = "detail",
+  onSet,
+  qualityChecks,
+  pendingSuggestion,
+  scope,
+  resolution,
+}: WhyValueProps) {
+  const queryClient = useQueryClient();
+  const refresh = useMutation({
+    mutationFn: async () => {
+      await invalidateOperationTags(queryClient, entityRipple(entity));
+    },
+  });
+  const metadata = useEntityMetadata(entity);
+  const listQuery = useListQuery(entity);
+  const bindings = z
+    .object({ scopeFilters: z.record(z.string(), z.string()).optional() })
+    .parse(
+      metadata.fields.fields.find((candidate) => candidate.key === field)
+        ?.explanation ?? {},
+    ).scopeFilters;
+  const filters = z
+    .record(z.string(), z.unknown())
+    .parse(listQuery?.filters ?? {});
+  const candidates = Object.entries(bindings ?? {}).flatMap(
+    ([entityKind, filter]) => {
+      const values = z
+        .union([z.string(), z.array(z.string())])
+        .safeParse(filters[filter]);
+      if (!values.success) return [];
+      return (Array.isArray(values.data) ? values.data : [values.data]).map(
+        (entityId) =>
+          fieldExplanationInput.shape.scope
+            .unwrap()
+            .parse({ entityKind, entityId }),
+      );
+    },
+  );
+  const contextualScope =
+    scope ??
+    (surface === "list" && candidates.length === 1 ? candidates[0] : undefined);
+  const locator = {
+    entityKind: entity,
+    entityId: id,
+    field,
+    surface,
+    ...(contextualScope ? { scope: contextualScope } : {}),
+  };
+  const result = useQuery({
+    ...fieldExplanation.explain.queryOptions({
+      ...locator,
+      ...(resolution
+        ? {
+            displayedResult: fieldExplanationInput.shape.displayedResult
+              .unwrap()
+              .parse(resolution.result),
+          }
+        : {}),
+    }),
+    staleTime: 0,
+    refetchOnMount: "always",
+  });
+  const currentQualityControls =
+    result.data?.currentQualityControls?.filter(
+      (check) =>
+        (check.exception ||
+          (check.state === "gap" && check.exceptionReasons.length > 0)) &&
+        !result.data?.qualityBreakdown?.checks.some(
+          (published) => published.check === check.check,
+        ),
+    ) ?? [];
+  // Long rule identifiers must wrap inside the viewport-bounded popover.
+  return (
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-3 p-3">
+      <PopoverTitle className="text-sm font-semibold">
+        Why this value · {label}
+      </PopoverTitle>
+      {/* Suggestion readiness is independent of the explanation request. */}
+      {!result.isSuccess && pendingSuggestion ? (
+        <DecisionLevels>
+          {(level) => (level === "pending" ? pendingSuggestion : null)}
+        </DecisionLevels>
+      ) : null}
+      {result.isPending ? (
+        <p className="text-muted-foreground">Loading…</p>
+      ) : result.isError && result.data === undefined ? (
+        <Stack gap="sm">
+          <ErrorDisplay error={result.error} title="this explanation" />
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => void result.refetch()}
+            disabled={result.isFetching}
+          >
+            Retry explanation
+          </Button>
+        </Stack>
+      ) : result.data.publication?.kind === "superseded" ? (
+        <Stack gap="sm">
+          <p className="text-xs leading-5">{result.data.publication.reason}</p>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={refresh.isPending}
+            onClick={() => refresh.mutate()}
+          >
+            Refresh value and explanation
+          </Button>
+          {refresh.isError ? (
+            <ErrorDisplay error={refresh.error} title="refreshing this value" />
+          ) : null}
+        </Stack>
+      ) : (
+        <>
+          {result.isError ? (
+            <div className="grid gap-1">
+              <ErrorDisplay
+                error={result.error}
+                title="refreshing this explanation"
+              />
+              <Button
+                size="xs"
+                variant="link"
+                onClick={() => void result.refetch()}
+              >
+                Retry explanation
+              </Button>
+            </div>
+          ) : null}
+          <DecisionChain
+            data={result.data}
+            onSet={onSet}
+            pending={pendingSuggestion}
+          />
+          {result.data.interpretation ? (
+            <div className="grid gap-1 text-xs leading-5">
+              {!result.data.resolutionEvidence ? (
+                <p className="font-medium">
+                  {result.data.interpretation.result}
+                </p>
+              ) : null}
+              <p>{result.data.interpretation.summary}</p>
+              {!result.data.qualityBreakdown ? (
+                <>
+                  {result.data.interpretation.caveats.map((caveat) => (
+                    <p key={caveat} className="text-muted-foreground">
+                      {caveat}
+                    </p>
+                  ))}
+                  {result.data.interpretation.nextSteps.map((step) => (
+                    <p key={step}>{step}</p>
+                  ))}
+                </>
+              ) : null}
+            </div>
+          ) : null}
+          {result.data.envelope.result.kind === "cached" &&
+          result.data.resolutionEvidence ? (
+            <p className="text-xs font-medium">Current resolution evidence</p>
+          ) : null}
+          {result.data.publication?.kind === "unavailable" ? (
+            <p className="text-xs leading-5 text-muted-foreground">
+              {result.data.publication.reason}
+            </p>
+          ) : null}
+          <ResolutionEvidence evidence={result.data.resolutionEvidence} />
+          {result.data.imageChain ? (
+            <ImageChain chain={result.data.imageChain} />
+          ) : null}
+          {result.data.qualityBreakdown ? (
+            <QualityCalculation
+              breakdown={result.data.qualityBreakdown}
+              entityId={id}
+              currentControls={result.data.currentQualityControls}
+            />
+          ) : null}
+          {currentQualityControls.length > 0 ? (
+            <section className="grid gap-2 border-t border-border pt-2">
+              <h3 className={sectionLabelClassName}>
+                Current exception controls
+              </h3>
+              {currentQualityControls.map((check) => (
+                <div key={check.check} className="grid gap-1 text-xs">
+                  <p>{check.label}</p>
+                  <ExceptionControls entityId={id} check={check} />
+                </div>
+              ))}
+            </section>
+          ) : null}
+          {!result.data.qualityBreakdown && qualityChecks?.length ? (
+            <Ledger>
+              {qualityChecks.map((check) => (
+                <QualityCheckRow
+                  key={check.check}
+                  check={check}
+                  entityId={id}
+                />
+              ))}
+            </Ledger>
+          ) : null}
+          {visibleSources(result.data).length > 0 ? (
+            <section className="grid gap-2 border-t border-border pt-3">
+              <h3 className={sectionLabelClassName}>Evidence</h3>
+              <ExplanationSources
+                data={result.data}
+                sources={visibleSources(result.data).slice(0, 6)}
+              />
+              {visibleSources(result.data).length > 6 ? (
+                <Disclosure
+                  summary={`Show ${visibleSources(result.data).length - 6} more evidence entries`}
+                >
+                  <ExplanationSources
+                    data={result.data}
+                    sources={visibleSources(result.data).slice(6)}
+                  />
+                </Disclosure>
+              ) : null}
+            </section>
+          ) : null}
+          {result.data.truncated ? (
+            <p className="text-xs leading-5 text-muted-foreground">
+              Evidence is bounded; the displayed sources are not an exhaustive
+              list.
+            </p>
+          ) : null}
+          <ExplanationTechnicalDetails data={result.data} />
+          <ExplanationFooter data={result.data} />
+        </>
+      )}
+    </div>
+  );
+}
+
+function RawExplanationEvidence({ data }: { data: FieldExplanationOutput }) {
+  return (
+    <Disclosure summary="Raw evidence and check identifiers">
+      <div className="max-h-64 max-w-full overflow-auto text-xs">
+        <JsonRenderer input={data} />
+      </div>
+    </Disclosure>
+  );
+}
+
+function ExplanationTechnicalDetails({
+  data,
+}: {
+  data: FieldExplanationOutput;
+}) {
+  return (
+    // Parts, not `Disclosure`: the trigger keeps this popover's section-label
+    // heading, which `Disclosure`'s summary row cannot carry.
+    <DisclosureRoot state={{}} className="border-t border-border pt-2">
+      <h3 className={sectionLabelClassName}>
+        <DisclosureTrigger>Technical details</DisclosureTrigger>
+      </h3>
+      <DisclosureBody className="grid gap-2 pt-2">
+        <p className="text-xs leading-5">{data.rule.description}</p>
+        <Facts
+          layout="inline"
+          className="text-xs"
+          facts={[
+            {
+              label: "Rule",
+              value: `${data.rule.id} · r${data.rule.revision}`,
+              className: "font-mono break-all",
+            },
+            {
+              label: "Result code",
+              value: String(fieldValueOf(data.envelope)),
+              className: "font-mono",
+              hide:
+                !z.string().safeParse(fieldValueOf(data.envelope)).success ||
+                data.interpretation?.result === fieldValueOf(data.envelope),
+            },
+            {
+              label: "Evaluated",
+              value: <DateDisplay timestamp={data.evaluatedAt} />,
+            },
+          ]}
+        />
+        {data.qualityBreakdown ? (
+          <>
+            {data.interpretation?.caveats.map((caveat) => (
+              <p key={caveat} className="text-xs text-muted-foreground">
+                {caveat}
+              </p>
+            ))}
+          </>
+        ) : null}
+        <RawExplanationEvidence data={data} />
+      </DisclosureBody>
+    </DisclosureRoot>
+  );
+}
+
+function ExplanationFooter({ data }: { data: FieldExplanationOutput }) {
+  return (
+    <footer className="sticky bottom-0 z-10 -mx-3 -mb-3 border-t border-border bg-popover px-3 py-2">
+      <DerivedFreshness envelope={data.envelope} context={data} />
+    </footer>
+  );
+}
+
+export function WhyValuePopoverContents(props: WhyValueProps) {
+  return props.field === "dataQuality" &&
+    !z.enum(scoredEntities).safeParse(props.entity).success ? (
+    <UnassessedQualityExplanation entity={props.entity} id={props.id} />
+  ) : (
+    <WhyValueContents {...props} />
+  );
+}

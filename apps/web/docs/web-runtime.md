@@ -144,6 +144,13 @@ placeholder; its session-dependent controls do not belong in the Worker render
 closure. Do not commit a new shell Suspense fallback for this control: React's
 retry throttle can hold hydration of independent route boundaries. Reuse the loaded
 component on remount and rethrow import failures to the existing error boundary.
+Field explanation triggers keep their local popover lifecycle. Load the explanation
+reader, query observers, and evidence renderers only inside the open popup's
+local Suspense boundary; detail and suggestion callers use the same deferred
+content owner. Reusable value and entity-link formatting lives separately so
+importing it never admits the explanation query graph. Keep the popup title and
+loading state present while its code loads, and let import failures reach the
+existing error boundary.
 Interaction-only registry dialogs stay lazy with a local Suspense boundary
 inside their open/selected state. Loading a dialog must not suspend the action
 host or page. Feature installation stays synchronous and idempotent so child

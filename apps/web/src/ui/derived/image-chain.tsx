@@ -17,8 +17,8 @@ import {
 } from "~/ui/primitives/popover";
 import { Description } from "~/ui/text/description";
 
+import { ExplanationEntityLink } from "./explanation-value";
 import { SourceStack } from "./source-stack";
-import { ExplanationEntityLink } from "./why-value";
 
 export type ImageChainQueryOptions =
   typeof fieldExplanation.imageChain.queryOptions;

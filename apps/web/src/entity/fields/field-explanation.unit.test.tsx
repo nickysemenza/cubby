@@ -6,10 +6,8 @@ import { afterEach, beforeEach, expect, it } from "vitest";
 import { createEditorBrowserTestHarness as createBrowserTestHarness } from "#web/tests/editor-metadata.fixtures.ts";
 import { fieldExplanation } from "~/integrations/tanstack-query/generated/domains/fieldExplanation.gen";
 import { DecisionChain } from "~/ui/derived/decision-chain";
-import {
-  ReadableExplanationValue,
-  WhyValueContents,
-} from "~/ui/derived/why-value";
+import { ReadableExplanationValue } from "~/ui/derived/explanation-value";
+import { WhyValueContents } from "~/ui/derived/why-value-content";
 import { Popover, PopoverContent } from "~/ui/primitives/popover";
 
 let harness: ReturnType<typeof createBrowserTestHarness>;

@@ -22,11 +22,14 @@ import { Description } from "~/ui/text/description";
 import { DateDisplay } from "~/ui/values/date-display";
 
 import {
+  ExplanationEntityLink,
+  ReadableExplanationValue,
+} from "./explanation-value";
+import {
   pendingWorkLabel,
   UpdatingDot,
   useFieldExecutionCurrent,
 } from "./value-mark";
-import { ExplanationEntityLink, ReadableExplanationValue } from "./why-value";
 
 export function DecisionValue({
   entity,

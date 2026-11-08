@@ -4,12 +4,12 @@ import { RecordsBlockView } from "~/entity/entity-detail/records-block";
 import { useEntityMetadata } from "~/entity/metadata";
 import { Disclosure } from "~/ui/layout/disclosure";
 
-import { SourceStack } from "./source-stack";
 import {
   ExplanationEntityLink,
-  WhyValue,
   ReadableExplanationValue,
-} from "./why-value";
+} from "./explanation-value";
+import { SourceStack } from "./source-stack";
+import { WhyValue } from "./why-value";
 
 type Evidence = NonNullable<FieldExplanationOutput["resolutionEvidence"]>;
 export const sectionLabelClassName =

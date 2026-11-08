@@ -1,6 +1,6 @@
 import { fieldExplanationOutput } from "@cubby/schemas/field-explanation";
 import { testShortcode } from "@cubby/schemas/testing";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, expect, it } from "vitest";
 import { page, userEvent } from "vitest/browser";
 
@@ -111,7 +111,12 @@ it("loads on demand, retries a failed read and expands bounded evidence without 
     name: "How quality is determined",
   });
   expect(calls).toHaveLength(0);
-  await userEvent.click(trigger);
+  await act(async () => {
+    await userEvent.click(trigger);
+    // Keep Vite compilation outside the query-state assertion budget.
+    await import("~/ui/derived/why-value-content");
+  });
+  await waitFor(() => expect(calls).toHaveLength(1));
   await waitFor(() => expect(screen.getByText("Loading…")).toBeVisible());
   releaseFailure();
   const retry = await screen.findByRole("button", {
