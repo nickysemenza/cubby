@@ -7,6 +7,7 @@ import { generatedEntityListFields } from "@cubby/schemas/entity-list-fields";
  */
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { entityManifest } from "@cubby/schemas/entity-manifest";
+import { FILTER_NONE } from "@cubby/schemas/filter-sentinel-fields";
 import { presenceFilter, type PresenceFilter } from "@cubby/schemas/pagination";
 import { type AnyColumn, and, arrayContains, or, SQL, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
@@ -406,16 +407,32 @@ const excludedFilterRequests = (
       optionalTextList.parse(values[descriptor.exclude.field]),
     );
     if (excluded === undefined) return [];
+    const missing =
+      descriptor.nullable !== null && excluded.includes(FILTER_NONE);
+    const picked = missing
+      ? excluded.filter((value) => value !== FILTER_NONE)
+      : excluded;
     const key = descriptor.field ?? descriptor.columnId;
     const toggle = set.subtree?.(key);
     return [
-      {
-        [key]: excluded,
-        ...(descriptor.wire.kind === "param"
-          ? { [descriptor.wire.name]: excluded }
-          : {}),
-        ...(toggle === undefined ? {} : { [toggle.key]: values[toggle.key] }),
-      },
+      ...(picked.length
+        ? [
+            {
+              [key]: picked,
+              ...(descriptor.wire.kind === "param"
+                ? { [descriptor.wire.name]: picked }
+                : {}),
+              ...(toggle === undefined
+                ? {}
+                : { [toggle.key]: values[toggle.key] }),
+            },
+          ]
+        : []),
+      // Has and No value may overlap for row sets. Negate the canonical
+      // missing predicate separately, retaining every positive selection.
+      ...(missing && descriptor.nullable
+        ? [{ [descriptor.nullable.field]: "none" }]
+        : []),
     ];
   });
 

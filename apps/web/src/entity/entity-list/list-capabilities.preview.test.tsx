@@ -1,4 +1,5 @@
 import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
+import { FILTER_NONE } from "@cubby/schemas/filter-sentinel-fields";
 import { testShortcode } from "@cubby/schemas/testing";
 import {
   fireEvent,
@@ -255,8 +256,19 @@ it.each([1440, 402])(
     await waitFor(() =>
       expect(within(editor).getByText(/Is \/ is not/)).toBeVisible(),
     );
+    fireEvent.click(within(editor).getByRole("button", { name: "is not" }));
+    fireEvent.click(await within(editor).findByText("Missing value"));
+    await waitFor(() =>
+      expect(state.requests).toContainEqual(
+        expect.objectContaining({
+          filters: expect.objectContaining({ brandIdExclude: [FILTER_NONE] }),
+        }),
+      ),
+    );
     fireEvent.click(within(editor).getByRole("button", { name: "Close" }));
-    fireEvent.click(screen.getByRole("button", { name: "Filter" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: /^Filter(?: \d+)?$/ }),
+    );
     let reopened = await screen.findByRole("dialog", { name: "Filter" });
     fireEvent.click(within(reopened).getByRole("button", { name: "Projects" }));
     const projectEditor = await screen.findByRole("dialog", {
@@ -271,7 +283,9 @@ it.each([1440, 402])(
     fireEvent.click(
       within(projectEditor).getByRole("button", { name: "Close" }),
     );
-    fireEvent.click(screen.getByRole("button", { name: "Filter" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: /^Filter(?: \d+)?$/ }),
+    );
     reopened = await screen.findByRole("dialog", { name: "Filter" });
     fireEvent.click(
       within(reopened).getByRole("button", { name: "Sort by Updated at" }),

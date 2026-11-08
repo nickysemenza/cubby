@@ -4,10 +4,11 @@
  *
  * Double-underscored so they can't collide with anything a real option
  * carries — a uuid, an enum slug, or a user-authored tag. They never reach the
- * wire: `buildFiltersFromManifest` partitions them out and emits the filter's
+ * include wire: `buildFiltersFromManifest` partitions them out and emits the filter's
  * generated keys instead — Any value / No value as its `presenceFilter`, Match
  * all as its match key, an excluded value as its Exclude key — so the runtime
- * input schemas never see them.
+ * input schemas never see them. Nullable Exclude keys explicitly accept
+ * FILTER_NONE to negate the same missing-value predicate.
  */
 import { humanize } from "@cubby/shared/text-case";
 

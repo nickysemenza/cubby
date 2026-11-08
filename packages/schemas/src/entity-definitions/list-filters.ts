@@ -147,9 +147,9 @@ export interface FilterSpecCore {
  * Picklist sentinels for a nullable column.
  *
  * Double-underscored so they can't collide with anything a real option carries
- * — a uuid, an enum slug, or a user-authored tag. They never reach the wire:
+ * — a uuid, an enum slug, or a user-authored tag. Include tokens never reach the wire:
  * `buildFiltersFromManifest` partitions them out and emits a `presenceFilter`
- * instead, so the runtime input schemas never see them.
+ * instead. Nullable Exclude schemas accept FILTER_NONE explicitly.
  */
 // Hierarchy modes use the toggle's own URL key instead of entering its value
 // list (`includeSubLocations=false`, `projectIdIncludeDescendants=true`).
@@ -288,7 +288,11 @@ export function buildFiltersFromManifest(
         const patch: FilterPatch = {};
         const exclude = excludeKey(spec);
         const excludedParsed = exclude
-          ? excluded.map((value) => brand(spec, value))
+          ? excluded.map((value) =>
+              spec.nullable && value === FILTER_NONE
+                ? FILTER_NONE
+                : brand(spec, value),
+            )
           : [];
         if (exclude && excludedParsed.length) patch[exclude] = excludedParsed;
         // `IS NULL OR IS NOT NULL` is every row, and the OR swallows any value
@@ -365,8 +369,8 @@ export function buildFiltersFromManifest(
  * Exclude matching records from a grouped section, as its next column-filter
  * value: the section's value joins the excluded ones, so the grouping stays
  * and the section goes. A level section stands for its key's descendants,
- * so "Include sub-…" turns on. The no-value section hides as Any value, or,
- * beside picked values, by dropping No value. Unavailable operations retain
+ * so "Include sub-…" turns on. The no-value section negates its canonical
+ * missing-value predicate, retaining all prior selections. Unavailable operations retain
  * their reason so every shared header can explain the limitation.
  */
 export const sectionExclusion = (
@@ -375,29 +379,14 @@ export const sectionExclusion = (
   values: readonly string[],
 ): { values: string[]; reason: null } | { values: null; reason: string } => {
   if (section.key === FILTER_NONE) {
-    if (!spec.nullable)
+    if (!spec.nullable || excludeKey(spec) === undefined)
       return {
         values: null,
         reason: "This filter cannot exclude missing values.",
       };
-    const rest = values.filter(
-      (value) => value !== FILTER_NONE && value !== FILTER_ANY,
-    );
-    const picked = splitExcluded(rest).included.filter(
-      (value) => !isSentinel(value),
-    );
-    if (
-      values.includes(FILTER_NONE) &&
-      !values.includes(FILTER_ANY) &&
-      picked.length === 0
-    )
-      return {
-        values: null,
-        reason:
-          "This filter selects only missing values. Changing it to Any value would replace your selection. Clear or change the filter first.",
-      };
+    const missing = `${FILTER_NOT_PREFIX}${FILTER_NONE}`;
     return {
-      values: picked.length ? rest : [...rest, FILTER_ANY],
+      values: values.includes(missing) ? [...values] : [...values, missing],
       reason: null,
     };
   }
@@ -443,11 +432,15 @@ function matchesMultiSelect<TFilterValue>(
   value: string | null | undefined,
   filterValue: TFilterValue,
 ): boolean {
-  const selected = parseFilterValue(filterValue);
-  if (!Array.isArray(selected) || selected.length === 0) return true;
+  const parsed = parseFilterValue(filterValue);
+  if (!Array.isArray(parsed) || parsed.length === 0) return true;
+  const { included: selected, excluded } = splitExcluded(parsed);
   // "" counts as absent: clearing an inline text edit writes an empty string,
   // and the `(none)` option has to find those rows too.
   const isEmpty = value == null || value === "";
+  if (excluded.some((item) => item === (isEmpty ? FILTER_NONE : value)))
+    return false;
+  if (selected.length === 0) return true;
 
   const wantsNone = selected.includes(FILTER_NONE);
   const wantsAny = selected.includes(FILTER_ANY);
@@ -909,7 +902,12 @@ function describeFilter(
               : []
             : items.map((value) => optionLabel(spec, value) ?? value);
         const picked = labelled(rest);
-        const notPicked = labelled(excluded);
+        const missingExcluded = spec.nullable && excluded.includes(FILTER_NONE);
+        const notPicked = labelled(
+          missingExcluded
+            ? excluded.filter((value) => value !== FILTER_NONE)
+            : excluded,
+        );
         const presence = spec.nullable
           ? tokens
               .filter((value) => value === FILTER_ANY || value === FILTER_NONE)
@@ -924,6 +922,9 @@ function describeFilter(
         const parts = [
           ...(joined ? [joined] : []),
           ...presence,
+          ...(missingExcluded
+            ? [`excluding missing ${spec.nullable?.label}`]
+            : []),
           ...(notPicked.length
             ? [`not ${collapse(notPicked, MAX_VALUES_PER_FILTER)}`]
             : []),

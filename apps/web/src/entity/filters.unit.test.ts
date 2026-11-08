@@ -398,9 +398,29 @@ describe("buildFiltersFromManifest", () => {
           [FILTER_NONE],
         ),
       ).toMatchObject({
-        values: null,
-        reason: expect.stringContaining("replace your selection"),
+        values: [FILTER_NONE, `__not__:${FILTER_NONE}`],
+        reason: null,
       });
+      const nullable = {
+        ...parent,
+        nullable: { field: "parentPresence", label: "parent" },
+        brand: (value: string) => `branded:${value}`,
+      };
+      const excluded = [
+        FILTER_NONE,
+        `__not__:${FILTER_NONE}`,
+        "__not__:SCAT-4K7M",
+      ];
+      expect(
+        buildFiltersFromManifest([nullable], getter({ parent: excluded })),
+      ).toEqual({
+        parentPresence: "none",
+        parentExclude: [FILTER_NONE, "branded:SCAT-4K7M"],
+      });
+      const codec = compileFilterCodec([nullable]);
+      expect(codec.decode(codec.encode(getter({ parent: excluded })))).toEqual([
+        { id: "parent", value: excluded },
+      ]);
       expect(
         sectionExclusion(parent, { key: "SCAT-4K7M", subtree: false }, []),
       ).toEqual({ values: ["__not__:SCAT-4K7M", FILTER_EXACT], reason: null });
@@ -519,6 +539,11 @@ describe("multiSelectFilterFn", () => {
     expect(run(undefined, [FILTER_NONE])).toBe(true);
     expect(run("", [FILTER_NONE])).toBe(true);
     expect(run("Amazon", [FILTER_NONE])).toBe(false);
+    expect(run(null, [`__not__:${FILTER_NONE}`])).toBe(false);
+    expect(run("Amazon", [`__not__:${FILTER_NONE}`])).toBe(true);
+    expect(run(null, [FILTER_NONE, `__not__:${FILTER_NONE}`])).toBe(false);
+    expect(run("Amazon", [FILTER_NONE, `__not__:${FILTER_NONE}`])).toBe(false);
+    expect(run("Amazon", ["__not__:Amazon"])).toBe(false);
   });
 
   it("finds non-empty rows via Has x", () => {

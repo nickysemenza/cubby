@@ -3138,6 +3138,11 @@ unavailable when it would change the mode of an existing picked or excluded
 value; it never broadens or narrows the member's other selections implicitly.
 Shared section headers explain unavailable exclusions on focus or click. The
 member can choose the required scope in Filters before excluding the section.
+Nullable Exclude keys also accept `__none__`, negating the canonical missing-value
+predicate. This preserves positive selections, including a missing-only selection
+that becomes empty. Row sets can match both Has and No value; switching to Has
+cannot exclude their missing-value group. Each excluded value and missing-value
+predicate is negated separately, so a matching record disappears from every group.
 
 ### Background derived data
 

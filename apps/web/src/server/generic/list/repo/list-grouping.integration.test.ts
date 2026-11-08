@@ -724,6 +724,63 @@ describe("expanded grouped list memberships", () => {
       { key: FILTER_NONE, count: 1 },
     ]);
     expect(byParty.meta.membershipCount).toBe(2);
+    const complete = await createRepoEntity(
+      ctx,
+      "expense",
+      makeExpenseInput({
+        name: "Grouping fully attributed expense",
+        cost: 2,
+        date: "2026-01-01",
+      }),
+    );
+    await getDb(ctx.db).insert(expenseAttribution).values({
+      expenseId: complete.entityId,
+      role: "funder",
+      ledgerPartyId: knownParty.entityId,
+      weight: 1,
+    });
+    const ids = [basis.output.id, noProject.output.id, complete.output.id];
+    for (const [filters, expected] of [
+      [
+        { ledgerPartyIdPresenceFilter: "none" },
+        [basis.output.id, noProject.output.id],
+      ],
+      [
+        { ledgerPartyIdPresenceFilter: "has" },
+        [basis.output.id, complete.output.id],
+      ],
+      [{ ledgerPartyIdExclude: [FILTER_NONE] }, [complete.output.id]],
+      [
+        {
+          ledgerPartyId: [knownParty.output.id],
+          ledgerPartyIdExclude: [FILTER_NONE],
+        },
+        [complete.output.id],
+      ],
+      [
+        {
+          ledgerPartyIdPresenceFilter: "none",
+          ledgerPartyIdExclude: [FILTER_NONE],
+        },
+        [],
+      ],
+      [{ ledgerPartyIdExclude: [knownParty.output.id, FILTER_NONE] }, []],
+    ] as const) {
+      const filtered = await executeEntity(kernel(), {
+        action: "list",
+        entity: "expense",
+        filters: { ids, ...filters },
+        groupBy: [{ key: "ledgerPartyId" }],
+      });
+      expect(filtered.items.map((item) => item.id).sort()).toEqual(
+        [...expected].sort(),
+      );
+      expect(
+        filtered.meta.memberships?.some((membership) =>
+          membership.path.includes(FILTER_NONE),
+        ) ?? false,
+      ).toBe(!("ledgerPartyIdExclude" in filters));
+    }
     const pages = [];
     for (const pageIndex of [0, 1, 2]) {
       const page = await executeEntity(kernel(), {

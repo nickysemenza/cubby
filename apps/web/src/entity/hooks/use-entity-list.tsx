@@ -40,7 +40,6 @@ import {
 } from "~/entity/filter-manifest";
 import {
   buildFiltersFromManifest,
-  FILTER_NONE,
   filterGetterFromColumnFilters,
   sectionExclusion,
   summarizeListState,
@@ -696,16 +695,6 @@ export function useEntityList<
           return {
             excludeReason:
               "No exact record exclusion is declared for this section.",
-          };
-        // Row-set Has and No value can both match one record. Has is not
-        // their No value predicate's negation, so it cannot exclude this bucket.
-        if (
-          field.key === FILTER_NONE &&
-          groupChoice.value?.kind === "rowRecord"
-        )
-          return {
-            excludeReason:
-              "Records can have both known and missing references. This filter cannot exclude that entire missing-value section exactly.",
           };
         const valueGroup = { ...group, key: field.key };
         const current = columnFilters.find(

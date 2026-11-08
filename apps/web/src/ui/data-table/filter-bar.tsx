@@ -644,12 +644,20 @@ function ChecklistEditor({
   const [side, setSide] = useState<FilterSide>(initialSide);
   const values = filter?.values ?? [];
   const roster = visibleOptions(field, filter);
-  // Any value / No value belong to the "is" side.
+  // Missing-value exclusion negates its predicate; Any value stays include-only.
   const isNotRoster = useMemo(
     () =>
-      roster.filter(
-        (option) => option.value !== FILTER_ANY && option.value !== FILTER_NONE,
-      ),
+      roster
+        .filter((option) => option.value !== FILTER_ANY)
+        .map((option) =>
+          option.value === FILTER_NONE
+            ? {
+                ...option,
+                label: "Missing value",
+                detail: "Excludes matching records from every group.",
+              }
+            : option,
+        ),
     [roster],
   );
   const label = labelOf(field);
