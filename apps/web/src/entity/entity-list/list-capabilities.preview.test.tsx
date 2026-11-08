@@ -555,6 +555,20 @@ it("keeps quality beside identity and emits its server sort", async () => {
     within(pivot).getByRole("button", { name: /Seller spending: \$12.00/ }),
   ).toBeVisible();
   expect(within(pivot).getAllByText("$12.00").length).toBeGreaterThan(1);
+  await userEvent.click(
+    within(pivot).getByRole("button", { name: /Seller spending: \$12.00/ }),
+  );
+  await waitFor(() =>
+    expect(state.requests.at(-1)).toEqual(
+      expect.objectContaining({
+        filters: expect.objectContaining({
+          purchaseDateFrom: "2025-09-01",
+          purchaseDateTo: "2025-09-30",
+          sellerId: [testShortcode("vendor", "VEN-4K7M")],
+        }),
+      }),
+    ),
+  );
   await page.viewport(402, 900);
   await screen.findByRole("link", { name: productName });
   await waitFor(() => {

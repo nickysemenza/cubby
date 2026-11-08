@@ -22,6 +22,7 @@ import {
 
 import {
   type CompiledEntity,
+  dateRangeBounds,
   EntityDeclarationError,
   type FilterDescriptor,
 } from "./declarations.ts";
@@ -1105,6 +1106,17 @@ const enumOptions = (
         ({ value, label }) => ({ value, label }),
       );
 
+const groupFilterBinding = (descriptor: FilterDescriptor | undefined) =>
+  descriptor === undefined
+    ? null
+    : {
+        columnId: descriptor.columnId,
+        noValue: Boolean(
+          descriptor.nullable || dateRangeBounds(descriptor)?.presence,
+        ),
+        subtree: descriptor.subtree,
+      };
+
 /**
  * Compiles one `model.grouping` key. A model field groups by its own column,
  * or by its referenced record; a `model.derived` key groups through its
@@ -1170,7 +1182,10 @@ const compileGroupChoice = (
           : alias.terminal.kind === "field" &&
             alias.terminal.column === value.column);
       return (
-        (candidate.kind === "multiselect" || candidate.kind === "idMulti") &&
+        (candidate.kind === "multiselect" ||
+          candidate.kind === "idMulti" ||
+          candidate.kind === "boolean" ||
+          dateRangeBounds(candidate) !== null) &&
         (samePath ||
           candidate.derived === key ||
           keys.includes(candidate.columnId) ||
@@ -1279,14 +1294,7 @@ const compileGroupChoice = (
           : [],
       reason,
       value,
-      filter:
-        descriptor === undefined
-          ? null
-          : {
-              columnId: descriptor.columnId,
-              noValue: Boolean(descriptor.nullable),
-              subtree: descriptor.subtree,
-            },
+      filter: groupFilterBinding(descriptor),
       ...levelsOf(value, reason),
     };
   };

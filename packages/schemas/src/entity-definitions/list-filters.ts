@@ -94,7 +94,7 @@ export interface FilterSpecCore {
    * relative date token the server resolves (`..@today-1d`), or under
    * `number` a number the declaration accepts (`1.5..48`).
    */
-  range?: { from: string; to: string; number?: NumberRange };
+  range?: { from: string; to: string; number?: NumberRange; presence?: string };
   /** An id scope the server accepts one value for: the control picks one. */
   singleValue?: boolean;
   /**
@@ -300,6 +300,10 @@ export function buildFiltersFromManifest(
       .with("range", () => {
         const value = single(raw);
         if (value === undefined) return undefined;
+        if (spec.range?.presence && (value === "none" || value === "has"))
+          return {
+            [spec.range.presence]: value,
+          };
         // Explicit bounds set the range's own keys; a preset owns several
         // server fields at once (dateFrom+dateTo), so its expander returns
         // the whole patch rather than one value.

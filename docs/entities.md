@@ -1997,8 +1997,9 @@ the page-size-0 request. `?share=` picks Count, Row %, Col % or All % (Row %
 when absent). A saved view opens in it with `view: "pivot"`, at least two
 usable `groupBy` dimensions and an optional `share`; the compiler rejects
 fewer. A cell drills into the table through the same eligibility rule as a
-section's "Filter to this" (`entity-list/group-drill-down.ts`): bucketed dates,
-unmapped choices and unsupported no-value cells stay unclickable. Apple ignores
+section's "Filter to this" (`entity-list/group-drill-down.ts`): calendar buckets
+use the same field's declared date-range filter; boolean values use its boolean
+predicate. Unmapped choices and unsupported no-value cells stay unclickable. Apple ignores
 the Pivot view id and keeps the grouped list.
 
 A `presentation.list.totals` entry with `group: true` also sums its key
@@ -2015,8 +2016,9 @@ filtered-set analytics.
 Web section headers show full counts and can collapse independently without
 changing membership, selection, or later groups. Collapse state is scoped to
 the entity and dimensions. "Filter to this" applies every supported prefix
-filter, preserving ancestor subtree semantics. Calendar buckets lack a scalar
-filter adapter, so that action is unavailable there. "Hide" is available only
+filter, preserving ancestor subtree semantics. Calendar buckets use inclusive
+plain-date bounds; timestamp predicates resolve those bounds in the household
+timezone, including DST transitions. "Hide" is available only
 for a single root value with an exclusion filter; a flat exclusion cannot negate
 a multidimensional path conjunction. Native multidimensional leaf menus are
 disabled for the same reason, while labels retain ancestor context.

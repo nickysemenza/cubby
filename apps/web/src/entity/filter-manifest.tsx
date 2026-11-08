@@ -153,6 +153,9 @@ export const getEntityFilters = (
               range: {
                 from: wire.from,
                 to: wire.to,
+                ...(dateRange && "presence" in wire && wire.presence
+                  ? { presence: wire.presence }
+                  : {}),
                 ...(dateRange
                   ? {}
                   : {
