@@ -2,7 +2,8 @@ import type { ActorContext } from "@cubby/schemas/context";
 import { sourceTransactionRecordUpdateData } from "@cubby/schemas/entities/sourceTransactionRecord";
 import { sourceTransactionRecordRawOut as rawSourceTransactionRecordOut } from "@cubby/schemas/entity-contracts/sourceTransactionRecord";
 import type { ShortcodeFor } from "@cubby/schemas/identifiers";
-import { inArray, sql } from "drizzle-orm";
+import { minorToMoney } from "@cubby/shared";
+import { getTableColumns, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -17,6 +18,7 @@ import { runStepInputListRows } from "~/server/domains/run/repo/run-step-input";
 import { sourceTransactionRecordSearch } from "~/server/domains/transaction-import/repo/search-read-source-transaction-record";
 import {
   sourceObservations,
+  sourceObservationFacts,
   sourceObservationsForPage,
   sourceObservationField,
   sourceObservationColumns,
@@ -44,7 +46,10 @@ import {
 } from "./source-transaction-record-lifecycle";
 
 type ReaderDb = Database | DrizzleTransaction;
-type SourceRow = typeof sourceTransactionRecord.$inferSelect;
+type SourceRow = Pick<
+  typeof sourceTransactionRecord.$inferSelect,
+  "id" | "merchant" | "rawDescription" | "accountDescriptor"
+>;
 
 const initialFingerprint = sql`(SELECT i.fingerprint FROM "TransactionImport" i WHERE i.id = "SourceTransactionRecord"."batchId")`;
 
@@ -186,66 +191,78 @@ const sourceRead = {
   },
 } satisfies ListReadOptions<SourceRow>;
 
-export const sourceTransactionRecordScaffold = listScaffold(
+export const sourceTransactionRecordScaffold = listScaffold<
   "sourceTransactionRecord",
-  sourceTransactionRecord,
-  {
-    rows: {
-      runStepInputs: runStepInputListRows("sourceTransactionRecord"),
-      reconciliation: sql`SELECT r.id AS owner, r."accountId" AS account, r."withdrawalImportId" AS withdrawal, r."supersededByRowId" AS successor FROM ${sourceObservations} r`,
-      acceptedTransactions: sql`SELECT "record" AS "owner", "transaction" FROM (${sourceTransactionSettlements}) accepted`,
-    },
-    derived: {
-      matchState: {
-        value: sourceObservationField("matchState"),
-        // Fence the complete state set before filters or import membership
-        // can turn its history join into a parameterized nested loop.
-        set: sql`WITH match_states AS MATERIALIZED (
+  typeof sourceTransactionRecord,
+  SourceRow
+>("sourceTransactionRecord", sourceTransactionRecord, {
+  rows: {
+    runStepInputs: runStepInputListRows("sourceTransactionRecord"),
+    reconciliation: sql`SELECT r.id AS owner, r."accountId" AS account, r."withdrawalImportId" AS withdrawal, r."supersededByRowId" AS successor FROM ${sourceObservations} r`,
+    acceptedTransactions: sql`SELECT "record" AS "owner", "transaction" FROM (${sourceTransactionSettlements}) accepted`,
+  },
+  derived: {
+    matchState: {
+      value: sourceObservationField("matchState"),
+      // Fence the complete state set before filters or import membership
+      // can turn its history join into a parameterized nested loop.
+      set: sql`WITH match_states AS MATERIALIZED (
           SELECT observed.id, observed."matchState" AS value FROM ${sourceObservations} observed
         ) SELECT id, value FROM match_states`,
-      },
-      externalId: sourceObservationField("externalId"),
-      legacyExternalId: sourceObservationField("legacyExternalId"),
-      chargeKey: sourceObservationField("chargeKey"),
-      current: sourceObservationField("current"),
-      withdrawnAt: sourceObservationField("withdrawnAt"),
-      lastObservedAt: sourceObservationField("lastObservedAt"),
-      updatedAt: sourceObservationField("updatedAt"),
-      notes: sourceObservationField("notes"),
-      dispositionNote: sourceObservationField("dispositionNote"),
-      disposition: sourceObservationField("disposition"),
-      dispositionReason: sourceObservationField("dispositionReason"),
     },
-    read: {
-      ...sourceRead,
-      columns: {
-        accountName: sql`(SELECT account.name FROM "FinancialAccount" account WHERE account.id=${sourceObservationField("accountId")})`,
-        ...Object.fromEntries(
-          (
-            [
-              "externalId",
-              "legacyExternalId",
-              "chargeKey",
-              "current",
-              "withdrawnAt",
-              "lastObservedAt",
-              "updatedAt",
-              "notes",
-              "dispositionNote",
-              "disposition",
-              "dispositionReason",
-              "accountId",
-              "withdrawalImportId",
-              "supersededByRowId",
-            ] as const
-          ).map((key) => [key, sourceObservationField(key)]),
-        ),
-      },
-      title: sql`${sourceTransactionRecord.rawDescription}`,
-      search: sourceTransactionRecordSearch,
-    },
+    externalId: sourceObservationField("externalId"),
+    legacyExternalId: sourceObservationField("legacyExternalId"),
+    chargeKey: sourceObservationField("chargeKey"),
+    current: sourceObservationField("current"),
+    withdrawnAt: sourceObservationField("withdrawnAt"),
+    lastObservedAt: sourceObservationField("lastObservedAt"),
+    updatedAt: sourceObservationField("updatedAt"),
+    notes: sourceObservationField("notes"),
+    dispositionNote: sourceObservationField("dispositionNote"),
+    disposition: sourceObservationField("disposition"),
+    dispositionReason: sourceObservationField("dispositionReason"),
   },
-);
+  read: {
+    ...sourceRead,
+    // Bind facts to one selected record; flattening can scan the whole population.
+    // Raw timestamps and minor-unit money keep the plain reader's decoders.
+    load: async (db, where) =>
+      unwrapDb(db)
+        .select({
+          ...getTableColumns(sourceTransactionRecord),
+          amount: sql<string>`${sourceTransactionRecord.amount}::text`.mapWith(
+            (value) => minorToMoney(BigInt(value)),
+          ),
+          providerAmount:
+            sql<string>`${sourceTransactionRecord.providerAmount}::text`.mapWith(
+              (value) => minorToMoney(BigInt(value)),
+            ),
+          accountName: sql`(SELECT account.name FROM "FinancialAccount" account WHERE account.id=source_read_facts."accountId")`,
+          externalId: sql`source_read_facts."externalId"`,
+          legacyExternalId: sql`source_read_facts."legacyExternalId"`,
+          chargeKey: sql`source_read_facts."chargeKey"`,
+          current: sql`source_read_facts."current"`,
+          withdrawnAt: sql`source_read_facts."withdrawnAt"`,
+          lastObservedAt: sql`source_read_facts."lastObservedAt"`,
+          updatedAt: sql`source_read_facts."updatedAt"`,
+          notes: sql`source_read_facts."notes"`,
+          dispositionNote: sql`source_read_facts."dispositionNote"`,
+          disposition: sql`source_read_facts."disposition"`,
+          dispositionReason: sql`source_read_facts."dispositionReason"`,
+          accountId: sql`source_read_facts."accountId"`,
+          withdrawalImportId: sql`source_read_facts."withdrawalImportId"`,
+          supersededByRowId: sql`source_read_facts."supersededByRowId"`,
+        })
+        .from(sourceTransactionRecord)
+        .leftJoinLateral(
+          sql`(SELECT facts.* FROM ${sourceObservationFacts} facts WHERE facts.id=${sourceTransactionRecord.id} OFFSET 0) source_read_facts`,
+          sql`true`,
+        )
+        .where(where),
+    title: sql`${sourceTransactionRecord.rawDescription}`,
+    search: sourceTransactionRecordSearch,
+  },
+});
 
 const sourceReader = createEntityReader<
   unknown,

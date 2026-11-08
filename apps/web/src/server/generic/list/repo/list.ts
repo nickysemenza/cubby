@@ -426,9 +426,9 @@ type ListReadDeclaration<Row> = ListReadOptions<Row> & {
     Record<string, SQL | PgColumn | ((context: ListContext) => SQL)>
   >;
   /**
-   * Rows by id when one plain select over the root table cannot read them
-   * (relation-loaded children). The scaffold selects, orders and pages the
-   * ids; `where` restricts to them.
+   * Rows by id for joined or relation-loaded reads. The scaffold selects,
+   * orders and pages the ids; `where` restricts to them. Closed physical reads bypass this
+   * enrichment and keep the scaffold's single-query projection.
    */
   load?: (
     db: Database | DrizzleTransaction,
@@ -635,6 +635,12 @@ export function listScaffold<
     fieldModel?.fields.some((field) => field.key === key) === true &&
     !derivedProjectedByBinding(derivedSql, key) &&
     projection.includes(key);
+  // A closed physical read has no binding or field-fact input to hydrate.
+  const closedPhysicalRead = (projection: ListProjection): boolean =>
+    listEntity !== null &&
+    !readPlan().hasBindings(projection) &&
+    compileReadDemand(entity, projection).facts === null &&
+    projection.every((key) => Object.hasOwn(getTableColumns(table), key));
   /** Stored columns, declared derived values and declared columns a projection reads. */
   const readColumns = (projection: ListProjection, context: ListContext) => {
     const wanted = new Set(projection);
@@ -644,11 +650,7 @@ export function listScaffold<
     const columns = getTableColumns(table);
     // Bindings and field facts may read columns absent from the projection.
     // Only direct physical-field reads have a closed set of row inputs here.
-    const narrow =
-      listEntity !== null &&
-      !readPlan().hasBindings(projection) &&
-      compileReadDemand(entity, projection).facts === null &&
-      projection.every((key) => Object.hasOwn(columns, key));
+    const narrow = closedPhysicalRead(projection);
     const selected = new Map<string, SQL | PgColumn>(
       Object.entries(columns).filter(
         ([key]) =>
@@ -685,6 +687,7 @@ export function listScaffold<
   const readRows = (
     db: Database | DrizzleTransaction,
     context: ListContext,
+    projection: ListProjection,
   ):
     | {
         load: NonNullable<
@@ -702,7 +705,7 @@ export function listScaffold<
         load?: never;
       } => {
     const load = readDeclaration.load;
-    if (load)
+    if (load && !closedPhysicalRead(projection))
       return {
         load: (where, projection) => load(db, where, projection, context),
       };
@@ -1462,7 +1465,7 @@ export function listScaffold<
           ...override,
           context,
           tieBreaker: readDeclaration.tieBreaker,
-          ...readRows(db, context),
+          ...readRows(db, context, projection),
           derived: true,
           storedKeys: plan.storedKeys(projection),
           hydrate: (rows, selected, hydration, prefetched) =>
@@ -1519,7 +1522,7 @@ export function listScaffold<
       ).withReader(reader);
       const where = scaffold.plan({ ids: [...codes] }, { context }).where;
       if (where === undefined) throw new Error("A read needs a WHERE");
-      const selection = readRows(db, context);
+      const selection = readRows(db, context, projection);
       const rows = selection.load
         ? await selection.load(where, projection)
         : await selection.select(

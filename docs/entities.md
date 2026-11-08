@@ -2502,6 +2502,10 @@ custom selectors/counts and group summaries
 retain their existing paths. Tracing reports the combined page/count phase as
 `entity.list.core.pageWithCount`, without invented separate timings.
 
+Closed physical reads with no binding or field-fact demand bypass declared row
+loaders and use the scaffold's narrow single SELECT. Enriched reads retain the
+page-owned loader and its canonical row inputs.
+
 List bindings that need only internal page IDs use `bind.ids`; the same plan
 starts them beside row hydration as soon as selection finishes. Row-dependent
 bindings use `bind.batch`. Both memoize within one page, including transitive
