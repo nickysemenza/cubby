@@ -13,6 +13,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 import type { ChildTableDeclaration } from "@cubby/schemas/compiler/entity-definitions/child-definition";
 import type { EntityDeclaration } from "@cubby/schemas/entity-definitions/definition";
+import { storedDateRangeSchema } from "@cubby/schemas/date-range";
 import { typeChecker } from "cubby/tooling/type-checker";
 import { generatedHeader, removeExtraArtifacts } from "../generator/artifacts";
 import { compileEntityDeclarations as compileDeclarations } from "../generator/entities/compile";
@@ -182,6 +183,7 @@ describe("typed entity compiler", () => {
     const entity = compileEntityDeclarations([
       {
         ...base,
+        presentation: { ...presentation, titleField: "heading" },
         model: {
           ...model,
           fields: [
@@ -192,6 +194,35 @@ describe("typed entity compiler", () => {
               label: "Title",
               nullable: true,
             },
+            {
+              output: false,
+              key: "internalAt",
+              kind: "timestamp",
+              nullable: true,
+            },
+            {
+              key: "heading",
+              kind: "text",
+              validation: { read: z.string(), create: null, update: null },
+            },
+            { output: false, key: "startsOn", kind: "date", nullable: true },
+            { output: false, key: "endsOn", kind: "date", nullable: true },
+            {
+              key: "period",
+              kind: "dateRange",
+              nullable: true,
+              dateRange: {
+                start: "startsOn",
+                end: "endsOn",
+                semantics: "period",
+              },
+              control: { kind: "dateRange" },
+              validation: {
+                read: storedDateRangeSchema.nullable(),
+                create: null,
+                update: null,
+              },
+            },
           ],
 
           storage: [
@@ -201,6 +232,10 @@ describe("typed entity compiler", () => {
               defaultOverride: "literal",
               defaultValue: "Example",
             },
+            "heading",
+            "internalAt",
+            "startsOn",
+            "endsOn",
           ],
         },
       },
@@ -215,6 +250,13 @@ describe("typed entity compiler", () => {
       nullable: false,
       defaultValue: "Example",
     });
+    expect(
+      entity.listFields.grouping.find(({ key }) => key === "internalAt"),
+    ).toMatchObject({ listed: false });
+    for (const key of ["startsOn", "endsOn"])
+      expect(
+        entity.listFields.grouping.find((choice) => choice.key === key),
+      ).toMatchObject({ listed: true });
     expect(() =>
       compileEntityDeclarations([
         { ...base, model: { ...model, storage: ["missing"] } },

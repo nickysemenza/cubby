@@ -1125,6 +1125,28 @@ const groupFilterBinding = (descriptor: FilterDescriptor | undefined) =>
         subtree: descriptor.subtree,
       };
 
+/** Public surfaces and date-range bounds admit fields; storage alone does not. */
+const listedGroupField = (
+  entity: CompiledEntity,
+  field: CompiledEntity["fieldModel"]["fields"][number] | undefined,
+  hasFilter: boolean,
+): boolean =>
+  field !== undefined &&
+  field.key !== "deletedAt" &&
+  (entity.fieldModel.output.includes(field.key) ||
+    field.reference !== null ||
+    field.control !== null ||
+    field.display.list ||
+    field.display.detail ||
+    field.display.readPath !== null ||
+    hasFilter ||
+    entity.fieldModel.fields.some(
+      (candidate) =>
+        candidate.dateRange !== null &&
+        (candidate.dateRange.start === field.key ||
+          candidate.dateRange.end === field.key),
+    ));
+
 /**
  * Compiles one `model.grouping` key. A model field groups by its own column,
  * or by its referenced record; a `model.derived` key groups through its
@@ -1269,7 +1291,7 @@ const compileGroupChoice = (
       key,
       listed:
         entity.fieldModel.grouping.includes(key) ||
-        (field !== undefined && key !== "deletedAt") ||
+        listedGroupField(entity, field, labelFilter !== undefined) ||
         ((bound?.shape === "via" || bound?.shape === "rows") &&
           bound.terminal.kind === "record"),
       label,

@@ -141,6 +141,7 @@ export const { definition, readSchemas } = defineEntityModel({
     },
   },
   model: {
+    grouping: ["purchaseAssociationReviewed"],
     fields: [
       {
         key: "id",

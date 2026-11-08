@@ -163,6 +163,7 @@ export const { definition, readSchemas } = defineEntityModel(
       },
     },
     model: {
+      grouping: ["metadataOutcome"],
       fields: [
         {
           audit: false,

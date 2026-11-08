@@ -300,6 +300,7 @@ export const { definition, readSchemas } = defineEntityModel(
       ],
 
       derived: { recipeCount: { type: "number" } },
+      grouping: ["importedAt"],
       sort: {
         fields: ["name", "recipeCount", "createdAt", "updatedAt"],
       },
