@@ -5,7 +5,6 @@ import SwiftUI
 struct PhotoDestinationSheet: View {
     @Environment(AppModel.self) private var appModel
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(\.developerOverlays) private var developerOverlays
     @Environment(\.undoManager) private var undoManager
     let manifest: PhotoImportManifest
@@ -16,10 +15,11 @@ struct PhotoDestinationSheet: View {
     @State private var relatedContext: PhotoRelatedContext?
     @State private var createSelfContext: PhotoCreateSelfContext?
     @State private var createTargetContext: PhotoCreateTargetContext?
-    /// A2: reverse-geocodes each group's representative photo so its row can add "· photo ·
-    /// <city>" evidence once known.
-    @State private var provenance = PhotoCaptureProvenance()
     @State private var draftDismissal = DraftDismissalState()
+    @State private var previewID: String?
+    @State private var importBatch: PhotoImportRunBatch?
+    @State private var committedIDs: [String]?
+    @State private var deliveredResult = false
 
     /// `.bottomBar` is iOS/tvOS/watchOS-only; macOS has no equivalent placement, so this bar's
     /// items fall back to the window toolbar there.
@@ -33,7 +33,16 @@ struct PhotoDestinationSheet: View {
 
     var body: some View {
         NavigationStack(path: $path) {
-            reviewContent
+            Group {
+                if committedIDs != nil {
+                    completionContent
+                } else {
+                    reviewContent
+                }
+            }
+            .navigationDestination(for: PhotoImportNavigationDestination.self) { destination in
+                destinationScreen(destination)
+            }
         }
         .nativeSheet(.photoReview)
         .onAppear { manifest.undoManager = undoManager }
@@ -44,6 +53,24 @@ struct PhotoDestinationSheet: View {
         .draftDismissal(
             $draftDismissal, isDirty: manifest.hasStagedChanges, isSaving: manifest.isCommitting
         ) { dismiss() }
+        .onDisappear { deliverResult() }
+        .photoImportViewer(
+            isPresented: Binding(
+                get: { previewID != nil }, set: { if !$0 { previewID = nil } }),
+            items: manifest.items, initialID: previewID ?? manifest.items.first?.id ?? ""
+        )
+        .sheet(item: $importBatch) { batch in
+            PhotoImportRunSheet(items: batch.items, flow: batch.flow) { _ in
+                let uploadedIDs = batch.flow.session.importedPhotoIDs
+                appModel.retirePhotoImport(batch.flow)
+                importBatch = nil
+                if !uploadedIDs.isEmpty {
+                    committedIDs = Array(uploadedIDs)
+                    deliverResult()
+                    dismiss()
+                }
+            }
+        }
         .task {
             manifest.startAnalysis(client: appModel.client, matches: appModel.photoMatches)
         }
@@ -61,7 +88,7 @@ struct PhotoDestinationSheet: View {
             Button("Replace", role: .destructive) {
                 guard let confirmation = replacement else { return }
                 manifest.moveSelected(to: confirmation.option, row: confirmation.row, replace: true)
-                path.removeLast()
+                path.removeAll()
             }
             Button("Cancel", role: .cancel) {}
         } message: {
@@ -133,90 +160,34 @@ struct PhotoDestinationSheet: View {
 
     private var reviewContent: some View {
         reviewLayout
-            .navigationTitle("Review photos")
+            .navigationTitle("Add photos")
             #if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)
             #endif
-            .navigationSubtitle(manifest.reviewSelectionStatus)
             .toolbar { reviewToolbar }
             .safeAreaBar(edge: .bottom) { statusFooter }
-            .navigationDestination(for: PhotoImportNavigationDestination.self) { destination in
-                destinationScreen(destination)
-            }
+
     }
 
-    /// Extracted so `body` stays under the project's 200ms type-check budget
-    /// (apps/apple/AGENTS.md, "A generator must never emit…" note on long-body stalls; the same
-    /// principle applies to a hand-written body this long).
-    @ViewBuilder
     private var manifestListContent: some View {
-        if !manifest.needsDestination.isEmpty {
-            Section {
-                PhotoImportGroupRows(
-                    ids: manifest.needsDestination, manifest: manifest,
-                    onChangeDestination: { path.append(.sourceTypes) })
-            } header: {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Needs a destination").font(.headline)
-                    if let caption = analysisCompleteCaption {
-                        Text(caption).font(.caption).foregroundStyle(.secondary)
-                    }
-                }
-            }
-        }
-        ForEach(Array(manifest.groups.enumerated()), id: \.element.id) { index, group in
-            Section {
-                PhotoImportGroupRows(
-                    ids: group.photoIDs, manifest: manifest,
-                    onChangeDestination: { path.append(.sourceTypes) })
-            } header: {
-                groupHeader(group, showsAnalysisCaption: manifest.needsDestination.isEmpty && index == 0)
-            }
-        }
-        Section {
-            PhotoAnalysisDisclosure(manifest: manifest)
+        ForEach(manifest.items) { item in
+            PhotoDestinationRow(
+                item: item, manifest: manifest,
+                onPreview: { previewID = item.id },
+                onChangeDestination: { chooseDestination(for: [item.id]) })
         }
     }
 
-    private func groupHeader(_ group: PhotoImportGroup, showsAnalysisCaption: Bool) -> some View {
-        HStack(alignment: .firstTextBaseline) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(group.title).font(.headline)
-                if let evidence = groupEvidence(group) {
-                    Text(evidence).font(.caption).foregroundStyle(.secondary)
-                }
-                if showsAnalysisCaption, let caption = analysisCompleteCaption {
-                    Text(caption).font(.caption).foregroundStyle(.secondary)
-                }
-                if developerOverlays {
-                    DevOverlayText(group.decision.reasonLabel)
-                }
-            }
-            Spacer()
-            if let source = group.source, let sourceRow = group.sourceRow {
-                Button("Change destination…") {
-                    path.append(.routePicker(source: source, row: sourceRow))
-                }
-                .font(.caption)
-                .accessibilityIdentifier("photos.manifest.changeDestination.\(group.id)")
-            }
+    private func chooseDestination(for ids: [String]) {
+        manifest.selectPhotos(ids)
+        let currentType = manifest.groups.first {
+            Set(ids).isSubset(of: Set($0.photoIDs))
+        }?.source
+        if let type = currentType ?? manifest.selectedSuggestedSourceType {
+            path.append(.sourceType(type))
+        } else {
+            path.append(.sourceTypes)
         }
-        .task(id: group.photoIDs.first) {
-            guard let id = group.photoIDs.first,
-                let item = manifest.items.first(where: { $0.id == id })
-            else { return }
-            await provenance.resolve(id: item.id, location: item.location)
-        }
-    }
-
-    /// `group.evidence` with "· photo · <city>" appended once the group's representative photo's
-    /// location has resolved (A2) — never blocks or reflows the row while it's still pending.
-    private func groupEvidence(_ group: PhotoImportGroup) -> String? {
-        let city = group.photoIDs.first
-            .flatMap { id in manifest.items.first(where: { $0.id == id }) }
-            .flatMap { provenance.result(for: $0.id)?.city }
-        let parts = [group.evidence, city.map { "photo · \($0)" }].compactMap { $0 }
-        return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
     @ToolbarContentBuilder
@@ -228,6 +199,17 @@ struct PhotoDestinationSheet: View {
                     dismiss: dismiss)
             }
             .disabled(manifest.isCommitting)
+        }
+        ToolbarItem(placement: .primaryAction) {
+            Button("Import selected belongings…", systemImage: "shippingbox") {
+                manifest.cancelAnalysis()
+                importBatch = PhotoImportRunBatch(
+                    items: manifest.selectedItems, flow: appModel.makePhotoImportFlow())
+            }
+            .disabled(manifest.selectedIDs.isEmpty || manifest.isCommitting || manifest.commitRequiresReview)
+            .labelStyle(.iconOnly)
+            .help("Import selected belongings")
+            .accessibilityIdentifier("photos.destination.import")
         }
         if developerOverlays {
             ToolbarItem { CopyDiagnosticsButton { reviewDiagnostics } }
@@ -274,10 +256,12 @@ struct PhotoDestinationSheet: View {
     @ViewBuilder
     private func destinationScreen(_ destination: PhotoImportNavigationDestination) -> some View {
         switch destination {
+        case .record(let key, let id):
+            EntityDetailView(key: key, id: id)
         case .sourceTypes:
             List {
-                PhotoImportHero(items: manifest.scopedHeroItems)
-                PhotoAnalysisDisclosure(manifest: manifest)
+                PhotoImportHero(items: manifest.scopedHeroItems, heightCap: (120, 0.14))
+                if developerOverlays { PhotoAnalysisDisclosure(manifest: manifest) }
                 Section("Choose what is in the photo") {
                     ForEach(manifest.sourceTypeOptions) { type in
                         Button {
@@ -313,6 +297,18 @@ struct PhotoDestinationSheet: View {
                 ) { row in
                     chooseSourceRecord(type, row: row)
                 }
+                .toolbar {
+                    ToolbarItem(placement: .secondaryAction) {
+                        Menu("Change type", systemImage: "arrow.triangle.2.circlepath") {
+                            ForEach(manifest.sourceTypeOptions) { option in
+                                Button(option.title) {
+                                    path = [.sourceType(option.source)]
+                                }
+                            }
+                        }
+                        .accessibilityIdentifier("photos.destination.changeType")
+                    }
+                }
             } else {
                 ContentUnavailableView(
                     "Destination unavailable",
@@ -323,8 +319,8 @@ struct PhotoDestinationSheet: View {
             }
         case .routePicker(let source, let row):
             List {
-                PhotoImportHero(items: manifest.scopedHeroItems)
-                PhotoAnalysisDisclosure(manifest: manifest)
+                PhotoImportHero(items: manifest.scopedHeroItems, heightCap: (120, 0.14))
+                if developerOverlays { PhotoAnalysisDisclosure(manifest: manifest) }
                 if let type = manifest.sourceTypeOptions.first(where: {
                     $0.source == source
                 }) {
@@ -354,74 +350,40 @@ struct PhotoDestinationSheet: View {
         }
     }
 
-    /// Keep a bounded side column when the sheet has room for the review list beside it.
-    @ViewBuilder private var reviewLayout: some View {
-        GeometryReader { geometry in
-            if !dynamicTypeSize.isAccessibilitySize && geometry.size.width >= 640 {
-                HStack(spacing: 0) {
-                    sideColumn(width: min(300, max(220, geometry.size.width * 0.32)))
-                    Divider()
-                    List { manifestListContent }
+    private var reviewLayout: some View {
+        List {
+            Section {
+                HStack {
+                    Text("\(manifest.items.count) photo\(manifest.items.count == 1 ? "" : "s")")
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    selectAllButton
                 }
-            } else {
-                VStack(alignment: .leading, spacing: 0) {
-                    hero(heightCap: (220, 0.22), compact: true)
-                    HStack {
-                        Text(manifest.reviewSelectionStatus)
-                            .font(.subheadline).foregroundStyle(.secondary)
-                        Spacer()
-                        selectAllButton
+                .font(.subheadline)
+                analysisStatus
+                manifestListContent
+                if manifest.selectedIDs.count > 1 {
+                    Button("Change destination for \(manifest.selectedIDs.count) selected photos…") {
+                        chooseDestination(for: Array(manifest.selectedIDs))
                     }
-                    .padding(.horizontal, FieldGuideTokens.Space.md)
-                    analysisStatus
-                    List {
-                        if !manifest.selectedIDs.isEmpty {
-                            Section { destinationAction }
-                        }
-                        manifestListContent
-                    }
+                    .accessibilityIdentifier("photos.manifest.destination")
                 }
             }
-        }
-    }
-
-    /// The regular-width hero/filmstrip/assign-action column, extracted so `reviewLayout` stays
-    /// under the project's type-check budget (apps/apple/AGENTS.md).
-    private func sideColumn(width: CGFloat) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            hero(heightCap: (260, 0.3))
-            VStack(alignment: .leading, spacing: 4) {
-                Text(manifest.reviewSelectionStatus)
-                    .font(.subheadline).foregroundStyle(.secondary)
-                selectAllButton.buttonStyle(.borderless)
+            if developerOverlays {
+                Section { PhotoAnalysisDisclosure(manifest: manifest) }
             }
-            analysisStatus
-            destinationAction
-            Spacer(minLength: 0)
         }
-        .padding(FieldGuideTokens.Space.md)
-        .frame(width: width)
+        .fieldGuideSectionStyle()
+        .disabled(manifest.isCommitting || manifest.commitRequiresReview)
     }
 
     private var selectAllButton: some View {
         Button(manifest.selectedIDs.count == manifest.items.count ? "Deselect all" : "Select all") {
             manifest.toggleSelectAll()
         }
+        .buttonStyle(.borderless)
         .disabled(manifest.isCommitting)
         .accessibilityIdentifier("photos.manifest.selectAll")
-    }
-
-    private func hero(heightCap: (points: CGFloat, fraction: CGFloat), compact: Bool = false) -> some View {
-        PhotoImportHero(
-            items: manifest.items,
-            selectedIDs: manifest.selectedIDs,
-            focusedID: Binding(
-                get: { manifest.focusedItemID ?? manifest.items.first?.id ?? "" },
-                set: { manifest.focusedItemID = $0 }),
-            heightCap: heightCap,
-            compact: compact,
-            onToggle: manifest.toggle
-        )
     }
 
     @ViewBuilder
@@ -458,97 +420,11 @@ struct PhotoDestinationSheet: View {
         }
     }
 
-    /// The former standalone "Analysis complete" row, now the first list section's header
-    /// caption (see the `Section` headers in `body`) instead of a fixed row above the list.
-    private var analysisCompleteCaption: String? {
-        guard case .complete = manifest.analysisState else { return nil }
-        return manifest.needsDestination.isEmpty
-            ? "Analysis complete"
-            : "Analysis complete · \(manifest.needsDestination.count) need a destination"
-    }
-
-    @ViewBuilder
-    private var destinationAction: some View {
-        if !manifest.selectedIDs.isEmpty {
-            VStack(spacing: 6) {
-                if manifest.isResolvingSourceRecord {
-                    HStack(spacing: 8) {
-                        ProgressView().controlSize(.small)
-                        Text("Finding existing…")
-                    }
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .accessibilityIdentifier("photos.manifest.resolvingSource")
-                }
-                if let suggested = manifest.selectedSuggestedSource {
-                    Button {
-                        chooseSourceRecord(suggested.type, row: suggested.row)
-                    } label: {
-                        Label(
-                            "Choose \(suggested.row.title) · \(suggested.row.id)",
-                            systemImage: entitySymbol(for: suggested.type.source)
-                        )
-                        .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .accessibilityIdentifier("photos.manifest.suggested-source")
-
-                    Button("Choose another type…") { path.append(.sourceTypes) }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(.secondary)
-                } else if let suggested = manifest.selectedSuggestedSourceType {
-                    Button {
-                        path.append(.sourceType(suggested))
-                    } label: {
-                        Label(
-                            "Choose \(EntityCatalog[suggested].singular.lowercased())",
-                            systemImage: entitySymbol(for: suggested)
-                        )
-                        .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .accessibilityIdentifier("photos.manifest.suggested-source-type")
-
-                    Button("Choose another type…") { path.append(.sourceTypes) }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(.secondary)
-                } else if !manifest.selectedSourceTypeSuggestionGroups.isEmpty {
-                    ForEach(manifest.selectedSourceTypeSuggestionGroups) { group in
-                        Button {
-                            manifest.selectSuggestedPhotos(for: group.source)
-                            path.append(.sourceType(group.source))
-                        } label: {
-                            Label(
-                                "Choose \(EntityCatalog[group.source].plural) for \(group.photoIDs.count) photos",
-                                systemImage: entitySymbol(for: group.source)
-                            )
-                            .frame(maxWidth: .infinity)
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .accessibilityIdentifier(
-                            "photos.manifest.suggested-group.\(group.source.rawValue)")
-                    }
-
-                    Button("Choose another type…") { path.append(.sourceTypes) }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(.secondary)
-                } else {
-                    Button {
-                        path.append(.sourceTypes)
-                    } label: {
-                        Label("Assign selected…", systemImage: "arrow.right.circle")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.bordered)
-                }
-            }
-            .accessibilityIdentifier("photos.manifest.destination")
-        }
-    }
-
     private func chooseSourceRecord(_ type: PhotoSourceTypeOption, row: EntityRow) {
         Task {
             switch await manifest.chooseSourceRecord(type, row: row, client: appModel.client) {
+            case .replaceConfirmation(let option):
+                replacement = ReplacementConfirmation(option: option, row: row)
             case .routePicker:
                 path.append(.routePicker(source: type.source, row: row))
             case .resolved:
@@ -572,8 +448,12 @@ struct PhotoDestinationSheet: View {
         case .`self`:
             // Reached only via the interactive route picker (a `.prompt` route, or an ambiguous
             // fallback) — `.prompted`, distinct from a chooser row's plain `.user` pick.
-            manifest.moveSelected(to: option, row: source, decision: .prompted)
-            path.removeAll()
+            if option.route.requiresReplaceConfirmation && source.imageURL != nil {
+                replacement = ReplacementConfirmation(option: option, row: source)
+            } else {
+                manifest.moveSelected(to: option, row: source, decision: .prompted)
+                path.removeAll()
+            }
         case .createSelf:
             // Unreachable: the route picker's menu is `type.options`, which excludes `createSelf`
             // (see `destinationOptions`) — that affordance lives on `PhotoEntityChooser`'s "New
@@ -617,8 +497,7 @@ struct PhotoDestinationSheet: View {
     @ViewBuilder
     private var statusFooter: some View {
         if manifest.errorMessage != nil
-            || (!manifest.canCommit && !manifest.isCommitting && manifest.needsDestination.isEmpty
-                && manifest.commitDisabledReason != nil)
+            || (!manifest.canCommit && !manifest.isCommitting && manifest.commitDisabledReason != nil)
         {
             VStack(alignment: .leading, spacing: 4) {
                 if let error = manifest.errorMessage {
@@ -626,7 +505,7 @@ struct PhotoDestinationSheet: View {
                         .font(.caption)
                         .foregroundStyle(FieldGuideTokens.destructive)
                 }
-                if !manifest.canCommit, !manifest.isCommitting, manifest.needsDestination.isEmpty,
+                if !manifest.canCommit, !manifest.isCommitting,
                     let reason = manifest.commitDisabledReason
                 {
                     Label(reason, systemImage: "info.circle")
@@ -651,120 +530,141 @@ struct PhotoDestinationSheet: View {
             })
     }
 
-    private func finish(with committedIDs: [String]) async {
-        onDone(committedIDs)
-        dismiss()
-        await appModel.photoMatches.refresh(client: appModel.client, priorityIDs: Set(committedIDs))
-    }
-}
-
-private struct PhotoImportGroupRows: View {
-    @Environment(\.developerOverlays) private var developerOverlays
-    let ids: [String]
-    @Bindable var manifest: PhotoImportManifest
-    /// Pulls a single wrongly grouped photo out for a fresh source-type pick without undoing the
-    /// rest of the batch: the row action scopes selection to `id` first, then this navigates.
-    let onChangeDestination: () -> Void
-
-    var body: some View {
-        ForEach(ids, id: \.self) { id in
-            if let item = manifest.items.first(where: { $0.id == id }) {
-                Button {
-                    manifest.toggle(id)
-                } label: {
-                    HStack(spacing: 12) {
-                        Image(decorative: item.preview, scale: 1).resizable().scaledToFill()
-                            .frame(width: 52, height: 52).clipShape(RoundedRectangle(cornerRadius: 8))
-                        VStack(alignment: .leading, spacing: 2) {
-                            if let capturedAt = item.capturedAt {
-                                DateDisplay(date: capturedAt)
-                            } else {
-                                Text("Undated photo")
-                            }
-                            if let suggestion = manifest.suggestions[id] {
-                                Text(suggestion).font(.caption).foregroundStyle(.secondary)
-                            } else if manifest.analysisState == .complete,
-                                manifest.needsDestination.contains(id)
-                            {
-                                Text("No confident match")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                            if developerOverlays, let score = manifest.suggestionScores[id] {
-                                DevOverlayText(Self.scoreCaption(score))
-                            }
-                            if let candidates = manifest.duplicateCandidates[id] {
-                                Menu {
-                                    ForEach(candidates, id: \.id) { candidate in
-                                        Button {
-                                            manifest.chooseExisting(candidate.id, for: id)
-                                        } label: {
-                                            Label(
-                                                "Use \(manifest.duplicateLabel(candidate))",
-                                                systemImage: manifest.duplicateSelection(id)
-                                                    == .reuse(candidate.id)
-                                                    ? "checkmark.circle.fill" : "circle")
-                                        }
-                                    }
-                                    Divider()
-                                    Button {
-                                        manifest.chooseNew(for: id)
-                                    } label: {
-                                        Label(
-                                            "Add separately",
-                                            systemImage: manifest.duplicateSelection(id) == .keepBoth
-                                                ? "checkmark.circle.fill" : "circle")
-                                    }
-                                } label: {
-                                    Label(
-                                        manifest.duplicateSelection(id) == nil
-                                            ? "Review possible duplicate" : "Duplicate reviewed",
-                                        systemImage: manifest.duplicateSelection(id) == nil
-                                            ? "exclamationmark.circle" : "checkmark.circle")
-                                }
-                                .font(.caption)
-                                .accessibilityIdentifier("photos.duplicate.\(id)")
-                            }
-                        }
-                        Spacer()
-                        Image(
-                            systemName: manifest.selectedIDs.contains(id) ? "checkmark.circle.fill" : "circle"
-                        )
-                        .foregroundStyle(manifest.selectedIDs.contains(id) ? .blue : .secondary)
-                    }
-                }.buttonStyle(.plain).accessibilityValue(
-                    manifest.selectedIDs.contains(id) ? "Selected" : "Not selected"
+    private var completionContent: some View {
+        List {
+            Section {
+                Label(
+                    "Added \(committedIDs?.count ?? 0) photo\(committedIDs?.count == 1 ? "" : "s")",
+                    systemImage: "checkmark.circle"
                 )
-                .contextMenu {
-                    Button("Change destination…", systemImage: "arrow.triangle.2.circlepath") {
-                        changeDestination(id)
+                .font(.headline)
+                ForEach(Array(manifest.committedDestinations.enumerated()), id: \.offset) { _, destination in
+                    if let id = destination.id {
+                        NavigationLink(
+                            value: PhotoImportNavigationDestination.record(destination.entity, id: id)
+                        ) {
+                            completionLabel(title: destination.title, count: destination.photoCount)
+                        }
+                    } else {
+                        completionLabel(title: destination.title, count: destination.photoCount)
                     }
                 }
-                .swipeActions(edge: .trailing) {
-                    Button("Change…") { changeDestination(id) }
-                        .tint(.blue)
+            }
+        }
+        .navigationTitle("Photos added")
+        .toolbar {
+            ToolbarItem(placement: .confirmationAction) {
+                Button("Done") {
+                    deliverResult(); dismiss()
                 }
             }
         }
     }
 
-    private func changeDestination(_ id: String) {
-        manifest.selectedIDs = [id]
-        manifest.focusedItemID = id
-        onChangeDestination()
+    private func completionLabel(title: String, count: Int) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+            Text("\(count) photo\(count == 1 ? "" : "s")")
+                .font(.caption).foregroundStyle(.secondary)
+        }
     }
 
-    /// "text 0.00 · date 0.88 · visual 1.00 · classifier 0.08 → 0.96" (developer overlays layer 2).
-    /// `Score.identity` is shown as "visual": it is set from an authoritative-owner or visual-match
-    /// hit, never from text/date/classifier evidence — see `PhotoEvidenceScorer.score`.
-    private static func scoreCaption(_ score: PhotoEvidenceScorer.Score) -> String {
-        let parts = [
-            "text \(String(format: "%.2f", score.text))",
-            "date \(String(format: "%.2f", score.date))",
-            "visual \(String(format: "%.2f", score.identity))",
-            "classifier \(String(format: "%.2f", score.classifier))",
-        ]
-        return "\(parts.joined(separator: " · ")) → \(String(format: "%.2f", score.combined))"
+    private func deliverResult() {
+        guard let committedIDs, !deliveredResult else { return }
+        deliveredResult = true
+        onDone(committedIDs)
+    }
+
+    private func finish(with committedIDs: [String]) async {
+        self.committedIDs = committedIDs
+        await appModel.photoMatches.refresh(client: appModel.client, priorityIDs: Set(committedIDs))
+    }
+}
+
+private struct PhotoDestinationRow: View {
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    let item: PhotoSelectionItem
+    @Bindable var manifest: PhotoImportManifest
+    let onPreview: () -> Void
+    let onChangeDestination: () -> Void
+
+    private var group: PhotoImportGroup? {
+        manifest.groups.first { $0.photoIDs.contains(item.id) }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .center, spacing: 8) {
+                Button(action: onPreview) {
+                    PhotoImportProgressiveImage(item: item, maxPixelSize: 320)
+                        .frame(width: dynamicTypeSize.isAccessibilitySize ? 88 : 112, height: 112)
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                }
+                .buttonStyle(.borderless)
+                .accessibilityLabel("Preview photo")
+                VStack(alignment: .leading, spacing: 4) {
+                    if let capturedAt = item.capturedAt {
+                        DateDisplay(date: capturedAt).font(.subheadline)
+                    } else {
+                        Text("Undated photo").font(.subheadline)
+                    }
+                    if group == nil {
+                        Text(manifest.suggestions[item.id] ?? "Choose a destination")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+                Spacer(minLength: 0)
+                Button {
+                    manifest.toggle(item.id)
+                } label: {
+                    Image(
+                        systemName: manifest.selectedIDs.contains(item.id)
+                            ? "checkmark.circle.fill" : "circle"
+                    )
+                    .frame(minWidth: 44, minHeight: 44)
+                }
+                .buttonStyle(.borderless)
+                .accessibilityLabel("Select photo")
+                .accessibilityValue(manifest.selectedIDs.contains(item.id) ? "Selected" : "Not selected")
+                .accessibilityIdentifier("photos.manifest.select.\(item.id)")
+            }
+            Button(action: onChangeDestination) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(group.map { "Add to \($0.title)" } ?? "Choose destination…")
+                            .font(.subheadline.weight(.semibold))
+                        if let evidence = group?.evidence {
+                            Text(evidence).font(.caption).foregroundStyle(.secondary)
+                        }
+                    }
+                    Spacer(minLength: 8)
+                    Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary)
+                }
+                .frame(minHeight: 44)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.borderless)
+            .accessibilityIdentifier("photos.manifest.changeDestination.\(item.id)")
+            if let candidates = manifest.duplicateCandidates[item.id] {
+                Menu {
+                    ForEach(candidates, id: \.id) { candidate in
+                        Button("Use \(manifest.duplicateLabel(candidate))") {
+                            manifest.chooseExisting(candidate.id, for: item.id)
+                        }
+                    }
+                    Button("Add separately") { manifest.chooseNew(for: item.id) }
+                } label: {
+                    Label(
+                        manifest.duplicateSelection(item.id) == nil
+                            ? "Review possible duplicate" : "Duplicate reviewed",
+                        systemImage: "photo.on.rectangle")
+                }
+                .font(.caption)
+                .accessibilityIdentifier("photos.duplicate.\(item.id)")
+            }
+        }
+        .padding(.vertical, 4)
+        .listRowInsets(EdgeInsets(top: 4, leading: 8, bottom: 4, trailing: 8))
     }
 }
 

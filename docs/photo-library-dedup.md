@@ -171,6 +171,24 @@ creation and capture-date prefills follow [Garden](garden.md#native-photo-import
 Saved entry/upload IDs survive retries; a destination stays fixed once a batch
 starts so recovery cannot split writes across locations.
 
+## Native photo review
+
+Capture and All photos use one batch review for library, picker and camera
+selections. One or many photos use the same selectable rows, with direct preview
+and destination controls. The manifest offers confident record destinations for
+confirmation; type-only and ambiguous results require a member choice. Manual
+choices remain authoritative while analysis continues. Related-record resolution
+uses each capture day separately, and explicit destination picks can combine days.
+New-record editors confirm dirty-draft dismissal; clean prefills do not prompt.
+
+The final Add commits the whole assigned batch atomically. Its disabled reason
+names unassigned photos or unresolved duplicate decisions. Completion retains
+confirmed destination links, including created records when the commit response
+provides their IDs. Ambiguous-response reconciliation must not invent created IDs.
+Existing staging and check-status recovery retain their original write fences.
+Import selected belongings carries selected photos into the durable Run flow
+below without changing inventory as a side effect of selection.
+
 ## Native import-run lifecycle
 
 An explicit photo import continues independently of the Automatic work setting.

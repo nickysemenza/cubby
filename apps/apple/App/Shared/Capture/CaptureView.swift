@@ -68,7 +68,7 @@ private struct CaptureContent: View {
     @Binding var pickingLocation: Bool
     @Binding var showingStrays: Bool
     @State private var scanning = false
-    @State private var photoImport: PhotoImportRunBatch?
+    @State private var photoSelection: PhotoSelectionBatch?
     /// Shared by the location glyph column and the chip dividers so both track Dynamic Type.
     @ScaledMetric(relativeTo: .body) private var iconSlotWidth: CGFloat = 20
 
@@ -96,10 +96,9 @@ private struct CaptureContent: View {
         .onChange(of: pickingLocation) { _, picking in
             if !picking, capture.location == nil { scanning = false }
         }
-        .sheet(item: $photoImport) { batch in
-            PhotoImportRunSheet(items: batch.items, flow: batch.flow) { _ in
-                appModel.retirePhotoImport(batch.flow)
-                photoImport = nil
+        .sheet(item: $photoSelection) { batch in
+            PhotoDestinationSheet(manifest: batch.manifest) { _ in
+                photoSelection = nil
             }
         }
         // Newest chip first; its status settling is what changes `chips`, so that is the trigger.
@@ -158,7 +157,7 @@ private struct CaptureContent: View {
             Eyebrow("Photos")
             PhotoSourceButtons(maxSelectionCount: SharedConstants.photoRunImageLimit, reviewsUploads: false) {
                 items in
-                photoImport = PhotoImportRunBatch(items: items, flow: appModel.makePhotoImportFlow())
+                photoSelection = PhotoSelectionBatch(items: items, appModel: appModel)
             }
         }
     }

@@ -621,7 +621,7 @@ public actor CubbyClient {
         let trimmed = String(
             text.trimmingCharacters(in: .whitespacesAndNewlines).prefix(SearchHit.maxQueryLength))
         guard !trimmed.isEmpty else { return [] }
-        var query = SearchQueryInput(
+        var query = SearchFindInput(
             query: trimmed, limit: min(max(limit, 1), SearchHit.maxLimit)
         )
         // `search.find`'s body declares its own searchable-entity enum, so catalog keys are

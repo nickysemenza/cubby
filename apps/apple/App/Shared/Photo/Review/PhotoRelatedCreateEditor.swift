@@ -27,7 +27,9 @@ struct PhotoRelatedCreateEditor: View {
 
     @Environment(AppModel.self) private var appModel
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.developerOverlays) private var developerOverlays
     @State private var model: GenericEntityEditModel?
+    @State private var draftDismissal = DraftDismissalState()
     @State private var pickedTitles: [String: String] = [:]
     /// A2: reverse-geocodes `heroItems.first` for the capture-date provenance caption's city.
     @State private var provenance = PhotoCaptureProvenance()
@@ -114,9 +116,9 @@ struct PhotoRelatedCreateEditor: View {
                 if let model {
                     VStack(spacing: 0) {
                         if !heroItems.isEmpty {
-                            PhotoImportHero(items: heroItems)
+                            PhotoImportHero(items: heroItems, heightCap: (120, 0.14))
                         }
-                        PhotoAnalysisDisclosure(manifest: importManifest)
+                        if developerOverlays { PhotoAnalysisDisclosure(manifest: importManifest) }
                         Form {
                             Section {
                                 Label(
@@ -157,7 +159,9 @@ struct PhotoRelatedCreateEditor: View {
             #endif
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                    Button("Cancel") {
+                        draftDismissal.request(isDirty: model?.isDirty ?? false, dismiss: dismiss)
+                    }
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Continue") {
@@ -179,6 +183,10 @@ struct PhotoRelatedCreateEditor: View {
             }
         }
         .nativeSheet(.editor)
+        .draftDismissal(
+            $draftDismissal, isDirty: model?.isDirty ?? false, isSaving: false,
+            confirmInteractiveDismissal: true
+        ) { dismiss() }
         .task {
             guard model == nil else { return }
             let created = GenericEntityEditModel(

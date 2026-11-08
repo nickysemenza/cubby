@@ -6,11 +6,6 @@ struct PhotosRootView: View {
     @Environment(AppModel.self) private var appModel
     @State private var destination: PhotoSelectionBatch?
     @State private var runBatch: PhotoImportRunBatch?
-    /// A completed selection with no destination chosen yet — the dialog below decides between
-    /// per-photo routing (`destination`) and the plain bulk "Add to import run" path (`runBatch`).
-    /// Both the toolbar's "Add to…" and macOS's "From files" fallback funnel through this same
-    /// `onSelection` closure, so either source offers both destinations.
-    @State private var pendingSelection: [PhotoSelectionItem]?
     @State private var analysisReady = false
 
     var body: some View {
@@ -19,39 +14,7 @@ struct PhotosRootView: View {
             analysisStore: analysisReady ? appModel.photoAnalysisStore : nil,
             sweep: analysisReady ? appModel.photoClassificationSweep : nil
         ) { items in
-            pendingSelection = items
-        }
-        .confirmationDialog(
-            "Add \(pendingSelection?.count ?? 0) photo\((pendingSelection?.count ?? 0) == 1 ? "" : "s")",
-            isPresented: Binding(
-                get: { pendingSelection != nil },
-                set: { if !$0 { pendingSelection = nil } }),
-            titleVisibility: .visible
-        ) {
-            if let analysisStore = appModel.photoAnalysisStore {
-                Button("Assign to records…") {
-                    guard let items = pendingSelection else { return }
-                    // Built here, once per batch, and owned by the batch rather than seeded into
-                    // the sheet's own @State: a re-presented `.sheet(item:)` is not guaranteed to
-                    // reset @State seeded from an init parameter when the item changes
-                    // (apps/apple/AGENTS.md, "Traps that cost real time"), which previously showed
-                    // the prior batch's manifest.
-                    destination = PhotoSelectionBatch(
-                        items: items,
-                        manifest: PhotoImportManifest(
-                            items: items, analysisStore: analysisStore,
-                            activityCenter: appModel.backgroundActivity))
-                    pendingSelection = nil
-                }
-            }
-            Button("Add to import run…") {
-                guard let items = pendingSelection else { return }
-                runBatch = PhotoImportRunBatch(
-                    items: items,
-                    flow: appModel.makePhotoImportFlow())
-                pendingSelection = nil
-            }
-            Button("Cancel", role: .cancel) { pendingSelection = nil }
+            destination = PhotoSelectionBatch(items: items, appModel: appModel)
         }
         .sheet(item: $destination) { batch in
             PhotoDestinationSheet(manifest: batch.manifest) { committedIDs in
@@ -138,6 +101,16 @@ struct PhotoSelectionBatch: Identifiable {
     let id = UUID()
     let items: [PhotoSelectionItem]
     let manifest: PhotoImportManifest
+
+    init(items: [PhotoSelectionItem], appModel: AppModel) {
+        self.items = items
+        if let store = appModel.photoAnalysisStore {
+            manifest = PhotoImportManifest(
+                items: items, analysisStore: store, activityCenter: appModel.backgroundActivity)
+        } else {
+            manifest = PhotoImportManifest(items: items, activityCenter: appModel.backgroundActivity)
+        }
+    }
 }
 
 private struct PhotoLibraryBrowser: View {
@@ -454,7 +427,8 @@ private struct PhotoLibraryBrowser: View {
                     #endif
                     PhotoAccessSettingsButton()
                 }
-                PhotoSourceButtons(maxSelectionCount: maxSelectionCount, onSelection: onSelection)
+                PhotoSourceButtons(
+                    maxSelectionCount: maxSelectionCount, reviewsUploads: false, onSelection: onSelection)
             }.padding(FieldGuideTokens.Space.lg).frame(maxWidth: 560)
         }
     }

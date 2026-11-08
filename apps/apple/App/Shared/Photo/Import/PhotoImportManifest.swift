@@ -8,13 +8,11 @@ import Photos
 final class PhotoImportManifest {
     let items: [PhotoSelectionItem]
     var selectedIDs: Set<String>
-    /// The hero's current item. Drives the default single-photo selection scope (`init`,
-    /// `advanceFocusAfterAssignment`); the filmstrip's own focus binding keeps this in sync.
+    /// The hero's current item. Preview focus is independent of the batch assignment selection.
     var focusedItemID: String?
     /// Set by the sheet from `path.isEmpty` (A1): true while a chooser/editor is pushed on top of
-    /// the review list. Advancing focus/selection while one is open would move the selection out
-    /// from under the photo the person is currently editing there, losing its capture date —
-    /// the advance is deferred until the sheet pops back and drains `pendingFocusAdvance`.
+    /// the review list. Preview focus stays on the photo being edited until the sheet pops back
+    /// and drains `pendingFocusAdvance`; assignments preserve the member's selection.
     var isNavigating = false {
         didSet {
             guard !isNavigating, pendingFocusAdvance else { return }
@@ -24,6 +22,8 @@ final class PhotoImportManifest {
     }
     private var pendingFocusAdvance = false
     private var assignments: [String: PhotoDestinationAssignment] = [:]
+    private var manuallyAssignedIDs: Set<String> = []
+    private var assignmentRevision = 0
     private(set) var isCommitting = false
     private(set) var isResolvingSourceRecord = false
     private(set) var analysisState: PhotoImportAnalysisState = .idle
@@ -48,6 +48,7 @@ final class PhotoImportManifest {
     weak var undoManager: UndoManager?
     private var prepared: [String: (PhotoFile, PhotoLocalAnalysis)] = [:]
     private var transaction: PhotoImportTransaction?
+    private var createdDestinationIDs: [String: String] = [:]
     private var analysisTask: Task<Void, Never>?
     private var nextAnalysisLogID = 0
     /// One `cloudIdentifierMappings` result per local identifier, resolved at most once per
@@ -77,7 +78,7 @@ final class PhotoImportManifest {
         self.activityCenter = activityCenter
         let focused = items.first?.id
         focusedItemID = focused
-        selectedIDs = focused.map { Set([$0]) } ?? []
+        selectedIDs = Set(items.map(\.id))
     }
 
     private static func ephemeralAnalysisStore() -> PhotoAnalysisStore {
@@ -86,12 +87,16 @@ final class PhotoImportManifest {
         try! PhotoAnalysisStore.make(inMemory: true)
     }
 
-    /// The filmstrip header's Select all/Deselect all: the default single-photo scope above
-    /// covers the common one-record-per-photo case, this covers a same-day batch someone
-    /// deliberately selects.
+    /// Selection controls assignment changes; the final Add action always includes the batch.
     func toggleSelectAll() {
         guard !isCommitting else { return }
         selectedIDs = selectedIDs.count == items.count ? [] : Set(items.map(\.id))
+    }
+
+    func selectPhotos(_ ids: [String]) {
+        guard !isCommitting else { return }
+        selectedIDs = Set(ids).intersection(items.map(\.id))
+        focusedItemID = items.first(where: { selectedIDs.contains($0.id) })?.id
     }
 
     func startAnalysis(client: CubbyClient, matches: PhotoMatchStore) {
@@ -192,11 +197,6 @@ final class PhotoImportManifest {
         Self.preferredSourceType(selectedIDs: selectedIDs, suggestions: suggestedSourceTypes)
     }
 
-    var selectedSourceTypeSuggestionGroups: [PhotoSourceTypeSuggestionGroup] {
-        Self.sourceTypeSuggestionGroups(
-            selectedIDs: selectedIDs, suggestions: suggestedSourceTypes)
-    }
-
     var selectedSuggestedSource: PhotoSuggestedSource? {
         guard let source = selectedSuggestedSourceType else { return nil }
         let rows = selectedIDs.compactMap { suggestedSourceRecords[$0] }
@@ -215,29 +215,6 @@ final class PhotoImportManifest {
             ? values.first : nil
     }
 
-    static func sourceTypeSuggestionGroups(
-        selectedIDs: Set<String>, suggestions: [String: EntityKey]
-    ) -> [PhotoSourceTypeSuggestionGroup] {
-        Dictionary(
-            grouping: selectedIDs.compactMap { photoID in
-                suggestions[photoID].map { (photoID, $0) }
-            }, by: { $0.1 }
-        ).map { source, values in
-            PhotoSourceTypeSuggestionGroup(
-                source: source, photoIDs: values.map(\.0).sorted())
-        }.sorted { lhs, rhs in
-            if lhs.photoIDs.count != rhs.photoIDs.count {
-                return lhs.photoIDs.count > rhs.photoIDs.count
-            }
-            return EntityCatalog[lhs.source].plural < EntityCatalog[rhs.source].plural
-        }
-    }
-
-    func selectSuggestedPhotos(for source: EntityKey) {
-        selectedIDs = Set(
-            selectedIDs.filter { suggestedSourceTypes[$0] == source })
-    }
-
     var groups: [PhotoImportGroup] {
         Dictionary(
             grouping: items.compactMap { item -> (PhotoSelectionItem, PhotoDestinationAssignment)? in
@@ -248,17 +225,33 @@ final class PhotoImportManifest {
             guard let first = values.first else { return nil }
             return PhotoImportGroup(
                 id: first.1.id,
-                // A createSelf draft has no source record, so its header is just the draft's own
-                // title ("New <singular>") rather than "<title>  <shortcode>".
-                title:
-                    first.1.source == nil
-                    ? first.1.title : "\(first.1.title)  \(first.1.shortcode)",
+                title: first.1.title,
                 evidence: first.1.evidence,
                 photoIDs: values.map { $0.0.id },
                 source: first.1.source?.entity,
                 sourceRow: first.1.sourceRow,
                 decision: first.1.decision)
         }.sorted { $0.title < $1.title }
+    }
+
+    /// Created ids are available only from a confirmed commit response; reconciliation must not
+    /// turn the source of a related draft into a fabricated destination link.
+    var committedDestinations: [(entity: EntityKey, id: String?, title: String, photoCount: Int)] {
+        guard hasCommitted else { return [] }
+        var keys: [String] = []
+        var destinations: [(entity: EntityKey, id: String?, title: String, photoCount: Int)] = []
+        for item in items {
+            guard let assignment = assignments[item.id] else { continue }
+            let id = assignment.createDraft.map { createdDestinationIDs[$0.id] } ?? assignment.recordID
+            let key = "\(assignment.route.target.rawValue):\(id ?? assignment.id)"
+            if let index = keys.firstIndex(of: key) {
+                destinations[index].photoCount += 1
+            } else {
+                keys.append(key)
+                destinations.append((assignment.route.target, id, assignment.title, 1))
+            }
+        }
+        return destinations
     }
 
     var canCommit: Bool {
@@ -277,7 +270,12 @@ final class PhotoImportManifest {
         let drafts = Dictionary(
             grouping: assignments.values.compactMap(\.createDraft), by: \.id
         ).values.compactMap(\.first)
-        guard !drafts.isEmpty else { return "Add \(photos)" }
+        guard !drafts.isEmpty else {
+            if needsDestination.isEmpty, groups.count == 1, let title = groups.first?.title {
+                return "Add to \(title)"
+            }
+            return "Add \(photos)"
+        }
         if drafts.count == 1, let draft = drafts.first {
             return "Add \(photos) + \(EntityCatalog[draft.route.target].singular)"
         }
@@ -388,6 +386,9 @@ final class PhotoImportManifest {
     func chooseSourceRecord(
         _ type: PhotoSourceTypeOption, row: EntityRow, client: CubbyClient
     ) async -> PhotoSourceRecordResolution {
+        guard !isResolvingSourceRecord, !isCommitting, !hasCommitted, !commitRequiresReview else {
+            return .resolved
+        }
         if type.options.contains(where: { $0.route.choice == .prompt }) {
             return .routePicker
         }
@@ -412,36 +413,83 @@ final class PhotoImportManifest {
         let captureDate = scopedCaptureDate
 
         if let pair = relatedPair(for: primary) {
+            let scope = selectedItems
+            let revision = assignmentRevision
             isResolvingSourceRecord = true
             defer { isResolvingSourceRecord = false }
-            do {
-                guard
-                    let page = try await Self.findRelated(
-                        option: pair.existing, source: row, captureDate: captureDate, client: client)
-                else {
-                    return stageOrOpenCreateEditor(
-                        pair.create, source: row, captureDate: captureDate, decision: decision)
-                }
-                switch page.items.count {
-                case 0:
-                    return stageOrOpenCreateEditor(
-                        pair.create, source: row, captureDate: captureDate, decision: decision)
-                case 1:
-                    moveSelected(
-                        to: pair.existing, source: row, destination: page.items[0],
-                        captureDate: captureDate, decision: .existingSameDay(count: page.items.count))
-                    return .resolved
-                default:
-                    return .relatedChooser(option: pair.existing, page: page)
-                }
-            } catch {
-                Diagnostics.report(error, context: "photos.manifest.findRelated")
-                return .relatedChooser(option: pair.existing, page: nil)
+            let days = Dictionary(grouping: scope) {
+                $0.capturedAt.map { PlainDate($0).rawValue } ?? "undated"
             }
+            var resolved: [(ids: Set<String>, date: Date?, destination: EntityRow?)] = []
+            var pending: [(ids: Set<String>, resolution: PhotoSourceRecordResolution)] = []
+            for day in days.keys.sorted() {
+                guard let photos = days[day] else { continue }
+                let ids = Set(photos.map(\.id))
+                let date = photos.compactMap(\.capturedAt).min()
+                do {
+                    let page = try await Self.findRelated(
+                        option: pair.existing, source: row, captureDate: date, client: client)
+                    guard assignmentRevision == revision, !isCommitting, !hasCommitted,
+                        !commitRequiresReview
+                    else { return .resolved }
+                    if let page, page.items.count == 1 {
+                        resolved.append((ids, date, page.items[0]))
+                    } else if page == nil || page?.items.isEmpty == true {
+                        if PhotoRelatedCreateEditor.hasOnlyOptionalFields(
+                            option: pair.create, source: row, captureDate: date)
+                        {
+                            resolved.append((ids, date, nil))
+                        } else {
+                            pending.append((ids, .createEditor(option: pair.create)))
+                        }
+                    } else {
+                        pending.append((ids, .relatedChooser(option: pair.existing, page: page)))
+                    }
+                } catch {
+                    guard assignmentRevision == revision, !isCommitting, !hasCommitted,
+                        !commitRequiresReview
+                    else { return .resolved }
+                    Diagnostics.report(error, context: "photos.manifest.findRelated")
+                    pending.append((ids, .relatedChooser(option: pair.existing, page: nil)))
+                }
+            }
+            // Look up every day before staging. A failed or ambiguous day must neither hide later
+            // safe matches nor become a member choice that prevents subsequent automatic recovery.
+            let assignedIDs = resolved.reduce(into: Set<String>()) { $0.formUnion($1.ids) }
+            if !assignedIDs.isEmpty { rememberMove(photoIDs: assignedIDs) }
+            for result in resolved {
+                if let destination = result.destination {
+                    moveSelected(
+                        to: pair.existing, source: row, destination: destination,
+                        captureDate: result.date, decision: .existingSameDay(count: 1),
+                        photoIDs: result.ids, recordUndo: false)
+                } else {
+                    stageCreate(
+                        option: pair.create, source: row,
+                        body: PhotoRelatedCreateEditor.createPrefill(
+                            option: pair.create, source: row, captureDate: result.date),
+                        photoIDs: result.ids, decision: decision, automatic: true)
+                }
+            }
+            for unresolved in pending {
+                for id in unresolved.ids {
+                    suggestions[id] =
+                        "Choose a \(pair.existing.descriptor.singular.lowercased()) for this photo's day"
+                }
+            }
+            if let first = pending.first {
+                selectPhotos(Array(first.ids))
+                return first.resolution
+            }
+            advanceFocusAfterAssignment()
+            return .resolved
         }
 
         switch primary.route.kind {
         case .`self`:
+            if primary.route.requiresReplaceConfirmation, row.imageURL != nil {
+                return .replaceConfirmation(option: primary)
+            }
             moveSelected(to: primary, row: row, decision: decision)
             return .resolved
         case .createRelated:
@@ -491,11 +539,12 @@ final class PhotoImportManifest {
         assignments[photoID]?.createDraft?.body
     }
 
-    /// Test-observable: exercises the analyzer's suggestion application (using the manifest's own
-    /// current generation) without driving the full pipeline. Analysis can offer a record, but a
-    /// person must tap it before any assignment is staged.
-    func applyRoutingDecisions(_ decisions: [PhotoRoutingDecision], candidates: [String: Candidate]) {
-        apply(decisions: decisions, candidates: candidates, generation: analysisGeneration)
+    /// Exercises the same automatic routing and preservation fences as the analysis pipeline.
+    func applyRoutingDecisions(
+        _ decisions: [PhotoRoutingDecision], candidates: [String: Candidate], client: CubbyClient
+    ) async {
+        await apply(
+            decisions: decisions, candidates: candidates, generation: analysisGeneration, client: client)
     }
 
     private func analyze(client: CubbyClient, matches: PhotoMatchStore, generation: UUID) async {
@@ -613,7 +662,8 @@ final class PhotoImportManifest {
                 evidence: evidence, candidates: candidates.map(\.routing))
             appendDecisionLog(
                 deterministic.decisions, candidates: byID, stage: "Deterministic routing")
-            apply(decisions: deterministic.decisions, candidates: byID, generation: generation)
+            await apply(
+                decisions: deterministic.decisions, candidates: byID, generation: generation, client: client)
             analysisState = .running("Refining suggestions on this device…")
             appendAnalysisLog(
                 "Foundation Models refinement started",
@@ -629,7 +679,7 @@ final class PhotoImportManifest {
                 kind: result.modelStatus == .used ? .decision : .fallback)
             appendDecisionLog(
                 result.decisions, candidates: byID, stage: "Final routing")
-            apply(decisions: result.decisions, candidates: byID, generation: generation)
+            await apply(decisions: result.decisions, candidates: byID, generation: generation, client: client)
             analysisState = .complete
             appendAnalysisLog(
                 "Analysis complete",
@@ -652,8 +702,9 @@ final class PhotoImportManifest {
     }
 
     private func apply(
-        decisions: [PhotoRoutingDecision], candidates: [String: Candidate], generation: UUID
-    ) {
+        decisions: [PhotoRoutingDecision], candidates: [String: Candidate], generation: UUID,
+        client: CubbyClient
+    ) async {
         guard analysisGeneration == generation else { return }
         for decision in decisions {
             guard assignments[decision.photoID] == nil,
@@ -665,8 +716,81 @@ final class PhotoImportManifest {
             suggestedSourceRecords[decision.photoID] = candidate.row
             suggestions[decision.photoID] =
                 "\(candidate.row.title) · \(candidate.row.id) · \(decision.explanation)"
-            // Suggestions deliberately stop here. A source/record tap is the authorization to
-            // resolve routes or attach a photo; model output never stages an assignment itself.
+            await stageAutomaticSuggestion(
+                candidate, photoID: decision.photoID, explanation: decision.explanation,
+                generation: generation, client: client)
+        }
+    }
+
+    private func stageAutomaticSuggestion(
+        _ candidate: Candidate, photoID: String, explanation: String,
+        generation: UUID, client: CubbyClient
+    ) async {
+        guard let type = sourceTypeOptions.first(where: { $0.source == candidate.option.route.source }),
+            !type.options.contains(where: { $0.route.choice == .prompt }),
+            let item = items.first(where: { $0.id == photoID })
+        else { return }
+        let row = candidate.row
+        let primary =
+            type.options.first { option in
+                guard let predicate = option.route.primaryWhen,
+                    let value = row.raw.recordValue(predicate.field)?.stringValue
+                else { return false }
+                return predicate.values.contains(value)
+            } ?? type.options.first(where: { $0.route.choice == .primary })
+        guard let primary, primary.route.enabled,
+            !(primary.route.requiresReplaceConfirmation && row.imageURL != nil)
+        else { return }
+        var option = primary
+        var destination = row
+        let date = item.capturedAt
+        if let pair = relatedPair(for: primary) {
+            // Without a capture day, a relationship lookup cannot prove a same-day match.
+            guard let date, pair.existing.route.enabled, pair.create.route.enabled else { return }
+            do {
+                guard
+                    let page = try await Self.findRelated(
+                        option: pair.existing, source: row, captureDate: date, client: client)
+                else { return }
+                if page.items.count == 1 {
+                    option = pair.existing
+                    destination = page.items[0]
+                } else if page.items.isEmpty {
+                    option = pair.create
+                } else {
+                    return
+                }
+            } catch {
+                Diagnostics.report(error, context: "photos.manifest.automaticRelated")
+                return
+            }
+        }
+        // Every await may admit a member edit, cancellation or commit. Never replace those choices
+        // or mutate a batch whose transaction has already captured its assignments.
+        guard analysisGeneration == generation, !Task.isCancelled, transaction == nil,
+            !isResolvingSourceRecord, !isCommitting, !hasCommitted, !commitRequiresReview,
+            assignments[photoID] == nil, !manuallyAssignedIDs.contains(photoID)
+        else { return }
+        let decision = Self.automaticDecision(route: primary.route, row: row)
+        switch option.route.kind {
+        case .createRelated:
+            guard
+                PhotoRelatedCreateEditor.hasOnlyOptionalFields(
+                    option: option, source: row, captureDate: date)
+            else { return }
+            stageCreate(
+                option: option, source: row,
+                body: PhotoRelatedCreateEditor.createPrefill(option: option, source: row, captureDate: date),
+                photoIDs: [photoID], decision: decision, automatic: true)
+        case .`self`, .existingRelated:
+            if option.route.kind == .existingRelated && relatedPair(for: primary) == nil { return }
+            assignments[photoID] = PhotoDestinationAssignment(
+                route: option.route, source: EntityRef(entity: option.route.source, id: row.id),
+                sourceRow: row, recordID: destination.id, title: destination.title,
+                shortcode: destination.id, replaceConfirmed: false,
+                evidence: "Suggested · \(explanation)", decision: decision)
+        case .createSelf:
+            break
         }
     }
 
@@ -676,18 +800,9 @@ final class PhotoImportManifest {
         if selectedIDs.contains(id) { selectedIDs.remove(id) } else { selectedIDs.insert(id) }
     }
 
-    var reviewSelectionStatus: String {
-        if selectedIDs.isEmpty, needsDestination.isEmpty {
-            return "All \(items.count) photo\(items.count == 1 ? "" : "s") ready to add"
-        }
-        if selectedIDs.isEmpty { return "Choose photos to assign" }
-        return "Assigning \(selectedIDs.count) of \(items.count) photo\(items.count == 1 ? "" : "s")"
-    }
-
-    /// Routing and duplicate decisions only come from explicit picks, so any entry is staged work
-    /// that Cancel or swipe-down would discard.
+    /// Automatic destinations are review suggestions; only member edits make dismissal dirty.
     var hasStagedChanges: Bool {
-        !hasCommitted && (!assignments.isEmpty || !duplicateDecisions.isEmpty)
+        !hasCommitted && (!manuallyAssignedIDs.isEmpty || !duplicateDecisions.isEmpty)
     }
 
     func chooseExisting(_ imageID: ImageCode, for itemID: String) {
@@ -712,6 +827,7 @@ final class PhotoImportManifest {
         to option: PhotoDestinationOption, row: EntityRow, replace: Bool = false,
         decision: PhotoRouteDecision = .user
     ) {
+        guard !isCommitting, !hasCommitted, !commitRequiresReview else { return }
         rememberMove()
         let assignment = PhotoDestinationAssignment(
             route: option.route, source: EntityRef(entity: option.route.source, id: row.id),
@@ -724,9 +840,12 @@ final class PhotoImportManifest {
 
     func moveSelected(
         to option: PhotoDestinationOption, source: EntityRow, destination: EntityRow,
-        captureDate: Date? = nil, decision: PhotoRouteDecision = .user
+        captureDate: Date? = nil, decision: PhotoRouteDecision = .user,
+        photoIDs: Set<String>? = nil, recordUndo: Bool = true
     ) {
-        rememberMove()
+        guard !isCommitting, !hasCommitted, !commitRequiresReview else { return }
+        let scope = photoIDs ?? selectedIDs
+        if recordUndo { rememberMove(photoIDs: scope) }
         let evidence =
             captureDate.map { "Existing \(option.descriptor.singular) · \(PlainDate($0).rawValue)" }
             ?? "Related to \(source.title)"
@@ -740,19 +859,19 @@ final class PhotoImportManifest {
             replaceConfirmed: false,
             evidence: evidence,
             decision: decision)
-        for id in selectedIDs { assignments[id] = assignment }
-        advanceFocusAfterAssignment()
+        for id in scope { assignments[id] = assignment }
+        if recordUndo { advanceFocusAfterAssignment() }
     }
 
     /// `source` is `nil` for a `createSelf` draft — the created record has no source of its own.
     func stageCreate(
         option: PhotoDestinationOption, source: EntityRow?, body: [String: JSONValue],
-        photoIDs: Set<String>? = nil, decision: PhotoRouteDecision = .user
+        photoIDs: Set<String>? = nil, decision: PhotoRouteDecision = .user, automatic: Bool = false
     ) {
         // A disabled route (project, cookbook, …) is shown so its reason is visible, but is never
         // an actual staging target — belt-and-suspenders alongside the UI disabling its row.
-        guard option.route.enabled else { return }
-        rememberMove()
+        guard option.route.enabled, !isCommitting, !hasCommitted, !commitRequiresReview else { return }
+        if !automatic { rememberMove(photoIDs: photoIDs) }
         let itemsToStage = items.filter { photoIDs?.contains($0.id) ?? selectedIDs.contains($0.id) }
         guard let source else {
             stageCreateSelf(option: option, body: body, items: itemsToStage, decision: decision)
@@ -763,17 +882,14 @@ final class PhotoImportManifest {
         }
         for (day, group) in grouped {
             var dayBody = body
-            if let binding = option.route.bindings.first(where: { $0.source == .captureDate }) {
-                if day == "undated" {
-                    dayBody.removeValue(forKey: binding.field)
-                } else {
-                    dayBody[binding.field] = .string(day)
-                }
-            }
+            let dateField = option.route.bindings.first(where: { $0.source == .captureDate })?.field
+            // Capture metadata owns dated groups; an undated photo keeps the date the member entered.
+            if day != "undated", let dateField { dayBody[dateField] = .string(day) }
+            let draftDay = day == "undated" ? dateField.flatMap { dayBody[$0]?.stringValue } ?? day : day
             // Keyed by route + source record + capture day: picking the same source record twice
             // on the same day merges into one draft; two different source records always give two.
             let draft = PhotoCreateDraft(
-                id: "\(option.id):\(source.id):\(day)", route: option.route,
+                id: "\(option.id):\(source.id):\(draftDay)", route: option.route,
                 source: EntityRef(entity: option.route.source, id: source.id), body: dayBody,
                 title: "\(source.title) · \(source.id)",
                 captureDate: group.compactMap(\.capturedAt).first)
@@ -781,11 +897,12 @@ final class PhotoImportManifest {
                 route: option.route, source: draft.source, sourceRow: source, recordID: nil,
                 title: draft.title,
                 shortcode: "New", replaceConfirmed: false,
-                evidence: "New \(option.descriptor.singular) · \(day == "undated" ? "date needed" : day)",
+                evidence:
+                    "New \(option.descriptor.singular) · \(draftDay == "undated" ? "date needed" : draftDay)",
                 createDraft: draft, decision: decision)
             for item in group { assignments[item.id] = assignment }
         }
-        advanceFocusAfterAssignment()
+        if !automatic { advanceFocusAfterAssignment() }
     }
 
     /// A `createSelf` draft has no source record to key or split by day — unlike the path above,
@@ -800,15 +917,13 @@ final class PhotoImportManifest {
             return
         }
         // A1: re-derive the capture-date binding from the photos actually being staged, exactly
-        // like `stageCreate`'s per-day grouping — `body` may have been prefilled earlier (e.g.
-        // against a since-changed selection) and must not be trusted for this field.
+        // like `stageCreate`'s per-day grouping. Without capture metadata, retain the date
+        // explicitly supplied by the editor instead of stripping a required member decision.
         var body = body
         let captureDate = itemsToStage.compactMap(\.capturedAt).min()
         if let binding = option.route.bindings.first(where: { $0.source == .captureDate }) {
             if let captureDate {
                 body[binding.field] = .string(PlainDate(captureDate).rawValue)
-            } else {
-                body.removeValue(forKey: binding.field)
             }
         }
         let enteredTitle = body[option.descriptor.titleField]?.stringValue?
@@ -829,8 +944,7 @@ final class PhotoImportManifest {
         advanceFocusAfterAssignment()
     }
 
-    /// After every successful move/stage, hand focus and selection to the next unassigned photo
-    /// so the following pick applies there instead of re-touching the just-assigned photo(s).
+    /// Move the preview focus to an unresolved photo without changing the member's batch selection.
     /// Deferred while a chooser/editor is pushed (`isNavigating`) — see that property's doc.
     private func advanceFocusAfterAssignment() {
         guard !isNavigating else {
@@ -839,7 +953,6 @@ final class PhotoImportManifest {
         }
         let next = needsDestination.first
         if let next { focusedItemID = next }
-        selectedIDs = next.map { Set([$0]) } ?? []
     }
 
     /// A nullable source relationship is a missing binding, not an instruction to write null.
@@ -855,7 +968,8 @@ final class PhotoImportManifest {
     }
 
     func undoLastMove() {
-        guard !undoSnapshot.isEmpty else { return }
+        guard !undoSnapshot.isEmpty, !isCommitting, !hasCommitted, !commitRequiresReview else { return }
+        assignmentRevision += 1
         let snapshot = undoSnapshot
         for item in snapshot { assignments[item.photoID] = item.assignment }
         selectedIDs = Set(snapshot.map(\.photoID))
@@ -901,6 +1015,7 @@ final class PhotoImportManifest {
 
     func commit(client: CubbyClient) async -> [String]? {
         guard canCommit else { return nil }
+        cancelAnalysis()
         isCommitting = true
         errorMessage = nil
         commitRequiresReview = false
@@ -921,6 +1036,7 @@ final class PhotoImportManifest {
             let committedClientIDs = try await transaction.commit(batch) { [weak self] state in
                 Task { @MainActor in self?.updateProgress(state) }
             }
+            createdDestinationIDs = await transaction.createdDestinations
             hasCommitted = true
             progress = "Added"
             return committedClientIDs
@@ -967,6 +1083,7 @@ final class PhotoImportManifest {
         defer { activityCenter?.end(id: uploadActivityID) }
         do {
             let committedIDs = try await activeTransaction.reconcile(try makeBatch())
+            createdDestinationIDs = await activeTransaction.createdDestinations
             hasCommitted = true
             commitRequiresReview = false
             progress = "Added"
@@ -1161,8 +1278,11 @@ final class PhotoImportManifest {
         }
     }
 
-    private func rememberMove() {
-        undoSnapshot = selectedIDs.sorted().map {
+    private func rememberMove(photoIDs: Set<String>? = nil) {
+        assignmentRevision += 1
+        let scope = photoIDs ?? selectedIDs
+        manuallyAssignedIDs.formUnion(scope)
+        undoSnapshot = scope.sorted().map {
             PhotoUndoAssignment(photoID: $0, assignment: assignments[$0])
         }
         undoManager?.removeAllActions(withTarget: self)

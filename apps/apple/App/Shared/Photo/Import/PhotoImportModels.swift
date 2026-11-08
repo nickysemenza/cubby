@@ -57,16 +57,8 @@ enum PhotoImportAnalysisState: Equatable {
     }
 }
 
-struct PhotoSourceTypeSuggestionGroup: Identifiable, Equatable {
-    let source: EntityKey
-    let photoIDs: [String]
-    var id: EntityKey { source }
-}
-
-/// What the review sheet should do after `PhotoImportManifest.chooseSourceRecord` resolves a
-/// tapped source record. `.resolved` means the manifest already moved or staged the photo(s); the
-/// other cases carry what the sheet needs to present the remaining interactive step.
 enum PhotoSourceRecordResolution {
+    case replaceConfirmation(option: PhotoDestinationOption)
     case routePicker
     case resolved
     case relatedChooser(option: PhotoDestinationOption, page: ListPage<EntityRow>?)
@@ -135,6 +127,7 @@ struct PhotoSourceTypeOption: Identifiable, Sendable {
 
 enum PhotoImportNavigationDestination: Hashable {
     case sourceTypes
+    case record(EntityKey, id: String)
     case sourceType(EntityKey)
     case routePicker(source: EntityKey, row: EntityRow)
 

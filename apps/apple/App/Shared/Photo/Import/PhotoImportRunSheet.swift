@@ -446,6 +446,13 @@ struct PhotoImportRunSheet: View {
     var body: some View {
         NavigationStack {
             content
+                .safeAreaBar(edge: .bottom) {
+                    if case .choosingRun = flow.step {
+                        startNewRunButton
+                            .padding(.horizontal, FieldGuideTokens.Space.md)
+                            .padding(.vertical, FieldGuideTokens.Space.sm)
+                    }
+                }
                 .navigationTitle("Add to import run")
                 #if os(iOS)
                     .navigationBarTitleDisplayMode(.inline)
@@ -526,6 +533,21 @@ struct PhotoImportRunSheet: View {
         }
     }
 
+    private var startNewRunButton: some View {
+        Button {
+            flow.startNewRun(items: items, client: appModel.client)
+        } label: {
+            Label(
+                "Import \(items.count) photo\(items.count == 1 ? "" : "s")",
+                systemImage: "square.and.arrow.up"
+            )
+            .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.borderedProminent)
+        .controlSize(.large)
+        .accessibilityIdentifier("photos.run.startNew")
+    }
+
     private var choosingRunView: some View {
         List {
             if let error = flow.prepareError {
@@ -573,18 +595,6 @@ struct PhotoImportRunSheet: View {
                 DisclosureGroup("Add a note") {
                     TextField("Notes for this batch", text: $flow.notes, axis: .vertical)
                 }
-                Button {
-                    flow.startNewRun(items: items, client: appModel.client)
-                } label: {
-                    Label(
-                        "Import \(items.count) photo\(items.count == 1 ? "" : "s")",
-                        systemImage: "square.and.arrow.up"
-                    )
-                    .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-                .accessibilityIdentifier("photos.run.startNew")
             } header: {
                 Text("New run")
             } footer: {
