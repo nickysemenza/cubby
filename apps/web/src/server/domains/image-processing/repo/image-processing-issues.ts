@@ -16,7 +16,7 @@ import { unwrapDb } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { image } from "~/server/db/schema";
 import {
-  appleRefusalCoveredByCloudDescriptionSql,
+  appleFailureCoveredByCloudDescriptionSql,
   IMAGE_DESCRIPTION_PROCESSOR_REVISION,
   IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
   IMAGE_IDENTIFICATION_PROCESSOR_REVISION,
@@ -35,7 +35,7 @@ export function imageProcessingIssueExpression(
       OR (j.kind = ${imageProcessingJobKind.enum.subject_lift} AND j."processorRevision" = ${IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION}))`;
   return sql`CASE WHEN ${source.status} <> ${ImageStatus.enum.UPLOADED} OR ${source.deletedAt} IS NOT NULL THEN NULL
     WHEN EXISTS (SELECT 1 FROM "ImageProcessingJob" j WHERE ${notDeleted("j")} AND ${current} AND ${imageJobDisplayStateSql("j")} = ${imageProcessingJobState.enum.failed}
-      AND NOT ${appleRefusalCoveredByCloudDescriptionSql({ jobAlias: "j", imageId: sql`${source.id}`, sourceContentHash: sql`${source.sha256}` })}) THEN ${imageProcessingIssue.enum.failed}
+      AND NOT ${appleFailureCoveredByCloudDescriptionSql({ jobAlias: "j", imageId: sql`${source.id}`, sourceContentHash: sql`${source.sha256}` })}) THEN ${imageProcessingIssue.enum.failed}
     WHEN EXISTS (SELECT 1 FROM "ImageProcessingJob" j WHERE ${notDeleted("j")} AND ${current} AND j.kind = ${imageProcessingJobKind.enum.describe_image}
       AND j.state = ${imageProcessingJobState.enum.ready} AND j.result->'description'->>'cutoutEligibility' = ${imageCutoutEligibility.enum.review})
       AND NOT EXISTS (SELECT 1 FROM "ImageProcessingJob" j WHERE ${notDeleted("j")} AND ${current} AND j.kind = ${imageProcessingJobKind.enum.subject_lift}

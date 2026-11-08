@@ -53,7 +53,8 @@ private enum GeneratedCutoutEligibility {
 
 // Shape is load-bearing. A free-text eligibility was filled with the guide text, and claims as
 // `{text}` objects let greedy decoding write `}]}```json{` inside the last claim and run to the
-// 8192-token context limit (~4 min) on some photos; the enum and plain strings decode cleanly.
+// 8192-token context limit (~4 min) on some photos. Enum and plain-string fields reduce that
+// failure surface, but even typed conversion does not establish response completeness.
 @Generable
 @available(iOS 27.0, macOS 27.0, *)
 private struct GeneratedCompanionImageDescription {
@@ -170,6 +171,7 @@ public struct FoundationModelsImageDescriber: CompanionImageDescribing {
                 "Evaluate this image for Cubby's catalog."
                 Attachment(image).label("source image")
             }
+            try requireComplete(response.rawContent)
         } catch let error as GeneratedContent.ParsingError {
             throw StructuredOutputFailure(
                 original: error,
@@ -189,6 +191,16 @@ public struct FoundationModelsImageDescriber: CompanionImageDescribing {
         return CompanionImageDescription(
             description: generated.description, cutoutEligibility: eligibility,
             claims: generated.claims.map { CompanionImageClaim(text: $0) })
+    }
+
+    // Typed conversion can succeed for an unfinished string or final array element.
+    // Only the raw response can establish that the model finished the required output.
+    static func requireComplete(_ content: GeneratedContent) throws {
+        guard content.isComplete else {
+            throw GeneratedContent.ParsingError(
+                rawContent: content.jsonString,
+                debugDescription: "Structured image description response is incomplete")
+        }
     }
 
     // Captured synchronously from the failed fresh session, before it leaves scope.
@@ -287,6 +299,8 @@ public struct FoundationModelsImageDescriber: CompanionImageDescribing {
         let budgetDetails: String
         if case .contextSizeExceeded(let context) = error {
             budgetDetails = " (contextSize=\(context.contextSize), tokenCount=\(context.tokenCount))"
+        } else if case .guardrailViolation(let context) = error {
+            budgetDetails = " (diagnostic=\(context.debugDescription))"
         } else {
             budgetDetails = ""
         }

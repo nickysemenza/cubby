@@ -74,6 +74,16 @@ struct CompanionImageProcessorTests {
             }
         }
 
+        // The SDK accepts an unfinished string as a typed value; that is not a finished answer.
+        let incomplete = try GeneratedContent(json: #"{"description":"A synthetic blue shape"#)
+        #expect(try incomplete.value(String.self, forProperty: "description") == "A synthetic blue shape")
+        #expect(!incomplete.isComplete)
+        #expect(throws: GeneratedContent.ParsingError.self) {
+            try FoundationModelsImageDescriber.requireComplete(incomplete)
+        }
+        try FoundationModelsImageDescriber.requireComplete(
+            GeneratedContent(json: #"{"description":"A synthetic blue shape"}"#))
+
         let rawContent = #"{"description":"A metal tool marked 3/8"}"#
         attempts = []
         do {
@@ -92,6 +102,19 @@ struct CompanionImageProcessorTests {
             #expect(reason.contains("3/8"))
         }
         #expect(attempts.count == 1)
+
+        do {
+            _ = try await FoundationModelsImageDescriber.describeWithRecovery(image, contextSize: 8192) {
+                _, _ in
+                throw LanguageModelError.guardrailViolation(
+                    .init(debugDescription: "Synthetic response-side diagnostic"))
+            }
+            Issue.record("A guardrail refusal must remain a failure")
+        } catch CompanionImageDescriptionFailure.model(let reason, let retryable) {
+            #expect(!retryable)
+            #expect(reason.hasPrefix("guardrail_violation: "))
+            #expect(reason.contains("Synthetic response-side diagnostic"))
+        }
     }
 
     @Test("Decodes a checksum-verified AVIF catalog source")

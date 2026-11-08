@@ -63,8 +63,8 @@ export const IMAGE_IDENTIFICATION_PROCESSOR_REVISION = stableProcessorRevision(
   ].join("/"),
 );
 
-/** A terminal guardrail refusal stops these Apple inputs; current cloud evidence satisfies automatic attention only. */
-export function appleRefusalCoveredByCloudDescriptionSql(input: {
+/** Current cloud evidence satisfies automatic attention for stopped Apple refusal or structured-output failures only. */
+export function appleFailureCoveredByCloudDescriptionSql(input: {
   jobAlias: string;
   imageId: SQL;
   sourceContentHash: SQL;
@@ -74,7 +74,8 @@ export function appleRefusalCoveredByCloudDescriptionSql(input: {
   return sql<boolean>`CASE WHEN ${column("kind")} = ${imageProcessingJobKind.enum.describe_image}
     AND ${column("processorRevision")} = ${IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION}
     AND ${column("state")} = ${imageProcessingJobState.enum.failed}
-    AND starts_with(${column("lastError")}, 'guardrail_violation: ')
+    AND (starts_with(${column("lastError")}, 'guardrail_violation: ')
+      OR starts_with(${column("lastError")}, 'structured_output_invalid: '))
     AND ${column("imageId")} = ${input.imageId}
     AND ${column("sourceContentHash")} = ${input.sourceContentHash}
     THEN ${currentPreferredCloudDescriptionSql(input)} ELSE false END`;

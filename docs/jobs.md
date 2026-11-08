@@ -477,15 +477,18 @@ and an initial explicit response budget of at most 512 tokens, reserved from the
 model context size. A context overflow retries once with 512 pixels and half the
 response budget. Persistent failures retain the reported context/token counts and
 remain visibly failed until explicit retry or changed source/processor inputs.
-A stored terminal Apple `guardrail_violation: ` refusal at the current processor
-revision leaves automatic Work failure attention and the image's processing issue
-when a retained, undeleted current preferred cloud description covers the same
+A stored terminal Apple `guardrail_violation: ` or `structured_output_invalid: `
+failure at the current processor revision leaves automatic Work failure attention
+and the image's processing issue when a retained, undeleted current preferred cloud description covers the same
 source hash. Both views use the same evidence predicate, including provider,
-model, prompt, schema and normalization revisions. This accepts the existing
-deterministic stop for those inputs; it does not establish inability on every OS
-or future instruction revision. The failed image-job diagnostic check, reason,
-attempts and explicit retry remain available. Parsing failures, model `refusal`,
-pending retrying work and failed subject lifts remain actionable. No additional
+model, prompt, schema and normalization revisions. This satisfies the productive
+description need with the retained cloud answer; it
+does not make the Apple evaluation successful or establish that those inputs are
+impossible to describe. The failed image-job diagnostic check, reason,
+attempts and explicit retry remain available. Without that exact cloud evidence,
+parsing failures remain actionable. Model
+`refusal`, other errors, pending retrying work and failed subject lifts remain
+actionable even with cloud evidence. No additional
 cloud request or fabricated description is introduced. A structured parsing failure
 retries only when the latest structured response is explicitly incomplete and
 session output usage reaches the configured response cap. That fresh-session retry
@@ -493,7 +496,12 @@ keeps the image size and raises the output budget to at most 1,024 tokens, bound
 by one quarter of runtime context. There are at most two attempts total: context
 shrinking and truncation recovery cannot chain. Unknown/complete response metadata,
 below-cap output, arbitrary malformed parsing, and repeated truncation remain
-terminal. No partial result is adopted. Terminal parsing failures preserve the
+terminal. No partial result is adopted. Typed conversion can succeed for an incomplete
+string or final array element, so native code also requires the raw response
+to be complete before adopting typed content. It applies the same bounded
+truncation recovery to this case. This acceptance check changes no generation
+inputs or processor identity and does not reopen retained failures. Terminal
+parsing failures preserve the
 original raw diagnostic in the existing server reason.
 Before releasing the failed session, native code appends fixed metadata: attempted
 image dimensions and response budget, session output usage, latest-response
@@ -503,7 +511,22 @@ flags. Missing response metadata stays unknown; older responses are not used.
 Output usage of zero does not establish that no tokens were generated. The
 snapshot excludes generated values and arbitrary keys and precedes the raw
 diagnostic so it survives the existing 1,000-character failure-reason limit.
-The full raw reason can still contain private content.
+The full raw reason can still contain private content. Guardrail failures also
+retain the SDK context debug description. Wording such as “Response may contain
+sensitive or unsafe content” is useful diagnostic evidence, not an authoritative
+input/output attribution; empty metadata and zero reported output usage cannot
+resolve that distinction. Guardrails remain enabled.
+
+On the measured macOS 27.2 runtime, the same retained image completed as plain
+text but exhausted its budget under the current structured request. Removing
+claims did not complete the free-text output; moving eligibility first produced
+that enum without fixing the unfinished text. An enum-only request completed
+with both retained inputs, including one that refused plain-text descriptions.
+These comparisons establish request/output-shape dependence on that runtime,
+not a general image-input prohibition. No experimental prompt or schema is
+shipped without a complete description, eligibility and claims on both retained
+inputs and synthetic controls. See [#3791](https://github.com/nickysemenza/cubby/issues/3791) for the remaining
+recovery investigation.
 
 Recurring image-execution repair also settles retained negative cutout failures in
 bounded batches. This negative-outcome pass requires the current source/revision and the matching settled
