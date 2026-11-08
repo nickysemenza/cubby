@@ -1281,6 +1281,9 @@ cover flags identify a match to that selection rather than choosing another imag
 Calendar range items and Location trees carry this same canonical `displayImages`
 projection. Picker cover/logo URLs serialize the resolver’s result rather than
 querying attachment tables themselves.
+Internal one-cover URL readers use the cover query rather than materializing
+full image arrays. They retain the same preferred representation and omit refs
+without an image; gallery and image-chain readers retain their complete arrays.
 Each path visits a subject kind once, so reciprocal Recipe/Meal and Task/Project
 policies terminate. Each relationship retains its declared newest/oldest ordering
 before nested relationships and attachment order. Unavailable files, PDFs,
