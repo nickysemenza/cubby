@@ -314,7 +314,7 @@ importers:
         version: 1.3.6(@tanstack/query-core@5.105.0)(@tanstack/react-query@5.105.0(@types/react@19.3.0)(react@19.3.1))(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(better-auth@1.7.10(4b381c1e001f776e7f09abfe3558799a))(react-dom@19.3.1(@types/react@19.3.0)(react@19.3.1))(react@19.3.1)
       '@daveyplate/better-auth-ui':
         specifier: 3.4.0
-        version: 3.4.0(bb92a8095bcd7b71dddb48ae583ad35b)
+        version: 3.4.0(04e5e5ec5515c112384ab18c34ac4770)
       '@dnd-kit/core':
         specifier: ^6.3.1
         version: 6.3.1(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(@types/react@19.3.0)(react@19.3.1))(react@19.3.1)
@@ -343,8 +343,8 @@ importers:
         specifier: ^5.3.0
         version: 5.3.0
       '@hookform/resolvers':
-        specifier: ^5.9.1
-        version: 5.9.1(@standard-schema/spec@1.1.0)(ajv-formats@2.1.1(ajv@8.20.0))(ajv@8.20.0)(react-hook-form@7.91.0(@types/react@19.3.0)(react@19.3.1))(zod@4.6.7)
+        specifier: ^7.0.0
+        version: 7.0.3(@standard-schema/spec@1.1.0)(ajv-formats@2.1.1(ajv@8.20.0))(ajv@8.20.0)(react-hook-form@7.91.0(@types/react@19.3.0)(react@19.3.1))(typebox@1.3.27)(zod@4.6.7)
       '@modelcontextprotocol/client':
         specifier: ^2.3.1
         version: 2.4.0
@@ -2367,10 +2367,9 @@ packages:
       '@types/react-dom':
         optional: true
 
-  '@hookform/resolvers@5.9.1':
-    resolution: {integrity: sha512-7b7vsbraJxKgjVSA1Nur9tLwj539WGJUBLA7QNvXnFoT2pM5Z7G+6rlukk4B2/QrTZy6huRtH6wKeESPKuIr6w==}
+  '@hookform/resolvers@7.0.3':
+    resolution: {integrity: sha512-beGY1JY6K5cyWlswD4BVf7UTb5MxSjKkjljrRyLPT3KIQzsTU0jOibBKqtdcKqIZYQUUyURed7roLWZtSdAtiQ==}
     peerDependencies:
-      '@sinclair/typebox': '>=0.25.24'
       '@standard-schema/spec': ^1.0.0
       '@types/ajv': '*'
       '@types/ajv-errors': '*'
@@ -2387,23 +2386,21 @@ packages:
       '@types/joi': '*'
       '@types/nope-validator': '*'
       '@types/react-hook-form': '*'
-      '@types/sinclair__typebox': '*'
       '@types/standard-schema__spec': '*'
       '@types/superstruct': '*'
       '@types/typanion': '*'
-      '@types/typeschema__main': '*'
+      '@types/typebox': '*'
       '@types/valibot': '*'
       '@types/vest': '*'
       '@types/vinejs__vine': '*'
       '@types/yup': '*'
       '@types/zod': '*'
-      '@typeschema/main': '>=0.13.7'
       '@vinejs/vine': ^2.0.0 || ^3.0.0 || ^4.0.0
       ajv: ^8.12.0
       ajv-errors: ^3.0.0
       ajv-formats: ^2.1.1
       arktype: ^2.0.0
-      ata-validator: ^1.2.0
+      ata-validator: ^1.23.0
       class-transformer: '>=0.4.0'
       class-validator: '>=0.12.0'
       computed-types: ^1.0.0
@@ -2416,13 +2413,12 @@ packages:
       react-hook-form: ^7.55.0
       superstruct: '>=0.12.0'
       typanion: ^3.3.2
+      typebox: ^1.0.0
       valibot: '>=0.31.0 || ^1.0.0-beta.4 || ^1.0.0-rc'
       vest: '>=6.0.0'
       yup: ^1.0.0
       zod: 4.6.7
     peerDependenciesMeta:
-      '@sinclair/typebox':
-        optional: true
       '@standard-schema/spec':
         optional: true
       '@types/ajv':
@@ -2455,15 +2451,13 @@ packages:
         optional: true
       '@types/react-hook-form':
         optional: true
-      '@types/sinclair__typebox':
-        optional: true
       '@types/standard-schema__spec':
         optional: true
       '@types/superstruct':
         optional: true
       '@types/typanion':
         optional: true
-      '@types/typeschema__main':
+      '@types/typebox':
         optional: true
       '@types/valibot':
         optional: true
@@ -2474,8 +2468,6 @@ packages:
       '@types/yup':
         optional: true
       '@types/zod':
-        optional: true
-      '@typeschema/main':
         optional: true
       '@vinejs/vine':
         optional: true
@@ -2510,6 +2502,8 @@ packages:
       superstruct:
         optional: true
       typanion:
+        optional: true
+      typebox:
         optional: true
       valibot:
         optional: true
@@ -12338,7 +12332,7 @@ snapshots:
       '@types/react': 19.3.0
       '@types/react-dom': 19.3.0(@types/react@19.3.0)
 
-  '@daveyplate/better-auth-ui@3.4.0(bb92a8095bcd7b71dddb48ae583ad35b)':
+  '@daveyplate/better-auth-ui@3.4.0(04e5e5ec5515c112384ab18c34ac4770)':
     dependencies:
       '@better-auth/api-key': 1.7.10(@better-auth/core@1.7.9(@better-auth/utils@0.5.0)(@better-fetch/fetch@1.3.2)(@opentelemetry/api@1.9.1)(better-call@1.4.2(zod@4.6.7))(jose@6.2.12)(kysely@0.29.6)(nanostores@1.5.5))(@better-auth/utils@0.5.0)(better-auth@1.7.10(4b381c1e001f776e7f09abfe3558799a))(better-call@2.0.2(zod@4.6.7))
       '@better-auth/passkey': 1.7.10(@better-auth/core@1.7.9(@better-auth/utils@0.5.0)(@better-fetch/fetch@1.3.2)(@opentelemetry/api@1.9.1)(better-call@1.4.2(zod@4.6.7))(jose@6.2.12)(kysely@0.29.6)(nanostores@1.5.5))(@better-auth/utils@0.5.0)(@better-fetch/fetch@1.3.2)(better-auth@1.7.10(4b381c1e001f776e7f09abfe3558799a))(better-call@1.4.2(zod@4.6.7))(nanostores@1.5.5)
@@ -12346,7 +12340,7 @@ snapshots:
       '@captchafox/react': 1.13.0(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(@types/react@19.3.0)(react@19.3.1))(react@19.3.1)
       '@daveyplate/better-auth-tanstack': 1.3.6(@tanstack/query-core@5.105.0)(@tanstack/react-query@5.105.0(@types/react@19.3.0)(react@19.3.1))(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(better-auth@1.7.10(4b381c1e001f776e7f09abfe3558799a))(react-dom@19.3.1(@types/react@19.3.0)(react@19.3.1))(react@19.3.1)
       '@hcaptcha/react-hcaptcha': 2.2.0
-      '@hookform/resolvers': 5.9.1(@standard-schema/spec@1.1.0)(ajv-formats@2.1.1(ajv@8.20.0))(ajv@8.20.0)(react-hook-form@7.91.0(@types/react@19.3.0)(react@19.3.1))(zod@4.6.7)
+      '@hookform/resolvers': 7.0.3(@standard-schema/spec@1.1.0)(ajv-formats@2.1.1(ajv@8.20.0))(ajv@8.20.0)(react-hook-form@7.91.0(@types/react@19.3.0)(react@19.3.1))(typebox@1.3.27)(zod@4.6.7)
       '@instantdb/react': 1.0.67(@types/react@19.3.0)(react@19.3.1)
       '@marsidev/react-turnstile': 1.6.2(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(@types/react@19.3.0)(react@19.3.1))(react@19.3.1)
       '@noble/hashes': 2.4.0
@@ -12883,7 +12877,7 @@ snapshots:
       - '@types/emotion__react'
       - supports-color
 
-  '@hookform/resolvers@5.9.1(@standard-schema/spec@1.1.0)(ajv-formats@2.1.1(ajv@8.20.0))(ajv@8.20.0)(react-hook-form@7.91.0(@types/react@19.3.0)(react@19.3.1))(zod@4.6.7)':
+  '@hookform/resolvers@7.0.3(@standard-schema/spec@1.1.0)(ajv-formats@2.1.1(ajv@8.20.0))(ajv@8.20.0)(react-hook-form@7.91.0(@types/react@19.3.0)(react@19.3.1))(typebox@1.3.27)(zod@4.6.7)':
     dependencies:
       '@standard-schema/utils': 0.3.0
       react-hook-form: 7.91.0(@types/react@19.3.0)(react@19.3.1)
@@ -12891,6 +12885,7 @@ snapshots:
       '@standard-schema/spec': 1.1.0
       ajv: 8.20.0
       ajv-formats: 2.1.1(ajv@8.20.0)
+      typebox: 1.3.27
       zod: 4.6.7
 
   '@img/colour@1.1.0': {}
