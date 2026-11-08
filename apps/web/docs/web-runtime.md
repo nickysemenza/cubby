@@ -205,6 +205,10 @@ and freezes each compiler-owned slice, and returns them in one local loader read
 Dependencies are not traversed transitively. A document's QueryClient owns the
 complete admitted bundles. Accessors take that explicit scope.
 
+Derived-count links use the source slice's compiled relation plan for the target,
+URL key and subtree scope. Rendering a count must not admit the target's filter
+metadata just to reconstruct facts already owned by that plan.
+
 Filter descriptors compile once per admitted metadata slice in browsers and
 Worker isolates, shared by column filters and list controls. Compilation must use
 only frozen declaration data, never session, actor or request state. Replacing
@@ -214,8 +218,8 @@ of that compilation.
 The app's wrapper around TanStack's SSR Query integration replaces metadata query
 data with its entity admission identity on the existing initial state, streamed
 batches and pending promises. The browser reconstructs each complete bundle from
-lazy Vite chunks of the same canonical generated slices, resolved by
-`import.meta.glob` in `entity/metadata-loader.ts`. It awaits reconstruction before passing
+lazy Vite chunks of the same canonical generated slices, resolved by the
+per-entity loaders in `entity/metadata-loader.ts`. It awaits reconstruction before passing
 successful data to Query; pending query promises resolve through reconstruction.
 The installed router hydrate hook awaits initial admission before React renders.
 The stream transform awaits subsequent admissions before TanStack hydrates each
@@ -225,6 +229,11 @@ cancellation, request cleanup and query publication; the app does not fork them.
 Failed metadata imports publish an error only to their affected Query; sibling
 queries and later stream batches still hydrate. Mapped pending promises retain
 their rejection observers even when SSR cleanup cancels before transport reads.
+
+The lean generated roster includes each entity's direct metadata dependencies.
+Browser admission starts the primary and those dependency chunks together;
+it does not await the primary module to discover them or load the whole catalog.
+The roster and slice dependency lists come from the same compiler calculation.
 
 Browser navigation and dynamic admissions use those same public chunks, without
 a metadata RPC or hydration-time server read. Module loading deduplicates immutable

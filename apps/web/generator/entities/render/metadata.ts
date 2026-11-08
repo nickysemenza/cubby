@@ -318,6 +318,21 @@ export const renderEntityMetadataArtifacts = (
         ],
   );
   const entitySort = Object.fromEntries(entitySortEntries);
+  const metadataDependencies = Object.fromEntries(
+    entities.map((entity) => [
+      entity.key,
+      entities
+        .filter(
+          ({ key }) =>
+            key !== entity.key &&
+            (entity.relations.some(({ target }) => target === key) ||
+              entity.fieldModel.fields.some(
+                ({ reference }) => reference?.entity === key,
+              )),
+        )
+        .map(({ key }) => key),
+    ]),
+  );
   const entityEditIntents = Object.fromEntries(
     entities.flatMap(({ key, fieldModel }) =>
       fieldModel.intents === null
@@ -372,16 +387,7 @@ export const renderEntityMetadataArtifacts = (
               name: "metadata",
               value: {
                 entity: entity.key,
-                dependencies: entities
-                  .filter(
-                    ({ key }) =>
-                      key !== entity.key &&
-                      (entity.relations.some(({ target }) => target === key) ||
-                        entity.fieldModel.fields.some(
-                          ({ reference }) => reference?.entity === key,
-                        )),
-                  )
-                  .map(({ key }) => key),
+                dependencies: metadataDependencies[entity.key],
                 descriptor: entity.descriptor,
                 summary: {
                   ...entity.inspector,
@@ -435,6 +441,7 @@ export const renderEntityMetadataArtifacts = (
     artifact("packages/schemas/src/generated/entity-roster.gen.ts", {
       imports: [typeImport(["EntityRosterData"])],
       consts: [
+        { name: "entityMetadataDependencies", value: metadataDependencies },
         {
           name: "entityRoster",
           value: Object.fromEntries(
