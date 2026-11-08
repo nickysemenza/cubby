@@ -10,8 +10,8 @@ import { useMemo, type ReactNode } from "react";
  * A list grouped by a declared `model.grouping` choice. `groups` are the
  * server's sections of the whole filtered set, in page order; `onFilter` sets
  * a section's value as the field's include filter, present only when the
- * field has a declared filter. `hide` returns a section's Hide action (its
- * value as the field's excluded value), or undefined when it cannot hide.
+ * field has a declared filter. `exclude` returns the matching-record action
+ * or a reason the current filter cannot express it exactly.
  */
 export interface GroupConfig {
   choice: GeneratedGroupChoice;
@@ -21,7 +21,9 @@ export interface GroupConfig {
   onToggle?: (key: string) => void;
   onFilter?: (group: ListGroupSummary) => void;
   canFilter?: (group: ListGroupSummary) => boolean;
-  hide?: (group: ListGroupSummary) => (() => void) | undefined;
+  exclude?: (
+    group: ListGroupSummary,
+  ) => Pick<GroupSection<unknown>, "onExclude" | "excludeReason">;
   /**
    * A section's own header content: `labelContent` decorates the plain label,
    * `aside` sits beside its label and count (a
@@ -55,8 +57,9 @@ export interface GroupSection<T> {
   items: T[];
   /** Applies "Filter to this"; absent when the section has no filter value. */
   onFilter?: () => void;
-  /** Hides the section, keeping the grouping; absent when it cannot. */
-  onHide?: () => void;
+  /** Excludes matching records, keeping the grouping. */
+  onExclude?: () => void;
+  excludeReason?: string;
   aside?: ReactNode;
   actions?: ReactNode;
   columnTotals?: readonly GroupColumnTotal[];
@@ -123,7 +126,7 @@ export function groupSections<T>(
             config.choice.filter?.noValue === true))
           ? () => config.onFilter?.(group)
           : undefined,
-      onHide: config.hide?.(group),
+      ...config.exclude?.(group),
       ...config.header?.(group),
     };
     // Consume the whole section before hiding rows, including nested children:

@@ -1938,6 +1938,8 @@ fields and duplicate SQL values are unlisted, retaining existing grouped links
 and supplied views. Authored choices win; otherwise the choice matching its
 filter column wins. Derived aliases bind drill-down through the same compiled
 relationship path, including a stored reference's equivalent related preview.
+Calendar aliases must match the grouped value's path or declared key: a date
+window's effective deadline filter cannot stand in for its stored start date.
 
 List requests and supplied views use `groupBy: [{ key, level?, bucket? }]`, with
 at most three unique keys in hierarchy order. Empty or omitted means ungrouped.
@@ -3109,6 +3111,8 @@ edge and gets the toggle like any other.
 Include and exclude share that filter's hierarchy mode. Section exclusion is
 unavailable when it would change the mode of an existing picked or excluded
 value; it never broadens or narrows the member's other selections implicitly.
+Shared section headers explain unavailable exclusions on focus or click. The
+member can choose the required scope in Filters before excluding the section.
 
 ### Background derived data
 

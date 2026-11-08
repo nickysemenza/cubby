@@ -33,7 +33,8 @@ type GroupedItem =
       collapsed?: boolean;
       onToggle?: () => void;
       onFilter?: () => void;
-      onHide?: () => void;
+      onExclude?: () => void;
+      excludeReason?: string;
       aside?: ReactNode;
       actions?: ReactNode;
       columnTotals?: readonly GroupColumnTotal[];
@@ -71,7 +72,8 @@ type ResolvedVirtualIndex =
       collapsed?: boolean;
       onToggle?: () => void;
       onFilter?: () => void;
-      onHide?: () => void;
+      onExclude?: () => void;
+      excludeReason?: string;
       aside?: ReactNode;
       actions?: ReactNode;
       columnTotals?: readonly GroupColumnTotal[];

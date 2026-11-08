@@ -362,29 +362,50 @@ export function buildFiltersFromManifest(
 }
 
 /**
- * "Hide" on a grouped list's section, as the field's next column-filter
+ * Exclude matching records from a grouped section, as its next column-filter
  * value: the section's value joins the excluded ones, so the grouping stays
  * and the section goes. A level section stands for its key's descendants,
  * so "Include sub-…" turns on. The no-value section hides as Any value, or,
- * beside picked values, by dropping No value. Undefined when the filter
- * cannot hide the section.
+ * beside picked values, by dropping No value. Unavailable operations retain
+ * their reason so every shared header can explain the limitation.
  */
-export const hideSectionValues = (
+export const sectionExclusion = (
   spec: FilterSpecCore,
   section: Readonly<{ key: string; subtree?: boolean }>,
   values: readonly string[],
-): string[] | undefined => {
+): { values: string[]; reason: null } | { values: null; reason: string } => {
   if (section.key === FILTER_NONE) {
-    if (!spec.nullable) return undefined;
+    if (!spec.nullable)
+      return {
+        values: null,
+        reason: "This filter cannot exclude missing values.",
+      };
     const rest = values.filter(
       (value) => value !== FILTER_NONE && value !== FILTER_ANY,
     );
     const picked = splitExcluded(rest).included.filter(
       (value) => !isSentinel(value),
     );
-    return picked.length ? rest : [...rest, FILTER_ANY];
+    if (
+      values.includes(FILTER_NONE) &&
+      !values.includes(FILTER_ANY) &&
+      picked.length === 0
+    )
+      return {
+        values: null,
+        reason:
+          "This filter selects only missing values. Changing it to Any value would replace your selection. Clear or change the filter first.",
+      };
+    return {
+      values: picked.length ? rest : [...rest, FILTER_ANY],
+      reason: null,
+    };
   }
-  if (excludeKey(spec) === undefined) return undefined;
+  if (excludeKey(spec) === undefined)
+    return {
+      values: null,
+      reason: "This field does not support record exclusion.",
+    };
   // Include and exclude share one hierarchy mode. Changing it would also
   // change an existing selection, so a mixed-scope exclusion is unavailable.
   if (
@@ -393,12 +414,22 @@ export const hideSectionValues = (
     includesSubtree(values, spec.subtreeDefault !== false) !==
       (section.subtree === true)
   )
-    return undefined;
+    return {
+      values: null,
+      reason: `This section needs Include sub… ${section.subtree ? "on" : "off"}. Changing it here would alter an existing filter. Choose that setting in Filters first.`,
+    };
   const hidden = `${FILTER_NOT_PREFIX}${section.key}`;
   const next = values.includes(hidden) ? [...values] : [...values, hidden];
-  return spec.subtree
-    ? withSubtree(next, section.subtree === true, spec.subtreeDefault !== false)
-    : next;
+  return {
+    values: spec.subtree
+      ? withSubtree(
+          next,
+          section.subtree === true,
+          spec.subtreeDefault !== false,
+        )
+      : next,
+    reason: null,
+  };
 };
 
 /**

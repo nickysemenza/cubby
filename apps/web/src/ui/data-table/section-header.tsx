@@ -1,8 +1,15 @@
 import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { EyeSlashIcon } from "@phosphor-icons/react/dist/csr/EyeSlash";
 import { FunnelIcon } from "@phosphor-icons/react/dist/csr/Funnel";
+import { InfoIcon } from "@phosphor-icons/react/dist/csr/Info";
 import { cn } from "cn";
 import type { ReactNode } from "react";
+
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "~/ui/primitives/popover";
 
 import { ROW_DENSITY } from "./density";
 
@@ -33,8 +40,9 @@ interface SectionHeaderProps {
   onToggle?: () => void;
   /** "Filter to this": present only when the grouped field has a declared filter. */
   onFilter?: () => void;
-  /** "Hide": excludes the section's value, keeping the grouping. */
-  onHide?: () => void;
+  /** Excludes matching records while keeping the grouping. */
+  onExclude?: () => void;
+  excludeReason?: string;
   /** Beside the label and count: a record link the plain label cannot carry. */
   aside?: ReactNode;
   /** The section's own commands, always visible at the trailing edge. */
@@ -51,12 +59,12 @@ interface SectionHeaderProps {
 }
 
 const ACTION_CLASS =
-  "inline-flex items-center gap-1 rounded-sm px-1.5 py-0.5 text-xs text-muted-foreground opacity-0 transition-opacity group-hover/section:opacity-100 hover:bg-background hover:text-foreground focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none pointer-coarse:opacity-100";
+  "inline-flex min-h-11 min-w-11 items-center gap-1 rounded-sm px-1.5 py-0.5 text-xs text-muted-foreground opacity-0 transition-opacity group-hover/section:opacity-100 hover:bg-background hover:text-foreground focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none pointer-coarse:opacity-100 md:min-h-0 md:min-w-0";
 
 /**
  * Header of one grouped-list section: a neutral band with the section's
  * label and its count over the whole filtered set. "Filter to this" and
- * "Hide" reveal on hover and stay reachable by keyboard.
+ * "Exclude matching records" reveal on hover and stay reachable by keyboard.
  */
 export function SectionHeader({
   title,
@@ -66,7 +74,8 @@ export function SectionHeader({
   collapsed = false,
   onToggle,
   onFilter,
-  onHide,
+  onExclude,
+  excludeReason,
   aside,
   actions,
   columnTotals,
@@ -142,7 +151,7 @@ export function SectionHeader({
           </span>
         ))}
       </div>
-      {onFilter || onHide || actions ? (
+      {onFilter || onExclude || excludeReason || actions ? (
         <div className="sticky right-2 z-10 ml-auto flex items-center gap-0.5 bg-card md:bg-(--table-section-surface)">
           {onFilter ? (
             <button type="button" onClick={onFilter} className={ACTION_CLASS}>
@@ -151,10 +160,10 @@ export function SectionHeader({
               <span className="sr-only">: {title}</span>
             </button>
           ) : null}
-          {onHide ? (
+          {onExclude ? (
             <button
               type="button"
-              onClick={onHide}
+              onClick={onExclude}
               className={ACTION_CLASS}
               title="Removes matching records from every group. Collapse this section to keep the records and totals unchanged."
             >
@@ -162,6 +171,25 @@ export function SectionHeader({
               Exclude matching records
               <span className="sr-only">: {title}</span>
             </button>
+          ) : null}
+          {!onExclude && excludeReason ? (
+            <Popover>
+              <PopoverTrigger
+                render={
+                  <button
+                    type="button"
+                    className={ACTION_CLASS}
+                    aria-label={`Why exclusion is unavailable: ${title}`}
+                    title="Why exclusion is unavailable"
+                  />
+                }
+              >
+                <InfoIcon aria-hidden className="size-3.5" />
+              </PopoverTrigger>
+              <PopoverContent align="end">
+                <p>{excludeReason}</p>
+              </PopoverContent>
+            </Popover>
           ) : null}
           {actions}
         </div>

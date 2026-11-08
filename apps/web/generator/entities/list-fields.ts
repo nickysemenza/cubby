@@ -1178,6 +1178,7 @@ const compileGroupChoice = (
         .map((column) => column.key),
     ];
     return descriptors.find((candidate) => {
+      const dateRange = dateRangeBounds(candidate);
       const alias = candidate.derived ? derived[candidate.derived] : undefined;
       const samePath =
         value !== null &&
@@ -1189,17 +1190,20 @@ const compileGroupChoice = (
           ? alias.terminal.kind === "record"
           : alias.terminal.kind === "field" &&
             alias.terminal.column === value.column);
+      // A date alias can name a window's effective end, not this field's
+      // stored start. Its columnId alone cannot prove the same range binding.
       return (
         (candidate.kind === "multiselect" ||
           candidate.kind === "idMulti" ||
           candidate.kind === "boolean" ||
-          dateRangeBounds(candidate) !== null) &&
+          dateRange !== null) &&
         (samePath ||
           candidate.derived === key ||
-          keys.includes(candidate.columnId) ||
-          (candidate.field !== null && keys.includes(candidate.field)) ||
-          (candidate.stored?.columns.length === 1 &&
-            keys.includes(candidate.stored.columns[0]!)))
+          ((dateRange === null || candidate.derived === null) &&
+            (keys.includes(candidate.columnId) ||
+              (candidate.field !== null && keys.includes(candidate.field)) ||
+              (candidate.stored?.columns.length === 1 &&
+                keys.includes(candidate.stored.columns[0]!)))))
       );
     });
   };

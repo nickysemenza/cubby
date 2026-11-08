@@ -103,6 +103,18 @@ describe("resolveDateRange", () => {
     });
   });
   it("maps typed groups to exact calendar and record predicates", () => {
+    // The deadline filter uses dueEndDate ?? dueDate; a start-date group
+    // must not bind to that different expression merely by columnId.
+    const dueStart = groupPathFilters(
+      {
+        groupBy: [{ key: "dueDate", bucket: "day" }],
+        grouping: entityMetadata(queryClient, "task").listFields.grouping,
+        fields: getEntityFilters(queryClient, "task"),
+        groups: [],
+      },
+      ["2026-03-08"],
+    );
+    expect(dueStart?.some(({ id }) => id === "dueDate")).not.toBe(true);
     expect(resolveDateRange("1m", "2024-03-31")).toEqual({
       dateFrom: "2024-02-29",
       dateTo: "2024-03-31",

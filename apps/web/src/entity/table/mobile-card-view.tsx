@@ -898,7 +898,8 @@ export function MobileCardView<TItem extends RowData>({
               collapsed={gItem.section.collapsed}
               onToggle={gItem.section.onToggle}
               onFilter={gItem.section.onFilter}
-              onHide={gItem.section.onHide}
+              onExclude={gItem.section.onExclude}
+              excludeReason={gItem.section.excludeReason}
               actions={gItem.section.actions}
               aside={gItem.section.aside}
               labelledTotals={gItem.section.columnTotals}

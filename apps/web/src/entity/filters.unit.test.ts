@@ -16,7 +16,7 @@ import {
   FILTER_SUBTREE,
   FILTER_NONE,
   filterGetterFromColumnFilters,
-  hideSectionValues,
+  sectionExclusion,
   type FilterSpecCore,
   type FilterSearch,
   type FilterValue,
@@ -392,19 +392,35 @@ describe("buildFiltersFromManifest", () => {
         exclude: { field: "parentExclude" },
       };
       expect(
-        hideSectionValues(parent, { key: "SCAT-4K7M", subtree: false }, []),
-      ).toEqual(["__not__:SCAT-4K7M", FILTER_EXACT]);
+        sectionExclusion(
+          { ...parent, nullable: { field: "parentPresence", label: "parent" } },
+          { key: FILTER_NONE },
+          [FILTER_NONE],
+        ),
+      ).toMatchObject({
+        values: null,
+        reason: expect.stringContaining("replace your selection"),
+      });
       expect(
-        hideSectionValues(parent, { key: "SCAT-4K7M", subtree: false }, [
+        sectionExclusion(parent, { key: "SCAT-4K7M", subtree: false }, []),
+      ).toEqual({ values: ["__not__:SCAT-4K7M", FILTER_EXACT], reason: null });
+      expect(
+        sectionExclusion(parent, { key: "SCAT-4K7M", subtree: false }, [
           "SCAT-8P2N",
         ]),
-      ).toBeUndefined();
+      ).toMatchObject({
+        values: null,
+        reason: expect.stringContaining("would alter an existing filter"),
+      });
       expect(
-        hideSectionValues(parent, { key: "SCAT-4K7M", subtree: true }, [
+        sectionExclusion(parent, { key: "SCAT-4K7M", subtree: true }, [
           "SCAT-8P2N",
           FILTER_EXACT,
         ]),
-      ).toBeUndefined();
+      ).toMatchObject({
+        values: null,
+        reason: expect.stringContaining("would alter an existing filter"),
+      });
     });
 
     it("keeps @me unbranded only where the descriptor declares it", () => {

@@ -20,7 +20,8 @@ type DesktopGroupItem =
       collapsed: boolean;
       onToggle?: () => void;
       onFilter?: () => void;
-      onHide?: () => void;
+      onExclude?: () => void;
+      excludeReason?: string;
       aside?: ReactNode;
       actions?: ReactNode;
       columnTotals?: readonly GroupColumnTotal[];
@@ -67,7 +68,8 @@ export function useDesktopGroupedRows<TItem extends RowData>(
             collapsed: section.collapsed,
             onToggle: section.onToggle,
             onFilter: section.onFilter,
-            onHide: section.onHide,
+            onExclude: section.onExclude,
+            excludeReason: section.excludeReason,
             aside: section.aside,
             actions: section.actions,
             columnTotals: section.columnTotals,

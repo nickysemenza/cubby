@@ -283,6 +283,26 @@ test("wardrobe cards exclude a clothing type, keep uncategorized items, and a he
 
   // Excluding records keeps the grouping and excludes that section's value too.
   await tops.hover();
+  const originalFilters = new URL(page.url()).search;
+  await tops
+    .getByRole("button", { name: /^Why exclusion is unavailable/ })
+    .click();
+  await expect(page.getByText(/would alter an existing filter/)).toBeVisible();
+  expect(new URL(page.url()).search).toBe(originalFilters);
+  await page.keyboard.press("Escape");
+  // The existing exclusion includes descendants. Choose exact matching
+  // explicitly before adding this exact section to the excluded values.
+  await page.getByRole("button", { name: "Filters", exact: true }).click();
+  await page
+    .getByRole("button", { name: /^Category: is not/ })
+    .first()
+    .click();
+  const descendants = page.getByRole("switch", { name: /^Include sub-/ });
+  await expect(descendants).toBeChecked();
+  await descendants.click();
+  await expect(descendants).not.toBeChecked();
+  await page.keyboard.press("Escape");
+  await tops.hover();
   await tops.getByRole("button", { name: /^Exclude matching records/ }).click();
   await expect(sections).toHaveText([/^Apparel/, /^Unassigned/]);
   const url = new URL(page.url());
@@ -290,4 +310,7 @@ test("wardrobe cards exclude a clothing type, keep uncategorized items, and a he
     { key: "category" },
   ]);
   expect(url.searchParams.get("categoryExclude")?.split(",")).toHaveLength(2);
+  expect(
+    JSON.parse(url.searchParams.get("includeSubProductCategories") ?? "null"),
+  ).toBe("false");
 });
