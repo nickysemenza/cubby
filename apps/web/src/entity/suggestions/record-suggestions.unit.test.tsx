@@ -1271,11 +1271,14 @@ describe("record suggestions", () => {
     fireEvent.click(
       await screen.findByRole("button", { name: "Suggestion actions" }),
     );
-    fireEvent.click(
-      await screen.findByRole("button", { name: "Use a different value…" }),
-    );
-    const dialog = await screen.findByRole("dialog");
-    fireEvent.click(within(dialog).getByRole("button", { name: /save/i }));
+    const chooseDifferent = await screen.findByRole("button", {
+      name: "Use a different value…",
+    });
+    await act(async () => {
+      fireEvent.click(chooseDifferent);
+    });
+    const save = await screen.findByRole("button", { name: /save/i });
+    fireEvent.click(save);
     await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
     await waitFor(() =>
       expect(

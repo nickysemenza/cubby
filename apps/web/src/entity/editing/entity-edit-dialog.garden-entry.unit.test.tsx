@@ -11,7 +11,7 @@ import { entityMutation } from "~/integrations/tanstack-query/generated/domains/
 import { mock } from "~/lib/test/mock-schema";
 import { entityBrowserMutationResultSchema } from "~/server/entity-kernel/contracts";
 
-import { EntityEditDialog } from "./entity-edit-dialog";
+import { EntityEditDialogContent } from "./entity-edit-dialog-content";
 import { createEntityMutationPort } from "./use-entity-commands";
 
 installFeatures();
@@ -57,7 +57,7 @@ describe("EntityEditDialog generic create", () => {
   it("keeps its controls mounted across value changes and sends every filled field", async () => {
     const { mutationPort, transport } = gardenEntryPort();
     render(
-      <EntityEditDialog
+      <EntityEditDialogContent
         open
         onOpenChange={() => undefined}
         mutationPort={mutationPort}
@@ -129,7 +129,7 @@ describe("EntityEditDialog generic create", () => {
       },
     });
     render(
-      <EntityEditDialog
+      <EntityEditDialogContent
         open
         onOpenChange={() => undefined}
         mutationPort={mutationPort}
