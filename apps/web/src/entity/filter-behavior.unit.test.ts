@@ -188,6 +188,25 @@ describe("resolveDateRange", () => {
       ).toEqual({ usuallyOnHand: value === "true" });
     }
     const projectId = testShortcode("project", "PRJ-4K7M");
+    const recipeFields = getEntityFilters(queryClient, "recipe");
+    for (const value of ["true", "false"]) {
+      const drilled = groupPathFilters(
+        {
+          groupBy: [{ key: "meals" }],
+          grouping: entityMetadata(queryClient, "recipe").listFields.grouping,
+          fields: recipeFields,
+          groups: [],
+        },
+        [value],
+      );
+      expect(drilled).toBeDefined();
+      expect(
+        buildFiltersFromManifest(
+          recipeFields,
+          filterGetterFromColumnFilters(drilled ?? []),
+        ),
+      ).toEqual({ mealPresenceFilter: value === "true" ? "has" : "none" });
+    }
     for (const subtree of [false, true]) {
       const path = [projectId];
       const drilled = groupPathFilters(

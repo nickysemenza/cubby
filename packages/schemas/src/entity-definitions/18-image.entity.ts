@@ -809,6 +809,25 @@ export const { definition, readSchemas } = defineEntityModel(
       schema: { module: "@cubby/schemas/image", export: "imageFilterFields" },
       descriptors: [
         {
+          columnId: "verifiedAt",
+          label: "Verified at",
+          kind: "range",
+          deriveSchema: true,
+          stored: true,
+          range: { kind: "date" },
+          wire: {
+            kind: "range",
+            from: "verifiedAtFrom",
+            to: "verifiedAtTo",
+            presence: "verifiedAtPresenceFilter",
+          },
+          placeholder: "Filter by verified at...",
+          options: [
+            { value: "has", label: "Has date", meta: true },
+            { value: "none", label: "(none)", meta: true },
+          ],
+        },
+        {
           columnId: "filename",
           field: "nameFilter",
           kind: "text",

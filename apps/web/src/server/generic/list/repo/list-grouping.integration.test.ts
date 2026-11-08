@@ -20,7 +20,9 @@ import {
   ledgerPartyScaffold,
 } from "~/server/domains/ledger-party/repo/ledger-party";
 import { locationScaffold } from "~/server/domains/location/repo/crud";
+import { createMealWithEntityId } from "~/server/domains/meal/repo/crud";
 import { createProductCategory } from "~/server/domains/product-category/repo/product-category";
+import { recipeScaffold } from "~/server/domains/recipe/repo/crud";
 import {
   entityKernelContextSchema,
   executeEntity,
@@ -31,10 +33,12 @@ import {
   createLocationFixture,
   createPlantFixture,
   createProductFixture,
+  createRecipeFixture,
   listProductsFixture,
   makeExpenseInput,
   makeLocationInput,
   makeProductInput,
+  makeRecipeInput,
 } from "~/server/testing/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
@@ -462,7 +466,7 @@ describe("server list grouping", () => {
     expect(await presence("has")).toBe(0);
   });
 
-  it("orders enum sections by declared option order before pagination", async () => {
+  it("orders scalar sections before pagination and keeps count links separate from predicate groups", async () => {
     await location("Room one", "room");
     await location("Room two", "room");
     await location("Box one", "box");
@@ -496,6 +500,49 @@ describe("server list grouping", () => {
       hasNextPage: true,
       unresolvedCount: undefined,
     });
+    const planned = await createRecipeFixture(
+      ctx.db,
+      makeRecipeInput({ name: "Planned soup" }),
+      ctx.actor,
+    );
+    const unplanned = await createRecipeFixture(
+      ctx.db,
+      makeRecipeInput({ name: "Unplanned soup" }),
+      ctx.actor,
+    );
+    await createMealWithEntityId(
+      ctx.db,
+      {
+        date: "2026-09-10",
+        name: "Soup supper",
+        recipes: [{ recipeId: planned.id, scale: 1 }],
+      },
+      ctx.actor,
+    );
+    const recipes = await recipeScaffold.read(ctx.db, {
+      filters: withListGroupBy({}, [{ key: "meals" }]),
+      sorts: [],
+      projection: ["id", "meals"],
+      pagination: { pageIndex: 0, pageSize: 50 },
+    });
+    expect(groups(recipes)).toMatchObject([
+      { key: "false", count: 1 },
+      { key: "true", count: 1 },
+    ]);
+    expect(
+      recipes.data.map((item) => z.object({ meals: z.number() }).parse(item)),
+    ).toEqual([{ meals: 0 }, { meals: 1 }]);
+    for (const [presence, id] of [
+      ["has", planned.id],
+      ["none", unplanned.id],
+    ] as const) {
+      const filtered = await executeEntity(kernel(), {
+        action: "list",
+        entity: "recipe",
+        filters: { mealPresenceFilter: presence },
+      });
+      expect(filtered.items.map((item) => item.id)).toEqual([id]);
+    }
   });
 
   it("applies Ledger Party secondary sorts before its stable tie breaker", async () => {

@@ -967,6 +967,7 @@ export const { definition, readSchemas } = defineEntityModel({
       },
       {
         columnId: "dueDate",
+        label: "Due deadline",
         kind: "range",
         wire: {
           kind: "range",

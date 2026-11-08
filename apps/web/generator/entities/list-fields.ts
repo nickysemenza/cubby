@@ -1218,6 +1218,9 @@ const compileGroupChoice = (
         (candidate.kind === "multiselect" ||
           candidate.kind === "idMulti" ||
           candidate.kind === "boolean" ||
+          (candidate.kind === "presence" &&
+            bound?.shape === "value" &&
+            bound.type === "boolean") ||
           dateRange !== null) &&
         (samePath ||
           candidate.derived === key ||
@@ -1235,6 +1238,9 @@ const compileGroupChoice = (
     );
   const labelFilter = filterOn(null);
   const label =
+    (labelFilter && dateRangeBounds(labelFilter) !== null
+      ? labelFilter.label
+      : undefined) ??
     field?.label ??
     entity.relations.find(
       (relation) =>
@@ -1297,13 +1303,14 @@ const compileGroupChoice = (
       label,
       noValueLabel: field?.display.emptyLabel ?? "Unassigned",
       multiple:
-        field?.kind === "text-array" ||
-        field?.reference?.multiple === true ||
-        bound?.shape === "rows" ||
-        (bound?.shape === "via" &&
-          (bound.many ||
-            (bound.terminal.kind === "field" &&
-              bound.terminal.fieldKind === "text-array"))),
+        value?.kind !== "derived" &&
+        (field?.kind === "text-array" ||
+          field?.reference?.multiple === true ||
+          bound?.shape === "rows" ||
+          (bound?.shape === "via" &&
+            (bound.many ||
+              (bound.terminal.kind === "field" &&
+                bound.terminal.fieldKind === "text-array")))),
       dateKind:
         field?.kind === "timestamp" ||
         (bound?.shape === "via" &&
@@ -1522,7 +1529,6 @@ const presentationValueType = ({
 }): GeneratedListFieldPresentation["valueType"] => {
   if (field?.display.value) return field.display.value.kind;
   if (field?.display.standard === "image") return "images";
-  if (target !== null) return "record";
   if (
     field?.display.format === "currency" ||
     field?.display.format === "signedCurrency" ||
@@ -1542,6 +1548,7 @@ const presentationValueType = ({
       field?.display.format === "arrayCount"
       ? "count"
       : "number";
+  if (target !== null) return "record";
   if (
     kind === "enum" ||
     field?.display.valueOptions?.length ||
@@ -1568,7 +1575,7 @@ const presentationCardinality = ({
   field?.display.standard === "image" ||
   field?.display.value?.kind === "images" ||
   (field?.display.value?.kind === "record" && field.display.value.multiple) ||
-  field?.reference?.multiple ||
+  (field?.kind !== "number" && field?.reference?.multiple) ||
   kind === "text-array" ||
   (value?.shape === "via" && value.many) ||
   value?.shape === "rows" ||
@@ -1600,6 +1607,47 @@ const presentationTarget = ({
   relation?.target ??
   filter?.brandRef?.entity ??
   null;
+
+/** Group marks follow the grouped SQL value, independently of a linked cell. */
+const groupPresentation = ({
+  field,
+  filter,
+  kind,
+  group,
+  value,
+  cellValueType,
+}: Omit<Parameters<typeof presentationValueType>[0], "target"> & {
+  group: CompiledGroupChoice | undefined;
+  value: CompiledListField | undefined;
+  cellValueType: GeneratedListFieldPresentation["valueType"];
+}) => {
+  const grouped = group?.value;
+  const target =
+    grouped &&
+    (grouped.kind === "record" ||
+      grouped.kind === "rowRecord" ||
+      grouped.kind === "relatedRecord")
+      ? grouped.target
+      : null;
+  const valueType = presentationValueType({
+    field: grouped?.kind === "derived" ? undefined : field,
+    filter,
+    kind:
+      grouped?.kind === "derived" && value?.shape === "value"
+        ? value.type
+        : kind,
+    target,
+  });
+  return {
+    valueType,
+    target,
+    description: group?.multiple
+      ? "Records may appear in several groups. Filters select whole records and retain their other memberships."
+      : valueType === "boolean" && cellValueType === "count"
+        ? "Groups by the yes / no predicate. The column shows a count."
+        : null,
+  };
+};
 
 const compileFieldPresentation = (
   entity: CompiledEntity,
@@ -1669,13 +1717,21 @@ const compileFieldPresentation = (
             ? value.terminal.fieldKind
             : undefined);
       const valueType = presentationValueType({ field, filter, kind, target });
+      const groupFacts = groupPresentation({
+        field,
+        filter,
+        kind,
+        group,
+        value,
+        cellValueType: valueType,
+      });
       const presentation: GeneratedListFieldPresentation<string> = {
         label:
           (key === entity.inspector.titleField
             ? `${entity.inspector.singular} name`
             : undefined) ??
-          group?.label ??
           field?.label ??
+          group?.label ??
           relation?.label ??
           (filter?.columnId === key ? filterFieldLabel(filter) : undefined) ??
           filter?.label ??
@@ -1697,15 +1753,17 @@ const compileFieldPresentation = (
             ? "Sorts by the first related record shown in the cell."
             : null,
         ),
-        group: operation(
-          group?.reason === null ? group.key : undefined,
-          group?.reason ??
-            value?.group ??
-            "Grouping is unavailable for this field.",
-          group?.multiple
-            ? "Records may appear in several groups. Filters select whole records and retain their other memberships."
-            : null,
-        ),
+        group: {
+          ...operation(
+            group?.reason === null ? group.key : undefined,
+            group?.reason ??
+              value?.group ??
+              "Grouping is unavailable for this field.",
+            groupFacts.description,
+          ),
+          valueType: groupFacts.valueType,
+          target: groupFacts.target,
+        },
         filter: {
           ...operation(
             filter?.columnId,

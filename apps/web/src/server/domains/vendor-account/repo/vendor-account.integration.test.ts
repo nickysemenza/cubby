@@ -19,6 +19,7 @@ import {
 } from "~/server/domains/vendor-account/repo/vendor-account";
 import { getEntityGraph } from "~/server/generic/entity-graph/repo/entity-graph";
 import { getFilterOptions } from "~/server/generic/list/repo/filter-options";
+import { withListGroupBy } from "~/server/generic/list/repo/list";
 import {
   lookupEntityLabels,
   lookupEntityReferences,
@@ -149,11 +150,25 @@ describe("vendor account run activity", () => {
     const before = await readVendorAccount(ctx.db, account.shortcode);
     expect(before?.lastRunAt).toBeNull();
     expect(before?.lastSuccessAt).toBeNull();
+    expect(
+      (
+        await vendorAccountScaffold.read(ctx.db, {
+          filters: { lastRunAtPresenceFilter: "none" },
+          sorts: [],
+          pagination: { pageIndex: 0, pageSize: 50 },
+        })
+      ).data.map(({ id }) => id),
+    ).toEqual([account.shortcode]);
 
     const started = await startImportRunFixture(ctx.db, {
       ledgerPartyId: party.id,
       vendorAccountId: account.id,
     });
+    // UTC April 1 is still March 31 for the household's range and group.
+    await getDb(ctx.db)
+      .update(run)
+      .set({ startedAt: new Date("2026-04-01T00:30:00.000Z") })
+      .where(eq(run.id, started.id));
     const [row] = await getDb(ctx.db)
       .select({ startedAt: run.startedAt })
       .from(run)
@@ -161,6 +176,28 @@ describe("vendor account run activity", () => {
     const running = await readVendorAccount(ctx.db, account.shortcode);
     expect(running?.lastRunAt).toEqual(row?.startedAt);
     expect(running?.lastSuccessAt).toBeNull();
+    const march = await vendorAccountScaffold.read(ctx.db, {
+      filters: withListGroupBy(
+        { lastRunAtFrom: "2026-03-31", lastRunAtTo: "2026-03-31" },
+        [{ key: "lastRunAt", bucket: "day" }],
+      ),
+      sorts: [],
+      pagination: { pageIndex: 0, pageSize: 50 },
+    });
+    expect(march.data.map(({ id }) => id)).toEqual([account.shortcode]);
+    expect(march.groups).toMatchObject([{ path: ["2026-03-31"], count: 1 }]);
+    expect(
+      await vendorAccountScaffold.countBy(ctx.db, {}, "lastRunAt"),
+    ).toMatchObject({ kind: "range", min: "2026-03-31", max: "2026-03-31" });
+    expect(
+      (
+        await vendorAccountScaffold.read(ctx.db, {
+          filters: { lastRunAtFrom: "2026-04-01", lastRunAtTo: "2026-04-01" },
+          sorts: [],
+          pagination: { pageIndex: 0, pageSize: 50 },
+        })
+      ).data,
+    ).toEqual([]);
 
     const endedAt = new Date("2026-06-01T12:00:00.000Z");
     await getDb(ctx.db)

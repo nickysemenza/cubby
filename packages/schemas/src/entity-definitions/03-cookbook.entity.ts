@@ -338,6 +338,16 @@ export const { definition, readSchemas } = defineEntityModel(
       },
       descriptors: [
         {
+          columnId: "importedAt",
+          label: "Imported at",
+          kind: "range",
+          deriveSchema: true,
+          stored: true,
+          range: { kind: "date" },
+          wire: { kind: "range", from: "importedAtFrom", to: "importedAtTo" },
+          placeholder: "Filter by imported at...",
+        },
+        {
           columnId: "subjects",
           field: "subjectFilters",
           kind: "multiselect",

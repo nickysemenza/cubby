@@ -66,6 +66,7 @@ import {
   buildSearchConditions,
   countWhere,
   executeListQueryWithCount,
+  householdDaySql,
   type ListReadIntent,
   notDeleted,
   shortcodeSetCondition,
@@ -1374,13 +1375,19 @@ export function listScaffold<
       const stored = {
         value,
         kind:
-          derived?.shape === "value" ? derived.type : (base?.kind ?? "text"),
+          derived?.shape === "value"
+            ? model?.kind === "timestamp"
+              ? "timestamp"
+              : derived.type
+            : (base?.kind ?? "text"),
         reference: model?.reference?.entity ?? base?.reference ?? null,
       };
       if (descriptor.kind === "range") {
         const bound = (aggregate: "min" | "max") =>
           stored.kind === "timestamp"
-            ? sql<string | null>`${sql.raw(aggregate)}(${value})::date::text`
+            ? sql<
+                string | null
+              >`${householdDaySql(sql`${sql.raw(aggregate)}(${value})`)}::text`
             : sql<string | null>`${sql.raw(aggregate)}(${value})::text`;
         const [row] = await unwrapDb(db)
           .select({ min: bound("min"), max: bound("max") })

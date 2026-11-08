@@ -208,6 +208,18 @@ describe("typed entity compiler", () => {
             { output: false, key: "startsOn", kind: "date", nullable: true },
             { output: false, key: "endsOn", kind: "date", nullable: true },
             {
+              output: false,
+              key: "uses",
+              kind: "number",
+              reference: { entity: "alpha", multiple: true },
+              display: { format: "count" },
+              validation: {
+                read: z.number().int(),
+                create: null,
+                update: null,
+              },
+            },
+            {
               key: "period",
               kind: "dateRange",
               nullable: true,
@@ -225,6 +237,7 @@ describe("typed entity compiler", () => {
             },
           ],
 
+          derived: { uses: { type: "boolean" } },
           storage: [
             {
               key: "name",
@@ -257,6 +270,15 @@ describe("typed entity compiler", () => {
       expect(
         entity.listFields.grouping.find((choice) => choice.key === key),
       ).toMatchObject({ listed: true });
+    expect(
+      entity.listFields.grouping.find(({ key }) => key === "uses"),
+    ).toMatchObject({ value: { kind: "derived" }, multiple: false });
+    expect(entity.listFields.presentation.uses).toMatchObject({
+      target: "alpha",
+      valueType: "count",
+      cardinality: "one",
+      group: { valueType: "boolean", target: null },
+    });
     expect(() =>
       compileEntityDeclarations([
         { ...base, model: { ...model, storage: ["missing"] } },
