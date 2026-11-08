@@ -64,7 +64,8 @@ export async function controlWorkflowRun(
       memberUserId: ledgerParty.userId,
       attempt: sql<number>`coalesce((${runTable.progress}->>'attempt')::int, 0)`,
       hasAiRoster:
-        purpose === "ai_refresh" && input.action === "retry"
+        purpose === "ai_refresh" &&
+        ["retry", "resume", "run_now_paid"].includes(input.action)
           ? runEvaluationRosterExists(sql`${runTable.id}`)
           : sql<boolean>`true`,
     })
@@ -81,6 +82,12 @@ export async function controlWorkflowRun(
     row.memberUserId !== actor.userId
   )
     throw new Error("Only the member this Run belongs to can control it");
+  // A paused Run may have no durable roster; refuse before launch or a paid grant.
+  if (!row.hasAiRoster)
+    throw createAppError(
+      "RUN_CONTROL_REFUSED",
+      "This AI refresh Run has no durable evaluation roster; its original scope cannot be recovered.",
+    );
   if (input.action === "pause") {
     if (
       (purpose !== "mail_reclassify" && purpose !== "sweep") ||
@@ -129,11 +136,6 @@ export async function controlWorkflowRun(
       throw createAppError(
         "RUN_CONTROL_REFUSED",
         `Only a failed Run can be retried (${row.status})`,
-      );
-    if (purpose === "ai_refresh" && !row.hasAiRoster)
-      throw createAppError(
-        "RUN_CONTROL_REFUSED",
-        "This AI refresh Run has no durable evaluation roster; its original scope cannot be recovered.",
       );
     if (purpose === "mail_reclassify") {
       const { requestedAiEvaluations } =

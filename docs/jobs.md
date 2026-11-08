@@ -123,9 +123,10 @@ generation while preserving the Run's input and page; page settlement and mailbo
 admission still apply. A completed Job without retained work remains refused.
 
 AI refresh recovery requires a durable owned or requested evaluation roster,
-including terminal rows and retry handoffs. With no roster, Retry run refuses
-before launching, and the execution driver retains a raw failure rather than
-completing an unknown scope. Historical discovery metadata is not a target roster.
+including terminal rows and retry handoffs. With no roster, Retry run, Resume
+and "Run now, paid allowed" refuse before launching or recording a paid grant.
+The execution driver retains a raw failure rather than completing an unknown
+scope. Historical discovery metadata is not a target roster.
 
 A legacy failed Mail reclassification with no durable roster can be closed by
 an explicitly authorized historical correction after every original identity
