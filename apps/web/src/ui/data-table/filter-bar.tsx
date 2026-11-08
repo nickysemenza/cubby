@@ -654,8 +654,8 @@ function ChecklistEditor({
           option.value === FILTER_NONE
             ? {
                 ...option,
-                label: "Missing value",
-                detail: "Excludes matching records from every group.",
+                label: "No value",
+                detail: "Excludes matching records from the list.",
               }
             : option,
         ),

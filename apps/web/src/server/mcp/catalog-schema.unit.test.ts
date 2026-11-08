@@ -258,21 +258,27 @@ describe("MCP catalog schemas", () => {
       description:
         "Stable evidence key shared by each input field in the workflow.",
     };
-    const schema = mergeActionInputSchemas([
-      {
-        name: "inspect",
-        description: "Inspect evidence",
-        schema: {
-          type: "object",
-          properties: {
-            first: field,
-            second: field,
-            third: field,
-            fourth: field,
+    const extra = { fifth: field };
+    const original = JSON.stringify(extra);
+    const schema = mergeActionInputSchemas(
+      [
+        {
+          name: "inspect",
+          description: "Inspect evidence",
+          schema: {
+            type: "object",
+            properties: {
+              first: field,
+              second: field,
+              third: field,
+              fourth: field,
+            },
           },
         },
-      },
-    ]);
+      ],
+      extra,
+    );
+    expect(JSON.stringify(extra)).toBe(original);
     const validate = new Ajv({ strict: false, validateFormats: false }).compile(
       schema,
     );

@@ -240,6 +240,8 @@ function hoistRepeats(root: JsonObject): JsonObject {
       );
   });
   walk(root.properties ?? {}, "map", (schema) => {
+    // Per-entity wrappers keep their label in place for agent narrowing.
+    if (Array.isArray(schema.allOf)) return;
     const description = schema.description;
     if (
       !isText(description) ||
@@ -402,7 +404,7 @@ export function mergeActionInputSchemas(
   };
   for (const [key, list] of variants)
     properties[key] = mergeProperty(list, actions.length);
-  Object.assign(properties, extraProperties);
+  Object.assign(properties, structuredClone(extraProperties));
   const shared = hoistRepeats({
     $schema: "http://json-schema.org/draft-07/schema#",
     type: "object",

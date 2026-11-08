@@ -1850,6 +1850,15 @@ traversal and drill-down binding; a duplicate `model.derived` alias is not
 required. Equivalent stored-reference and related-path choices share one menu
 entry while retaining accepted keys. Query-backed and external relations do not
 acquire SQL grouping merely because they have a preview.
+
+A stored-result reference with an explicit `storedProjection` and a declared
+scalar list binding groups through that binding's canonical target UUID. It
+does not fall back to the same-named assignment column. Inventory Owner reuses
+the effective-owner filter's identity, so inherited owners and current explicit
+assignments group together with the values shown in rows. The combined No
+resolved individual owner section includes Household, Unknown and pending
+resolution. Its specialized Owner filter cannot select that exact set, so its
+drill-down and exclusion remain unavailable; known owner sections drill normally.
 Implicit Group menu choices require a public field surface, canonical reference,
 same-field value filter, or the backing bound of a declared date-range field.
 Storage alone does not expose calculation timestamps, leases or override modes.

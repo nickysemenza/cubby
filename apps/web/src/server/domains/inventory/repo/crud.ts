@@ -39,7 +39,7 @@ import {
   withTransaction,
 } from "~/server/db/helpers";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
-import { inventoryEntry, product } from "~/server/db/schema";
+import { inventoryEntry, ledgerParty, product } from "~/server/db/schema";
 import { inventorySearch } from "~/server/domains/inventory/repo/search-read-inventory";
 import {
   assertValidRawInventoryOwnership,
@@ -176,6 +176,8 @@ export const inventoryScaffold = listScaffold<
 >("inventory", inventoryEntry, {
   population: liveProductAndLocation,
   derived: {
+    // Resolve the filter's canonical identity to the UUID used by record projections.
+    ownerLedgerPartyId: sql`(SELECT ${ledgerParty.id} FROM ${ledgerParty} WHERE ${ledgerParty.shortcode} = ${inventoryOwnerFilterSql()})`,
     effectiveOwner: (value) =>
       value.values.length === 0
         ? sql`false`

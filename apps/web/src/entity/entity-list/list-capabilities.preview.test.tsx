@@ -279,7 +279,7 @@ it.each([1440, 402])(
       expect(within(editor).getByText(/Is \/ is not/)).toBeVisible(),
     );
     fireEvent.click(within(editor).getByRole("button", { name: "is not" }));
-    fireEvent.click(await within(editor).findByText("Missing value"));
+    fireEvent.click(await within(editor).findByText("No value"));
     await waitFor(() =>
       expect(state.requests).toContainEqual(
         expect.objectContaining({

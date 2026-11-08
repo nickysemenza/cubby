@@ -1062,15 +1062,77 @@ const optionOrder = (
  * related record groups under its ancestor at that level (itself when it
  * sits above it), so a section counts its key's descendants.
  */
-export const groupSql = (
+function recordGroupLabelSql(
+  value: { target: Entity; titleColumn: string | null },
+  recordTitles: ReadonlyMap<Entity, SQL>,
+  id: SQL,
+  stored: (column: string) => SQL,
+): SQL {
+  if (value.titleColumn !== null) return stored(value.titleColumn);
+  const title = recordTitles.get(value.target);
+  const targetTable = entityManifest[value.target].dbTable;
+  if (!title || !targetTable)
+    throw new Error(`${value.target} canonical group title was not prepared`);
+  return sql`(SELECT ${title} FROM ${sql.identifier(targetTable)} "__list_record" WHERE "__list_record"."id" = ${id})`;
+}
+
+/** A declared scalar record identity uses the same live target and title reader as paths. */
+function projectedRecordGroupSql({
+  entity,
+  derived,
+  value,
+  choice,
+  context,
+  level,
+  recordLabel,
+}: {
+  entity: Entity;
+  derived: AnyDerivedSql;
+  value: Extract<
+    NonNullable<GeneratedGroupChoice["value"]>,
+    { kind: "projectedRecord" }
+  >;
+  choice: GeneratedGroupChoice;
+  context: ListContext;
+  level: number | undefined;
+  recordLabel: (id: SQL, stored: (column: string) => SQL) => SQL;
+}): ListGroupSql {
+  const target = entityManifest[value.target];
+  if (target.dbTable === null) throw new Error(`${value.target} has no table`);
+  const targetTable = target.dbTable;
+  const reference = derivedValueSql(entity, derived, value.field, context);
+  const leaf = sql`list_projected_record`;
+  const leafId = sql`${leaf}."id"`;
+  const id =
+    level === undefined
+      ? leafId
+      : hierarchyAncestorSql(value.target, leafId, level);
+  const at = (column: string): SQL =>
+    level === undefined
+      ? sql`${leaf}.${sql.identifier(column)}`
+      : sql`(SELECT a.${sql.identifier(column)} FROM ${sql.identifier(targetTable)} a WHERE a."id" = ${id})`;
+  const select = (expression: SQL) => sql`(SELECT ${expression}
+          FROM ${sql.identifier(target.dbTable)} ${leaf}
+          WHERE ${leaf}."id" = ${reference}
+          ${target.softDelete ? sql`AND ${notDeleted("list_projected_record")}` : sql``})`;
+  return {
+    choice,
+    key: select(at("shortcode")),
+    label: select(recordLabel(id, at)),
+    order: ["label", "key"],
+    subtree:
+      level === undefined
+        ? null
+        : select(
+            sql`${hierarchyLevelSql(value.target, leafId)} > ${level}::int`,
+          ),
+  };
+}
+
+const requireGroupChoice = (
   entity: Entity,
   { key, level, bucket }: ListGroupBy,
-  derived: AnyDerivedSql,
-  table: PgTable,
-  context: ListContext,
-  recordTitles: ReadonlyMap<Entity, SQL> = new Map(),
-  rows: AnyRowsSql = {},
-): ListGroupSql => {
+) => {
   const choices: readonly GeneratedGroupChoice[] =
     generatedEntityListFields[entity].grouping;
   const choice = choices.find((candidate) => candidate.key === key);
@@ -1097,20 +1159,36 @@ export const groupSql = (
       choice.levelReason ??
         `${choice.label} offers levels 1–${choice.levels}, not ${level}`,
     );
+  return { choice, value };
+};
+
+export const groupSql = (
+  entity: Entity,
+  { key, level, bucket }: ListGroupBy,
+  derived: AnyDerivedSql,
+  table: PgTable,
+  context: ListContext,
+  recordTitles: ReadonlyMap<Entity, SQL> = new Map(),
+  rows: AnyRowsSql = {},
+): ListGroupSql => {
+  const { choice, value } = requireGroupChoice(entity, { key, level, bucket });
   switch (value.kind) {
+    case "projectedRecord":
     case "relatedRecord":
     case "rowRecord":
     case "record": {
-      const recordLabel = (id: SQL, stored: (column: string) => SQL): SQL => {
-        if (value.titleColumn !== null) return stored(value.titleColumn);
-        const title = recordTitles.get(value.target);
-        const targetTable = entityManifest[value.target].dbTable;
-        if (!title || !targetTable)
-          throw new Error(
-            `${value.target} canonical group title was not prepared`,
-          );
-        return sql`(SELECT ${title} FROM ${sql.identifier(targetTable)} "__list_record" WHERE "__list_record"."id" = ${id})`;
-      };
+      const recordLabel = (id: SQL, stored: (column: string) => SQL): SQL =>
+        recordGroupLabelSql(value, recordTitles, id, stored);
+      if (value.kind === "projectedRecord")
+        return projectedRecordGroupSql({
+          entity,
+          derived,
+          value,
+          choice,
+          context,
+          level,
+          recordLabel,
+        });
       if (value.kind !== "record") {
         const { ids: memberIds, owner } = recordMemberships(
           entity,

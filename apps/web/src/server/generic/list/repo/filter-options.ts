@@ -414,7 +414,7 @@ async function withProjectDates(
  * Tag rosters share no shortcode with the `entity`
  * source: they're a distinct list folded from a free-text array column, not
  * a scanned reference table. Loaded whole (these are small, personal-household
- * vocabularies — see `getAllTags`/`getProductTagOptions`) and paginated/
+ * vocabularies) and paginated/
  * filtered in memory, same cursor contract as every other source.
  */
 type TagOptionRow = OptionRow & { count?: number };

@@ -1181,6 +1181,28 @@ const listedGroupField = (
           candidate.dateRange.end === field.key),
     ));
 
+const projectedRecordValue = (
+  field: CompiledEntity["fieldModel"]["fields"][number] | undefined,
+  bound: CompiledListField | undefined,
+  byKey: ReadonlyMap<string, CompiledEntity>,
+  key: string,
+): Extract<GroupValue, { kind: "projectedRecord" }> | null => {
+  if (
+    !field?.reference ||
+    !field.storedPath ||
+    !field.storedProjection ||
+    bound?.shape !== "value"
+  )
+    return null;
+  const target = byKey.get(field.reference.entity);
+  return {
+    kind: "projectedRecord",
+    field: key,
+    target: field.reference.entity,
+    titleColumn: target ? titleColumn(target) : null,
+  };
+};
+
 /**
  * Compiles one `model.grouping` key. A model field groups by its own column,
  * or by its referenced record; a `model.derived` key groups through its
@@ -1306,6 +1328,7 @@ const compileGroupChoice = (
       return { levels: 0, levelReason: reason ?? `${label} cannot group.` };
     if (
       value.kind !== "record" &&
+      value.kind !== "projectedRecord" &&
       value.kind !== "rowRecord" &&
       value.kind !== "relatedRecord"
     )
@@ -1421,6 +1444,8 @@ const compileGroupChoice = (
       null,
     );
   };
+  const projected = projectedRecordValue(field, bound, byKey, key);
+  if (projected) return choice(projected, null);
   if (bound?.shape === "via") return viaValue(bound);
   if (bound?.shape === "rows" && bound.terminal.kind === "record")
     return choice(
@@ -1666,6 +1691,7 @@ const groupPresentation = ({
   const target =
     grouped &&
     (grouped.kind === "record" ||
+      grouped.kind === "projectedRecord" ||
       grouped.kind === "rowRecord" ||
       grouped.kind === "relatedRecord")
       ? grouped.target

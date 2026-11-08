@@ -29,8 +29,9 @@ import { listScaffold } from "./list";
  */
 describe("list field compiler", () => {
   const db = {} as Database;
-  // Inventory's other filter-only fields, which these cases never read.
-  const filterOnly = {
+  // Inventory bindings these preparation cases never read.
+  const unusedBindings = {
+    ownerLedgerPartyId: sql`null::uuid`,
     locationRole: sql`false`,
     effectiveOwner: () => sql`true`,
     categoryFeature: () => sql`true`,
@@ -44,7 +45,7 @@ describe("list field compiler", () => {
       derived: {
         valuation: valuations.value(() => sql`0`),
         amount: [sql`unit`, sql`size`],
-        ...filterOnly,
+        ...unusedBindings,
         valuationStatus: valuations.value(() => sql`0`),
       },
     });
@@ -74,7 +75,7 @@ describe("list field compiler", () => {
       derived: {
         valuation: valuations.value(() => sql`0`),
         amount: [sql`unit`, sql`size`],
-        ...filterOnly,
+        ...unusedBindings,
         valuationStatus: valuations.value(() => sql`0`),
       },
     });
@@ -129,7 +130,7 @@ describe("list field compiler", () => {
       derived: {
         valuation: valuations.value(() => sql`0`),
         amount: [sql`unit`, sql`size`],
-        ...filterOnly,
+        ...unusedBindings,
         valuationStatus: valuations.value(() => sql`0`),
       },
     });
@@ -216,7 +217,7 @@ describe("list field compiler", () => {
       derived: {
         valuation: valuations.value(() => sql`prepared_valuation`),
         amount: [sql`unit`, sql`size`],
-        ...filterOnly,
+        ...unusedBindings,
         valuationStatus: valuations.value(() => sql`prepared_status`),
       },
     });
@@ -271,7 +272,7 @@ describe("list field compiler", () => {
         valuation: shared.value(() => sql`shared_valuation`),
         valuationStatus: local.value(() => sql`local_status`),
         amount: [sql`unit`, sql`size`],
-        ...filterOnly,
+        ...unusedBindings,
       },
     });
     const preparation = new ListPreparationScope(db);
@@ -314,7 +315,7 @@ describe("list field compiler", () => {
           valuation: sql`0`,
           valuationStatus: sql`0`,
           amount: [sql`unit`, sql`size`],
-          ...filterOnly,
+          ...unusedBindings,
           effectiveOwner: owners.predicate<AnyOfValue>(
             (_owners, value) => sql`owner_code IN ${value.values}`,
           ),

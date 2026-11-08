@@ -409,9 +409,12 @@ export const { definition, readSchemas } = defineEntityModel(
           key: "ownerLedgerPartyId",
           storedKey: "ownership",
           storedPath: ["effectiveOwnerId"],
+          storedProjection: true,
           kind: "identifier",
           nullable: true,
           label: "Owner",
+          description:
+            "Current explicit owner, otherwise the owner resolved from acquisition evidence. No resolved individual owner combines Household, Unknown and pending resolution; that combined section cannot be filtered or excluded exactly.",
           reference: {
             entity: "ledgerParty",
             filters: [{ field: "kind", values: ["member", "guest"] }],
@@ -422,6 +425,7 @@ export const { definition, readSchemas } = defineEntityModel(
             // Owner leads; the Stock band (valuation, verified) follows it.
             listOrder: 2,
             columnLabel: "Owner",
+            emptyLabel: "No resolved individual owner",
             width: "md",
             labelPath: "effectiveOwnership.effectiveOwner.name",
             renderer: { detail: "ownerLedgerPartyId" },
@@ -647,6 +651,9 @@ export const { definition, readSchemas } = defineEntityModel(
         categoryFeature: { via: "product.category.feature" },
         // Stock parked in the household-wide Unknown location.
         locationRole: { type: "boolean" },
+        ownerLedgerPartyId: {
+          type: "text",
+        },
         effectiveOwner: {
           predicate: "idMulti",
           requiresResult: "ownership",
