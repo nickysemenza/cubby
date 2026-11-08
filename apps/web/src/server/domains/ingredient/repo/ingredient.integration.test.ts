@@ -1,4 +1,5 @@
 import { parseEntityId } from "@cubby/schemas/identifiers";
+import { rawIngredientList } from "@cubby/schemas/ingredient-raw-read";
 import { testEntityId, testShortcode } from "@cubby/schemas/testing";
 import { count, eq } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
@@ -124,10 +125,42 @@ describe("ingredient", () => {
         { sourceMetadata: { type: "product", productId: live.id } },
       ]);
     }
+    const summarySchema = rawIngredientList.pick({ productSummaries: true });
+    const summaryProducts = async () => {
+      const result = await ingredientScaffold.get(
+        ctx.db,
+        [item.id],
+        ["id", "productSummaries"],
+      );
+      expect(result.data[0]).not.toHaveProperty("product");
+      return summarySchema.parse(result.data[0]).productSummaries;
+    };
+    expect(await summaryProducts()).toMatchObject([
+      {
+        id: live.id,
+        unitMappings: [
+          { sourceMetadata: { type: "product", productId: live.id } },
+        ],
+      },
+    ]);
+    const both = await ingredientScaffold.get(
+      ctx.db,
+      [item.id],
+      ["id", "product", "productSummaries"],
+    );
+    const bothProducts = rawIngredientList
+      .pick({ product: true, productSummaries: true })
+      .parse(both.data[0]);
+    expect(bothProducts.productSummaries).toEqual(
+      bothProducts.product.map((row) =>
+        rawIngredientList.shape.productSummaries.unwrap().element.parse(row),
+      ),
+    );
     await getDb(ctx.db)
       .update(product)
       .set({ deletedAt: new Date() })
       .where(eq(product.id, live.entityId));
+    expect(await summaryProducts()).toEqual([]);
     const gaps = await enrichmentWorkbenchIngredients(ctx.db);
     expect(gaps.find((row) => row.id === item.id)?.product).toEqual([]);
   });

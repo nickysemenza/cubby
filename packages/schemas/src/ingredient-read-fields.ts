@@ -8,6 +8,15 @@ import {
 } from "./product-raw-read";
 import { rawRecipeTopLevel, recipeRefOut } from "./recipe-shared";
 import { productShortcode } from "./identifier-fields";
+const ingredientProductSummary = productWithMappingsOut.pick({
+  id: true,
+  name: true,
+  brandName: true,
+  price: true,
+  unitMappings: true,
+  labelNutrition: true,
+});
+
 export const ingredientNutritionProductOut = z.object({
   productId: productShortcode,
   name: z.string(),
@@ -24,6 +33,7 @@ export function ingredientReadSchemas<S extends z.ZodRawShape>(
   const list = base.extend({
     displayImages: displayImagesField,
     product: z.array(productWithMappingsOut),
+    productSummaries: z.array(ingredientProductSummary).optional(),
     appearsInRecipes: z.array(recipeRefOut),
     ownRecipeCount: z.number().int(),
   });

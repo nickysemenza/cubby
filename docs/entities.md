@@ -2431,6 +2431,11 @@ Ingredient records and embedded Products from their respective scaffolds. The
 enrichment workbench adds its recipe count and cookbook-only flag to those reads.
 Ingredient Product bindings reuse link shortcodes and request raw scaffold rows
 without field contexts; the outer public read builds nested Product envelopes.
+Generic Ingredient rosters explicitly request optional `productSummaries`, retaining
+Product identity, brand, canonical price, label nutrition and unit mappings with
+the same public envelopes. Complete `product` records remain unchanged for full
+reads, detail, nutrition and workbench consumers. A read requesting both forms
+shares the complete Product load; ordinary full reads omit the explicit summary.
 Expense analytics removes share-scoped filters before preparing its scaffold
 WHERE because allocation shares apply those filters themselves.
 

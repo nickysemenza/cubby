@@ -32,6 +32,7 @@ const DECLARED_UUID_OUTPUT_PATHS = new Set([
   "entity_read.item.unitMappings[].id",
   "product_enrichment.results[].item.unitMappings[].id",
   "entity_read.items[].product[].unitMappings[].id",
+  "entity_read.items[].productSummaries[].unitMappings[].id",
   "entity_read.items[].unitMappings[].id",
   // Image processing jobs are internal queue handles, not Image entity links.
   "image.jobIds[]",

@@ -230,7 +230,7 @@ describe("ensureEntityListSsr", () => {
       ingredientListReadProjection(metadataClient, "ingredient", {
         appearsInRecipes: false,
       }),
-    ).toContain("product");
+    ).toContain("productSummaries");
     expect(
       mealListReadProjection(metadataClient, "meal", {
         name: false,
