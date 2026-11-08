@@ -449,7 +449,9 @@ Location omits its default-hidden children and inventory payloads until revealed
 row-action inputs remain loaded when their columns are hidden. Ingredient unit
 mappings retain complete conversion inputs through the explicit Product summaries
 owned by [entity list reads](../../../docs/entities.md#list-reads); image and USDA
-providers keep their existing collection batches. Meal rename/delete retains name and date.
+providers keep their existing collection batches. Ingredient uses the shared generated
+delete configuration so enrichment arrivals retain mounted cell editors and dialogs.
+Meal rename/delete retains name and date.
 Task progress and Cookbook extraction counts declare dependencies on their owning
 Name and Recipes columns.
 All generic rosters now default to declared demand; an override no longer opts

@@ -10,13 +10,11 @@ import {
   EntityRefList,
 } from "~/entity/components/entity-ref-link";
 import { EntityIcon } from "~/entity/entities";
-import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
 import {
   EntityDisplayImagesProvider,
   useEntityDisplayImage,
 } from "~/entity/entity-media/entity-display-images";
 import { relationshipFieldProvenance } from "~/entity/fields/field-provenance";
-import { useDeletableConfig } from "~/entity/hooks/use-deletable-config";
 import {
   ProductFoodSummariesProvider,
   useHydratedProductFood,
@@ -143,11 +141,6 @@ export const ingredientListOverride = defineListOverride<
       [],
     );
     const foodByProductId = useProductFoodSummaries(foodHydrationIds);
-    const deletable = useDeletableConfig({
-      mutationFn: entityMutationOptionsFactory("ingredient", "delete"),
-      entityLabel: "Ingredient",
-      entity: "ingredient",
-    });
     const getMappings = useCallback(
       (ingredient: IngredientListItem) =>
         ingredientProducts(ingredient).flatMap((product) =>
@@ -215,8 +208,9 @@ export const ingredientListOverride = defineListOverride<
     );
 
     const list = useMemo(
-      () => ({ deletable, getMappings }),
-      [deletable, getMappings],
+      // Resolve generated delete actions once; a fresh factory remounts cell editors.
+      () => ({ deletable: true as const, getMappings }),
+      [getMappings],
     );
 
     return {
