@@ -1,3 +1,4 @@
+import { expenseSchemaBindings } from "~/entity/generated/entity-schema-bindings.expense.gen";
 import { recomputeRecipesForPriceAffectedProducts } from "~/server/domains/expense/repo/price-affected-recipes";
 import { defineRepository } from "~/server/entity-kernel/repo/repository";
 
@@ -10,6 +11,7 @@ import {
 import { expenseScaffold } from "./lookup";
 
 export const expenseRepository = defineRepository("expense", {
+  schemas: expenseSchemaBindings,
   lifecycle: { delete: EXPENSE_DELETE_EDGE_POLICY },
   scaffold: expenseScaffold,
   create: async (ctx, data) => {

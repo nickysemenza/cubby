@@ -108,89 +108,94 @@ export const renderKernelBindingsArtifacts = (
           ) !== null,
       ),
   );
-  const defaultDefinitions = factoryEntities
-    .map((entity) => {
-      const actions = kernelActionsFor(entity);
-      const name = `${entity.key}DefaultRepository`;
-      const factory = `create${entity.key[0]?.toUpperCase()}${entity.key.slice(1)}DefaultRepository`;
-      const scaffold = `${entity.key}DefaultScaffold`;
-      const table = `${entity.key}DefaultTable`;
-      const crud = `${entity.key}DefaultCrud`;
-      const key = JSON.stringify(entity.key);
-      const writable = actions.includes("create") || actions.includes("update");
-      const searchFields = entity.fieldModel.storage.filter(
-        (field) =>
-          field.kind === "text" && entity.fieldModel.output.includes(field.key),
+  const defaultDefinition = (entity: CompiledEntity) => {
+    const actions = kernelActionsFor(entity);
+    const name = `${entity.key}DefaultRepository`;
+    const factory = `create${entity.key[0]?.toUpperCase()}${entity.key.slice(1)}DefaultRepository`;
+    const scaffold = `${entity.key}DefaultScaffold`;
+    const table = `${entity.key}DefaultTable`;
+    const crud = `${entity.key}DefaultCrud`;
+    const key = JSON.stringify(entity.key);
+    const writable = actions.includes("create") || actions.includes("update");
+    const searchFields = entity.fieldModel.storage.filter(
+      (field) =>
+        field.kind === "text" && entity.fieldModel.output.includes(field.key),
+    );
+    const title = entity.fieldModel.storage.find(
+      (field) => field.key === entity.inspector.titleField,
+    );
+    if (
+      entity.descriptor.searchable === true &&
+      !entity.ports.search.read &&
+      !title
+    )
+      throw new EntityDeclarationError(
+        `${entity.key}: ordinary search requires a stored title or an explicit search read port.`,
       );
-      const title = entity.fieldModel.storage.find(
-        (field) => field.key === entity.inspector.titleField,
-      );
-      if (
-        entity.descriptor.searchable === true &&
-        !entity.ports.search.read &&
-        !title
-      )
-        throw new EntityDeclarationError(
-          `${entity.key}: ordinary search requires a stored title or an explicit search read port.`,
-        );
-      const search = entity.ports.search.read
-        ? `${entity.key}DefaultSearch`
-        : entity.descriptor.searchable === true
-          ? `storedSearchRead({entity: ${key}, table: ${table}, title: ${table}[${JSON.stringify(title?.key)}], keywords: [${searchFields
-              .filter((field) => field.key !== title?.key)
-              .map((field) => `${table}[${JSON.stringify(field.key)}]`)
-              .join(",")}]})`
-          : null;
-      const read = `{ media: true${search ? `, search: ${search}` : ""} }`;
+    const search = entity.ports.search.read
+      ? `${entity.key}DefaultSearch`
+      : entity.descriptor.searchable === true
+        ? `storedSearchRead({entity: ${key}, table: ${table}, title: ${table}[${JSON.stringify(title?.key)}], keywords: [${searchFields
+            .filter((field) => field.key !== title?.key)
+            .map((field) => `${table}[${JSON.stringify(field.key)}]`)
+            .join(",")}]})`
+        : null;
+    const read = `{ media: true${search ? `, search: ${search}` : ""} }`;
 
-      const updateType = actions.includes("update")
-        ? `Awaited<ReturnType<(typeof ENTITY_STORED_WRITES)[${key}]["update"]>>["data"]`
-        : "never";
-      const declaration = writable
-        ? `const ${crud} = createEntityCrud({ entity: ${key}, table: ${table}, scaffold: ${scaffold}, output: ENTITY_SCHEMA_BINDINGS[${key}].repositoryOutput, toUpdate: (data: ${updateType}) => data, auditUpdateFields: [...entityFieldModels[${key}].audit] });`
-        : "";
-      return `${entity.ports.repository === null ? "" : "export "}const ${factory} = () => { const ${scaffold} = listScaffold(${key}, ${table}, { read: ${read} });\n${declaration}\nreturn defineRepository(${key}, { scaffold: ${scaffold}, ${actions.includes("create") ? `create: asActor(${crud}.createWriter(ENTITY_STORED_WRITES[${key}].create, (output, entityId) => ({output, entityId}))),` : ""} ${actions.includes("update") ? `update: asActor(${crud}.updateWriter(ENTITY_STORED_WRITES[${key}].update, (output, entityId) => ({output, entityId}))),` : ""} }); };${entity.ports.repository === null ? `\nconst ${name} = ${factory}();` : ""}`;
-    })
-    .join("\n");
-  const writableDefaults = factoryEntities.some((entity) =>
-    kernelActionsFor(entity).some(
-      (action) => action === "create" || action === "update",
-    ),
-  );
-  const defaultImports = factoryEntities.length
-    ? [
-        'import { listScaffold } from "~/server/generic/list/repo/list";',
-        ...(factoryEntities.some(
-          (entity) =>
-            entity.descriptor.searchable === true && !entity.ports.search.read,
-        )
-          ? [
-              'import { storedSearchRead } from "~/server/generic/search/repo/search-read-port";',
-            ]
-          : []),
-        ...factoryEntities.flatMap((entity) =>
-          entity.ports.search.read
+    const updateType = actions.includes("update")
+      ? `Awaited<ReturnType<(typeof ENTITY_STORED_WRITES)[${key}]["update"]>>["data"]`
+      : "never";
+    const declaration = writable
+      ? `const ${crud} = createEntityCrud({ entity: ${key}, table: ${table}, scaffold: ${scaffold}, output: ${entity.key}SchemaBindings.repositoryOutput, toUpdate: (data: ${updateType}) => data, auditUpdateFields: [...entityFieldModels[${key}].audit] });`
+      : "";
+    return `${entity.ports.repository === null ? "" : "export "}const ${factory} = () => { const ${scaffold} = listScaffold(${key}, ${table}, { readSchema: ${entity.key}RepositoryReadSchema, read: ${read} });\n${declaration}\nreturn defineRepository(${key}, { schemas: ${entity.key}SchemaBindings, scaffold: ${scaffold}, ${actions.includes("create") ? `create: asActor(${crud}.createWriter(ENTITY_STORED_WRITES[${key}].create, (output, entityId) => ({output, entityId}))),` : ""} ${actions.includes("update") ? `update: asActor(${crud}.updateWriter(ENTITY_STORED_WRITES[${key}].update, (output, entityId) => ({output, entityId}))),` : ""} }); };${entity.ports.repository === null ? `\nexport const ${name} = ${factory}();` : ""}`;
+  };
+  const defaultImportsFor = (factoryEntities: readonly CompiledEntity[]) => {
+    const writableDefaults = factoryEntities.some((entity) =>
+      kernelActionsFor(entity).some(
+        (action) => action === "create" || action === "update",
+      ),
+    );
+    const defaultImports = factoryEntities.length
+      ? [
+          'import { listScaffold } from "~/server/generic/list/repo/list";',
+          ...(factoryEntities.some(
+            (entity) =>
+              entity.descriptor.searchable === true &&
+              !entity.ports.search.read,
+          )
             ? [
-                `import { ${entity.ports.search.read.export} as ${entity.key}DefaultSearch } from ${JSON.stringify(entity.ports.search.read.module)};`,
+                'import { storedSearchRead } from "~/server/generic/search/repo/search-read-port";',
               ]
-            : [],
-        ),
-        writableDefaults
-          ? 'import { createEntityCrud, defineRepository, asActor } from "~/server/entity-kernel/repo/repository";'
-          : 'import { defineRepository } from "~/server/entity-kernel/repo/repository";',
-        ...(writableDefaults
-          ? [
-              'import { ENTITY_SCHEMA_BINDINGS } from "~/server/generated/entity-bindings.gen";',
-              'import { ENTITY_STORED_WRITES } from "~/server/generated/entity-write-bindings.gen";',
-              'import { entityFieldModels } from "@cubby/schemas/entity-fields";',
-            ]
-          : []),
-        ...factoryEntities.map(
-          (entity) =>
-            `import { ${entity.table?.exportName} as ${entity.key}DefaultTable } from "~/server/db/schema";`,
-        ),
-      ].join("\n")
-    : "";
+            : []),
+          ...factoryEntities.flatMap((entity) =>
+            entity.ports.search.read
+              ? [
+                  `import { ${entity.ports.search.read.export} as ${entity.key}DefaultSearch } from ${JSON.stringify(entity.ports.search.read.module)};`,
+                ]
+              : [],
+          ),
+          writableDefaults
+            ? 'import { createEntityCrud, defineRepository, asActor } from "~/server/entity-kernel/repo/repository";'
+            : 'import { defineRepository } from "~/server/entity-kernel/repo/repository";',
+          ...(writableDefaults
+            ? [
+                'import { ENTITY_STORED_WRITES } from "~/server/generated/entity-write-bindings.gen";',
+                'import { entityFieldModels } from "@cubby/schemas/entity-fields";',
+              ]
+            : []),
+          ...factoryEntities.map(
+            (entity) =>
+              `import { ${entity.key}SchemaBindings, ${entity.key}RepositoryReadSchema } from "~/entity/generated/entity-schema-bindings.${entity.key}.gen";`,
+          ),
+          ...factoryEntities.map(
+            (entity) =>
+              `import { ${entity.table?.exportName} as ${entity.key}DefaultTable } from "~/server/db/schema";`,
+          ),
+        ].join("\n")
+      : "";
+    return defaultImports;
+  };
   const runtimeAdapterImports = new Map<string, Set<string>>();
   for (const entity of kernelEntities) {
     const adapter = entity.ports.repository;
@@ -222,7 +227,10 @@ export const renderKernelBindingsArtifacts = (
         ? `import("~/server/domains/${entity.key}/repo/${entity.key === "run" ? "run" : "crud"}").then(m => m.${entity.key}Scaffold)`
         : adapter
           ? `import(${JSON.stringify(adapter.module)}).then(m => m.${adapter.export}.repository.scaffold)`
-          : `import("~/server/generated/entity-kernel-runtime.gen").then(m => m.ENTITY_KERNEL_BINDINGS[${key}].repository.scaffold)`;
+          : `import("~/server/generated/entity-default-repository.${entity.key}.gen").then(m => m.${adapterName(entity)}.repository.scaffold)`;
+      const coreLoad = adapter
+        ? `import(${JSON.stringify(adapter.module)}).then(m => m.${adapter.export})`
+        : `import("~/server/generated/entity-default-repository.${entity.key}.gen").then(m => m.${adapterName(entity)})`;
       const title = entity.fieldModel.storage.find(
         (field) =>
           field.key ===
@@ -232,7 +240,7 @@ export const renderKernelBindingsArtifacts = (
       );
       const composed =
         !title || ["inventory", "meal", "run"].includes(entity.key);
-      return `  ${key}: { title: ${composed ? `async () => (await ${load}).title()` : title && entity.table ? `() => sql.raw(${JSON.stringify(`"${entity.table.name}"."${title.column}"::text`)})` : `() => undefined`}, fieldReads: async (db: RepositoryQueryInput, codes: readonly string[], keys?: readonly string[]) => (await ${load}).fieldReads(db, codes, keys) },`;
+      return `  ${key}: { load: () => ${coreLoad}, title: ${composed ? `async () => (await ${load}).title()` : title && entity.table ? `() => sql.raw(${JSON.stringify(`"${entity.table.name}"."${title.column}"::text`)})` : `() => undefined`}, fieldReads: async (db: RepositoryQueryInput, codes: readonly string[], keys?: readonly string[]) => (await ${load}).fieldReads(db, codes, keys) },`;
     })
     .join("\n");
   const runtimeBindings = kernelEntities
@@ -332,6 +340,16 @@ export const renderKernelBindingsArtifacts = (
     };
   };
   return [
+    ...factoryEntities.map((entity) => ({
+      relativePath: `apps/web/src/server/generated/entity-default-repository.${entity.key}.gen.ts`,
+      source: rawSource(
+        generatedHeader +
+          defaultImportsFor([entity]) +
+          "\n" +
+          defaultDefinition(entity) +
+          "\n",
+      ),
+    })),
     {
       relativePath:
         "apps/web/src/server/generated/entity-kernel-bindings.gen.ts",
@@ -359,7 +377,13 @@ export const renderKernelBindingsArtifacts = (
           'import { defineEntityOperations } from "~/server/entity-kernel/entity-operations";\n' +
           `${runtimeAdapterImportSource}\n` +
           `${timelineImportSource}\n\n` +
-          `${defaultImports}\n${defaultDefinitions}\n` +
+          factoryEntities
+            .map(
+              (entity) =>
+                `import { ${adapterName(entity)} } from "~/server/generated/entity-default-repository.${entity.key}.gen";`,
+            )
+            .join("\n") +
+          "\n" +
           "type CorrelatedEntityKernelBindings = {\n" +
           "  [E in EntityKernelEntity]: EntityKernelCoreBinding<E>;\n" +
           "};\n\n" +

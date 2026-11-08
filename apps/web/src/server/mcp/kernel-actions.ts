@@ -161,7 +161,7 @@ const executeMcpEntity: McpEntityExecutor = async (
   if (command.action === "list" && hasListReader(command.entity)) {
     const fields = selectionListFields(command.entity, selection);
     if (fields)
-      return listOperations(command.entity).listFields(
+      return (await listOperations(command.entity)).listFields(
         context,
         { ...command, filters: command.filters ?? {} },
         fields,
@@ -179,7 +179,7 @@ const executeDetail: McpEntityExecutor = async (context, command, detail) => {
   return detail === "summary" &&
     command.action === "list" &&
     hasListReader(command.entity)
-    ? listOperations(command.entity).listFields(
+    ? (await listOperations(command.entity)).listFields(
         context,
         { ...command, filters: command.filters ?? {} },
         entitySummaryFields(command.entity),

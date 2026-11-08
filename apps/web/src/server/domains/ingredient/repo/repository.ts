@@ -5,6 +5,7 @@ import {
 import { rawIngredientOutput as ingredientOut } from "@cubby/schemas/ingredient-raw-read";
 import { z } from "zod";
 
+import { ingredientSchemaBindings } from "~/entity/generated/entity-schema-bindings.ingredient.gen";
 import {
   asActor,
   defineRepository,
@@ -20,6 +21,7 @@ import { ingredientScaffold } from "./search";
 const ingredientShortcodes = bindShortcodeResolver("ingredient");
 
 export const ingredientRepository = defineRepository("ingredient", {
+  schemas: ingredientSchemaBindings,
   lifecycle: {
     delete: INGREDIENT_DELETE_EDGE_POLICY,
     merge: INGREDIENT_MERGE_EDGE_POLICY,

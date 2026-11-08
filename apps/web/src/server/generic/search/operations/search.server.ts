@@ -15,8 +15,8 @@ import { listEntities } from "~/entity/model/list-contracts";
 import type { Database } from "~/server/db";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { listOperations } from "~/server/entity-kernel/list-operations";
+import { loadEntityReadBinding } from "~/server/entity-kernel/list-operations";
 import { findSimilarEntitiesWorkflow } from "~/server/generic/embedding/service/semantic-similarity";
-import { listReadSchema } from "~/server/generic/list/repo/list-read-schema";
 import {
   findGroupedSearchHits,
   findRelatedSearchGroups,
@@ -43,7 +43,10 @@ async function withSearchFacts(
         .map((group) => group.primary);
       if (!hits.length) return;
       const fields = entityFieldModels[entity].fields;
-      const allowed = new Set(Object.keys(listReadSchema(entity).shape));
+      const binding = await loadEntityReadBinding(entity);
+      const allowed = new Set(
+        Object.keys(binding.repository.scaffold.readSchema.schema.shape),
+      );
       const keys = [
         ...new Set(
           entitySummary[entity].searchFacts.flatMap((key) => {
@@ -60,7 +63,9 @@ async function withSearchFacts(
         ),
       ].filter((key): key is string => key !== undefined && allowed.has(key));
       if (!keys.length) return;
-      const result = await listOperations(entity).listFields(
+      const result = await (
+        await listOperations(entity)
+      ).listFields(
         context,
         {
           filters: { ids: hits.map((hit) => hit.id) },

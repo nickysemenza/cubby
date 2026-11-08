@@ -4,6 +4,7 @@ import { alias } from "drizzle-orm/pg-core";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { taskRepositoryReadSchema } from "~/entity/generated/entity-schema-bindings.task.gen";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { email, task } from "~/server/db/schema";
@@ -21,6 +22,7 @@ import { listScaffold } from "./list";
 describe("list selection and relation loading", () => {
   const ctx = withTestDb();
   const scaffold = listScaffold("task", task, {
+    readSchema: taskRepositoryReadSchema,
     derived: {
       effectiveTrade: sql`NULL`,
       effectiveDueDate: sql`NULL`,
@@ -132,6 +134,7 @@ describe("list selection and relation loading", () => {
     await insertWithShortcode(ctx.db, "task", { name: "Test Aliased Task" });
     const table = alias(task, "listed_task");
     const page = await listScaffold("task", table, {
+      readSchema: taskRepositoryReadSchema,
       derived: {
         effectiveTrade: sql`NULL`,
         effectiveDueDate: sql`NULL`,

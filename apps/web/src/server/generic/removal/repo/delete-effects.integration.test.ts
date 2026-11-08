@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { recipeSchemaBindings } from "~/entity/generated/entity-schema-bindings.recipe.gen";
 import { getDb, runAfterCommit } from "~/server/db/helpers";
 import { recipe } from "~/server/db/schema";
 import {
@@ -45,6 +46,7 @@ describe("delete effect snapshot contention", () => {
     const subject = await fixture();
     let attempts = 0;
     const binding = defineRepository("recipe", {
+      schemas: recipeSchemaBindings,
       lifecycle: { delete: RECIPE_DELETE_EDGE_POLICY },
       scaffold: recipeScaffold,
       delete: async (context) => {

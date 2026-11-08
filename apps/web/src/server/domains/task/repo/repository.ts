@@ -1,3 +1,4 @@
+import { taskSchemaBindings } from "~/entity/generated/entity-schema-bindings.task.gen";
 import {
   asActor,
   defineRepository,
@@ -15,6 +16,7 @@ import {
 import { taskScaffold } from "./lookup";
 
 export const taskRepository = defineRepository("task", {
+  schemas: taskSchemaBindings,
   lifecycle: { delete: TASK_DELETE_EDGE_POLICY },
   scaffold: taskScaffold,
   create: asActor(createTask),

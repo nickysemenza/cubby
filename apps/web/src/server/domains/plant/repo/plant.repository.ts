@@ -1,6 +1,7 @@
 import { plantRawOut as rawPlantOut } from "@cubby/schemas/entity-contracts/plant";
 import { z } from "zod";
 
+import { plantSchemaBindings } from "~/entity/generated/entity-schema-bindings.plant.gen";
 import {
   asActor,
   defineRepository,
@@ -30,6 +31,7 @@ const plantMergeSummary = z.object({
 });
 
 export const plantRepository = defineRepository("plant", {
+  schemas: plantSchemaBindings,
   updatePolicy: { recordFields: [] },
   lifecycle: {
     delete: PLANT_DELETE_EDGE_POLICY,

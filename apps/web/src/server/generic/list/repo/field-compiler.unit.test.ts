@@ -3,6 +3,10 @@ import { allEntities, entityManifest } from "@cubby/schemas/entity-manifest";
 import { and, sql } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 
+import { inventoryRepositoryReadSchema } from "~/entity/generated/entity-schema-bindings.inventory.gen";
+import { locationRepositoryReadSchema } from "~/entity/generated/entity-schema-bindings.location.gen";
+import { purchaseRepositoryReadSchema } from "~/entity/generated/entity-schema-bindings.purchase.gen";
+import { runRepositoryReadSchema } from "~/entity/generated/entity-schema-bindings.run.gen";
 import type { Database } from "~/server/db";
 import { inventoryEntry, location, purchase, run } from "~/server/db/schema";
 import { renderWhereSql } from "~/server/testing/mock-db";
@@ -42,6 +46,7 @@ describe("list field compiler", () => {
   it("compiles a related path ending in a hierarchy to EXISTS over its descendants", () => {
     const valuations = listPrepare(async () => new Map<string, number>());
     const scaffold = listScaffold("inventory", inventoryEntry, {
+      readSchema: inventoryRepositoryReadSchema,
       derived: {
         valuation: valuations.value(() => sql`0`),
         amount: [sql`unit`, sql`size`],
@@ -72,6 +77,7 @@ describe("list field compiler", () => {
   it("orders a to-one related path by a correlated scalar subquery", () => {
     const valuations = listPrepare(async () => new Map<string, number>());
     const scaffold = listScaffold("inventory", inventoryEntry, {
+      readSchema: inventoryRepositoryReadSchema,
       derived: {
         valuation: valuations.value(() => sql`0`),
         amount: [sql`unit`, sql`size`],
@@ -101,6 +107,7 @@ describe("list field compiler", () => {
 
   it("keeps a part's declared NULL placement and fixed direction", () => {
     const scaffold = listScaffold("purchase", purchase, {
+      readSchema: purchaseRepositoryReadSchema,
       derived: {
         reconciliationGap: [
           { sql: sql`gap`, nulls: "high" },
@@ -127,6 +134,7 @@ describe("list field compiler", () => {
   it("orders a compound derived value part by part", () => {
     const valuations = listPrepare(async () => new Map<string, number>());
     const scaffold = listScaffold("inventory", inventoryEntry, {
+      readSchema: inventoryRepositoryReadSchema,
       derived: {
         valuation: valuations.value(() => sql`0`),
         amount: [sql`unit`, sql`size`],
@@ -143,6 +151,7 @@ describe("list field compiler", () => {
 
   it("orders a derived value by the SQL its repository passes", () => {
     const scaffold = listScaffold("purchase", purchase, {
+      readSchema: purchaseRepositoryReadSchema,
       derived: {
         reconciliationGap: sql`declared_gap`,
         vendorId: sql`0`,
@@ -157,6 +166,7 @@ describe("list field compiler", () => {
 
   it("orders a declared rollup by its compiled, live, correlated aggregate", () => {
     const scaffold = listScaffold("purchase", purchase, {
+      readSchema: purchaseRepositoryReadSchema,
       derived: {
         reconciliationGap: sql`declared_gap`,
         vendorId: sql`0`,
@@ -179,6 +189,7 @@ describe("list field compiler", () => {
 
   it("expands a stored filter over a hierarchical reference unless its toggle is off", () => {
     const scaffold = listScaffold("run", run, {
+      readSchema: runRepositoryReadSchema,
       derived: { stalled: sql`false`, needsAttention: sql`false` },
     });
     expect(whereSql(scaffold.where({ parentRunId: ["RUN-2345"] }))).toContain(
@@ -193,6 +204,7 @@ describe("list field compiler", () => {
     expect(
       whereSql(
         listScaffold("location", location, {
+          readSchema: locationRepositoryReadSchema,
           derived: {
             inventoryEntries: sql`0`,
             valuation: listPrepare(async () => null).value(() => sql`0`),
@@ -214,6 +226,7 @@ describe("list field compiler", () => {
       return new Map<string, number>();
     });
     const scaffold = listScaffold("inventory", inventoryEntry, {
+      readSchema: inventoryRepositoryReadSchema,
       derived: {
         valuation: valuations.value(() => sql`prepared_valuation`),
         amount: [sql`unit`, sql`size`],
@@ -268,6 +281,7 @@ describe("list field compiler", () => {
       return 1;
     });
     const scaffold = listScaffold("inventory", inventoryEntry, {
+      readSchema: inventoryRepositoryReadSchema,
       derived: {
         valuation: shared.value(() => sql`shared_valuation`),
         valuationStatus: local.value(() => sql`local_status`),
@@ -311,6 +325,7 @@ describe("list field compiler", () => {
   it("negates a predicate only over filter-independent prepared data", async () => {
     const read = async (owners: ListPrepare<readonly string[]>) => {
       const scaffold = listScaffold("inventory", inventoryEntry, {
+        readSchema: inventoryRepositoryReadSchema,
         derived: {
           valuation: sql`0`,
           valuationStatus: sql`0`,

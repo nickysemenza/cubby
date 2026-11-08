@@ -5,6 +5,7 @@ import { sourceTransactionRecordMatchState } from "@cubby/schemas/source-transac
 import { sql } from "drizzle-orm";
 import { z } from "zod";
 
+import { sourceTransactionRecordRepositoryReadSchema } from "~/entity/generated/entity-schema-bindings.sourceTransactionRecord.gen";
 import type { Database } from "~/server/db";
 import { unwrapDb } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
@@ -30,7 +31,10 @@ export async function importReconciliationSummary(
         filters: { importId: [importId], matchState: [state] },
         sorts: [],
         pagination: { pageIndex: 0, pageSize: 1 },
-        projection: selectedListProjection("sourceTransactionRecord", ["id"]),
+        projection: selectedListProjection(
+          sourceTransactionRecordRepositoryReadSchema,
+          ["id"],
+        ),
         readIntent: "count",
       });
       return { state, count: z.number().parse(result.count) };

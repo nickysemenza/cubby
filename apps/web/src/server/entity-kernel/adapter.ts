@@ -14,10 +14,9 @@ import type { MealMutationHooks } from "~/server/domains/meal/repo/crud";
 import type { RecipeCostingService } from "~/server/domains/recipe/repo/recipe-costing";
 import type { TaskMutationHooks } from "~/server/domains/task/repo/crud";
 import type { USDAService } from "~/server/domains/usda-food/service/usda.service";
-import {
-  ENTITY_SCHEMA_BINDINGS,
-  type EntitySchemaBindingEntity,
-  type EntitySchemaBindingMap,
+import type {
+  EntitySchemaBindingEntity,
+  EntitySchemaBindingMap,
 } from "~/server/generated/entity-bindings.gen";
 import type { PageFieldReadContexts } from "~/server/generic/derived/repo/read-context";
 import type { ListPreparationScope } from "~/server/generic/list/repo/field-compiler";
@@ -120,10 +119,11 @@ export type EntityPublicOutput<E extends EntitySchemaBindingEntity> =
   SchemaOutput<SchemasFor<E>["output"]>;
 
 /** Parse a public entity output through the schema owned by the same entity. */
-export function parseEntityPublicOutput<E extends EntitySchemaBindingEntity>(
-  entity: E,
-  value: UnparsedEntityOutput,
-): EntityPublicOutput<E> {
+export async function parseEntityPublicOutput<
+  E extends EntitySchemaBindingEntity,
+>(entity: E, value: UnparsedEntityOutput): Promise<EntityPublicOutput<E>> {
+  const { ENTITY_SCHEMA_BINDINGS } =
+    await import("~/server/generated/entity-bindings.gen");
   const parsed = ENTITY_SCHEMA_BINDINGS[entity].output.parse(value);
   // SAFETY: E selects this exact entry in the generated schema binding map;
   // `.parse` above applies that entry's transformations before restoration.

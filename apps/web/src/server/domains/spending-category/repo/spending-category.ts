@@ -15,6 +15,10 @@ import { and, inArray, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 import { z } from "zod";
 
+import {
+  spendingCategoryRepositoryReadSchema,
+  spendingCategorySchemaBindings,
+} from "~/entity/generated/entity-schema-bindings.spendingCategory.gen";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   inheritedFieldSql,
@@ -169,7 +173,10 @@ const categoryRead = {
 export const spendingCategoryScaffold = listScaffold(
   "spendingCategory",
   spendingCategory,
-  { read: { ...categoryRead } },
+  {
+    readSchema: spendingCategoryRepositoryReadSchema,
+    read: { ...categoryRead },
+  },
 );
 const crud = createEntityCrud({
   table: spendingCategory,
@@ -438,6 +445,7 @@ async function mergeSpendingCategories(
 }
 
 export const spendingCategoryRepository = defineRepository("spendingCategory", {
+  schemas: spendingCategorySchemaBindings,
   lifecycle: {
     merge: SPENDING_CATEGORY_MERGE_EDGE_POLICY,
     delete: {

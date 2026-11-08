@@ -1,6 +1,7 @@
 import { ledgerPartyRawOut as rawLedgerPartyOut } from "@cubby/schemas/entity-contracts/ledgerParty";
 import { z } from "zod";
 
+import { ledgerPartySchemaBindings } from "~/entity/generated/entity-schema-bindings.ledgerParty.gen";
 import {
   asActor,
   defineRepository,
@@ -37,6 +38,7 @@ const ledgerPartyMergeSummary = z.object({
 });
 
 export const ledgerPartyRepository = defineRepository("ledgerParty", {
+  schemas: ledgerPartySchemaBindings,
   lifecycle: {
     delete: LEDGER_PARTY_DELETE_EDGE_POLICY,
     merge: LEDGER_PARTY_MERGE_EDGE_POLICY,

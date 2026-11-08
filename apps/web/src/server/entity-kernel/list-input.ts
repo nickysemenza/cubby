@@ -24,7 +24,7 @@ export const parseSorts = <
   E extends EntityKernelEntity,
   S extends EntityBindingSchemas,
 >(
-  binding: EntityKernelCoreBinding<E, S>,
+  binding: Pick<EntityKernelCoreBinding<E, S>, "entity" | "sort">,
   value: SortParams[] | undefined,
   allowEmpty = false,
 ) => {
@@ -66,7 +66,7 @@ export const parseGroupBy = <
   E extends EntityKernelEntity,
   S extends EntityBindingSchemas,
 >(
-  binding: EntityKernelCoreBinding<E, S>,
+  binding: Pick<EntityKernelCoreBinding<E, S>, "entity" | "sort">,
   value: unknown,
 ): ListGroupBy[] => {
   const dimensions = listGroupByDimensionsSchema.optional().parse(value) ?? [];

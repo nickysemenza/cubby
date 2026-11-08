@@ -3,6 +3,10 @@ import { sourceOccurrenceClosure } from "@cubby/schemas/source-occurrence-fields
 import { sql } from "drizzle-orm";
 import { z } from "zod";
 
+import {
+  sourceOccurrenceRepositoryReadSchema,
+  sourceOccurrenceSchemaBindings,
+} from "~/entity/generated/entity-schema-bindings.sourceOccurrence.gen";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   databaseForTransaction,
@@ -243,5 +247,9 @@ const read = {
 } satisfies ListReadOptions<typeof sourceOccurrence.$inferSelect>;
 
 export const sourceOccurrenceRepository = defineRepository("sourceOccurrence", {
-  scaffold: listScaffold("sourceOccurrence", sourceOccurrence, { read }),
+  schemas: sourceOccurrenceSchemaBindings,
+  scaffold: listScaffold("sourceOccurrence", sourceOccurrence, {
+    readSchema: sourceOccurrenceRepositoryReadSchema,
+    read,
+  }),
 });

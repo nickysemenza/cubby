@@ -31,6 +31,7 @@ import type { PgTable } from "drizzle-orm/pg-core";
 import { alias, QueryBuilder } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
+import { locationRepositoryReadSchema } from "~/entity/generated/entity-schema-bindings.location.gen";
 import { getR2PublicUrl } from "~/server/clients/r2-public-url";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { stockOnly } from "~/server/db/computed/inventory-placement";
@@ -757,6 +758,7 @@ const loadLocationTrees = async (
  * child refs; the record read replaces them with the full tree.
  */
 export const locationScaffold = listScaffold("location", location, {
+  readSchema: locationRepositoryReadSchema,
   derived: {
     // Direct value, because that is what the list cell renders in compact
     // mode.

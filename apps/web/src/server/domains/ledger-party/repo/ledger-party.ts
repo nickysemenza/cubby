@@ -16,6 +16,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 import { uniq } from "es-toolkit";
 
+import { ledgerPartyRepositoryReadSchema } from "~/entity/generated/entity-schema-bindings.ledgerParty.gen";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
@@ -311,6 +312,7 @@ export const LEDGER_PARTY_MERGE_EDGE_POLICY = {
 } as const satisfies IncomingEdgePolicy<"ledgerParty", OperationDisposition>;
 
 export const ledgerPartyScaffold = listScaffold("ledgerParty", ledgerParty, {
+  readSchema: ledgerPartyRepositoryReadSchema,
   read: { optionKind: ledgerParty.kind },
 });
 

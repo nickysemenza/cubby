@@ -2,6 +2,7 @@ import type { ReportBlock } from "@cubby/schemas/entity-report";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { z } from "zod";
 
+import { inventoryRepositoryReadSchema } from "~/entity/generated/entity-schema-bindings.inventory.gen";
 import type { Database } from "~/server/db";
 import { householdContributionLedger } from "~/server/domains/household-contribution/repo/reports";
 import { inventoryScaffold } from "~/server/domains/inventory/repo/crud";
@@ -69,7 +70,10 @@ export async function partyHoldingsSummary(
     filters: { ownerLedgerPartyId: [owner] },
     sorts: [],
     pagination: { pageIndex: 0, pageSize: 3 },
-    projection: selectedListProjection("inventory", ["id", "displayName"]),
+    projection: selectedListProjection(inventoryRepositoryReadSchema, [
+      "id",
+      "displayName",
+    ]),
   });
   const rows = z
     .array(z.object({ id: z.string(), displayName: z.string() }))

@@ -8,6 +8,10 @@ import { parseEntityId } from "@cubby/schemas/identifiers";
 import { inArray } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 
+import {
+  deviceRepositoryReadSchema,
+  deviceSchemaBindings,
+} from "~/entity/generated/entity-schema-bindings.device.gen";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import { buildPartialUpdateValues, withTransaction } from "~/server/db/helpers";
@@ -61,6 +65,7 @@ const deviceInactive = (lastSeenAt: Date | null, now = new Date()) =>
   now.getTime() - lastSeenAt.getTime() > DEVICE_INACTIVE_AFTER_MS;
 
 export const deviceScaffold = listScaffold("device", device, {
+  readSchema: deviceRepositoryReadSchema,
   read: {
     bindings: (bind) => {
       // Row-local derivations; per-device leases live on the Activity queue.
@@ -179,6 +184,7 @@ const deleteDevicePushRegistrations = async (
 };
 
 export const deviceRepository = defineRepository("device", {
+  schemas: deviceSchemaBindings,
   lifecycle: { delete: DEVICE_DELETE_EDGE_POLICY },
   scaffold: deviceScaffold,
   create: asActor(createDevice),

@@ -4,6 +4,7 @@ import { rawTaskListItemOut } from "@cubby/schemas/work-raw-read";
 import { inArray, isNull, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 
+import { taskRepositoryReadSchema } from "~/entity/generated/entity-schema-bindings.task.gen";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { effectiveFieldSql } from "~/server/db/computed/effective-field";
 import {
@@ -34,6 +35,7 @@ const readDatabase = (db: Database | DrizzleTransaction): Database =>
 // The effective project, subject product and assignee compile from their
 // declared `via` paths through the inherited references.
 export const taskScaffold = listScaffold("task", task, {
+  readSchema: taskRepositoryReadSchema,
   derived: {
     effectiveTrade: effectiveFieldSql("task", "trade"),
     // Effective due date — `dueEndDate ?? dueDate` — so a ranged task still

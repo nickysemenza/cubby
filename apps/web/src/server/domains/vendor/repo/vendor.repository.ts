@@ -6,6 +6,7 @@ import {
 } from "@cubby/schemas/vendor";
 import { z } from "zod";
 
+import { vendorSchemaBindings } from "~/entity/generated/entity-schema-bindings.vendor.gen";
 import {
   asActor,
   defineRepository,
@@ -23,6 +24,7 @@ import {
 } from "./vendor";
 
 export const vendorRepository = defineRepository("vendor", {
+  schemas: vendorSchemaBindings,
   lifecycle: {
     delete: VENDOR_DELETE_EDGE_POLICY,
     merge: VENDOR_MERGE_EDGE_POLICY,

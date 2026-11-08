@@ -1,3 +1,4 @@
+import { imageSchemaBindings } from "~/entity/generated/entity-schema-bindings.image.gen";
 import { defineRepository } from "~/server/entity-kernel/repo/repository";
 import { bindShortcodeResolver } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
@@ -12,6 +13,7 @@ const imageShortcodes = bindShortcodeResolver("image");
 
 /** Images are created by the upload workflow, never as a row CRUD action. */
 export const imageRepository = defineRepository("image", {
+  schemas: imageSchemaBindings,
   lifecycle: { delete: IMAGE_HARD_DELETE },
   scaffold: imageScaffold,
   update: async (ctx, shortcode, data) => {

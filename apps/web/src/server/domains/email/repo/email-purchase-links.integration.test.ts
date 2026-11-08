@@ -25,6 +25,7 @@ import { raceUniqueInsert, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
+import { emailRepositoryReadSchema } from "~/entity/generated/entity-schema-bindings.email.gen";
 import { account as googleAccount } from "~/server/db/auth.schema";
 import {
   databaseForTransaction,
@@ -674,7 +675,7 @@ describe("Email Purchase links", () => {
         filters: filters,
         sorts: [{ orderBy: "linkState", direction: "asc" }],
         pagination: { pageIndex: 0, pageSize: 25 },
-        projection: selectedListProjection("email", [
+        projection: selectedListProjection(emailRepositoryReadSchema, [
           "linkState",
           "purchaseLinks",
           "linked",

@@ -77,6 +77,7 @@ import { computeAttentionItems } from "~/server/domains/project/repo/attention";
 import { countStaleRecipeTotals } from "~/server/domains/recipe/repo/totals";
 import type { UsdaFoodBatchPort } from "~/server/domains/usda-food/repo/usda-helpers";
 import { batchEnrichWithFood } from "~/server/domains/usda-food/repo/usda-helpers";
+import { ENTITY_REPOSITORY_READ_SCHEMAS } from "~/server/generated/entity-bindings.gen";
 import { selectedListProjection } from "~/server/generic/list/repo/list-projection";
 import { loadAllocationDefectPresenters } from "~/server/generic/problems/repo/detectors-financial";
 import {
@@ -1159,7 +1160,7 @@ for (const key of FAST_ENTITY_PROBLEM_KEYS) {
       ? listEntities.find((entity) => entity === source.entity)
       : undefined;
   if (!entity) throw new Error(`Selected Problem has no list entity: ${key}`);
-  selectedListProjection(entity, fields);
+  selectedListProjection(ENTITY_REPOSITORY_READ_SCHEMAS[entity], fields);
 }
 
 /** Fast Problems stays DB-only: no WASM or provider calls. */

@@ -11,6 +11,7 @@ import { describe, expect, it } from "vitest";
 
 import { metadataQueryClient } from "#web/tests/entity-metadata.ts";
 import { declaredListReadProjection } from "~/entity/entity-list/list-read-demand";
+import { locationRepositoryReadSchema } from "~/entity/generated/entity-schema-bindings.location.gen";
 import { getR2PublicUrl } from "~/server/clients/r2-public-url";
 import { getDb, mapImages } from "~/server/db/helpers";
 import {
@@ -459,7 +460,7 @@ describe("entity display image resolver", () => {
         representations: expectedRepresentations("images/stale.jpg"),
       })),
     };
-    const plan = listReadPlan<typeof row>("location", {
+    const plan = listReadPlan<typeof row>(locationRepositoryReadSchema, {
       media: true,
       bindings: (bind) => [
         bind(rawLocationList.pick({ images: true }), (row) => ({
@@ -467,7 +468,7 @@ describe("entity display image resolver", () => {
         })),
       ],
     });
-    const projection = selectedListProjection("location", [
+    const projection = selectedListProjection(locationRepositoryReadSchema, [
       "images",
       "displayImages",
     ]);
@@ -1832,7 +1833,9 @@ describe("entity display image resolver", () => {
           auth: { userId: ctx.actor.userId },
         }),
       );
-      const selected = await listOperations("planting").listFields(
+      const selected = await (
+        await listOperations("planting")
+      ).listFields(
         context,
         {
           filters: { ids: [planted.id] },

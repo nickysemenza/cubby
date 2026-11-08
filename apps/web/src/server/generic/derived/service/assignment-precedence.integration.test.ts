@@ -166,7 +166,9 @@ describe("assignment and stored projection precedence", () => {
     });
     expect(unpriced.items).toEqual([]);
     expect(unpriced.meta.unresolvedCount).toBe(1);
-    const facets = await listOperations("product").facets(context(), {
+    const facets = await (
+      await listOperations("product")
+    ).facets(context(), {
       filters: { ids: [first.id, second.id] },
       facetIds: ["priced"],
     });
@@ -178,7 +180,9 @@ describe("assignment and stored projection precedence", () => {
         unresolvedCount: 1,
       }),
     );
-    const viewCounts = await listOperations("product").viewCounts(context(), {
+    const viewCounts = await (
+      await listOperations("product")
+    ).viewCounts(context(), {
       views: [
         {
           id: "unpriced",
@@ -228,7 +232,9 @@ describe("assignment and stored projection precedence", () => {
       service.id,
     ]);
     expect(serviceWithoutPrice.meta.unresolvedCount).toBe(0);
-    const selectedService = await listOperations("product").listFields(
+    const selectedService = await (
+      await listOperations("product")
+    ).listFields(
       context(),
       {
         filters: { ids: [service.id] },
@@ -346,7 +352,9 @@ describe("assignment and stored projection precedence", () => {
       kind: "live",
       decision: { provenance: { kind: "computed" } },
     });
-    const selected = await listOperations("product").listFields(
+    const selected = await (
+      await listOperations("product")
+    ).listFields(
       context(),
       {
         filters: { ids: [product.id] },

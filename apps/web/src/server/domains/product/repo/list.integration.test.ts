@@ -9,6 +9,7 @@ import {
 } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { productRepositoryReadSchema } from "~/entity/generated/entity-schema-bindings.product.gen";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { location, product } from "~/server/db/schema";
 import { createIngredient } from "~/server/domains/ingredient/repo/crud";
@@ -342,7 +343,7 @@ describe("product list staged projections", () => {
       filters: { ids: products.map((row) => row.id) },
       sorts: [{ orderBy: "name", direction: "asc" }],
       pagination: { pageIndex: 0, pageSize: 3 },
-      projection: selectedListProjection("product", [
+      projection: selectedListProjection(productRepositoryReadSchema, [
         "food",
         "pricing",
         "primaryPlacement",

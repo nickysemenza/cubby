@@ -20,7 +20,6 @@ import { parseEntityId } from "@cubby/schemas/identifiers";
 import pMap from "p-map";
 import { z } from "zod";
 
-import type { ListEntity } from "~/entity/model/list-contracts";
 import type { ListReadRow } from "~/entity/model/list-read-fields";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { inheritedFieldOfColumn } from "~/server/db/computed/effective-field";
@@ -40,8 +39,8 @@ import {
 import type { PageStoredMeta } from "~/server/generic/derived/repo/read-context";
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
 import {
-  listReadSchema,
   projectListRows,
+  type RepositoryReadSchema,
 } from "~/server/generic/list/repo/list-read-schema";
 import { lookupEntityReferences } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
@@ -50,10 +49,10 @@ import { loadRelationProjection } from "./relation-projection";
 
 /** Validate explicit field demand before reading even an empty page. */
 export function selectedListProjection(
-  entity: ListEntity,
+  read: RepositoryReadSchema,
   requested: readonly string[],
 ): ListProjection {
-  const schema = listReadSchema(entity);
+  const { entity, schema } = read;
   for (const field of requested)
     if (!(field in schema.shape))
       throw new Error(`Unknown list field: ${entity}.${field}`);
@@ -186,10 +185,10 @@ const sourceIdentity = z.object({ id: z.string(), shortcode: z.string() });
 
 /** Canonical fields own admission; batches retain their inferred result in a page-local closure. */
 export function listReadPlan<Row>(
-  entity: ListEntity,
+  read: RepositoryReadSchema,
   options: ListReadOptions<Row> = {},
 ) {
-  const schema = listReadSchema(entity);
+  const { entity, schema } = read;
   const batch = <Page extends object, Loaded>(
     load: (page: Page) => Promise<Loaded>,
     pageOf: (page: ListReadPage<Row>) => Page,
@@ -408,7 +407,7 @@ export function listReadPlan<Row>(
           projection.includes(field.readKey ?? field.key),
       ));
   const validate = (projection: ListProjection) => {
-    selectedListProjection(entity, projection);
+    selectedListProjection(read, projection);
   };
   // A detail-scoped binding is expensive per row: a single-record read loads
   // it, a page loads it only when a projection names its keys.
@@ -866,7 +865,7 @@ export function listReadPlan<Row>(
                 media.representations,
               )
             : mapped.map((row) => row.value);
-      return projectListRows(entity, completed, projection);
+      return projectListRows(read, completed, projection);
     },
   };
 }

@@ -63,7 +63,17 @@ const inputSchema = z.object({
 export function defineListOperations<
   E extends ListEntity,
   S extends EntityBindingSchemas,
->(binding: EntityKernelCoreBinding<E, S>) {
+>(
+  binding: Pick<
+    EntityKernelCoreBinding<E, S>,
+    "entity" | "schemas" | "sort"
+  > & {
+    repository: Pick<
+      EntityKernelCoreBinding<E, S>["repository"],
+      "scaffold" | "listRead"
+    >;
+  },
+) {
   const parseFilters = (input: z.output<typeof inputSchema>["filters"]) => {
     const { ids, ...rest } = z
       .object({ ids: z.array(z.string()).max(500).optional() })
@@ -104,7 +114,10 @@ export function defineListOperations<
       value: unknown,
       fields: readonly string[],
     ) {
-      const projection = selectedListProjection(binding.entity, fields);
+      const projection = selectedListProjection(
+        binding.repository.scaffold.readSchema,
+        fields,
+      );
       const input = inputSchema.parse(value);
       const pagination = input.pagination ?? { pageIndex: 0, pageSize: 50 };
       const scoped = await scopedFilters(context, input);
@@ -140,7 +153,11 @@ export function defineListOperations<
             )
           ? await withRecordEmoji(context.db, binding.entity, result.data)
           : result.data;
-      const selected = validateListReadRows(binding.entity, rows, fields);
+      const selected = validateListReadRows(
+        binding.repository.scaffold.readSchema,
+        rows,
+        fields,
+      );
       const selectedSchema = selectedFieldEnvelopeSchema(
         binding.schemas.list,
         fields,

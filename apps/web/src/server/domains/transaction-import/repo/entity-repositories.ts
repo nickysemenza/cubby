@@ -6,6 +6,10 @@ import { minorToMoney } from "@cubby/shared";
 import { getTableColumns, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
+import {
+  sourceTransactionRecordRepositoryReadSchema,
+  sourceTransactionRecordSchemaBindings,
+} from "~/entity/generated/entity-schema-bindings.sourceTransactionRecord.gen";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { sourceTransactionSettlements } from "~/server/db/computed/source-transaction-settlement-sql";
 import {
@@ -196,6 +200,7 @@ export const sourceTransactionRecordScaffold = listScaffold<
   typeof sourceTransactionRecord,
   SourceRow
 >("sourceTransactionRecord", sourceTransactionRecord, {
+  readSchema: sourceTransactionRecordRepositoryReadSchema,
   rows: {
     runStepInputs: runStepInputListRows("sourceTransactionRecord"),
     reconciliation: sql`SELECT r.id AS owner, r."accountId" AS account, r."withdrawalImportId" AS withdrawal, r."supersededByRowId" AS successor FROM ${sourceObservations} r`,
@@ -384,6 +389,7 @@ const SOURCE_TRANSACTION_RECORD_DELETE_POLICY = {
 export const sourceTransactionRecordRepository = defineRepository(
   "sourceTransactionRecord",
   {
+    schemas: sourceTransactionRecordSchemaBindings,
     lifecycle: { delete: SOURCE_TRANSACTION_RECORD_DELETE_POLICY },
     deleteHooks: {
       beforeLock: lockSourceObservationRemoval,

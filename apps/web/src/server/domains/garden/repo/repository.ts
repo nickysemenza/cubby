@@ -3,6 +3,8 @@ import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import { parseShortcodeFor, type PlantingId } from "@cubby/schemas/identifiers";
 import { and, asc, eq, inArray } from "drizzle-orm";
 
+import { gardenEntrySchemaBindings } from "~/entity/generated/entity-schema-bindings.gardenEntry.gen";
+import { plantingSchemaBindings } from "~/entity/generated/entity-schema-bindings.planting.gen";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import { notDeleted, unwrapDb } from "~/server/db/helpers";
@@ -120,6 +122,7 @@ const auditEntryPlantingSets = async (
 };
 
 export const plantingRepository = defineRepository("planting", {
+  schemas: plantingSchemaBindings,
   lifecycle: { delete: PLANTING_DELETE_EDGE_POLICY },
   scaffold: plantingScaffold,
   create: asActor(createPlanting),
@@ -157,6 +160,7 @@ export const plantingRepository = defineRepository("planting", {
 });
 
 export const gardenEntryRepository = defineRepository("gardenEntry", {
+  schemas: gardenEntrySchemaBindings,
   lifecycle: { delete: GARDEN_ENTRY_DELETE_EDGE_POLICY },
   scaffold: gardenEntryScaffold,
   create: asActor(createGardenEntry),

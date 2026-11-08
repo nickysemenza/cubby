@@ -6,4 +6,3 @@ export {
   executeEntityAs,
   resolveEntity,
 } from "./execute";
-export { executeEntitySelectionIds } from "./selection-ids";

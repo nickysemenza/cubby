@@ -19,6 +19,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import type { z } from "zod";
 
+import { sourceTransactionRecordRepositoryReadSchema } from "~/entity/generated/entity-schema-bindings.sourceTransactionRecord.gen";
 import {
   sourceHistoricalTransactionRows,
   sourceOccurrenceHasUnresolvedHistory,
@@ -612,12 +613,10 @@ describe("statement row ledger", () => {
           filters: {},
           sorts: [],
           pagination: { pageIndex, pageSize: 2 },
-          projection: selectedListProjection("sourceTransactionRecord", [
-            "id",
-            "matchState",
-            "transactionId",
-            "historicalTransactionIds",
-          ]),
+          projection: selectedListProjection(
+            sourceTransactionRecordRepositoryReadSchema,
+            ["id", "matchState", "transactionId", "historicalTransactionIds"],
+          ),
         });
         expect(page.data).toHaveLength(
           Math.min(2, expected.rows.length - pageIndex * 2),
@@ -1489,11 +1488,10 @@ describe("statement row ledger", () => {
       filters: {},
       sorts: [],
       pagination: { pageIndex: 0, pageSize: 10 },
-      projection: selectedListProjection("sourceTransactionRecord", [
-        "id",
-        "source",
-        "matchState",
-      ]),
+      projection: selectedListProjection(
+        sourceTransactionRecordRepositoryReadSchema,
+        ["id", "source", "matchState"],
+      ),
     });
     expect(projection.data[0]).not.toHaveProperty("providerData");
     // Saved views, facets and import reports must agree with the visible state.

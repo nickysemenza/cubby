@@ -70,7 +70,9 @@ describe("row-set filters", () => {
       createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
     );
   const listed = async (entity: ListEntity, filters: ListFilterValues) => {
-    const pageResult = await listOperations(entity).listFields(
+    const pageResult = await (
+      await listOperations(entity)
+    ).listFields(
       context(),
       {
         filters,

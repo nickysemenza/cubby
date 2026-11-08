@@ -1,9 +1,9 @@
 import { entityListContract } from "~/contracts/entity-list.contract";
 import { entityListInputSchema } from "~/entity/model/list-contracts";
 import { loadEntityListSchemas } from "~/entity/model/read-schemas/loaders";
-import { executeEntitySelectionIds } from "~/server/entity-kernel";
 import { resolveFilterTokens } from "~/server/entity-kernel/filter-tokens";
 import { listOperations } from "~/server/entity-kernel/list-operations";
+import { executeEntitySelectionIds } from "~/server/entity-kernel/selection-ids";
 import {
   entityActionReadFields,
   withEntityActionStates,
@@ -17,14 +17,13 @@ import { implementOperationDomain } from "~/server/operation-runtime/operation-d
  */
 export const entityListHandlers = implementOperationDomain(entityListContract, {
   selectionIds: (context, input) => executeEntitySelectionIds(context, input),
-  facetCounts: (context, input) =>
-    listOperations(input.entity).facets(context, input),
-  viewCounts: (context, input) =>
-    listOperations(input.entity).viewCounts(context, input),
+  facetCounts: async (context, input) =>
+    (await listOperations(input.entity)).facets(context, input),
+  viewCounts: async (context, input) =>
+    (await listOperations(input.entity)).viewCounts(context, input),
   list: {
     input: entityListInputSchema,
     run: async (context, input) => {
-      const { executeEntityAs } = await import("~/server/entity-kernel");
       const schemas = await loadEntityListSchemas(input.entity);
       const parsed = schemas.listInput.parse(input);
       const resolved = await resolveFilterTokens(
@@ -33,22 +32,21 @@ export const entityListHandlers = implementOperationDomain(entityListContract, {
         parsed,
       );
       if (input.fields !== undefined) {
-        const result = await listOperations(input.entity).listFields(
-          context,
-          resolved,
-          [
-            ...new Set([
-              ...input.fields,
-              ...entityActionReadFields(input.entity),
-            ]),
-          ],
-        );
+        const result = await (
+          await listOperations(input.entity)
+        ).listFields(context, resolved, [
+          ...new Set([
+            ...input.fields,
+            ...entityActionReadFields(input.entity),
+          ]),
+        ]);
         return schemas.selectedListOutput.parse({
           items: withEntityActionStates(input.entity, [...result.items]),
           meta: result.meta,
           selectedFields: input.fields,
         });
       }
+      const { executeEntityAs } = await import("~/server/entity-kernel");
       const result = await executeEntityAs(context, "list", resolved);
       return schemas.listOutput.parse({
         items: withEntityActionStates(input.entity, [...result.items]),

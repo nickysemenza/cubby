@@ -4,6 +4,7 @@ import {
 } from "@cubby/schemas/purchase";
 import { rawPurchaseOut } from "@cubby/schemas/purchase-raw-read";
 
+import { purchaseSchemaBindings } from "~/entity/generated/entity-schema-bindings.purchase.gen";
 import {
   asActor,
   defineRepository,
@@ -24,6 +25,7 @@ import {
 const purchaseShortcodes = bindShortcodeResolver("purchase");
 
 export const purchaseRepository = defineRepository("purchase", {
+  schemas: purchaseSchemaBindings,
   lifecycle: {
     delete: PURCHASE_DELETE_EDGE_POLICY,
     merge: PURCHASE_MERGE_EDGE_POLICY,

@@ -1,6 +1,6 @@
+import { entityFieldEnvelopeNested } from "@cubby/schemas/compiler/generated/entity-field-envelope-nested.gen";
 import { dataQuality, scoredEntities } from "@cubby/schemas/data-quality";
 import type { Entity } from "@cubby/schemas/entity";
-import { entityFieldEnvelopeNested } from "@cubby/schemas/entity-field-envelopes";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { storedProjectionVersionsSchema } from "@cubby/schemas/field-envelope";

@@ -82,6 +82,7 @@ import {
 } from "drizzle-orm/pg-core";
 
 import { localPhotoAnalysisSchema } from "~/contracts/photo-import.contract";
+import { imageRepositoryReadSchema } from "~/entity/generated/entity-schema-bindings.image.gen";
 import { getR2PublicUrl } from "~/server/clients/r2-public-url";
 import { deleteStoredObjects } from "~/server/clients/s3";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
@@ -1321,6 +1322,7 @@ const loadImageAttachments = async (
  * single-record read all select through it.
  */
 export const imageScaffold = listScaffold("image", image, {
+  readSchema: imageRepositoryReadSchema,
   derived: {
     referenced: imageReferenceCondition(image, "active"),
     processingIssue: imageProcessingIssueExpression(image),

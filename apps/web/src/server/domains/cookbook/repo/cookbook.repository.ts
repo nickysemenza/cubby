@@ -1,3 +1,4 @@
+import { cookbookSchemaBindings } from "~/entity/generated/entity-schema-bindings.cookbook.gen";
 import { defineRepository } from "~/server/entity-kernel/repo/repository";
 
 import {
@@ -12,6 +13,7 @@ import {
  * serves reads and title/author/subject edits.
  */
 export const cookbookRepository = defineRepository("cookbook", {
+  schemas: cookbookSchemaBindings,
   lifecycle: { delete: COOKBOOK_DELETE_EDGE_POLICY },
   scaffold: cookbookScaffold,
   update: (ctx, shortcode, data) =>

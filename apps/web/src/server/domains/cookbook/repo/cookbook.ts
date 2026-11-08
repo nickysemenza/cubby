@@ -46,6 +46,7 @@ import { and, eq, inArray, isNull, ne, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 import type { z } from "zod";
 
+import { cookbookRepositoryReadSchema } from "~/entity/generated/entity-schema-bindings.cookbook.gen";
 import type { Database } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
@@ -307,6 +308,7 @@ const getCookbookById = async (db: Database, id: CookbookId) => {
  * the cover of the book and of its live shelf copy.
  */
 export const cookbookScaffold = listScaffold("cookbook", cookbook, {
+  readSchema: cookbookRepositoryReadSchema,
   derived: {
     recipeCount: related(
       recipe,

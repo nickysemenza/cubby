@@ -67,7 +67,7 @@ describe("complete list composition", () => {
       name: "Synthetic outside scope",
     });
     const context = buildKernelContext(ctx.db);
-    const operation = listOperations("vendor");
+    const operation = await listOperations("vendor");
     const input = {
       filters: { ids: [first.shortcode, second.shortcode, deleted.shortcode] },
       sort: [{ orderBy: "name", direction: "asc" }],
@@ -153,7 +153,7 @@ describe("complete list composition", () => {
     await seedReferenceUniverse(ctx.db);
     const context = buildKernelContext(ctx.db);
     for (const entity of ["task", "product"] as const) {
-      const operation = listOperations(entity);
+      const operation = await listOperations(entity);
       const specs = getEntityFilters(queryClient, entity);
       const views = viewsForEntity(queryClient, entity).map((view) => {
         const values = new Map(
@@ -185,7 +185,7 @@ describe("complete list composition", () => {
         );
       }
     }
-    const productOperation = listOperations("product");
+    const productOperation = await listOperations("product");
     const expected = await executeEntity(context, {
       action: "list",
       entity: "product",
@@ -277,7 +277,7 @@ describe("complete list composition", () => {
         },
       },
     ];
-    const operation = listOperations("product");
+    const operation = await listOperations("product");
     const context = buildKernelContext(ctx.db);
     const uncounted = {
       filters: {},
@@ -420,7 +420,9 @@ describe("complete list composition", () => {
           queryClient,
           entity,
         ) ?? [];
-      const selected = await listOperations(entity).listFields(
+      const selected = await (
+        await listOperations(entity)
+      ).listFields(
         context,
         { filters: {}, pagination: { pageIndex: 0, pageSize: 2 } },
         fields,

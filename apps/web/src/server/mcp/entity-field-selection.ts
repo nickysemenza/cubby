@@ -14,7 +14,7 @@ import {
 } from "~/entity/model/list-read-fields";
 import { createAppError } from "~/server/errors/app-error";
 import { ENTITY_SCHEMA_BINDINGS } from "~/server/generated/entity-bindings.gen";
-import { listReadSchema } from "~/server/generic/list/repo/list-read-schema";
+import { ENTITY_REPOSITORY_READ_SCHEMAS } from "~/server/generated/entity-bindings.gen";
 
 export type ReadSelection =
   | { kind: "fields"; paths: string[][] }
@@ -238,7 +238,7 @@ function compactKeys(entity: string): string[] {
   if (!list || !detail) return [];
   const listEntity = listEntityOf(entity);
   const declared = listEntity
-    ? Object.keys(listReadSchema(listEntity).shape)
+    ? Object.keys(ENTITY_REPOSITORY_READ_SCHEMAS[listEntity].schema.shape)
     : schemaKeys(list);
   return declared.flatMap((key) => {
     if (imagePayloadFields.has(key) || longText(entity, key)) return [];
@@ -301,7 +301,9 @@ export function selectionListFields(
   entity: ListEntity,
   selection: ReadSelection,
 ): string[] | null {
-  const declared = new Set(Object.keys(listReadSchema(entity).shape));
+  const declared = new Set(
+    Object.keys(ENTITY_REPOSITORY_READ_SCHEMAS[entity].schema.shape),
+  );
   const paths =
     selection.kind === "compact"
       ? selection.keys.map((key) => key.split("."))

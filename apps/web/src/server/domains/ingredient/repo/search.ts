@@ -35,6 +35,7 @@ import type { PgTable } from "drizzle-orm/pg-core";
 import { QueryBuilder } from "drizzle-orm/pg-core";
 import { groupBy } from "es-toolkit";
 
+import { ingredientRepositoryReadSchema } from "~/entity/generated/entity-schema-bindings.ingredient.gen";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   buildSearchConditions,
@@ -497,6 +498,7 @@ const loadIngredientRecipes = async (
  * recipe's own ingredient rows out of pages.
  */
 export const ingredientScaffold = listScaffold("ingredient", ingredient, {
+  readSchema: ingredientRepositoryReadSchema,
   derived: {
     // Shared with global search so the sort key matches the displayed
     // `appearsInRecipes.length` exactly (live recipes/sections/usages only).

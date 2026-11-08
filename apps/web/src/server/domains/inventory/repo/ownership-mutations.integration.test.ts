@@ -15,6 +15,7 @@ import { buildEntity } from "tooling/factories/build";
 import { raceUniqueInsert, TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
+import { inventoryRepositoryReadSchema } from "~/entity/generated/entity-schema-bindings.inventory.gen";
 import { getDb, notDeleted, withTransaction } from "~/server/db/helpers";
 import { amountFromColumns } from "~/server/db/helpers";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
@@ -356,7 +357,10 @@ describe("inventory ownership mutations", () => {
       { path: [owner.output.id], count: 1 },
     ]);
     const read = async (fields: readonly string[]) => {
-      const projection = selectedListProjection("inventory", fields);
+      const projection = selectedListProjection(
+        inventoryRepositoryReadSchema,
+        fields,
+      );
       const result = await inventoryScaffold.read(ctx.db, {
         filters,
         sorts: [],
@@ -365,7 +369,11 @@ describe("inventory ownership mutations", () => {
       });
       return {
         count: result.count,
-        data: selectListReadRows("inventory", result.data, fields),
+        data: selectListReadRows(
+          inventoryRepositoryReadSchema,
+          result.data,
+          fields,
+        ),
       };
     };
     const ownership = vi.spyOn(ownershipReads, "loadInventoryOwnershipTraces");
@@ -374,7 +382,7 @@ describe("inventory ownership mutations", () => {
       const selected = await read(fields);
       expect(selected.count).toBe(full.count);
       expect(selected.data).toEqual(
-        selectListReadRows("inventory", full.data, fields),
+        selectListReadRows(inventoryRepositoryReadSchema, full.data, fields),
       );
       expect(ownership).not.toHaveBeenCalled();
       for (const field of [
@@ -385,7 +393,11 @@ describe("inventory ownership mutations", () => {
         ownership.mockClear();
         const requested = ["id", field];
         expect((await read(requested)).data).toEqual(
-          selectListReadRows("inventory", full.data, requested),
+          selectListReadRows(
+            inventoryRepositoryReadSchema,
+            full.data,
+            requested,
+          ),
         );
         expect(ownership).not.toHaveBeenCalled();
       }

@@ -4,7 +4,7 @@ import {
   entitySelectionIdsInputSchema,
   entitySelectionIdsOutputSchema,
 } from "~/contracts/entity-list.contract";
-import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-runtime.gen";
+import { loadEntityReadBinding } from "~/server/entity-kernel/list-operations";
 
 import type { EntityKernelContext } from "./adapter";
 import { resolveFilterTokens } from "./filter-tokens";
@@ -16,7 +16,7 @@ export async function executeEntitySelectionIds(
   value: z.input<typeof entitySelectionIdsInputSchema>,
 ) {
   const input = entitySelectionIdsInputSchema.parse(value);
-  const binding = ENTITY_KERNEL_BINDINGS[input.entity];
+  const binding = await loadEntityReadBinding(input.entity);
   const { ids, ...rest } = z
     .object({ ids: z.array(z.string()).max(500).optional() })
     .passthrough()

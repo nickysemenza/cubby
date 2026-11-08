@@ -12,9 +12,9 @@ import {
   seedReferenceUniverse,
 } from "~/server/entity-kernel/reference-universe.fixtures";
 import { ENTITY_SCHEMA_BINDINGS } from "~/server/generated/entity-bindings.gen";
+import { ENTITY_REPOSITORY_READ_SCHEMAS } from "~/server/generated/entity-bindings.gen";
 import { generatedMcpEntityActionEntities } from "~/server/generated/entity-kernel-entities.gen";
 import { ensureExternalSources } from "~/server/generic/entity-links/repo/entity-external-ids";
-import { listReadSchema } from "~/server/generic/list/repo/list-read-schema";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { createMcpServer } from "~/server/mcp/server";
 import {
@@ -255,7 +255,9 @@ describe("entity_read field selection", () => {
       resultDetail: "compact",
     });
     expect(listed.isError).not.toBe(true);
-    const declared = new Set(Object.keys(listReadSchema("purchase").shape));
+    const declared = new Set(
+      Object.keys(ENTITY_REPOSITORY_READ_SCHEMAS["purchase"].schema.shape),
+    );
     const [item] = rows.parse(listed.structuredContent).items;
     expect(item).toHaveProperty(
       "fields.expenseTotal.result.decision.outcome.value",
@@ -529,7 +531,9 @@ describe("entity_read field selection", () => {
           if (!(published instanceof z.ZodObject))
             throw new Error("Expected generated object schema");
           const governed = published.shape["fields"];
-          const keys = Object.keys(listReadSchema(entity).shape).filter(
+          const keys = Object.keys(
+            ENTITY_REPOSITORY_READ_SCHEMAS[entity].schema.shape,
+          ).filter(
             (key) =>
               Object.hasOwn(published.shape, key) ||
               (governed instanceof z.ZodObject &&

@@ -3,6 +3,7 @@ import type { FinancialTransactionFilters } from "@cubby/schemas/financial-trans
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { z } from "zod";
 
+import { financialTransactionRepositoryReadSchema } from "~/entity/generated/entity-schema-bindings.financialTransaction.gen";
 import { formatCurrency } from "~/lib/number-format";
 import type { Database } from "~/server/db";
 import { financialTransactionScaffold } from "~/server/domains/financial-transaction/repo/financial-transaction";
@@ -24,12 +25,10 @@ export async function accountReviewSummary(
     filters: { accountId: [accountId], dataGap: gaps },
     sorts: [{ orderBy: "transactionDate", direction: "desc" }],
     pagination: { pageIndex: 0, pageSize: 3 },
-    projection: selectedListProjection("financialTransaction", [
-      "id",
-      "merchant",
-      "amount",
-      "transactionDate",
-    ]),
+    projection: selectedListProjection(
+      financialTransactionRepositoryReadSchema,
+      ["id", "merchant", "amount", "transactionDate"],
+    ),
   });
   const rows = z
     .array(

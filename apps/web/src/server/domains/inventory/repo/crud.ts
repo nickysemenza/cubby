@@ -19,6 +19,7 @@ import {
 import { and, eq, inArray, not, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 
+import { inventoryRepositoryReadSchema } from "~/entity/generated/entity-schema-bindings.inventory.gen";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   liveProductAndLocation,
@@ -174,6 +175,7 @@ export const inventoryScaffold = listScaffold<
   typeof inventoryEntry,
   InventoryReadRow
 >("inventory", inventoryEntry, {
+  readSchema: inventoryRepositoryReadSchema,
   population: liveProductAndLocation,
   derived: {
     // Resolve the filter's canonical identity to the UUID used by record projections.

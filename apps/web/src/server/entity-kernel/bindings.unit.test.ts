@@ -6,7 +6,11 @@ import { PgDialect } from "drizzle-orm/pg-core";
 import { describe, expect, it } from "vitest";
 
 import { mock } from "~/lib/test/mock-schema";
-import { ENTITY_SCHEMA_BINDINGS } from "~/server/generated/entity-bindings.gen";
+import { loadEntityReadBinding } from "~/server/entity-kernel/list-operations";
+import {
+  ENTITY_SCHEMA_BINDINGS,
+  ENTITY_REPOSITORY_READ_SCHEMAS,
+} from "~/server/generated/entity-bindings.gen";
 import {
   generatedMcpEntityCreateCommandSchema,
   generatedMcpEntityUpdateCommandSchema,
@@ -57,7 +61,15 @@ describe("entity kernel bindings", () => {
     if (source.prefix) dialect.sqlToQuery(source.prefix(context));
   });
 
-  it("loads every read-schema key through each repository's declared read", () => {
+  it("loads every read-schema key through each repository's declared read", async () => {
+    for (const binding of Object.values(ENTITY_KERNEL_BINDINGS)) {
+      const loaded = await loadEntityReadBinding(binding.entity);
+      expect(loaded.schemas).toBe(ENTITY_SCHEMA_BINDINGS[binding.entity]);
+      expect(loaded.repository.scaffold).toBe(binding.repository.scaffold);
+      expect(loaded.repository.scaffold.readSchema).toBe(
+        ENTITY_REPOSITORY_READ_SCHEMAS[binding.entity],
+      );
+    }
     const failures = Object.values(ENTITY_KERNEL_BINDINGS).flatMap(
       (binding) => {
         try {
