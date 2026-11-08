@@ -678,6 +678,13 @@ occurrence siblings and collection memberships, and does not depend on a retaine
 legacy charge-key string. One and many-record badges use the same bounded record
 expansion. Work retains the narrower account-owned statement reach.
 
+Source record rows join their observation facts once after generic list paging.
+The facts relation stays parameterized by each selected root; flattening can scan
+the complete facts population. All computed row values retain one statement
+snapshot and their existing raw
+timestamp and minor-unit money decoders. Detail reads use the same facts join.
+Filters, sorting and whole-population membership keep their scalar facts SQL.
+
 Whole-list projections materialize retained historical closure before applying
 root predicates. List filters use the generic whole-list value set; state sorts
 use uncorrelated membership sets. Page bindings first collect requested roots'

@@ -12,7 +12,7 @@ import {
   type TransactionImportInput,
   type SourceTransactionRecordInput,
 } from "@cubby/schemas/source-transaction-record";
-import { eq, sql } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { buildKernelContext } from "tooling/scenarios/context";
 import { withTestDb } from "tooling/test-setup";
@@ -553,6 +553,55 @@ describe("statement row ledger", () => {
         sql`SELECT shortcode AS id, "matchState", "transactionShortcode" AS "transactionId", "historicalTransactionIds"
           FROM ${sourceObservations} observed WHERE observed."deletedAt" IS NULL`,
       );
+      const factKeys = [
+        "externalId",
+        "legacyExternalId",
+        "chargeKey",
+        "current",
+        "withdrawnAt",
+        "lastObservedAt",
+        "updatedAt",
+        "notes",
+        "dispositionNote",
+        "disposition",
+        "dispositionReason",
+        "accountId",
+        "withdrawalImportId",
+        "supersededByRowId",
+      ] as const;
+      const expectedFacts = await getDb(ctx.db)
+        .select({
+          id: sourceTransactionRecord.shortcode,
+          ...Object.fromEntries(
+            factKeys.map((key) => [key, sourceObservationField(key)]),
+          ),
+          accountId: sql`(SELECT shortcode FROM "FinancialAccount" WHERE id=${sourceObservationField("accountId")})`,
+          withdrawalImportId: sql`(SELECT shortcode FROM "TransactionImport" WHERE id=${sourceObservationField("withdrawalImportId")})`,
+          supersededByRowId: sql`(SELECT shortcode FROM "SourceTransactionRecord" successor WHERE successor.id=${sourceObservationField("supersededByRowId")})`,
+        })
+        .from(sourceTransactionRecord)
+        .where(
+          inArray(
+            sourceTransactionRecord.shortcode,
+            expected.rows.map((row) => row.id),
+          ),
+        );
+      const complete = await sourceTransactionRecordScaffold.get(
+        ctx.db,
+        expectedFacts.map((row) => row.id),
+      );
+      for (const row of expectedFacts) {
+        const expectedValues = new Map(Object.entries(row));
+        const raw = complete.fieldReads?.get(row.id)?.raw;
+        expect(raw).toBeDefined();
+        expect(
+          Object.fromEntries(factKeys.map((key) => [key, raw?.[key]])),
+        ).toEqual(
+          Object.fromEntries(
+            factKeys.map((key) => [key, expectedValues.get(key)]),
+          ),
+        );
+      }
       // Small pages must retain history supplied by observations outside their scope.
       for (
         let pageIndex = 0;

@@ -143,8 +143,8 @@ and retain their behavior checks; passing the helper's own tests proves only tha
   policy-driven removal (`server/generic/removal/repo/`).
   List filtering, sorting, paging, and count share a plain root-table FROM,
   including dashboard counts that reuse list predicates. Remove consuming alias
-  overrides together. Scalar projections omit `load` to retain their two-query
-  selection/count budget.
+  overrides together. The [list read contract](../entities.md#list-reads) owns
+  joined row loaders and the closed-physical-read bypass.
   `load(where, projection)` enriches selected IDs only; never pass list predicates
   or pagination into a relational query. The scaffold restores selected order.
   Page and detail reads share one assembly path:
