@@ -17,50 +17,29 @@ export async function hydrateImageReadProjection<T>(
   preloaded?: ReadonlyMap<string, ImageRepresentations>,
 ): Promise<T> {
   const codes = new Set<string>();
-  function collect<Node>(input: Node): void {
+  const references: { id: string; value: z.infer<typeof record> }[] = [];
+  function visit<Node>(input: Node): Node {
     if (Array.isArray(input)) {
-      input.forEach(collect);
-      return;
-    }
-    // Scalars cannot contain images; avoid allocating schema failures per leaf.
-    if (input === null || typeof input !== "object") return;
-    const object = record.safeParse(input);
-    if (!object.success) return;
-    const reference =
-      "id" in input && "url" in input ? imageReference.safeParse(input) : null;
-    if (reference?.success) codes.add(reference.data.id);
-    Object.values(object.data).forEach(collect);
-  }
-  function visit<Node>(
-    input: Node,
-    representations: ReadonlyMap<string, ImageRepresentations>,
-  ): Node {
-    if (Array.isArray(input)) {
-      // SAFETY: recursive hydration preserves every element and its original shape.
-      return input.map((item) => visit(item, representations)) as Node;
+      // SAFETY: every array element retains its original shape.
+      return input.map(visit) as Node;
     }
     if (input === null || typeof input !== "object") return input;
     const object = record.safeParse(input);
-    if (!object.success) return input; // Date and other non-record values retain their identity.
+    if (!object.success) return input;
     const reference =
       "id" in input && "url" in input ? imageReference.safeParse(input) : null;
-    const hydrated = Object.fromEntries(
-      Object.entries(object.data).map(([key, child]) => [
-        key,
-        visit(child, representations),
-      ]),
-    );
-    // SAFETY: all fields survive; only the optional declared Image representation is added.
-    return (
-      reference?.success && representations.has(reference.data.id)
-        ? {
-            ...hydrated,
-            representations: representations.get(reference.data.id),
-          }
-        : hydrated
-    ) as Node;
+    if (reference?.success) codes.add(reference.data.id);
+    // Parse once into fresh clones; only these clones receive representations.
+    const hydrated = object.data;
+    for (const [key, child] of Object.entries(hydrated))
+      hydrated[key] = visit(child);
+    if (reference?.success) {
+      references.push({ id: reference.data.id, value: hydrated });
+    }
+    // SAFETY: the parsed record retains its fields and recursively hydrated values.
+    return hydrated as Node;
   }
-  collect(value);
+  const hydrated = visit(value);
   if (!codes.size) return value;
   const missing = [...codes].filter((code) => !preloaded?.has(code));
   const representations = new Map(preloaded);
@@ -72,7 +51,9 @@ export async function hydrateImageReadProjection<T>(
       representations.set(code, representation);
     }
   }
-  // SAFETY: the walk preserves every input field and only adds the declared
-  // optional representations projection to valid public Image references.
-  return visit(value, representations) as T;
+  for (const reference of references) {
+    if (representations.has(reference.id))
+      reference.value.representations = representations.get(reference.id);
+  }
+  return hydrated;
 }
