@@ -375,8 +375,8 @@ and retain their behavior checks; passing the helper's own tests proves only tha
   bursts fold through `foldAuditEntries` (`entity/audit-log/audit-log-fold.ts`).
 - Errors and clipboard: `showErrorToast`, `ErrorDisplay`, `copyTextWithToast`.
 - Data: generated query catalog operations, `useActionMutation`,
-  `useUpdateMutation`, `useDeletableConfig`, `useAllEntityRecords`, and
-  `useServerTree` for a tree entity's whole server-nested hierarchy.
+  `useUpdateMutation`, [shared list deletion](../../apps/web/docs/web-ui-reference.md#react-hooks-preventing-infinite-render-loops),
+  `useAllEntityRecords`, and `useServerTree` for a tree entity's whole server-nested hierarchy.
   Cursor-paged operations use `cursorQueryOptions`
   (`integrations/tanstack-query/cursor-query-options.ts`); numeric
   page/offset paging stays on `infiniteQueryOptions`.
