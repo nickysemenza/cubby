@@ -10,6 +10,7 @@ import { getDb } from "~/server/db/helpers";
 import { run, runOperation, runStep } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { updateJobs } from "~/server/generic/jobs/jobs.fixtures";
+import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { withJobFixtureExecution } from "~/server/testing/background-queue";
 import { launchWorkflowRun } from "~/server/workflows/runs/lifecycle";
@@ -364,12 +365,12 @@ describe("step-ledger Runs", () => {
   it("resets the active progress sample immediately on a step retry", async () => {
     const { id, params } = await startRun();
     const pages = scripted(
-      "synthetic-retry",
+      "exif",
       [{ kind: "progress", delta: { done: 1, failed: 1 }, done: true }],
       2,
     );
     await drive(params, [pages.entry]);
-    await retryRunStep(ctx.db, id, "synthetic-retry");
+    await retryRunStep(ctx.db, id, "exif");
     const owner = (await readRun(id))!;
     expect(
       (await getRunLiveProgress(ctx.db, owner.shortcode))!.workProgress!
@@ -639,7 +640,7 @@ describe("step-ledger Runs", () => {
   it("permits the member to retry a failed step on a cancelled Run", async () => {
     const { id, params } = await startRun();
     const broken = scripted(
-      "broken",
+      "exif",
       [
         {
           kind: "progress",
@@ -657,7 +658,7 @@ describe("step-ledger Runs", () => {
       .update(run)
       .set({ status: "failed", failureCode: "user_cancelled" })
       .where(eq(run.id, id));
-    await retryRunStep(ctx.db, id, "broken");
+    await retryRunStep(ctx.db, id, "exif");
     expect(await readRun(id)).toMatchObject({
       status: "running",
       failureCode: null,
@@ -666,7 +667,7 @@ describe("step-ledger Runs", () => {
   });
 
   // Retrying an old pass while another is active must not hit the unique index.
-  it("refuses to retry a maintenance step while another pass is active", async () => {
+  it("preserves a retained maintenance failure when its retry cannot execute", async () => {
     const { id, params } = await startRun();
     const broken = scripted(
       "broken",
@@ -683,11 +684,29 @@ describe("step-ledger Runs", () => {
       1,
     );
     await drive(params, [broken.entry]);
-    await startRun();
+    const active = await startRun();
     await expect(retryRunStep(ctx.db, id, "broken")).rejects.toThrow(
       /is still running or paused; retry this step once it ends/,
     );
     expect((await readRunSteps(ctx.db, id))[0]?.state).toBe("failed");
+    await getDb(ctx.db)
+      .update(run)
+      .set({ status: "completed" })
+      .where(eq(run.id, active.id));
+    const before = {
+      owner: await readRun(id),
+      steps: await readRunSteps(ctx.db, id),
+      jobs: await readJobs(ctx.db, { runId: id }),
+    };
+    // Historical keys must not reopen work that the current plan cannot execute.
+    await expect(retryRunStep(ctx.db, id, "broken")).rejects.toThrow(
+      "This retained step has no current executor; its failures remain preserved.",
+    );
+    expect({
+      owner: await readRun(id),
+      steps: await readRunSteps(ctx.db, id),
+      jobs: await readJobs(ctx.db, { runId: id }),
+    }).toEqual(before);
   });
 
   // Failure mode (review): the error sample holds 20, so a retry that read it

@@ -117,6 +117,9 @@ cancellations remain stopped. Retry failed on a cancelled Sweep step with
 no failed items directs the member to Retry run. Actual failures remain
 retryable without reviving the cancelled remainder.
 A retained step with zero committed pages still retries its full failed roster.
+Retry failed refuses a retained step absent from its Run's current execution
+plan before changing its ledger or launching work. Historical failures and
+references remain available; retry does not re-plan a retired population.
 An explicit Retry run can also reopen a completed execution Job when a failed
 Mail discovery Run retains a valid frozen page. The same Job starts a new
 generation while preserving the Run's input and page; page settlement and mailbox
