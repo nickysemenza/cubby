@@ -4,40 +4,24 @@ This preserves the detailed former web guidance. Load the relevant heading for t
 
 ## React Hooks: Preventing Infinite Render Loops
 
-**CRITICAL**: Never pass inline object literals, arrays, or functions to hooks with dependencies. This creates new references on every render, triggering infinite loops.
+Keep semantically unchanged hook inputs referentially stable. Recreated
+configuration can rerun effects or rebuild cell renderers, losing an open editor.
 
-### Bad (causes infinite re-renders):
+Generated CRUD lists use the shared delete configuration:
 
 ```typescript
-const { table } = useEntityList({
-  deletable: {
-    mutationOptions: (callbacks) =>
-      api.product.delete.mutationOptions(callbacks),
-    entityLabel: "Product",
-    invalidateKeys: [queryKeys.product.list],
-  },
+const list = useEntityList({
+  ...options,
+  entity: "product",
+  deletable: true,
 });
 ```
 
-### Good (stable reference):
-
-```typescript
-const deletableConfig = useDeletableConfig({
-  mutationFn: api.product.delete.mutationOptions,
-  entityLabel: "Product",
-  invalidateKeys: [queryKeys.product.list],
-});
-
-const { table } = useEntityList({
-  deletable: deletableConfig,
-});
-```
-
-**Rule**: If you're passing configuration objects to `useEntityList`, `useMemo`, `useEffect`, or any hook with dependencies, either:
-
-1. Use `useDeletableConfig` helper for deletable configs
-2. Wrap in `useMemo` with proper dependencies
-3. Extract to a stable reference outside the component
+Use `useDeletableConfig` for a custom delete transport and give it a stable
+mutation factory. Calling `entityMutationOptionsFactory(...)` inside render
+creates a new factory on every render and defeats that hook's memoization.
+Other configuration objects use `useMemo` with semantic dependencies, or a
+module constant when they carry no component state.
 
 ### Stable defaults for hook results (guard-enforced)
 
