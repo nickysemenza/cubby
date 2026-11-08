@@ -1,6 +1,7 @@
 import type {
   ListGroupBy,
   ListGroupMargin,
+  ListGroupMetric,
   ListGroupSummary,
 } from "@cubby/schemas/pagination";
 import type { ColumnFiltersState } from "@tanstack/react-table";
@@ -96,6 +97,7 @@ export function groupRootField(context: GroupDrillContext, key: string) {
 
 /** A grouped list's full-population summaries, for layouts that draw no rows. */
 export interface GroupSummaryModel {
+  metrics?: Record<string, ListGroupMetric>;
   groupBy: readonly ListGroupBy[];
   groups: readonly ListGroupSummary[];
   margins: readonly ListGroupMargin[];

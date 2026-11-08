@@ -17,6 +17,7 @@ import { entities } from "~/entity/entities";
 import type { StandardEntity } from "~/entity/entity-contracts";
 import { entityListFor } from "~/entity/entity-list";
 import { identityListConfig } from "~/entity/entity-list/identity-list-config";
+import { ListEvidenceSummary } from "~/entity/entity-list/list-evidence-summary";
 import {
   declaredListReadProjection,
   type ListReadProjection,
@@ -606,7 +607,23 @@ function ServerListBody({
   const footerContent = (
     <ListFooterContent
       list={list}
-      totals={entityMetadata(queryClient, entity).summary.list.totals}
+      totals={entityMetadata(queryClient, entity).summary.list.totals.map(
+        (total) => ({
+          ...total,
+          metricKey:
+            total.keys.length === 1
+              ? entityMetadata(
+                  queryClient,
+                  entity,
+                ).summary.list.evidenceMetrics.find(
+                  (metric) => metric.key === total.keys[0],
+                )?.key
+              : undefined,
+        }),
+      )}
+      evidenceMetrics={
+        entityMetadata(queryClient, entity).summary.list.evidenceMetrics
+      }
       contextualStatus={contextualStatus}
       setStatusTarget={setStatusTarget}
       totalsOverride={parts.footerTotals?.(list)}
@@ -742,6 +759,29 @@ function ServerListBody({
             )}
           {renderedView === PIVOT_VIEW_ID && (
             <EntityPivot
+              metricDefinitions={[
+                ...entityMetadata(queryClient, entity)
+                  .listFields.metrics.filter(
+                    (metric) =>
+                      !entityMetadata(
+                        queryClient,
+                        entity,
+                      ).summary.list.evidenceMetrics.some(
+                        ({ key }) => key === metric.key,
+                      ),
+                  )
+                  .map((metric) => ({
+                    ...metric,
+                    description:
+                      Object.entries(
+                        entityMetadata(queryClient, entity).listFields
+                          .presentation,
+                      ).find(([key]) => key === metric.key)?.[1].description ??
+                      "Each matching record contributes its whole value once per total.",
+                  })),
+                ...entityMetadata(queryClient, entity).summary.list
+                  .evidenceMetrics,
+              ]}
               labels={(listGroupBy(context.search) ?? []).map(
                 (dimension) =>
                   entityMetadata(queryClient, entity).listFields.grouping.find(
@@ -834,12 +874,14 @@ function ListFooterContent({
   contextualStatus,
   setStatusTarget,
   totalsOverride,
+  evidenceMetrics,
 }: {
   list: UseEntityListReturn<BaseListRow>;
   totals: Parameters<typeof ListTotalSummary>[0]["totals"];
   contextualStatus: ReactNode;
   setStatusTarget: (element: HTMLDivElement | null) => void;
   totalsOverride?: ReactNode;
+  evidenceMetrics: Parameters<typeof ListEvidenceSummary>[0]["definitions"];
 }) {
   const showingUnresolved = list.resultMembership === "unresolved";
   const unresolved = list.unresolvedCount ?? 0;
@@ -852,11 +894,12 @@ function ListFooterContent({
     <>
       <div
         data-table-pending={pending ? "" : undefined}
-        className="flex min-w-0 items-center"
+        className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1"
       >
         {totalsOverride ?? (
           <ListTotalSummary
             totals={totals}
+            metrics={list.metrics}
             labels={labelsRef.current}
             failed={list.workbench.error !== null && !list.totalLabels}
             scopeLabel={
@@ -868,6 +911,11 @@ function ListFooterContent({
             }
           />
         )}
+        <ListEvidenceSummary
+          definitions={evidenceMetrics}
+          metrics={list.metrics}
+          failed={list.workbench.error !== null}
+        />
       </div>
       {(showingUnresolved || unresolved > 0) && (
         <div className="flex shrink-0 items-center gap-1">

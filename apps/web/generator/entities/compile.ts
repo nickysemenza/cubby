@@ -2737,6 +2737,7 @@ export const compileEntity = (
       subtree: {},
       grouping: [],
       metrics: [],
+      evidenceMetrics: [],
       scope: [],
       scopes: {},
     },

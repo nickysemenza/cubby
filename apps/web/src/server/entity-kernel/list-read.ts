@@ -175,6 +175,7 @@ export function defineListOperations<
           margins: result.margins,
           memberships: result.memberships,
           membershipCount: result.membershipCount,
+          metrics: result.metrics,
         }),
       };
     },

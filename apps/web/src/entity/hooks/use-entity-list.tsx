@@ -3,6 +3,7 @@ import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import type {
   ListGroupBy,
   ListGroupSummary,
+  ListGroupMetric,
   ListNesting,
   ListResultMembership,
 } from "@cubby/schemas/pagination";
@@ -23,6 +24,10 @@ import {
   withGroupFilters,
 } from "~/entity/entity-list/group-drill-down";
 import { GroupValueLabel } from "~/entity/entity-list/group-value-label";
+import {
+  ListEvidenceSummary,
+  ListMetricValue,
+} from "~/entity/entity-list/list-evidence-summary";
 import {
   listReadNeedsCount,
   listReadVisibility,
@@ -276,6 +281,7 @@ export interface UseEntityListReturn<
   setResultMembership: (membership: ListResultMembership) => void;
   sums: Record<string, number> | undefined;
   totalLabels: Record<string, string> | undefined;
+  metrics: Record<string, ListGroupMetric> | undefined;
   inspection: ReturnType<typeof useEntityPreview>;
   /** Present once a grouped read lands. */
   groupSummary: GroupSummaryModel | undefined;
@@ -714,6 +720,10 @@ export function useEntityList<
         ),
         aside: (
           <>
+            <ListEvidenceSummary
+              definitions={metadata.summary.list.evidenceMetrics}
+              metrics={group.metrics}
+            />
             {group.overlapping && (
               <span
                 className="text-xs text-muted-foreground"
@@ -726,12 +736,19 @@ export function useEntityList<
         ),
         columnTotals: metadata.listFields.metrics.flatMap((metric) => {
           const value = group.metrics?.[metric.key];
+          const evidence = metadata.summary.list.evidenceMetrics.find(
+            ({ key }) => key === metric.key,
+          );
           return value
             ? [
                 {
                   columnId: metric.key,
                   label: metric.label,
-                  node: <GroupMetricValue metric={metric} value={value} />,
+                  node: evidence ? (
+                    <ListMetricValue value={value} format={evidence.format} />
+                  ) : (
+                    <GroupMetricValue metric={metric} value={value} />
+                  ),
                 },
               ]
             : [];
@@ -762,6 +779,7 @@ export function useEntityList<
       groupBy,
       groups,
       margins: infiniteResult.margins ?? [],
+      metrics: infiniteResult.metrics,
       totalCount,
       drillFilters: (path) => groupPathFilters(drill, path),
       drill: (path) => {
@@ -775,6 +793,7 @@ export function useEntityList<
     groupBy,
     groups,
     infiniteResult.margins,
+    infiniteResult.metrics,
     metadata,
     queryClient,
     setColumnFilters,
@@ -1166,6 +1185,7 @@ export function useEntityList<
     totalCount: isLoading ? undefined : totalCount,
     sums,
     totalLabels: infiniteResult.totalLabels,
+    metrics: infiniteResult.metrics,
     unresolvedCount: infiniteResult.unresolvedCount,
     resultMembership,
     setResultMembership,

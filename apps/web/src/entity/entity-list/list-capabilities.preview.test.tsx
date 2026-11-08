@@ -52,7 +52,11 @@ const product = mock(productListItem, {
         entityFieldEnvelopeSchemas.product.list.shape.fields.shape[
           "expenseCount"
         ],
-        1,
+        2,
+      ),
+      expenseTotal: fieldValueFixture(
+        entityFieldEnvelopeSchemas.product.list.shape.fields.shape.expenseTotal,
+        10,
       ),
       purchaseDate: fieldValueFixture(
         entityFieldEnvelopeSchemas.product.list.shape.fields.shape[
@@ -75,6 +79,33 @@ const product = mock(productListItem, {
 });
 
 async function mount(path: string, empty = false, contactSheet = false) {
+  const metrics = {
+    expenseTotal: { sum: 10, presentCount: 2, totalCount: 2, coverage: 1 },
+    sellerSpending: { sum: 12, presentCount: 1, totalCount: 1, coverage: 1 },
+    unattributedSpending: {
+      sum: -2,
+      presentCount: 1,
+      totalCount: 1,
+      coverage: 1,
+    },
+    plannedExpenses: { sum: 0, presentCount: 0, totalCount: 0, coverage: null },
+    reimbursementExpenses: {
+      sum: 0,
+      presentCount: 0,
+      totalCount: 0,
+      coverage: null,
+    },
+  };
+  const sellerCode = testShortcode("vendor", "VEN-4K7M");
+  const groupMetrics = {
+    ...metrics,
+    unattributedSpending: {
+      sum: 0,
+      presentCount: 0,
+      totalCount: 0,
+      coverage: null,
+    },
+  };
   const picturedProduct = {
     ...product,
     id: testShortcode("product", "PRD-8P2N"),
@@ -100,6 +131,45 @@ async function mount(path: string, empty = false, contactSheet = false) {
           pageIndex: 0,
           pageSize: 100,
           totalCount: rows.length,
+          metrics,
+          ...(params.groupBy?.length === 2
+            ? {
+                groups: [
+                  {
+                    key: JSON.stringify(["2025-09-01"]),
+                    path: ["2025-09-01"],
+                    label: "September 2025",
+                    count: 1,
+                    parentCount: 1,
+                    fraction: 1,
+                    overlapping: false,
+                    metrics,
+                  },
+                  {
+                    key: JSON.stringify(["2025-09-01", sellerCode]),
+                    path: ["2025-09-01", sellerCode],
+                    label: "Sample Seller",
+                    count: 1,
+                    parentCount: 1,
+                    fraction: 1,
+                    overlapping: false,
+                    metrics: groupMetrics,
+                  },
+                ],
+                margins: [
+                  {
+                    dimensions: [1],
+                    path: [sellerCode],
+                    count: 1,
+                    metrics: groupMetrics,
+                  },
+                ],
+                memberships: [
+                  { id: product.id, path: ["2025-09-01", sellerCode] },
+                ],
+                membershipCount: 1,
+              }
+            : {}),
         },
       };
     },
@@ -160,6 +230,19 @@ it.each([1440, 402])(
       ),
     );
     expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width);
+    const footer = document.querySelector("[data-list-footer]");
+    if (!(footer instanceof HTMLElement))
+      throw new Error("No list totals footer");
+    expect(within(footer).getByText("Seller spending")).toBeVisible();
+    expect(within(footer).getByText("Unattributed spending")).toBeVisible();
+    fireEvent.click(
+      within(footer).getByRole("button", { name: "Explain these totals" }),
+    );
+    await waitFor(() =>
+      expect(screen.getByText("Contribution details")).toBeVisible(),
+    );
+    expect(screen.getByText("Planned expenses")).toBeVisible();
+    await userEvent.keyboard("{Escape}");
     if (width !== 402) return;
     fireEvent.click(screen.getByRole("button", { name: "Filter" }));
     const filters = await screen.findByRole("dialog", { name: "Filter" });
@@ -452,6 +535,37 @@ it("keeps quality beside identity and emits its server sort", async () => {
       }),
     ),
   );
+  if (!screen.queryByRole("button", { name: /Products view:/i }))
+    fireEvent.click(screen.getByRole("button", { name: "Display" }));
+  fireEvent.click(
+    await screen.findByRole("button", { name: /Products view:/i }),
+  );
+  fireEvent.click(await screen.findByRole("menuitem", { name: "Pivot view" }));
+  await userEvent.keyboard("{Escape}");
+  await userEvent.click(
+    await screen.findByRole("combobox", { name: "Measure" }),
+  );
+  await userEvent.click(
+    await screen.findByRole("option", { name: "Seller spending" }),
+  );
+  const pivot = await screen.findByRole("table", {
+    name: /Purchase date by Sellers/,
+  });
+  expect(
+    within(pivot).getByRole("button", { name: /Seller spending: \$12.00/ }),
+  ).toBeVisible();
+  expect(within(pivot).getAllByText("$12.00").length).toBeGreaterThan(1);
+  await page.viewport(402, 900);
+  await screen.findByRole("link", { name: productName });
+  await waitFor(() => {
+    const sellerHeader = Array.from(
+      document.querySelectorAll("[data-slot=list-section-header]"),
+    ).find((header) => header.textContent?.includes("Sample Seller"));
+    if (!(sellerHeader instanceof HTMLElement))
+      throw new Error("Phone has no Seller section");
+    expect(within(sellerHeader).getByText("Seller spending")).toBeVisible();
+    expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(402);
+  });
 });
 
 // The SQL identity and bulk-write owners retain filtering and persistence.

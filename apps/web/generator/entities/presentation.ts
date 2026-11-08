@@ -1199,6 +1199,7 @@ export const compilePresentation = (
       ],
       viewAliases: list.viewAliases,
       totals: list.totals,
+      evidenceMetrics: list.evidenceMetrics,
       metrics: list.metrics,
       shelf: { subtitle: shelfSubtitle },
       titleSubtitle: list.titleSubtitle,

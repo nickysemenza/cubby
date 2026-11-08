@@ -505,6 +505,12 @@ The Pivot view sends that same request with page size 0 and its `groupBy`,
 reading counts, `meta.groups` and `meta.margins` without rows; it adds no
 summary operation. Its placeholder from earlier filters or dimensions renders
 as loading, never as the current matrix.
+Declared contributor metrics add full-filter `meta.metrics` and metric facts on
+each group and margin, using distinct contributor identities in each scope.
+Pivot's Measure control selects these facts; record counts still determine
+membership and overlap. Signed values retain their sign and unknown amounts
+retain coverage, rather than using count percentages or count heat shading.
+Phones retain the grouped list and the same contribution disclosure.
 When `meta.unresolvedCount` is positive, the displayed count covers known matches;
 the list status strip explains the incomplete count and offers the unresolved
 records under the same filters. Changing `resultMembership` changes the query

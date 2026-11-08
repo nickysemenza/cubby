@@ -66,6 +66,11 @@ export function buildPivot(input: {
   totalCount: number | undefined;
   expandColumns: boolean;
   sort: PivotSort | null;
+  /** Values at their own contributor grain; counts still own overlap/folding. */
+  metricValue?: (
+    dimensions: readonly number[],
+    path: readonly string[],
+  ) => number | null;
 }): PivotModel {
   const margins = new Map(
     input.margins.map((margin) => [
@@ -111,7 +116,16 @@ export function buildPivot(input: {
         0,
       ),
   }));
-  allColumns.sort(byTotal);
+  allColumns.sort((left, right) => {
+    if (!input.metricValue) return byTotal(left, right);
+    const a = input.metricValue([1], [left.key]);
+    const b = input.metricValue([1], [right.key]);
+    return (
+      Number(left.key === FILTER_NONE) - Number(right.key === FILTER_NONE) ||
+      (a === null ? (b === null ? 0 : 1) : b === null ? -1 : b - a) ||
+      left.label.localeCompare(right.label)
+    );
+  });
   const grandTotal =
     input.totalCount ?? rowSummaries.reduce((sum, row) => sum + row.count, 0);
   const columnSum = allColumns.reduce((sum, column) => sum + column.total, 0);
@@ -137,10 +151,26 @@ export function buildPivot(input: {
     return next;
   };
 
-  const sortValue = (row: PivotRow) =>
-    input.sort === null || input.sort.column === TOTAL_COLUMN
+  const sortValue = (row: PivotRow): number | null => {
+    if (input.metricValue) {
+      const root = row.path[0];
+      const child = root !== row.key;
+      const column = input.sort?.column ?? TOTAL_COLUMN;
+      const total = column === TOTAL_COLUMN;
+      return total
+        ? input.metricValue(
+            child ? [0, 2] : [0],
+            child ? [root ?? "", row.key] : [row.key],
+          )
+        : input.metricValue(
+            child ? [0, 1, 2] : [0, 1],
+            child ? [root ?? "", column, row.key] : [row.key, column],
+          );
+    }
+    return input.sort === null || input.sort.column === TOTAL_COLUMN
       ? row.total
       : (row.cells.get(input.sort.column) ?? 0);
+  };
   const orderRows = (rows: PivotRow[]) =>
     rows.sort((left, right) => {
       const none =
@@ -150,7 +180,15 @@ export function buildPivot(input: {
         return (
           left.label.localeCompare(right.label) * (input.sort.desc ? -1 : 1)
         );
-      const difference = sortValue(right) - sortValue(left);
+      const a = sortValue(left);
+      const b = sortValue(right);
+      if (a === null || b === null)
+        return a === b
+          ? left.label.localeCompare(right.label)
+          : a === null
+            ? 1
+            : -1;
+      const difference = b - a;
       return (
         (input.sort && !input.sort.desc ? -difference : difference) ||
         left.label.localeCompare(right.label)

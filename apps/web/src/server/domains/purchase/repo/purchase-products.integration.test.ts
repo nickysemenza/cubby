@@ -475,6 +475,45 @@ describe("purchase ↔ product links", () => {
         if (result.action !== "list") throw new Error("expected list");
         expect(result.meta.totalCount).toBe(2);
         expect(result.meta.membershipCount).toBe(3);
+        expect(result.meta.metrics).toMatchObject({
+          expenseTotal: {
+            sum: -37,
+            presentCount: 10,
+            totalCount: 11,
+            coverage: 10 / 11,
+          },
+          sellerSpending: {
+            sum: 75,
+            presentCount: 6,
+            totalCount: 7,
+            coverage: 6 / 7,
+          },
+          unattributedSpending: { sum: -107, presentCount: 2, totalCount: 2 },
+          plannedExpenses: { sum: 10 },
+          reimbursementExpenses: { sum: -15 },
+        });
+        expect(result.meta.groups).toMatchObject([
+          {
+            path: [firstSeller.output.id],
+            metrics: {
+              sellerSpending: { sum: 100 },
+              unattributedSpending: { sum: 0 },
+            },
+          },
+          {
+            path: [secondSeller.output.id],
+            metrics: {
+              sellerSpending: { sum: -25, presentCount: 4, totalCount: 5 },
+            },
+          },
+          {
+            path: [FILTER_NONE],
+            metrics: {
+              sellerSpending: { sum: 0 },
+              unattributedSpending: { sum: -100 },
+            },
+          },
+        ]);
         memberships.push(...(result.meta.memberships ?? []));
       }
       expect(memberships).toEqual([
@@ -482,6 +521,50 @@ describe("purchase ↔ product links", () => {
         { id: saw.id, path: [secondSeller.output.id] },
         { id: noSeller.id, path: [FILTER_NONE] },
       ]);
+      const crossed = await executeEntity(kernel, {
+        action: "list",
+        entity: "product",
+        filters: { ids: [saw.id, noSeller.id] },
+        groupBy: [
+          { key: "kind" },
+          { key: "sellers" },
+          { key: "related:product.vendors" },
+        ],
+        pagination: { pageIndex: 0, pageSize: 0 },
+      });
+      if (crossed.action !== "list") throw new Error("expected list");
+      expect(crossed.meta.metrics?.sellerSpending?.sum).toBe(75);
+      expect(
+        crossed.meta.groups?.find(({ path }) => path.length === 1)?.metrics,
+      ).toMatchObject({
+        sellerSpending: { sum: 75 },
+        unattributedSpending: { sum: -107 },
+        expenseTotal: { sum: -37 },
+      });
+      expect(
+        crossed.meta.groups?.find(
+          ({ path }) =>
+            path[1] === firstSeller.output.id &&
+            path[2] === secondSeller.output.id,
+        )?.metrics?.sellerSpending?.sum,
+      ).toBe(0);
+      expect(
+        crossed.meta.margins?.find(
+          ({ dimensions, path }) =>
+            dimensions.length === 1 && path[0] === firstSeller.output.id,
+        )?.metrics?.sellerSpending?.sum,
+      ).toBe(100);
+      const ungrouped = await executeEntity(kernel, {
+        action: "list",
+        entity: "product",
+        filters: { ids: [saw.id, noSeller.id] },
+        pagination: { pageIndex: 0, pageSize: 1 },
+      });
+      if (ungrouped.action !== "list") throw new Error("expected list");
+      expect(ungrouped.meta.metrics).toMatchObject({
+        sellerSpending: { sum: 75 },
+        unattributedSpending: { sum: -107 },
+      });
       for (const filters of [
         { sellerId: [firstSeller.output.id] },
         { sellersPresenceFilter: "none" as const },
@@ -500,6 +583,9 @@ describe("purchase ↔ product links", () => {
             ? memberships.slice(0, 2)
             : memberships.slice(2),
         );
+        expect(result.meta.metrics?.sellerSpending?.sum).toBe(
+          "sellerId" in filters ? 75 : 0,
+        );
       }
       await getDb(ctx.db)
         .update(vendor)
@@ -514,6 +600,60 @@ describe("purchase ↔ product links", () => {
       });
       if (surviving.action !== "list") throw new Error("expected list");
       expect(surviving.meta.memberships).toEqual(memberships.slice(0, 1));
+      expect(surviving.meta.metrics).toMatchObject({
+        expenseTotal: { sum: 68, presentCount: 7, totalCount: 8 },
+        sellerSpending: { sum: 100, presentCount: 2, totalCount: 2 },
+        unattributedSpending: { sum: -32, presentCount: 5, totalCount: 6 },
+      });
+      const unpriced = await createProduct(
+        ctx.db,
+        makeProductInput({ name: "Unpriced acquisition" }),
+        ctx.actor,
+      );
+      const unpricedPurchase = await createRepoEntity(ctx, "purchase", {
+        vendorId: firstSeller.output.id,
+        date: "2026-03-04",
+      });
+      await createRepoEntity(
+        ctx,
+        "expense",
+        makeExpenseInput({
+          name: "Unpriced acquired item",
+          productId: unpriced.id,
+          purchaseId: unpricedPurchase.output.id,
+          productQuantity: 1,
+          cost: null,
+          date: "2026-03-04",
+        }),
+      );
+      const unknown = await executeEntity(kernel, {
+        action: "list",
+        entity: "product",
+        filters: { ids: [unpriced.id] },
+        groupBy: [{ key: "sellers" }],
+        pagination: { pageIndex: 0, pageSize: 0 },
+      });
+      if (unknown.action !== "list") throw new Error("expected list");
+      expect(unknown.meta.metrics).toMatchObject({
+        expenseTotal: {
+          sum: null,
+          presentCount: 0,
+          totalCount: 1,
+          coverage: 0,
+        },
+        sellerSpending: {
+          sum: null,
+          presentCount: 0,
+          totalCount: 1,
+          coverage: 0,
+        },
+        unattributedSpending: {
+          sum: 0,
+          presentCount: 0,
+          totalCount: 0,
+          coverage: null,
+        },
+      });
     });
   });
 

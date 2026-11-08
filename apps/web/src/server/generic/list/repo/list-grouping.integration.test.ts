@@ -669,14 +669,14 @@ describe("expanded grouped list memberships", () => {
             path: ["durable"],
             count: 2,
             parentCount: 2,
-            metrics: {
+            metrics: expect.objectContaining({
               expenseTotal: {
                 sum: 10,
-                presentCount: 2,
-                totalCount: 2,
+                presentCount: 1,
+                totalCount: 1,
                 coverage: 1,
               },
-            },
+            }),
           }),
           expect.objectContaining({
             path: ["durable", "A"],
@@ -714,7 +714,7 @@ describe("expanded grouped list memberships", () => {
     expect(
       summary.meta.groups?.filter(({ path }) => path.length === 2),
     ).toHaveLength(3);
-    expect(summary.meta.margins).toEqual([
+    expect(summary.meta.margins).toMatchObject([
       { dimensions: [1], path: ["durable"], count: 2 },
     ]);
   });

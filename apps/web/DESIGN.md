@@ -327,6 +327,15 @@ Supported hidden fields remain available in Sort. The section action reads
 closes only that section. Phone controls keep the base target size and grouped
 list layout.
 
+List money keeps whole-record totals separate from relationship-attributed
+amounts. Compact footers and group rows show Seller spending and Unattributed
+spending; a focusable information control opens contributor definitions,
+coverage, plans and reimbursements. Unknown costs read as Unknown or partial
+beside a known subtotal. Footer facts wrap on phones. Pivot's Measure control
+offers the same declared metrics with signed values and distinct contributor
+totals. Record counts still explain membership and overlap; money does not use
+count percentages or count heat shading.
+
 Pending Suggestion counts sit beside a record's identity as quiet, focusable
 badges that open the shared record review in a popover. Record details host
 that review as a section. Automatic decisions have their own RecordList and detail section, with

@@ -146,6 +146,7 @@ import {
 import { projectProductUnitPriceBatch } from "~/server/domains/product/repo/list-enrichment";
 import { buildNutritionDisplay } from "~/server/domains/product/repo/nutrition-display";
 import { productSellerMembershipsSql } from "~/server/domains/product/repo/product-counterparties";
+import { productSpendingEvidenceSql } from "~/server/domains/product/repo/product-spending";
 import { productSearch as productSearchRead } from "~/server/domains/product/repo/search-read-product";
 import { serviceCategorySql } from "~/server/domains/product/repo/service-category";
 import { loadStoredProductDisplay } from "~/server/domains/product/repo/stored-display";
@@ -290,7 +291,10 @@ export const productScaffold = listScaffold<
   typeof product,
   ProductReadRow
 >("product", product, {
-  rows: { sellerMemberships: productSellerMembershipsSql },
+  rows: {
+    sellerMemberships: productSellerMembershipsSql,
+    spendingEvidence: productSpendingEvidenceSql,
+  },
   derived: {
     location: sql.raw(
       `(SELECT min(l."name") FROM "InventoryEntry" ie ` +
