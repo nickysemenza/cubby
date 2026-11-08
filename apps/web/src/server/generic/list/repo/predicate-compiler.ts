@@ -34,6 +34,7 @@ import { storedDerived } from "~/server/db/derived-declarations";
 import {
   flagCondition,
   formatSearchTerm,
+  householdDayRangeConditions,
   notDeleted,
 } from "~/server/db/helpers";
 import { SHORTCODE_TABLE } from "~/server/generated/shortcode-tables.gen";
@@ -458,16 +459,31 @@ const derivedFilterPredicates = (
           bound.parse(values[from]),
           bound.parse(values[to]),
         ];
+        const timestamp = entityFieldModels[entity]?.fields.some(
+          (model) => model.key === derivedKey && model.kind === "timestamp",
+        );
         return [
           rangeOrPresence(
             // Unbounded reads no value, so an unrequested prepare stays unread.
             low === undefined && high === undefined
               ? undefined
               : test((column) =>
-                  and(
-                    low === undefined ? undefined : sql`${column} >= ${low}`,
-                    high === undefined ? undefined : sql`${column} <= ${high}`,
-                  ),
+                  timestamp && field.type === "date"
+                    ? and(
+                        ...householdDayRangeConditions(
+                          column,
+                          optionalDate.parse(low),
+                          optionalDate.parse(high),
+                        ),
+                      )
+                    : and(
+                        low === undefined
+                          ? undefined
+                          : sql`${column} >= ${low}`,
+                        high === undefined
+                          ? undefined
+                          : sql`${column} <= ${high}`,
+                      ),
                 ),
             descriptor.wire.presence === undefined
               ? undefined

@@ -141,6 +141,7 @@ export const { definition, readSchemas } = defineEntityModel({
     },
   },
   model: {
+    grouping: ["purchaseAssociationReviewed"],
     fields: [
       {
         key: "id",
@@ -449,6 +450,44 @@ export const { definition, readSchemas } = defineEntityModel({
       export: "shipmentFilterFields",
     },
     descriptors: [
+      {
+        columnId: "firstEventDate",
+        label: "First event",
+        kind: "range",
+        deriveSchema: true,
+        derived: true,
+        range: { kind: "date" },
+        wire: {
+          kind: "range",
+          from: "firstEventDateFrom",
+          to: "firstEventDateTo",
+          presence: "firstEventDatePresenceFilter",
+        },
+        placeholder: "Filter by first event...",
+        options: [
+          { value: "has", label: "Has date", meta: true },
+          { value: "none", label: "(none)", meta: true },
+        ],
+      },
+      {
+        columnId: "lastEventDate",
+        label: "Last event",
+        kind: "range",
+        deriveSchema: true,
+        derived: true,
+        range: { kind: "date" },
+        wire: {
+          kind: "range",
+          from: "lastEventDateFrom",
+          to: "lastEventDateTo",
+          presence: "lastEventDatePresenceFilter",
+        },
+        placeholder: "Filter by last event...",
+        options: [
+          { value: "has", label: "Has date", meta: true },
+          { value: "none", label: "(none)", meta: true },
+        ],
+      },
       {
         columnId: "name",
         field: "search",

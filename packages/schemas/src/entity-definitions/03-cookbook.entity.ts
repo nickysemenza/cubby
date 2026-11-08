@@ -300,6 +300,7 @@ export const { definition, readSchemas } = defineEntityModel(
       ],
 
       derived: { recipeCount: { type: "number" } },
+      grouping: ["importedAt"],
       sort: {
         fields: ["name", "recipeCount", "createdAt", "updatedAt"],
       },
@@ -336,6 +337,16 @@ export const { definition, readSchemas } = defineEntityModel(
         export: "cookbookFilterFields",
       },
       descriptors: [
+        {
+          columnId: "importedAt",
+          label: "Imported at",
+          kind: "range",
+          deriveSchema: true,
+          stored: true,
+          range: { kind: "date" },
+          wire: { kind: "range", from: "importedAtFrom", to: "importedAtTo" },
+          placeholder: "Filter by imported at...",
+        },
         {
           columnId: "subjects",
           field: "subjectFilters",

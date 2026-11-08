@@ -895,6 +895,39 @@ export const { definition, readSchemas } = defineEntityModel({
     },
     descriptors: [
       {
+        columnId: "withdrawnAt",
+        label: "Withdrawn at",
+        kind: "range",
+        deriveSchema: true,
+        derived: true,
+        range: { kind: "date" },
+        wire: {
+          kind: "range",
+          from: "withdrawnAtFrom",
+          to: "withdrawnAtTo",
+          presence: "withdrawnAtPresenceFilter",
+        },
+        placeholder: "Filter by withdrawn at...",
+        options: [
+          { value: "has", label: "Has date", meta: true },
+          { value: "none", label: "(none)", meta: true },
+        ],
+      },
+      {
+        columnId: "lastObservedAt",
+        label: "Last observed",
+        kind: "range",
+        deriveSchema: true,
+        derived: true,
+        range: { kind: "date" },
+        wire: {
+          kind: "range",
+          from: "lastObservedAtFrom",
+          to: "lastObservedAtTo",
+        },
+        placeholder: "Filter by last observed...",
+      },
+      {
         columnId: "runStepInput",
         kind: "text",
         label: "Run step input",

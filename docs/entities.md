@@ -1838,8 +1838,8 @@ explicit text fields and related paths. The compiler then infers eligible enum,
 reference, boolean, and calendar-date fields. Generated choices carry their filter, no-value label,
 multivalue capability, ancestor levels, and supported date buckets. Unsupported
 SQL sources remain disabled with a reason; the kernel validates the same
-capabilities for every client. A field omitted from a read projection can still
-be a useful grouping dimension; output policy does not hide its menu choice.
+capabilities for every client. Menu admission is separate from read projections;
+a public date-range backing field can still be a useful grouping dimension.
 Deletion timestamps and duplicate path aliases stay out of the menu while their
 accepted keys remain valid. Derived expressions retain their own key identity,
 even when they have identical option lists.
@@ -1850,6 +1850,13 @@ traversal and drill-down binding; a duplicate `model.derived` alias is not
 required. Equivalent stored-reference and related-path choices share one menu
 entry while retaining accepted keys. Query-backed and external relations do not
 acquire SQL grouping merely because they have a preview.
+Implicit Group menu choices require a public field surface, canonical reference,
+same-field value filter, or the backing bound of a declared date-range field.
+Storage alone does not expose calculation timestamps, leases or override modes.
+An explicit `model.grouping` entry can retain a useful backing choice such as a
+Cookbook import date or Image metadata outcome. Menu admission stays separate
+from accepting stable saved-view keys; hiding an internal choice does not delete
+its data or invalidate an existing grouping.
 Preview-derived grouping reuses the related-view reader's full evidence union,
 view conditions and filter traversal, including explicit links without Expense
 rows. Grouping never reduces a multi-source preview to its first path. Ancestor
@@ -1921,7 +1928,12 @@ The list-field compiler also owns `listFields.presentation`: semantic labels,
 descriptions, entity targets, value types, cardinality and admitted sort, group
 and filter keys with unavailable reasons. Shared web columns and menus consume
 these facts rather than guessing semantics from storage shape. Relationship
-previews contain records; their existing sort follows the first chip in the
+counts retain their record target but expose a scalar numeric value and
+cardinality. A grouping operation owns its own type and target: a repository
+yes/no predicate can share a legacy key with a displayed count. Its grouping
+uses the predicate's scalar shape and presence filter, never array expansion
+based on the count's related-record link. Relationship previews contain records;
+their existing sort follows the first chip in the
 view's declared order and carries that explanation separately. Sort controls offer supported hidden
 columns independently of column visibility.
 
@@ -1940,6 +1952,9 @@ filter column wins. Derived aliases bind drill-down through the same compiled
 relationship path, including a stored reference's equivalent related preview.
 Calendar aliases must match the grouped value's path or declared key: a date
 window's effective deadline filter cannot stand in for its stored start date.
+Public calendar groups declare same-value ranges, including distinct window
+starts and ends. Computed timestamp ranges and their facet bounds use whole
+household-local days through the same helpers as stored timestamps and grouping.
 
 List requests and supplied views use `groupBy: [{ key, level?, bucket? }]`, with
 at most three unique keys in hierarchy order. Empty or omitted means ungrouped.

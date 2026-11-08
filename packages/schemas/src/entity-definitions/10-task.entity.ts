@@ -967,6 +967,7 @@ export const { definition, readSchemas } = defineEntityModel({
       },
       {
         columnId: "dueDate",
+        label: "Due deadline",
         kind: "range",
         wire: {
           kind: "range",
@@ -987,6 +988,64 @@ export const { definition, readSchemas } = defineEntityModel({
           module: "~/entity/filter-behavior",
           export: "resolveTaskDueFilter",
         },
+      },
+      {
+        // The stored due date (a window's start). `dueDate` above filters the
+        // effective deadline, `dueEndDate ?? dueDate`.
+        columnId: "dueStart",
+        label: "Due window start",
+        kind: "range",
+        deriveSchema: true,
+        stored: { columns: ["dueDate"] },
+        range: { kind: "date" },
+        wire: {
+          kind: "range",
+          from: "dueStartFrom",
+          to: "dueStartTo",
+          presence: "dueStartPresenceFilter",
+        },
+        placeholder: "Filter by due window start...",
+        options: [
+          { value: "has", label: "Has due date", meta: true },
+          { value: "none", label: "(none)", meta: true },
+        ],
+      },
+      {
+        columnId: "dueEnd",
+        label: "Due window end",
+        kind: "range",
+        deriveSchema: true,
+        stored: { columns: ["dueEndDate"] },
+        range: { kind: "date" },
+        wire: {
+          kind: "range",
+          from: "dueEndFrom",
+          to: "dueEndTo",
+          presence: "dueEndPresenceFilter",
+        },
+        placeholder: "Filter by due window end...",
+        options: [
+          { value: "has", label: "Has due window end", meta: true },
+          { value: "none", label: "(none)", meta: true },
+        ],
+      },
+      {
+        columnId: "completedOn",
+        label: "Completed on",
+        kind: "range",
+        deriveSchema: true,
+        stored: true,
+        wire: {
+          kind: "range",
+          from: "completedOnFrom",
+          to: "completedOnTo",
+          presence: "completedOnPresenceFilter",
+        },
+        placeholder: "Filter by completion date...",
+        options: [
+          { value: "has", label: "Completed", meta: true },
+          { value: "none", label: "(none)", meta: true },
+        ],
       },
       {
         columnId: "completion",

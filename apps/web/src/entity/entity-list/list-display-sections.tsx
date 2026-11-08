@@ -332,15 +332,15 @@ function ListGroupMenu({ entity }: { entity: BrowserRoutedEntity }) {
                       )
                     }
                   >
-                    {presentation?.target ? (
+                    {presentation?.group.target ? (
                       <EntityIcon
-                        entity={presentation.target}
+                        entity={presentation.group.target}
                         aria-hidden="true"
                         className="size-3.5 shrink-0"
                       />
                     ) : (
                       <ListFieldTypeMark
-                        valueType={presentation?.valueType ?? "text"}
+                        valueType={presentation?.group.valueType ?? "text"}
                       />
                     )}
                     <span className="flex min-w-0 flex-col">

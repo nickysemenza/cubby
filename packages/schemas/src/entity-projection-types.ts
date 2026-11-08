@@ -308,7 +308,10 @@ export type GeneratedListFieldPresentation<E extends string = Entity> = {
   readonly valueType: NonNullable<DeclaredDisplay["value"]>["kind"];
   readonly cardinality: "one" | "many";
   readonly sort: GeneratedListOperation;
-  readonly group: GeneratedListOperation;
+  readonly group: GeneratedListOperation & {
+    readonly valueType: NonNullable<DeclaredDisplay["value"]>["kind"];
+    readonly target: E | null;
+  };
   readonly filter: GeneratedListOperation & { readonly label: string };
 };
 

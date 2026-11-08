@@ -1283,6 +1283,24 @@ export const { definition, readSchemas } = defineEntityModel({
         },
       },
       {
+        columnId: "firstPurchaseDate",
+        label: "First purchase",
+        kind: "range",
+        deriveSchema: true,
+        derived: true,
+        wire: {
+          kind: "range",
+          from: "firstPurchaseDateFrom",
+          to: "firstPurchaseDateTo",
+          presence: "firstPurchaseDatePresenceFilter",
+        },
+        placeholder: "Filter by first purchase...",
+        options: [
+          { value: "has", label: "Has purchase", meta: true },
+          { value: "none", label: "(none)", meta: true },
+        ],
+      },
+      {
         columnId: "mailSearch",
         kind: "multiselect",
         placeholder: "Filter mail search...",

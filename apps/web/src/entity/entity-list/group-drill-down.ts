@@ -77,6 +77,9 @@ export function groupPathFilters(
     } else if (spec.kind === "boolean") {
       if (key !== "true" && key !== "false") return undefined;
       value = key;
+    } else if (spec.kind === "presence") {
+      if (key !== "true" && key !== "false") return undefined;
+      value = key === "true" ? "has" : "none";
     } else {
       value = spec.subtree
         ? withSubtree(

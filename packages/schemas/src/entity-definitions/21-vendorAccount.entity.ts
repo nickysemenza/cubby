@@ -290,6 +290,25 @@ export const { definition, readSchemas } = defineEntityModel({
 
     descriptors: [
       {
+        columnId: "lastRunAt",
+        label: "Last run",
+        kind: "range",
+        deriveSchema: true,
+        derived: true,
+        range: { kind: "date" },
+        wire: {
+          kind: "range",
+          from: "lastRunAtFrom",
+          to: "lastRunAtTo",
+          presence: "lastRunAtPresenceFilter",
+        },
+        placeholder: "Filter by last run...",
+        options: [
+          { value: "has", label: "Has date", meta: true },
+          { value: "none", label: "(none)", meta: true },
+        ],
+      },
+      {
         columnId: "related:vendorAccount.purchases",
         field: "purchaseSearch",
         deriveSchema: true,
