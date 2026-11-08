@@ -745,13 +745,13 @@ export async function continueMailDiscovery(
   }
   // A selected Vendor finishes in this Run; it never fans out to the history lane.
   if (input.controlled) return;
-  if (
-    await yieldToMailDiscoveryRecovery(db, {
-      ledgerPartyId: previous.ledgerPartyId,
-      mailboxId: input.mailboxId,
-    })
-  )
-    return;
+  const target = {
+    ledgerPartyId: previous.ledgerPartyId,
+    mailboxId: input.mailboxId,
+  };
+  // The retained funding owner admits the next pass after capacity returns.
+  if (await fundingPausedDiscovery(db, target, "paused_auth")) return;
+  if (await yieldToMailDiscoveryRecovery(db, target)) return;
   const clientKey = `mailbox-continuation:${previous.id}`;
   const [existing] = await getDb(db)
     .select()

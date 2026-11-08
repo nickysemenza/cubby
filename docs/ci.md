@@ -550,6 +550,11 @@ secrets are inherited. The Sentry plugin still names and uploads the build's
 maps as `cubby@<short SHA>` with `inject: false`, matching the runtime release. The Cloudflare Vite plugin v2 builds this
 output from `cloudflare.config.ts`. It checks
 current main before building and again after migration, before deployment.
+These checks let a stale run finish successfully without publishing. Before
+production acceptance, verify the actual Worker upload, trigger deployment and
+published version in the logs for a commit containing the change. If the run
+was skipped as stale, follow the newer release; a green workflow alone does
+not prove publication.
 Keep build, migration and deployment as named steps in the existing action;
 avoid standalone wrappers and multi-operation command inputs.
 Migration failure blocks deployment. The migration and deploy share the existing
