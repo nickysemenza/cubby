@@ -206,7 +206,7 @@ describe("resolveDateRange", () => {
         ),
       ).toEqual({
         projectId: [projectId],
-        ...(subtree ? { includeSubProjects: true } : {}),
+        ...(subtree ? { projectIdIncludeDescendants: true } : {}),
       });
     }
   });

@@ -630,19 +630,19 @@ describe("expanded grouped list memberships", () => {
       { key: projectRoot.output.id, count: 1, subtree: true },
       { key: FILTER_NONE, count: 1 },
     ]);
-    for (const includeSubProjects of [undefined, false, true]) {
+    for (const includeDescendants of [undefined, false, true]) {
       const drilled = await executeEntity(kernel(), {
         action: "list",
         entity: "product",
         filters: {
           ids: [first.id, second.id],
           projectId: [projectRoot.output.id],
-          includeSubProjects,
+          projectIdIncludeDescendants: includeDescendants,
         },
       });
       if (drilled.action !== "list") throw new Error("expected list");
       expect(drilled.items.map((row) => row.id)).toEqual(
-        includeSubProjects ? [first.id] : [],
+        includeDescendants ? [first.id] : [],
       );
     }
     const knownParty = await createRepoEntity(ctx, "ledgerParty", {

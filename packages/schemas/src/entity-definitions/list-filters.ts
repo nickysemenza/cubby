@@ -152,7 +152,7 @@ export interface FilterSpecCore {
  * instead, so the runtime input schemas never see them.
  */
 // Hierarchy modes use the toggle's own URL key instead of entering its value
-// list (`includeSubLocations=false`, `includeSubProjects=true`).
+// list (`includeSubLocations=false`, `projectIdIncludeDescendants=true`).
 export {
   FILTER_ALL,
   FILTER_ANY,
@@ -618,12 +618,13 @@ export function encodeFilters(
       : undefined;
     if (exclude)
       params[exclude] = excluded.length ? joinFilterList(excluded) : undefined;
-    if (spec.subtree)
-      params[spec.subtree] =
+    if (spec.subtree) {
+      const explicit =
         subtree !== (spec.subtreeDefault !== false) &&
-        (values.length || excluded.length)
-          ? String(subtree)
-          : undefined;
+        (values.length || excluded.length);
+      if (explicit) params[spec.subtree] = String(subtree);
+      else if (!(spec.subtree in params)) params[spec.subtree] = undefined;
+    }
   }
   return params;
 }

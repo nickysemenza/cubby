@@ -802,6 +802,39 @@ describe("compileFilterCodec", () => {
     expect(
       buildFiltersFromManifest(exactSpecs, getter({ parent: ["SCAT-4K7M"] })),
     ).toEqual({ parent: ["SCAT-4K7M"] });
+    const independent = [
+      { columnId: "parent", kind: "idMulti", subtree: "includeSubCategories" },
+      {
+        columnId: "related",
+        kind: "idMulti",
+        subtree: "relatedIncludeDescendants",
+        subtreeDefault: false,
+      },
+    ] as const;
+    const mixedModes = [
+      { id: "parent", value: ["SCAT-4K7M", FILTER_EXACT] },
+      { id: "related", value: ["SCAT-8P2N", FILTER_SUBTREE] },
+    ];
+    const independentCodec = compileFilterCodec(independent);
+    const encoded = independentCodec.encode(
+      filterGetterFromColumnFilters(mixedModes),
+    );
+    expect(encoded).toEqual({
+      parent: "SCAT-4K7M",
+      includeSubCategories: "false",
+      related: "SCAT-8P2N",
+      relatedIncludeDescendants: "true",
+    });
+    expect(independentCodec.decode(encoded)).toEqual(mixedModes);
+    expect(
+      encodeFilters(
+        [
+          independent[0],
+          { ...independent[1], subtree: "includeSubCategories" },
+        ],
+        getter({ parent: ["SCAT-4K7M", FILTER_EXACT], related: ["SCAT-8P2N"] }),
+      ),
+    ).toMatchObject({ includeSubCategories: "false" });
   });
 
   it("keeps a folded toggle when its standalone descriptor is also encoded", () => {

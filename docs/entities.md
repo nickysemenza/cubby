@@ -3088,7 +3088,10 @@ adds a boolean `includeSub<Plural>` toggle descriptor ("Include sub-…") for
 each such filter; absent reads as on, and `false` limits the filter to the
 selected records for existing stored, derived and predicate bindings. Previously
 exact declared references and related-view filters retain an exact default;
-`true` explicitly includes descendants. The compiled subtree binding owns both
+`true` explicitly includes descendants. New exact relationships own separate
+`<filterKey>IncludeDescendants` parameters, so choosing one relationship's mode
+cannot overwrite another's. Existing target-wide parameter keys stay intact.
+The compiled subtree binding owns both
 the parameter key and default. Browser state uses explicit exact/subtree mode
 tokens only when overriding that default, and URL codecs round-trip the boolean
 under its own key. Ancestor section/Pivot drill-downs request descendants;

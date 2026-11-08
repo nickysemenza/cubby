@@ -798,8 +798,16 @@ const compatibleKinds = (
   }
 };
 
-const toggleDescriptor = (target: CompiledEntity): FilterDescriptor => {
-  const key = `includeSub${pascal(pluralOf(target))}`;
+const toggleDescriptor = (
+  target: CompiledEntity,
+  owner: FilterDescriptor,
+  defaultValue: boolean,
+): FilterDescriptor => {
+  // Existing target-wide keys retain their contract. New exact filters own
+  // distinct keys so independent relationship modes can round-trip together.
+  const key = defaultValue
+    ? `includeSub${pascal(pluralOf(target))}`
+    : `${owner.field ?? owner.columnId}IncludeDescendants`;
   const label = `Include sub-${pluralOf(target).toLowerCase()}`;
   return {
     columnId: key,
@@ -811,7 +819,7 @@ const toggleDescriptor = (target: CompiledEntity): FilterDescriptor => {
     optionsRef: null,
     optionsKey: null,
     label,
-    schemaDescription: `Include records under each selected ${target.inspector.singular.toLowerCase()}; the selected filter owns its default.`,
+    schemaDescription: `Include live descendants for ${filterFieldLabel(owner).toLowerCase()}. Defaults to ${defaultValue}; false matches only selected records.`,
     deriveSchema: true,
     schemaFromRead: false,
     brandRef: null,
@@ -1961,7 +1969,7 @@ export const compileListFields = (
       const subtreeDefault =
         referenced !== null &&
         (bound !== undefined || descriptor.stored !== null);
-      const toggle = toggleDescriptor(target);
+      const toggle = toggleDescriptor(target, descriptor, subtreeDefault);
       subtree[descriptor.field ?? descriptor.columnId] = {
         key: toggle.columnId,
         default: subtreeDefault,
@@ -1970,6 +1978,14 @@ export const compileListFields = (
         ...descriptor,
         subtree: toggle.columnId,
         ...(subtreeDefault ? {} : { subtreeDefault: false }),
+        schemaDescription: [
+          descriptor.schemaDescription,
+          subtreeDefault
+            ? `Includes selected ${pluralOf(target).toLowerCase()} and their live descendants by default. Set ${toggle.columnId} to false to match only selected records.`
+            : `Matches only selected ${pluralOf(target).toLowerCase()} by default. Set ${toggle.columnId} to true to include their live descendants.`,
+        ]
+          .filter(Boolean)
+          .join(" "),
       };
       if (!toggles.some(({ columnId }) => columnId === toggle.columnId))
         toggles.push(toggle);
