@@ -47,6 +47,7 @@ import {
   locationSearch,
 } from "~/server/domains/location/repo/crud";
 import { buildLocationTree } from "~/server/domains/location/repo/tree";
+import { productScaffold } from "~/server/domains/product/repo/crud";
 import {
   recordSourceTransactionRecords,
   updateSourceTransactionRecords,
@@ -1954,6 +1955,23 @@ describe("entity display image resolver", () => {
       const key = entityRefKey("product", owner.entityId);
       const original = getR2PublicUrl(cover.key);
       const transparent = getR2PublicUrl(derivativeKey);
+      const assertProductCover = async (expected: string) => {
+        for (const projection of [
+          ["id", "coverImageUrl"],
+          ["id", "coverImageUrl", "displayImages", "images", "labelImages"],
+        ]) {
+          const result = await productScaffold.get(
+            ctx.db,
+            [owner.id],
+            projection,
+            undefined,
+            { includeFieldReads: false },
+          );
+          expect(result.data).toHaveLength(1);
+          expect(result.data[0]?.coverImageUrl).toBe(expected);
+        }
+      };
+      await assertProductCover(transparent);
 
       expect((await resolveEntityDisplayImages(ctx.db, ref)).get(key)).toEqual({
         url: transparent,
@@ -1969,6 +1987,7 @@ describe("entity display image resolver", () => {
         .update(image)
         .set({ useOriginal: true })
         .where(eq(image.id, cover.id));
+      await assertProductCover(original);
       expect((await resolveEntityDisplayImages(ctx.db, ref)).get(key)).toEqual({
         url: original,
         representations: {
@@ -1983,6 +2002,7 @@ describe("entity display image resolver", () => {
         .update(image)
         .set({ useOriginal: false, sha256: "c".repeat(64) })
         .where(eq(image.id, cover.id));
+      await assertProductCover(original);
       expect((await resolveEntityDisplayImages(ctx.db, ref)).get(key)).toEqual(
         expectedImageUrl(cover),
       );

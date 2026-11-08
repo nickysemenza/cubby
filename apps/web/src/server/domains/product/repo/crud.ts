@@ -693,8 +693,13 @@ export const productScaffold = listScaffold<
           throw new Error("Product food binding omitted a selected row");
         return value;
       };
-      const covers = bind.ids(({ db, ids }) =>
-        getProductCoverImageUrlsByProductIds(db, productIds(ids)),
+      const covers = bind.ids(async ({ db, ids, projection }) =>
+        // Full media already resolves the same ranked cover before bindings run.
+        ["displayImages", "images", "labelImages"].some((key) =>
+          projection.includes(key),
+        )
+          ? undefined
+          : getProductCoverImageUrlsByProductIds(db, productIds(ids)),
       );
       const servingAsLocations = bind.ids(async ({ db, ids }) => {
         const rows = await unwrapDb(db).query.location.findMany({
@@ -983,7 +988,16 @@ export const productScaffold = listScaffold<
         ),
         covers.fields(
           rawProductDetail.pick({ coverImageUrl: true }),
-          (row, loaded) => ({ coverImageUrl: loaded.get(row.id) ?? null }),
+          (row, loaded, { displayImages }) => {
+            if (loaded !== undefined)
+              return { coverImageUrl: loaded.get(row.id) ?? null };
+            if (displayImages === undefined)
+              throw new Error(
+                "Product cover requires its resolved display images",
+              );
+            const cover = displayImages[0];
+            return { coverImageUrl: cover ? preferredImageUrl(cover) : null };
+          },
           { scope: "detail" },
         ),
         servingAsLocations.fields(
