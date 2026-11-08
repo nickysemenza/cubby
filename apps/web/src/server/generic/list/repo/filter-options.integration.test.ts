@@ -414,5 +414,29 @@ describe("tag filter options", () => {
       { id: "m18", label: "m18", count: 2 },
       { id: "m12", label: "m12", count: 1 },
     ]);
+    await createLocation(
+      ctx.db,
+      buildEntity("location", {
+        name: "Tagged shelf",
+        tags: [" m18 ", "m18", " "],
+      }),
+      TEST_ACTOR,
+    );
+    await createLocation(
+      ctx.db,
+      buildEntity("location", { name: "Tagged box", tags: ["m12"] }),
+      TEST_ACTOR,
+    );
+    const locations = await getFilterOptions(ctx.db, {
+      source: "tags",
+      entity: "location",
+      search: "",
+      selectedIds: [],
+      limit: 1000,
+    });
+    expect(locations.items).toEqual([
+      { id: "m12", label: "m12", count: 1 },
+      { id: "m18", label: "m18", count: 1 },
+    ]);
   });
 });

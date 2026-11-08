@@ -3143,6 +3143,19 @@ predicate. This preserves positive selections, including a missing-only selectio
 that becomes empty. Row sets can match both Has and No value; switching to Has
 cannot exclude their missing-value group. Each excluded value and missing-value
 predicate is negated separately, so a matching record disappears from every group.
+Nullable stored flags expose the same presence companion: false matches false,
+and No value matches an undecided value. The shared filter picker keeps those
+choices distinct; grouped drill-down writes the presence key for No value.
+Required references also gain a presence companion when their target supports
+soft deletion. A retained foreign key to a deleted target belongs to No value,
+matching the existing live-reference SQL and group memberships.
+An id filter can declare `subtreeParam` to own its descendant mode independently
+of another filter targeting the same hierarchy. Existing keys keep their defaults.
+Public enum groups reuse their exact filter's labels when the field has no
+authored value labels. Tag rosters load from the declared `optionsKey: "tags"`
+on opening a filter, including embedded lists. Product and Location rosters
+count distinct records. Grouping, array predicates and those rosters trim the
+same whitespace and omit blank values without rewriting stored tags.
 
 ### Background derived data
 

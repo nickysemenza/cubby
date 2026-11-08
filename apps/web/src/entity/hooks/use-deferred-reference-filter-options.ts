@@ -1,4 +1,8 @@
 import { type BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
+import {
+  tagFilterEntity,
+  type FilterOptionsInput,
+} from "@cubby/schemas/filter-options";
 import { relatedViewKeySchema } from "@cubby/schemas/related-view";
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import { useQueryClient } from "@tanstack/react-query";
@@ -20,8 +24,8 @@ import { entityFilterOptions } from "~/integrations/tanstack-query/generated/dom
 import type { RuntimeFilterOptions } from "~/ui/combobox/filter-option-types";
 
 /**
- * Generic live rosters for every manifest entity-reference filter, including
- * one with an `optionsKey` its list's caller may not supply.
+ * Live rosters for declared reference and tag filters, including embedded
+ * lists whose callers supply no runtime options.
  */
 export function useDeferredReferenceFilterOptions(
   entity: BrowserRoutedEntity,
@@ -29,7 +33,12 @@ export function useDeferredReferenceFilterOptions(
   const queryClient = useQueryClient();
   const references = useMemo(
     () =>
-      getEntityFilters(queryClient, entity).flatMap((spec) => {
+      getEntityFilters(queryClient, entity).flatMap<
+        DeferredEntityRoster | DeferredTagRoster
+      >((spec) => {
+        const tagEntity = tagFilterEntity.safeParse(entity);
+        if (spec.optionsKey === "tags" && tagEntity.success)
+          return [{ key: "tags", target: tagEntity.data, tags: true }];
         if (!spec.referenceEntity) return [];
         const key = referenceFilterOptionsKey(spec);
         return key
@@ -68,6 +77,7 @@ const rosterResults = (
   }));
 
 export type DeferredEntityRoster = {
+  tags?: never;
   key: string;
   target: BrowserRoutedEntity;
   relationKey?: string;
@@ -77,10 +87,18 @@ export type DeferredEntityRoster = {
     | "locationIdentityProduct";
 };
 
+type DeferredTagRoster = {
+  key: string;
+  target: Extract<FilterOptionsInput, { source: "tags" }>["entity"];
+  tags: true;
+  relationKey?: never;
+  optionsKind?: never;
+};
+
 /** Live, searchable shortcode rosters fetched only once their filter opens.
  * `references` must be stable (a module constant or memoized value). */
 export function useDeferredEntityRosters(
-  references: readonly DeferredEntityRoster[],
+  references: readonly (DeferredEntityRoster | DeferredTagRoster)[],
 ): RuntimeFilterOptions {
   const [active, setActive] = useState<Record<string, boolean>>({});
   const [search, setSearch] = useState<Record<string, string>>({});
@@ -116,20 +134,22 @@ export function useDeferredEntityRosters(
   );
   const queries = useQueries({
     queries: requests.map(
-      ({ key, target, optionsKind, relationKey, cursor, selection }) => ({
+      ({ key, target, tags, optionsKind, relationKey, cursor, selection }) => ({
         ...entityFilterOptions.filterOptions.queryOptions({
-          ...(relationKey
-            ? {
-                source: "relation" as const,
-                relationKey: relatedViewKeySchema.parse(relationKey),
-              }
-            : optionsKind
-              ? { source: "kind" as const, kind: optionsKind }
-              : {
-                  source: "entity" as const,
-                  entity: target,
-                  include: ["emoji" as const],
-                }),
+          ...(tags
+            ? { source: "tags" as const, entity: target }
+            : relationKey
+              ? {
+                  source: "relation" as const,
+                  relationKey: relatedViewKeySchema.parse(relationKey),
+                }
+              : optionsKind
+                ? { source: "kind" as const, kind: optionsKind }
+                : {
+                    source: "entity" as const,
+                    entity: target,
+                    include: ["emoji" as const],
+                  }),
           search: selection ? "" : (debouncedSearch[key] ?? ""),
           selectedIds: selection ? [...(selected[key] ?? [])] : [],
           cursor,
@@ -207,18 +227,20 @@ export function useDeferredEntityRosters(
   );
   const inheritedImages = useEntityDisplayImageMap();
   const images = useEntityDisplayImages(
-    references.flatMap(({ target }, index) =>
-      (rosters[index]?.items ?? []).map((item) => ({
-        entityKind: target,
-        entityId: item.id,
-      })),
+    references.flatMap(({ target, tags }, index) =>
+      tags
+        ? []
+        : (rosters[index]?.items ?? []).map((item) => ({
+            entityKind: target,
+            entityId: item.id,
+          })),
     ),
     inheritedImages,
   );
   return useMemo(
     () =>
       Object.fromEntries(
-        references.map(({ key, target }, index) => {
+        references.map(({ key, target, tags }, index) => {
           const roster = rosters[index];
           const searching =
             (search[key] ?? "") !== (debouncedSearch[key] ?? "");
@@ -231,16 +253,25 @@ export function useDeferredEntityRosters(
             {
               options:
                 roster?.items.map((item) =>
-                  recordFilterOption(
-                    target,
-                    item,
-                    images[
-                      entityDisplayImageKey({
-                        entityKind: target,
-                        entityId: item.id,
-                      })
-                    ] ?? null,
-                  ),
+                  tags
+                    ? {
+                        value: item.id,
+                        label: item.label,
+                        hint:
+                          item.count === undefined
+                            ? undefined
+                            : String(item.count),
+                      }
+                    : recordFilterOption(
+                        target,
+                        item,
+                        images[
+                          entityDisplayImageKey({
+                            entityKind: target,
+                            entityId: item.id,
+                          })
+                        ] ?? null,
+                      ),
                 ) ?? [],
               onActivate: (selectedIds?: readonly string[]) =>
                 activate(key, selectedIds),
@@ -280,7 +311,7 @@ export function useDeferredEntityRosters(
                       };
                 });
               },
-              ...(isPickerEntity(target)
+              ...(!tags && isPickerEntity(target)
                 ? { records: recordSource(target) }
                 : {}),
             },

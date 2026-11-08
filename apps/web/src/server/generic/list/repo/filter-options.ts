@@ -27,6 +27,7 @@ import { formatCalendarDay } from "~/lib/date-format";
 import type { Database } from "~/server/db";
 import { stockOnly } from "~/server/db/computed/inventory-placement";
 import { productBrandNameSql } from "~/server/db/computed/product-brand-sql";
+import { nonEmptyTextValuesSql } from "~/server/db/computed/text-whitespace";
 import { formatSearchTerm, getDb, notDeleted } from "~/server/db/helpers";
 import {
   ingredient,
@@ -37,7 +38,6 @@ import {
   vendor,
 } from "~/server/db/schema";
 import { loadLocationAncestors } from "~/server/domains/location/repo/tree";
-import { getProductTagOptions } from "~/server/domains/product/repo/analytics";
 import { projectNameOptions } from "~/server/domains/project/repo/lookup";
 import { getAllTags as getAllRecipeTags } from "~/server/domains/recipe/repo/queries";
 import { resolveEntityDisplayImages } from "~/server/entity-kernel/repo/entity-display-image";
@@ -411,9 +411,9 @@ async function withProjectDates(
 }
 
 /**
- * Recipe/product tag rosters share no table or shortcode with the `entity`
+ * Tag rosters share no shortcode with the `entity`
  * source: they're a distinct list folded from a free-text array column, not
- * a scanned reference table. Loaded whole (both are small, personal-household
+ * a scanned reference table. Loaded whole (these are small, personal-household
  * vocabularies — see `getAllTags`/`getProductTagOptions`) and paginated/
  * filtered in memory, same cursor contract as every other source.
  */
@@ -427,7 +427,18 @@ async function loadTagRows(
     const tags = await getAllRecipeTags(db);
     return tags.map((tag) => ({ id: tag, label: tag }));
   }
-  const tags = await getProductTagOptions(db);
+  const table = SHORTCODE_TABLE[input.entity];
+  const tagsColumn = getTableColumns(table).tags;
+  if (!tagsColumn) throw new Error(`${input.entity} has no stored tags column`);
+  const tags = await getDb(db)
+    .select({
+      tag: sql<string>`tag`,
+      count: sql<number>`count(DISTINCT ${table.id})::int`,
+    })
+    .from(sql`${table}, unnest(${nonEmptyTextValuesSql(tagsColumn)}) AS tag`)
+    .where(notDeleted(table))
+    .groupBy(sql`tag`)
+    .orderBy(sql`count(DISTINCT ${table.id}) DESC, tag ASC`);
   return tags.map(({ tag, count }) => ({ id: tag, label: tag, count }));
 }
 

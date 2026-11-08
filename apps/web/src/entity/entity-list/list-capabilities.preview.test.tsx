@@ -1,4 +1,5 @@
 import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
+import { filterOptionsInput } from "@cubby/schemas/filter-options";
 import { FILTER_NONE } from "@cubby/schemas/filter-sentinel-fields";
 import { testShortcode } from "@cubby/schemas/testing";
 import {
@@ -26,7 +27,10 @@ import type { ListQueryOptionsFn } from "~/entity/table/use-paginated-table-core
 
 installFeatures();
 let harness: ReturnType<typeof createBrowserTestHarness> | undefined;
+let restoreOptions: (() => void) | undefined;
 afterEach(() => {
+  restoreOptions?.();
+  restoreOptions = undefined;
   harness?.dispose();
   harness = undefined;
 });
@@ -184,10 +188,28 @@ async function mount(path: string, empty = false, contactSheet = false) {
     initialPath: path,
     route: { path: "/products", component: Page },
   });
+  const optionRequests: object[] = [];
+  restoreOptions = overrideOperationDispatch(async (operation, input) => {
+    if (operation !== "entity.filterOptions")
+      throw new Error(`Unexpected option operation ${operation}`);
+    const request = filterOptionsInput.parse(input);
+    optionRequests.push(request);
+    return {
+      ok: true,
+      data: {
+        items:
+          request.source === "tags"
+            ? [{ id: "workshop", label: "workshop", count: 1 }]
+            : [],
+        nextCursor: null,
+      },
+    };
+  });
   await harness.loadRouter();
   render(<div />, { wrapper: harness.routerWrapper });
   return {
     requests,
+    optionRequests,
     showProduct: () => {
       rows = [product];
     },
@@ -270,6 +292,49 @@ it.each([1440, 402])(
       await screen.findByRole("button", { name: /^Filter(?: \d+)?$/ }),
     );
     let reopened = await screen.findByRole("dialog", { name: "Filter" });
+    const flag = within(reopened).getByRole("button", {
+      name: "Stock tracking decision",
+    });
+    expect(flag).toHaveTextContent("yes / no / missing");
+    fireEvent.click(flag);
+    const flagEditor = await screen.findByRole("dialog", {
+      name: "Filter by Stock tracking decision",
+    });
+    fireEvent.click(await within(flagEditor).findByText("No value"));
+    await waitFor(() =>
+      expect(state.requests).toContainEqual(
+        expect.objectContaining({
+          filters: expect.objectContaining({
+            stockTrackedDecisionPresenceFilter: "none",
+          }),
+        }),
+      ),
+    );
+    fireEvent.click(within(flagEditor).getByRole("button", { name: "Close" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: /^Filter(?: \d+)?$/ }),
+    );
+    reopened = await screen.findByRole("dialog", { name: "Filter" });
+    fireEvent.click(within(reopened).getByRole("button", { name: "Tags" }));
+    const tagEditor = await screen.findByRole("dialog", {
+      name: "Filter by Tags",
+    });
+    fireEvent.click(await within(tagEditor).findByText("workshop"));
+    await waitFor(() =>
+      expect(state.requests).toContainEqual(
+        expect.objectContaining({
+          filters: expect.objectContaining({ tagFilters: ["workshop"] }),
+        }),
+      ),
+    );
+    expect(state.optionRequests).toContainEqual(
+      expect.objectContaining({ source: "tags", entity: "product" }),
+    );
+    fireEvent.click(within(tagEditor).getByRole("button", { name: "Close" }));
+    fireEvent.click(
+      await screen.findByRole("button", { name: /^Filter(?: \d+)?$/ }),
+    );
+    reopened = await screen.findByRole("dialog", { name: "Filter" });
     fireEvent.click(within(reopened).getByRole("button", { name: "Projects" }));
     const projectEditor = await screen.findByRole("dialog", {
       name: "Filter by Projects",

@@ -598,12 +598,13 @@ function TypedValuesEditor({
   );
 }
 
-/** Any | Yes | No: a boolean or presence filter holds one value or none. */
+/** Nullable flags use the full picker so missing stays distinct from false. */
 const ANY_SEGMENT = "*any";
 
 const isTriState = (field: FilterBarField): boolean =>
   (field.valueType === "boolean" || field.valueType === "presence") &&
   field.type === "select" &&
+  !(field.options ?? []).some((option) => option.value === FILTER_NONE) &&
   (field.options ?? []).filter((option) => !option.meta).length === 2;
 
 function TriStateEditor({ field, filter, setValues, clear }: FieldEditorProps) {
@@ -963,7 +964,9 @@ function filterTypeLabel(field: FilterBarField): string {
   if (field.dateRange) return "date range";
   if (field.numberRange) return "number range";
   if (field.valueType === "boolean" || field.valueType === "presence")
-    return "yes / no";
+    return (field.options ?? []).some((option) => option.value === FILTER_NONE)
+      ? "yes / no / missing"
+      : "yes / no";
   if (field.presentation) return listFieldTypeLabel(field.presentation);
   if (field.referenceEntity) return "record";
   return {

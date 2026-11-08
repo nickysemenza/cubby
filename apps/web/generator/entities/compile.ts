@@ -1484,8 +1484,13 @@ const storedPresence = (
     throw new EntityDeclarationError(
       `${context} is compiled, so its Any value / No value key is generated; remove nullable.`,
     );
-  if (kind !== "multiselect" && kind !== "idMulti") return null;
   const field = storage.find(({ key }) => key === stored.columns[0]);
+  if (
+    kind !== "multiselect" &&
+    kind !== "idMulti" &&
+    !(kind === "boolean" && field?.kind === "boolean")
+  )
+    return null;
   return field?.nullable || field?.kind === "text-array"
     ? { field: `${value.columnId}PresenceFilter`, label: label.toLowerCase() }
     : null;
@@ -1586,7 +1591,7 @@ const filterDescriptor = (
     // it can match all of the picked ones.
     match: stored?.array ? { field: `${value.columnId}Match` } : null,
     exclude: null,
-    subtree: null,
+    subtree: value.subtreeParam ?? null,
     currentMember: value.currentMember === true,
     singleValue: value.singleValue?.reason ?? null,
     exclusiveGroup: value.singleValue?.group ?? null,
@@ -2098,7 +2103,11 @@ const validateSavedViews = (
           throw new EntityDeclarationError(
             `${where} pins ${filter.id}=${value}; a presence filter holds "has" or "none".`,
           );
-        if (descriptor.kind === "boolean" && !["true", "false"].includes(value))
+        if (
+          descriptor.kind === "boolean" &&
+          !["true", "false"].includes(value) &&
+          !(descriptor.nullable !== null && SENTINELS.has(value))
+        )
           throw new EntityDeclarationError(
             `${where} pins ${filter.id}=${value}; a boolean filter holds "true" or "false".`,
           );

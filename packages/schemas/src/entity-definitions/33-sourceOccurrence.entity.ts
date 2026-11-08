@@ -363,6 +363,22 @@ export const { definition, readSchemas } = defineEntityModel(
       audit: true,
       descriptors: [
         {
+          columnId: "physicalImportId",
+          label: "Physical import",
+          kind: "idMulti",
+          deriveSchema: true,
+          brandRef: { entity: "transactionImport" },
+          placeholder: "Filter by physical import...",
+        },
+        {
+          columnId: "currentObservationId",
+          label: "Current observation",
+          kind: "idMulti",
+          deriveSchema: true,
+          brandRef: { entity: "sourceTransactionRecord" },
+          placeholder: "Filter by current observation...",
+        },
+        {
           columnId: "identityKind",
           kind: "multiselect",
           deriveSchema: true,

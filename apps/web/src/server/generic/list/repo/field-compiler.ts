@@ -34,7 +34,10 @@ import {
   effectiveFieldSql,
   inheritedFieldOfColumn,
 } from "~/server/db/computed/effective-field";
-import { trimTextSql } from "~/server/db/computed/text-whitespace";
+import {
+  trimTextSql,
+  nonEmptyTextValuesSql,
+} from "~/server/db/computed/text-whitespace";
 import { unwrapDb } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { householdDaySql, uuidArrayParam } from "~/server/db/helpers/query";
@@ -1250,7 +1253,7 @@ export const groupSql = (
           label: null,
           order: ["key"],
           subtree: null,
-          members: sql`SELECT DISTINCT NULLIF(${trimTextSql(sql`v::text`)}, '') AS "key", null::text AS "label", false AS "subtree" FROM unnest(${raw}) AS v WHERE NULLIF(${trimTextSql(sql`v::text`)}, '') IS NOT NULL`,
+          members: sql`SELECT DISTINCT v AS "key", null::text AS "label", false AS "subtree" FROM unnest(${nonEmptyTextValuesSql(raw)}) AS v`,
         };
       if (choice.dateKind !== null) {
         const day =

@@ -805,9 +805,11 @@ const toggleDescriptor = (
 ): FilterDescriptor => {
   // Existing target-wide keys retain their contract. New exact filters own
   // distinct keys so independent relationship modes can round-trip together.
-  const key = defaultValue
-    ? `includeSub${pascal(pluralOf(target))}`
-    : `${owner.field ?? owner.columnId}IncludeDescendants`;
+  const key =
+    owner.subtree ??
+    (defaultValue
+      ? `includeSub${pascal(pluralOf(target))}`
+      : `${owner.field ?? owner.columnId}IncludeDescendants`);
   const label = `Include sub-${pluralOf(target).toLowerCase()}`;
   return {
     columnId: key,
@@ -946,6 +948,34 @@ const withExcludeKey = (
     ...descriptor,
     exclude: { field: filterExcludeField(descriptor.columnId) },
   };
+};
+
+/** A required foreign key can still point to a soft-deleted record. */
+const withReferencePresence = (
+  descriptor: FilterDescriptor,
+  entity: CompiledEntity,
+  byKey: ReadonlyMap<string, CompiledEntity>,
+): FilterDescriptor => {
+  if (
+    descriptor.kind !== "idMulti" ||
+    descriptor.nullable !== null ||
+    descriptor.stored === null ||
+    descriptor.stored.columns.length !== 1
+  )
+    return descriptor;
+  const field = entity.fieldModel.storage.find(
+    ({ key }) => key === descriptor.stored?.columns[0],
+  );
+  const target = field?.reference ? byKey.get(field.reference) : undefined;
+  return target?.lifecycle.softDelete
+    ? {
+        ...descriptor,
+        nullable: {
+          field: `${descriptor.columnId}PresenceFilter`,
+          label: filterFieldLabel(descriptor).toLowerCase(),
+        },
+      }
+    : descriptor;
 };
 
 /**
@@ -1107,12 +1137,16 @@ const withAliases = (
 
 const enumOptions = (
   field: CompiledEntity["fieldModel"]["fields"][number] | undefined,
+  fallback?: FilterDescriptor,
 ): readonly GroupOption[] | null =>
   field?.kind !== "enum"
     ? null
-    : (field.display.valueOptions ?? field.control?.options ?? []).map(
-        ({ value, label }) => ({ value, label }),
-      );
+    : (
+        field.display.valueOptions ??
+        field.control?.options ??
+        fallback?.options?.filter((option) => !option.meta) ??
+        []
+      ).map(({ value, label }) => ({ value, label }));
 
 const groupFilterBinding = (descriptor: FilterDescriptor | undefined) =>
   descriptor === undefined
@@ -1200,6 +1234,9 @@ const compileGroupChoice = (
         .map((column) => column.key),
     ];
     return descriptors.find((candidate) => {
+      // Aliases decode into another field's state and are skipped by the
+      // filter builder. Group actions must bind the editable owner.
+      if (candidate.aliasOf !== null) return false;
       const dateRange = dateRangeBounds(candidate);
       const alias = candidate.derived ? derived[candidate.derived] : undefined;
       const samePath =
@@ -1434,7 +1471,11 @@ const compileGroupChoice = (
       )
     )
       return choice(
-        { kind: "column", column: stored.column, options: enumOptions(field) },
+        {
+          kind: "column",
+          column: stored.column,
+          options: enumOptions(field, labelFilter),
+        },
         null,
       );
   }
@@ -2021,7 +2062,14 @@ export const compileListFields = (
         );
       validateAnyOfMembers(declared, derived, context);
       const descriptor = withDerivedOptions(
-        withExcludeKey(withViaKeys(declared, derived, byKey, context), bound),
+        withExcludeKey(
+          withReferencePresence(
+            withViaKeys(declared, derived, byKey, context),
+            entity,
+            byKey,
+          ),
+          bound,
+        ),
         bound,
       );
       compiled.push(descriptor);
@@ -2033,7 +2081,13 @@ export const compileListFields = (
           `${context}.filters ${descriptor.columnId} is a ${descriptor.kind} filter over derived ${bound.shape} field; expected ${compatibleKinds(bound).join(" | ")}.`,
         );
       assertRowSetRange(descriptor, bound, context);
-      if (descriptor.kind !== "idMulti") continue;
+      if (descriptor.kind !== "idMulti") {
+        if (descriptor.subtree !== null)
+          throw new EntityDeclarationError(
+            `${context}.filters ${descriptor.columnId}: subtreeParam requires an idMulti reference filter.`,
+          );
+        continue;
+      }
       // A declared idMulti predicate (an inherited reference) targets its
       // brand's entity.
       const referenced =
@@ -2049,7 +2103,13 @@ export const compileListFields = (
                     ({ key }) => key === descriptor.stored?.columns[0],
                   )?.reference ?? null);
       const target = referenced === null ? undefined : byKey.get(referenced);
-      if (target?.fieldModel.hierarchy == null) continue;
+      if (target?.fieldModel.hierarchy == null) {
+        if (descriptor.subtree !== null)
+          throw new EntityDeclarationError(
+            `${context}.filters ${descriptor.columnId}: subtreeParam requires a hierarchical target.`,
+          );
+        continue;
+      }
       const subtreeDefault =
         referenced !== null &&
         (bound !== undefined || descriptor.stored !== null);

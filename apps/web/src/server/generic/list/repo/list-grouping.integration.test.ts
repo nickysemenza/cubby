@@ -14,6 +14,7 @@ import {
   expenseAttribution,
   productCategory,
   product as productTable,
+  vendor as vendorTable,
 } from "~/server/db/schema";
 import {
   createLedgerParty,
@@ -543,6 +544,38 @@ describe("server list grouping", () => {
       });
       expect(filtered.items.map((item) => item.id)).toEqual([id]);
     }
+    const flags = await Promise.all(
+      [null, false, true].map((usdaUnavailable) =>
+        createProductFixture(
+          ctx.db,
+          makeProductInput({
+            name: `Nullable flag ${usdaUnavailable}`,
+            usdaUnavailable,
+          }),
+          ctx.actor,
+        ),
+      ),
+    );
+    for (const [filters, expected] of [
+      [{ usdaUnavailable: false }, [flags[1]!.id]],
+      [{ usdaUnavailable: true }, [flags[2]!.id]],
+      [{ usdaUnavailablePresenceFilter: "none" }, [flags[0]!.id]],
+      [{ usdaUnavailablePresenceFilter: "has" }, [flags[1]!.id, flags[2]!.id]],
+      [
+        { usdaUnavailable: false, usdaUnavailablePresenceFilter: "none" },
+        [flags[0]!.id, flags[1]!.id],
+      ],
+    ] as const) {
+      const page = await executeEntity(kernel(), {
+        action: "list",
+        entity: "product",
+        filters: { ids: flags.map(({ id }) => id), ...filters },
+        groupBy: [{ key: "usdaUnavailable" }],
+      });
+      expect(page.items.map((item) => item.id).sort()).toEqual(
+        [...expected].sort(),
+      );
+    }
   });
 
   it("applies Ledger Party secondary sorts before its stable tie breaker", async () => {
@@ -781,6 +814,31 @@ describe("expanded grouped list memberships", () => {
         ) ?? false,
       ).toBe(!("ledgerPartyIdExclude" in filters));
     }
+    const padded = await createLocationFixture(
+      ctx.db,
+      makeLocationInput({ name: "Tagged grouping box", tags: [" A ", "A"] }),
+      ctx.actor,
+    );
+    const blank = await createLocationFixture(
+      ctx.db,
+      makeLocationInput({ name: "Blank-tag grouping box", tags: [" \t "] }),
+      ctx.actor,
+    );
+    for (const [filters, expected] of [
+      [{ tagFilters: ["A"] }, [padded.id]],
+      [{ tagsPresenceFilter: "none" }, [blank.id]],
+      [{ tagsExclude: [FILTER_NONE] }, [padded.id]],
+      [{ tagsExclude: ["A"] }, [blank.id]],
+    ] as const) {
+      const page = await executeEntity(kernel(), {
+        action: "list",
+        entity: "location",
+        filters: { ids: [padded.id, blank.id], ...filters },
+        groupBy: [{ key: "tags" }],
+      });
+      expect(page.items.map((item) => item.id)).toEqual(expected);
+      expect(page.meta.membershipCount).toBe(1);
+    }
     const pages = [];
     for (const pageIndex of [0, 1, 2]) {
       const page = await executeEntity(kernel(), {
@@ -915,11 +973,13 @@ describe("expanded grouped list memberships", () => {
         createRepoEntity(ctx, "vendor", { name }),
       ),
     );
+    const purchases: string[] = [];
     for (const counterparty of counterparties) {
       const purchase = await createRepoEntity(ctx, "purchase", {
         vendorId: counterparty.output.id,
         date: "2026-01-01",
       });
+      purchases.push(purchase.output.id);
       // Repeated lines and signed refunds preserve one membership per Vendor.
       for (const cost of [10, 3, -2])
         await createRepoEntity(
@@ -968,6 +1028,23 @@ describe("expanded grouped list memberships", () => {
     if (filtered.action !== "list") throw new Error("expected list");
     expect(filtered.meta.totalCount).toBe(1);
     expect(filtered.meta.memberships).toEqual(paths.slice(0, 2));
+    // Historical references retain their source FK after a target is deleted.
+    await getDb(ctx.db)
+      .update(vendorTable)
+      .set({ deletedAt: new Date("2026-01-02T00:00:00Z") })
+      .where(eq(vendorTable.id, counterparties[0]!.entityId));
+    for (const [filters, expected] of [
+      [{ vendorIdPresenceFilter: "none" }, [purchases[0]]],
+      [{ vendorIdExclude: [FILTER_NONE] }, [purchases[1]]],
+    ] as const) {
+      const page = await executeEntity(kernel(), {
+        action: "list",
+        entity: "purchase",
+        filters: { ids: purchases, ...filters },
+        groupBy: [{ key: "vendorId" }],
+      });
+      expect(page.items.map((item) => item.id)).toEqual(expected);
+    }
   });
 
   it("rejects duplicate dimensions, excess dimensions, and buckets on non-dates", async () => {

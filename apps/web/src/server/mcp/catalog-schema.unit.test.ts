@@ -287,6 +287,7 @@ describe("MCP catalog schemas", () => {
     ).toBe(true);
     expect(validate({ action: "inspect", first: "x" })).toBe(false);
     expect(validate({ action: "inspect", fourth: "x".repeat(41) })).toBe(false);
+    expect(JSON.stringify(schema)).toContain(field.description);
     expect(JSON.stringify(schema).length).toBeLessThan(650);
   });
 

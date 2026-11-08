@@ -3000,6 +3000,7 @@ Rules:
         // its stock sits.
         {
           columnId: "servingAsLocationId",
+          subtreeParam: "servingAsLocationIdIncludeDescendants",
           label: "Serving as location",
           derived: "servingAsLocations",
           kind: "idMulti",

@@ -122,12 +122,14 @@ entities or new MCP identifier exceptions.
 ## Failures and timeouts
 
 Published input schemas keep an object root and share repeated nested fields
-through definitions, including small constrained workflow fields. Measure the
+through `$defs` JSON Pointer references, including small constrained workflow fields. Measure the
 whole catalog when tuning sharing: reference overhead can exceed the saving,
 and validation plus model-facing descriptions must survive.
 Generated presence and Match-all descriptions state their shared operation;
-the parameter key and entity metadata name the field. Schema sharing accounts
-for reference and definition overhead before hoisting a repeated constraint.
+the parameter key and entity metadata name the field. Schema sharing preserves repeated descriptions in annotation-only `allOf` branches,
+accounts for reference and definition overhead, and inlines definitions left with
+a single reference after an enclosing schema is shared. Agent narrowing prunes
+reachable definitions using both legacy `definitions` and `$defs` pointers.
 Any change to a tool's input schema or its `.describe`
 text, including a shared Zod schema a tool imports, runs
 `pnpm test:postgres src/server/mcp/catalog.integration.test.ts` and the

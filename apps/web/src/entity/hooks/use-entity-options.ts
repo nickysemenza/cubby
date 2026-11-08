@@ -2,6 +2,7 @@ import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import type {
   FilterOptionItem,
   FilterOptionProjection,
+  FilterOptionsInput,
 } from "@cubby/schemas/filter-options";
 import type { ExpenseShortcode } from "@cubby/schemas/identifiers";
 import { useInfiniteQuery } from "@tanstack/react-query";
@@ -71,7 +72,10 @@ const NO_TAG_OPTIONS: Array<{ value: string; label: string }> = [];
  * count is what exposes a near-duplicate ("M18 (13)" next to a stray "m18
  * (1)") before it spreads. Replaces `recipe.getAllTags`/`product.tagOptions`.
  */
-export function useTagOptions(entity: "recipe" | "product", enabled = true) {
+export function useTagOptions(
+  entity: Extract<FilterOptionsInput, { source: "tags" }>["entity"],
+  enabled = true,
+) {
   const query = useInfiniteQuery({
     ...cursorQueryOptions(entityFilterOptions.filterOptions, {
       source: "tags",

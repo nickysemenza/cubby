@@ -9,10 +9,12 @@ import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { entityManifest } from "@cubby/schemas/entity-manifest";
 import { FILTER_NONE } from "@cubby/schemas/filter-sentinel-fields";
 import { presenceFilter, type PresenceFilter } from "@cubby/schemas/pagination";
-import { type AnyColumn, and, arrayContains, or, SQL, sql } from "drizzle-orm";
+import { type AnyColumn, and, or, SQL, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
+import { trimText } from "~/lib/text-whitespace";
+import { nonEmptyTextValuesSql } from "~/server/db/computed/text-whitespace";
 import {
   arrayOverlapOrPresence,
   eqAny,
@@ -190,18 +192,19 @@ const arrayPredicate = (
   values: readonly string[] | undefined,
   presence: PresenceFilter,
   all: boolean,
-): SQL | undefined =>
-  all && values !== undefined && values.length > 0
+): SQL | undefined => {
+  const normalized = nonEmptyTextValuesSql(column);
+  const picked = values?.map(trimText);
+  return all && picked !== undefined && picked.length > 0
     ? or(
-        column instanceof SQL
-          ? sql`${column} @> ARRAY[${sql.join(
-              values.map((value) => sql`${value}`),
-              sql`, `,
-            )}]::text[]`
-          : arrayContains(column, [...values]),
-        arrayOverlapOrPresence(column, undefined, presence, nullable),
+        sql`${normalized} @> ARRAY[${sql.join(
+          picked.map((value) => sql`${value}`),
+          sql`, `,
+        )}]::text[]`,
+        arrayOverlapOrPresence(normalized, undefined, presence, nullable),
       )
-    : arrayOverlapOrPresence(column, values, presence, nullable);
+    : arrayOverlapOrPresence(normalized, picked, presence, nullable);
+};
 
 /**
  * The request keys a descriptor's predicate reads: its value (a range its
@@ -318,7 +321,10 @@ const columnPredicate = (
       return term ? textPredicate(first, term) : undefined;
     }
     case "boolean":
-      return booleanPredicate(first, optionalBoolean.parse(value));
+      return or(
+        booleanPredicate(first, optionalBoolean.parse(value)),
+        presenceCondition(first.value, presence),
+      );
     case "multiselect":
       return descriptor.stored?.array
         ? arrayPredicate(

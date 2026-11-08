@@ -796,6 +796,7 @@ Rules:
         {
           columnId: "tags",
           field: "tagFilters",
+          optionsKey: "tags",
           kind: "multiselect",
           deriveSchema: true,
           stored: { array: true },

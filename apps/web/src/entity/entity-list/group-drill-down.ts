@@ -75,8 +75,11 @@ export function groupPathFilters(
         value = `${key}..${shiftPlainDate(next, -1)}`;
       }
     } else if (spec.kind === "boolean") {
-      if (key !== "true" && key !== "false") return undefined;
-      value = key;
+      if (key === FILTER_NONE && spec.nullable) value = FILTER_NONE;
+      else {
+        if (key !== "true" && key !== "false") return undefined;
+        value = key;
+      }
     } else if (spec.kind === "presence") {
       if (key !== "true" && key !== "false") return undefined;
       value = key === "true" ? "has" : "none";

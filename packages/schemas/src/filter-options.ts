@@ -66,14 +66,15 @@ const entityFilterOptionsInput = filterOptionRequest.extend({
 
 /**
  * A tag roster, keyed by the entity whose free-text `tags` column is being
- * enumerated. Recipe tags are a plain distinct list; product tags carry usage
+ * enumerated. Recipe tags are a plain distinct list; Product and Location tags carry usage
  * counts (via `include: ["count"]`-shaped output — always populated, not
  * gated behind `include`, since the picker label needs it to tell near-dup
  * tags apart).
  */
+export const tagFilterEntity = z.enum(["recipe", "product", "location"]);
 const tagsFilterOptionsInput = filterOptionRequest.extend({
   source: z.literal("tags"),
-  entity: z.enum(["recipe", "product"]),
+  entity: tagFilterEntity,
   limit: z.number().int().min(1).max(1000).default(25),
 });
 

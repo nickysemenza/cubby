@@ -115,8 +115,8 @@ export interface FilterSpecCore {
    * Marks a picklist as covering a NULLABLE column: the control gains the
    * Any value / No value options below, and the builder routes them to
    * `field` (a `presenceFilter`) instead of into the value list. `multiselect`
-   * / `idMulti` only — a `presence` kind IS this filter, for relations with
-   * no picklist.
+   * / `idMulti`, and nullable stored boolean filters. A `presence` kind IS
+   * this filter, for relations with no picklist.
    *
    * `label` is the noun in a tab title's "Has {label}".
    */
@@ -263,6 +263,10 @@ export function buildFiltersFromManifest(
       })
       .with("boolean", () => {
         const value = single(raw);
+        if (spec.nullable && (value === FILTER_NONE || value === FILTER_ANY))
+          return {
+            [spec.nullable.field]: value === FILTER_NONE ? "none" : "has",
+          };
         return value === "true" || value === "false"
           ? { [field]: value === "true" }
           : undefined;
@@ -882,6 +886,8 @@ function describeFilter(
       )
       .with("presence", () => describePresence(spec, first))
       .with("boolean", () => {
+        if (spec.nullable && (first === FILTER_NONE || first === FILTER_ANY))
+          return describeSentinel(spec.nullable.label, first);
         const noun = humanize(spec.columnId);
         return first === "false" ? `No ${noun.toLowerCase()}` : noun;
       })

@@ -158,30 +158,6 @@ export const countProductsWithNoImagesWithGtin = async (
   return row?.count ?? 0;
 };
 
-/**
- * The distinct tag roster with usage counts, ranked by frequency then
- * alphabetically — feeds the product list's Tags filter picklist.
- *
- * Grouped SQL over `unnest`, not recipe/queries.ts's `getAllTags`, which loads
- * every row's tags and de-dupes into a Set in JS. Same "cheap options query"
- * shape as `vendorOptions` (repo/vendor.ts).
- */
-export const getProductTagOptions = async (
-  db: Database,
-): Promise<Array<{ tag: string; count: number }>> => {
-  const rows = await getDb(db)
-    .select({
-      tag: sql<string>`tag`,
-      count: sql<number>`count(*)::int`,
-    })
-    .from(sql`${product}, unnest(${product.tags}) AS tag`)
-    .where(notDeleted(product))
-    .groupBy(sql`tag`)
-    .orderBy(sql`count(*) DESC, tag ASC`);
-
-  return rows;
-};
-
 export const getProductExternalIdSourceOptions = async (
   db: Database,
 ): Promise<Array<{ source: string; count: number }>> =>
