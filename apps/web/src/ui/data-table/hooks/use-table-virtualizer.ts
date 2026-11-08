@@ -376,6 +376,8 @@ export function useTableVirtualizer({
     paneWrapperRef,
     paneMaxHeight,
     paneRows: Math.ceil(paneHeight / rowHeight),
+    // Keep virtual-core's seeded offset, not the pane's clamped scrollTop:
+    // pending restoration still needs to admit pages before the offset fits.
     scrollOffset: rowVirtualizer.scrollOffset ?? initialOffset,
     virtualRowCount: baseCount,
     virtualRows,

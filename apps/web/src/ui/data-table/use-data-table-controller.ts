@@ -159,6 +159,18 @@ export function useDataTableController<TItem extends RowData>({
 
   // Desktop group detection (server trusts ordering)
   const groupedItems = useDesktopGroupedRows(rows, groupConfig, detailRowIds);
+  // Use the whole server group roster: later pages may contain open groups
+  // whose headers have not rendered yet. Collapsed ancestors hide their groups.
+  const hasOpenContent =
+    !groupConfig ||
+    groupConfig.groups.some(
+      (group) =>
+        !group.path.some((_, index) =>
+          groupConfig.collapsed?.has(
+            JSON.stringify(group.path.slice(0, index + 1)),
+          ),
+        ),
+    );
 
   // Pane scroll restoration. The pane carries `data-scroll-restoration-id`
   // (see Table.tsx) so the router snapshots its offset against a stable
@@ -199,7 +211,7 @@ export function useDataTableController<TItem extends RowData>({
   });
 
   useInfinitePrefetch({
-    infiniteScroll,
+    infiniteScroll: hasOpenContent ? infiniteScroll : undefined,
     isMobile,
     virtualRows,
     rowCount: virtualRowCount,

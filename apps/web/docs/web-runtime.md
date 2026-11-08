@@ -738,10 +738,13 @@ Connection publication retains its small target reference in `Suggestion.data`.
 Queue counts still check live endpoints, decisions and suppression. A missing
 reference falls back to the row's evidence.
 
-Browser tables use the shared 50-record page unless a measured caller
+Browser tables share a 50-record default unless a measured caller
 constraint requires an override. An infinite table's full opening viewport does not start the
 prefetch runway while its scroll offset is zero. An undersized viewport fills
-immediately; scrolling or restoring a scrolled position enables the shared
+immediately when rows or an expanded group need data. Automatic paging pauses
+when the whole server group roster is collapsed, including collapsed ancestors;
+rendered headers alone cannot establish this because later pages may contain
+other open groups. Scrolling or restoring a scrolled position enables the shared
 two-pane runway with its 30-row floor. The virtualizer owns the scroll offset:
 do not add row observers or another scroll listener for read scheduling.
 A smaller batch can repeat full population reads just to fill a runway.
