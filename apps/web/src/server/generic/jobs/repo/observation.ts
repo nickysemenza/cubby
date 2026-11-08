@@ -342,7 +342,11 @@ const workAction = (
   needsAttention = false,
 ): WorkStuckItem["action"] =>
   kind.startsWith("image.")
-    ? { type: "link", label: "View photos", href: "/image-jobs?state=pending" }
+    ? {
+        type: "link",
+        label: "View photos",
+        href: needsAttention ? "/image-jobs?state=failed" : "/image-jobs",
+      }
     : kind.startsWith("embedding.") || kind.startsWith("ai.evaluation")
       ? { type: "none" }
       : {

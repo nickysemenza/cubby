@@ -172,7 +172,7 @@ export const { definition, readSchemas } = defineEntityModel({
           id: "attention",
           label: "Needs attention",
           description:
-            "Image jobs that keep failing; they retry with backoff until they succeed",
+            "Stopped image jobs and repeated failures; stopped jobs require explicit retry",
           filters: [{ id: "state", value: ["failed"] }],
         },
         {

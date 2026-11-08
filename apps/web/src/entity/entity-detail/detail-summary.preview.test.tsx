@@ -277,3 +277,45 @@ it("keeps failed contextual reports visible without expanding context", async ()
     harness.dispose();
   }
 });
+
+it("renders an image job state from its canonical envelope", async () => {
+  const harness = createBrowserTestHarness();
+  const restore = overrideOperationDispatch(async (operation) => {
+    if (operation === "entityMedia.displayImages")
+      return { ok: true, data: {} };
+    if (operation === "entity.connectedRecords")
+      return {
+        ok: true,
+        data: connectedRecordsOutputSchema.parse({
+          targetEntity: "image",
+          totalCount: 0,
+          items: [],
+        }),
+      };
+    throw new Error(`Unexpected image job summary operation: ${operation}`);
+  });
+  try {
+    render(
+      <DetailSummary
+        entity="imageJob"
+        record={fromPartial<DetailRecordOf<"imageJob">>({
+          id: shortcode("IPR-4K7M"),
+          fields: {
+            state: fieldValueFixture(
+              entityFieldEnvelopeSchemas.imageJob.detail.shape.fields.shape
+                .state,
+              "failed",
+            ),
+          },
+        })}
+      />,
+      { wrapper: harness.wrapper },
+    );
+    await screen.findByText("Needs attention");
+    expect(screen.queryByText("Not recorded")).toBeNull();
+  } finally {
+    restore();
+    cleanup();
+    harness.dispose();
+  }
+});

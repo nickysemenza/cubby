@@ -351,10 +351,22 @@ struct CompanionImageProcessorTests {
         #expect(await upload.count == 1)
     }
 
-    @Test("Returns no subject without uploading a uniform canvas")
-    func uniformCanvasDoesNotUpload() async throws {
-        let sourceBytes = try ImageEncoding.encode(
-            TestImages.canvas(width: 400, height: 300, subject: false), as: .png)
+    @Test("Returns no subject without uploading a uniform canvas", arguments: [false, true])
+    func uniformCanvasDoesNotUpload(orange: Bool) async throws {
+        let canvas = TestImages.canvas(width: 128, height: 128, subject: false)
+        let image: CGImage
+        if orange {
+            let context = CGContext(
+                data: nil, width: 128, height: 128, bitsPerComponent: 8, bytesPerRow: 0,
+                space: CGColorSpaceCreateDeviceRGB(),
+                bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue)!
+            context.setFillColor(CGColor(srgbRed: 1, green: 163.0 / 255, blue: 0, alpha: 1))
+            context.fill(CGRect(x: 0, y: 0, width: 128, height: 128))
+            image = context.makeImage()!
+        } else {
+            image = canvas
+        }
+        let sourceBytes = try ImageEncoding.encode(image, as: .png)
         let upload = UploadProbe()
         let processor = CompanionImageProcessor(
             download: { _ in sourceBytes },

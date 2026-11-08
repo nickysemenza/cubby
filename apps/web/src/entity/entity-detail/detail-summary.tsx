@@ -505,23 +505,6 @@ export function DetailSummary<E extends GenericDetailEntity>({
                       ) === null
                         ? overrides[field.key]?.(record, queryClient)?.value
                         : undefined;
-                    const allocated =
-                      (fieldResolutionFor(record, field.key)
-                        ? fieldDecisionOf(
-                            fieldResolutionFor(record, field.key)!,
-                          )?.provenance?.kind
-                        : undefined) === "allocated";
-                    const absent =
-                      field.readKey !== null &&
-                      field.display.readPath === null &&
-                      !(field.readKey in record);
-                    const value =
-                      field.readKey === null
-                        ? undefined
-                        : readPathValue(
-                            record,
-                            field.display.readPath ?? field.readKey,
-                          );
                     return (
                       <div
                         key={key}
@@ -538,24 +521,12 @@ export function DetailSummary<E extends GenericDetailEntity>({
                         </dt>
                         <dd className="min-w-0 break-words">
                           {override ??
-                            ((absent || value === null) &&
-                            !allocated &&
-                            classificationFieldRefusal(
+                            renderDetailFieldValue(
+                              queryClient,
                               entity,
                               record,
-                              field.key,
-                            ) === null ? (
-                              <span className="text-muted-foreground">
-                                Not recorded
-                              </span>
-                            ) : (
-                              renderDetailFieldValue(
-                                queryClient,
-                                entity,
-                                record,
-                                field,
-                              )
-                            ))}
+                              field,
+                            )}
                         </dd>
                       </div>
                     );

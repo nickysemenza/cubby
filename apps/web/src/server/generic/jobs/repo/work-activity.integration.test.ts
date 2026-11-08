@@ -12,7 +12,7 @@ import {
   insertEntityFixtures,
 } from "~/server/testing/repo.fixtures";
 
-import { readWorkActivity } from "./observation";
+import { readBackgroundWorkStatus, readWorkActivity } from "./observation";
 import { enqueueJob } from "./producer";
 
 describe("work activity", () => {
@@ -123,6 +123,21 @@ describe("work activity", () => {
         },
       ]);
     await seed("device", "subject_lift", { runAt: new Date(0) });
+    await seed("device", "describe_image", {
+      state: "failed",
+      failures: 1,
+      processorRevision: 2,
+      lastError: "Synthetic terminal failure",
+    });
+    const status = await readBackgroundWorkStatus(ctx.db, now);
+    expect(
+      status.stuck.find((item) => item.key === "image.device:failing")?.action,
+    ).toEqual({
+      type: "link",
+      label: "View photos",
+      href: "/image-jobs?state=failed",
+    });
+
     await seed("cloud", "describe_image", {
       leaseUntil: new Date(now.getTime() + 60_000),
       attemptId: crypto.randomUUID(),

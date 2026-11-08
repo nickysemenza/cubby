@@ -455,6 +455,23 @@ subject-lift derivative is rebuilt. Explicit image retry reopens a negative cuto
 without discarding its evidence or allowing maintenance to immediately settle it again.
 A changed source or new processor revision is new work, and
 a newer Apple build's first pull makes backing-off device work due.
+
+Only stored `pending` jobs have a waiting explanation. Displayed Needs attention
+can mean either an open job retrying with backoff or a stopped job; the latter
+must not say it is waiting for an Apple device. Work's View photos action opens
+the failed display-state filter for failure attention, including both cases.
+Detail summaries render the canonical field envelope, as the hero does.
+Attempt totals retain earlier releases, lease expiries and failures under older
+policies; the latest nonretryable result does not describe every earlier attempt.
+
+Subject lifting uses `VNGenerateForegroundInstanceMaskRequest` on the concurrent
+executor. On the affected macOS 27.2 runtime, the Swift Vision request repeatedly
+reported cancellation for a uniform-color synthetic image with an uncancelled
+parent, while this API returned zero observations. Only a successful empty
+observation means `no_subject`; cancellation and all other errors remain failures.
+Parent cancellation is checked before and after the request. Source bytes,
+derivative identity and attempt history remain unchanged.
+
 On-device descriptions use a fresh session, a full-frame image bounded to 1024 pixels,
 and an initial explicit response budget of at most 512 tokens, reserved from the runtime
 model context size. A context overflow retries once with 512 pixels and half the

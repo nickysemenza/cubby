@@ -2,6 +2,7 @@ import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelope
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { generateShortcode } from "@cubby/shared";
+import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
@@ -184,6 +185,30 @@ describe("image job cost", () => {
       claimsPerMinute: 0.2,
       etaSeconds: null,
     });
+    // Displayed attention includes both stopped jobs and open jobs backing off.
+    await getDb(ctx.db)
+      .update(imageProcessingJob)
+      .set({
+        state: "failed",
+        failures: 1,
+        lastError: "guardrail_violation: Synthetic refusal",
+      })
+      .where(eq(imageProcessingJob.id, parked.id));
+    const stopped = reply.parse(await read(parked.shortcode)).item;
+    expect(fieldValueOf(stopped.fields.state)).toBe("failed");
+    expect(fieldValueOf(stopped.fields.waitingOn)).toBeNull();
+    await getDb(ctx.db)
+      .update(imageProcessingJob)
+      .set({
+        state: "pending",
+        failures: 40,
+        runAt: new Date(Date.now() + 60_000),
+      })
+      .where(eq(imageProcessingJob.id, parked.id));
+    const retrying = reply.parse(await read(parked.shortcode)).item;
+    expect(fieldValueOf(retrying.fields.state)).toBe("failed");
+    expect(fieldValueOf(retrying.fields.waitingOn)).toContain("Backing off");
+
     const source = {
       entityKind: "imageJob" as const,
       entityId: held.shortcode,
