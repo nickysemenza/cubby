@@ -112,6 +112,9 @@ const RETIREMENT_FENCE = "cubby_retirement_fence";
 type RunAgent =
   import("~/server/domains/purchase-agent/service/run-agent").PurchaseImportRunAgent;
 
+/** How long one live fence read answers this instance's fetches and alarms. */
+const NOT_RETIRED_TTL_MS = 5 * 60_000;
+
 /**
  * One import Run's coordinator Durable Object. Execution entry points refuse a
  * retired Run before loading the agent; its Lifecycle jobs wake it through
@@ -134,6 +137,8 @@ class PurchaseImportRunAgentHost
   private agent: Promise<RunAgent> | undefined;
   private disposalAttempted = false;
   private retiring = false;
+  /** Until when the last database fence read said this Run is live. */
+  private liveUntil = 0;
   private readonly admitted = new Set<Promise<unknown>>();
 
   /** Run `work` unless retirement began, tracked so `retire` can drain it. */
@@ -160,9 +165,19 @@ class PurchaseImportRunAgentHost
     );
   }
 
-  /** The database fence, plus retirement begun on this instance meanwhile. */
+  /**
+   * The database fence, plus retirement begun on this instance meanwhile.
+   * `Run.retiredAt` is stamped only after this object's own `retire()` has
+   * set `retiring`, so a live "not retired" answer stays true for this
+   * instance; it is re-read after `NOT_RETIRED_TTL_MS` only to notice a Run
+   * deleted underneath it. A retired answer is never cached away.
+   */
   private async fenced(): Promise<boolean> {
-    return (await this.services().coordinatorRetired()) || this.retiring;
+    if (this.retiring) return true;
+    if (this.liveUntil > Date.now()) return false;
+    const retired = await this.services().coordinatorRetired();
+    if (!retired) this.liveUntil = Date.now() + NOT_RETIRED_TTL_MS;
+    return retired || this.retiring;
   }
 
   private runId(): string {
