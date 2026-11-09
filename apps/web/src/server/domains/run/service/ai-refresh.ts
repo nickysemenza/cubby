@@ -69,13 +69,6 @@ const log = createLogger("ai-refresh");
 export type AiRefreshPorts = {
   context?: EntityKernelContext;
   suggestPorts?: SuggestFieldsPorts;
-  emailPorts?: Pick<
-    Parameters<
-      typeof import("~/server/domains/purchase-import/service/gmail/ingest").ingestGmailMessages
-    >[2],
-    "triage" | "relevance" | "storage"
-  >;
-  /** Test seam: the Automatic rule audit sample, so outcomes never ride on random ids. */
 };
 const jsonSnapshot = (value: unknown) =>
   z.json().parse(JSON.parse(JSON.stringify(value)));
@@ -375,12 +368,8 @@ export async function executeAiRefreshTarget(
   const { id, attemptToken: token } = claimed;
   await guardAiEvaluationAttempt(db, id, token);
   const target = aiEvaluationTarget.parse(claimed.target);
-  if (target.kind === "email") {
-    const { refreshEmailEvaluation } =
-      await import("~/server/domains/purchase-import/service/gmail/refresh-evaluation");
-    await refreshEmailEvaluation(db, claimed, ports.emailPorts);
-    return;
-  }
+  if (target.kind !== "field")
+    throw new Error(`AI refresh no longer evaluates ${target.kind} targets`);
   const snapshot = fieldSnapshot.parse(claimed.snapshot);
   const fieldPorts = {
     ...ports,
