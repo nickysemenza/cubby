@@ -1,7 +1,5 @@
 import {
   backgroundTaskSchema,
-  imageMetadataJobKey,
-  locationAiJobKey,
   type BackgroundTaskInput,
   type BackgroundTaskReceipt,
 } from "@cubby/schemas/background-tasks";
@@ -16,6 +14,7 @@ import { repositoryTransactionDatabase } from "~/server/db/repository-access.bou
 import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 
 import type { BackgroundQueueProducer } from "../background-queue-types";
+import { backgroundTaskJobKey } from "./kinds";
 
 const logger = createLogger("jobs");
 export interface PublishOptions {
@@ -126,22 +125,6 @@ export async function wakeAt(
   );
 }
 
-function taskKey(task: BackgroundTaskInput) {
-  switch (task.kind) {
-    case "maintenance.purchase-discovery":
-      return task.kind;
-    case "image-metadata.extract":
-      return imageMetadataJobKey(task.imageId);
-    case "location-ai.description.refresh":
-    case "location-ai.inventory.refresh":
-      return locationAiJobKey(task.kind, task.locationId);
-    case "calendar-feed.mark-dirty":
-      return `calendar:${task.origin}`;
-    default:
-      return `${task.kind}:${crypto.randomUUID()}`;
-  }
-}
-
 /** Persist using the caller's transaction; the transport carries only a wake. */
 export async function publishBackgroundTasks(
   db: Database,
@@ -173,11 +156,10 @@ export async function publishBackgroundTasks(
     }
     for (const task of parsed) {
       if (task.kind === "entity-embedding.refresh") continue;
-      const input = task;
       await enqueueJob(tx, {
-        key: taskKey(input),
+        key: backgroundTaskJobKey(task),
         kind: task.kind,
-        input: z.json().parse(JSON.parse(JSON.stringify(input))),
+        input: z.json().parse(JSON.parse(JSON.stringify(task))),
         runId: task.runId,
         invalidate: true,
       });

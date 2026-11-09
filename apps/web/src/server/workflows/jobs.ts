@@ -1,14 +1,6 @@
-import {
-  locationAiDescriptionRefreshTaskSchema,
-  locationAiInventoryRefreshTaskSchema,
-  imageMetadataExtractTaskSchema,
-  maintenancePurchaseDiscoveryTaskSchema,
-  calendarFeedMarkDirtyTaskSchema,
-} from "@cubby/schemas/background-tasks";
 import { jobWaitReason, type JOB_KIND_POLICY } from "@cubby/schemas/job";
 import { purchaseAgentEvent } from "@cubby/schemas/purchase-import";
 import { captureException } from "@sentry/tanstackstart-react";
-import { z } from "zod";
 
 import { aiEvaluationDrain } from "~/server/ai/evaluation/service/ai-evaluation-drain";
 import { getPurchaseDispatchHostEnv } from "~/server/cf-env";
@@ -34,48 +26,13 @@ import { embeddingRefreshDrain } from "~/server/generic/embedding/service/embedd
 import { readRebuildObservation as readDerivedRebuildStatus } from "~/server/generic/jobs/repo/observation";
 import { defineJobHandler } from "~/server/generic/jobs/service/jobs";
 import type { JobHandler, JobHandlers } from "~/server/generic/jobs/types";
-import { handleBackgroundTask } from "~/server/workflows/background-tasks/handle";
-import { withJobFence } from "~/server/workflows/runs/execution";
+import { backgroundJobHandlers } from "~/server/workflows/background-tasks/kinds";
 import { runJobHandler } from "~/server/workflows/runs/job-execution";
 
 import { derivedComputes } from "./derived-computes";
 
-/** Standalone provider Jobs check their lease before each paid request and fence their publications. */
-const providerFenced = (handler: JobHandler): JobHandler => ({
-  prepare: (db, job, context) =>
-    withJobFence(context, () => handler.prepare(db, job, context)),
-});
-
-const background = defineJobHandler(
-  z.discriminatedUnion("kind", [
-    locationAiDescriptionRefreshTaskSchema,
-    locationAiInventoryRefreshTaskSchema,
-    imageMetadataExtractTaskSchema,
-    maintenancePurchaseDiscoveryTaskSchema,
-    calendarFeedMarkDirtyTaskSchema,
-  ]),
-  async (db, claim, task, context) => {
-    if (task.kind !== claim.kind)
-      throw new Error(`Job kind ${claim.kind} does not match ${task.kind}`);
-    const outcome = await handleBackgroundTask(
-      db,
-      task,
-      undefined,
-      context.fenced,
-    );
-    return { page: { done: true, result: { outcome } } };
-  },
-);
-const backgroundHandlers = {
-  "location-ai.description.refresh": providerFenced(background),
-  "location-ai.inventory.refresh": providerFenced(background),
-  "image-metadata.extract": background,
-  "maintenance.purchase-discovery": background,
-  "calendar-feed.mark-dirty": background,
-} satisfies Record<string, JobHandler>;
-
 export const productionJobHandlers: JobHandlers = {
-  ...backgroundHandlers,
+  ...backgroundJobHandlers,
   "run.execute": runJobHandler,
   "purchase.dispatch": defineJobHandler(
     purchaseAgentEvent,

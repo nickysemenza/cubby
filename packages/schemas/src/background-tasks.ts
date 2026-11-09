@@ -2,16 +2,6 @@ import { z } from "zod";
 import { searchableEntities } from "./generated/entity-roster.gen";
 import { imageId, locationId, parseEntityRef } from "./identifiers";
 
-/** Domain admission inputs. Publishers persist Job intent; transport carries only a wake. */
-export const backgroundTaskKinds = [
-  "entity-embedding.refresh",
-  "location-ai.description.refresh",
-  "location-ai.inventory.refresh",
-  "image-metadata.extract",
-  "maintenance.purchase-discovery",
-  "calendar-feed.mark-dirty",
-] as const;
-
 /** A record has one key per kind of single-item work, so re-admission replaces its Job. */
 export const imageMetadataJobKey = (imageId: string) =>
   `image-metadata:${imageId}`;
@@ -19,9 +9,6 @@ export const locationAiJobKey = (
   kind: "location-ai.description.refresh" | "location-ai.inventory.refresh",
   locationId: string,
 ) => `${kind}:${locationId}`;
-
-export const backgroundTaskKindSchema = z.enum(backgroundTaskKinds);
-export type BackgroundTaskKind = z.infer<typeof backgroundTaskKindSchema>;
 
 const taskEnvelopeFields = {
   /** Timestamp retained with the durable admission input. */
@@ -89,6 +76,7 @@ export const calendarFeedMarkDirtyTaskSchema = z.object({
   reason: z.string().min(1),
 });
 
+/** Domain admission inputs. Publishers persist Job intent; transport carries only a wake. */
 export const backgroundTaskSchema = z.discriminatedUnion("kind", [
   entityEmbeddingRefreshTaskSchema,
   locationAiDescriptionRefreshTaskSchema,
