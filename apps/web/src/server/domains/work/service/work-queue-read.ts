@@ -34,7 +34,8 @@ const publish = async (db: Database) => {
  * response as a tracked `waitUntil` task, so the request's pools stay open
  * until it settles; the commit rings open readers. Only the first read ever
  * waits, and it fails with the raw publication error rather than reading rows
- * no publication completed.
+ * no publication completed. A later read keeps serving the last good rows and
+ * returns when they were published and the latest attempt's raw error.
  */
 export async function readPublishedWorkQueue(
   db: Database,
@@ -44,23 +45,28 @@ export async function readPublishedWorkQueue(
   if (!publication?.publishedAt) {
     await publish(db);
     publication = await readWorkPublication(db);
-    // Never serve rows no publication completed: an empty table is not zero work.
-    if (!publication?.publishedAt)
-      throw new Error(
-        publication?.error
-          ? `Work items are not published yet; the last attempt failed: ${publication.error}`
-          : "Work items are not published yet; the first publication is still running.",
-      );
   } else if (workPublicationStale(publication))
     await afterResponse(
       publish(db).catch((error: unknown) => {
-        // SILENT: the next stale read retries; the previous rows stay readable.
+        // SILENT: a failed attempt is recorded and returned with the next read;
+        // this catches only the lock or connection around it.
         log.error("work republish failed", { error });
       }),
     );
+  // Never serve rows no publication completed: an empty table is not zero work.
+  if (!publication?.publishedAt)
+    throw new Error(
+      publication?.error
+        ? `Work items are not published yet; the last attempt failed: ${publication.error}`
+        : "Work items are not published yet; the first publication is still running.",
+    );
   return readWorkQueueWith(db, await workQueueComposition(), {
     ...read,
-    published: { meta: publication.meta },
+    published: {
+      meta: publication.meta,
+      publishedAt: publication.publishedAt,
+      error: publication.error,
+    },
   });
 }
 

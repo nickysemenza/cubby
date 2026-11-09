@@ -359,6 +359,14 @@ export const workQueueOutSchema = z.object({
     groups: z.array(workQueueGroupSummarySchema).optional(),
     /** Every composed source's declared reasons, for the Reason filter. */
     reasons: z.array(reasonOption),
+    /**
+     * A published read's snapshot instant, and the raw error when the latest
+     * republish failed (its rows are still the last good publication). Live
+     * reads omit it.
+     */
+    publication: z
+      .object({ publishedAt: z.string(), error: z.string().nullable() })
+      .optional(),
   }),
 });
 
