@@ -37,36 +37,33 @@ type PendingPage = {
 
 export type BackgroundPageBudget = {
   jobs: PageWork;
-  feature(name: string): PageWork;
+  feature: PageWork;
   snapshot(): {
     started: number;
     held: number;
     peakLocalPages: number;
     peakIsolatePages: number;
-    afterDrain?: string;
-    admittedDrains: readonly string[];
-    heldDrains: readonly string[];
     retryAt: Date | null;
   };
+  finishFeatures(): void;
   close(): Promise<void>;
 };
 
 /** Count participating pages, not bytes; this does not bound total isolate heap. */
 export function createBackgroundPageBudget(input: {
   deadline: number;
-  afterDrain?: string;
+  featuresPending?: boolean;
 }): BackgroundPageBudget {
   const pending = { job: Array<PendingPage>(), feature: Array<PendingPage>() };
   const running = new Set<Promise<void>>();
-  const admittedDrains = new Set<string>();
-  const heldDrains = new Set<string>();
   let turn: WorkClass = "job";
   let localPages = 0;
+  let localJobs = 0;
+  let featuresPending = input.featuresPending ?? false;
   let started = 0;
   let held = 0;
   let peakLocalPages = 0;
   let peakIsolatePages = 0;
-  let afterDrain = input.afterDrain;
   let retryAt: Date | null = null;
   let closed = false;
   let scheduled = false;
@@ -97,6 +94,8 @@ export function createBackgroundPageBudget(input: {
       return;
     }
     while (pending.job.length || pending.feature.length) {
+      // Async feature discovery keeps its turn without acquiring a parent permit.
+      if (featuresPending && !pending.feature.length && localJobs > 0) return;
       const release = tryAcquirePage();
       if (!release) {
         if (!localPages) holdAll();
@@ -120,10 +119,12 @@ export function createBackgroundPageBudget(input: {
       }
       turn = selected === "job" ? "feature" : "job";
       localPages++;
+      if (selected === "job") localJobs++;
       peakLocalPages = Math.max(peakLocalPages, localPages);
       peakIsolatePages = Math.max(peakIsolatePages, activePages);
       page.start(() => {
         localPages--;
+        if (selected === "job") localJobs--;
         release();
         schedule();
       });
@@ -132,12 +133,10 @@ export function createBackgroundPageBudget(input: {
   const enqueue = <T>(
     kind: WorkClass,
     work: () => Promise<T>,
-    drain?: string,
   ): Promise<PageAdmission<T>> =>
     new Promise((resolve, reject) => {
       const hold = () => {
         held++;
-        if (drain !== undefined) heldDrains.add(drain);
         retryAt ??= new Date(Date.now() + BACKGROUND_RECHECK_MS);
         resolve({ kind: "held", retryAt });
       };
@@ -157,10 +156,6 @@ export function createBackgroundPageBudget(input: {
                 return;
               }
               started++;
-              if (drain !== undefined) {
-                afterDrain = drain;
-                admittedDrains.add(drain);
-              }
               resolve({ kind: "started", value: await work() });
             } catch (error) {
               reject(error);
@@ -176,17 +171,18 @@ export function createBackgroundPageBudget(input: {
     });
   return {
     jobs: (work) => enqueue("job", work),
-    feature: (name) => (work) => enqueue("feature", work, name),
+    feature: (work) => enqueue("feature", work),
     snapshot: () => ({
       started,
       held,
       peakLocalPages,
       peakIsolatePages,
-      afterDrain,
-      admittedDrains: [...admittedDrains],
-      heldDrains: [...heldDrains],
       retryAt,
     }),
+    finishFeatures: () => {
+      featuresPending = false;
+      schedule();
+    },
     close: async () => {
       closed = true;
       holdAll();

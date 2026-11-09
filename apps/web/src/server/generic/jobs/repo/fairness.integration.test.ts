@@ -145,6 +145,8 @@ describe("durable Job selection", () => {
       .where(inArray(job.id, waitingIds));
     const jobReady = Promise.withResolvers<void>();
     const featureReady = Promise.withResolvers<void>();
+    const discoveryReady = Promise.withResolvers<void>();
+    const releaseDiscovery = Promise.withResolvers<void>();
     const releaseJob = Promise.withResolvers<void>();
     const releaseFeature = Promise.withResolvers<void>();
     const payloadBytes = 12 * 1024 * 1024;
@@ -169,8 +171,8 @@ describe("durable Job selection", () => {
             withPayload(async (bytes) => {
               if (claim.id === slow.id) {
                 jobReady.resolve();
-                await releaseJob.promise;
               }
+              await releaseJob.promise;
               expect(bytes[0]).toBe(7);
               return { retainedBytes: bytes.byteLength };
             }),
@@ -179,17 +181,27 @@ describe("durable Job selection", () => {
     };
     const startedFeatures: string[] = [];
     let failLate = false;
+    let expireDiscovery: (() => void) | undefined;
+    const early = admittedDrain({
+      name: "synthetic.early",
+      page: async () =>
+        withPayload(async () => {
+          startedFeatures.push("early");
+          featureReady.resolve();
+          await releaseFeature.promise;
+          return { more: false, nextAt: null, settled: 1 };
+        }),
+    });
     const drains: BackgroundDrain[] = [
-      admittedDrain({
-        name: "synthetic.early",
-        page: async () =>
-          withPayload(async () => {
-            startedFeatures.push("early");
-            featureReady.resolve();
-            await releaseFeature.promise;
-            return { more: false, nextAt: null, settled: 1 };
-          }),
-      }),
+      {
+        name: early.name,
+        page: async (db, round) => {
+          discoveryReady.resolve();
+          await releaseDiscovery.promise;
+          expireDiscovery?.();
+          return early.page(db, round);
+        },
+      },
       admittedDrain({
         name: "synthetic.late",
         page: async () =>
@@ -206,7 +218,17 @@ describe("durable Job selection", () => {
       timeBudgetMs: 30_000,
     });
     try {
-      await Promise.all([jobReady.promise, featureReady.promise]);
+      await Promise.all([jobReady.promise, discoveryReady.promise]);
+      // Discovery latency cannot let later features or a second Job steal its turn.
+      expect(startedFeatures).toEqual([]);
+      expect(
+        await getDb(ctx.db)
+          .select()
+          .from(job)
+          .where(inArray(job.id, waitingIds)),
+      ).toEqual(waitingBefore);
+      releaseDiscovery.resolve();
+      await featureReady.promise;
       expect(retainedBytes).toBe(2 * payloadBytes);
       // A second invocation cannot claim work while the isolate's slots are held.
       const overlap = await runBackgroundRound(ctx.db, handlers, drains, {
@@ -273,16 +295,44 @@ describe("durable Job selection", () => {
         ),
       ).toBe(true);
       failLate = false;
+      await enqueueJob(ctx.db, {
+        key: "synthetic.shared-page.after-failure",
+        kind: "synthetic.shared-page",
+        input: {},
+      });
       const recovered = await runBackgroundRound(ctx.db, handlers, drains, {
         afterDrain: resumed.afterDrain,
       });
       expect(recovered.failures).toEqual([]);
+      expect(recovered.outcomes).toEqual(["succeeded"]);
       expect(recovered.statistics.peakLocalPages).toBe(2);
       expect(peakBytes).toBeLessThanOrEqual(2 * payloadBytes);
       expect(retainedBytes).toBe(0);
+      const expiredClock = vi.spyOn(Date, "now");
+      let expiredAfter: string | undefined;
+      try {
+        expireDiscovery = () =>
+          expiredClock.mockReturnValue(startedAt + 600_000);
+        const expired = await runBackgroundRound(ctx.db, handlers, drains, {
+          afterDrain: "synthetic.late",
+        });
+        expect(expired.afterDrain).toBe("synthetic.early");
+        expect(expired.more).toBe(false);
+        expect(expired.nextAt?.getTime()).toBeGreaterThan(Date.now());
+        expiredAfter = expired.afterDrain;
+      } finally {
+        expireDiscovery = undefined;
+        expiredClock.mockRestore();
+      }
+      const featureOffset = startedFeatures.length;
+      await runBackgroundRound(ctx.db, handlers, drains, {
+        afterDrain: expiredAfter,
+      });
+      expect(startedFeatures.slice(featureOffset)).toEqual(["late", "early"]);
     } finally {
       releaseJob.resolve();
       releaseFeature.resolve();
+      releaseDiscovery.resolve();
       await firstRound;
     }
   });

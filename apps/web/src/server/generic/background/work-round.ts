@@ -40,13 +40,15 @@ export async function runBackgroundRound(
     Date.now() + (options.timeBudgetMs ?? JOB_DRAIN.timeBudgetMs);
   const budget = createBackgroundPageBudget({
     deadline,
-    afterDrain: options.afterDrain,
+    featuresPending: drains.length > 0,
   });
   const after = drains.findIndex((drain) => drain.name === options.afterDrain);
   const ordered = [...drains.slice(after + 1), ...drains.slice(0, after + 1)];
   const failures: UnparsedError[] = [];
   const pages: DrainPage[] = [];
   let outcomes: JobOutcome[] = [];
+  let unvisited = false;
+  let afterDrain = options.afterDrain;
   try {
     const jobs = drainDueJobs(
       db,
@@ -56,19 +58,36 @@ export async function runBackgroundRound(
       JOB_DRAIN.concurrency,
       { deadline, pageWork: budget.jobs },
     );
-    const features = ordered.map((drain) => {
+    const features = (async () => {
       try {
-        return drain.page(db, {
-          deadline,
-          runPage: budget.feature(drain.name),
-        });
-      } catch (error) {
-        return Promise.reject(error);
+        // Preserve the rotated order across discovery I/O, without a parent permit.
+        for (const drain of ordered) {
+          if (Date.now() >= deadline) {
+            unvisited = true;
+            break;
+          }
+          try {
+            pages.push(
+              await drain.page(db, {
+                deadline,
+                runPage: budget.feature,
+              }),
+            );
+          } catch (error) {
+            failures.push(error);
+            log.error("drain page failed", { drain: drain.name, error });
+          } finally {
+            // Discovery visited this registration even if its page missed the deadline.
+            afterDrain = drain.name;
+          }
+        }
+      } finally {
+        budget.finishFeatures();
       }
-    });
+    })();
     const [jobResult, featureResult] = await Promise.allSettled([
       jobs,
-      Promise.allSettled(features),
+      features,
     ]);
     if (jobResult.status === "fulfilled") {
       outcomes = jobResult.value.outcomes;
@@ -77,32 +96,13 @@ export async function runBackgroundRound(
       failures.push(jobResult.reason);
       log.error("Job round failed", { error: jobResult.reason });
     }
-    if (featureResult.status === "fulfilled")
-      for (const [index, result] of featureResult.value.entries()) {
-        if (result.status === "fulfilled") pages.push(result.value);
-        else {
-          failures.push(result.reason);
-          log.error("drain page failed", {
-            drain: ordered[index]?.name,
-            error: result.reason,
-          });
-        }
-      }
-    else failures.push(featureResult.reason);
+    if (featureResult.status === "rejected")
+      failures.push(featureResult.reason);
   } finally {
     // Closing this invocation cannot close a sibling's I/O or abandon its pages.
     await budget.close();
   }
   const statistics = budget.snapshot();
-  const unvisited = ordered.findIndex(
-    (drain) =>
-      statistics.heldDrains.includes(drain.name) &&
-      !statistics.admittedDrains.includes(drain.name),
-  );
-  const afterDrain =
-    unvisited >= 0
-      ? ordered[(unvisited + ordered.length - 1) % ordered.length]?.name
-      : statistics.afterDrain;
   const now = Date.now();
   const due = pages.flatMap((page) =>
     page.nextAt ? [page.nextAt.getTime()] : [],
@@ -111,6 +111,7 @@ export async function runBackgroundRound(
   due.sort((a, b) => a - b);
   const next = due[0];
   const ready =
+    unvisited ||
     pages.some((page) => page.more) ||
     statistics.held > 0 ||
     failures.length > 0 ||

@@ -277,6 +277,11 @@ share only a synchronous counter; they never await another request's promises.
 Denied work stays unclaimed and receives a delayed wake.
 
 Within an invocation, Job and feature opportunities alternate. Feature
+registrations run one at a time in continuation order, alongside Job work, even
+when discovery awaits SQL. While
+that traversal is pending, at most one Job page from the invocation runs; no
+parent permit is held during discovery. Once the traversal ends, Jobs may use
+all free capacity. Individual AI pages still admit independently. Feature
 continuations carry the last visited registration through the existing wake
 message, so a deadline-limited round resumes at unvisited work. A batch prefers
 the newest timestamped continuation; ordinary wakes do not reset it. This is
