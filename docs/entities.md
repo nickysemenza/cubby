@@ -2429,6 +2429,10 @@ Domain envelope projectors use their own canonical per-entity schemas. Product's
 price-only projection does not import the aggregate envelope-schema roster; both
 paths share the same schema instances.
 
+A rank used only to order rows (`rankOf`, such as Product's category path
+order) is never selected as the field's row value; reads take the field's own
+column, so a detail read does not rank the whole target table.
+
 The scaffold compiles one filter plan for repository readers, with population,
 related scopes, result availability, joins and ordering under one owner. Declared
 rollups and result projections cannot be silently replaced by repository SQL.
