@@ -20,7 +20,6 @@ import { backgroundTaskJobKey } from "./kinds";
 const logger = createLogger("jobs");
 export interface PublishOptions {
   readonly source: string;
-  readonly afterDrain?: string;
 }
 
 type WakeMessage =
@@ -52,7 +51,7 @@ async function sendWake(
   }
 }
 
-/** Best-effort wake for intent already committed in Postgres. */
+/** Best-effort permit for intent already committed in Postgres. */
 export async function wakeJobs(
   options: PublishOptions & { queue?: BackgroundQueueProducer },
 ) {
@@ -67,9 +66,6 @@ export async function wakeJobs(
         body: {
           version: BACKGROUND_TASK_MESSAGE_VERSION,
           queueType: "background",
-          ...(options.afterDrain === undefined
-            ? {}
-            : { afterDrain: options.afterDrain }),
         },
       }),
       {
@@ -80,8 +76,8 @@ export async function wakeJobs(
   );
 }
 
-/** A Queue delay at most this long; anything later waits for the hourly cron. */
-const MAX_WAKE_DELAY_SECONDS = 3_600;
+/** Cloudflare Queues' longest delivery delay; anything later waits for the hourly cron. */
+const MAX_WAKE_DELAY_SECONDS = 12 * 3_600;
 
 /**
  * A best-effort wake when known work falls due. Delivery can't be cancelled, so a
@@ -106,9 +102,6 @@ export async function wakeAt(
           version: BACKGROUND_TASK_MESSAGE_VERSION,
           queueType: "background",
           ...(options.ring ? { ring: true as const } : {}),
-          ...(options.afterDrain === undefined
-            ? {}
-            : { afterDrain: options.afterDrain }),
         },
         // A retry still lands when the work is due.
         delaySeconds: delayFromNow(),

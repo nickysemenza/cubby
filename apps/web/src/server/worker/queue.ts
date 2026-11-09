@@ -12,8 +12,8 @@ type QueueDelivery = Omit<BackgroundQueueBatch, "queue"> & {
   readonly queue: string;
 };
 
-// Deliveries wake the durable Job drain and always acknowledge. Job owns
-// retries, including when a wake envelope is unreadable.
+// Each background delivery is one permit to run one unit; the unit's rows own
+// its retries, including when a permit envelope is unreadable.
 export async function handleQueueInvocation(
   batch: QueueDelivery,
   env: Env,
@@ -29,8 +29,8 @@ export async function handleQueueInvocation(
         )
           throw new Error(`Unexpected queue: ${batch.queue}`);
 
-        // A task can launch independent maintenance transactions concurrently.
-        // Lease separate clients and close the bounded pools after the batch.
+        // One shared two-socket pool per invocation, closed when it finishes
+        // (docs/infrastructure.md#background-connection-budget).
         await withInvocationDb(
           env.HYPERDRIVE_BACKGROUND.connectionString,
           async () => {
@@ -51,13 +51,12 @@ export async function handleQueueInvocation(
               db,
               { ...batch, queue: QUEUE_NAMES.background },
               {
-                captureException: (error) => {
-                  Sentry.captureException(error);
+                captureException: (error, unit) => {
+                  Sentry.withScope((scope) => {
+                    if (unit) scope.setTag("cubby.background.unit", unit);
+                    Sentry.captureException(error);
+                  });
                 },
-                // The calendar projection reads only meal/task rows
-                // (`operations/calendar-caldav`), which no background task kind
-                // writes — marking it dirty here scheduled a full re-projection
-                // after every batch (~1,000 during one backfill).
                 afterSuccess: async () => {
                   await recordDatabaseWrite("background-job");
                 },

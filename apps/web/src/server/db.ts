@@ -4,7 +4,12 @@ import { createLogger } from "@cubby/worker-tracing";
 import { drizzle as drizzleNodePostgres } from "drizzle-orm/node-postgres";
 import pg from "pg";
 
-import { getBackgroundDatabaseConnectionString } from "./cf-env";
+import { observeResponseBody } from "~/lib/response-body-observer";
+
+import {
+  afterExecutionTasks,
+  getBackgroundDatabaseConnectionString,
+} from "./cf-env";
 import { Database } from "./db/database";
 import {
   createDatabase,
@@ -83,34 +88,61 @@ const createPoolRuntime = (
     role,
   );
 
+async function closeScope(holder: RequestDatabaseRuntimeScope) {
+  holder.closed = true;
+  const closed = await Promise.allSettled(
+    Object.values(holder.runtimes).map((runtime) => runtime.close?.()),
+  );
+  for (const result of closed) {
+    if (result.status === "rejected")
+      log.error("Failed closing database pool", { error: result.reason });
+  }
+}
+
 /**
- * Run a function with per-request strong and bounded-stale database bindings.
+ * Run a request with per-request strong and bounded-stale database bindings.
  * Pool construction remains lazy: requests that never resolve a Database
- * handle never create a local pg pool or wake the origin database.
+ * handle never create a local pg pool or wake the origin database. The pools
+ * close once the response body finishes and every `waitUntil` task the request
+ * registered has settled; an upgraded socket keeps pg's idle timeout instead.
  */
-export const withRequestDb = async <T>(
+export const withRequestDb = async (
   connections: RequestDbConnections,
-  fn: () => Promise<T>,
-): Promise<T> => {
+  fn: () => Promise<Response>,
+): Promise<Response> => {
   const holder: RequestDatabaseRuntimeScope = {
     kind: "http",
     connections,
     runtimes: {},
   };
-  return requestDbStore.run(holder, fn);
+  let response: Response;
+  try {
+    response = await requestDbStore.run(holder, fn);
+  } catch (error) {
+    await closeScope(holder);
+    throw error;
+  }
+  if (response.status === 101) return response;
+  const finished = Promise.withResolvers<void>();
+  if (!afterExecutionTasks(finished.promise, () => closeScope(holder)))
+    return response;
+  return observeResponseBody(response, () => finished.resolve());
 };
 
 /**
- * Background work leases independent clients through HYPERDRIVE_BACKGROUND
- * inside a Worker; non-Worker tests/scripts use the supplied connection string.
- * A standalone client cannot isolate concurrent transactions by
- * serializing individual statements. Close every opened pool when the awaited
- * invocation or Workflow step finishes; never carry clients across steps.
+ * Background work leases clients through HYPERDRIVE_BACKGROUND inside a
+ * Worker; non-Worker tests/scripts use the supplied connection string. A
+ * standalone client cannot isolate concurrent transactions by serializing
+ * individual statements. One invocation holds one pool, closed when it
+ * finishes; a nested call (a Durable Object service invoked inline from a
+ * queue permit) reuses the open scope instead of opening a second pool.
  */
 export const withInvocationDb = async <T>(
   connectionString: string,
   fn: () => Promise<T>,
 ): Promise<T> => {
+  const active = requestDbStore.getStore();
+  if (active && !active.closed) return fn();
   const invocationConnection =
     getBackgroundDatabaseConnectionString() ?? connectionString;
   const holder: RequestDatabaseRuntimeScope = {
@@ -124,16 +156,7 @@ export const withInvocationDb = async <T>(
   try {
     return await requestDbStore.run(holder, fn);
   } finally {
-    holder.closed = true;
-    const closed = await Promise.allSettled(
-      Object.values(holder.runtimes).map((runtime) => runtime.close?.()),
-    );
-    for (const result of closed) {
-      if (result.status === "rejected")
-        log.error("Failed closing invocation database pool", {
-          error: result.reason,
-        });
-    }
+    await closeScope(holder);
   }
 };
 

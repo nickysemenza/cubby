@@ -15,10 +15,8 @@ import {
   asc,
   eq,
   inArray,
-  isNotNull,
   isNull,
   lte,
-  min,
   or,
   sql,
   type SQL,
@@ -220,22 +218,6 @@ export function embeddingRefreshStore(token: string): EmbeddingRefreshStore {
           ),
         );
     },
-    nextReadyAt: async (db) => {
-      const [row] = await getDb(db)
-        .select({
-          at: sql<Date | null>`min(greatest(${searchDocument.embeddingDueAt}, ${searchDocument.embeddingLeaseUntil}))`.mapWith(
-            searchDocument.embeddingDueAt,
-          ),
-        })
-        .from(searchDocument)
-        .where(
-          and(
-            isNotNull(searchDocument.embeddingDueAt),
-            isNull(searchDocument.deletedAt),
-          ),
-        );
-      return row?.at ?? null;
-    },
   };
 }
 
@@ -270,8 +252,11 @@ export const embeddingCleanupStore: DrainStore = {
               .for("update", { skipLocked: true }),
           ),
         )
-        .returning({ ref: entityEmbedding.id })
-    ).map((row) => item(EMBEDDING_CLEANUP_TARGET, row.ref, 0, 0)),
+        .returning({
+          ref: entityEmbedding.id,
+          attempts: entityEmbedding.deletionAttempts,
+        })
+    ).map((row) => item(EMBEDDING_CLEANUP_TARGET, row.ref, 0, row.attempts)),
   lock: async (tx, items) => {
     if (!items.length) return [];
     const refs = items.map((entry) => entry.ref);
@@ -291,11 +276,15 @@ export const embeddingCleanupStore: DrainStore = {
   },
   // Recording the deletion receipt is what settles an artifact.
   clear: async () => {},
-  defer: async (tx, items) => {
+  defer: async (tx, items, error) => {
     if (!items.length) return;
     await getDb(tx)
       .update(entityEmbedding)
-      .set({ deletionRetryAt: new Date(Date.now() + CLEANUP_RETRY_MS) })
+      .set({
+        deletionRetryAt: new Date(Date.now() + CLEANUP_RETRY_MS),
+        deletionAttempts: sql`${entityEmbedding.deletionAttempts} + 1`,
+        deletionError: error.slice(0, 2000),
+      })
       .where(
         inArray(
           entityEmbedding.id,
@@ -303,11 +292,73 @@ export const embeddingCleanupStore: DrainStore = {
         ),
       );
   },
-  nextReadyAt: async (db) => {
-    const [row] = await getDb(db)
-      .select({ at: min(entityEmbedding.deletionRetryAt) })
-      .from(entityEmbedding)
-      .where(cleanupOwed());
-    return row?.at ?? null;
-  },
 };
+
+/** Permit selection: refresh is due while a live document owes a vector and no page holds it. */
+export const embeddingRefreshDue = (unit: string) =>
+  sql`SELECT ${unit}::text AS unit, false AS demand, min(${searchDocument.embeddingDueAt}) AS since
+    FROM ${searchDocument}
+    WHERE ${searchDocument.embeddingDueAt} <= now() AND ${leaseFree()} AND ${searchDocument.deletedAt} IS NULL
+    HAVING count(*) > 0`;
+export const embeddingRefreshNext = () =>
+  sql`SELECT min(greatest(${searchDocument.embeddingDueAt}, ${searchDocument.embeddingLeaseUntil}))
+    FROM ${searchDocument}
+    WHERE ${searchDocument.embeddingDueAt} IS NOT NULL AND ${searchDocument.deletedAt} IS NULL`;
+
+/** Permit selection: cleanup is due while a stopped artifact still holds a vector. */
+export const embeddingCleanupDue = (unit: string) =>
+  sql`SELECT ${unit}::text AS unit, false AS demand, now()::timestamp AS since
+    -- includes-deleted: a deleted artifact still owes its vector deletion.
+    WHERE EXISTS (SELECT 1 FROM ${entityEmbedding}
+      WHERE ${cleanupOwed()} AND coalesce(${entityEmbedding.deletionRetryAt} <= now(), true))`;
+export const embeddingCleanupNext = () =>
+  sql`SELECT min(coalesce(${entityEmbedding.deletionRetryAt}, now()::timestamp)) FROM ${entityEmbedding} WHERE ${cleanupOwed()}`;
+
+/**
+ * A vector deletion that kept failing stops: its error stays on the artifact,
+ * which Work lists as failed, and `infinity` keeps it out of selection.
+ */
+export async function exhaustEmbeddingCleanup(
+  tx: Database,
+  items: readonly DrainItem[],
+  error: string,
+) {
+  if (!items.length) return;
+  await getDb(tx)
+    .update(entityEmbedding)
+    .set({
+      deletionRetryAt: sql`'infinity'::timestamp`,
+      deletionAttempts: sql`${entityEmbedding.deletionAttempts} + 1`,
+      deletionError: error.slice(0, 2000),
+    })
+    .where(
+      inArray(
+        entityEmbedding.id,
+        items.map((entry) => entry.ref),
+      ),
+    );
+}
+
+/** A refresh that kept failing stops owing; its error and attempts stay for Work. */
+export async function exhaustEmbeddingRefresh(
+  tx: Database,
+  items: readonly DrainItem[],
+  error: string,
+) {
+  if (!items.length) return;
+  await getDb(tx)
+    .update(searchDocument)
+    .set({
+      embeddingDueAt: null,
+      embeddingAttempts: sql`${searchDocument.embeddingAttempts} + 1`,
+      embeddingError: error.slice(0, 2000),
+      embeddingLeaseToken: null,
+      embeddingLeaseUntil: null,
+    })
+    .where(
+      inArray(
+        searchDocument.entityId,
+        items.map((entry) => entry.ref),
+      ),
+    );
+}

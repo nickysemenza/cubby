@@ -28,15 +28,14 @@ export class DerivedRebuildBusyError extends Error {
   }
 }
 
-/** A bounded Worker invocation. Continuations carry no entity IDs or work ownership. */
+/**
+ * One page of the pass per call: a background permit is one unit. True while
+ * the pass has more to do. Continuations carry no entity IDs or work ownership.
+ */
 export async function rebuildDerived(
   db: Database,
   computes: DerivedComputes,
-  {
-    force = false,
-    pageLimit = Number.POSITIVE_INFINITY,
-    deadline = Date.now() + 20_000,
-  }: { force?: boolean; pageLimit?: number; deadline?: number } = {},
+  { force = false }: { force?: boolean } = {},
 ): Promise<boolean> {
   const claim = await claimRebuild(db, force);
   if (!claim) {
@@ -48,7 +47,8 @@ export async function rebuildDerived(
   let current = { target: claim.target, afterId: claim.afterId };
 
   try {
-    for (let page = 0; page < pageLimit; page++) {
+    // A missing declaration resets the cursor first; the loop ends after one real page.
+    for (let page = 0; ; page++) {
       const index = declarations.findIndex(
         (entry) => entry.target === current.target,
       );
@@ -74,8 +74,9 @@ export async function rebuildDerived(
         const compute = computes[declaration.compute];
         if (!compute)
           throw new Error(`Rebuild compute missing: ${declaration.compute}`);
+        // At most 50 records per page bounds the page's prepared values.
         const configured = Math.min(
-          200,
+          50,
           Math.max(1, compute.preparationBatchSize ?? 20),
         );
         let observed: Awaited<ReturnType<typeof beginRebuildPage>>;
@@ -172,7 +173,7 @@ export async function rebuildDerived(
         return false;
       }
       current = next;
-      if (Date.now() >= deadline) break;
+      break;
     }
     await releaseRebuild(db, claim.token);
     log.info("pass invocation yielded", { target: current.target });

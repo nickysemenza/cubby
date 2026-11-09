@@ -19,7 +19,9 @@ supplies the lane and internal-kind flag. Work shows on the Work page and throug
 
 A Job is a unit of execution, not a unit of household work. Work that fans out over many
 records is a **drain** over **items** held on the rows that owe them: `AiEvaluation`,
-`SearchDocument`, `EntityEmbedding` and `ImageProcessingJob` own their scheduling. The first three supply a `DrainStore`
+`SearchDocument`, `EntityEmbedding` and `ImageProcessingJob` own their scheduling.
+A drain unit's only `Job` row is its `background.drain` record (rotation and
+latest execution); it never holds or schedules items. The first three supply a `DrainStore`
 (`generic/jobs/drain-store.ts`). An item's ticket says which intent a page may settle, so a
 re-mark during a page takes a new ticket, and the page clears only what it claimed. The
 derived rebuild is a resumable pass with its own row, not items.
@@ -35,12 +37,13 @@ paid results survive publication failure on the evaluation row. No synthetic Job
 context or claim generation stands in for that ownership.
 
 Published and failed counts record committed settlements, once each even
-when a serializable transaction replays. Retained items stay owed. Empty pages
-report their next due time; they have no idle publication or recurring Job.
+when a serializable transaction replays. Retained items stay owed. Each drain
+declares SQL for when it is due now and when it is next due; an empty page
+publishes nothing and schedules nothing.
 Email purchase discovery holds one AppSettings cursor, publishes the
 `connection.email-purchase` recommendation Suggestions for Emails whose retained
-evidence suggests a purchase link, and repeats hourly. It runs deterministic SQL:
-no model, no Run and no evaluation.
+evidence suggests a purchase link, and repeats hourly (its cursor's `nextAt` is
+its `next`). It runs deterministic SQL: no model, no Run and no evaluation.
 
 One-record work stays a Job: Run execution, Location AI, image metadata,
 calendar invalidation and purchase dispatch. Image processing owns its own row.
@@ -51,21 +54,25 @@ only stored wait deadline. Completed Jobs remain until retention prunes them.
 ## Kinds and lanes
 
 `apps/web/src/server/generic/jobs/kind-policy.ts` is the one registry of
-per-kind policy: lane, internal flag, `maxAttempts` (null never exhausts) and
+per-kind policy: lane, internal flag, `maxAttempts` (every kind has one) and
 failure backoff. A kind absent there is a server kind with three attempts and
 1 s doubling to 60 s backoff. Each lane names the executor that runs it:
 
-| Lane       | Kinds               | Executor                        |
-| ---------- | ------------------- | ------------------------------- |
-| `external` | `purchase.dispatch` | a coordinator outside the drain |
-| `server`   | every other kind    | the server drain                |
+| Lane       | Kinds               | Executor                                        |
+| ---------- | ------------------- | ----------------------------------------------- |
+| `external` | `purchase.dispatch` | a coordinator, handed off by a permit           |
+| `server`   | every other kind    | a [background permit](#selection-and-admission) |
 
-Device image work is parked on its own row and never reaches the drain.
+`background.drain` is an internal record kind: one completed row per drain
+unit (`key` `drain:<unit>`) whose `lastClaimedAt` places the unit in rotation.
+It is never claimed or executed.
+
+Device image work is parked on its own row and never reaches a permit.
 Enqueueing it rings connected
 companions after commit, and a companion connecting to the doorbell is rung at
 once; there is no polling interval. Work that comes due later (a failure
 backoff, a deferral, a lapsed lease, a delayed release) rings through a
-Queue-delayed wake carrying `ring`. A delay past one hour is left to the hourly
+Queue-delayed permit carrying `ring`. A delay past twelve hours is left to the hourly
 cron, which also covers a lost message and rings whenever parked work is
 claimable. A doorbell RPC failure fails the delivery, so it retries; reaching
 no open socket is not a failure. A release with no delay also rings at once
@@ -180,9 +187,8 @@ visible for recovery instead of hiding it as an automatic wait.
 
 Mailbox discovery acquires at most five messages from its frozen provider page
 per Job claim. Each lane fetches and publishes in source order without buffering
-several full originals. Independent search Runs share the background round's
-two-page isolate budget and database sockets; feature traversal leaves room
-for at most one Job from that round. Its durable message offset resumes the remaining
+several full originals. Each claim runs in its own permit with that permit's
+two database sockets. Its durable message offset resumes the remaining
 messages without replaying the completed prefix; absent offsets on retained
 pages mean zero.
 
@@ -261,71 +267,46 @@ producers.
 
 ## Selection and admission
 
-`dueJobs` (private to `generic/jobs`) selects up to `JOB_DRAIN.batch` due
-Jobs from one snapshot:
+The `cubby-background` queue carries permits. Each message lets one
+invocation run ONE unit: one Job page, or one page of a named drain (cloud
+images, embedding refresh, embedding cleanup, one AI evaluation feature as
+`ai-evaluation:<feature>`, the derived rebuild, and reconciliation). The
+queue's `maxConcurrency` (8, batch size 1, in
+`packages/shared/src/background-queue-consumer.json`) is the only concurrency
+bound; there is no in-isolate admission, page or wall budget, round or
+Job/feature alternation.
 
-1. `run.execute` and Jobs whose `runId` is a running, member-visible Run lead
-   (routine Runs such as connection discovery do not).
-2. Within each class, kinds take turns: every kind's first Job, then every
-   kind's second, with the least recently claimed kind first; within a kind,
-   priority then age. A 100k flood of one kind therefore never starves
-   another.
+`dueUnits` (private to `generic/jobs`) chooses the unit in one statement over
+due Jobs and every drain's `due` SQL:
 
-Timed Jobs and woken Jobs scan separately, so terminal history is never
-searched to find a wake. The latest claim per kind comes from the
-`(kind, lastClaimedAt)` index, including completed Jobs so that finishing a
-pass never erases its service history.
+1. `run.execute`, Jobs whose `runId` is a running, member-visible Run, and drain
+   units with member demand (an AI evaluation at priority 0, a Run-owned cloud
+   image) lead (routine Runs such as connection discovery do not).
+2. Within each class, units take turns: every unit's first candidate, then
+   every Job kind's second, least recently served first (a Job kind's latest
+   claim from the `(kind, lastClaimedAt)` index, a drain unit's
+   `background.drain` record row); within a kind, priority then age. A 100k
+   flood of one kind therefore never starves another.
+
+A permit tries up to eight candidates in that order and runs the first it can
+claim (`SKIP LOCKED`; a sibling's held row is skipped, not awaited). A unit
+that claimed work sends exactly one successor permit for the earliest owed work
+across Jobs, leases and drains (`nextDueAt`): now if anything is due, else
+delayed until it is due (at most twelve hours). A permit that claimed nothing,
+including an over-produced one, exits after its one selection query and sends
+nothing, and a failed drain page sends no successor; so wake chains end when
+the household goes idle. A Job claim also sends one delayed permit for its
+lease lapsing, so a killed invocation is recovered without waiting for cron.
 
 Member-first ordering inside a drain is item priority: root transactions in
 Job execution mark derived inputs at priority 1, member transactions at 0, and
 savepoints inherit the outer transaction's priority.
 
-Job pages and feature pages share two preparation/publication slots per Worker
-isolate. A Job acquires capacity before selection and claim; AI feature pages and
-cloud image dispatches acquire it separately, without holding a parent slot.
-Ordinary row drains acquire one slot per page. A derived rebuild turn publishes
-at most one page. Slots remain held through publication and are released when
-the page settles, including errors. Overlapping queue and hourly invocations
-share only a synchronous counter; they never await another request's promises.
-Denied work stays unclaimed and receives a delayed wake.
-
-Within an invocation, Job and feature opportunities alternate. Feature
-registrations run one at a time in continuation order, alongside Job work, even
-when discovery awaits SQL. While
-that traversal is pending, at most one Job page from the invocation runs; no
-parent permit is held during discovery. Once the traversal ends, Jobs may use
-all free capacity. Individual AI pages still admit independently. Feature
-continuations carry their position through the existing wake message. A later
-registration that requests capacity but starts no page gets the first opportunity
-in the next round; discovery I/O in a short remaining window cannot repeatedly
-skip it. The first registration still yields when denied, so long discovery or
-unavailable capacity cannot pin the head. Other visited registrations advance the
-position normally. A batch prefers
-the newest timestamped continuation; ordinary wakes do not reset it. This is
-best-effort service fairness, not a durable per-feature allocation or a delivery
-deadline. Two already-running slow pages can occupy both slots until they
-settle; paid calls are not preempted. The queue consumer still runs one batch at
-a time (`maxConcurrency: 1` in
-`packages/shared/src/background-queue-consumer.json`).
-
-Free lanes refill while siblings run. A refused claim of an uncapped
-kind stays excluded until another page makes progress, then rejoins fair
-selection; progress during an in-flight refusal also permits reconsideration.
-Capped kinds remain excluded for the invocation. Refusals still consume the
-existing page budget, so locked rows cannot spin without bound. An escaped lane
-error stops new selection, and the round joins started sibling pages before
-returning it. The 20-second start deadline is rechecked before admission and
-claim; an in-flight provider call may cross it and still publish. Unvisited or
-admission-denied work alone schedules a bounded 15-second recheck, rather than
-an immediate no-progress wake. Real progress with remaining due work can wake
-immediately. The hourly backstop remains available if a wake is lost.
-
-This limits participating pages, not bytes or total heap. HTTP requests,
-maintenance, response decoding and each page's payload can add allocations.
-Round diagnostics report admitted and held units, peak participating pages and
-the continuation position; native Worker outcomes remain the memory-failure
-source of truth. Existing source limits, retained paid results, lease recovery,
-funding deadlines and claim/publication fences remain unchanged.
+This bounds concurrent units, not bytes or heap: each page's payload,
+HTTP requests and response decoding still allocate. Native Worker outcomes
+remain the memory-failure source of truth. Existing source limits, retained
+paid results, lease recovery, funding deadlines and claim/publication fences
+remain unchanged.
 
 A device pull (`claimCompanionImageCommands`) claims, prepares, assigns and
 reserves output in one transaction under an advisory lock, so concurrent batches
@@ -344,7 +325,7 @@ available. Retained label receipts still need ordered, fresh-evidence automatic
 application, even when the page asks no model questions. Smaller pages commit
 completion and the remaining cursor before those repeated reads accumulate
 across 32 charges. This bounds work between checkpoints, not total invocation
-CPU: a drain can execute other pages within its existing wall-time budget.
+CPU.
 Cooperative label application also checks its existing 20-second deadline
 between charges while no financial rule has applied in that round. It settles at least one
 charge, then leaves the untouched suffix's receipts and inclusive cursor for
@@ -417,8 +398,7 @@ measure heap usage or establish a memory bound.
 automatic rules and refused-rule evidence check, then the page's receipt
 completion. Payloads contain only phase names, charge indices and counts.
 These entry events distinguish interrupted application work without retaining
-proposal graphs or logging source content. They do not attribute invocation CPU
-to one Job: maintenance and evaluation pages can run in the same invocation.
+proposal graphs or logging source content.
 
 A handler has one shape: `prepare(db, claim, input, ctx)` reads and calls
 providers outside a transaction and returns an outcome with an optional
@@ -462,7 +442,7 @@ migrations checks, test setup) import `db/drizzle-schema.ts`.
 ## Wakes
 
 A Job is due when it is queued or in backoff and its time has come, or when its lease has
-expired. A wake is only a Queue message that makes the drain look sooner (`wakeJobs`, `wakeAt`);
+expired. A permit is only a Queue message that makes a unit run sooner (`wakeJobs`, `wakeAt`);
 it carries no durable state, and the hourly cron recovers a lost one. `enqueueJob({ invalidate:
 true })` is the only restart: it bumps the generation and clears the lease, so the old pass
 fails its fence. Email purchase discovery repeats through its cursor; automatic work has no recurring Job.
@@ -472,33 +452,54 @@ fails its fence. Email purchase discovery repeats through its cursor; automatic 
 Claiming is not an attempt; a failure is, and so is reclaiming an expired
 lease (the previous executor vanished mid-pass, and a crash loop must still
 exhaust). A failed Job backs off by its policy, `baseMs · 2^(failures - 1)` up
-to `maxMs`, and fails after `maxAttempts`; `maxAttempts: null` never exhausts. `releaseJobClaim` hands a claim back without an
-attempt, and deferrals never count. Drain items keep their own attempts and
-backoff.
+to `maxMs`, and fails after `maxAttempts`; every kind has a bound, and a row
+stored with a null column uses its kind's. `releaseJobClaim` hands a claim back
+without an attempt, and deferrals never count.
+
+Transient failures — a Hyperdrive pool-slot timeout (SQLSTATE 58000, "Timed out
+while waiting for an open slot in the pool"), a dropped connection, a
+`JobRetryableError` or an exhausted snapshot replay — back off without spending
+attempts; their delay grows with the failing streak's age. `failingSince` records
+the streak's first failure and any successful or deferred page clears it.
+Whatever the class, a Job still failing `JOB_FAILING_LIMIT_MS` (24 hours) after
+its streak began fails visibly. Funding and provider waits stay `JobDeferredError`
+/ `waiting_on` and never start a streak.
+
+Drain items are bounded too: AI evaluations settle `failed` after three
+non-transient failures; an embedding refresh stops owing after 100 failures
+(about a day at its 15-minute cap) and a vector deletion after 288 five-minute
+retries, each keeping its error for Work's failed list; image processing stops
+retrying after twelve failures (about a day and a half of doubling backoff) and
+waits for explicit retry. Transient failures defer an item without exhausting it.
 
 Serialization recovery is bounded inside a DB-only snapshot transaction. If all
 attempts roll back, its owner emits `SnapshotWriteConflictError`; the durable Job
-then backs off without exhausting its attempt budget. A raw SQLSTATE on an
-after-commit effect is not this signal and cannot request unbounded replay.
-Location description and inventory-analysis Jobs also never exhaust and use a
-one-minute base with a fifteen-minute backoff cap: unchanged
-failures keep diagnostics and backoff until corrected code or input heals them.
-The model-input recovery migration reopens their retained failures and proven
-failed outer Email gates, preserving checkpoints, attempts and errors. Reopened
-location work is staggered over fifteen minutes without advancing an existing
-future deadline. When the recovered universal Job executes, its matching Run reconciled to
-`job_failed` returns to running under the Job fence. Another active Run owning
-the admission slot causes retry backoff until it finishes. Admission waits
-reserve exactly one further attempt, rather than conserving the ordinary failure
-budget;
-member-controlled, retired and superseded Runs are excluded. Member
-pauses/cancellations and running leases keep their states.
+then backs off as a transient failure. A raw SQLSTATE on an after-commit effect
+is not this signal and cannot request unbounded replay.
+Location description and inventory-analysis Jobs use a one-minute base with a
+fifteen-minute backoff cap and ten attempts. When a recovered universal Job
+executes, its matching Run reconciled to `job_failed` returns to running under
+the Job fence. Another active Run owning the admission slot causes retry backoff
+until it finishes. Admission waits reserve exactly one further attempt, rather
+than conserving the ordinary failure budget; member-controlled, retired and
+superseded Runs are excluded. Member pauses/cancellations and running leases
+keep their states.
+
+### Execution records
+
+Every execution writes `Job.lastExecution` (`jobExecution` in
+`packages/schemas/src/job.ts`): outcome, error class, wall milliseconds, database
+query count and time, the charged AI cost recorded during it, the Worker version
+and its finish time. A drain unit records the same on its `background.drain`
+row, with its claimed, published and failed item counts. Failed Job executions
+and failed drain pages reach Sentry tagged `cubby.background.unit` with the Job
+kind or drain unit.
 
 Retry now (`job.retryNow`, `retryJobsNow`) makes a filtered set due at once:
 backoff and provider waits clear, prior errors stay, failed and cancelled Jobs
 reopen with a fresh budget and generation, and running or member-paused Jobs
 are left alone. A Run cancel is one set-based statement (`cancelRunJobs`);
-never-exhausting work belongs to its subject and survives a Run cancel.
+subject-owned work (Location AI) belongs to its subject and survives a Run cancel.
 
 `run.funding-resume` is keyed by funding window, not Run: its one handler
 resumes every funding-paused Run. A funding-paused import stays `paused_auth`
@@ -642,7 +643,7 @@ model, network or other processing errors as negative cutouts.
 `ImageProcessingJob` is the sole owner of image execution: `lane`, `runAt`,
 `leaseUntil`, `failures`, `waitReason` and the current `attemptId` live on the row,
 and nothing else queues it. Cloud rows run through `cloudImageDrain`, a registered
-drain (`generic/background/drains.ts`) with no Job row: it claims due rows under a
+drain (`generic/background/drains.ts`) whose items have no Job row: it claims due rows under a
 16-minute lease that nothing renews, because no consumer outlives 15 minutes. A
 crashed page is reclaimed after that, and a reclaim counts as a failure.
 `imageProcessingLane` fixes each job's lane: subject lifts, Apple descriptions
@@ -728,7 +729,8 @@ recorded charged usage. Apple Activity hands the household queue off to
 The web audit-log changes feed follows the queue.
 
 The hourly cron calls `maintainJobs` directly: one bounded image-repair page and
-one retention page per tick. No maintenance Job or result timestamp is enrolled.
+one retention page per tick. It also reconciles stopped executions and
+dispatches each tick (`reconcileStoppedWork`). No maintenance Job or result timestamp is enrolled.
 Completed Jobs retain eight days, cancelled fourteen and failed thirty, under
 the existing pending-work and identity safeguards. A failed Job whose Run is
 terminal, not manual, not a member request and not mail or financial import work
@@ -747,9 +749,9 @@ or rebuild pages, never invented execution counts. Run ETA reads remain
 unchanged. Search repair reports committed record computations and failed pages;
 its unknown total stays indeterminate.
 
-A Queue batch runs one drain attempt, even on failure. All messages acknowledge
-or retry consistently. Job and row drains return continuation hints; their round
-owner coalesces the wake. Pre-execution recovery wakes remain armed.
+A permit acknowledges whatever its unit's outcome: the unit's rows own its
+retries. Only a failure before or around selection (the database unreachable)
+retries delivery, three times, 30 seconds apart.
 
 | Job kind                                                     | Why a row                                      | Owner of the result           |
 | ------------------------------------------------------------ | ---------------------------------------------- | ----------------------------- |
@@ -853,7 +855,7 @@ work.
 
 ### Embedding execution
 
-Embeddings run on two registered drains with no Job row
+Embeddings run on two registered drains whose items have no Job row
 (`generic/background/drains.ts`). A `SearchDocument` owes a fresh embedding when
 `embeddingDueAt` is set; a failure backs off on the document, and Vectorize
 visibility polling reschedules it without spending an attempt. An `EntityEmbedding`
@@ -929,7 +931,8 @@ questions and Sweeps are the only producers of field evaluations; no discovery
 drain walks the household. Nothing queues an evaluation: `AiEvaluation.runAt` is set while
 the drain owes it (`priority` 0 when the owner or an uncancelled requester is a
 running, member-visible Run nobody scheduled; otherwise 1) and null once it settled
-or parked. Each round pages up to two features, most urgent first. A page claims
+or parked. Each feature is its own permit unit, so features page in parallel up
+to the queue's concurrency. A page claims
 rows under one `leaseToken`, a 16-minute lease nothing renews because no consumer
 outlives 15 minutes. The token is the attempt (`aiEvaluationAttemptToken`), and a
 mark never takes a held lease, because that page may be paying the provider: no
@@ -962,7 +965,7 @@ spending attempts; anything else is the item's failure, and its third
 consecutive failure settles the evaluation `failed` with the raw error and
 settles its requesters. A Run cancel withdraws its requests and stops owing
 evaluations no other requester still wants. Paid concurrency is bounded by the
-one queue consumer and the two feature lanes.
+queue's `maxConcurrency`.
 
 A governed target field whose current result is unavailable is that target's
 failure (`JobTargetError`), not an empty value or obsolete evidence. At
@@ -1053,26 +1056,22 @@ retired Runs is also suspended; those findings remain stored.
 ## Deadline scheduling and idle recovery
 
 PostgreSQL owns Jobs, drain items, claims, progress, member pauses and retry policy.
-The queue executes ready work immediately; subsequent pages continue while work
-is runnable. Kind capacity refusals do not themselves generate immediate wake loops.
-Nothing but Postgres holds a deadline. At the end of a round the drains and the Job
-drain each send one Queue-delayed wake for their next known due time, up to one hour
-out; the hourly cron reaches anything later and anything whose message was lost. Each
-round that claims a Job first arms a wake for its lease to lapse, so a killed
-invocation recovers without waiting for the cron. A wake cannot be cancelled, so a
-stale one touches Postgres once and finds nothing due. A process dying between commit
-and its post-commit signal recovers on app-open or the next hourly tick.
+Nothing but Postgres holds a deadline. A unit's successor permit is delayed to the
+next owed time (at most twelve hours, Cloudflare Queues' delivery-delay limit);
+the hourly cron reaches anything later and anything whose message was lost. A
+permit cannot be cancelled, so a stale one touches Postgres once and finds nothing
+due. A process dying between commit and its post-commit signal recovers on app-open
+or the next hourly tick.
 
-Queue maintenance finishes after bounded repair/retention pages instead of repeating every
-five minutes. Existing Job identities, cursors, tickets, errors and stops survive.
-
-The cron fires hourly and drains whatever is due, so it is the timer for work due
-later and the backstop for a lost wake. Daily recovery runs at 7 a.m.
+The hourly cron is the timer for work due later and the backstop for a lost permit
+or broken delivery: it reconciles, runs `maintainJobs`, runs units itself for up
+to five minutes, then sends up to `maxConcurrency` permits for what is still due
+(one delayed permit when the next work is later). Daily recovery runs at 7 a.m.
 America/Los_Angeles: the invocation at that household hour also runs the daily pass.
 Every daily step is idempotent, and the nightly pass is keyed by its household date
 (`Run.clientKey`), so a repeated invocation reuses that date's pass even after it
 finished. Only an earlier date's budget-paused pass makes way for a new one. A failed
-wake send retries three times over about five seconds before the hourly cron is its
+permit send retries three times over about five seconds before the hourly cron is its
 only recovery.
 The first hourly tick after a deploy activates that Worker version's AI policy.
 App-open coalesces recovery and mail discovery. Gmail provider push is not implemented here.

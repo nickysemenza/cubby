@@ -3,6 +3,7 @@ import type { JobWaitReason } from "@cubby/schemas/job";
 import type { UnparsedError } from "~/lib/error-utils";
 import {
   findPgError,
+  isTransientConnectionError,
   SnapshotWriteConflictError,
 } from "~/server/errors/db-errors";
 
@@ -65,9 +66,12 @@ export function classifyJobFailure(
     return { kind: "isolated" };
   // A fresh durable attempt can recover after bounded whole-transaction replay.
   // Classification never replays a committed transaction or its effects here.
+  // A Hyperdrive pool-slot timeout (58000) or a dropped connection is capacity,
+  // not the work's fault: it backs off without spending attempts.
   if (
     chain.some((cause) => cause instanceof JobRetryableError) ||
-    chain.some((cause) => cause instanceof SnapshotWriteConflictError)
+    chain.some((cause) => cause instanceof SnapshotWriteConflictError) ||
+    isTransientConnectionError(error)
   )
     return { kind: "transient" };
   return { kind: "failed" };

@@ -1,0 +1,149 @@
+{
+  "type": "diff",
+  "version": "9",
+  "dialect": "postgres",
+  "id": "6ad7cece-fada-45ad-9857-948ee518ff75",
+  "prevIds": [
+    "04ccf317-c1a6-45d3-895c-46c8051782b3"
+  ],
+  "footprints": [
+    {
+      "statementType": "add_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "EntityEmbedding",
+        "deletionAttempts"
+      ],
+      "writes": [
+        "s|col|public.EntityEmbedding.deletionAttempts",
+        "n|col|public.EntityEmbedding.deletionAttempts",
+        "e|col|public.EntityEmbedding.deletionAttempts"
+      ],
+      "reads": [
+        "n|tbl|public.EntityEmbedding",
+        "n|sch|public"
+      ]
+    },
+    {
+      "statementType": "add_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "EntityEmbedding",
+        "deletionError"
+      ],
+      "writes": [
+        "s|col|public.EntityEmbedding.deletionError",
+        "n|col|public.EntityEmbedding.deletionError",
+        "e|col|public.EntityEmbedding.deletionError"
+      ],
+      "reads": [
+        "n|tbl|public.EntityEmbedding",
+        "n|sch|public"
+      ]
+    },
+    {
+      "statementType": "add_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "Job",
+        "failingSince"
+      ],
+      "writes": [
+        "s|col|public.Job.failingSince",
+        "n|col|public.Job.failingSince",
+        "e|col|public.Job.failingSince"
+      ],
+      "reads": [
+        "n|tbl|public.Job",
+        "n|sch|public"
+      ]
+    },
+    {
+      "statementType": "add_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "Job",
+        "lastExecution"
+      ],
+      "writes": [
+        "s|col|public.Job.lastExecution",
+        "n|col|public.Job.lastExecution",
+        "e|col|public.Job.lastExecution"
+      ],
+      "reads": [
+        "n|tbl|public.Job",
+        "n|sch|public"
+      ]
+    }
+  ],
+  "deltas": [
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "EntityEmbedding",
+        "name": "deletionAttempts",
+        "type": "integer",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "0",
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "EntityEmbedding",
+        "name": "deletionError",
+        "type": "text",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "Job",
+        "name": "failingSince",
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "Job",
+        "name": "lastExecution",
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    }
+  ]
+}

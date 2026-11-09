@@ -125,9 +125,7 @@ async function advanceCleanup(db: Database, store: VectorStorePort) {
     .update(entityEmbedding)
     .set({ deletionRetryAt: null })
     .where(isNotNull(entityEmbedding.deletionRetryAt));
-  await embeddingCleanupDrain(store).page(db, {
-    deadline: Date.now() + 30_000,
-  });
+  await embeddingCleanupDrain(store).page(db, "embedding.cleanup");
 }
 
 describe("embedding refresh and cleanup drains", () => {
@@ -163,28 +161,28 @@ describe("embedding refresh and cleanup drains", () => {
       },
     };
     await markRefresh(ctx.db, [ref]);
-    const deadline = () => ({ deadline: Date.now() + 30_000 });
-    const first = embeddingRefreshDrain(port).page(ctx.db, deadline());
+    const unit = "embedding.refresh";
+    const first = embeddingRefreshDrain(port).page(ctx.db, unit);
     await inFlight;
 
     await markRefresh(ctx.db, [ref]);
     const [remarked] = await embeddingWorkFor(ctx.db, [ref.entityId]);
     expect(remarked?.readyAt?.getTime()).toBeLessThanOrEqual(Date.now());
-    const sibling = await embeddingRefreshDrain(port).page(ctx.db, deadline());
-    expect(sibling.more).toBe(false);
+    const sibling = await embeddingRefreshDrain(port).page(ctx.db, unit);
     // The sibling waits for the lease rather than the due time.
-    expect(sibling.nextAt?.getTime()).toBeGreaterThan(Date.now() + 60_000);
+    expect(sibling.claimed).toBe(0);
 
     release();
-    const settled = await first;
+    await first;
     expect(calls).toHaveLength(1);
     // The latest intent is still owed and is claimable straight away.
-    expect(settled.nextAt?.getTime()).toBeLessThanOrEqual(Date.now());
+    const [owed] = await embeddingWorkFor(ctx.db, [ref.entityId]);
+    expect(owed?.readyAt?.getTime()).toBeLessThanOrEqual(Date.now());
     const [submitted] = await selectArtifacts(ctx.db, ref.entityId);
     expect(submitted).toMatchObject({ artifactState: "submitted" });
     expect(remote.upserted).toHaveLength(1);
 
-    await embeddingRefreshDrain(port).page(ctx.db, deadline());
+    await embeddingRefreshDrain(port).page(ctx.db, unit);
     await advanceRefresh(ctx.db, port);
     expect(calls).toHaveLength(1);
     expect(remote.upserted).toHaveLength(1);

@@ -52,9 +52,7 @@ export async function advanceEmbeddingFixture(
     .update(searchDocument)
     .set({ embeddingDueAt: new Date(0) })
     .where(isNotNull(searchDocument.embeddingDueAt));
-  await embeddingRefreshDrain(port).page(db, {
-    deadline: Date.now() + 30_000,
-  });
+  await embeddingRefreshDrain(port).page(db, "embedding.refresh");
 }
 
 export async function embedFixtures(

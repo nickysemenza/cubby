@@ -6,6 +6,8 @@ import type { Database } from "~/server/db";
 import { retrieveEmailConnectionCandidates } from "~/server/domains/connection/repo/email-connections";
 import {
   EMAIL_PURCHASE_PAGE,
+  emailPurchaseDiscoveryDue,
+  emailPurchaseDiscoveryNext,
   emailPurchaseDiscoveryPage,
   emailsWithSuggestedPurchases,
 } from "~/server/domains/connection/repo/email-purchase-cursor";
@@ -13,10 +15,7 @@ import {
   prepareEntityConnectionEvidence,
   publishPreparedEntityConnections,
 } from "~/server/domains/connection/repo/entity-connections";
-import {
-  admittedDrain,
-  type BackgroundDrain,
-} from "~/server/generic/background/drains";
+import type { BackgroundDrain } from "~/server/generic/background/drains";
 
 const log = createLogger("email-purchase-discovery");
 const PASS_INTERVAL_MS = 60 * 60_000;
@@ -39,13 +38,15 @@ export async function discoverEmailPurchaseConnections(
 }
 
 /** The routine pass over Emails whose retained evidence suggests a purchase link. */
-export const emailPurchaseDiscoveryDrain: BackgroundDrain = admittedDrain({
+export const emailPurchaseDiscoveryDrain: BackgroundDrain = {
   name: "email-purchase-discovery",
+  due: () => emailPurchaseDiscoveryDue("email-purchase-discovery"),
+  next: emailPurchaseDiscoveryNext,
   page: (db) =>
     emailPurchaseDiscoveryPage(db, async (tx, cursor) => {
       if (cursor.nextAt && Date.parse(cursor.nextAt) > Date.now())
         return {
-          result: { more: false, nextAt: new Date(cursor.nextAt) },
+          result: { claimed: 0, nextAt: new Date(cursor.nextAt) },
           next: cursor.after,
         };
       const emails = await emailsWithSuggestedPurchases(tx, cursor.after);
@@ -64,11 +65,12 @@ export const emailPurchaseDiscoveryDrain: BackgroundDrain = admittedDrain({
       const next =
         emails.length === EMAIL_PURCHASE_PAGE ? emails.at(-1)!.id : null;
       return {
+        // The page ran even when it found nothing: its successor waits an hour.
         result: {
-          more: next !== null,
+          claimed: Math.max(1, emails.length),
           nextAt: next ? null : new Date(Date.now() + PASS_INTERVAL_MS),
         },
         next,
       };
     }),
-});
+};

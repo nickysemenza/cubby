@@ -2,6 +2,7 @@ import type { RunId } from "@cubby/schemas/identifiers";
 import {
   jobState,
   jobWaitReason,
+  type JobExecution,
   type JobPayload,
   type JobState,
   type JobWaitReason,
@@ -56,6 +57,10 @@ export const job = pgTable(
     leaseExpiresAt: timestamp("leaseExpiresAt", { mode: "date" }),
     lastClaimedAt: timestamp("lastClaimedAt", { mode: "date" }),
     error: text("error"),
+    /** First failure of the current failing streak; cleared by any successful or deferred page. */
+    failingSince: timestamp("failingSince", { mode: "date" }),
+    /** The latest execution of this Job or drain unit (`jobExecution`). */
+    lastExecution: jsonb("lastExecution").$type<JobExecution>(),
     createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
     updatedAt: timestamp("updatedAt", { mode: "date" })
       .notNull()

@@ -7,25 +7,11 @@ import { runWithExecutionCtx } from "~/server/cf-env";
 import { wakeAt, wakeJobs } from "./publish";
 
 describe("Job wake transport", () => {
-  it("sends only a versioned wake and fair cursor, with no domain payload", async () => {
+  it("sends only a versioned permit, with no domain payload", async () => {
     const sendBatch = vi.fn().mockResolvedValue(undefined);
     await wakeJobs({ source: "synthetic-test", queue: { sendBatch } });
     expect(sendBatch).toHaveBeenCalledWith([
       { body: { version: 3, queueType: "background" } },
-    ]);
-    await wakeJobs({
-      source: "synthetic-continuation",
-      afterDrain: "synthetic.late",
-      queue: { sendBatch },
-    });
-    expect(sendBatch).toHaveBeenLastCalledWith([
-      {
-        body: {
-          version: 3,
-          queueType: "background",
-          afterDrain: "synthetic.late",
-        },
-      },
     ]);
   });
 

@@ -15,7 +15,10 @@ import {
   type EmbeddingUploadReceipt,
 } from "~/server/generic/embedding/repo/embedding-drain";
 import {
+  embeddingRefreshDue,
+  embeddingRefreshNext,
   embeddingRefreshStore,
+  exhaustEmbeddingRefresh,
   postponeEmbeddingRefresh,
   type EmbeddingRefreshStore,
 } from "~/server/generic/embedding/repo/embedding-work";
@@ -31,6 +34,8 @@ import {
 } from "~/server/workflows/background-tasks/embedding";
 
 const PAGE_LIMIT = 100;
+/** With the 15-minute backoff cap, about 24 hours of failing before it stops. */
+const EMBEDDING_MAX_ATTEMPTS = 100;
 const REQUEST_ITEM_LIMIT = 2048;
 const REQUEST_BYTES_LIMIT = 300_000;
 const INPUT_BYTES_LIMIT = 8_192;
@@ -218,16 +223,19 @@ async function prepareRefreshPage(
 export function embeddingRefreshDrain(
   port: EmbeddingRefreshPort = productionEmbeddingRefreshPort,
 ): BackgroundDrain {
+  const name = "embedding.refresh";
   return {
-    name: "embedding.refresh",
-    async page(db, round) {
-      if (!port.configured()) return { more: false, nextAt: null };
+    name,
+    due: () => (port.configured() ? embeddingRefreshDue(name) : null),
+    next: () => (port.configured() ? embeddingRefreshNext() : null),
+    async page(db) {
       const store = embeddingRefreshStore(crypto.randomUUID());
       return rowDrain<RefreshPage>({
-        name: "embedding.refresh",
         store,
         backoff: EMBEDDING_BACKOFF,
         limit: PAGE_LIMIT,
+        maxAttempts: EMBEDDING_MAX_ATTEMPTS,
+        exhaust: exhaustEmbeddingRefresh,
         prepare: (pageDb, items, context) =>
           prepareRefreshPage(port, store, pageDb, items, context),
         lock: async (tx, items, prepared) => {
@@ -251,7 +259,7 @@ export function embeddingRefreshDrain(
           await publishEmbeddingDrainSelections(tx, store, items, prepared);
           return { retain: postponed };
         },
-      }).page(db, round);
+      })(db);
     },
   };
 }

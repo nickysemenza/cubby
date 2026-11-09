@@ -1,28 +1,24 @@
 import { createLogger } from "@cubby/worker-tracing";
 import { z } from "zod";
 
+import type { UnparsedError } from "~/lib/error-utils";
+import { getWorkerVersion } from "~/server/cf-env";
 import type { Database } from "~/server/db";
-import {
-  runBackgroundPage,
-  type PageWork,
-} from "~/server/generic/background/page-budget";
 import {
   withJobExecution,
   type JobExecutionDetails,
 } from "~/server/generic/jobs/context";
 import { classifyJobFailure } from "~/server/generic/jobs/failure";
-import { JOB_DRAIN } from "~/server/generic/jobs/limits";
+import { withExecutionMetrics } from "~/server/generic/jobs/page-work";
 import {
   assertJobClaim,
   claimJob,
-  dueJobs,
   fenceJob,
   failJob,
   fencedJobTransaction,
-  JOB_LEASE_MS,
-  nextJobDue,
   pauseClaimedJob,
   publishJobPage,
+  recordJobExecution,
   type JobClaim,
 } from "~/server/generic/jobs/repo/queue";
 
@@ -85,29 +81,75 @@ export function claimContext(
   };
 }
 
+/** Receives a failed execution's error and its Job kind (Sentry, in production). */
+export type JobFailureReport = (error: UnparsedError, kind: string) => void;
+
 /** Queue and cron call this same path; neither owns a second retry budget. */
 export async function advanceJob(
   db: Database,
   id: string,
   handlers: JobHandlers,
+  report?: JobFailureReport,
 ): Promise<JobOutcome> {
   const claimed = await claimJob(db, id);
   if (!claimed) return "skipped";
   const handler = handlers[claimed.kind];
-  return executeClaim(db, claimed, (context) => {
-    if (!handler)
-      throw new Error(`No job handler registered for ${claimed.kind}`);
-    return handler.prepare(db, claimed, context);
-  });
+  return executeClaim(
+    db,
+    claimed,
+    (context) => {
+      if (!handler)
+        throw new Error(`No job handler registered for ${claimed.kind}`);
+      return handler.prepare(db, claimed, context);
+    },
+    report,
+  );
 }
 
-/** Fixed lease, fences, publication and the one failure classification for every page. */
+/** One execution, recorded on its Job row whatever its outcome. */
 async function executeClaim(
   db: Database,
   claimed: JobClaim,
   prepare: (context: JobContext) => Promise<PreparedJobPage>,
+  report?: JobFailureReport,
 ): Promise<JobOutcome> {
   const details: JobExecutionDetails = { stepKey: null };
+  return withExecutionMetrics(async (sample) => {
+    const { outcome, failure } = await settleClaim(
+      db,
+      claimed,
+      prepare,
+      details,
+    );
+    if (failure && outcome === "failed") report?.(failure.error, claimed.kind);
+    await recordJobExecution(
+      db,
+      { id: claimed.id },
+      {
+        outcome,
+        errorClass: failure?.kind ?? null,
+        ...sample(),
+        aiCostUsd: details.aiCostUsd ?? null,
+        workerVersion: getWorkerVersion(),
+        finishedAt: new Date().toISOString(),
+      },
+    ).catch((error: unknown) =>
+      log.error("execution record failed", { jobId: claimed.id, error }),
+    );
+    return outcome;
+  });
+}
+
+/** Fixed lease, fences, publication and the one failure classification for every page. */
+async function settleClaim(
+  db: Database,
+  claimed: JobClaim,
+  prepare: (context: JobContext) => Promise<PreparedJobPage>,
+  details: JobExecutionDetails,
+): Promise<{
+  outcome: JobOutcome;
+  failure?: { kind: string; error: UnparsedError };
+}> {
   let publicationStartedAt: number | undefined;
   let publicationDurationMs: number | undefined;
   const entry = () =>
@@ -177,13 +219,14 @@ async function executeClaim(
         : (prepared.page.waitReason ?? null),
       pageResult,
     });
-    return published ? "succeeded" : "superseded";
+    return { outcome: published ? "succeeded" : "superseded" };
   } catch (error) {
     const failure = classifyJobFailure(error);
+    const failed = { kind: failure.kind, error };
     switch (failure.kind) {
       case "paused":
         await pauseClaimedJob(db, claimed, failure.error);
-        return "paused";
+        return { outcome: "paused", failure: failed };
       case "deferred":
         // A cooperative wait keeps the checkpoint and spends no attempt.
         await publishJobPage(db, claimed, {
@@ -196,135 +239,16 @@ async function executeClaim(
           waitReason: failure.reason,
           waitUntil: failure.until,
         });
-        return "deferred";
+        return { outcome: "deferred", failure: failed };
       case "interrupted":
         // The token fence makes this a no-op once another claim owns the Job.
         await failJob(db, claimed, error);
         entry().warn("superseded", { error });
-        return "superseded";
+        return { outcome: "superseded", failure: failed };
       default:
         await failJob(db, claimed, error);
         entry().error("fail", { error });
-        return "failed";
+        return { outcome: "failed", failure: failed };
     }
   }
-}
-
-/**
- * Free lanes reselect fair work without waiting for a slow sibling. Selected
- * Jobs stay reserved locally until their page finishes; leases protect claims
- * across independent drains.
- */
-export async function drainDueJobs(
-  db: Database,
-  handlers: JobHandlers,
-  limit = JOB_DRAIN.pageLimit,
-  timeBudgetMs = JOB_DRAIN.timeBudgetMs,
-  concurrency = JOB_DRAIN.concurrency,
-  options: { pageWork?: PageWork; deadline?: number } = {},
-) {
-  const outcomes: JobOutcome[] = [];
-  const deadline = options.deadline ?? Date.now() + timeBudgetMs;
-  let scheduled = 0;
-  let settled = 0;
-  let progressed = 0;
-  const reserved = new Set<string>();
-  // A row lock may clear while a sibling publishes, so reconsider refusals
-  // after real progress.
-  const busy = new Set<string>();
-  const selected: Awaited<ReturnType<typeof dueJobs>> = [];
-  let selecting: Promise<boolean> | undefined;
-  let failure: { reason: unknown } | undefined;
-  const spent = () =>
-    failure !== undefined || scheduled >= limit || Date.now() >= deadline;
-  const refill = async () => {
-    const settledBefore = settled;
-    const remaining = Math.min(
-      JOB_DRAIN.batch,
-      limit - scheduled - selected.length,
-    );
-    if (remaining <= 0) return false;
-    const candidates = await dueJobs(db, remaining, {
-      excludeIds: [...reserved, ...busy],
-    });
-    for (const candidate of candidates) {
-      reserved.add(candidate.id);
-      selected.push(candidate);
-    }
-    // A page may finish while selection is in flight. Reselect before every
-    // idle lane exits on an empty result from that older snapshot.
-    return candidates.length > 0 || settledBefore !== settled;
-  };
-  const next = async () => {
-    while (!spent()) {
-      const candidate = selected.shift();
-      if (candidate) {
-        scheduled++;
-        return candidate;
-      }
-      selecting ??= refill().finally(() => {
-        selecting = undefined;
-      });
-      if (!(await selecting)) return undefined;
-    }
-    return undefined;
-  };
-  let leaseRecovery: Promise<void> | undefined;
-  let heldUntil: Date | undefined;
-  const lane = async () => {
-    for (;;) {
-      // Admission precedes selection/claim, so queued work holds no payload or lease.
-      const admitted = await runBackgroundPage({
-        admit: options.pageWork,
-        work: async () => {
-          const candidate = await next();
-          if (!candidate) return false;
-          const progressBefore = progressed;
-          try {
-            if (Date.now() >= deadline) return false;
-            // Arm recovery before claiming, without holding a lease while queued.
-            leaseRecovery ??= (async () => {
-              const { wakeAt } =
-                await import("~/server/workflows/background-tasks/publish");
-              await wakeAt(new Date(Date.now() + JOB_LEASE_MS + 5_000), {
-                source: "job.lease-recovery",
-              });
-            })();
-            await leaseRecovery;
-            if (Date.now() >= deadline) return false;
-            const outcome = await advanceJob(db, candidate.id, handlers);
-            outcomes.push(outcome);
-            if (outcome === "skipped") {
-              if (progressBefore === progressed) busy.add(candidate.id);
-            } else {
-              progressed++;
-              busy.clear();
-            }
-            return true;
-          } finally {
-            reserved.delete(candidate.id);
-            settled++;
-          }
-        },
-      });
-      if (admitted.kind === "held") {
-        heldUntil = admitted.retryAt;
-        return;
-      }
-      if (!admitted.value) return;
-    }
-  };
-  // Invocation cleanup must not close clients while a sibling still owns work.
-  // Stop new selection on an escaped error, join active lanes, then rethrow it.
-  await Promise.all(
-    Array.from({ length: Math.max(1, Math.min(concurrency, limit)) }, () =>
-      lane().catch((reason: unknown) => {
-        failure ??= { reason };
-      }),
-    ),
-  );
-  if (failure) throw failure.reason;
-  if (heldUntil) return { outcomes, more: false, nextAt: heldUntil };
-  const more = (await dueJobs(db, 1, { excludeIds: [...busy] })).length > 0;
-  return { outcomes, more, nextAt: more ? null : await nextJobDue(db) };
 }

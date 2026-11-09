@@ -192,7 +192,7 @@ export async function jobFactsOf(
       state: row.state,
       generation: row.generation,
       attempts: row.attempts,
-      maxAttempts: row.maxAttempts,
+      maxAttempts: row.maxAttempts ?? jobKindPolicy(row.kind).maxAttempts,
       priority: row.priority,
       waitReason: row.waitReason,
       waitUntil: row.waitReason ? iso(row.availableAt) : null,
@@ -205,6 +205,7 @@ export async function jobFactsOf(
       lane: jobKindPolicy(row.kind).lane,
       waitingOn,
       runId: runCode ? runShortcode.parse(runCode) : null,
+      lastExecution: row.lastExecution,
     };
   });
 }

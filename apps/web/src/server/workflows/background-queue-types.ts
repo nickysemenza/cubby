@@ -9,15 +9,13 @@ export interface BackgroundQueueProducer {
   ): Promise<void>;
 }
 
-export interface BackgroundQueueDeliveredMessage {
+interface BackgroundQueueDeliveredMessage {
   /**
    * `unknown`, not the message type: what Cloudflare hands back is whatever
    * JSON was on the wire, including messages minted by an older deploy. Typing
    * it forces the consumer through `safeParse`.
    */
   readonly body: unknown;
-  /** Transport enqueue time. Absent on legacy fixtures, never inferred from intent age. */
-  readonly timestamp?: Date;
   ack(): void;
   retry(options?: { delaySeconds: number }): void;
 }

@@ -9,6 +9,8 @@ export type JobExecutionDetails = {
   phase?: string | null;
   phaseStartedAt?: number;
   phaseMs?: Record<string, number>;
+  /** Charged AI cost recorded while this execution ran. */
+  aiCostUsd?: number;
 };
 const execution = new AsyncLocalStorage<{
   db: Database;
@@ -30,6 +32,12 @@ export const setJobStepKey = (stepKey: string) => {
 };
 
 export const currentJobExecution = () => execution.getStore();
+
+/** Attribute a recorded AI charge to the executing Job's execution record. */
+export const addJobAiCost = (usd: number | null | undefined) => {
+  const details = execution.getStore()?.details;
+  if (details && usd) details.aiCostUsd = (details.aiCostUsd ?? 0) + usd;
+};
 export const withJobExecution = <T>(
   db: Database,
   claim: JobClaim,

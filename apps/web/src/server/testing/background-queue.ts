@@ -178,10 +178,7 @@ export async function drainDerivedPage(
     ),
   );
   for (let page = 0; page < 1_000; page++) {
-    const more = await rebuildDerived(db, observed, {
-      force: page === 0,
-      pageLimit: 1,
-    });
+    const more = await rebuildDerived(db, observed, { force: page === 0 });
     if (!pending) return;
     if (!more) break;
   }

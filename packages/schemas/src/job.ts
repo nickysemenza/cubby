@@ -121,13 +121,46 @@ export const enqueueJobInput = z.object({
   input: jobPayload,
   runId: z.uuid().nullable().optional(),
   priority: z.number().int().optional(),
-  /** Defaults to the kind policy; null never exhausts. */
-  maxAttempts: z.number().int().positive().nullable().optional(),
+  /** Defaults to the kind policy. */
+  maxAttempts: z.number().int().positive().optional(),
   availableAt: dateTime.optional(),
   /** Explicit new input or member retry; routine recovery never revives failures. */
   invalidate: z.boolean().optional(),
 });
 export type EnqueueJobInput = z.infer<typeof enqueueJobInput>;
+
+/** Every Job and drain unit fails visibly after failing this long, whatever its error class. */
+export const JOB_FAILING_LIMIT_MS = 24 * 60 * 60_000;
+
+/** What one execution of a Job or drain unit did, recorded on its `Job` row. */
+export const jobExecution = z.object({
+  outcome: z.enum([
+    "succeeded",
+    "skipped",
+    "superseded",
+    "paused",
+    "deferred",
+    "failed",
+  ]),
+  /** The failure classification (`transient`, `failed`, ...) or the error's name; null on success. */
+  errorClass: z.string().nullable(),
+  wallMs: z.number().int().nonnegative(),
+  queryCount: z.number().int().nonnegative(),
+  queryMs: z.number().int().nonnegative(),
+  /** Charged AI cost attributed to this Job during the execution; null when none is attributable. */
+  aiCostUsd: z.number().nonnegative().nullable(),
+  workerVersion: z.string().nullable(),
+  /** Drain pages: claimed, published and failed items. */
+  items: z
+    .object({
+      claimed: z.number().int().nonnegative(),
+      published: z.number().int().nonnegative(),
+      failed: z.number().int().nonnegative(),
+    })
+    .optional(),
+  finishedAt: z.iso.datetime(),
+});
+export type JobExecution = z.infer<typeof jobExecution>;
 
 export const jobPage = z.object({
   done: z.boolean(),
@@ -241,15 +274,16 @@ export type JobKindPolicy = {
   readonly internal: boolean;
   readonly lane: JobLane;
   /**
-   * Consecutive reported failures before the Job fails. Null never exhausts:
-   * subject-owned work and drains back off forever. Reclaiming an expired
-   * lease counts as a failure, so a crash loop still exhausts.
+   * Consecutive reported failures before the Job fails. Reclaiming an
+   * expired lease counts as a failure, so a crash loop still exhausts.
+   * Transient failures do not count, but any Job still failing after
+   * `JOB_FAILING_LIMIT_MS` fails visibly.
    */
-  readonly maxAttempts: number | null;
+  readonly maxAttempts: number;
   readonly backoff: JobBackoff;
 };
 
-/** Unbounded model work waits longer between attempts than ordinary server Jobs. */
+/** Location model work waits longer between attempts than ordinary server Jobs. */
 const RECOVERABLE_BACKOFF = { baseMs: 60_000, maxMs: 15 * 60_000 };
 
 const SERVER: JobKindPolicy = {
@@ -322,7 +356,7 @@ export const JOB_KIND_POLICY = {
   },
   "location-ai.description.refresh": {
     ...SERVER,
-    maxAttempts: null,
+    maxAttempts: 10,
     backoff: RECOVERABLE_BACKOFF,
     label: "Describe a Location",
     purpose: "Refreshes the AI description for a Location.",
@@ -335,7 +369,7 @@ export const JOB_KIND_POLICY = {
   },
   "location-ai.inventory.refresh": {
     ...SERVER,
-    maxAttempts: null,
+    maxAttempts: 10,
     backoff: RECOVERABLE_BACKOFF,
     label: "Analyze Location inventory",
     purpose: "Refreshes inventory analysis for a Location.",
@@ -370,6 +404,20 @@ export const JOB_KIND_POLICY = {
     dependencies: "Purchase discovery configuration and source evidence.",
     cost: "Downstream work follows its model and funding policy.",
     exclusions: "Eligibility remains owned by purchase discovery.",
+  },
+  "background.drain": {
+    ...SERVER,
+    internal: true,
+    label: "Background drain page",
+    purpose:
+      "Records the latest page of one drain unit (cloud images, embeddings, AI evaluation, derived rebuild, reconciliation).",
+    trigger: "A background permit selecting that unit.",
+    targets: "The rows the drain unit owes; its record row holds no work.",
+    effects: "Records when the unit last ran and that execution's outcome.",
+    dependencies: "The drain's own rows and providers.",
+    cost: "Follows the drain's own model and provider policy.",
+    exclusions:
+      "Never claimed or executed as a Job; item retries live on the drain's rows.",
   },
   "calendar-feed.mark-dirty": {
     ...SERVER,

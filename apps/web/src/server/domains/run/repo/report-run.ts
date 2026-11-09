@@ -1222,7 +1222,7 @@ export function runDiagnosticsBlocks(jobs: JobListOut): ReportBlock[] {
     ["State", primary.state],
     [
       "Attempt",
-      `${formatCount(primary.attempts)} of ${primary.maxAttempts === null ? "unbounded" : formatCount(primary.maxAttempts)}`,
+      `${formatCount(primary.attempts)} of ${formatCount(primary.maxAttempts)}`,
     ],
     ["Wait", primary.waitReason],
     ["Wait until", primary.waitUntil && at(primary.waitUntil)],

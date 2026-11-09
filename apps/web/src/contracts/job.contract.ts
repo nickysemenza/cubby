@@ -1,6 +1,7 @@
 import { runShortcode } from "@cubby/schemas/identifiers";
 import {
   workActivity,
+  jobExecution,
   jobLane,
   jobState,
   jobWaitingOn,
@@ -19,7 +20,7 @@ const jobFacts = z.object({
   state: jobState,
   generation: z.number().int(),
   attempts: z.number().int().nonnegative(),
-  maxAttempts: z.number().int().positive().nullable(),
+  maxAttempts: z.number().int().positive(),
   priority: z.number().int(),
   waitReason: jobWaitReason.nullable(),
   waitUntil: z.iso.datetime().nullable(),
@@ -35,6 +36,8 @@ const jobFacts = z.object({
   waitingOn: jobWaitingOn.nullable(),
   /** The Run that owns it, as its public code. */
   runId: runShortcode.nullable(),
+  /** The latest execution's outcome and cost (`jobExecution`); null before the first. */
+  lastExecution: jobExecution.nullable(),
 });
 export type JobFacts = z.infer<typeof jobFacts>;
 

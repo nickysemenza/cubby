@@ -9,7 +9,7 @@ import { failJob, claimJob } from "~/server/generic/jobs/repo/queue";
 
 import { JobDeferredError, JobPausedError } from "../errors";
 import { advanceJob } from "../service/jobs";
-import { nextJobDue } from "./queue";
+import { nextDueAt } from "./queue";
 
 describe("Job retry policy", () => {
   const ctx = withTestDb();
@@ -30,7 +30,7 @@ describe("Job retry policy", () => {
     });
     const first = await claimJob(ctx.db, saved.id, 1_000);
     expect(first?.attempts).toBe(0);
-    expect(await nextJobDue(ctx.db)).toEqual(first!.leaseExpiresAt);
+    expect(await nextDueAt(ctx.db, [])).toEqual(first!.leaseExpiresAt);
     await getDb(ctx.db)
       .update(job)
       .set({ leaseExpiresAt: new Date(0) })
@@ -43,24 +43,40 @@ describe("Job retry policy", () => {
     });
   });
 
-  it("does not exhaust a Job whose maxAttempts is null", async () => {
+  it("retries pool-slot timeouts without spending attempts, then fails visibly after a day", async () => {
     const saved = await enqueueJob(ctx.db, {
-      key: "synthetic.unbounded-retry",
-      kind: "synthetic.unbounded-retry",
+      key: "synthetic.pool-timeout",
+      kind: "synthetic.pool-timeout",
       input: {},
-      maxAttempts: null,
+      maxAttempts: 1,
     });
-    for (let failure = 1; failure <= 4; failure++) {
+    const poolTimeout = () =>
+      new Error("Synthetic query wrapper", {
+        cause: Object.assign(
+          new Error("Timed out while waiting for an open slot in the pool"),
+          { code: "58000" },
+        ),
+      });
+    for (let failure = 1; failure <= 3; failure++) {
       await makeDue(saved.id);
       const claim = await claimJob(ctx.db, saved.id);
       if (!claim) throw new Error(`Expected claim ${failure}`);
-      await failJob(ctx.db, claim, new Error("Synthetic page failure"));
+      await failJob(ctx.db, claim, poolTimeout());
       expect(await read(saved.id)).toMatchObject({
         state: "retry_wait",
-        attempts: failure,
-        maxAttempts: null,
+        attempts: 0,
       });
     }
+    // The streak began more than a day ago: the next failure stops the Job.
+    await getDb(ctx.db)
+      .update(job)
+      .set({ failingSince: new Date(Date.now() - 25 * 60 * 60_000) })
+      .where(eq(job.id, saved.id));
+    await makeDue(saved.id);
+    const claim = await claimJob(ctx.db, saved.id);
+    if (!claim) throw new Error("Expected a final claim");
+    await failJob(ctx.db, claim, poolTimeout());
+    expect(await read(saved.id)).toMatchObject({ state: "failed" });
   });
 
   // Database contention may exhaust the in-request transaction replay, but must not
@@ -124,7 +140,7 @@ describe("Job retry policy", () => {
         },
       }),
     ).resolves.toBe("deferred");
-    expect(await nextJobDue(ctx.db)).toEqual(until);
+    expect(await nextDueAt(ctx.db, [])).toEqual(until);
     expect(await read(saved.id)).toMatchObject({
       state: "queued",
       attempts: 0,
@@ -148,7 +164,7 @@ describe("Job retry policy", () => {
         },
       }),
     ).resolves.toBe("paused");
-    expect(await nextJobDue(ctx.db)).toBeNull();
+    expect(await nextDueAt(ctx.db, [])).toBeNull();
     expect(await read(saved.id)).toMatchObject({
       state: "paused",
       attempts: 0,
