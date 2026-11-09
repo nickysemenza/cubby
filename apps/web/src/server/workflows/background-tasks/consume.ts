@@ -25,6 +25,9 @@ export interface BackgroundQueueConsumerPorts {
  * retries delivery. An unreadable envelope is still a permit; a recovery
  * envelope runs only the claim it names, if that claim still needs it.
  */
+const isRetiredRecovery = (body: unknown) =>
+  typeof body === "object" && body !== null && "recover" in body;
+
 export async function handleBackgroundQueueBatch(
   db: Database,
   batch: BackgroundQueueBatch,
@@ -33,6 +36,12 @@ export async function handleBackgroundQueueBatch(
   for (const message of batch.messages) {
     try {
       const envelope = backgroundTaskMessageSchema.safeParse(message.body).data;
+      // A recovery in a retired shape names claims this runtime cannot fence;
+      // running it as a permit would start an extra chain. The cron backstops it.
+      if (!envelope && isRetiredRecovery(message.body)) {
+        message.ack();
+        continue;
+      }
       if (envelope?.ring)
         await (
           await import("~/server/domains/image-processing/repo/image-processing-ring")

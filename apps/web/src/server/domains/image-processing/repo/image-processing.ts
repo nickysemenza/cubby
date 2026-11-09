@@ -762,10 +762,14 @@ export async function claimImageProcessingJob(
             asc(imageProcessingJob.id),
           )
           .limit(limit)
-          .for("update", {
-            of: [imageProcessingJob, image],
-            skipLocked: true,
-          });
+          // An exact-attempt recovery waits for the row instead of skipping it:
+          // a skipped lapsed attempt would otherwise wait for the hourly cron.
+          .for(
+            "update",
+            input.attemptId
+              ? { of: [imageProcessingJob, image] }
+              : { of: [imageProcessingJob, image], skipLocked: true },
+          );
       const batch = input.deviceBatch;
       if (
         batch &&
