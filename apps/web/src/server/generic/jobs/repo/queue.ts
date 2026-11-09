@@ -36,7 +36,7 @@ import {
 } from "../kind-policy";
 
 /** How long a claim holds a Job before another worker may take it over. */
-export const JOB_LEASE_MS = 16 * 60_000;
+const JOB_LEASE_MS = 16 * 60_000;
 export type JobRow = typeof job.$inferSelect;
 export type JobClaim = JobRow & {
   leaseToken: string;

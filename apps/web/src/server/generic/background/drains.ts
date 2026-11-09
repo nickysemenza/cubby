@@ -28,7 +28,7 @@ export type DrainPage = {
  * Arm one delayed recovery for rows this page holds under a lease nothing
  * renews; it runs only if one of them is still leased past `afterMs`.
  */
-export type ArmDrainRecovery = (recovery: {
+type ArmDrainRecovery = (recovery: {
   ids: string[];
   afterMs: number;
   source: string;
