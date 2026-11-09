@@ -449,12 +449,7 @@ export const entityProblemSources = (
             reasonKeys: [definition.key],
             name: routed("name"),
             owners: routed("owners"),
-            ...Object.fromEntries(
-              sourceKeys.map((key) => [
-                key,
-                routed(key),
-              ]),
-            ),
+            ...Object.fromEntries(sourceKeys.map((key) => [key, routed(key)])),
           })
             .from(sql`${sql.identifier(baseName)} base`)
             .where(
