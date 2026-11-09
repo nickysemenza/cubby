@@ -54,7 +54,9 @@ domains between `src/app/` and `src/features/` under different names.
   domain's `service` or `operations`; where they need domain behavior, the
   caller passes it in as an argument (for example `classifyLineRole`,
   `resolveReversal`, `compareVariants`), and the server keeps no
-  module-level registries. On the client, `ui/` imports neither
+  module-level registries. The timeline runtime passes its entity reader to
+  the shared and custom timeline implementations; repository modules do not
+  load the kernel runtime. On the client, `ui/` imports neither
   `entity/` nor `features/`, and `entity/` does not import `features/`. The
   rule has no baseline: the codebase is at zero violations.
 - **Client.** `src/app/` and `src/features/` merged into

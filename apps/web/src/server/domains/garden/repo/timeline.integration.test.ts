@@ -3,7 +3,10 @@ import { describe, expect, it } from "vitest";
 
 import { parseEntityTimelineInput } from "~/entity/generated/entity-timelines.gen";
 import { createLocation } from "~/server/domains/location/repo/crud";
-import { entityKernelContextSchema } from "~/server/entity-kernel";
+import {
+  entityKernelContextSchema,
+  executeEntityAs,
+} from "~/server/entity-kernel";
 import {
   createPlantFixture,
   makeLocationInput,
@@ -42,6 +45,7 @@ describe("plantingTimeline guide bands", () => {
         filters: {},
         window: { ids: [shortcode] },
       }),
+      executeEntityAs,
     );
 
   const guideRowIds = (rows: readonly { id: string }[] | undefined) =>

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { localGoogleProviderOrigin } from "./e2e-google-provider";
+import { localGoogleProviderOrigin } from "~/server/lib/local-google-provider-origin";
 
 // A local identity provider must never replace Google in ordinary runtime or
 // allow the fixture token/JWKS seam to redirect credentials off loopback.

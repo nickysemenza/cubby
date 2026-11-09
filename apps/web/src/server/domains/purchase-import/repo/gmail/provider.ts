@@ -9,7 +9,7 @@ import {
 } from "~/server/domains/purchase-import/repo/gmail/types";
 import { inJobExecution } from "~/server/generic/jobs/context";
 import { JobDeferredError } from "~/server/generic/jobs/errors";
-import { localGoogleProviderOrigin } from "~/server/http/e2e-google-provider";
+import { localGoogleProviderOrigin } from "~/server/lib/local-google-provider-origin";
 
 import {
   createBetterAuthGmailAccountStore,

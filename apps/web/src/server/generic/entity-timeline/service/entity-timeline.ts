@@ -5,6 +5,7 @@ import {
   type ParsedEntityTimelineInputByEntity,
   type TimelineEntity,
 } from "~/entity/generated/entity-timelines.gen";
+import { executeEntityAs } from "~/server/entity-kernel";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { ENTITY_TIMELINE_BINDINGS } from "~/server/generated/entity-kernel-runtime.gen";
 
@@ -32,7 +33,7 @@ export async function runEntityTimeline<E extends TimelineEntity>(
     const custom = customTimelineFor(entity);
     if (!custom)
       throw new Error(`${entity} declares a custom timeline without a binding`);
-    return custom(context, input);
+    return custom(context, input, executeEntityAs);
   }
-  return defaultTimeline(context, input);
+  return defaultTimeline(context, input, executeEntityAs);
 }

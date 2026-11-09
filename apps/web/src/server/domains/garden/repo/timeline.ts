@@ -89,8 +89,12 @@ const guideRows = async (
  * the same page, so the guide bands page with the default's records. */
 export const plantingTimeline: EntityTimelineImplementation<
   "planting"
-> = async (context, input) => {
-  const { out: base, recordIds } = await defaultTimelinePage(context, input);
+> = async (context, input, read) => {
+  const { out: base, recordIds } = await defaultTimelinePage(
+    context,
+    input,
+    read,
+  );
   const bands = await guideRows(context, recordIds);
   if (bands.length === 0) return base;
   return { ...base, rows: [...(base.rows ?? []), ...bands] };

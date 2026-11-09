@@ -22,10 +22,8 @@ import {
 } from "~/server/auth-configuration";
 import { drizzle } from "~/server/db";
 import * as schema from "~/server/db/auth.schema";
-import {
-  localGoogleProviderOrigin,
-  localGoogleProviderPlugin,
-} from "~/server/http/e2e-google-provider";
+import { localGoogleProviderPlugin } from "~/server/http/e2e-google-provider";
+import { localGoogleProviderOrigin } from "~/server/lib/local-google-provider-origin";
 
 const betterAuthLog = createLogger("Better Auth");
 
