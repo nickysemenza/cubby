@@ -25,7 +25,7 @@ describe("ChatGPT caller cancellation bridge", () => {
     });
     const pending = inferChatGptPlan(
       plan,
-      { model: "gpt-6-sol" },
+      { model: "gpt-6.1-sol" },
       { signal: abort.signal },
     );
     const rejected = pending.then(() => "unexpected success", getErrorMessage);
@@ -50,7 +50,7 @@ describe("ChatGPT caller cancellation bridge", () => {
     const abort = new AbortController();
     const response = await inferChatGptPlan(
       plan,
-      { model: "gpt-6-sol" },
+      { model: "gpt-6.1-sol" },
       { signal: abort.signal },
     );
     const rejected = response
@@ -59,7 +59,7 @@ describe("ChatGPT caller cancellation bridge", () => {
     abort.abort(new Error("example cancellation"));
     expect(await rejected).toContain("example cancellation");
     expect(upstream?.aborted).toBe(true);
-    const cancelled = await inferChatGptPlan(plan, { model: "gpt-6-sol" });
+    const cancelled = await inferChatGptPlan(plan, { model: "gpt-6.1-sol" });
     await cancelled.body?.cancel();
     expect(upstream?.aborted).toBe(true);
   });
@@ -73,7 +73,7 @@ describe("ChatGPT caller cancellation bridge", () => {
     });
     const pending = inferChatGptPlan(
       plan,
-      { model: "gpt-6-sol" },
+      { model: "gpt-6.1-sol" },
       { requestTimeoutMs: 25 },
     );
     const rejected = pending.then(() => "unexpected success", getErrorMessage);
@@ -95,7 +95,7 @@ it("skips a plan needing reauthorization", async () => {
   expect(
     await connectedChatGptInference(
       plan,
-      { model: "gpt-6-sol" },
+      { model: "gpt-6.1-sol" },
       { onSelected },
     ),
   ).toBeNull();
@@ -127,7 +127,7 @@ it.each([undefined, "subscription"] as const)(
     });
     const response = await send("https://ai-gateway.invalid/openai/responses", {
       method: "POST",
-      body: JSON.stringify({ model: "gpt-6-sol" }),
+      body: JSON.stringify({ model: "gpt-6.1-sol" }),
     });
     expect(await response.json()).toMatchObject(
       funding
@@ -198,7 +198,7 @@ it.each(["invalid_client", "scope removed", "temporary failure"])(
       });
       const pending = send("https://ai-gateway.invalid/openai/responses", {
         method: "POST",
-        body: JSON.stringify({ model: "gpt-6-sol" }),
+        body: JSON.stringify({ model: "gpt-6.1-sol" }),
       });
       const result = await pending.then(
         async (response) => ({ body: await response.json(), error: null }),

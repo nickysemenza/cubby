@@ -120,13 +120,13 @@ describe("ChatGPT connection recovery", () => {
       ...credential(),
       expiresAt: Date.now() + 3600_000,
     });
-    const response = await session.infer({ input: [] }, "gpt-6-sol");
+    const response = await session.infer({ input: [] }, "gpt-6.1-sol");
     expect(response.ok).toBe(false);
     expect(await session.status()).toMatchObject({
       needsReauthorization: true,
       issue: expect.stringContaining(code),
     });
-    await expect(session.infer({ input: [] }, "gpt-6-sol")).rejects.toThrow(
+    await expect(session.infer({ input: [] }, "gpt-6.1-sol")).rejects.toThrow(
       code,
     );
     expect(upstream).toHaveBeenCalledTimes(1);
@@ -148,7 +148,7 @@ describe("ChatGPT connection recovery", () => {
     expect(await session.status()).toMatchObject({
       needsReauthorization: true,
     });
-    await expect(session.infer({ input: [] }, "gpt-6-sol")).rejects.toThrow(
+    await expect(session.infer({ input: [] }, "gpt-6.1-sol")).rejects.toThrow(
       "subscription_sharing_invalid_user",
     );
     expect(upstream).toHaveBeenCalledTimes(1);
@@ -163,7 +163,7 @@ describe("ChatGPT connection recovery", () => {
       ...credential(),
       expiresAt: Date.now() + 3600_000,
     });
-    const pending = session.infer({ input: [] }, "gpt-6-sol");
+    const pending = session.infer({ input: [] }, "gpt-6.1-sol");
     await vi.advanceTimersByTimeAsync(0);
     expect(upstream).toHaveBeenCalledTimes(1);
     for (const [delay, calls] of [
@@ -180,7 +180,7 @@ describe("ChatGPT connection recovery", () => {
     ).toBe(1);
     const abort = new AbortController();
     const aborted = session
-      .infer({ input: [] }, "gpt-6-sol", abort.signal)
+      .infer({ input: [] }, "gpt-6.1-sol", abort.signal)
       .catch((error) => error);
     await vi.advanceTimersByTimeAsync(0);
     abort.abort(new Error("example cancelled"));
@@ -309,7 +309,7 @@ it("returns the last 503 body when the next wait cannot fit the deadline", async
   });
   const pending = session.infer(
     { input: [] },
-    "gpt-6-sol",
+    "gpt-6.1-sol",
     undefined,
     Date.now() + 10_500,
   );
@@ -353,7 +353,7 @@ it("shares the 503 retry budget with the breakpoint-stripped request", async () 
         },
       ],
     },
-    "gpt-6-sol",
+    "gpt-6.1-sol",
   );
   await vi.advanceTimersByTimeAsync(40000);
   const response = await pending;

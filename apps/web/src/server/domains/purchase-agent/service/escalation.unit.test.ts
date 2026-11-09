@@ -69,10 +69,10 @@ describe("coordinator escalation", () => {
         models,
         undefined,
         async (model) =>
-          model === "gpt-6-sol" && available
+          model === "gpt-6.1-sol" && available
             ? null
             : "Synthetic credit unavailable",
-        "gpt-6-sol",
+        "gpt-6.1-sol",
       );
       await claim("claim", "synthetic-order");
       expect(
@@ -82,9 +82,9 @@ describe("coordinator escalation", () => {
         }),
       ).toMatchObject({
         escalated: available,
-        model: available ? "gpt-6-sol" : "gpt-6-luna",
+        model: available ? "gpt-6.1-sol" : "gpt-6-luna",
       });
-      expect(configured).toEqual(available ? ["gpt-6-sol"] : []);
+      expect(configured).toEqual(available ? ["gpt-6.1-sol"] : []);
       const recovered = coordinatorEscalation({
         models,
         store: {
@@ -93,7 +93,7 @@ describe("coordinator escalation", () => {
         },
         useModel: async () => {},
       });
-      expect(recovered.model()).toBe(available ? "gpt-6-sol" : "gpt-6-luna");
+      expect(recovered.model()).toBe(available ? "gpt-6.1-sol" : "gpt-6-luna");
     },
   );
   it.each([

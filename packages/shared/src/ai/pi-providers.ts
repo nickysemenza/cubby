@@ -330,10 +330,10 @@ export function fundedChatAttempts(policy: {
 }[] {
   const household = [
     { model: "claude-opus-5-5", funding: "subscriber_credit" },
-    { model: "gpt-6-sol", funding: "openai_credit" },
-    { model: "gpt-6-sol", funding: "subscription" },
+    { model: "gpt-6.1-sol", funding: "openai_credit" },
+    { model: "gpt-6.1-sol", funding: "subscription" },
     ...(policy.paid
-      ? [{ model: "gpt-6-sol" as const, funding: "paid" as const }]
+      ? [{ model: "gpt-6.1-sol" as const, funding: "paid" as const }]
       : []),
   ] as const;
   if (!policy.lead) return household;

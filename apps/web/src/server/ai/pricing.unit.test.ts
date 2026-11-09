@@ -59,10 +59,10 @@ it("retries required legacy pricing on a real catalog outage while ordinary tele
   });
   const usage = { inputTokens: 1000, outputTokens: 1000 };
   await expect(
-    snapshotAiUsagePrice("openai", "gpt-6-sol", usage),
+    snapshotAiUsagePrice("openai", "gpt-6.1-sol", usage),
   ).resolves.toMatchObject({ amount: null, evidence: null });
   await expect(
-    snapshotAiUsagePrice("openai", "gpt-6-sol", usage, {
+    snapshotAiUsagePrice("openai", "gpt-6.1-sol", usage, {
       requireCatalog: true,
     }),
   ).rejects.toThrow(/catalog unavailable/i);

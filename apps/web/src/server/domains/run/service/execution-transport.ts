@@ -4,6 +4,7 @@ import {
   type GatewayFetchRoutes,
   type GatewayFetchRequest,
 } from "@cubby/shared/ai/gateway-request";
+import { supportedChatModelSchema } from "@cubby/shared/ai/models";
 import { z } from "zod";
 
 import {
@@ -57,9 +58,7 @@ async function selectedCoordinatorExecution(
   const body = await request.query();
   if (
     isChatEndpoint(request) &&
-    ["gpt-6-luna", "gpt-6-sol", "claude-opus-5-5"].includes(
-      z.string().parse(body.model),
-    )
+    supportedChatModelSchema.safeParse(body.model).success
   ) {
     const selected = await readMailImportLineage(db, runId);
     if (!selected?.ledgerPartyId) return false;

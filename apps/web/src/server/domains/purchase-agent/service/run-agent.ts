@@ -24,7 +24,7 @@ import type { AiUsageTransport } from "@cubby/schemas/telemetry";
 import type { GatewayResponseInfo } from "@cubby/shared/ai/gateway-request";
 import { isPaidFundingUnavailable } from "@cubby/shared/ai/gateway-request";
 import {
-  supportedChatModelSchema,
+  storedChatModelSchema,
   type SupportedChatModel,
 } from "@cubby/shared/ai/models";
 import { piTokenUsage } from "@cubby/shared/ai/pi-providers";
@@ -100,7 +100,7 @@ const runIdentity = z.object({
   runId: z.uuid(),
   purpose: agentImportRunPurpose,
   /** The Run's recorded coordinator model; a transient retry records its escalation model. */
-  model: supportedChatModelSchema.optional(),
+  model: storedChatModelSchema.optional(),
 });
 type RunIdentity = z.infer<typeof runIdentity>;
 

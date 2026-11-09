@@ -85,7 +85,7 @@ function stubInferenceFetch(inference: typeof fetch) {
       ? Response.json({
           openai: {
             models: {
-              "gpt-6-sol": { cost: decisionCost },
+              "gpt-6.1-sol": { cost: decisionCost },
               "text-embedding-3-small": { cost: { input: 0.02, output: 0 } },
             },
           },
@@ -728,7 +728,7 @@ describe("AiUsage accounting", () => {
     const { recordAiUsage } = await import("~/server/ai/usage");
     await recordAiUsage(ctx.db, {
       provider: "openai",
-      model: "gpt-6-sol",
+      model: "gpt-6.1-sol",
       feature: "location-description",
       operation: "locationDescription",
       runId,
@@ -755,7 +755,7 @@ describe("AiUsage accounting", () => {
       type: "ai_usage" as const,
       feature: "location-description",
       provider: "openai",
-      model: "gpt-6-sol",
+      model: "gpt-6.1-sol",
       operation: "locationDescription",
       runId,
       inputTokens: 1_000,

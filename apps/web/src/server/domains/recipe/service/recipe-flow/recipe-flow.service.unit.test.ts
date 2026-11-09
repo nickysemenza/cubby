@@ -124,7 +124,7 @@ const artifact = (fingerprint: string): RecipeFlowArtifact => ({
   guidance: null,
   warnings: [],
   contentFingerprint: fingerprint,
-  model: "gpt-6-sol",
+  model: "gpt-6.1-sol",
   promptVersion: "2026-09-11.1",
   generatedAt: new Date("2026-07-29T12:00:00Z"),
 });

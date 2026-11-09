@@ -52,7 +52,7 @@ it("restarts a credit-refused generation on the subscription with its actual mod
     { maxTokens: 512 },
   );
   expect(response.errorMessage).toBeUndefined();
-  expect(response.model).toBe("gpt-6-sol");
+  expect(response.model).toBe("gpt-6.1-sol");
   expect(attempts).toEqual([
     "anthropic:subscriber_credit",
     "openai:openai_credit",
@@ -95,7 +95,7 @@ it("advances past a credit attempt the egress object refuses from its recorded r
     { maxTokens: 512 },
   );
   expect(response.errorMessage).toBeUndefined();
-  expect(response.model).toBe("gpt-6-sol");
+  expect(response.model).toBe("gpt-6.1-sol");
   expect(attempts).toEqual([
     "anthropic:subscriber_credit",
     "openai:openai_credit",
@@ -147,8 +147,8 @@ describe("a ladder that leads with the requested model", () => {
       expect(attempts).toEqual([
         first,
         "anthropic:subscriber_credit:claude-opus-5-5",
-        "openai:openai_credit:gpt-6-sol",
-        "openai:subscription:gpt-6-sol",
+        "openai:openai_credit:gpt-6.1-sol",
+        "openai:subscription:gpt-6.1-sol",
       ]);
     },
   );
@@ -309,7 +309,7 @@ it("discards a partial tool call before falling through both included funding ro
     "subscription",
     "paid",
   ]);
-  expect(refused).toEqual(["claude-opus-5-5", "gpt-6-sol", "gpt-6-sol"]);
+  expect(refused).toEqual(["claude-opus-5-5", "gpt-6.1-sol", "gpt-6.1-sol"]);
   expect(emitted).not.toContain("toolcall_start");
   expect(piTokenUsage(result).costEvidence?.billingReason).toBe("standard");
 });
@@ -416,7 +416,7 @@ it.each([
     if (!model) throw new Error("Missing Luna");
     const response = await models.completeSimple(model, { messages: [] });
     expect(attempts).toEqual(expected);
-    expect(response.model).toBe("gpt-6-sol");
+    expect(response.model).toBe("gpt-6.1-sol");
     expect(Boolean(response.errorMessage)).toBe(!paid);
   },
 );
@@ -606,8 +606,8 @@ describe("cubbyPiProviders cost normalization", () => {
       () => async () => completed(headers),
     ))
       models.setProvider(provider);
-    const model = models.getModel("openai", "gpt-6-sol");
-    if (!model) throw new Error("gpt-6-sol is not declared");
+    const model = models.getModel("openai", "gpt-6.1-sol");
+    if (!model) throw new Error("gpt-6.1-sol is not declared");
     const message = await models.complete(model, { messages: [] });
     return {
       cost: message.usage.cost.total,
@@ -680,7 +680,7 @@ it("rejects an incomplete Responses turn before handing tools to the coordinator
       ),
   ))
     models.setProvider(provider);
-  const model = models.getModel("openai", "gpt-6-sol");
+  const model = models.getModel("openai", "gpt-6.1-sol");
   if (!model) throw new Error("Missing Sol");
   const stream = models.streamSimple(model, { messages: [] });
   const terminal: string[] = [];

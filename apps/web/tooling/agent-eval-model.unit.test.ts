@@ -40,7 +40,7 @@ it("forwards the swapped candidate to the gateway's OpenAI route", async () => {
           operation: "agent.turn",
         }),
       },
-      body: JSON.stringify({ model: "gpt-6-sol", reasoning: {} }),
+      body: JSON.stringify({ model: "gpt-6.1-sol", reasoning: {} }),
     }),
     env,
     ctx,
@@ -80,7 +80,7 @@ it("counts a rejected upstream socket as an unpriced attempted request", async (
     agentEvalModel.fetch(
       new Request("https://ai-gateway.invalid/openai/responses", {
         method: "POST",
-        body: JSON.stringify({ model: "gpt-6-sol", input: [] }),
+        body: JSON.stringify({ model: "gpt-6.1-sol", input: [] }),
       }),
       env,
       ctx,
@@ -110,7 +110,7 @@ it("retains a bounded credential-scrubbed upstream refusal for acceptance diagno
   await agentEvalModel.fetch(
     new Request("https://eval-model.test/configure", {
       method: "POST",
-      body: JSON.stringify({ model: "gpt-6-sol", effort: "high" }),
+      body: JSON.stringify({ model: "gpt-6.1-sol", effort: "high" }),
     }),
     env,
     ctx,
@@ -118,7 +118,7 @@ it("retains a bounded credential-scrubbed upstream refusal for acceptance diagno
   const result = await agentEvalModel.fetch(
     new Request("https://eval-model.test/openai/responses", {
       method: "POST",
-      body: JSON.stringify({ model: "gpt-6-sol", input: [] }),
+      body: JSON.stringify({ model: "gpt-6.1-sol", input: [] }),
     }),
     env,
     ctx,
@@ -161,7 +161,7 @@ it("returns an oversized refusal without waiting for its unread caller branch", 
   await agentEvalModel.fetch(
     new Request("https://eval-model.test/configure", {
       method: "POST",
-      body: JSON.stringify({ model: "gpt-6-sol", effort: "high" }),
+      body: JSON.stringify({ model: "gpt-6.1-sol", effort: "high" }),
     }),
     env,
     ctx,
@@ -171,7 +171,7 @@ it("returns an oversized refusal without waiting for its unread caller branch", 
       .fetch(
         new Request("https://eval-model.test/openai/responses", {
           method: "POST",
-          body: JSON.stringify({ model: "gpt-6-sol", input: [] }),
+          body: JSON.stringify({ model: "gpt-6.1-sol", input: [] }),
         }),
         env,
         ctx,

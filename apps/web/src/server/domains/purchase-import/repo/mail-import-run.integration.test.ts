@@ -1959,7 +1959,7 @@ describe("mail research admission", () => {
     },
     {
       provider: "openai",
-      model: "gpt-6-sol",
+      model: "gpt-6.1-sol",
       endpoint: "responses",
     },
     {

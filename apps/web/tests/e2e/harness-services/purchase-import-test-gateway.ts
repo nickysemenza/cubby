@@ -226,7 +226,7 @@ export default {
         openai: {
           id: "openai",
           models: Object.fromEntries(
-            ["gpt-6-sol", "gpt-6-luna"].map((model) => [
+            ["gpt-6.1-sol", "gpt-6-luna"].map((model) => [
               model,
               {
                 id: model,

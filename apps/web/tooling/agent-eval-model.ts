@@ -21,7 +21,7 @@ import {
 
 /**
  * The purchase agent's model peer for a live coordinator eval. The agent pins
- * `openai/gpt-6-sol`; this Worker forwards its Responses calls to Cubby's AI
+ * `openai/gpt-6.1-sol`; this Worker forwards its Responses calls to Cubby's AI
  * Gateway or the explicitly required local subscription transport, with
  * candidate model and reasoning effort swapped in, and
  * totals the usage each streamed response reports. Its metadata keeps the

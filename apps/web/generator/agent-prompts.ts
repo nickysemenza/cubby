@@ -12,7 +12,6 @@ const sources = {
   audit: ".agents/skills/purchase-import/references/audit.md",
   receiptExtraction:
     ".agents/skills/purchase-import/references/receipt-extraction.md",
-  orderMail: ".agents/skills/purchase-import/references/order-mail.md",
 } as const;
 
 /** Playwright imports server modules directly; generated text keeps Markdown authoritative there. */

@@ -2,7 +2,7 @@ import type { CoordinatorModels } from "@cubby/schemas/coordinator-models";
 import type { ImportRunAgentConfig } from "@cubby/schemas/import-run-agent";
 import type { photoInventoryToolInputs } from "@cubby/schemas/purchase-agent-services";
 import {
-  supportedChatModelSchema,
+  storedChatModelSchema,
   type SupportedChatModel,
 } from "@cubby/shared/ai/models";
 import type { ToolExecutionResult } from "@earendil-works/pi-durable";
@@ -39,10 +39,10 @@ const escalationRecord = z.object({
   detail: z.string(),
   callId: z.string().nullable(),
   /** Retained when a funded alternative was selected before transmission. */
-  model: supportedChatModelSchema.optional(),
+  model: storedChatModelSchema.optional(),
 });
 const modelConfiguration = z.object({
-  model: supportedChatModelSchema,
+  model: storedChatModelSchema,
   status: z.enum(["pending", "applied"]),
 });
 const claimedEmail = z.looseObject({

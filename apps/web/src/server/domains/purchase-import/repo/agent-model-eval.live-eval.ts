@@ -56,7 +56,7 @@ import {
  * `pnpm --dir apps/web eval:agent-models`.
  */
 const candidates = evalCandidates(
-  "gpt-6-luna:medium,gpt-6-luna:high,gpt-6-sol:medium,gpt-6-sol:high",
+  "gpt-6-luna:medium,gpt-6-luna:high,gpt-6.1-sol:medium,gpt-6.1-sol:high",
 );
 const caseFilter = process.env.AGENT_EVAL_CASES?.split(",");
 const cases = agentModelEvalCases.filter(

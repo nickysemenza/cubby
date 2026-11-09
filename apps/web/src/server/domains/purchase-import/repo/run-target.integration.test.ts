@@ -129,7 +129,7 @@ describe("import run summary pricing", () => {
           costs.map((chargedCost): typeof aiUsage.$inferInsert => ({
             feature: "synthetic",
             provider: "openai",
-            model: "gpt-6-sol",
+            model: "gpt-6.1-sol",
             operation: "synthetic.summary",
             runId: runEntityId.parse(run.id),
             durationMs: 1,

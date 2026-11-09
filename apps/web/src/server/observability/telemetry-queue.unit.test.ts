@@ -38,7 +38,7 @@ const legacyAiEvent = {
   type: "ai_usage" as const,
   feature: "synthetic",
   provider: "openai",
-  model: "gpt-6-sol",
+  model: "gpt-6.1-sol",
   operation: "synthetic",
   transport: "gateway" as const,
   inputTokens: 1000,
@@ -96,7 +96,7 @@ it("reconstructs only the legacy token-only billed message before persistence", 
       pricingSource: "models.dev",
       pricingSnapshot: {
         provider: "openai",
-        model: "gpt-6-sol",
+        model: "gpt-6.1-sol",
         capturedAt: "2026-01-01T00:00:00Z",
         rates: { input: 1, output: 2 },
       },
@@ -131,7 +131,7 @@ it("reconstructs only the legacy token-only billed message before persistence", 
   });
   expect(persisted[1]).toEqual(current);
   expect(snapshot).toHaveBeenCalledTimes(1);
-  expect(snapshot).toHaveBeenCalledWith("openai", "gpt-6-sol", legacy, {
+  expect(snapshot).toHaveBeenCalledWith("openai", "gpt-6.1-sol", legacy, {
     requireCatalog: true,
   });
 });
@@ -144,7 +144,7 @@ it("preserves numeric legacy figures and keeps unsupported or inconsistent bille
       pricingSource: "models.dev",
       pricingSnapshot: {
         provider: "openai",
-        model: "gpt-6-sol",
+        model: "gpt-6.1-sol",
         capturedAt: "2026-01-01T00:00:00Z",
         rates: { input: 1, output: 2 },
       },

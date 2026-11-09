@@ -23,7 +23,7 @@ const agentEnv = {
   RESPONSES_EFFORT: "high",
 };
 const responsesBody = {
-  model: "gpt-6-sol",
+  model: "gpt-6.1-sol",
   input: [{ role: "user", content: "synthetic" }],
   reasoning: { effort: "medium", summary: "auto" },
   stream: true,
@@ -483,7 +483,7 @@ it("forwards unconfigured peers and other routes unchanged", async () => {
     unchanged,
   );
   expect(await usage(env)).toMatchObject({
-    openai: { models: { "gpt-6-sol": 1 } },
+    openai: { models: { "gpt-6.1-sol": 1 } },
   });
   const messages = JSON.stringify({
     model: "synthetic-messages-model",

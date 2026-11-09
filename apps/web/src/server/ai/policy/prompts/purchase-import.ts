@@ -94,16 +94,6 @@ function purchaseRepairMessages(
   ];
 }
 
-export const orderMailRequest = (args: {
-  sender: string;
-  subject: string;
-  receivedAt: string;
-  content: unknown;
-}) => ({
-  systemPrompts: [purchaseImportPromptText.orderMail],
-  messages: [{ role: "user" as const, content: JSON.stringify(args) }],
-});
-
 export const purchaseReceiptRequest = (args: {
   evidenceUrl: string;
   mediaType: string;

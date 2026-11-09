@@ -20,7 +20,7 @@ describe("ChatGPT inference request ownership", () => {
         });
       },
     );
-    const pending = requests.infer({}, "gpt-6-sol", {
+    const pending = requests.infer({}, "gpt-6.1-sol", {
       requestId: "first",
       timeoutMs: 1000,
     });
@@ -30,7 +30,10 @@ describe("ChatGPT inference request ownership", () => {
     expect(signal?.aborted).toBe(true);
     requests.cancel("early");
     await expect(
-      requests.infer({}, "gpt-6-sol", { requestId: "early", timeoutMs: 1000 }),
+      requests.infer({}, "gpt-6.1-sol", {
+        requestId: "early",
+        timeoutMs: 1000,
+      }),
     ).rejects.toThrow("cancelled");
   });
 
@@ -43,7 +46,7 @@ describe("ChatGPT inference request ownership", () => {
         return new Response(new ReadableStream<Uint8Array>());
       },
     );
-    const response = await requests.infer({}, "gpt-6-sol", {
+    const response = await requests.infer({}, "gpt-6.1-sol", {
       requestId: "stream",
       timeoutMs: 50,
     });
@@ -60,7 +63,7 @@ describe("ChatGPT inference request ownership", () => {
         return new Response("done");
       },
     );
-    const done = await completed.infer({}, "gpt-6-sol", {
+    const done = await completed.infer({}, "gpt-6.1-sol", {
       requestId: "done",
       timeoutMs: 50,
     });
@@ -78,13 +81,13 @@ it("passes the request deadline to the token owner", async () => {
   const upstream = vi.fn(async () => new Response("example"));
   const requests = new ChatGptInferenceRequests(upstream);
   const deadlineAt = Date.now() + 5000;
-  const response = await requests.infer({}, "gpt-6-sol", {
+  const response = await requests.infer({}, "gpt-6.1-sol", {
     requestId: "example",
     timeoutMs: 5000,
   });
   expect(upstream).toHaveBeenCalledWith(
     {},
-    "gpt-6-sol",
+    "gpt-6.1-sol",
     expect.any(AbortSignal),
     deadlineAt,
   );

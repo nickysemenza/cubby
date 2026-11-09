@@ -1,5 +1,4 @@
 import {
-  adaptiveThinkingFor,
   getChatModelConfig,
   type OpenAiEffort,
   type SupportedChatModel,
@@ -150,8 +149,7 @@ export type SharedEffort = OpenAiEffort & AnthropicEffort;
  * with the tier's token cap and reasoning dial mapped onto each provider's
  * own fields. Mirrors the effective parameters the old TanStack adapters
  * sent: OpenAI reasoning effort + an output cap, Anthropic adaptive
- * thinking/effort with no temperature (Haiku 4.5 rejects both — see
- * `adaptiveThinkingFor`).
+ * thinking/effort with no temperature.
  */
 export function chatCompletionOptionsFor(
   model: SupportedChatModel,
@@ -180,22 +178,19 @@ export function chatCompletionOptionsFor(
       return options;
     }
     case "anthropic": {
+      // Thinking rejects a forced tool_choice (400); the single respond tool
+      // still answers under "auto".
       const options: AnthropicOptions = {
         maxTokens: args.maxTokens,
-        toolChoice: { type: "tool", name: toolName },
+        toolChoice: "auto",
+        thinkingEnabled: true,
       };
-      if (adaptiveThinkingFor(model)) {
-        // Thinking rejects a forced tool_choice (400); the single respond
-        // tool still answers under "auto".
-        options.toolChoice = "auto";
-        options.thinkingEnabled = true;
-        if (args.effort) {
-          // SAFETY: `args.effort` is `OpenAiEffort | AnthropicEffort` (see
-          // this function's own comment) because the
-          // caller's feature record is already tiered to this route; on the
-          // Anthropic route it is always an `AnthropicEffort` value.
-          options.effort = args.effort as AnthropicEffort;
-        }
+      if (args.effort) {
+        // SAFETY: `args.effort` is `OpenAiEffort | AnthropicEffort` (see this
+        // function's own comment) because the caller's feature record is
+        // already tiered to this route; on the Anthropic route it is always an
+        // `AnthropicEffort` value.
+        options.effort = args.effort as AnthropicEffort;
       }
       return options;
     }

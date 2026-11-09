@@ -48,7 +48,7 @@ function catalog(): ProviderMap {
   });
   return {
     openai: provider("openai", {
-      "gpt-6-sol": {
+      "gpt-6.1-sol": {
         input: 2,
         output: 10,
         cache_read: 0.2,
@@ -75,10 +75,6 @@ function catalog(): ProviderMap {
     }),
     anthropic: provider("anthropic", {
       "claude-haiku-4-5": { input: 1, output: 5 },
-    }),
-    google: provider("google", {
-      "gemini-2.5-flash": { input: 0.3, output: 2.5, cache_read: 0.03 },
-      "gemini-2.5-flash-lite": { input: 0.1, output: 0.4 },
     }),
   };
 }
@@ -180,7 +176,7 @@ describe("quoteAiDecisionRequest", () => {
   it("refuses unsupported models, mismatched providers, missing catalog rows, and invalid question counts", () => {
     const { providers } = decisionCatalog();
     const pricing = projectAiModelPricing(providers);
-    expect(quote(pricing, { ...request, model: "gpt-6-sol" })).toBeNull();
+    expect(quote(pricing, { ...request, model: "gpt-6.1-sol" })).toBeNull();
     expect(
       quote(pricing, { ...request, model: "unknown-decision" }),
     ).toBeNull();
@@ -214,7 +210,7 @@ describe("estimateAiUsageCost", () => {
 
   it("prices base and cache token classes", () => {
     expect(
-      estimateAiUsageCost(pricing, "openai", "gpt-6-sol", {
+      estimateAiUsageCost(pricing, "openai", "gpt-6.1-sol", {
         inputTokens: 1000,
         outputTokens: 1000,
         cacheReadTokens: 10_000,
@@ -235,29 +231,9 @@ describe("estimateAiUsageCost", () => {
     ).toBeCloseTo(0.0000009);
   });
 
-  // Cookbook's pinned ladder bills Gemini calls to `google-ai-studio`, which
-  // models.dev prices under its `google` provider.
-  it("prices the cookbook's Gemini models billed to google-ai-studio", () => {
-    expect(
-      estimateAiUsageCost(pricing, "google-ai-studio", "gemini-2.5-flash", {
-        inputTokens: 1_000_000,
-        outputTokens: 1_000_000,
-        cacheReadTokens: 1_000_000,
-      }),
-    ).toBeCloseTo(0.3 + 2.5 + 0.03, 8);
-    expect(
-      estimateAiUsageCost(
-        pricing,
-        "google-ai-studio",
-        "gemini-2.5-flash-lite",
-        { inputTokens: 1_000_000, outputTokens: 1_000_000 },
-      ),
-    ).toBeCloseTo(0.1 + 0.4, 8);
-  });
-
   it("prices a prompt above a context tier at that tier's rates", () => {
     expect(
-      estimateAiUsageCost(pricing, "openai", "gpt-6-sol", {
+      estimateAiUsageCost(pricing, "openai", "gpt-6.1-sol", {
         inputTokens: 200_000,
         cacheReadTokens: 100_000,
         outputTokens: 1000,
@@ -286,7 +262,7 @@ describe("estimateAiUsageCost", () => {
       }),
     ).toBeNull();
     expect(
-      estimateAiUsageCost(pricing, "openai", "gpt-6-sol", {
+      estimateAiUsageCost(pricing, "openai", "gpt-6.1-sol", {
         inputTokens: null,
         outputTokens: undefined,
       }),
@@ -377,12 +353,12 @@ it("retains a token-class pricing snapshot independent of subsequent catalog edi
   const priced = priceAiUsage(
     projectAiModelPricing(providers),
     "openai",
-    "gpt-6-sol",
+    "gpt-6.1-sol",
     { inputTokens: 300_000, outputTokens: 0 },
   );
   expect(priced.amount).toBe(1.2);
   expect(priced.evidence?.pricingSnapshot.rates.input).toBe(4);
-  providers.openai!.models["gpt-6-sol"]!.cost!.tiers![0]!.input = 99;
+  providers.openai!.models["gpt-6.1-sol"]!.cost!.tiers![0]!.input = 99;
   expect(priced.evidence?.pricingSnapshot.rates.input).toBe(4);
   expect(priced.amount).toBe(1.2);
 });

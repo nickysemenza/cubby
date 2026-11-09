@@ -12,7 +12,7 @@ describe("purchase-agent durable dispatch", () => {
       type: "retry",
       runId,
       // A historical body: the field must not reach the member-visible transcript.
-      coordinatorModel: "gpt-6-sol",
+      coordinatorModel: "gpt-6.1-sol",
       eventId: "retry-9",
       generation: "synthetic-generation",
       retryOf: "operation-9",

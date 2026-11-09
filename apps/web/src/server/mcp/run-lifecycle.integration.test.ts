@@ -180,7 +180,7 @@ describe("Run lifecycle through MCP", () => {
       runId: original.id,
       feature: "purchase_import_agent",
       provider: "openai",
-      model: "gpt-6-sol",
+      model: "gpt-6.1-sol",
       operation: "agent.generation",
       durationMs: 1,
       chargedCost: 1.05,

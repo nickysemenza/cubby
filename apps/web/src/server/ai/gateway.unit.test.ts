@@ -69,7 +69,7 @@ describe("gatewayFetch provider transport", () => {
         authorization: "Bearer placeholder",
         "content-length": "17",
       },
-      body: JSON.stringify({ model: "claude-sonnet-5" }),
+      body: JSON.stringify({ model: "claude-sonnet-5-5" }),
       signal: controller.signal,
     });
 
@@ -86,7 +86,9 @@ describe("gatewayFetch provider transport", () => {
     expect(JSON.parse(sent?.headers.get("cf-aig-metadata") ?? "{}")).toEqual(
       outbound,
     );
-    expect(await sent?.json()).toEqual({ model: "anthropic/claude-sonnet-5" });
+    expect(await sent?.json()).toEqual({
+      model: "anthropic/claude-sonnet-5.5",
+    });
     controller.abort();
     expect(sent?.signal.aborted).toBe(true);
   });
@@ -136,7 +138,7 @@ describe("gatewayFetch provider transport", () => {
 
     const response = await gatewayFetch("openai", { metadata })(
       `${gatewayBaseURL("openai")}/responses`,
-      { method: "POST", body: JSON.stringify({ model: "gpt-6-sol" }) },
+      { method: "POST", body: JSON.stringify({ model: "gpt-6.1-sol" }) },
     );
 
     expect(response).toBe(streamed);
@@ -158,7 +160,7 @@ describe("gatewayFetch provider transport", () => {
       onErrorResponse: (details) => observed.push(details),
     })(`${gatewayBaseURL("openai")}/responses`, {
       method: "POST",
-      body: JSON.stringify({ model: "gpt-6-sol" }),
+      body: JSON.stringify({ model: "gpt-6.1-sol" }),
     });
 
     expect(response).toBe(failure);
@@ -249,7 +251,10 @@ describe("gatewayFetch on the dev REST fallback", () => {
     await expect(
       devFetch("anthropic", { metadata })(
         `${gatewayBaseURL("anthropic")}/v1/messages`,
-        { method: "POST", body: JSON.stringify({ model: "claude-sonnet-5" }) },
+        {
+          method: "POST",
+          body: JSON.stringify({ model: "claude-sonnet-5-5" }),
+        },
       ),
     ).rejects.toThrow("AI_GATEWAY_API_KEY is not configured");
   });
@@ -268,7 +273,10 @@ describe("gatewayFetch transport selection", () => {
     await expect(
       gatewayFetch("anthropic", options)(
         `${gatewayBaseURL("anthropic")}/v1/messages`,
-        { method: "POST", body: JSON.stringify({ model: "claude-sonnet-5" }) },
+        {
+          method: "POST",
+          body: JSON.stringify({ model: "claude-sonnet-5-5" }),
+        },
       ),
     ).rejects.toThrow(/allowance exhausted/);
 
@@ -283,7 +291,7 @@ describe("gatewayFetch transport selection", () => {
     await expect(
       gatewayFetch("openai", options)(`${gatewayBaseURL("openai")}/responses`, {
         method: "POST",
-        body: JSON.stringify({ model: "gpt-6-sol", input: [] }),
+        body: JSON.stringify({ model: "gpt-6.1-sol", input: [] }),
       }),
     ).rejects.toThrow(/Required ChatGPT subscription/);
 
@@ -324,7 +332,7 @@ describe("gatewayFetch transport selection", () => {
         onTransport: (transport) => transports.push(transport),
       })(`${gatewayBaseURL("openai")}/responses`, {
         method: "POST",
-        body: JSON.stringify({ model: "gpt-6-sol", input: [] }),
+        body: JSON.stringify({ model: "gpt-6.1-sol", input: [] }),
       }),
     ).rejects.toThrow(/connection reset/);
 
@@ -342,7 +350,7 @@ describe("gatewayFetch transport selection", () => {
       onTransport: (transport) => transports.push(transport),
     })(`${gatewayBaseURL("openai")}/responses`, {
       method: "POST",
-      body: JSON.stringify({ model: "gpt-6-sol", input: [] }),
+      body: JSON.stringify({ model: "gpt-6.1-sol", input: [] }),
     });
 
     expect(infer).not.toHaveBeenCalled();
@@ -365,7 +373,7 @@ describe("gatewayFetch metadata contract", () => {
       `${gatewayBaseURL("openai")}/responses`,
       {
         method: "POST",
-        body: JSON.stringify({ model: "gpt-6-sol" }),
+        body: JSON.stringify({ model: "gpt-6.1-sol" }),
       },
     );
     return JSON.parse(calls[0]?.headers.get("cf-aig-metadata") ?? "{}");
@@ -418,7 +426,7 @@ describe("gatewayFetch metadata contract", () => {
       metadata: { ...metadata, entityKind: "location" },
     })(`${gatewayBaseURL("openai")}/responses`, {
       method: "POST",
-      body: JSON.stringify({ model: "gpt-6-sol" }),
+      body: JSON.stringify({ model: "gpt-6.1-sol" }),
     });
     expect(
       JSON.parse(calls[0]?.headers.get("cf-aig-metadata") ?? "{}"),
@@ -541,7 +549,7 @@ describe("gatewayFetch response observation", () => {
       onResponse: (info) => observed.push(info),
     })(`${gatewayBaseURL("anthropic")}/v1/messages`, {
       method: "POST",
-      body: JSON.stringify({ model: "claude-sonnet-5" }),
+      body: JSON.stringify({ model: "claude-sonnet-5-5" }),
     });
 
     expect(observed).toEqual([
@@ -569,7 +577,7 @@ describe("gatewayFetch response observation", () => {
       onErrorResponse: (failure) => failures.push(failure),
     })(`${gatewayBaseURL("openai")}/responses`, {
       method: "POST",
-      body: JSON.stringify({ model: "gpt-6-sol" }),
+      body: JSON.stringify({ model: "gpt-6.1-sol" }),
     });
 
     expect(universal).not.toHaveBeenCalled();
@@ -595,7 +603,7 @@ describe("gatewayFetch response observation", () => {
       onErrorResponse: (failure) => failures.push(failure),
     })(`${gatewayBaseURL("openai")}/responses`, {
       method: "POST",
-      body: JSON.stringify({ model: "gpt-6-sol" }),
+      body: JSON.stringify({ model: "gpt-6.1-sol" }),
     });
 
     expect(observed).toEqual([
@@ -631,7 +639,7 @@ it("preserves sanitized provider headers through shared Gateway coordination", a
         "anthropic-beta": "synthetic-beta",
         "x-api-key": "synthetic-secret",
       },
-      body: JSON.stringify({ model: "claude-sonnet-5" }),
+      body: JSON.stringify({ model: "claude-sonnet-5-5" }),
     },
   );
   expect(await response.text()).toBe("synthetic stream");

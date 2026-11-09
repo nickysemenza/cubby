@@ -17,7 +17,7 @@ const pricing = projectAiModelPricing(
   fromPartial({
     openai: {
       models: {
-        "gpt-6-sol": {
+        "gpt-6.1-sol": {
           cost: {
             input: 2,
             output: 10,
@@ -54,7 +54,7 @@ const usage: EvalUsage = {
 
 it("prices inclusive cached input once, as its own class", async () => {
   // 600 uncached x 2 + 400 cached x 0.2 + 50 output x 10, per million.
-  await expect(evalCostUsd("gpt-6-sol", usage)).resolves.toBeCloseTo(
+  await expect(evalCostUsd("gpt-6.1-sol", usage)).resolves.toBeCloseTo(
     0.00178,
     10,
   );
@@ -84,12 +84,12 @@ it("selects context tiers per request rather than on the combined run", async ()
       { inputTokens: 150_000, cachedInputTokens: 0, outputTokens: 0 },
     ],
   };
-  await expect(evalCostUsd("gpt-6-sol", run)).resolves.toBeCloseTo(0.6);
+  await expect(evalCostUsd("gpt-6.1-sol", run)).resolves.toBeCloseTo(0.6);
 });
 
 it("keeps a failed request without usage unpriced", async () => {
   await expect(
-    evalCostUsd("gpt-6-sol", {
+    evalCostUsd("gpt-6.1-sol", {
       ...usage,
       requests: 1,
       failedRequests: 1,

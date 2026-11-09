@@ -189,7 +189,7 @@ export const importRunAgentManifest = {
   mail_import: {
     model: "gpt-6-luna",
     escalationModel: "claude-opus-5-5",
-    escalationAlternative: "gpt-6-sol",
+    escalationAlternative: "gpt-6.1-sol",
     effort: "medium",
     agentTools: [
       ...RUN_AGENT_TOOLS.filter((tool) => tool !== "report_agent_progress"),

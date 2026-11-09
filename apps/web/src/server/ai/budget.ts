@@ -4,7 +4,7 @@ import {
   type AiBudgetSettings,
   type AiBudgetStatus,
 } from "@cubby/schemas/mail-import-settings";
-import { supportedChatModelSchema } from "@cubby/shared/ai/models";
+import { AI_MODELS } from "@cubby/shared/ai/models";
 import { and, gte, inArray, sql } from "drizzle-orm";
 
 import { roundTo } from "~/lib/round-to";
@@ -18,8 +18,7 @@ import { aiBudgetWindow } from "./budget-window";
  * Household caps on frontier chat-model spend per fixed six-hour UTC window
  * (ADR 0017): the paid budget sums charged cost, and the provider credit budgets
  * sum their own standard API cost of subscriber-credit calls, which charge $0.
- * Embeddings, closed-set decision models and other model roles are not
- * budgeted. Admission (`paidRunPreflight`, `withAiBudget`,
+ * Embeddings and closed-set decision models are not budgeted. Admission (`paidRunPreflight`, `withAiBudget`,
  * `withFreeBudget`) and accounting (`readAiBudget`) share `aiBudgetCovers`.
  */
 export const AI_BUDGET_LIMIT_USD = 1;
@@ -31,7 +30,10 @@ export const DEFAULT_CREDIT_BUDGET_USD = 1.5;
  */
 export const PLAN_BUDGET_LIMIT_USD = 2;
 const SETTINGS_ID = "00000000-0000-4000-8000-000000000077";
-const FRONTIER_MODELS: readonly string[] = supportedChatModelSchema.options;
+/** Chat models and cookbook's pinned frontier models, which spend the same credit. */
+const FRONTIER_MODELS: readonly string[] = Object.entries(AI_MODELS)
+  .filter(([, model]) => model.role === "chat" || model.role === "cookbook")
+  .map(([id]) => id);
 export const aiBudgetCovers = (model: string) =>
   FRONTIER_MODELS.includes(model);
 

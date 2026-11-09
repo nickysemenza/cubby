@@ -38,10 +38,8 @@ import { merchantIdentityProposal } from "@cubby/schemas/merchant-identity";
 import {
   type ImportAuditModelOutput,
   type ImportExtractionModelOutput,
-  type OrderMailMessageClassification,
   importAuditModelOutput,
   importExtractionModelOutput,
-  orderMailMessageClassification,
 } from "@cubby/schemas/purchase-import";
 import {
   type RecipeFlowAiPlan,
@@ -88,7 +86,6 @@ import {
   purchaseAuditPrompt,
   purchaseReceiptRequest,
   purchaseRepairPrompt,
-  orderMailRequest,
 } from "./prompts/purchase-import";
 import {
   purchaseLinePrompt,
@@ -476,17 +473,6 @@ export const PURCHASE_IMPORT_RECEIPT_FEATURE = defineFeature({
   schema: importExtractionModelOutput,
 }) satisfies AiStructuredFeature<ImportExtractionModelOutput>;
 
-const PURCHASE_IMPORT_MAIL_FEATURE = defineFeature({
-  request: orderMailRequest,
-  feature: "purchase-import-mail-classification",
-  tier: "quality",
-  maxTokens: 1_000,
-  effort: "low",
-  cache: true,
-  promptVersion: "2026-10-22.1",
-  schema: orderMailMessageClassification,
-}) satisfies AiStructuredFeature<OrderMailMessageClassification>;
-
 /**
  * On Sol again since 2026-10-06: judged the better model, and the ChatGPT plan
  * made its cost moot.
@@ -641,7 +627,6 @@ export const AI_FEATURES = [
   LOCATION_INVENTORY_DETECTION_FEATURE,
   PURCHASE_IMPORT_EXTRACTION_FEATURE,
   PURCHASE_IMPORT_RECEIPT_FEATURE,
-  PURCHASE_IMPORT_MAIL_FEATURE,
   LOCATION_DESCRIPTION_FEATURE,
   IMAGE_DESCRIPTION_FEATURE,
   RECIPE_FLOW_PRIMARY_FEATURE,
