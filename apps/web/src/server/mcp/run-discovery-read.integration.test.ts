@@ -258,13 +258,11 @@ describe("member discovery readiness through MCP", () => {
       },
     });
     const foreignUserId = userId.parse("synthetic-foreign-discovery-user");
-    await getDb(ctx.db)
-      .insert(user)
-      .values({
-        id: foreignUserId,
-        name: "Synthetic other discovery member",
-        email: "foreign-discovery@example.test",
-      });
+    await getDb(ctx.db).insert(user).values({
+      id: foreignUserId,
+      name: "Synthetic other discovery member",
+      email: "foreign-discovery@example.test",
+    });
     await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Synthetic other discovery member",
       kind: "member",
