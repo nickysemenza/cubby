@@ -90,17 +90,20 @@ describe("Job maintenance", () => {
   });
 
   it("prunes old failed Jobs only for settled automatic Runs and keeps the Run", async () => {
-    const old = new Date(Date.now() - 15 * 24 * 60 * 60_000);
+    const daysAgo = (days: number) =>
+      new Date(Date.now() - days * 24 * 60 * 60_000);
     const seed = async (
       key: string,
       run: {
-        purpose: "maintenance" | "mail_search";
+        purpose: "maintenance" | "mail_search" | "sweep";
         trigger: "manual" | "scheduled";
+        status?: "running" | "completed";
       },
+      age = 15,
     ) => {
       const runId = await ensureRun(ctx.db, ctx.actor, {
         ...run,
-        status: "completed",
+        status: run.status ?? "completed",
         execution: false,
       });
       const saved = await enqueueJob(ctx.db, {
@@ -112,7 +115,7 @@ describe("Job maintenance", () => {
       await updateJobs(
         ctx.db,
         { id: saved.id },
-        { state: "failed", updatedAt: old },
+        { state: "failed", updatedAt: daysAgo(age) },
       );
       return { jobId: saved.id, runId };
     };
@@ -128,7 +131,25 @@ describe("Job maintenance", () => {
       purpose: "mail_search",
       trigger: "scheduled",
     });
+    // Protected Runs keep their failed Jobs past the 30-day no-Run window too.
+    const oldManual = await seed(
+      "synthetic.failed.manual-old",
+      { purpose: "maintenance", trigger: "manual" },
+      45,
+    );
+    const oldMail = await seed(
+      "synthetic.failed.mail-old",
+      { purpose: "mail_search", trigger: "scheduled" },
+      45,
+    );
+    const oldUnfinished = await seed(
+      "synthetic.failed.unfinished-old",
+      { purpose: "sweep", trigger: "scheduled", status: "running" },
+      45,
+    );
     await maintainJobs(ctx.db);
+    for (const kept of [oldManual, oldMail, oldUnfinished])
+      expect(await readJobs(ctx.db, { id: kept.jobId })).toHaveLength(1);
     expect(await readJobs(ctx.db, { id: automatic.jobId })).toEqual([]);
     expect(await readJobs(ctx.db, { id: manual.jobId })).toHaveLength(1);
     expect(await readJobs(ctx.db, { id: mail.jobId })).toHaveLength(1);

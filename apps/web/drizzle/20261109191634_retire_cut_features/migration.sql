@@ -45,6 +45,7 @@ WHERE j."runId" = r.id
   AND j.state = 'failed'
   AND r.purpose = 'ai_refresh'
   AND r.trigger = 'scheduled'
+  AND r.cause IS DISTINCT FROM 'member_request'
   AND r.status = 'failed';
 --> statement-breakpoint
 -- The retired connection-discovery cursor.
