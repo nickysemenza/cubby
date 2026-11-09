@@ -8,7 +8,6 @@ import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
-import { getEntityRecommendations } from "~/server/domains/connection/service/connection-recommendations";
 import { expenseHandlers } from "~/server/domains/expense/operations/expense.server";
 import { readExpense, updateExpense } from "~/server/domains/expense/repo/crud";
 import { resolveDraftExpenseFields } from "~/server/domains/expense/repo/expense-inheritance";
@@ -286,12 +285,6 @@ describe("purchase inheritance lifecycle", () => {
     if (!chargeContext.ok) throw new Error(chargeContext.error.message);
     const result = expenseChargeContextOut.parse(chargeContext.data);
     expect(result?.siblings).toHaveLength(2);
-    await expect(
-      getEntityRecommendations(ctx.db, {
-        entityKind: "expense",
-        entityId: code,
-      }),
-    ).resolves.toMatchObject({ source: { entityId: code } });
     const context = entityKernelContextSchema.parse(
       createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
     );
@@ -318,12 +311,6 @@ describe("purchase inheritance lifecycle", () => {
         "Stored override",
       );
     }
-    await expect(
-      getEntityRecommendations(ctx.db, {
-        entityKind: "expense",
-        entityId: charge.shortcode,
-      }),
-    ).resolves.toMatchObject({ groups: [] });
   });
 
   it("returns canonical attach and charge contexts without losing inherited or allocated decisions", async () => {

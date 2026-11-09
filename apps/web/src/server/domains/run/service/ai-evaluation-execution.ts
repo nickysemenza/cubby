@@ -6,7 +6,6 @@ import { runEntityId } from "@cubby/schemas/identifiers";
  * status, funding resume). The drain itself lives in `ai/evaluation`.
  */
 import type { AiEvaluationExecution } from "~/server/ai/evaluation/service/ai-evaluation-drain";
-import { semanticCoveragePending } from "~/server/generic/embedding/repo/entity-embedding";
 import { withWorkflowExecution } from "~/server/workflows/runs/execution";
 
 import {
@@ -14,11 +13,7 @@ import {
   readRunStatus,
   resumeFundingStoppedRuns,
 } from "../repo/ai-work-state";
-import {
-  executeAiRefreshTarget,
-  prepareAiRefreshPage,
-  type AiRefreshPorts,
-} from "./ai-refresh";
+import { executeAiRefreshTarget, type AiRefreshPorts } from "./ai-refresh";
 import { executeAiWorkTarget, type AiWorkPorts } from "./ai-work";
 
 export type AiEvaluationPorts = AiRefreshPorts & AiWorkPorts;
@@ -39,9 +34,6 @@ export const runAiEvaluationExecution = (
           ? executeAiRefreshTarget(db, claimed, ports)
           : executeAiWorkTarget(db, claimed, ports),
     ),
-  preparePage: (db, targets, context) =>
-    prepareAiRefreshPage(db, targets, context, ports),
-  coveragePending: semanticCoveragePending,
   pauseRun: async (db, runId, message) => {
     await pauseRunForAiWork(db, runEntityId.parse(runId), message);
   },

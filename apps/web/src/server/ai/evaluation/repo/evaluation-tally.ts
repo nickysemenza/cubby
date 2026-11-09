@@ -9,12 +9,11 @@
  */
 import {
   aiEvaluationState,
-  aiEvaluationTargetKind,
   MEMBER_CANCELLED_AI_WORK,
 } from "@cubby/schemas/ai-evaluation";
 import type { RunId } from "@cubby/schemas/identifiers";
 import { RUN_STEP_ERROR_SAMPLE } from "@cubby/schemas/run-step";
-import { and, eq, sql, type SQL, type SQLWrapper } from "drizzle-orm";
+import { and, eq, sql, type SQL } from "drizzle-orm";
 import type { SelectedFields } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
@@ -25,23 +24,9 @@ import { outer } from "~/server/db/helpers/related";
 import { aiEvaluation, aiEvaluationRequest } from "~/server/db/schema";
 
 export type EvaluationScope = { runId: RunId | SQL } & (
-  | { source: "owned"; connectionsOnly?: boolean }
+  | { source: "owned" }
   | { source: "requested"; executionKind?: string }
 );
-
-const UUID_PATTERN = z.regexes.uuid().source;
-const uuidString = (value: SQLWrapper) =>
-  sql`(jsonb_typeof(${value}) = 'string' AND (${value} #>> '{}') ~ ${UUID_PATTERN})`;
-
-const connectionTarget = () => {
-  const field = (key: string) =>
-    sql`(${outer(aiEvaluation.target)} -> ${key}::text)`;
-  return sql`(${field("kind")} = to_jsonb(${aiEvaluationTargetKind.enum.connection}::text)
-    AND jsonb_typeof(${field("entity")}) = 'string'
-    AND ${uuidString(field("recordId"))}
-    AND jsonb_typeof(${field("field")}) = 'null'
-    AND ${field("suggestionIds")} = '[]'::jsonb)`;
-};
 
 /** A cancelled request hides a falsy receipt; otherwise its own receipt wins over the shared one. */
 const requestedReceipt = () => sql`(CASE
@@ -71,13 +56,9 @@ function reads(scope: EvaluationScope) {
     owned
       ? sql`${outer(aiEvaluation.runId)} = ${scope.runId}`
       : sql`${outer(aiEvaluationRequest.runId)} = ${scope.runId}`,
-    owned
-      ? scope.connectionsOnly
-        ? connectionTarget()
-        : undefined
-      : scope.executionKind
-        ? sql`${outer(aiEvaluation.executionKind)} = ${scope.executionKind}`
-        : undefined,
+    !owned && scope.executionKind
+      ? sql`${outer(aiEvaluation.executionKind)} = ${scope.executionKind}`
+      : undefined,
   );
   return {
     scopeWhere,

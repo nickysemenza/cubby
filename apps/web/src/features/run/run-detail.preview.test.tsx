@@ -62,8 +62,8 @@ const steps: RunDetailStepsOut = {
   input: {
     kind: "sweep",
     families: [
-      { family: "transfer_pair", scope: {} },
       { family: "statement_transaction", scope: {} },
+      { family: "field", scope: {} },
     ],
   },
   purpose: "sweep",

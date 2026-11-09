@@ -402,30 +402,12 @@ export const sweepFieldTargets = z
 /** The Suggestion families a Sweep can cover, each with its own scope. */
 export const sweepFamilyScope = z.discriminatedUnion("family", [
   z.strictObject({
-    family: z.literal("transfer_pair"),
-    scope: z
-      .strictObject({
-        accountIds: z.array(z.uuid()).max(100).optional(),
-        since: plainDate.optional(),
-      })
-      .default({}),
-  }),
-  z.strictObject({
     family: z.literal("statement_transaction"),
     scope: z
       .strictObject({
         importId: z.uuid().optional(),
         accountIds: z.array(z.uuid()).max(100).optional(),
         since: plainDate.optional(),
-      })
-      .default({}),
-  }),
-  z.strictObject({
-    family: z.literal("recommendation"),
-    scope: z
-      .strictObject({
-        /** Connection sources of these entity kinds; omitted covers every eligible kind. */
-        entityKinds: z.array(z.string().min(1)).max(20).optional(),
       })
       .default({}),
   }),
@@ -444,13 +426,11 @@ export type SweepFamily = SweepFamilyScope["family"];
 /** Each Suggestion family's plural name, shared by Sweep steps, chips, and dialogs. */
 export const SWEEP_FAMILY_LABEL = {
   statement_transaction: "Statements",
-  recommendation: "Connections",
   field: "Fields",
-  transfer_pair: "Transfer pairs",
 } as const satisfies Record<SweepFamily, string>;
 export const sweepRunInput = z.strictObject({
   kind: z.literal("sweep"),
-  families: z.array(sweepFamilyScope).min(1).max(4),
+  families: z.array(sweepFamilyScope).min(1).max(2),
 });
 export type SweepRunInput = z.infer<typeof sweepRunInput>;
 export const maintenanceRunInput = z.strictObject({
@@ -517,15 +497,6 @@ export function runWorkLabel(run: {
   const purpose = runPurpose.safeParse(run.purpose);
   if (!purpose.success) return run.purpose;
   if (isMailReclassifyRun(run)) return "Email reclassification";
-  if (purpose.data === "sweep") {
-    const families = sweepRunInput.safeParse(run.input).data?.families;
-    if (
-      families?.length === 2 &&
-      families.some((entry) => entry.family === "transfer_pair") &&
-      families.some((entry) => entry.family === "statement_transaction")
-    )
-      return "Financial reconciliation";
-  }
   if (purpose.data !== "account_sync") return RUN_PURPOSE_LABEL[purpose.data];
   const kind = z.object({ kind: z.string() }).safeParse(run.input);
   switch (kind.success ? kind.data.kind : null) {

@@ -393,10 +393,10 @@ describe("Run attention entity view", () => {
         feature: "synthetic-attention",
         workKey: crypto.randomUUID(),
         target: {
-          kind: "connection",
+          kind: "field",
           entity: "email",
           recordId: crypto.randomUUID(),
-          field: null,
+          field: "subject",
           suggestionIds: [],
         },
         provenance: {

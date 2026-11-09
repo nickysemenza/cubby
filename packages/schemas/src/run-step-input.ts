@@ -2,7 +2,6 @@ import { z } from "zod";
 import { shortcodeSchema } from "./identifier-fields";
 
 export const runStepInputStepKey = z.enum([
-  "transfer_pair_scan",
   "statement_generate",
   "statement_holds",
 ]);
@@ -31,11 +30,11 @@ export const parseRunStepInputFilterToken = (value: unknown) =>
 export const runStepInputInspection = z.discriminatedUnion("entity", [
   z.object({
     entity: z.literal("financialTransaction"),
-    stepKey: z.enum(["transfer_pair_scan", "statement_holds"]),
+    stepKey: z.literal("statement_holds"),
   }),
   z.object({
     entity: z.literal("sourceTransactionRecord"),
-    stepKey: z.enum(["transfer_pair_scan", "statement_generate"]),
+    stepKey: z.literal("statement_generate"),
   }),
 ]);
 export type RunStepInputInspection = z.infer<typeof runStepInputInspection>;

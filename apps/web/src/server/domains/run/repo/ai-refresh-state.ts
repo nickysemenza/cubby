@@ -2,16 +2,11 @@ import {
   aiRefreshActivation,
   aiProvenance,
   aiRefreshRunInput,
-  suggestionSupersessionReceipt,
   suggestionAcceptanceReceipt,
   type AiEvaluationTarget,
   type AiProvenance,
 } from "@cubby/schemas/ai-evaluation";
-import {
-  parseEntityId,
-  runEntityId,
-  type RunId,
-} from "@cubby/schemas/identifiers";
+import { runEntityId, type RunId } from "@cubby/schemas/identifiers";
 import { sha256Hex } from "@cubby/shared/sha256";
 import {
   and,
@@ -19,12 +14,9 @@ import {
   count,
   desc,
   eq,
-  gt,
   inArray,
   isNotNull,
   isNull,
-  notInArray,
-  or,
   sql,
 } from "drizzle-orm";
 import { z } from "zod";
@@ -40,14 +32,9 @@ import {
 import {
   aiEvaluation,
   aiEvaluationRequest,
-  product,
-  email,
-  emailClassificationObservation,
-  ledgerParty,
   run,
   suggestionTable as suggestion,
 } from "~/server/db/schema";
-import { emailMemberClassificationSql } from "~/server/domains/email/repo/email-sql";
 import {
   type SuggestionStateRow,
   suggestionStateColumns,
@@ -62,16 +49,6 @@ import { readAutomaticAiStop } from "./automatic-ai-stop";
 import { ensureRun } from "./ensure-run";
 
 export type { SuggestionStateRow };
-export type FieldRefreshCursor = Pick<
-  SuggestionStateRow,
-  "entity" | "field"
-> & { recordId: string };
-
-const withSavedRecord = (rows: readonly SuggestionStateRow[]) =>
-  rows.flatMap((row) =>
-    row.recordId === null ? [] : [{ ...row, recordId: row.recordId }],
-  );
-
 const jsonSnapshot = (value: unknown) =>
   z.json().parse(JSON.parse(JSON.stringify(value)));
 
@@ -97,13 +74,7 @@ const SUPERSEDED_RUN_FAILURE = "superseded";
 const refreshRunRevision = sql<number>`coalesce((${run.input}->${aiRefreshRunInput.keyof().enum.activation}->>${aiRefreshActivation.keyof().enum.revision})::int, 0)`;
 
 const targetFeature = (target: AiEvaluationTarget) =>
-  target.kind === "connection"
-    ? "entity-connections"
-    : target.kind === "field"
-      ? "field-suggestion"
-      : target.kind === "product" || target.kind === "product_pair"
-        ? "product-identity"
-        : "mailbox-triage";
+  target.kind === "field" ? "field-suggestion" : "mailbox-triage";
 
 async function slotAdmissions(
   db: Database,
@@ -341,7 +312,7 @@ type ScheduleEvaluationResult =
   | { kind: "deferred"; reason: "scheduling_busy" | "capacity" };
 
 /** Automatic evaluations waiting before a discovery page holds its cursor. */
-export const AUTOMATIC_EVALUATION_BACKLOG = 1_000;
+const AUTOMATIC_EVALUATION_BACKLOG = 1_000;
 
 /**
  * Admit automatic refresh work, which has no Run: the drain runs it and the activation
@@ -487,24 +458,6 @@ export async function scheduleEvaluationRun(
   });
 }
 
-export async function liveProductIdsAfter(
-  db: Database,
-  after: string | null,
-  limit: number,
-) {
-  return getDb(db)
-    .select({ id: product.id })
-    .from(product)
-    .where(
-      and(
-        notDeleted(product),
-        after ? gt(product.id, parseEntityId("product", after)) : undefined,
-      ),
-    )
-    .orderBy(product.id)
-    .limit(limit);
-}
-
 /** Settle an evaluation with no replacement without rewriting historical Feedback. */
 export async function settleAppliedFieldRefresh(
   db: Database,
@@ -528,120 +481,6 @@ export async function settleAppliedFieldRefresh(
       };
     },
   );
-}
-
-// Applications identify logical targets even when inactive or rejected after
-// a member correction. Rejected proposals without a receipt stay resolved.
-const eligibleSuggestions = () =>
-  or(
-    eq(suggestion.status, "applied"),
-    isNotNull(suggestion.acceptanceReceipt),
-    and(
-      eq(suggestion.active, true),
-      or(
-        eq(suggestion.status, "pending"),
-        and(
-          eq(suggestion.status, "superseded"),
-          sql`${suggestion.supersessionReceipt}->>'reason' IN (${suggestionSupersessionReceipt.shape.reason.enum.input_changed}, ${suggestionSupersessionReceipt.shape.reason.enum.no_proposal})`,
-        ),
-      ),
-    ),
-  );
-
-/** The newest refreshable field suggestion per (entity, record, field), after the cursor. */
-export async function pendingFieldRefreshes(
-  db: Database,
-  after: FieldRefreshCursor | null,
-  limit: number,
-) {
-  return getDb(db)
-    .selectDistinctOn(
-      [suggestion.entity, suggestion.recordId, suggestion.field],
-      suggestionStateColumns,
-    )
-    .from(suggestion)
-    .where(
-      and(
-        eligibleSuggestions(),
-        eq(suggestion.family, "field"),
-        isNotNull(suggestion.recordId),
-        after
-          ? sql`(${suggestion.entity}, ${suggestion.recordId}, ${suggestion.field}) > (${after.entity}, ${after.recordId}::uuid, ${after.field})`
-          : undefined,
-      ),
-    )
-    .orderBy(
-      asc(suggestion.entity),
-      asc(suggestion.recordId),
-      asc(suggestion.field),
-      desc(suggestion.createdAt),
-    )
-    .limit(limit)
-    .then(withSavedRecord);
-}
-
-export async function fieldRefreshHistory(
-  db: Database,
-  key: FieldRefreshCursor,
-) {
-  return getDb(db)
-    .select(suggestionStateColumns)
-    .from(suggestion)
-    .where(
-      and(
-        eq(suggestion.family, "field"),
-        eq(suggestion.entity, key.entity),
-        eq(suggestion.recordId, key.recordId),
-        eq(suggestion.field, key.field),
-        eligibleSuggestions(),
-      ),
-    )
-    .orderBy(desc(suggestion.createdAt))
-    .then(withSavedRecord);
-}
-
-/** Uncertain, unresolved Email without a member classification, with its owner. */
-export async function uncertainEmailRefreshCandidates(
-  db: Database,
-  after: string | null,
-  limit: number,
-) {
-  return getDb(db)
-    .select({ item: email, ownerUserId: ledgerParty.userId })
-    .from(email)
-    .innerJoin(
-      ledgerParty,
-      and(eq(email.ledgerPartyId, ledgerParty.id), notDeleted(ledgerParty)),
-    )
-    .where(
-      and(
-        after ? gt(email.id, parseEntityId("email", after)) : undefined,
-        notDeleted(email),
-        eq(email.classification, "uncertain"),
-        notInArray(email.status, [
-          "completed",
-          "deleted",
-          "excluded",
-          "researching",
-        ]),
-        isNull(emailMemberClassificationSql()),
-      ),
-    )
-    .orderBy(asc(email.id))
-    .limit(limit);
-}
-
-/** Classification observations for these Emails, newest first. */
-export async function emailClassificationObservations(
-  db: Database,
-  emailIds: readonly (typeof email.$inferSelect)["id"][],
-) {
-  if (!emailIds.length) return [];
-  return getDb(db)
-    .select()
-    .from(emailClassificationObservation)
-    .where(inArray(emailClassificationObservation.emailId, [...emailIds]))
-    .orderBy(desc(emailClassificationObservation.createdAt));
 }
 
 export async function suggestionStatesById(

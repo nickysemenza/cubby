@@ -16,7 +16,6 @@ import {
 import { withEmailEvidenceWrite } from "~/server/domains/purchase-import/repo/email-evidence-write-scope";
 import { decideEmailPurchase } from "~/server/domains/purchase-import/repo/email-purchase-decision";
 import { syntheticRetainedMail } from "~/server/domains/purchase-import/service/gmail/retained-mail.fixtures";
-import { connectionSourceFingerprint } from "~/server/domains/run/repo/connection-refresh";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
@@ -25,21 +24,13 @@ import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
 // misses retained events; subject similarity invents identity; a changed checksum
 // or superseded event applies; foreign members/agents bypass purchase_import.mail_resolve;
 // a failed outer transaction leaks a link and a retry applies twice.
-import { reconcileDerivedRefreshInputs } from "~/server/testing/background-queue";
 import { activeEmailPurchaseDecision } from "~/server/testing/email-link.fixtures";
 
-import { retrieveConnectionCandidates } from "./connection-candidates";
+import { retrieveEmailConnectionCandidates as retrieveConnectionCandidates } from "./email-connections";
 import {
   publishEntityConnection,
   readEntityConnections,
 } from "./entity-connections";
-
-const reconciledSourceFingerprint = async (
-  ...args: Parameters<typeof connectionSourceFingerprint>
-) => {
-  await reconcileDerivedRefreshInputs(args[0]);
-  return connectionSourceFingerprint(...args);
-};
 
 describe("fresh retained Email connection recommendations", () => {
   const ctx = withTestDb();
@@ -167,10 +158,6 @@ describe("fresh retained Email connection recommendations", () => {
       .update(orderMailEvent)
       .set({ orderId: null, amount: 24 })
       .where(eq(orderMailEvent.id, f.event.id));
-    const before = await Promise.all([
-      reconciledSourceFingerprint(ctx.db, f.source),
-      reconciledSourceFingerprint(ctx.db, f.target),
-    ]);
     const vendor = await insertWithShortcode(ctx.db, "vendor", {
       name: "Synthetic unrelated vendor",
     });
@@ -201,12 +188,6 @@ describe("fresh retained Email connection recommendations", () => {
       orderId: "SYNTHETIC-UNRELATED",
       sourceKey: "synthetic-other-event",
     });
-    expect(
-      await Promise.all([
-        reconciledSourceFingerprint(ctx.db, f.source),
-        reconciledSourceFingerprint(ctx.db, f.target),
-      ]),
-    ).toEqual(before);
     expect(await retrieveConnectionCandidates(ctx.db, f.source)).toHaveLength(
       1,
     );

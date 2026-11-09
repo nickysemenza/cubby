@@ -121,8 +121,6 @@ function scopeLabel(entry: SweepFamilyScope) {
   if ("importId" in scope && scope.importId) parts.push("Selected import");
   if ("since" in scope && scope.since)
     parts.push(`Since ${formatCalendarDay(scope.since, "dateShort")}`);
-  if ("entityKinds" in scope && scope.entityKinds)
-    parts.push(scope.entityKinds.join(", "));
   if ("targets" in scope && scope.targets)
     parts.push(
       ...scope.targets.map(

@@ -10,8 +10,6 @@ import { and, eq, inArray, isNotNull, isNull, or, type SQL } from "drizzle-orm";
 import { chunk } from "es-toolkit";
 import { z } from "zod";
 
-import { findErrorCause } from "~/lib/error-diagnostics";
-import type { UnparsedError } from "~/lib/error-utils";
 import { normalizeSearchText } from "~/lib/search-normalization";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
@@ -42,22 +40,6 @@ export interface SemanticCandidateScan {
   complete: boolean;
   gap?: SemanticCoverageGap;
 }
-/** No gap: neither reason is established (a provider failure or an unready seed). */
-export class SemanticCoverageIncomplete extends Error {
-  constructor(
-    message?: string,
-    readonly gap?: SemanticCoverageGap,
-  ) {
-    super(message);
-  }
-}
-/** Whether this failure only reports owed upstream work, wherever it was wrapped. */
-export const semanticCoveragePending = (error: UnparsedError) =>
-  findErrorCause(
-    error,
-    (cause): cause is SemanticCoverageIncomplete =>
-      cause instanceof SemanticCoverageIncomplete,
-  )?.gap === "pending";
 const CANDIDATE_BUDGET = 100;
 const artifactIdSchema = z.uuid();
 

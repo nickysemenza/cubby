@@ -273,11 +273,9 @@ export function SuggestionsPage({
         open={finding}
         onOpenChange={setFinding}
         preset={
-          search.family === "product_pair"
-            ? { families: ["recommendation"] }
-            : search.family
-              ? { families: [search.family] }
-              : undefined
+          search.family === "field" || search.family === "statement_transaction"
+            ? { families: [search.family] }
+            : undefined
         }
         onStarted={(runId) => onSearch({ sweep: runId })}
       />

@@ -47,7 +47,8 @@ export const evaluationSlotKey = ({
     target.entity,
     target.recordId,
     target.field ?? "",
-    target.kind === "product_pair" ? target.otherId : "",
+    // The stored slot key still carries a fifth part, empty for every live kind.
+    "",
   ]
     .map((value) => `${new TextEncoder().encode(value).length}:${value}`)
     .join("");

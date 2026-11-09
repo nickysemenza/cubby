@@ -75,36 +75,8 @@ export const aiExecutionKind = z.enum([
   "mail_discovery",
 ]);
 export type AiExecutionKind = z.infer<typeof aiExecutionKind>;
-export const aiEvaluationTargetKind = z.enum([
-  "connection",
-  "product_pair",
-  "product",
-  "field",
-  "email",
-]);
+export const aiEvaluationTargetKind = z.enum(["field", "email"]);
 export const aiEvaluationTarget = z.discriminatedUnion("kind", [
-  z.object({
-    kind: z.literal(aiEvaluationTargetKind.enum.connection),
-    entity: z.string(),
-    recordId: z.uuid(),
-    field: z.null(),
-    suggestionIds: z.array(suggestionChildHandle).max(0),
-  }),
-  z.object({
-    kind: z.literal(aiEvaluationTargetKind.enum.product_pair),
-    entity: z.literal("product"),
-    recordId: z.uuid(),
-    otherId: z.uuid(),
-    field: z.null(),
-    suggestionIds: z.array(suggestionChildHandle).max(0),
-  }),
-  z.object({
-    kind: z.literal(aiEvaluationTargetKind.enum.product),
-    entity: z.literal("product"),
-    recordId: z.uuid(),
-    field: z.null(),
-    suggestionIds: z.array(suggestionChildHandle).max(0),
-  }),
   z.object({
     kind: z.literal(aiEvaluationTargetKind.enum.field),
     entity: z.string(),

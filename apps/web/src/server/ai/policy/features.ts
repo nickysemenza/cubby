@@ -111,10 +111,6 @@ import {
   statementTransactionKindPrompt,
 } from "./prompts/statement";
 import {
-  transferPairMovementChoices,
-  transferPairMovementPrompt,
-} from "./prompts/transfer-pair";
-import {
   buildProductIdentificationRequest,
   buildInventoryDetectionRequest,
   buildLocationDescriptionRequest,
@@ -266,17 +262,6 @@ export const STATEMENT_COUNTERPARTY_FEATURE = defineFeature({
   choices: statementCounterpartyChoices,
   feature: "statement-counterparty",
   promptVersion: "2026-10-18.1",
-  tier: "decision",
-  cache: true,
-  collectPayload: false,
-});
-
-/** Advisory descriptor evidence, combined with structural transfer-pair checks. */
-export const TRANSFER_PAIR_MOVEMENT_FEATURE = defineFeature({
-  prompt: transferPairMovementPrompt,
-  choices: transferPairMovementChoices,
-  feature: "transfer-pair-movement",
-  promptVersion: "2026-10-19.1",
   tier: "decision",
   cache: true,
   collectPayload: false,
@@ -604,7 +589,6 @@ export const AI_FEATURES = [
   STATEMENT_CHARGE_IDENTITY_FEATURE,
   STATEMENT_TRANSACTION_KIND_FEATURE,
   STATEMENT_COUNTERPARTY_FEATURE,
-  TRANSFER_PAIR_MOVEMENT_FEATURE,
   UPC_OFFER_COMPARABILITY_FEATURE,
   IMAGE_PROVENANCE_CLASSIFICATION_FEATURE,
   PRODUCT_VARIANT_RELATION_FEATURE,

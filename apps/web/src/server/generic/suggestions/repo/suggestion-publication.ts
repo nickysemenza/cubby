@@ -4,7 +4,7 @@ import type {
   SuggestionProducer,
 } from "@cubby/schemas/suggestion";
 import { createLogger } from "@cubby/worker-tracing";
-import { and, asc, count, eq, inArray, type SQL, sql } from "drizzle-orm";
+import { and, count, eq, inArray, type SQL, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
@@ -538,46 +538,12 @@ export async function publishSuggestionBatches<
   });
 }
 
-/** A label pass's position in `(createdAt, id)` order. */
-export type SuggestionLabelCursor = { createdAt: string; id: string };
-
 /** Family label predicates read the backlog as `Suggestion s`. */
 const backlogState = alias(suggestionTable, "s");
-const backlogCreatedAt = sql<string>`to_char(${backlogState.createdAt}, 'YYYY-MM-DD"T"HH24:MI:SS.US')`;
 const backlogWhere = (
   family: Pick<SuggestionFamily<unknown>, "family" | "labelBacklog">,
   ...more: (SQL | undefined)[]
 ) => and(eq(backlogState.family, family.family), family.labelBacklog, ...more);
-
-/** The family's label backlog after the cursor, oldest first. */
-export async function suggestionLabelBacklog(
-  db: Database,
-  family: Pick<SuggestionFamily<unknown>, "family" | "labelBacklog">,
-  input: {
-    limit: number;
-    after?: SuggestionLabelCursor | null;
-    where?: SQL;
-  },
-) {
-  return getDb(db)
-    .select({
-      id: sql<string>`${backlogState.id}::text`,
-      createdAt: backlogCreatedAt,
-      data: backlogState.data,
-    })
-    .from(backlogState)
-    .where(
-      backlogWhere(
-        family,
-        input.where,
-        input.after
-          ? sql`(${backlogState.createdAt}, ${backlogState.id}) > (${input.after.createdAt}::timestamp, ${input.after.id}::uuid)`
-          : undefined,
-      ),
-    )
-    .orderBy(asc(backlogState.createdAt), asc(backlogState.id))
-    .limit(input.limit);
-}
 
 /** Remaining label backlog, for a Sweep's estimate. */
 export async function countSuggestionLabelBacklog(

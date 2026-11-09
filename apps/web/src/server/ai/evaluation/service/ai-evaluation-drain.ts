@@ -1,5 +1,4 @@
 import { aiEvaluationTarget } from "@cubby/schemas/ai-evaluation";
-import { workWaitCause } from "@cubby/schemas/job";
 
 import { createConcurrencyLimiter } from "~/lib/concurrency-limiter";
 import { findErrorCause, scrubErrorMessage } from "~/lib/error-diagnostics";
@@ -12,7 +11,6 @@ import { findErrorCause, scrubErrorMessage } from "~/lib/error-diagnostics";
  * execution arrive through `AiEvaluationExecution`; `rowDrain` owns publication,
  * attempts and backoff.
  */
-import type { UnparsedError } from "~/lib/error-utils";
 import { AiBudgetExhaustedError } from "~/server/ai/budget";
 import { aiWorkDeferral } from "~/server/ai/cooperative-work";
 import {
@@ -22,12 +20,10 @@ import {
   claimAiEvaluation,
   type ClaimedAiEvaluation,
   failAiEvaluations,
-  fenceAiEvaluationPage,
   guardAiEvaluationPage,
   lockAiEvaluationPage,
   readAiEvaluations,
   settleAiEvaluations,
-  withAiEvaluationSavepoint,
 } from "~/server/ai/evaluation/repo/ai-evaluation";
 import { PENDING_AI_STATES } from "~/server/ai/evaluation/repo/ai-evaluation-requests";
 import {
@@ -38,12 +34,10 @@ import {
   dueAiEvaluationFeatures,
   nextAiEvaluationDue,
   releaseAiEvaluationPage,
-  waitAiEvaluations,
 } from "~/server/ai/evaluation/repo/ai-evaluation-work";
 import type {
   EvaluationPagePublication,
   EvaluationPageTarget,
-  PreparedEvaluationPage,
 } from "~/server/ai/evaluation/repo/evaluation-page";
 import {
   gatewayAdmissionWait,
@@ -71,7 +65,6 @@ import {
   JobDeferredError,
   JobEvidenceObsoleteError,
   JobSupersededError,
-  JobTargetError,
 } from "~/server/generic/jobs/errors";
 import { classifyJobFailure } from "~/server/generic/jobs/failure";
 import type { JobContext } from "~/server/generic/jobs/types";
@@ -87,26 +80,13 @@ export type AiEvaluationExecution = {
     evaluation: ClaimedAiEvaluation,
     context: DrainContext,
   ): Promise<void>;
-  /** A page of a paged feature (product identity, connections). */
-  preparePage(
-    db: Database,
-    targets: readonly EvaluationPageTarget[],
-    context: DrainContext,
-  ): Promise<PreparedEvaluationPage>;
-  /** Upstream work still owes this target's evidence: the item waits for it. */
-  coveragePending(error: UnparsedError): boolean;
   pauseRun(db: Database, runId: string, message: string): Promise<void>;
   runPaused(db: Database, runId: string): Promise<boolean>;
   /** The page runs once its funding window opened: resume Runs a budget stop paused. */
   resumeFundingStopped(db: Database, runIds: readonly string[]): Promise<void>;
 };
 
-/** Features whose evaluations share one page preparation and decision wave. */
-const PAGE_FEATURES = new Set(["product-identity", "entity-connections"]);
-/**
- * Items per Job page. A paged feature prepares and evaluates them as one wave,
- * so the rest stay owed and rejoin fair selection after this page's checkpoint.
- */
+/** Items per Job page; the rest stay owed and rejoin fair selection after this page's checkpoint. */
 const PAGE_LIMIT = 8;
 const ITEM_CONCURRENCY = 2;
 /** Consecutive failures before an item settles its evaluation `failed`. */
@@ -122,18 +102,14 @@ type Entry =
   | { kind: "park" }
   /** The item's own transactions already committed its outcome. */
   | { kind: "settled" }
-  /** Upstream still owes its evidence: same ticket and attempts, explained on the item. */
-  | { kind: "wait" }
   /** External stop: retain the ticket while paid siblings publish before feature deferral. */
   | { kind: "defer" }
-  | { kind: "outcome" }
   | { kind: "obsolete"; reason: string }
   | { kind: "fail"; error: string };
 
 type Prepared = {
   targets: Map<string, EvaluationPageTarget>;
   entries: Map<string, Entry>;
-  page?: PreparedEvaluationPage;
 };
 
 const errorMessage = (error: unknown) =>
@@ -199,7 +175,6 @@ async function mapFailure(
   if (is(AiEvaluationAttemptObsoleteError)) return { entry: { kind: "skip" } };
   if (is(AiEvaluationUnauthorizedError)) return { entry: { kind: "park" } };
   if (stopsDrainPage(error)) return { failed: error };
-  if (execution.coveragePending(error)) return { entry: { kind: "wait" } };
   const message = errorMessage(error);
   const deferred = evaluationDeferral(error);
   if (deferred) return { failed: deferred };
@@ -258,7 +233,6 @@ function aiEvaluationPage(
   publicationTransaction: JobContext["fenced"],
 ) {
   let deferred: JobDeferredError | undefined;
-  const paged = PAGE_FEATURES.has(feature);
   const drain = rowDrain<Prepared>({
     name: aiEvaluationPageKey(feature),
     transaction: publicationTransaction,
@@ -267,7 +241,6 @@ function aiEvaluationPage(
     limit: PAGE_LIMIT,
     isolationLevel: "serializable",
     maxAttempts: AI_EVALUATION_MAX_ATTEMPTS,
-    weight: (item, prepared) => prepared.page?.ready.get(item.ref)?.weight ?? 1,
     async prepare(db, items) {
       const targets = new Map<string, EvaluationPageTarget>();
       const entries = new Map<string, Entry>();
@@ -366,42 +339,24 @@ function aiEvaluationPage(
           } else failed.set(target.item, mapped.failed);
         }
       };
-      if (!paged) {
-        await prepareItems(db, runnable, context, execution, settle, entries);
-        return { prepared: { targets, entries }, failed };
-      }
-      if (!runnable.length) return { prepared: { targets, entries }, failed };
-      const page = await execution.preparePage(db, runnable, context);
-      const overflow = new Set(page.overflow);
-      for (const target of runnable) {
-        const id = target.evaluation.id;
-        const oversized = page.oversized.get(id);
-        if (page.ready.has(id)) entries.set(id, { kind: "outcome" });
-        else if (oversized) entries.set(id, { kind: "fail", error: oversized });
-        else if (overflow.has(id)) entries.set(id, { kind: "skip" });
-        else await settle(target, page.failures.get(id));
-      }
-      return { prepared: { targets, entries, page }, failed };
+      await prepareItems(db, runnable, context, execution, settle, entries);
+      return { prepared: { targets, entries }, failed };
     },
     async lock(tx, items, prepared) {
-      // Unadmitted evidence stays owed with its original ticket and backoff.
-      const overflow = new Set(prepared.page?.overflow);
-      const admitted = items.filter((item) => !overflow.has(item.ref));
       await lockAiEvaluationPage(
         tx,
-        admitted.flatMap((item) => {
+        items.flatMap((item) => {
           const kind = prepared.entries.get(item.ref)?.kind;
           const target = prepared.targets.get(item.ref);
           return target &&
             kind !== "skip" &&
             kind !== "settled" &&
-            kind !== "wait" &&
             kind !== "defer"
             ? [target]
             : [];
         }),
       );
-      return admitted;
+      return items;
     },
     async publish(tx, items, prepared) {
       const held = items.flatMap((item) => {
@@ -417,33 +372,16 @@ function aiEvaluationPage(
         parked.map(({ target }) => target.evaluation),
         false,
       );
-      // A wait writes only its own item, so it takes no evaluation or Run lock.
-      // Paused, cancelled or changed demand settles at the retry's prepare,
-      // before any paid stage; a re-marked item is no longer held here.
-      const waiting = held.flatMap(({ target, entry }) =>
-        entry.kind === "wait" ? [target.item] : [],
-      );
-      await waitAiEvaluations(
-        tx,
-        waiting,
-        token,
-        workWaitCause.enum.search_coverage,
-        AI_EVALUATION_BACKOFF.baseMs,
-      );
       const retain = [
         ...parked
           .filter(({ target }) => authorization.has(target.evaluation.id))
           .map(({ target }) => target.item),
-        ...waiting,
         ...held.flatMap(({ target, entry }) =>
           entry.kind === "defer" ? [target.item] : [],
         ),
       ];
       const written = held.filter(
-        ({ entry }) =>
-          entry.kind === "outcome" ||
-          entry.kind === "obsolete" ||
-          entry.kind === "fail",
+        ({ entry }) => entry.kind === "obsolete" || entry.kind === "fail",
       );
       if (!written.length) return { retain };
       const { valid, stale } = await guardAiEvaluationPage(
@@ -454,42 +392,7 @@ function aiEvaluationPage(
       const current = written.filter(({ target }) =>
         validIds.has(target.evaluation.id),
       );
-      let ready = current.filter(({ entry }) => entry.kind === "outcome");
       const publications: EvaluationPagePublication[] = [];
-      if (ready.length) {
-        const ids = ready.map(({ target }) => target.evaluation.id);
-        let published: EvaluationPagePublication[];
-        try {
-          published = await withAiEvaluationSavepoint(tx, (savepoint) =>
-            prepared.page!.publish(savepoint, ids),
-          );
-        } catch (error) {
-          // Evidence that changed during inference settles obsolete. The
-          // drain splits a chunk on target errors, so a change obsoletes only
-          // its own evaluation and its siblings still publish.
-          if (!evidenceObsolete(error)) throw error;
-          if (ids.length > 1)
-            throw new JobTargetError(errorMessage(error), { cause: error });
-          published = [];
-          publications.push({
-            evaluationId: ids[0]!,
-            state: "obsolete",
-            receipt: { reason: errorMessage(error) },
-          });
-          ready = [];
-        }
-        if (
-          ready.length &&
-          (published.length !== ids.length ||
-            new Set(published.map((entry) => entry.evaluationId)).size !==
-              ids.length ||
-            published.some((entry) => !validIds.has(entry.evaluationId)))
-        )
-          throw new Error(
-            "AI page adapter returned an unexpected publication set",
-          );
-        publications.push(...published);
-      }
       for (const { target, entry } of current)
         if (entry.kind === "obsolete")
           publications.push({
@@ -507,10 +410,6 @@ function aiEvaluationPage(
       for (const { target, entry } of current)
         if (entry.kind === "fail")
           await failAiEvaluations(tx, [target.evaluation.id], entry.error);
-      await fenceAiEvaluationPage(
-        tx,
-        ready.map(({ target }) => target),
-      );
       return { retain };
     },
     async exhaust(tx, items, error) {

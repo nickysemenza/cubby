@@ -5,7 +5,6 @@ import {
   type AiProvenance,
 } from "@cubby/schemas/ai-evaluation";
 import { FIELD_ASSIGNMENT_REVISION } from "@cubby/schemas/automatic-rule";
-import { connectionRelation } from "@cubby/schemas/entity-connections";
 import { MAILBOX_RESEARCH_VERSION } from "@cubby/schemas/mailbox-research";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { z } from "zod";
@@ -20,7 +19,6 @@ import { fieldDecisionRows } from "./field-decisions";
 
 const automaticFeatures = new Set([
   "field-suggestion",
-  "product-identity",
   "selection-overflow",
   "mailbox-triage",
   "mailbox-relevance",
@@ -68,13 +66,6 @@ export async function compiledRefreshManifest(): Promise<AiRefreshManifest> {
 
 async function compileRefreshManifest(): Promise<AiRefreshManifest> {
   const entries: AiRefreshManifest = {};
-  entries["entity-connections"] = {
-    promptVersion: "1",
-    generation: 0,
-    policyFingerprint: await sha256Hex(
-      JSON.stringify(connectionRelation.options),
-    ),
-  };
   const templates = new Map<string, unknown>([
     [
       MAILBOX_TRIAGE_FEATURE.feature,

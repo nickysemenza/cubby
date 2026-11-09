@@ -1,4 +1,3 @@
-import { aiEvaluationTarget } from "@cubby/schemas/ai-evaluation";
 import type { RunId } from "@cubby/schemas/identifiers";
 import { sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
@@ -240,22 +239,6 @@ describe("evaluation tally", () => {
       Math.min(10, want.errors.length),
     );
   }
-
-  it("matches the row rules for a Run's connection evaluations", async () => {
-    const runId = await newRun();
-    await insert(runId, combinations());
-    const items = (await aiEvaluationsForRun(ctx.db, runId))
-      .filter(
-        (item) =>
-          aiEvaluationTarget.safeParse(item.target).data?.kind === "connection",
-      )
-      .filter((item) => !isRetried(item.receipt));
-    expect(items.length).toBeGreaterThan(0);
-    await assertMatches(
-      { runId, source: "owned", connectionsOnly: true },
-      items,
-    );
-  });
 
   it("matches the row rules for everything a Run owns", async () => {
     const runId = await newRun();

@@ -448,11 +448,6 @@ async function settleReview(
             commandFeedback: event,
           });
         } else {
-          if (prediction.family === "field") {
-            const { assertConnectionFieldFresh } =
-              await import("~/server/domains/connection/repo/field-connections");
-            await assertConnectionFieldFresh(transactionDb, prediction.id);
-          }
           if ("lockForApply" in family && family.lockForApply)
             await family.lockForApply(transactionDb, prediction);
           const query = getDb(transactionDb)

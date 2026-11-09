@@ -8,7 +8,6 @@ import type { RunEvaluationsOut } from "~/contracts/run-detail.contract";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
 import { run } from "~/server/db/schema";
-import { connectionDiscoveryPosition } from "~/server/domains/run/repo/connection-refresh";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 /** Latest settled evaluations listed per Run. */
@@ -124,10 +123,7 @@ async function readRunEvaluations(
       completedPerMinute: completedPace / PACE_MINUTES,
       lastCompletedAt: lastCompletedAt ?? null,
     },
-    roster:
-      input.purpose === "connection_discovery"
-        ? await connectionDiscoveryPosition(db, input.runId)
-        : null,
+    roster: null,
     byKind,
     recent: recent.rows.map((row) => ({
       id: row.id,

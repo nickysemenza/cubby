@@ -13,19 +13,10 @@ export const sweepStartInput = z.strictObject({
     .array(
       z.discriminatedUnion("family", [
         z.strictObject({
-          family: z.literal("transfer_pair"),
-          accountIds: z.array(financialAccountShortcode).max(100).optional(),
-          since: plainDate.optional(),
-        }),
-        z.strictObject({
           family: z.literal("statement_transaction"),
           importId: transactionImportShortcode.optional(),
           accountIds: z.array(financialAccountShortcode).max(100).optional(),
           since: plainDate.optional(),
-        }),
-        z.strictObject({
-          family: z.literal("recommendation"),
-          entityKinds: z.array(z.string().min(1)).max(20).optional(),
         }),
         z.strictObject({
           family: z.literal("field"),
@@ -34,18 +25,13 @@ export const sweepStartInput = z.strictObject({
       ]),
     )
     .min(1)
-    .max(4),
+    .max(2),
 });
 export type SweepStartInput = z.infer<typeof sweepStartInput>;
 export const sweepEstimateOut = z.object({
   families: z.array(
     z.object({
-      family: z.enum([
-        "statement_transaction",
-        "recommendation",
-        "field",
-        "transfer_pair",
-      ]),
+      family: z.enum(["statement_transaction", "field"]),
       records: z.number().int().nonnegative(),
     }),
   ),

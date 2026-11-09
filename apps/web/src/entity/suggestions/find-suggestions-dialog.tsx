@@ -1,4 +1,3 @@
-import { connectionEndpointKinds } from "@cubby/schemas/entity-connections";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import {
   shortcodeEntities,
@@ -50,25 +49,12 @@ const DECISION_ENTITY_OPTIONS = suggestionEntities.map((entity) => ({
   value: entity,
   label: entityRoster[entity].singular,
 }));
-const CONNECTION_KIND_OPTIONS = shortcodeEntities
-  .filter((entity) => connectionEndpointKinds.includes(entity))
-  .map((entity) => ({ value: entity, label: entityRoster[entity].singular }));
 
 const FAMILY_ROWS = [
   {
     family: "statement_transaction",
     label: SWEEP_FAMILY_LABEL.statement_transaction,
     hint: "create, attach, settle and void holds",
-  },
-  {
-    family: "transfer_pair",
-    label: SWEEP_FAMILY_LABEL.transfer_pair,
-    hint: "opposite money movements across accounts",
-  },
-  {
-    family: "recommendation",
-    label: SWEEP_FAMILY_LABEL.recommendation,
-    hint: "acquisitions, settlements, Emails, placements",
   },
   {
     family: "field",
@@ -80,8 +66,6 @@ const FAMILY_ROWS = [
 /** The unit of each family's first counted step, which the estimate reports. */
 const FAMILY_NOUN = {
   statement_transaction: "charge",
-  transfer_pair: "movement",
-  recommendation: "record",
   field: "entity",
 } satisfies Record<Family, string>;
 
@@ -204,9 +188,6 @@ export function FindSuggestionsDialog({
   );
   const [accounts, setAccounts] = useState<ComboboxItem[]>([]);
   const [since, setSince] = useState("");
-  const [transferAccounts, setTransferAccounts] = useState<ComboboxItem[]>([]);
-  const [transferSince, setTransferSince] = useState("");
-  const [kinds, setKinds] = useState<string[]>([]);
   const [fieldEntity, setFieldEntity] = useState<string | null>(
     preset?.field?.entity ?? null,
   );
@@ -246,20 +227,6 @@ export function FindSuggestionsDialog({
           families: FAMILY_ROWS.flatMap(
             ({ family }): SweepStartInput["families"] => {
               if (!families.has(family)) return [];
-              if (family === "transfer_pair")
-                return [
-                  {
-                    family,
-                    ...(transferAccounts.length
-                      ? {
-                          accountIds: transferAccounts.map((item) =>
-                            financialAccountShortcode.parse(item.id),
-                          ),
-                        }
-                      : {}),
-                    ...(transferSince ? { since: `${transferSince}-01` } : {}),
-                  },
-                ];
               if (family === "statement_transaction")
                 return [
                   {
@@ -273,10 +240,6 @@ export function FindSuggestionsDialog({
                       : {}),
                     ...(since ? { since: `${since}-01` } : {}),
                   },
-                ];
-              if (family === "recommendation")
-                return [
-                  { family, ...(kinds.length ? { entityKinds: kinds } : {}) },
                 ];
               return [
                 {
@@ -366,56 +329,6 @@ export function FindSuggestionsDialog({
           </FamilyRow>
           <FamilyRow
             {...FAMILY_ROWS[1]}
-            checked={families.has("transfer_pair")}
-            onChecked={(checked) => toggle("transfer_pair", checked)}
-          >
-            <Picker
-              multiple
-              label="Transfer accounts"
-              placeholder="All accounts"
-              className="w-64"
-              entity="financialAccount"
-              items={accountSource.items}
-              hasNextPage={accountSource.hasNextPage}
-              isFetchingNextPage={accountSource.isFetchingNextPage}
-              onLoadMore={accountSource.onLoadMore}
-              error={accountSource.error}
-              onRetry={accountSource.onRetry}
-              isLoading={accountSource.isLoading}
-              onSearchChange={accountSource.onSearchChange}
-              onOpenChange={accountSource.onOpenChange}
-              values={transferAccounts}
-              setValues={setTransferAccounts}
-            />
-            {/* oxlint-disable-next-line jsx-a11y/label-has-associated-control -- the Input inside is the control */}
-            <label className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
-              Since
-              <Input
-                type="month"
-                aria-label="Transfers since month"
-                className="w-36"
-                value={transferSince}
-                onChange={(event) => setTransferSince(event.target.value)}
-              />
-            </label>
-          </FamilyRow>
-          <FamilyRow
-            {...FAMILY_ROWS[2]}
-            checked={families.has("recommendation")}
-            onChecked={(checked) => toggle("recommendation", checked)}
-          >
-            <Picker
-              multiple
-              label="Record types"
-              placeholder="All record types"
-              className="w-64"
-              options={CONNECTION_KIND_OPTIONS}
-              values={kinds}
-              onValuesChange={setKinds}
-            />
-          </FamilyRow>
-          <FamilyRow
-            {...FAMILY_ROWS[3]}
             checked={families.has("field")}
             onChecked={(checked) => toggle("field", checked)}
           >

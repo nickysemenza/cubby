@@ -19,11 +19,7 @@ import {
   semanticEmbeddingsConfigured,
 } from "~/server/generic/embedding/service/semantic/embeddings";
 import { productionVectorStore } from "~/server/generic/embedding/service/semantic/vector-store";
-import {
-  hydrateSearchHitRefs,
-  type InternalSearchCandidate,
-  readSearchHitRefs,
-} from "~/server/generic/search/service/search.service";
+import { hydrateSearchHitRefs } from "~/server/generic/search/service/search.service";
 import { TraceNames, withTrace } from "~/server/observability/tracing";
 
 const log = createLogger("semantic-search");
@@ -40,13 +36,6 @@ interface SemanticRefScan extends SemanticCandidateScan {
 }
 
 type SemanticRef = SemanticRefScan["candidates"][number];
-
-type SemanticIdentityScan = Omit<SemanticRefScan, "candidates"> & {
-  candidates: {
-    item: Pick<InternalSearchCandidate, "id">;
-    similarity: number;
-  }[];
-};
 
 const COVERAGE_GAP_ERROR = {
   pending: "Semantic candidate coverage is pending",
@@ -110,32 +99,6 @@ function rankRowsByRef<Row extends { entityKind: string; entityId: string }>(
     const row = rowByRef.get(`${ref.entityKind}:${ref.entityId}`);
     return row ? [{ row, similarity: ref.similarity }] : [];
   });
-}
-
-/**
- * Unconfirmed coverage withholds negatives; valid candidates remain usable.
- * Candidate identity needs no display reads, so their failures cannot become a
- * coverage error here.
- */
-export async function semanticEntityCandidateScan(
-  db: Database,
-  query: string,
-  limit: number,
-  entityKind: SearchableEntity,
-  owner?: AiCallOwner,
-): Promise<SemanticIdentityScan> {
-  try {
-    const scan = await scanSemanticRefs(db, query, limit, entityKind, owner);
-    const rows = await readSearchHitRefs(db, scan.candidates);
-    return {
-      ...scan,
-      candidates: rankRowsByRef(scan.candidates, rows).map(
-        ({ row, similarity }) => ({ item: { id: row.id }, similarity }),
-      ),
-    };
-  } catch (error) {
-    return { candidates: [], complete: false, error: getErrorMessage(error) };
-  }
 }
 
 /** Internal semantic fallback for candidate matching; never used by global UX. */

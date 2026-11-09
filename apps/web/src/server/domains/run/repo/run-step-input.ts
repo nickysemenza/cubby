@@ -53,23 +53,6 @@ async function runStepInputWhere(
       "Run input inspection requires the step's recorded input count and boundary",
     );
   const sweep = sweepRunInput.parse(stored.input);
-  if (address.stepKey === "transfer_pair_scan") {
-    const family = sweep.families.find(
-      (candidate) => candidate.family === "transfer_pair",
-    );
-    if (!family)
-      throw createAppError(
-        "CONSTRAINT_VIOLATION",
-        "This Sweep does not cover transfer pairs",
-      );
-    const seeds = transferPairSeedKeys({
-      since: family.scope.since ?? null,
-      createdBefore: z.iso.datetime().parse(input.boundary),
-    });
-    return entity === "financialTransaction"
-      ? sql`('ftx:' || "FinancialTransaction".shortcode) IN (SELECT key FROM (${seeds}) inputs)`
-      : sql`('stmt:' || "SourceTransactionRecord".source || ':' || ${sourceObservationField("chargeKey")}) IN (SELECT key FROM (${seeds}) inputs)`;
-  }
   const family = sweep.families.find(
     (candidate) => candidate.family === "statement_transaction",
   );

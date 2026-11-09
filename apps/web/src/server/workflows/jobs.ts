@@ -6,12 +6,11 @@ import { aiEvaluationDrain } from "~/server/ai/evaluation/service/ai-evaluation-
 import { getPurchaseDispatchHostEnv } from "~/server/cf-env";
 import type { Database } from "~/server/db";
 import { DERIVED_REBUILD_LEASE_SECONDS } from "~/server/db/derived-rebuild-schema";
+import { emailPurchaseDiscoveryDrain } from "~/server/domains/connection/service/email-purchase-discovery";
 import { cloudImageDrain } from "~/server/domains/image-processing/service/cloud-drain";
 import { deliverPurchaseDispatch } from "~/server/domains/purchase-agent/service/dispatch";
 import { fundingResumeInput } from "~/server/domains/run/repo/execution-context";
 import { runAiEvaluationExecution } from "~/server/domains/run/service/ai-evaluation-execution";
-import { aiRefreshDiscoveryDrain } from "~/server/domains/run/service/ai-refresh";
-import { connectionDiscoveryDrain } from "~/server/domains/run/service/derived-discovery";
 import {
   admittedDrain,
   type BackgroundDrain,
@@ -114,8 +113,7 @@ const productionDrains = (): readonly BackgroundDrain[] => [
   embeddingCleanupDrain(),
   aiEvaluationDrain(runAiEvaluationExecution()),
   derivedRebuildDrain,
-  aiRefreshDiscoveryDrain,
-  connectionDiscoveryDrain,
+  emailPurchaseDiscoveryDrain,
 ];
 
 export async function drainProductionJobs(
