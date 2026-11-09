@@ -3,6 +3,10 @@ import { describe, expect, it } from "vitest";
 import { dashboardContract } from "~/contracts/dashboard.contract";
 import { declaredReadPolicy, type OperationContract } from "~/contracts/define";
 import { entityDetailContract } from "~/contracts/entity-detail.contract";
+import {
+  connectionContract,
+  entityGraphContract,
+} from "~/contracts/entity-graph.contract";
 import { entityReportContract } from "~/contracts/entity-report.contract";
 import { expenseContract } from "~/contracts/expense.contract";
 import { financialTransactionContract } from "~/contracts/finance.contract";
@@ -43,6 +47,8 @@ describe("shared read policy", () => {
   it("keeps generic reads of financial entities and reports authoritative", () => {
     expect(policy(entityDetailContract, "detail")).toBe("financialEntity");
     expect(policy(entityReportContract, "get")).toBe("financialEntity");
+    expect(policy(entityGraphContract, "relation")).toBe("financialEntity");
+    expect(policy(connectionContract, "read")).toBeUndefined();
     for (const entity of ["expense", "purchase", "transactionImport"])
       expect(inputReadPolicy(entity, [])).toBe("strong");
     expect(inputReadPolicy("product", [])).toBe("context");
