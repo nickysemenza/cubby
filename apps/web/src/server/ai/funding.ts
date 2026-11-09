@@ -7,6 +7,7 @@ import type {
   FundingRefusalSource,
 } from "@cubby/schemas/mail-import-settings";
 import { CUBBY_AI_GATEWAY_ID } from "@cubby/shared/ai/gateway-metadata";
+import { isInferenceStreamFundingRefusal } from "@cubby/shared/ai/gateway-request";
 import {
   getChatModelConfig,
   type SupportedChatModel,
@@ -120,7 +121,11 @@ export async function readChatGptPlanAvailability(
     )
     .orderBy(desc(aiUsage.createdAt))
     .limit(1);
-  const quotaRefused = !!latest?.failure && PLAN_QUOTA.test(latest.failure);
+  // The SDK's message-only quota terminal must pause status as well as the ladder.
+  const quotaRefused =
+    !!latest?.failure &&
+    (PLAN_QUOTA.test(latest.failure) ||
+      isInferenceStreamFundingRefusal(latest.failure, "subscription"));
   const until =
     quotaRefused && latest?.failure
       ? planResetAt(latest.failure, latest.createdAt)
