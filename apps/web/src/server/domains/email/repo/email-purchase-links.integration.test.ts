@@ -1881,12 +1881,12 @@ describe("Email Purchase links", () => {
     const edge = await insertWithShortcode(ctx.db, "purchase", {
       vendorId: vendor.id,
       date: "2026-08-03",
-      statedTotal: moneyToMinor(1.01),
+      statedTotal: moneyToMinor(12),
     });
     await insertWithShortcode(ctx.db, "purchase", {
       vendorId: vendor.id,
       date: "2026-08-02",
-      statedTotal: moneyToMinor(1),
+      statedTotal: moneyToMinor(12),
     });
     await insertWithShortcode(ctx.db, "purchase", {
       vendorId: vendor.id,
@@ -1894,7 +1894,7 @@ describe("Email Purchase links", () => {
       statedTotal: moneyToMinor(99),
     });
     const bodyText =
-      "Order WS-SYN-2001. Example Window Shop. Printed total 1 USD.";
+      "Order WS-SYN-2001. Example Window Shop. Printed total 12 USD.";
     const checksum = await sha256Hex(bodyText);
     const mail = await syntheticRetainedMail(ctx.db, {
       ledgerPartyId: party.id,
@@ -1913,7 +1913,7 @@ describe("Email Purchase links", () => {
         orderMailId: mail.id,
         event: "placed",
         orderId: "WS-SYN-2001",
-        amount: 1,
+        amount: 12,
         currency: "USD",
         sourceKey: `classified:${checksum}:0`,
       });
