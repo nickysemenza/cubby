@@ -1,8 +1,9 @@
 import CubbyKit
 import SwiftUI
 
-/// The end of a walk: what changed, and the two ways to keep going — pick up the bins that were
-/// skipped, or start a fresh walk over a different scope.
+/// The end of a walk: how many bins finished or were skipped, what changed (adjusted, removed and
+/// moved disclosed separately), and the two ways to keep going — count the skipped bins, or start
+/// a fresh walk over a different scope.
 struct RecountSummaryView: View {
     let session: RecountSession
 
@@ -26,23 +27,45 @@ private struct RecountSummaryContent: View {
 
     var body: some View {
         List {
-            Section("Walk complete") {
+            Section {
                 LabeledContent("Verified", value: ValueFormat.count(summary.verified))
-                LabeledContent("Changed", value: ValueFormat.count(summary.changed))
-                LabeledContent("Added", value: ValueFormat.count(summary.added))
-                LabeledContent("Adopted", value: ValueFormat.count(summary.adopted))
-                LabeledContent("Bins done", value: ValueFormat.count(summary.binsDone))
-                LabeledContent("Bins skipped", value: ValueFormat.count(summary.binsSkipped))
+                DisclosureGroup {
+                    LabeledContent("Counts adjusted", value: ValueFormat.count(summary.adjusted))
+                    LabeledContent("Removed", value: ValueFormat.count(summary.removed))
+                    LabeledContent("Moved elsewhere", value: ValueFormat.count(summary.relocated))
+                } label: {
+                    LabeledContent("Changed", value: ValueFormat.count(summary.changed))
+                }
+                LabeledContent("Added from scans", value: ValueFormat.count(summary.added))
+                LabeledContent("Bins adopted", value: ValueFormat.count(summary.adopted))
+            } header: {
+                Text(headline)
+            } footer: {
+                if summary.binsSkipped > 0 {
+                    Text("Skipped bins were left unchanged.")
+                }
             }
             Section {
                 if canRevisitSkipped {
-                    Button("Revisit skipped", action: onRevisitSkipped)
+                    Button(revisitTitle, action: onRevisitSkipped)
                         .accessibilityIdentifier("audit.revisitSkipped")
                 }
                 Button("Count another", action: onCountAnother)
                     .accessibilityIdentifier("audit.countAnother")
             }
         }
+    }
+
+    /// Finished and skipped bins in one line: a walk with skips is not complete.
+    private var headline: String {
+        let finished =
+            "\(ValueFormat.count(summary.binsDone)) \(summary.binsDone == 1 ? "bin" : "bins") finished"
+        guard summary.binsSkipped > 0 else { return finished }
+        return "\(finished) · \(ValueFormat.count(summary.binsSkipped)) skipped"
+    }
+
+    private var revisitTitle: String {
+        "Count \(ValueFormat.count(summary.binsSkipped)) skipped \(summary.binsSkipped == 1 ? "bin" : "bins")"
     }
 }
 

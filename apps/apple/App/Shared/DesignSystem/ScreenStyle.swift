@@ -50,7 +50,7 @@ struct LoadFailureView: View {
         ContentUnavailableView {
             Label(title, systemImage: "exclamationmark.triangle")
         } description: {
-            Text(message)
+            DiagnosticMessage(message: message)
         } actions: {
             Button("Retry") { Task { await retry() } }
                 .buttonStyle(.bordered)
@@ -64,31 +64,50 @@ struct InlineLoadFailure: View {
     let message: String
     var isRetrying = false
     let retry: @MainActor () async -> Void
+    @Environment(\.dynamicTypeSize) private var textSize
 
     var body: some View {
-        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
-            Label(message, systemImage: "exclamationmark.triangle")
-                .font(.callout)
-                .foregroundStyle(FieldGuideTokens.warning)
-                .fixedSize(horizontal: false, vertical: true)
+        let layout =
+            textSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: FieldGuideTokens.Space.sm))
+            : AnyLayout(HStackLayout(alignment: .top, spacing: FieldGuideTokens.Space.sm))
+        layout {
+            Label {
+                DiagnosticMessage(message: message)
+            } icon: {
+                Image(systemName: "exclamationmark.triangle")
+            }
+            .font(.callout)
+            .foregroundStyle(FieldGuideTokens.warning)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
             HStack(spacing: FieldGuideTokens.Space.sm) {
                 // Borderless so a List row fires only the button, not a row-wide tap.
                 // The frame sits inside the label: outside it, it grows layout but not the hit area.
                 Button {
                     Task { await retry() }
                 } label: {
-                    Text("Retry")
+                    Label("Retry", systemImage: "arrow.clockwise")
                         .frame(
-                            minWidth: FieldGuideTokens.touchTarget,
-                            minHeight: FieldGuideTokens.touchTarget
+                            minWidth: retryTarget,
+                            minHeight: retryTarget
                         )
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.borderless)
                 .disabled(isRetrying)
+                .fixedSize()
                 if isRetrying { LoadingIndicator(label: "Retrying") }
             }
         }
+    }
+
+    private var retryTarget: CGFloat {
+        #if os(iOS)
+            FieldGuideTokens.touchTarget
+        #else
+            24
+        #endif
     }
 }
 
@@ -107,7 +126,7 @@ struct ActionFailureNotice: View {
             Label {
                 VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
                     Text(title).font(.callout.weight(.semibold))
-                    Text(message)
+                    DiagnosticMessage(message: message)
                         .font(.callout)
                         .foregroundStyle(FieldGuideTokens.graphite)
                         .textSelection(.enabled)
@@ -117,7 +136,6 @@ struct ActionFailureNotice: View {
                 Image(systemName: "exclamationmark.octagon")
             }
             .foregroundStyle(FieldGuideTokens.destructive)
-            .accessibilityElement(children: .combine)
             if let retry {
                 // Borderless so a List row fires only the button, not a row-wide tap.
                 // The frame sits inside the label: outside it, it grows layout but not the hit area.
@@ -134,6 +152,50 @@ struct ActionFailureNotice: View {
             }
         }
     }
+}
+
+/// Keeps recovery beside the task while retaining the complete original diagnostic for inspection.
+struct DiagnosticMessage: View {
+    let message: String
+
+    private var needsDisclosure: Bool {
+        message.count > 220 || message.split(separator: "\n").count > 3
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
+            Text(
+                needsDisclosure ? String(message.split(separator: "\n").first ?? Substring(message)) : message
+            )
+            .lineLimit(needsDisclosure ? 3 : nil)
+            .fixedSize(horizontal: false, vertical: true)
+            if needsDisclosure {
+                DisclosureGroup("Technical details") {
+                    ScrollView {
+                        Text(message)
+                            .font(.fieldGuideCode)
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .frame(maxHeight: 180)
+                    Button("Copy diagnostic", systemImage: "document.on.document") {
+                        Clipboard.copy(message)
+                    }
+                    .buttonStyle(.borderless)
+                }
+                .font(.callout)
+                .foregroundStyle(.primary)
+            }
+        }
+    }
+}
+
+#Preview("Long diagnostic") {
+    InlineLoadFailure(
+        message: "HTTP 503: synthetic upstream unavailable\n"
+            + String(repeating: "Nested cause: synthetic transport refused the request.\n", count: 12)
+    ) {}
+    .padding()
 }
 
 #Preview("Load failures") {
@@ -169,11 +231,17 @@ struct LoadingIndicator: View {
     var label: String = "Loading"
 
     var body: some View {
-        ProgressView(label)
+        HStack(spacing: FieldGuideTokens.Space.sm) {
+            ProgressView().controlSize(.small).accessibilityHidden(true)
+            Text(label)
+        }
+        .font(.callout)
+        .foregroundStyle(.secondary)
+        .accessibilityElement(children: .combine)
     }
 
     static func screen(label: String = "Loading") -> some View {
-        LoadingIndicator(label: label)
+        ProgressView(label)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
@@ -188,34 +256,38 @@ struct LoadingIndicator: View {
     .background(FieldGuideTokens.canvas)
 }
 
-/// A square-ish shortcut: a ink glyph over a sentence-case label, sized for a two-column grid.
-/// Used for the Today shortcuts and the Identify photo sources so both read as the same affordance.
+/// A shared shortcut: a compact horizontal label on Mac and a touch-sized tile on iOS.
 struct ActionTile: View {
     let title: String
     let symbol: String
     var detail: String?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
+        #if os(macOS)
+            let layout = AnyLayout(HStackLayout(alignment: .center, spacing: FieldGuideTokens.Space.sm))
+        #else
+            let layout = AnyLayout(VStackLayout(alignment: .leading, spacing: FieldGuideTokens.Space.sm))
+        #endif
+        layout {
             Image(systemName: symbol)
-                .font(.title3)
+                .font(.body)
                 .foregroundStyle(FieldGuideTokens.interaction)
                 .accessibilityHidden(true)
-            Text(title)
-                .font(.fieldGuideTitle)
-                .foregroundStyle(FieldGuideTokens.graphite)
-                .multilineTextAlignment(.leading)
-
-            if let detail {
-                Text(detail)
-                    .font(.fieldGuideLabel)
-                    .foregroundStyle(FieldGuideTokens.graphiteSecondary)
-
+            VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
+                Text(title)
+                    .font(.fieldGuideTitle)
+                    .foregroundStyle(FieldGuideTokens.graphite)
+                    .multilineTextAlignment(.leading)
+                if let detail {
+                    Text(detail)
+                        .font(.fieldGuideLabel)
+                        .foregroundStyle(FieldGuideTokens.graphiteSecondary)
+                }
             }
         }
         .frame(maxWidth: .infinity, alignment: .topLeading)
         .padding(FieldGuideTokens.Space.md)
-        .frame(minHeight: 84, maxHeight: .infinity, alignment: .topLeading)
+        .frame(minHeight: minimumHeight, maxHeight: .infinity, alignment: .leading)
         .background(
             RoundedRectangle(cornerRadius: FieldGuideTokens.radiusPanel).fill(FieldGuideTokens.surface)
         )
@@ -224,6 +296,14 @@ struct ActionTile: View {
                 .strokeBorder(FieldGuideTokens.hairline, lineWidth: FieldGuideTokens.hairlineWidth)
         )
         .contentShape(RoundedRectangle(cornerRadius: FieldGuideTokens.radiusPanel))
+    }
+
+    private var minimumHeight: CGFloat {
+        #if os(macOS)
+            44
+        #else
+            84
+        #endif
     }
 }
 

@@ -222,9 +222,8 @@ struct PhotoDestinationSheet: View {
                 .accessibilityIdentifier("photos.manifest.undo")
             }
         }
+        // The list header owns the photo and selection count; the commit title repeats its scope.
         ToolbarItemGroup(placement: Self.commitBarPlacement) {
-            Text("\(manifest.items.count) photo\(manifest.items.count == 1 ? "" : "s")")
-                .foregroundStyle(.secondary)
             Spacer()
             if manifest.commitRequiresReview {
                 Button("Check status") {
@@ -354,7 +353,7 @@ struct PhotoDestinationSheet: View {
         List {
             Section {
                 HStack {
-                    Text("\(manifest.items.count) photo\(manifest.items.count == 1 ? "" : "s")")
+                    Text(selectionSummary)
                         .foregroundStyle(.secondary)
                     Spacer()
                     selectAllButton
@@ -377,12 +376,20 @@ struct PhotoDestinationSheet: View {
         .disabled(manifest.isCommitting || manifest.commitRequiresReview)
     }
 
+    private var selectionSummary: String {
+        let total = "\(manifest.items.count) photo\(manifest.items.count == 1 ? "" : "s")"
+        let selected = manifest.selectedIDs.count
+        return selected == 0 ? total : "\(selected) of \(total) selected"
+    }
+
+    /// Deselect all only once every photo, and at least one, is selected.
     private var selectAllButton: some View {
-        Button(manifest.selectedIDs.count == manifest.items.count ? "Deselect all" : "Select all") {
+        let allSelected = !manifest.items.isEmpty && manifest.selectedIDs.count == manifest.items.count
+        return Button(allSelected ? "Deselect all" : "Select all") {
             manifest.toggleSelectAll()
         }
         .buttonStyle(.borderless)
-        .disabled(manifest.isCommitting)
+        .disabled(manifest.isCommitting || manifest.items.isEmpty)
         .accessibilityIdentifier("photos.manifest.selectAll")
     }
 
@@ -612,6 +619,11 @@ private struct PhotoDestinationRow: View {
                         Text(manifest.suggestions[item.id] ?? "Choose a destination")
                             .font(.caption).foregroundStyle(.secondary)
                     }
+                    if manifest.duplicateCandidates[item.id] == nil {
+                        Text(manifest.matchStatus(item.id))
+                            .font(.caption).foregroundStyle(.secondary)
+                            .accessibilityIdentifier("photos.manifest.matchStatus.\(item.id)")
+                    }
                 }
                 Spacer(minLength: 0)
                 Button {
@@ -654,9 +666,10 @@ private struct PhotoDestinationRow: View {
                     }
                     Button("Add separately") { manifest.chooseNew(for: item.id) }
                 } label: {
+                    // The decision sits beside its own candidate; the label states the match or choice.
                     Label(
                         manifest.duplicateSelection(item.id) == nil
-                            ? "Review possible duplicate" : "Duplicate reviewed",
+                            ? "\(manifest.matchStatus(item.id)) · Review" : manifest.matchStatus(item.id),
                         systemImage: "photo.on.rectangle")
                 }
                 .font(.caption)

@@ -22,6 +22,9 @@ struct EntityDetailView: View {
     @State private var actions: RecordActionPresenter?
     @State private var quickField: InlineEditSession?
     @State private var showingRunEvidence = false
+    #if os(iOS)
+        @State private var showingConnections = false
+    #endif
 
     private var descriptor: EntityDescriptor { EntityCatalog[key] }
 
@@ -108,8 +111,19 @@ struct EntityDetailView: View {
                 actions, onFinished: finishAction, onEditorSaved: { Task { await refresh() } }
             )
             .sheet(isPresented: $showingRunEvidence) {
-                NavigationStack { RunEvidenceView(runID: model?.row?.id ?? id) }
+                NavigationStack {
+                    RunEvidenceView(runID: model?.row?.id ?? id, context: model?.row?.title)
+                }
             }
+            #if os(iOS)
+                .fullScreenCover(isPresented: $showingConnections) {
+                    NavigationStack {
+                        HostedWorkspaceView(
+                            surface: .connections(entity: key.rawValue, id: model?.row?.id ?? id),
+                            title: "Connections", context: model?.row?.title)
+                    }
+                }
+            #endif
             .sheet(item: $creatingRelation) { section in
                 EntityEditorSheet(
                     key: section.target.key, mode: .create(prefill: section.createPrefill),
@@ -216,7 +230,14 @@ struct EntityDetailView: View {
                 showingRunEvidence = true
             }
         }
-        ConnectionsWorkspaceLink(entity: key.rawValue, recordID: row.id)
+        #if os(iOS)
+            // The record owns presentation; menu-item state disappears when the menu closes.
+            Button("Open connections", systemImage: "arrow.up.left.and.arrow.down.right") {
+                showingConnections = true
+            }
+        #else
+            ConnectionsWorkspaceLink(entity: key.rawValue, recordID: row.id, recordTitle: row.title)
+        #endif
     }
 
     @ViewBuilder private var relationCreationMenuItems: some View {
@@ -436,6 +457,7 @@ struct EntityDetailContent: View {
     @Environment(AppModel.self) private var appModel
     @Environment(\.developerOverlays) private var developerOverlays
     @Environment(\.detailSuggestions) private var suggestions
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var timeline: EntityTimelineOut?
     @State private var timelineError: String?
     @State private var activityEvents: [DetailActivityEvent] = []
@@ -694,15 +716,23 @@ struct EntityDetailContent: View {
         }
     #endif
 
+    /// At accessibility sizes the bar's tiles stack into a tall column; the record's own facts
+    /// (an amount, a due date, its status) lead so the first screen still says what this is.
+    private var actionsFollowSummary: Bool {
+        dynamicTypeSize.isAccessibilitySize && !presentation.summarySlots.isEmpty
+    }
+
     private var phoneBody: some View {
         List {
             Section {
                 EntityHeroView(descriptor: descriptor, row: row) { EmptyView() }
                     .listRowBackground(Color.clear)
                     .listRowSeparator(.hidden)
-                actionBar
-                    .listRowBackground(Color.clear)
-                    .listRowSeparator(.hidden)
+                if !actionsFollowSummary {
+                    actionBar
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
+                }
             }
             if let groupedSuggestions {
                 Section { DetailSuggestionsRow(descriptor: descriptor, model: groupedSuggestions) }
@@ -710,6 +740,13 @@ struct EntityDetailContent: View {
             if !presentation.summarySlots.isEmpty {
                 Section {
                     DetailSummaryGrid(descriptor: descriptor, row: row)
+                }
+            }
+            if actionsFollowSummary {
+                Section {
+                    actionBar
+                        .listRowBackground(Color.clear)
+                        .listRowSeparator(.hidden)
                 }
             }
             if let journal = journalSection {

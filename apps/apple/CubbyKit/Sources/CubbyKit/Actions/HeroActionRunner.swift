@@ -34,7 +34,7 @@ public enum HeroActionOutcome: Sendable, Equatable {
     /// the only write.
     case editRecord(entity: EntityKey, id: String, staged: [String: JSONValue])
     /// An AI answer the server already saved, shown against what it replaced before the person
-    /// moves on. Keep and Hide both just close it, as on web.
+    /// moves on. Done only closes it; reviewing does not write the answer again.
     case review(HeroActionReview)
 }
 

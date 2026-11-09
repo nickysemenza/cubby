@@ -97,7 +97,9 @@ final class EntitySelectionController {
 }
 
 /// The bottom bar while selecting: the count, then every selection action. An unavailable action
-/// stays visible and dimmed; tapping it says why.
+/// stays visible and dimmed; tapping it says why. iPhone and iPad spread equal 44-point targets
+/// across the bar; Mac keeps one compact status-bar row of content-sized native buttons beside
+/// the count, matching the table's density (the multi-row context menu repeats the actions).
 struct EntitySelectionBar: View {
     let descriptor: EntityDescriptor
     let rows: [EntityRow]
@@ -107,48 +109,79 @@ struct EntitySelectionBar: View {
 
     var body: some View {
         let actions = ActionPlacement.selectionBar(entity: descriptor, rows: rows)
-        VStack(spacing: FieldGuideTokens.Space.xs) {
-            Text(
-                rows.isEmpty
-                    ? "Select \(descriptor.plural.lowercased())" : "\(ValueFormat.count(rows.count)) selected"
-            )
-            .font(.caption)
-            .monospacedDigit()
-            .foregroundStyle(.secondary)
-            .accessibilityIdentifier("browse.\(descriptor.key.rawValue).selection.count")
-            HStack(spacing: 0) {
+        #if os(macOS)
+            HStack(spacing: FieldGuideTokens.Space.sm) {
+                count
+                Spacer(minLength: FieldGuideTokens.Space.md)
                 ForEach(actions) { action in
-                    Button {
-                        controller.run(action, descriptor: descriptor, rows: rows, appModel: appModel)
-                    } label: {
-                        VStack(spacing: 2) {
-                            Image(systemName: action.symbol).font(.body)
-                            Text(action.label).font(.caption2)
-                        }
-                        .frame(maxWidth: .infinity, minHeight: FieldGuideTokens.touchTarget)
-                        .contentShape(Rectangle())
+                    actionButton(action) {
+                        Label(action.label, systemImage: action.symbol)
                     }
-                    .buttonStyle(.borderless)
-                    .foregroundStyle(
-                        !action.enabled
-                            ? AnyShapeStyle(.tertiary)
-                            : action.isDestructive
-                                ? AnyShapeStyle(FieldGuideTokens.destructive)
-                                : AnyShapeStyle(FieldGuideTokens.interaction)
-                    )
-                    .disabled(controller.busy)
-                    .accessibilityLabel(action.label)
-                    .accessibilityHint(action.enabled ? "" : (action.reason ?? "Unavailable"))
-                    .help(action.reason ?? action.label)
-                    .accessibilityIdentifier("browse.\(descriptor.key.rawValue).selection.\(action.id)")
+                    .buttonStyle(.bordered)
+                    .controlSize(.small)
                 }
             }
+            .padding(.horizontal, FieldGuideTokens.Space.md)
+            .padding(.vertical, FieldGuideTokens.Space.xs)
+            .frame(maxWidth: .infinity)
+            .background(.bar)
+            .overlay(alignment: .top) { Divider() }
+        #else
+            VStack(spacing: FieldGuideTokens.Space.xs) {
+                count
+                HStack(spacing: 0) {
+                    ForEach(actions) { action in
+                        actionButton(action) {
+                            VStack(spacing: 2) {
+                                Image(systemName: action.symbol).font(.body)
+                                Text(action.label).font(.caption2)
+                            }
+                            .frame(maxWidth: .infinity, minHeight: FieldGuideTokens.touchTarget)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.borderless)
+                    }
+                }
+            }
+            .padding(.horizontal, FieldGuideTokens.Space.md)
+            .padding(.vertical, FieldGuideTokens.Space.sm)
+            .frame(maxWidth: .infinity)
+            .background(.bar)
+            .overlay(alignment: .top) { Divider() }
+        #endif
+    }
+
+    private var count: some View {
+        Text(
+            rows.isEmpty
+                ? "Select \(descriptor.plural.lowercased())" : "\(ValueFormat.count(rows.count)) selected"
+        )
+        .font(.caption)
+        .monospacedDigit()
+        .foregroundStyle(.secondary)
+        .accessibilityIdentifier("browse.\(descriptor.key.rawValue).selection.count")
+    }
+
+    private func actionButton<ButtonLabel: View>(
+        _ action: PlacedAction, @ViewBuilder label: () -> ButtonLabel
+    ) -> some View {
+        Button {
+            controller.run(action, descriptor: descriptor, rows: rows, appModel: appModel)
+        } label: {
+            label()
         }
-        .padding(.horizontal, FieldGuideTokens.Space.md)
-        .padding(.vertical, FieldGuideTokens.Space.sm)
-        .frame(maxWidth: .infinity)
-        .background(.bar)
-        .overlay(alignment: .top) { Divider() }
+        .foregroundStyle(
+            !action.enabled
+                ? AnyShapeStyle(.tertiary)
+                : action.isDestructive
+                    ? AnyShapeStyle(FieldGuideTokens.destructive)
+                    : AnyShapeStyle(FieldGuideTokens.interaction)
+        )
+        .disabled(controller.busy)
+        .accessibilityLabel(action.label)
+        .accessibilityHint(action.enabled ? "" : (action.reason ?? "Unavailable"))
+        .help(action.reason ?? action.label)
+        .accessibilityIdentifier("browse.\(descriptor.key.rawValue).selection.\(action.id)")
     }
 }
 

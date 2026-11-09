@@ -65,13 +65,19 @@ describe("valueSchemaOf", () => {
 
   it("treats a defaulted key as optional and labels keys for people", () => {
     const row = fieldsOf(
-      schemaOf(z.object({ externalId: z.string().default("x"), url: z.url() })),
+      schemaOf(
+        z.object({
+          externalId: z.string().default("x"),
+          url: z.url().meta({ title: "Source URL" }),
+        }),
+      ),
     );
     expect(row.externalId).toMatchObject({
       label: "External id",
       required: false,
     });
     expect(row.url).toMatchObject({
+      label: "Source URL",
       required: true,
       schema: { node: { text: { format: "uri" } } },
     });

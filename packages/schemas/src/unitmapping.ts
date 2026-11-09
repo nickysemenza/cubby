@@ -36,12 +36,12 @@ export const unitMappingBase = z.object({
 });
 
 export const unitMappingInput = z.object({
-  a: positiveAmount.describe(
-    'left side of the pair, e.g. { value: 8, unit: "oz" }',
-  ),
-  b: mappingTargetAmount.describe(
-    'right side of the pair, e.g. { value: 10, unit: "dollar" }',
-  ),
+  a: positiveAmount
+    .describe('left side of the pair, e.g. { value: 8, unit: "oz" }')
+    .meta({ title: "From" }),
+  b: mappingTargetAmount
+    .describe('right side of the pair, e.g. { value: 10, unit: "dollar" }')
+    .meta({ title: "Equivalent to" }),
   source: z
     .string()
     .nullable()

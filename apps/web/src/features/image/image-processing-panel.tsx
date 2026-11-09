@@ -5,6 +5,7 @@ import {
   scheduleImageProcessingInput,
   selectImageDescription,
 } from "@cubby/schemas/image-processing";
+import { countLabel } from "@cubby/shared/pluralize";
 import {
   useInfiniteQuery,
   useQuery,
@@ -27,8 +28,8 @@ import { invalidateOperationTags } from "~/integrations/tanstack-query/operation
 import { formatInstant } from "~/lib/date-format";
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
-import { Disclosure } from "~/ui/layout";
-import { Section } from "~/ui/layout";
+import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
+import { Disclosure, Section } from "~/ui/layout";
 import { Image } from "~/ui/media/image";
 import { Overlay } from "~/ui/overlays/overlay";
 import { Button, buttonVariants } from "~/ui/primitives/button";
@@ -52,8 +53,18 @@ function ImageAnalysisHistory({
       title="Analysis history"
       headingAs="h4"
       compact
-      count={`${pages[0]?.total ?? 0} analyses`}
+      // An unread or failed history has no known count.
+      count={pages[0] ? countLabel(pages[0].total, "analysis") : undefined}
     >
+      {analyses.isPending ? (
+        <SimpleLoading text="Loading analysis history…" />
+      ) : analyses.isError ? (
+        <ErrorDisplay
+          error={analyses.error}
+          title="analysis history"
+          onRetry={() => void analyses.refetch()}
+        />
+      ) : null}
       {pages
         .flatMap((page) => page.items)
         .map((analysis) => (
@@ -134,7 +145,7 @@ function DescriptionSummary({
           <p className="text-xs text-muted-foreground">
             {status.correction
               ? "Confirmed correction"
-              : `${selected?.provider} description${selected?.preferred ? " · Preferred" : " · Available result"}`}
+              : `${selected?.provider ?? "Unknown provider"} description${selected?.preferred ? " · Preferred" : " · Available result"}`}
           </p>
         </>
       ) : (
@@ -296,7 +307,7 @@ export function ImageProcessingPanel({ image }: { image: ImageWithEntity }) {
               : "Not processed"}
           </p>
           {!transparent ? (
-            <p className="text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
               Transparent image unavailable
             </p>
           ) : null}
@@ -313,7 +324,7 @@ export function ImageProcessingPanel({ image }: { image: ImageWithEntity }) {
           onRetry={() => void status.refetch()}
         />
       ) : (
-        <p>Loading processing status…</p>
+        <SimpleLoading text="Loading processing status…" />
       )}
       <Textarea
         aria-label="Corrected image description"
@@ -327,14 +338,24 @@ export function ImageProcessingPanel({ image }: { image: ImageWithEntity }) {
           size="sm"
           disabled={save.isPending || !correction.trim() || !image.sha256}
           onClick={() =>
-            save.mutate({
-              id,
-              contentHash: image.sha256 ?? "",
-              operationId: crypto.randomUUID(),
-              expectedEffectId:
-                status.data?.correction?.owner?.effectId ?? null,
-              description: correction.trim(),
-            })
+            save.mutate(
+              {
+                id,
+                contentHash: image.sha256 ?? "",
+                operationId: crypto.randomUUID(),
+                expectedEffectId:
+                  status.data?.correction?.owner?.effectId ?? null,
+                description: correction.trim(),
+              },
+              // A refused save keeps the draft; a saved one is now the
+              // Confirmed correction above, so the box is ready for the next.
+              {
+                onSuccess: (_, saved) =>
+                  setCorrection((current) =>
+                    current.trim() === saved.description ? "" : current,
+                  ),
+              },
+            )
           }
         >
           Save correction
@@ -399,7 +420,7 @@ function ImageProcessingActions({ image }: { image: ImageWithEntity }) {
     <>
       <div className="flex flex-wrap gap-2 text-sm">
         <a
-          className={buttonVariants({ variant: "outline" })}
+          className={buttonVariants({ variant: "outline", size: "sm" })}
           href={fieldValueOf(image.fields.url) ?? undefined}
           target="_blank"
           rel="noreferrer"
@@ -408,7 +429,7 @@ function ImageProcessingActions({ image }: { image: ImageWithEntity }) {
         </a>
         {transparent ? (
           <a
-            className={buttonVariants({ variant: "outline" })}
+            className={buttonVariants({ variant: "outline", size: "sm" })}
             href={transparent}
             target="_blank"
             rel="noreferrer"
@@ -459,7 +480,7 @@ function ImageProcessingActions({ image }: { image: ImageWithEntity }) {
         </>
       ) : null}
       <a
-        className={buttonVariants({ variant: "outline" })}
+        className={buttonVariants({ variant: "outline", size: "sm" })}
         href={`/image-jobs?imageId=${encodeURIComponent(id)}`}
       >
         View processing jobs

@@ -10,9 +10,9 @@ import SwiftUI
 /// View › Refresh ⌘R; Edit › Find ⌘F (the visible list's filter, else global Search) and Search
 /// Everything ⌥⌘F; Edit › Edit Record ⌘E and Delete Record… ⌘⌫ (confirmed) for the open record;
 /// an Actions menu of that record's placed verbs, unavailable ones dimmed with the server's
-/// reason; and a Go menu numbering the sidebar's sections. Settings… (⌘,) is the
-/// `Settings` scene's own app-menu item, not a command here. On iOS: ⌘1…⌘N select the tabs,
-/// ⌘F jumps to Search, and ⌘0 opens Dev, which is off the tab bar there.
+/// reason; and a Go menu numbering the sidebar's sections under the sidebar's names. Settings…
+/// (⌘,) is the `Settings` scene's own app-menu item, not a command here. On iOS: ⌘1…⌘N select the
+/// tabs, ⌘F jumps to Search, and ⌘0 opens Dev, which is off the tab bar there.
 ///
 /// `Commands` runs outside any window's view hierarchy, so it cannot read `@Environment(AppModel
 /// .self)`. Record and list commands read the focused scene's published values (`sceneCommands`,
@@ -23,6 +23,7 @@ struct CubbyCommands: Commands {
         @FocusedValue(\.sceneCommands) private var scene
         @FocusedValue(\.recordCommands) private var record
         @FocusedValue(\.listSearch) private var listSearch
+        @FocusedValue(\.detailVisibility) private var detailVisibility
     #endif
 
     @FocusedValue(\.nativeRefresh) private var refresh
@@ -44,7 +45,14 @@ struct CubbyCommands: Commands {
                 .disabled(focusedURL == nil)
             }
             CommandGroup(after: .pasteboard) { recordEditCommands }
-            CommandGroup(after: .toolbar) { refreshButton }
+            CommandGroup(after: .toolbar) {
+                refreshButton
+                Button(detailVisibility?.isVisible == true ? "Hide Detail" : "Show Detail") {
+                    detailVisibility?.toggle()
+                }
+                .keyboardShortcut("d", modifiers: [.option, .command])
+                .disabled(detailVisibility?.isEnabled != true)
+            }
             CommandGroup(after: .textEditing) {
                 Button(listSearch.map { "Find in \($0.plural)" } ?? "Find") {
                     if let listSearch { listSearch.focus() } else { openSearch() }
@@ -56,7 +64,7 @@ struct CubbyCommands: Commands {
             CommandMenu("Actions") { recordActionCommands }
             CommandMenu("Go") {
                 ForEach(Array(AppSection.tabs.enumerated()), id: \.element) { index, section in
-                    Button(section.title) {
+                    Button(Self.sidebarTitle(section)) {
                         AppModel.active?.navigator.section = section
                     }
                     .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")), modifiers: .command)
@@ -80,6 +88,15 @@ struct CubbyCommands: Commands {
             }
         #endif
     }
+
+    #if os(macOS)
+        /// The sidebar's own name for a section (the shared manifest's label), so the Go menu
+        /// never calls a row something the sidebar does not; native-only sections keep theirs.
+        private static func sidebarTitle(_ section: AppSection) -> String {
+            SidebarManifest.sections.lazy.flatMap(\.destinations)
+                .first { $0.nativeDestination == .section(section) }?.label ?? section.title
+        }
+    #endif
 
     private var refreshButton: some View {
         Button("Refresh") { refresh?.run() }

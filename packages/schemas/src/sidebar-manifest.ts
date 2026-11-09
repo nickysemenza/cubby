@@ -27,9 +27,9 @@ export const SIDEBAR_SECTIONS = [
     defaultFolded: false,
     destinations: [
       {
-        label: "Home",
+        label: "Today",
         route: "/",
-        sfSymbol: "house",
+        sfSymbol: "sun.horizon",
       },
       {
         label: "Work",

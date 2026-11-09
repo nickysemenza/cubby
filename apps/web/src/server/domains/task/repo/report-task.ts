@@ -1,3 +1,4 @@
+import { entityFieldByKey } from "@cubby/schemas/entity-fields";
 import type {
   EntityReportInput,
   EntityReportOut,
@@ -7,6 +8,35 @@ import { z } from "zod";
 
 import { effectiveTaskDueDate } from "~/lib/task-dates";
 import type { Database } from "~/server/db";
+
+type ReportBadge = NonNullable<
+  Extract<
+    EntityReportOut["blocks"][number],
+    { kind: "records" }
+  >["rows"][number]["badges"]
+>[number];
+
+/**
+ * A row's status chip from the declared status option: its label and condition tone. The quiet
+ * option (Not started) is the expected state and stays unsaid, as list rows already do.
+ */
+function statusBadges(status: string): ReportBadge[] {
+  const option = entityFieldByKey("task", "status")?.control?.options?.find(
+    (candidate) => candidate.value === status,
+  );
+  if (!option) return [{ label: status }];
+  if ("quiet" in option && option.quiet) return [];
+  const color = "color" in option ? option.color : undefined;
+  const tone =
+    color === "var(--positive)"
+      ? "positive"
+      : color === "var(--warning)"
+        ? "warning"
+        : color === "var(--destructive)"
+          ? "destructive"
+          : undefined;
+  return [tone ? { label: option.label, tone } : { label: option.label }];
+}
 
 /** Presentation consumes the bounded SQL projection without fetching an actionable graph. */
 export function taskBriefingReport(
@@ -37,7 +67,7 @@ export function taskBriefingReport(
           id: row.id,
           title: row.name,
           trailing: effectiveTaskDueDate(row),
-          badges: [{ label: row.status.replaceAll("_", " ") }],
+          badges: statusBadges(row.status),
           lines:
             row.projectName && row.projectId
               ? [

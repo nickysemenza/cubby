@@ -43,7 +43,7 @@ struct NotificationSettingsSection: View {
             Button("Open System Settings", systemImage: "arrow.up.forward.app", action: openSystemSettings)
                 .accessibilityIdentifier("settings.notificationSystemSettings")
         } header: {
-            Text(sectionTitle)
+            SettingsSectionHeader(sectionTitle)
         } footer: {
             Text(
                 "Import notifications alert you when an import is ready or needs attention. This is the default for new imports; each import can override it."

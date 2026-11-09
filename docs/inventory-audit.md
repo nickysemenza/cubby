@@ -83,6 +83,12 @@ Resolution behavior:
 Plain `bulkMove` never stamps `lastBulkInventory`. Skipping a location is
 client-only: it never stamps `verifiedAt` or `lastBulkInventory`.
 
+Native rows show the stored amount and one pending decision. Finishing applies
+the staged decisions together; Skip leaves the bin unchanged and discards them.
+The summary distinguishes finished and skipped bins and breaks changes into
+adjusted, removed and moved counts. Moving strays is an immediate write and is
+labelled separately from finishing the bin.
+
 Implementation and focused coverage live in the inventory service/repository
 and `tests/e2e/native-fieldwork-api.spec.ts`; the
 [journey coverage map](agents/core-journey-e2e.md) owns remaining client gaps.

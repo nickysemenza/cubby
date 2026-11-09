@@ -1,14 +1,16 @@
 import CubbyKit
 import SwiftUI
 
-/// One expected row in a bin: what's there, what (if anything) you've staged about it. Tap opens
-/// the full set of decisions; swipe reaches the two most common ones directly. Meant as a `List`
-/// row — the swipe actions depend on it.
+/// One expected row in a bin: what's there, then one statement of what (if anything) you've staged
+/// about it. Every decision stays pending until the bin's Done commits them together. Tap opens the
+/// full set of decisions, the context menu repeats them (the Mac's primary path), and swipe reaches
+/// the two most common ones directly. Meant as a `List` row — the swipe actions depend on it.
 struct BinRowView: View {
     let session: RecountSession
     let row: RecountRow
     let resolution: RecountResolution?
     let isDuplicate: Bool
+    var binName: String? = nil
 
     @State private var showingDialog = false
     @State private var showingAdjust = false
@@ -32,22 +34,28 @@ struct BinRowView: View {
         .swipeActions(edge: .trailing) {
             Button("Remove", role: .destructive) { session.stage(.remove, for: row.id) }
         }
+        .contextMenu { decisionButtons }
         .confirmationDialog(row.product.name, isPresented: $showingDialog, titleVisibility: .visible) {
-            Button("Verify") { session.stage(.verify, for: row.id) }
-            Button("Adjust count…") { showingAdjust = true }
-            Button("Remove", role: .destructive) { session.stage(.remove, for: row.id) }
-            Button("Move to Unknown") { Task { await session.relocateToUnknown(row.id) } }
-            Button("Move to…") { showingMoveTo = true }
-            if resolution != nil {
-                Button("Clear") { session.clearResolution(for: row.id) }
-            }
+            decisionButtons
             Button("Cancel", role: .cancel) {}
         }
         .sheet(isPresented: $showingAdjust) {
-            AdjustCountSheet(session: session, id: row.id, amount: row.amount)
+            AdjustCountSheet(session: session, row: row, binName: binName)
         }
         .sheet(isPresented: $showingMoveTo) {
             BinMoveToSheet(session: session, id: row.id)
+        }
+    }
+
+    @ViewBuilder
+    private var decisionButtons: some View {
+        Button("Verify") { session.stage(.verify, for: row.id) }
+        Button("Adjust count…") { showingAdjust = true }
+        Button("Remove", role: .destructive) { session.stage(.remove, for: row.id) }
+        Button("Move to Unknown") { Task { await session.relocateToUnknown(row.id) } }
+        Button("Move to…") { showingMoveTo = true }
+        if resolution != nil {
+            Button("Clear decision") { session.clearResolution(for: row.id) }
         }
     }
 
@@ -55,58 +63,64 @@ struct BinRowView: View {
         HStack(alignment: .top, spacing: FieldGuideTokens.Space.md) {
             Thumb(url: row.product.coverImageURL, size: 48, symbol: "shippingbox")
             VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: FieldGuideTokens.Space.xs) {
-                    Text(row.product.name)
-                        .font(.fieldGuideTitle)
-                        .foregroundStyle(FieldGuideTokens.graphite)
-                        .lineLimit(2)
-                    if isDuplicate {
-                        Eyebrow("Duplicate")
-                    }
-                }
-                if let brandName = row.product.brandName {
-                    Text(brandName)
+                Text(row.product.name)
+                    .font(.fieldGuideTitle)
+                    .foregroundStyle(FieldGuideTokens.graphite)
+                    .lineLimit(2)
+                if let identityLine {
+                    Text(identityLine)
                         .font(.fieldGuideLabel)
                         .foregroundStyle(FieldGuideTokens.graphiteSecondary)
-                        .lineLimit(1)
+                        .lineLimit(2)
                 }
-                Text(Self.amountText(row.amount))
-                    .font(.fieldGuideData)
-                    .foregroundStyle(FieldGuideTokens.graphiteSecondary)
+                quantityLine
             }
-            Spacer(minLength: FieldGuideTokens.Space.sm)
-            StatusChip(text: statusLabel, tone: statusTone)
+            Spacer(minLength: 0)
         }
         .padding(.horizontal, FieldGuideTokens.Space.md)
-        .padding(.vertical, FieldGuideTokens.Space.md)
+        .padding(.vertical, FieldGuideTokens.Space.sm)
+        .frame(minHeight: FieldGuideTokens.touchTarget)
         .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
     }
 
-    private var statusLabel: String {
+    /// Brand, then the stocked-twice flag for a one-of-a-kind product, on one subordinate line so
+    /// neither crowds the product name.
+    private var identityLine: String? {
+        let parts = [row.product.brandName, isDuplicate ? "One of a kind, stocked in several places" : nil]
+            .compactMap { $0 }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    /// One quantity statement: the stored amount, the staged change and that it is pending. An
+    /// untouched row prints only its stored amount, since Done verifies it.
+    /// One wrapping `Text`, so a long move target flows onto a second line instead of truncating.
+    private var quantityLine: Text {
+        let stored = Text(quantityText).foregroundStyle(FieldGuideTokens.graphiteSecondary)
+        guard let pending else { return stored.font(.fieldGuideData) }
+        let symbol = Text(Image(systemName: pending.symbol)).foregroundStyle(pending.tone.color)
+        let status = Text("· \(pending.label)").foregroundStyle(pending.tone.color)
+        return Text("\(symbol) \(stored) \(status)").font(.fieldGuideData)
+    }
+
+    private var quantityText: String {
+        let stored = Self.amountText(row.amount)
+        if case .adjust(let amount) = resolution { return "\(stored) → \(Self.amountText(amount))" }
+        return stored
+    }
+
+    private var pending: (label: String, symbol: String, tone: StatusChip.Tone)? {
         switch resolution {
-        case nil: "Expected"
-        case .verify: "Verified"
-        case .adjust(let amount): "Adjusted to \(Self.amountText(amount))"
-        case .remove: "Remove"
-        case .relocate(_, let name): "Move to \(name)"
+        case nil: nil
+        case .verify: ("Verify pending", "checkmark.circle", .positive)
+        case .adjust: ("Count pending", "pencil.circle", .warning)
+        case .remove: ("Removal pending", "minus.circle", .destructive)
+        case .relocate(_, let name): ("Move to \(name) pending", "arrow.right.circle", .warning)
         }
     }
 
-    private var statusTone: StatusChip.Tone {
-        switch resolution {
-        case nil: .neutral
-        case .verify: .positive
-        case .adjust: .warning
-        case .remove: .destructive
-        case .relocate: .warning
-        }
-    }
-
-    private static func amountText(_ amount: Amount) -> String {
-        let value =
-            amount.value.truncatingRemainder(dividingBy: 1) == 0
-            ? String(Int(amount.value)) : String(amount.value)
-        return "\(value) \(amount.unit)"
+    static func amountText(_ amount: Amount) -> String {
+        ValueFormat.amount(unit: amount.unit, value: amount.value)
     }
 }
 
@@ -182,6 +196,12 @@ private struct BinMoveToSheet: View {
             row: AuditPreviewData.sampleRow,
             resolution: .adjust(Amount(value: 2, unit: "each")),
             isDuplicate: true
+        )
+        BinRowView(
+            session: RecountSession(service: appModel.client),
+            row: AuditPreviewData.sampleRow,
+            resolution: .relocate(LocationCode("LOC-1002"), name: "Hall closet"),
+            isDuplicate: false
         )
     }
     .listStyle(.plain)

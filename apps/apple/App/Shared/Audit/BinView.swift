@@ -156,7 +156,7 @@ struct BinView: View {
             ForEach(session.rows) { state in
                 BinRowView(
                     session: session, row: state.row, resolution: state.resolution,
-                    isDuplicate: state.isDuplicate
+                    isDuplicate: state.isDuplicate, binName: session.currentBin?.name
                 )
             }
         }
@@ -169,7 +169,7 @@ struct BinView: View {
                 showingStrays = true
             } label: {
                 HStack {
-                    Text("\(session.strays.count) found elsewhere · \(session.adoptions.count) bins to adopt")
+                    Text(straysSummary)
                         .font(.fieldGuideBody)
                         .foregroundStyle(FieldGuideTokens.graphite)
                     Spacer(minLength: FieldGuideTokens.Space.sm)
@@ -182,6 +182,15 @@ struct BinView: View {
             }
             .buttonStyle(.plain)
         }
+    }
+
+    private var straysSummary: String {
+        let strays = session.strays.count
+        let adoptions = session.adoptions.count
+        return [
+            strays > 0 ? "\(strays) found elsewhere" : nil,
+            adoptions > 0 ? "\(adoptions) \(adoptions == 1 ? "bin" : "bins") to adopt" : nil,
+        ].compactMap { $0 }.joined(separator: " · ")
     }
 
     @ViewBuilder
@@ -223,6 +232,13 @@ struct BinView: View {
 
     @ViewBuilder
     private var footerRows: some View {
+        if let pendingSummary {
+            Text(pendingSummary)
+                .font(.fieldGuideLabel)
+                .foregroundStyle(FieldGuideTokens.graphiteSecondary)
+                .listRowBackground(FieldGuideTokens.canvas)
+                .listRowSeparator(.hidden)
+        }
         Button {
             Task { await session.commitBin() }
         } label: {
@@ -238,13 +254,39 @@ struct BinView: View {
         Button {
             Task { await session.skipBin() }
         } label: {
-            Text("Skip").frame(maxWidth: .infinity)
+            Text("Skip bin").frame(maxWidth: .infinity)
         }
         .buttonStyle(.bordered)
+        .accessibilityHint("Leaves this bin unchanged and discards its pending decisions")
         .frame(height: FieldGuideTokens.touchTarget)
         .disabled(session.busy)
         .listRowBackground(FieldGuideTokens.canvas)
         .listRowSeparator(.hidden)
+    }
+
+    /// The staged changes Done will apply, so the commit boundary says what it writes. Verifies are
+    /// left out: the button title already counts the rows it will verify.
+    private var pendingSummary: String? {
+        var adjusted = 0
+        var removed = 0
+        var moved = 0
+        for state in session.rows {
+            switch state.resolution {
+            case .adjust: adjusted += 1
+            case .remove: removed += 1
+            case .relocate: moved += 1
+            case .verify, nil: break
+            }
+        }
+        let adopted = session.adoptions.count
+        let parts = [
+            adjusted > 0 ? "\(adjusted) \(adjusted == 1 ? "count" : "counts") changed" : nil,
+            removed > 0 ? "\(removed) removed" : nil,
+            moved > 0 ? "\(moved) moved" : nil,
+            adopted > 0 ? "\(adopted) \(adopted == 1 ? "bin" : "bins") adopted" : nil,
+        ].compactMap { $0 }
+        guard !parts.isEmpty else { return nil }
+        return "Pending: \(parts.joined(separator: " · ")). Finishing applies them together."
     }
 
     /// Committing marks every uncounted row verified, so the title states that effect.

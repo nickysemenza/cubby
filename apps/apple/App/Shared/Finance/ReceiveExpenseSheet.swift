@@ -105,7 +105,8 @@ struct ReceiveExpenseSheet: View {
                     form
                 }
             }
-            .navigationTitle("Receive into Inventory")
+            // A short title so the product name, which leads the form, never truncates it.
+            .navigationTitle("Receive Stock")
             #if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)
             #endif
@@ -123,10 +124,12 @@ struct ReceiveExpenseSheet: View {
         .nativeSheet(.editor)
     }
 
+    /// Reading order: the product and its current stock, the arrival decision, then the place and
+    /// amount with the write it will make. Possible duplicate records follow, warnings visible.
     private var form: some View {
         Form {
-            if let snapshot = model.snapshot, model.alreadyCounted {
-                countedSection(snapshot)
+            if let snapshot = model.snapshot {
+                arrivalSection(snapshot)
             }
             if model.decision == .additionalUnits {
                 destinationSection
@@ -137,51 +140,65 @@ struct ReceiveExpenseSheet: View {
                         .accessibilityIdentifier("receive.refusal")
                 }
             }
+            if model.alreadyCounted {
+                matchesSection
+            }
         }
         .formStyle(.grouped)
     }
 
     @ViewBuilder
-    private func countedSection(_ snapshot: ReceivingSnapshot) -> some View {
-        ForEach(model.stockedMatches) { match in
-            Section {
-                VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
-                    Text(match.noticeTitle).font(.subheadline.weight(.semibold))
-                    Text(
-                        "\(match.stockOnHand) on hand" + (match.evidence.map { " · \($0)" } ?? "")
-                    )
-                    .font(.caption)
-                    ForEach(match.warnings, id: \.self) {
-                        Text($0).font(.caption).foregroundStyle(FieldGuideTokens.warning)
-                    }
-                    // There is no native Product match review yet; the candidate is read-only here.
-                    OpenOnWebButton(
-                        target: .record(key: .product, id: match.candidateID.rawValue),
-                        label: "Review this match on web"
-                    )
-                    .font(.caption)
-                }
-            }
-        }
+    private func arrivalSection(_ snapshot: ReceivingSnapshot) -> some View {
         Section {
-            if !snapshot.stock.isEmpty {
-                Text(
-                    "\(snapshot.productName) already has \(ValueFormat.count(model.ownUnits, maxFractionDigits: 6)) on hand ("
-                        + snapshot.stock.map {
-                            "\(ValueFormat.amount(unit: $0.unit, value: $0.value)) at \($0.locationName)"
-                        }
-                        .joined(separator: ", ") + "). Importing this purchase did not change it."
+            LabeledContent(snapshot.productName) {
+                Text(snapshot.stock.isEmpty ? "Not stocked" : "\(ValueFormat.count(model.ownUnits)) on hand")
+            }
+            ForEach(snapshot.stock) { stock in
+                LabeledContent(
+                    stock.locationName, value: ValueFormat.amount(unit: stock.unit, value: stock.value)
                 )
-                .font(.callout)
+                .foregroundStyle(.secondary)
             }
             if model.decision == .nothingNew {
-                Button("Nothing new arrived") { dismiss() }
+                Button("No additional units") { dismiss() }
                     .accessibilityIdentifier("receive.nothing")
                 Button("Additional units arrived") { model.chooseAdditionalUnits() }
                     .accessibilityIdentifier("receive.additional")
-            } else {
-                Text("Enter how many additional units arrived. Nothing is added until you do.")
-                    .font(.caption).foregroundStyle(.secondary)
+            }
+        } header: {
+            Text("What arrived?")
+        } footer: {
+            if model.alreadyCounted {
+                Text(
+                    "Importing this purchase did not change stock. Receive only units that actually arrived.")
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var matchesSection: some View {
+        if !model.stockedMatches.isEmpty {
+            Section("Possibly already counted") {
+                ForEach(model.stockedMatches) { match in
+                    VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
+                        Text(match.noticeTitle).font(.subheadline.weight(.semibold))
+                        Text(
+                            "\(match.stockOnHand) on hand" + (match.evidence.map { " · \($0)" } ?? "")
+                        )
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        ForEach(match.warnings, id: \.self) {
+                            Label($0, systemImage: "exclamationmark.triangle")
+                                .font(.caption).foregroundStyle(FieldGuideTokens.warning)
+                        }
+                        // There is no native Product match review yet; the candidate is read-only here.
+                        OpenOnWebButton(
+                            target: .record(key: .product, id: match.candidateID.rawValue),
+                            label: "Review this match on web"
+                        )
+                        .font(.caption)
+                    }
+                }
             }
         }
     }
@@ -198,15 +215,38 @@ struct ReceiveExpenseSheet: View {
             .accessibilityIdentifier("receive.location")
             switch model.plan {
             case .move:
-                Text("This is a one-of-a-kind item that is already stocked, so receiving it moves it.")
-                    .font(.caption).foregroundStyle(.secondary)
+                EmptyView()
             case .add(_, let unit):
                 quantityRow(unit: unit, editableUnit: false)
-                Text("Already stocked here. Receiving adds to that count.")
-                    .font(.caption).foregroundStyle(.secondary)
             case .create:
                 quantityRow(unit: model.unit, editableUnit: true)
             }
+        } header: {
+            Text("Additional units")
+        } footer: {
+            Text(consequence).accessibilityIdentifier("receive.consequence")
+        }
+    }
+
+    /// The write Receive will make, worded from the model's plan; the server still validates it.
+    private var consequence: String {
+        let place = model.locations.first { $0.id == model.locationID }?.name
+        switch model.plan {
+        case .move(_, let from):
+            guard let place else {
+                return "This one-of-a-kind item is already stocked, so receiving moves it. Choose where."
+            }
+            return from == model.locationID
+                ? "This item is already at \(place). Choose a different location to move it."
+                : "Moves this one-of-a-kind item to \(place)."
+        case .add(_, let unit):
+            guard let place else { return "Choose a location." }
+            guard let quantity = model.quantity else { return "Enter how many arrived to add to \(place)." }
+            return "Adds \(ValueFormat.amount(unit: unit, value: quantity)) to the stock already at \(place)."
+        case .create:
+            guard let place else { return "Choose a location." }
+            guard let quantity = model.quantity else { return "Enter how many arrived." }
+            return "Stocks \(ValueFormat.amount(unit: model.unit, value: quantity)) at \(place)."
         }
     }
 

@@ -20,6 +20,11 @@ a signed client such as Claude Code keeps that grant. `xcrun mcp-server status`
 lists permitted agents, folders, and open workspaces. Opening a workspace starts the server; inspect `xcrun mcp-server --help` for
 the installed toolchain's controls.
 
+If `xcrun` cannot find `simctl` or `mcpbridge`, check `xcode-select -p`.
+When it points at Command Line Tools, set
+`DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer` for the native
+command and its child processes; a machine-wide toolchain change is unnecessary.
+
 ## Session bootstrap
 
 1. `XcodeListWorkspaces`; if none is open, `XcodeOpenWorkspace` with the
@@ -32,19 +37,62 @@ the installed toolchain's controls.
 ## Preview loop
 
 `RenderPreview(workspaceIdentifier, sourceFilePath, previewDefinitionIndexInFile)`
-builds the active scheme (`Cubby-iOS`) and returns `previewSnapshotPath`, a PNG.
+builds the active scheme and returns a PNG path. Inspect the installed tool's
+schema: current responses expose `snapshot.path`, `renderedDestination`, and
+`supportedOverrides`; older versions use different field names.
 
 - **Timing:** the first render of a session is a cold preview build — set
   `timeout: 400`; the 120 s default fails. Warm renders take ~15 s, ~40–80 s
   after an edit that rebuilds.
-- **Variants:** a response lists `supportedPreviewVariantOverrides` (color
-  scheme, Dynamic Type, contrast, orientation); pass them back as
-  `previewVariantOverrides` to sweep appearance without code changes.
+- **Variants:** use the response's `supportedOverrides.previewVariants` (color
+  scheme, Dynamic Type, contrast, orientation) as the keys and values for
+  `previewVariantOverrides`. Available overrides differ by platform.
 - **Failures are text:** a crashing preview returns the crash report. A
   `PreviewFixtures.swift` `fatalError` means a fixture no longer decodes —
   regenerate it (see `apps/apple/AGENTS.md` § Generated files).
 - The snapshot filename contains a non-ASCII space before `AM`/`PM`; copy it
-  with a glob.
+  using the returned path rather than reconstructing its name.
+
+## Whole-app contact sheets
+
+`pnpm apple previews` renders the Product/Expense/Task screen catalog on iOS;
+it does not enumerate every component or render macOS. For a whole-app sweep,
+inventory actual `#Preview` declarations, including named states, and retain
+their source file, line, and definition index. Exclude comment mentions and
+respect conditional compilation and platform-specific source directories.
+Do not collapse distinct declarations with similar names or appearances.
+
+Render one platform at a time with `XcodeSwitchScheme` (`Cubby-iOS` or
+`Cubby-macOS`). Choose `preferredRenderDestination` from that scheme's returned
+`supportedOverrides.renderDestinations`. Validate every successful response's
+`renderedDestination` before labeling or reusing its PNG: a scheme-switch
+acknowledgment alone does not establish the capture's platform. Project
+regeneration/reload can reset the scheme or destination; wait for package
+loading to settle, reselect the scheme, and verify a probe capture before
+starting the sweep. Do not advance through the inventory on a shared setup
+failure such as package loading or missing provisioning profiles.
+
+Use sequential requests by default, grouping states from the same source file
+to reuse the preview build. Concurrent requests can share a preview-process
+crash and obscure which state caused it. Save each response and copy its image
+immediately; resume from validated captures rather than starting over. Retry
+individual failed states once in isolation. A SwiftUI preview compilation or
+table-renderer crash is evidence of an unavailable preview, not proof that the
+installed app fails the same way.
+
+Keep a tile for every supported state, marking failed renders unavailable.
+Report captured and unavailable counts per platform, with source locations and
+concise failure reasons. Preserve full-resolution images alongside the labeled
+contact sheets; a searchable gallery makes large inventories easier to inspect.
+Use synthetic fixtures and retain their declared loading/error states.
+
+For a Mac preview blocked by signing, use a temporary XcodeGen input override
+with the separate development bundle identity. In this capture workflow,
+ad-hoc signing alone still required a provisioning profile; preview-only
+`CODE_SIGNING_ALLOWED=NO` and `CODE_SIGNING_REQUIRED=NO` allowed rendering.
+Do not edit generated project/configuration files or install this preview build
+over the signed app. Remove the temporary input and regenerate the normal
+project afterward, then recheck scheme/destination before further captures.
 
 ## Device loop
 

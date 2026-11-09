@@ -254,6 +254,8 @@ targets:
           PROVISIONING_PROFILE_SPECIFIER: "$(CUBBY_LIVE_ACTIVITY_PROVISIONING_PROFILE_SPECIFIER)"
   Cubby-macOS:
     templates: [CubbyApp]
+    sources:
+      - path: App/LiveActivity/Shared/DeviceWorkAttributes.swift
     templateAttributes:
       plat: macOS
     platform: macOS

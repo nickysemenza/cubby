@@ -10,10 +10,12 @@ click "id=browse.catalog.product label=Products"
 wait "id=browse.product.row.${PRODUCT_ID}" 60000
 click "id=browse.product.row.${PRODUCT_ID}"
 wait "role=Button id=detail.product.edit" 60000
-click "role=Button label=Contents"
-wait "role=Button label=\"Stock & price\"" 30000
-click "role=Button label=\"Stock & price\""
-click "role=Button label=Close"
+# Locate the inline Price field directly; Contents dismisses after choosing a section.
+scroll top
+scroll down 0.5 --until "id=field.explanation.product.${PRODUCT_ID}.price"
+# Move the field clear of the floating tab bar before opening its context menu.
+scroll down 0.3
+wait stable 500 10000
 longpress "id=field.explanation.product.${PRODUCT_ID}.price" 800
 wait "role=Button label=Explain" 30000
 wait "role=Button label=\"Use inherited\"" 30000

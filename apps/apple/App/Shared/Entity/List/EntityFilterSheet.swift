@@ -353,6 +353,11 @@ struct EntityFilterDraft: Hashable {
 /// Every declared filter of one entity as a form, applied in one go. Each `EntityFilterKind`
 /// maps to a native control; a filter the sheet cannot edit (an id picker whose target has no
 /// descriptor) is left untouched rather than dropped.
+///
+/// The sheet leads with what is active, not with the schema: active conditions first as wrapping
+/// summaries with their own Remove, then the editor of each active (or just added) filter, then
+/// Add filter for the rest. Every include, exclude, presence, match and subtree control is still
+/// drawn for an opened filter; unknown wire keys stay in the draft untouched.
 struct EntityFilterSheet: View {
     let descriptor: EntityDescriptor
     let onApply: (EntityFilterState) async -> Void
@@ -365,6 +370,9 @@ struct EntityFilterSheet: View {
     /// Filters whose editor shows the "is not" side (by `columnId`); every editor opens on "is".
     @State private var excluding: Set<String> = []
     @State private var pendingTokens: [String: String] = [:]
+    /// Filters whose editor is shown (by `columnId`): the active ones, plus any the member added.
+    /// Clearing an opened filter keeps its editor in place rather than making it jump away.
+    @State private var opened: Set<String>
     private let initial: EntityFilterState
 
     init(
@@ -377,13 +385,19 @@ struct EntityFilterSheet: View {
         // Presented via `.sheet(isPresented:)` at a fixed call site (`EntityListView`) —
         // dismissing tears the subtree down, so re-presenting rebuilds this seed fresh.
         _draft = State(initialValue: EntityFilterDraft(filters))  // state-init-ok
+        let seed = EntityFilterDraft(filters)
+        let active = EntityFilterDraft.sections(of: descriptor).filter { seed.isActive($0) }
+        _opened = State(initialValue: Set(active.map(\.columnId)))  // state-init-ok
     }
 
     var body: some View {
         NavigationStack {
             Form {
                 activeChips
-                ForEach(EntityFilterDraft.sections(of: descriptor), id: \.columnId) { filter in
+                ForEach(
+                    EntityFilterDraft.sections(of: descriptor).filter { opened.contains($0.columnId) },
+                    id: \.columnId
+                ) { filter in
                     Section {
                         control(for: filter)
                     } header: {
@@ -394,13 +408,19 @@ struct EntityFilterSheet: View {
                                 Button("Clear") { draft.clear(filter) }
                                     .font(.caption)
                                     .buttonStyle(.borderless)
+                            } else {
+                                Button("Hide") { opened.remove(filter.columnId) }
+                                    .font(.caption)
+                                    .buttonStyle(.borderless)
                             }
                         }
                     }
+                    .accessibilityIdentifier("filter.section.\(filter.columnId)")
                 }
+                addFilter
             }
             .formStyle(.grouped)
-            .navigationTitle("Filter \(descriptor.plural)")
+            .navigationTitle("Filters")
             #if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)
             #endif
@@ -409,8 +429,11 @@ struct EntityFilterSheet: View {
                     Button("Cancel") { dismiss() }
                 }
                 ToolbarItem(placement: .destructiveAction) {
-                    Button("Reset") { draft = EntityFilterDraft() }
-                        .disabled(draft.state.isEmpty)
+                    Button("Reset") {
+                        draft = EntityFilterDraft()
+                        opened = []
+                    }
+                    .disabled(draft.state.isEmpty)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Apply") {
@@ -440,37 +463,71 @@ struct EntityFilterSheet: View {
         .nativeSheet(.editor)
     }
 
-    /// The draft's active filters as chips; removing one clears that side of its filter.
+    /// The draft's active conditions, one wrapping row per "is" or "is not" side. The summary
+    /// reads in full; the trailing Remove clears only that side, and its editor sits below.
     @ViewBuilder
     private var activeChips: some View {
         let chips = EntityFilterDraft.chips(in: descriptor, state: draft.state)
         if !chips.isEmpty {
             Section("Active") {
-                WrappingFactsLayout(spacing: FieldGuideTokens.Space.xs) {
-                    ForEach(chips) { chip in
-                        Button {
+                ForEach(chips) { chip in
+                    HStack(alignment: .firstTextBaseline, spacing: FieldGuideTokens.Space.sm) {
+                        Text(chip.label)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        Button("Remove", systemImage: "xmark.circle.fill") {
                             draft.remove(chip, in: descriptor)
-                        } label: {
-                            HStack(spacing: FieldGuideTokens.Space.xs) {
-                                Text(chip.label).lineLimit(1)
-                                Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary)
-                            }
-                            .font(.callout)
-                            .padding(.horizontal, FieldGuideTokens.Space.sm)
-                            .padding(.vertical, FieldGuideTokens.Space.xs)
-                            .background(Capsule().fill(FieldGuideTokens.inset))
-                            .overlay(Capsule().strokeBorder(FieldGuideTokens.hairline))
-                            #if os(iOS)
-                                .frame(minHeight: FieldGuideTokens.touchTarget)
-                            #endif
-                            .contentShape(Rectangle())
                         }
-                        .buttonStyle(.plain)
+                        .labelStyle(.iconOnly)
+                        .foregroundStyle(.secondary)
+                        .buttonStyle(.borderless)
+                        #if os(iOS)
+                            .frame(
+                                minWidth: FieldGuideTokens.touchTarget,
+                                minHeight: FieldGuideTokens.touchTarget)
+                        #endif
+                        .contentShape(Rectangle())
                         .accessibilityLabel("Remove \(chip.label)")
                         .accessibilityIdentifier("filter.chip.\(chip.id)")
                     }
                 }
-                .padding(.vertical, FieldGuideTokens.Space.xs)
+            }
+        }
+    }
+
+    /// The filters not yet shown. With nothing active the fields are listed directly, so the
+    /// first condition is one tap away; afterwards they fold into one Add filter menu.
+    @ViewBuilder
+    private var addFilter: some View {
+        let closed = EntityFilterDraft.sections(of: descriptor).filter { !opened.contains($0.columnId) }
+        if !closed.isEmpty {
+            if opened.isEmpty {
+                Section("Filter by") {
+                    ForEach(closed, id: \.columnId) { filter in
+                        Button {
+                            opened.insert(filter.columnId)
+                        } label: {
+                            Label(
+                                EntityFilterDraft.label(for: filter, in: descriptor),
+                                systemImage: "plus.circle")
+                        }
+                        .accessibilityIdentifier("filter.add.\(filter.columnId)")
+                    }
+                }
+            } else {
+                Section {
+                    Menu {
+                        ForEach(closed, id: \.columnId) { filter in
+                            Button(EntityFilterDraft.label(for: filter, in: descriptor)) {
+                                opened.insert(filter.columnId)
+                            }
+                            .accessibilityIdentifier("filter.add.\(filter.columnId)")
+                        }
+                    } label: {
+                        Label("Add filter", systemImage: "plus")
+                    }
+                    .accessibilityIdentifier("filter.add")
+                }
             }
         }
     }

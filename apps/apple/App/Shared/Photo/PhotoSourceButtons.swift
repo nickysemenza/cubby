@@ -174,7 +174,7 @@ struct PhotoSourceButtons: View {
                 matching: .images, preferredItemEncoding: .current
             ) {
                 ActionTile(
-                    title: maxSelectionCount == 1 ? "Choose photo" : "Choose photos",
+                    title: libraryPickerTitle,
                     symbol: "photo.on.rectangle", detail: "From your library")
             }
             .buttonStyle(.plain)
@@ -209,11 +209,19 @@ struct PhotoSourceButtons: View {
                 showingFileImporter = true
             } label: {
                 ActionTile(
-                    title: maxSelectionCount == 1 ? "Choose photo" : "Choose photos",
-                    symbol: "photo.on.rectangle", detail: "From files")
+                    title: maxSelectionCount == 1 ? "Choose file" : "Choose files",
+                    symbol: "folder", detail: "Import an image")
             }
             .buttonStyle(.plain)
             .accessibilityIdentifier("photo.source.files")
+        #endif
+    }
+
+    private var libraryPickerTitle: String {
+        #if os(macOS)
+            "Choose from Photos"
+        #else
+            maxSelectionCount == 1 ? "Choose photo" : "Choose photos"
         #endif
     }
 
@@ -445,7 +453,7 @@ struct PhotoAccessSettingsButton: View {
     PhotoAccessSettingsButton()
 }
 
-#Preview {
+#Preview(traits: .modifier(SignedInPreview())) {
     PhotoSourceButtons { _ in }
         .padding()
         .fieldGuideScreen()

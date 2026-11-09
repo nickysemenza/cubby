@@ -37,11 +37,9 @@ final class NeedsPhotoModel {
             queue = page.items
             total = page.meta.totalCount
             phase = .ready
-        } catch let error as CubbyAPIError {
-            phase = .failed(error.detail?.message ?? "HTTP \(error.status)")
-            Diagnostics.report(error, context: "photo.queue.load")
         } catch {
-            phase = .failed(String(describing: error))
+            // `userMessage` keeps the server's complete diagnostic body, nested causes included.
+            phase = .failed(error.userMessage)
             Diagnostics.report(error, context: "photo.queue.load")
         }
     }

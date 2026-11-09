@@ -93,23 +93,59 @@ struct EntityTimelineView: View {
 private struct TimelineEventRow: View {
     let event: EntityTimelineEvent
 
+    private var displayKind: String {
+        if event.kind.hasPrefix("field:"), case .value(.some(let label)) = event.detail {
+            return label
+        }
+        return Self.kindLabel(event.kind)
+    }
+
+    /// Web's `KIND_LABEL` (`entity/timeline/entity-timeline.tsx`), so both clients name an event
+    /// kind the same way; an unlisted `field:<name>` kind reads as its field name, anything else
+    /// as its raw kind, exactly as web falls back.
+    static func kindLabel(_ kind: String) -> String {
+        let labels = [
+            "acquired": "Acquired", "exited": "Exited", "discarded": "Discarded",
+            "adjusted": "Price adjusted", "unknown": "Unknown", "linked": "Linked purchase",
+            "audit:create": "Created", "audit:update": "Updated", "audit:delete": "Deleted",
+        ]
+        if let label = labels[kind] { return label }
+        return kind.hasPrefix("field:") ? String(kind.dropFirst("field:".count)) : kind
+    }
+
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: FieldGuideTokens.Space.sm) {
-            StatusChip(text: event.kind.replacingOccurrences(of: "_", with: " ").capitalized)
+            StatusChip(text: displayKind)
             VStack(alignment: .leading, spacing: 2) {
                 Text(event.label).font(.fieldGuideBody)
-                if case .value(.some(let detail)) = event.detail {
+                if case .value(.some(let detail)) = event.detail, detail != displayKind {
                     Text(detail).font(.caption).foregroundStyle(.secondary)
                 }
             }
             Spacer(minLength: FieldGuideTokens.Space.sm)
-            if case .value(.some(let amount)) = event.amount {
-                Text(ValueFormat.amount(unit: nil, value: amount))
-                    .font(.fieldGuideData)
-                    .foregroundStyle(FieldGuideTokens.graphiteSecondary)
-            }
+            amount
         }
         .frame(minHeight: FieldGuideTokens.touchTarget)
+    }
+
+    /// `amount` is signed USD by contract (an Expense cost; negative is money recovered), never an
+    /// inventory quantity. Same shapes as web's `Amount`: absent draws nothing, null says unknown.
+    @ViewBuilder
+    private var amount: some View {
+        switch event.amount {
+        case .absent:
+            EmptyView()
+        case .value(.none):
+            Text("Amount unknown").font(.caption).foregroundStyle(.secondary)
+        case .value(.some(let value)) where value < 0:
+            Text("\(ValueFormat.currency(-value)) recovered")
+                .font(.fieldGuideData)
+                .foregroundStyle(FieldGuideTokens.positive)
+        case .value(.some(let value)):
+            Text(ValueFormat.currency(value))
+                .font(.fieldGuideData)
+                .foregroundStyle(FieldGuideTokens.graphiteSecondary)
+        }
     }
 }
 
@@ -177,8 +213,9 @@ private struct LifecycleRowView: View {
     private var accessibilitySummary: String {
         row.intervals.map { interval in
             let confidence = interval.confident ? "" : ", unconfirmed"
-            return
-                "\(interval.start.rawValue) to \(interval.end.valueIfPresent??.rawValue ?? "now")\(confidence)"
+            let start = ValueFormat.plainDate(interval.start.rawValue)
+            let end = (interval.end.valueIfPresent??.rawValue).map(ValueFormat.plainDate) ?? "now"
+            return "\(start) to \(end)\(confidence)"
         }.joined(separator: "; ")
     }
 }

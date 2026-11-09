@@ -2,6 +2,10 @@ import CubbyKit
 import SwiftUI
 
 #if os(iOS)
+    import VisionKit
+#endif
+
+#if os(iOS)
     /// A single-shot code lookup, presented from Search's toolbar and empty state on iPhone and iPad:
     /// scan or type a code, then act on what it resolves to. Mac has no camera here; its search field
     /// resolves codes on submit. Unlike `CaptureView`'s sweep, there is no location and
@@ -16,6 +20,7 @@ import SwiftUI
 
         @Environment(AppModel.self) private var model
         @Environment(\.dismiss) private var dismiss
+        @Environment(\.dynamicTypeSize) private var dynamicTypeSize
         @State private var manualEntry = ""
         @State private var resolving = false
         @State private var outcome: LookupOutcome?
@@ -68,7 +73,24 @@ import SwiftUI
             .fieldGuideScreen()
         }
 
+        /// A device without a camera gets one quiet line, not a large empty viewfinder above the
+        /// field it actually uses; a camera that is off or failing keeps its explanation and
+        /// Settings or Retry inside the viewfinder.
+        @ViewBuilder
         private var scannerSlot: some View {
+            if DataScannerViewController.isSupported {
+                viewfinder
+            } else {
+                Label(
+                    "No camera on this device. Type or paste a code.", systemImage: "camera.metering.unknown"
+                )
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .accessibilityIdentifier("scanLookup.noCamera")
+            }
+        }
+
+        private var viewfinder: some View {
             RoundedRectangle(cornerRadius: FieldGuideTokens.radiusPanel)
                 .fill(FieldGuideTokens.inset)
                 .aspectRatio(4.0 / 3.0, contentMode: .fit)
@@ -84,7 +106,12 @@ import SwiftUI
         private var manualEntryField: some View {
             VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
                 Eyebrow("Barcode, ISBN, or label")
-                HStack(spacing: FieldGuideTokens.Space.sm) {
+                // Accessibility sizes put Look up under the field so neither is squeezed.
+                let layout =
+                    dynamicTypeSize.isAccessibilitySize
+                    ? AnyLayout(VStackLayout(alignment: .leading, spacing: FieldGuideTokens.Space.sm))
+                    : AnyLayout(HStackLayout(spacing: FieldGuideTokens.Space.sm))
+                layout {
                     TextField("Barcode, ISBN, or label", text: $manualEntry)
                         .keyboardDismissBar()
                         .font(.fieldGuideCode)
@@ -94,7 +121,7 @@ import SwiftUI
                         .textInputAutocapitalization(.characters)
                         .onSubmit { handleRead(manualEntry) }
                         .padding(.horizontal, FieldGuideTokens.Space.md)
-                        .frame(height: FieldGuideTokens.touchTarget)
+                        .frame(minHeight: FieldGuideTokens.touchTarget)
                         .background(
                             RoundedRectangle(cornerRadius: FieldGuideTokens.radiusControl)
                                 .fill(FieldGuideTokens.surface)

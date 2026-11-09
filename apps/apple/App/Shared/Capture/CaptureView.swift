@@ -145,7 +145,7 @@ private struct CaptureContent: View {
         } label: {
             Label(scanning ? "Stop scanning" : "Scan", systemImage: "barcode.viewfinder")
                 .font(.fieldGuideTitle)
-                .frame(maxWidth: .infinity, minHeight: FieldGuideTokens.touchTarget)
+                .captureButtonWidth()
         }
         .buttonStyle(.borderedProminent)
         .tint(FieldGuideTokens.interaction)
@@ -168,7 +168,7 @@ private struct CaptureContent: View {
         NavigationLink(value: Route.audit(locationID: capture.location?.id)) {
             Label("Walk the shelf", systemImage: "checklist")
                 .font(.fieldGuideTitle)
-                .frame(maxWidth: .infinity, minHeight: FieldGuideTokens.touchTarget)
+                .captureButtonWidth()
         }
         .buttonStyle(.bordered)
         .buttonBorderShape(.roundedRectangle(radius: FieldGuideTokens.radiusControl))
@@ -250,11 +250,11 @@ private struct CaptureContent: View {
                 .buttonStyle(.plain)
                 if let error = capture.locationError {
                     PanelDivider()
-                    Text(error)
-                        .font(.fieldGuideLabel)
-                        .foregroundStyle(FieldGuideTokens.destructive)
-                        .padding(.horizontal, FieldGuideTokens.Space.md)
-                        .padding(.vertical, FieldGuideTokens.Space.sm)
+                    InlineLoadFailure(message: error, isRetrying: capture.loadingLocations) {
+                        await capture.loadLocations()
+                    }
+                    .padding(.horizontal, FieldGuideTokens.Space.md)
+                    .padding(.vertical, FieldGuideTokens.Space.sm)
                 }
             }
         }
@@ -494,4 +494,15 @@ struct ScanChipRow: View {
 
 #Preview(traits: .modifier(SignedInPreview())) {
     NavigationStack { CaptureView() }
+}
+
+extension View {
+    /// Touch-sized, full-width primary actions on iPhone; Mac push buttons size to their content.
+    fileprivate func captureButtonWidth() -> some View {
+        #if os(macOS)
+            self
+        #else
+            frame(maxWidth: .infinity, minHeight: FieldGuideTokens.touchTarget)
+        #endif
+    }
 }

@@ -1,18 +1,50 @@
 import CubbyKit
 import SwiftUI
 
-/// Per-person macros with each entered food underneath. The adaptive grid presents two people
-/// side by side when space permits and naturally becomes one column on iPhone.
+/// Per-person macros with each entered food underneath. `.panels` (inside a record's Form
+/// section) presents two people side by side when space permits; `.sections` (a List of its own,
+/// the daily screen) gives each person a plain section rather than a card inside a card.
 struct MealNutritionPeopleView: View {
+    enum Layout {
+        case panels
+        case sections
+    }
+
     let summary: MealNutritionOut
     var showMealHeadings = false
+    var layout: Layout = .panels
 
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    private var hasPartialEstimate: Bool {
+        summary.people.contains(where: { $0.totals.macros.containsPartialEstimate })
+    }
+
+    private static let partialNote =
+        "+ means a known subtotal; some food nutrition is missing. — means unavailable."
 
     var body: some View {
         if summary.people.isEmpty {
             Text("No portions entered yet.")
+                .font(.callout)
                 .foregroundStyle(.secondary)
+        } else if layout == .sections {
+            ForEach(Array(summary.people.enumerated()), id: \.element.id) { index, person in
+                Section {
+                    MacroGrid(totals: person.totals.macros, prominent: true)
+                        .padding(.vertical, FieldGuideTokens.Space.xs)
+                    personFoods(person)
+                } header: {
+                    NavigationLink(value: Route.entityDetail(.ledgerParty, id: person.id)) {
+                        Text(person.name)
+                    }
+                    .buttonStyle(.plain)
+                } footer: {
+                    if hasPartialEstimate, index == summary.people.count - 1 {
+                        Text(Self.partialNote)
+                    }
+                }
+            }
         } else {
             VStack(alignment: .leading, spacing: FieldGuideTokens.Space.md) {
                 LazyVGrid(columns: peopleColumns, alignment: .leading, spacing: FieldGuideTokens.Space.lg) {
@@ -20,8 +52,8 @@ struct MealNutritionPeopleView: View {
                         personPanel(person)
                     }
                 }
-                if summary.people.contains(where: { $0.totals.macros.containsPartialEstimate }) {
-                    Text("+ means a known subtotal; some food nutrition is missing. — means unavailable.")
+                if hasPartialEstimate {
+                    Text(Self.partialNote)
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
@@ -33,25 +65,31 @@ struct MealNutritionPeopleView: View {
         [GridItem(.adaptive(minimum: dynamicTypeSize.isAccessibilitySize ? 280 : 310), alignment: .top)]
     }
 
+    /// Each food with its meal heading where the meal changes. In a section, each food is its own
+    /// row (the List draws separators); in a panel, dividers separate them.
+    @ViewBuilder private func personFoods(_ person: MealNutritionPerson) -> some View {
+        if person.foods.isEmpty {
+            Text("No foods assigned")
+                .font(.callout)
+                .foregroundStyle(.secondary)
+        } else {
+            ForEach(Array(person.foods.enumerated()), id: \.offset) { index, food in
+                if layout == .panels, index > 0 { Divider() }
+                if showMealHeadings, let meal = food.meal,
+                    index == 0 || person.foods[index - 1].meal?.id != meal.id
+                {
+                    mealHeading(meal, for: person)
+                }
+                foodRow(food)
+            }
+        }
+    }
+
     private func personPanel(_ person: MealNutritionPerson) -> some View {
         GroupBox {
             VStack(alignment: .leading, spacing: FieldGuideTokens.Space.md) {
                 MacroGrid(totals: person.totals.macros, prominent: true)
-                if person.foods.isEmpty {
-                    Text("No foods assigned")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                } else {
-                    ForEach(Array(person.foods.enumerated()), id: \.offset) { index, food in
-                        if index > 0 { Divider() }
-                        if showMealHeadings, let meal = food.meal,
-                            index == 0 || person.foods[index - 1].meal?.id != meal.id
-                        {
-                            mealHeading(meal, for: person)
-                        }
-                        foodRow(food)
-                    }
-                }
+                personFoods(person)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         } label: {
@@ -128,7 +166,7 @@ struct MealNutritionCompactView: View {
     var body: some View {
         if summary.people.isEmpty {
             Text("No food logged yet. Add a portion to see nutrition.")
-                .font(.fieldGuideLabel)
+                .font(.callout)
                 .foregroundStyle(.secondary)
         } else {
             ForEach(summary.people) { person in
@@ -148,20 +186,37 @@ private struct MacroGrid: View {
 
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
+    /// Four across, then two by two, then one column: a figure never wraps its unit or its
+    /// partial-estimate "+" onto a second line.
     var body: some View {
-        LazyVGrid(columns: columns, alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
-            macro("Calories", amount: totals.calories, unit: "kcal", calories: true)
-            macro("Protein", amount: totals.protein, unit: "g")
-            macro("Carbs", amount: totals.carbs, unit: "g")
-            macro("Fat", amount: totals.fat, unit: "g")
+        if dynamicTypeSize.isAccessibilitySize {
+            VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) { cells }
+        } else {
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .top, spacing: FieldGuideTokens.Space.lg) { cells }
+                Grid(
+                    alignment: .leading, horizontalSpacing: FieldGuideTokens.Space.lg,
+                    verticalSpacing: FieldGuideTokens.Space.sm
+                ) {
+                    GridRow {
+                        macro("Calories", amount: totals.calories, unit: "kcal", calories: true)
+                        macro("Protein", amount: totals.protein, unit: "g")
+                    }
+                    GridRow {
+                        macro("Carbs", amount: totals.carbs, unit: "g")
+                        macro("Fat", amount: totals.fat, unit: "g")
+                    }
+                }
+                VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) { cells }
+            }
         }
     }
 
-    private var columns: [GridItem] {
-        if dynamicTypeSize.isAccessibilitySize {
-            return [GridItem(.flexible(), alignment: .leading)]
-        }
-        return [GridItem(.adaptive(minimum: 70), alignment: .leading)]
+    @ViewBuilder private var cells: some View {
+        macro("Calories", amount: totals.calories, unit: "kcal", calories: true)
+        macro("Protein", amount: totals.protein, unit: "g")
+        macro("Carbs", amount: totals.carbs, unit: "g")
+        macro("Fat", amount: totals.fat, unit: "g")
     }
 
     private func macro(
@@ -171,14 +226,20 @@ private struct MacroGrid: View {
             Text(label)
                 .font(.caption)
                 .foregroundStyle(.secondary)
+            let value = amount.formatted(calories: calories)
             HStack(alignment: .firstTextBaseline, spacing: 3) {
-                Text(amount.formatted(calories: calories))
+                Text(value)
                     .font(
                         prominent ? .title3.weight(.semibold).monospacedDigit() : .callout.monospacedDigit())
-                Text(unit)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                // The shared cell writes "—" for an unavailable value; a unit beside it says nothing.
+                if value != "—" {
+                    Text(unit)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
+            .lineLimit(1)
+            .fixedSize()
             if let count = amount.inferredZeroCount, count > 0 {
                 Text("\(count) inferred from label")
                     .font(.caption2)

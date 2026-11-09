@@ -35,6 +35,9 @@ struct EntityPickerSheet: View {
     @State private var term = ""
     @State private var selected: [EntityPick]
     @State private var model: GenericEntityListModel?
+    @State private var selectionRows: [String: EntityRow] = [:]
+    @State private var missingSelections: Set<String> = []
+    @State private var selectionErrors: [String: String] = [:]
 
     init(
         target: EntityKey, multiple: Bool = false, selected: [String] = [],
@@ -68,17 +71,20 @@ struct EntityPickerSheet: View {
         NavigationStack {
             List {
                 if !selected.isEmpty {
-                    Section("Selected") {
+                    Section(multiple ? "Selected (\(selected.count))" : "Current selection") {
                         ForEach(selected, id: \.selectedRowIdentity) { pick in
                             HStack {
-                                Text(pick.title)
+                                selectedIdentity(pick)
                                 Spacer()
-                                Button("Remove", systemImage: "xmark.circle.fill") {
-                                    selected.removeAll { $0.id == pick.id }
+                                if multiple {
+                                    Button("Remove", systemImage: "xmark.circle.fill") {
+                                        selected.removeAll { $0.id == pick.id }
+                                    }
+                                    .labelStyle(.iconOnly)
+                                    .foregroundStyle(.secondary)
+                                    .buttonStyle(.borderless)
+                                    .accessibilityLabel("Remove \(selectionTitle(pick.id))")
                                 }
-                                .labelStyle(.iconOnly)
-                                .foregroundStyle(.secondary)
-                                .buttonStyle(.borderless)
                             }
                             .frame(minHeight: FieldGuideTokens.touchTarget)
                         }
@@ -130,8 +136,66 @@ struct EntityPickerSheet: View {
                 }
             }
             .onChange(of: term) { _, value in model?.setSearchQuery(value) }
+            .task(id: selected.map(\.id)) { await resolveSelections() }
         }
         .nativeSheet(.picker)
+    }
+
+    @ViewBuilder
+    private func selectedIdentity(_ pick: EntityPick) -> some View {
+        if let row = selectionRows[pick.id] {
+            HStack(spacing: FieldGuideTokens.Space.sm) {
+                Thumb(
+                    url: row.imageURL, size: RecordRowMetrics.thumbnail,
+                    symbol: descriptor.recordSymbol(in: row), emoji: descriptor.recordEmoji(in: row))
+                Text(selectionTitle(row.id))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        } else if missingSelections.contains(pick.id) {
+            Label("\(descriptor.singular) no longer available", systemImage: "questionmark.folder")
+                .foregroundStyle(.secondary)
+        } else if let message = selectionErrors[pick.id] {
+            InlineLoadFailure(message: message) {
+                await resolveSelections(retrying: pick.id)
+            }
+        } else {
+            LoadingIndicator(label: "Loading selection")
+        }
+    }
+
+    private func selectionTitle(_ id: String) -> String {
+        guard let row = selectionRows[id], row.title != row.id else {
+            return "Unnamed \(descriptor.singular)"
+        }
+        return row.title
+    }
+
+    private func resolveSelections(retrying retryID: String? = nil) async {
+        let ids = retryID.map { [$0] } ?? selected.map(\.id)
+        for id in ids {
+            guard !Task.isCancelled else { return }
+            if retryID == nil && (selectionRows[id] != nil || missingSelections.contains(id)) {
+                continue
+            }
+            selectionErrors[id] = nil
+            do {
+                let row = try await appModel.client.row(descriptor, id: id)
+                try Task.checkCancellation()
+                guard selected.contains(where: { $0.id == id }) else { continue }
+                if let row {
+                    selectionRows[id] = row
+                    if let index = selected.firstIndex(where: { $0.id == id }) {
+                        selected[index] = EntityPick(id: id, title: row.title)
+                    }
+                } else {
+                    missingSelections.insert(id)
+                }
+            } catch {
+                guard !Task.isCancelled else { return }
+                Diagnostics.report(error, context: "picker.selection")
+                selectionErrors[id] = error.userMessage
+            }
+        }
     }
 
     @ViewBuilder
@@ -139,17 +203,21 @@ struct EntityPickerSheet: View {
         switch search.phase {
         case .idle: EmptyView()
         case .debouncing, .loading: LoadingIndicator(label: "Searching")
-        case .failed(let message): Text(message).foregroundStyle(.secondary)
+        case .failed(let message):
+            InlineLoadFailure(message: message) { search.retry() }
         case .loaded:
             if search.rows.isEmpty { Text("No matches").foregroundStyle(.secondary) }
         }
         ForEach(search.rows, id: \.entityPickerResultIdentity) { row in
-            pickRow(
-                EntityPick(id: row.id, title: row.title), imageURL: row.imageURL,
-                emoji: descriptor.recordEmoji(in: row), symbol: descriptor.recordSymbol(in: row))
+            pickRow(row)
         }
-        if let message = search.nextPageError { Text(message).foregroundStyle(.secondary) }
-        if search.hasMore {
+        if let message = search.refreshError {
+            InlineLoadFailure(message: message) { await search.refresh() }
+        }
+        if let message = search.nextPageError {
+            InlineLoadFailure(message: message) { await search.loadNextPage() }
+        }
+        if search.hasMore && search.nextPageError == nil {
             Button("Load more") { Task { await search.loadNextPage() } }
                 .disabled(search.phase != .loaded)
         }
@@ -161,26 +229,34 @@ struct EntityPickerSheet: View {
         case .idle, .loading:
             LoadingIndicator(label: "Loading \(descriptor.plural)")
         case .unavailable(let message), .failed(let message):
-            Text(message).foregroundStyle(.secondary)
+            InlineLoadFailure(message: message) { await model.loadInitial() }
         case .loaded:
             if model.rows.isEmpty { Text("No matches").foregroundStyle(.secondary) }
             ForEach(model.rows, id: \.entityPickerResultIdentity) { row in
-                pickRow(
-                    EntityPick(id: row.id, title: row.title), imageURL: row.imageURL,
-                    emoji: descriptor.recordEmoji(in: row), symbol: descriptor.recordSymbol(in: row))
+                pickRow(row)
             }
-            if model.hasMore {
+            if let message = model.refreshError {
+                InlineLoadFailure(message: message, isRetrying: model.activity != .idle) {
+                    await model.refresh()
+                }
+            }
+            if let message = model.nextPageError {
+                InlineLoadFailure(message: message, isRetrying: model.activity != .idle) {
+                    await model.loadNextPage()
+                }
+            }
+            if model.hasMore && model.nextPageError == nil {
                 Button("Load more") { Task { await model.loadNextPage() } }
                     .disabled(model.activity != .idle)
             }
         }
     }
 
-    private func pickRow(_ pick: EntityPick, imageURL: URL?, emoji: String? = nil, symbol: String? = nil)
-        -> some View
-    {
+    private func pickRow(_ row: EntityRow) -> some View {
+        let pick = EntityPick(id: row.id, title: row.title)
         let isSelected = selected.contains { $0.id == pick.id }
         return Button {
+            selectionRows[row.id] = row
             if multiple {
                 if isSelected {
                     selected.removeAll { $0.id == pick.id }
@@ -193,9 +269,11 @@ struct EntityPickerSheet: View {
             }
         } label: {
             RecordListRow(
-                title: pick.title, imageURL: imageURL, symbol: symbol ?? descriptor.sfSymbol, emoji: emoji
+                title: row.title == row.id ? "Unnamed \(descriptor.singular)" : row.title,
+                imageURL: row.imageURL, symbol: descriptor.recordSymbol(in: row),
+                emoji: descriptor.recordEmoji(in: row), titleLineLimit: 2
             ) {
-                Text(pick.id).font(.fieldGuideCode)
+                if let subtitle = row.subtitle { Text(subtitle) }
             } rail: {
                 if isSelected {
                     Image(systemName: "checkmark").foregroundStyle(FieldGuideTokens.interaction)
@@ -205,6 +283,7 @@ struct EntityPickerSheet: View {
             }
         }
         .buttonStyle(.plain)
+        .accessibilityIdentifier("picker.option.\(row.id)")
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 

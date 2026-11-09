@@ -101,9 +101,29 @@ struct SettingsView: View {
             Form(content: content)
                 .formStyle(.grouped)
                 .font(.fieldGuideBody)
+                // The toolbar pane already names the section.
+                .environment(\.settingsPaneHeadersHidden, true)
         }
     }
 #endif
+
+extension EnvironmentValues {
+    /// Set by a Mac Settings window pane, whose toolbar title already names its section, so the
+    /// section's own header would repeat it.
+    @Entry var settingsPaneHeadersHidden = false
+}
+
+/// A settings section header, omitted inside the Mac pane that already names it.
+struct SettingsSectionHeader: View {
+    let title: String
+    @Environment(\.settingsPaneHeadersHidden) private var hidden
+
+    init(_ title: String) { self.title = title }
+
+    var body: some View {
+        if !hidden { Text(title) }
+    }
+}
 
 extension View {
     /// iOS rows keep a comfortable touch height; the Mac grouped form uses system row metrics.
@@ -135,17 +155,22 @@ private struct ServerSettingsSection: View {
             .onChange(of: model.baseURL) { _, _ in synchronizeServerSelection() }
 
             if selectedServer == .custom {
-                TextField("Custom server URL", text: $draftURL)
-                    .keyboardDismissBar()
-                    .font(.fieldGuideCode)
-                    .autocorrectionDisabled()
-                    #if os(iOS)
-                        .keyboardType(.URL)
-                        .textInputAutocapitalization(.never)
-                    #endif
-                    .onSubmit(applyCustomServer)
-                    .accessibilityIdentifier("settings.customServerURL")
-                    .settingsRowHeight()
+                // A visible label on both platforms; only the value is mono.
+                LabeledContent("URL") {
+                    TextField("URL", text: $draftURL, prompt: Text("https://"))
+                        .labelsHidden()
+                        .multilineTextAlignment(.trailing)
+                        .keyboardDismissBar()
+                        .font(.fieldGuideCode)
+                        .autocorrectionDisabled()
+                        #if os(iOS)
+                            .keyboardType(.URL)
+                            .textInputAutocapitalization(.never)
+                        #endif
+                        .onSubmit(applyCustomServer)
+                        .accessibilityIdentifier("settings.customServerURL")
+                }
+                .settingsRowHeight()
 
                 if let customURLValidationMessage {
                     Text(customURLValidationMessage)
@@ -160,11 +185,14 @@ private struct ServerSettingsSection: View {
                 }
             }
 
-            LabeledContent("Host") {
-                Text(CubbyBaseURL.host(of: model.baseURL)).font(.fieldGuideCode)
+            // A custom URL row already shows the host it is using.
+            if selectedServer != .custom || customServerURL != model.baseURL {
+                LabeledContent("Host") {
+                    Text(CubbyBaseURL.host(of: model.baseURL)).font(.fieldGuideCode)
+                }
+                .id(model.baseURL)
+                .settingsRowHeight()
             }
-            .id(model.baseURL)
-            .settingsRowHeight()
             LabeledContent("Credential") {
                 Text(model.credentialSummary).font(.fieldGuideData)
             }
@@ -181,7 +209,7 @@ private struct ServerSettingsSection: View {
                 .settingsRowHeight()
             }
         } header: {
-            Text("Server")
+            SettingsSectionHeader("Server")
         } footer: {
             Text(
                 "Each host keeps its own credential, so switching never sends one server's token to another."
@@ -250,10 +278,24 @@ private struct AdvancedSettingsSection: View {
                 Toggle("Pause analysis", isOn: pausedBinding)
                     .settingsRowHeight()
             }
-            Button("Developer tools", systemImage: "wrench.and.screwdriver", action: openDeveloperTools)
-                .accessibilityIdentifier("settings.developerTools")
+            // Opens another screen, so it reads as a navigation row rather than a push button.
+            Button(action: openDeveloperTools) {
+                HStack {
+                    Label("Developer tools", systemImage: "wrench.and.screwdriver")
+                        .foregroundStyle(FieldGuideTokens.graphite)
+                    Spacer(minLength: FieldGuideTokens.Space.sm)
+                    Image(systemName: "chevron.forward")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.tertiary)
+                        .accessibilityHidden(true)
+                }
+                .contentShape(Rectangle())
+                .settingsRowHeight()
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("settings.developerTools")
         } header: {
-            Text("Advanced")
+            SettingsSectionHeader("Advanced")
         } footer: {
             Text(
                 "Automatic work covers companion image jobs, library matching, and background analysis on this device; explicit photo imports always work. Image descriptions and subject lifts share the image job slots, and Automatic uses the value measured for this kind of device."
@@ -284,24 +326,21 @@ private struct ImageWorkConcurrencyRow: View {
     @AppStorage(CompanionImageConcurrency.defaultsKey) private var stored = 0
 
     var body: some View {
-        Stepper(value: choice, in: 0...CompanionImageConcurrency.range.upperBound) {
-            LabeledContent("Image jobs at once") {
-                Text(
-                    stored == 0
-                        ? "Automatic (\(CompanionImageConcurrency.automatic))"
-                        : "\(CompanionImageConcurrency.slots(for: stored))"
-                )
-                .monospacedDigit()
+        // A menu of explicit choices: Automatic is a named option, not a stepper's hidden zero.
+        Picker("Image jobs at once", selection: choice) {
+            Text("Automatic (\(CompanionImageConcurrency.automatic))").tag(0)
+            ForEach(Array(CompanionImageConcurrency.range), id: \.self) { slots in
+                Text("\(slots)").monospacedDigit().tag(slots)
             }
         }
         .settingsRowHeight()
         .accessibilityIdentifier("settings.imageWork.jobs")
     }
 
-    /// Stepping below 1 returns to Automatic (stored 0).
+    /// Automatic stores 0; an out-of-range stored value reads as its clamped slot count.
     private var choice: Binding<Int> {
         Binding(
-            get: { stored },
+            get: { stored == 0 ? 0 : CompanionImageConcurrency.slots(for: stored) },
             set: {
                 stored = $0
                 model.applyImageWorkConcurrency()
@@ -374,7 +413,7 @@ private struct AboutSettingsSection: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        Section("About") {
+        Section {
             LabeledContent("Version") {
                 Text(Self.version).monospacedDigit().textSelection(.enabled)
             }
@@ -390,6 +429,8 @@ private struct AboutSettingsSection: View {
                 Label("Open Cubby on the web", systemImage: "arrow.up.forward.app")
             }
             .accessibilityIdentifier("settings.openOnWeb")
+        } header: {
+            SettingsSectionHeader("About")
         }
     }
 

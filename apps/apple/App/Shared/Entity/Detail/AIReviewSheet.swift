@@ -2,8 +2,8 @@ import CubbyKit
 import SwiftUI
 
 /// An AI answer the server already saved, set beside what it replaced. Both sides, the model and
-/// its age come from the server's answer; Keep and Hide only close the sheet (the write happened
-/// when the analysis ran), exactly as on web.
+/// its age come from the server's answer. The write happened when the analysis ran, so the sheet
+/// reports a saved result and offers only Done; it never stages an approval it cannot make.
 struct AIReviewSheet: View {
     let review: HeroActionReview
     @Environment(\.dismiss) private var dismiss
@@ -12,17 +12,22 @@ struct AIReviewSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: FieldGuideTokens.Space.md) {
-                    Label("\(review.confidence.capitalized) confidence", systemImage: "sparkles")
-                        .font(.fieldGuideLabel).foregroundStyle(.secondary)
-                    Text(review.reasoning).font(.footnote).foregroundStyle(.secondary)
+                    Label("Saved to this record", systemImage: "checkmark.circle.fill")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(FieldGuideTokens.positive)
+                        .accessibilityIdentifier("aiReview.saved")
+                    section("Saved result", review.proposed)
                     if let previous = review.previous, !previous.isEmpty {
-                        section("Current", previous, secondary: true)
+                        section("Previous", previous, secondary: true)
                     }
-                    section(review.previous == nil ? "New" : "Proposed", review.proposed)
-                    VStack(alignment: .leading, spacing: 2) {
+                    VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
+                        Label("\(review.confidence.capitalized) confidence", systemImage: "sparkles")
+                            .font(.fieldGuideLabel)
+                        Text(review.reasoning)
                         Text(provenance)
                         DateDisplay(date: review.analyzedAt)
-                    }.font(.caption).foregroundStyle(.secondary)
+                    }
+                    .font(.caption).foregroundStyle(.secondary)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(FieldGuideTokens.Space.md)
@@ -32,11 +37,8 @@ struct AIReviewSheet: View {
                 .navigationBarTitleDisplayMode(.inline)
             #endif
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Hide") { dismiss() }.accessibilityIdentifier("aiReview.hide")
-                }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Keep") { dismiss() }.accessibilityIdentifier("aiReview.keep")
+                    Button("Done") { dismiss() }.accessibilityIdentifier("aiReview.done")
                 }
             }
         }
@@ -44,10 +46,11 @@ struct AIReviewSheet: View {
 
     private func section(_ title: String, _ text: String, secondary: Bool = false) -> some View {
         VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
-            Text(title.uppercased()).font(.fieldGuideLabel).foregroundStyle(.secondary)
+            Text(title).font(.fieldGuideLabel).foregroundStyle(.secondary)
             Text(text).foregroundStyle(secondary ? Color.secondary : Color.primary)
                 .textSelection(.enabled)
         }
+        .accessibilityElement(children: .combine)
     }
 
     private var provenance: String {

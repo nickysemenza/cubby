@@ -2,7 +2,8 @@ import CubbyKit
 import SwiftUI
 
 /// Work shows this device's work, the device backlog, Runs in progress and Runs needing
-/// attention. The household's actionable work across every source is web's `/activity`.
+/// attention, then All changes (the audit history). The household's actionable work across every
+/// source is web's `/activity`.
 struct ActivityView: View {
     @Environment(AppModel.self) private var appModel
 
@@ -18,11 +19,19 @@ struct ActivityView: View {
         List {
             DeviceBacklogBannerSection(
                 backlog: backlog, error: backlogError,
-                thisDeviceProcessing: appModel.companionImageActivity.phase == .processing)
+                thisDeviceProcessing: appModel.companionImageActivity.phase == .processing,
+                retry: { await load() })
             localExecution()
             runSection("In progress", savedView: "in-progress", model: inProgress)
             runSection("Runs needing attention", savedView: "attention", model: attention)
+            // Audit history lives here on every platform; household work continues on web.
             Section {
+                activityDestination(.auditHistory) {
+                    Label("All changes", systemImage: "clock")
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
+                }
+                .accessibilityIdentifier("activity.changes")
                 OpenOnWebButton(target: .route(path: "/activity"), label: "Open Work on web")
             }
         }
@@ -107,11 +116,21 @@ struct ActivityView: View {
                     .accessibilityIdentifier("activity.run.\(row.id)")
                 }
                 listState(model)
-                activityDestination(.entityList(.run, savedView: savedView)) {
-                    Text("All \(model.meta?.totalCount ?? 0)")
+                // The section shows at most a page; the full saved view opens only when more match.
+                if let total = model.meta?.totalCount, total > model.rows.count {
+                    activityDestination(.entityList(.run, savedView: savedView)) {
+                        HStack {
+                            Text("Show all")
+                            Spacer(minLength: FieldGuideTokens.Space.sm)
+                            Text(ValueFormat.count(Double(total)))
+                                .monospacedDigit().foregroundStyle(.secondary)
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .accessibilityLabel("Show all \(ValueFormat.count(Double(total))) \(title)")
                 }
             } else {
-                ProgressView()
+                LoadingIndicator(label: "Loading runs")
             }
         }
     }
@@ -138,12 +157,18 @@ struct ActivityView: View {
 
     @ViewBuilder private func listState(_ model: GenericEntityListModel) -> some View {
         switch model.phase {
-        case .idle, .loading: ProgressView()
-        case .failed(let message), .unavailable(let message):
-            Text(message).foregroundStyle(FieldGuideTokens.warning)
+        case .idle, .loading: LoadingIndicator(label: "Loading runs")
+        case .failed(let message):
+            InlineLoadFailure(message: message) { await model.refresh() }
+        case .unavailable(let message):
+            // Not a transient failure: Retry would ask the same unsupported question again.
+            Label(message, systemImage: "exclamationmark.triangle")
+                .font(.callout).foregroundStyle(FieldGuideTokens.warning)
         case .loaded:
-            if model.rows.isEmpty { Text("No matching records").foregroundStyle(.secondary) }
-            if let error = model.refreshError { Text(error).foregroundStyle(FieldGuideTokens.warning) }
+            if model.rows.isEmpty { Text("None right now").font(.callout).foregroundStyle(.secondary) }
+            if let error = model.refreshError {
+                InlineLoadFailure(message: error) { await model.refresh() }
+            }
         }
     }
 
@@ -162,6 +187,8 @@ struct ActivityView: View {
     @ViewBuilder private func localExecution() -> some View {
         let activities = appModel.backgroundActivity.visibleActivities
         Section {
+            // A control is a row, never a footer: footers explain.
+            Toggle("Automatic work on this device", isOn: automaticWorkBinding)
             CompanionWorkerStatusRow(activity: appModel.companionImageActivity)
             if !activities.isEmpty {
                 ForEach(activities) { activity in
@@ -184,9 +211,7 @@ struct ActivityView: View {
                 }
             }
         } header: {
-            Text("This device — now")
-        } footer: {
-            Toggle("Automatic work on this device", isOn: automaticWorkBinding)
+            Text("This device")
         }
     }
 
@@ -258,21 +283,24 @@ struct LocalActivityDetailView: View {
     var body: some View {
         List {
             if let activity {
+                // The navigation title already names the task; rows add only what it does not.
                 Section {
-                    LabeledContent("Task", value: activity.title)
                     if let detail = activity.detail {
                         LabeledContent("Detail", value: detail)
                     }
                     LabeledContent("Started") {
                         DateDisplay(date: activity.startedAt)
                     }
-                    if let progress = activity.progress {
-                        LabeledContent("Progress") {
-                            Text(progress, format: .percent.precision(.fractionLength(0)))
+                    LabeledContent("Progress") {
+                        if let progress = activity.progress {
+                            HStack(spacing: FieldGuideTokens.Space.sm) {
+                                ProgressView(value: progress).frame(maxWidth: 160)
+                                Text(progress, format: .percent.precision(.fractionLength(0)))
+                                    .monospacedDigit()
+                            }
+                        } else {
+                            ProgressView().controlSize(.small)
                         }
-                        ProgressView(value: progress)
-                    } else {
-                        ProgressView()
                     }
                 }
                 if activity.isCancellable {
@@ -282,7 +310,10 @@ struct LocalActivityDetailView: View {
                         }
                     }
                 }
-            } else {
+            }
+        }
+        .overlay {
+            if activity == nil {
                 ContentUnavailableView("Finished", systemImage: "checkmark.circle")
             }
         }

@@ -26,6 +26,7 @@ import {
   type EntityTimelineWindowByEntity,
 } from "~/entity/entity-timeline";
 import type { TimelineEntity } from "~/entity/generated/entity-timelines.gen";
+import { entityMetadataQueryOptions } from "~/entity/metadata";
 import { ShortcodeProse } from "~/entity/prose/shortcode-prose";
 import { entityTimeline } from "~/integrations/tanstack-query/generated/domains/entityTimeline.gen";
 import { formatCalendarDay } from "~/lib/date-format";
@@ -149,9 +150,37 @@ const known = <T extends Record<string, string>>(
     : undefined;
 const kindColor = (kind: string) =>
   known(KIND_COLOR, kind) ?? "var(--foreground)";
-const kindLabel = (kind: string) =>
-  known(KIND_LABEL, kind) ??
-  (kind.startsWith("field:") ? kind.slice("field:".length) : kind);
+
+type KindLabel = (kind: string) => string;
+
+/**
+ * Kind → member-facing label. A `field:<key>` kind reads as the declared
+ * field's label (`season.start` → "Season start"), matching the server's
+ * event detail; an unknown key keeps its raw spelling.
+ */
+function useKindLabel(entity: TimelineEntity): KindLabel {
+  // Cache-only: the list or detail page mounting the timeline has already
+  // admitted this entity's metadata, and a miss only costs the friendly label.
+  const bundle = useQuery({
+    ...entityMetadataQueryOptions(entity),
+    enabled: false,
+  }).data;
+  const fields: readonly { key: string; label: string }[] =
+    bundle?.primary.entity === entity ? bundle.primary.fields.fields : [];
+  return (kind) => {
+    const table = known(KIND_LABEL, kind);
+    if (table) return table;
+    if (!kind.startsWith("field:")) return kind;
+    const key = kind.slice("field:".length);
+    const [fieldKey = key, endpoint] = key.split(".");
+    const label = fields.find((field) => field.key === fieldKey)?.label;
+    if (!label) return key;
+    if (endpoint === undefined) return label;
+    return endpoint === "start" || endpoint === "end"
+      ? `${label} ${endpoint}`
+      : key;
+  };
+}
 
 /** A routed entity link, or plain text when the target has no browser route. */
 function TimelineLink({
@@ -396,17 +425,22 @@ function Amount({ amount }: { amount: number | null | undefined }) {
   );
 }
 
-function EventLine({ event }: { event: EntityTimelineEvent }) {
+function EventLine({
+  event,
+  kindLabel,
+}: {
+  event: EntityTimelineEvent;
+  kindLabel: KindLabel;
+}) {
   const audit = event.kind.startsWith("audit:");
+  const label = kindLabel(event.kind);
+  // A declared-date event's detail is that field's label, which the kind
+  // chip already says.
+  const detail = event.detail === label ? null : event.detail;
   return (
     <RecordRow
       clip={!audit}
-      leading={
-        <RecordDot
-          color={kindColor(event.kind)}
-          label={kindLabel(event.kind)}
-        />
-      }
+      leading={<RecordDot color={kindColor(event.kind)} label={label} />}
       primary={
         <>
           <TimelineLink link={event.link} className="min-w-0 truncate">
@@ -417,18 +451,16 @@ function EventLine({ event }: { event: EntityTimelineEvent }) {
             color={kindColor(event.kind)}
             className="text-xs"
           >
-            {kindLabel(event.kind)}
+            {label}
           </EnumPill>
         </>
       }
       secondary={
-        event.detail ? (
+        detail ? (
           audit ? (
-            <span className="break-words whitespace-pre-wrap">
-              {event.detail}
-            </span>
+            <span className="break-words whitespace-pre-wrap">{detail}</span>
           ) : (
-            <ShortcodeProse>{event.detail}</ShortcodeProse>
+            <ShortcodeProse>{detail}</ShortcodeProse>
           )
         ) : null
       }
@@ -439,9 +471,11 @@ function EventLine({ event }: { event: EntityTimelineEvent }) {
 
 function EventGroup({
   group,
+  kindLabel,
   showDate = true,
 }: {
   group: EntityTimelineGroup;
+  kindLabel: KindLabel;
   showDate?: boolean;
 }) {
   return (
@@ -467,13 +501,19 @@ function EventGroup({
         />
       ) : null}
       {group.events.map((event) => (
-        <EventLine key={event.id} event={event} />
+        <EventLine key={event.id} event={event} kindLabel={kindLabel} />
       ))}
     </>
   );
 }
 
-function EventsView({ groups }: { groups: EntityTimelineGroup[] }) {
+function EventsView({
+  groups,
+  kindLabel,
+}: {
+  groups: EntityTimelineGroup[];
+  kindLabel: KindLabel;
+}) {
   if (groups.length === 0)
     return (
       <Visualization
@@ -489,7 +529,7 @@ function EventsView({ groups }: { groups: EntityTimelineGroup[] }) {
       {dated.length > 0 ? (
         <RecordList variant="timeline" aria-label="Timeline events">
           {dated.map((group) => (
-            <EventGroup key={group.key} group={group} />
+            <EventGroup key={group.key} group={group} kindLabel={kindLabel} />
           ))}
         </RecordList>
       ) : null}
@@ -498,7 +538,12 @@ function EventsView({ groups }: { groups: EntityTimelineGroup[] }) {
           <h3 className="mb-1 text-sm font-medium">Date unknown</h3>
           <RecordList variant="timeline">
             {undated.map((group) => (
-              <EventGroup key={group.key} group={group} showDate={false} />
+              <EventGroup
+                key={group.key}
+                group={group}
+                kindLabel={kindLabel}
+                showDate={false}
+              />
             ))}
           </RecordList>
         </section>
@@ -510,9 +555,11 @@ function EventsView({ groups }: { groups: EntityTimelineGroup[] }) {
 function LifecyclesView({
   rows,
   extent,
+  kindLabel,
 }: {
   rows: EntityTimelineRow[];
   extent: EntityTimelineOut["extent"];
+  kindLabel: KindLabel;
 }) {
   const kinds = useMemo(
     () => [...new Set(rows.flatMap((row) => row.markers.map((m) => m.kind)))],
@@ -582,16 +629,15 @@ function LifecyclesView({
                   if (clippedEnd < clippedStart) return null;
                   const left = position(clippedStart);
                   const right = position(clippedEnd);
+                  const span = interval.confident
+                    ? interval.end
+                      ? formatDateSpan(interval.start, interval.end)
+                      : `${formatCalendarDay(interval.start, "dateShort")} – open`
+                    : `Uncertain after ${formatCalendarDay(interval.start, "dateShort")}`;
                   return (
                     <div
                       key={`${interval.start}:${interval.end ?? "open"}`}
-                      title={
-                        interval.confident
-                          ? interval.end
-                            ? formatDateSpan(interval.start, interval.end)
-                            : `${formatCalendarDay(interval.start, "dateShort")} – open`
-                          : `Uncertain after ${formatCalendarDay(interval.start, "dateShort")}`
-                      }
+                      title={span}
                       className={cn(
                         "absolute top-5 h-2 rounded-full",
                         interval.confident
@@ -602,7 +648,9 @@ function LifecyclesView({
                         left: `${left}%`,
                         width: `${Math.max(right - left, 0.5)}%`,
                       }}
-                    />
+                    >
+                      <span className="sr-only">{span}</span>
+                    </div>
                   );
                 })}
                 {row.markers.map((marker) => (
@@ -617,7 +665,12 @@ function LifecyclesView({
                             left: `${position(marker.date)}%`,
                             backgroundColor: kindColor(marker.kind),
                           }}
-                        />
+                        >
+                          <span className="sr-only">
+                            {formatCalendarDay(marker.date, "dateShort")} ·{" "}
+                            {kindLabel(marker.kind)}
+                          </span>
+                        </span>
                       }
                     />
                     <TooltipContent>
@@ -830,6 +883,7 @@ export function EntityTimeline<E extends TimelineEntity>({
       />
     ) : null;
 
+  const kindLabel = useKindLabel(entity);
   const hasRows = data?.rows !== undefined;
   const activeMode: EntityTimelineMode = hasRows ? state.mode : "events";
   return (
@@ -874,15 +928,20 @@ export function EntityTimeline<E extends TimelineEntity>({
             />
             {activeMode === "lifecycles" && data.rows ? (
               <>
-                <LifecyclesView rows={data.rows} extent={data.extent} />
+                <LifecyclesView
+                  rows={data.rows}
+                  extent={data.extent}
+                  kindLabel={kindLabel}
+                />
                 {data.groups.some((group) => group.date === null) ? (
                   <EventsView
                     groups={data.groups.filter((group) => group.date === null)}
+                    kindLabel={kindLabel}
                   />
                 ) : null}
               </>
             ) : (
-              <EventsView groups={data.groups} />
+              <EventsView groups={data.groups} kindLabel={kindLabel} />
             )}
           </>
         )}

@@ -11,7 +11,6 @@ import { CubeFocusIcon } from "@phosphor-icons/react/dist/csr/CubeFocus";
 import { DatabaseIcon } from "@phosphor-icons/react/dist/csr/Database";
 import { FileTextIcon } from "@phosphor-icons/react/dist/csr/FileText";
 import { GearIcon } from "@phosphor-icons/react/dist/csr/Gear";
-import { HouseIcon } from "@phosphor-icons/react/dist/csr/House";
 import { LayoutIcon } from "@phosphor-icons/react/dist/csr/Layout";
 import { LightbulbIcon } from "@phosphor-icons/react/dist/csr/Lightbulb";
 import { ListChecksIcon } from "@phosphor-icons/react/dist/csr/ListChecks";
@@ -23,6 +22,7 @@ import { QrCodeIcon } from "@phosphor-icons/react/dist/csr/QrCode";
 import { ShoppingBagIcon } from "@phosphor-icons/react/dist/csr/ShoppingBag";
 import { ShoppingCartIcon } from "@phosphor-icons/react/dist/csr/ShoppingCart";
 import { SparkleIcon } from "@phosphor-icons/react/dist/csr/Sparkle";
+import { SunHorizonIcon } from "@phosphor-icons/react/dist/csr/SunHorizon";
 import { WarehouseIcon } from "@phosphor-icons/react/dist/csr/Warehouse";
 import { WrenchIcon } from "@phosphor-icons/react/dist/csr/Wrench";
 import type { Icon } from "@phosphor-icons/react/lib";
@@ -56,7 +56,7 @@ export type NavGroup = {
 };
 
 const routeIcons = {
-  "/": HouseIcon,
+  "/": SunHorizonIcon,
   "/activity": PulseIcon,
   "/work-queue": ListChecksIcon,
   "/calendar": CalendarBlankIcon,
@@ -80,7 +80,7 @@ const routeIcons = {
   "/ai": SparkleIcon,
 };
 const sectionIcons = {
-  top: HouseIcon,
+  top: SunHorizonIcon,
   plan: CalendarBlankIcon,
   cook: ChefHatIcon,
   pantry: WarehouseIcon,
@@ -117,7 +117,7 @@ export const navGroups = sidebarSections.filter(
 export const topNavItems = sidebarSections
   .filter((section) => section.id === "top")
   .flatMap((section) => section.children);
-const homeNavItem: NavItem = { to: "/", label: "Home", icon: HouseIcon };
+const todayNavItem: NavItem = { to: "/", label: "Today", icon: SunHorizonIcon };
 export const settingsNavItem: NavItem = {
   to: "/settings",
   label: "Settings",
@@ -151,7 +151,7 @@ export function navItemLinkProps(item: NavItem, active: boolean) {
   };
 }
 export const bottomNavItems: NavItem[] = [
-  { to: "/", label: "Home", icon: HouseIcon },
+  { to: "/", label: "Today", icon: SunHorizonIcon },
   {
     to: "/inventory",
     entity: "inventory",
@@ -161,7 +161,7 @@ export const bottomNavItems: NavItem[] = [
   { to: "/search", label: "Search", icon: MagnifyingGlassIcon },
 ];
 export const publicNavItems: NavItem[] = [
-  homeNavItem,
+  todayNavItem,
   { to: "/docs", label: "Docs", icon: FileTextIcon },
 ];
 export function getEntityNavGroup(

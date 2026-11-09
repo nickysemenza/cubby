@@ -3,13 +3,14 @@ import SwiftUI
 
 /// What scanning turned up beyond this bin's own expected rows: products stocked elsewhere, and
 /// bins that scanned as inside this one but live somewhere else. Strays move as soon as you press
-/// "Move here"; adoptions only take effect when the bin's "Done" commits.
+/// "Move N here now"; adoptions only take effect when the bin's Done commits.
 struct BinStraysSheet: View {
     let session: RecountSession
     @Environment(\.dismiss) private var dismiss
     @Environment(AppModel.self) private var model
     @State private var resolving = false
     @State private var summary: String?
+    @State private var failure: String?
 
     var body: some View {
         NavigationStack {
@@ -21,26 +22,34 @@ struct BinStraysSheet: View {
             .listStyle(.plain)
             .fieldGuideScreen()
             .overlay {
-                if session.strays.isEmpty && session.adoptions.isEmpty && summary == nil {
+                if session.strays.isEmpty && session.adoptions.isEmpty && summary == nil && failure == nil {
                     ContentUnavailableView(
-                        "Nothing queued",
+                        "No items to move here",
                         systemImage: "tray",
                         description: Text(
-                            "Scans that turn up elsewhere, or a bin scanned as inside this one, queue here.")
+                            "Products stocked elsewhere and bins scanned inside this one appear here.")
                     )
                 }
             }
             .navigationTitle("Found while scanning")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(resolving ? "Moving…" : "Move here") { Task { await resolveStrays() } }
-                        .disabled(resolving || session.strays.isEmpty)
+                // Strays move as soon as this runs; adoptions wait for the bin's Done, so the
+                // action only exists while there is a stray to move.
+                if !session.strays.isEmpty || resolving {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button(resolving ? "Moving…" : moveTitle) { Task { await resolveStrays() } }
+                            .disabled(resolving)
+                    }
                 }
             }
         }
         .nativeSheet(.editor)
         .interactiveDismissDisabled(resolving)
+    }
+
+    private var moveTitle: String {
+        session.strays.count == 1 ? "Move 1 here now" : "Move \(session.strays.count) here now"
     }
 
     @ViewBuilder
@@ -91,7 +100,7 @@ struct BinStraysSheet: View {
                         .font(.fieldGuideBody)
                         .foregroundStyle(FieldGuideTokens.graphite)
                         .lineLimit(2)
-                    Text("Adopted when you press Done.")
+                    Text("Adopted when you finish this bin.")
                         .font(.fieldGuideLabel)
                         .foregroundStyle(FieldGuideTokens.graphiteSecondary)
                 }
@@ -104,6 +113,12 @@ struct BinStraysSheet: View {
 
     @ViewBuilder
     private var summaryRow: some View {
+        if let failure {
+            // The Move action stays in the toolbar, so the notice offers no second retry.
+            ActionFailureNotice(title: "Couldn't move", message: failure)
+                .listRowBackground(FieldGuideTokens.canvas)
+                .listRowSeparator(.hidden)
+        }
         if let summary {
             Text(summary)
                 .font(.fieldGuideBody)
@@ -116,6 +131,7 @@ struct BinStraysSheet: View {
     private func resolveStrays() async {
         resolving = true
         defer { resolving = false }
+        failure = nil
         do {
             if let result = try await session.resolveStrays() {
                 let skipped = result.skipped.isEmpty ? "" : " · \(result.skipped.count) skipped"
@@ -125,9 +141,9 @@ struct BinStraysSheet: View {
             // A 401 here means the middleware already dropped the credential; tell the app so it
             // follows the session out instead of leaving this sheet open on a dead login.
             model.handle(error)
-            summary = error.detail?.message ?? "HTTP \(error.status)"
+            failure = error.userMessage
         } catch {
-            summary = String(describing: error)
+            failure = error.userMessage
             Diagnostics.report(error, context: "audit.resolveStrays")
         }
     }

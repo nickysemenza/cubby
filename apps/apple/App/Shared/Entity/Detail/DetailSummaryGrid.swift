@@ -2,7 +2,9 @@ import CubbyKit
 import SwiftUI
 
 /// The declaration owns order and meaning; native supplies one renderer for each summary kind.
-/// The first four cells are the record's glance, laid out two across under the hero.
+/// The first four cells are the record's glance under the hero. Adjacent short scalar cells sit
+/// two across; a cell carrying record links, related records, a report or a chart takes the full
+/// width, so a linked Product or Purchase name is not truncated to half a phone row.
 struct DetailSummaryGrid: View {
     let descriptor: EntityDescriptor
     let row: EntityRow
@@ -38,14 +40,14 @@ struct DetailSummaryGrid: View {
             } else {
                 Grid(alignment: .topLeading, horizontalSpacing: FieldGuideTokens.Space.md, verticalSpacing: 0)
                 {
-                    ForEach(Array(stride(from: 0, to: glance.count, by: 2)), id: \.self) { index in
-                        GridRow {
-                            container(glance[index])
-                            if index + 1 < glance.count {
-                                container(glance[index + 1])
-                            } else {
-                                Color.clear.gridCellUnsizedAxes([.horizontal, .vertical])
+                    ForEach(glanceRows(glance), id: \.first?.id) { pair in
+                        if pair.count == 2 {
+                            GridRow {
+                                container(pair[0])
+                                container(pair[1])
                             }
+                        } else if let only = pair.first {
+                            GridRow { container(only).gridCellColumns(2) }
                         }
                     }
                 }
@@ -55,10 +57,50 @@ struct DetailSummaryGrid: View {
         .buttonStyle(.borderless)
     }
 
+    /// Glance rows in declared order: two adjacent scalar cells share a row; anything else stands
+    /// alone at full width. Order never changes, only how many cells share a row.
+    private func glanceRows(_ glance: [DetailSummarySlot]) -> [[DetailSummarySlot]] {
+        var rows: [[DetailSummarySlot]] = []
+        var index = 0
+        while index < glance.count {
+            if isScalar(glance[index]), index + 1 < glance.count, isScalar(glance[index + 1]) {
+                rows.append([glance[index], glance[index + 1]])
+                index += 2
+            } else {
+                rows.append([glance[index]])
+                index += 1
+            }
+        }
+        return rows
+    }
+
+    /// A short read-only fact (an amount, a date, a status): a fields cell whose fields are not
+    /// links, lists or prose. Related records, reports and charts are rich and take a full row.
+    private func isScalar(_ slot: DetailSummarySlot) -> Bool {
+        guard case .fields(let keys) = slot.kind, keys.count == 1 else { return false }
+        return keys.allSatisfy { key in
+            guard let field = descriptor.field(key) else { return false }
+            return field.reference == nil && field.itemsPath == nil && field.controlKind != .textarea
+                && field.valueSchema == nil && field.detailRenderer == nil
+        }
+    }
+
     private func container(_ slot: DetailSummarySlot) -> some View {
-        SummaryCellContainer(title: slot.title) { cell(slot) }
+        SummaryCellContainer(title: summaryTitle(slot)) { cell(slot) }
             .id("\(descriptor.key.rawValue)|\(row.id)|\(slot.id)")
             .accessibilityIdentifier("detail.summary.\(slot.id)")
+    }
+
+    private func summaryTitle(_ slot: DetailSummarySlot) -> String? {
+        if case .fields(let keys) = slot.kind, keys.count == 1,
+            let field = descriptor.field(keys[0]),
+            field.label.caseInsensitiveCompare(slot.title) == .orderedSame,
+            field.detailRenderer == nil
+        {
+            // The field keeps its visible label and explanation; do not repeat it above the cell.
+            return nil
+        }
+        return slot.title
     }
 
     @ViewBuilder private func cell(_ slot: DetailSummarySlot) -> some View {
@@ -101,7 +143,7 @@ struct SummaryCellEmpty: PreferenceKey {
 
 /// Keep the loader mounted after an empty read so a mutation can make the cell applicable again.
 private struct SummaryCellContainer<Content: View>: View {
-    let title: String
+    let title: String?
     @ViewBuilder let content: () -> Content
     @State private var empty = false
 
@@ -109,7 +151,7 @@ private struct SummaryCellContainer<Content: View>: View {
         VStack(alignment: .leading, spacing: empty ? 0 : FieldGuideTokens.Space.sm) {
             if !empty {
                 Divider()
-                Text(title).font(.subheadline.weight(.semibold))
+                if let title { Text(title).font(.subheadline.weight(.semibold)) }
             }
             content()
         }

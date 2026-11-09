@@ -8,15 +8,75 @@ enum TodaySectionState<Value> {
     case failed(String)
 }
 
-/// The phone and readable-width Today reading order: tasks, meals, then views. Activity and the
-/// audit feed live on the Activity tab there (DESIGN.md Today order); only the Mac dashboard adds them.
+/// The phone and readable-width Today reading order: tasks, meals, nutrition, views, then Work
+/// (attention counts, All work and Problems). The audit feed stays in Work › All changes there;
+/// only the Mac dashboard shows recent changes inline.
 enum TodaySection: String, CaseIterable, Identifiable {
     case tasks = "Next up"
     case meals = "Meals today"
     case nutrition = "Nutrition today"
     case views = "Your views"
+    case work = "Work"
 
     var id: Self { self }
+}
+
+/// What Today's + menu and empty sections create.
+enum TodayCreation: String, Identifiable {
+    case task, meal
+    var id: String { rawValue }
+    var key: EntityKey { self == .task ? .task : .meal }
+}
+
+/// Today's Work rows: how many Runs and Image jobs match their entity's declared `attention`
+/// saved view, read as the generic list's server total. A row hides while loading and at zero;
+/// a failed count keeps the row without a number so the path stays reachable.
+@MainActor
+@Observable
+final class WorkAttentionModel {
+    enum Count: Equatable {
+        case loading
+        case known(Int)
+        case unavailable
+    }
+
+    static let savedView = "attention"
+
+    private(set) var runs: Count
+    private(set) var imageJobs: Count
+
+    init(runs: Count = .loading, imageJobs: Count = .loading) {
+        self.runs = runs
+        self.imageJobs = imageJobs
+    }
+
+    func refresh(client: CubbyClient) async {
+        async let runs = Self.count(.run, client: client)
+        async let imageJobs = Self.count(.imageJob, client: client)
+        let (runCount, imageJobCount) = await (runs, imageJobs)
+        self.runs = Self.merged(runCount, previous: self.runs)
+        self.imageJobs = Self.merged(imageJobCount, previous: self.imageJobs)
+    }
+
+    /// A failed refresh keeps the last known total rather than dropping a nonzero row.
+    private static func merged(_ next: Count, previous: Count) -> Count {
+        if next == .unavailable, case .known = previous { return previous }
+        return next
+    }
+
+    private static func count(_ key: EntityKey, client: CubbyClient) async -> Count {
+        let descriptor = EntityCatalog[key]
+        guard let view = descriptor.presentation.savedViews.first(where: { $0.id == savedView }) else {
+            return .unavailable
+        }
+        do {
+            let page = try await client.list(descriptor, pageSize: 1, filters: view.filterState)
+            return page.meta.totalCount.map(Count.known) ?? .unavailable
+        } catch {
+            Diagnostics.report(error, context: "today.attention.\(key.rawValue)")
+            return .unavailable
+        }
+    }
 }
 
 /// Screen state for Today. Each section owns its request, activity, and error so completed data
@@ -156,6 +216,23 @@ struct TodayBriefingPresentation {
     let tasks: EntityReportOut
     let stats: EntityReportOut
     let moreReady: [String]
+
+    /// No records block has a row: the server's empty text shows and Today offers New task.
+    var hasNoTasks: Bool {
+        tasks.blocks.allSatisfy { block in
+            if case .records(let records) = block { return records.rows.isEmpty }
+            return true
+        }
+    }
+
+    /// The bounded stats as "Overdue 0 · Due this week 2", from the server's own labels and text.
+    var statsSummary: String? {
+        let figures = ReportPresentation(stats).blocks.flatMap { block -> [ReportPresentation.Figure] in
+            if case .stats(_, let figures) = block { return figures }
+            return []
+        }
+        return figures.isEmpty ? nil : figures.map { "\($0.label) \($0.text)" }.joined(separator: " · ")
+    }
 
     init(_ report: EntityReportOut) {
         var tasks = report

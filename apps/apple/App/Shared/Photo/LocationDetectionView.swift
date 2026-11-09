@@ -11,13 +11,9 @@ struct LocationDetectionView: View {
             VStack(alignment: .leading, spacing: FieldGuideTokens.Space.lg) {
                 switch model.phase {
                 case .detecting:
+                    // The indicator's own label is the one visible and spoken loading text.
                     Panel {
-                        HStack(spacing: FieldGuideTokens.Space.md) {
-                            LoadingIndicator(label: "Reading the photo").controlSize(.small)
-                            Text("Reading the photo…")
-                                .font(.fieldGuideBody)
-                                .foregroundStyle(FieldGuideTokens.graphiteSecondary)
-                        }
+                        LoadingIndicator(label: "Reading the photo…").controlSize(.small)
                     }
                 case .failed(let message):
                     LoadFailureView(title: "Couldn't read the photo", message: message) {

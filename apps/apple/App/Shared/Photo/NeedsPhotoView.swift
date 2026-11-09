@@ -36,9 +36,9 @@ struct NeedsPhotoView: View {
         case .loading:
             LoadingIndicator.screen(label: "Loading needs-a-photo queue")
         case .failed(let message):
-            ContentUnavailableView(
-                "Couldn't load the queue", systemImage: "exclamationmark.triangle", description: Text(message)
-            )
+            LoadFailureView(title: "Couldn't load the queue", message: message) {
+                await needs.load()
+            }
         case .ready:
             ScrollView {
                 VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xl) {

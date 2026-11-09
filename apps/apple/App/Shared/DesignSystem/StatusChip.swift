@@ -76,7 +76,7 @@ extension StatusChip {
 }
 
 #Preview("Status chips") {
-    HStack(spacing: FieldGuideTokens.Space.sm) {
+    WrappingFactsLayout(spacing: FieldGuideTokens.Space.sm) {
         StatusChip(text: "Added", tone: .positive)
         StatusChip(text: "Confirmed")
         StatusChip(text: "Elsewhere", tone: .warning)

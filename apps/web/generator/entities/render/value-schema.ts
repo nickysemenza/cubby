@@ -18,6 +18,7 @@ export type EntityForPrefix = (prefix: string) => string | null;
 
 /** The JSON Schema keywords `z.toJSONSchema` emits for an input type that this reads. */
 type JsonSchema = {
+  title?: string | undefined;
   $ref?: string | undefined;
   type?: string | string[] | undefined;
   anyOf?: JsonSchema[] | undefined;
@@ -38,6 +39,7 @@ type JsonSchema = {
 };
 const jsonSchema: z.ZodType<JsonSchema> = z.lazy(() =>
   z.object({
+    title: z.string().optional(),
     $ref: z.string().optional(),
     type: z.union([z.string(), z.array(z.string())]).optional(),
     anyOf: z.array(jsonSchema).optional(),
@@ -110,7 +112,7 @@ const fieldsOf = (
     .map(([key, property]) => {
       const field = {
         key,
-        label: humanize(key),
+        label: property.title ?? humanize(key),
         required: required.has(key),
         schema: convert(property, {
           ...context,

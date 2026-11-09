@@ -215,6 +215,12 @@ struct EntityFieldControl: View {
         model.isRequired(field) ? "\(field.label) *" : field.label
     }
 
+    /// The prompt an empty input shows. "None" is reserved for a value that may stay empty; a
+    /// required input says so, and a number never shows "0", which reads as a saved zero.
+    private var emptyPrompt: String {
+        field.placeholder ?? (model.isRequired(field) ? "Required" : "None")
+    }
+
     /// A select's choices: the declared `controlOptions`, else the same-named list filter's
     /// (declared, or the route's enum), else at least the current value so it is not blank.
     private var selectOptions: [(value: String, label: String)] {
@@ -238,7 +244,7 @@ struct EntityFieldControl: View {
                 emojiControl
             } else {
                 LabeledContent(label) {
-                    TextField(label, text: stringBinding, prompt: Text(field.placeholder ?? "None"))
+                    TextField(label, text: stringBinding, prompt: Text(emptyPrompt))
                         .multilineTextAlignment(.trailing)
                         .labelsHidden()
                 }
@@ -247,9 +253,11 @@ struct EntityFieldControl: View {
             VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
                 Text(label).font(.fieldGuideLabel).foregroundStyle(.secondary)
                 TextField(
-                    label, text: stringBinding, prompt: Text(field.placeholder ?? "None"), axis: .vertical
+                    label, text: stringBinding, prompt: Text(emptyPrompt), axis: .vertical
                 )
-                .lineLimit(3...8)
+                // An empty note starts as one line and grows while typing, so optional prose does
+                // not push later fields below the fold.
+                .lineLimit(1...8)
                 .labelsHidden()
             }
         case .checkbox:
@@ -276,7 +284,7 @@ struct EntityFieldControl: View {
                         get: { value.doubleValue },
                         set: { model.draft[key] = $0.map(JSONValue.number) ?? .null }),
                     format: .number,
-                    prompt: Text(field.placeholder ?? "0")
+                    prompt: Text(emptyPrompt)
                 )
                 .multilineTextAlignment(.trailing)
                 .labelsHidden()
@@ -367,7 +375,7 @@ struct EntityFieldControl: View {
 
     private var textControl: some View {
         LabeledContent(label) {
-            TextField(label, text: stringBinding, prompt: Text(field.placeholder ?? "None"))
+            TextField(label, text: stringBinding, prompt: Text(emptyPrompt))
                 .multilineTextAlignment(.trailing)
                 .labelsHidden()
                 .accessibilityIdentifier("editor.\(model.descriptor.key.rawValue).\(key)")
@@ -393,7 +401,7 @@ struct EntityFieldControl: View {
                         set: { entry in
                             model.draft[key] = entry.last.map { .string(String($0)) } ?? .null
                         }),
-                    prompt: Text(field.placeholder ?? "None").font(.body)
+                    prompt: Text(emptyPrompt).font(.body)
                 )
                 .font(value.stringValue?.isEmpty == false ? .largeTitle : .body)
                 .multilineTextAlignment(.trailing)
@@ -420,7 +428,7 @@ struct EntityFieldControl: View {
                 set: { model.draft[key] = $0.map(JSONValue.number) ?? .null }),
             // Entry parses a plain amount; the stored dollars display through `ValueFormat`.
             format: .number.precision(.fractionLength(0...2)).locale(Locale(identifier: "en_US")),
-            prompt: Text(field.placeholder ?? "0.00")
+            prompt: Text(emptyPrompt)
         )
         .multilineTextAlignment(.trailing)
         .labelsHidden()
