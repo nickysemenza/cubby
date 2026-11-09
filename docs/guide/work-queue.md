@@ -20,7 +20,8 @@ can appear in more than one view when it has different actionable work.
 Home and Work disclose the same incomplete Project or diagnostic publications.
 Home leaves its total unavailable while those checks are incomplete and labels
 an empty known roster without claiming that nothing needs attention.
-Gap sources also report records whose quality inputs have not been published.
+Gap and Problem sources also report records whose inputs have not been
+published, named by their declared input label or Problem title.
 Those records contribute completeness metadata, never guessed gaps or actionable
 rows. The same candidate filters, routing, member fence and planned-Purchase
 deferral apply; negative reason filters cannot establish that unknown records

@@ -143,7 +143,7 @@ function NeedsYouContent() {
                       }
                     >
                       <WorkRowLink row={row} />
-                      <span className="min-w-0 truncate text-muted-foreground">
+                      <span className="max-w-1/2 shrink-0 truncate text-muted-foreground">
                         {row.reason}
                       </span>
                     </HomeRow>

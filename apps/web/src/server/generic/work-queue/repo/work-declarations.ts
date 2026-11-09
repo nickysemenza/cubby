@@ -369,6 +369,7 @@ export const entityProblemSources = (
       entity,
       link: { kind: "record" },
       reasons: [{ key: definition.key, label: definition.title }],
+      inputLabel: definition.title,
       actions: [
         ...workProblemActions(definition.key),
         // The reason group continues in the entity list with the Problem's
