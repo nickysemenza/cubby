@@ -20,7 +20,7 @@ import {
   MAIL_DISCOVERY_ADMISSION_WAIT,
 } from "@cubby/schemas/mailbox-research";
 import { and, eq, inArray, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
-import type { z } from "zod";
+import { z } from "zod";
 
 import type { UnparsedError } from "~/lib/error-utils";
 import type { Database } from "~/server/db";
@@ -50,6 +50,7 @@ import {
 import type { GmailProvider } from "~/server/domains/purchase-import/repo/gmail/types";
 import { mailImportEnabled } from "~/server/domains/purchase-import/repo/mail-import-settings";
 import { HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION } from "~/server/domains/purchase-import/repo/mail-source-identity";
+import { readRun } from "~/server/domains/run/repo/ai-work-state";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { recordPaidGrant } from "~/server/domains/run/repo/paid-grant";
 import { recordRunProgress } from "~/server/domains/run/repo/run-progress";
@@ -58,7 +59,9 @@ import {
   currentJobExecution,
   withJobPhase,
 } from "~/server/generic/jobs/context";
+import { JobPausedError } from "~/server/generic/jobs/errors";
 import { enqueueJob } from "~/server/generic/jobs/repo/producer";
+import type { PreparedJobPage } from "~/server/generic/jobs/types";
 import type { WorkflowRunParams } from "~/server/workflows/runs/contract";
 import {
   claimWorkflowRun,
@@ -950,6 +953,58 @@ export async function continueMailDiscovery(
     clientKey,
     reconcileRoster: false,
   });
+}
+
+const discoveryCursor = z.object({
+  phase: z.enum(["list", "save"]),
+  index: z.number().int().nonnegative(),
+  more: z.boolean().optional(),
+});
+
+/**
+ * One `run.execute` quantum: list a provider page, then save it in batches,
+ * then finish and admit the next pass. The Job cursor carries the phase.
+ */
+export async function advanceMailDiscoveryPage(
+  db: Database,
+  params: WorkflowRunParams,
+  claimed: PreparedJobPage["page"]["cursor"] | null,
+  ports: DiscoveryPorts = {},
+): Promise<PreparedJobPage["page"]> {
+  const resumed = await beginMailDiscovery(db, params);
+  if (resumed.kind === "stopped") return stopDiscoveryPage(db, params);
+  const cursor = discoveryCursor.parse(
+    claimed ?? { phase: "list", index: resumed.index },
+  );
+  if (cursor.phase === "list") {
+    const page = await listMailDiscovery(db, params, ports);
+    if (page.kind === "stopped") return stopDiscoveryPage(db, params);
+    return {
+      done: false,
+      cursor: { phase: "save", index: cursor.index, more: page.more },
+    };
+  }
+  const saved = await saveMailDiscoveryBatch(db, params, cursor.index, ports);
+  if (saved.kind === "stopped") return stopDiscoveryPage(db, params);
+  if (saved.kind === "more") return { done: false, cursor };
+  if (!cursor.more) {
+    await finishMailDiscovery(db, params);
+    await continueMailDiscovery(db, params);
+    return { done: true };
+  }
+  return { done: false, cursor: { phase: "list", index: cursor.index + 1 } };
+}
+
+async function stopDiscoveryPage(
+  db: Database,
+  params: WorkflowRunParams,
+): Promise<PreparedJobPage["page"]> {
+  const owner = await readRun(db, runEntityId.parse(params.runId));
+  if (owner?.status === "paused_auth")
+    throw new JobPausedError(
+      owner.dispatchError ?? "Mailbox requires authorization",
+    );
+  return { done: true };
 }
 
 export async function failMailDiscovery(
