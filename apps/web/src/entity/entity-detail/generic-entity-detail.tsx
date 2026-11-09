@@ -1,8 +1,8 @@
-import { relationshipSources } from "@cubby/schemas/connected-views";
+// Keep the catalog constructor and its universal metadata off the detail entry.
+import { relationshipSources } from "@cubby/schemas/connected-view-definitions";
 import type { CompiledEntityPresentation } from "@cubby/schemas/entity-definitions/definition";
 import { onDetailSurface } from "@cubby/schemas/entity-detail-summary";
 import { type EntityFieldModel } from "@cubby/schemas/entity-fields";
-import { entityManifest } from "@cubby/schemas/entity-manifest";
 import { entityAttachmentRead } from "@cubby/schemas/entity-read-media";
 import { isGalleryEntity } from "@cubby/schemas/entity-roster";
 import { fieldEnvelopeFor } from "@cubby/schemas/field-envelope";
@@ -411,6 +411,7 @@ function declaredSections<E extends GenericDetailEntity>(
  * Such a relation gets no count and never folds as empty.
  */
 function graphCountsRelation(
+  queryClient: QueryClient,
   entity: GenericDetailEntity,
   relation: string,
   detail: {
@@ -418,9 +419,10 @@ function graphCountsRelation(
   },
 ) {
   if (detail.relationFilterOverrides?.[relation]) return false;
-  const declared = entityManifest[entity].relationships.find(
-    (candidate) => candidate.key === relation,
-  );
+  const declared = entityMetadata(
+    queryClient,
+    entity,
+  ).descriptor.relationships.find((candidate) => candidate.key === relation);
   return (
     declared !== undefined &&
     relationshipSources(declared).every(
@@ -669,7 +671,7 @@ function FullEntityDetail<E extends GenericDetailEntity>({
   const declaredRelations = detail.sections.flatMap((section) =>
     section.kind === "relation" &&
     onDetailSurface(section, "web") &&
-    graphCountsRelation(entity, section.relation, detail)
+    graphCountsRelation(queryClient, entity, section.relation, detail)
       ? [section.relation]
       : [],
   );
