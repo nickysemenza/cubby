@@ -382,20 +382,41 @@ provider/DO/storage/telemetry calls. One Worker continues to serve all events.
 
 #### Background connection budget
 
-Every background invocation — one queue permit, the hourly cron tick, or one
-Durable Object request — holds exactly one shared two-socket pool on
-`HYPERDRIVE_BACKGROUND` (`withInvocationDb`); both database roles resolve to
-it, and it closes when the invocation finishes. Code called inline from an
-invocation that already holds a scope (a purchase dispatch delivering to its
-coordinator's services, for example) reuses that pool instead of opening a
-second one. The invariant is
+Every background invocation — one queue permit, one telemetry batch, the hourly
+cron tick, or one Durable Object request — holds exactly one shared two-socket
+pool on `HYPERDRIVE_BACKGROUND` (`withInvocationDb`); both database roles
+resolve to it, and it closes when the invocation finishes. Code called inline
+from an invocation that already holds a scope (a purchase dispatch delivering
+to its coordinator's services, for example) reuses that pool instead of opening
+a second one. The invariant is
 
-`2 × max_concurrency + cron + live Durable Object requests ≤ 40` (the background origin cap)
+`2 × (background max_concurrency + telemetry max_concurrency + cron + live Durable Object requests) ≤ 40` (the background origin cap)
 
-With `max_concurrency` 8 (`packages/shared/src/background-queue-consumer.json`)
-the queue holds at most 16 sockets and the cron 2, leaving 22 for concurrent
-coordinator and other Durable Object requests. Raise `max_concurrency` only with
-the origin cap, and only after measuring pool waits.
+Only part of it is enforced. The queue consumers' `max_concurrency` bounds
+permit and telemetry invocations: 8 background
+(`packages/shared/src/background-queue-consumer.json`) and 1 telemetry
+(`apps/web/cloudflare.config.ts`), so at most 18 sockets. The cron runs its
+backstop and the daily pass one after the other, so 2 more. Nothing bounds
+Durable Object requests except their own traffic: purchase coordinators open a
+pool per service call for each active Run, and the CalendarFeed object per
+rebuild. That leaves 20 sockets, or 10 concurrent Durable Object requests,
+before Hyperdrive queues for an origin slot; past its wait it fails the query
+with SQLSTATE 58000 "Timed out while waiting for an open slot in the pool".
+Those failures are transient (no attempts spent; see [Jobs](jobs.md)), so
+exceeding the budget slows work rather than losing it.
+
+Watch for the margin running out:
+
+- `58000` pool-slot timeouts in Sentry, grouped by the `cubby.background.unit`
+  tag, and coordinator admission faults on purchase Runs.
+- `Job.lastExecution.errorClass = 'transient'` on Job and `background.drain`
+  record rows (`drain:<unit>`), and a rising `queryMs` relative to `wallMs`.
+- Long `db.acquire` spans on queue, cron and Durable Object traces.
+- The background configuration's origin connection count in the Hyperdrive
+  dashboard approaching 40.
+
+Raise `max_concurrency` only with the origin cap, and only after measuring pool
+waits.
 
 Editing Neon's autoscaling bounds restarts the endpoint and disconnects active
 sessions; automatic resizing within those bounds does not. Apply a range change
