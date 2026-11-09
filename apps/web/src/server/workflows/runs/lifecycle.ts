@@ -24,6 +24,7 @@ import { run as runTable } from "~/server/db/retained-tables";
 import {
   lockMailDiscoveryRunAdmission,
   mailDiscoveryAdmission,
+  mailDiscoveryShouldYield,
   retainedMailDiscoveryScope,
 } from "~/server/domains/purchase-import/repo/gmail/discovery-admission";
 import { recordRunProgress as recordProgress } from "~/server/domains/run/repo/run-progress";
@@ -326,6 +327,72 @@ function currentRunClaim(params: WorkflowRunParams) {
       "Background Run execution requires its universal Job claim",
     );
   return current.claim.generation === params.attempt ? current : null;
+}
+
+/** Yield only before new domain work, never while a provider request is in flight. */
+export async function yieldClaimedMailDiscovery(
+  db: Database,
+  params: WorkflowRunParams,
+): Promise<void> {
+  if (!currentRunClaim(params)) return;
+  const runId = runEntityId.parse(params.runId);
+  const yielded = await withTransactionDatabase(db, async (tx) => {
+    const mailbox = await lockMailDiscoveryRunAdmission(tx, runId);
+    if (!mailbox) return false;
+    const [owner] = await getDb(tx)
+      .select()
+      .from(runTable)
+      .where(eq(runTable.id, runId))
+      .for("update");
+    const successor = related(runTable, (next) =>
+      eq(next.predecessorRunId, outer(runTable.id)),
+    ).exists();
+    if (
+      !owner ||
+      owner.status !== "running" ||
+      owner.deletedAt ||
+      owner.retiredAt
+    )
+      return false;
+    const input = mailboxDiscoveryInput.parse(owner.input);
+    const progress = mailboxDiscoveryProgress.parse(owner.progress);
+    if (
+      owner.ledgerPartyId !== mailbox.ledgerPartyId ||
+      input.mailboxId !== mailbox.mailboxId
+    )
+      throw new Error("Mail discovery admission identity changed");
+    if (
+      progress.attempt !== params.attempt ||
+      !(await mailDiscoveryShouldYield(tx, {
+        ...mailbox,
+        runId,
+        controlled: Boolean(input.controlled),
+        progress,
+      }))
+    )
+      return false;
+    const [queued] = await getDb(tx)
+      .update(runTable)
+      .set({
+        status: "paused",
+        failureCode: MAIL_DISCOVERY_ADMISSION_WAIT,
+        dispatchError: "Mail discovery is queued for shared search capacity",
+        progress: sql`${runTable.progress} || jsonb_build_object('admissionRequestedAt', ${new Date().toISOString()}::text)`,
+      })
+      .where(and(eq(runTable.id, runId), not(successor)))
+      .returning({ id: runTable.id });
+    // A concurrent stop, lease loss or new generation rolls back the yield.
+    if (queued) await assertWorkflowEffect(tx);
+    return Boolean(queued);
+  }).catch((error: unknown) => {
+    throw mailDiscoveryAdmissionBackpressure(error) ?? error;
+  });
+  if (yielded)
+    throw new JobDeferredError(
+      "Mail discovery yielded shared search capacity",
+      new Date(Date.now() + 15_000),
+      "provider_capacity",
+    );
 }
 
 /** A recovered universal Job restores only its own reconciled failure, under its fence. */

@@ -233,9 +233,10 @@ async function createDiscoveryPasses(
         coverage = merged;
       }
     }
-    const scopes: MailboxDiscoveryScope[] =
-      !coverage || discoveryMode(coverage) === "new_mail"
-        ? [{ kind: "mailbox" }]
+    const scopes: MailboxDiscoveryScope[] = !coverage
+      ? [{ kind: "mailbox" }]
+      : discoveryMode(coverage) === "new_mail"
+        ? [{ kind: "mailbox", mode: "new_mail" }]
         : coverage.scoped
             .filter(
               (query) =>
@@ -598,7 +599,10 @@ export async function listMailDiscovery(
       coverage,
       claimed.input.controlled || queryKey !== undefined
         ? "targeted"
-        : discoveryMode(coverage),
+        : claimed.progress.discoveryScope?.kind === "mailbox" &&
+            claimed.progress.discoveryScope.mode === "new_mail"
+          ? "new_mail"
+          : discoveryMode(coverage),
       claimed.input.controlled
         ? claimed.input.scopedQueries.map((query) => query.key)
         : queryKey !== undefined

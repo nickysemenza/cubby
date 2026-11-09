@@ -193,7 +193,11 @@ export const MAIL_DISCOVERY_CAPACITY = 4;
 export const MAIL_DISCOVERY_ADMISSION_WAIT = "mail_discovery_queued";
 export const mailboxDiscoveryScope = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("query"), key: z.string().min(1) }),
-  z.object({ kind: z.literal("mailbox") }),
+  z.object({
+    kind: z.literal("mailbox"),
+    /** Pins ordinary history demand; absent on initialization and unscoped work. */
+    mode: z.literal("new_mail").optional(),
+  }),
 ]);
 export type MailboxDiscoveryScope = z.infer<typeof mailboxDiscoveryScope>;
 export const mailboxDiscoveryProgress = z.object({

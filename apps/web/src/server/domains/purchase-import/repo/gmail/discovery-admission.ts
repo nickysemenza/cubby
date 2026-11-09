@@ -52,12 +52,28 @@ export async function lockMailDiscoveryRunAdmission(
 
 /** Explicit readmission may narrow a frozen targeted page, never its source inputs. */
 export function retainedMailDiscoveryScope(
-  input: Pick<typeof run.$inferSelect, "input" | "progress">,
+  input: Pick<
+    typeof run.$inferSelect,
+    "input" | "progress" | "status" | "failureCode"
+  >,
 ): MailboxDiscoveryScope {
   const declared = mailboxDiscoveryInput.parse(input.input);
   const progress = mailboxDiscoveryProgress.parse(input.progress);
   if (declared.controlled) return { kind: "mailbox" };
-  if (progress.discoveryScope) return progress.discoveryScope;
+  if (progress.discoveryScope) {
+    // Authorization also pauses initialization before a page freezes; only
+    // the admission-wait owner establishes legacy queued history intent.
+    if (
+      input.status === "paused" &&
+      input.failureCode === MAIL_DISCOVERY_ADMISSION_WAIT &&
+      progress.discoveryScope.kind === "mailbox" &&
+      progress.admissionClass === "automatic" &&
+      progress.phase === "paused" &&
+      !progress.page
+    )
+      return { kind: "mailbox", mode: "new_mail" };
+    return progress.discoveryScope;
+  }
   return progress.page?.scopedKey
     ? { kind: "query", key: progress.page.scopedKey }
     : { kind: "mailbox" };
@@ -66,7 +82,7 @@ export function retainedMailDiscoveryScope(
 type MailDiscoveryOwner = Pick<
   typeof run.$inferSelect,
   "id" | "status" | "failureCode"
-> & { progress: MailboxDiscoveryProgress | null };
+> & { progress: MailboxDiscoveryProgress | null; historyOnly: boolean };
 
 async function readMailDiscoveryOwners(
   db: Database,
@@ -84,6 +100,11 @@ async function readMailDiscoveryOwners(
       id: run.id,
       status: run.status,
       failureCode: run.failureCode,
+      controlled: sql<boolean>`${run.input}->'controlled' IS NOT NULL`,
+      hasFrozenPage: sql<boolean>`${run.progress}->${mailboxDiscoveryProgress.keyof().enum.page} IS NOT NULL`,
+      pageScopedKey: sql<
+        string | null
+      >`${run.progress}->${mailboxDiscoveryProgress.keyof().enum.page}->>'scopedKey'`,
       // Frozen pages contain full coverage; admission needs only these fields.
       progress: sql<unknown>`jsonb_strip_nulls(jsonb_build_object(
         'attempt', ${run.progress}->'attempt', 'phase', ${run.progress}->'phase',
@@ -133,10 +154,25 @@ async function readMailDiscoveryOwners(
         ),
       ),
     );
-  return owners.map((owner) => ({
-    ...owner,
-    progress: mailboxDiscoveryProgress.safeParse(owner.progress).data ?? null,
-  }));
+  return owners.map((owner) => {
+    const progress =
+      mailboxDiscoveryProgress.safeParse(owner.progress).data ?? null;
+    return {
+      ...owner,
+      progress,
+      // Ordinary mailbox owners are pinned to history by the listing path.
+      historyOnly:
+        progress?.discoveryScope?.kind === "mailbox" &&
+        progress.admissionClass === "automatic" &&
+        !owner.controlled &&
+        !owner.pageScopedKey &&
+        (progress.discoveryScope.mode === "new_mail" ||
+          (owner.status === "paused" &&
+            owner.failureCode === MAIL_DISCOVERY_ADMISSION_WAIT &&
+            progress.phase === "paused" &&
+            !owner.hasFrozenPage)),
+    };
+  });
 }
 
 /** Coalesce normal history demand while independent query owners finish. */
@@ -194,7 +230,9 @@ export async function mailDiscoveryAdmission(
     return "scope_busy";
   const requestTime = (owner: (typeof owners)[number]) =>
     owner.progress?.admissionRequestedAt ?? "";
-  const candidate = owners.find((owner) => owner.id === input.runId);
+  const candidate = owners.find(
+    (owner) => owner.id === input.runId && owner.status !== "running",
+  );
   const precedes = (
     owner: MailDiscoveryOwner,
     next: MailDiscoveryOwner | undefined,
@@ -235,4 +273,43 @@ export async function mailDiscoveryAdmission(
     active.length < MAIL_DISCOVERY_CAPACITY - 1
     ? "available"
     : "capacity";
+}
+
+/** A parked partial query must retain its own position against later demand. */
+export async function mailDiscoveryShouldYield(
+  db: Database,
+  input: {
+    ledgerPartyId: string;
+    mailboxId: string;
+    runId: RunId;
+    controlled: boolean;
+    progress: MailboxDiscoveryProgress;
+  },
+): Promise<boolean> {
+  const { page, discoveryScope: scope } = input.progress;
+  if (input.controlled || !scope) return false;
+  // History event coverage is atomic over a whole provider page.
+  if (page && (scope.kind === "mailbox" || page.scopedKey !== scope.key))
+    return false;
+  if (page && scope.kind === "query") {
+    const owners = await readMailDiscoveryOwners(db, input);
+    if (
+      owners.some(
+        (owner) =>
+          owner.id !== input.runId &&
+          owner.status !== "running" &&
+          (owner.progress?.discoveryScope?.kind === "query"
+            ? owner.progress.discoveryScope.key === scope.key
+            : !owner.historyOnly),
+      )
+    )
+      return false;
+  }
+  return (
+    (await mailDiscoveryAdmission(db, {
+      ...input,
+      scope,
+      recovery: input.progress.admissionClass === "recovery",
+    })) !== "available"
+  );
 }
