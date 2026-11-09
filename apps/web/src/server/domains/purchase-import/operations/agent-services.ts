@@ -21,6 +21,7 @@ import {
   stopForReviewInput,
 } from "@cubby/schemas/purchase-agent-services";
 import { supportedChatModelSchema } from "@cubby/shared/ai/models";
+import { retryWithBackoff } from "@cubby/shared/retry";
 import { sha256Uuid } from "@cubby/shared/sha256";
 import { z } from "zod";
 
@@ -81,32 +82,36 @@ export async function admissionRead<T>(
       import("~/server/errors/db-errors"),
       import("drizzle-orm"),
     ]);
-  for (let attempt = 1; ; attempt++) {
-    try {
-      return await read();
-    } catch (error: unknown) {
-      if (attempt < ADMISSION_ATTEMPTS && isTransientConnectionError(error)) {
-        await wait(250 * attempt * attempt);
-        continue;
-      }
-      const pg = findPgError(error);
-      if (!(error instanceof Error)) throw error;
-      // A budget or executability refusal is a plain Error and stays final.
-      if (!pg && !(error instanceof DrizzleQueryError)) throw error;
-      const root = pg
-        ? `${pg.code} ${pg.message ?? ""}`.trim()
-        : error.cause instanceof Error
-          ? error.cause.message
-          : "";
-      // A bare Postgres error already carries its own message.
-      const cause =
-        root && !error.message.includes(pg?.message ?? root)
-          ? `\ncause: ${root}`
-          : "";
-      throw new Error(`${ADMISSION_DATABASE_FAULT} ${error.message}${cause}`, {
-        cause: error,
-      });
-    }
+  try {
+    return await retryWithBackoff(read, {
+      delayFor: (outcome, attempt) =>
+        !outcome.ok &&
+        attempt + 1 < ADMISSION_ATTEMPTS &&
+        isTransientConnectionError(outcome.error)
+          ? 250 * (attempt + 1) ** 2
+          : null,
+      sleep: async (ms) => {
+        await wait(ms);
+      },
+    });
+  } catch (error: unknown) {
+    const pg = findPgError(error);
+    if (!(error instanceof Error)) throw error;
+    // A budget or executability refusal is a plain Error and stays final.
+    if (!pg && !(error instanceof DrizzleQueryError)) throw error;
+    const root = pg
+      ? `${pg.code} ${pg.message ?? ""}`.trim()
+      : error.cause instanceof Error
+        ? error.cause.message
+        : "";
+    // A bare Postgres error already carries its own message.
+    const cause =
+      root && !error.message.includes(pg?.message ?? root)
+        ? `\ncause: ${root}`
+        : "";
+    throw new Error(`${ADMISSION_DATABASE_FAULT} ${error.message}${cause}`, {
+      cause: error,
+    });
   }
 }
 

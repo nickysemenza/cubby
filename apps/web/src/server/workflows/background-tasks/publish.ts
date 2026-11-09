@@ -4,6 +4,7 @@ import {
   type BackgroundTaskReceipt,
 } from "@cubby/schemas/background-tasks";
 import { BACKGROUND_TASK_MESSAGE_VERSION } from "@cubby/schemas/queue-messages";
+import { retryWithBackoff } from "@cubby/shared/retry";
 import { createLogger } from "@cubby/worker-tracing";
 import { z } from "zod";
 
@@ -41,18 +42,13 @@ async function sendWake(
   message: () => WakeMessage,
   log: { source: string; exhausted: string },
 ) {
-  for (let attempt = 0; ; attempt++) {
-    try {
-      await queue.sendBatch([message()]);
-      return;
-    } catch (error) {
-      const wait = WAKE_RETRY_DELAYS_MS[attempt];
-      if (wait === undefined) {
-        logger.error(log.exhausted, { source: log.source, error });
-        return;
-      }
-      await new Promise((resolve) => setTimeout(resolve, wait));
-    }
+  try {
+    await retryWithBackoff(() => queue.sendBatch([message()]), {
+      delayFor: (outcome, attempt) =>
+        outcome.ok ? null : (WAKE_RETRY_DELAYS_MS[attempt] ?? null),
+    });
+  } catch (error) {
+    logger.error(log.exhausted, { source: log.source, error });
   }
 }
 

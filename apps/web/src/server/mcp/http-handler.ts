@@ -157,6 +157,8 @@ async function jsonRpcFailure<TError>(failure: {
     { operation: "mcp", authenticated, headers },
   ).publicError;
   const tooLarge = detail.reason === "MCP_REQUEST_TOO_LARGE";
+  // SILENT: the write classification only adds a re-read hint to an error
+  // that is already being reported; failing to classify omits the hint.
   const writes = await callWrites(tool, action).catch(() => undefined);
   const request = detail.requestId ? `; Cubby request ${detail.requestId}` : "";
   // Present only when the failure was captured (not sampled out, DSN set).
