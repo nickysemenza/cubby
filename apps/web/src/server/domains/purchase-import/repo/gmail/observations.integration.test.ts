@@ -578,6 +578,8 @@ describe("immutable Email observations", () => {
                 entityId: prediction?.emailId,
                 kind: "other",
                 status: "open",
+                // Regression: a conflict payload here made the Run unreadable.
+                proposedFix: null,
               },
             ]
           : [],

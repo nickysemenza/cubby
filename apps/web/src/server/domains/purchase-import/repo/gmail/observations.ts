@@ -244,11 +244,9 @@ export async function recordEmailClassificationObservation(
         summary:
           "Email was classified unrelated despite an accepted Purchase association",
         evidenceFingerprint: `email-classification:${observation.id}:${observation.checksum ?? "unknown"}`,
-        proposedFix: {
-          emailId: email.id,
-          predictionId: observation.id,
-          conflict: parsed.conflict,
-        },
+        // A conflict is not an executable fix; any other payload here made
+        // the Run's findings unreadable (2026-11-09).
+        proposedFix: null,
       });
     await recordChange(tx, { kind: "source", categories: ["email"] });
     return observation;
