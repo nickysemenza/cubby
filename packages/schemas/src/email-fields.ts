@@ -24,6 +24,21 @@ export const emailSearchOrigin = z.enum(["member_search", "discovery"]);
 export type EmailSearchOrigin = z.infer<typeof emailSearchOrigin>;
 
 /**
+ * Normalized order numbers an Email prints (trimmed, leading `#` removed,
+ * upper-cased), never a tracking number (`mail-rule-evidence.ts`).
+ */
+export const emailOrderKeys = z.array(z.string().min(1));
+export type EmailOrderKeys = z.infer<typeof emailOrderKeys>;
+/** Carrier tracking numbers an Email prints, upper-cased without whitespace. */
+export const emailTrackingKeys = z.array(
+  z.object({
+    carrier: z.enum(["UPS", "FedEx", "USPS"]).nullable(),
+    number: z.string().min(1),
+  }),
+);
+export type EmailTrackingKeys = z.infer<typeof emailTrackingKeys>;
+
+/**
  * How one Email relates to one Purchase, derived from stored evidence (ADR
  * 0011): an accepted import source or a reviewed link wins, then a live
  * suggestion, then a dismissal. Dismissing one order event never hides

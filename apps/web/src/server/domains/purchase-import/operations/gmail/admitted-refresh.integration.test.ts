@@ -44,9 +44,9 @@ describe("classification-only refresh of admitted Email", () => {
   const ctx = withTestDb();
   it.each([
     { status: "researching", label: "researching", ambiguous: false },
-    { status: "blocked", label: "blocked", ambiguous: false },
+    { status: "unsettled", label: "unsettled", ambiguous: false },
     { status: "completed", label: "completed", ambiguous: false },
-    { status: "blocked", label: "ambiguous historical", ambiguous: true },
+    { status: "unsettled", label: "ambiguous historical", ambiguous: true },
   ] as const)(
     "preserves $label frozen original and Run ownership without classifier calls or saved dispatch",
     async ({ status, ambiguous }) => {

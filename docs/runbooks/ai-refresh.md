@@ -127,7 +127,8 @@ genuine ambiguity wait for a relevant fingerprint change. Rediscovery reopens a
 blocked or obsolete target at most three times: a replacement row
 (`<workKey>:reopen:<n>`) joins a running Run, while the settled row keeps its
 Run, receipt and error and links the replacement through `retryEvaluationId`.
-Switching Mail import on therefore resumes the blocked Emails. Admission waits defer without consuming inference retries.
+Switching Mail import on therefore resumes the blocked Email evaluations (an
+evaluation state, distinct from the `unsettled` Email status). Admission waits defer without consuming inference retries.
 Cancelled Runs remain stopped, including their blocked/obsolete evaluations:
 rediscovery cannot replay the same fingerprint in a successor Run. A changed
 fingerprint is new work; an explicit member Run retry is still supported.

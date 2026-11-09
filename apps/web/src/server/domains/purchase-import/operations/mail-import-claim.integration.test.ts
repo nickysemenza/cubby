@@ -282,7 +282,7 @@ describe("Mail import claim", () => {
       kind: "email",
       email: { messageId: inexact.messageId },
     });
-    expect((await emailOf(unmatched)).status).toBe("blocked");
+    expect((await emailOf(unmatched)).status).toBe("unsettled");
     expect((await linkRows(unmatched)).links).toEqual([]);
     expect((await emailOf(inexact)).status).toBe("researching");
     const packages = await getDb(ctx.db)
@@ -315,6 +315,59 @@ describe("Mail import claim", () => {
     expect((await linkRows(later)).links).toEqual([
       expect.objectContaining({ decision: "linked", proposedBy: "heuristic" }),
     ]);
+  });
+
+  // An exact link spends no coordinator, so it must be unambiguous and must
+  // not drop the package evidence the coordinator would have extracted.
+  it("links a tracked notice by its sender's exact order key with its package, leaving conflicting evidence to the coordinator", async () => {
+    const { party, order, retain } = await world();
+    const target = await order("#syn-4001");
+    const other = await order("SYN-4002");
+    const tracked = await retain(
+      "exact-tracked",
+      "Your order SYN-4001 has shipped",
+      "Order #SYN-4001 is on its way via UPS. Tracking number: 1Z999AA10123456784",
+    );
+    // Its order key names one Purchase, its tracking another's package.
+    const conflicting = await retain(
+      "exact-conflicting",
+      "Your order SYN-4002 has shipped",
+      "Order #SYN-4002 is on its way via UPS. Tracking number: 1Z999AA10123456784",
+    );
+    const { owner } = await admit(party, [tracked, conflicting]);
+
+    expect(await claimMailImportWork(ctx.db, owner.id)).toMatchObject({
+      kind: "email",
+      email: { messageId: conflicting.messageId },
+    });
+    expect(await linkRows(tracked)).toMatchObject({
+      events: ["shipped"],
+      links: [
+        expect.objectContaining({
+          decision: "linked",
+          proposedBy: "heuristic",
+        }),
+      ],
+      email: { status: "completed" },
+    });
+    expect(
+      await getDb(ctx.db)
+        .select({
+          tracking: shipment.trackingNumber,
+          purchase: shipment.purchaseId,
+        })
+        .from(shipment),
+    ).toEqual([{ tracking: "1Z999AA10123456784", purchase: target.id }]);
+    expect(await linkRows(conflicting)).toMatchObject({
+      links: [],
+      email: { status: "researching" },
+    });
+    expect(other.id).not.toBe(target.id);
+    expect(await emailOf(tracked)).toMatchObject({
+      orderKeys: expect.arrayContaining(["SYN-4001"]),
+      trackingKeys: [{ carrier: "UPS", number: "1Z999AA10123456784" }],
+      mailKeysChecksum: tracked.rawChecksum,
+    });
   });
 
   it("claims an incomplete lifecycle read instead of settling its first-page match", async () => {
@@ -565,7 +618,7 @@ describe("Mail import claim", () => {
     expect(await linkRows(ruleShipped)).toMatchObject({
       events: [],
       links: [],
-      email: { status: "blocked" },
+      email: { status: "unsettled" },
     });
 
     const unrelated = await linkRows(newsletter);

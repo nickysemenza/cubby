@@ -187,6 +187,18 @@ describe("settled coordinator retirement", () => {
     await settle(settled);
     const fresh = await agentRun();
     await settle(fresh, new Date());
+    // An Email still researching under a settled-looking Run would be left
+    // with no coordinator forever: that Run is not retired.
+    const holding = await agentRun();
+    await insertWithShortcode(ctx.db, "email", {
+      ledgerPartyId: member!.id,
+      mailboxId: "synthetic-mailbox",
+      messageId: "synthetic-still-researching",
+      checksum: "a".repeat(64),
+      status: "researching",
+      runId: holding,
+    });
+    await settle(holding);
     const calls: string[] = [];
     let disposed = false;
     const coordinator = (agentId: string) => ({
@@ -219,7 +231,7 @@ describe("settled coordinator retirement", () => {
     expect(
       await retireSettledCoordinators(ctx.db, coordinator, before),
     ).toEqual({ considered: 0, retired: 0 });
-    for (const untouched of [live, fresh]) {
+    for (const untouched of [live, fresh, holding]) {
       expect(await coordinatorRetired(ctx.db, untouched)).toBe(false);
     }
   });

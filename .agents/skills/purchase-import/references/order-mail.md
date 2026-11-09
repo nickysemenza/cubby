@@ -48,6 +48,15 @@ creates an order nor changes money or inventory. A `linked` disposition may
 include `shipments: [{purchaseId, shipments}]` to record package evidence in the
 same transaction; every packet must name one of its linked `purchaseIds`.
 
+A Mail import claim already links a lifecycle Email model-free when exact
+evidence names one Purchase on its owner's account (a Shipment it already
+sourced, a tracking number matching one Shipment, or the proven sender's
+normalized order number), recording its carrier tracking through that same
+`shipments` packet with only a dated notification observation. Richer
+observations you later find in that Email still go through `shipments.record`.
+An Email resolved `unresolved` is `unsettled`; restating the same gap does not
+readmit it, only new evidence does.
+
 Lifecycle Emails can add observations to the same Shipment. Follow the
 extraction contract's nullable `distinctPackageEvidence`: ordinary tracking
 and status evidence must not force a new package. Source-local package keys

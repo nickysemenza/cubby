@@ -112,8 +112,8 @@ export function SenderAttributionDetails({
       ) : null}
       <Description size="xs">
         Saved decisions apply to future and eligible unresolved retained mail.
-        Paused, excluded or previously blocked imports keep their existing Run
-        controls. Previously imported Purchases are never rewritten here.
+        Paused or excluded imports keep their existing Run controls. Previously
+        imported Purchases are never rewritten here.
       </Description>
       <h3 className="text-sm font-semibold">
         Accepted receipt evidence · {attribution.evidenceCount}

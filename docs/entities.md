@@ -3843,6 +3843,15 @@ possible member work, so the member view reports it as unassessed rather than
 a confident zero. Gap counts read only currently declared checks, so a key a
 rules change removed stops counting before republication.
 
+Email `status` is `pending`, `researching`, `completed`, `unsettled`,
+`deleted` or `excluded`. `unsettled` replaces `blocked`: a related Email an
+import attempt left without accepted or linked evidence keeps its holder Run
+and is readmitted only by a new evidence revision (ADR 0011). Storage-only
+`orderKeys` and `trackingKeys` hold the normalized order numbers and carrier
+tracking numbers its retained content prints, valid for `mailKeysChecksum`;
+ingest writes them and the import claim recomputes missing or stale keys.
+They are exact-linking inputs, not read fields.
+
 Email metadata, original/attachment persistence, candidate/classification
 observations, `EmailReview`, `EmailPurchaseDecision`, linked Purchase writes and Mail import
 Run/source-roster changes enroll the existing quality family transactionally.

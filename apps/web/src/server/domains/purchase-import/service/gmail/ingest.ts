@@ -22,6 +22,7 @@ import {
 import type { Database } from "~/server/db";
 import { hasAcceptedEmailAssociation } from "~/server/domains/email/repo/email";
 import { discardMailAttachmentUpload } from "~/server/domains/mail/repo/mail-attachment-uploads";
+import { readRetainedMail } from "~/server/domains/mail/repo/retained-mail";
 import { originalChecksum } from "~/server/domains/purchase-import/repo/gmail/checksum";
 import { normalizeMessage } from "~/server/domains/purchase-import/repo/gmail/normalize";
 import { captureGmailOriginal } from "~/server/domains/purchase-import/repo/gmail/original-capture";
@@ -31,6 +32,7 @@ import {
   type GmailMessage,
   type GmailNormalizedMessage,
 } from "~/server/domains/purchase-import/repo/gmail/types";
+import { readEmailMailKeys } from "~/server/domains/purchase-import/repo/mail-rule-evidence";
 import { HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION } from "~/server/domains/purchase-import/repo/mail-source-identity";
 import { JobDeferredError } from "~/server/generic/jobs/errors";
 
@@ -88,7 +90,10 @@ export type GmailIngestOutcome = {
   deleted: string[];
   excluded: string[];
   unrelated: string[];
-  blocked: string[];
+  /** An attempt left this Email unsettled; its holder Run keeps it. */
+  unsettled: string[];
+  /** Related or uncertain with no retained content: nothing can import it yet. */
+  unretained: string[];
   /** Reclassify kept the current Relevance and recorded the rerun as history. */
   kept: { messageId: string; reason: ReclassifyKeptReason }[];
   /** Reclassify reached the current Relevance again. */
@@ -375,10 +380,10 @@ async function protectOriginalOutcome(
   original: { orderMailId: string; checksum: string },
   prior: PriorMessage,
 ): Promise<
-  { kind: "skipped" | "blocked" } | { kind: "saved"; orderMailId: string }
+  { kind: "skipped" | "unsettled" } | { kind: "saved"; orderMailId: string }
 > {
   const status =
-    prior?.status === "completed" || prior?.status === "blocked"
+    prior?.status === "completed" || prior?.status === "unsettled"
       ? prior.status
       : "pending";
   await saveEmail(db, {
@@ -394,7 +399,7 @@ async function protectOriginalOutcome(
     status,
   });
   if (status === "completed") return { kind: "skipped" };
-  if (status === "blocked") return { kind: "blocked" };
+  if (status === "unsettled") return { kind: "unsettled" };
   return { kind: "saved", orderMailId: original.orderMailId };
 }
 async function fetchObservedMessage(
@@ -506,7 +511,9 @@ function recordUnsavedOutcome(
 type GmailAcquisitionOutcome =
   | { kind: "saved"; orderMailId: string }
   | { kind: "kept"; reason: ReclassifyKeptReason }
-  | { kind: "unrelated" | "blocked" | "skipped" | "confirmed" };
+  | {
+      kind: "unrelated" | "unsettled" | "unretained" | "skipped" | "confirmed";
+    };
 
 async function discardPreparedGmailKeys(
   db: Database,
@@ -792,14 +799,18 @@ async function acquireEligible(
             ...recorded,
             checksum,
             classification: decision.classification,
+            // Without retained bytes nothing can import it; pending with no
+            // retained content is never admitted (`importPendingEmails`).
             status:
-              decision.classification === "unrelated" ? "completed" : "blocked",
+              decision.classification === "unrelated" ? "completed" : "pending",
           });
           if (observation)
             await recordEmailClassificationApplication(tx, observation.id);
           return {
             kind:
-              decision.classification === "unrelated" ? "unrelated" : "blocked",
+              decision.classification === "unrelated"
+                ? "unrelated"
+                : "unretained",
           };
         }
         // Routing and retained bytes publish together; failed uploads leave the prior source intact.
@@ -827,6 +838,12 @@ async function acquireEligible(
           orderMailId,
         });
         await restoreOrderMailContent(tx, orderMailId);
+        // Exact-linking keys come from the retained content, as a claim reads it.
+        const [retained] = await readRetainedMail(tx, {
+          ledgerPartyIds: [ledgerPartyId.parse(identity.ledgerPartyId)],
+          orderMailIds: [orderMailId],
+        });
+        if (retained) await readEmailMailKeys(tx, retained);
         if (input.searchActor) {
           const saved = await readEmail(tx, identity);
           if (!saved) throw new Error("Search Email was not retained");
@@ -970,7 +987,8 @@ export async function ingestGmailMessages(
     deleted: [],
     excluded: [],
     unrelated: [],
-    blocked: [],
+    unsettled: [],
+    unretained: [],
     kept: [],
     confirmed: [],
     candidatePreviews: [],

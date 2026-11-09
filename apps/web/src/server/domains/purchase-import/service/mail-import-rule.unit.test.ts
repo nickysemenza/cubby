@@ -12,7 +12,7 @@
 import { testEntityId, testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 
-import { orderIdentifiers } from "../repo/mail-rule-evidence";
+import { extractMailKeys } from "../repo/mail-rule-evidence";
 import {
   carrierNotice,
   decideMailByRule,
@@ -104,16 +104,36 @@ describe("mail import rule", () => {
     ).toBe("coordinator");
   });
 
-  it("finds printed order identifiers, not amounts or phrases", () => {
+  // Exact linking compares these keys: a tracking number read as an order
+  // number (or the reverse) links the wrong Purchase.
+  it("keeps normalized order numbers and carrier tracking apart, not amounts or phrases", () => {
+    const keys = extractMailKeys({
+      subject: "Your order #syn-1001 has shipped",
+      text: "Order number: 112-3344556-7788990. Order total $24.00. Tracking number: 1Z999AA10123456784. USPS 9400 1000 0000 0000 0000 00",
+      links: [
+        "https://www.fedex.com/fedextrack/?trknbr=123456789012",
+        "https://example.test/track?tracking_number=SYNTRACK0042",
+      ],
+    });
+    expect(keys.orderKeys).toEqual(
+      expect.arrayContaining(["SYN-1001", "112-3344556-7788990"]),
+    );
+    expect(keys.trackingKeys).toEqual(
+      expect.arrayContaining([
+        { carrier: "UPS", number: "1Z999AA10123456784" },
+        { carrier: "USPS", number: "9400100000000000000000" },
+        { carrier: "FedEx", number: "123456789012" },
+        { carrier: null, number: "SYNTRACK0042" },
+      ]),
+    );
+    expect(keys.orderKeys).not.toContain("1Z999AA10123456784");
     expect(
-      orderIdentifiers(
-        "Your order #SYN-1001 has shipped",
-        "Order number: 112-3344556-7788990. Order total $24.00.",
-      ),
-    ).toEqual(expect.arrayContaining(["SYN-1001", "112-3344556-7788990"]));
-    expect(
-      orderIdentifiers("Synthetic newsletter", "Save $24.00 today"),
-    ).toEqual([]);
+      extractMailKeys({
+        subject: "Synthetic newsletter",
+        text: "Save $24.00 today",
+        links: [],
+      }),
+    ).toEqual({ orderKeys: [], trackingKeys: [] });
   });
 
   it.each([

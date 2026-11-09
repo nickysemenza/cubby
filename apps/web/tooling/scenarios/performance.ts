@@ -494,7 +494,7 @@ export async function seedPerformanceCorpus(
         classification: historical ? "related" : "uncertain",
         classificationStage: "rule",
         classificationVersion: "synthetic-performance/v1",
-        status: historical ? "completed" : "blocked",
+        status: historical ? "completed" : "pending",
       } satisfies typeof email.$inferInsert;
       emails.push(messageRow);
       if (historicalRun)

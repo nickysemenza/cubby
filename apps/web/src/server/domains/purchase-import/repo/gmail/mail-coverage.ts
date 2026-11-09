@@ -186,8 +186,8 @@ export async function readMailCoverage(
           sql<number>`count(*) FILTER (WHERE ${email.status} = ${emailStatus.enum.pending})`.mapWith(
             Number,
           ),
-        blocked:
-          sql<number>`count(*) FILTER (WHERE ${email.status} = ${emailStatus.enum.blocked})`.mapWith(
+        unsettled:
+          sql<number>`count(*) FILTER (WHERE ${email.status} = ${emailStatus.enum.unsettled})`.mapWith(
             Number,
           ),
         linkedEmails:
@@ -737,7 +737,7 @@ export async function readMailCoverage(
         | "classified"
         | "retained"
         | "pending"
-        | "blocked"
+        | "unsettled"
         | "imported"
         | "sellerUnresolved",
     ) => counts.reduce((total, row) => total + row[field], 0);
@@ -755,7 +755,7 @@ export async function readMailCoverage(
       classified: sum("classified"),
       retained: sum("retained"),
       pending: sum("pending"),
-      blocked: sum("blocked"),
+      unsettled: sum("unsettled"),
       imported: sum("imported"),
       sellerUnresolved: sum("sellerUnresolved"),
     };

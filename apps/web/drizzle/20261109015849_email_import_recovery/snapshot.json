@@ -1,0 +1,140 @@
+{
+  "type": "diff",
+  "version": "9",
+  "dialect": "postgres",
+  "id": "76cca729-296e-4f74-a218-44bda1abc2f7",
+  "prevIds": [
+    "3a57bf3e-6886-488d-b2ba-c03a6247bac1"
+  ],
+  "footprints": [
+    {
+      "statementType": "add_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "Email",
+        "orderKeys"
+      ],
+      "writes": [
+        "s|col|public.Email.orderKeys",
+        "n|col|public.Email.orderKeys",
+        "e|col|public.Email.orderKeys"
+      ],
+      "reads": [
+        "n|tbl|public.Email",
+        "n|sch|public"
+      ]
+    },
+    {
+      "statementType": "add_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "Email",
+        "trackingKeys"
+      ],
+      "writes": [
+        "s|col|public.Email.trackingKeys",
+        "n|col|public.Email.trackingKeys",
+        "e|col|public.Email.trackingKeys"
+      ],
+      "reads": [
+        "n|tbl|public.Email",
+        "n|sch|public"
+      ]
+    },
+    {
+      "statementType": "add_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "Email",
+        "mailKeysChecksum"
+      ],
+      "writes": [
+        "s|col|public.Email.mailKeysChecksum",
+        "n|col|public.Email.mailKeysChecksum",
+        "e|col|public.Email.mailKeysChecksum"
+      ],
+      "reads": [
+        "n|tbl|public.Email",
+        "n|sch|public"
+      ]
+    },
+    {
+      "statementType": "alter_check",
+      "statementTarget": [
+        "table",
+        "public",
+        "Email"
+      ],
+      "writes": [
+        "s|ck|public.Email.Email_status_check"
+      ],
+      "reads": [
+        "n|tbl|public.Email",
+        "n|sch|public",
+        "n|col|public.Email.status",
+        "e|col|public.Email.status"
+      ],
+      "sqlHash": "a969afde4681e6ac"
+    }
+  ],
+  "deltas": [
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "Email",
+        "name": "orderKeys",
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "Email",
+        "name": "trackingKeys",
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "Email",
+        "name": "mailKeysChecksum",
+        "type": "text",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "alter",
+      "key": "checks\u0000[\"public\",\"Email\",\"Email_status_check\"]",
+      "set": {
+        "value": "\"status\" IN ('pending', 'researching', 'completed', 'unsettled', 'deleted', 'excluded')"
+      }
+    }
+  ]
+}

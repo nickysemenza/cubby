@@ -192,15 +192,24 @@ pending: nothing here starts Product research.
    Before
    claiming, it settles leading roster Emails a Mail import rule decides
    (`service/mail-import-rule.ts`, revision `MAIL_IMPORT_RULE_REVISION`)
-   through `purchase_import.mail_resolve`'s own writer, with no model call: a shipped,
-   delivered or duplicate confirmation notice (subject phrase; no refund,
+   through `purchase_import.mail_resolve`'s own writer, with no model call. A
+   related shipped, delivered or confirmation notice (subject phrase; no refund,
    cancellation, return or failure wording, including item cancellations in
-   the body) whose complete compact read's printed order identifier
-   (`purchase_cues`) names exactly one live Purchase of the sender-proof
-   Vendor (`senderProofVendor`) on the Email owner's own account there, with
-   no retained attachment bytes and an accepted import source (an unitemized
-   Purchase goes to the coordinator, which can itemize it from the notice),
-   links as that event (proposer `heuristic`, Assessment producer `rule`); an
+   the body) with a complete compact read and no retained attachment bytes
+   links as that event (proposer `heuristic`, Assessment producer `rule`) when
+   every exact rule that applies names the same one Purchase on the Email
+   owner's own account: (a) a Shipment this Email already sourced, (b) a
+   tracking key (`Email.trackingKeys`) equal to exactly one Shipment, (c) a
+   normalized order key (`Email.orderKeys`) equal to exactly one live Purchase
+   of the sender-proof Vendor (`senderProofVendor`). A disagreement, another
+   member's Shipment, or a sender proven to be another Vendor goes to the
+   coordinator. A (b)/(c) link records the Email's carrier tracking in the same
+   resolution as dated notification observations; a shipping or delivery
+   notice without recognised tracking, and a confirmation of a Purchase no
+   import has sourced, go to the coordinator. Keys come from one extractor
+   (`extractMailKeys`: `purchase_cues` identifiers minus carrier tracking;
+   UPS/USPS/FedEx formats and tracking-link parameters) and are stored at ingest
+   or recomputed when missing or stale (`readEmailMailKeys`). An
    exact USPS or FedEx carrier notice classified related records its package,
    then links only the Purchase that Shipment already holds or settles
    unresolved, and goes to the coordinator if the writer holds the package; an
@@ -274,6 +283,16 @@ pending: nothing here starts Product research.
    escalation does not block unrelated Emails. Explicit Run review, stopped
    Runs and exhausted rosters still settle. Pi's settled submission reconciles the Run
    (`run-review.ts` `reconcileSettledRun`); the daily cron expires stale Runs.
+   An unanswered submission is classified (`purchase-agent/service/settlement.ts`
+   `coordinatorFailureCode`) from Pi's reason and the last model error or
+   failed tool result the coordinator recorded (`run-agent.ts` `recordFailure`):
+   a funding stop pauses; `agent_transient` retries in `markRunFailed` as one
+   successor (`cause: retry`, escalation coordinator model) taking only the
+   Run's held unsettled Emails, at most three attempts; `agent_failed` never
+   retries. The last failed attempt carries one Run finding with the class and
+   raw error. Ending Runs, including member cancels, release unreached Emails
+   and keep claimed ones `unsettled`; retirement skips a Run still holding a
+   `researching` Email.
    Transcripts are preserved until explicit member-authorized retirement, as
    [Background work](../../../../../../../docs/jobs.md) documents. Authorized
    disposal destroys settled Runs' transcripts (`run-retirement.ts`), oldest

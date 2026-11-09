@@ -38,7 +38,12 @@ export type McpToolDefinition = {
 
 /** One durable event for a Run's coordinator. */
 export type DispatchInput = {
-  identity: { runId: string; purpose: AgentImportRunPurpose };
+  identity: {
+    runId: string;
+    purpose: AgentImportRunPurpose;
+    /** The Run's recorded coordinator model. */
+    model?: SupportedChatModel;
+  };
   operationId: string;
   generation: string;
   signal: AgentSignal;
@@ -85,6 +90,8 @@ export interface RunServices {
   /** The Run's public identity: its purpose and agent instance name. */
   loadScope(): Promise<{
     purpose: AgentImportRunPurpose;
+    /** The Run's recorded coordinator model, when it is still supported. */
+    coordinatorModel?: SupportedChatModel;
     agentId: string;
     generation: string | null;
   }>;

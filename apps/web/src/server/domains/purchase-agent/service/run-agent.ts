@@ -23,7 +23,10 @@ import {
 import type { AiUsageTransport } from "@cubby/schemas/telemetry";
 import type { GatewayResponseInfo } from "@cubby/shared/ai/gateway-request";
 import { isPaidFundingUnavailable } from "@cubby/shared/ai/gateway-request";
-import type { SupportedChatModel } from "@cubby/shared/ai/models";
+import {
+  supportedChatModelSchema,
+  type SupportedChatModel,
+} from "@cubby/shared/ai/models";
 import { piTokenUsage } from "@cubby/shared/ai/pi-providers";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { createLogger } from "@cubby/worker-tracing";
@@ -96,6 +99,8 @@ const context = BACKGROUND_CONTEXT;
 const runIdentity = z.object({
   runId: z.uuid(),
   purpose: agentImportRunPurpose,
+  /** The Run's recorded coordinator model; a transient retry records its escalation model. */
+  model: supportedChatModelSchema.optional(),
 });
 type RunIdentity = z.infer<typeof runIdentity>;
 
@@ -128,7 +133,11 @@ const STATE_KEYS = {
   progressSequence: "progress_sequence",
   /** The submission whose last model turn found no paid funding, if any. */
   fundingUnavailable: "funding_unavailable",
+  /** The latest submission's last model error or failed tool result text. */
+  lastFailure: "last_failure",
 } as const;
+
+const recordedFailure = z.object({ operationId: z.string(), text: z.string() });
 
 /**
  * One import Run's coordinator: a pi-durable conversation hosted on this
@@ -181,6 +190,15 @@ export class PurchaseImportRunAgent
       receivedEventIds: () => this.receivedEventIds(),
       fundingUnavailable: (operationId) =>
         this.readState(STATE_KEYS.fundingUnavailable) === operationId,
+      lastFailure: (operationId) => {
+        const raw = this.readState(STATE_KEYS.lastFailure);
+        const recorded = raw
+          ? recordedFailure.safeParse(JSON.parse(raw)).data
+          : undefined;
+        return recorded?.operationId === operationId
+          ? recorded.text
+          : undefined;
+      },
     },
     () => this.agentEnv.settlementPollMs ?? SETTLEMENT_POLL_MS,
   );
@@ -349,8 +367,12 @@ export class PurchaseImportRunAgent
     if (this.installed === identity.runId) return;
     const { runId, purpose } = identity;
     const manifest = importRunAgentManifest[purpose];
+    // A transient-failure retry records its escalation model as the Run's
+    // coordinator; equal primary and escalation turns escalation off.
     const models = coordinatorModelsFor(
-      manifest,
+      identity.model && !this.agentEnv.coordinatorModels
+        ? { ...manifest, model: identity.model }
+        : manifest,
       this.agentEnv.coordinatorModels,
     );
     const escalation = coordinatorEscalation({
@@ -525,6 +547,16 @@ export class PurchaseImportRunAgent
                     return reserveExtraction(call, api, context);
                   },
                   afterTool: async (call, result, api, context) => {
+                    if (result.isError)
+                      this.recordFailure(
+                        `${call.name}: ${
+                          result.output
+                            ?.flatMap((part) =>
+                              part.type === "text" ? [part.text] : [],
+                            )
+                            .join("\n") || "tool error"
+                        }`,
+                      );
                     if (
                       attempts &&
                       !call.parent &&
@@ -724,6 +756,11 @@ export class PurchaseImportRunAgent
         ? (this.readState(STATE_KEYS.latestSubmission) ?? "")
         : "",
     );
+    // The settlement classifies a failed submission from the errors since its
+    // last answered model turn.
+    if (message.stopReason === "error")
+      this.recordFailure(message.errorMessage || "model error without text");
+    else this.writeState(STATE_KEYS.lastFailure, "");
     await this.recorder.settled();
     const breakdown = this.recorder.take(CONTEXT_SCOPE);
     const responseKey = message.responseId ?? `t:${message.timestamp}`;
@@ -757,6 +794,17 @@ export class PurchaseImportRunAgent
       // Usage accounting never fails the coordinator's turn.
       this.report(error);
     }
+  }
+
+  /** Durable and bound to the latest submission, like the funding stop. */
+  private recordFailure(text: string) {
+    this.writeState(
+      STATE_KEYS.lastFailure,
+      JSON.stringify({
+        operationId: this.readState(STATE_KEYS.latestSubmission) ?? "",
+        text: text.slice(0, 4_000),
+      }),
+    );
   }
 
   private recordSettlement(settled: AgentConversationSettlement) {

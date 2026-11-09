@@ -1,4 +1,5 @@
 import { runEntityId, type RunId } from "@cubby/schemas/identifiers";
+import { agentFailureCode } from "@cubby/schemas/purchase-agent-services";
 import {
   MAIL_RUN_ROSTER_LIMIT,
   mailResearchRunInput,
@@ -238,7 +239,7 @@ export async function admitSupportingMailSource(
         `Another Mail import Run holds ${message.shortcode} (${holder.shortcode}, ${holder.status}); it stays with that Run until that Run settles it or a member resumes or retries it. Settle the current Email without it: link a lifecycle notice to the Purchase it names, or resolve it unresolved naming ${message.shortcode}. Escalating does not change this.`,
       );
   }
-  if (!["pending", "blocked"].includes(message.status))
+  if (!["pending", "unsettled"].includes(message.status))
     throw createAppError(
       "MAIL_SOURCE_ADMISSION_REFUSED",
       `A supporting original must be an Email no import has settled; ${message.shortcode} is ${message.status}.`,
@@ -332,14 +333,14 @@ export async function transferMailRunSources(
 }
 
 /**
- * A Mail import Run that fails on its own, or whose coordinator stops for
- * review before claiming every Email, returns its still-researching Emails to
- * Mail discovery; nothing else would ever admit them again. Settled and
- * `blocked` Emails (the review's subject) stay. An Email an earlier Run already
- * left unsettled stays with this Run as `blocked` instead, so a message that
- * keeps ending its import unsettled does not spend a coordinator every discovery
- * pass and does not claim research nothing is doing; a member's retry still
- * transfers it.
+ * A Mail import Run that ends (fails, is cancelled, or stops for review) before
+ * settling every Email returns the Emails no coordinator reached to Mail
+ * discovery; nothing else would ever admit them again. An Email this Run or an
+ * earlier failed Run already claimed stays with this Run as `unsettled`: a
+ * message that keeps ending its import unsettled must not spend a coordinator
+ * every discovery pass, and must not claim research nothing is doing. Only a
+ * new evidence revision (`mail-import-run.ts`), a transient-failure retry or a
+ * member's retry admits it again.
  */
 export async function releaseUnsettledMailRunSources(
   tx: DrizzleTransaction,
@@ -368,7 +369,8 @@ export async function releaseUnsettledMailRunSources(
         or(
           and(
             eq(run.status, "failed"),
-            inArray(run.failureCode, [...SELF_FAILURE_CODES]),
+            // Failures a Run reached on its own; a member's cancel is not an attempt.
+            inArray(run.failureCode, [...agentFailureCode.options]),
           ),
           eq(run.status, "needs_review"),
         ),
@@ -419,6 +421,31 @@ export async function releaseUnsettledMailRunSources(
           });
     }
   }
+  // This Run's own claims count as attempts: its coordinator reached the
+  // Email and ended without settling it.
+  const ownClaims = await tx
+    .select({ result: runOperation.result })
+    .from(runOperation)
+    .where(
+      and(
+        eq(runOperation.runId, runId),
+        eq(runOperation.kind, "claim_next_work"),
+        eq(runOperation.state, "completed"),
+      ),
+    );
+  for (const row of ownClaims) {
+    const claim = claimedMail.safeParse(row.result);
+    if (!claim.success) continue;
+    for (const source of held)
+      if (
+        source.email.mailboxId === claim.data.email.mailboxId &&
+        source.email.messageId === claim.data.email.messageId
+      )
+        attempts.set(`${runId}:${source.orderMailId}`, {
+          orderMailId: source.orderMailId,
+          unsettled: true,
+        });
+  }
   const failedBefore = new Set(
     [...attempts.values()]
       .filter((attempt) => attempt.unsettled)
@@ -428,7 +455,7 @@ export async function releaseUnsettledMailRunSources(
   if (kept.length)
     await tx
       .update(emailTable)
-      .set({ status: "blocked", updatedAt: new Date() })
+      .set({ status: "unsettled", updatedAt: new Date() })
       .where(
         and(
           eq(emailTable.runId, runId),
@@ -461,9 +488,6 @@ export async function releaseUnsettledMailRunSources(
     )
     .returning({ id: emailTable.id });
 }
-
-/** Failures the Run reached on its own; a member's cancel keeps its Emails. */
-const SELF_FAILURE_CODES = ["agent_failed", "agent_aborted"] as const;
 
 const claimedMail = z.object({
   kind: z.literal("email"),

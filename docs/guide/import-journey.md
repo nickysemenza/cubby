@@ -92,7 +92,7 @@ purchase from that Vendor has been found.
 Mail coverage starts with mailbox discovery: last recorded poll, whether a
 paginated new-mail catch-up remains, automatic import status, active discovery
 Run, current targeted searches completed/total, and separate local scanned,
-classified, retained, pending, blocked and imported counts. Imported Emails
+classified, retained, pending, unsettled and imported counts. Imported Emails
 have accepted Purchase evidence; lifecycle links alone do not count. A poll is not proof of
 completed classification, import or exhaustive history. Sender resolution separates
 unassigned, disputed and excluded addresses from genuinely multi-seller shared
@@ -241,18 +241,41 @@ result without importing again or auditing the stopped Run. At Mail batch
 settlement, every import batch is audited, and open
 commit or audit findings require review alongside any unresolved Emails.
 
-A Mail import Run that fails on its own (its coordinator fails or aborts), or
-whose coordinator stops for review before claiming every Email, returns its
-still-researching Emails to catch-up once; `blocked` Emails, the review's
-subject, stay. This release also applies when settlement revisits a Run already
-stopped for review. An Email an earlier review or self-failed Run actually
-attempted stays with the new Run: its `target_outcome` or Email claim in the
-RunOperation ledger proves the attempt; roster admission alone does not.
-A later completed outcome in that Run clears its earlier unsettled attempt.
-This keeps repeatedly attempted, unsettled messages from spending a coordinator
-every pass without pinning untouched batch members. A member's cancel keeps its Emails
-with the cancelled Run. Retrying a failed Run transfers only the Emails it
-still holds.
+A Mail import Run that ends before settling every Email (its coordinator fails
+or aborts, a member cancels it, or it stops for review) returns the Emails no
+coordinator reached to catch-up as `pending`. An Email this Run claimed, or an
+earlier review or self-failed Run attempted, stays with it as `unsettled`: its
+`target_outcome` or Email claim in the RunOperation ledger proves the attempt;
+roster admission alone does not. A later completed outcome in that Run clears
+its earlier unsettled attempt. This release also applies when settlement
+revisits a Run already stopped for review. No Run completes, and no coordinator
+is retired, while its roster still holds a `researching` Email.
+
+An `unsettled` Email is readmitted from any ended holder, failed and retired
+ones included, only when a new evidence revision appears: a newly verified
+sender mapping, new accepted Purchase evidence for an order it prints, or new
+retained bytes. Each revision admits at most one attempt, so repeatedly
+unsettled messages never spend a coordinator every pass. Retrying a failed Run
+transfers only the Emails it still holds.
+
+A failed coordinator is classified from its last model or tool error. A funding
+stop pauses the Run. A transient fault (provider or gateway 408/409/425/429/5xx,
+deadline, egress, overload, harness reset, database connection) retries
+automatically as one successor Run with that Run's unsettled Emails on the
+escalation coordinator model, at most three attempts in total, and holds back
+new automatic admission for an hour. A deterministic failure, such as a
+tool-validation loop, never retries. Either way the last failed Run carries one
+finding naming the class and the raw error, and its claimed Emails stay
+`unsettled`.
+
+Before the coordinator, the claim links a lifecycle notice without a model call
+when exact evidence names exactly one Purchase on the owner's account: a
+Shipment the Email already sourced, a tracking number equal to exactly one
+Shipment, or the sender-proven Vendor's normalized order number. Conflicting
+evidence goes to the coordinator, and so does a shipping or delivery notice
+without recognised tracking, because the link would not record its package. A
+tracking or order-number link records the Email's carrier tracking as shipment
+evidence; a confirmation links only to a Purchase an import already sourced.
 Run targets retain that Run's recorded Email outcomes. An unsettled target
 now held elsewhere names the owning Run; it never inherits that Run's live
 Email state or completion time.

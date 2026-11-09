@@ -44,7 +44,7 @@ const STATUS_PRESENTATION = {
     glyph: { phosphor: "MagnifyingGlass", sfSymbol: "magnifyingglass" },
   },
   completed: { color: "positive" },
-  blocked: {
+  unsettled: {
     color: "destructive",
     glyph: { phosphor: "WarningCircle", sfSymbol: "exclamationmark.circle" },
   },
@@ -755,6 +755,25 @@ export const { definition, readSchemas } = defineEntityModel({
       },
       { key: "searchExpiresAt", kind: "timestamp" },
       { key: "contentClearedAt", kind: "timestamp" },
+      // Exact-linking keys from the retained content whose checksum is
+      // `mailKeysChecksum`; null or stale keys are recomputed at claim time.
+      {
+        key: "orderKeys",
+        kind: "json",
+        type: {
+          module: "@cubby/schemas/email-fields",
+          export: "EmailOrderKeys",
+        },
+      },
+      {
+        key: "trackingKeys",
+        kind: "json",
+        type: {
+          module: "@cubby/schemas/email-fields",
+          export: "EmailTrackingKeys",
+        },
+      },
+      { key: "mailKeysChecksum", kind: "text" },
     ],
     relations: {
       content: { one: "orderMail", field: "orderMailId", references: "id" },

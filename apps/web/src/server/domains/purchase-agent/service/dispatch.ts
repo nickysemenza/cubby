@@ -24,7 +24,9 @@ export async function deliverPurchaseDispatch(
   }
   const { accepted } = await env
     .coordinator(scope.agentId)
-    .dispatch(dispatchInputForEvent(event, scope.purpose));
+    .dispatch(
+      dispatchInputForEvent(event, scope.purpose, scope.coordinatorModel),
+    );
   if (accepted && event.type === "start_or_resume")
     await services.updateAgentProgress({
       eventId: `coordinator-started:${event.eventId}`,

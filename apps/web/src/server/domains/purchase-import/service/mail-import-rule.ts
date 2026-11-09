@@ -1,6 +1,8 @@
 import type { VendorId } from "@cubby/schemas/identifiers";
 /** Confident unrelated outcomes and exact carrier notices bypass the coordinator.
- * Other related originals need package extraction even when their order already exists.
+ * Other related originals need package extraction even when their order
+ * already exists; the claim's exact linker (`mail-import-claim.ts`) records
+ * that package evidence itself before linking.
  */
 import type {
   MailboxClassification,
@@ -10,7 +12,7 @@ import type {
 
 import type { MailRuleCandidate } from "../repo/mail-rule-evidence";
 
-export const MAIL_IMPORT_RULE_REVISION = "mail-import-rule-2026-11-06.1";
+export const MAIL_IMPORT_RULE_REVISION = "mail-import-rule-2026-11-08.1";
 
 type RuleLifecycleEvent = Extract<
   MailEvent,
@@ -157,7 +159,10 @@ export type MailRuleEvidence = {
   senderVendorId: VendorId | null;
   /** Attachments with retained bytes, whose purpose only a model decides. */
   retainedAttachments: number;
+  /** The sender-proven Vendor's live Purchases holding a printed order key. */
   candidates: readonly MailRuleCandidate[];
+  /** Normalized order keys the Email prints, whichever Vendor holds them. */
+  orderKeys?: readonly string[];
   carrierNotice?: CarrierNotice | null;
 };
 
@@ -198,7 +203,9 @@ export function decideMailByRule(evidence: MailRuleEvidence): MailRuleDecision {
         kind: "coordinator",
         reason: "The member selected this Email despite its classification.",
       };
-    if (event || evidence.candidates.length)
+    // Candidates are scoped to a proven sender's Vendor; an unproven sender's
+    // printed order number may still be another Vendor's recorded order.
+    if (event || evidence.candidates.length || evidence.orderKeys?.length)
       return {
         kind: "coordinator",
         reason: "An unrelated classification names a recorded order.",

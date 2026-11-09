@@ -1046,7 +1046,7 @@ describe("member-only exact original relevance correction", () => {
           .set({
             runId: runEntityId.parse(runId),
             orderMailId: shell.id,
-            status: "blocked",
+            status: "unsettled",
           })
           .where(eq(emailTable.id, f.email.id));
       }

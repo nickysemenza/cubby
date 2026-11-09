@@ -65,7 +65,7 @@ it("retains reused discovery decisions without consuming queued reclassification
     classificationStage: "rule",
     classificationVersion: HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION,
     executionPolicy: "classification_only",
-    status: "blocked",
+    status: "pending",
   });
   const reclassificationId = await ensureRun(ctx.db, ctx.actor, {
     purpose: "mail_reclassify",
@@ -306,7 +306,7 @@ it("records exact deleted history handling without inventing an Email, and prese
     classificationStage: "rule",
     classificationVersion: HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION,
     executionPolicy: "classification_only",
-    status: "blocked",
+    status: "pending",
   });
   for (const messageId of [
     current.messageId,
@@ -326,7 +326,7 @@ it("records exact deleted history handling without inventing an Email, and prese
     .where(eq(email.mailboxId, mailboxId));
   expect(rows).toHaveLength(2);
   expect(rows.find((row) => row.id === current.id)?.status).toBe("deleted");
-  expect(rows.find((row) => row.id === frozen.id)?.status).toBe("blocked");
+  expect(rows.find((row) => row.id === frozen.id)?.status).toBe("pending");
   const read = await loadMailDiscoveryRead(ctx.db, owner.shortcode, {
     userId: ctx.actor.userId,
     ledgerPartyId: party.id,

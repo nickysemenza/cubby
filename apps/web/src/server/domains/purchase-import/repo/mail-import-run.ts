@@ -22,10 +22,10 @@ import {
   mailboxDiscoveryInput,
   MAILBOX_RESEARCH_VERSION,
 } from "@cubby/schemas/mailbox-research";
+import { agentFailureCode } from "@cubby/schemas/purchase-agent-services";
 import {
   runTargetOutcomeReceipt,
   runStatus,
-  runTrigger,
   mailResearchRunInput,
 } from "@cubby/schemas/run-fields";
 import { suggestionFamily, feedbackAuthority } from "@cubby/schemas/suggestion";
@@ -104,12 +104,25 @@ import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-u
 
 import { dispatchStartedRun } from "./dispatch";
 import { mailReadContent } from "./gmail/read-content";
-import { readMailRuleCandidates, orderIdentifiers } from "./mail-rule-evidence";
+import {
+  normalizedOrderIdSql,
+  normalizeOrderKey,
+  readEmailMailKeys,
+  readMailRuleCandidates,
+} from "./mail-rule-evidence";
 
 const CLASSIFICATION_RUN_PURPOSES: (typeof run.$inferSelect.purpose)[] = [
   "mail_discovery",
   "mail_reclassify",
   "ai_refresh",
+];
+
+/** A holder no coordinator is working: evidence recovery may readmit its Emails. */
+const ENDED_MAIL_IMPORT_STATUSES: (typeof run.$inferSelect.status)[] = [
+  runStatus.enum.completed,
+  runStatus.enum.needs_review,
+  runStatus.enum.failed,
+  runStatus.enum.dispatch_failed,
 ];
 
 type MailImportAdmission = {
@@ -156,6 +169,7 @@ async function importedPurchaseRechecks(
       purchaseId: purchase.shortcode,
       orderId: purchase.orderId,
       vendorId: vendor.shortcode,
+      vendorUuid: vendor.id,
       sourceId: importSourceOrder.id,
       checksum: importSourceOrder.checksum,
       outputFingerprint: importSourceOrder.outputFingerprint,
@@ -188,10 +202,8 @@ async function importedPurchaseRechecks(
         "purchaseId" in requested
           ? eq(purchase.shortcode, requested.purchaseId)
           : and(
-              inArray(purchase.orderId, [
-                ...new Set(
-                  requested.orderIds.flatMap((id) => [id, id.toUpperCase()]),
-                ),
+              inArray(normalizedOrderIdSql(purchase.orderId), [
+                ...new Set(requested.orderIds.map(normalizeOrderKey)),
               ]),
               inArray(vendor.shortcode, [...requested.vendorIds]),
             ),
@@ -209,6 +221,7 @@ async function importedPurchaseRechecks(
         purchaseId: first.purchaseId,
         orderId: first.orderId,
         vendorId: first.vendorId,
+        vendorUuid: first.vendorUuid,
         evidenceAt: new Date(
           Math.max(...sources.map((source) => source.evidenceAt.getTime())),
         ).toISOString(),
@@ -267,14 +280,18 @@ const senderRecheckRevision = (identity: {
     ),
   );
 
-/**
- * A later member edit/review, changed bytes, or newer outcome prevents reopening.
- * Raw SQL instants use UTC ISO text, never pg's host-local Date encoding.
- */
-const untouchedAutomaticUnresolved = (
-  sourceChanged = false,
-  newEvidenceAt?: Date,
-) => sql`EXISTS (
+const outcomeFreeAttempt = (sourceChanged: boolean, newEvidenceAt?: Date) =>
+  sql`(${run.endedAt} IS NOT NULL
+  AND NOT EXISTS (SELECT 1 FROM "RunOperation" outcome
+    WHERE outcome."runId" = ${run.id} AND outcome.kind = ${"target_outcome"}
+      AND outcome.result->${runTargetOutcomeReceipt.keyof().enum.target}::text->>'entityId' = ${emailTable.id}::text)
+  AND EXISTS (SELECT 1 FROM jsonb_array_elements(coalesce(${run.input}->'sources', '[]'::jsonb)) frozen
+    WHERE frozen->>'orderMailId' = ${emailTable.orderMailId}::text
+      AND frozen->>'checksum' ${sourceChanged ? sql`<>` : sql`=`} ${emailTable.checksum})
+  AND ${newEvidenceAt ? sql`${run.endedAt} < ${newEvidenceAt.toISOString()}::timestamp` : sql`true`})`;
+
+const unresolvedOutcome = (sourceChanged: boolean, newEvidenceAt?: Date) =>
+  sql`EXISTS (
   SELECT 1 FROM "RunOperation" outcome
   WHERE outcome."runId" = ${run.id}
     AND outcome.kind = ${"target_outcome"} AND outcome.state = ${runStatus.enum.completed}
@@ -295,7 +312,20 @@ const untouchedAutomaticUnresolved = (
         AND newer.result->${runTargetOutcomeReceipt.keyof().enum.target}::text->>'entityId' = ${emailTable.id}::text
         AND newer."completedAt" > outcome."completedAt")
     AND ${newEvidenceAt ? sql`outcome."completedAt" < ${newEvidenceAt.toISOString()}::timestamp` : sql`true`}
-) AND NOT EXISTS (
+)`;
+
+/**
+ * The holder Run left this Email unsettled: an automatic unresolved outcome,
+ * or (a Run that failed or stopped after claiming it) no outcome at all, with
+ * the holder's frozen roster binding the attempted checksum and its end as the
+ * attempt instant. A later member edit/review, changed bytes, or newer outcome
+ * prevents reopening.
+ * Raw SQL instants use UTC ISO text, never pg's host-local Date encoding.
+ */
+const untouchedAutomaticUnresolved = (
+  sourceChanged = false,
+  newEvidenceAt?: Date,
+) => sql`(${unresolvedOutcome(sourceChanged, newEvidenceAt)} OR ${outcomeFreeAttempt(sourceChanged, newEvidenceAt)}) AND NOT EXISTS (
   SELECT 1 FROM "EmailReview" reviewed
   WHERE reviewed.family = ${suggestionFamily.enum.mail_import_outcome}
     AND reviewed."emailId" = ${emailTable.id} AND reviewed.authority = ${feedbackAuthority.enum.member}
@@ -381,45 +411,51 @@ async function partitionOwnership(
           )
           .limit(1)
       : [];
+    // A new evidence revision readmits an unsettled Email from any ended holder,
+    // failed and retired ones included; the per-revision guard below is what
+    // keeps one revision from paying for more than one attempt.
+    if (
+      senderRevision &&
+      owner?.purpose === "mail_import" &&
+      (owner.retiredAt || ENDED_MAIL_IMPORT_STATUSES.includes(owner.status)) &&
+      message?.status === (sourceChanged ? "pending" : "unsettled") &&
+      !owner.clientKey?.includes(`sender-proof:${senderRevision}:`)
+    ) {
+      const [eligible] = await tx
+        .select({ id: emailTable.id })
+        .from(emailTable)
+        .innerJoin(run, eq(run.id, emailTable.runId))
+        .where(
+          and(
+            eq(emailTable.id, message.id),
+            untouchedAutomaticUnresolved(sourceChanged, newEvidenceAt),
+            unattemptedSenderMapping(sql`${senderRevision}`),
+          ),
+        );
+      const intent = await readEmailProtectingIntent(
+        databaseForTransaction(tx),
+        emailId.parse(message.id),
+      );
+      if (
+        eligible &&
+        intent.status === "captured" &&
+        intent.feedbackIds.length === 0 &&
+        !(await hasLiveRunJobLease(tx, owner.id, "purchase.dispatch"))
+      ) {
+        // A retired coordinator holds nothing to transfer; admit it afresh.
+        if (owner.retiredAt) fresh.push(source);
+        else
+          transfers.set(owner.id, [...(transfers.get(owner.id) ?? []), source]);
+        continue;
+      }
+      if (owner.retiredAt) continue;
+    }
     if (sourceChanged && (!owner || owner.retiredAt)) continue;
     if (
       owner &&
       !owner.retiredAt &&
       !CLASSIFICATION_RUN_PURPOSES.includes(owner.purpose)
     ) {
-      if (
-        senderRevision &&
-        owner.purpose === "mail_import" &&
-        owner.trigger === "discovery" &&
-        (owner.status === "completed" || owner.status === "needs_review") &&
-        message?.status === (sourceChanged ? "pending" : "blocked") &&
-        !owner.clientKey?.includes(`sender-proof:${senderRevision}:`)
-      ) {
-        const [eligible] = await tx
-          .select({ id: emailTable.id })
-          .from(emailTable)
-          .innerJoin(run, eq(run.id, emailTable.runId))
-          .where(
-            and(
-              eq(emailTable.id, message.id),
-              untouchedAutomaticUnresolved(sourceChanged, newEvidenceAt),
-              unattemptedSenderMapping(sql`${senderRevision}`),
-            ),
-          );
-        const intent = await readEmailProtectingIntent(
-          databaseForTransaction(tx),
-          emailId.parse(message.id),
-        );
-        if (
-          eligible &&
-          intent.status === "captured" &&
-          intent.feedbackIds.length === 0 &&
-          !(await hasLiveRunJobLease(tx, owner.id, "purchase.dispatch"))
-        ) {
-          transfers.set(owner.id, [...(transfers.get(owner.id) ?? []), source]);
-          continue;
-        }
-      }
       const transferable =
         controlledParentRunId &&
         owner.purpose === "mail_import" &&
@@ -590,12 +626,10 @@ export async function admitMailImport(
               databaseForTransaction(tx),
               {
                 ledgerPartyId: partyId,
-                orderIds: orderIdentifiers(
-                  source.subject,
-                  [content.preheader, content.bodyText]
-                    .filter(Boolean)
-                    .join("\n"),
-                ),
+                vendorId: current.vendorUuid,
+                orderKeys: (
+                  await readEmailMailKeys(databaseForTransaction(tx), source)
+                ).orderKeys,
               },
             );
             if (
@@ -748,15 +782,16 @@ export async function startMailImport(
   }));
 }
 
-/** Revisit retained related Emails that predate automatic import admission. */
-/** How long automatic admission waits after a Run fails on its own. */
-const SELF_FAILURE_BACKOFF_MS = 60 * 60 * 1000;
+/** How long automatic admission waits after a Run fails transiently. */
+const TRANSIENT_FAILURE_BACKOFF_MS = 60 * 60 * 1000;
 
 /**
  * Automatic admission waits while a Run waits for AI funding, or after the
- * latest settled Run failed on its own. A failed Run releases its Emails, so
- * admitting again at once would spin: 540 fifty-Email Runs failed in two hours
- * this way when no funding could answer.
+ * latest settled Run failed transiently (provider, gateway or database
+ * outage, or a dispatch that never started): admitting again at once would
+ * spin, as 540 fifty-Email Runs failed in two hours when no funding could
+ * answer. A deterministic failure says nothing about the next Run's Emails,
+ * so it holds nothing back; its own claimed Emails stay held as `unsettled`.
  */
 async function mailImportHeldBack(db: Database, ledgerPartyId: LedgerPartyId) {
   const party = parseEntityId("ledgerParty", ledgerPartyId);
@@ -784,10 +819,10 @@ async function mailImportHeldBack(db: Database, ledgerPartyId: LedgerPartyId) {
     .orderBy(desc(run.endedAt))
     .limit(1);
   return (
-    (latest?.failureCode === "agent_failed" ||
+    (latest?.failureCode === agentFailureCode.enum.agent_transient ||
       latest?.failureCode === runStatus.enum.dispatch_failed) &&
     latest.endedAt !== null &&
-    Date.now() - latest.endedAt.getTime() < SELF_FAILURE_BACKOFF_MS
+    Date.now() - latest.endedAt.getTime() < TRANSIENT_FAILURE_BACKOFF_MS
   );
 }
 
@@ -918,12 +953,7 @@ export async function importPendingEmails(db: Database) {
           eq(emailTable.status, "pending"),
           eq(emailTable.classification, "related"),
           eq(run.purpose, "mail_import"),
-          eq(run.trigger, "discovery"),
-          inArray(run.status, [
-            runStatus.enum.completed,
-            runStatus.enum.needs_review,
-          ]),
-          isNull(run.retiredAt),
+          inArray(run.status, ENDED_MAIL_IMPORT_STATUSES),
           notDeleted(run),
           notDeleted(emailTable),
           retainedEmailImportContentCondition(),
@@ -975,11 +1005,12 @@ export async function importPendingEmails(db: Database) {
           vendorId: sql<string>`sender_identity."vendorId"`,
           revision: sql<string>`sender_identity.revision`,
           senderEligible: sql<boolean>`${unattemptedSenderMapping(sql`sender_identity.revision`)} AND coalesce(${run.clientKey}, '') NOT LIKE ('%sender-proof:' || sender_identity.revision || ':%')`,
+          // An outcome-free attempt dates from its holder's end.
           outcomeAt:
-            sql<Date | null>`(SELECT max(prior."completedAt") FROM "RunOperation" prior
+            sql<Date | null>`coalesce((SELECT max(prior."completedAt") FROM "RunOperation" prior
           WHERE prior."runId" = ${run.id} AND prior.kind = ${"target_outcome"} AND prior.state = ${runStatus.enum.completed}
           AND prior.result->${runTargetOutcomeReceipt.keyof().enum.target}::text->>'entityId' = ${emailTable.id}::text
-          AND prior.result->${runTargetOutcomeReceipt.keyof().enum.target}::text->>'state' = ${"unresolved"})`.mapWith(
+          AND prior.result->${runTargetOutcomeReceipt.keyof().enum.target}::text->>'state' = ${"unresolved"}), ${run.endedAt})`.mapWith(
               runOperation.completedAt,
             ),
         })
@@ -1003,7 +1034,7 @@ export async function importPendingEmails(db: Database) {
               parseEntityId("ledgerParty", target.ledgerPartyId),
             ),
             eq(emailTable.mailboxId, target.mailboxId),
-            eq(emailTable.status, "blocked"),
+            eq(emailTable.status, "unsettled"),
             eq(emailTable.classification, "related"),
             or(
               isNull(emailTable.classificationVersion),
@@ -1013,12 +1044,7 @@ export async function importPendingEmails(db: Database) {
               ),
             ),
             eq(run.purpose, "mail_import"),
-            eq(run.trigger, runTrigger.enum.discovery),
-            inArray(run.status, [
-              runStatus.enum.completed,
-              runStatus.enum.needs_review,
-            ]),
-            isNull(run.retiredAt),
+            inArray(run.status, ENDED_MAIL_IMPORT_STATUSES),
             notDeleted(run),
             notDeleted(emailTable),
             retainedEmailImportContentCondition(),
@@ -1042,10 +1068,7 @@ export async function importPendingEmails(db: Database) {
         if (!content.truncated && content.nextOffset === null)
           identifiers.set(
             original.id,
-            orderIdentifiers(
-              original.subject,
-              [content.preheader, content.bodyText].filter(Boolean).join("\n"),
-            ),
+            (await readEmailMailKeys(db, original)).orderKeys,
           );
       }
       const imported = await importedPurchaseRechecks(
@@ -1064,16 +1087,11 @@ export async function importPendingEmails(db: Database) {
         purchase?: PurchaseRecheck;
       }[] = [];
       for (const row of page) {
-        const printed = new Set(
-          (identifiers.get(row.id) ?? []).flatMap((id) => [
-            id,
-            id.toUpperCase(),
-          ]),
-        );
+        const printed = new Set(identifiers.get(row.id) ?? []);
         const relevant = imported.filter(
           (candidate) =>
             candidate.vendorId === row.vendorId &&
-            printed.has(candidate.orderId) &&
+            printed.has(normalizeOrderKey(candidate.orderId)) &&
             row.outcomeAt &&
             new Date(candidate.evidenceAt) > row.outcomeAt,
         );

@@ -1,16 +1,29 @@
+import type {
+  EmailOrderKeys,
+  EmailTrackingKeys,
+} from "@cubby/schemas/email-fields";
 import {
   parseShortcodeFor,
   type LedgerPartyId,
   type ShortcodeFor,
   type VendorId,
 } from "@cubby/schemas/identifiers";
-import { and, eq, inArray, isNotNull, or } from "drizzle-orm";
+import {
+  and,
+  eq,
+  inArray,
+  isNotNull,
+  or,
+  sql,
+  type SQLWrapper,
+} from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import { productBrandNameSql } from "~/server/db/computed/product-brand-sql";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import {
+  email as emailTable,
   expense,
   product,
   importSourceOrder,
@@ -19,6 +32,7 @@ import {
   vendor,
   vendorAccount,
 } from "~/server/db/schema";
+import type { RetainedMail } from "~/server/domains/mail/repo/retained-mail";
 import {
   externalIdKey,
   findProductsByExternalIds,
@@ -27,16 +41,204 @@ import {
 import { lookupProductIdentifierSources } from "~/server/domains/product/repo/product-identifier-source";
 import { wasm } from "~/server/wasm";
 
+import { mailReadContent } from "./gmail/read-content";
 import { amazonAsin, lineIdentifierRequests } from "./writer";
 
 const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9_/-]{2,39}$/u;
 
-/** Order, invoice or tracking identifiers the Email prints (`purchase_cues`). */
-export function orderIdentifiers(subject: string | null, text: string) {
-  const { cues } = wasm.purchase_cues(`${subject ?? ""}\n${text}`);
-  return [
-    ...new Set(cues.filter((cue) => IDENTIFIER.test(cue) && /\d/u.test(cue))),
+/** An Email's exact-linking keys: order numbers and carrier tracking, kept apart. */
+export type MailKeys = {
+  orderKeys: EmailOrderKeys;
+  trackingKeys: EmailTrackingKeys;
+};
+type Carrier = EmailTrackingKeys[number]["carrier"];
+
+/**
+ * An order number as keys and Purchase lookups compare it: trimmed, leading
+ * `#` removed, upper-cased. Hyphens and suffixes stay, so an Amazon
+ * `NNN-NNNNNNN-NNNNNNN` id or a split-shipment `-2` remains its own key.
+ */
+export const normalizeOrderKey = (value: string) =>
+  value.trim().replace(/^#+/u, "").trim().toUpperCase();
+/** `normalizeOrderKey` for a stored order id column. */
+export const normalizedOrderIdSql = (column: SQLWrapper) =>
+  sql<string>`upper(btrim(regexp_replace(btrim(${column}), '^#+', '')))`;
+
+/** Shipment matching compares numbers this way (`shipment/repo/evidence.ts`). */
+const normalizeTracking = (value: string) =>
+  value.replaceAll(/\s/gu, "").toUpperCase();
+
+const UPS_NUMBER = /^1Z[0-9A-Z]{16}$/u;
+// USPS IMpb: 20–22 or 26 digits from 91–95, optionally behind a 420+ZIP prefix.
+const USPS_NUMBER = /^(?:420\d{5}(?:\d{4})?)?(9[1-5](?:\d{18,20}|\d{24}))$/u;
+const USPS_INTERNATIONAL = /^[A-Z]{2}\d{9}US$/u;
+const FEDEX_LENGTHS = new Set([12, 15, 20, 22]);
+const UPS_IN_TEXT = /\b1Z[0-9A-Z]{16}\b/giu;
+const USPS_INTERNATIONAL_IN_TEXT = /\b[A-Z]{2}\d{9}US\b/gu;
+// Contiguous digits, or the space-grouped form carriers print (9400 1000 ...).
+const DIGITS_IN_TEXT =
+  /(?<![\dA-Za-z])(?:\d{4}(?: \d{4}){2,6}(?: \d{1,4})?|\d{12,34})(?![\dA-Za-z])/gu;
+const FEDEX_CONTEXT = /fedex|track|shipment|package/iu;
+const TRACKING_PARAMS = new Set([
+  "trknbr",
+  "tracknum",
+  "tracknums",
+  "tracking_number",
+  "trackingnumber",
+  "tracknumbers",
+  "tlabels",
+]);
+
+function carrierFromHost(href: string): Carrier {
+  try {
+    const host = new URL(href).hostname.toLowerCase();
+    if (/(?:^|\.)ups\.com$/u.test(host)) return "UPS";
+    if (/(?:^|\.)fedex\.com$/u.test(host)) return "FedEx";
+    if (/(?:^|\.)usps\.(?:com|gov)$/u.test(host)) return "USPS";
+  } catch {
+    // SILENT: an unparseable link names no carrier.
+  }
+  return null;
+}
+
+/** A carrier the number's own format proves, else null. */
+function carrierFromNumber(number: string): Carrier {
+  if (UPS_NUMBER.test(number)) return "UPS";
+  if (USPS_NUMBER.test(number) || USPS_INTERNATIONAL.test(number))
+    return "USPS";
+  return null;
+}
+
+/**
+ * Carrier tracking numbers an Email prints: UPS `1Z…`, USPS IMpb and
+ * international formats, FedEx 12/15/20/22 digits only beside FedEx or
+ * tracking wording in a FedEx Email, and tracking-link query parameters.
+ */
+function trackingKeys(text: string, links: readonly string[]) {
+  const found = new Map<string, Carrier>();
+  const add = (raw: string, carrier: Carrier) => {
+    const usps = USPS_NUMBER.exec(normalizeTracking(raw));
+    const number = usps?.[1] ?? normalizeTracking(raw);
+    if (!found.get(number)) found.set(number, carrier);
+  };
+  for (const match of text.matchAll(UPS_IN_TEXT)) add(match[0], "UPS");
+  for (const match of text.matchAll(USPS_INTERNATIONAL_IN_TEXT))
+    add(match[0], "USPS");
+  const fedexEmail =
+    /fedex/iu.test(text) ||
+    links.some((href) => carrierFromHost(href) === "FedEx");
+  for (const match of text.matchAll(DIGITS_IN_TEXT)) {
+    const number = normalizeTracking(match[0]);
+    if (USPS_NUMBER.test(number)) add(number, "USPS");
+    else if (
+      fedexEmail &&
+      FEDEX_LENGTHS.has(number.length) &&
+      FEDEX_CONTEXT.test(text.slice(Math.max(0, match.index - 60), match.index))
+    )
+      add(number, "FedEx");
+  }
+  for (const href of links) {
+    let params: URLSearchParams;
+    try {
+      params = new URL(href).searchParams;
+    } catch {
+      // SILENT: an unparseable link carries no tracking parameter.
+      continue;
+    }
+    for (const [name, value] of params)
+      if (TRACKING_PARAMS.has(name.toLowerCase()))
+        for (const part of value.split(/[,\s]+/u)) {
+          const number = normalizeTracking(part);
+          if (/^[A-Z0-9]{8,40}$/u.test(number) && /\d/u.test(number))
+            add(number, carrierFromHost(href) ?? carrierFromNumber(number));
+        }
+  }
+  return [...found].map(([number, carrier]) => ({ carrier, number }));
+}
+
+/**
+ * The one extractor every caller shares. Order keys are the identifiers
+ * `purchase_cues` reads (order, invoice, receipt, confirmation and similar
+ * cues) minus anything recognised as carrier tracking.
+ */
+export function extractMailKeys(input: {
+  subject: string | null;
+  text: string;
+  links: readonly string[];
+}): MailKeys {
+  const body = `${input.subject ?? ""}\n${input.text}`;
+  const tracking = trackingKeys(body, input.links);
+  const numbers = new Set(tracking.map((key) => key.number));
+  const { cues } = wasm.purchase_cues(body);
+  const orderKeys = [
+    ...new Set(
+      cues
+        .filter((cue) => IDENTIFIER.test(cue.trim()) && /\d/u.test(cue))
+        .map(normalizeOrderKey)
+        .filter(
+          (key) =>
+            key.length > 0 &&
+            !numbers.has(normalizeTracking(key)) &&
+            carrierFromNumber(normalizeTracking(key)) === null,
+        ),
+    ),
   ];
+  return { orderKeys, trackingKeys: tracking };
+}
+
+/** The keys of one retained original, from the compact text its read shows. */
+function retainedMailKeys(
+  mail: Pick<RetainedMail, "subject" | "content">,
+): MailKeys {
+  const content = mailReadContent(mail.content, {});
+  return extractMailKeys({
+    subject: mail.subject,
+    text: [content.preheader, content.bodyText].filter(Boolean).join("\n"),
+    links: content.links.map((link) => link.href),
+  });
+}
+
+/**
+ * The Email's stored keys for this retained checksum. Missing or stale keys
+ * (Emails retained before keys existed, or changed since) are computed and
+ * stored here, so existing Emails backfill as they are claimed or rechecked.
+ */
+export async function readEmailMailKeys(
+  db: Database,
+  mail: Pick<RetainedMail, "id" | "subject" | "content" | "rawChecksum">,
+): Promise<MailKeys> {
+  const [stored] = await getDb(db)
+    .select({
+      orderKeys: emailTable.orderKeys,
+      trackingKeys: emailTable.trackingKeys,
+      checksum: emailTable.mailKeysChecksum,
+    })
+    .from(emailTable)
+    .where(eq(emailTable.orderMailId, mail.id))
+    .limit(1);
+  if (
+    stored?.orderKeys &&
+    stored.trackingKeys &&
+    stored.checksum === mail.rawChecksum
+  )
+    return { orderKeys: stored.orderKeys, trackingKeys: stored.trackingKeys };
+  const keys = retainedMailKeys(mail);
+  await getDb(db)
+    .update(emailTable)
+    .set({
+      ...keys,
+      mailKeysChecksum: mail.rawChecksum,
+      // Derived keys are not an Email change: evidence recovery compares
+      // `updatedAt` with the holder's unresolved outcome.
+      updatedAt: sql`${emailTable.updatedAt}`,
+    })
+    .where(
+      and(
+        eq(emailTable.orderMailId, mail.id),
+        eq(emailTable.checksum, mail.rawChecksum),
+      ),
+    );
+  return keys;
 }
 
 /** A live Purchase whose order id equals an identifier an Email prints. */
@@ -60,15 +262,21 @@ type MailOrderPurchase = MailRuleCandidate & {
   date: string | null;
 };
 
-/** Every live Purchase whose order id is one of `orderIds`, printed or upper-cased. */
+/**
+ * Every live Purchase at this Vendor whose normalized order id equals one of
+ * the Email's normalized order keys. Another Vendor's equal number is never a
+ * candidate.
+ */
 export async function readMailRuleCandidates(
   db: Database,
-  input: { ledgerPartyId: LedgerPartyId; orderIds: readonly string[] },
+  input: {
+    ledgerPartyId: LedgerPartyId;
+    vendorId: VendorId;
+    orderKeys: readonly string[];
+  },
 ): Promise<MailOrderPurchase[]> {
-  const orderIds = [
-    ...new Set(input.orderIds.flatMap((id) => [id, id.toUpperCase()])),
-  ];
-  if (!orderIds.length) return [];
+  const orderKeys = [...new Set(input.orderKeys.map(normalizeOrderKey))];
+  if (!orderKeys.length) return [];
   const rows = await getDb(db)
     .select({
       id: purchase.id,
@@ -89,7 +297,13 @@ export async function readMailRuleCandidates(
         notDeleted(vendorAccount),
       ),
     )
-    .where(and(inArray(purchase.orderId, orderIds), notDeleted(purchase)));
+    .where(
+      and(
+        eq(purchase.vendorId, input.vendorId),
+        inArray(normalizedOrderIdSql(purchase.orderId), orderKeys),
+        notDeleted(purchase),
+      ),
+    );
   const accepted = rows.length
     ? await getDb(db)
         .select({

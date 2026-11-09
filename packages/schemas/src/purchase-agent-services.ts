@@ -50,8 +50,22 @@ export const stopForReviewInput = purchaseAgentOperationRef.extend({
   detail: z.string().min(1).max(1_000).optional(),
 });
 
+/**
+ * How a coordinator failed, stored as `Run.failureCode`. `agent_transient`: a
+ * provider, gateway, deadline, harness or database fault a later attempt can
+ * outlive, so it retries automatically; `agent_failed`: deterministic, such as
+ * a tool-validation loop, so it never retries; `agent_aborted`: the
+ * conversation was aborted. A funding stop pauses the Run instead.
+ */
+export const agentFailureCode = z.enum([
+  "agent_failed",
+  "agent_transient",
+  "agent_aborted",
+]);
+export type AgentFailureCode = z.infer<typeof agentFailureCode>;
+
 export const markRunFailedInput = purchaseAgentOperationRef.extend({
-  failureCode: z.enum(["agent_failed", "agent_aborted"]),
+  failureCode: agentFailureCode,
   detail: z.string().optional(),
   dispatchEventId: z.string().optional(),
 });
