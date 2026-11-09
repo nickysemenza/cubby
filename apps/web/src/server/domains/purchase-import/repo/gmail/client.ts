@@ -27,17 +27,6 @@ export type GmailApiClientOptions = {
   sleep?: (ms: number) => Promise<void>;
 };
 
-const retryDelay = (response: Response, attempt: number): number => {
-  const header = response.headers.get("Retry-After");
-  const seconds = header ? Number(header) : Number.NaN;
-  if (Number.isFinite(seconds) && seconds >= 0)
-    return Math.min(seconds * 1_000, 10_000);
-  const date = header ? Date.parse(header) : Number.NaN;
-  if (Number.isFinite(date))
-    return Math.min(Math.max(date - Date.now(), 0), 10_000);
-  return 500 * 2 ** attempt;
-};
-
 const gmailErrorBody = z
   .object({
     error: z
@@ -122,12 +111,14 @@ export const createGmailApiClient = ({
       },
       {
         sleep,
-        // Three attempts; only throttling and server errors are transient.
+        // Throttling and provider deadlines reach the shared cooldown owner
+        // before another request; server failures without a deadline retry here.
         delayFor: (outcome, attempt) =>
           outcome.ok &&
-          (outcome.value.status === 429 || outcome.value.status >= 500) &&
+          outcome.value.status >= 500 &&
+          !outcome.value.headers.has("retry-after") &&
           attempt < 2
-            ? retryDelay(outcome.value, attempt)
+            ? 500 * 2 ** attempt
             : null,
       },
     );

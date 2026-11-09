@@ -154,6 +154,8 @@ later. Repeated capacity deferrals consume no failure attempts. Eligible
 recovery reserves one vacancy; an exclusive waiter stops fresh admissions until
 existing owners drain. Other normal query work retains the remaining capacity.
 Recovery query owners use at most three slots, leaving room for normal work.
+Only a recovery with available recovery capacity and an unoccupied resource
+reserves a vacancy; blocked recovery cannot strand the normal lane.
 Normal history demand coalesces into one queued Run; its older exclusive request
 also drains query owners instead of waiting behind endless recovery callbacks.
 Creation, generation and wake intent commit together. A manual paid-start action
@@ -171,6 +173,9 @@ Gmail throttling and transient provider failures retain their raw diagnostics
 and retry time. The mailbox cursor shares that cooldown across independent
 clients; a Job defers before another provider request without spending attempts.
 Retry-After is preserved beyond the client's short in-call retry bound.
+Throttling and server responses with Retry-After reach the shared cooldown owner
+before any further HTTP attempt; only server failures without a deadline retry
+within the client.
 Mailbox coverage advances only after every batch and history event is handled. A retained
 automatic history page can then settle against a newer completed history cursor
 under the same baseline when its numeric ID covers the entire frozen range.

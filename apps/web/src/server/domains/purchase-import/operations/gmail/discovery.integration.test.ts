@@ -27,6 +27,7 @@ import {
   vendor,
 } from "~/server/db/schema";
 import { readRetainedMail } from "~/server/domains/mail/repo/retained-mail";
+import { createGmailApiClient } from "~/server/domains/purchase-import/repo/gmail/client";
 import {
   initializeMailboxCoverage,
   listGmailPage,
@@ -47,7 +48,7 @@ import {
 } from "~/server/workflows/runs/lifecycle";
 
 import { GmailAuthorizationError } from "../../repo/gmail/tokens";
-import { GmailApiError, type GmailProvider } from "../../repo/gmail/types";
+import type { GmailProvider } from "../../repo/gmail/types";
 import { startMailImport } from "../../repo/mail-import-run";
 import {
   startMailDiscovery,
@@ -1614,6 +1615,52 @@ describe("scheduled Gmail discovery", () => {
       });
     }
     expect((await readRun(recoveryId)).progress).toEqual(queued.progress);
+    const normalVacancy = active[3];
+    if (!normalVacancy) throw new Error("Synthetic fourth search missing");
+    const priorActive = await Promise.all(
+      active.map((owner) => readRun(owner.id)),
+    );
+    // Three admitted recoveries cannot reserve the remaining normal lane.
+    for (const owner of priorActive.slice(0, 3))
+      await getDb(ctx.db)
+        .update(run)
+        .set({
+          progress: {
+            ...mailboxDiscoveryProgress.parse(owner.progress),
+            admissionClass: "recovery",
+          },
+        })
+        .where(eq(run.id, owner.id));
+    await getDb(ctx.db)
+      .update(run)
+      .set({ status: "completed" })
+      .where(eq(run.id, normalVacancy.id));
+    expect(await startMailDiscovery(ctx.db)).toEqual({
+      started: 1,
+      running: 0,
+    });
+    const [normalFourth] = (
+      await getDb(ctx.db).select().from(run).where(eq(run.status, "running"))
+    ).filter((owner) => !active.some((prior) => prior.id === owner.id));
+    if (!normalFourth) throw new Error("Synthetic fourth normal lane missing");
+    expect(
+      mailboxDiscoveryProgress.parse(normalFourth.progress).admissionClass,
+    ).toBe("automatic");
+    await controlWorkflowRun(
+      ctx.db,
+      ctx.actor,
+      { runPublicId: normalFourth.shortcode, action: "cancel" },
+      "mail_discovery",
+    );
+    await getDb(ctx.db)
+      .update(run)
+      .set({ status: "running" })
+      .where(eq(run.id, normalVacancy.id));
+    for (const owner of priorActive.slice(0, 3))
+      await getDb(ctx.db)
+        .update(run)
+        .set({ progress: owner.progress })
+        .where(eq(run.id, owner.id));
     const historyPage = await listGmailPage(
       gmail(),
       target.mailboxId,
@@ -1761,13 +1808,16 @@ describe("scheduled Gmail discovery", () => {
     const cfEnv = await import("~/server/cf-env");
     const tokens = await import("../../repo/gmail/tokens");
     const providers = await import("../../repo/gmail/provider");
-    const until = new Date(Date.now() + 120_000);
-    const getProfile = vi.fn(async () => {
-      throw new GmailApiError({
+    const until = new Date(Math.ceil((Date.now() + 120_000) / 1_000) * 1_000);
+    const fetchGmail = vi.fn(async () => {
+      return new Response("Synthetic shared Gmail throttle", {
         status: 429,
-        message: "Synthetic shared Gmail throttle",
-        retryAt: until.getTime(),
+        headers: { "retry-after": until.toUTCString() },
       });
+    });
+    const rawProvider = createGmailApiClient({
+      accessToken: "synthetic-token",
+      fetcher: fetchGmail,
     });
     const credentials = vi
       .spyOn(cfEnv, "getGmailOAuthCredentials")
@@ -1777,7 +1827,7 @@ describe("scheduled Gmail discovery", () => {
       });
     const factory = vi
       .spyOn(tokens, "createGmailProviderFactory")
-      .mockReturnValue(async () => gmail({ getProfile }));
+      .mockReturnValue(async () => rawProvider);
     try {
       const clientA = await providers.gmailProviderForUser(
         ctx.db,
@@ -1791,7 +1841,7 @@ describe("scheduled Gmail discovery", () => {
       );
       await expect(clientA.getProfile()).rejects.toMatchObject({
         status: 429,
-        message: "Synthetic shared Gmail throttle",
+        message: expect.stringContaining("Synthetic shared Gmail throttle"),
       });
       const normal = normalWaiters[0];
       if (!normal) throw new Error("Synthetic queued history missing");
@@ -1819,7 +1869,7 @@ describe("scheduled Gmail discovery", () => {
         status: 429,
         retryAt: until.getTime(),
       });
-      expect(getProfile).toHaveBeenCalledOnce();
+      expect(fetchGmail).toHaveBeenCalledOnce();
       expect(
         (await getDb(ctx.db).select().from(mailboxCursor))[0],
       ).toMatchObject({

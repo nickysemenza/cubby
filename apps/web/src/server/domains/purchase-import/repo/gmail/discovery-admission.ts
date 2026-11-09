@@ -178,41 +178,60 @@ export async function mailDiscoveryAdmission(
     owner.progress?.discoveryScope ?? {
       kind: "mailbox",
     };
-  const conflicts = (scope: MailboxDiscoveryScope) =>
-    scope.kind === "mailbox" ||
-    input.scope.kind === "mailbox" ||
-    scope.key === input.scope.key;
+  const conflicts = (
+    left: MailboxDiscoveryScope,
+    right: MailboxDiscoveryScope,
+  ) =>
+    left.kind === "mailbox" ||
+    right.kind === "mailbox" ||
+    left.key === right.key;
   if (
     active.length >= MAIL_DISCOVERY_CAPACITY ||
     active.some((owner) => scopeOf(owner).kind === "mailbox")
   )
     return "capacity";
-  if (active.some((owner) => conflicts(scopeOf(owner)))) return "scope_busy";
+  if (active.some((owner) => conflicts(scopeOf(owner), input.scope)))
+    return "scope_busy";
   const requestTime = (owner: (typeof owners)[number]) =>
     owner.progress?.admissionRequestedAt ?? "";
   const candidate = owners.find((owner) => owner.id === input.runId);
-  const older = queued.filter(
-    (owner) =>
-      !candidate ||
-      requestTime(owner) < requestTime(candidate) ||
-      (requestTime(owner) === requestTime(candidate) &&
-        owner.id < candidate.id),
-  );
+  const precedes = (
+    owner: MailDiscoveryOwner,
+    next: MailDiscoveryOwner | undefined,
+  ) =>
+    !next ||
+    requestTime(owner) < requestTime(next) ||
+    (requestTime(owner) === requestTime(next) && owner.id < next.id);
+  const older = queued.filter((owner) => precedes(owner, candidate));
   // An exclusive waiter drains existing owners instead of losing every vacancy
   // to a fresh continuation. Query recovery reserves one otherwise free lane.
   if (older.some((owner) => scopeOf(owner).kind === "mailbox"))
     return "capacity";
-  if (older.some((owner) => conflicts(scopeOf(owner)))) return "scope_busy";
-  if (
-    input.recovery &&
-    input.scope.kind === "query" &&
+  if (older.some((owner) => conflicts(scopeOf(owner), input.scope)))
+    return "scope_busy";
+  const recoveryCapacity =
     active.filter((owner) => owner.progress?.admissionClass === "recovery")
-      .length >=
-      MAIL_DISCOVERY_CAPACITY - 1
-  )
+      .length <
+    MAIL_DISCOVERY_CAPACITY - 1;
+  if (input.recovery && input.scope.kind === "query" && !recoveryCapacity)
     return "capacity";
+  // A recovery blocked by its own ceiling or resource cannot use a vacancy.
+  const eligibleRecovery =
+    recoveryCapacity &&
+    queued.some(
+      (owner) =>
+        owner.progress?.admissionClass === "recovery" &&
+        scopeOf(owner).kind === "query" &&
+        !active.some((current) =>
+          conflicts(scopeOf(current), scopeOf(owner)),
+        ) &&
+        !queued.some(
+          (prior) =>
+            precedes(prior, owner) && conflicts(scopeOf(prior), scopeOf(owner)),
+        ),
+    );
   return input.recovery ||
-    queued.length === 0 ||
+    !eligibleRecovery ||
     active.length < MAIL_DISCOVERY_CAPACITY - 1
     ? "available"
     : "capacity";

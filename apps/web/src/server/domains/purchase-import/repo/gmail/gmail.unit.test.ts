@@ -249,7 +249,7 @@ describe("Gmail API client", () => {
     });
   });
 
-  it("retries a transient Gmail 429 and honors Retry-After", async () => {
+  it("retries transient server failures and surfaces Gmail throttling before another request", async () => {
     let calls = 0;
     let cancelled = 0;
     const waits: number[] = [];
@@ -268,8 +268,7 @@ describe("Gmail API client", () => {
                 },
               }),
               {
-                status: 429,
-                headers: { "Retry-After": "2" },
+                status: 503,
               },
             )
           : Response.json({ messages: [] });
@@ -279,17 +278,23 @@ describe("Gmail API client", () => {
       client.listMessages({ query: "from:example.test" }),
     ).resolves.toEqual({ messages: [] });
     expect(calls).toBe(2);
-    expect(waits).toEqual([2_000]);
+    expect(waits).toEqual([500]);
     expect(cancelled).toBe(1);
     const started = Date.now();
+    let throttledCalls = 0;
+    const throttledWaits: number[] = [];
     const throttled = createGmailApiClient({
       accessToken: "synthetic-token",
-      sleep: async () => {},
-      fetcher: async () =>
-        new Response("Synthetic throttled", {
+      sleep: async (ms) => {
+        throttledWaits.push(ms);
+      },
+      fetcher: async () => {
+        throttledCalls++;
+        return new Response("Synthetic throttled", {
           status: 429,
           headers: { "retry-after": "120" },
-        }),
+        });
+      },
     });
     const [failed] = await Promise.allSettled([
       throttled.listMessages({ query: "from:example.test" }),
@@ -300,6 +305,8 @@ describe("Gmail API client", () => {
     if (!(failed.reason instanceof GmailApiError)) return;
     expect(failed.reason.message).toContain("Synthetic throttled");
     expect(failed.reason.retryAt).toBeGreaterThanOrEqual(started + 120_000);
+    expect(throttledCalls).toBe(1);
+    expect(throttledWaits).toEqual([]);
   });
 });
 
