@@ -3,24 +3,19 @@ import {
   getCalendarRange,
   getCalendarSchedule,
 } from "~/server/domains/calendar/repo/calendar";
-import { calendarFeedStateFor } from "~/server/domains/calendar/repo/client";
+import {
+  calendarFeedOrigin,
+  calendarFeedStateFor,
+} from "~/server/domains/calendar/repo/client";
 import { readPublicEntityRows } from "~/server/generic/derived/service/public-read";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
-
-function calendarOrigin(headers: Headers): string {
-  const origin = headers.get("origin");
-  if (origin) return new URL(origin).origin;
-  const host = headers.get("host") ?? "localhost:3000";
-  const protocol =
-    headers.get("x-forwarded-proto") ??
-    (host.startsWith("localhost") ? "http" : "https");
-  return `${protocol}://${host}`;
-}
 
 /** The Durable Object retains protocol state and owns each awaited write's
  * commit boundary; every action first resolves that per-origin client. */
 const calendarClient = (context: { headers: Headers }) =>
-  calendarFeedStateFor(calendarOrigin(context.headers));
+  calendarFeedStateFor(
+    calendarFeedOrigin(context.headers) ?? "http://localhost:3000",
+  );
 
 export const calendarHandlers = implementOperationDomain(calendarContract, {
   range: (context, input) => getCalendarRange(context.db, input),

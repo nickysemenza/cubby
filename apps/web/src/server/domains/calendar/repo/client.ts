@@ -1,5 +1,4 @@
 import type { UserId } from "@cubby/schemas/identifiers";
-import { sleep } from "@cubby/shared/retry";
 import { createLogger } from "@cubby/worker-tracing";
 
 import { getCalendarFeedNamespace, getExecutionCtx } from "~/server/cf-env";
@@ -103,9 +102,6 @@ export async function handleCalDavRequest(request: Request): Promise<Response> {
   });
 }
 
-/** Delays between dirty-mark attempts; the RPC is idempotent (`markDirty` only sets a flag). */
-const DIRTY_MARK_RETRY_DELAYS_MS = [250, 750];
-
 /**
  * Db-less sender: this runs from a `waitUntil` with no request `Database` in
  * scope, and the task carries everything its handler needs. Without a queue
@@ -134,6 +130,18 @@ async function enqueueMarkDirtyFallback(
   }
 }
 
+/** The feed origin a request addresses: its `Origin`, else its forwarded host. */
+export function calendarFeedOrigin(headers: Headers): string | undefined {
+  const origin = headers.get("origin");
+  if (origin) return new URL(origin).origin;
+  const host = headers.get("host");
+  if (!host) return undefined;
+  const protocol =
+    headers.get("x-forwarded-proto") ??
+    (host.startsWith("localhost") ? "http" : "https");
+  return `${protocol}://${host}`;
+}
+
 export function scheduleCalendarFeedDirty(
   reason: string,
   options: { origin?: string } = {},
@@ -141,36 +149,15 @@ export function scheduleCalendarFeedDirty(
   const execution = getExecutionCtx();
   const origin = execution?.origin ?? options.origin;
   if (!origin || !getCalendarFeedNamespace()) return;
-  // SILENT: best-effort background dirty-mark from a `waitUntil` task, run
-  // after the response is already committed — there is no result channel
-  // left to report into. `markDirty` only sets a flag on the target Durable
-  // Object, so retrying it a few times (short backoff, still inside the same
-  // `waitUntil`) is safe and absorbs a transient RPC failure; a failure that
-  // survives every retry hands the same idempotent mark to the durable queue
-  // (`calendar-feed.mark-dirty`) instead of leaving the feed stale.
+  // `markDirty` only sets a flag, so a failed mark hands the same idempotent
+  // mark to the durable queue (`calendar-feed.mark-dirty`) rather than leaving
+  // the feed stale; the response is already committed.
   const task = (async () => {
-    const state = await calendarFeedStateFor(origin);
-    for (const [attempt, retryDelay] of [
-      ...DIRTY_MARK_RETRY_DELAYS_MS,
-      undefined,
-    ].entries()) {
-      try {
-        await state.markDirty(reason);
-        return;
-      } catch (error) {
-        if (retryDelay === undefined) {
-          log.error("failed to mark snapshot dirty", {
-            reason,
-            attempt,
-            error,
-          });
-          await enqueueMarkDirtyFallback(origin, reason);
-          return;
-        }
-        // SILENT: not the last attempt — logged above only if every retry
-        // below also fails.
-        await sleep(retryDelay);
-      }
+    try {
+      await (await calendarFeedStateFor(origin)).markDirty(reason);
+    } catch (error) {
+      log.error("failed to mark snapshot dirty", { reason, error });
+      await enqueueMarkDirtyFallback(origin, reason);
     }
   })();
   execution?.waitUntil(task);

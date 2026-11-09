@@ -28,7 +28,10 @@ import {
 } from "~/server/db/freshness/member-marker";
 import { runAfterCommit } from "~/server/db/helpers";
 import { inputReadPolicy } from "~/server/db/read-policy";
-import { scheduleCalendarFeedDirty } from "~/server/domains/calendar/repo/client";
+import {
+  calendarFeedOrigin,
+  scheduleCalendarFeedDirty,
+} from "~/server/domains/calendar/repo/client";
 import {
   AppError,
   appErrorFromUnknown,
@@ -826,16 +829,8 @@ export function createOperationExecutor(runtime: OperationExecutorRuntime) {
 
 const productionOperationExecutorRuntime = {
   observe: observeOperation,
-  markCalendarDirty: (reason, headers) => {
-    const headerOrigin = headers.get("origin");
-    const host = headers.get("host");
-    const origin = headerOrigin
-      ? new URL(headerOrigin).origin
-      : host
-        ? `${headers.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https")}://${host}`
-        : undefined;
-    scheduleCalendarFeedDirty(reason, { origin });
-  },
+  markCalendarDirty: (reason, headers) =>
+    scheduleCalendarFeedDirty(reason, { origin: calendarFeedOrigin(headers) }),
   recordDatabaseWrite,
 } satisfies OperationExecutorRuntime;
 
