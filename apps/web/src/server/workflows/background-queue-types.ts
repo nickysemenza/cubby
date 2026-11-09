@@ -9,7 +9,7 @@ export interface BackgroundQueueProducer {
   ): Promise<void>;
 }
 
-export interface BackgroundQueueDeliveredMessage {
+interface BackgroundQueueDeliveredMessage {
   /**
    * `unknown`, not the message type: what Cloudflare hands back is whatever
    * JSON was on the wire, including messages minted by an older deploy. Typing

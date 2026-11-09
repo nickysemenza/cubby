@@ -35,7 +35,7 @@ const CANDIDATES = 8;
 /** Cloudflare Queues' longest delivery delay; later work is the hourly cron's. */
 const MAX_PERMIT_DELAY_MS = 12 * 60 * 60_000;
 
-export type PermitPorts = {
+type PermitPorts = {
   /** Send one permit, due now (`null`) or delayed until `at`. */
   send(at: Date | null, source: string): Promise<void>;
   captureException(error: UnparsedError, unit: string): void;
