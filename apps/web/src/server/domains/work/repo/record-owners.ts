@@ -32,31 +32,35 @@ const owners = {
     tender: transactionTenderOwners,
   },
   financialAccount: { source: accountOwners, tender: accountOwners },
-  image: { source: workImageOwners },
+  image: { source: workImageOwners, shared: workImageIsShared },
   run: { source: workRunReviewOwners },
   vendorAccount: { source: () => sql`ARRAY["VendorAccount"."ledgerPartyId"]` },
   email: { source: () => sql`ARRAY["Email"."ledgerPartyId"]` },
 } satisfies Partial<
   Record<
     ShortcodeEntity,
-    { source: (id: SQL) => SQL; tender?: (id: SQL) => SQL }
+    {
+      source: (id: SQL) => SQL;
+      tender?: (id: SQL) => SQL;
+      shared?: (id: SQL) => SQL;
+    }
   >
 >;
 
-type SourceOwnersTable = Partial<
-  Record<ShortcodeEntity, { source: (id: SQL) => SQL }>
+type SourceOwners = Partial<
+  Record<
+    ShortcodeEntity,
+    { source: (id: SQL) => SQL; shared?: (id: SQL) => SQL }
+  >
 >;
 
-const sourceOwnerFor = (table: SourceOwnersTable, entity: ShortcodeEntity) =>
+const sourceOwnersFor = (table: SourceOwners, entity: ShortcodeEntity) =>
   table[entity];
 
 export const workSourceAuthority = (entity: ShortcodeEntity, id: SQL) => {
-  const entry = sourceOwnerFor(owners, entity);
+  const entry = sourceOwnersFor(owners, entity);
   return entry
-    ? {
-        owners: entry.source(id),
-        shared: entity === "image" ? workImageIsShared(id) : false,
-      }
+    ? { owners: entry.source(id), shared: entry.shared?.(id) ?? false }
     : { owners: sql`ARRAY[]::uuid[]`, shared: true };
 };
 
