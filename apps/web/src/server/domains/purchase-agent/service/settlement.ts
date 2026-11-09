@@ -22,7 +22,7 @@ const TRANSIENT_HARNESS_REASONS = new Set(["stale", "reset"]);
  * such as a tool-validation loop or a refused tool call, recurs on retry.
  */
 const TRANSIENT_ERROR =
-  /^\s*(?:error:?\s*)?(?:408|409|425|429|5\d\d)\b|\b(?:status|HTTP)(?: code)?\s*[:=]?\s*(?:408|409|425|429|5\d\d)\b|\b(?:408|409|425|429|5\d\d) status\b|\b(?:deadline|time(?:d)? ?out|timeout|egress|overload(?:ed)?|(?:temporarily|service) unavailable|bad gateway|ECONNRESET|ECONNREFUSED|ETIMEDOUT|EPIPE|socket hang up|network|connection (?:reset|refused|closed|terminated|error)|terminating connection|too many connections|deadlock|could not serialize|SQLSTATE (?:08|40|53|57))/iu;
+  /^\s*(?:error:?\s*)?(?:408|409|425|429|5\d\d)\b|\((?:408|409|425|429|5\d\d)\)|\b(?:status|HTTP)(?: code)?\s*[:=]?\s*(?:408|409|425|429|5\d\d)\b|\b(?:408|409|425|429|5\d\d) status\b|\b(?:deadline|time(?:d)? ?out|timeout|egress|overload(?:ed)?|(?:temporarily|service) unavailable|bad gateway|ECONNRESET|ECONNREFUSED|ETIMEDOUT|EPIPE|socket hang up|network|connection (?:reset|refused|closed|terminated|error)|terminating connection|too many connections|deadlock|could not serialize|SQLSTATE (?:08|40|53|57))/iu;
 
 /**
  * An explicit authentication or authorization refusal (401/403) recurs until

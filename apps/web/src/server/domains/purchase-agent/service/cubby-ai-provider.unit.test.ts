@@ -228,6 +228,28 @@ describe("createCubbyGatewayFetch", () => {
     expect(run).not.toHaveBeenCalled();
   });
 
+  // Regression (2026-11-09): a final 403 here failed the Run without retry.
+  it("answers an admission database fault with a retryable 502", async () => {
+    const run = vi.fn(async () => completedResponse());
+    const response = await createCubbyGatewayFetch("openai", {
+      gateway: () => gateway(run),
+      subscription: async () => null,
+      subscriptionRequired: true,
+      subscriptionFallback: "budgeted",
+      beforePaidRequest: async () => {
+        throw new Error(
+          "Admission database fault: Failed query: select 1\ncause: timeout",
+        );
+      },
+    })("https://api.openai.com/v1/responses", {
+      method: "POST",
+      body: JSON.stringify({ model: "gpt-6-sol", input: [] }),
+    });
+    expect(response.status).toBe(502);
+    expect(await response.text()).toMatch(/cubby_transport_failed/);
+    expect(run).not.toHaveBeenCalled();
+  });
+
   it("stops subscription-required research when the plan is disconnected", async () => {
     const run = vi.fn(async () => completedResponse());
     const options = {
