@@ -475,6 +475,10 @@ typed list input, like the Product Category vocabulary. Do not compile empty rou
 search or admit category metadata from these labels: that suspends the populated
 parent list. Known names and emoji remain visible while hierarchy enrichment loads;
 the existing tree query keys, invalidation and category-link identity stay intact.
+The Product Category vocabulary selects only its label and hierarchy fields
+(name, aliases, description, parent, path, feature); category images use the
+display-image read. Add a field there before reading it from a vocabulary row:
+the full projection returned every envelope and image, about 3.8 MB per read.
 
 The generic `useInfiniteTableList` query keys own filter, ordering, grouping and
 projection scope. A new scope shows its own cached rows or initial skeletons,
