@@ -5,6 +5,22 @@ import type { RippleKey } from "~/contracts/cache-policy";
 
 import type { OperationCacheTag } from "./operation-meta";
 
+/** Entity read cache profiles; omitted entities use the default profile. */
+const entityReadCache = {
+  product: { list: "browse", detail: "persisted-detail" },
+  location: { list: "browse", detail: "persisted-detail" },
+  recipe: { list: "browse", detail: "persisted-detail" },
+  ingredient: { list: "browse", detail: "persisted-detail" },
+  inventory: { detail: "persisted-detail" },
+} satisfies Record<string, { list?: "browse"; detail?: "persisted-detail" }>;
+
+const entityReadCacheByName = new Map<
+  string,
+  { list?: "browse"; detail?: "persisted-detail" }
+>(Object.entries(entityReadCache));
+export const entityReadCacheProfile = (entity: string) =>
+  entityReadCacheByName.get(entity);
+
 /**
  * An invalidation set can only be minted by this module. Keeping the brand at
  * the policy boundary prevents a call site from quietly reintroducing an
