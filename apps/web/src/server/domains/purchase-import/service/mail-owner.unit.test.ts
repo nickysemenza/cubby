@@ -1,11 +1,9 @@
 import { mailAttributionHeaders } from "@cubby/schemas/mailbox-research";
 import { describe, expect, it } from "vitest";
 
-import {
-  type MailOwnerEvidence,
-  normalizeMailAddress,
-  isOwnMail,
-} from "./mail-owner";
+import type { MailOwnerEvidence } from "~/server/domains/purchase-import/repo/mail-owner-types";
+
+import { normalizeMailAddress, isOwnMail } from "./mail-owner";
 
 const evidence: MailOwnerEvidence = {
   owner: {
