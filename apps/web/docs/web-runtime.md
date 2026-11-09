@@ -282,6 +282,9 @@ Detail relation folding reads relationships from its admitted entity descriptor.
 Import pure relationship helpers from `connected-view-definitions`, not the
 `connected-views` catalog owner: constructing that catalog loads every entity's
 manifest and inspector metadata even when the page only needs one helper.
+Relation header labels use the lightweight entity roster. They must not admit
+the target's full metadata merely to name an action: that suspension escapes
+the table body's local boundary and can delay the page's primary fields.
 
 ## Confirmed edit state
 
