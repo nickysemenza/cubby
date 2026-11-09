@@ -123,6 +123,12 @@ function readableMailView({
           )
         : false,
     original: JSON.stringify({
+      // Provider identity keeps captured model inputs distinct per message.
+      sourceKey: mail.sourceKey,
+      mailboxId: mail.mailboxId,
+      messageId: mail.messageId,
+      threadId: mail.threadId,
+      internalDate: mail.internalDate,
       headers: Object.fromEntries(
         RELEVANCE_HEADERS.flatMap((name) =>
           mail.headers[name] ? [[name, clipped(mail.headers[name], 512)]] : [],
