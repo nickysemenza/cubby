@@ -3,6 +3,10 @@ import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import {
+  runBackgroundPage,
+  type PageWork,
+} from "~/server/generic/background/page-budget";
+import {
   withJobExecution,
   type JobExecutionDetails,
 } from "~/server/generic/jobs/context";
@@ -211,9 +215,10 @@ export async function drainDueJobs(
   limit = JOB_DRAIN.pageLimit,
   timeBudgetMs = JOB_DRAIN.timeBudgetMs,
   concurrency = JOB_DRAIN.concurrency,
+  options: { pageWork?: PageWork; deadline?: number } = {},
 ) {
   const outcomes: JobOutcome[] = [];
-  const deadline = Date.now() + timeBudgetMs;
+  const deadline = options.deadline ?? Date.now() + timeBudgetMs;
   let scheduled = 0;
   let settled = 0;
   let progressed = 0;
@@ -258,36 +263,49 @@ export async function drainDueJobs(
     }
     return undefined;
   };
-  let armed = false;
+  let leaseRecovery: Promise<void> | undefined;
+  let heldUntil: Date | undefined;
   const lane = async () => {
     for (;;) {
-      const candidate = await next();
-      if (!candidate) return;
-      if (!armed) {
-        armed = true;
-        // A killed invocation leaves its leases behind and settles nothing, so
-        // arm the wake for them before the first page.
-        const { wakeAt } =
-          await import("~/server/workflows/background-tasks/publish");
-        await wakeAt(new Date(Date.now() + JOB_LEASE_MS + 5_000), {
-          source: "job.lease-recovery",
-        });
+      // Admission precedes selection/claim, so queued work holds no payload or lease.
+      const admitted = await runBackgroundPage({
+        admit: options.pageWork,
+        work: async () => {
+          const candidate = await next();
+          if (!candidate) return false;
+          const progressBefore = progressed;
+          try {
+            if (Date.now() >= deadline) return false;
+            // Arm recovery before claiming, without holding a lease while queued.
+            leaseRecovery ??= (async () => {
+              const { wakeAt } =
+                await import("~/server/workflows/background-tasks/publish");
+              await wakeAt(new Date(Date.now() + JOB_LEASE_MS + 5_000), {
+                source: "job.lease-recovery",
+              });
+            })();
+            await leaseRecovery;
+            if (Date.now() >= deadline) return false;
+            const outcome = await advanceJob(db, candidate.id, handlers);
+            outcomes.push(outcome);
+            if (outcome === "skipped") {
+              if (progressBefore === progressed) busy.add(candidate.id);
+            } else {
+              progressed++;
+              busy.clear();
+            }
+            return true;
+          } finally {
+            reserved.delete(candidate.id);
+            settled++;
+          }
+        },
+      });
+      if (admitted.kind === "held") {
+        heldUntil = admitted.retryAt;
+        return;
       }
-      const progressBefore = progressed;
-      try {
-        const outcome = await advanceJob(db, candidate.id, handlers);
-        outcomes.push(outcome);
-        if (outcome === "skipped") {
-          // A sibling may have progressed while this refusal was in flight.
-          if (progressBefore === progressed) busy.add(candidate.id);
-        } else {
-          progressed++;
-          busy.clear();
-        }
-      } finally {
-        reserved.delete(candidate.id);
-        settled++;
-      }
+      if (!admitted.value) return;
     }
   };
   // Invocation cleanup must not close clients while a sibling still owns work.
@@ -300,6 +318,7 @@ export async function drainDueJobs(
     ),
   );
   if (failure) throw failure.reason;
+  if (heldUntil) return { outcomes, more: false, nextAt: heldUntil };
   const more = (await dueJobs(db, 1, { excludeIds: [...busy] })).length > 0;
   return { outcomes, more, nextAt: more ? null : await nextJobDue(db) };
 }

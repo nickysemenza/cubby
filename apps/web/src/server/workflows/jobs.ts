@@ -21,21 +21,18 @@ import { runAiEvaluationExecution } from "~/server/domains/run/service/ai-evalua
 import { aiRefreshDiscoveryDrain } from "~/server/domains/run/service/ai-refresh";
 import { connectionDiscoveryDrain } from "~/server/domains/run/service/derived-discovery";
 import {
-  runDrains,
+  admittedDrain,
   type BackgroundDrain,
 } from "~/server/generic/background/drains";
+import { runBackgroundRound } from "~/server/generic/background/work-round";
 import {
   rebuildDerived,
   DerivedRebuildBusyError,
 } from "~/server/generic/derived/service/rebuild";
 import { embeddingCleanupDrain } from "~/server/generic/embedding/service/embedding-cleanup";
 import { embeddingRefreshDrain } from "~/server/generic/embedding/service/embedding-refresh";
-import { JOB_DRAIN } from "~/server/generic/jobs/limits";
 import { readRebuildObservation as readDerivedRebuildStatus } from "~/server/generic/jobs/repo/observation";
-import {
-  defineJobHandler,
-  drainDueJobs,
-} from "~/server/generic/jobs/service/jobs";
+import { defineJobHandler } from "~/server/generic/jobs/service/jobs";
 import type { JobHandler, JobHandlers } from "~/server/generic/jobs/types";
 import { handleBackgroundTask } from "~/server/workflows/background-tasks/handle";
 import { withJobFence } from "~/server/workflows/runs/execution";
@@ -126,11 +123,14 @@ export const productionJobHandlers: JobHandlers = {
 } satisfies Record<keyof typeof JOB_KIND_POLICY, JobHandler>;
 
 /** Work owned by its domain's rows: no Job row, one registration here. */
-const derivedRebuildDrain: BackgroundDrain = {
+const derivedRebuildDrain: BackgroundDrain = admittedDrain({
   name: "derived-rebuild",
   page: async (db, { deadline }) => {
     try {
-      const more = await rebuildDerived(db, derivedComputes, { deadline });
+      const more = await rebuildDerived(db, derivedComputes, {
+        deadline,
+        pageLimit: 1,
+      });
       const status = more ? null : await readDerivedRebuildStatus(db);
       return {
         more,
@@ -149,7 +149,7 @@ const derivedRebuildDrain: BackgroundDrain = {
       return { more: false, nextAt: new Date(Date.now() + 5 * 60_000) };
     }
   },
-};
+});
 // Built per round: production ports participate in this module's import cycle.
 const productionDrains = (): readonly BackgroundDrain[] => [
   cloudImageDrain,
@@ -163,30 +163,32 @@ const productionDrains = (): readonly BackgroundDrain[] => [
 
 export async function drainProductionJobs(
   db: Database,
-  limit = JOB_DRAIN.pageLimit,
+  options: { limit?: number; afterDrain?: string } = {},
 ) {
-  const [jobs, drains] = await Promise.allSettled([
-    drainDueJobs(db, productionJobHandlers, limit),
-    runDrains(db, productionDrains()),
-  ]);
-  if (jobs.status === "rejected") throw jobs.reason;
-  if (drains.status === "rejected") throw drains.reason;
-  const pages = [jobs.value, drains.value];
+  const round = await runBackgroundRound(
+    db,
+    productionJobHandlers,
+    productionDrains(),
+    options,
+  );
   const { wakeAt, wakeJobs } =
     await import("~/server/workflows/background-tasks/publish");
-  const next = pages
-    .flatMap((page) => (page.nextAt ? [page.nextAt.getTime()] : []))
-    .sort((a, b) => a - b)[0];
-  if (pages.some((page) => page.more))
-    await wakeJobs({ source: "background.more" });
-  else if (next !== undefined)
-    await wakeAt(new Date(next), { source: "background.next-due" });
-  const outcomes = jobs.value.outcomes;
+  if (round.more)
+    await wakeJobs({ source: "background.more", afterDrain: round.afterDrain });
+  else if (round.nextAt)
+    await wakeAt(round.nextAt, {
+      source: "background.next-due",
+      afterDrain: round.afterDrain,
+    });
+  // Preserve the continuation before transport retries an older failed envelope.
+  if (round.failures.length === 1) throw round.failures[0];
+  if (round.failures.length)
+    throw new AggregateError(round.failures, "Background pages failed");
   await (
     await import("~/server/domains/purchase-import/repo/dispatch")
   ).reconcilePurchaseDispatches(db);
   await (
     await import("~/server/workflows/runs/lifecycle")
   ).reconcileWorkflowRuns(db);
-  return outcomes;
+  return round.outcomes;
 }

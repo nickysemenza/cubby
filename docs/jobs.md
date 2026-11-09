@@ -267,21 +267,48 @@ Member-first ordering inside a drain is item priority: root transactions in
 Job execution mark derived inputs at priority 1, member transactions at 0, and
 savepoints inherit the outer transaction's priority.
 
-The drain runs up to `JOB_DRAIN.concurrency` Jobs at once. The queue consumer runs
-one batch at a time (`maxConcurrency: 1` in
-`packages/shared/src/background-queue-consumer.json`), so one long active batch
-holds accepted wakes undelivered. Smaller pages reduce that exposure, but one
-provider wave can still run for minutes; no wake has a hard delivery time.
+Job pages and feature pages share two preparation/publication slots per Worker
+isolate. A Job acquires capacity before selection and claim; AI feature pages and
+cloud image dispatches acquire it separately, without holding a parent slot.
+Ordinary row drains acquire one slot per page. A derived rebuild turn publishes
+at most one page. Slots remain held through publication and are released when
+the page settles, including errors. Overlapping queue and hourly invocations
+share only a synchronous counter; they never await another request's promises.
+Denied work stays unclaimed and receives a delayed wake.
+
+Within an invocation, Job and feature opportunities alternate. Feature
+registrations run one at a time in continuation order, alongside Job work, even
+when discovery awaits SQL. While
+that traversal is pending, at most one Job page from the invocation runs; no
+parent permit is held during discovery. Once the traversal ends, Jobs may use
+all free capacity. Individual AI pages still admit independently. Feature
+continuations carry the last visited registration through the existing wake
+message, so a deadline-limited round resumes at unvisited work. A batch prefers
+the newest timestamped continuation; ordinary wakes do not reset it. This is
+best-effort service fairness, not a durable per-feature allocation or a delivery
+deadline. Two already-running slow pages can occupy both slots until they
+settle; paid calls are not preempted. The queue consumer still runs one batch at
+a time (`maxConcurrency: 1` in
+`packages/shared/src/background-queue-consumer.json`).
 
 Free lanes refill while siblings run. A refused claim of an uncapped
 kind stays excluded until another page makes progress, then rejoins fair
 selection; progress during an in-flight refusal also permits reconsideration.
 Capped kinds remain excluded for the invocation. Refusals still consume the
 existing page budget, so locked rows cannot spin without bound. An escaped lane
-error stops new selection, and the drain still joins active lanes before
-returning it. The 20-second budget limits starting work, not the lease: an
-in-flight provider call may cross it and still publish. A drain that stops
-with due work left publishes another wake.
+error stops new selection, and the round joins started sibling pages before
+returning it. The 20-second start deadline is rechecked before admission and
+claim; an in-flight provider call may cross it and still publish. Unvisited or
+admission-denied work alone schedules a bounded 15-second recheck, rather than
+an immediate no-progress wake. Real progress with remaining due work can wake
+immediately. The hourly backstop remains available if a wake is lost.
+
+This limits participating pages, not bytes or total heap. HTTP requests,
+maintenance, response decoding and each page's payload can add allocations.
+Round diagnostics report admitted and held units, peak participating pages and
+the continuation position; native Worker outcomes remain the memory-failure
+source of truth. Existing source limits, retained paid results, lease recovery,
+funding deadlines and claim/publication fences remain unchanged.
 
 A device pull (`claimCompanionImageCommands`) claims, prepares, assigns and
 reserves output in one transaction under an advisory lock, so concurrent batches

@@ -65,6 +65,7 @@ import {
   type DrainContext,
   stopsDrainPage,
 } from "~/server/generic/background/drains";
+import { runBackgroundPage } from "~/server/generic/background/page-budget";
 import type { DrainItem } from "~/server/generic/jobs/drain-store";
 import {
   JobDeferredError,
@@ -636,23 +637,34 @@ export function aiEvaluationDrain(
 ): BackgroundDrain {
   return {
     name: "ai.evaluation",
-    async page(db) {
+    async page(db, round) {
       const features = await dueAiEvaluationFeatures(db);
       const pages = await Promise.allSettled(
-        features
-          .slice(0, FEATURE_LANES)
-          .map((feature) => runAiEvaluationPage(db, execution, feature)),
+        features.slice(0, FEATURE_LANES).map((feature) =>
+          runBackgroundPage({
+            admit: round.runPage,
+            work: () => runAiEvaluationPage(db, execution, feature),
+          }),
+        ),
       );
       const failure = pages.find((page) => page.status === "rejected");
       if (failure?.status === "rejected") throw failure.reason;
       const settled = pages.some(
-        (page) => page.status === "fulfilled" && page.value.settled > 0,
+        (page) =>
+          page.status === "fulfilled" &&
+          page.value.kind === "started" &&
+          page.value.value.settled > 0,
       );
+      const next = await nextAiEvaluationDue(db);
+      const held = pages.flatMap((page) =>
+        page.status === "fulfilled" && page.value.kind === "held"
+          ? [page.value.retryAt.getTime()]
+          : [],
+      );
+      if (next) held.push(next.getTime());
       return {
-        more:
-          features.length > FEATURE_LANES ||
-          (settled && (await dueAiEvaluationFeatures(db)).length > 0),
-        nextAt: await nextAiEvaluationDue(db),
+        more: settled && (await dueAiEvaluationFeatures(db)).length > 0,
+        nextAt: held.length ? new Date(Math.min(...held)) : null,
       };
     },
   };

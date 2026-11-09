@@ -88,7 +88,10 @@ import { readAutomaticAiStop } from "~/server/domains/run/repo/automatic-ai-stop
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { readSelectedEntityRecords } from "~/server/entity-kernel/selected-read";
 import { latestFieldWrite } from "~/server/generic/audit-log/repo/field-write";
-import type { BackgroundDrain } from "~/server/generic/background/drains";
+import {
+  admittedDrain,
+  type BackgroundDrain,
+} from "~/server/generic/background/drains";
 import type { DrainContext } from "~/server/generic/background/drains";
 import {
   SemanticCoverageIncomplete,
@@ -797,7 +800,7 @@ export async function discoverAiRefresh(
  * can run beside this one, which is harmless: a page calls no model and every slot it
  * admits is idempotent.
  */
-export const aiRefreshDiscoveryDrain: BackgroundDrain = {
+export const aiRefreshDiscoveryDrain: BackgroundDrain = admittedDrain({
   name: "ai-refresh.discovery",
   async page(db) {
     const page = await discoverAiRefresh(db);
@@ -808,7 +811,7 @@ export const aiRefreshDiscoveryDrain: BackgroundDrain = {
         : page.nextAt,
     };
   },
-};
+});
 
 /** Field and Email refresh evaluate one claimed item; the drain owns retries and failures. */
 export async function executeAiRefreshTarget(

@@ -8,11 +8,14 @@ import {
   connectionDiscoveryPage,
   prepareConnectionDiscoveryPage,
 } from "~/server/domains/run/repo/derived-discovery";
-import type { BackgroundDrain } from "~/server/generic/background/drains";
+import {
+  admittedDrain,
+  type BackgroundDrain,
+} from "~/server/generic/background/drains";
 import { launchWorkflowRun } from "~/server/workflows/runs/lifecycle";
 
 /** Automatic discovery owes one cursor, never a Sweep Run or a Job. */
-export const connectionDiscoveryDrain: BackgroundDrain = {
+export const connectionDiscoveryDrain: BackgroundDrain = admittedDrain({
   name: "connection-discovery",
   page: (db) =>
     connectionDiscoveryPage(db, async (tx, cursor, save) => {
@@ -54,4 +57,4 @@ export const connectionDiscoveryDrain: BackgroundDrain = {
       });
       return { more: !!page.next, nextAt: page.next ? null : nextAt };
     }),
-};
+});

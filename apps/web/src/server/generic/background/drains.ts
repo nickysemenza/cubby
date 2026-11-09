@@ -1,22 +1,19 @@
-import { createLogger } from "@cubby/worker-tracing";
-
 import { describeErrorCauses } from "~/lib/error-diagnostics";
 import type { UnparsedError } from "~/lib/error-utils";
 import type { Database } from "~/server/db/database";
 import { repositorySnapshotWriteDatabase } from "~/server/db/repository-access.boundary";
 import { repositoryTransactionDatabase } from "~/server/db/repository-access.boundary";
+import {
+  runBackgroundPage,
+  type PageWork,
+} from "~/server/generic/background/page-budget";
 import { withJobPhase } from "~/server/generic/jobs/context";
 import type { DrainItem, DrainStore } from "~/server/generic/jobs/drain-store";
 import { classifyJobFailure, stopsPage } from "~/server/generic/jobs/failure";
 import type { JobBackoff } from "~/server/generic/jobs/kind-policy";
 import type { JobContext } from "~/server/generic/jobs/types";
 
-const log = createLogger("drains");
-
-/** One round's wall budget for every drain; a drain with more wakes the next round. */
-const DRAIN_ROUND_MS = 20_000;
-
-type DrainPage = {
+export type DrainPage = {
   /** Claimable work remains after real progress: wake another round now. */
   more: boolean;
   processed?: number;
@@ -33,42 +30,26 @@ type DrainPage = {
  */
 export type BackgroundDrain = {
   name: string;
-  page(db: Database, round: { deadline: number }): Promise<DrainPage>;
+  /** Admit each owned page; a group never holds a permit while admitting children. */
+  page(
+    db: Database,
+    round: { deadline: number; runPage?: PageWork },
+  ): Promise<DrainPage>;
 };
 
-/**
- * One round: every drain runs its page, then at most one wake follows. An escaped
- * error still lets the other drains finish and rejects the round, so queue
- * delivery retries.
- */
-export async function runDrains(
-  db: Database,
-  drains: readonly BackgroundDrain[],
-  timeBudgetMs = DRAIN_ROUND_MS,
-): Promise<DrainPage> {
-  const deadline = Date.now() + timeBudgetMs;
-  const settled = await Promise.allSettled(
-    drains.map((drain) => drain.page(db, { deadline })),
-  );
-  const pages = settled.flatMap((result) =>
-    result.status === "fulfilled" ? [result.value] : [],
-  );
-  const next = pages
-    .flatMap((page) => (page.nextAt ? [page.nextAt.getTime()] : []))
-    .sort((a, b) => a - b)[0];
-  const failures: unknown[] = settled.flatMap((result, index) => {
-    if (result.status === "fulfilled") return [];
-    log.error("drain page failed", {
-      drain: drains[index]?.name,
-      error: result.reason,
-    });
-    return [result.reason];
-  });
-  if (failures.length === 1) throw failures[0];
-  if (failures.length) throw new AggregateError(failures, "Drains failed");
+/** One preparation/publication page, including its claim and cleanup. */
+export function admittedDrain(drain: BackgroundDrain): BackgroundDrain {
   return {
-    more: pages.some((page) => page.more),
-    nextAt: next === undefined ? null : new Date(next),
+    name: drain.name,
+    page: async (db, round) => {
+      const result = await runBackgroundPage({
+        admit: round.runPage,
+        work: () => drain.page(db, round),
+      });
+      return result.kind === "started"
+        ? result.value
+        : { more: false, nextAt: result.retryAt };
+    },
   };
 }
 
@@ -179,7 +160,7 @@ const chunked = <P>(
 
 /** One claim → prepare → publish page over domain rows, with no Job identity. */
 export function rowDrain<P>(spec: RowDrainSpec<P>): BackgroundDrain {
-  return {
+  return admittedDrain({
     name: spec.name,
     async page(db) {
       const context: RowContext = {
@@ -301,5 +282,5 @@ export function rowDrain<P>(spec: RowDrainSpec<P>): BackgroundDrain {
         if (!released) await spec.store.release?.(db);
       }
     },
-  };
+  });
 }

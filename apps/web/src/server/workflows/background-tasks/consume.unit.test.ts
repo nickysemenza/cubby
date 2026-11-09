@@ -32,5 +32,46 @@ describe("Job wake consumption", () => {
     expect(sibling.retry).toHaveBeenCalledWith({ delaySeconds: 30 });
     expect(sibling.ack).not.toHaveBeenCalled();
     expect(captureException).toHaveBeenCalledOnce();
+    const wakes = [
+      {
+        body: { version: 3, queueType: "background" },
+        timestamp: new Date(5_000),
+        ack: vi.fn(),
+        retry: vi.fn(),
+      },
+      {
+        body: {
+          version: 3,
+          queueType: "background",
+          afterDrain: "synthetic.late",
+        },
+        timestamp: new Date(3_000),
+        ack: vi.fn(),
+        retry: vi.fn(),
+      },
+      {
+        body: {
+          version: 3,
+          queueType: "background",
+          afterDrain: "synthetic.early",
+        },
+        timestamp: new Date(1_000),
+        ack: vi.fn(),
+        retry: vi.fn(),
+      },
+    ];
+    const drained = vi.fn(async () => []);
+    await handleBackgroundQueueBatch(
+      unavailable,
+      { queue: "cubby-background", messages: wakes },
+      { captureException, drainJobs: drained },
+    );
+    expect(drained).toHaveBeenLastCalledWith(unavailable, {
+      afterDrain: "synthetic.late",
+    });
+    for (const wake of wakes) {
+      expect(wake.ack).toHaveBeenCalledOnce();
+      expect(wake.retry).not.toHaveBeenCalled();
+    }
   });
 });
