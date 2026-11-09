@@ -2,37 +2,24 @@ import { createHash } from "node:crypto";
 
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { categoryMappingSchema } from "@cubby/schemas/spending-classification";
-import { sql } from "drizzle-orm";
+import { and, asc, eq, ne, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { unwrapDb } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
+import { outer } from "~/server/db/helpers/related";
+import {
+  expense,
+  product,
+  productCategory,
+  purchase,
+  spendingCategory,
+  vendor,
+} from "~/server/db/schema";
 import { categoryMappingSql } from "~/server/domains/product-category/repo/category-connections";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
-
-const rootSchema = z.object({
-  name: z.string(),
-  website: z.string().nullable(),
-  notes: z.string().nullable(),
-  spendingProfile: z.string(),
-  defaultSpendingCategoryId: z.string().nullable(),
-});
-const lineSchema = z.object({
-  shortcode: z.string(),
-  name: z.string(),
-  cost: z.number(),
-  purchase: z.string(),
-  product: z.string().nullable(),
-  productName: z.string().nullable(),
-  productCategoryId: z.string().nullable(),
-  productCategory: z.string().nullable(),
-  productCategoryEmoji: z.string().nullable(),
-  mapping: categoryMappingSchema.nullable(),
-  explicitSpendingCategory: z.string().nullable(),
-  purchaseSpendingCategory: z.string().nullable(),
-  economicRole: z.string(),
-});
 
 /** Authoritative saved evidence deliberately excludes vendor-resolved category summaries. */
 export async function loadVendorSuggestionContext(
@@ -41,29 +28,89 @@ export async function loadVendorSuggestionContext(
 ) {
   const id = await resolveOrThrow(db, "vendor", code);
   const database = unwrapDb(db);
-  const roots = await database.execute(
-    sql`SELECT name, website, notes, "spendingProfile", "defaultSpendingCategoryId" FROM "Vendor" WHERE id=${id} AND ${notDeleted("Vendor")}`,
-    "objects",
-  );
-  const root = rootSchema.parse(roots[0]);
-  const rows = await database.execute(
-    sql`SELECT e.shortcode,e.name,e.cost,p.shortcode AS purchase,g.shortcode AS product,g.name AS "productName",pc.shortcode AS "productCategoryId",pc.name AS "productCategory",pc.emoji AS "productCategoryEmoji",
-    CASE WHEN pc.id IS NULL THEN NULL ELSE ${categoryMappingSql(sql`pc.id`)} END AS mapping,
-    sc.name AS "explicitSpendingCategory",psc.name AS "purchaseSpendingCategory",e."economicRole"
-    FROM "Expense" e JOIN "Purchase" p ON p.id=e."purchaseId" AND ${notDeleted("p")}
-    LEFT JOIN "Product" g ON g.id=e."productId" AND ${notDeleted("g")}
-    LEFT JOIN "ProductCategory" pc ON pc.id=g."categoryId" AND ${notDeleted("pc")}
-    LEFT JOIN "SpendingCategory" sc ON sc.id=e."spendingCategoryId" AND ${notDeleted("sc")}
-    LEFT JOIN "SpendingCategory" psc ON psc.id=p."spendingCategoryId" AND p."spendingCategoryOrigin" <> 'source' AND ${notDeleted("psc")}
-    WHERE p."vendorId"=${id} AND ${notDeleted("e")} AND e."lineKind"='principal'
-    ORDER BY e.shortcode LIMIT 201`,
-    "objects",
-  );
-  const lines = z.array(lineSchema).parse(rows);
-  const categories = await database.execute(
-    sql`SELECT shortcode,name,"parentId",emoji FROM "SpendingCategory" WHERE ${notDeleted("SpendingCategory")} ORDER BY shortcode`,
-    "objects",
-  );
+  const [root] = await database
+    .select({
+      name: vendor.name,
+      website: vendor.website,
+      notes: vendor.notes,
+      spendingProfile: vendor.spendingProfile,
+      defaultSpendingCategoryId: vendor.defaultSpendingCategoryId,
+    })
+    .from(vendor)
+    .where(and(eq(vendor.id, id), notDeleted(vendor)));
+  if (!root) throw new Error(`Vendor ${code} was not found`);
+  const lineCategory = alias(spendingCategory, "lineSpendingCategory");
+  const purchaseCategory = alias(spendingCategory, "purchaseSpendingCategory");
+  const rows = await database
+    .select({
+      shortcode: expense.shortcode,
+      name: expense.name,
+      cost: expense.cost,
+      purchase: purchase.shortcode,
+      product: product.shortcode,
+      productName: product.name,
+      productCategoryId: productCategory.shortcode,
+      productCategory: productCategory.name,
+      productCategoryEmoji: productCategory.emoji,
+      mapping: sql<unknown>`CASE WHEN ${productCategory.id} IS NULL THEN NULL ELSE ${categoryMappingSql(outer(productCategory.id))} END`,
+      explicitSpendingCategory: lineCategory.name,
+      purchaseSpendingCategory: purchaseCategory.name,
+      economicRole: expense.economicRole,
+    })
+    .from(expense)
+    .innerJoin(
+      purchase,
+      and(eq(purchase.id, expense.purchaseId), notDeleted(purchase)),
+    )
+    .leftJoin(
+      product,
+      and(eq(product.id, expense.productId), notDeleted(product)),
+    )
+    .leftJoin(
+      productCategory,
+      and(
+        eq(productCategory.id, product.categoryId),
+        notDeleted(productCategory),
+      ),
+    )
+    .leftJoin(
+      lineCategory,
+      and(
+        eq(lineCategory.id, expense.spendingCategoryId),
+        notDeleted(lineCategory),
+      ),
+    )
+    .leftJoin(
+      purchaseCategory,
+      and(
+        eq(purchaseCategory.id, purchase.spendingCategoryId),
+        ne(purchase.spendingCategoryOrigin, "source"),
+        notDeleted(purchaseCategory),
+      ),
+    )
+    .where(
+      and(
+        eq(purchase.vendorId, id),
+        notDeleted(expense),
+        eq(expense.lineKind, "principal"),
+      ),
+    )
+    .orderBy(asc(expense.shortcode))
+    .limit(201);
+  const lines = rows.map((row) => ({
+    ...row,
+    mapping: categoryMappingSchema.nullable().parse(row.mapping),
+  }));
+  const categories = await database
+    .select({
+      shortcode: spendingCategory.shortcode,
+      name: spendingCategory.name,
+      parentId: spendingCategory.parentId,
+      emoji: spendingCategory.emoji,
+    })
+    .from(spendingCategory)
+    .where(notDeleted(spendingCategory))
+    .orderBy(asc(spendingCategory.shortcode));
   const truncated = lines.length > 200;
   const subject = JSON.stringify({
     savedVendor: root,

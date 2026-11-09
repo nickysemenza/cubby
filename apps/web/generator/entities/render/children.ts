@@ -106,8 +106,16 @@ export const renderChildTables = (
     })
     .join("\n\n");
 
+/**
+ * To-many relations into soft-deletable tables load live rows only, so nested
+ * reads never repeat the liveness filter. To-one relations stay unfiltered: a
+ * deleted parent still resolves, and readers decide how to present it.
+ */
+export const liveRelationWhere = "where: { deletedAt: { isNull: true } }";
+
 export const renderChildRelations = (
   tables: readonly ChildTableMetadata[],
+  softDeleted: ReadonlySet<string>,
 ): string =>
   tables
     .filter((table) => table.relations.length > 0)
@@ -132,6 +140,9 @@ export const renderChildRelations = (
                 : []),
               ...(relation.relationName
                 ? [`alias:${JSON.stringify(relation.relationName)}`]
+                : []),
+              ...(relation.kind === "many" && softDeleted.has(relation.table)
+                ? [liveRelationWhere]
                 : []),
             ];
             return `${JSON.stringify(relation.name)}:r.${relation.kind}.${relation.table}({${config.join(",")}})`;

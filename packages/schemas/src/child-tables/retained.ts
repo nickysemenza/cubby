@@ -17,3 +17,14 @@ const retainedTableReasons = {
 } as const;
 
 export const retainedTableExports = Object.keys(retainedTableReasons);
+
+/** Retained tables with a soft-delete column; generated to-many relations into them load live rows. */
+export const retainedSoftDeletedTables = [
+  "aiAnalysis",
+  "entityAttachment",
+  "entityEmbedding",
+  "entityExternalId",
+  "entityLink",
+  "ledgerSourceClaim",
+  "searchDocument",
+] as const satisfies readonly (keyof typeof retainedTableReasons)[];

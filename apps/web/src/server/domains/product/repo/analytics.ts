@@ -24,7 +24,7 @@ import {
 import { categorySummarySql } from "~/server/db/computed/product-category-sql";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
-import { entityExternalId, inventoryEntry, product } from "~/server/db/schema";
+import { entityExternalId, product } from "~/server/db/schema";
 import { productHasDisplayableImageSql } from "~/server/domains/image/repo/image-displayability";
 import {
   loadPrimaryGtins,
@@ -63,10 +63,6 @@ export const findDuplicateUniqueProducts = async (
     },
     with: {
       inventoryEntry: {
-        where: {
-          RAW: (table: PgTable) =>
-            relationalSql(table, notDeleted(inventoryEntry)),
-        },
         with: {
           location: true,
         },
@@ -222,10 +218,6 @@ export const getCategoryDistribution = async (
     },
     with: {
       inventoryEntry: {
-        where: {
-          RAW: (table: PgTable) =>
-            relationalSql(table, notDeleted(inventoryEntry)),
-        },
         columns: {},
         with: {
           location: {

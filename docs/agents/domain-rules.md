@@ -255,6 +255,28 @@ column identity for this binding while preserving qualification in plain selects
 Do not interpolate an old RQB alias into a relational expression. Extras that
 accept a table-name argument must derive it from the callback's table.
 
+Choose the query form in this order:
+
+1. RQB `with`/`columns` for related reads a declared relation covers. Declare
+   a missing relation on the entity rather than joining by hand. Generated
+   to-many relations into soft-deletable tables already filter
+   `deletedAt IS NULL`; a nested `RAW` repeats only other conditions (role,
+   kind). To-one relations still return deleted parents, so readers project
+   `deletedAt` where presentation depends on it.
+2. Typed core builders (`select`/`join`/`exists`/`inArray`, `count()`,
+   `asc`/`desc`) where no relation fits. Query-only repositories stay on
+   `RepositoryQueryClient` and use this form; do not widen it to RQB.
+3. Raw `sql` only for named cases: generic list, search and work-queue
+   compilers; effective and inherited field resolution; window functions,
+   recursive CTEs, `ON CONFLICT`, row and advisory locks, full-text search,
+   ranking and deduplication; single-parameter arrays (`uuidArrayParam`);
+   jsonb construction; and DDL or generated code.
+
+Keep RQB filters in the `RAW` + `relationalSql` form, not object filters: rc.5
+throws on `undefined` object-filter fields and drops bare `Date` values. Convert
+whole statements. Never put builder columns into the select fields of a
+hand-written statement; Drizzle renders them unqualified there.
+
 Drizzle raw-`sql` traps: a nullable timestamp `CASE` must cast its bound
 instant to `timestamp`; an unconstrained parameter beside `NULL` otherwise
 infers `text` and fails the update. Timestamp aggregates and scalar subqueries

@@ -26,12 +26,7 @@ import { match } from "ts-pattern";
 import type { Database } from "~/server/db";
 import { escapeLike, getDb, notDeleted } from "~/server/db/helpers";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
-import {
-  entityExternalId,
-  inventoryEntry,
-  product,
-  vendor,
-} from "~/server/db/schema";
+import { inventoryEntry, product, vendor } from "~/server/db/schema";
 import {
   attachInventoryValuations,
   loadStoredInventoryValuations,
@@ -161,12 +156,7 @@ export const countProductsByFoodIdentifiers = async (
     },
     columns: { fdc_id: true },
     with: {
-      externalIds: {
-        where: {
-          RAW: (table: PgTable) =>
-            relationalSql(table, notDeleted(entityExternalId)),
-        },
-      },
+      externalIds: {},
     },
   });
   return lookups.map(

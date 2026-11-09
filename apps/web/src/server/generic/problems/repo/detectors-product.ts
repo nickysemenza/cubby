@@ -561,10 +561,6 @@ export const loadProductsForCoverage = async (
     },
     with: {
       unitMappings: {
-        where: {
-          RAW: (table: PgTable) =>
-            relationalSql(table, notDeleted(productUnitMappings)),
-        },
         columns: {
           aValue: true,
           aUnit: true,

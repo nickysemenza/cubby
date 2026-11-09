@@ -28,9 +28,11 @@ import {
   notDeleted,
   withTransaction,
 } from "~/server/db/helpers";
+import { outer, related } from "~/server/db/helpers/related";
 import {
   financialAccount,
   financialTransaction,
+  ledgerParty,
   ledgerTransfer,
 } from "~/server/db/schema";
 import { financialEvidenceAmountMinor } from "~/server/domains/financial-transaction/repo/financial-evidence";
@@ -98,6 +100,15 @@ type LedgerSourceClaimRow = Omit<
   updatedAt: string;
 };
 
+// includes-deleted: transfer titles and party references resolve across a
+// soft-deleted party (see the read columns below).
+const transferParty = (column: typeof ledgerTransfer.fromPartyId) =>
+  related(ledgerParty, (party) => eq(party.id, outer(column)), {
+    includeDeleted: true,
+  });
+const fromParty = transferParty(ledgerTransfer.fromPartyId);
+const toParty = transferParty(ledgerTransfer.toPartyId);
+
 const partyKind = z.enum(["member", "guest", "household"]);
 
 export const ledgerTransferScaffold = listScaffold(
@@ -106,21 +117,21 @@ export const ledgerTransferScaffold = listScaffold(
   {
     readSchema: ledgerTransferRepositoryReadSchema,
     read: {
-      title: sql`(SELECT name FROM "LedgerParty" WHERE id = "LedgerTransfer"."fromPartyId")`,
+      title: fromParty.value<string>((party) => party.name),
       // Keys outside the read schema are helper columns the bindings read.
       columns: {
         // includes-deleted: `fromPartyName` is the entity's non-null titleField
         // and `toPartyName` mirrors it; a soft-deleted party's name must not
         // read as SQL NULL into a `z.string()` read schema. The party
         // shortcodes resolve across a soft-deleted party for the same reason.
-        fromPartyName: sql<string>`(SELECT name FROM "LedgerParty" WHERE id = "LedgerTransfer"."fromPartyId")`,
-        toPartyName: sql<string>`(SELECT name FROM "LedgerParty" WHERE id = "LedgerTransfer"."toPartyId")`,
+        fromPartyName: fromParty.value<string>((party) => party.name),
+        toPartyName: toParty.value<string>((party) => party.name),
         sourceClaims: transferSourceClaimsSql,
         evidenceTransactionIds: transferEvidenceIdsSql,
-        fromPartyShortcode: sql<string>`(SELECT shortcode FROM "LedgerParty" WHERE id = "LedgerTransfer"."fromPartyId")`,
-        toPartyShortcode: sql<string>`(SELECT shortcode FROM "LedgerParty" WHERE id = "LedgerTransfer"."toPartyId")`,
-        fromPartyKind: sql<string>`(SELECT kind FROM "LedgerParty" WHERE id = "LedgerTransfer"."fromPartyId")`,
-        toPartyKind: sql<string>`(SELECT kind FROM "LedgerParty" WHERE id = "LedgerTransfer"."toPartyId")`,
+        fromPartyShortcode: fromParty.value<string>((party) => party.shortcode),
+        toPartyShortcode: toParty.value<string>((party) => party.shortcode),
+        fromPartyKind: fromParty.value<string>((party) => party.kind),
+        toPartyKind: toParty.value<string>((party) => party.kind),
       },
       bindings: (bind) => [
         bind(
