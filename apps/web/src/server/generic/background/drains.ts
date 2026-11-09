@@ -1,3 +1,4 @@
+import { JOB_FAILING_LIMIT_MS } from "@cubby/schemas/job";
 import type { SQL } from "drizzle-orm";
 
 import { describeErrorCauses } from "~/lib/error-diagnostics";
@@ -195,6 +196,8 @@ export function rowDrain<P>(
       if (!items.length) return { claimed: 0 };
       let published = 0;
       let failed = 0;
+      // Unset until preparation returns; a page-level failure settles without it.
+      let preparation: { prepared: P } | undefined;
       // Fenced callbacks roll back and may replay on 40001, so each one returns
       // its own counts and the page adds them only after that fence commits.
       const settleFailed = async (
@@ -203,80 +206,108 @@ export function rowDrain<P>(
       ) => {
         let settled = 0;
         for (const [item, error] of entries) {
-          const narrowed = (await spec.lock?.(tx, [item], prepared)) ?? [item];
+          const narrowed = (preparation &&
+            (await spec.lock?.(tx, [item], preparation.prepared))) || [item];
           const held = await store.lock(tx, narrowed);
           if (!held.length) continue;
           settled++;
-          // Capacity failures (a pool-slot timeout) back off without exhausting.
+          // Capacity failures (a pool-slot timeout) spend no attempt, but no
+          // item keeps failing past the shared limit (docs/jobs.md#retries).
+          const transient = classifyJobFailure(error).kind === "transient";
+          const failingFor = item.failingSince
+            ? Date.now() - item.failingSince.getTime()
+            : 0;
           if (
-            classifyJobFailure(error).kind !== "transient" &&
-            item.attempts + 1 >= spec.maxAttempts
+            (!transient && item.attempts + 1 >= spec.maxAttempts) ||
+            failingFor >= JOB_FAILING_LIMIT_MS
           )
             await spec.exhaust(tx, held, message(error));
-          else await store.defer(tx, held, message(error), backoff);
+          else await store.defer(tx, held, message(error), backoff, transient);
         }
         return settled;
       };
-      const { prepared, failed: preparationFailures = new Map() } =
-        await withJobPhase("drain.prepare", () =>
-          spec.prepare(db, items, context),
-        );
-      for (const error of preparationFailures.values())
-        if (stopsDrainPage(error)) throw error;
-      if (preparationFailures.size)
-        failed += await context.fenced((tx) =>
-          settleFailed(tx, [...preparationFailures]),
-        );
-      // A rolled-back chunk splits; committed siblings never replay.
-      const publish = async (chunk: readonly DrainItem[]): Promise<void> => {
-        try {
-          const committed = await withJobPhase("drain.publish", () =>
-            context.fenced(
-              async (tx) => {
-                const narrowed =
-                  (await spec.lock?.(tx, chunk, prepared)) ?? chunk;
-                const held = await store.lock(tx, narrowed);
-                if (!held.length) return 0;
-                const publication = await spec.publish(tx, held, prepared);
-                const retained = new Set(
-                  (publication?.retain ?? []).map(
-                    ({ target, ref, ticket }) => `${target}\0${ref}\0${ticket}`,
-                  ),
-                );
-                const completed = held.filter(
-                  ({ target, ref, ticket }) =>
-                    !retained.has(`${target}\0${ref}\0${ticket}`),
-                );
-                await store.clear(tx, completed);
-                return completed.length;
-              },
-              { isolationLevel: spec.isolationLevel },
-            ),
+      try {
+        const { prepared, failed: preparationFailures = new Map() } =
+          await withJobPhase("drain.prepare", () =>
+            spec.prepare(db, items, context),
           );
-          published += committed;
-        } catch (error) {
-          if (
-            classifyJobFailure(error, { publication: true }).kind !== "isolated"
-          )
-            throw error;
-          if (chunk.length === 1) {
-            failed += await context.fenced((tx) =>
-              settleFailed(tx, [[chunk[0]!, error]]),
+        preparation = { prepared };
+        for (const error of preparationFailures.values())
+          if (stopsDrainPage(error)) throw error;
+        if (preparationFailures.size)
+          failed += await context.fenced((tx) =>
+            settleFailed(tx, [...preparationFailures]),
+          );
+        // A rolled-back chunk splits; committed siblings never replay.
+        const publish = async (chunk: readonly DrainItem[]): Promise<void> => {
+          try {
+            const committed = await withJobPhase("drain.publish", () =>
+              context.fenced(
+                async (tx) => {
+                  const narrowed =
+                    (await spec.lock?.(tx, chunk, prepared)) ?? chunk;
+                  const held = await store.lock(tx, narrowed);
+                  if (!held.length) return 0;
+                  const publication = await spec.publish(tx, held, prepared);
+                  const retained = new Set(
+                    (publication?.retain ?? []).map(
+                      ({ target, ref, ticket }) =>
+                        `${target}\0${ref}\0${ticket}`,
+                    ),
+                  );
+                  const completed = held.filter(
+                    ({ target, ref, ticket }) =>
+                      !retained.has(`${target}\0${ref}\0${ticket}`),
+                  );
+                  await store.clear(tx, completed);
+                  return completed.length;
+                },
+                { isolationLevel: spec.isolationLevel },
+              ),
             );
-            return;
+            published += committed;
+          } catch (error) {
+            if (
+              classifyJobFailure(error, { publication: true }).kind !==
+              "isolated"
+            )
+              throw error;
+            if (chunk.length === 1) {
+              failed += await context.fenced((tx) =>
+                settleFailed(tx, [[chunk[0]!, error]]),
+              );
+              return;
+            }
+            const middle = Math.ceil(chunk.length / 2);
+            await publish(chunk.slice(0, middle));
+            await publish(chunk.slice(middle));
           }
-          const middle = Math.ceil(chunk.length / 2);
-          await publish(chunk.slice(0, middle));
-          await publish(chunk.slice(middle));
-        }
-      };
-      for (const chunk of chunked(
-        items.filter((item) => !preparationFailures.has(item)),
-        prepared,
-        spec.weight,
-        DRAIN_PUBLISH_CHUNK,
-      ))
-        await publish(chunk);
+        };
+        for (const chunk of chunked(
+          items.filter((item) => !preparationFailures.has(item)),
+          prepared,
+          spec.weight,
+          DRAIN_PUBLISH_CHUNK,
+        ))
+          await publish(chunk);
+      } catch (error) {
+        // A page that fails whole (a dropped connection, a pool timeout, a
+        // provider error outside any item) settles its still-held items as
+        // failed, so persistent page failures reach the same bounds. Pauses,
+        // waits and lost leases stop the page without touching its items.
+        if (!stopsDrainPage(error))
+          await context
+            .fenced((tx) =>
+              settleFailed(
+                tx,
+                items.map((item) => [item, error] as const),
+              ),
+            )
+            // SILENT: the page's own error is rethrown below and reported by
+            // its permit; an unreachable database leaves the items owed.
+            .catch(() => undefined);
+        throw error;
+      }
       released = true;
       await spec.store.release?.(db);
       return { claimed: items.length, published, failed };

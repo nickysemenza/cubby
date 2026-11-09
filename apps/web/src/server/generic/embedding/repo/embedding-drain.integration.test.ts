@@ -1,5 +1,5 @@
 import type { SearchableEntityRef } from "@cubby/schemas/search";
-import { and, eq, isNotNull, isNull } from "drizzle-orm";
+import { and, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -466,14 +466,34 @@ describe("embedding refresh and cleanup drains", () => {
     const before = Date.now();
 
     await advanceCleanup(ctx.db, remote.store);
-    const [work] = await getDb(ctx.db)
-      .select({
-        deletionId: entityEmbedding.deletionId,
-        retryAt: entityEmbedding.deletionRetryAt,
-      })
-      .from(entityEmbedding)
-      .where(eq(entityEmbedding.id, staged.id));
+    const read = async () =>
+      (
+        await getDb(ctx.db)
+          .select({
+            deletionId: entityEmbedding.deletionId,
+            retryAt: entityEmbedding.deletionRetryAt,
+            attempts: entityEmbedding.deletionAttempts,
+            failingSince: entityEmbedding.deletionFailingSince,
+            parked: sql<boolean>`${entityEmbedding.deletionRetryAt} = 'infinity'::timestamp`,
+          })
+          .from(entityEmbedding)
+          .where(eq(entityEmbedding.id, staged.id))
+      )[0];
+    const work = await read();
     expect(work?.deletionId).toBeNull();
     expect(work?.retryAt?.getTime()).toBeGreaterThan(before);
+    // A transient failure spends no attempt but starts the failure streak.
+    expect(work?.attempts).toBe(0);
+    expect(work?.failingSince).not.toBeNull();
+
+    // Still failing a day after the streak began, the deletion stops visibly.
+    await getDb(ctx.db)
+      .update(entityEmbedding)
+      .set({ deletionFailingSince: new Date(Date.now() - 25 * 60 * 60_000) })
+      .where(eq(entityEmbedding.id, staged.id));
+    await advanceCleanup(ctx.db, remote.store);
+    const stopped = await read();
+    expect(stopped?.deletionId).toBeNull();
+    expect(stopped?.parked).toBe(true);
   });
 });

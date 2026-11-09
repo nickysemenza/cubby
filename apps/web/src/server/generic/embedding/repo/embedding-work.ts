@@ -29,8 +29,11 @@ import {
   repositoryAfterCommit,
 } from "~/server/db/repository-access.boundary";
 import { entityEmbedding, searchDocument } from "~/server/db/retained-tables";
-import type { DrainStore } from "~/server/generic/jobs/drain-store";
-import type { DrainItem } from "~/server/generic/jobs/drain-store";
+import {
+  transientRetryAt,
+  type DrainItem,
+  type DrainStore,
+} from "~/server/generic/jobs/drain-store";
 
 const EMBEDDING_REFRESH_TARGET = "embedding.refresh";
 const EMBEDDING_CLEANUP_TARGET = "embedding.cleanup";
@@ -50,7 +53,8 @@ const item = (
   ref: string,
   ticket: number,
   attempts: number,
-): DrainItem => ({ target, ref, ticket, priority: 0, attempts });
+  failingSince: Date | null,
+): DrainItem => ({ target, ref, ticket, priority: 0, attempts, failingSince });
 
 /**
  * Owe a fresh embedding for these sources. A page in flight keeps its lease: it can
@@ -68,6 +72,7 @@ export async function markEmbeddingRefresh(
       embeddingGeneration: sql`${searchDocument.embeddingGeneration} + 1`,
       embeddingAttempts: 0,
       embeddingError: null,
+      embeddingFailingSince: null,
     })
     .where(
       and(
@@ -163,10 +168,17 @@ export function embeddingRefreshStore(token: string): EmbeddingRefreshStore {
           ref: searchDocument.entityId,
           ticket: searchDocument.embeddingGeneration,
           attempts: searchDocument.embeddingAttempts,
+          failingSince: searchDocument.embeddingFailingSince,
         });
       for (const row of rows) claimed.add(row.ref);
       return rows.map((row) =>
-        item(EMBEDDING_REFRESH_TARGET, row.ref, row.ticket, row.attempts),
+        item(
+          EMBEDDING_REFRESH_TARGET,
+          row.ref,
+          row.ticket,
+          row.attempts,
+          row.failingSince,
+        ),
       );
     },
     lock: async (tx, items) => {
@@ -189,19 +201,25 @@ export function embeddingRefreshStore(token: string): EmbeddingRefreshStore {
           embeddingDueAt: null,
           embeddingAttempts: 0,
           embeddingError: null,
+          embeddingFailingSince: null,
           embeddingLeaseToken: null,
           embeddingLeaseUntil: null,
         })
         .where(or(...items.map(current)));
     },
-    defer: async (tx, items, error, backoff) => {
+    defer: async (tx, items, error, backoff, transient) => {
       if (!items.length) return;
       await getDb(tx)
         .update(searchDocument)
         .set({
-          embeddingAttempts: sql`${searchDocument.embeddingAttempts} + 1`,
+          embeddingAttempts: transient
+            ? sql`${searchDocument.embeddingAttempts}`
+            : sql`${searchDocument.embeddingAttempts} + 1`,
+          embeddingFailingSince: sql`coalesce(${searchDocument.embeddingFailingSince}, now())`,
           embeddingError: error.slice(0, 2000),
-          embeddingDueAt: sql`now() + least(${backoff.maxMs}::bigint,
+          embeddingDueAt: transient
+            ? transientRetryAt(searchDocument.embeddingFailingSince, backoff)
+            : sql`now() + least(${backoff.maxMs}::bigint,
             ${backoff.baseMs}::bigint * (2 ^ least(${searchDocument.embeddingAttempts}, 20))::bigint) * interval '1 millisecond'`,
         })
         .where(or(...items.map(current)));
@@ -255,8 +273,17 @@ export const embeddingCleanupStore: DrainStore = {
         .returning({
           ref: entityEmbedding.id,
           attempts: entityEmbedding.deletionAttempts,
+          failingSince: entityEmbedding.deletionFailingSince,
         })
-    ).map((row) => item(EMBEDDING_CLEANUP_TARGET, row.ref, 0, row.attempts)),
+    ).map((row) =>
+      item(
+        EMBEDDING_CLEANUP_TARGET,
+        row.ref,
+        0,
+        row.attempts,
+        row.failingSince,
+      ),
+    ),
   lock: async (tx, items) => {
     if (!items.length) return [];
     const refs = items.map((entry) => entry.ref);
@@ -276,13 +303,17 @@ export const embeddingCleanupStore: DrainStore = {
   },
   // Recording the deletion receipt is what settles an artifact.
   clear: async () => {},
-  defer: async (tx, items, error) => {
+  // Deletions retry on a fixed interval; a transient failure spends no attempt.
+  defer: async (tx, items, error, _backoff, transient) => {
     if (!items.length) return;
     await getDb(tx)
       .update(entityEmbedding)
       .set({
         deletionRetryAt: new Date(Date.now() + CLEANUP_RETRY_MS),
-        deletionAttempts: sql`${entityEmbedding.deletionAttempts} + 1`,
+        deletionAttempts: transient
+          ? sql`${entityEmbedding.deletionAttempts}`
+          : sql`${entityEmbedding.deletionAttempts} + 1`,
+        deletionFailingSince: sql`coalesce(${entityEmbedding.deletionFailingSince}, now())`,
         deletionError: error.slice(0, 2000),
       })
       .where(

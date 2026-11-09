@@ -470,7 +470,14 @@ non-transient failures; an embedding refresh stops owing after 100 failures
 (about a day at its 15-minute cap) and a vector deletion after 288 five-minute
 retries, each keeping its error for Work's failed list; image processing stops
 retrying after twelve failures (about a day and a half of doubling backoff) and
-waits for explicit retry. Transient failures defer an item without exhausting it.
+waits for explicit retry. Drain items follow the Job rule for transient
+failures: they defer without spending an attempt, back off by the streak's age,
+and record the streak's start on the owning row (`AiEvaluation.failingSince`,
+`SearchDocument.embeddingFailingSince`, `EntityEmbedding.deletionFailingSince`);
+any item still failing 24 hours after its streak began is settled as failed.
+A page that fails whole (outside any one item) settles each item it still holds
+as failed, so persistent page failures reach the same bounds. Funding and
+provider waits stop the page without touching its items.
 
 Serialization recovery is bounded inside a DB-only snapshot transaction. If all
 attempts roll back, its owner emits `SnapshotWriteConflictError`; the durable Job

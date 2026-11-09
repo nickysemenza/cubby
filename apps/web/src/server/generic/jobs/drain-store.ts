@@ -1,4 +1,5 @@
 import type { JobBackoff } from "@cubby/schemas/job";
+import { sql, type AnyColumn } from "drizzle-orm";
 
 import type { Database } from "~/server/db/database";
 
@@ -9,6 +10,8 @@ export type DrainItem = {
   ticket: number;
   priority: number;
   attempts: number;
+  /** First failure of the item's current streak, if it is failing. */
+  failingSince?: Date | null;
 };
 
 /**
@@ -20,10 +23,25 @@ export type DrainStore = {
   claim(db: Database, limit: number): Promise<DrainItem[]>;
   lock(tx: Database, items: readonly DrainItem[]): Promise<DrainItem[]>;
   clear(tx: Database, items: readonly DrainItem[]): Promise<void>;
+  /**
+   * Back off failed items and start their failure streak if none is running.
+   * A `transient` failure (capacity, dropped connection) spends no attempt;
+   * its delay grows with the streak's age instead.
+   */
   defer(
     tx: Database,
     items: readonly DrainItem[],
     error: string,
     backoff: JobBackoff,
+    transient: boolean,
   ): Promise<void>;
 };
+
+/** A transient failure's retry time: it grows with the streak's age, within the backoff bounds. */
+export const transientRetryAt = (
+  failingSince: AnyColumn,
+  backoff: JobBackoff,
+) =>
+  sql`now() + least(${backoff.maxMs}::bigint, greatest(${backoff.baseMs}::bigint,
+    (extract(epoch FROM now() - coalesce(${failingSince}, now())) * 1000)::bigint))
+    * interval '1 millisecond'`;

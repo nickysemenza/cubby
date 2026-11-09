@@ -33,7 +33,10 @@ import type { Database } from "~/server/db/database";
 import { repositoryQueries as getDb } from "~/server/db/repository-access.boundary";
 import { aiEvaluation } from "~/server/db/retained-tables";
 import type { DrainStore } from "~/server/generic/jobs/drain-store";
-import type { DrainItem } from "~/server/generic/jobs/drain-store";
+import {
+  transientRetryAt,
+  type DrainItem,
+} from "~/server/generic/jobs/drain-store";
 
 /** Items name evaluations; a page serves one feature. */
 const AI_EVALUATION_TARGET = "ai.evaluation";
@@ -100,6 +103,7 @@ export async function markAiEvaluationWork(
       priority: sql`CASE WHEN ${aiEvaluation.runAt} IS NOT NULL
         THEN least(${aiEvaluation.priority}, ${demandPriority}) ELSE ${demandPriority} END`,
       attempts: 0,
+      failingSince: null,
       error: null,
       waitCause: null,
       ...(revive
@@ -146,6 +150,7 @@ export async function dropAiEvaluationWork(db: Database, where: SQL) {
     .set({
       runAt: null,
       attempts: 0,
+      failingSince: null,
       leaseToken: null,
       leaseUntil: null,
       waitCause: null,
@@ -270,6 +275,7 @@ export const aiEvaluationStore = (
           priority: aiEvaluation.priority,
           attempts: aiEvaluation.attempts,
           runAt: aiEvaluation.runAt,
+          failingSince: aiEvaluation.failingSince,
         });
       return rows
         .sort(
@@ -284,6 +290,7 @@ export const aiEvaluationStore = (
           ticket: 0,
           priority: row.priority,
           attempts: row.attempts,
+          failingSince: row.failingSince,
         }));
     },
     lock: async (tx, items) => {
@@ -304,23 +311,29 @@ export const aiEvaluationStore = (
         .set({
           runAt: null,
           attempts: 0,
+          failingSince: null,
           leaseToken: null,
           leaseUntil: null,
           waitCause: null,
         })
         .where(held(items));
     },
-    defer: async (tx, items, error, backoff) => {
+    defer: async (tx, items, error, backoff, transient) => {
       if (!items.length) return;
       await getDb(tx)
         .update(aiEvaluation)
         .set({
-          attempts: sql`${aiEvaluation.attempts} + 1`,
+          attempts: transient
+            ? sql`${aiEvaluation.attempts}`
+            : sql`${aiEvaluation.attempts} + 1`,
+          failingSince: sql`coalesce(${aiEvaluation.failingSince}, now())`,
           error: error.slice(0, 2000),
           leaseToken: null,
           leaseUntil: null,
           waitCause: null,
-          runAt: sql`now() + least(${backoff.maxMs}::bigint,
+          runAt: transient
+            ? transientRetryAt(aiEvaluation.failingSince, backoff)
+            : sql`now() + least(${backoff.maxMs}::bigint,
             ${backoff.baseMs}::bigint * (2 ^ least(${aiEvaluation.attempts}, 20))::bigint) * interval '1 millisecond'`,
         })
         .where(held(items));
