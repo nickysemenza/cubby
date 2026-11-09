@@ -151,11 +151,14 @@ An accepted retained Retry keeps its Run, frozen page and canonical Job. If its
 resource is occupied it reads as queued automatic work, using the existing
 paused state with a specific admission reason. Its fenced Job claim admits it
 later. Repeated capacity deferrals consume no failure attempts. Eligible
-recovery reserves one vacancy; an exclusive waiter stops fresh admissions until
+recovery or an older yielded query reserves one vacancy; fresh continuations
+cannot strand a parked page. An exclusive waiter stops fresh admissions until
 existing owners drain. Other normal query work retains the remaining capacity.
 Recovery query owners use at most three slots, leaving room for normal work.
 Only a recovery with available recovery capacity and an unoccupied resource
 reserves a vacancy; blocked recovery cannot strand the normal lane.
+Eligibility includes the candidate's own reservation: a younger same-query
+waiter cannot take its older owner's vacancy.
 Normal history demand coalesces into one queued Run; its older exclusive request
 also drains query owners instead of waiting behind endless recovery callbacks.
 Running owners renew admission at the next Job claim, without interrupting an
@@ -188,6 +191,10 @@ Retry-After is preserved beyond the client's short in-call retry bound.
 Throttling and server responses with Retry-After reach the shared cooldown owner
 before any further HTTP attempt; only server failures without a deadline retry
 within the client.
+An aborted discovery database snapshot or lock/capacity conflict defers the
+canonical Job with its original cursor and failure allowance. Raw database
+diagnostics remain in workflow logs; cancellation and lease loss still stop
+that invocation instead of creating new demand.
 Mailbox coverage advances only after every batch and history event is handled. A retained
 automatic history page can then settle against a newer completed history cursor
 under the same baseline when its numeric ID covers the entire frozen range.

@@ -2093,6 +2093,41 @@ describe("scheduled Gmail discovery", () => {
         }),
       ).toBe("deferred");
       expect(await readRun(queryOwner)).toEqual(parked);
+      // Fresh continuations leave a vacancy for an older yielded query, even
+      // when a younger recovery for its same resource cannot yet enter.
+      for (let index = 0; index < 3; index++)
+        await insertWithShortcode(ctx.db, "vendor", {
+          name: `Synthetic fresh fair seller ${index}`,
+          orderEmailSenders: [`orders@fresh-fair-${index}.example.test`],
+        });
+      expect((await startMailDiscovery(ctx.db)).started).toBe(3);
+      const freshOwners = await getDb(ctx.db)
+        .select()
+        .from(run)
+        .where(eq(run.status, "running"));
+      expect(freshOwners).toHaveLength(3);
+      const freshOwner = freshOwners[0];
+      if (!freshOwner) throw new Error("Synthetic fresh owner missing");
+      const [freshJob] = await readJobs(ctx.db, {
+        key: `run:${freshOwner.id}`,
+      });
+      if (!freshJob) throw new Error("Synthetic fresh Job missing");
+      // The native stale snapshot above also models a rolled-back Email read:
+      // capacity backpressure keeps its cursor and ordinary failure allowance.
+      factory.mockReturnValueOnce(async () => {
+        throw stale.reason;
+      });
+      expect(
+        await advanceJob(ctx.db, freshJob.id, { "run.execute": runJobHandler }),
+      ).toBe("deferred");
+      expect(await readRun(freshOwner.id)).toEqual(freshOwner);
+      expect((await readJobs(ctx.db, { key: freshJob.key }))[0]).toMatchObject({
+        state: "queued",
+        cursor: null,
+        generation: 1,
+        attempts: 0,
+        waitReason: "provider_capacity",
+      });
       await updateJobs(
         ctx.db,
         { key: queryJob.key },

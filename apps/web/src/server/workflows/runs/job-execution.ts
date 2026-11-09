@@ -25,6 +25,7 @@ import type { PreparedJobPage } from "~/server/generic/jobs/types";
 import { EXECUTED_RUN_PURPOSES } from "~/server/workflows/runs/contract";
 import { withWorkflowExecution } from "~/server/workflows/runs/execution";
 import {
+  mailDiscoveryBackpressure,
   resumeClaimedWorkflowRun,
   yieldClaimedMailDiscovery,
 } from "~/server/workflows/runs/lifecycle";
@@ -264,7 +265,9 @@ export const runJobHandler = defineJobHandler(
               new Date(provider.retryAt),
               "provider_capacity",
             )
-          : undefined;
+          : input.purpose === "mail_discovery"
+            ? mailDiscoveryBackpressure(error)
+            : undefined;
       if (!deferred) throw error;
       if (provider && !budget)
         await context.fenced(async (tx) => {
