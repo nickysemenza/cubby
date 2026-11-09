@@ -15,7 +15,7 @@ import { product } from "~/integrations/tanstack-query/generated/domains/product
 import { StaticTable } from "~/ui/data-table/static-table";
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { Row, Stack } from "~/ui/layout";
-import { Panel } from "~/ui/layout/panel";
+import { Panel } from "~/ui/layout";
 import { Overlay } from "~/ui/overlays/overlay";
 import { Button } from "~/ui/primitives/button";
 import { Checkbox } from "~/ui/primitives/checkbox";

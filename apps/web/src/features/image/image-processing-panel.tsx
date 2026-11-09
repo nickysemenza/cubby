@@ -27,8 +27,8 @@ import { invalidateOperationTags } from "~/integrations/tanstack-query/operation
 import { formatInstant } from "~/lib/date-format";
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
-import { Disclosure } from "~/ui/layout/disclosure";
-import { Section } from "~/ui/layout/section";
+import { Disclosure } from "~/ui/layout";
+import { Section } from "~/ui/layout";
 import { Image } from "~/ui/media/image";
 import { Overlay } from "~/ui/overlays/overlay";
 import { Button, buttonVariants } from "~/ui/primitives/button";

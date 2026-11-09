@@ -16,7 +16,7 @@ import { dateSpanParts } from "~/lib/date-span";
 import { formatCount } from "~/lib/number-format";
 import { wasm } from "~/lib/wasm";
 import { Row, Stack } from "~/ui/layout";
-import { Panel } from "~/ui/layout/panel";
+import { Panel } from "~/ui/layout";
 import { Avatar, AvatarFallback, AvatarImage } from "~/ui/primitives/avatar";
 import type { Fact } from "~/ui/records/facts";
 import {

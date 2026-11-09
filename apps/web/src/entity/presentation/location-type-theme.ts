@@ -20,7 +20,6 @@ import type { Icon } from "@phosphor-icons/react/lib";
 
 import { getCategoryIcon } from "./category-theme";
 
-// Re-export colors/helpers from @cubby/shared for existing consumers
 export { getLocationTypeColor };
 
 /**

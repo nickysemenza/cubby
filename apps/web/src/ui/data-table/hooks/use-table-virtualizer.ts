@@ -241,7 +241,6 @@ export function useTableVirtualizer({
   initialOffset = 0,
   retainedItemKey = null,
 }: UseTableVirtualizerArgs): UseTableVirtualizerResult {
-  // Ref for virtualization scroll container
   const tableContainerRef = useRef<HTMLDivElement>(null);
 
   // The pane is bounded to whatever is left of the viewport beneath it, so the

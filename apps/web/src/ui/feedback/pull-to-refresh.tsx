@@ -57,11 +57,9 @@ export function PullToRefresh({
       const deltaY = touch.clientY - startYRef.current;
 
       if (deltaY > 0) {
-        // Pulling down
         const distance = Math.min(MAX_PULL, deltaY * 0.5); // Apply resistance
         setPullDistance(distance);
       } else {
-        // Pushing up - reset
         setPullDistance(0);
         isPullingRef.current = false;
       }

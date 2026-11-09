@@ -62,7 +62,7 @@ import type { FilterConfig } from "~/ui/data-table/table-meta";
 import type { GroupConfig } from "~/ui/data-table/use-grouped-list";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { RemoveButton } from "~/ui/forms/remove-button";
-import { Panel } from "~/ui/layout/panel";
+import { Panel } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Tabs, TabsList, TabsTrigger } from "~/ui/primitives/tabs";
 import { Alert, AlertAction } from "~/ui/reui/alert";

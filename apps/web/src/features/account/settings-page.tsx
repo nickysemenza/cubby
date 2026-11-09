@@ -38,7 +38,7 @@ import type { ComboboxItem } from "~/ui/combobox/combobox-types";
 import { IndexedSections } from "~/ui/data-table/indexed-sections";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { Row, Section, Stack } from "~/ui/layout";
-import { Disclosure } from "~/ui/layout/disclosure";
+import { Disclosure } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/text/description";
 import { StatusText } from "~/ui/text/status-text";

@@ -15,7 +15,7 @@ import { useSectionEmpty } from "~/ui/data-table/detail-section-state";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useHydratedLoading } from "~/ui/hooks/use-hydrated";
 import { Stack, Row } from "~/ui/layout";
-import { Disclosure } from "~/ui/layout/disclosure";
+import { Disclosure } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { RecordList, RecordRow } from "~/ui/records/record-list";
 import { Description } from "~/ui/text/description";

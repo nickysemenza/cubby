@@ -217,7 +217,6 @@ export function GlobalCommandMenu({
   // before this (lazily loaded) menu has mounted. Don't register it here too,
   // or it would double-toggle once mounted.
 
-  // Reset search when dialog closes
   React.useEffect(() => {
     if (!open) {
       setSearch("");

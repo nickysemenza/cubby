@@ -3,8 +3,8 @@ import { groupBy } from "es-toolkit";
 import { useEffect, useState } from "react";
 
 import { Stack } from "~/ui/layout";
-import { Disclosure } from "~/ui/layout/disclosure";
-import { Panel } from "~/ui/layout/panel";
+import { Disclosure } from "~/ui/layout";
+import { Panel } from "~/ui/layout";
 
 import { docSections } from "./docs-registry";
 

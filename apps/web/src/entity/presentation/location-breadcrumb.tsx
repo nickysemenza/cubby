@@ -37,7 +37,6 @@ export function locationToSegments(
 ): LocationSegment[] {
   const segments: LocationSegment[] = [];
 
-  // Walk up the parent chain
   let current: LocationTreeNode | null | undefined = location;
   while (current) {
     segments.unshift({

@@ -2,7 +2,7 @@ import type { MerchantVendorInference } from "@cubby/schemas/financial-transacti
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { Row, Stack } from "~/ui/layout";
-import { Disclosure } from "~/ui/layout/disclosure";
+import { Disclosure } from "~/ui/layout";
 
 const supportCopy = (count: number) =>
   `${count} previously settled ${count === 1 ? "transaction" : "transactions"}`;

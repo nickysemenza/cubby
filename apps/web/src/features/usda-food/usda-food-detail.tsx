@@ -8,7 +8,7 @@ import { ScalesIcon } from "@phosphor-icons/react/dist/csr/Scales";
 import { ScrollIcon } from "@phosphor-icons/react/dist/csr/Scroll";
 import { useMemo } from "react";
 
-import { EntityRefList } from "~/entity/components/entity-ref-link";
+import { ListRefLink } from "~/entity/components/ref-link/list";
 import { Page } from "~/entity/page/page";
 import { USDA_KINDS } from "~/lib/conversion-coverage";
 import { sourceNutritionEstimate } from "~/lib/nutrition-format";
@@ -76,7 +76,6 @@ export const USDAFoodDetail: React.FC<{
     legacyFoodInfo,
   } = food;
 
-  // Load mappings
   const mappings = useMemo(() => unitMappingsFromFood(food), [food]);
 
   // Nutrient-density intel needs a priced product — an unlinked USDA food has
@@ -223,7 +222,6 @@ export const USDAFoodDetail: React.FC<{
     <UnitMappingDisplay mappings={mappings} title="" kinds={USDA_KINDS} />
   );
 
-  // Section for displaying linked products
   const linkedProductsSection = (
     <div>
       {linkedProducts.length === 0 ? (
@@ -231,7 +229,7 @@ export const USDAFoodDetail: React.FC<{
           No associated products found
         </div>
       ) : (
-        <EntityRefList entity="product" items={linkedProducts} />
+        <ListRefLink entity="product" items={linkedProducts} />
       )}
     </div>
   );

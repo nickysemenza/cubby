@@ -5,7 +5,7 @@ import { lazy, Suspense, useId, useMemo, useState } from "react";
 import type { BaseKind } from "~/lib/conversion-coverage";
 import { unitKindOrNull } from "~/lib/wasm";
 import { Row, Stack } from "~/ui/layout";
-import { Disclosure } from "~/ui/layout/disclosure";
+import { Disclosure } from "~/ui/layout";
 import { Checkbox } from "~/ui/primitives/checkbox";
 import { Label } from "~/ui/primitives/label";
 

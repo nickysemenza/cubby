@@ -1,7 +1,7 @@
 import { cn } from "cn";
 import type * as React from "react";
 
-import { type GridVariants, gridVariants } from "~/styles/layouts";
+import { type GridVariants, gridVariants } from "~/ui/layout/layouts";
 
 interface GridProps extends React.HTMLAttributes<HTMLElement>, GridVariants {
   /** Render as a different element (e.g. "ul"). */

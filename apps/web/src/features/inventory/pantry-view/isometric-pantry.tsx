@@ -1,6 +1,6 @@
 /**
  * React shell for the isometric pantry. Pure projection/layout lives in
- * isometric-geometry and isometric-scene; canvas lifecycle and pointer/touch
+ * isometric layout and renderer; canvas lifecycle and pointer/touch
  * interaction live in use-isometric-pantry.
  */
 import { getFeatureColor } from "@cubby/shared";

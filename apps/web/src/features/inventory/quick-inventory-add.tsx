@@ -33,7 +33,7 @@ import {
 } from "~/ui/forms/form-fields";
 import { NullableNumericField, UnifiedTextField } from "~/ui/forms/form-utils";
 import { Row } from "~/ui/layout";
-import { Disclosure } from "~/ui/layout/disclosure";
+import { Disclosure } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Spinner } from "~/ui/primitives/spinner";
 

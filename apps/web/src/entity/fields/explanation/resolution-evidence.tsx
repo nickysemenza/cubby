@@ -3,7 +3,7 @@ import type { FieldExplanationOutput } from "@cubby/schemas/field-explanation";
 import { RecordsBlockView } from "~/entity/entity-detail/records-block";
 import { useEntityMetadata } from "~/entity/metadata";
 import { SourceStack } from "~/ui/derived/source-stack";
-import { Disclosure } from "~/ui/layout/disclosure";
+import { Disclosure } from "~/ui/layout";
 
 import {
   ExplanationEntityLink,

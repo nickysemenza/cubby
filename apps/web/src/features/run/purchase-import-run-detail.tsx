@@ -44,7 +44,7 @@ import { invalidateOperationTags } from "~/integrations/tanstack-query/operation
 import { formatDuration } from "~/lib/format-duration";
 import { useSectionEmpty } from "~/ui/data-table/detail-section-state";
 import { Panel, Row, Section, Stack } from "~/ui/layout";
-import { Disclosure } from "~/ui/layout/disclosure";
+import { Disclosure } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Facts, FactsDensityProvider } from "~/ui/records/facts";
 import {

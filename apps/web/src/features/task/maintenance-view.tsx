@@ -12,7 +12,7 @@ import { householdLocalDate } from "~/lib/household-date";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
 import { Row, Section, Stack } from "~/ui/layout";
-import { Disclosure } from "~/ui/layout/disclosure";
+import { Disclosure } from "~/ui/layout";
 import { Input } from "~/ui/primitives/input";
 import { RecordList, RecordRow } from "~/ui/records/record-list";
 import { Description } from "~/ui/text/description";

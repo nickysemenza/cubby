@@ -144,7 +144,6 @@ function ConversionDialogContent({
     [mappings, effectiveKinds],
   );
 
-  // Update conversions whenever form values change
   React.useEffect(() => {
     const subscription = form.watch((values) => {
       // Only update if we have both a value and a unit

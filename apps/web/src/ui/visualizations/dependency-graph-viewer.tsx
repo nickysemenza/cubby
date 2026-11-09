@@ -2,7 +2,7 @@ import { humanize } from "@cubby/shared";
 import { type ComponentProps, useMemo } from "react";
 
 import { Row, Stack } from "~/ui/layout";
-import { Disclosure } from "~/ui/layout/disclosure";
+import { Disclosure } from "~/ui/layout";
 import { browserOnlyLazy } from "~/ui/primitives/browser-only-lazy";
 import { Button } from "~/ui/primitives/button";
 import type { Fact } from "~/ui/records/facts";

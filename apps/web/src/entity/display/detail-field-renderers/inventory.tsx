@@ -4,7 +4,7 @@ import { renderDetailFieldValue } from "~/entity/display/entity-display";
 import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import { useEntityMetadata } from "~/entity/metadata";
 import { Stack } from "~/ui/layout";
-import { Disclosure } from "~/ui/layout/disclosure";
+import { Disclosure } from "~/ui/layout";
 
 import type { EntityDetailFieldRenderers } from "./index";
 import { InventoryExpenseActions } from "./inventory-expense";

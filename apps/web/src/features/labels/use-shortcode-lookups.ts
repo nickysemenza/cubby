@@ -14,7 +14,6 @@ import type { LabelItem } from "./sheet-layouts";
 const NO_ROWS: never[] = [];
 
 export function useShortcodeLookups(shortcodes: string[]) {
-  // Group shortcodes by entity type
   const { locationCodes, productCodes } = useMemo(() => {
     const locs: string[] = [];
     const prods: string[] = [];

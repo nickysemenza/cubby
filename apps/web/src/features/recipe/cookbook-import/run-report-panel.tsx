@@ -8,7 +8,7 @@ import { formatMinutesSeconds } from "~/lib/format-duration";
 import { formatAiCostSubtotal } from "~/lib/number-format";
 import { StaticTable } from "~/ui/data-table/static-table";
 import { Row, Stack } from "~/ui/layout";
-import { Disclosure } from "~/ui/layout/disclosure";
+import { Disclosure } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import type { Fact } from "~/ui/records/facts";
 import {

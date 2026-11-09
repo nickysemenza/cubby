@@ -676,7 +676,6 @@ export function useCellSelection<TItem extends RowData>({
     return () => document.removeEventListener("paste", handler);
   }, [enabled, doPaste, getSelection]);
 
-  // Clear a pending fallback timer on unmount.
   React.useEffect(
     () => () => {
       if (fallbackPasteTimerRef.current !== null) {

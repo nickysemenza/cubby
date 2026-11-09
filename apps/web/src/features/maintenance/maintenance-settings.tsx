@@ -6,7 +6,7 @@ import { MaintenanceRunCard } from "~/features/maintenance/maintenance-run-card"
 import { MaintenanceTools } from "~/features/maintenance/maintenance-tools";
 import { DefinedRunSteps, WorkEffects } from "~/features/run/work-definition";
 import { Section, Stack } from "~/ui/layout";
-import { Disclosure } from "~/ui/layout/disclosure";
+import { Disclosure } from "~/ui/layout";
 
 /**
  * Operator controls, closed until asked for: a closed panel mounts nothing, so

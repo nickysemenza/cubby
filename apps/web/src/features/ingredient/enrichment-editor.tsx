@@ -29,7 +29,7 @@ import { savedWithBackgroundWork } from "~/lib/recompute-summary";
 import { NumberInput } from "~/ui/forms/number-input";
 import { RemoveButton } from "~/ui/forms/remove-button";
 import { Row, Stack } from "~/ui/layout";
-import { Disclosure } from "~/ui/layout/disclosure";
+import { Disclosure } from "~/ui/layout";
 import { Checkbox } from "~/ui/primitives/checkbox";
 import { Input } from "~/ui/primitives/input";
 import { Description } from "~/ui/text/description";

@@ -7,7 +7,7 @@ import {
 } from "@cubby/schemas/run-fields";
 
 import { Stack } from "~/ui/layout";
-import { Disclosure } from "~/ui/layout/disclosure";
+import { Disclosure } from "~/ui/layout";
 import { Facts } from "~/ui/records/facts";
 import { RecordList, RecordRow } from "~/ui/records/record-list";
 import { Description } from "~/ui/text/description";

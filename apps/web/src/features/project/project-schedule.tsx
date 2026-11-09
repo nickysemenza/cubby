@@ -33,7 +33,7 @@ import {
 } from "~/features/schedule/schedule-grid";
 import { entityReport } from "~/integrations/tanstack-query/generated/domains/entityReport.gen";
 import { project } from "~/integrations/tanstack-query/generated/domains/project.gen";
-import { Panel } from "~/ui/layout/panel";
+import { Panel } from "~/ui/layout";
 import { Button, buttonVariants } from "~/ui/primitives/button";
 import {
   Alert,

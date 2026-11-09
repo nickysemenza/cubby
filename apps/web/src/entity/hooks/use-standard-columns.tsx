@@ -381,7 +381,6 @@ export function useStandardColumns<TData extends BaseListRow>({
           add(buildSelectColumn<TData>());
         }
 
-        // Prepend standard columns
         const hasExplicitImageColumn = customColumns
           .visit((column) => isImageColumnId(columnIdentifier(column)))
           .some(Boolean);
@@ -437,7 +436,6 @@ export function useStandardColumns<TData extends BaseListRow>({
             add(colId ? withManifestFilter(withSorting, colId) : withSorting);
           });
 
-        // Append unit mappings column if configured
         if (standardDefinitions.mappings) {
           // The product id stays "unitMappingQuality" — it's what the manifest's
           // presence filter hangs on. NOT sortable: the cell grades conversion
@@ -455,7 +453,6 @@ export function useStandardColumns<TData extends BaseListRow>({
         add(standardDefinitions.createdAt);
         add(standardDefinitions.updatedAt);
 
-        // Append actions column (always last)
         add(standardDefinitions.actions);
       }),
     [

@@ -1,7 +1,7 @@
 import { cn } from "cn";
 import type * as React from "react";
 
-import { type StackVariants, stackVariants } from "~/styles/layouts";
+import { type StackVariants, stackVariants } from "~/ui/layout/layouts";
 
 interface StackProps extends React.HTMLAttributes<HTMLElement>, StackVariants {
   /** Render as a different element (e.g. "ul", "section", "button"). */
@@ -19,7 +19,7 @@ interface StackProps extends React.HTMLAttributes<HTMLElement>, StackVariants {
  * spaces children with `margin-top`, which inline children (`span`, `a`, …)
  * ignore, so a plain-block stack of two inline elements renders them
  * concatenated on one line with no gap. `flex-col` blockifies every child so
- * the line break actually happens. See `stackVariants` in `~/styles/layouts`
+ * the line break actually happens. See `stackVariants` in `~/ui/layout/layouts`
  * for the full trade-off (it stretches an unsized `inline-flex`/`inline-block`
  * child to the container's width, where block layout let it shrink to fit).
  */

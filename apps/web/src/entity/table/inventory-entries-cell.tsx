@@ -4,10 +4,8 @@ import { PencilIcon } from "@phosphor-icons/react/dist/csr/Pencil";
 import { useQueryClient } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 
-import {
-  EntityRefLink,
-  EntityRefList,
-} from "~/entity/components/entity-ref-link";
+import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import { ListRefLink } from "~/entity/components/ref-link/list";
 import { FieldRecordValue } from "~/ui/derived/record-value";
 import { Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
@@ -290,7 +288,7 @@ function InventoryEntriesCellBody<
     if (entity === "location") {
       const locations = relatedEntities;
       return (
-        <EntityRefList
+        <ListRefLink
           entity="location"
           items={locations}
           compact
@@ -300,7 +298,7 @@ function InventoryEntriesCellBody<
     }
     const products = relatedEntities;
     return (
-      <EntityRefList
+      <ListRefLink
         entity="product"
         items={products}
         compact

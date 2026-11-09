@@ -7,7 +7,7 @@ import {
 } from "@cubby/usda";
 
 import { estimateStatusText, formatEstimate } from "~/lib/nutrition-format";
-import { Disclosure } from "~/ui/layout/disclosure";
+import { Disclosure } from "~/ui/layout";
 
 const DEFAULT_NUTRIENTS = new Set<NutrientKey>(KEY_NUTRIENT_KEYS);
 

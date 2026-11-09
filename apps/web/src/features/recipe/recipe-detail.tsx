@@ -30,7 +30,7 @@ import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
 import { useDebug } from "~/ui/hooks/use-debug";
 import { useWakeLock } from "~/ui/hooks/use-wake-lock";
 import { Panel, Row, Section, Stack } from "~/ui/layout";
-import { Disclosure } from "~/ui/layout/disclosure";
+import { Disclosure } from "~/ui/layout";
 
 import EntityImageList from "../../entity/components/entity-image-list";
 import { useRecipeCostingData } from "../../entity/hooks/use-recipe-costing-data";
@@ -670,7 +670,6 @@ const RecipeDetailInner: React.FC<{
     [scaledRecipe.sections],
   );
 
-  // Get recipe images from the recipe object
   const recipeImages = effectiveRecipeImages ?? [];
 
   // Load ingredient data plus the graph of any sub-recipes used as ingredients,

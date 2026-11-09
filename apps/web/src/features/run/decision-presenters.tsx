@@ -18,8 +18,8 @@ import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { formatInstant } from "~/lib/date-format";
 import { formatCurrency } from "~/lib/number-format";
 import { StaticTable } from "~/ui/data-table/static-table";
-import { Disclosure } from "~/ui/layout/disclosure";
-import { Panel } from "~/ui/layout/panel";
+import { Disclosure } from "~/ui/layout";
+import { Panel } from "~/ui/layout";
 import { SidePanelSection } from "~/ui/overlays/side-panel";
 
 import type { StatusTone } from "../job/job-status";

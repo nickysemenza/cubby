@@ -108,7 +108,6 @@ const recipeYieldDraft = z
     path: ["unit"],
   });
 
-// Form schema for recipe form
 export const formSchema = z.object({
   name: z.string().min(1, "Name is required"),
   // The source cookbook; edit mode only (`null` = not from a cookbook).
@@ -146,7 +145,6 @@ export const formSchema = z.object({
 
 export type RecipeFormValues = z.infer<typeof formSchema>;
 
-// Props for create mode
 interface CreateRecipeFormProps {
   mode: "create";
   isPending: boolean;
@@ -160,7 +158,6 @@ interface CreateRecipeFormProps {
   autoScrape?: boolean;
 }
 
-// Props for edit mode
 interface EditRecipeFormProps {
   mode: "edit";
   isPending: boolean;
@@ -170,9 +167,6 @@ interface EditRecipeFormProps {
   entity: RecipeOut;
 }
 
-// Combined props type using discriminated union
 export type RecipeFormProps = CreateRecipeFormProps | EditRecipeFormProps;
-
-// Import types from schema
 
 type RecipeOut = DetailRecordOf<"recipe">;

@@ -15,7 +15,6 @@ export {
   OrderRefLink as VendorOrderLink,
   TableRefLink as EntityRouteLink,
 } from "./ref-link/leaf";
-export { ListRefLink as EntityRefList } from "./ref-link/list";
 
 type RecordLinkProps = {
   entity: Entity;

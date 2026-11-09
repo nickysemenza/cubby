@@ -19,7 +19,7 @@ import { formatCount } from "~/lib/number-format";
 import { useSectionCount } from "~/ui/data-table/detail-section-state";
 import { StaticTable } from "~/ui/data-table/static-table";
 import { useDisplayNow } from "~/ui/hooks/use-display-now";
-import { Section } from "~/ui/layout/section";
+import { Section } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import {
   Progress,

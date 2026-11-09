@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { z } from "zod";
 
 import { formatCount } from "~/lib/number-format";
-import { Disclosure } from "~/ui/layout/disclosure";
+import { Disclosure } from "~/ui/layout";
 import {
   Popover,
   PopoverContent,

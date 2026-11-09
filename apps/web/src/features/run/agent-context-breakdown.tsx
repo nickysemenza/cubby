@@ -11,7 +11,7 @@ import {
   StaticTable,
   type StaticTableColumn,
 } from "~/ui/data-table/static-table";
-import { Disclosure } from "~/ui/layout/disclosure";
+import { Disclosure } from "~/ui/layout";
 
 import {
   contextCallsFromMessages,

@@ -101,13 +101,11 @@ export function RecipeHero({ recipe }: RecipeHeroProps) {
     effectiveRecipeDisplayImages?.[0];
   const hasImage = !!heroImage;
 
-  // Count total ingredients across all sections
   const totalIngredients = sumBy(
     recipe.sections,
     (section) => section.ingredients.length,
   );
 
-  // Count total instruction steps
   const totalSteps = sumBy(
     recipe.sections,
     (section) => section.instructions.length,

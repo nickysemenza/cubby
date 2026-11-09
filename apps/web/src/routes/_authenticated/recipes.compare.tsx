@@ -47,7 +47,6 @@ function RecipeComparePage() {
   const { ids } = Route.useSearch();
   const navigate = useNavigate();
 
-  // Parse recipe IDs from URL
   const recipeIds = useMemo<string[]>(() => {
     const list =
       ids
@@ -57,7 +56,6 @@ function RecipeComparePage() {
     return uniq(list);
   }, [ids]);
 
-  // Fetch all recipes in parallel
   const recipeQueryOptions = useMemo(
     () => recipeIds.map((id) => entityDetailFor("recipe").queryOptions(id)),
     [recipeIds],
@@ -100,7 +98,6 @@ function RecipeComparePage() {
     });
   }, [recipes, ingMap, recipeMap]);
 
-  // Remove a recipe from comparison
   const handleRemove = (recipeId: string) => {
     const newIds = recipeIds.filter((id) => id !== recipeId).join(",");
     if (newIds) {

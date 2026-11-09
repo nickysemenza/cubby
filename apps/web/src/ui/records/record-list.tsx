@@ -10,7 +10,7 @@ import {
 } from "react";
 
 import { ErrorDisplay } from "~/ui/feedback/error-display";
-import { Disclosure } from "~/ui/layout/disclosure";
+import { Disclosure } from "~/ui/layout";
 import { Skeleton } from "~/ui/primitives/skeleton";
 
 import { type Fact, factColumnStyle, Facts } from "./facts";

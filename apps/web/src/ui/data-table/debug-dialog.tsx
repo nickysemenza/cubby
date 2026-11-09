@@ -1,6 +1,6 @@
 import { useState, type ReactElement } from "react";
 
-import { Panel } from "~/ui/layout/panel";
+import { Panel } from "~/ui/layout";
 import { Overlay } from "~/ui/overlays/overlay";
 import { DialogTrigger } from "~/ui/primitives/dialog";
 

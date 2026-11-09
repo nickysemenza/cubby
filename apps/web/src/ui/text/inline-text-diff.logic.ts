@@ -20,7 +20,6 @@ export const diffWords = (before: string, after: string): DiffSeg[] => {
       ...(before ? [{ type: "remove" as const, text: before }] : []),
       ...(after ? [{ type: "add" as const, text: after }] : []),
     ];
-  // LCS length table.
   const lcs: number[][] = Array.from({ length: n + 1 }, () =>
     Array.from<number>({ length: m + 1 }).fill(0),
   );

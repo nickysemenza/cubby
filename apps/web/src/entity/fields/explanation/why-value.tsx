@@ -40,7 +40,7 @@ import {
   DisclosureBody,
   DisclosureRoot,
   DisclosureTrigger,
-} from "~/ui/layout/disclosure";
+} from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import {
   Popover,

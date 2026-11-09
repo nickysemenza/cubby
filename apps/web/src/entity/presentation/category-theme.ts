@@ -13,7 +13,6 @@ import { TShirtIcon } from "@phosphor-icons/react/dist/csr/TShirt";
 import { WrenchIcon } from "@phosphor-icons/react/dist/csr/Wrench";
 import type { Icon } from "@phosphor-icons/react/lib";
 
-// Re-export colors/helpers from @cubby/shared for existing consumers
 export { getFeatureColor };
 
 const featureIcons = {

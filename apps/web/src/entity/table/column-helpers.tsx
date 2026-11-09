@@ -29,9 +29,9 @@ import {
 import {
   EntityRefLink,
   EntityRouteLink,
-  EntityRefList,
 } from "~/entity/components/entity-ref-link";
 import { RecordEmoji } from "~/entity/components/record-emoji";
+import { ListRefLink } from "~/entity/components/ref-link/list";
 import type { EntityDetailParams, EntityDetailRoute } from "~/entity/entities";
 import {
   entities,
@@ -1288,7 +1288,7 @@ const singleEntityAdapters = {
       <CanonicalSingleEntityLink entity="ingredient" data={data} />
     ),
     renderCollection: (items) => (
-      <EntityRefList
+      <ListRefLink
         entity="ingredient"
         items={items}
         maxItems={1}
@@ -1306,7 +1306,7 @@ const singleEntityAdapters = {
       <CanonicalSingleEntityLink entity="product" data={data} />
     ),
     renderCollection: (items) => (
-      <EntityRefList
+      <ListRefLink
         entity="product"
         items={items}
         maxItems={1}
@@ -1324,7 +1324,7 @@ const singleEntityAdapters = {
       <CanonicalSingleEntityLink entity="recipe" data={data} />
     ),
     renderCollection: (items) => (
-      <EntityRefList
+      <ListRefLink
         entity="recipe"
         items={items}
         maxItems={1}
@@ -1342,7 +1342,7 @@ const singleEntityAdapters = {
       <CanonicalSingleEntityLink entity="location" data={data} />
     ),
     renderCollection: (items) => (
-      <EntityRefList
+      <ListRefLink
         entity="location"
         items={items}
         maxItems={1}
