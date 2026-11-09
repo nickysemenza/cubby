@@ -32,6 +32,7 @@ import {
   type GmailNormalizedMessage,
 } from "~/server/domains/purchase-import/repo/gmail/types";
 import { HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION } from "~/server/domains/purchase-import/repo/mail-source-identity";
+import { JobDeferredError } from "~/server/generic/jobs/errors";
 
 import {
   deferClassificationRefresh,
@@ -68,7 +69,7 @@ import {
   upsertOrderMail,
 } from "../../repo/gmail/persistence";
 import { queueSearchClassification } from "../../repo/gmail/reclassify-state";
-import { GmailAuthorizationError } from "../../repo/gmail/tokens";
+import { isGmailAuthorizationFailure } from "../../repo/gmail/tokens";
 import {
   extractEmailCandidatePreview,
   type EmailCandidateChoice,
@@ -408,7 +409,8 @@ async function fetchObservedMessage(
       missing: null,
     };
   } catch (error) {
-    if (error instanceof GmailAuthorizationError) throw error;
+    if (isGmailAuthorizationFailure(error) || error instanceof JobDeferredError)
+      throw error;
     // A first 404 must mint its diagnostic owner inside fenced publication.
     // Creating it before the optimistic check would invalidate our own snapshot.
     if (error instanceof GmailApiError && error.status === 404)

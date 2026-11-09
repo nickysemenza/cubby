@@ -1,4 +1,5 @@
 import { imageProcessingJobState } from "@cubby/schemas/image-processing";
+import { MAIL_DISCOVERY_ADMISSION_WAIT } from "@cubby/schemas/mailbox-research";
 import { photoGroupProposalState } from "@cubby/schemas/photo-import-run";
 import {
   RUN_KINDS,
@@ -16,9 +17,26 @@ import {
 import { related } from "~/server/db/helpers/related";
 import { imageProcessingJob } from "~/server/db/retained-tables";
 import { activeFindingSql } from "~/server/domains/purchase-import/repo/finding-expiry";
-import { runHasLiveJobs } from "~/server/generic/jobs/repo/job-reads";
+import {
+  runHasLiveJobs,
+  runHasLiveExecution,
+} from "~/server/generic/jobs/repo/job-reads";
 
 const RUN = runStatus.enum;
+
+/** A queued discovery is automatic demand only while its canonical generation remains live. */
+export function queuedMailDiscoveryPredicate(input: {
+  id: SQL;
+  purpose: SQL;
+  status: SQL;
+  failureCode: SQL;
+  progress: SQL;
+}): SQL<boolean> {
+  return sql<boolean>`CASE WHEN ${input.purpose} = ${runPurpose.enum.mail_discovery}
+    AND ${input.status} = ${RUN.paused} AND ${input.failureCode} = ${MAIL_DISCOVERY_ADMISSION_WAIT}
+    THEN ${runHasLiveExecution({ id: input.id, purpose: input.purpose, generation: sql`${input.progress}->>'attempt'` })}
+    ELSE false END`;
+}
 const historicalRoutineStepPurposes = Object.entries(RUN_KINDS).flatMap(
   ([purpose, declaration]) => {
     const kind: RunKindDeclaration = declaration;

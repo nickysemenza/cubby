@@ -47,6 +47,7 @@ import {
   settledAiRunPredicate,
   retiredRunPredicate,
   historicalRoutineRunPredicate,
+  queuedMailDiscoveryPredicate,
 } from "~/server/domains/run/repo/work-attention";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import {
@@ -132,6 +133,7 @@ export function runNeedsAttentionSql(): SQL<boolean> {
     (next) => sql`${next.predecessorRunId} = ${outer(run.id)}`,
   ).exists();
   return sql<boolean>`(NOT ${memberStoppedRunPredicate(sql`${run.failureCode}`)} AND NOT ${retiredRunPredicate(sql`${run.retiredAt}`)}
+    AND NOT ${queuedMailDiscoveryPredicate({ id: outer(run.id), purpose: sql`${run.purpose}`, status: sql`${run.status}`, failureCode: sql`${run.failureCode}`, progress: sql`${run.progress}` })}
     AND (${runStalledSql()} OR (${run.status} IN (${runStatus.enum.paused},${runStatus.enum.paused_auth},${runStatus.enum.needs_review},${runStatus.enum.failed},${runStatus.enum.dispatch_failed}) AND NOT ${successor} AND NOT ${historicalRoutineRunPredicate({ id: outer(run.id), purpose: sql`${run.purpose}`, status: sql`${run.status}`, trigger: sql`${run.trigger}`, endedAt: sql`${run.endedAt}`, failureCode: sql`${run.failureCode}` })} AND NOT ${settledAiRunPredicate({ id: outer(run.id), purpose: sql`${run.purpose}`, status: sql`${run.status}`, failureCode: sql`${run.failureCode}` })})))`;
 }
 

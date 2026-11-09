@@ -15,18 +15,26 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
 import { account } from "~/server/db/auth.schema";
-import { getDb } from "~/server/db/helpers";
+import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import {
   mailboxCursor,
   email as emailTable,
   orderMail,
   orderMailAttachment,
   run,
+  runControlEvent,
+  aiUsage,
   vendor,
 } from "~/server/db/schema";
 import { readRetainedMail } from "~/server/domains/mail/repo/retained-mail";
+import {
+  initializeMailboxCoverage,
+  listGmailPage,
+} from "~/server/domains/purchase-import/repo/gmail/sync";
+import { listGmailSyncTargets } from "~/server/domains/purchase-import/repo/gmail/targets";
 import { setMailImport } from "~/server/domains/purchase-import/repo/mail-import-settings";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
+import { findPgError } from "~/server/errors/db-errors";
 import { updateJobs } from "~/server/generic/jobs/jobs.fixtures";
 import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 import { enqueueJob } from "~/server/generic/jobs/repo/producer";
@@ -39,7 +47,7 @@ import {
 } from "~/server/workflows/runs/lifecycle";
 
 import { GmailAuthorizationError } from "../../repo/gmail/tokens";
-import type { GmailProvider } from "../../repo/gmail/types";
+import { GmailApiError, type GmailProvider } from "../../repo/gmail/types";
 import { startMailImport } from "../../repo/mail-import-run";
 import {
   startMailDiscovery,
@@ -926,72 +934,27 @@ describe("scheduled Gmail discovery", () => {
         runId: waitingRun,
         purpose: "mail_discovery",
       });
-      for (let attempt = 1; attempt <= 4; attempt++) {
+      for (let attempt = 0; attempt < 4; attempt++) {
         await updateJobs(ctx.db, { key }, { availableAt: new Date() });
-        expect(await advance()).toBe("failed");
+        expect(await advance()).toBe("deferred");
         expect((await readJobs(ctx.db, { key }))[0]).toMatchObject({
-          state: "retry_wait",
-          attempts: attempt,
+          state: "queued",
+          attempts: 0,
           generation: 1,
           input: execution.input,
           cursor: checkpoint,
+          waitReason: "provider_capacity",
         });
       }
       expect(relevance).toHaveBeenCalledTimes(calls);
       expect(await readRun(state.params.runId)).toMatchObject({
-        status: "paused_auth",
+        status: "paused",
+        failureCode: "mail_discovery_queued",
         input: retained.input,
-        progress: retained.progress,
-      });
-      await pauseForFunding(ctx.db, waitingRun, budget);
-      await updateJobs(
-        ctx.db,
-        { kind: "run.funding-resume" },
-        {
-          input: { until: until.toISOString() },
-        },
-      );
-      // Raising the budget releases discovery without granting per-Run overage.
-      const { resumeFundingPausedRuns } =
-        await import("~/server/domains/run/service/ai-work");
-      await resumeFundingPausedRuns(ctx.db, { anyWindow: true });
-      expect(await readRun(state.params.runId)).toMatchObject({
-        status: "paused_auth",
-        failureCode: "execution_limit",
         progress: {
-          ...retained.progress,
-          fundingReleasedAt: expect.any(String),
+          page: mailboxDiscoveryProgress.parse(retained.progress).page,
         },
       });
-      await launchWorkflowRun(ctx.db, {
-        runId: waitingRun,
-        purpose: "mail_discovery",
-      });
-      const released = await readRun(state.params.runId);
-      const { readRun: readPublicRun } =
-        await import("~/server/domains/run/repo/run");
-      expect(await readPublicRun(ctx.db, released.shortcode)).toMatchObject({
-        displayStatus: "paused",
-      });
-      expect(
-        summarizeDiscoveryProgress(
-          mailboxDiscoveryProgress.parse(released.progress),
-        ),
-      ).not.toHaveProperty("fundingReleasedAt");
-      await expect(
-        controlWorkflowRun(
-          ctx.db,
-          ctx.actor,
-          {
-            runPublicId: released.shortcode,
-            action: "resume",
-          },
-          "mail_discovery",
-        ),
-      ).rejects.toMatchObject({ reason: "RUN_CONTROL_REFUSED" });
-      expect(await readRun(state.params.runId)).toEqual(released);
-      expect(await advance()).toBe("failed");
-      expect(relevance).toHaveBeenCalledTimes(calls);
       await controlWorkflowRun(
         ctx.db,
         ctx.actor,
@@ -1002,11 +965,46 @@ describe("scheduled Gmail discovery", () => {
         "mail_discovery",
       );
       const cancelled = await readRun(waitingRun);
-      await resumeFundingPausedRuns(ctx.db, { anyWindow: true });
-      expect(await readRun(waitingRun)).toEqual(cancelled);
+      await updateJobs(
+        ctx.db,
+        { kind: "run.funding-resume" },
+        { input: { until: until.toISOString() } },
+      );
       await updateJobs(ctx.db, { key }, { availableAt: new Date() });
       expect(await advance()).toBe("succeeded");
       expect(relevance).toHaveBeenCalledTimes(calls + 1);
+      expect(await readRun(state.params.runId)).toMatchObject({
+        status: "paused_auth",
+        failureCode: "execution_limit",
+      });
+      // Raising the budget releases discovery without granting per-Run overage.
+      const { resumeFundingPausedRuns } =
+        await import("~/server/domains/run/service/ai-work");
+      await resumeFundingPausedRuns(ctx.db, { anyWindow: true });
+      expect(await readRun(waitingRun)).toEqual(cancelled);
+      const released = await readRun(state.params.runId);
+      expect(released).toMatchObject({
+        status: "paused_auth",
+        failureCode: "execution_limit",
+        progress: {
+          ...retained.progress,
+          admissionClass: "recovery",
+          fundingReleasedAt: expect.any(String),
+        },
+      });
+      const { readRun: readPublicRun } =
+        await import("~/server/domains/run/repo/run");
+      expect(await readPublicRun(ctx.db, released.shortcode)).toMatchObject({
+        displayStatus: "paused",
+      });
+      expect(
+        summarizeDiscoveryProgress(
+          mailboxDiscoveryProgress.parse(released.progress),
+        ),
+      ).not.toHaveProperty("fundingReleasedAt");
+      await updateJobs(ctx.db, { key }, { availableAt: new Date() });
+      expect(await advance()).toBe("succeeded");
+      expect(relevance).toHaveBeenCalledTimes(calls + 2);
       expect((await readRun(state.params.runId)).status).toBe("paused_auth");
       expect((await readRun(state.params.runId)).progress).not.toHaveProperty(
         "fundingReleasedAt",
@@ -1344,7 +1342,7 @@ describe("scheduled Gmail discovery", () => {
     expect(await getDb(ctx.db).select().from(emailTable)).toHaveLength(0);
   });
 
-  it("starts one pass per connected mailbox and refuses an overlapping one", async () => {
+  it("bounds independent searches and fairly admits retained recovery without spending failure attempts", async () => {
     const state = await seed();
     expect(await startMailDiscovery(ctx.db)).toEqual({
       started: 0,
@@ -1353,6 +1351,521 @@ describe("scheduled Gmail discovery", () => {
     expect((await readRun(state.params.runId)).input).toMatchObject({
       mailboxId: "synthetic-google-subject",
     });
+    await finishMailDiscovery(ctx.db, state.params);
+    for (let index = 0; index < 5; index++)
+      await insertWithShortcode(ctx.db, "vendor", {
+        name: `Synthetic concurrent seller ${index}`,
+        orderEmailSenders: [`orders@concurrent-${index}.example.test`],
+      });
+    const [target] = await listGmailSyncTargets(ctx.db);
+    if (!target) throw new Error("Synthetic mailbox missing");
+    const baseline = await initializeMailboxCoverage(
+      gmail(),
+      target.scopedQueries,
+    );
+    baseline.nextLane = "scan";
+    await getDb(ctx.db)
+      .update(mailboxCursor)
+      .set({ coverage: baseline, historyId: "100" });
+    let snapshotReady = () => {};
+    let releaseSnapshot = () => {};
+    const ready = new Promise<void>((resolve) => {
+      snapshotReady = resolve;
+    });
+    const releaseOldSnapshot = new Promise<void>((resolve) => {
+      releaseSnapshot = resolve;
+    });
+    const snapshotAdmission = Promise.allSettled([
+      withTransactionDatabase(
+        ctx.db,
+        async (tx) => {
+          await getDb(tx).select({ id: mailboxCursor.id }).from(mailboxCursor);
+          snapshotReady();
+          await releaseOldSnapshot;
+          const selected = target.scopedQueries.at(-1);
+          if (!selected) throw new Error("Synthetic concurrent query missing");
+          return ensureRun(tx, ctx.actor, {
+            purpose: "mail_discovery",
+            trigger: "scheduled",
+            status: "running",
+            input: {
+              mailboxId: target.mailboxId,
+              scopedQueries: target.scopedQueries,
+              executionPolicy: "classification_only",
+            },
+            progress: mailboxDiscoveryProgress.parse({
+              attempt: 0,
+              phase: "listing",
+              discoveryScope: { kind: "query", key: selected.key },
+            }),
+          });
+        },
+        { isolationLevel: "serializable" },
+      ),
+    ]);
+    await ready;
+    const racing = await Promise.all([
+      startMailDiscovery(ctx.db),
+      startMailDiscovery(ctx.db),
+    ]).finally(async () => {
+      releaseSnapshot();
+      await snapshotAdmission;
+    });
+    const [stale] = await snapshotAdmission;
+    expect(stale?.status).toBe("rejected");
+    if (stale?.status !== "rejected") return;
+    expect(findPgError(stale.reason)?.code).toBe("40001");
+    expect(racing.reduce((total, result) => total + result.started, 0)).toBe(4);
+    const active = await getDb(ctx.db)
+      .select()
+      .from(run)
+      .where(eq(run.status, "running"));
+    expect(active).toHaveLength(4);
+    const scopes = active.map(
+      (row) => mailboxDiscoveryProgress.parse(row.progress).discoveryScope,
+    );
+    expect(scopes.every((scope) => scope?.kind === "query")).toBe(true);
+    expect(
+      new Set(
+        scopes.map((scope) => (scope?.kind === "query" ? scope.key : null)),
+      ).size,
+    ).toBe(4);
+    for (const row of active)
+      expect(row.input).toMatchObject({ scopedQueries: target.scopedQueries });
+    const [legacy] = await Promise.allSettled([
+      ensureRun(ctx.db, ctx.actor, {
+        purpose: "mail_discovery",
+        trigger: "scheduled",
+        status: "running",
+        input: mailboxDiscoveryInput.parse(active[0]?.input),
+        progress: mailboxDiscoveryProgress.parse({
+          attempt: 0,
+          phase: "listing",
+        }),
+      }),
+    ]);
+    expect(legacy?.status).toBe("rejected");
+    if (legacy?.status !== "rejected") return;
+    expect(findPgError(legacy.reason)?.constraint).toBe(
+      "Run_one_active_mail_discovery",
+    );
+
+    let listings = 0;
+    let release = () => {};
+    const barrier = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const seam = ports(
+      gmail({
+        listMessages: async () => {
+          listings++;
+          await barrier;
+          return {};
+        },
+      }),
+    );
+    const listed = Promise.allSettled(
+      active.map((row) =>
+        listMailDiscovery(
+          ctx.db,
+          {
+            runId: row.id,
+            attempt: mailboxDiscoveryProgress.parse(row.progress).attempt,
+          },
+          seam,
+        ),
+      ),
+    );
+    try {
+      await vi.waitFor(() => expect(listings).toBe(4));
+    } finally {
+      release();
+      await listed;
+    }
+    expect((await listed).map((result) => result.status)).toEqual(
+      Array(4).fill("fulfilled"),
+    );
+
+    const occupied = new Set(
+      scopes.flatMap((scope) => (scope?.kind === "query" ? [scope.key] : [])),
+    );
+    const recoveryQuery = baseline.scoped.find(
+      (query) => !occupied.has(query.key),
+    );
+    if (!recoveryQuery) throw new Error("Synthetic retained query missing");
+    const page = await listGmailPage(
+      gmail({ listMessages: async () => ({}) }),
+      target.mailboxId,
+      baseline,
+      "targeted",
+      [recoveryQuery.key],
+    );
+    const retainedInput = mailboxDiscoveryInput.parse(active[0]?.input);
+    const recoveryId = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "mail_discovery",
+      trigger: "scheduled",
+      status: "completed",
+      execution: false,
+      input: retainedInput,
+      progress: mailboxDiscoveryProgress.parse({
+        attempt: 1,
+        phase: "failed",
+        page,
+      }),
+    });
+    await getDb(ctx.db)
+      .update(run)
+      .set({ status: "failed", failureCode: "mail_discovery_failed" })
+      .where(eq(run.id, recoveryId));
+    const job = await enqueueJob(ctx.db, {
+      key: `run:${recoveryId}`,
+      kind: "run.execute",
+      runId: recoveryId,
+      input: { runId: recoveryId, purpose: "mail_discovery" },
+    });
+    await updateJobs(ctx.db, { key: job.key }, { state: "completed" });
+    await controlWorkflowRun(
+      ctx.db,
+      ctx.actor,
+      {
+        runPublicId: (await readRun(recoveryId)).shortcode,
+        action: "retry",
+      },
+      "mail_discovery",
+    );
+    const queued = await readRun(recoveryId);
+    const { runScaffold } = await import("~/server/domains/run/repo/run");
+    expect(
+      (
+        await runScaffold.read(ctx.db, {
+          filters: { ids: [queued.shortcode], needsAttention: true },
+          sorts: [],
+          pagination: { pageIndex: 0, pageSize: 10 },
+        })
+      ).data,
+    ).toEqual([]);
+    const { readRecordWorkQueue } =
+      await import("~/server/domains/work/service/work-queue-read");
+    const waitingWork = await readRecordWorkQueue(ctx.db, {
+      id: queued.shortcode,
+      memberPartyId: null,
+      memberOnly: false,
+    });
+    expect(waitingWork.items.some((row) => row.family === "account")).toBe(
+      false,
+    );
+    expect(waitingWork.items).toContainEqual(
+      expect.objectContaining({ family: "execution", executor: "automatic" }),
+    );
+    // A terminal canonical Job must expose the stranded Run instead of hiding it.
+    await updateJobs(ctx.db, { key: job.key }, { state: "failed" });
+    expect(
+      (
+        await runScaffold.read(ctx.db, {
+          filters: { ids: [queued.shortcode], needsAttention: true },
+          sorts: [],
+          pagination: { pageIndex: 0, pageSize: 10 },
+        })
+      ).data.some((row) => row.id === queued.shortcode),
+    ).toBe(true);
+    expect(
+      (
+        await readRecordWorkQueue(ctx.db, {
+          id: queued.shortcode,
+          memberPartyId: null,
+          memberOnly: false,
+        })
+      ).items.some((row) => row.family === "account"),
+    ).toBe(true);
+    expect(await readRun(recoveryId)).toEqual(queued);
+    await updateJobs(ctx.db, { key: job.key }, { state: "queued" });
+    expect(
+      summarizeDiscoveryProgress(
+        mailboxDiscoveryProgress.parse(queued.progress),
+      ),
+    ).not.toHaveProperty("discoveryScope");
+    expect(
+      summarizeDiscoveryProgress(
+        mailboxDiscoveryProgress.parse(queued.progress),
+      ),
+    ).not.toHaveProperty("admissionRequestedAt");
+    expect(queued).toMatchObject({
+      status: "paused",
+      failureCode: "mail_discovery_queued",
+      input: retainedInput,
+      progress: {
+        page,
+        discoveryScope: { kind: "query", key: recoveryQuery.key },
+      },
+    });
+    const { advanceJob } = await import("~/server/generic/jobs/service/jobs");
+    const { runJobHandler } =
+      await import("~/server/workflows/runs/job-execution");
+    for (let attempt = 0; attempt < 4; attempt++) {
+      await updateJobs(ctx.db, { key: job.key }, { availableAt: new Date() });
+      expect(
+        await advanceJob(ctx.db, job.id, { "run.execute": runJobHandler }),
+      ).toBe("deferred");
+      expect((await readJobs(ctx.db, { key: job.key }))[0]).toMatchObject({
+        state: "queued",
+        attempts: 0,
+        generation: 2,
+        waitReason: "provider_capacity",
+      });
+    }
+    expect((await readRun(recoveryId)).progress).toEqual(queued.progress);
+    const historyPage = await listGmailPage(
+      gmail(),
+      target.mailboxId,
+      baseline,
+      "new_mail",
+    );
+    const exclusiveId = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "mail_discovery",
+      trigger: "scheduled",
+      status: "completed",
+      execution: false,
+      input: retainedInput,
+      progress: mailboxDiscoveryProgress.parse({
+        attempt: 1,
+        phase: "failed",
+        page: historyPage,
+      }),
+    });
+    await getDb(ctx.db)
+      .update(run)
+      .set({ status: "failed", failureCode: "mail_discovery_failed" })
+      .where(eq(run.id, exclusiveId));
+    const exclusiveJob = await enqueueJob(ctx.db, {
+      key: `run:${exclusiveId}`,
+      kind: "run.execute",
+      runId: exclusiveId,
+      input: { runId: exclusiveId, purpose: "mail_discovery" },
+    });
+    await updateJobs(ctx.db, { key: exclusiveJob.key }, { state: "completed" });
+    await controlWorkflowRun(
+      ctx.db,
+      ctx.actor,
+      {
+        runPublicId: (await readRun(exclusiveId)).shortcode,
+        action: "retry",
+      },
+      "mail_discovery",
+    );
+    expect(await readRun(exclusiveId)).toMatchObject({
+      status: "paused",
+      progress: { discoveryScope: { kind: "mailbox" } },
+    });
+    const first = active[0];
+    if (!first) throw new Error("Synthetic active search missing");
+    await controlWorkflowRun(
+      ctx.db,
+      ctx.actor,
+      { runPublicId: first.shortcode, action: "cancel" },
+      "mail_discovery",
+    );
+    expect(await startMailDiscovery(ctx.db)).toEqual({
+      started: 0,
+      running: 1,
+    });
+    await updateJobs(ctx.db, { key: job.key }, { availableAt: new Date() });
+    expect(
+      await advanceJob(ctx.db, job.id, { "run.execute": runJobHandler }),
+    ).toBe("succeeded");
+    expect(await readRun(recoveryId)).toMatchObject({
+      status: "running",
+      failureCode: null,
+      input: retainedInput,
+      progress: {
+        page,
+        attempt: 2,
+        discoveryScope: { kind: "query", key: recoveryQuery.key },
+      },
+    });
+    const finishing = [
+      ...active.slice(1).map((row) => ({
+        runId: row.id,
+        attempt: mailboxDiscoveryProgress.parse(row.progress).attempt,
+      })),
+      { runId: recoveryId, attempt: 2 },
+    ];
+    await Promise.all(
+      finishing.map((params) =>
+        saveMailDiscoveryBatch(ctx.db, params, 0, ports(gmail())),
+      ),
+    );
+    const [cursor] = await getDb(ctx.db).select().from(mailboxCursor);
+    expect(
+      cursor?.coverage?.scoped.filter((query) => query.completed),
+    ).toHaveLength(4);
+    expect(
+      cursor?.coverage?.scoped.filter((query) => !query.completed),
+    ).toHaveLength(target.scopedQueries.length - 4);
+    expect(
+      cursor?.coverage?.scoped.every((query) => (query.emailCount ?? 0) === 0),
+    ).toBe(true);
+    expect(cursor?.coverage?.history).toEqual(baseline.history);
+    for (const params of finishing) {
+      expect(await readRun(params.runId)).toMatchObject({
+        progress: { pagesDone: 1 },
+      });
+      await finishMailDiscovery(ctx.db, params);
+    }
+    expect(await startMailDiscovery(ctx.db)).toEqual({
+      started: 1,
+      running: 0,
+    });
+    const normalWaiters = (
+      await getDb(ctx.db).select().from(run).where(eq(run.status, "paused"))
+    ).filter(
+      (row) =>
+        mailboxDiscoveryProgress.parse(row.progress).admissionClass ===
+        "automatic",
+    );
+    expect(normalWaiters).toHaveLength(1);
+    await updateJobs(
+      ctx.db,
+      { key: exclusiveJob.key },
+      { availableAt: new Date() },
+    );
+    expect(
+      await advanceJob(ctx.db, exclusiveJob.id, {
+        "run.execute": runJobHandler,
+      }),
+    ).toBe("succeeded");
+    expect(await readRun(exclusiveId)).toMatchObject({
+      status: "running",
+      input: retainedInput,
+      progress: {
+        page: historyPage,
+        attempt: 2,
+        discoveryScope: { kind: "mailbox" },
+      },
+    });
+    expect(await startMailDiscovery(ctx.db)).toEqual({
+      started: 0,
+      running: 1,
+    });
+    await controlWorkflowRun(
+      ctx.db,
+      ctx.actor,
+      {
+        runPublicId: (await readRun(exclusiveId)).shortcode,
+        action: "cancel",
+      },
+      "mail_discovery",
+    );
+    expect((await readRun(first.id)).failureCode).toBe("user_cancelled");
+    expect(await getDb(ctx.db).select().from(emailTable)).toEqual([]);
+    expect(await getDb(ctx.db).select().from(orderMail)).toEqual([]);
+    const cfEnv = await import("~/server/cf-env");
+    const tokens = await import("../../repo/gmail/tokens");
+    const providers = await import("../../repo/gmail/provider");
+    const until = new Date(Date.now() + 120_000);
+    const getProfile = vi.fn(async () => {
+      throw new GmailApiError({
+        status: 429,
+        message: "Synthetic shared Gmail throttle",
+        retryAt: until.getTime(),
+      });
+    });
+    const credentials = vi
+      .spyOn(cfEnv, "getGmailOAuthCredentials")
+      .mockReturnValue({
+        clientId: "synthetic-client",
+        clientSecret: "synthetic-secret",
+      });
+    const factory = vi
+      .spyOn(tokens, "createGmailProviderFactory")
+      .mockReturnValue(async () => gmail({ getProfile }));
+    try {
+      const clientA = await providers.gmailProviderForUser(
+        ctx.db,
+        ctx.actor.userId,
+        target.mailboxId,
+      );
+      const clientB = await providers.gmailProviderForUser(
+        ctx.db,
+        ctx.actor.userId,
+        target.mailboxId,
+      );
+      await expect(clientA.getProfile()).rejects.toMatchObject({
+        status: 429,
+        message: "Synthetic shared Gmail throttle",
+      });
+      const normal = normalWaiters[0];
+      if (!normal) throw new Error("Synthetic queued history missing");
+      const [normalJob] = await readJobs(ctx.db, { key: `run:${normal.id}` });
+      if (!normalJob) throw new Error("Synthetic history Job missing");
+      expect(
+        await advanceJob(ctx.db, normalJob.id, {
+          "run.execute": runJobHandler,
+        }),
+      ).toBe("deferred");
+      expect((await readJobs(ctx.db, { key: normalJob.key }))[0]).toMatchObject(
+        {
+          state: "queued",
+          attempts: 0,
+          generation: 1,
+          waitReason: "rate_limit",
+          availableAt: until,
+        },
+      );
+      expect(await readRun(normal.id)).toMatchObject({
+        status: "running",
+        progress: { admissionClass: "automatic" },
+      });
+      await expect(clientB.getProfile()).rejects.toMatchObject({
+        status: 429,
+        retryAt: until.getTime(),
+      });
+      expect(getProfile).toHaveBeenCalledOnce();
+      expect(
+        (await getDb(ctx.db).select().from(mailboxCursor))[0],
+      ).toMatchObject({
+        coverage: cursor?.coverage,
+        providerRetryAt: until,
+      });
+      expect(await getDb(ctx.db).select().from(runControlEvent)).toEqual([]);
+      expect(await getDb(ctx.db).select().from(aiUsage)).toEqual([]);
+      const paidStart = {
+        target,
+        paidGrant: { actor: ctx.actor, paidOverBudgetUsd: 1 },
+      };
+      expect(await startMailDiscovery(ctx.db, paidStart)).toEqual({
+        started: 0,
+        running: 1,
+      });
+      expect(await getDb(ctx.db).select().from(runControlEvent)).toMatchObject([
+        { runId: normal.id, paidOverBudgetUsd: 1 },
+      ]);
+      await controlWorkflowRun(
+        ctx.db,
+        ctx.actor,
+        { runPublicId: normal.shortcode, action: "cancel" },
+        "mail_discovery",
+      );
+      if (!cursor?.coverage)
+        throw new Error("Synthetic query coverage missing");
+      await getDb(ctx.db)
+        .update(mailboxCursor)
+        .set({ coverage: { ...cursor.coverage, nextLane: "scan" } });
+      // A confirmed allowance must not be copied onto every free search lane.
+      expect(await startMailDiscovery(ctx.db, paidStart)).toEqual({
+        started: 1,
+        running: 0,
+      });
+      const grants = await getDb(ctx.db).select().from(runControlEvent);
+      expect(grants).toHaveLength(2);
+      expect(new Set(grants.map((grant) => grant.runId)).size).toBe(2);
+      expect(
+        await getDb(ctx.db).select().from(run).where(eq(run.status, "running")),
+      ).toHaveLength(1);
+      expect(await getDb(ctx.db).select().from(aiUsage)).toEqual([]);
+    } finally {
+      credentials.mockRestore();
+      factory.mockRestore();
+    }
   });
   it("does not starve a second connected mailbox belonging to the same member", async () => {
     await seed();

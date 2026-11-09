@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { createGmailApiClient } from "./client";
 import { normalizeHistoryPage, normalizeMessage } from "./normalize";
 import { maxHistoryId } from "./sync";
-import type { GmailMessage } from "./types";
+import { GmailApiError, type GmailMessage } from "./types";
 
 // Retrieval failures must preserve provider diagnostics even when Gmail returns
 // non-JSON or a structured envelope whose extra fields carry the useful error.
@@ -251,6 +251,7 @@ describe("Gmail API client", () => {
 
   it("retries a transient Gmail 429 and honors Retry-After", async () => {
     let calls = 0;
+    let cancelled = 0;
     const waits: number[] = [];
     const client = createGmailApiClient({
       accessToken: "token-placeholder",
@@ -260,10 +261,17 @@ describe("Gmail API client", () => {
       fetcher: async () => {
         calls += 1;
         return calls === 1
-          ? new Response("{}", {
-              status: 429,
-              headers: { "Retry-After": "2" },
-            })
+          ? new Response(
+              new ReadableStream({
+                cancel: () => {
+                  cancelled++;
+                },
+              }),
+              {
+                status: 429,
+                headers: { "Retry-After": "2" },
+              },
+            )
           : Response.json({ messages: [] });
       },
     });
@@ -272,6 +280,26 @@ describe("Gmail API client", () => {
     ).resolves.toEqual({ messages: [] });
     expect(calls).toBe(2);
     expect(waits).toEqual([2_000]);
+    expect(cancelled).toBe(1);
+    const started = Date.now();
+    const throttled = createGmailApiClient({
+      accessToken: "synthetic-token",
+      sleep: async () => {},
+      fetcher: async () =>
+        new Response("Synthetic throttled", {
+          status: 429,
+          headers: { "retry-after": "120" },
+        }),
+    });
+    const [failed] = await Promise.allSettled([
+      throttled.listMessages({ query: "from:example.test" }),
+    ]);
+    expect(failed?.status).toBe("rejected");
+    if (failed?.status !== "rejected") return;
+    expect(failed.reason).toBeInstanceOf(GmailApiError);
+    if (!(failed.reason instanceof GmailApiError)) return;
+    expect(failed.reason.message).toContain("Synthetic throttled");
+    expect(failed.reason.retryAt).toBeGreaterThanOrEqual(started + 120_000);
   });
 });
 

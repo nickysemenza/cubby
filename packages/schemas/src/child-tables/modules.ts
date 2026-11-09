@@ -37,6 +37,8 @@ export const modulesChildren = [
       { key: "coverage", kind: "jsonb", type: "MailboxCoverage" },
       { key: "historyId", kind: "text" },
       { key: "lastPolledAt", kind: "timestamp" },
+      { key: "providerRetryAt", kind: "timestamp" },
+      { key: "admissionVersion", kind: "integer", notNull: true, default: 0 },
       {
         key: "createdAt",
         kind: "timestamp",

@@ -14,9 +14,13 @@ import {
   mailboxDiscoveryProgress,
   type MailboxDiscoveryProgress,
   type MailboxCoverage,
+  type MailboxDiscoveryScope,
   type MailboxDiscoveryStartOutput,
+  MAIL_DISCOVERY_CAPACITY,
+  MAIL_DISCOVERY_ADMISSION_WAIT,
 } from "@cubby/schemas/mailbox-research";
 import { and, eq, inArray, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
+import type { z } from "zod";
 
 import type { UnparsedError } from "~/lib/error-utils";
 import type { Database } from "~/server/db";
@@ -35,28 +39,29 @@ import {
   waitForActiveMailboxImports,
 } from "~/server/domains/purchase-import/repo/controlled-mail-import";
 import {
+  lockMailDiscoveryAdmission,
+  mailDiscoveryAdmission,
+  findQueuedAutomaticMailboxDiscovery,
+} from "~/server/domains/purchase-import/repo/gmail/discovery-admission";
+import {
   listGmailSyncTargets,
-  mailDiscoveryRecoveryWakeAt,
   type GmailSyncTarget,
 } from "~/server/domains/purchase-import/repo/gmail/targets";
-import {
-  GmailApiError,
-  type GmailProvider,
-} from "~/server/domains/purchase-import/repo/gmail/types";
+import type { GmailProvider } from "~/server/domains/purchase-import/repo/gmail/types";
 import { mailImportEnabled } from "~/server/domains/purchase-import/repo/mail-import-settings";
 import { HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION } from "~/server/domains/purchase-import/repo/mail-source-identity";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { recordPaidGrant } from "~/server/domains/run/repo/paid-grant";
 import { recordRunProgress } from "~/server/domains/run/repo/run-progress";
-import { isUniqueViolation } from "~/server/errors/db-errors";
 import { reportServerError } from "~/server/errors/report-error";
 import { currentJobExecution } from "~/server/generic/jobs/context";
-import { wakeAt } from "~/server/workflows/background-tasks/publish";
+import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 import type { WorkflowRunParams } from "~/server/workflows/runs/contract";
 import {
   claimWorkflowRun,
   failWorkflowRun,
   launchWorkflowRun,
+  mailDiscoveryAdmissionBackpressure,
   runFailureText,
 } from "~/server/workflows/runs/lifecycle";
 
@@ -73,7 +78,7 @@ import {
   listGmailPage,
   rebaseMailboxPage,
 } from "../../repo/gmail/sync";
-import { GmailAuthorizationError } from "../../repo/gmail/tokens";
+import { isGmailAuthorizationFailure } from "../../repo/gmail/tokens";
 import type { startMailImport } from "../../repo/mail-import-run";
 import { ingestGmailMessages } from "../../service/gmail/ingest";
 import type { MailRelevance } from "../../service/gmail/relevance";
@@ -124,8 +129,8 @@ export async function recordDeletedHistoryEvent(
   });
 }
 
-const MAIL_DISCOVERY_CONSTRAINT = "Run_one_active_mail_discovery";
 type DiscoveryMode = "new_mail" | "targeted";
+type DiscoveryPaidGrant = { actor: ActorContext; paidOverBudgetUsd?: number };
 /** A paginated new-mail catch-up finishes first; otherwise pending targets alternate with new mail. */
 const discoveryMode = (coverage: MailboxCoverage): DiscoveryMode =>
   coverage.history.pageToken ||
@@ -159,6 +164,183 @@ async function discoveryAllowed(
     Boolean(coverage?.history.pageToken) ||
     scopedQueriesPending(coverage, target.scopedQueries)
   );
+}
+
+/** The current roster is reconciled once; each execution owns only its selected position. */
+async function createDiscoveryPasses(
+  db: Database,
+  input: {
+    ledgerPartyId: string;
+    actor: ActorContext;
+    frozen: z.output<typeof mailboxDiscoveryInput>;
+    notes: string;
+    clientKey?: string;
+    reconcileRoster: boolean;
+    paidGrant?: DiscoveryPaidGrant;
+  },
+): Promise<RunId[]> {
+  return withTransactionDatabase(db, async (tx) => {
+    const identity = {
+      ledgerPartyId: input.ledgerPartyId,
+      mailboxId: input.frozen.mailboxId,
+    };
+    await lockMailDiscoveryAdmission(tx, identity);
+    const launch = async (runId: RunId) => {
+      if (input.paidGrant) {
+        await recordPaidGrant(tx, input.paidGrant.actor, {
+          runId,
+          paidOverBudgetUsd: input.paidGrant.paidOverBudgetUsd,
+        });
+        await launchWorkflowRun(tx, { runId, purpose: "mail_discovery" });
+      } else
+        await launchWorkflowRun(tx, {
+          runId,
+          purpose: "mail_discovery",
+          automatic: true,
+        });
+    };
+    if (input.clientKey) {
+      const [existing] = await getDb(tx)
+        .select({
+          id: runTable.id,
+          status: runTable.status,
+          progress: runTable.progress,
+        })
+        .from(runTable)
+        .where(eq(runTable.clientKey, input.clientKey));
+      if (existing) {
+        if (
+          existing.status !== "running" ||
+          mailboxDiscoveryProgress.parse(existing.progress).attempt !== 0
+        )
+          return [];
+        await launch(existing.id);
+        return [existing.id];
+      }
+    }
+    let { coverage } = await loadGmailCursor(tx, { ...identity, lock: true });
+    if (coverage && input.reconcileRoster) {
+      const merged = mergeMailboxQueries(coverage, input.frozen.scopedQueries);
+      if (JSON.stringify(merged) !== JSON.stringify(coverage)) {
+        if (
+          !(await checkpointMailboxCoverage(tx, {
+            ...identity,
+            from: coverage,
+            to: merged,
+          }))
+        )
+          throw new Error("Mailbox query roster changed before admission");
+        coverage = merged;
+      }
+    }
+    const scopes: MailboxDiscoveryScope[] =
+      !coverage || discoveryMode(coverage) === "new_mail"
+        ? [{ kind: "mailbox" }]
+        : coverage.scoped
+            .filter(
+              (query) =>
+                !query.completed &&
+                input.frozen.scopedQueries.some(
+                  (selected) =>
+                    selected.key === query.key &&
+                    selected.query === query.query,
+                ),
+            )
+            .map((query) => ({ kind: "query", key: query.key }));
+    const scheduled: RunId[] = [];
+    for (const scope of scopes) {
+      const decision = await mailDiscoveryAdmission(tx, {
+        ...identity,
+        scope,
+        recovery: false,
+      });
+      if (decision !== "available") {
+        if (
+          input.paidGrant &&
+          (await fundingPausedDiscovery(tx, identity, "running"))
+        )
+          return [];
+        const queued =
+          scope.kind === "mailbox" && coverage
+            ? await findQueuedAutomaticMailboxDiscovery(tx, identity)
+            : null;
+        if (queued && input.paidGrant) {
+          await launch(queued);
+          scheduled.push(queued);
+        } else if (scope.kind === "mailbox" && coverage && !queued) {
+          const progress = mailboxDiscoveryProgress.parse({
+            attempt: 0,
+            phase: "paused",
+            discoveryScope: scope,
+            admissionClass: "automatic",
+            admissionRequestedAt: new Date().toISOString(),
+          });
+          const runId = await ensureRun(tx, input.actor, {
+            purpose: "mail_discovery",
+            trigger: "scheduled",
+            status: "completed",
+            execution: false,
+            clientKey: input.clientKey,
+            notes: input.notes,
+            input: input.frozen,
+            progress,
+          });
+          const execution = await enqueueJob(tx, {
+            key: `run:${runId}`,
+            kind: "run.execute",
+            runId,
+            input: { runId, purpose: "mail_discovery" },
+          });
+          await getDb(tx)
+            .update(runTable)
+            .set({
+              status: "paused",
+              endedAt: null,
+              failureCode: MAIL_DISCOVERY_ADMISSION_WAIT,
+              dispatchError:
+                "Mail discovery is queued for shared search capacity",
+              progress: { ...progress, attempt: execution.generation },
+            })
+            .where(eq(runTable.id, runId));
+          await launch(runId);
+          scheduled.push(runId);
+        }
+        if (decision === "capacity" || scope.kind === "mailbox") break;
+        continue;
+      }
+      const runId = await ensureRun(tx, input.actor, {
+        purpose: "mail_discovery",
+        trigger: "scheduled",
+        status: "running",
+        ...(input.clientKey
+          ? {
+              clientKey:
+                scheduled.length === 0
+                  ? input.clientKey
+                  : `${input.clientKey}:${scheduled.length}`,
+            }
+          : {}),
+        notes: input.notes,
+        input: input.frozen,
+        progress: mailboxDiscoveryProgress.parse({
+          attempt: 0,
+          phase: "listing",
+          discoveryScope: scope,
+          admissionClass: "automatic",
+        }),
+      });
+      // Generation, paid authority and wake intent commit with creation; a
+      // concurrent drain must never claim a half-launched discovery.
+      await launch(runId);
+      scheduled.push(runId);
+      // One member action grants one Run's allowance, never one per lane.
+      if (input.paidGrant || scheduled.length === MAIL_DISCOVERY_CAPACITY)
+        break;
+    }
+    return scheduled;
+  }).catch((error: unknown) => {
+    throw mailDiscoveryAdmissionBackpressure(error) ?? error;
+  });
 }
 export type DiscoveryPorts = {
   providerForUser?: (userId: string) => Promise<GmailProvider>;
@@ -196,15 +378,7 @@ const pauseAuthorization = async (
   params: WorkflowRunParams,
   error: UnparsedError,
 ): Promise<boolean> => {
-  if (
-    !(error instanceof GmailAuthorizationError) &&
-    !(
-      error instanceof GmailApiError &&
-      (error.status === 401 ||
-        (error.status === 403 && error.reason === "insufficientPermissions"))
-    )
-  )
-    return false;
+  if (!isGmailAuthorizationFailure(error)) return false;
   await getDb(db)
     .update(runTable)
     .set({
@@ -242,18 +416,6 @@ async function fundingPausedDiscovery(
   return row;
 }
 
-async function yieldToMailDiscoveryRecovery(
-  db: Database,
-  target: Pick<GmailSyncTarget, "ledgerPartyId" | "mailboxId">,
-): Promise<boolean> {
-  const at = await mailDiscoveryRecoveryWakeAt(db, target);
-  if (!at) return false;
-  // Only the existing Job's fenced claim may restore its Run. Starting another
-  // automatic owner here would take the unique mailbox slot ahead of that claim.
-  await wakeAt(at, { source: "mail-discovery.recovery" });
-  return true;
-}
-
 /**
  * Starts discovery for each eligible mailbox. A mailbox whose discovery is
  * waiting for free AI capacity keeps that Run instead of starting another;
@@ -264,7 +426,7 @@ export async function startMailDiscovery(
   db: Database,
   options: {
     target?: Pick<GmailSyncTarget, "ledgerPartyId" | "userId" | "mailboxId">;
-    paidGrant?: { actor: ActorContext; paidOverBudgetUsd?: number };
+    paidGrant?: DiscoveryPaidGrant;
   } = {},
 ): Promise<MailboxDiscoveryStartOutput> {
   const grantPaid = async (runId: RunId) => {
@@ -310,54 +472,28 @@ export async function startMailDiscovery(
       started += 1;
       continue;
     }
-    if (
-      !options.paidGrant &&
-      (await yieldToMailDiscoveryRecovery(db, target))
-    ) {
-      running += 1;
-      continue;
-    }
-    let runId;
-    try {
-      runId = await ensureRun(
-        db,
-        buildActorContext(userId.parse(target.userId), "system"),
-        {
-          purpose: "mail_discovery",
-          trigger: "scheduled",
-          status: "running",
-          notes: "Scheduled Gmail discovery",
-          input: {
-            emailAuditVersion: 1,
-            mailboxId: target.mailboxId,
-            scopedQueries: target.scopedQueries,
-            executionPolicy: (await mailImportEnabled(db, target.mailboxId))
-              ? "import"
-              : "classification_only",
-          },
-          progress: {
-            attempt: 0,
-            phase: "listing",
-            pagesDone: 0,
-            saved: 0,
-            deleted: 0,
-            excluded: 0,
-            unrelated: 0,
-            events: 0,
-            droppedEvents: 0,
-          },
-        },
-      );
-    } catch (error) {
-      if (!isUniqueViolation(error, MAIL_DISCOVERY_CONSTRAINT)) throw error;
+    const runIds = await createDiscoveryPasses(db, {
+      ledgerPartyId: target.ledgerPartyId,
+      actor: buildActorContext(userId.parse(target.userId), "system"),
+      notes: "Scheduled Gmail discovery",
+      reconcileRoster: true,
+      paidGrant: options.paidGrant,
+      frozen: {
+        emailAuditVersion: 1,
+        mailboxId: target.mailboxId,
+        scopedQueries: target.scopedQueries,
+        executionPolicy: (await mailImportEnabled(db, target.mailboxId))
+          ? "import"
+          : "classification_only",
+      },
+    });
+    if (runIds.length === 0) {
       const active = await fundingPausedDiscovery(db, target, "running");
       if (active) await grantPaid(active.id);
       running += 1;
       continue;
     }
-    await grantPaid(runId);
-    await launchWorkflowRun(db, { runId, purpose: "mail_discovery" });
-    started += 1;
+    started += runIds.length;
   }
   return { started, running };
 }
@@ -386,6 +522,10 @@ export async function listMailDiscovery(
 ): Promise<{ kind: "stopped" } | { kind: "listed"; more: boolean }> {
   const claimed = await claimDiscovery(db, params);
   if (!claimed) return { kind: "stopped" };
+  const queryKey =
+    claimed.progress.discoveryScope?.kind === "query"
+      ? claimed.progress.discoveryScope.key
+      : undefined;
   // A new-mail catch-up keeps paginating; each targeted page is its own pass.
   const continuing = (coverage: MailboxCoverage) =>
     claimed.input.controlled
@@ -396,7 +536,9 @@ export async function listMailDiscovery(
               (selected) => selected.key === query.key,
             ),
         )
-      : Boolean(coverage.history.pageToken);
+      : queryKey !== undefined
+        ? false
+        : Boolean(coverage.history.pageToken);
   if (claimed.progress.page)
     return {
       kind: "listed",
@@ -429,12 +571,15 @@ export async function listMailDiscovery(
     }
     // The member's bounded selection must not prune other searches' durable
     // positions or advance the mailbox's history cursor.
-    const merged = mergeMailboxQueries(
-      coverage,
-      claimed.input.controlled
-        ? [...coverage.scoped, ...claimed.input.scopedQueries]
-        : claimed.input.scopedQueries,
-    );
+    const merged =
+      claimed.progress.discoveryScope && !claimed.input.controlled
+        ? coverage
+        : mergeMailboxQueries(
+            coverage,
+            claimed.input.controlled
+              ? [...coverage.scoped, ...claimed.input.scopedQueries]
+              : claimed.input.scopedQueries,
+          );
     if (JSON.stringify(merged) !== JSON.stringify(coverage)) {
       if (
         !(await checkpointMailboxCoverage(db, {
@@ -451,10 +596,24 @@ export async function listMailDiscovery(
       provider,
       claimed.input.mailboxId,
       coverage,
-      claimed.input.controlled ? "targeted" : discoveryMode(coverage),
+      claimed.input.controlled || queryKey !== undefined
+        ? "targeted"
+        : discoveryMode(coverage),
       claimed.input.controlled
         ? claimed.input.scopedQueries.map((query) => query.key)
-        : undefined,
+        : queryKey !== undefined
+          ? coverage.scoped
+              .filter(
+                (current) =>
+                  current.key === queryKey &&
+                  claimed.input.scopedQueries.some(
+                    (frozen) =>
+                      frozen.key === current.key &&
+                      frozen.query === current.query,
+                  ),
+              )
+              .map((query) => query.key)
+          : undefined,
     );
     const frozen = await (
       await import("~/server/domains/run/repo/ai-work-state")
@@ -631,6 +790,8 @@ export async function saveMailDiscoveryBatch(
       const { coverage } = await loadGmailCursor(tx, {
         ledgerPartyId: claimed.ledgerPartyId,
         mailboxId: claimed.input.mailboxId,
+        // Merge into the latest position while the short cursor write is locked.
+        lock: true,
       });
       const rebased =
         coverage &&
@@ -751,69 +912,23 @@ export async function continueMailDiscovery(
   };
   // The retained funding owner admits the next pass after capacity returns.
   if (await fundingPausedDiscovery(db, target, "paused_auth")) return;
-  if (await yieldToMailDiscoveryRecovery(db, target)) return;
   const clientKey = `mailbox-continuation:${previous.id}`;
-  const [existing] = await getDb(db)
-    .select()
-    .from(runTable)
-    .where(eq(runTable.clientKey, clientKey))
-    .limit(1);
-  if (
-    existing &&
-    existing.status !== "failed" &&
-    Number(mailboxDiscoveryProgress.parse(existing.progress).attempt) > 0
-  )
-    return;
-  let nextRunId = existing?.id;
-  if (!nextRunId) {
-    const { coverage } = await loadGmailCursor(db, {
-      ledgerPartyId: previous.ledgerPartyId,
-      mailboxId: input.mailboxId,
-    });
-    // Continuation carries current objectives, never a retired or revised search.
-    const scopedQueries = input.scopedQueries.filter((query) =>
-      coverage?.scoped.some(
-        (current) => current.key === query.key && current.query === query.query,
-      ),
-    );
-    if (
-      !(await discoveryAllowed(db, {
-        ledgerPartyId: previous.ledgerPartyId,
-        mailboxId: input.mailboxId,
-        scopedQueries,
-      }))
-    )
-      return;
-    try {
-      nextRunId = await ensureRun(
-        db,
-        buildActorContext(previous.actorUserId, "system"),
-        {
-          purpose: "mail_discovery",
-          trigger: "scheduled",
-          status: "running",
-          clientKey,
-          notes: "Continue Gmail history coverage",
-          input: { ...input, scopedQueries, emailAuditVersion: 1 },
-          progress: {
-            attempt: 0,
-            phase: "listing",
-            pagesDone: 0,
-            saved: 0,
-            deleted: 0,
-            excluded: 0,
-            unrelated: 0,
-            events: 0,
-            droppedEvents: 0,
-          },
-        },
-      );
-    } catch (error) {
-      if (isUniqueViolation(error, MAIL_DISCOVERY_CONSTRAINT)) return;
-      throw error;
-    }
-  }
-  await launchWorkflowRun(db, { runId: nextRunId, purpose: "mail_discovery" });
+  const { coverage } = await loadGmailCursor(db, target);
+  // Continuation carries current objectives, never a retired or revised search.
+  const scopedQueries = input.scopedQueries.filter((query) =>
+    coverage?.scoped.some(
+      (current) => current.key === query.key && current.query === query.query,
+    ),
+  );
+  if (!(await discoveryAllowed(db, { ...target, scopedQueries }))) return;
+  await createDiscoveryPasses(db, {
+    ledgerPartyId: previous.ledgerPartyId,
+    actor: buildActorContext(previous.actorUserId, "system"),
+    frozen: { ...input, scopedQueries, emailAuditVersion: 1 },
+    notes: "Continue Gmail history coverage",
+    clientKey,
+    reconcileRoster: false,
+  });
 }
 
 export async function failMailDiscovery(

@@ -1,0 +1,132 @@
+{
+  "type": "diff",
+  "version": "9",
+  "dialect": "postgres",
+  "id": "3a57bf3e-6886-488d-b2ba-c03a6247bac1",
+  "prevIds": [
+    "57ab5cac-faec-4511-bc58-51486a997ddf"
+  ],
+  "footprints": [
+    {
+      "statementType": "add_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "MailboxCursor",
+        "providerRetryAt"
+      ],
+      "writes": [
+        "s|col|public.MailboxCursor.providerRetryAt",
+        "n|col|public.MailboxCursor.providerRetryAt",
+        "e|col|public.MailboxCursor.providerRetryAt"
+      ],
+      "reads": [
+        "n|tbl|public.MailboxCursor",
+        "n|sch|public"
+      ]
+    },
+    {
+      "statementType": "add_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "MailboxCursor",
+        "admissionVersion"
+      ],
+      "writes": [
+        "s|col|public.MailboxCursor.admissionVersion",
+        "n|col|public.MailboxCursor.admissionVersion",
+        "e|col|public.MailboxCursor.admissionVersion"
+      ],
+      "reads": [
+        "n|tbl|public.MailboxCursor",
+        "n|sch|public"
+      ]
+    },
+    {
+      "statementType": "recreate_index",
+      "statementTarget": [
+        "index",
+        "public",
+        "Run",
+        "Run_one_active_mail_discovery"
+      ],
+      "writes": [
+        "s|idx|public.Run_one_active_mail_discovery",
+        "n|idx|public.Run_one_active_mail_discovery",
+        "e|idx|public.Run_one_active_mail_discovery",
+        "n|rel|public.Run_one_active_mail_discovery"
+      ],
+      "reads": [
+        "n|tbl|public.Run",
+        "n|sch|public",
+        "n|col|public.Run.ledgerPartyId"
+      ],
+      "sharedWrites": [],
+      "sqlHash": "6301b6991b0ce1c1"
+    }
+  ],
+  "deltas": [
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "MailboxCursor",
+        "name": "providerRetryAt",
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "MailboxCursor",
+        "name": "admissionVersion",
+        "type": "integer",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "0",
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "alter",
+      "key": "indexes\u0000[\"public\",\"Run_one_active_mail_discovery\"]",
+      "set": {
+        "columns": [
+          {
+            "value": "ledgerPartyId",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          },
+          {
+            "value": "COALESCE(\"input\"->>'mailboxId', '')",
+            "isExpression": true,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          },
+          {
+            "value": "md5(COALESCE(CASE WHEN \"progress\"->'discoveryScope'->>'kind' = 'query' THEN \"progress\"->'discoveryScope'->>'key' END, ''))",
+            "isExpression": true,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ]
+      }
+    }
+  ]
+}

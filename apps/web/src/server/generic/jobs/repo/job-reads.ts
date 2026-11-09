@@ -12,6 +12,7 @@ import {
   eq,
   gt,
   inArray,
+  or,
   sql,
   type SQL,
 } from "drizzle-orm";
@@ -24,6 +25,33 @@ import {
 import { job, run } from "~/server/db/retained-tables";
 
 import type { JobRow } from "./queue";
+
+/** A Run's canonical generation, rather than an unrelated Job carrying its provenance. */
+export const runHasLiveExecution = (input: {
+  id: SQL;
+  purpose: SQL;
+  generation: SQL;
+  requireAttempt?: boolean;
+}): SQL<boolean> =>
+  related(job, (current) => eq(current.runId, input.id))
+    .where((current) =>
+      and(
+        eq(current.key, sql`'run:' || ${input.id}::text`),
+        eq(current.kind, "run.execute"),
+        eq(sql`${current.input}->>'runId'`, sql`${input.id}::text`),
+        eq(sql`${current.input}->>'purpose'`, input.purpose),
+        eq(sql`${current.generation}::text`, input.generation),
+        inArray(current.state, [
+          jobState.enum.queued,
+          jobState.enum.retry_wait,
+          jobState.enum.running,
+        ]),
+        input.requireAttempt
+          ? or(gt(current.generation, 1), gt(current.attempts, 0))
+          : undefined,
+      ),
+    )
+    .exists();
 
 export type { JobRow };
 

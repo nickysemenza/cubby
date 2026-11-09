@@ -139,9 +139,38 @@ to completed; its original checkpoint, notes and end time remain unchanged.
 The checkpoint can remain incomplete while the linked continuations establish
 fulfillment. Linkage also includes child usage in the parent's cost rollup.
 
+Mailbox discovery admits at most four independent targeted searches per member
+and mailbox. Each Run keeps the complete frozen query roster and a stable
+selected query resource. Legacy, history and controlled scans own the whole
+mailbox. Short admission transactions coordinate resource conflicts; a database
+guard preserves the capacity and exclusion rules during Worker cutover too.
+Only current connected-mailbox discovery reconciles the canonical query roster;
+individual query lanes cannot prune or restore other objectives.
+
+An accepted retained Retry keeps its Run, frozen page and canonical Job. If its
+resource is occupied it reads as queued automatic work, using the existing
+paused state with a specific admission reason. Its fenced Job claim admits it
+later. Repeated capacity deferrals consume no failure attempts. Eligible
+recovery reserves one vacancy; an exclusive waiter stops fresh admissions until
+existing owners drain. Other normal query work retains the remaining capacity.
+Recovery query owners use at most three slots, leaving room for normal work.
+Normal history demand coalesces into one queued Run; its older exclusive request
+also drains query owners instead of waiting behind endless recovery callbacks.
+Creation, generation and wake intent commit together. A manual paid-start action
+grants one Run's allowance and never duplicates it across parallel lanes.
+Cancellation removes demand, and a missing or terminal Job leaves the Run
+visible for recovery instead of hiding it as an automatic wait.
+
 Mailbox discovery acquires at most five messages from its frozen provider page
-per Job claim. Its durable message offset resumes the remaining messages without
-replaying the completed prefix; absent offsets on retained pages mean zero.
+per Job claim. Each lane fetches and publishes in source order without buffering
+several full originals. Independent search Runs share the existing three-page
+Job drain and database sockets. Its durable message offset resumes the remaining
+messages without replaying the completed prefix; absent offsets on retained
+pages mean zero.
+Gmail throttling and transient provider failures retain their raw diagnostics
+and retry time. The mailbox cursor shares that cooldown across independent
+clients; a Job defers before another provider request without spending attempts.
+Retry-After is preserved beyond the client's short in-call retry bound.
 Mailbox coverage advances only after every batch and history event is handled. A retained
 automatic history page can then settle against a newer completed history cursor
 under the same baseline when its numeric ID covers the entire frozen range.
@@ -416,8 +445,9 @@ its generation, attempts and cursor and clearing the old wait reason; the next
 page still checks current funding
 and may pause again. Resume creates no paid grant; `run_now_paid` uses its explicit
 paid authority. An explicit budget increase releases funding-paused discovery
-before bringing queued Jobs forward; its claim admits one retained page per
-mailbox, while contenders keep retrying under the same Job fence. Until admitted,
+before bringing queued Jobs forward; claims reacquire their query resource or
+exclusive mailbox scope, while contenders defer under the same Job fence
+without spending failure attempts. Until admitted,
 a released discovery reads as paused rather than waiting for funding. The release
 marker stays out of the public checkpoint and grants no overage. A fresh funding
 stop clears it, keeping the funding owner's frozen deadline for the next wait.

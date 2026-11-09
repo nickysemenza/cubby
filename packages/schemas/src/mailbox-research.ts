@@ -188,8 +188,21 @@ export const mailboxDiscoveryInput = z.object({
   /** A member-selected Vendor uses only its searches and never the history lane. */
   controlled: controlledMailDateRange.optional(),
 });
+/** A missing scope on retained work owns the whole mailbox until it is readmitted. */
+export const MAIL_DISCOVERY_CAPACITY = 4;
+export const MAIL_DISCOVERY_ADMISSION_WAIT = "mail_discovery_queued";
+export const mailboxDiscoveryScope = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("query"), key: z.string().min(1) }),
+  z.object({ kind: z.literal("mailbox") }),
+]);
+export type MailboxDiscoveryScope = z.infer<typeof mailboxDiscoveryScope>;
 export const mailboxDiscoveryProgress = z.object({
   attempt: z.number().int().nonnegative(),
+  /** Stable across page removal; the frozen query roster remains in Run input. */
+  discoveryScope: mailboxDiscoveryScope.optional(),
+  admissionClass: z.enum(["automatic", "recovery"]).optional(),
+  /** FIFO demand exists only with the admission-wait failure code and live Job. */
+  admissionRequestedAt: z.iso.datetime().optional(),
   /** An explicit budget raise releases admission, never the next funding check. */
   fundingReleasedAt: z.iso.datetime().optional(),
   phase: z.enum(["listing", "fetching", "completed", "failed", "paused"]),
@@ -815,7 +828,13 @@ export const mailboxCoverageSummary = mailboxCoverage
     }),
   });
 export const mailboxDiscoveryProgressSummary = mailboxDiscoveryProgress
-  .omit({ page: true, fundingReleasedAt: true })
+  .omit({
+    page: true,
+    fundingReleasedAt: true,
+    discoveryScope: true,
+    admissionClass: true,
+    admissionRequestedAt: true,
+  })
   .extend({
     page: z
       .object({

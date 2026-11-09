@@ -15,6 +15,7 @@ import {
   memberStoppedRunPredicate,
   retiredRunPredicate,
   historicalRoutineRunPredicate,
+  queuedMailDiscoveryPredicate,
 } from "~/server/domains/run/repo/work-attention";
 import { workRunReviewRead } from "~/server/domains/run/repo/work-owners";
 import { recordScope } from "~/server/generic/work-queue/repo/work-declarations";
@@ -48,7 +49,7 @@ const execution: WorkSource = {
       exclusiveOwner: sql`"Run"."ledgerPartyId"`,
       date: householdDaySql(sql`"Run"."startedAt"`),
       // A Run stopped at its execution limit waits for a member to resume it.
-      executor: sql`CASE WHEN "Run".status = ${runStatus.enum.running} THEN ${workExecutor.enum.automatic} WHEN "Run".status = ${runStatus.enum.needs_review} THEN ${workExecutor.enum.human} ELSE ${workExecutor.enum.external} END`,
+      executor: sql`CASE WHEN ("Run".status = ${runStatus.enum.running} OR ${queuedMailDiscoveryPredicate({ id: outer(run.id), purpose: outer(run.purpose), status: outer(run.status), failureCode: outer(run.failureCode), progress: outer(run.progress) })}) THEN ${workExecutor.enum.automatic} WHEN "Run".status = ${runStatus.enum.needs_review} THEN ${workExecutor.enum.human} ELSE ${workExecutor.enum.external} END`,
       reason: execution.reasons[0]!.label,
       reasonKeys: [execution.id],
     })
@@ -62,7 +63,7 @@ const execution: WorkSource = {
               (purpose) => !isStepRunPurpose(purpose),
             ).map((purpose) => sql`${purpose}`),
             sql`, `,
-          )}) OR "Run"."dispatchEventId" IS NOT NULL)) OR ("Run".status = ${runStatus.enum.needs_review} AND "Run"."failureCode" IN ('execution_limit') AND NOT ${related(
+          )}) OR "Run"."dispatchEventId" IS NOT NULL)) OR ${queuedMailDiscoveryPredicate({ id: outer(run.id), purpose: outer(run.purpose), status: outer(run.status), failureCode: outer(run.failureCode), progress: outer(run.progress) })} OR ("Run".status = ${runStatus.enum.needs_review} AND "Run"."failureCode" IN ('execution_limit') AND NOT ${related(
             runTable,
             (successor) =>
               sql`${successor.predecessorRunId} = ${outer(runTable.id)}`,
@@ -97,7 +98,7 @@ const account: WorkSource = {
       .where(
         and(
           sql`${notDeleted(alias(run, "Run"))} AND NOT ${memberStoppedRunPredicate(sql`"Run"."failureCode"`)} AND (
-        (NOT ${retiredRunPredicate(sql`"Run"."retiredAt"`)} AND NOT ${historicalRoutineRunPredicate({ id: outer(run.id), purpose: outer(run.purpose), status: outer(run.status), trigger: outer(run.trigger), endedAt: outer(run.endedAt), failureCode: outer(run.failureCode) })} AND NOT ${settledAiRunPredicate({ id: outer(run.id), purpose: outer(run.purpose), status: outer(run.status), failureCode: outer(run.failureCode) })} AND ${attentionStatePredicate(sql`"Run".status`)} AND NOT ("Run".status = ${runStatus.enum.needs_review} AND "Run"."failureCode" IS NOT DISTINCT FROM 'execution_limit')
+        (NOT ${retiredRunPredicate(sql`"Run"."retiredAt"`)} AND NOT ${historicalRoutineRunPredicate({ id: outer(run.id), purpose: outer(run.purpose), status: outer(run.status), trigger: outer(run.trigger), endedAt: outer(run.endedAt), failureCode: outer(run.failureCode) })} AND NOT ${settledAiRunPredicate({ id: outer(run.id), purpose: outer(run.purpose), status: outer(run.status), failureCode: outer(run.failureCode) })} AND NOT ${queuedMailDiscoveryPredicate({ id: outer(run.id), purpose: outer(run.purpose), status: outer(run.status), failureCode: outer(run.failureCode), progress: outer(run.progress) })} AND ${attentionStatePredicate(sql`"Run".status`)} AND NOT ("Run".status = ${runStatus.enum.needs_review} AND "Run"."failureCode" IS NOT DISTINCT FROM 'execution_limit')
           AND NOT EXISTS (SELECT 1 FROM "RunFinding" finding WHERE finding."runId" = "Run".id AND ${activeFindingSql("finding")}))
         OR ("Run".purpose = ${runPurpose.enum.photo_inventory} AND EXISTS (
           SELECT 1 FROM "PhotoGroupProposal" proposal WHERE proposal."runId" = "Run".id AND proposal.state = ${photoGroupProposalState.enum.proposed}
