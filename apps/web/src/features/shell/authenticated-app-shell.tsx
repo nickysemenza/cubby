@@ -15,7 +15,9 @@ import {
 } from "react";
 import { z } from "zod";
 
+import { NavigationCountBadge } from "~/entity/navigation/navigation-count-badge";
 import { QuickActionsMenu } from "~/entity/navigation/quick-actions-menu";
+import { WorkNavStatus } from "~/entity/navigation/work-nav-status";
 import { preloadCommandMenu } from "~/features/command-menu/command-menu-loader";
 import { MainNav } from "~/features/shell/main-nav";
 import { useDatabaseChanges } from "~/integrations/tanstack-query/use-database-changes";
@@ -54,8 +56,6 @@ import {
 } from "../../entity/navigation/sidebar-rail-group";
 import { domainChipClass } from "../../ui/navigation/domain-wayfinding";
 import { createInAppHistory } from "../../ui/navigation/in-app-history";
-import { NavigationCountBadge } from "../../ui/navigation/navigation-count-badge";
-import { WorkNavStatus } from "../../ui/navigation/work-nav-status";
 
 const LOGO_SRC = import.meta.env.DEV ? "/favicon-dev.svg" : "/favicon.svg";
 const collapsedPreferenceSchema = z.boolean();

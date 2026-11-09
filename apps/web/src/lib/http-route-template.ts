@@ -52,7 +52,7 @@ for (const raw of [...ROUTER_PATHS, ...WORKER_PATHS]) {
     ],
   });
 }
-const DYNAMIC_TRACE_ROUTES = dynamicRoutes.toSorted((a, b) => {
+const DYNAMIC_TRACE_ROUTES = dynamicRoutes.sort((a, b) => {
   for (let index = 0; index < a.rank.length; index++) {
     const difference = a.rank[index]! - b.rank[index]!;
     if (difference !== 0) return difference;

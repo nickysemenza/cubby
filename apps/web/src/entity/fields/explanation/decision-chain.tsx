@@ -15,17 +15,17 @@ import {
 } from "~/entity/fields/field-resolution";
 import { compactFieldText } from "~/entity/fields/field-text";
 import { useEntityMetadata } from "~/entity/metadata";
+import {
+  pendingWorkLabel,
+  UpdatingDot,
+  useFieldExecutionCurrent,
+} from "~/ui/derived/value-mark";
 import { useDisplayNow } from "~/ui/hooks/use-display-now";
 import { Button } from "~/ui/primitives/button";
 import { Facts } from "~/ui/records/facts";
 import { Description } from "~/ui/text/description";
 import { DateDisplay } from "~/ui/values/date-display";
 
-import {
-  pendingWorkLabel,
-  UpdatingDot,
-  useFieldExecutionCurrent,
-} from "./value-mark";
 import { ExplanationEntityLink, ReadableExplanationValue } from "./why-value";
 
 export function DecisionValue({

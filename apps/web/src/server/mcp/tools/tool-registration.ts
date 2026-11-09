@@ -11,6 +11,12 @@ import { type JSONType, z } from "zod";
 
 import type { McpActionSpec } from "~/contracts/mcp-define";
 import type { OperationIdOfKind } from "~/lib/generated/operation-registry.gen";
+import {
+  type PublicOperationError,
+  publicOperationErrorSchema,
+  type OperationResult,
+  operationWireValueSchema,
+} from "~/lib/operation-result";
 import { roundTo } from "~/lib/round-to";
 import { getDb } from "~/server/db/helpers";
 import { run as runTable } from "~/server/db/schema";
@@ -39,12 +45,6 @@ import {
 } from "~/server/mcp/purchase-agent-protocol";
 import { getRequestId } from "~/server/observability/tracing";
 import { dispatchOperation } from "~/server/operation-runtime/operation-dispatch.server";
-import {
-  type PublicOperationError,
-  publicOperationErrorSchema,
-  type OperationResult,
-  operationWireValueSchema,
-} from "~/server/operation-runtime/operation.contract";
 import {
   normalizeOperationError,
   type OperationFailureContext,

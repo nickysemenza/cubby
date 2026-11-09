@@ -18,7 +18,6 @@ import {
   isBrowserRoutedEntity,
 } from "~/entity/entities";
 import { entityGraph } from "~/integrations/tanstack-query/generated/domains/entityGraph.gen";
-import { browserOnlyLazy } from "~/lib/browser-only-lazy";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
@@ -27,6 +26,7 @@ import { Row, Stack } from "~/ui/layout";
 import { Disclosure } from "~/ui/layout/disclosure";
 import { Panel } from "~/ui/layout/panel";
 import { PrevNextButtons } from "~/ui/navigation/prev-next-buttons";
+import { browserOnlyLazy } from "~/ui/primitives/browser-only-lazy";
 import { Button } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";
 import {

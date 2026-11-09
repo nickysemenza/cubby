@@ -5,9 +5,9 @@ import { afterEach, expect, it } from "vitest";
 import { page, userEvent } from "vitest/browser";
 
 import { createEditorBrowserTestHarness as createBrowserTestHarness } from "#web/tests/editor-metadata.fixtures.ts";
+import { WhyValue } from "~/entity/fields/explanation/why-value";
 import { overrideOperationDispatch } from "~/integrations/tanstack-query/operation-call";
 import { mock } from "~/lib/test/mock-schema";
-import { WhyValue } from "~/ui/derived/why-value";
 
 let harness: ReturnType<typeof createBrowserTestHarness> | undefined;
 let restoreTransport: (() => void) | undefined;

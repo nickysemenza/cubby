@@ -1,6 +1,7 @@
 import { apiKey } from "@better-auth/api-key";
 import { electron } from "@better-auth/electron";
 import { oauthProvider } from "@better-auth/oauth-provider";
+import { createLogger } from "@cubby/worker-tracing";
 import { betterAuth, type BetterAuthAdvancedOptions } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { APIError, createAuthMiddleware } from "better-auth/api";
@@ -8,6 +9,12 @@ import { bearer, jwt, openAPI } from "better-auth/plugins";
 import { tanstackStartCookies } from "better-auth/tanstack-start";
 import { and, eq } from "drizzle-orm";
 
+import { MCP_RESOURCE, OAUTH_ISSUER, OAUTH_SCOPES } from "~/lib/auth-constants";
+import {
+  authorizeGoogleUserInfo,
+  isGoogleIdTokenOnlyRequest,
+} from "~/lib/google-auth";
+import { GMAIL_READONLY_SCOPE } from "~/lib/google-auth-constants";
 import { drizzle } from "~/server/db";
 import * as schema from "~/server/db/auth.schema";
 import {
@@ -15,17 +22,12 @@ import {
   sameAuthConfiguration,
   type AuthConfiguration,
 } from "~/server/http/auth-configuration";
-
-import { MCP_RESOURCE, OAUTH_ISSUER, OAUTH_SCOPES } from "./auth-constants";
 import {
   localGoogleProviderOrigin,
   localGoogleProviderPlugin,
-} from "./e2e-google-provider";
-import {
-  authorizeGoogleUserInfo,
-  isGoogleIdTokenOnlyRequest,
-} from "./google-auth";
-import { GMAIL_READONLY_SCOPE } from "./google-auth-constants";
+} from "~/server/http/e2e-google-provider";
+
+const betterAuthLog = createLogger("Better Auth");
 
 const OAUTH_RESOURCE_SEED_RETRY_MESSAGE =
   "oauth-provider: could not seed `resources` at startup; retrying on first resource access.";
@@ -112,11 +114,13 @@ function createAuth(env: AuthConfiguration) {
             "No database instance available. On CF Workers, wrap the handler with withRequestDb()."
         )
           return;
-        if (level === "error")
-          console.error(`[Better Auth] ${message}`, ...args);
-        else if (level === "warn")
-          console.warn(`[Better Auth] ${message}`, ...args);
-        else console.log(`[Better Auth] ${message}`, ...args);
+        const write =
+          level === "error"
+            ? betterAuthLog.error
+            : level === "warn"
+              ? betterAuthLog.warn
+              : betterAuthLog.info;
+        write(message, { args });
       },
     },
     database: drizzleAdapter(drizzle, {

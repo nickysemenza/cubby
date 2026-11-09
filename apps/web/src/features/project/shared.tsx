@@ -20,7 +20,6 @@ import {
 import { createTextColumn } from "~/entity/table/column-helpers";
 import { EditableEntityCell } from "~/entity/table/editable-entity-cell";
 import { purchaseLabel } from "~/lib/purchase-label";
-import { getStatusBadgeProps } from "~/lib/status-colors";
 import { persistedVendorId } from "~/lib/vendor-logo";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import { entityCellData, specFromCellData } from "~/ui/data-table/cell-data";
@@ -32,6 +31,7 @@ import { type MobileColumnMeta } from "~/ui/data-table/table-meta";
 import { attachCubbyColumnMeta } from "~/ui/data-table/table-meta";
 import { badgeVariantColor } from "~/ui/reui/badge";
 import { NoneValue } from "~/ui/text/none-value";
+import { getStatusBadgeProps } from "~/ui/values/status-colors";
 
 export { TASK_STATUS_LABELS } from "~/entity/presentation/task-options";
 

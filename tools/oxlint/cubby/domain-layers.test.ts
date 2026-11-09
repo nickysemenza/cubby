@@ -305,29 +305,14 @@ test("services consume the nominal handle, not storage table or query capabiliti
   assert.equal(violation(service, `${S}/db/database`, true), undefined);
 });
 
-test("derived UI composes entity decisions without opening shared UI to features", () => {
-  assert.equal(
-    violation(
-      "apps/web/src/ui/derived/decision-chain.tsx",
-      "apps/web/src/entity/fields/field-resolution.tsx",
-      false,
-    ),
-    undefined,
-  );
-  assert.equal(
-    violation(
-      "apps/web/src/ui/records/facts.tsx",
-      "apps/web/src/entity/fields/field-resolution.tsx",
-      false,
-    ),
-    "uiUpward",
-  );
-  assert.equal(
-    violation(
-      "apps/web/src/ui/derived/decision-chain.tsx",
-      "apps/web/src/features/product/detail.tsx",
-      false,
-    ),
-    "uiUpward",
-  );
+test("shared UI imports no entity, feature or query code", () => {
+  for (const to of [
+    "apps/web/src/entity/fields/field-resolution.tsx",
+    "apps/web/src/features/product/detail.tsx",
+    "apps/web/src/integrations/tanstack-query/cache-tags.ts",
+  ])
+    assert.equal(
+      violation("apps/web/src/ui/derived/value-mark.tsx", to, false),
+      "uiUpward",
+    );
 });

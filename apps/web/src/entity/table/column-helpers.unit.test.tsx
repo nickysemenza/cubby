@@ -18,8 +18,8 @@ import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 import { metadataQueryClient } from "#web/tests/entity-metadata.ts";
 import { ProductCostValue } from "~/entity/display/product-cost-value";
 import { formatCurrency } from "~/lib/number-format";
-import { booleanCellOptions } from "~/lib/select-options";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
+import { booleanCellOptions } from "~/ui/combobox/select-options";
 import { specFromCellData } from "~/ui/data-table/cell-data";
 
 import {

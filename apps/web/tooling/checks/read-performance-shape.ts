@@ -1,6 +1,6 @@
 import { reportSlot } from "@cubby/schemas/entity-report";
 import { z } from "zod";
-import type { OperationWireValue } from "~/server/operation-runtime/operation.contract";
+import type { OperationWireValue } from "~/lib/operation-result";
 import {
   entityListInputSchema,
   listEntities,

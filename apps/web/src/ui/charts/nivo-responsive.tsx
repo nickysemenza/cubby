@@ -8,7 +8,7 @@ import type { ResponsiveTree as NivoResponsiveTree } from "@nivo/tree";
 import type { ResponsiveTreeMap as NivoResponsiveTreeMap } from "@nivo/treemap";
 import type { ComponentType } from "react";
 
-import { browserOnlyLazy } from "~/lib/browser-only-lazy";
+import { browserOnlyLazy } from "~/ui/primitives/browser-only-lazy";
 
 // nivo's responsive charts measure their container before drawing anything,
 // so on the server they render only an empty full-size box. Rendering that box

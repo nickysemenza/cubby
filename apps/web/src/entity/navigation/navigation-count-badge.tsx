@@ -12,10 +12,10 @@ const localCountKeys = dashboardLocalCounts.keyof();
 
 export function navigationCount(
   counts: Partial<DashboardCountsOut> | undefined,
-  entity: BrowserRoutedEntity | "usdaFood" | undefined,
+  entity: BrowserRoutedEntity | undefined,
 ): number | undefined {
   if (!counts || !entity) return undefined;
-  if (entity === "usdaFood") {
+  if (entity === "usda-food") {
     return counts.usdaFoodsAvailable ? counts.usdaFoods : undefined;
   }
   const key = localCountKeys.safeParse(entity);

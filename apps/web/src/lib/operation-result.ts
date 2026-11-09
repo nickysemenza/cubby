@@ -4,7 +4,7 @@ import { z } from "zod";
 import {
   type ErrorDiagnostics,
   errorDiagnosticsSchema,
-} from "~/lib/error-diagnostics";
+} from "./error-diagnostics";
 
 /**
  * The wire contract every operation shares. Server and browser both import

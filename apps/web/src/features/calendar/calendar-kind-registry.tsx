@@ -23,8 +23,8 @@ import type { EntityEditDialogRequest } from "~/entity/editing/entity-edit-dialo
 import type { EntityEditIntent } from "~/entity/editing/intent-types";
 import type { EditableEntity, EntityEditRecord } from "~/entity/editing/types";
 import { entities } from "~/entity/entities";
-import { statusTone } from "~/lib/status-tone";
 import type { BadgeVariant } from "~/ui/reui/badge";
+import { statusTone } from "~/ui/values/status-tone";
 
 import { TASK_STATUS_LABELS } from "../../entity/presentation/task-options";
 import {

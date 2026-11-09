@@ -7,12 +7,12 @@ import { SparkleIcon } from "@phosphor-icons/react/dist/csr/Sparkle";
 import { cn } from "cn";
 import { type KeyboardEvent, type ReactNode, useEffect, useRef } from "react";
 
-import { badgeToneTextClass, statusTone } from "~/lib/status-tone";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/text/description";
 import { KeyHint } from "~/ui/text/key-hint";
 import { DateDisplay } from "~/ui/values/date-display";
+import { badgeToneTextClass, statusTone } from "~/ui/values/status-tone";
 
 /** Confidence → text color, from the shared status tone so every AI-suggestion
  * surface agrees. */

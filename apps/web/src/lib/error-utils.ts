@@ -5,7 +5,7 @@ import {
 import { AppErrors, getErrorMessage, type AppErrorReason } from "@cubby/shared";
 import { z } from "zod";
 
-import type { PublicStartValidationIssue } from "~/server/operation-runtime/operation.contract";
+import type { PublicStartValidationIssue } from "~/lib/operation-result";
 
 import {
   type ErrorDiagnostics,

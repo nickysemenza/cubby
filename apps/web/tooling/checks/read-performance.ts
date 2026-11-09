@@ -6,7 +6,7 @@ import { pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 import { z } from "zod";
 import { listEntities } from "~/entity/model/list-contracts";
-import { operationWireValueSchema } from "~/server/operation-runtime/operation.contract";
+import { operationWireValueSchema } from "~/lib/operation-result";
 
 import { percentile, readDatabaseTiming } from "./read-performance-metrics";
 import {

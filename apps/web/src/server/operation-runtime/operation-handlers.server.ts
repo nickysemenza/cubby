@@ -1,12 +1,12 @@
 import type { OperationIdOfKind } from "~/lib/generated/operation-registry.gen";
+import type {
+  OperationResult,
+  OperationWireValue,
+} from "~/lib/operation-result";
 import {
   OPERATION_HANDLERS,
   WORKFLOW_STREAM_HANDLERS,
 } from "~/server/generated/operation-handler-data.gen";
-import type {
-  OperationResult,
-  OperationWireValue,
-} from "~/server/operation-runtime/operation.contract";
 import type { OperationRequest } from "~/server/operation-runtime/operation.server";
 import type { WorkflowStreamHandler } from "~/server/operation-runtime/subscription-domain.server";
 

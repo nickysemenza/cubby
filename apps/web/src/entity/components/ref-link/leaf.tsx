@@ -25,7 +25,7 @@ import {
   hoverPreviewEntities,
   type HoverPreviewEntity,
 } from "~/entity/preview/preview-entities";
-import { browserOnlyLazy } from "~/lib/browser-only-lazy";
+import { browserOnlyLazy } from "~/ui/primitives/browser-only-lazy";
 import {
   HoverCard,
   HoverCardContent,

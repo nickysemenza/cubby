@@ -1,5 +1,5 @@
-import { getAuth } from "~/lib/auth";
 import type { HttpRouteHandlers } from "~/lib/http/route-handler";
+import { getAuth } from "~/server/http/auth";
 import { withDefaultResource } from "~/server/http/oauth/default-resource";
 
 export const handlers: HttpRouteHandlers<{ _splat: string }, "GET" | "POST"> = {

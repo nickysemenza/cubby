@@ -8,7 +8,7 @@ import {
   publicOperationErrorSchema,
   operationWireValueSchema,
   operationResultSchema,
-} from "~/server/operation-runtime/operation.contract";
+} from "~/lib/operation-result";
 
 import { percentile, readDatabaseTiming } from "./read-performance-metrics";
 import { requestedReadMetadata } from "./read-performance-shape";

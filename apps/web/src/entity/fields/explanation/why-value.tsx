@@ -31,6 +31,8 @@ import { invalidateOperationTags } from "~/integrations/tanstack-query/operation
 import { dataQualityStatusLabel } from "~/lib/data-quality-options";
 import { formatCurrency } from "~/lib/number-format";
 import { CELL_RAIL_BUTTON_CLASS } from "~/ui/data-table/cell-frame";
+import { DecisionLevels } from "~/ui/derived/decision-levels";
+import { SourceStack } from "~/ui/derived/source-stack";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Stack } from "~/ui/layout";
 import {
@@ -56,13 +58,11 @@ import { NoneValue } from "~/ui/text/none-value";
 import { DateDisplay } from "~/ui/values/date-display";
 
 import { DecisionChain, DerivedFreshness } from "./decision-chain";
-import { DecisionLevels } from "./decision-levels";
 import { ImageChain } from "./image-chain";
 import {
   ResolutionEvidence,
   sectionLabelClassName,
 } from "./resolution-evidence";
-import { SourceStack } from "./source-stack";
 
 type ExplanationSource = z.infer<typeof fieldExplanationSource>;
 type ExplanationValue = ExplanationSource["value"];

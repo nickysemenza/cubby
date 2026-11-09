@@ -2,7 +2,7 @@ import { decodeBase64Url, decodeBase64UrlText } from "@cubby/shared/base64";
 import type { BetterAuthPlugin } from "better-auth";
 import { z } from "zod";
 
-import type { authorizeGoogleUserInfo } from "./google-auth";
+import type { authorizeGoogleUserInfo } from "~/lib/google-auth";
 
 type VerifyIdToken = NonNullable<Parameters<typeof authorizeGoogleUserInfo>[4]>;
 type Authorize = (

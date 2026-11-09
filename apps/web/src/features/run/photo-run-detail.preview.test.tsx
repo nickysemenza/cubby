@@ -29,8 +29,8 @@ import { photoImport } from "~/integrations/tanstack-query/generated/domains/pho
 import { run as runOperations } from "~/integrations/tanstack-query/generated/domains/run.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { overrideOperationDispatch } from "~/integrations/tanstack-query/operation-call";
+import type { OperationWireValue } from "~/lib/operation-result";
 import { mock } from "~/lib/test/mock-schema";
-import type { OperationWireValue } from "~/server/operation-runtime/operation.contract";
 
 import { PhotoImportRunView } from "./photo-run-detail";
 

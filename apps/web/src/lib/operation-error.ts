@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import type { PublicOperationError } from "~/server/operation-runtime/operation.contract";
+import type { PublicOperationError } from "~/lib/operation-result";
 
 /**
  * Every client-side operation failure: a server refusal, and a transport or

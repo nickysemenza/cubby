@@ -41,6 +41,7 @@ import {
   QualityResult,
 } from "~/entity/entity-detail/record-quality";
 import { EntityDisplayImagesProvider } from "~/entity/entity-media/entity-display-images";
+import { WhyValueContents } from "~/entity/fields/explanation/why-value";
 import { NotApplicableField } from "~/entity/fields/field-applicability";
 import { getEntityFilters } from "~/entity/filter-manifest";
 import { filterUrlKey } from "~/entity/filters";
@@ -86,7 +87,6 @@ import {
 } from "~/ui/data-table/table-meta";
 import { CellMagnitudeBar } from "~/ui/data-table/visuals/cell-visual";
 import { FieldRecordValue } from "~/ui/derived/record-value";
-import { WhyValueContents } from "~/ui/derived/why-value";
 import { Button } from "~/ui/primitives/button";
 import { Checkbox } from "~/ui/primitives/checkbox";
 import {

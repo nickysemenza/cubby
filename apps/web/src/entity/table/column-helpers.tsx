@@ -40,13 +40,13 @@ import {
   isBrowserRoutedEntity,
 } from "~/entity/entities";
 import { readRecordField } from "~/entity/entity-references";
+import { ImageChainPopover } from "~/entity/fields/explanation/image-chain";
 import { fieldResolutionFor } from "~/entity/fields/field-resolution";
 import { multiSelectFilterFn } from "~/entity/filters";
 import { rowDisplayCover } from "~/entity/model/row-display-cover";
 import { readPathValue } from "~/entity/read-path";
 import { fieldSuggestionBasisFromRecord } from "~/entity/suggestions/field-suggestion";
 import { suggestTargetsFor } from "~/entity/suggestions/suggestion-targets";
-import { ImageChainPopover } from "~/ui/derived/image-chain";
 import { Row } from "~/ui/layout";
 import { MoreMenuTrigger } from "~/ui/navigation/more-menu-trigger";
 import { Button } from "~/ui/primitives/button";

@@ -2,7 +2,7 @@ import { countLabel } from "@cubby/shared/pluralize";
 
 import { backfillProductUpcImagesStream } from "~/features/product/product-streams";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
-import { backfillLocationDescriptionsStream } from "~/lib/ai-streams";
+import { aiStreams } from "~/integrations/tanstack-query/generated/domains/aiStreams.gen";
 
 import type { BackfillButtonProps } from "./backfill-button";
 
@@ -46,7 +46,8 @@ export const BACKFILL = {
     enqueued: number;
     total: number;
   }>({
-    run: backfillLocationDescriptionsStream,
+    run: (signal) =>
+      aiStreams.backfillLocationDescriptions.open(undefined, { signal }),
     invalidateTags: ripple.location,
     idleLabel: "Analyze all",
     pendingLabel: "Enqueuing…",

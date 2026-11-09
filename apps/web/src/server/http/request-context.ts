@@ -13,9 +13,6 @@ import type { SpanAttr } from "@cubby/worker-tracing";
 import { and, eq } from "drizzle-orm";
 
 import { env } from "~/env";
-// Static on purpose: importing auth lazily inside a Worker request left the
-// purchase agent's MCP tool calls unanswered (#2536).
-import { getAuth } from "~/lib/auth";
 import { STRONG_READ_HEADER } from "~/lib/read-consistency";
 import type { NotionClient } from "~/server/clients/notion";
 import { createUpcLookupService } from "~/server/clients/upc";
@@ -37,6 +34,9 @@ import type { AvailabilityService } from "~/server/domains/recipe/service/availa
 import type { USDAService } from "~/server/domains/usda-food/service/usda.service";
 import type { UsdaReleaseRpc } from "~/server/domains/usda-release/operations/rpc";
 import { createAppError } from "~/server/errors/app-error";
+// Static on purpose: importing auth lazily inside a Worker request left the
+// purchase agent's MCP tool calls unanswered (#2536).
+import { getAuth } from "~/server/http/auth";
 import { deferredService } from "~/server/http/deferred-service";
 import type { RequestOrigin } from "~/server/http/workload";
 import { annotateActiveSpan } from "~/server/observability/tracing";

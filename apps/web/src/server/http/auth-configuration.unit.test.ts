@@ -1,12 +1,12 @@
 import { fromPartial } from "@total-typescript/shoehorn";
 import { expect, it } from "vitest";
 
-import { getAuth } from "~/lib/auth";
 import { withCfEnv } from "~/server/cf-env";
 import {
   createPurchaseAgentOAuthState,
   verifyPurchaseAgentOAuthState,
 } from "~/server/domains/purchase-import/repo/agent-auth";
+import { getAuth } from "~/server/http/auth";
 
 import {
   type AuthConfiguration,

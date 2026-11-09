@@ -2,6 +2,11 @@ import type { z } from "zod";
 
 import type { OperationIdOfKind } from "~/lib/generated/operation-registry.gen";
 import { operationDefinition } from "~/lib/operation-observability";
+import {
+  type OperationResult,
+  type OperationWireValue,
+  operationWireValueSchema,
+} from "~/lib/operation-result";
 import { recordDatabaseWrite } from "~/server/db/freshness/member-marker";
 import { withErrorReporting } from "~/server/errors/report-error";
 import type { Workload } from "~/server/http/workload";
@@ -10,11 +15,6 @@ import {
   observeOperation,
 } from "~/server/observability/observed-request";
 import { type AppSpan, getRequestId } from "~/server/observability/tracing";
-import {
-  type OperationResult,
-  type OperationWireValue,
-  operationWireValueSchema,
-} from "~/server/operation-runtime/operation.contract";
 import {
   assertClientMayWrite,
   type AuthenticatedOperationContext,

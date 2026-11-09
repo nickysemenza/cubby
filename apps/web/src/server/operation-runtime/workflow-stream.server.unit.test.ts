@@ -2,6 +2,7 @@ import { testUserId } from "@cubby/schemas/testing";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
+import { publicOperationErrorSchema } from "~/lib/operation-result";
 import { createDatabase } from "~/server/db/database-runtime";
 import {
   withMemberFreshness,
@@ -12,7 +13,6 @@ import { withErrorReporting } from "~/server/errors/report-error";
 import { systemPrincipal } from "~/server/http/authenticate";
 import { requireActor } from "~/server/http/request-context";
 import type { AppSpan } from "~/server/observability/tracing";
-import { publicOperationErrorSchema } from "~/server/operation-runtime/operation.contract";
 import type {
   AuthenticatedOperationContext,
   OperationRequest,

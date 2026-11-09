@@ -23,7 +23,7 @@ import {
   operationDefinitionFor,
   type OperationId,
 } from "~/lib/operation-observability";
-import { operationWireValueSchema } from "~/server/operation-runtime/operation.contract";
+import { operationWireValueSchema } from "~/lib/operation-result";
 
 import {
   EMPTY_INVALIDATION_TAG_SET,

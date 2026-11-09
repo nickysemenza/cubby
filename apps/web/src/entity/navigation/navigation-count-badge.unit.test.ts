@@ -19,12 +19,12 @@ describe("navigation list counts", () => {
   });
 
   it("shows USDA only when the upstream count was available", () => {
-    expect(navigationCount(counts, "usdaFood")).toBeUndefined();
+    expect(navigationCount(counts, "usda-food")).toBeUndefined();
     expect(
-      navigationCount({ ...counts, usdaFoodsAvailable: false }, "usdaFood"),
+      navigationCount({ ...counts, usdaFoodsAvailable: false }, "usda-food"),
     ).toBeUndefined();
     expect(
-      navigationCount({ ...counts, usdaFoodsAvailable: true }, "usdaFood"),
+      navigationCount({ ...counts, usdaFoodsAvailable: true }, "usda-food"),
     ).toBe(0);
   });
 });

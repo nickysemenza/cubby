@@ -12,7 +12,7 @@
 import type { z } from "zod";
 
 import { OPERATIONS } from "~/lib/generated/operation-registry.gen";
-import { publicOperationErrorSchema } from "~/server/operation-runtime/operation.contract";
+import { publicOperationErrorSchema } from "~/lib/operation-result";
 
 /** Response header carrying the server's request id back to the client. */
 import {

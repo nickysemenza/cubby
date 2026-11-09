@@ -2,12 +2,12 @@ import { CalendarIcon } from "@phosphor-icons/react/dist/csr/Calendar";
 import { Suspense, type ComponentProps, type Ref, useState } from "react";
 import type { DateRange } from "react-day-picker";
 
-import { browserOnlyLazy } from "~/lib/browser-only-lazy";
 import { formatCalendarDay } from "~/lib/date-format";
 import { formatPlainDate, parsePlainDate } from "~/lib/plain-date";
 import { Picker } from "~/ui/combobox/picker";
 import type { Calendar as CalendarComponent } from "~/ui/dates/calendar";
 import { DatePickerInput } from "~/ui/dates/date-picker-input";
+import { browserOnlyLazy } from "~/ui/primitives/browser-only-lazy";
 import { Button } from "~/ui/primitives/button";
 import {
   Popover,

@@ -78,6 +78,7 @@ import type { EntityEditValueBag } from "~/entity/editing/value-schema";
 import type { StandardEntity } from "~/entity/entity-contracts";
 import { entityDetailFor } from "~/entity/entity-detail";
 import { readReferenceField } from "~/entity/entity-references";
+import { WhyValueContents } from "~/entity/fields/explanation/why-value";
 import { NotApplicableField } from "~/entity/fields/field-applicability";
 import { generatedBrowserCrudEntities } from "~/entity/generated/entity-routes.gen";
 import { entityMetadata, useEntityMetadata } from "~/entity/metadata";
@@ -91,7 +92,6 @@ import { operationCachePolicy } from "~/integrations/tanstack-query/query-policy
 import { createRequestBatcher } from "~/integrations/tanstack-query/request-batcher";
 import { createConcurrencyLimiter } from "~/lib/concurrency-limiter";
 import { CELL_RAIL_BUTTON_CLASS, CellFrame } from "~/ui/data-table/cell-frame";
-import { WhyValueContents } from "~/ui/derived/why-value";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useHydrated } from "~/ui/hooks/use-hydrated";

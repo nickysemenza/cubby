@@ -23,7 +23,6 @@ import {
 import { AuthenticatedAppShell } from "~/features/shell/authenticated-app-shell";
 import { MainNav } from "~/features/shell/main-nav";
 import { getClientAuthed, getGuardSession } from "~/lib/auth-guard";
-import { browserOnlyLazy } from "~/lib/browser-only-lazy";
 import {
   buildMetadataQueryOptions,
   SENTRY_RELEASE_META,
@@ -42,6 +41,7 @@ import { RouteErrorComponent } from "~/ui/feedback/route-error";
 import { RouteNotFound } from "~/ui/feedback/route-not-found";
 import { useDebug } from "~/ui/hooks/use-debug";
 import { AppFooter } from "~/ui/layout/footer";
+import { browserOnlyLazy } from "~/ui/primitives/browser-only-lazy";
 import { Toaster } from "~/ui/primitives/sonner";
 
 import { Provider } from "../integrations/tanstack-query/root-provider";

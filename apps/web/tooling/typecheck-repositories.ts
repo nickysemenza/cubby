@@ -102,7 +102,6 @@ export const repositoryOwners = [
   "src/server/entity-kernel/repo/entity-identity-writer.ts",
   "src/server/generic/jobs/context.ts",
   "src/server/errors/db-errors.ts",
-  "src/server/operation-runtime/operation.contract.ts",
 
   "src/server/generic/entity-links/repo/entity-external-ids.ts",
   "src/server/domains/product/repo/gtin.ts",

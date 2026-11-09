@@ -18,8 +18,8 @@ import { runDetailContract } from "~/contracts/run-detail.contract";
 import { entityReadFixture } from "~/entity/fields/field-envelope.fixtures";
 import { runDetail } from "~/integrations/tanstack-query/generated/domains/runDetail.gen";
 import { overrideOperationDispatch } from "~/integrations/tanstack-query/operation-call";
+import type { OperationWireValue } from "~/lib/operation-result";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
-import type { OperationWireValue } from "~/server/operation-runtime/operation.contract";
 
 import { RunDecisions, RunDiagnostics, RunStepsDetail } from "./run-detail";
 import { RunEvaluations } from "./run-evaluations";

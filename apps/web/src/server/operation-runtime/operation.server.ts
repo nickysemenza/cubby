@@ -16,6 +16,10 @@ import {
   type OperationKind,
   operationDefinitionFor,
 } from "~/lib/operation-observability";
+import type {
+  PublicOperationError,
+  OperationResult,
+} from "~/lib/operation-result";
 import { noteRequestOperation } from "~/server/db/db-observability";
 import {
   recordDatabaseWrite,
@@ -61,10 +65,6 @@ import {
   cloudflareRayId,
   getRequestId,
 } from "~/server/observability/tracing";
-import type {
-  PublicOperationError,
-  OperationResult,
-} from "~/server/operation-runtime/operation.contract";
 
 const log = createLogger("operation");
 
