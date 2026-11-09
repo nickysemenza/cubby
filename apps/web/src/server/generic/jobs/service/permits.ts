@@ -8,19 +8,24 @@
  * when the household goes idle.
  */
 import type { JobExecution } from "@cubby/schemas/job";
+import type { PermitRecovery } from "@cubby/schemas/queue-messages";
 import { createLogger } from "@cubby/worker-tracing";
 import type { SQL } from "drizzle-orm";
 
 import type { UnparsedError } from "~/lib/error-utils";
 import { getWorkerVersion } from "~/server/cf-env";
 import type { Database } from "~/server/db";
-import type { BackgroundDrain } from "~/server/generic/background/drains";
+import type {
+  BackgroundDrain,
+  DrainPage,
+} from "~/server/generic/background/drains";
+import { meterDrainAiCost } from "~/server/generic/jobs/context";
 import { classifyJobFailure } from "~/server/generic/jobs/failure";
 import { withExecutionMetrics } from "~/server/generic/jobs/page-work";
 import {
   claimDrainUnit,
   dueUnits,
-  JOB_LEASE_MS,
+  jobLeaseLapsed,
   nextDueAt,
   recordJobExecution,
   type DueUnit,
@@ -36,8 +41,15 @@ const CANDIDATES = 8;
 const MAX_PERMIT_DELAY_MS = 12 * 60 * 60_000;
 
 type PermitPorts = {
-  /** Send one permit, due now (`null`) or delayed until `at`. */
-  send(at: Date | null, source: string): Promise<void>;
+  /**
+   * Send one permit, due now (`null`) or delayed until `at`. A `recover`
+   * permit names one claim and runs only if that claim still needs recovery.
+   */
+  send(
+    at: Date | null,
+    source: string,
+    recover?: PermitRecovery,
+  ): Promise<void>;
   captureException(error: UnparsedError, unit: string): void;
 };
 
@@ -65,14 +77,17 @@ async function runUnit(
 ): Promise<boolean> {
   const { db, handlers, drains, ports } = runtime;
   if (candidate.type === "job") {
-    // A killed invocation's lease lapses unobserved; this permit recovers it.
-    await ports.send(
-      new Date(Date.now() + JOB_LEASE_MS + 5_000),
-      "job.lease-recovery",
-    );
-    const outcome = await advanceJob(db, candidate.id, handlers, (error) =>
-      ports.captureException(error, candidate.unit),
-    );
+    const outcome = await advanceJob(db, candidate.id, handlers, {
+      report: (error) => ports.captureException(error, candidate.unit),
+      // A killed invocation's lease lapses unobserved. Only this held claim
+      // arms a recovery, and it does nothing once the claim settled.
+      onClaim: (claim) =>
+        ports.send(
+          new Date(claim.leaseExpiresAt.getTime() + 5_000),
+          "job.lease-recovery",
+          { kind: "job", id: claim.id, lease: claim.leaseToken },
+        ),
+    });
     return outcome !== "skipped";
   }
   const drain = drainFor(drains, candidate.unit);
@@ -82,7 +97,7 @@ async function runUnit(
     const record = (
       outcome: JobExecution["outcome"],
       errorClass: string | null,
-      items?: JobExecution["items"],
+      page?: DrainPage,
     ) =>
       recordJobExecution(
         db,
@@ -91,21 +106,35 @@ async function runUnit(
           outcome,
           errorClass,
           ...sample(),
-          aiCostUsd: null,
+          aiCostUsd: page?.aiCostUsd ?? null,
           workerVersion: getWorkerVersion(),
-          ...(items && { items }),
+          ...(page && {
+            items: {
+              claimed: page.claimed,
+              published: page.published ?? 0,
+              failed: page.failed ?? 0,
+            },
+          }),
           finishedAt: new Date().toISOString(),
         },
       ).catch((error: unknown) =>
         log.error("execution record failed", { unit: candidate.unit, error }),
       );
     try {
-      const page = await drain.page(db, candidate.unit);
-      await record(page.claimed ? "succeeded" : "skipped", null, {
-        claimed: page.claimed,
-        published: page.published ?? 0,
-        failed: page.failed ?? 0,
-      });
+      const { result, aiCostUsd } = await meterDrainAiCost(() =>
+        drain.page(db, candidate.unit, (recover) =>
+          ports.send(new Date(Date.now() + recover.afterMs), recover.source, {
+            kind: "image",
+            ids: recover.ids,
+          }),
+        ),
+      );
+      const page = { ...result, aiCostUsd: result.aiCostUsd ?? aiCostUsd };
+      await record(
+        page.outcome ?? (page.claimed ? "succeeded" : "skipped"),
+        null,
+        page,
+      );
       return page.claimed > 0;
     } catch (error) {
       // Item state, backoff and waits live on the drain's rows. A failed page
@@ -117,6 +146,34 @@ async function runUnit(
       return false;
     }
   });
+}
+
+/**
+ * A recovery permit runs only if the claim it names is still leased and that
+ * lease lapsed; otherwise it exits without running work or sending anything.
+ */
+export async function runRecovery(
+  runtime: PermitRuntime,
+  recover: PermitRecovery,
+): Promise<string | null> {
+  const { db, drains } = runtime;
+  let candidate: DueUnit | null = null;
+  if (recover.kind === "job") {
+    if (await jobLeaseLapsed(db, recover.id, recover.lease))
+      candidate = {
+        type: "job",
+        id: recover.id,
+        unit: "job.lease-recovery",
+        runOwned: false,
+      };
+  } else {
+    const drain = drains.find((entry) => entry.recovers);
+    if (drain?.recovers && (await drain.recovers(db, recover.ids)))
+      candidate = { type: "drain", unit: drain.name, runOwned: false };
+  }
+  if (!candidate || !(await runUnit(runtime, candidate))) return null;
+  await sendSuccessor(runtime, "permit.successor");
+  return candidate.unit;
 }
 
 /** Run the first claimable candidate; null when nothing was claimable. */

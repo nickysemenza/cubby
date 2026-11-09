@@ -89,10 +89,18 @@ export async function advanceJob(
   db: Database,
   id: string,
   handlers: JobHandlers,
-  report?: JobFailureReport,
+  {
+    report,
+    onClaim,
+  }: {
+    report?: JobFailureReport;
+    /** Runs once the claim is held, before any work (arms its lease recovery). */
+    onClaim?: (claim: JobClaim) => Promise<void>;
+  } = {},
 ): Promise<JobOutcome> {
   const claimed = await claimJob(db, id);
   if (!claimed) return "skipped";
+  await onClaim?.(claimed);
   const handler = handlers[claimed.kind];
   return executeClaim(
     db,
@@ -124,7 +132,11 @@ async function executeClaim(
     if (failure && outcome === "failed") report?.(failure.error, claimed.kind);
     await recordJobExecution(
       db,
-      { id: claimed.id },
+      {
+        id: claimed.id,
+        generation: claimed.generation,
+        claimedAt: claimed.lastClaimedAt,
+      },
       {
         outcome,
         errorClass: failure?.kind ?? null,

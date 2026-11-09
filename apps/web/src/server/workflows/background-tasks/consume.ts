@@ -4,6 +4,7 @@ import type { UnparsedError } from "~/lib/error-utils";
 import type { Database } from "~/server/db";
 import {
   runPermit,
+  runRecovery,
   type PermitRuntime,
 } from "~/server/generic/jobs/service/permits";
 
@@ -21,7 +22,8 @@ export interface BackgroundQueueConsumerPorts {
  * Each delivery is one permit (`maxBatchSize` 1). The unit it runs owns its own
  * retries in Postgres, so a permit acknowledges whatever the unit's outcome;
  * only a failure before or around selection (the database unreachable, say)
- * retries delivery. An unreadable envelope is still a permit.
+ * retries delivery. An unreadable envelope is still a permit; a recovery
+ * envelope runs only the claim it names, if that claim still needs it.
  */
 export async function handleBackgroundQueueBatch(
   db: Database,
@@ -30,7 +32,8 @@ export async function handleBackgroundQueueBatch(
 ) {
   for (const message of batch.messages) {
     try {
-      if (backgroundTaskMessageSchema.safeParse(message.body).data?.ring)
+      const envelope = backgroundTaskMessageSchema.safeParse(message.body).data;
+      if (envelope?.ring)
         await (
           await import("~/server/domains/image-processing/repo/image-processing-ring")
         ).ringDueDeviceWork(db);
@@ -40,7 +43,9 @@ export async function handleBackgroundQueueBatch(
           db,
           ports.captureException,
         );
-      const unit = await runPermit(runtime);
+      const unit = envelope?.recover
+        ? await runRecovery(runtime, envelope.recover)
+        : await runPermit(runtime);
       message.ack();
       if (unit) await ports.afterSuccess?.();
     } catch (error) {

@@ -17,7 +17,21 @@ export type DrainPage = {
   /** Committed settlements, recorded on the unit's execution record. */
   published?: number;
   failed?: number;
+  /** The page's own outcome when it is not plain success (a funding or provider wait). */
+  outcome?: "succeeded" | "skipped" | "deferred" | "superseded";
+  /** Charged AI cost the page recorded, when attributable. */
+  aiCostUsd?: number | null;
 };
+
+/**
+ * Arm one delayed recovery for rows this page holds under a lease nothing
+ * renews; it runs only if one of them is still leased past `afterMs`.
+ */
+export type ArmDrainRecovery = (recovery: {
+  ids: string[];
+  afterMs: number;
+  source: string;
+}) => Promise<void>;
 
 /**
  * A registered function over the rows a domain already owes. It has no queue row
@@ -38,7 +52,13 @@ export type BackgroundDrain = {
   /** Scalar timestamp: when owed work next becomes claimable (may be past), or null. */
   next(): SQL | null;
   /** One page of `unit`; it claims, prepares and publishes, then returns. */
-  page(db: Database, unit: string): Promise<DrainPage>;
+  page(
+    db: Database,
+    unit: string,
+    armRecovery?: ArmDrainRecovery,
+  ): Promise<DrainPage>;
+  /** Whether any of these rows is still leased past its lease (its page died). */
+  recovers?(db: Database, ids: readonly string[]): Promise<boolean>;
 };
 
 /** Pause, defer and lease loss stop the page; an adapter must rethrow them rather than settle an item. */

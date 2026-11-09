@@ -614,6 +614,31 @@ export const cloudImageDue = (unit: string) =>
     WHERE ${eq(imageProcessingJob.lane, "cloud")} AND ${imageJobClaimable(new Date())}
     HAVING count(*) > 0`;
 
+/** Whether any of these cloud rows is still leased past its lease: its page died. */
+export async function cloudImageLeaseLapsed(
+  db: Database,
+  ids: readonly string[],
+): Promise<boolean> {
+  if (!ids.length) return false;
+  const [row] = await getDb(db)
+    .select({ id: imageProcessingJob.id })
+    .from(imageProcessingJob)
+    .where(
+      and(
+        inArray(
+          imageProcessingJob.id,
+          ids.map((id) => parseEntityId("imageJob", id)),
+        ),
+        eq(imageProcessingJob.lane, "cloud"),
+        eq(imageProcessingJob.state, "pending"),
+        isNotNull(imageProcessingJob.leaseUntil),
+        lte(imageProcessingJob.leaseUntil, new Date()),
+      ),
+    )
+    .limit(1);
+  return row !== undefined;
+}
+
 /** When the next open cloud row comes due or its lease lapses. */
 export const cloudImageNext = () =>
   sql`SELECT min(coalesce(${imageProcessingJob.leaseUntil}, ${imageProcessingJob.runAt}))

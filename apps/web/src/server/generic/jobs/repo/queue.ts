@@ -168,7 +168,9 @@ export async function nextDueAt(
 /** Record one execution on its Job row (a Job, or a drain unit's record row). */
 export async function recordJobExecution(
   db: RepositoryQueryInput,
-  target: { id: string } | { unit: string },
+  target:
+    | { id: string; generation: number; claimedAt: Date | null }
+    | { unit: string },
   execution: JobExecution,
 ) {
   await repositoryQueries(db)
@@ -176,9 +178,37 @@ export async function recordJobExecution(
     .set({ lastExecution: execution })
     .where(
       "id" in target
-        ? eq(job.id, target.id)
+        ? // A superseded executor's late record matches nothing: a newer claim
+          // moved the generation or the claim time.
+          and(
+            eq(job.id, target.id),
+            eq(job.generation, target.generation),
+            target.claimedAt
+              ? eq(job.lastClaimedAt, target.claimedAt)
+              : sql`false`,
+          )
         : eq(job.key, drainRecordKey(target.unit)),
     );
+}
+
+/** Whether a Job claim is still held by `lease` and its lease lapsed: its invocation died. */
+export async function jobLeaseLapsed(
+  db: RepositoryQueryInput,
+  id: string,
+  lease: string,
+) {
+  const [row] = await repositoryQueries(db)
+    .select({ id: job.id })
+    .from(job)
+    .where(
+      and(
+        eq(job.id, id),
+        eq(job.state, "running"),
+        eq(job.leaseToken, lease),
+        sql`${job.leaseExpiresAt} <= ${new Date().toISOString()}::timestamp`,
+      ),
+    );
+  return row !== undefined;
 }
 
 /** Stamp a drain unit's service before its page: rotation counts the attempt. */

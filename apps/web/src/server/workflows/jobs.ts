@@ -153,8 +153,8 @@ export function productionPermitRuntime(
     handlers: productionJobHandlers,
     drains: productionDrains(),
     ports: {
-      send: (at, source) =>
-        at ? wakeAt(at, { source }) : wakeJobs({ source }),
+      send: (at, source, recover) =>
+        at ? wakeAt(at, { source, recover }) : wakeJobs({ source }),
       captureException,
     },
   };
