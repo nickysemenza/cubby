@@ -451,8 +451,9 @@ embedded tables retain their `60vh` cap.
 Desktop virtualization keeps four extra items (records, group headers or detail
 rows) beyond each visible edge. An open inline editor retains its owning row by
 stable occurrence key until save or cancel. Its draft and focus must survive
-scrolling outside the visible range without mounting intervening records. The
-body fills each disjoint range's gap while preserving the detached sticky header
+scrolling outside the visible range without mounting intervening records. The name editor
+has its own renderer lifetime: changing row-action resolvers during paging must
+not recreate its component function. The body fills each disjoint range's gap while preserving the detached sticky header
 and total scroll extent. Paging follows the normal viewport range; retaining an
 offscreen editor must not create additional paging demand. The
 virtualizer owns pane measurement; do not add a separate resize/state cycle

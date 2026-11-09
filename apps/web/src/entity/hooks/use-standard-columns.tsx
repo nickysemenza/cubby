@@ -221,6 +221,42 @@ export function useStandardColumns<TData extends BaseListRow>({
     [],
   );
   const hasMappings = mappingsMap !== null;
+  // Paging can replace action resolvers without changing the name editor.
+  // Its component function owns the draft, so give it its own lifetime.
+  const identityDefinition = useMemo(
+    () =>
+      createNameColumn(columnHelper, entity, undefined, {
+        id: titleField,
+        header: metadata.summary.singular,
+        enableSorting: getSortableFields(queryClient, entity).includes(
+          titleField,
+        ),
+        className: nameClassName ?? identityWidth,
+        // Computed titles stay read-only unless an explicit adapter maps the
+        // edit gesture to an underlying stored field (for example, Meal name).
+        editable: nameEditable,
+        nameSuffix,
+        namePrefix,
+        expandable,
+        rowLink,
+        getValue: (row: TData) =>
+          readRecordField(row, titleField, titleValueSchema) ?? null,
+      }),
+    [
+      columnHelper,
+      entity,
+      titleField,
+      metadata.summary.singular,
+      queryClient,
+      nameClassName,
+      identityWidth,
+      nameEditable,
+      nameSuffix,
+      namePrefix,
+      expandable,
+      rowLink,
+    ],
+  );
   // Related/custom metadata can also change the collection. Standard renderers
   // depend only on their own behavior, never on that collection's identity.
   const standardDefinitions = useMemo(() => {
@@ -237,23 +273,6 @@ export function useStandardColumns<TData extends BaseListRow>({
           : undefined,
 
         provenance: imageField?.provenance ?? null,
-      }),
-      identity: createNameColumn(columnHelper, entity, undefined, {
-        id: titleField,
-        header: metadata.summary.singular,
-        enableSorting: getSortableFields(queryClient, entity).includes(
-          titleField,
-        ),
-        className: nameClassName ?? identityWidth,
-        // Computed titles stay read-only unless an explicit adapter maps the
-        // edit gesture to an underlying stored field (for example, Meal name).
-        editable: nameEditable,
-        nameSuffix,
-        namePrefix,
-        expandable,
-        rowLink,
-        getValue: (row: TData) =>
-          readRecordField(row, titleField, titleValueSchema) ?? null,
       }),
       quality: createEntityDisplayColumns(
         queryClient,
@@ -287,21 +306,13 @@ export function useStandardColumns<TData extends BaseListRow>({
     columnHelper,
     entity,
     standardColumns,
-    titleField,
     shouldUseMappings,
     hasMappings,
     mappingsFor,
     combinedExtraActions,
     rowLink,
     subject,
-    nameClassName,
-    identityWidth,
-    nameEditable,
-    nameSuffix,
-    namePrefix,
-    expandable,
     queryClient,
-    metadata,
   ]);
   const baseColumns = useMemo(
     () =>
@@ -377,7 +388,7 @@ export function useStandardColumns<TData extends BaseListRow>({
         if (!hasExplicitImageColumn) {
           add(withManifestFilter(standardDefinitions.image, "image"));
         }
-        add(withManifestFilter(standardDefinitions.identity, titleField));
+        add(withManifestFilter(identityDefinition, titleField));
 
         // Custom columns get two things applied from the registries: sorting from
         // `sortableFields`, and their filter control from the manifest.
@@ -451,6 +462,7 @@ export function useStandardColumns<TData extends BaseListRow>({
       customColumns,
       entity,
       standardDefinitions,
+      identityDefinition,
       titleField,
       stableFilters,
       enableRowSelection,
