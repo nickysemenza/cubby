@@ -253,23 +253,24 @@ export async function mailDiscoveryAdmission(
     MAIL_DISCOVERY_CAPACITY - 1;
   if (input.recovery && input.scope.kind === "query" && !recoveryCapacity)
     return "capacity";
-  // A recovery blocked by its own ceiling or resource cannot use a vacancy.
-  const eligibleRecovery =
-    recoveryCapacity &&
-    queued.some(
-      (owner) =>
-        owner.progress?.admissionClass === "recovery" &&
-        scopeOf(owner).kind === "query" &&
-        !active.some((current) =>
-          conflicts(scopeOf(current), scopeOf(owner)),
-        ) &&
-        !queued.some(
-          (prior) =>
-            precedes(prior, owner) && conflicts(scopeOf(prior), scopeOf(owner)),
-        ),
-    );
+  // Older yielded work also owns a vacancy; fresh continuations cannot strand
+  // its frozen page. A blocked recovery cannot reserve that vacancy away.
+  const eligibleWaiter = queued.some(
+    (owner) =>
+      scopeOf(owner).kind === "query" &&
+      (owner.progress?.admissionClass !== "recovery" || recoveryCapacity) &&
+      (owner.progress?.admissionClass === "recovery" ||
+        precedes(owner, candidate)) &&
+      !active.some((current) => conflicts(scopeOf(current), scopeOf(owner))) &&
+      !owners.some(
+        (prior) =>
+          prior.status !== "running" &&
+          precedes(prior, owner) &&
+          conflicts(scopeOf(prior), scopeOf(owner)),
+      ),
+  );
   return input.recovery ||
-    !eligibleRecovery ||
+    !eligibleWaiter ||
     active.length < MAIL_DISCOVERY_CAPACITY - 1
     ? "available"
     : "capacity";

@@ -61,7 +61,7 @@ import {
   claimWorkflowRun,
   failWorkflowRun,
   launchWorkflowRun,
-  mailDiscoveryAdmissionBackpressure,
+  mailDiscoveryBackpressure,
   runFailureText,
 } from "~/server/workflows/runs/lifecycle";
 
@@ -340,7 +340,7 @@ async function createDiscoveryPasses(
     }
     return scheduled;
   }).catch((error: unknown) => {
-    throw mailDiscoveryAdmissionBackpressure(error) ?? error;
+    throw mailDiscoveryBackpressure(error) ?? error;
   });
 }
 export type DiscoveryPorts = {

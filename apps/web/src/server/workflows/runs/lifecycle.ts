@@ -6,6 +6,7 @@ import {
   MAIL_DISCOVERY_ADMISSION_WAIT,
 } from "@cubby/schemas/mailbox-research";
 import { runStepState } from "@cubby/schemas/run-step";
+import { createLogger } from "@cubby/worker-tracing";
 import { and, or, not, eq, getTableColumns, isNull, sql } from "drizzle-orm";
 
 import {
@@ -35,6 +36,7 @@ import {
   JobDeferredError,
   JobRetryableError,
 } from "~/server/generic/jobs/errors";
+import { classifyJobFailure, stopsPage } from "~/server/generic/jobs/failure";
 import {
   lockUnchangedJob,
   stoppedRunExecutions,
@@ -48,6 +50,8 @@ import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 import { assertWorkflowEffect } from "~/server/workflows/runs/execution";
 
 import { type WorkflowRunParams, type ExecutedRunPurpose } from "./contract";
+
+const log = createLogger("workflow");
 
 export const runFailureText = (
   error: Error | string,
@@ -99,10 +103,12 @@ export const recordRunProgress = (
  */
 export const MANUAL_RUN_PRIORITY = 10;
 
-/** A refused admission rolled back; a live Job waits without spending attempts. */
-export function mailDiscoveryAdmissionBackpressure(
+/** An aborted Mail snapshot waits on its canonical Job without spending attempts. */
+export function mailDiscoveryBackpressure(
   error: UnparsedError,
 ): Error | undefined {
+  // A wrapped database cause cannot turn cancellation or lease loss into demand.
+  if (stopsPage(classifyJobFailure(error))) return undefined;
   const pg = findPgError(error);
   if (
     !pg ||
@@ -112,6 +118,7 @@ export function mailDiscoveryAdmissionBackpressure(
       ))
   )
     return undefined;
+  log.warn("Mail discovery database capacity wait", { error });
   const message =
     "Mail discovery is waiting for shared database or search capacity";
   if (!currentJobExecution())
@@ -295,7 +302,7 @@ export async function launchWorkflowRun(
     return { attempt: execution.generation, instanceId: execution.id };
   }).catch((error: unknown) => {
     if (input.purpose === "mail_discovery") {
-      const deferred = mailDiscoveryAdmissionBackpressure(error);
+      const deferred = mailDiscoveryBackpressure(error);
       if (deferred) throw deferred;
     }
     const pg = findPgError(error);
@@ -385,7 +392,7 @@ export async function yieldClaimedMailDiscovery(
     if (queued) await assertWorkflowEffect(tx);
     return Boolean(queued);
   }).catch((error: unknown) => {
-    throw mailDiscoveryAdmissionBackpressure(error) ?? error;
+    throw mailDiscoveryBackpressure(error) ?? error;
   });
   if (yielded)
     throw new JobDeferredError(
@@ -544,7 +551,7 @@ export async function resumeClaimedWorkflowRun(
       "purpose" in claimInput &&
       claimInput.purpose === "mail_discovery"
     ) {
-      const deferred = mailDiscoveryAdmissionBackpressure(error);
+      const deferred = mailDiscoveryBackpressure(error);
       if (deferred) throw deferred;
     }
     const pg = findPgError(error);
