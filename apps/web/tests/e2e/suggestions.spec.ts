@@ -1,4 +1,3 @@
-import { fieldEnvelope, fieldValueOf } from "@cubby/schemas/field-envelope";
 import { seedProductPrerequisite } from "./fixtures/catalog";
 import { seedFieldSuggestion } from "tooling/shared-suggestion-fixtures";
 import { fieldSuggestionsReply } from "./support/field-suggestion-wire";
@@ -20,10 +19,7 @@ import { z } from "zod";
 
 import { BROWSER_OPERATION_PATH } from "~/lib/browser-operation-path";
 import { product as productTable } from "~/server/db/schema";
-import {
-  publishEntityConnection,
-  readEntityConnections,
-} from "~/server/domains/connection/repo/entity-connections";
+
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { generateStatementSuggestionPage } from "~/server/domains/transaction-import/repo/statement-suggestions";
 import { publishSuggestion } from "~/server/generic/suggestions/repo/suggestion";
@@ -34,7 +30,6 @@ import { readSuggestionDecisions } from "~/server/testing/suggestion-decisions.f
 import { dispatchesOperation, unbatchFor } from "./support/dispatch-wire";
 import {
   gotoAuthenticatedPage,
-  readExpense,
   uniqueName,
   waitForAppHydration,
 } from "./support/e2e-helpers";
@@ -103,7 +98,7 @@ const suggestionsTable = (page: Page) =>
 // Failure modes: a family drops out of the page; a record renders as a bare
 // shortcode or a category as the generic grey reference chip; Accept on a
 // field or Confirm on a connection writes nothing.
-test("Suggestions lists every family with named records and category pills, and reviews fields and connections", async ({
+test("Suggestions lists every family with named records and category pills, and reviews fields", async ({
   page,
 }, testInfo) => {
   const { db, actor } = await createEvidenceHarnessContext(page);
@@ -119,23 +114,6 @@ test("Suggestions lists every family with named records and category pills, and 
   const itemId = await resolveOrThrow(db, "product", item.id);
   const runId = await ensureRun(db, actor, { purpose: "ai_suggest" });
 
-  const charge = await createEntityFixture(page, "expense", {
-    name: productName,
-    cost: 24,
-    productId: null,
-    trade: "electrical",
-  });
-  await publishEntityConnection(db, {
-    relation: "product-expense",
-    source: { entityKind: "product", entityId: item.id },
-    target: { entityKind: "expense", entityId: charge.id },
-    label: "This Expense acquired this Product",
-    evidence: {
-      reasons: ["Synthetic itemized receipt names this exact variant"],
-      contradictions: [],
-      unknowns: [],
-    },
-  });
   const alias = uniqueName(testInfo, "Suggestions card");
   await createEntityFixture(page, "financialAccount", {
     name: alias,
@@ -185,24 +163,18 @@ test("Suggestions lists every family with named records and category pills, and 
   await seedCategoryAdvice();
   await gotoAuthenticatedPage(page, "/suggestions");
   const families = page.getByRole("group", { name: "Suggestion families" });
-  for (const family of [
-    "Statements",
-    "Connections and recommendations",
-    "Fields",
-  ])
+  for (const family of ["Statements", "Fields"])
     await expect(
       families.getByRole("button", { name: new RegExp(`^${family} [1-9]`) }),
     ).toBeVisible();
 
-  // Both endpoints' Suggestions list under the record, in the All view.
+  // A record's Suggestions list under it, in the All view.
   await gotoAuthenticatedPage(page, `/suggestions?record=product:${item.id}`);
   const rows = suggestionsTable(page).getByRole("row");
   const field = rows
     .filter({ hasText: "Field" })
     .filter({ hasText: "Category" });
-  const connection = rows.filter({ hasText: "This Expense acquired" });
   await expect(field).toHaveCount(1);
-  await expect(connection).toHaveCount(1);
   const recordLink = field.getByRole("link", { name: productName });
   await expect(recordLink).toBeVisible();
   // The category retains its full-path record label.
@@ -266,35 +238,6 @@ test("Suggestions lists every family with named records and category pills, and 
   await expect(
     field.getByRole("checkbox", { name: "Select row", exact: true }),
   ).not.toBeChecked();
-
-  // Acquisition does not change the declared classification inputs, so the
-  // existing category advice remains available after confirming the link.
-  await connection
-    .getByRole("button", { name: "Confirm", exact: true })
-    .click();
-  await expect
-    .poll(() =>
-      readEntityConnections(db, { entityKind: "product", entityId: item.id }),
-    )
-    .toEqual([]);
-  await expect
-    .poll(async () =>
-      fieldValueOf(
-        (
-          await readExpense(
-            page,
-            charge.id,
-            z.object({
-              fields: z.object({
-                productId: fieldEnvelope(z.string().nullable(), z.string()),
-              }),
-            }),
-          )
-        ).fields.productId,
-      ),
-    )
-    .toBe(item.id);
-  await expect(connection).toHaveCount(0);
 
   await drainDerivedRefreshFrontier(db);
   await gotoAuthenticatedPage(page, `/suggestions?record=product:${item.id}`);

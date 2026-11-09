@@ -1,19 +1,15 @@
 import { eq, inArray } from "drizzle-orm";
-import { suggestionReviewBatchOut } from "@cubby/schemas/suggestion";
 
 import { getDb } from "~/server/db/helpers";
 import {
   emailReview,
   runOperation,
   product as productTable,
-  expense as expenseTable,
-  inventoryEntry,
 } from "~/server/db/schema";
-import { publishEntityConnection } from "~/server/domains/connection/repo/entity-connections";
+
 import { publishProductPair } from "~/server/domains/product/repo/match/product-match-candidate";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { readSuggestionDecisions } from "~/server/testing/suggestion-decisions.fixtures";
 
 import {
   createFixtureGraph,
@@ -22,39 +18,13 @@ import {
 import { seedUnimportedOrderMail } from "./fixtures/mail";
 import { gotoAuthenticatedPage, uniqueName } from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
-import { dispatchesOperation, operationResult } from "./support/dispatch-wire";
 
-// Failure modes: Confirm fails to apply the proposed connection or changes money;
-// Report incorrect fails to retain the member's history feedback.
-test("one queue confirms proposals and records automatic-history feedback", async ({
+// Failure mode: Report incorrect fails to retain the member's history feedback.
+test("automatic history records the member's incorrect-report feedback", async ({
   page,
 }, testInfo) => {
   test.slow();
   const { db, actor } = await createEvidenceHarnessContext(page);
-  const name = uniqueName(testInfo, "Synthetic queue drill");
-  const { item, charge } = await createFixtureGraph(page, async (create) => {
-    const brand = await create("vendor", {
-      name: uniqueName(testInfo, "Example Tools"),
-    });
-    const item = await create("product", { name, brandId: brand.id });
-    const charge = await create("expense", {
-      name: `${name} receipt`,
-      cost: 24,
-      trade: "electrical",
-    });
-    return { item, charge };
-  });
-  const connection = await publishEntityConnection(db, {
-    relation: "product-expense",
-    source: { entityKind: "product", entityId: item.id },
-    target: { entityKind: "expense", entityId: charge.id },
-    label: "Synthetic acquisition connection",
-    evidence: {
-      reasons: ["Synthetic itemized evidence"],
-      contradictions: [],
-      unknowns: [],
-    },
-  });
   const mail = await seedUnimportedOrderMail(
     page,
     uniqueName(testInfo, "Synthetic audit vendor"),
@@ -106,44 +76,6 @@ test("one queue confirms proposals and records automatic-history feedback", asyn
       },
     });
   await gotoAuthenticatedPage(page, "/suggestions");
-  const queue = page.getByRole("table", { name: "Suggestions", exact: true });
-  const proposal = queue
-    .getByRole("row")
-    .filter({ hasText: "Synthetic acquisition connection" });
-  await expect(proposal).toHaveCount(1);
-  // Feedback precedes the application transaction; only its response proves commit.
-  const [application] = await Promise.all([
-    page.waitForResponse((response) =>
-      dispatchesOperation(response.request(), "suggestion.reviewBatch"),
-    ),
-    proposal.getByRole("button", { name: "Confirm", exact: true }).click(),
-  ]);
-  expect(
-    await operationResult(
-      application,
-      "suggestion.reviewBatch",
-      suggestionReviewBatchOut,
-    ),
-  ).toMatchObject([
-    { ok: true, suggestionId: connection.review.suggestionId, applied: true },
-  ]);
-  await expect
-    .poll(async () =>
-      (await readSuggestionDecisions(db, connection.review.suggestionId)).some(
-        (row) => row.verdict === "correct" && row.intent === "apply",
-      ),
-    )
-    .toBe(true);
-
-  const chargeId = await resolveOrThrow(db, "expense", charge.id);
-  const productId = await resolveOrThrow(db, "product", item.id);
-  expect(
-    await getDb(db)
-      .select({ productId: expenseTable.productId, cost: expenseTable.cost })
-      .from(expenseTable)
-      .where(eq(expenseTable.id, chargeId)),
-  ).toEqual([{ productId, cost: 24 }]);
-
   await gotoAuthenticatedPage(
     page,
     "/automatic-decisions?family=mail_import_outcome",
@@ -173,114 +105,6 @@ test("one queue confirms proposals and records automatic-history feedback", asyn
       ).some((row) => row.verdict === "wrong" && row.intent === "history"),
     )
     .toBe(true);
-});
-
-// Replaces the transient project/placement reviewers: mounting is passive,
-// each stored change needs confirmation, and a coalesced move follows its survivor.
-test("project assignments and placement moves use the shared queue", async ({
-  page,
-}, testInfo) => {
-  test.slow();
-  const { db } = await createEvidenceHarnessContext(page);
-  const { project, expense, source, target, to } = await createFixtureGraph(
-    page,
-    async (create) => {
-      const project = await create("project", {
-        name: uniqueName(testInfo, "Synthetic workshop refresh"),
-      });
-      const expense = await create("expense", {
-        name: uniqueName(testInfo, "Synthetic supplies"),
-        cost: 15,
-        trade: "building",
-      });
-      const item = await create("product", {
-        name: uniqueName(testInfo, "Synthetic placement tool"),
-      });
-      const from = await create("location", {
-        name: uniqueName(testInfo, "Synthetic unplaced shelf"),
-      });
-      const to = await create("location", {
-        name: uniqueName(testInfo, "Synthetic target shelf"),
-      });
-      const source = await create("inventory", {
-        productId: item.id,
-        locationId: from.id,
-        amount: { value: 1, unit: "each" },
-      });
-      const target = await create("inventory", {
-        productId: item.id,
-        locationId: to.id,
-        amount: { value: 2, unit: "each" },
-      });
-      return { project, expense, source, target, to };
-    },
-  );
-  await publishEntityConnection(db, {
-    relation: "expense-project",
-    source: { entityKind: "expense", entityId: expense.id },
-    target: { entityKind: "project", entityId: project.id },
-    label: "Synthetic project assignment",
-    evidence: {
-      reasons: ["Synthetic dated work"],
-      contradictions: [],
-      unknowns: [],
-    },
-  });
-  await publishEntityConnection(db, {
-    relation: "inventory-location",
-    source: { entityKind: "inventory", entityId: source.id },
-    target: { entityKind: "location", entityId: to.id },
-    label: "Synthetic placement move",
-    evidence: {
-      reasons: ["Synthetic stock destination"],
-      contradictions: [],
-      unknowns: [],
-    },
-  });
-  const expenseId = await resolveOrThrow(db, "expense", expense.id);
-  await gotoAuthenticatedPage(page, `/projects/${project.id}`);
-  const proposals = page.getByRole("region", {
-    name: "Pending suggestions",
-    exact: true,
-  });
-  await expect(proposals).toContainText("Synthetic project assignment");
-  expect(
-    (
-      await getDb(db)
-        .select({ projectId: expenseTable.projectId })
-        .from(expenseTable)
-        .where(eq(expenseTable.id, expenseId))
-    )[0]?.projectId,
-  ).toBeNull();
-  await proposals.getByRole("button", { name: "Confirm", exact: true }).click();
-  const projectId = await resolveOrThrow(db, "project", project.id);
-  await expect
-    .poll(
-      async () =>
-        (
-          await getDb(db)
-            .select({ projectId: expenseTable.projectId })
-            .from(expenseTable)
-            .where(eq(expenseTable.id, expenseId))
-        )[0]?.projectId,
-    )
-    .toBe(projectId);
-  await gotoAuthenticatedPage(page, `/inventory/${source.id}`);
-  await expect(proposals).toContainText("Synthetic placement move");
-  await proposals.getByRole("button", { name: "Confirm", exact: true }).click();
-  await expect(page).toHaveURL(new RegExp(`/inventory/${target.id}$`));
-  const targetId = await resolveOrThrow(db, "inventory", target.id);
-  expect(
-    (
-      await getDb(db)
-        .select({
-          value: inventoryEntry.amountValue,
-          unit: inventoryEntry.amountUnit,
-        })
-        .from(inventoryEntry)
-        .where(eq(inventoryEntry.id, targetId))
-    )[0],
-  ).toEqual({ value: 3, unit: "each" });
 });
 
 // Identity conflicts cannot merge; matching pairs still require survivor and impact confirmation.

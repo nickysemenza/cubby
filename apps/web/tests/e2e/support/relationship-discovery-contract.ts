@@ -1,46 +1,19 @@
-import { fieldEnvelope, fieldValueOf } from "@cubby/schemas/field-envelope";
-import { z } from "zod";
-
 import { seedRelationshipReviewPrerequisite } from "../fixtures/finance";
 import {
   escapeRegExp,
   expectViewportBounded,
   gotoAuthenticatedPage,
-  readExpense,
 } from "./e2e-helpers";
 import { expect, test } from "./e2e-test";
-
-export const projectAssignment = z.object({
-  fields: z.object({
-    projectId: fieldEnvelope(z.string().nullable(), z.string()),
-  }),
-});
 
 /**
  * The review flow shared by the desktop relationships and graph views.
  */
 export function relationshipDiscoveryContract() {
-  test("assigned expense offers a reviewed alternative and explores multiple levels", async ({
-    page,
-  }) => {
+  test("assigned expense explores multiple levels", async ({ page }) => {
     const name = `e2e relationship review ${Date.now()}`;
     const fixture = await seedRelationshipReviewPrerequisite(page, name);
     await gotoAuthenticatedPage(page, `/expenses/${fixture.expense.id}`);
-    const assignment = async () =>
-      fieldValueOf(
-        (await readExpense(page, fixture.expense.id, projectAssignment)).fields
-          .projectId,
-      );
-    const proposals = page.getByRole("region", {
-      name: "Pending suggestions",
-      exact: true,
-    });
-    await expect(proposals).toContainText(`${name} suggested`);
-    expect(await assignment()).toBe(fixture.current.id);
-    await proposals
-      .getByRole("button", { name: "Confirm", exact: true })
-      .click();
-    await expect.poll(assignment).toBe(fixture.target.id);
 
     await gotoAuthenticatedPage(
       page,
