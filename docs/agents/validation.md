@@ -186,6 +186,10 @@ Rebase onto freshly fetched `origin/main` before running any typecheck,
 generator, or test, and again before pushing: results from a stale base miss
 migrations, generated artifacts, and ratchets (schema budgets)
 that main has since changed, so they are not evidence for the merge.
+Vitest's `fsModuleCache` (`node_modules/.vitest-cache`) does not key on
+`import.meta.glob` matches: after switching to a branch that adds or removes
+matched files, delete it, or `operation-handlers.server.ts` reports
+`No operation module loader` for a file that exists.
 
 Evidence-revision and withdrawal fixtures must set an explicit initial
 `observedAt` before their later observations. Mixing a wall-clock default with
