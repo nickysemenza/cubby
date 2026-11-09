@@ -11,11 +11,13 @@ const WORKER_REQUEST_CONNECTIONS = {
   "bounded-stale": 2,
 } as const satisfies Record<RequestDbRole, number>;
 
-// Background invocations keep their existing transaction parallelism.
-const BACKGROUND_CONNECTIONS = {
-  strong: 3,
-  "bounded-stale": 1,
-} as const satisfies Record<RequestDbRole, number>;
+/**
+ * One background invocation (a queue permit, the cron tick or a Durable Object
+ * request) holds one shared two-socket pool: both roles resolve to it.
+ * docs/infrastructure.md#background-connection-budget owns the origin-cap
+ * invariant this enters.
+ */
+const BACKGROUND_CONNECTIONS = 2;
 
 export interface RequestDbConnections {
   strong: string;
@@ -68,6 +70,9 @@ export class DatabaseRuntimeResolver {
     if (scope) {
       if (scope.closed)
         throw new Error("Database invocation scope has completed");
+      // Background reads are never stale-routed: both roles share one pool.
+      if (scope.kind === "background" && role === "bounded-stale")
+        return this.resolve("strong");
       const existing = scope.runtimes[role];
       if (existing) return existing;
 
@@ -79,9 +84,9 @@ export class DatabaseRuntimeResolver {
       // budgets use SET LOCAL inside their transaction, never session overrides here.
       const runtime = this.#createRuntime(
         connectionString,
-        (scope.kind === "background"
+        scope.kind === "background"
           ? BACKGROUND_CONNECTIONS
-          : WORKER_REQUEST_CONNECTIONS)[role],
+          : WORKER_REQUEST_CONNECTIONS[role],
         role,
         () => (scope.clientOrdinal = (scope.clientOrdinal ?? 0) + 1),
         scope.connections.poolIdleTimeoutMs,

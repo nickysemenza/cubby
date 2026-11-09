@@ -11,26 +11,71 @@ interface WaitUntilContext {
   origin?: string;
 }
 
+type TrackedExecutionContext = WaitUntilContext & {
+  /** Work registered through this request's `waitUntil`, until it settles. */
+  readonly pending: Set<Promise<unknown>>;
+  readonly untracked: (task: Promise<unknown>) => void;
+};
+
 /**
  * Execution context belongs to one request. A module-level one would be overwritten by
  * whichever request landed last in the isolate, and calling waitUntil on a
  * context whose request already settled throws.
  */
-const executionCtxStore = new AsyncLocalStorage<WaitUntilContext>();
+const executionCtxStore = new AsyncLocalStorage<TrackedExecutionContext>();
 
 export const runWithExecutionCtx = <T>(
   ctx: WaitUntilContext,
   fn: () => Promise<T>,
   origin?: string,
-): Promise<T> =>
-  executionCtxStore.run(
-    { waitUntil: (task) => ctx.waitUntil(task), origin },
+): Promise<T> => {
+  const pending = new Set<Promise<unknown>>();
+  return executionCtxStore.run(
+    {
+      pending,
+      origin,
+      untracked: (task) => ctx.waitUntil(task),
+      waitUntil: (task) => {
+        // The platform owns the task's own rejection; tracking only observes it.
+        const tracked: Promise<void> = task
+          .then(
+            () => undefined,
+            () => undefined,
+          )
+          .finally(() => pending.delete(tracked));
+        pending.add(tracked);
+        ctx.waitUntil(task);
+      },
+    },
     fn,
   );
+};
 
 /** Undefined outside a Worker fetch request, including queue/cron invocations. */
 export const getExecutionCtx = (): WaitUntilContext | undefined =>
   executionCtxStore.getStore();
+
+/**
+ * Runs `work` after `ready` and then every `waitUntil` task the current request
+ * registered (including tasks those tasks registered) settle, keeping the
+ * request alive for it. False outside a Worker fetch request.
+ */
+export const afterExecutionTasks = (
+  ready: Promise<void>,
+  work: () => Promise<void>,
+): boolean => {
+  const execution = executionCtxStore.getStore();
+  if (!execution) return false;
+  execution.untracked(
+    (async () => {
+      await ready;
+      while (execution.pending.size)
+        await Promise.allSettled(execution.pending);
+      await work();
+    })(),
+  );
+  return true;
+};
 
 /**
  * Best-effort work the response does not need: inside a Worker request it

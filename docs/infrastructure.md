@@ -350,26 +350,18 @@ admission, cache or coordinator responsibilities. AI refresh policy details
 live in the [refresh runbook](runbooks/ai-refresh.md).
 
 Neon owns the PostgreSQL database. Production compute is autoscaling
-0.25–4 CU and keeps scale-to-zero (300 s idle) by choice: the first query after
+0.25–2 CU (`max_connections` 901) and keeps scale-to-zero (300 s idle) by choice: the first query after
 an idle gap waits for compute start (about 0.5 s median, 0.9 s p90), visible
 as a long `db.connect.phase.startup` on `db.client.connect`. This range belongs to the production endpoint: changing the project's
 default compute range does not resize an existing endpoint. The Hyperdrive
-origin connection caps are 30 strong + 12 cached + 10 background.
+origin connection caps are 40 strong + 12 cached + 40 background (raised from
+30 + 12 + 10 by an operator action alongside the permit runtime).
 All three configurations share origin
 compute; the cached pool needs headroom for short reads while expensive reads
 are running. Pool caps are soft limits, not interactive connection reservations.
 Keep them below database capacity and measure origin waits and query execution
 together before raising them. More connections cannot remove expensive query
-work. The background
-queue consumer settings (`packages/shared/src/background-queue-consumer.json`)
-and each drain's page concurrency (`JOB_DRAIN.concurrency`) are ceilings on
-concurrent Job pages, not active consumer counts; a long active batch can block
-consumer scaling and delay accepted wakes
-([Selection and admission](jobs.md#selection-and-admission)). The ceiling is not
-a measured optimum or an interactive connection reservation. Tune it against Activity's due counts, origin pool waits, and interactive latency together. Telemetry
-concurrency remains 1. Purchase dispatch starts coordinator work outside Job delivery; the background
-queue cap does not bound active coordinator database work. That workload policy
-remains separate.
+work. Telemetry concurrency remains 1.
 
 The background configuration was created as an authorized operator action;
 the existing strong and cached configurations were left unchanged. Builds and
@@ -380,12 +372,28 @@ origin admission and SQL execution separately. This change adds no PostgreSQL
 role or `statement_timeout` and preserves Neon's compute bounds.
 
 Each HTTP invocation lazily opens at most two strong and two cached database
-sockets, so ordinary browser reads can overlap page enrichment. Background
-invocations retain three strong and one cached socket on the background binding,
-close their pools at scope completion and preserve
-independent concurrent transactions. Four database sockets leave two of the
-Worker's six outbound connection slots for provider/DO/storage/telemetry calls.
-One Worker continues to serve all events.
+sockets, so ordinary browser reads can overlap page enrichment. Its pools close
+once the response body finishes and every `waitUntil` task it registered has
+settled (`withRequestDb`); an upgraded socket keeps pg's idle timeout. Four
+database sockets leave two of the Worker's six outbound connection slots for
+provider/DO/storage/telemetry calls. One Worker continues to serve all events.
+
+#### Background connection budget
+
+Every background invocation — one queue permit, the hourly cron tick, or one
+Durable Object request — holds exactly one shared two-socket pool on
+`HYPERDRIVE_BACKGROUND` (`withInvocationDb`); both database roles resolve to
+it, and it closes when the invocation finishes. Code called inline from an
+invocation that already holds a scope (a purchase dispatch delivering to its
+coordinator's services, for example) reuses that pool instead of opening a
+second one. The invariant is
+
+`2 × max_concurrency + cron + live Durable Object requests ≤ 40` (the background origin cap)
+
+With `max_concurrency` 8 (`packages/shared/src/background-queue-consumer.json`)
+the queue holds at most 16 sockets and the cron 2, leaving 22 for concurrent
+coordinator and other Durable Object requests. Raise `max_concurrency` only with
+the origin cap, and only after measuring pool waits.
 
 Editing Neon's autoscaling bounds restarts the endpoint and disconnects active
 sessions; automatic resizing within those bounds does not. Apply a range change
