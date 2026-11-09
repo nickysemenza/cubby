@@ -219,7 +219,6 @@ export const repositoryOwners = [
   "src/server/domains/purchase-import/repo/gmail/evidence-candidates.ts",
   "src/server/domains/purchase-import/repo/gmail/normalize.ts",
   "src/server/domains/purchase-import/repo/gmail/original-capture.ts",
-  "src/server/domains/purchase-import/repo/gmail/refresh-evaluation-state.ts",
   "src/server/domains/purchase-import/repo/gmail/targets.ts",
   "src/server/domains/purchase-import/repo/gmail/types.ts",
   "src/server/domains/purchase-import/repo/gmail/vendor-identity.ts",
