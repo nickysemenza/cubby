@@ -41,10 +41,13 @@ export async function seedLocalFixturePack(
     overrides: EntityOverrides<E> = {},
   ) => createEntity(context, entity, overrides, { faker });
   switch (pack) {
-    case "performance": {
+    case "performance":
+    case "performance-production": {
       const { seedPerformanceCorpus } =
         await import("../scenarios/performance");
-      await seedPerformanceCorpus(context.db, testUserId(userId));
+      await seedPerformanceCorpus(context.db, testUserId(userId), {
+        scale: pack === "performance" ? "default" : "production",
+      });
       return;
     }
     case "recipes": {

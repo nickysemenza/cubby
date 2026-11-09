@@ -301,6 +301,16 @@ CUBBY_DEV_INSTANCE=performance pnpm dev
 CUBBY_DEV_INSTANCE=performance pnpm dev seed performance
 ```
 
+`pnpm dev seed performance-production` seeds the same graph at the household's
+current scale and fan-out for list/detail CPU work: 1,200 bundles (~7.2k
+Products, all categorized under a ~190-node taxonomy, each with an attached
+Image), ~4.8k Purchases from ~2.4k Vendors, ~18k Expenses, ~4.8k Financial
+Transactions and ~9.6k Images. Run the hourly scheduled handler after seeding so
+read snapshots publish before measuring. It omits Source Transaction Records and
+the full Email volume. Profile the built Worker (`pnpm dev preview`) rather than
+HMR, and report cold-isolate requests separately: a first request after start
+used several times the CPU of a warm one.
+
 Use that instance's discovered origin and synthetic login to measure Run and
 Work queue navigation, first usable rows, scrolling and concurrent requests.
 Compare query plans and request counts as well as elapsed time. Record initial

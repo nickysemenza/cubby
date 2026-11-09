@@ -35,6 +35,7 @@ import {
   financialAccount,
   financialTransaction,
   financialTransactionAllocation,
+  image,
   importSourceClaim,
   importSourceOrder,
   spendingCategory,
@@ -45,6 +46,7 @@ import {
   shipmentSourceCapture,
   shipmentSourcePackage,
 } from "~/server/db/schema";
+import { entityAttachment } from "~/server/db/retained-tables";
 import { writeOutcomeReceipts } from "~/server/domains/purchase-import/service/run-outcome.fixtures";
 import {
   logAuditEntries,
@@ -62,9 +64,20 @@ async function batches<T, Result>(
     await write(rows.slice(offset, offset + 500));
 }
 
-const optionsSchema = z.object({
-  bundles: z.number().int().min(1).max(1000).default(1000),
-});
+const optionsSchema = z
+  .object({
+    bundles: z.number().int().min(1).max(1200).optional(),
+    /**
+     * `production` matches the household's current row counts and fan-out for
+     * list/detail CPU work: categorized Products with attached Images, extra
+     * single-line Purchases from many Vendors, and unallocated charges.
+     */
+    scale: z.enum(["default", "production"]).default("default"),
+  })
+  .transform(({ bundles, scale }) => ({
+    scale,
+    bundles: bundles ?? (scale === "production" ? 1200 : 1000),
+  }));
 
 /** Optional local pack: one household's repeated purchase/research history.
  * Call only through the guarded dev pack runner or an isolated test lease.
@@ -75,7 +88,8 @@ export async function seedPerformanceCorpus(
   userId: UserId,
   options: z.input<typeof optionsSchema> = {},
 ) {
-  const { bundles } = optionsSchema.parse(options);
+  const { scale, bundles } = optionsSchema.parse(options);
+  const production = scale === "production";
   const bodyBytes = 32768;
   // Distinct blocks keep the raw profile out of line. Repeated prose models
   // compression too; both reuse bounded padding instead of per-record entropy.
@@ -162,6 +176,39 @@ export async function seedPerformanceCorpus(
     name: "Synthetic performance parts",
     parentId: parentCategory.id,
   };
+  // A production-shaped taxonomy: ten branches of sixteen leaves under the
+  // mapped root, so vocabulary and hierarchy reads see ~170 categories.
+  const extraCategories: (typeof productCategory.$inferInsert)[] = [];
+  const leafCategories: NonNullable<
+    (typeof productCategory.$inferInsert)["id"]
+  >[] = [];
+  function addTaxonomy() {
+    if (!production) return;
+    for (let branch = 0; branch < 10; branch++) {
+      const parent = {
+        ...identity("productCategory"),
+        name: `Synthetic performance branch ${branch + 1}`,
+        parentId: parentCategory.id,
+      };
+      extraCategories.push(parent);
+      for (let leaf = 0; leaf < 16; leaf++) {
+        const row = {
+          ...identity("productCategory"),
+          name: `Synthetic performance branch ${branch + 1} leaf ${leaf + 1}`,
+          parentId: parent.id,
+        };
+        extraCategories.push(row);
+        leafCategories.push(row.id);
+      }
+    }
+  }
+  addTaxonomy();
+  const categoryFor = (bundle: number, index: number) =>
+    production
+      ? leafCategories[(bundle * 6 + index) % leafCategories.length]!
+      : index >= 3
+        ? childCategory.id
+        : null;
   const shelf = {
     ...identity("location"),
     name: "Synthetic performance shelf",
@@ -172,6 +219,7 @@ export async function seedPerformanceCorpus(
   // Not searchable: audit history only.
   for (const [entityKind, entityId] of [
     ...sourceAccounts.map((row) => ["vendorAccount", row.id] as const),
+    ...extraCategories.map((row) => ["productCategory", row.id!] as const),
     ["spendingCategory", spending.id] as const,
     ["productCategory", parentCategory.id] as const,
     ["productCategory", childCategory.id] as const,
@@ -190,6 +238,38 @@ export async function seedPerformanceCorpus(
   const transactions: (typeof financialTransaction.$inferInsert)[] = [];
   const allocations: (typeof financialTransactionAllocation.$inferInsert)[] =
     [];
+  const images: (typeof image.$inferInsert)[] = [];
+  const attachments: (typeof entityAttachment.$inferInsert)[] = [];
+  const extraVendors: (typeof vendor.$inferInsert)[] = [];
+  function addImage(
+    entityKind: "product" | "purchase",
+    entityId: string,
+    label: string,
+  ) {
+    if (!production) return;
+    const row = {
+      ...identity("image"),
+      key: `synthetic-performance/${entityKind}/${entityId}.jpg`,
+      filename: `${label}.jpg`,
+      size: 48_000,
+      contentType: "image/jpeg",
+      status: "UPLOADED" as const,
+      width: 1200,
+      height: 900,
+      source: "own",
+      useOriginal: false,
+      captureAttribution: "none",
+    } satisfies typeof image.$inferInsert;
+    images.push(row);
+    created("image", row.id);
+    // Product attachments declare what they show; Purchase receipts do not.
+    attachments.push({
+      entityKind,
+      entityId,
+      imageId: row.id,
+      purpose: entityKind === "product" ? "item" : null,
+    });
+  }
   const claims: (typeof importSourceClaim.$inferInsert)[] = [];
   const sourceOrders: (typeof importSourceOrder.$inferInsert)[] = [];
   const parcels: (typeof shipment.$inferInsert)[] = [];
@@ -282,6 +362,69 @@ export async function seedPerformanceCorpus(
     }
   }
 
+  function addLongTail(
+    bundle: number,
+    label: string,
+    unpricedId: NonNullable<(typeof product.$inferInsert)["id"]>,
+  ) {
+    if (!production) return;
+    // Production's long tail: many Vendors with one-line Purchases, a
+    // receipt Image on some orders, and charges not yet allocated.
+    for (let extra = 0; extra < 2; extra++) {
+      const row = {
+        ...identity("vendor"),
+        name: `${label} vendor ${extra + 1}`,
+      };
+      extraVendors.push(row);
+      created("vendor", row.id);
+    }
+    for (let extra = 0; extra < 3; extra++) {
+      const seller = extraVendors.at(-1 - (extra % 2))!;
+      const small = {
+        ...identity("purchase"),
+        vendorId: seller.id!,
+        vendorAccountId: null,
+        orderId: `SYNTHETIC-PERF-${bundle + 1}-${extra + 1}`,
+        date: "2026-02-01",
+        statedTotal: 2500n,
+        spendingCategoryId: extra === 0 ? spending.id : null,
+      };
+      purchases.push(small);
+      created("purchase", small.id);
+      if (extra < 2)
+        addImage("purchase", small.id, `${label} receipt ${extra + 1}`);
+      const line = {
+        ...identity("expense"),
+        name: `${label} extra line ${extra + 1}`,
+        purchaseId: small.id,
+        productId: extra === 0 ? unpricedId : null,
+        productQuantity: extra === 0 ? 1 : null,
+        cost: 25,
+        date: "2026-02-01",
+        future: false,
+        trade: "other" as const,
+        costType: "materials" as const,
+        lineKind: "principal" as const,
+      };
+      expenses.push(line);
+      created("expense", line.id);
+      const charge = {
+        ...identity("financialTransaction"),
+        accountId: tenders[extra % 2]!.id,
+        kind: "purchase" satisfies NonNullable<
+          (typeof financialTransaction.$inferInsert)["kind"]
+        >,
+        status: "posted",
+        amount: moneyToMinor(25),
+        transactionDate: "2026-02-02",
+        postedDate: "2026-02-03",
+        merchant: `${label} vendor charge ${extra + 1}`,
+      } satisfies typeof financialTransaction.$inferInsert;
+      transactions.push(charge);
+      created("financialTransaction", charge.id);
+    }
+  }
+
   for (let bundle = 0; bundle < bundles; bundle++) {
     const label = `Synthetic performance ${String(bundle + 1).padStart(4, "0")}`;
     const bundleProducts = [];
@@ -300,11 +443,12 @@ export async function seedPerformanceCorpus(
         price: index === 3 ? 5 : null,
         expectedQuantity: null,
         model: null,
-        categoryId: index >= 3 ? childCategory.id : null,
+        categoryId: categoryFor(bundle, index),
       };
       products.push(row);
       bundleProducts.push(row);
       created("product", row.id);
+      addImage("product", row.id, row.name);
     }
     const [kit, inner, part, sibling, sold, unpriced] = bundleProducts;
     if (!kit || !inner || !part || !sibling || !sold || !unpriced)
@@ -381,6 +525,7 @@ export async function seedPerformanceCorpus(
       expenses.push(row);
       created("expense", row.id);
     }
+    addLongTail(bundle, label, unpriced.id);
     // Incurred lines total 90: settled, mismatched, pending, split and
     // unsettled orders each take a different settlement branch.
     const tenderId = tenders[bundle % 2]!.id;
@@ -568,7 +713,11 @@ export async function seedPerformanceCorpus(
     await tx.insert(spendingCategory).values(spending);
     await tx.insert(productCategory).values(parentCategory);
     await tx.insert(productCategory).values(childCategory);
+    await batches(extraCategories, (rows) =>
+      tx.insert(productCategory).values(rows),
+    );
     await tx.insert(location).values(shelf);
+    await batches(extraVendors, (rows) => tx.insert(vendor).values(rows));
     await batches(products, (rows) => tx.insert(product).values(rows));
     await batches(links, (rows) => tx.insert(entityLink).values(rows));
     await batches(inventory, (rows) => tx.insert(inventoryEntry).values(rows));
@@ -588,6 +737,10 @@ export async function seedPerformanceCorpus(
     );
 
     await batches(expenses, (rows) => tx.insert(expense).values(rows));
+    await batches(images, (rows) => tx.insert(image).values(rows));
+    await batches(attachments, (rows) =>
+      tx.insert(entityAttachment).values(rows),
+    );
     await batches(mails, (rows) => tx.insert(orderMail).values(rows));
     await batches(emails, (rows) => tx.insert(email).values(rows));
     await batches(transactions, (rows) =>
@@ -608,7 +761,7 @@ export async function seedPerformanceCorpus(
     );
     // Immediate reads must see the new volume, rather than waiting for autoanalyze.
     await tx.execute(
-      sql`ANALYZE ${vendor}, ${product}, ${entityLink}, ${inventoryEntry}, ${purchase}, ${expense}, ${orderMail}, ${run}, ${email}, ${entityIdentity}, ${financialTransaction}, ${financialTransactionAllocation}, ${importSourceClaim}, ${importSourceOrder}, ${shipment}, ${shipmentObservation}`,
+      sql`ANALYZE ${vendor}, ${product}, ${productCategory}, ${image}, ${entityAttachment}, ${entityLink}, ${inventoryEntry}, ${purchase}, ${expense}, ${orderMail}, ${run}, ${email}, ${entityIdentity}, ${financialTransaction}, ${financialTransactionAllocation}, ${importSourceClaim}, ${importSourceOrder}, ${shipment}, ${shipmentObservation}`,
     );
     await batches(refs, (rows) => refreshSearchDocuments(tx, rows));
   });
