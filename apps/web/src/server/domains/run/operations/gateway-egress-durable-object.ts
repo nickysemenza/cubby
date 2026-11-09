@@ -23,6 +23,7 @@ import {
   gatewayEgressInput,
   type GatewayAdmission,
 } from "~/server/ai/gateway-egress-contract";
+import { reportServerError } from "~/server/errors/report-error";
 
 import { initializeGatewayEgress } from "../repo/gateway-egress-initialization";
 import {
@@ -411,7 +412,14 @@ export class AiGatewayEgressDurableObject extends DurableObject<Env> {
       finished = true;
       clearTimeout(timeout);
       request.signal.removeEventListener("abort", abort);
-      await this.finish(token, status, retryAfter);
+      try {
+        await this.finish(token, status, retryAfter);
+      } catch (error) {
+        // SILENT: an unreleased permit expires at its deadline. A storage
+        // fault here (a reset during deploy) errored a stream the provider
+        // had already answered and failed the Run for good (2026-11-09).
+        reportServerError(error, { operation: "gateway_egress.finish" });
+      }
     };
     let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
     controller.signal.addEventListener(
