@@ -6,8 +6,6 @@ import { useNavigate, useRouter } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import {
   useCallback,
-  lazy,
-  Suspense,
   useEffect,
   useMemo,
   useRef,
@@ -30,13 +28,18 @@ import { SidePanel } from "~/ui/overlays/side-panel";
 import { Button } from "~/ui/primitives/button";
 import { Sheet, SheetContent, SheetTitle } from "~/ui/primitives/sheet";
 
+type Inspector =
+  typeof import("../entity-detail/entity-workbench-inspector").EntityWorkbenchInspector;
+type InspectorCodeState =
+  | { kind: "loading" }
+  | { kind: "ready"; Component: Inspector }
+  | { kind: "failed"; error: unknown };
+let resolvedInspector: Inspector | undefined;
 const loadInspector = () =>
-  import("../entity-detail/entity-workbench-inspector");
-const EntityWorkbenchInspector = lazy(() =>
-  loadInspector().then((module) => ({
-    default: module.EntityWorkbenchInspector,
-  })),
-);
+  import("../entity-detail/entity-workbench-inspector").then((module) => {
+    resolvedInspector = module.EntityWorkbenchInspector;
+    return module;
+  });
 
 export interface PreviewState {
   entityKind: Entity;
@@ -178,37 +181,62 @@ function renderDefaultInspector({
   preview,
   onClose,
 }: EntityPreviewRendererProps) {
+  return <DeferredInspector preview={preview} onClose={onClose} />;
+}
+
+function DeferredInspector({ preview, onClose }: EntityPreviewRendererProps) {
+  const [state, setState] = useState<InspectorCodeState>(() =>
+    resolvedInspector
+      ? { kind: "ready", Component: resolvedInspector }
+      : { kind: "loading" },
+  );
+  useEffect(() => {
+    if (state.kind !== "loading") return;
+    let mounted = true;
+    // A code-only Suspense fallback throttles independent record reveals.
+    void loadInspector().then(
+      ({ EntityWorkbenchInspector: Component }) => {
+        if (mounted) setState({ kind: "ready", Component });
+      },
+      (error: unknown) => {
+        if (mounted) setState({ kind: "failed", error });
+      },
+    );
+    return () => {
+      mounted = false;
+    };
+  }, [state.kind]);
+  if (state.kind === "failed") throw state.error;
   const label = entityLabel(preview.entityKind);
-  return (
-    <Suspense
-      fallback={
-        <SidePanel
-          label={`${label} inspector`}
-          eyebrow={label}
-          title={
-            preview.name ?? (
-              <span className="font-normal text-muted-foreground">
-                Loading {label.toLowerCase()}…
-              </span>
-            )
-          }
-          code={preview.id}
-          onClose={onClose}
-          closeLabel="Close inspector"
-        >
-          <output>Loading inspector…</output>
-        </SidePanel>
-      }
-    >
-      {/* Keyed so stepping to another record never shows the previous name. */}
-      <EntityWorkbenchInspector
-        key={`${preview.entityKind}:${preview.id}`}
-        entity={preview.entityKind}
-        id={preview.id}
+  if (state.kind === "loading")
+    return (
+      <SidePanel
+        label={`${label} inspector`}
+        eyebrow={label}
+        title={
+          preview.name ?? (
+            <span className="font-normal text-muted-foreground">
+              Loading {label.toLowerCase()}…
+            </span>
+          )
+        }
+        code={preview.id}
         onClose={onClose}
-        seedName={preview.name}
-      />
-    </Suspense>
+        closeLabel="Close inspector"
+      >
+        <output>Loading inspector…</output>
+      </SidePanel>
+    );
+  const EntityWorkbenchInspector = state.Component;
+  // Keyed so stepping to another record never shows the previous name.
+  return (
+    <EntityWorkbenchInspector
+      key={`${preview.entityKind}:${preview.id}`}
+      entity={preview.entityKind}
+      id={preview.id}
+      onClose={onClose}
+      seedName={preview.name}
+    />
   );
 }
 
