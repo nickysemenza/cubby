@@ -10,6 +10,7 @@ import {
   type InferenceFunding,
   type GatewayResponseInfo,
   gatewayResponseInfo,
+  creditFundingFor,
   isInferenceFundingRefusal,
 } from "@cubby/shared/ai/gateway-request";
 import { gatewayProviderSchema } from "@cubby/shared/ai/models";
@@ -277,12 +278,7 @@ export async function forwardGatewayRequest(
   port: GatewayForwardPort = productionGatewayForwardPort,
 ): Promise<GatewayForwardResponse> {
   const { provider } = splitProviderRoute(request.path);
-  const funding =
-    provider === "anthropic"
-      ? "subscriber_credit"
-      : provider === "openai"
-        ? "openai_credit"
-        : "paid";
+  const funding = creditFundingFor(provider) ?? "paid";
   let response = await forwardGatewayAttempt(request, opts, port, funding);
   if (funding === "openai_credit") {
     if (!isInferenceFundingRefusal(response.status, response.body, funding))

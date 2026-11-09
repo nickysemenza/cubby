@@ -465,6 +465,16 @@ export type InferenceFunding =
   | "subscription"
   | "paid";
 
+/** The provider-owned credit a stored subscriber key draws, when it has one. */
+export const creditFundingFor = (
+  provider: string,
+): "subscriber_credit" | "openai_credit" | undefined =>
+  provider === "anthropic"
+    ? "subscriber_credit"
+    : provider === "openai"
+      ? "openai_credit"
+      : undefined;
+
 /** Named BYOK is opt-in; the default key must remain unset for paid fallback. */
 export function inferenceFundingHeaders(
   funding: InferenceFunding,

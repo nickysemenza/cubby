@@ -4,6 +4,7 @@ import { aiGatewayId, CF_ACCOUNT_ID } from "@cubby/shared/ai/gateway-metadata";
 import {
   creditRefusedResponse,
   isGatewayBalanceEmpty,
+  creditFundingFor,
   isInferenceFundingRefusal,
   isSubscriberCreditRequest,
   paidRefusedResponse,
@@ -180,7 +181,7 @@ export class AiGatewayEgressDurableObject extends DurableObject<Env> {
       isInferenceFundingRefusal(
         status,
         body,
-        provider === "openai" ? "openai_credit" : "subscriber_credit",
+        creditFundingFor(provider) ?? "subscriber_credit",
       ),
     );
   }
