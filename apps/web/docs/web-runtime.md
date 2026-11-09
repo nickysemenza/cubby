@@ -450,7 +450,9 @@ An unbounded first layout would mount the full page and admit premature paging;
 embedded tables retain their `60vh` cap.
 Desktop virtualization keeps four extra items (records, group headers or detail
 rows) beyond each visible edge. An open inline editor retains its owning row by
-stable occurrence key until save or cancel. Its draft and focus must survive
+stable occurrence key through save/cancel focus restoration. Release follows the
+virtualizer observing any scroll caused by returning focus to the trigger. Its
+draft and focus must survive
 scrolling outside the visible range without mounting intervening records. The name editor
 has its own renderer lifetime: changing row-action resolvers during paging must
 not recreate its component function. The body fills each disjoint range's gap while preserving the detached sticky header

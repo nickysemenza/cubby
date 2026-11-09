@@ -1293,14 +1293,21 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
     filterOptionHints,
     footerContent,
   } = props;
-  const [retainedItemKey, setRetainedItemKey] = useState<string | null>(null);
+  const [retainedRow, setRetainedRow] = useState<{ key: string } | null>(null);
   const retainVirtualRow = useCallback((key: string) => {
-    setRetainedItemKey(key);
-    return () =>
-      setRetainedItemKey((current) => (current === key ? null : current));
+    const owner = { key };
+    setRetainedRow(owner);
+    return () => {
+      // Cancel/save focuses the trigger and can scroll it into view. Let the
+      // virtualizer observe that scroll before releasing its row, or the old
+      // range unmounts the newly focused trigger. A newer editor owns its lease.
+      requestAnimationFrame(() =>
+        setRetainedRow((current) => (current === owner ? null : current)),
+      );
+    };
   }, []);
   const controller = useDataTableController({
-    retainedItemKey,
+    retainedItemKey: retainedRow?.key ?? null,
     table,
     // A record's own tables can print meaning for a null bucket ("Unassigned",
     // "No purchase/vendor") and edit in place, which hiding the column would erase.
