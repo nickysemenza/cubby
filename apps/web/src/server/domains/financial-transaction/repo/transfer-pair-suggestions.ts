@@ -86,6 +86,7 @@ import {
   previewRowFor,
   type ChargeRef,
 } from "~/server/domains/transaction-import/repo/statement-input";
+import { STATEMENT_SUGGESTION_REVISION } from "~/server/domains/transaction-import/repo/statement-suggestion-revision";
 import { statementTransactionKind } from "~/server/domains/transaction-import/repo/statement-transaction-kind";
 import { transactionImportMembers } from "~/server/domains/transaction-import/repo/transaction-import-membership";
 import { type EntityKernelContext } from "~/server/entity-kernel/adapter";
@@ -1538,11 +1539,7 @@ export async function refreshTransferPairStatements(
   );
   if (!rows.length) return false;
   const charges = transferPairSourceCharges(pairKey);
-  const {
-    buildChargeProposals,
-    publishChargeProposal,
-    STATEMENT_SUGGESTION_REVISION,
-  } =
+  const { buildChargeProposals, publishChargeProposal } =
     await import("~/server/domains/transaction-import/repo/statement-suggestions");
   const proposals = await buildChargeProposals(db, charges);
   proposals.sort((a, b) =>

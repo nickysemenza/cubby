@@ -1,10 +1,11 @@
-import { generatedEntityListFields } from "@cubby/schemas/entity-list-fields";
 /**
  * Declared filters compiled to SQL over any set of columns: an entity table
  * (`declaredFilterPredicates`) or a relation list's projected columns. One
  * module owns each kind's include predicate, Any value / No value, Match all,
  * and the generated Exclude ("is not") negation.
  */
+import type { Entity } from "@cubby/schemas/entity";
+import { generatedEntityListFields } from "@cubby/schemas/entity-list-fields";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { entityManifest } from "@cubby/schemas/entity-manifest";
 import { FILTER_NONE } from "@cubby/schemas/filter-sentinel-fields";
@@ -35,7 +36,23 @@ import {
   hierarchyDescendantsSql,
 } from "~/server/generic/list/repo/hierarchy";
 
-import { type ListFilterValues, shortcodeIdsSql } from "./field-compiler";
+import type { ListFilterValues } from "./field-compiler";
+
+/**
+ * The id subquery of the requested public shortcodes of live `target` rows,
+ * resolved inside the list query (#2333): an unknown or soft-deleted code
+ * matches nothing.
+ */
+export const shortcodeIdsSql = (
+  target: Entity,
+  condition: (shortcode: SQL) => SQL | undefined,
+): SQL => {
+  const { dbTable, softDelete } = entityManifest[target];
+  if (dbTable === null) throw new Error(`${target} has no table to filter by`);
+  return sql`(SELECT ref."id" FROM ${sql.identifier(dbTable)} ref WHERE ${
+    condition(sql`ref."shortcode"`) ?? sql`false`
+  }${softDelete ? sql` AND ${notDeleted("ref")}` : sql``})`;
+};
 
 export const matchAll = z
   .enum(["any", "all"])

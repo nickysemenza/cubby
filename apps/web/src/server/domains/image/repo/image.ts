@@ -165,7 +165,7 @@ import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { softDeleteEntitySearchArtifactsTx } from "~/server/generic/embedding/repo/entity-embedding-cleanup";
-import { shortcodeIdsSql } from "~/server/generic/list/repo/field-compiler";
+import { shortcodeIdsSql } from "~/server/generic/list/repo/declared-filters";
 import { hierarchyDescendantsSql } from "~/server/generic/list/repo/hierarchy";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import {

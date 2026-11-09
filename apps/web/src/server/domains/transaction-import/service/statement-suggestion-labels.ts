@@ -52,11 +52,11 @@ import {
   prepareStatementSpending,
   prepareStatementSpendingFacts,
 } from "~/server/domains/transaction-import/repo/statement-spending";
+import { isClean } from "~/server/domains/transaction-import/repo/statement-suggestion-read";
 import {
   buildChargeProposals,
   chargeId,
   type ChargeRef,
-  isClean,
   labelledProposal,
   publishCompleteStatementLabels,
   type CompleteStatementLabelPublication,

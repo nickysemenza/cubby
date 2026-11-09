@@ -19,7 +19,7 @@ import { notDeleted } from "~/server/db/helpers/predicates";
 import { suggestionTable } from "~/server/db/schema";
 import { financialSourceReferenceRows } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
 import { transactionImportMembers } from "~/server/domains/transaction-import/repo/transaction-import-membership";
-import { SuggestionRecordScope } from "~/server/generic/suggestions/repo/suggestion-touching";
+import type { SuggestionRecordScope } from "~/server/generic/suggestions/repo/suggestion-touching";
 
 export const reviewSuggestion = alias(suggestionTable, "s");
 

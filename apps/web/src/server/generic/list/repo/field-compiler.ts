@@ -926,22 +926,6 @@ export const rowSetSql = (
 };
 
 /**
- * The id subquery of the requested public shortcodes of live `target` rows,
- * resolved inside the list query (#2333): an unknown or soft-deleted code
- * matches nothing.
- */
-export const shortcodeIdsSql = (
-  target: Entity,
-  condition: (shortcode: SQL) => SQL | undefined,
-): SQL => {
-  const { dbTable, softDelete } = entityManifest[target];
-  if (dbTable === null) throw new Error(`${target} has no table to filter by`);
-  return sql`(SELECT ref."id" FROM ${sql.identifier(dbTable)} ref WHERE ${
-    condition(sql`ref."shortcode"`) ?? sql`false`
-  }${softDelete ? sql` AND ${notDeleted("ref")}` : sql``})`;
-};
-
-/**
  * The ORDER BY of a declared derived field or a `related:<view>` roster
  * column, or null for a field this compiler does not own. A rejected field (a
  * to-many path, a filter-only predicate) fails with the reason the

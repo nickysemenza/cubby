@@ -95,8 +95,10 @@ import {
 import {
   readStatementSuggestions,
   statementSuggestionFacts,
+  isClean,
   statementSuggestionKeys,
 } from "~/server/domains/transaction-import/repo/statement-suggestion-read";
+import { STATEMENT_SUGGESTION_REVISION } from "~/server/domains/transaction-import/repo/statement-suggestion-revision";
 import {
   kindAgreed,
   decideStatementKind,
@@ -173,8 +175,6 @@ const STATE = "Suggestion";
 const log = createLogger("statement-suggestions");
 const pendingStatementState = sql`${suggestionTable.family} = ${suggestionFamily.enum.statement_transaction} AND ${suggestionTable.active} AND ${suggestionTable.status} = ${suggestionStatus.enum.pending}`;
 
-/** Matching revision and Automatic attach rule revision; clean-only changes use the policy below. */
-export const STATEMENT_SUGGESTION_REVISION = "2026-10-21.1";
 /**
  * Bump when only bulk-acceptability changes. Labels ride on top of the
  * evidence fingerprint, so a stricter clean rule would otherwise leave
@@ -1303,43 +1303,6 @@ export async function buildChargeProposals(
     );
   }
   return proposals;
-}
-
-/** Bulk acceptance never changes an amount or relies on a kind sources dispute. */
-export function isClean(
-  judgment: StatementTransactionJudgment,
-  statementAmount: number,
-): boolean {
-  if (judgment.reviewReason || judgment.siblings.length) return false;
-  if (
-    judgment.create !== null &&
-    ["purchase", "refund", "fee"].includes(judgment.create.kind) &&
-    judgment.spending?.status !== "ready" &&
-    judgment.spending?.status !== "already_booked"
-  )
-    return false;
-  if (judgment.recommended === "book")
-    return (
-      judgment.spending?.status === "ready" &&
-      judgment.create !== null &&
-      kindAgreed(judgment.create, judgment.transfer, judgment.transferPair)
-    );
-  if (judgment.recommended === "create")
-    return (
-      judgment.candidates.length === 0 &&
-      judgment.create !== null &&
-      kindAgreed(judgment.create, judgment.transfer, judgment.transferPair)
-    );
-  if (judgment.candidates.length !== 1) return false;
-  const [only] = judgment.candidates;
-  if (cents(only!.amount) !== cents(statementAmount)) return false;
-  if (judgment.recommended === "supersede") return true;
-  return (
-    judgment.recommended === "attach" &&
-    !only!.claimed &&
-    only!.label?.same === "same" &&
-    only!.label.confidence === "high"
-  );
 }
 
 async function finishProposal(

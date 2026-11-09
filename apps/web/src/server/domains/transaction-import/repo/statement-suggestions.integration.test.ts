@@ -55,6 +55,7 @@ import { advanceStepRun } from "~/server/domains/run/service/step-run";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { startSweep } from "~/server/domains/run/service/sweep";
 import { answering } from "~/server/domains/transaction-import/repo/statement-decision-port.fixtures";
+import { STATEMENT_SUGGESTION_REVISION } from "~/server/domains/transaction-import/repo/statement-suggestion-revision";
 import * as statementSuggestionsRepo from "~/server/domains/transaction-import/repo/statement-suggestions";
 import { labelStatementSuggestions as runStatementLabels } from "~/server/domains/transaction-import/service/statement-suggestion-labels";
 import * as statementLabelService from "~/server/domains/transaction-import/service/statement-suggestion-labels";
@@ -1477,7 +1478,7 @@ describe("statement Transaction suggestions", () => {
         await publishChargeProposal(ctx.db, proposal, {
           kind: "rule",
           model: null,
-          revision: statementSuggestionsRepo.STATEMENT_SUGGESTION_REVISION,
+          revision: STATEMENT_SUGGESTION_REVISION,
           runId: null,
           evaluationId: null,
         }),

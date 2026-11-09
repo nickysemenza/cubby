@@ -7,8 +7,10 @@ import {
   statementTransactionAction,
   statementTransactionJudgment,
   type StatementSuggestionOut,
+  type StatementTransactionJudgment,
 } from "@cubby/schemas/statement-suggestion";
 import { suggestionFamily } from "@cubby/schemas/suggestion";
+import { cents } from "@cubby/shared";
 import { sql, type SQL } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
@@ -27,13 +29,12 @@ import {
   chargeStateOf,
   LIVE_REFS,
 } from "~/server/domains/transaction-import/repo/statement-charge";
+import { kindAgreed } from "~/server/domains/transaction-import/repo/statement-transaction-kind";
 import {
   automaticApplicationRule,
   matchedRulesOf,
 } from "~/server/generic/suggestions/repo/suggestion";
-import { suggestionFamilies as reviewFamilyDeclarations } from "~/server/generic/suggestions/repo/suggestion-family-declarations";
-
-import { isClean } from "./statement-suggestions";
+import { statementRecords } from "~/server/generic/suggestions/repo/suggestion-record-discovery";
 
 const currentClean = sql`${sourceSuggestionAutomaticEligible()} AND coalesce((coalesce((${suggestionField("clean")})::boolean, false) AND (
   s.judgment->${"create"}->>${"kind"} NOT IN (${financialTransactionKind.enum.purchase}, ${financialTransactionKind.enum.refund}, ${financialTransactionKind.enum.fee})
@@ -71,7 +72,7 @@ const conditions = (filters: StatementSuggestionScope): SQL => {
       OR EXISTS (SELECT 1 FROM jsonb_array_elements(s.judgment->'candidates') candidate WHERE candidate->>'transactionId' IN (${ids}))
       OR s.judgment->${"supersede"}->>'pendingTransactionId' IN (${ids})
       OR s.judgment->${"void"}->>'transactionId' IN (${ids})
-      OR EXISTS (SELECT 1 FROM jsonb_array_elements(${reviewFamilyDeclarations.statement_transaction.affectedRecords.forward()}) ref WHERE ref->>'id' IN (${ids})))`);
+      OR EXISTS (SELECT 1 FROM jsonb_array_elements(${statementRecords()}) ref WHERE ref->>'id' IN (${ids})))`);
   }
   return sql.join(where, sql` AND `);
 };
@@ -410,3 +411,40 @@ export async function readStatementSuggestions(
 }
 
 /** Statement outcome counts by Suggestion status, optionally for one Run. */
+
+/** Bulk acceptance never changes an amount or relies on a kind sources dispute. */
+export function isClean(
+  judgment: StatementTransactionJudgment,
+  statementAmount: number,
+): boolean {
+  if (judgment.reviewReason || judgment.siblings.length) return false;
+  if (
+    judgment.create !== null &&
+    ["purchase", "refund", "fee"].includes(judgment.create.kind) &&
+    judgment.spending?.status !== "ready" &&
+    judgment.spending?.status !== "already_booked"
+  )
+    return false;
+  if (judgment.recommended === "book")
+    return (
+      judgment.spending?.status === "ready" &&
+      judgment.create !== null &&
+      kindAgreed(judgment.create, judgment.transfer, judgment.transferPair)
+    );
+  if (judgment.recommended === "create")
+    return (
+      judgment.candidates.length === 0 &&
+      judgment.create !== null &&
+      kindAgreed(judgment.create, judgment.transfer, judgment.transferPair)
+    );
+  if (judgment.candidates.length !== 1) return false;
+  const [only] = judgment.candidates;
+  if (cents(only!.amount) !== cents(statementAmount)) return false;
+  if (judgment.recommended === "supersede") return true;
+  return (
+    judgment.recommended === "attach" &&
+    !only!.claimed &&
+    only!.label?.same === "same" &&
+    only!.label.confidence === "high"
+  );
+}

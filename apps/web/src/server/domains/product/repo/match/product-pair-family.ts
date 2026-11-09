@@ -1,15 +1,28 @@
+import { suggestionStatus } from "@cubby/schemas/ai";
+import {
+  suggestionFamily,
+  suggestionJudgments,
+} from "@cubby/schemas/suggestion";
 import { productPairSuggestionRow } from "@cubby/schemas/suggestion-list";
 import { suggestionReviewFamilies } from "@cubby/schemas/suggestion-review-family";
 import { sql } from "drizzle-orm";
 
-import { getProductMatchQueue } from "~/server/domains/product/repo/match/product-match-review";
+import type { Database } from "~/server/db";
+import { unwrapDb } from "~/server/db/helpers";
+import { notDeleted } from "~/server/db/helpers/predicates";
 import {
-  actions,
-  outcomes,
-  storedKeys,
-} from "~/server/generic/suggestions/repo/stored-suggestion-presentation";
+  currentProductPairPolicySql,
+  reviewedProductPairFingerprint,
+} from "~/server/domains/product/repo/match/product-match-candidate";
+import { getProductMatchQueue } from "~/server/domains/product/repo/match/product-match-review";
 import { type SuggestionFamilyDeclaration } from "~/server/generic/suggestions/repo/suggestion-family-declaration";
-import { keyBase } from "~/server/generic/suggestions/repo/suggestion-presentation";
+import { outcomes } from "~/server/generic/suggestions/repo/suggestion-outcomes";
+import {
+  keyBase,
+  suggestionIdScope,
+  type SuggestionFamilyQuery,
+  type SuggestionKey,
+} from "~/server/generic/suggestions/repo/suggestion-presentation";
 import {
   entities,
   ref,
@@ -19,9 +32,47 @@ import {
   primaryRecordMatch,
 } from "~/server/generic/suggestions/repo/suggestion-record-discovery";
 
+const actionable = sql`s.judgment->'actionable' = 'true'::jsonb`;
+
+async function storedKeys(
+  db: Database,
+  query: SuggestionFamilyQuery,
+): Promise<SuggestionKey[]> {
+  if (query.filters.status !== "pending") return [];
+  const rows = await unwrapDb(db).execute<{
+    id: string;
+    fingerprint: string | null;
+    createdAt: Date | string;
+    conflict: boolean;
+  }>(
+    sql`
+    SELECT s.id, s.fingerprint, s."createdAt", COALESCE((s.judgment->>${suggestionJudgments.product_pair.keyof().enum.conflict})::boolean, false) AS conflict
+    FROM "Suggestion" s
+    WHERE s.family = ${suggestionFamily.enum.product_pair} AND s.active AND s.status = ${suggestionStatus.enum.pending} AND s.suppression IS NULL AND ${actionable}
+      AND ${suggestionIdScope(query.suggestionIds, sql`s.id`)}
+      ${query.filters.runId ? sql`AND s."runId" = (SELECT id FROM "Run" WHERE shortcode = ${query.filters.runId})` : sql``}
+      AND ${currentProductPairPolicySql(sql`s.producer`)} AND EXISTS (SELECT 1 FROM "Product" p WHERE p.id = s."recordId" AND ${notDeleted("p")})
+      AND EXISTS (SELECT 1 FROM "Product" p WHERE p.id::text = s.data->>'otherId' AND ${notDeleted("p")})`,
+    "objects",
+  );
+  return rows.map((row) => ({
+    family: "product_pair",
+    suggestionId: row.id,
+    status: "pending",
+    fingerprint: row.fingerprint,
+    clean: false,
+    strength: row.conflict ? "weak" : "medium",
+    impact: [],
+    createdAt: new Date(row.createdAt),
+    columns: { entityKind: "product" },
+    matchedRules: [],
+    automaticRule: null,
+  }));
+}
+
 export const product_pairFamily: SuggestionFamilyDeclaration<"product_pair"> = {
   family: "product_pair",
-  keys: (db, query) => storedKeys(db, query, "product_pair"),
+  keys: storedKeys,
   rows: async (db, keys) => {
     if (!keys.length) return new Map();
     const candidates = await getProductMatchQueue(db, {
@@ -49,12 +100,12 @@ export const product_pairFamily: SuggestionFamilyDeclaration<"product_pair"> = {
                 { kind: "text", text: "Merge possible duplicate" },
                 { kind: "record", ref: other },
               ],
-              actions: actions(
+              actions: [
                 ...(canMerge ? ["review_merge" as const] : []),
-                "reject",
-                "dismiss",
-                "never_suggest",
-              ),
+                "reject" as const,
+                "dismiss" as const,
+                "never_suggest" as const,
+              ].map((verb) => ({ verb, ownerOnly: false })),
               review: {
                 application: {
                   kind: "product_merge",
@@ -107,13 +158,9 @@ export const product_pairFamily: SuggestionFamilyDeclaration<"product_pair"> = {
       ),
     ],
   }),
-  actionable: sql`s.judgment->'actionable' = 'true'::jsonb`,
+  actionable,
   transactionBound: false,
-  currentFingerprint: async (db, state) => {
-    const { reviewedProductPairFingerprint } =
-      await import("~/server/domains/product/repo/match/product-match-candidate");
-    return reviewedProductPairFingerprint(db, state);
-  },
+  currentFingerprint: reviewedProductPairFingerprint,
   apply: async (db, context, state, input) => {
     if (input.verdict !== "correct" || input.correction.present)
       throw new Error("Product merging requires an accepted pair");

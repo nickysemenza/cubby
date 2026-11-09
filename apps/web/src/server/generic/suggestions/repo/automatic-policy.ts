@@ -9,7 +9,7 @@ import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { requiresSuggestionReview } from "@cubby/schemas/field-suggestion-policy";
 import type { StatementTransactionJudgment } from "@cubby/schemas/statement-suggestion";
 
-import { STATEMENT_SUGGESTION_REVISION } from "~/server/domains/transaction-import/repo/statement-suggestions";
+import { STATEMENT_SUGGESTION_REVISION } from "~/server/domains/transaction-import/repo/statement-suggestion-revision";
 
 /** What a field rule reads from the published proposal. */
 export type FieldRuleFacts = {
