@@ -188,11 +188,20 @@ export function useRenderedColumnWidths<TData extends RowData>(
       host.style.cssText =
         "position:fixed;left:-100000px;top:0;width:max-content;visibility:hidden;pointer-events:none;";
       const samples: Array<FitSample & { cell: HTMLElement }> = [];
+      // Normalization includes resolved typography. Identical renderings in
+      // this batch share geometry; font and content changes start a new batch.
+      const clones = new Map<string, HTMLElement>();
       for (const { id, cell } of pending) {
         const sample = fitSample(id, cell);
         if (!sample) continue;
-        host.append(sample.clone);
-        samples.push({ ...sample, cell });
+        const key = sample.clone.outerHTML;
+        let clone = clones.get(key);
+        if (!clone) {
+          clone = sample.clone;
+          clones.set(key, clone);
+          host.append(clone);
+        }
+        samples.push({ ...sample, clone, cell });
       }
       if (samples.length === 0) return;
       // All writes precede all layout reads; remove the inert batch only after

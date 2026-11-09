@@ -48,6 +48,9 @@ readable labels.
 Within a query scope, unchanged rendered cells retain their measured contribution;
 content changes invalidate only the affected cell. New cells and font readiness
 receive fresh measurements, and a new query scope resets the fit.
+Within one offscreen batch, identical normalized cell markup, including resolved
+typography, shares one mounted measurement clone. This reuse ends with the batch;
+font readiness and content changes retain their existing fresh measurements.
 Mutations without an eligible unmeasured cell skip geometry reads as well as
 offscreen cloning, so unrelated enrichment cannot force a fitting layout.
 
