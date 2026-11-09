@@ -670,6 +670,60 @@ describe("composed Work queue engine", () => {
     ).toBe(0);
   });
 
+  // Regression: a failed first publication left WorkItem empty and the read
+  // served it as a complete zero.
+  it("fails a cold read with the raw publication error until a publication succeeds", async () => {
+    const execute = (statement: ReturnType<typeof sql>) =>
+      getDb(ctx.db).execute(statement);
+    await execute(sql`
+      CREATE FUNCTION synthetic_work_item_failure() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN RAISE EXCEPTION 'synthetic publication failure'; END $$`);
+    await execute(sql`
+      CREATE TRIGGER synthetic_work_item_failure BEFORE INSERT ON "WorkItem"
+      FOR EACH STATEMENT EXECUTE FUNCTION synthetic_work_item_failure()`);
+    const read = {
+      input: NEEDS_YOU_FILTERS,
+      memberPartyId: null,
+      memberOnly: false,
+    } as const;
+    try {
+      await expect(readPublishedWorkQueue(ctx.db, read)).rejects.toThrow(
+        /not published yet; the last attempt failed: .*synthetic publication failure/,
+      );
+      const failed = await readWorkPublication(ctx.db);
+      expect(failed).toMatchObject({ publishedAt: null, meta: null });
+      expect(failed?.attemptedAt).toBeInstanceOf(Date);
+      // Within the backoff the next read reports the same attempt.
+      await expect(readPublishedWorkQueue(ctx.db, read)).rejects.toThrow(
+        /synthetic publication failure/,
+      );
+      expect((await readWorkPublication(ctx.db))?.attemptedAt).toEqual(
+        failed?.attemptedAt,
+      );
+
+      await execute(
+        sql`DROP TRIGGER synthetic_work_item_failure ON "WorkItem"`,
+      );
+      await execute(
+        sql`UPDATE "WorkPublication" SET "attemptedAt" = "attemptedAt" - interval '2 minutes'`,
+      );
+      await readPublishedWorkQueue(ctx.db, read);
+      expect(await readWorkPublication(ctx.db)).toMatchObject({
+        error: null,
+        attemptedAt: null,
+        publishedAt: expect.any(Date),
+      });
+    } finally {
+      // The file shares one database; later cases start from no publication.
+      await execute(
+        sql`DROP TRIGGER IF EXISTS synthetic_work_item_failure ON "WorkItem"`,
+      );
+      await execute(sql`DROP FUNCTION synthetic_work_item_failure()`);
+      await execute(sql`DELETE FROM "WorkPublication"`);
+      await execute(sql`DELETE FROM "WorkItem"`);
+    }
+  });
+
   // Regression: the publication stored one record's pending families together,
   // so excluding one family (Needs you excludes field suggestions) dropped a
   // Product that also had a product-pair review.

@@ -33,7 +33,8 @@ const publish = async (db: Database) => {
  * never evaluate every source. A stale publication is replaced after the
  * response as a tracked `waitUntil` task, so the request's pools stay open
  * until it settles; the commit rings open readers. Only the first read ever
- * waits.
+ * waits, and it fails with the raw publication error rather than reading rows
+ * no publication completed.
  */
 export async function readPublishedWorkQueue(
   db: Database,
@@ -43,6 +44,13 @@ export async function readPublishedWorkQueue(
   if (!publication?.publishedAt) {
     await publish(db);
     publication = await readWorkPublication(db);
+    // Never serve rows no publication completed: an empty table is not zero work.
+    if (!publication?.publishedAt)
+      throw new Error(
+        publication?.error
+          ? `Work items are not published yet; the last attempt failed: ${publication.error}`
+          : "Work items are not published yet; the first publication is still running.",
+      );
   } else if (workPublicationStale(publication))
     await afterResponse(
       publish(db).catch((error: unknown) => {
@@ -52,7 +60,7 @@ export async function readPublishedWorkQueue(
     );
   return readWorkQueueWith(db, await workQueueComposition(), {
     ...read,
-    published: { meta: publication?.meta ?? null },
+    published: { meta: publication.meta },
   });
 }
 

@@ -11,8 +11,16 @@ import {
   workPublication,
   type WorkPublicationMeta,
 } from "~/server/db/work-item-schema";
+import { findPgError } from "~/server/errors/db-errors";
 
 const log = createLogger("work-publication");
+
+/** Raw diagnostics: Drizzle's "Failed query" text hides the Postgres error. */
+const rawError = (error: unknown) => {
+  const pg = findPgError(error);
+  const message = getErrorMessage(error);
+  return pg ? `${pg.code} ${pg.message ?? ""}\n${message}` : message;
+};
 
 const PUBLICATION_ID = 1;
 /** Background-only changes (imports, Runs) reach a reader within this age. */
@@ -111,7 +119,7 @@ export async function publishWorkItems(
     } catch (error) {
       log.error("work publication failed", { error });
       await record({
-        error: getErrorMessage(error),
+        error: rawError(error),
         attemptedAt: sql`clock_timestamp()`,
       });
       return false;
