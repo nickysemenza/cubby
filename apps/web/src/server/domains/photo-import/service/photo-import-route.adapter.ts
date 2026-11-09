@@ -7,10 +7,7 @@ import {
 import { anyShortcodeSchema, parseEntityRef } from "@cubby/schemas/identifiers";
 import { z } from "zod";
 
-import {
-  photoImportContract,
-  type PhotoImportCommitInput,
-} from "~/contracts/photo-import.contract";
+import { type PhotoImportCommitInput } from "~/contracts/photo-import.contract";
 import {
   attachImportedGalleryImages,
   attachImportedSingularImage,
@@ -21,6 +18,7 @@ import {
   type ImportImageRow,
 } from "~/server/domains/photo-import/repo/photo-import";
 import {
+  createBodySchema,
   assertPhotoImportReplacementAllowed,
   assertPhotoImportRouteEnabled,
   assertPhotoImportSourceCardinality,
@@ -53,8 +51,6 @@ const routesByID = new Map<string, Route>(
 );
 const shortcodeEntity = z.enum(shortcodeEntities);
 const kernelEntity = z.enum(ENTITY_KERNEL_ENTITIES);
-const createBodySchema =
-  photoImportContract.ops.commit.input.shape.creates.element.shape.body;
 
 const targetEntityFor = (route: Route) =>
   shortcodeEntity.parse(route.targetEntity);

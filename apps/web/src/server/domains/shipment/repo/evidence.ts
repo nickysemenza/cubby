@@ -80,7 +80,7 @@ import {
 } from "~/server/domains/shipment/repo/carrier-evidence";
 import { resolveProductBrand } from "~/server/domains/vendor/repo/product-brand";
 import { resolveEntityIdentity } from "~/server/entity-kernel/repo/entity-identity";
-import { createAppError } from "~/server/errors/app-error";
+import { constraintViolation, createAppError } from "~/server/errors/app-error";
 import { logAuditEntries } from "~/server/generic/audit-log/repo/audit-log";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { finalizeMerge, mergeNotes } from "~/server/generic/merge/repo/core";
@@ -93,9 +93,6 @@ import {
   shipmentTrackingReferenceKey,
 } from "./carrier-references";
 
-const refuse = (message: string): never => {
-  throw createAppError("CONSTRAINT_VIOLATION", message);
-};
 const canonical = (value: unknown) => canonicalJson(jsonSnapshot.parse(value));
 const normalizeNumber = (value: string) =>
   value.replaceAll(/\s/g, "").toUpperCase();
@@ -572,7 +569,7 @@ export async function canonicalShipment(
         ? identity.canonicalId
         : null;
   if (!id)
-    return refuse(
+    return constraintViolation(
       "The Shipment is missing, deleted or merged; use its current SHIP reference for writes.",
     );
   const [row] = await getDb(db)
@@ -583,7 +580,7 @@ export async function canonicalShipment(
     )
     .for("update")
     .limit(1);
-  if (!row) return refuse("The Shipment is no longer available.");
+  if (!row) return constraintViolation("The Shipment is no longer available.");
   return row;
 }
 
@@ -612,7 +609,7 @@ async function carrierReference(
         (alias) => alias.trim().toLowerCase() === literal,
       )
     )
-      return refuse(
+      return constraintViolation(
         "Carrier reference and literal carrier name disagree; verify the Vendor identity or its alias.",
       );
   }
@@ -637,7 +634,7 @@ async function purchaseReference(
     .for("share")
     .limit(1);
   if (!row)
-    return refuse(
+    return constraintViolation(
       "The Purchase changed during shipment intake; read it again.",
     );
   return row.id;
@@ -724,7 +721,9 @@ async function sourceCapture(
       .where(and(eq(email.id, emailId), notDeleted(email)))
       .for("share");
     if (!message?.orderMailId)
-      return refuse("Shipment Email requires a retained original.");
+      return constraintViolation(
+        "Shipment Email requires a retained original.",
+      );
     const parties = await getDb(db)
       .select({ id: ledgerParty.id })
       .from(ledgerParty)
@@ -744,7 +743,7 @@ async function sourceCapture(
       "share",
     );
     if (!original || original.rawChecksum !== source.checksum)
-      return refuse(
+      return constraintViolation(
         "Shipment Email is foreign, missing or changed; read its original again.",
       );
     await assertMailSourceIdentityReady(getDb(db), original);
@@ -754,14 +753,14 @@ async function sourceCapture(
         scope.ledgerPartyId !== original.ledgerPartyId ||
         scope.status !== "running"
       )
-        return refuse(
+        return constraintViolation(
           "The active import Run does not own this Email or is not running.",
         );
       const mailSources = runPurposePolicy(scope.purpose).mailSources;
       if (mailSources === "admitted")
         await assertMailRunMembership(getDb(db), actor.runId, original.id);
       else if (mailSources !== "owner")
-        return refuse("This Run cannot record shipment evidence.");
+        return constraintViolation("This Run cannot record shipment evidence.");
     }
     ownerId = original.ledgerPartyId;
     originalContent = original.content;
@@ -772,11 +771,13 @@ async function sourceCapture(
     checksum = source.checksum;
   } else {
     if (actor.runId)
-      return refuse(
+      return constraintViolation(
         "Unattended mail processing cannot submit interactive shipment captures.",
       );
     if (new Date(source.capturedAt).getTime() > Date.now() + 300000)
-      return refuse("Tracking capture time cannot be in the future.");
+      return constraintViolation(
+        "Tracking capture time cannot be in the future.",
+      );
     sourceKey =
       source.kind === "tracking_page"
         ? `tracking_page:${actor.userId}:${source.url}:${source.externalKey}`
@@ -803,7 +804,7 @@ async function sourceCapture(
         .where(eq(shipmentSourceCapture.sourceKey, sourceKey))
         .limit(1);
       if (prior[0] && prior[0].checksum !== checksum)
-        return refuse(
+        return constraintViolation(
           "The exported SMS source changed; review its original instead of replacing it.",
         );
     }
@@ -845,9 +846,12 @@ async function assertPurchaseSourceOwner(
 ) {
   if (!id || !ownerId) return;
   const row = await purchaseSourceOwner(db, id);
-  if (!row) return refuse("The Shipment's Purchase is no longer live.");
+  if (!row)
+    return constraintViolation("The Shipment's Purchase is no longer live.");
   if (row?.ownerId && row.ownerId !== ownerId)
-    refuse("The shipment Email and Purchase belong to different members.");
+    constraintViolation(
+      "The shipment Email and Purchase belong to different members.",
+    );
 }
 
 async function shipmentSourceOwners(db: Database, shipmentId: string) {
@@ -927,7 +931,7 @@ async function writeShipmentEvidence(
             observation.time.kind !== "date" ||
             observation.time.value !== notificationDate)
         )
-          refuse(
+          constraintViolation(
             "Notification fallback must use the source notification's Los Angeles calendar date.",
           );
     const purchaseId = await purchaseReference(tdb, input.purchaseId);
@@ -1075,7 +1079,10 @@ async function writeShipmentEvidence(
           .select()
           .from(shipment)
           .where(eq(shipment.id, binding.shipmentId));
-        if (!bound) return refuse("The source package reference is missing.");
+        if (!bound)
+          return constraintViolation(
+            "The source package reference is missing.",
+          );
         // Merges and reassignment move bindings, so a deleted target is a member's
         // retirement. The capture stays; sibling packets in this source still apply.
         if (bound.deletedAt && !row) {
@@ -1088,7 +1095,7 @@ async function writeShipmentEvidence(
         }
         const resolved = await canonicalShipment(tdb, bound.shortcode);
         if (row && row.id !== resolved.id)
-          return refuse(
+          return constraintViolation(
             "This source package already belongs to another Shipment; explicitly reassign it.",
           );
         row = resolved;
@@ -1458,7 +1465,7 @@ async function writeShipmentEvidence(
         continue;
       }
       if (candidate)
-        return refuse(
+        return constraintViolation(
           "The final Shipment candidate must pass source and identity checks before association.",
         );
       if (
@@ -1468,7 +1475,7 @@ async function writeShipmentEvidence(
         row.purchaseId &&
         row.purchaseId !== purchaseId
       )
-        return refuse(
+        return constraintViolation(
           "The Shipment belongs to another Purchase; explicitly reassign it.",
         );
       if (row) await assertPurchaseSourceOwner(tdb, row.purchaseId, ownerId);
@@ -1695,7 +1702,9 @@ export async function editShipmentObservation(
   actor: ActorContext,
 ) {
   if (actor.runId)
-    return refuse("Observation edits require an interactive member decision.");
+    return constraintViolation(
+      "Observation edits require an interactive member decision.",
+    );
   const input = editShipmentObservationInput.parse(raw);
   return withTransactionDatabase(db, async (tdb) => {
     await lockShipmentWrites(tdb);
@@ -1711,12 +1720,15 @@ export async function editShipmentObservation(
         ),
       );
     if (!original)
-      return refuse("The observation does not belong to this Shipment.");
+      return constraintViolation(
+        "The observation does not belong to this Shipment.",
+      );
     const [capture] = await database
       .select()
       .from(shipmentSourceCapture)
       .where(eq(shipmentSourceCapture.id, original.sourceCaptureId));
-    if (!capture) return refuse("The retained source capture is missing.");
+    if (!capture)
+      return constraintViolation("The retained source capture is missing.");
     if (capture.emailId) {
       const [owner] = await database
         .select({ id: email.id })
@@ -1731,11 +1743,11 @@ export async function editShipmentObservation(
           ),
         );
       if (!owner)
-        return refuse(
+        return constraintViolation(
           "The member does not own this observation's Email source.",
         );
     } else if (capture.actorUserId !== actor.userId) {
-      return refuse(
+      return constraintViolation(
         "The member does not own this observation's tracking capture.",
       );
     }
@@ -1747,12 +1759,14 @@ export async function editShipmentObservation(
       event.timeBasis === "notification_received" &&
       capture.source.kind === "tracking_page"
     )
-      return refuse("Tracking pages do not have a notification receipt date.");
+      return constraintViolation(
+        "Tracking pages do not have a notification receipt date.",
+      );
     if (
       event.timeBasis === "notification_received" &&
       event.time.kind !== "date"
     )
-      return refuse(
+      return constraintViolation(
         "Notification fallback uses its calendar date at date-only precision.",
       );
     const carrier = await carrierReference(
@@ -1775,7 +1789,7 @@ export async function editShipmentObservation(
         successor.memberReviewed
       )
         return result;
-      return refuse(
+      return constraintViolation(
         "The observation was superseded; read the current revision before editing.",
       );
     }
@@ -1836,7 +1850,7 @@ export async function associateShipment(
   actor: ActorContext,
 ) {
   if (actor.runId)
-    return refuse(
+    return constraintViolation(
       "Shipment reassignment requires an interactive member decision.",
     );
   const input = associateShipmentInput.parse(raw);
@@ -1868,7 +1882,9 @@ export async function mergeShipment(
   actor: ActorContext,
 ) {
   if (actor.runId)
-    return refuse("Shipment merging requires an interactive member decision.");
+    return constraintViolation(
+      "Shipment merging requires an interactive member decision.",
+    );
   const input = mergeShipmentInput.parse(raw);
   return withTransactionDatabase(db, async (tdb) => {
     await lockShipmentWrites(tdb);
@@ -1877,7 +1893,7 @@ export async function mergeShipment(
     if (source.id === target.id)
       return { shipmentId: parseShortcodeFor("shipment", target.shortcode) };
     if (shipmentPurposesDisagree(source.purpose, target.purpose))
-      return refuse(
+      return constraintViolation(
         "Shipment directions disagree; explicitly correct the direction before merging.",
       );
     if (
@@ -1885,7 +1901,7 @@ export async function mergeShipment(
       target.purchaseId &&
       source.purchaseId !== target.purchaseId
     )
-      return refuse(
+      return constraintViolation(
         "Shipments belong to different Purchases; explicitly correct the association before merging.",
       );
     if (
@@ -1893,7 +1909,7 @@ export async function mergeShipment(
       target.purchaseAssociationReviewed &&
       source.purchaseId !== target.purchaseId
     )
-      return refuse(
+      return constraintViolation(
         "Reviewed Shipment associations disagree; correct them before merging.",
       );
     const purchaseId = target.purchaseAssociationReviewed
@@ -1908,7 +1924,9 @@ export async function mergeShipment(
         .where(and(eq(purchase.id, purchaseId), notDeleted(purchase)))
         .for("share");
       if (!order)
-        return refuse("The merged Shipment's Purchase is no longer live.");
+        return constraintViolation(
+          "The merged Shipment's Purchase is no longer live.",
+        );
     }
     await assertShipmentAssociation(tdb, source.id, purchaseId);
     await assertShipmentAssociation(tdb, target.id, purchaseId);
@@ -1997,7 +2015,7 @@ export async function reassignShipmentEvidence(
   actor: ActorContext,
 ) {
   if (actor.runId)
-    return refuse(
+    return constraintViolation(
       "Shipment evidence reassignment requires an interactive member decision.",
     );
   const input = reassignShipmentEvidenceInput.parse(raw);
@@ -2010,14 +2028,17 @@ export async function reassignShipmentEvidence(
       .where(eq(shipmentSourcePackage.id, input.sourcePackageId))
       .limit(1);
     if (!binding)
-      return refuse("The source package identity no longer exists.");
+      return constraintViolation(
+        "The source package identity no longer exists.",
+      );
     if (binding.shipmentId === target.id)
       return { shipmentId: parseShortcodeFor("shipment", target.shortcode) };
     const [previous] = await getDb(tdb)
       .select({ shortcode: shipment.shortcode })
       .from(shipment)
       .where(eq(shipment.id, binding.shipmentId));
-    if (!previous) return refuse("The previous Shipment is missing.");
+    if (!previous)
+      return constraintViolation("The previous Shipment is missing.");
     const sources = await getDb(tdb)
       .select({ ownerId: email.ledgerPartyId })
       .from(shipmentObservation)
@@ -2079,7 +2100,7 @@ export async function editShipmentReferences(
   actor: ActorContext,
 ) {
   if (actor.runId || actor.channel === "system")
-    return refuse(
+    return constraintViolation(
       "Carrier and tracking reference edits require an interactive member request; automated changes use source intake.",
     );
   return withTransactionDatabase(db, async (tdb) => {

@@ -29,7 +29,7 @@ import {
   insertPayloadsWithIdentities,
   isEntityShortcodeCollision,
 } from "~/server/entity-kernel/repo/entity-identity-writer";
-import { createAppError } from "~/server/errors/app-error";
+import { constraintViolation } from "~/server/errors/app-error";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { ensureExternalSources } from "~/server/generic/entity-links/repo/entity-external-ids";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
@@ -37,9 +37,6 @@ import { canonicalJson, jsonSnapshot } from "~/server/lib/canonical-json";
 
 import { auditEvidenceRows } from "./intake-audit";
 
-const refuse = (message: string): never => {
-  throw createAppError("CONSTRAINT_VIOLATION", message);
-};
 const consolidatedProof = z.object({ kind: z.literal("consolidated") });
 
 type Identity = {
@@ -50,7 +47,9 @@ type Identity = {
 };
 const requiredIdentity = (identity: Identity | null): Identity => {
   if (identity === null)
-    return refuse("A new observation requires proven source identity.");
+    return constraintViolation(
+      "A new observation requires proven source identity.",
+    );
   return identity;
 };
 const identityKey = (identity: {
@@ -133,7 +132,7 @@ async function prepareRows(input: RecordSourceTransactionRecordsInput) {
         row.statementDate > coverage.to,
     )
   )
-    refuse(
+    constraintViolation(
       "Every observation must belong to the declared account and date window.",
     );
   const rows = await Promise.all(
@@ -165,7 +164,7 @@ async function prepareRows(input: RecordSourceTransactionRecordsInput) {
     }),
   );
   if (new Set(rows.map((row) => row.key)).size !== rows.length)
-    refuse(
+    constraintViolation(
       "One collection cannot contain contradictory or repeated versions of one proven provider identity.",
     );
   return rows;
@@ -253,7 +252,7 @@ export async function recordSourceTransactionRecords(
         )
         .limit(1);
       if (existingBatch?.deletedAt)
-        refuse(
+        constraintViolation(
           "This original collection is tombstoned; its fingerprint remains reserved.",
         );
       const observedAt = input.import.observedAt
@@ -266,7 +265,7 @@ export async function recordSourceTransactionRecords(
           canonicalJson(jsonSnapshot.parse(existingBatch.coverage)) !==
             canonicalJson(input.import.coverage ?? null))
       )
-        refuse(
+        constraintViolation(
           "A collection's observation time, count and scope are immutable; resume its exact retained request.",
         );
       const members = existingBatch
@@ -387,7 +386,7 @@ export async function recordSourceTransactionRecords(
               before.acceptedTransactionId !== owner.acceptedTransactionId,
           )
         )
-          refuse(
+          constraintViolation(
             "Accepted ownership changed before the source lock; retry intake.",
           );
         if (owner.source === source)
@@ -399,9 +398,11 @@ export async function recordSourceTransactionRecords(
             (owner) => owner.id === reservation.supersededByOccurrenceId,
           );
           if (!survivor)
-            return refuse("A consolidated source reservation has no survivor.");
+            return constraintViolation(
+              "A consolidated source reservation has no survivor.",
+            );
           if (survivor.deletedAt || survivor.source !== reservation.source)
-            refuse(
+            constraintViolation(
               "A consolidated source reservation has no current survivor.",
             );
           byKey.set(identityKey(storedIdentity(reservation)), survivor);
@@ -438,7 +439,7 @@ export async function recordSourceTransactionRecords(
                 member.legacyAlias === incoming.legacyExternalId),
           )
         )
-          refuse(
+          constraintViolation(
             "A retained collection has unpositioned evidence; replay cannot attest a new physical position. Retain the original observation and its decisions.",
           );
         if (incoming.identity === null) {
@@ -450,12 +451,12 @@ export async function recordSourceTransactionRecords(
                   incoming.requestFingerprint),
           );
           if (retainedMembers.length !== 1)
-            refuse(
+            constraintViolation(
               "New evidence needs attested provider/account IDs or its original physical collection position. A historical replay must identify exactly one retained collection member.",
             );
           const member = retainedMembers[0]!;
           if (member.observation.deletedAt !== null)
-            refuse(
+            constraintViolation(
               "A tombstoned historical observation cannot be revived by replay.",
             );
           return {
@@ -467,7 +468,7 @@ export async function recordSourceTransactionRecords(
         }
         const owner = byKey.get(incoming.key);
         if (owner?.deletedAt)
-          refuse(
+          constraintViolation(
             "A tombstoned source identity remains reserved and cannot be silently revived.",
           );
         const positionMember =
@@ -495,17 +496,17 @@ export async function recordSourceTransactionRecords(
               incoming.row.rowPosition !== undefined &&
               member.membership.rowPosition !== incoming.row.rowPosition))
         )
-          refuse(
+          constraintViolation(
             "A retained collection position or provider identity cannot change its original observation facts.",
           );
         if (member?.observation.deletedAt)
-          refuse(
+          constraintViolation(
             "A retained collection observation is tombstoned; replay cannot replace it.",
           );
         if (member)
           return { incoming, owner, observation: member.observation, member };
         if (owner?.supersededByOccurrenceId)
-          refuse(
+          constraintViolation(
             "New collection evidence cannot revive a replaced source occurrence.",
           );
         const current = owner
@@ -534,13 +535,15 @@ export async function recordSourceTransactionRecords(
               saved.factFingerprint !== incoming.factFingerprint,
           )
         )
-          refuse(
+          constraintViolation(
             "A positioned occurrence cannot change the frozen facts of its original collection row.",
           );
         return { incoming, owner, observation, member: undefined };
       });
       if (existingBatch?.completedAt && chosen.some((row) => !row.member))
-        refuse("A completed collection cannot admit additional observations.");
+        constraintViolation(
+          "A completed collection cannot admit additional observations.",
+        );
       const novel = chosen.filter((row) => !row.observation);
       const revised = chosen.filter(
         (row) =>
@@ -824,7 +827,7 @@ export async function recordSourceTransactionRecords(
           input.import.rowCountDeclared === null ||
           input.import.rowCountDeclared !== rowCountStored
         )
-          refuse(
+          constraintViolation(
             "Completion requires explicit coverage and every declared occurrence, including zero values.",
           );
         await query
@@ -842,7 +845,7 @@ export async function recordSourceTransactionRecords(
           coverage.visibility !== "all" ||
           input.import.rowCountDeclared !== rowCountStored
         )
-          return refuse(
+          return constraintViolation(
             "Withdrawals require a completed, exhaustive rechecked account window.",
           );
         const withdrawals = locked.filter(
@@ -853,7 +856,7 @@ export async function recordSourceTransactionRecords(
             input.confirmedWithdrawals.includes(owner.providerIdentity!),
         );
         if (withdrawals.length !== input.confirmedWithdrawals.length)
-          refuse(
+          constraintViolation(
             "Every confirmed withdrawal must identify a retained occurrence in the proven account scope.",
           );
         for (const owner of withdrawals) {
@@ -867,7 +870,7 @@ export async function recordSourceTransactionRecords(
             owner.lastObservedAt > observedAt ||
             chosen.some((row) => row.owner?.id === owner.id)
           )
-            refuse(
+            constraintViolation(
               "The confirmed removal is observed, newer, unresolved, or outside the collection scope.",
             );
           if (owner.withdrawnAt !== null) continue;

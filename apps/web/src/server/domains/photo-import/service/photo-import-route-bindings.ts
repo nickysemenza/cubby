@@ -18,7 +18,7 @@ export type SourceRecord = ReadonlyMap<
   z.output<ReturnType<typeof z.json>>
 >;
 type CapturedAt = PhotoImportCommitInput["creates"][number]["capturedAt"];
-const createBodySchema =
+export const createBodySchema =
   photoImportContract.ops.commit.input.shape.creates.element.shape.body;
 
 export const sourceEntityFor = (
