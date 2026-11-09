@@ -3838,7 +3838,10 @@ queue branch read stored outcomes; no mailbox-wide acceptance or review relation
 runs on those reads. Missing publications stay unassessed until refresh. The
 Email Work branch routes each row by its gaps: undecided relevance is member
 work, a missing original is agent work, and import and preview gaps close
-automatically through Mail import.
+automatically through Mail import. An Email without a publication stays
+possible member work, so the member view reports it as unassessed rather than
+a confident zero. Gap counts read only currently declared checks, so a key a
+rules change removed stops counting before republication.
 
 Email metadata, original/attachment persistence, candidate/classification
 observations, `EmailReview`, `EmailPurchaseDecision`, linked Purchase writes and Mail import
