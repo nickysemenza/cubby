@@ -128,7 +128,7 @@ export function CellEditorOverlay({
   children,
 }: {
   anchorEl: HTMLElement | null;
-  onRequestCancel: () => void;
+  onRequestCancel: (focusOptions?: FocusOptions) => void;
   /** Date inputs commit on composite blur, so their outside press must not cancel first. */
   cancelOnOutside?: boolean;
   children: React.ReactNode;
@@ -188,10 +188,12 @@ export function CellEditorOverlay({
       // must yield when another cell starts editing. Each cell owns local edit
       // state, so this is the shared single-editor coordinator.
       if (target.closest?.("[data-cell-edit-trigger]")) {
-        onRequestCancel();
+        onRequestCancel({ preventScroll: true });
         return;
       }
-      if (cancelOnOutside) onRequestCancel();
+      // A retained offscreen trigger must not scroll back under the pointer:
+      // doing so changes the mouseup target and consumes the intended click.
+      if (cancelOnOutside) onRequestCancel({ preventScroll: true });
     };
     document.addEventListener("mousedown", handleMouseDown);
     return () => document.removeEventListener("mousedown", handleMouseDown);

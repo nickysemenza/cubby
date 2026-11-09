@@ -1632,6 +1632,7 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
     const detachedSticky = stickyRow && stickyRow.end < controller.scrollOffset;
     const bodyRows: ReactNode[] = [];
     let cursor = 0;
+    let gapIndex = 0;
     if (detachedSticky) {
       bodyRows.push(renderVirtualRow(stickyRow));
       cursor = stickyRow.size;
@@ -1654,7 +1655,7 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
     for (const virtualRow of virtualRows) {
       if (detachedSticky && virtualRow === stickyRow) continue;
       const gap = virtualRow.start - cursor;
-      if (gap > 0) bodyRows.push(spacer(`gap-${virtualRow.key}`, gap));
+      if (gap > 0) bodyRows.push(spacer(`gap-${gapIndex++}`, gap));
       bodyRows.push(renderVirtualRow(virtualRow));
       cursor = Math.max(cursor, virtualRow.start) + virtualRow.size;
     }

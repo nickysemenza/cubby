@@ -89,7 +89,7 @@ export function EditableEntityCell<TId extends string>({
   const editor = edit.isEditing && (
     <CellEditorOverlay
       anchorEl={edit.triggerRef.current}
-      onRequestCancel={edit.cancel}
+      onRequestCancel={edit.requestCancel}
     >
       <EditableEntityEditor
         value={value}

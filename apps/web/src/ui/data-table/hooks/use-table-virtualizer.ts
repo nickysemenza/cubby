@@ -379,10 +379,11 @@ export function useTableVirtualizer({
     virtualRowCount: baseCount,
     virtualRows,
     lastRangeIndex: rowVirtualizer.range
-      ? Math.min(
-          virtualizerCount - 1,
-          rowVirtualizer.range.endIndex + TABLE_OVERSCAN,
-        )
+      ? (defaultRangeExtractor({
+          ...rowVirtualizer.range,
+          count: rowVirtualizer.options.count,
+          overscan: rowVirtualizer.options.overscan,
+        }).at(-1) ?? -1)
       : -1,
     totalSize,
     resolveIndex: (index) =>
