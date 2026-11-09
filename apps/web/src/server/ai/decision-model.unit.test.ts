@@ -103,25 +103,16 @@ afterEach(() => {
 
 describe("decisionModelFor", () => {
   // Provenance callers must name the same model as singleton/batch execution,
-  // and the trial key must include every rendered question input.
-  it("routes the full question and preserves explicit overrides and injected ports", async () => {
+  // text always routes to Jev; images require the vision model.
+  it("routes text to Jev and preserves explicit overrides and injected ports", async () => {
     const models = await import("@cubby/shared/ai/models");
     const { decisionModelFor } = await import("./decision-model");
-    const { buildChoiceInput } = await import("./policy/decision-choice");
-    const select = vi.spyOn(models, "selectDecisionModel");
     const question = {
       ...base,
       decisionModel: undefined,
       choices: ["red", "blue"],
     };
-    decisionModelFor(question);
-    expect(select).toHaveBeenLastCalledWith({
-      key: JSON.stringify([
-        question.feature.feature,
-        question.feature.promptVersion,
-        buildChoiceInput(question),
-      ]),
-    });
+    expect(decisionModelFor(question)).toBe(models.DECISION_MODEL);
     expect(
       decisionModelFor({ ...question, decisionModel: "@cf/cloudflare/clef" }),
     ).toBe("@cf/cloudflare/clef");

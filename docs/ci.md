@@ -385,7 +385,7 @@ both.
 `CI passed` is the single required check (`re-actors/alls-green` on
 `ubuntu-slim`). It needs every lane and fails on any failure or cancellation,
 and on any skip other than a lane `Plan` did not select. A manual dispatch with `live-email=true` also runs the
-informational live Email decisions outside `CI passed`, calling Jev and Clef on
+informational live Email decisions outside `CI passed`, calling Jev on
 synthetic cases through the real gateway with `AI_GATEWAY_API_KEY` (passed only
 to that step). Failures do not block the deterministic merge gate. Real member
 inputs are refused in CI.

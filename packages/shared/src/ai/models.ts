@@ -69,7 +69,7 @@ interface DecisionModelDeclaration extends ModelDeclaration {
   role: "decision";
   provider: "typesafe" | "cloudflare";
   vision: boolean;
-  /** Clef requires this selector in addition to its route model id. */
+  /** Clef (the vision model) requires this selector in addition to its route model id. */
   selector?: string;
 }
 
@@ -267,33 +267,12 @@ export function chatTierOf(model: SupportedChatModel): ChatTier | undefined {
  * is not a {@link SupportedChatModel} and takes no chat adapter.
  */
 export const DECISION_MODEL = "typesafe/jev" satisfies SupportedDecisionModel;
-export const CLEF_MODEL =
-  "@cf/cloudflare/clef" satisfies SupportedDecisionModel;
-/** Set to 0 to return all decisions to Jev, or 1 to send all to Clef. */
-const CLEF_TRAFFIC_SHARE = 0.1;
-
 /**
- * The trial split. A `key` (the decision's own input) always maps to the same
- * model, so a repeated question reuses that model's cached answer while the
- * share still holds across distinct inputs. Text decisions require a key.
+ * Media decisions need a vision model, which Jev is not. Clef serves only
+ * questions that carry images; text decisions always use {@link DECISION_MODEL}.
  */
-export function selectDecisionModel(
-  options: { vision: true; key?: string } | { vision?: false; key: string },
-): SupportedDecisionModel {
-  if (options.vision) return CLEF_MODEL;
-  const draw = unitHash(options.key);
-  return draw < 1 - CLEF_TRAFFIC_SHARE ? DECISION_MODEL : CLEF_MODEL;
-}
-
-/** FNV-1a over UTF-16 code units, scaled to [0, 1). */
-function unitHash(key: string): number {
-  let hash = 0x811c9dc5;
-  for (let index = 0; index < key.length; index += 1) {
-    hash ^= key.charCodeAt(index);
-    hash = Math.imul(hash, 0x01000193);
-  }
-  return (hash >>> 0) / 2 ** 32;
-}
+export const VISION_DECISION_MODEL =
+  "@cf/cloudflare/clef" satisfies SupportedDecisionModel;
 
 export const DEFAULT_EMBEDDING_MODEL =
   "text-embedding-3-small" satisfies SupportedEmbeddingModel;

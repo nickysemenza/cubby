@@ -825,11 +825,11 @@ dismissal anywhere in its history keeps later publications out of it.
 _Avoid_: bucket, key (alone)
 
 **Decision model**:
-The closed-set classifier behind every Suggestion and Mail triage: Jev or
-Clef, chosen by the trial split (unpinned field decisions hash their input, so a
-repeated question reuses one model). Stored stages and user-facing text
+The closed-set classifier behind every Suggestion and Mail triage: Jev for
+text, Clef only for questions with images. The model is a constant
+(`DECISION_MODEL`), not a traffic split. Stored stages and user-facing text
 say "decision"; the record's `model` names which one answered.
-_Avoid_: Jev (when either model may have answered)
+_Avoid_: Jev (when Clef may have answered an image question)
 
 **Correction**:
 A Suggestion whose value differs from the record's current value.

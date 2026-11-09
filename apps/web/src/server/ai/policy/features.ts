@@ -131,7 +131,7 @@ export type {
 } from "~/server/ai/policy/feature-identity";
 
 // ---------------------------------------------------------------------------
-// Decision tier — Jev/Clef trial on Workers AI. Closed-set classification and
+// Decision tier — Jev (text) and Clef (images). Closed-set classification and
 // selection: the feature hands the model a roster of choices and gets back one
 // index plus a calibrated probability, so there is no id to echo and no
 // prose to parse. A selection whose roster exceeds the decision model's limit runs on
