@@ -6,7 +6,7 @@ open "cubby://entity/${GARDEN_ENTRY_ID}"
 wait "role=Button label=Edit" 90000
 click "role=Button label=Edit"
 wait text "Edit Garden Entry" 90000
-click "label=\"Planting IDs, None\""
+click "role=Button label=\"Planting IDs, None\""
 wait text "Synthetic Pea" 90000
 fill "label=\"Search Plantings\"" "zzqvnonexistent"
 wait text "No matches" 90000
@@ -23,7 +23,7 @@ fill "label=\"Search Locations\"" "Bed South"
 wait "role=Button id=picker.option.${SOUTH_BED_ID}" 90000
 click "role=Button id=picker.option.${SOUTH_BED_ID}"
 wait "label=\"Location, Synthetic Bed South\"" 90000
-click "label=\"Planting IDs, None\""
+click "role=Button label=\"Planting IDs, None\""
 wait "id=picker.option.${PAGE_ONE_PLANTING_ID}" 90000
 is absent "text=\"Synthetic Pea\""
 scroll bottom
