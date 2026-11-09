@@ -553,13 +553,23 @@ function RunEvidenceDetail<E extends GenericDetailEntity>({
   const { titleField } = presentationOf(queryClient, entity);
   const title =
     readRecordField(record, titleField, z.string().catch("")) || bag.id;
+  const factSections = new Set(
+    presentationOf(queryClient, entity)
+      .detail.sections.filter((section) => section.kind === "fields")
+      .map((section) => section.id),
+  );
   const sections = declaredSections(
     queryClient,
     entity,
     record,
     bag,
     operations,
-  ).filter((section) => section.workspace === "evidence");
+  )
+    .filter((section) => section.workspace === "evidence")
+    .sort(
+      (left, right) =>
+        Number(factSections.has(left.id)) - Number(factSections.has(right.id)),
+    );
   return (
     <DetailActionProvider>
       <Page

@@ -35,8 +35,7 @@ reviewed settlement, and preservation of Expense and inventory during convergenc
 journey-specific fixtures (`tooling/scenarios/native-qa.ts`), and replays
 every `apps/apple/e2e/qa-*.ad` journey against it: hero Discard with a shelf choice,
 approving only the selected ready group of a photo Run, a structured
-unit-mapping edit, external-ID Source/Identifier keyboard entry on an independent
-Product, and formatted barcode Add, additive preservation, explicit primary
+unit-mapping edit, formatted barcode Add and Source/Identifier keyboard entry, additive preservation, explicit primary
 promotion and secondary-barcode sweep confirmation,
 recipe scaling in cook mode, and scoped entity picking after a location change
 with selections across two pages. After the replays it reads the database back
@@ -47,9 +46,7 @@ photo group and its Product, and exactly the selected location and two plantings
 a passing journey. Scroll to a target by counting from `scroll bottom`, not with
 `--until` on a lazily loaded detail page.
 
-`pnpm test:e2e:sim -- --qa --journey qa-derived-explanation` checks that a Product
-row menu retains both Explain and Use inherited, opens the published/live
-comparison, and closes back to the same record without applying an override.
+The eight retained QA journeys protect distinct member workflows and saved outcomes. Barcode entry owns structured external-ID keyboard coverage; Run evidence owns Today/Changes and Run browsing. Settings sections, list/card switching, derived explanation controls and research-history copy use disposable inspection and previews rather than dedicated simulator smoke scripts. Do not add a new journey for each screen or layout change.
 
 In a fresh `--qa --hold` session, replay `e2e/image-source-navigation.yaml`
 with the device driver's `--maestro` flag to verify that an Inventory image's
@@ -57,26 +54,14 @@ Product source opens inside the explanation sheet. Back must return to the
 source stack, and closing it must return to the Inventory record.
 
 `pnpm test:e2e:sim -- --qa --journey qa-run-evidence` checks the sole hosted
-Run evidence sheet against the synthetic approval Run: enter from the native
-Runs catalog, load its durable operation and structured log, confirm that the
+Run evidence sheet against the synthetic approval Run: follow Today’s Work and
+Changes links, then open the Runs catalog, load its durable operation and
+structured log, confirm that the
 native loading/error overlays are absent, dismiss the sheet, reopen and load
 it again. Each Done must remove the hosted transcript from the accessibility tree.
-The return check reopens the native evidence item from the detail More menu, since Run has no edit action.
+The return check reopens the native evidence item from the native console toolbar, since Run has no edit action.
 This journey does not establish Retry, logout, host switching, auth/update gates,
 or record handoff and refresh acceptance.
-
-`pnpm test:e2e:sim -- --qa --journey qa-entity-table --video` checks the generic
-Product List ↔ Cards switch, the “Open table on web” menu item, and record
-navigation against the same synthetic QA world. The focused sort-model tests
-cover paging and pending-search response fencing; the simulator journey covers
-the compact presentation controls and navigation boundary. Its evidence uses the usual checksummed
-QA artifact bundle.
-
-`pnpm test:e2e:sim -- --qa --journey qa-settings` pushes Settings from the Today
-toolbar and checks the Server, Notifications, Advanced and About sections,
-including the version row and Open Cubby on the web. The fixture install has
-already answered the participation question, so Photos' inline prompt is
-covered by `#Preview` only.
 
 Reach catalog targets with `scroll down 0.5 --until "id=…"` using the current
 shared driver, whose scroll command repeats passes until the target is visible.

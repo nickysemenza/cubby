@@ -1,3 +1,4 @@
+import CubbyKit
 import SwiftUI
 
 #if os(iOS)
@@ -157,15 +158,24 @@ struct ActionFailureNotice: View {
 /// Keeps recovery beside the task while retaining the complete original diagnostic for inspection.
 struct DiagnosticMessage: View {
     let message: String
+    private let summary: String?
+
+    init(message: String) {
+        self.message = message
+        let detail = try? JSONDecoder().decode(CubbyAPIError.ErrorDetail.self, from: Data(message.utf8))
+        summary = detail.map { "\($0.code): \($0.message)" }
+    }
 
     private var needsDisclosure: Bool {
-        message.count > 220 || message.split(separator: "\n").count > 3
+        summary != nil || message.count > 220 || message.split(separator: "\n").count > 3
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
             Text(
-                needsDisclosure ? String(message.split(separator: "\n").first ?? Substring(message)) : message
+                summary
+                    ?? (needsDisclosure
+                        ? String(message.split(separator: "\n").first ?? Substring(message)) : message)
             )
             .lineLimit(needsDisclosure ? 3 : nil)
             .fixedSize(horizontal: false, vertical: true)

@@ -3,38 +3,54 @@ context platform=ios timeout=240000
 # A Run reads through the generic kernel list and get, so it browses like any
 # other entity: Library → Runs → the seeded run's detail.
 open com.nickysemenza.cubby
+# Today exposes Work and the audit history without a separate tab.
+wait "role=Button label=Today" 240000
+click "role=Button label=Today"
+scroll down 0.5 --until "id=today.work.all"
+click "id=today.work.all"
+wait "id=activity.changes" 60000
+click "id=activity.changes"
+wait "label=Changes" 60000
+wait absent "id=activity.changes" 30000
+# The minimized tab bar expands when its selected tab is tapped.
+click "role=Button label=Today"
 wait "role=Button label=Library" 240000
 click "role=Button label=Library"
 # Runs sits in the Finance group, the last group of the catalog.
 scroll bottom
 wait "id=browse.catalog.run" 30000
-click "id=browse.catalog.run"
+click "id=browse.catalog.run label=Runs"
 wait "id=browse.run.list" 60000
-# A row exposes its combined label (title, shortcode), not its identifier.
-wait "label=\"Synthetic Simulator Member · Photo inventory, ${PAUSED_RUN_ID}\"" 60000
-click "label=\"Synthetic Simulator Member · Photo inventory, ${PAUSED_RUN_ID}\""
+# Select the exact fixture run independently of the row’s spoken presentation.
+wait "id=browse.run.row.${PAUSED_RUN_ID}" 60000
+click "id=browse.run.row.${PAUSED_RUN_ID}"
 
-wait "role=Button label=More" 90000
-click "role=Button label=More"
 wait "role=Button label=\"Transcript, logs and AI usage\"" 90000
 click "role=Button label=\"Transcript, logs and AI usage\""
 wait text "Durable transcript" 90000
+wait text "No progress updates were recorded for this Run." 90000
+wait stable 500 10000
+click "role=Button label=\"Durable transcript\""
 wait text "synthetic-operation-1" 90000
 wait absent "label=\"Loading Run evidence\"" 90000
 is absent "text=\"Couldn’t load Run evidence\""
+scroll down 0.4 --until "text=\"System and agent log\""
+click "role=Button label=\"System and agent log\""
 wait text "run.started" 90000
-wait text "System and agent log" 90000
 click "role=Button label=Done"
 wait absent "text=\"Durable transcript\"" 90000
-wait "role=Button label=More" 90000
-click "role=Button label=More"
 wait "role=Button label=\"Transcript, logs and AI usage\"" 90000
 click "role=Button label=\"Transcript, logs and AI usage\""
 wait text "Durable transcript" 90000
+wait text "No progress updates were recorded for this Run." 90000
+wait stable 500 10000
+click "role=Button label=\"Durable transcript\""
 wait text "synthetic-operation-1" 90000
 wait absent "label=\"Loading Run evidence\"" 90000
 is absent "text=\"Couldn’t load Run evidence\""
+scroll down 0.4 --until "text=\"System and agent log\""
+click "role=Button label=\"System and agent log\""
 wait text "run.started" 90000
 click "role=Button label=Done"
 wait absent "text=\"Durable transcript\"" 90000
-wait "role=Button label=More" 90000
+wait "id=run.console" 90000
