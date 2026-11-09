@@ -915,6 +915,9 @@ export const runChildren = [
       { key: "runAt", kind: "timestamp" },
       { key: "priority", kind: "integer", notNull: true, default: 1 },
       { key: "attempts", kind: "integer", notNull: true, default: 0 },
+      // First failure of the current streak, transient ones included; the
+      // drain fails the item a day after it (docs/jobs.md#retries).
+      { key: "failingSince", kind: "timestamp" },
       // The page holding it; also the attempt token its writes check.
       { key: "leaseToken", kind: "uuid" },
       { key: "leaseUntil", kind: "timestamp" },

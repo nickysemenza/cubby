@@ -191,6 +191,8 @@ export const entityEmbedding = pgTable(
     /** Consecutive failed deletions; the drain stops at its bound and keeps the error. */
     deletionAttempts: integer("deletionAttempts").notNull().default(0),
     deletionError: text("deletionError"),
+    /** First failed deletion of the current streak, transient ones included. */
+    deletionFailingSince: timestamp("deletionFailingSince", { mode: "date" }),
     ...baseTimestamps(),
     ...softDeletedAt(),
   },
@@ -269,6 +271,8 @@ export const searchDocument = pgTable(
     embeddingLeaseUntil: timestamp("embeddingLeaseUntil", { mode: "date" }),
     embeddingAttempts: integer("embeddingAttempts").notNull().default(0),
     embeddingError: text("embeddingError"),
+    /** First failed refresh of the current streak, transient ones included. */
+    embeddingFailingSince: timestamp("embeddingFailingSince", { mode: "date" }),
     ...baseTimestamps(),
     ...softDeletedAt(),
   },

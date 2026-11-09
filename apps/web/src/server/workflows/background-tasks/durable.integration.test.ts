@@ -56,9 +56,15 @@ describe("durable task intent", () => {
     expect((await readJobs(ctx.db, { kind: task.kind }))[0]?.state).toBe(
       "completed",
     );
-    // Lease recovery for the claim; nothing else is owed, so no successor.
-    expect(send).toHaveBeenCalledTimes(1);
-    expect(send).toHaveBeenCalledWith(expect.any(Date), "job.lease-recovery");
+    // Lease recovery for the held claim only; nothing else is owed, so no successor.
+    const [saved] = await readJobs(ctx.db, { kind: task.kind });
+    expect(send.mock.calls).toEqual([
+      [
+        expect.any(Date),
+        "job.lease-recovery",
+        { kind: "job", id: saved?.id, lease: expect.any(String) },
+      ],
+    ]);
 
     // An idle permit costs one selection and sends nothing.
     const idle = { body: message.body, ack: vi.fn(), retry: vi.fn() };

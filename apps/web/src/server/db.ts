@@ -103,8 +103,9 @@ async function closeScope(holder: RequestDatabaseRuntimeScope) {
  * Run a request with per-request strong and bounded-stale database bindings.
  * Pool construction remains lazy: requests that never resolve a Database
  * handle never create a local pg pool or wake the origin database. The pools
- * close once the response body finishes and every `waitUntil` task the request
- * registered has settled; an upgraded socket keeps pg's idle timeout instead.
+ * close once the response body finishes (or the handler throws) and every
+ * `waitUntil` task the request registered has settled; an upgraded socket
+ * keeps pg's idle timeout instead.
  */
 export const withRequestDb = async (
   connections: RequestDbConnections,
@@ -119,7 +120,10 @@ export const withRequestDb = async (
   try {
     response = await requestDbStore.run(holder, fn);
   } catch (error) {
-    await closeScope(holder);
+    // A handler that failed may still have registered waitUntil tasks using
+    // these pools: close after they settle, and surface the original error.
+    if (!afterExecutionTasks(Promise.resolve(), () => closeScope(holder)))
+      await closeScope(holder);
     throw error;
   }
   if (response.status === 101) return response;

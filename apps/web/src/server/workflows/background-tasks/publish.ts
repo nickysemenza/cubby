@@ -3,7 +3,10 @@ import {
   type BackgroundTaskInput,
   type BackgroundTaskReceipt,
 } from "@cubby/schemas/background-tasks";
-import { BACKGROUND_TASK_MESSAGE_VERSION } from "@cubby/schemas/queue-messages";
+import {
+  BACKGROUND_TASK_MESSAGE_VERSION,
+  type PermitRecovery,
+} from "@cubby/schemas/queue-messages";
 import { retryWithBackoff } from "@cubby/shared/retry";
 import { createLogger } from "@cubby/worker-tracing";
 import { z } from "zod";
@@ -87,7 +90,7 @@ const MAX_WAKE_DELAY_SECONDS = 12 * 3_600;
  */
 export async function wakeAt(
   at: Date,
-  options: PublishOptions & { ring?: boolean },
+  options: PublishOptions & { ring?: boolean; recover?: PermitRecovery },
 ) {
   const delayFromNow = () =>
     Math.max(0, Math.ceil((at.getTime() - Date.now()) / 1000));
@@ -102,6 +105,7 @@ export async function wakeAt(
           version: BACKGROUND_TASK_MESSAGE_VERSION,
           queueType: "background",
           ...(options.ring ? { ring: true as const } : {}),
+          ...(options.recover ? { recover: options.recover } : {}),
         },
         // A retry still lands when the work is due.
         delaySeconds: delayFromNow(),

@@ -42,6 +42,8 @@ import { safeImageProcessingError } from "./safe-error";
 export type CloudImageDispatchOptions = {
   /** External storage/provider boundary; adoption still uses the real job ledger. */
   describe?: Parameters<typeof completeCloudImageDescription>[2];
+  /** Runs once the row's lease is held, before any provider work. */
+  onClaimed?: () => Promise<void>;
 };
 
 /**
@@ -79,6 +81,7 @@ export async function dispatchImageProcessingWakeup(
     leaseMs: CLOUD_IMAGE_LEASE_MS,
   });
   if (!claimed) return "skipped";
+  await options.onClaimed?.();
   // Stops the next paid request, and any fenced publication, once the row is lost.
   const fence = {
     check: () => assertImageLeaseHeld(db, claimed),

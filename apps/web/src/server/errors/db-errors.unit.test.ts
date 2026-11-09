@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  isTransientConnectionError,
   isUniqueViolation,
   runWithConflictRecovery,
   translateDatabaseError,
@@ -37,6 +38,54 @@ describe("isUniqueViolation", () => {
       ),
     ).toBe(false);
     expect(isUniqueViolation(null)).toBe(false);
+  });
+});
+
+// Drizzle wraps the driver error in "Failed query: …"; a socket error can sit
+// one level further down.
+const failedQuery = (cause: unknown) =>
+  new Error('Failed query: select "id" from "Job"', { cause });
+
+describe("isTransientConnectionError", () => {
+  it("retries pool-slot timeouts and dropped connections", () => {
+    for (const error of [
+      failedQuery(
+        Object.assign(
+          new Error("Timed out while waiting for an open slot in the pool."),
+          { code: "58000" },
+        ),
+      ),
+      failedQuery(Object.assign(new Error("terminating"), { code: "57P01" })),
+      failedQuery(new Error("Connection terminated unexpectedly")),
+      failedQuery(new Error("timeout exceeded when trying to connect")),
+      ...["ECONNRESET", "EPIPE", "ETIMEDOUT"].map((code) =>
+        failedQuery(
+          new Error("Connection terminated", {
+            cause: Object.assign(new Error(`read ${code}`), { code }),
+          }),
+        ),
+      ),
+    ])
+      expect(isTransientConnectionError(error)).toBe(true);
+  });
+
+  it("keeps query faults and other 58000 errors final", () => {
+    expect(
+      isTransientConnectionError(
+        failedQuery(Object.assign(new Error("no file"), { code: "58000" })),
+      ),
+    ).toBe(false);
+    expect(
+      isTransientConnectionError(
+        failedQuery(
+          Object.assign(new Error('relation "Job" does not exist'), {
+            code: "42P01",
+          }),
+        ),
+      ),
+    ).toBe(false);
+    expect(isTransientConnectionError(new Error("boom"))).toBe(false);
+    expect(isTransientConnectionError(null)).toBe(false);
   });
 });
 

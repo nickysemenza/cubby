@@ -1,0 +1,115 @@
+{
+  "type": "diff",
+  "version": "9",
+  "dialect": "postgres",
+  "id": "3c98f274-ef67-4725-a70a-7d48d1e1f009",
+  "prevIds": [
+    "6ad7cece-fada-45ad-9857-948ee518ff75"
+  ],
+  "footprints": [
+    {
+      "statementType": "add_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "AiEvaluation",
+        "failingSince"
+      ],
+      "writes": [
+        "s|col|public.AiEvaluation.failingSince",
+        "n|col|public.AiEvaluation.failingSince",
+        "e|col|public.AiEvaluation.failingSince"
+      ],
+      "reads": [
+        "n|tbl|public.AiEvaluation",
+        "n|sch|public"
+      ]
+    },
+    {
+      "statementType": "add_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "EntityEmbedding",
+        "deletionFailingSince"
+      ],
+      "writes": [
+        "s|col|public.EntityEmbedding.deletionFailingSince",
+        "n|col|public.EntityEmbedding.deletionFailingSince",
+        "e|col|public.EntityEmbedding.deletionFailingSince"
+      ],
+      "reads": [
+        "n|tbl|public.EntityEmbedding",
+        "n|sch|public"
+      ]
+    },
+    {
+      "statementType": "add_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "SearchDocument",
+        "embeddingFailingSince"
+      ],
+      "writes": [
+        "s|col|public.SearchDocument.embeddingFailingSince",
+        "n|col|public.SearchDocument.embeddingFailingSince",
+        "e|col|public.SearchDocument.embeddingFailingSince"
+      ],
+      "reads": [
+        "n|tbl|public.SearchDocument",
+        "n|sch|public"
+      ]
+    }
+  ],
+  "deltas": [
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "AiEvaluation",
+        "name": "failingSince",
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "EntityEmbedding",
+        "name": "deletionFailingSince",
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "SearchDocument",
+        "name": "embeddingFailingSince",
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    }
+  ]
+}

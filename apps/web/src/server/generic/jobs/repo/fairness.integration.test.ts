@@ -1,3 +1,4 @@
+import type { PermitRecovery } from "@cubby/schemas/queue-messages";
 import { eq, inArray, asc, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -8,13 +9,14 @@ import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import type { BackgroundDrain } from "~/server/generic/background/drains";
 import {
   runPermit,
+  runRecovery,
   type PermitRuntime,
 } from "~/server/generic/jobs/service/permits";
 import type { JobHandlers } from "~/server/generic/jobs/types";
 import { reconcileWorkflowRuns } from "~/server/workflows/runs/lifecycle";
 
 import { enqueueJob, enqueueJobs } from "./producer";
-import { dueUnits } from "./queue";
+import { claimJob, dueUnits } from "./queue";
 
 describe("durable Job selection", () => {
   const ctx = withTestDb();
@@ -109,25 +111,35 @@ describe("durable Job selection", () => {
         return { claimed: 1 };
       },
     };
-    const sent: (Date | null)[] = [];
+    const sent: {
+      at: Date | null;
+      source: string;
+      recover?: PermitRecovery;
+    }[] = [];
     const runtime: PermitRuntime = {
       db: ctx.db,
       handlers,
       drains: [drain],
       ports: {
-        send: async (at, source) => {
-          if (source !== "job.lease-recovery") sent.push(at);
+        send: async (at, source, recover) => {
+          sent.push({ at, source, ...(recover && { recover }) });
         },
         captureException: (error) => {
           throw error;
         },
       },
     };
-    await enqueueJob(ctx.db, {
+    const progress = await enqueueJob(ctx.db, {
       key: "synthetic.permit.progress",
       kind: "synthetic.b-progress",
       input: {},
     });
+    const recovery = (id: string) => ({
+      at: expect.any(Date),
+      source: "job.lease-recovery",
+      recover: { kind: "job", id, lease: expect.any(String) },
+    });
+    const successor = { at: null, source: "permit.successor" };
 
     // A sibling holds the first candidate's row: the permit runs the next one.
     const locked = Promise.withResolvers<void>();
@@ -145,21 +157,65 @@ describe("durable Job selection", () => {
       release.resolve();
       await holding;
     }
-    // Owed work remains, so the unit sent exactly one successor, due now.
-    expect(sent).toEqual([null]);
+    // The skipped claim armed nothing; the held claim armed its own recovery,
+    // and owed work remains, so the unit sent exactly one successor, due now.
+    expect(sent).toEqual([recovery(progress.id), successor]);
 
     // Every never-served unit runs before any unit runs twice.
     for (let unit = await runPermit(runtime); unit;)
       unit = await runPermit(runtime);
-    expect(new Set(ran.slice(0, 3))).toEqual(
-      new Set(["synthetic.a-busy", "synthetic.b-progress", "synthetic.drain"]),
-    );
-    expect(ran.filter((unit) => unit === "synthetic.drain")).toHaveLength(2);
+    expect(ran).toEqual([
+      "synthetic.b-progress",
+      "synthetic.a-busy",
+      "synthetic.drain",
+      "synthetic.drain",
+    ]);
+    // Drain pages arm no Job recovery; the last unit owes nothing, so no successor.
+    expect(sent).toEqual([
+      recovery(progress.id),
+      successor,
+      recovery(busy.id),
+      successor,
+      successor,
+    ]);
 
     // An over-produced permit exits after selection and sends nothing.
-    const before = sent.length;
     expect(await runPermit(runtime)).toBeNull();
-    expect(sent).toHaveLength(before);
+    expect(sent).toHaveLength(5);
+
+    // A recovery for a claim that published exits without running or sending.
+    const settled = sent[0]?.recover;
+    if (!settled) throw new Error("Expected a recovery payload");
+    expect(await runRecovery(runtime, settled)).toBeNull();
+    expect(sent).toHaveLength(5);
+
+    // Only the lapsed lease it names is recovered; a stale token is not.
+    const crashed = await enqueueJob(ctx.db, {
+      key: "synthetic.permit.crashed",
+      kind: "synthetic.b-progress",
+      input: {},
+    });
+    const claim = await claimJob(ctx.db, crashed.id);
+    if (!claim) throw new Error("Expected a claim");
+    await getDb(ctx.db)
+      .update(job)
+      .set({ leaseExpiresAt: new Date(0) })
+      .where(eq(job.id, crashed.id));
+    expect(
+      await runRecovery(runtime, {
+        kind: "job",
+        id: crashed.id,
+        lease: crypto.randomUUID(),
+      }),
+    ).toBeNull();
+    expect(
+      await runRecovery(runtime, {
+        kind: "job",
+        id: crashed.id,
+        lease: claim.leaseToken,
+      }),
+    ).not.toBeNull();
+    expect(ran.at(-1)).toBe("synthetic.b-progress");
   });
 
   it("walks past a locked reconciliation page and revisits skipped Runs on a later pass", async () => {

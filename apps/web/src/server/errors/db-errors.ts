@@ -55,21 +55,49 @@ export function findPgError(
   }
 }
 
+const DROPPED_SOCKET_CODES = new Set(["ECONNRESET", "EPIPE", "ETIMEDOUT"]);
+// node-postgres raises these without a SQLSTATE: the socket closed mid-query,
+// or the pool could not open a connection in time.
+const DROPPED_CONNECTION_MESSAGE =
+  /Connection terminated unexpectedly|timeout exceeded when trying to connect/iu;
+
+/** Walk an error's `cause` chain for a code-less driver or socket drop. */
+function isDroppedConnection(error: UnparsedDatabaseError, depth = 0): boolean {
+  if (depth >= 8) return false;
+  try {
+    const node = databaseErrorNodeSchema.safeParse(error);
+    if (!node.success) return false;
+    const { code, message, cause } = node.data;
+    if (
+      (code !== undefined && DROPPED_SOCKET_CODES.has(code)) ||
+      DROPPED_CONNECTION_MESSAGE.test(message ?? "")
+    )
+      return true;
+    return cause !== undefined && isDroppedConnection(cause, depth + 1);
+  } catch {
+    // Driver error properties can be accessors; diagnostics must not throw.
+    return false;
+  }
+}
+
 /**
- * A lost connection or a Hyperdrive pool-slot timeout (SQLSTATE 58000 "Timed
- * out while waiting for an open slot in the pool"): the same read can succeed
- * on retry.
+ * A lost connection (SQLSTATE class 08, 57P01, a code-less driver drop or a
+ * socket reset/timeout anywhere in the cause chain) or a Hyperdrive pool-slot
+ * timeout (SQLSTATE 58000 "Timed out while waiting for an open slot in the
+ * pool"): the same read can succeed on retry.
  */
 export function isTransientConnectionError(
   error: UnparsedDatabaseError,
 ): boolean {
   const pg = findPgError(error);
-  if (!pg) return false;
-  return (
-    pg.code.startsWith("08") ||
-    pg.code === "57P01" ||
-    (pg.code === "58000" && /open slot in the pool/iu.test(pg.message ?? ""))
-  );
+  if (
+    pg &&
+    (pg.code.startsWith("08") ||
+      pg.code === "57P01" ||
+      (pg.code === "58000" && /open slot in the pool/iu.test(pg.message ?? "")))
+  )
+    return true;
+  return isDroppedConnection(error);
 }
 
 /** "EntityExternalId" -> "entity external id" for prose. */

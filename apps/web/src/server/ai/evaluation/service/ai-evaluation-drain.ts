@@ -444,6 +444,7 @@ export async function runAiEvaluationPage(
   outcome: AiEvaluationPageOutcome;
   claimed: number;
   published: number;
+  failed: number;
 }> {
   const token = crypto.randomUUID();
   const assertHeld = async (client: Database) => {
@@ -495,12 +496,14 @@ export async function runAiEvaluationPage(
         outcome: "deferred",
         claimed: page.claimed,
         published: page.published ?? 0,
+        failed: page.failed ?? 0,
       };
     }
     return {
       outcome: page.claimed ? "succeeded" : "skipped",
       claimed: page.claimed,
       published: page.published ?? 0,
+      failed: page.failed ?? 0,
     };
   } catch (error) {
     let failure = classifyJobFailure(error);
@@ -518,10 +521,10 @@ export async function runAiEvaluationPage(
         errorMessage(error),
       );
       // The page ran: its successor permit waits for the deferral to end.
-      return { outcome: "deferred", claimed: 1, published: 0 };
+      return { outcome: "deferred", claimed: 1, published: 0, failed: 0 };
     }
     if (failure.kind === "interrupted")
-      return { outcome: "superseded", claimed: 0, published: 0 };
+      return { outcome: "superseded", claimed: 0, published: 0, failed: 0 };
     await deferAiEvaluationFeature(
       db,
       feature,
@@ -547,8 +550,13 @@ export function aiEvaluationDrain(
     next: aiEvaluationNext,
     async page(db, unit) {
       const feature = unit.slice(name.length + 1);
-      const { claimed } = await runAiEvaluationPage(db, execution, feature);
-      return { claimed };
+      const { outcome, ...counts } = await runAiEvaluationPage(
+        db,
+        execution,
+        feature,
+      );
+      // A funding or provider wait is the page's recorded outcome, not success.
+      return outcome === "failed" ? counts : { outcome, ...counts };
     },
   };
 }

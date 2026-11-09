@@ -457,8 +457,10 @@ stored with a null column uses its kind's. `releaseJobClaim` hands a claim back
 without an attempt, and deferrals never count.
 
 Transient failures — a Hyperdrive pool-slot timeout (SQLSTATE 58000, "Timed out
-while waiting for an open slot in the pool"), a dropped connection, a
-`JobRetryableError` or an exhausted snapshot replay — back off without spending
+while waiting for an open slot in the pool"), a dropped connection (SQLSTATE
+class 08 or 57P01, or anywhere in the cause chain a code-less "Connection
+terminated unexpectedly", a pool connect timeout or an `ECONNRESET`/`EPIPE`/
+`ETIMEDOUT` socket error), a `JobRetryableError` or an exhausted snapshot replay — back off without spending
 attempts; their delay grows with the failing streak's age. `failingSince` records
 the streak's first failure and any successful or deferred page clears it.
 Whatever the class, a Job still failing `JOB_FAILING_LIMIT_MS` (24 hours) after
@@ -470,7 +472,14 @@ non-transient failures; an embedding refresh stops owing after 100 failures
 (about a day at its 15-minute cap) and a vector deletion after 288 five-minute
 retries, each keeping its error for Work's failed list; image processing stops
 retrying after twelve failures (about a day and a half of doubling backoff) and
-waits for explicit retry. Transient failures defer an item without exhausting it.
+waits for explicit retry. Drain items follow the Job rule for transient
+failures: they defer without spending an attempt, back off by the streak's age,
+and record the streak's start on the owning row (`AiEvaluation.failingSince`,
+`SearchDocument.embeddingFailingSince`, `EntityEmbedding.deletionFailingSince`);
+any item still failing 24 hours after its streak began is settled as failed.
+A page that fails whole (outside any one item) settles each item it still holds
+as failed, so persistent page failures reach the same bounds. Funding and
+provider waits stop the page without touching its items.
 
 Serialization recovery is bounded inside a DB-only snapshot transaction. If all
 attempts roll back, its owner emits `SnapshotWriteConflictError`; the durable Job
