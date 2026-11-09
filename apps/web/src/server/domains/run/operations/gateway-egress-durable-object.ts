@@ -3,8 +3,8 @@ import type { FundingRefusalSource } from "@cubby/schemas/mail-import-settings";
 import { aiGatewayId, CF_ACCOUNT_ID } from "@cubby/shared/ai/gateway-metadata";
 import {
   creditRefusedResponse,
+  isGatewayBalanceEmpty,
   isInferenceFundingRefusal,
-  isPaidFundingUnavailable,
   isSubscriberCreditRequest,
   paidRefusedResponse,
   runProviderGateway,
@@ -187,8 +187,9 @@ export class AiGatewayEgressDurableObject extends DurableObject<Env> {
 
   /**
    * A paid Unified Billing response's effect on the gateway refusal, under the
-   * same epoch rule: success clears it; an empty gateway balance
-   * (`isPaidFundingUnavailable`) records it until the window ends.
+   * same epoch rule: success clears it; an empty gateway balance records it
+   * until the window ends. A missing BYOK credential is one provider's setup
+   * failure and must not refuse every paid provider, so it never records.
    */
   async notePaidResponse(
     status: number,
@@ -202,7 +203,7 @@ export class AiGatewayEgressDurableObject extends DurableObject<Env> {
       body,
       now,
       epoch,
-      isPaidFundingUnavailable(body),
+      isGatewayBalanceEmpty(body),
     );
   }
 

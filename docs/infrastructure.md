@@ -651,7 +651,8 @@ inside a stream are not recorded.
 
 The paid rung's gateway balance is held the same way. When a paid Unified
 Billing response (400, 402 or 403; Workers AI bills separately and is never
-gated) carries an empty-balance refusal `isPaidFundingUnavailable` recognizes,
+gated) carries an empty-balance refusal (`isGatewayBalanceEmpty`; a missing BYOK
+credential is one provider's setup failure and is never recorded),
 the egress object records it as `paid:gateway` with the raw body until the
 window end. While it holds, paid admission answers at once with a 402 replaying
 that raw body, so every paid caller pauses for funding exactly as on the

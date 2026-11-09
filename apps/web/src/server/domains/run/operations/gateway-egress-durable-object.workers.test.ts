@@ -237,6 +237,12 @@ describe("paid gateway refusal", () => {
     const stub = env.AI_GATEWAY_EGRESS.getByName(crypto.randomUUID());
     const now = Date.now();
     await stub.notePaidResponse(403, '{"error":"synthetic forbidden"}', now);
+    // One provider's missing credential leaves the other paid providers usable.
+    await stub.notePaidResponse(
+      400,
+      "Provider 'openai' has no BYOK credential named 'default'.",
+      now,
+    );
     expect(await stub.paidRefusal(now)).toBeNull();
     await stub.notePaidResponse(403, GATEWAY_EMPTY, now);
     expect((await stub.admit("unified", now + 1, "paid:gateway")).kind).toBe(
