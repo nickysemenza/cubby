@@ -92,7 +92,7 @@ import {
  * cannot tell them from two equal refunds, so the finding says so and the
  * reviewer decides.
  */
-export async function refundTally(
+async function refundTally(
   executor: DrizzleClient | DrizzleTransaction,
   input: { purchaseId: string; ledgerPartyId: string; amount: number },
 ): Promise<{ booked: number; evidenced: number }> {

@@ -35,7 +35,6 @@ import {
   foreignReceiptSourceSql,
   unpricedForeignExpenseSql,
 } from "~/server/domains/purchase-import/repo/writer-policy";
-export { effectiveExpenseSpendingCategorySql } from "~/server/domains/expense/repo/expense-category-resolution";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 // Alias-qualified columns preserve correlation when Drizzle compiles a

@@ -244,7 +244,7 @@ const inScope = emailScope.predicate(({ scope }) =>
  * any-of: `linkState` is relative to one scope record, so exactly one value
  * across the three is accepted (a scalar reads as a one-element list).
  */
-export async function resolveEmailScope(
+async function resolveEmailScope(
   db: Database | DrizzleTransaction,
   filters: Pick<EmailFilters, "purchaseId" | "vendorId" | "vendorAccountId">,
 ): Promise<EmailPurchaseScope | null> {

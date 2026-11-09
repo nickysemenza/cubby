@@ -38,7 +38,7 @@ import {
   liveLinks,
 } from "~/server/generic/entity-links/repo/entity-links";
 
-export async function listPurchasePaymentAccounts(
+async function listPurchasePaymentAccounts(
   db: Database,
   purchaseId: PurchaseId,
 ): Promise<PurchasePaymentAccountOut[]> {

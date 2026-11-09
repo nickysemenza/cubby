@@ -219,7 +219,7 @@ export async function foldVendorAccountsInto(
  * `Run_vendorAccount_started_idx`) rather than stored on the account, so the
  * two can never disagree with the run history they summarize.
  */
-export const loadVendorAccountRunActivity = async (
+const loadVendorAccountRunActivity = async (
   db: Database | DrizzleTransaction,
   ids: readonly VendorAccountId[],
 ) => {
