@@ -11,7 +11,7 @@ import {
   userId,
 } from "@cubby/schemas/identifiers";
 import { MAILBOX_RESEARCH_VERSION } from "@cubby/schemas/mailbox-research";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import { storedDerived } from "~/server/db/derived-declarations";
@@ -34,9 +34,12 @@ import { publishEmailLinkDecision } from "~/server/domains/email/repo/email-link
 import {
   foldPurchaseLinks,
   readEmailPurchaseEvidence,
+  readExactOrderLinkCandidates,
+  type ExactOrderLinkCandidate,
 } from "~/server/domains/email/repo/email-purchase-links";
 import { createAppError } from "~/server/errors/app-error";
 import { isUniqueViolation } from "~/server/errors/db-errors";
+import { recordChange } from "~/server/generic/changes/repo/change";
 import { publishRebuiltValues } from "~/server/generic/derived/repo/rebuild";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
@@ -301,19 +304,7 @@ async function decideOnce(
         .where(eq(emailTable.id, email.id));
     }
 
-    // The member's decision must reach the same snapshot used by list values and predicates.
-    const declaration = storedDerived("email", "relationshipFacts");
-    if (!declaration)
-      throw new Error("Email relationship declaration is missing");
-    const transactionDb = databaseForTransaction(tx);
-    await publishRebuiltValues(
-      transactionDb,
-      declaration,
-      [email.id],
-      await emailDerivedComputes["email.relationshipFacts"](transactionDb, [
-        email.id,
-      ]),
-    );
+    await republishEmailRelationship(databaseForTransaction(tx), email.id);
 
     const link = foldPurchaseLinks(
       await readEmailPurchaseEvidence(
@@ -327,5 +318,113 @@ async function decideOnce(
       purchaseId: input.purchaseId,
       state: link?.state ?? "none",
     });
+  });
+}
+
+/** A decision must reach the same snapshot used by list values and predicates. */
+async function republishEmailRelationship(db: Database, emailId: string) {
+  const declaration = storedDerived("email", "relationshipFacts");
+  if (!declaration)
+    throw new Error("Email relationship declaration is missing");
+  await publishRebuiltValues(
+    db,
+    declaration,
+    [emailId],
+    await emailDerivedComputes["email.relationshipFacts"](db, [emailId]),
+  );
+}
+
+/** The rule revision recorded on every automatic exact order-number link. */
+export const EXACT_ORDER_LINK_REVISION = "exact-order-link-2026-11-09.1";
+
+/**
+ * Links each undecided current order event whose order id names exactly one
+ * eligible Purchase (`readExactOrderLinkCandidates`) as an automatic decision:
+ * proposer `heuristic`, authority `automatic`, Assessment producer `rule`. It
+ * appears in `suggestions_read.automatic_decisions` (`email_link`) and its
+ * "Dismiss link" correction records the member's dismissal, which this rule
+ * never overrides; neither does it touch an event with any active decision.
+ *
+ * The order event is evidence extracted from the retained original, so the
+ * link rests on it. This differs from #3013's rule that association alone
+ * must not claim package evidence: no shipment evidence is recorded here.
+ * Unlike a member's Link it leaves the Email's relevance classification alone.
+ *
+ * Each event commits on its own (a savepoint inside a caller's transaction)
+ * with the member writer's lock order: Purchase, then the retained original,
+ * then the Email, then the event; the candidate is reread under those locks.
+ */
+export async function linkExactOrderEmails(
+  db: Database,
+  scope: { emailIds: readonly string[] } | { purchaseIds: readonly string[] },
+): Promise<number> {
+  let linked = 0;
+  for (const candidate of await readExactOrderLinkCandidates(db, scope))
+    if (await linkExactOrderEvent(db, candidate)) linked += 1;
+  return linked;
+}
+
+async function linkExactOrderEvent(
+  db: Database,
+  candidate: ExactOrderLinkCandidate,
+): Promise<boolean> {
+  return withTransaction(db, async (tx) => {
+    const purchaseId = parseEntityId("purchase", candidate.purchaseId);
+    const emailId = parseEntityId("email", candidate.emailId);
+    const [target] = await tx
+      .select({ vendorId: purchase.vendorId })
+      .from(purchase)
+      .where(and(eq(purchase.id, purchaseId), notDeleted(purchase)))
+      .for("update")
+      .limit(1);
+    if (!target) return false;
+    await tx
+      .select({ id: orderMail.id })
+      .from(orderMail)
+      .where(eq(orderMail.id, candidate.originalId))
+      .for("update");
+    const [owned] = await tx
+      .select({ ledgerPartyId: emailTable.ledgerPartyId })
+      .from(emailTable)
+      .where(and(eq(emailTable.id, emailId), notDeleted(emailTable)))
+      .for("update");
+    if (!owned) return false;
+    await tx.execute(
+      sql`SELECT pg_advisory_xact_lock(hashtextextended(${`email-link-event:${candidate.eventId}`},0))`,
+    );
+    const current = (
+      await readExactOrderLinkCandidates(tx, { emailIds: [emailId] })
+    ).find(
+      (row) =>
+        row.eventId === candidate.eventId &&
+        row.purchaseId === candidate.purchaseId &&
+        row.checksum === candidate.checksum,
+    );
+    if (!current) return false;
+    const transactionDb = databaseForTransaction(tx);
+    await ensureMailVendorAccount(tx, {
+      vendorId: target.vendorId,
+      ledgerPartyId: owned.ledgerPartyId,
+    });
+    await publishEmailLinkDecision(
+      transactionDb,
+      {
+        eventId: current.eventId,
+        purchaseId,
+        decision: "linked",
+        evidenceChecksum: current.checksum,
+        decidedByUserId: current.ownerUserId,
+        proposedBy: "heuristic",
+      },
+      "automatic",
+      undefined,
+      { revision: EXACT_ORDER_LINK_REVISION, runId: null },
+    );
+    await republishEmailRelationship(transactionDb, emailId);
+    await recordChange(tx, {
+      kind: "projection",
+      categories: ["suggestions", "email", "purchase"],
+    });
+    return true;
   });
 }

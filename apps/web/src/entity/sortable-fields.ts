@@ -10,13 +10,12 @@ export const generatedSortRoster = (queryClient: QueryClient, entity: Entity) =>
 export const defaultSortFor = (
   queryClient: QueryClient,
   entity: Entity,
-): string => generatedSortRoster(queryClient, entity)?.default ?? "createdAt";
+): string => generatedSortRoster(queryClient, entity).default;
 
 export const defaultSortDirectionFor = (
   queryClient: QueryClient,
   entity: Entity,
-): "asc" | "desc" =>
-  generatedSortRoster(queryClient, entity)?.direction ?? "desc";
+): "asc" | "desc" => generatedSortRoster(queryClient, entity).direction;
 
 export function entityListDefaultSort(
   queryClient: QueryClient,

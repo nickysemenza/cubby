@@ -61,7 +61,7 @@ A list row’s primary identity opens the record in the side inspector; checkbox
 
 Settings and long analytical workspaces (expense analytics, portfolio analytics, and cash flow) use `IndexedSections`: a continuous column with sticky contents navigation at 800px available width and phone “Jump to”, stable section hashes that preserve search parameters, and mounted drafts. A focused jump destination stays anchored while streamed content changes the layout, until the member navigates or scrolls. Embedded expense analytics stays inside the record’s existing contents navigation. Keep controls and summaries above the indexed body. Settings groups connections, mail and purchases, and household access; it links to Activity for maintenance, while connection diagnostics remain behind an explicit disclosure. Use tabs for distinct workflows rather than sections of the same page.
 
-Today/Home titles itself with the household day and keeps Log meal and New task in the page header. A key-numbers strip (Tasks due, Needs you, Spent this month, Pantry on hand) leads, then Today (plain task and project names, with quiet commands) and Needs you side by side as ruled rows, then What changed grouped by household day with the day in a quiet gutter. From 1280px a right rail holds Meals, Money (recorded spend by month), Today’s nutrition, Pantry by location and Your views; below it the rail follows the main column. Records and Insights stay behind disclosure. Every figure is an existing query value; never invent pace, progress scores, risk predictions, or AI panels.
+Today/Home titles itself with the household day and keeps Log meal and New task in the page header. A key-numbers strip (Tasks due, Needs you, Spent this month, Pantry on hand) leads, then Today (plain task and project names, with quiet commands) and Needs you side by side as ruled rows, then What changed grouped by household day with the day in a quiet gutter; each line names the record, the action and changed fields, the writer avatar with the client, device or non-web channel that carried the write and a Run icon link, then the time. From 1280px a right rail holds Meals, Money (recorded spend by month), Today’s nutrition, Pantry by location and Your views; below it the rail follows the main column. Records and Insights stay behind disclosure. Every figure is an existing query value; never invent pace, progress scores, risk predictions, or AI panels.
 
 Background refetches keep loaded content mounted. Lists, inspector previews and
 full detail pages reserve a compact status line for muted “Updating…” after
@@ -756,7 +756,10 @@ Needs you is the embedded `WorkQueue` grouped by Reason, over `NEEDS_YOU_FILTERS
 (mine plus shared, optional proposals excluded): one population with the sidebar
 and Home's preview. With nothing to show the page reads `Nothing needs you.` at
 its largest size. While inputs are incomplete it keeps the queue's known-work
-notice instead, because an unknown source cannot be claimed empty.
+notice instead, because an unknown source cannot be claimed empty. Work, the full
+queue and Home share that notice: one quiet line naming how many checks are
+updating, with each check's declared label and extent behind its disclosure.
+Source and Problem keys never reach the member.
 
 The sidebar's Work row shows the needs-you count and, only when something is
 stuck, a static warning glyph; the collapsed rail shows one dot with the same

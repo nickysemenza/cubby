@@ -5,7 +5,11 @@ import { getDb } from "~/server/db/helpers";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { getFixtureDb, ensureMemberParty } from "./core";
 
-/** A synthetic recognized email with one exact Purchase candidate. */
+/**
+ * A synthetic recognized email with one Purchase suggestion: its total and
+ * date match a Purchase that has no order number. An exact order number would
+ * link automatically instead of waiting for review.
+ */
 export async function seedVendorMailReviewPrerequisite(
   page: Page,
   name: string,
@@ -15,7 +19,7 @@ export async function seedVendorMailReviewPrerequisite(
   const vendor = await insertWithShortcode(db, "vendor", { name });
   const purchase = await insertWithShortcode(db, "purchase", {
     vendorId: vendor.id,
-    orderId: "SYN-ORDER-1001",
+    orderId: null,
     date: "2026-09-10",
     statedTotal: 4800n,
   });

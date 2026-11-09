@@ -479,13 +479,15 @@ describe("connection evaluation pages", () => {
       date: "2026-10-01",
       statedTotal: 24,
     });
-    const order = { id: created.entityId, orderId: created.output.orderId };
+    const order = { id: created.entityId };
     const [message] = await emails(base, 1, "final-attempt");
     if (!message) throw new Error("Synthetic Email missing");
+    // An amount match stays a recommendation; an exact order id links automatically.
     await getDb(ctx.db).insert(orderMailEvent).values({
       orderMailId: message.mail.id,
       event: "placed",
-      orderId: order.orderId,
+      orderId: null,
+      amount: 24,
       sourceKey: "synthetic-final-event",
     });
     const ids = await schedule([message.message]);
@@ -758,10 +760,12 @@ describe("connection evaluation pages", () => {
     });
     const [withEvidence, deleted] = await emails(base, 2, "evidence");
     if (!withEvidence || !deleted) throw new Error("Synthetic Emails missing");
+    // An amount match stays a recommendation; an exact order id links automatically.
     await getDb(ctx.db).insert(orderMailEvent).values({
       orderMailId: withEvidence.mail.id,
       event: "placed",
-      orderId: purchase.orderId,
+      orderId: null,
+      amount: 24,
       sourceKey: "synthetic-page-event",
     });
     const ids = await schedule([withEvidence.message, deleted.message]);

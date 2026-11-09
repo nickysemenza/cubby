@@ -6,10 +6,15 @@ import { differenceInCalendarDays, parseISO } from "date-fns";
 import { uniqBy } from "es-toolkit";
 import { Fragment, useMemo } from "react";
 
-import { summarizeChanges } from "~/entity/audit-log/audit-log-entry";
+import {
+  AuditActor,
+  auditVia,
+  summarizeChanges,
+} from "~/entity/audit-log/audit-log-entry";
 import { foldAuditEntries } from "~/entity/audit-log/audit-log-fold";
 import type { AuditLogListOperations } from "~/entity/audit-log/audit-log-list";
 import { EntityAuditLink } from "~/entity/components/entity-ref-link";
+import { EntityIcon } from "~/entity/entities";
 import { EntityDisplayImagesProvider } from "~/entity/entity-media/entity-display-images";
 import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-options";
 import { auditLog } from "~/integrations/tanstack-query/generated/domains/auditLog.gen";
@@ -188,7 +193,7 @@ function DayAge({ day, today }: { day: string; today: string }) {
   );
 }
 
-/** One change: the record, what happened to it, then its time. */
+/** One change: the record, what happened to it, who and how, then its time. */
 function ChangeLine({ group }: { group: AuditEntry[] }) {
   const [entry] = group;
   if (!entry) return null;
@@ -205,7 +210,7 @@ function ChangeLine({ group }: { group: AuditEntry[] }) {
   const fields = summary?.shown.map((field) => humanize(field.field));
   return (
     <li className="flex min-w-0 items-baseline justify-between gap-3 text-sm/4.5">
-      <span className="grid min-w-0 flex-1 grid-cols-1 items-center gap-x-3 sm:grid-cols-[minmax(0,1fr)_8rem]">
+      <span className="grid min-w-0 flex-1 grid-cols-1 items-center gap-x-3 sm:grid-cols-[minmax(0,1fr)_8rem_7rem]">
         {entry.entityId ? (
           <EntityAuditLink
             entityKind={entry.entityKind}
@@ -215,17 +220,42 @@ function ChangeLine({ group }: { group: AuditEntry[] }) {
             layout="row"
           />
         ) : null}
-        <span className="min-w-0 truncate text-muted-foreground">
-          {action.toLocaleLowerCase()}
-          {group.length > 1 ? ` ${group.length}×` : ""}
-          {fields?.length
-            ? ` · ${fields.join(", ").toLocaleLowerCase()}${summary && summary.omitted > 0 ? ` +${summary.omitted}` : ""}`
-            : ""}
+        <span className="flex min-w-0 items-center gap-3 sm:contents">
+          <span className="min-w-0 truncate text-muted-foreground">
+            {action.toLocaleLowerCase()}
+            {group.length > 1 ? ` ${group.length}×` : ""}
+            {fields?.length
+              ? ` · ${fields.join(", ").toLocaleLowerCase()}${summary && summary.omitted > 0 ? ` +${summary.omitted}` : ""}`
+              : ""}
+          </span>
+          <ChangeOrigin entry={entry} />
         </span>
       </span>
       <span className="shrink-0 text-xs text-muted-foreground">
         <DateDisplay timestamp={entry.createdAt} clock="time" stacked={false} />
       </span>
     </li>
+  );
+}
+
+/** Who wrote the change, through which client or channel, and its Run as an icon link. */
+function ChangeOrigin({ entry }: { entry: AuditEntry }) {
+  const via = auditVia(entry);
+  return (
+    <span className="flex min-w-0 shrink-0 items-center gap-1.5 text-xs text-muted-foreground sm:shrink">
+      <AuditActor entry={entry} />
+      {via ? <span className="min-w-0 truncate">{via}</span> : null}
+      {entry.runId ? (
+        <Link
+          to="/runs/$shortcode"
+          params={{ shortcode: entry.runId }}
+          title={entry.runId}
+          aria-label={`Run ${entry.runId}`}
+          className="shrink-0 rounded-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <EntityIcon entity="run" className="size-3.5" aria-hidden />
+        </Link>
+      ) : null}
+    </span>
   );
 }

@@ -161,6 +161,12 @@ describe("fresh retained Email connection recommendations", () => {
 
   it("ignores another vendor's purchases and retained mail", async () => {
     const f = await fixture();
+    // The derived pass links an exact order id automatically; an amount match
+    // stays a recommendation, and another Vendor's equal total never joins it.
+    await getDb(ctx.db)
+      .update(orderMailEvent)
+      .set({ orderId: null, amount: 24 })
+      .where(eq(orderMailEvent.id, f.event.id));
     const before = await Promise.all([
       reconciledSourceFingerprint(ctx.db, f.source),
       reconciledSourceFingerprint(ctx.db, f.target),

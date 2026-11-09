@@ -70,6 +70,7 @@ import {
   findExactProductNameMatches,
   findProductIdentityReviewCandidates,
 } from "~/server/domains/product/repo/resolve-names";
+import { linkExactOrderEmails } from "~/server/domains/purchase-import/repo/email-purchase-decision";
 import { manufacturerPartRequests } from "~/server/domains/purchase-import/repo/manufacturer-identity";
 import {
   type LiveSourceOrder,
@@ -2243,6 +2244,11 @@ export async function importVendorOrder(
       ${created ? sql`"imported" = "imported" + 1` : sql`"updated" = "updated" + 1`},
       "updatedAt" = now()
       WHERE "id" = ${input.runId}`);
+
+    // An order Email retained before this Purchase existed links by its exact order id.
+    await linkExactOrderEmails(databaseForTransaction(tx), {
+      purchaseIds: [purchaseId],
+    });
 
     for (const mutation of rowMutations)
       if (

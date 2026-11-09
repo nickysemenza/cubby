@@ -587,6 +587,9 @@ Governed values are read only from `record.fields[readKey ?? key]`; ordinary fie
 First-page list compilation uses the entity's declared opening sort and direction
 when neither the URL nor a caller supplies an override. SSR preloads, secondary
 lists and mounted table state share the same lightweight sort-roster owner.
+There is no shared fallback field: `useTableState` requires the opening sort,
+caller overrides left `undefined` keep the declared default, and embedded sort
+ids type-check against the entity's sort roster.
 Lexical search still omits the ordinary default sort so relevance remains authoritative.
 
 Every entity page reads complete rows, counts with membership completeness,

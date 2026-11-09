@@ -6,6 +6,7 @@ import {
   parseShortcodeFor,
   purchaseId,
   type EmailShortcode,
+  type VendorId,
 } from "@cubby/schemas/identifiers";
 import { moneyToMinor } from "@cubby/shared";
 import { sha256Hex } from "@cubby/shared/sha256";
@@ -51,7 +52,10 @@ import {
   emailLinkedSql,
   emailMemberClassificationSql,
 } from "~/server/domains/email/repo/email-sql";
-import { decideEmailPurchase } from "~/server/domains/purchase-import/repo/email-purchase-decision";
+import {
+  decideEmailPurchase,
+  EXACT_ORDER_LINK_REVISION,
+} from "~/server/domains/purchase-import/repo/email-purchase-decision";
 import { readMailCoverage } from "~/server/domains/purchase-import/repo/gmail/mail-coverage";
 import { recordEmailClassificationObservation } from "~/server/domains/purchase-import/repo/gmail/observations";
 import { syntheticRetainedMail } from "~/server/domains/purchase-import/service/gmail/retained-mail.fixtures";
@@ -64,6 +68,7 @@ import { buildEntityReport } from "~/server/generic/entity-report/repo";
 import { explainField } from "~/server/generic/field-explanation/operations/field-explanation.server";
 import { selectedListProjection } from "~/server/generic/list/repo/list-projection";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { listAutomaticDecisions } from "~/server/generic/suggestions/repo/automatic-decisions";
 import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
 import { createMcpServer } from "~/server/mcp/server";
 import { drainStoredDerived } from "~/server/testing/background-queue";
@@ -581,7 +586,11 @@ describe("Email Purchase links", () => {
     },
   );
 
-  async function retainedReviewFixture() {
+  /**
+   * An exact order-number match links automatically on the next derived pass;
+   * `amount` keeps the pair a suggestion (no order id on the event).
+   */
+  async function retainedReviewFixture(match: "order" | "amount" = "order") {
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Synthetic retention reviewer",
       kind: "member",
@@ -593,6 +602,9 @@ describe("Email Purchase links", () => {
     const purchase = await insertWithShortcode(ctx.db, "purchase", {
       vendorId: vendor.id,
       orderId: "SYNTHETIC-RETAINED",
+      ...(match === "amount"
+        ? { date: "2026-10-01", statedTotal: moneyToMinor(25) }
+        : {}),
     });
     const scope = await insertWithShortcode(ctx.db, "run", {
       purpose: "mail_import",
@@ -628,7 +640,9 @@ describe("Email Purchase links", () => {
       .values({
         orderMailId: source.id,
         event: "placed",
-        orderId: "SYNTHETIC-RETAINED",
+        ...(match === "amount"
+          ? { orderId: null, amount: 25 }
+          : { orderId: "SYNTHETIC-RETAINED" }),
         sourceKey: "synthetic-retention-event",
       })
       .returning();
@@ -646,7 +660,7 @@ describe("Email Purchase links", () => {
   }
 
   it("discovers newly eligible matches and keeps live owner gates separate from cached facts", async () => {
-    const f = await retainedReviewFixture();
+    const f = await retainedReviewFixture("amount");
     await drainStoredDerived(ctx.db);
     // Internal response hydration still needs links when it omits envelopes.
     const internal = await emailScaffold.get(
@@ -665,7 +679,7 @@ describe("Email Purchase links", () => {
     );
     await getDb(ctx.db)
       .update(purchaseTable)
-      .set({ orderId: "SYNTHETIC-NO-MATCH" })
+      .set({ statedTotal: moneyToMinor(99) })
       .where(eq(purchaseTable.id, f.purchase.id));
     const filters = {
       vendorId: parseShortcodeFor("vendor", f.vendor.shortcode),
@@ -744,7 +758,7 @@ describe("Email Purchase links", () => {
     });
     await getDb(ctx.db)
       .update(purchaseTable)
-      .set({ orderId: "SYNTHETIC-RETAINED" })
+      .set({ statedTotal: moneyToMinor(25) })
       .where(eq(purchaseTable.id, f.purchase.id));
     expect(await read()).toMatchObject({ linkState: "none" });
     await drainStoredDerived(ctx.db);
@@ -1478,7 +1492,8 @@ describe("Email Purchase links", () => {
         messageId: f.source.messageId,
         status,
         importOutcome: "importing",
-        linkState: "suggested",
+        // A content-disposed Email keeps its retained order event's exact link.
+        linkState: "linked",
       });
     },
   );
@@ -1719,7 +1734,7 @@ describe("Email Purchase links", () => {
     expect(unchanged?.vendorId).toBeNull();
   });
 
-  it("suggests an older exact order, honors a durable dismissal, and lets Link replace it", async () => {
+  it("links an exact order automatically, leaves ambiguous orders and member dismissals, and reverses through the correction", async () => {
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Synthetic mail reviewer",
       kind: "member",
@@ -1728,86 +1743,162 @@ describe("Email Purchase links", () => {
     const vendor = await insertWithShortcode(ctx.db, "vendor", {
       name: "Example Trail Shop",
     });
-    const purchase = await insertWithShortcode(ctx.db, "purchase", {
-      vendorId: vendor.id,
-      orderId: "TS-SYN-1001",
-      // Exact order identity is independent of the amount/date matching window.
-      date: "2024-01-01",
-      statedTotal: moneyToMinor(48),
+    const otherVendor = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Example Canyon Outfitter",
     });
-    // Same total, another order number: never a suggestion.
-    await insertWithShortcode(ctx.db, "purchase", {
-      vendorId: vendor.id,
-      orderId: "TS-SYN-3003",
-      date: "2026-09-08",
-      statedTotal: moneyToMinor(48),
-    });
-    const bodyText =
-      "Order TS-SYN-1001. Example Trail Shop. Printed total 48 USD.";
-    const checksum = await sha256Hex(bodyText);
-    const mail = await syntheticRetainedMail(ctx.db, {
-      ledgerPartyId: party.id,
-      mailboxId: `synthetic-review-${party.id}`,
-      content: { bodyText, bodyHtml: null, snippet: null },
-      vendorId: vendor.id,
-      messageId: "review-mail-1",
-      threadId: "review-thread-1",
-      sender: "Example Trail Shop <orders@example.test>",
-      subject: "Order update",
-      receivedAt: new Date("2026-09-10T15:00:00.000Z"),
-      rawChecksum: checksum,
-    });
-    await getDb(ctx.db)
-      .insert(orderMailEvent)
-      .values({
-        orderMailId: mail.id,
-        event: "placed",
-        orderId: "TS-SYN-1001",
-        amount: 48,
-        currency: "USD",
-        sourceKey: `classified:${checksum}:0`,
+    const purchaseFor = (vendorId: VendorId, orderId: string) =>
+      insertWithShortcode(ctx.db, "purchase", {
+        vendorId,
+        orderId,
+        // Exact order identity is independent of the amount/date matching window.
+        date: "2024-01-01",
+        statedTotal: moneyToMinor(48),
       });
-    const email = await emailCode(mail.id);
-    const vendorScope = {
-      vendorId: parseShortcodeFor("vendor", vendor.shortcode),
+    const seed = async (
+      messageId: string,
+      orderId: string,
+      vendorId: VendorId | null,
+    ) => {
+      const bodyText = `Order ${orderId}. Printed total 48 USD.`;
+      const checksum = await sha256Hex(bodyText);
+      const mail = await syntheticRetainedMail(ctx.db, {
+        ledgerPartyId: party.id,
+        mailboxId: `synthetic-review-${party.id}`,
+        content: { bodyText, bodyHtml: null, snippet: null },
+        vendorId,
+        messageId,
+        threadId: `thread-${messageId}`,
+        sender: "Example Trail Shop <orders@example.test>",
+        subject: "Order update",
+        receivedAt: new Date("2026-09-10T15:00:00.000Z"),
+        rawChecksum: checksum,
+      });
+      const [event] = await getDb(ctx.db)
+        .insert(orderMailEvent)
+        .values({
+          orderMailId: mail.id,
+          event: "placed",
+          orderId,
+          amount: 48,
+          currency: "USD",
+          sourceKey: `classified:${checksum}:0`,
+        })
+        .returning();
+      if (!event) throw new Error("Synthetic order event missing");
+      return { email: await emailCode(mail.id), checksum, event };
     };
-    const links = async () =>
-      (await list(vendorScope)).flatMap((row) => row.purchaseLinks);
-    expect(await links()).toEqual([
+    const decisions = (eventId: string) =>
+      getDb(ctx.db)
+        .select()
+        .from(orderMailCandidateDecision)
+        .where(
+          and(
+            eq(orderMailCandidateDecision.eventId, eventId),
+            eq(orderMailCandidateDecision.active, true),
+          ),
+        );
+    const automatic = (purchaseId: string, checksum: string) =>
       expect.objectContaining({
-        purchaseId: purchase.shortcode,
-        state: "suggested",
+        purchaseId,
+        decision: "linked",
+        authority: "automatic",
         proposedBy: "heuristic",
-      }),
+        evidenceChecksum: checksum,
+        producer: expect.objectContaining({
+          kind: "rule",
+          revision: EXACT_ORDER_LINK_REVISION,
+        }),
+      });
+
+    const exact = await purchaseFor(vendor.id, "TS-SYN-1001");
+    // Same total, another order number: never a match.
+    await purchaseFor(vendor.id, "TS-SYN-9009");
+    const single = await seed("auto-single", "TS-SYN-1001", vendor.id);
+    // Without a sender-proof Vendor, two Vendors' Purchases share the order id.
+    const shared = [
+      await purchaseFor(vendor.id, "TS-SYN-2002"),
+      await purchaseFor(otherVendor.id, "TS-SYN-2002"),
+    ];
+    const ambiguous = await seed("auto-ambiguous", "TS-SYN-2002", null);
+    const declined = await purchaseFor(vendor.id, "TS-SYN-3003");
+    const dismissed = await seed("auto-dismissed", "TS-SYN-3003", vendor.id);
+    await decide(dismissed.email, declined, dismissed.checksum, "dismissed");
+    const later = await seed("auto-later", "TS-SYN-4004", vendor.id);
+
+    // The hourly pass links existing undecided exact matches.
+    await drainStoredDerived(ctx.db);
+    expect(await decisions(single.event.id)).toEqual([
+      automatic(exact.id, single.checksum),
     ]);
-
-    await decide(email, purchase, checksum, "dismissed");
-    expect((await links())[0]?.state).toBe("dismissed");
-
-    await decide(email, purchase, checksum, "linked");
-    expect((await links())[0]?.state).toBe("linked");
+    expect(await decisions(ambiguous.event.id)).toEqual([]);
+    expect(await decisions(dismissed.event.id)).toEqual([
+      expect.objectContaining({ decision: "dismissed", authority: "member" }),
+    ]);
+    const states = new Map(
+      (await list({})).map((row) => [
+        row.id,
+        row.purchaseLinks.map((link) => [link.purchaseId, link.state]),
+      ]),
+    );
+    expect(states.get(single.email)).toEqual([[exact.shortcode, "linked"]]);
+    expect(states.get(ambiguous.email)).toEqual(
+      shared
+        .map((row) => [row.shortcode, "suggested"])
+        .sort((a, b) => a[0]!.localeCompare(b[0]!)),
+    );
+    expect(states.get(dismissed.email)).toEqual([
+      [declined.shortcode, "dismissed"],
+    ]);
     const [account] = await getDb(ctx.db)
       .select({ id: vendorAccount.id })
       .from(vendorAccount)
       .where(eq(vendorAccount.vendorId, vendor.id));
-    const [linkedPurchase] = await getDb(ctx.db)
-      .select({ vendorAccountId: purchaseTable.vendorAccountId })
-      .from(purchaseTable)
-      .where(eq(purchaseTable.id, purchase.id));
     expect(account).toBeDefined();
-    expect(linkedPurchase?.vendorAccountId).toBeNull();
-    // A member's Link is relevance evidence.
-    const [reviewed] = await getDb(ctx.db)
-      .select({
-        classification: emailTable.classification,
-        stage: emailTable.classificationStage,
-      })
-      .from(emailTable)
-      .where(eq(emailTable.orderMailId, mail.id));
-    expect(reviewed).toEqual({
-      classification: "related",
-      stage: "resolution",
+
+    // A Purchase created after its Email links inside its own write.
+    await createRepoEntity(ctx, "purchase", {
+      vendorId: vendor.shortcode,
+      orderId: "TS-SYN-4004",
     });
+    const [created] = await getDb(ctx.db)
+      .select({ id: purchaseTable.id })
+      .from(purchaseTable)
+      .where(eq(purchaseTable.orderId, "TS-SYN-4004"));
+    expect(await decisions(later.event.id)).toEqual([
+      automatic(created!.id, later.checksum),
+    ]);
+
+    // The automatic history's "Dismiss link" correction is final.
+    const [link] = await decisions(single.event.id);
+    const history = await listAutomaticDecisions(ctx.db, {
+      family: "email_link",
+      recordIds: [single.email],
+    });
+    expect(history.items).toEqual([
+      expect.objectContaining({
+        id: link!.id,
+        correction: expect.objectContaining({
+          options: expect.arrayContaining([
+            { label: "Dismiss link", value: { decision: "dismissed" } },
+          ]),
+        }),
+      }),
+    ]);
+    await reviewSuggestion(ctx.db, kernelCtx(ctx), {
+      suggestionId: link!.id,
+      operationId: "synthetic-exact-link-correction",
+      verdict: "wrong",
+      intent: "apply",
+      correction: { present: true, value: { decision: "dismissed" } },
+    });
+    await drainStoredDerived(ctx.db);
+    expect(await decisions(single.event.id)).toEqual([
+      expect.objectContaining({
+        purchaseId: exact.id,
+        decision: "dismissed",
+        authority: "member",
+      }),
+    ]);
   });
 
   it("records the member's resolution when a model already said related", async () => {
@@ -2197,7 +2288,7 @@ describe("Email Purchase links", () => {
   });
 
   it("orders an Emails section linked, then suggested, then dismissed", async () => {
-    const f = await retainedReviewFixture();
+    const f = await retainedReviewFixture("amount");
     const seed = async (messageId: string, orderId: string) => {
       const mail = await syntheticRetainedMail(ctx.db, {
         ledgerPartyId: f.party.id,

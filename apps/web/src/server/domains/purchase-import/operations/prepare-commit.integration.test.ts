@@ -1372,7 +1372,7 @@ describe("caller-driven purchase import writes", () => {
     ).toEqual(["dismissed"]);
   });
 
-  it("attaches only the imported original while refusing implicit same-order mail links and attachments", async () => {
+  it("attaches only the imported original; a same-order Email links automatically without its attachments", async () => {
     const { party, vendor } = await memberImportWorld(ctx.db, ctx.actor);
     const mail = await retainedOrderMail(party.id, "imported-original");
     const otherMail = await retainedOrderMail(
@@ -1460,8 +1460,12 @@ describe("caller-driven purchase import writes", () => {
     const decisions = await getDb(ctx.db)
       .select()
       .from(orderMailCandidateDecision);
-    expect(decisions).toHaveLength(1);
-    expect(decisions[0]?.eventId).not.toBe(otherEvent.id);
+    // The import links its own original; the other Email's exact order event
+    // links automatically when the Purchase is created, as a rule decision.
+    expect(decisions).toHaveLength(2);
+    expect(
+      decisions.find((decision) => decision.eventId === otherEvent.id),
+    ).toMatchObject({ authority: "automatic", proposedBy: "heuristic" });
     expect(await getDb(ctx.db).select().from(importSourceOrder)).toHaveLength(
       1,
     );

@@ -1,6 +1,7 @@
 import { isSlotListView } from "@cubby/schemas/entity-definitions/definition";
 import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import { shortcodeEntities } from "@cubby/schemas/entity-roster";
+import type { GeneratedEntitySortField } from "@cubby/schemas/entity-sort";
 import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
 import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { type QueryClient, useQueryClient } from "@tanstack/react-query";
@@ -242,7 +243,7 @@ export interface GenericEntityListProps {
 }
 
 /** A scoped roster uses the same columns, reads, selection and workbench as a page. */
-export function EmbeddedEntityList({
+export function EmbeddedEntityList<E extends ListEntity & BrowserRoutedEntity>({
   entity,
   filters,
   savedViewId,
@@ -256,13 +257,14 @@ export function EmbeddedEntityList({
   operations,
   refreshIntervalMs,
 }: {
-  entity: ListEntity & BrowserRoutedEntity;
+  entity: E;
   filters?: object;
   savedViewId?: string;
   pageSize: number;
   columns?: readonly string[];
   initialColumnVisibility?: Record<string, boolean>;
-  sort?: { id: string; desc: boolean }[];
+  /** Checked against the entity's declared sort roster; the server rejects others. */
+  sort?: { id: GeneratedEntitySortField<E>; desc: boolean }[];
   allLink?: boolean;
   detail?: {
     label: string;

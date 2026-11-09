@@ -285,6 +285,16 @@ proposed each link (`proposedBy`); that column describes the existing decision
 rows and adds no relationship. A member's Link marks the Email related as a
 member resolution, since a reviewed Purchase link is relevance evidence.
 
+Addendum (exact order links, 2026-11): the member accepted nearly every
+exact order-number suggestion by hand, so an undecided current order event
+whose order id names exactly one eligible Purchase now links automatically as
+an `automatic` decision proposed by `heuristic`. It rests on the extracted
+order event, which is evidence; association alone still claims no package
+evidence (#3013), and the link records none. Member decisions win: an event with
+any active decision is never touched, and the automatic history's correction
+records the member's dismissal. Ambiguous order ids and amount matches remain
+suggestions. The link leaves relevance classification alone.
+
 ### Unsettled Emails and coordinator failure recovery
 
 There is no `blocked` Email status. A related Email an import attempt left

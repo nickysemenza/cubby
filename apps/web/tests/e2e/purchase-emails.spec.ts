@@ -1,7 +1,8 @@
 /**
- * Failure modes: an exact order match must show as Suggested on its Purchase
- * (and a same-total order with a different order number must not); a
- * dismissal must survive a reload; Link must replace it; the Email page must keep the Gmail original.
+ * Failure modes: a matching total on a Purchase without an order number must
+ * show as Suggested (and a same-total order with a different order number must
+ * not); a dismissal must survive a reload; Link must replace it; the Email page
+ * must keep the Gmail original. Exact order numbers link automatically.
  */
 import { seedVendorMailReviewPrerequisite } from "./fixtures/mail";
 import { gotoAuthenticatedPage } from "./support/e2e-helpers";

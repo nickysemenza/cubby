@@ -233,7 +233,10 @@ pending: nothing here starts Product research.
    attachment) links and settles the Email as the Purchase's confirmation,
    and a commit that creates Products starts a `scheduled` category
    suggestion sweep for them when AI refresh is active
-   (`import-category-sweep.ts`);
+   (`import-category-sweep.ts`). The writer also links other retained Emails
+   whose undecided order event names the new or updated Purchase's order id
+   and no other Purchase (`linkExactOrderEmails`, an automatic decision; see
+   [Emails sections](../../../../../../../docs/entities.md#one-declaration-several-consumers));
    `purchase_import.mail_resolve` records a lifecycle link, an unresolved gap or an unrelated
    disposal (which deletes the retained copy unless a reviewed decision or
    import uses it; the daily catch-up retries a disposal lost after its
@@ -288,8 +291,8 @@ pending: nothing here starts Product research.
    An unanswered submission is classified (`purchase-agent/service/settlement.ts`
    `coordinatorFailureCode`) from Pi's reason and the last model error or
    failed tool result the coordinator recorded (`run-agent.ts` `recordFailure`):
-   a funding stop pauses; `agent_transient` (including Pi's `stale`, `reset`
-   and `restart_limit` stops) retries in `markRunFailed` as one
+   a funding stop pauses; `agent_transient` (including Pi's `stale`, `reset`,
+   `restart_limit` and `interrupted` stops) retries in `markRunFailed` as one
    successor (`cause: retry`, escalation coordinator model) taking only the
    Run's held unsettled Emails with an attempt left; `agent_failed` (including
    any explicit 401/403) never retries. A database fault in paid or free

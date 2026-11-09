@@ -61,6 +61,7 @@ import { trimTextSql } from "~/server/db/computed/text-whitespace";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
   buildPartialUpdateValues,
+  databaseForTransaction,
   getDb,
   galleryBinding,
   lockAndValidateForDelete,
@@ -121,6 +122,7 @@ import { syncEntityImages } from "~/server/domains/image/repo/entity-image-sync"
 import { resolveMemberAssignee } from "~/server/domains/ledger-party/repo/ledger-party-reference";
 import { syncChangedEffectivePrices } from "~/server/domains/product/repo/price-sync";
 import { loadEffectiveProductPricesById } from "~/server/domains/product/repo/pricing";
+import { linkExactOrderEmails } from "~/server/domains/purchase-import/repo/email-purchase-decision";
 import {
   purchaseCoverageSql,
   purchaseEvidenceFieldResolutionsSql,
@@ -912,6 +914,11 @@ export const createPurchase = defineMutationWriter({
         entityId: created.id,
         action: "create",
       });
+      // An order Email can arrive before its Purchase exists.
+      if (created.orderId)
+        await linkExactOrderEmails(databaseForTransaction(tx), {
+          purchaseIds: [created.id],
+        });
       return created.id;
     });
     return readOutput({ entityId: id });
@@ -1107,6 +1114,13 @@ export const updatePurchase = defineMutationWriter({
           changes,
         });
       }
+      if (
+        after.orderId &&
+        (after.orderId !== before.orderId || after.vendorId !== before.vendorId)
+      )
+        await linkExactOrderEmails(databaseForTransaction(tx), {
+          purchaseIds: [id],
+        });
     });
 
     return readOutput({ entityId: id, detachedImageKeys });

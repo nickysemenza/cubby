@@ -130,6 +130,8 @@ export function EntityBoard({
     [metadata],
   );
   const table = useTableState({
+    initialSort: metadata.sort.default,
+    initialSortDesc: metadata.sort.direction === "desc",
     filterSpecs: specs,
     primarySearch,
     initialFilter,
