@@ -19,7 +19,9 @@ supplies the lane and internal-kind flag. Work shows on the Work page and throug
 
 A Job is a unit of execution, not a unit of household work. Work that fans out over many
 records is a **drain** over **items** held on the rows that owe them: `AiEvaluation`,
-`SearchDocument`, `EntityEmbedding` and `ImageProcessingJob` own their scheduling. The first three supply a `DrainStore`
+`SearchDocument`, `EntityEmbedding` and `ImageProcessingJob` own their scheduling.
+A drain unit's only `Job` row is its `background.drain` record (rotation and
+latest execution); it never holds or schedules items. The first three supply a `DrainStore`
 (`generic/jobs/drain-store.ts`). An item's ticket says which intent a page may settle, so a
 re-mark during a page takes a new ticket, and the page clears only what it claimed. The
 derived rebuild is a resumable pass with its own row, not items.
@@ -641,7 +643,7 @@ model, network or other processing errors as negative cutouts.
 `ImageProcessingJob` is the sole owner of image execution: `lane`, `runAt`,
 `leaseUntil`, `failures`, `waitReason` and the current `attemptId` live on the row,
 and nothing else queues it. Cloud rows run through `cloudImageDrain`, a registered
-drain (`generic/background/drains.ts`) with no Job row: it claims due rows under a
+drain (`generic/background/drains.ts`) whose items have no Job row: it claims due rows under a
 16-minute lease that nothing renews, because no consumer outlives 15 minutes. A
 crashed page is reclaimed after that, and a reclaim counts as a failure.
 `imageProcessingLane` fixes each job's lane: subject lifts, Apple descriptions
@@ -853,7 +855,7 @@ work.
 
 ### Embedding execution
 
-Embeddings run on two registered drains with no Job row
+Embeddings run on two registered drains whose items have no Job row
 (`generic/background/drains.ts`). A `SearchDocument` owes a fresh embedding when
 `embeddingDueAt` is set; a failure backs off on the document, and Vectorize
 visibility polling reschedules it without spending an attempt. An `EntityEmbedding`
