@@ -258,16 +258,23 @@ describe("Mail import switch and discovery through MCP", () => {
     '{"type":"error","error":{"type":"invalid_request_error","message":"You have reached your specified API usage limits. You will regain access on 2099-11-01 at 00:00 UTC."}}';
   // The egress Durable Object's credit refusal, as funding reads see it.
   let creditRefusal: { until: number; reason: string } | null = null;
+  let paidRefusal: { until: number; reason: string } | null = null;
+  const GATEWAY_EMPTY =
+    '{"code":"invalid_prompt","message":"Insufficient balance; add money to your gateway or use BYOK"}';
 
   beforeEach(() => {
     creditRefusal = null;
+    paidRefusal = null;
     setCfEnv(
       fromPartial<Env>({
         AI_GATEWAY_EGRESS: {
           getByName: () => ({
-            creditRefusal: async () => creditRefusal,
-            resetCreditRefusal: async () => {
-              creditRefusal = null;
+            creditRefusal: async (_now?: number, provider?: string) =>
+              provider === "openai" ? null : creditRefusal,
+            paidRefusal: async () => paidRefusal,
+            resetFundingRefusal: async (source?: string) => {
+              if (!source || source === "credit") creditRefusal = null;
+              if (!source || source === "paid") paidRefusal = null;
             },
           }),
         },
@@ -413,6 +420,7 @@ describe("Mail import switch and discovery through MCP", () => {
     });
     const until = Date.parse("2099-11-01T00:00:00Z");
     creditRefusal = { until, reason: CONSOLE_LIMIT };
+    paidRefusal = { until, reason: GATEWAY_EMPTY };
     expect(
       (await call("ai_funding_read", { action: "status" })).structuredContent,
     ).toMatchObject({
@@ -422,17 +430,40 @@ describe("Mail import switch and discovery through MCP", () => {
         state: "refused",
         until: "2099-11-01T00:00:00.000Z",
         reason: CONSOLE_LIMIT,
+        availability: { usable: false, blocker: "provider_refused" },
       },
-      paid: { limitUsd: 1, spentUsd: 0 },
-      plan: { limitUsd: 2, spentUsd: 0, state: "disconnected", until: null },
+      // Within budget, yet unusable: the gateway has no balance.
+      paid: {
+        limitUsd: 1,
+        spentUsd: 0,
+        state: "refused",
+        reason: GATEWAY_EMPTY,
+        availability: { usable: false, blocker: "gateway_balance_empty" },
+      },
+      plan: {
+        limitUsd: 2,
+        spentUsd: 0,
+        state: "disconnected",
+        until: null,
+        availability: { usable: false, blocker: "disconnected" },
+      },
     });
     expect(
       (await call("run_read", { action: "mail_import" })).structuredContent,
     ).not.toHaveProperty("budget");
-    const reset = await call("ai_funding", { action: "reset_credit_refusal" });
+    const reset = await call("ai_funding", {
+      action: "reset_funding_refusal",
+      source: "credit",
+    });
     expect(reset.isError).not.toBe(true);
     expect(reset.structuredContent).toMatchObject({
-      credit: { state: "available", until: null, reason: null },
+      credit: {
+        state: "available",
+        until: null,
+        reason: null,
+        availability: { usable: true, blocker: null },
+      },
+      paid: { state: "refused" },
     });
     creditRefusal = { until, reason: CONSOLE_LIMIT };
     const set = await call("ai_funding", {
@@ -448,6 +479,8 @@ describe("Mail import switch and discovery through MCP", () => {
       paid: { limitUsd: 3 },
     });
     expect(creditRefusal).toBeNull();
+    // A budget change says nothing about the gateway balance.
+    expect(paidRefusal).not.toBeNull();
     expect((await call("run", { action: "set_credit_budget" })).isError).toBe(
       true,
     );
@@ -458,6 +491,8 @@ describe("Mail import switch and discovery through MCP", () => {
       paidAllowed: true,
     });
     expect(discovered.isError).not.toBe(true);
+    // Paying now probes the gateway instead of replaying its refusal.
+    expect(paidRefusal).toBeNull();
     expect(discovered.structuredContent).toEqual({ started: 1, running: 0 });
     const [discovery] = await getDb(ctx.db)
       .select({ id: runTable.id })

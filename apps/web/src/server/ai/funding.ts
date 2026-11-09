@@ -1,7 +1,10 @@
 import type { RunId } from "@cubby/schemas/identifiers";
 import type {
+  AiBudgetStatus,
   AiFundingStatus,
   ChatGptPlanAvailability,
+  FundingAvailability,
+  FundingRefusalSource,
 } from "@cubby/schemas/mail-import-settings";
 import { CUBBY_AI_GATEWAY_ID } from "@cubby/shared/ai/gateway-metadata";
 import {
@@ -69,14 +72,16 @@ export interface FundingStatusPorts {
   /** The egress Durable Object's recorded credit refusal; null without one. */
   creditRefusal?: () => Promise<CreditRefusal | null>;
   openaiCreditRefusal?: () => Promise<CreditRefusal | null>;
+  /** The egress Durable Object's recorded paid-gateway refusal. */
+  paidRefusal?: () => Promise<CreditRefusal | null>;
 }
 
 /** The household's one egress object holds the credit refusal (ADR 0017). */
 const egress = () => getAiGatewayEgress(CUBBY_AI_GATEWAY_ID);
 
-/** Retry API credits now, and every credit budget change. */
-export async function resetCreditRefusal() {
-  await egress()?.resetCreditRefusal();
+/** Retry one source's recorded refusal now, or every source without one. */
+export async function resetFundingRefusal(source?: FundingRefusalSource) {
+  await egress()?.resetFundingRefusal(source);
 }
 
 export async function readChatGptPlanAvailability(
@@ -131,6 +136,54 @@ export async function readChatGptPlanAvailability(
     : { state: "available", until: null, reason: null };
 }
 
+const refusalState = (refusal: CreditRefusal | null) =>
+  refusal
+    ? {
+        state: "refused" as const,
+        until: new Date(refusal.until).toISOString(),
+        reason: refusal.reason,
+      }
+    : { state: "available" as const, until: null, reason: null };
+
+const USABLE: FundingAvailability = {
+  usable: true,
+  blocker: null,
+  until: null,
+};
+const blocked = (
+  blocker: NonNullable<FundingAvailability["blocker"]>,
+  until: string | null,
+): FundingAvailability => ({ usable: false, blocker, until });
+
+/**
+ * One verdict per source for background work: a recorded refusal or
+ * connection problem outranks a spent window budget, which resets at the
+ * window end.
+ */
+function availability(
+  use: { spentUsd: number; limitUsd: number },
+  windowEnd: string,
+  refused: {
+    blocker: NonNullable<FundingAvailability["blocker"]>;
+    until: string | null;
+  } | null,
+): FundingAvailability {
+  if (refused) return blocked(refused.blocker, refused.until);
+  return use.spentUsd >= use.limitUsd
+    ? blocked("budget_spent", windowEnd)
+    : USABLE;
+}
+
+const PLAN_BLOCKER = {
+  available: null,
+  paused: "plan_limit",
+  disconnected: "disconnected",
+  needs_reauthorization: "needs_reauthorization",
+} as const satisfies Record<
+  ChatGptPlanAvailability["state"],
+  FundingAvailability["blocker"]
+>;
+
 export async function readAiFundingStatus(
   db: Database,
   ports: FundingStatusPorts = {},
@@ -139,36 +192,67 @@ export async function readAiFundingStatus(
     creditRefusal = async () => (await egress()?.creditRefusal()) ?? null,
     openaiCreditRefusal = async () =>
       (await egress()?.creditRefusal(undefined, "openai")) ?? null,
+    paidRefusal = async () => (await egress()?.paidRefusal()) ?? null,
   } = ports;
-  const [budget, plan, refusal, openaiRefusal] = await Promise.all([
+  const [budget, plan, refusal, openaiRefusal, paidRefused]: [
+    AiBudgetStatus,
+    ChatGptPlanAvailability,
+    CreditRefusal | null,
+    CreditRefusal | null,
+    CreditRefusal | null,
+  ] = await Promise.all([
     readAiBudget(db, ports.now),
     readChatGptPlanAvailability(db, ports),
     creditRefusal(),
     openaiCreditRefusal(),
+    paidRefusal(),
   ]);
+  const credit = refusalState(refusal);
+  const openaiCredit = refusalState(openaiRefusal);
+  const paid = refusalState(paidRefused);
+  const planBlocker = PLAN_BLOCKER[plan.state];
+  const refusedBy = (
+    state: ReturnType<typeof refusalState>,
+    blocker: NonNullable<FundingAvailability["blocker"]>,
+  ) => (state.state === "refused" ? { blocker, until: state.until } : null);
   return {
     ...budget,
     credit: {
       ...budget.credit,
-      ...(refusal
-        ? {
-            state: "refused" as const,
-            until: new Date(refusal.until).toISOString(),
-            reason: refusal.reason,
-          }
-        : { state: "available" as const, until: null, reason: null }),
+      ...credit,
+      availability: availability(
+        budget.credit,
+        budget.windowEnd,
+        refusedBy(credit, "provider_refused"),
+      ),
     },
     openaiCredit: {
       ...budget.openaiCredit,
-      ...(openaiRefusal
-        ? {
-            state: "refused" as const,
-            until: new Date(openaiRefusal.until).toISOString(),
-            reason: openaiRefusal.reason,
-          }
-        : { state: "available" as const, until: null, reason: null }),
+      ...openaiCredit,
+      availability: availability(
+        budget.openaiCredit,
+        budget.windowEnd,
+        refusedBy(openaiCredit, "provider_refused"),
+      ),
     },
-    plan: { ...budget.plan, ...plan },
+    plan: {
+      ...budget.plan,
+      ...plan,
+      availability: availability(
+        budget.plan,
+        budget.windowEnd,
+        planBlocker ? { blocker: planBlocker, until: plan.until } : null,
+      ),
+    },
+    paid: {
+      ...budget.paid,
+      ...paid,
+      availability: availability(
+        budget.paid,
+        budget.windowEnd,
+        refusedBy(paid, "gateway_balance_empty"),
+      ),
+    },
   };
 }
 

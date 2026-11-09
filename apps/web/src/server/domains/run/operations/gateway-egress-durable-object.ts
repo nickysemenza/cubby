@@ -1,9 +1,12 @@
 import type { DurableObjectState } from "@cloudflare/workers-types";
+import type { FundingRefusalSource } from "@cubby/schemas/mail-import-settings";
 import { aiGatewayId, CF_ACCOUNT_ID } from "@cubby/shared/ai/gateway-metadata";
 import {
   creditRefusedResponse,
   isInferenceFundingRefusal,
+  isPaidFundingUnavailable,
   isSubscriberCreditRequest,
+  paidRefusedResponse,
   runProviderGateway,
   workersAiModel,
   workersAiRunRequest,
@@ -40,8 +43,17 @@ const {
 const TYPESAFE_BUCKET = "byok:typesafe";
 const CREDIT_BUCKET = "subscriber-credit:anthropic";
 const OPENAI_CREDIT_BUCKET = "subscriber-credit:openai";
+/** Paid Unified Billing's refusal: the gateway account has no balance. */
+const PAID_BUCKET = "paid:gateway";
+const REFUSAL_BUCKETS = {
+  credit: CREDIT_BUCKET,
+  openaiCredit: OPENAI_CREDIT_BUCKET,
+  paid: PAID_BUCKET,
+} satisfies Record<FundingRefusalSource, string>;
 const isCreditBucket = (bucket: string) =>
   bucket === CREDIT_BUCKET || bucket === OPENAI_CREDIT_BUCKET;
+// Paid gateway refusals arrive as small JSON errors on these statuses.
+const PAID_REFUSAL_STATUSES = [400, 402, 403];
 
 const windowStart = (now: number) =>
   aiBudgetWindow(new Date(now)).start.getTime();
@@ -120,9 +132,18 @@ export class AiGatewayEgressDurableObject extends DurableObject<Env> {
     return row ? { until: row.untilMs, reason: row.reason } : null;
   }
 
-  /** Retry API credits now; a credit budget change too. */
-  async resetCreditRefusal() {
-    for (const bucket of [CREDIT_BUCKET, OPENAI_CREDIT_BUCKET]) {
+  /** The recorded paid-gateway funding refusal, if any. */
+  async paidRefusal(now = Date.now()) {
+    const row = this.activeCreditRefusal(now, PAID_BUCKET);
+    return row ? { until: row.untilMs, reason: row.reason } : null;
+  }
+
+  /** Retry one source now, or every source without one. */
+  async resetFundingRefusal(source?: FundingRefusalSource) {
+    const buckets = source
+      ? [REFUSAL_BUCKETS[source]]
+      : Object.values(REFUSAL_BUCKETS);
+    for (const bucket of buckets) {
       this.clearCreditRefusal(bucket);
       this.bumpCreditEpoch(bucket);
     }
@@ -150,18 +171,53 @@ export class AiGatewayEgressDurableObject extends DurableObject<Env> {
     provider = "anthropic",
   ) {
     const bucket = `subscriber-credit:${provider}`;
-    const currentEpoch = this.creditEpoch(bucket);
-    if (epoch !== undefined && epoch !== currentEpoch) return;
-    if (status >= 200 && status < 300) return this.clearCreditRefusal(bucket);
-    if (
-      !isInferenceFundingRefusal(
+    this.noteFundingResponse(
+      bucket,
+      status,
+      body,
+      now,
+      epoch,
+      isInferenceFundingRefusal(
         status,
         body,
         provider === "openai" ? "openai_credit" : "subscriber_credit",
-      ) ||
-      body.includes("cubby_credit_budget_reached")
-    )
-      return;
+      ) && !body.includes("cubby_credit_budget_reached"),
+    );
+  }
+
+  /**
+   * A paid Unified Billing response's effect on the gateway refusal, under the
+   * same epoch rule: success clears it; an empty gateway balance
+   * (`isPaidFundingUnavailable`) records it until the window ends.
+   */
+  async notePaidResponse(
+    status: number,
+    body: string,
+    now = Date.now(),
+    epoch: number | undefined = undefined,
+  ) {
+    this.noteFundingResponse(
+      PAID_BUCKET,
+      status,
+      body,
+      now,
+      epoch,
+      isPaidFundingUnavailable(body),
+    );
+  }
+
+  private noteFundingResponse(
+    bucket: string,
+    status: number,
+    body: string,
+    now: number,
+    epoch: number | undefined,
+    refused: boolean,
+  ) {
+    const currentEpoch = this.creditEpoch(bucket);
+    if (epoch !== undefined && epoch !== currentEpoch) return;
+    if (status >= 200 && status < 300) return this.clearCreditRefusal(bucket);
+    if (!refused) return;
     // Raw diagnostics stay whole (AGENTS.md); only credentials are redacted.
     const reason = scrubCredentialValues(body);
     this.bumpCreditEpoch(bucket);
@@ -177,19 +233,29 @@ export class AiGatewayEgressDurableObject extends DurableObject<Env> {
       .run();
   }
 
-  async admit(bucket: string, now = Date.now()): Promise<GatewayAdmission> {
+  /**
+   * `refusalBucket` is the funding refusal that gates this admission: the
+   * credit bucket itself, or paid Unified Billing's gateway refusal.
+   */
+  async admit(
+    bucket: string,
+    now = Date.now(),
+    refusalBucket: string | undefined = isCreditBucket(bucket)
+      ? bucket
+      : undefined,
+  ): Promise<GatewayAdmission> {
     // No await between checking capacity and reserving the permit.
     this.db
       .delete(starts)
       .where(lte(starts.started, now - WINDOW_MS))
       .run();
     this.db.delete(permits).where(lte(permits.deadline, now)).run();
-    const refusal = isCreditBucket(bucket)
-      ? this.activeCreditRefusal(now, bucket)
+    const refusal = refusalBucket
+      ? this.activeCreditRefusal(now, refusalBucket)
       : undefined;
     const probing =
       refusal !== undefined && refusal.probeWindow < windowStart(now);
-    // Refused credit answers at once so the ladder moves on without waiting.
+    // A refused source answers at once so the ladder moves on without waiting.
     if (refusal && !probing)
       return {
         kind: "refused",
@@ -235,7 +301,7 @@ export class AiGatewayEgressDurableObject extends DurableObject<Env> {
       this.db
         .update(creditRefusals)
         .set({ probeWindow: windowStart(now) })
-        .where(eq(creditRefusals.bucket, bucket))
+        .where(eq(creditRefusals.bucket, refusalBucket ?? bucket))
         .run();
     if (bucket === "unified")
       this.db.insert(starts).values({ bucket, started: now }).run();
@@ -243,8 +309,8 @@ export class AiGatewayEgressDurableObject extends DurableObject<Env> {
       .insert(permits)
       .values({ token, bucket, deadline: now + REQUEST_DEADLINE_MS })
       .run();
-    return isCreditBucket(bucket)
-      ? { kind: "admitted", token, epoch: this.creditEpoch(bucket) }
+    return refusalBucket
+      ? { kind: "admitted", token, epoch: this.creditEpoch(refusalBucket) }
       : { kind: "admitted", token };
   }
 
@@ -295,6 +361,8 @@ export class AiGatewayEgressDurableObject extends DurableObject<Env> {
       input.provider,
       new Headers(input.headers),
     );
+    // Paid Unified Billing draws the gateway balance; Workers AI bills apart.
+    const paid = !byokJev && !credit && input.provider !== "workers-ai";
     const admitted = await this.admit(
       byokJev
         ? TYPESAFE_BUCKET
@@ -302,9 +370,16 @@ export class AiGatewayEgressDurableObject extends DurableObject<Env> {
           ? `subscriber-credit:${input.provider}`
           : "unified",
       Date.now(),
+      credit
+        ? `subscriber-credit:${input.provider}`
+        : paid
+          ? PAID_BUCKET
+          : undefined,
     );
     if (admitted.kind === "refused")
-      return creditRefusedResponse(admitted, input.provider);
+      return credit
+        ? creditRefusedResponse(admitted, input.provider)
+        : paidRefusedResponse(admitted);
     if (admitted.kind === "wait")
       return new Response(
         "AI Gateway admission is waiting for shared capacity",
@@ -403,16 +478,24 @@ export class AiGatewayEgressDurableObject extends DurableObject<Env> {
         throw new Error("AI Gateway returned no raw Response");
       if (credit && response.ok)
         await this.noteCreditResponse(200, "", Date.now(), epoch, provider);
-      if (credit && [400, 402, 429].includes(response.status)) {
+      if (paid && response.ok)
+        await this.notePaidResponse(200, "", Date.now(), epoch);
+      if (
+        (credit && [400, 402, 429].includes(response.status)) ||
+        (paid && PAID_REFUSAL_STATUSES.includes(response.status))
+      ) {
         // Refusal bodies are small JSON errors; read one to classify it.
         const text = await response.text();
-        await this.noteCreditResponse(
-          response.status,
-          text,
-          Date.now(),
-          epoch,
-          provider,
-        );
+        if (credit)
+          await this.noteCreditResponse(
+            response.status,
+            text,
+            Date.now(),
+            epoch,
+            provider,
+          );
+        else
+          await this.notePaidResponse(response.status, text, Date.now(), epoch);
         await finish(response.status, response.headers.get("retry-after"));
         return new Response(text, {
           status: response.status,

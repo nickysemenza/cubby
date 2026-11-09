@@ -131,13 +131,29 @@ export async function assertAiBudget(db: Database, allowanceUsd = 0) {
     throw new AiBudgetExhaustedError(status);
 }
 
+/**
+ * A paid funding stop names its source, why it refused and when the Run
+ * retries, keeping the provider's raw text (`isPaidFundingUnavailable`); the
+ * window budget itself was not reached.
+ */
+export function paidFundingStopMessage(raw: string, status: AiBudgetStatus) {
+  const why = /has no BYOK credential/u.test(raw)
+    ? "the AI Gateway has no BYOK credential"
+    : "AI Gateway balance empty";
+  return `Paid models unavailable: ${why} (${raw.trim()}); retrying at ${status.windowEnd}.`;
+}
+
 /** The paid rung cannot answer at all: its Run, if any, pauses for the next window. */
 export async function paidFundingStop(
   db: Database,
   runId: RunId | undefined,
-  reason: string,
+  raw: string,
 ) {
-  const stop = new AiBudgetExhaustedError(await readAiBudget(db), reason);
+  const status = await readAiBudget(db);
+  const stop = new AiBudgetExhaustedError(
+    status,
+    paidFundingStopMessage(raw, status),
+  );
   if (runId)
     await (
       await import("~/server/domains/run/repo/execution-context")

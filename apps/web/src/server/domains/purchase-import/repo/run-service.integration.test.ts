@@ -761,7 +761,12 @@ describe("purchase import run admission", () => {
         generation: run.dispatchEventId!,
         sequence: 1,
         receivedEventIds: new Set([run.dispatchEventId!]),
-        failure: { failureCode: "agent_failed" },
+        failure: {
+          failureCode: "agent_failed",
+          detail: fundingUnavailable
+            ? 'Coordinator deterministic failure (error): OpenAI API error (403): {"code":"invalid_prompt","message":"Insufficient balance; add money to your gateway or use BYOK"}'
+            : undefined,
+        },
         fundingUnavailable,
       });
     const resumes = async () => {
@@ -772,6 +777,8 @@ describe("purchase import run admission", () => {
         .where(eq(job.kind, "run.funding-resume"));
     };
 
+    // Regression: the pause read "AI budget reached: $0 of $5" although the
+    // gateway, not the budget, refused.
     it("pauses when that submission's own turn found none", async () => {
       const run = await startAgentRun(await createMember());
       await settle(run, true);
@@ -779,6 +786,13 @@ describe("purchase import run admission", () => {
         status: "paused_auth",
         failureCode: "execution_limit",
       });
+      const [paused] = await getDb(ctx.db)
+        .select({ dispatchError: runTable.dispatchError })
+        .from(runTable)
+        .where(eq(runTable.id, runEntityId.parse(run.id)));
+      expect(paused?.dispatchError).toMatch(
+        /^Paid models unavailable: AI Gateway balance empty \(.*Insufficient balance; add money to your gateway.*\); retrying at /u,
+      );
       expect(await resumes()).toHaveLength(1);
     });
 

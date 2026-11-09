@@ -1,3 +1,4 @@
+import type { FundingRefusalSource } from "@cubby/schemas/mail-import-settings";
 import { aiGatewayMetadataSchema } from "@cubby/shared/ai/gateway-metadata";
 import { gatewayProviderSchema } from "@cubby/shared/ai/models";
 import { z } from "zod";
@@ -49,7 +50,7 @@ const gatewayAdmission = z.discriminatedUnion("kind", [
     epoch: z.number().optional(),
   }),
   z.object({ kind: z.literal("wait"), until: z.number() }),
-  // A recorded provider credit refusal: refused now, with no upstream call.
+  // A recorded provider funding refusal: refused now, with no upstream call.
   z.object({
     kind: z.literal("refused"),
     until: z.number(),
@@ -65,15 +66,26 @@ export type CreditRefusal = Omit<
 export interface AiGatewayEgressRpc {
   currentDeploymentVersion(): Promise<string>;
   fetch(request: Request): Promise<Response>;
-  admit(bucket: string, now?: number): Promise<GatewayAdmission>;
+  admit(
+    bucket: string,
+    now?: number,
+    refusalBucket?: string,
+  ): Promise<GatewayAdmission>;
   creditRefusal(now?: number, provider?: string): Promise<CreditRefusal | null>;
-  resetCreditRefusal(): Promise<void>;
+  paidRefusal(now?: number): Promise<CreditRefusal | null>;
+  resetFundingRefusal(source?: FundingRefusalSource): Promise<void>;
   noteCreditResponse(
     status: number,
     body: string,
     now?: number,
     epoch?: number,
     provider?: string,
+  ): Promise<void>;
+  notePaidResponse(
+    status: number,
+    body: string,
+    now?: number,
+    epoch?: number,
   ): Promise<void>;
   finish(
     token: string,

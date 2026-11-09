@@ -1,4 +1,7 @@
-import { isInferenceFundingRefusal } from "@cubby/shared/ai/gateway-request";
+import {
+  isInferenceFundingRefusal,
+  isPaidFundingUnavailable,
+} from "@cubby/shared/ai/gateway-request";
 import { env, evictDurableObject, runInDurableObject } from "cloudflare:test";
 import { describe, expect, it, vi } from "vitest";
 
@@ -176,9 +179,73 @@ describe("Claude credit refusal", () => {
     await stub.noteCreditResponse(400, CONSOLE_LIMIT, now);
     expect((await stub.admit("unified", now)).kind).toBe("admitted");
     expect((await stub.admit(CREDIT, now)).kind).toBe("refused");
-    await stub.resetCreditRefusal();
+    await stub.resetFundingRefusal();
     expect(await stub.creditRefusal(now)).toBeNull();
     expect((await stub.admit(CREDIT, now)).kind).toBe("admitted");
+  });
+});
+
+const GATEWAY_EMPTY =
+  '{"code":"invalid_prompt","message":"Insufficient balance; add money to your gateway or use BYOK"}';
+
+// Regression: an empty gateway balance refused every paid call while Settings
+// said Paid was "within budget", because only credit refusals were recorded.
+describe("paid gateway refusal", () => {
+  it("records an empty balance, refuses paid calls without calling the gateway, and clears only on its own reset", async () => {
+    const stub = env.AI_GATEWAY_EGRESS.getByName(crypto.randomUUID());
+    await runInDurableObject(stub, async (instance) => {
+      Object.defineProperty(instance, "env", {
+        value: { AI_GATEWAY_API_KEY: "synthetic-gateway-token" },
+      });
+      const upstream = vi
+        .spyOn(globalThis, "fetch")
+        .mockResolvedValueOnce(new Response(GATEWAY_EMPTY, { status: 403 }))
+        .mockImplementation(async () => new Response("synthetic response"));
+      try {
+        const first = await instance.fetch(egressRequest({}));
+        expect(first.status).toBe(403);
+        expect(await first.text()).toBe(GATEWAY_EMPTY);
+        expect(await instance.paidRefusal()).toEqual({
+          until: aiBudgetWindow(new Date()).end.getTime(),
+          reason: GATEWAY_EMPTY,
+        });
+
+        const refused = await instance.fetch(egressRequest({}));
+        expect(upstream).toHaveBeenCalledTimes(1);
+        expect(refused.status).toBe(402);
+        expect(isPaidFundingUnavailable(await refused.text())).toBe(true);
+
+        // Credit is a separate source and still reaches the provider.
+        const credit = await instance.fetch(creditRequest());
+        expect(await credit.text()).toBe("synthetic response");
+        expect(upstream).toHaveBeenCalledTimes(2);
+
+        await instance.resetFundingRefusal("credit");
+        expect(await instance.paidRefusal()).not.toBeNull();
+        await instance.resetFundingRefusal("paid");
+        expect(await instance.paidRefusal()).toBeNull();
+        const probe = await instance.fetch(egressRequest({}));
+        expect(await probe.text()).toBe("synthetic response");
+        expect(upstream).toHaveBeenCalledTimes(3);
+      } finally {
+        upstream.mockRestore();
+      }
+    });
+  });
+
+  it("clears on a paid success and ignores non-funding failures", async () => {
+    const stub = env.AI_GATEWAY_EGRESS.getByName(crypto.randomUUID());
+    const now = Date.now();
+    await stub.notePaidResponse(403, '{"error":"synthetic forbidden"}', now);
+    expect(await stub.paidRefusal(now)).toBeNull();
+    await stub.notePaidResponse(403, GATEWAY_EMPTY, now);
+    expect((await stub.admit("unified", now + 1, "paid:gateway")).kind).toBe(
+      "refused",
+    );
+    // Unified traffic without the paid gate (Workers AI) is unaffected.
+    expect((await stub.admit("unified", now + 1)).kind).toBe("admitted");
+    await stub.notePaidResponse(200, "", now + 2);
+    expect(await stub.paidRefusal(now + 2)).toBeNull();
   });
 });
 
@@ -191,7 +258,7 @@ describe("credit refusal observations", () => {
     const now = Date.now();
     const inFlight = await stub.admit(CREDIT, now);
     if (inFlight.kind !== "admitted") throw new Error("Expected admission");
-    await stub.resetCreditRefusal();
+    await stub.resetFundingRefusal();
     await stub.noteCreditResponse(400, CONSOLE_LIMIT, now + 1, inFlight.epoch);
     expect(await stub.creditRefusal(now + 1)).toBeNull();
   });

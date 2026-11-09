@@ -1,5 +1,5 @@
 import type { AiFundingStatus } from "@cubby/schemas/mail-import-settings";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { overrideOperationDispatch } from "~/integrations/tanstack-query/operation-call";
@@ -12,11 +12,15 @@ import {
   PaidRunButton,
 } from "./ai-funding";
 
+const USABLE = { usable: true, blocker: null, until: null } as const;
 const AVAILABLE = {
   state: "available",
   until: null,
   reason: null,
+  availability: USABLE,
 } as const;
+const GATEWAY_EMPTY =
+  '{"code":"invalid_prompt","message":"Insufficient balance; add money to your gateway or use BYOK"}';
 const CONSOLE_LIMIT =
   '{"type":"error","error":{"type":"invalid_request_error","message":"You have reached your specified API usage limits. You will regain access on 2026-11-01 at 00:00 UTC."}}';
 const budget = (overrides: Partial<AiFundingStatus> = {}): AiFundingStatus => ({
@@ -24,7 +28,7 @@ const budget = (overrides: Partial<AiFundingStatus> = {}): AiFundingStatus => ({
   windowEnd: "2026-10-01T06:00:00.000Z",
   credit: { limitUsd: 5, spentUsd: 2.5, ...AVAILABLE },
   openaiCredit: { limitUsd: 1.5, spentUsd: 0.25, ...AVAILABLE },
-  paid: { limitUsd: 1, spentUsd: 0.4 },
+  paid: { limitUsd: 1, spentUsd: 0.4, ...AVAILABLE },
   plan: { limitUsd: 2, spentUsd: 0.75, ...AVAILABLE },
   ...overrides,
 });
@@ -35,6 +39,11 @@ const refused = budget({
     state: "refused",
     until: "2026-11-01T12:00:00.000Z",
     reason: CONSOLE_LIMIT,
+    availability: {
+      usable: false,
+      blocker: "provider_refused",
+      until: "2026-11-01T12:00:00.000Z",
+    },
   },
 });
 
@@ -47,32 +56,37 @@ afterEach(() => {
   restore = undefined;
 });
 
-// Failure modes: the card hides a budget, the plan state, or a credit refusal
-// with Anthropic's raw reason; the refusal cannot be retried from Settings;
+// Failure modes: the card hides a budget, whether a source is usable, or a
+// refusal with its raw reason; a refusal cannot be retried from its row;
 // window budgets cannot be edited; "paid allowed" pays without a
 // confirmation, or past a spent paid budget without a second confirmation
 // naming the amount.
 describe("AI funding controls", () => {
   it("shows a credit refusal with its raw reason and retries Claude credit on request", async () => {
     harness = createBrowserTestHarness();
-    const calls: string[] = [];
-    restore = overrideOperationDispatch(async (operation) => {
-      calls.push(operation);
+    const calls: unknown[] = [];
+    restore = overrideOperationDispatch(async (operation, input) => {
       if (operation === "aiFunding.status") return { ok: true, data: refused };
-      if (operation === "aiFunding.resetCreditRefusal")
+      if (operation === "aiFunding.resetFundingRefusal") {
+        calls.push(input);
         return { ok: true, data: budget() };
+      }
       throw new Error(`Unexpected ${operation}`);
     });
     render(<AiFundingSettings />, { wrapper: harness.wrapper });
-    expect(await screen.findByText(/refused until Nov 1/u)).toBeVisible();
+    expect(await screen.findByText(/Refused until Nov 1/u)).toBeVisible();
+    expect(screen.queryByText(CONSOLE_LIMIT)).toBeNull();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Claude credit details" }),
+    );
     expect(screen.getByText(CONSOLE_LIMIT)).toBeVisible();
     expect(screen.getByText("$0.40 of $")).toBeVisible();
     expect(screen.getByLabelText("Paid budget per window")).toHaveValue(1);
     fireEvent.click(
       screen.getByRole("button", { name: "Retry Claude credit now" }),
     );
-    expect(await screen.findAllByText("available")).not.toHaveLength(0);
-    expect(calls).toContain("aiFunding.resetCreditRefusal");
+    await waitFor(() => expect(screen.getAllByText("Usable")).toHaveLength(4));
+    expect(calls).toEqual([{ source: "credit" }]);
     expect(
       screen.queryByRole("button", { name: "Retry Claude credit now" }),
     ).toBeNull();
@@ -83,7 +97,7 @@ describe("AI funding controls", () => {
     render(<AiFundingLine budget={refused} />, { wrapper: harness.wrapper });
     expect(screen.getByText(/Claude credit \$2\.50 of \$5\.00/u)).toBeVisible();
     expect(
-      screen.getByText(/ChatGPT plan \$0\.75 of \$2\.00, available/u),
+      screen.getByText(/ChatGPT plan \$0\.75 of \$2\.00, Usable/u),
     ).toBeVisible();
     expect(screen.getByRole("link", { name: "AI funding" })).toHaveAttribute(
       "href",
@@ -91,8 +105,9 @@ describe("AI funding controls", () => {
     );
   });
 
-  // Unknown quota reset must still offer the provider's usage controls.
-  it("offers Manage usage without inventing a plan reset", async () => {
+  // Unknown quota reset must still offer the provider's usage controls, and
+  // a paid row within budget must still say when the gateway has no balance.
+  it("offers row actions for a plan limit and an empty gateway balance", async () => {
     harness = createBrowserTestHarness();
     restore = overrideOperationDispatch(async () => ({
       ok: true,
@@ -103,18 +118,33 @@ describe("AI funding controls", () => {
           state: "paused",
           until: null,
           reason: "synthetic quota refusal",
+          availability: { usable: false, blocker: "plan_limit", until: null },
+        },
+        paid: {
+          limitUsd: 5,
+          spentUsd: 0,
+          state: "refused",
+          until: "2026-10-01T06:00:00.000Z",
+          reason: GATEWAY_EMPTY,
+          availability: {
+            usable: false,
+            blocker: "gateway_balance_empty",
+            until: "2026-10-01T06:00:00.000Z",
+          },
         },
       }),
     }));
     render(<AiFundingSettings />, { wrapper: harness.wrapper });
     expect(
-      await screen.findByText(
-        "ChatGPT plan usage limit reached; ChatGPT didn’t say when it resets",
-      ),
+      await screen.findByText("Usage limit · reset time unknown"),
     ).toBeVisible();
     expect(
       screen.getByRole("button", { name: "Manage usage" }),
     ).toHaveAttribute("href", "https://chatgpt.com/settings/usage");
+    expect(screen.getByText("Gateway balance empty")).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: "Retry paid now" }),
+    ).toBeVisible();
   });
 
   it("saves all four edited window budgets inline", () => {
@@ -173,7 +203,9 @@ describe("AI funding controls", () => {
       render(
         <PaidRunButton
           label="Run now, paid allowed"
-          budget={budget({ paid: { limitUsd: limit, spentUsd: spent } })}
+          budget={budget({
+            paid: { limitUsd: limit, spentUsd: spent, ...AVAILABLE },
+          })}
           pending={false}
           onConfirm={onConfirm}
         />,

@@ -34,7 +34,11 @@ import {
 } from "drizzle-orm";
 import { z } from "zod";
 
-import { AiBudgetExhaustedError, readAiBudget } from "~/server/ai/budget";
+import {
+  AiBudgetExhaustedError,
+  paidFundingStopMessage,
+  readAiBudget,
+} from "~/server/ai/budget";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import {
   getDb,
@@ -168,10 +172,16 @@ async function reconcileSettledRunOnce(
     // ADR 0017: with no funding the Run waits for the next window and keeps its
     // Emails. Failing would release them to a discovery pass that fails the same way.
     if (input.fundingUnavailable) {
+      // The agent's last turn found the paid gateway without funding; the
+      // window budget was not reached, so name the refusal it carries.
+      const status = await readAiBudget(db);
       await pauseForFunding(
         db,
         input.runId,
-        new AiBudgetExhaustedError(await readAiBudget(db)),
+        new AiBudgetExhaustedError(
+          status,
+          paidFundingStopMessage(input.failure.detail ?? "", status),
+        ),
         input.generation,
       );
       return {

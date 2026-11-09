@@ -18,6 +18,12 @@ import {
   RunPhotoBatch,
 } from "./purchase-import-run-detail";
 
+const SPENT = {
+  usable: false,
+  blocker: "budget_spent",
+  until: "2026-09-20T18:00:00.000Z",
+} as const;
+
 let harness: ReturnType<typeof createBrowserTestHarness>;
 let detailRun: RunDetail;
 let restoreDispatch: () => void;
@@ -167,6 +173,7 @@ beforeEach(() => {
             state: "available",
             until: null,
             reason: null,
+            availability: SPENT,
           },
           openaiCredit: {
             limitUsd: 1.5,
@@ -174,14 +181,23 @@ beforeEach(() => {
             state: "available",
             until: null,
             reason: null,
+            availability: SPENT,
           },
-          paid: { limitUsd: 1, spentUsd: 0.25 },
+          paid: {
+            limitUsd: 1,
+            spentUsd: 0.25,
+            state: "available",
+            until: null,
+            reason: null,
+            availability: { usable: true, blocker: null, until: null },
+          },
           plan: {
             limitUsd: 2,
             spentUsd: 2,
             state: "available",
             until: null,
             reason: null,
+            availability: SPENT,
           },
         },
       };

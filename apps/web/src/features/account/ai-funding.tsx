@@ -2,10 +2,16 @@ import { CHATGPT_USAGE_URL } from "@cubby/schemas/chatgpt";
 import type {
   AiBudgetSettings,
   AiFundingStatus,
+  FundingAvailability,
+  FundingRefusalSource,
 } from "@cubby/schemas/mail-import-settings";
+import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
+import { CheckCircleIcon } from "@phosphor-icons/react/dist/csr/CheckCircle";
+import { ClockIcon } from "@phosphor-icons/react/dist/csr/Clock";
+import { WarningCircleIcon } from "@phosphor-icons/react/dist/csr/WarningCircle";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { useState, type ReactNode } from "react";
+import { Fragment, useState, type ReactNode } from "react";
 
 import { useActionMutation } from "~/entity/hooks/use-action-mutation";
 import { aiFunding } from "~/integrations/tanstack-query/generated/domains/aiFunding.gen";
@@ -25,7 +31,13 @@ import {
 } from "~/ui/primitives/alert-dialog";
 import { Button } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";
+import {
+  CodeBlock,
+  CodeBlockContent,
+  CodeBlockHeader,
+} from "~/ui/text/code-block";
 import { Description } from "~/ui/text/description";
+import { EnumPill } from "~/ui/text/enum-pill";
 import { StatusText } from "~/ui/text/status-text";
 
 const usd = (value: number) => formatCurrency(value);
@@ -43,36 +55,90 @@ const when = (iso: string) =>
     minute: "2-digit",
   });
 
-const PLAN_LABEL = {
-  available: "available",
-  paused: "paused",
-  disconnected: "disconnected",
-  needs_reauthorization: "needs reauthorization",
-} satisfies Record<AiFundingStatus["plan"]["state"], string>;
+type SourceId = "credit" | "openaiCredit" | "plan" | "paid";
+type Blocker = NonNullable<FundingAvailability["blocker"]>;
 
-const creditLabel = ({ credit }: Pick<AiFundingStatus, "credit">) =>
-  credit.state === "refused" && credit.until
-    ? `refused until ${when(credit.until)}`
-    : credit.spentUsd >= credit.limitUsd
-      ? "budget spent"
-      : "available";
-const planLabel = ({ plan }: AiFundingStatus) =>
-  plan.state === "available" && plan.spentUsd >= plan.limitUsd
-    ? "budget spent"
-    : plan.state === "paused" && !plan.until
-      ? "usage limit reached; ChatGPT didn’t say when it resets"
-      : `${PLAN_LABEL[plan.state]}${plan.until ? ` until ${when(plan.until)}` : ""}`;
+const SOURCES = [
+  { id: "credit", source: "Claude credit", provider: "Anthropic" },
+  { id: "openaiCredit", source: "OpenAI credit", provider: "OpenAI" },
+  { id: "plan", source: "ChatGPT plan", provider: "ChatGPT" },
+  { id: "paid", source: "Paid", provider: "AI Gateway" },
+] as const satisfies readonly {
+  id: SourceId;
+  source: string;
+  provider: string;
+}[];
+
+/** Who recovers it: amber resets by itself, red waits for a member. */
+const TONE = {
+  positive: { color: "var(--positive)", Icon: CheckCircleIcon },
+  warning: { color: "var(--warning)", Icon: ClockIcon },
+  destructive: { color: "var(--destructive)", Icon: WarningCircleIcon },
+} as const;
+
+type Verdict = { tone: keyof typeof TONE; label: string };
+
+/** The server's availability verdict in a few words, shared by every summary. */
+function fundingVerdict(budget: AiFundingStatus, id: SourceId): Verdict {
+  const { availability } = budget[id];
+  const { until } = availability;
+  const blocker: Blocker | null = availability.blocker;
+  switch (blocker) {
+    case null:
+      return { tone: "positive", label: "Usable" };
+    case "budget_spent":
+      return {
+        tone: "warning",
+        label: `Budget spent · resets ${clock(until ?? budget.windowEnd)}`,
+      };
+    case "provider_refused":
+      return {
+        tone: "destructive",
+        label: until ? `Refused until ${when(until)}` : "Refused by provider",
+      };
+    case "plan_limit":
+      return until
+        ? { tone: "warning", label: `Usage limit · resets ${when(until)}` }
+        : { tone: "destructive", label: "Usage limit · reset time unknown" };
+    case "disconnected":
+      return { tone: "destructive", label: "Disconnected" };
+    case "needs_reauthorization":
+      return { tone: "destructive", label: "Needs reauthorization" };
+    case "gateway_balance_empty":
+      return { tone: "destructive", label: "Gateway balance empty" };
+  }
+}
+
+/** What the member reads beside the raw refusal. */
+function detailSentence(budget: AiFundingStatus, id: SourceId) {
+  const { until } = budget[id].availability;
+  const at = until ? when(until) : "the next window";
+  if (id === "paid")
+    return `The AI Gateway account has no balance, so paid models stop until ${at}, trying one call each six-hour window. Add balance in Cloudflare, then retry.`;
+  if (id === "plan") return null;
+  const provider = id === "credit" ? "Anthropic" : "OpenAI";
+  return `${provider} refused this credit. Cubby skips it until ${at}, trying one call each six-hour window.`;
+}
+
+function FundingStatus({ verdict }: { verdict: Verdict }) {
+  const { color, Icon } = TONE[verdict.tone];
+  return (
+    <EnumPill optionRole="status" color={color} icon={<Icon weight="fill" />}>
+      {verdict.label}
+    </EnumPill>
+  );
+}
 
 /** The one-line funding summary features show, linking to Settings. */
 export function AiFundingLine({ budget }: { budget: AiFundingStatus }) {
   return (
     <p className="text-xs text-muted-foreground tabular-nums">
-      Claude credit {usd(budget.credit.spentUsd)} of{" "}
-      {usd(budget.credit.limitUsd)}, {creditLabel(budget)} · OpenAI credit{" "}
-      {usd(budget.openaiCredit.spentUsd)} of {usd(budget.openaiCredit.limitUsd)}
-      , {creditLabel({ credit: budget.openaiCredit })} · ChatGPT plan{" "}
-      {usd(budget.plan.spentUsd)} of {usd(budget.plan.limitUsd)},{" "}
-      {planLabel(budget)} ·{" "}
+      {SOURCES.map(({ id, source }) => (
+        <Fragment key={id}>
+          {source} {usd(budget[id].spentUsd)} of {usd(budget[id].limitUsd)},{" "}
+          {fundingVerdict(budget, id).label} ·{" "}
+        </Fragment>
+      ))}
       <Link to="/settings" hash="ai-funding" className="underline">
         AI funding
       </Link>
@@ -91,16 +157,10 @@ export const aiFundingStatusQuery = () => ({
   refetchInterval: 60_000,
 });
 
-type FundingRow = {
-  id: string;
-  source: string;
-  window: ReactNode;
-  state: string;
-};
-
 /**
- * Household-wide frontier AI funding (ADR 0017): the four six-hour budgets,
- * the Claude credit's refusal state with Anthropic's raw reason, and the plan.
+ * Household-wide frontier AI funding (ADR 0017): one row per source with its
+ * window budget, whether background work can use it now, the raw refusal
+ * behind a disclosure and the row's own recovery action.
  */
 export function AiFundingSettings() {
   const queryClient = useQueryClient();
@@ -115,12 +175,63 @@ export function AiFundingSettings() {
     onSuccess: replace,
   });
   const retry = useActionMutation({
-    mutationFn: () => aiFunding.resetCreditRefusal.mutationOptions(),
-    success: "API credits will be tried on the next call",
-    error: "Couldn't clear the credit refusals",
+    mutationFn: () => aiFunding.resetFundingRefusal.mutationOptions(),
+    success: "Cubby will try it on the next call",
+    error: "Couldn't clear the refusal",
     onSuccess: replace,
   });
   const budget = status.data;
+  const retryButton = (source: FundingRefusalSource, label: string) => (
+    <Button
+      type="button"
+      size="sm"
+      variant="outline"
+      disabled={retry.isPending}
+      onClick={() => retry.mutate({ source })}
+    >
+      {label}
+    </Button>
+  );
+  const actions = (data: AiFundingStatus) => ({
+    ...(data.credit.state === "refused" && {
+      credit: retryButton("credit", "Retry Claude credit now"),
+    }),
+    ...(data.openaiCredit.state === "refused" && {
+      openaiCredit: retryButton("openaiCredit", "Retry OpenAI credit now"),
+    }),
+    ...(data.paid.state === "refused" && {
+      paid: retryButton("paid", "Retry paid now"),
+    }),
+    ...(data.plan.state === "paused" && {
+      plan: (
+        <Button
+          size="sm"
+          variant="outline"
+          nativeButton={false}
+          render={
+            <a href={CHATGPT_USAGE_URL} target="_blank" rel="noreferrer">
+              Manage usage
+            </a>
+          }
+        />
+      ),
+    }),
+    ...((data.plan.state === "disconnected" ||
+      data.plan.state === "needs_reauthorization") && {
+      plan: (
+        <Button
+          size="sm"
+          variant="outline"
+          nativeButton={false}
+          render={
+            <Link to="/settings" hash="chatgpt">
+              {data.plan.state === "disconnected" ? "Connect" : "Reconnect"}
+            </Link>
+          }
+        />
+      ),
+    }),
+  });
   return (
     <div className="space-y-3">
       <Description size="xs">
@@ -133,108 +244,40 @@ export function AiFundingSettings() {
         {status.isLoading ? <StatusText>Loading AI funding…</StatusText> : null}
         {status.error ? <ErrorDisplay error={status.error} /> : null}
         {budget ? (
-          <>
-            <Stack gap="sm">
-              <FundingBudgetEditor
-                key={`${budget.credit.limitUsd}:${budget.openaiCredit.limitUsd}:${budget.plan.limitUsd}:${budget.paid.limitUsd}`}
-                budget={budget}
-                pending={setCredit.isPending}
-                onSave={(settings) => setCredit.mutate(settings)}
-              />
-              <p className="text-xs text-muted-foreground">
-                Budgets reset {clock(budget.windowEnd)}.
-              </p>
-            </Stack>
-            {budget.credit.state === "refused" ? (
-              <Stack gap="sm">
-                <Row align="center" justify="between" gap="sm" wrap>
-                  <p className="min-w-0 text-sm">
-                    Anthropic refused Claude credit. Cubby skips it until{" "}
-                    {budget.credit.until ? when(budget.credit.until) : "reset"},
-                    trying one call each six-hour window.
-                  </p>
-                  <Button
-                    variant="outline"
-                    disabled={retry.isPending}
-                    onClick={() => retry.mutate({})}
-                  >
-                    Retry Claude credit now
-                  </Button>
-                </Row>
-                {budget.credit.reason ? (
-                  <code className="rounded-md bg-muted p-3 text-xs break-all">
-                    {budget.credit.reason}
-                  </code>
-                ) : null}
-              </Stack>
-            ) : null}
-            {budget.openaiCredit.state === "refused" ? (
-              <Stack gap="sm">
-                <Row align="center" justify="between" gap="sm" wrap>
-                  <p className="min-w-0 text-sm">
-                    OpenAI refused API credit. Cubby skips it until{" "}
-                    {budget.openaiCredit.until
-                      ? when(budget.openaiCredit.until)
-                      : "reset"}
-                    , trying one call each six-hour window.
-                  </p>
-                  <Button
-                    variant="outline"
-                    disabled={retry.isPending}
-                    onClick={() => retry.mutate({})}
-                  >
-                    Retry API credits now
-                  </Button>
-                </Row>
-                {budget.openaiCredit.reason ? (
-                  <code className="rounded-md bg-muted p-3 text-xs break-all">
-                    {budget.openaiCredit.reason}
-                  </code>
-                ) : null}
-              </Stack>
-            ) : null}
-            {budget.plan.state === "paused" ? (
-              <Row align="center" justify="between" gap="sm" wrap>
-                <p className="text-sm">
-                  {budget.plan.until
-                    ? `ChatGPT plan usage limit reached; resets ${when(budget.plan.until)}`
-                    : "ChatGPT plan usage limit reached; ChatGPT didn’t say when it resets"}
-                </p>
-                <Button
-                  variant="outline"
-                  nativeButton={false}
-                  render={
-                    <a
-                      href={CHATGPT_USAGE_URL}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      Manage usage
-                    </a>
-                  }
-                />
-              </Row>
-            ) : null}
-            {budget.plan.state !== "available" && budget.plan.reason ? (
-              <p className="text-xs break-words text-muted-foreground">
-                ChatGPT plan: {budget.plan.reason}
-              </p>
-            ) : null}
-          </>
+          <Stack gap="sm">
+            <FundingBudgetEditor
+              key={`${budget.credit.limitUsd}:${budget.openaiCredit.limitUsd}:${budget.plan.limitUsd}:${budget.paid.limitUsd}`}
+              budget={budget}
+              pending={setCredit.isPending}
+              onSave={(settings) => setCredit.mutate(settings)}
+              actions={actions(budget)}
+            />
+            <p className="text-xs text-muted-foreground">
+              Budgets reset {clock(budget.windowEnd)}.
+            </p>
+          </Stack>
         ) : null}
       </Stack>
     </div>
   );
 }
 
+type FundingRow = (typeof SOURCES)[number] & {
+  verdict: Verdict;
+  reason: string | null;
+};
+
 export function FundingBudgetEditor({
   budget,
   pending,
   onSave,
+  actions = {},
 }: {
   budget: AiFundingStatus;
   pending: boolean;
   onSave: (settings: AiBudgetSettings) => void;
+  /** Each source's recovery action, shown on its own row. */
+  actions?: Partial<Record<SourceId, ReactNode>>;
 }) {
   const [draft, setDraft] = useState({
     credit: String(budget.credit.limitUsd),
@@ -242,6 +285,7 @@ export function FundingBudgetEditor({
     plan: String(budget.plan.limitUsd),
     paid: String(budget.paid.limitUsd),
   });
+  const [open, setOpen] = useState<ReadonlySet<SourceId>>(new Set());
   const valid = Object.values(draft).every(
     (value) =>
       value.trim() !== "" &&
@@ -254,46 +298,20 @@ export function FundingBudgetEditor({
     draft.openaiCredit !== String(budget.openaiCredit.limitUsd) ||
     draft.plan !== String(budget.plan.limitUsd) ||
     draft.paid !== String(budget.paid.limitUsd);
-  const rows: FundingRow[] = (
-    [
-      { id: "credit", source: "Claude credit", state: creditLabel(budget) },
-      {
-        id: "openaiCredit",
-        source: "OpenAI credit",
-        state: creditLabel({ credit: budget.openaiCredit }),
-      },
-      { id: "plan", source: "ChatGPT plan", state: planLabel(budget) },
-      {
-        id: "paid",
-        source: "Paid",
-        state:
-          budget.paid.spentUsd >= budget.paid.limitUsd
-            ? "budget spent"
-            : "within budget",
-      },
-    ] satisfies { id: keyof typeof draft; source: string; state: string }[]
-  ).map((row) => ({
-    ...row,
-    window: (
-      <Row align="center" gap="sm">
-        <span>{usd(budget[row.id].spentUsd)} of $</span>
-        <Input
-          aria-label={`${row.source} budget per window`}
-          type="number"
-          inputMode="decimal"
-          min={0}
-          max={100}
-          step={0.5}
-          value={draft[row.id]}
-          disabled={pending}
-          onChange={(event) =>
-            setDraft({ ...draft, [row.id]: event.target.value })
-          }
-          className="h-7 w-20 tabular-nums"
-        />
-      </Row>
-    ),
+  const rows: FundingRow[] = SOURCES.map((source) => ({
+    ...source,
+    verdict: fundingVerdict(budget, source.id),
+    // A usable source keeps no stale diagnostic.
+    reason: budget[source.id].availability.usable
+      ? null
+      : budget[source.id].reason,
   }));
+  const detailId = (id: SourceId) => `ai-funding-${id}-details`;
+  const toggle = (id: SourceId) => {
+    const next = new Set(open);
+    if (!next.delete(id)) next.add(id);
+    setOpen(next);
+  };
   return (
     <form
       className="space-y-2"
@@ -311,12 +329,100 @@ export function FundingBudgetEditor({
       <StaticTable
         rows={rows}
         rowKey={(row) => row.id}
+        // Phones scroll the table sideways rather than crushing its controls.
+        className="min-w-3xl"
         cellClassName="tabular-nums"
         columns={[
-          { id: "source", header: "Funding", cell: (row) => row.source },
-          { id: "window", header: "This window", cell: (row) => row.window },
-          { id: "state", header: "State", cell: (row) => row.state },
+          {
+            id: "source",
+            header: "Funding",
+            headClassName: "w-28",
+            rowHeader: true,
+            cell: (row) => row.source,
+          },
+          {
+            id: "status",
+            header: "Status",
+            headClassName: "w-72",
+            cell: (row) => (
+              <Row align="center" gap="sm">
+                <FundingStatus verdict={row.verdict} />
+                {row.reason ? (
+                  <Button
+                    type="button"
+                    size="xs"
+                    variant="ghost"
+                    aria-expanded={open.has(row.id)}
+                    aria-controls={detailId(row.id)}
+                    aria-label={`${row.source} details`}
+                    onClick={() => toggle(row.id)}
+                    className="group/details text-muted-foreground"
+                    data-open={open.has(row.id) || undefined}
+                  >
+                    <CaretRightIcon
+                      aria-hidden
+                      className="transition-transform duration-(--brand-motion-fast) ease-cozy group-data-open/details:rotate-90"
+                    />
+                    Details
+                  </Button>
+                ) : null}
+              </Row>
+            ),
+          },
+          {
+            id: "window",
+            header: "This window",
+            headClassName: "w-44",
+            cell: (row) => (
+              <Row align="center" gap="sm">
+                <span>{usd(budget[row.id].spentUsd)} of $</span>
+                <Input
+                  aria-label={`${row.source} budget per window`}
+                  type="number"
+                  inputMode="decimal"
+                  min={0}
+                  max={100}
+                  step={0.5}
+                  value={draft[row.id]}
+                  disabled={pending}
+                  onChange={(event) =>
+                    setDraft({ ...draft, [row.id]: event.target.value })
+                  }
+                  className="h-7 w-20 shrink-0 tabular-nums"
+                />
+              </Row>
+            ),
+          },
+          {
+            id: "action",
+            header: <span className="sr-only">Action</span>,
+            cellClassName: "text-right",
+            cell: (row) => actions[row.id] ?? null,
+          },
         ]}
+        rowDetail={(row) =>
+          row.reason && open.has(row.id) ? (
+            // Sticky and viewport-bounded: on a phone the table scrolls
+            // sideways, but the diagnostic stays readable in view.
+            <div
+              id={detailId(row.id)}
+              className="sticky left-2 max-w-[calc(100vw-3rem)] space-y-1.5 py-0.5"
+            >
+              {detailSentence(budget, row.id) ? (
+                <p className="max-w-prose text-muted-foreground">
+                  {detailSentence(budget, row.id)}
+                </p>
+              ) : null}
+              <CodeBlock>
+                <CodeBlockHeader
+                  label={`${row.provider} response`}
+                  value={row.reason}
+                />
+                <CodeBlockContent>{row.reason}</CodeBlockContent>
+              </CodeBlock>
+            </div>
+          ) : null
+        }
       />
       <Button
         type="submit"
@@ -333,7 +439,8 @@ export function FundingBudgetEditor({
 /**
  * The one-Run paid grant. Within the paid budget one confirmation resumes the
  * Run; once the window's paid budget is spent a second confirmation names the
- * amount past it (between $1 and $10).
+ * amount past it (between $1 and $10). A recorded empty gateway balance is
+ * named before confirming; the grant clears it so the Run probes the gateway.
  */
 export function PaidRunButton({
   label,
@@ -388,6 +495,14 @@ export function PaidRunButton({
                   : ""}
                 .
               </AlertDialogDescription>
+              {paid?.state === "refused" ? (
+                <AlertDialogDescription className="text-destructive">
+                  The AI Gateway balance was empty
+                  {paid.until ? ` (held until ${clock(paid.until)})` : ""}.
+                  Allowing paid models tries the gateway again now; add balance
+                  first or the Run pauses again.
+                </AlertDialogDescription>
+              ) : null}
             </AlertDialogHeader>
           )}
           <AlertDialogFooter>

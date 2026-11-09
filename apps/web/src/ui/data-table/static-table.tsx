@@ -1,5 +1,5 @@
 import { cn } from "cn";
-import type { ComponentProps, ReactNode } from "react";
+import { Fragment, type ComponentProps, type ReactNode } from "react";
 
 import {
   Table,
@@ -35,6 +35,7 @@ export function StaticTable<T>({
   rowClassName,
   hideHeader = false,
   emptyMessage,
+  rowDetail,
   ...tableProps
 }: Omit<ComponentProps<"table">, "children"> & {
   rows: readonly T[];
@@ -48,6 +49,11 @@ export function StaticTable<T>({
   rowClassName?: string | ((row: T, index: number) => string | undefined);
   hideHeader?: boolean;
   emptyMessage?: ReactNode;
+  /**
+   * A full-width row under its parent, such as a disclosed raw diagnostic;
+   * null renders none. The caller owns the open state and its toggle.
+   */
+  rowDetail?: (row: T, index: number) => ReactNode;
 }) {
   const visibleColumns = columns.filter((column) => !column.hidden);
   return (
@@ -80,36 +86,50 @@ export function StaticTable<T>({
         </TableHeader>
       )}
       <TableBody>
-        {rows.map((row, index) => (
-          <TableRow
-            key={rowKey(row, index)}
-            className={
-              typeof rowClassName === "function"
-                ? rowClassName(row, index)
-                : rowClassName
-            }
-          >
-            {visibleColumns.map((column) => {
-              const props = column.cellProps?.(row, index);
-              if (props === null) return null;
-              const Cell = column.rowHeader ? TableHead : TableCell;
-              return (
-                <Cell
-                  key={column.id}
-                  scope={column.rowHeader ? "row" : undefined}
-                  {...props}
-                  className={cn(
-                    cellClassName,
-                    column.cellClassName,
-                    props?.className,
-                  )}
-                >
-                  {column.cell(row, index)}
-                </Cell>
-              );
-            })}
-          </TableRow>
-        ))}
+        {rows.map((row, index) => {
+          const detail = rowDetail?.(row, index);
+          return (
+            <Fragment key={rowKey(row, index)}>
+              <TableRow
+                className={
+                  typeof rowClassName === "function"
+                    ? rowClassName(row, index)
+                    : rowClassName
+                }
+              >
+                {visibleColumns.map((column) => {
+                  const props = column.cellProps?.(row, index);
+                  if (props === null) return null;
+                  const Cell = column.rowHeader ? TableHead : TableCell;
+                  return (
+                    <Cell
+                      key={column.id}
+                      scope={column.rowHeader ? "row" : undefined}
+                      {...props}
+                      className={cn(
+                        cellClassName,
+                        column.cellClassName,
+                        props?.className,
+                      )}
+                    >
+                      {column.cell(row, index)}
+                    </Cell>
+                  );
+                })}
+              </TableRow>
+              {detail != null && (
+                <TableRow className="hover:bg-transparent">
+                  <TableCell
+                    colSpan={visibleColumns.length}
+                    className="whitespace-normal"
+                  >
+                    {detail}
+                  </TableCell>
+                </TableRow>
+              )}
+            </Fragment>
+          );
+        })}
         {rows.length === 0 && emptyMessage != null && (
           <TableRow>
             <TableCell

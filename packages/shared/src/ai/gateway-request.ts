@@ -528,11 +528,23 @@ export function creditRefusedResponse(
       type: "error",
       error: {
         type: "cubby_credit_refused",
-        message: `${provider === "openai" ? "OpenAI" : "Claude"} credit refused until ${new Date(refusal.until).toISOString()}; Cubby skips it until then, probing once per six-hour window. Reset credit refusals in Settings → AI funding or MCP ai_funding.reset_credit_refusal. Provider: ${refusal.reason}`,
+        message: `${provider === "openai" ? "OpenAI" : "Claude"} credit refused until ${new Date(refusal.until).toISOString()}; Cubby skips it until then, probing once per six-hour window. Retry it in Settings → AI funding or MCP ai_funding.reset_funding_refusal. Provider: ${refusal.reason}`,
       },
     },
     { status: 400 },
   );
+}
+
+/**
+ * The egress Durable Object's answer while a recorded paid-gateway funding
+ * refusal holds: the gateway's own raw body, so every paid caller pauses for
+ * funding exactly as it does on the gateway's refusal (`isPaidFundingUnavailable`).
+ */
+export function paidRefusedResponse(refusal: { reason: string }): Response {
+  return new Response(refusal.reason, {
+    status: 402,
+    headers: { "content-type": "application/json" },
+  });
 }
 
 /** Verified pi-ai terminal formats for structured provider SSE quota errors. */
