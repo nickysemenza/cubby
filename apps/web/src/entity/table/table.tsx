@@ -53,6 +53,8 @@ import { CellSelectionContext } from "../../ui/data-table/cell-selection-context
 import {
   columnOffsetValue,
   columnWidthValue,
+  pinnedColumnWidthVariables,
+  spacerWidthValue,
 } from "../../ui/data-table/column-layout";
 import { DataTablePagination } from "../../ui/data-table/data-table-pagination";
 import {
@@ -627,7 +629,6 @@ function PinnedFooterCell<TItem extends RowData>({
   table: ITable<TItem>;
 }) {
   const pinned = header.column.getIsPinned();
-  const width = columnWidthValue(header.column.id);
   const pinnedColumns =
     pinned === "start"
       ? table.getStartVisibleLeafColumns()
@@ -690,7 +691,7 @@ function PinnedFooterCell<TItem extends RowData>({
         pinned && "sticky z-20 bg-card",
         boundaryClass,
       )}
-      style={{ width, minWidth: width, maxWidth: width, ...inset }}
+      style={inset}
     >
       {header.isPlaceholder ? null : footer}
     </TableCell>
@@ -1065,6 +1066,10 @@ function DesktopTableView<TItem extends RowData>({
           plural: entities[entity].pluralLabel.toLowerCase(),
         }
       : { singular: "record", plural: "records" };
+  const renderColumn = (column: { id: string }) =>
+    unpaintedColumns.has(column.id) ? null : (
+      <col key={column.id} style={{ width: columnWidthValue(column.id) }} />
+    );
 
   return (
     <ColumnVisibilityContext
@@ -1117,8 +1122,21 @@ function DesktopTableView<TItem extends RowData>({
               aria-busy={isTransitioning || isLoading}
               className={styles.table}
               containerClassName="overflow-visible"
-              style={columnSizeVars}
+              style={pinnedColumnWidthVariables(
+                table.getStartVisibleLeafColumns(),
+                table.getEndVisibleLeafColumns(),
+                columnSizeVars,
+              )}
             >
+              {/* Match painted header, record and footer cells: start/center,
+                  spacer, end, debug, with unpainted columns omitted. */}
+              <colgroup style={columnSizeVars}>
+                {table.getStartVisibleLeafColumns().map(renderColumn)}
+                {table.getCenterVisibleLeafColumns().map(renderColumn)}
+                <col style={{ width: spacerWidthValue }} />
+                {table.getEndVisibleLeafColumns().map(renderColumn)}
+                {isDebugEnabled && <col />}
+              </colgroup>
               <TableHeader className="sticky top-0 z-30 border-b border-border bg-card [&_tr]:border-b-0">
                 <TableHeaderLayout
                   table={table}
@@ -1324,6 +1342,7 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
   const {
     colSpan,
     columnsKey,
+    columnSizeVars,
     dConfig,
     hydrated,
     isDebugEnabled,
@@ -1362,8 +1381,13 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
           columnId: total.columnId,
           node: total.node,
           numeric: column.columnDef.meta?.numeric ?? false,
-          width: columnWidthValue(column.id),
-          start: columnOffsetValue(paintedColumns, column.id, "start"),
+          width: columnWidthValue(column.id, columnSizeVars),
+          start: columnOffsetValue(
+            paintedColumns,
+            column.id,
+            "start",
+            columnSizeVars,
+          ),
         },
       ];
     });
@@ -1474,10 +1498,6 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
                 <TableCell
                   key={column.id}
                   className="h-(--table-row-height) border-b border-hairline-soft px-1 py-0"
-                  style={{
-                    width: columnWidthValue(column.id),
-                    maxWidth: columnWidthValue(column.id),
-                  }}
                 >
                   <div
                     className={

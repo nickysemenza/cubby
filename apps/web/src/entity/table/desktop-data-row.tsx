@@ -26,10 +26,7 @@ import { DenseCellContext } from "~/ui/values/stacked-value";
 
 import { CellFrame } from "../../ui/data-table/cell-frame";
 import { NON_SELECTABLE_COLUMN_IDS } from "../../ui/data-table/cell-selection-context";
-import {
-  columnOffsetValue,
-  columnWidthValue,
-} from "../../ui/data-table/column-layout";
+import { columnOffsetValue } from "../../ui/data-table/column-layout";
 import { DebugDialog } from "../../ui/data-table/debug-dialog";
 import { ROW_DENSITY } from "../../ui/data-table/density";
 import {
@@ -100,11 +97,10 @@ function cellPresentation<TItem extends RowData>(
       : pinned === "end" && index === 0
         ? "table-pinned-boundary-end"
         : undefined;
-  const width = columnWidthValue(cell.column.id);
   const offset = pinned
     ? columnOffsetValue(columns, cell.column.id, pinned)
     : undefined;
-  return { selectable, selected, anchor, pinned, boundary, width, offset };
+  return { selectable, selected, anchor, pinned, boundary, offset };
 }
 
 function explainedCellContent<TItem extends RowData>(
@@ -165,7 +161,7 @@ function DesktopDataCell<TItem extends RowData>({
 }) {
   const presentation = cellPresentation(cell);
   const queryClient = useQueryClient();
-  const { selectable, selected, anchor, pinned, boundary, width, offset } =
+  const { selectable, selected, anchor, pinned, boundary, offset } =
     presentation;
   const inset =
     pinned === "start"
@@ -221,7 +217,7 @@ function DesktopDataCell<TItem extends RowData>({
         pinned && "table-pinned-cell sticky z-10",
         boundary,
       )}
-      style={{ width, minWidth: width, maxWidth: width, ...inset }}
+      style={inset}
     >
       <div className={ROW_DENSITY.cellContentClass}>
         <div className="min-w-0">
