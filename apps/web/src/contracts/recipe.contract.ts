@@ -248,7 +248,7 @@ export const recipeContract = defineContract(
         "Read candidate ingredient equivalences harvested from recipe data. Treat these as leads and review the source before changing an Ingredient.",
       input: z.undefined(),
       output: equivalenceReportSchema,
-      cache: { tags: [["recipe", "equivalences"]], profile: "stable" },
+      cache: { tags: [["recipe", "equivalences"]] },
     }),
     scrape: mutation({
       input: scrapeRecipeInput,

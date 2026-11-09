@@ -39,16 +39,7 @@ export function LabelNutritionReview({
 }) {
   const [open, setOpen] = useState(false);
   const id = imageShortcode.parse(label.id);
-  const status = useQuery({
-    ...imageProcessing.status.queryOptions({ id }),
-    refetchInterval: (query) =>
-      Object.values(query.state.data?.status ?? {}).some((value) =>
-        ["pending", "leased", "waiting_for_device"].includes(value ?? ""),
-      )
-        ? 15_000
-        : false,
-    refetchIntervalInBackground: false,
-  });
+  const status = useQuery(imageProcessing.status.queryOptions({ id }));
   const analysis = status.data?.analyses.find((entry) => entry.preferred);
   const proposal = useMemo(() => {
     if (!analysis?.result.nutritionFacts) return null;

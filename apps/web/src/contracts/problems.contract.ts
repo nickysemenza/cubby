@@ -34,7 +34,6 @@ export const problemsContract = defineContract(
     getMaintenanceCounts: query({
       input: noInput,
       output: maintenanceCountsSchema,
-      cache: { profile: "stable" },
     }),
     dryRunReparse: query({
       exposure: "capability",

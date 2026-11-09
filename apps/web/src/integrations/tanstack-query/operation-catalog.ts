@@ -66,13 +66,7 @@ export type QueryPolicy<
   Output extends z.ZodTypeAny,
 > = SharedPolicy<Input, Output> & {
   tags?: readonly OperationCacheTag[];
-  cache?:
-    | OperationCacheProfile
-    | {
-        bivarianceHack(
-          input: z.output<Input>,
-        ): OperationCacheProfile | undefined;
-      }["bivarianceHack"];
+  cache?: OperationCacheProfile;
 };
 
 export type MutationPolicy<
@@ -188,12 +182,6 @@ const invalidationPolicies = new Map<
   OperationId,
   (input: RawOperationValue) => InvalidationTagSet
 >();
-
-function isCacheProfileResolver<Input extends z.ZodTypeAny>(
-  policy: QueryDefinition<Input, z.ZodTypeAny>["cache"],
-): policy is (input: z.output<Input>) => OperationCacheProfile | undefined {
-  return typeof policy === "function";
-}
 
 function isInvalidationResolver<Input extends z.ZodTypeAny>(
   policy: MutationDefinition<Input, z.ZodTypeAny>["invalidates"],
@@ -515,15 +503,8 @@ function buildQueryDescriptor<
 ): QueryDescriptor<Input, Output> {
   const { id, definition, entity } = options;
   const operation = catalogOperation(options);
-  const staticProfile = isCacheProfileResolver(definition.cache)
-    ? undefined
-    : definition.cache;
-  const meta = descriptorMeta(
-    id,
-    definition,
-    entity,
-    operationCachePolicy(staticProfile),
-  );
+  const resolved = operationCachePolicy(definition.cache);
+  const meta = descriptorMeta(id, definition, entity, resolved);
   const parsedQueryKey = (
     input: z.output<Input>,
   ): OperationQueryKey<z.output<Input>> => [
@@ -531,21 +512,10 @@ function buildQueryDescriptor<
     id,
     keyPayload(entity, input),
   ];
-  type QueryPolicy = {
+  const staticPolicy: {
     meta: CubbyOperationMeta;
     freshness?: OperationFreshnessPolicy;
-  };
-  const queryPolicy = (input: z.output<Input>): QueryPolicy => {
-    const profile = isCacheProfileResolver(definition.cache)
-      ? definition.cache(input)
-      : definition.cache;
-    const resolved = operationCachePolicy(profile);
-    const policy: QueryPolicy = {
-      meta: descriptorMeta(id, definition, entity, resolved),
-    };
-    if (resolved.freshness) policy.freshness = resolved.freshness;
-    return policy;
-  };
+  } = resolved.freshness ? { meta, freshness: resolved.freshness } : { meta };
   return {
     id,
     definition,
@@ -555,11 +525,14 @@ function buildQueryDescriptor<
         parseOperationInput(id, () => definition.input.parse(args[0])),
         args[1],
       ),
-    policy: (input) => queryPolicy(definition.input.parse(input)),
+    policy: (input) => {
+      definition.input.parse(input);
+      return staticPolicy;
+    },
     queryKey: (...args) => parsedQueryKey(definition.input.parse(args[0])),
     queryOptions: (...args) => {
       const input = definition.input.parse(args[0]);
-      const policy = queryPolicy(input);
+      const policy = staticPolicy;
       return tanstackQueryOptions({
         queryKey: parsedQueryKey(input),
         queryFn: ({ signal, client, queryKey }) =>
@@ -588,7 +561,7 @@ function buildQueryDescriptor<
       },
     ) => {
       const parsedInput = definition.input.parse(input);
-      const policy = queryPolicy(parsedInput);
+      const policy = staticPolicy;
       const infiniteKey: InfiniteOperationQueryKey<z.output<Input>> = [
         "operation",
         id,

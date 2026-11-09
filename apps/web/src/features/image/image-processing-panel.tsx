@@ -365,17 +365,9 @@ export function ImageProcessingPanel({ image }: { image: ImageWithEntity }) {
   );
 }
 
+// Processing outcomes ring `image` over the change socket; no polling.
 function useImageProcessingStatus(id: ReturnType<typeof imageShortcode.parse>) {
-  return useQuery({
-    ...imageProcessing.status.queryOptions({ id }),
-    refetchInterval: (query) =>
-      Object.values(query.state.data?.status ?? {}).some((value) =>
-        ["pending", "leased", "waiting_for_device"].includes(value ?? ""),
-      )
-        ? 15_000
-        : false,
-    refetchIntervalInBackground: false,
-  });
+  return useQuery(imageProcessing.status.queryOptions({ id }));
 }
 
 export const ImageDetailActions: DetailSlotComponent<"image"> = ({

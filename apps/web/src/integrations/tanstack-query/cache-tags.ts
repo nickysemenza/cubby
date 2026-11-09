@@ -7,22 +7,6 @@ import type { EntityBrowserMutationInput } from "~/server/entity-kernel/contract
 
 import type { OperationCacheTag } from "./operation-meta";
 
-/** Entity read cache profiles; omitted entities use the default profile. */
-const entityReadCache = {
-  product: { list: "browse", detail: "persisted-detail" },
-  location: { list: "browse", detail: "persisted-detail" },
-  recipe: { list: "browse", detail: "persisted-detail" },
-  ingredient: { list: "browse", detail: "persisted-detail" },
-  inventory: { detail: "persisted-detail" },
-} satisfies Record<string, { list?: "browse"; detail?: "persisted-detail" }>;
-
-const entityReadCacheByName = new Map<
-  string,
-  { list?: "browse"; detail?: "persisted-detail" }
->(Object.entries(entityReadCache));
-export const entityReadCacheProfile = (entity: string) =>
-  entityReadCacheByName.get(entity);
-
 /**
  * An invalidation set can only be minted by this module. Keeping the brand at
  * the policy boundary prevents a call site from quietly reintroducing an
@@ -587,10 +571,11 @@ export const calendarHouseholdRipple = (
  * The rest — `ai` (×4), `mcp` (×3), `upc.lookup`,
  * `relatedness.product`, `entity.inspectorHealth`, `entityIntegrity` — are
  * external or derived reads with nothing that "writes" them from this app.
- * The global 60-second interactive policy in `query-policy.ts` means none of
+ * The `browse` profile's five-minute staleness in `query-policy.ts`, plus the
+ * one-minute interaction catch-up in `database-changes.ts`, means none of
  * these is ever PERMANENTLY stale even when nothing invalidates it, which is
- * why a reverse-direction checker was not built. Revisit only if that default
- * is raised, or a descriptor gains a permanently fresh cache profile.
+ * why a reverse-direction checker was not built. Revisit only if a descriptor
+ * gains a permanently fresh cache profile.
  */
 
 /** `entityRipple` hands back the SAME array reference for the same entity, so

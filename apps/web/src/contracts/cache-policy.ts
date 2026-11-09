@@ -10,14 +10,12 @@ import { allEntities } from "@cubby/schemas/entity-roster";
 /** A semantic cache tag. Matching is prefix-only (see `operation-tags` tests). */
 export type CacheTag = readonly [string, ...string[]];
 
-/** Named freshness behavior a query opts into; resolved in `query-policy.ts`. */
-export type CacheProfile =
-  | "interactive"
-  | "live-status"
-  | "browse"
-  | "stable"
-  | "derived-summary"
-  | "persisted-detail";
+/**
+ * Named freshness behavior a query opts into; resolved in `query-policy.ts`.
+ * `browse` (the default) relies on change notifications for freshness;
+ * `live-status` rereads on every mount.
+ */
+export type CacheProfile = "browse" | "live-status";
 
 /**
  * Names a row of the browser's invalidation fan-out table (`ripple` in

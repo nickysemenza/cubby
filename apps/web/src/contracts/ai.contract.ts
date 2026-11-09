@@ -134,12 +134,10 @@ export const aiContract = defineContract(
       modelBacked: true,
       input: fieldSuggestionsInput,
       output: fieldSuggestionsOut,
-      cache: { profile: "stable" },
     }),
     suggestFieldsBatch: query({
       input: fieldSuggestionsBatchInput,
       output: fieldSuggestionsBatchOut,
-      cache: { profile: "stable" },
     }),
     settledSuggestionQuestions: query({
       note: "List pages skip re-asking declined suggestion questions",
@@ -147,13 +145,12 @@ export const aiContract = defineContract(
       output: settledSuggestionQuestionsOut,
       // List pages batch this read and cache each question separately, tagged
       // with the entity kinds its decision reads (`record-suggestions.tsx`).
-      cache: { profile: "stable", tags: [["ai", "settledSuggestionQuestion"]] },
+      cache: { tags: [["ai", "settledSuggestionQuestion"]] },
     }),
     decisionCatalog: query({
       note: "The /ai Decisions tab; agents replay decisions through suggest_fields",
       input: zod.undefined(),
       output: decisionCatalogOut,
-      cache: { profile: "stable" },
     }),
     automaticWork: query({
       exposure: "capability",
@@ -184,7 +181,6 @@ export const aiContract = defineContract(
     suggestExternalIdKind: query({
       input: externalIdKindSuggestionInput,
       output: suggestExternalIdKindOut,
-      cache: { profile: "stable" },
     }),
     usageFilterOptions: query({
       exposure: "capability",

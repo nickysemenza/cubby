@@ -149,7 +149,7 @@ describe("operation catalog", () => {
       signal: undefined,
     });
     expect(operation.queryOptions({ start: "today" })).toMatchObject({
-      staleTime: 120_000,
+      staleTime: 300_000,
       meta: {
         cacheTags: [["calendar", "range"]],
         cacheProfile: "browse",

@@ -3,7 +3,6 @@ import type { DefaultOptions, Query } from "@tanstack/react-query";
 import type { CacheProfile } from "~/contracts/cache-policy";
 
 const MINUTE = 60_000;
-const HOUR = 60 * MINUTE;
 
 export const IDEMPOTENT_MUTATION_RETRY = 2;
 
@@ -47,46 +46,23 @@ export type ResolvedOperationCachePolicy = {
 };
 
 /**
- * The complete cache-policy vocabulary for operation descriptors. These names
- * encode resource behavior, so equal durations used for unrelated UI concerns
- * stay local instead of becoming coupled through a bag of timing constants.
+ * The complete cache-policy vocabulary for operation descriptors. Freshness
+ * comes from `household.changed` notifications and the interaction catch-up,
+ * so browsing reads stay cached; status reads reread on every mount.
  */
 const OPERATION_CACHE_PROFILES: Readonly<
   Record<OperationCacheProfile, ResolvedOperationCachePolicy>
 > = Object.freeze({
-  interactive: Object.freeze({
-    profile: "interactive",
+  browse: Object.freeze({
+    profile: "browse",
+    freshness: Object.freeze({ staleTime: 5 * MINUTE, gcTime: 30 * MINUTE }),
   }),
   "live-status": Object.freeze({
     profile: "live-status",
     freshness: Object.freeze({ staleTime: 0 }),
   }),
-  browse: Object.freeze({
-    profile: "browse",
-    freshness: Object.freeze({ staleTime: 2 * MINUTE }),
-  }),
-  stable: Object.freeze({
-    profile: "stable",
-    freshness: Object.freeze({ staleTime: 5 * MINUTE }),
-  }),
-  "derived-summary": Object.freeze({
-    profile: "derived-summary",
-    freshness: Object.freeze({
-      staleTime: 5 * MINUTE,
-      gcTime: 30 * MINUTE,
-    }),
-  }),
-  "persisted-detail": Object.freeze({
-    profile: "persisted-detail",
-    freshness: Object.freeze({
-      staleTime: 5 * MINUTE,
-      // Long in-memory GC — this entity's detail is worth keeping warm well
-      // past the tab's active session even without disk persistence.
-      gcTime: 24 * HOUR,
-    }),
-  }),
 });
 
 export const operationCachePolicy = (
-  profile: OperationCacheProfile = "interactive",
+  profile: OperationCacheProfile = "browse",
 ): ResolvedOperationCachePolicy => OPERATION_CACHE_PROFILES[profile];

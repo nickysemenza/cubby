@@ -2341,6 +2341,11 @@ data: a query's `cache: { tags?, profile? }` and a mutation's
 declares them only when they differ (`tags: []` opts out of tagging).
 `invalidates` names rows of the fan-out table in
 `integrations/tanstack-query/cache-tags.ts`; an empty list is a deliberate no-op.
+`profile` is `browse` (default) or `live-status`
+([change notifications](../apps/web/docs/web-runtime.md#change-notifications)).
+The fan-out table stays until notifications carry rollup consumers: generated
+read dependents do not yet name the Vendor, Purchase, Project or calendar
+rollups that an Expense write moves.
 The vocabulary types live in `contracts/cache-policy.ts`, which contracts may
 import; no contract holds React, query-client, or input-dependent code.
 

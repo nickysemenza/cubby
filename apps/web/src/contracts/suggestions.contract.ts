@@ -24,7 +24,7 @@ export const suggestionsContract = defineContract(
         "Already-applied decisions, newest first: Email relevance, automatic Email links, mail-import outcomes, and automatic-rule applications. Filter by family, recordIds and reviewStatus. Wrong records member Feedback through suggestions.review. Declared correction options use verdict wrong, intent apply, correction and expectedFingerprint; without a correction use intent history. Mail-import outcomes are history only; correct affected records through their domain actions. Decisions stay in this audit after review.",
       input: automaticDecisionListInput,
       output: automaticDecisionListOut,
-      cache: { profile: "stable", tags: [["suggestions"]] },
+      cache: { tags: [["suggestions"]] },
     }),
     recordCounts: query({
       exposure: "view",
@@ -32,7 +32,6 @@ export const suggestionsContract = defineContract(
       input: suggestionRecordCountsInput,
       output: suggestionRecordCountsOut,
       cache: {
-        profile: "stable",
         tags: [["suggestions"], ["sourceTransactionRecord"], ["connections"]],
       },
     }),
@@ -42,7 +41,6 @@ export const suggestionsContract = defineContract(
       input: suggestionListInput,
       output: suggestionListOut,
       cache: {
-        profile: "stable",
         tags: [["suggestions"], ["sourceTransactionRecord"], ["connections"]],
       },
     }),
@@ -52,7 +50,6 @@ export const suggestionsContract = defineContract(
       input: suggestionCountsInput,
       output: suggestionCountsOut,
       cache: {
-        profile: "stable",
         tags: [["suggestions"], ["sourceTransactionRecord"], ["connections"]],
       },
     }),
