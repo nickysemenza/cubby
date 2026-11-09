@@ -33,6 +33,7 @@ const source: WorkSource = {
   executor: "human",
   entity: null,
   link: { kind: "suggestions" },
+  admittedReasonsOnly: true,
   reasons: Object.entries({
     field: "Pending field suggestions",
     recommendation: "Pending connection suggestions",

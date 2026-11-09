@@ -45,6 +45,7 @@ import {
 import { resolveLiveShortcodes } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import {
+  admittedReasons,
   emptyWorkCandidates,
   scopeAdmitsReasons,
   type WorkCte,
@@ -236,16 +237,45 @@ const routedWork = sql`SELECT work.*, routing.owner_codes,
           ELSE ARRAY[]::text[] END AS owner_codes
       ) routing`;
 
-/** The admitted sources' published rows, routed when they were published. */
-const publishedRouted = (admitted: readonly WorkSource[]) =>
-  sql`SELECT source, entity, id, name, key, family, executor, reason,
-      "reasonKeys" AS reason_keys, owners, "exclusiveOwner" AS exclusive_owner,
+const publishedColumns = (reasonKeys: SQL) =>
+  sql`source, entity, id, name, key, family, executor, reason,
+      ${reasonKeys} AS reason_keys, owners, "exclusiveOwner" AS exclusive_owner,
       shared, amount, date, "inputIncomplete" AS input_incomplete,
-      "ownerCodes" AS owner_codes, "ownerKey" AS owner_key, "ownerLabel" AS owner_label
-    FROM "WorkItem" WHERE source IN (${sql.join(
-      [...admitted.map((source) => sql`${source.id}`), sql`NULL`],
-      sql`, `,
-    )})`;
+      "ownerCodes" AS owner_codes, "ownerKey" AS owner_key, "ownerLabel" AS owner_label`;
+
+/**
+ * The admitted sources' published rows, routed when they were published. A
+ * source whose rows carry only admitted reasons keeps the admitted part of
+ * its stored membership, as its live candidates would.
+ */
+const publishedRouted = (admitted: readonly WorkSource[], scope: WorkScope) => {
+  const whole = admitted.filter((source) => !source.admittedReasonsOnly);
+  return sql.join(
+    [
+      sql`SELECT ${publishedColumns(sql`"reasonKeys"`)} FROM "WorkItem"
+        WHERE source IN (${sql.join(
+          [...whole.map((source) => sql`${source.id}`), sql`NULL`],
+          sql`, `,
+        )})`,
+      ...admitted
+        .filter((source) => source.admittedReasonsOnly)
+        .map((source) => {
+          const keys = sql.join(
+            admittedReasons(scope, source.reasons).map(
+              (reason) => sql`${reason.key}`,
+            ),
+            sql`, `,
+          );
+          return sql`SELECT * FROM (SELECT ${publishedColumns(
+            sql`ARRAY(SELECT reason FROM unnest("reasonKeys") WITH ORDINALITY AS stored(reason, position)
+              WHERE reason IN (${keys}) ORDER BY position)`,
+          )} FROM "WorkItem" WHERE source = ${source.id}) pruned
+            WHERE cardinality(reason_keys) > 0`;
+        }),
+    ].map((query) => sql`(${query})`),
+    sql` UNION ALL `,
+  );
+};
 
 /**
  * Replaces the household publication with the composed sources' current
@@ -328,7 +358,11 @@ async function queryWorkQueue(
   );
   const published = read.published;
   const { prepared, withCtes, routed } = published
-    ? { prepared: [], withCtes: sql``, routed: publishedRouted(admitted) }
+    ? {
+        prepared: [],
+        withCtes: sql``,
+        routed: publishedRouted(admitted, scope),
+      }
     : await candidateUnion(db, admitted, scope).then((live) => ({
         ...live,
         routed: sql`WITH work AS NOT MATERIALIZED (${live.union}) ${routedWork}`,

@@ -4063,6 +4063,10 @@ two minutes) is replaced after the response, one attempt at a time, and its
 commit rings `workQueue` readers. MCP reads and `workQueue.forRecord` stay live,
 since agents act and reread and a record strip is already scoped. Publication
 captures coverage messages and incomplete Project/diagnostic inputs with the rows.
+A source declared `admittedReasonsOnly` (pending suggestion families) stores
+each record's full membership; the read keeps only the admitted reasons and
+drops a record with none, as its live candidates do. A Product with a field
+suggestion and a product-pair review therefore stays in Needs you as the pair.
 
 Every research gap source uses `gapPublicationRead` to join its retained quality
 publication once by entity id, kind and key for admission and reason columns.

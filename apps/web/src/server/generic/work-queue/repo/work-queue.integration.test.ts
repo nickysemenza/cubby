@@ -7,6 +7,7 @@ import {
   type WorkDiagnosticFacts,
 } from "@cubby/schemas/work-diagnostic-facts";
 import {
+  NEEDS_YOU_FILTERS,
   workQueueInput,
   type WorkQueueInput,
   type WorkFamily,
@@ -15,6 +16,7 @@ import {
 import { CURRENT_MEMBER_FILTER } from "@cubby/shared";
 import { eq, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
+import { seedFieldSuggestion } from "tooling/shared-suggestion-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
@@ -26,6 +28,7 @@ import {
   financialAccount,
   product as productTable,
 } from "~/server/db/schema";
+import { upsertAgentProductMatch } from "~/server/domains/product/repo/match/product-match-candidate";
 import { loadWorkDiagnosticFacts } from "~/server/domains/work/repo/work-diagnostic-facts";
 import {
   diagnosticWorkSources,
@@ -665,6 +668,68 @@ describe("composed Work queue engine", () => {
         )
       ).meta.totalCount,
     ).toBe(0);
+  });
+
+  // Regression: the publication stored one record's pending families together,
+  // so excluding one family (Needs you excludes field suggestions) dropped a
+  // Product that also had a product-pair review.
+  it("keeps a mixed suggestion record's admitted families in the publication", async () => {
+    const [lamp, partner] = await Promise.all(
+      ["Synthetic mixed suggestion lamp", "Synthetic pair partner lamp"].map(
+        (name) =>
+          createProductIdentityFixture(
+            ctx.db,
+            makeProductInput({ name }),
+            ctx.actor,
+          ),
+      ),
+    );
+    if (!lamp || !partner)
+      throw new Error("Synthetic products were not created");
+    await seedFieldSuggestion(ctx.db, {
+      entity: "product",
+      recordId: lamp.entityId,
+      field: "model",
+      currentValue: null,
+      suggestedValue: "Synthetic model",
+      confidence: 0.9,
+      model: "typesafe/jev",
+      kind: "addition",
+      status: "pending",
+      createdAt: new Date(),
+    });
+    await upsertAgentProductMatch(ctx.db, {
+      productIds: [lamp.entityId, partner.entityId],
+      evidence: "Synthetic same lamp",
+      sourceUrls: [],
+    });
+    const both = ["suggestions:field", "suggestions:product_pair"];
+    for (const [filters, reasonKeys] of [
+      [
+        { reasonExclude: NEEDS_YOU_FILTERS.reasonExclude },
+        ["suggestions:product_pair"],
+      ],
+      [{ reason: "suggestions:field" }, ["suggestions:field"]],
+      [{ reason: both }, both],
+      [{}, both],
+    ] as const) {
+      const read = {
+        input: {
+          ...filters,
+          entity: "product",
+          query: "Synthetic mixed suggestion",
+        },
+        memberPartyId: null,
+        memberOnly: false,
+      } as const;
+      const live = await readComposedQueue(ctx.db, read);
+      expect(
+        live.items.filter((row) => row.family === "suggestion"),
+      ).toMatchObject([{ id: lamp.id, reasonKeys }]);
+      const published = await readPublishedWorkQueue(ctx.db, read);
+      expect(published.items).toEqual(live.items);
+      expect(published.meta.totalCount).toBe(live.meta.totalCount);
+    }
   });
 
   it("composes real gap sources with their declared labels and fresh record facts", async () => {

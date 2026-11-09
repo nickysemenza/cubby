@@ -73,6 +73,12 @@ export interface WorkSource {
   readonly actions?: readonly WorkAction[];
   /** Admits gap reasons only; a reason filter of data checks keeps it. */
   readonly carriesGaps?: boolean;
+  /**
+   * A row's reasons are only those the read admits, and a record with none
+   * admitted is no row (pending suggestion families). Candidates prune them
+   * live; a publication stores full membership and the read prunes it.
+   */
+  readonly admittedReasonsOnly?: boolean;
   /** Names the published inputs when a source reports missingInputs. */
   readonly inputLabel?: string;
   readonly candidates: (
