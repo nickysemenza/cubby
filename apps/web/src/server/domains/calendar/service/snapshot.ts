@@ -1,3 +1,4 @@
+import type { CalendarItem } from "@cubby/schemas/calendar";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { uniq } from "es-toolkit";
 
@@ -9,7 +10,13 @@ import type {
   CalendarRefreshResult,
   StoredCalendarDocument,
 } from "../repo/contracts";
-import { createIcsDocument, type IcsFeed, kindsForFeed } from "./ics";
+import {
+  createIcsDocument,
+  type IcsFeed,
+  kindsForFeed,
+  type PublishableCalendarItem,
+  serializeIcsEvent,
+} from "./ics";
 
 const PAST_DAYS = 60;
 /** PAST_DAYS + FUTURE_DAYS stays within the range schema's 366-day cap. */
@@ -53,7 +60,19 @@ export async function buildCalendarSnapshot(
       kinds: uniq([...kindsForFeed("all"), ...kindsForFeed("garden")]),
     },
     async (items) => {
-      for (const builder of Object.values(builders)) builder.append(items);
+      // Feeds overlap (`all` repeats meals and tasks): serialize each event
+      // once per page and let every publishing feed retain the same text.
+      const texts = new Map<CalendarItem, string>();
+      const shared = (item: PublishableCalendarItem) => {
+        let text = texts.get(item);
+        if (text === undefined) {
+          text = serializeIcsEvent(item, documentOptions);
+          texts.set(item, text);
+        }
+        return text;
+      };
+      for (const builder of Object.values(builders))
+        builder.append(items, shared);
     },
   );
   const generatedAt = options.now.toISOString();

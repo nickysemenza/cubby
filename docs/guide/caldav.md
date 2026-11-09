@@ -74,7 +74,10 @@ during a refresh remain pending after that generation publishes.
 Read-only subscription rendering hydrates at most 100 records of each feed kind
 per page under a repeatable-read snapshot, using the same calendar item values
 as the interactive calendar. It skips daily summaries and appends one event at
-a time to size-limited serialized documents. The existing rolling window and
+a time to size-limited serialized documents. Each event is serialized once per
+page and its text shared by every feed that publishes it (`all` repeats Meals
+and Tasks), and a document releases its parts as soon as it is joined, so a
+rebuild retains roughly one copy of each event plus the finished bodies. The existing rolling window and
 document byte limits still apply. Refresh cannot recover uncommitted intent,
 lost mappings, duplicates, or arbitrary missed after-commit side effects.
 

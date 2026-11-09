@@ -59,7 +59,10 @@ const FEED_KINDS = {
 } as const satisfies Record<IcsFeed, FeedKinds>;
 
 type PublishableKind = (typeof FEED_KINDS)[IcsFeed][number];
-type PublishableCalendarItem = Extract<CalendarItem, { kind: PublishableKind }>;
+export type PublishableCalendarItem = Extract<
+  CalendarItem,
+  { kind: PublishableKind }
+>;
 
 const FEED_NAMES = {
   meals: "Cubby Meals",
@@ -294,7 +297,7 @@ function addBoundaries<K extends PublishableKind>(
 function toEventFor<K extends PublishableKind>(
   item: ItemOfKind<K>,
   spec: CalendarKindSpec<K>,
-  opts: IcsOptions,
+  opts: Pick<IcsOptions, "now" | "origin">,
 ): ICAL.Component {
   // UID must be stable across polls so an edit updates the event in place
   // rather than duplicating it. Shortcodes are permanent and never reassigned
@@ -319,7 +322,7 @@ function toEventFor<K extends PublishableKind>(
 
 function toEvent(
   item: PublishableCalendarItem,
-  opts: IcsOptions,
+  opts: Pick<IcsOptions, "now" | "origin">,
 ): ICAL.Component {
   if (item.kind === "meal") return toEventFor(item, KIND_SPECS.meal, opts);
   if (item.kind === "task") return toEventFor(item, KIND_SPECS.task, opts);
@@ -383,17 +386,36 @@ export function createIcsDocument(opts: IcsOptions) {
     get itemCount() {
       return itemCount;
     },
-    append(items: CalendarItem[]): void {
+    /**
+     * Append items; `serialized` lets several feeds share one event's text,
+     * since an event renders the same in every feed for one `now`/`origin`.
+     */
+    append(
+      items: CalendarItem[],
+      serialized: (item: PublishableCalendarItem) => string = (item) =>
+        serializeIcsEvent(item, opts),
+    ): void {
       for (const item of items) {
         if (!isPublishable(item, opts.feed)) continue;
-        appendPart(serializeCalendarComponent(toEvent(item, opts)));
+        appendPart(serialized(item));
         itemCount++;
       }
     },
+    /** Join the document once; its parts are released so only the body remains. */
     finish(): string {
-      return [...parts, end].join("");
+      const body = [...parts, end].join("");
+      parts.length = 0;
+      return body;
     },
   };
+}
+
+/** One event's serialized text; it depends only on the item, `now` and `origin`. */
+export function serializeIcsEvent(
+  item: PublishableCalendarItem,
+  opts: Pick<IcsOptions, "now" | "origin">,
+): string {
+  return serializeCalendarComponent(toEvent(item, opts));
 }
 
 export function renderIcs(items: CalendarItem[], opts: IcsOptions): string {
