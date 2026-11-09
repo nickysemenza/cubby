@@ -268,7 +268,7 @@ final class CompanionActivitySource: BackgroundActivitySource {
         guard activity.phase == .processing, let queue = activity.queueProgress else { return [] }
         return [
             BackgroundActivity(
-                id: "companion-image-queue", kind: .companionJob,
+                id: DeviceWorkAttributes.imageQueueActivityID, kind: .companionJob,
                 title: "Processing image queue", phase: .running,
                 progress: queue.progress, detail: queue.detail(running: activity.processingCount),
                 startedAt: queue.startedAt, link: .activity,

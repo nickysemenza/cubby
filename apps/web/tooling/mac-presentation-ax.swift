@@ -3,9 +3,10 @@ import ApplicationServices
 import Foundation
 
 let arguments = CommandLine.arguments
-guard arguments.count == 6, let pid = pid_t(arguments[2]),
+// arguments[6] is the fixture bundle id (`macFixtureBundleID`).
+guard arguments.count == 7, let pid = pid_t(arguments[2]),
     let app = NSRunningApplication(processIdentifier: pid),
-    app.bundleIdentifier == "com.nickysemenza.cubby.e2e",
+    app.bundleIdentifier == arguments[6],
     app.bundleURL?.path == arguments[3],
     NSWorkspace.shared.frontmostApplication?.processIdentifier == pid
 else { fatalError("Presentation action requires the foreground isolated fixture") }
@@ -50,7 +51,7 @@ if arguments[1] == "snapshot" {
     for popover in popovers {
         for element in descendants(popover, matching: { _ in true }) {
             guard nodes.count < 512 else { fatalError("Owned popover snapshot limit exceeded") }
-            var node: [String: Any] = ["index": nodes.count, "bundleId": "com.nickysemenza.cubby.e2e"]
+            var node: [String: Any] = ["index": nodes.count, "bundleId": arguments[6]]
             for (name, key) in [
                 ("role", kAXRoleAttribute), ("subrole", kAXSubroleAttribute),
                 ("identifier", kAXIdentifierAttribute), ("value", kAXValueAttribute),

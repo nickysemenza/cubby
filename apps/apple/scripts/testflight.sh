@@ -41,8 +41,17 @@ require() {
 require RELEASE_VERSION RELEASE_BUILD_NUMBER TESTFLIGHT_OUTPUT_DIR PROFILES_JSON \
   ASC_API_KEY_PATH APP_STORE_CONNECT_KEY_ID APP_STORE_CONNECT_ISSUER_ID
 
-readonly team_id="Y9A97FXT63"
-readonly bundle_id="com.nickysemenza.cubby"
+# `pnpm generate` writes both from packages/shared/src/apple-app-identity.ts.
+xcconfig_value() {
+  sed -n "s/^$1 = //p" apps/apple/Generated/AppleVersion.xcconfig
+}
+team_id="$(xcconfig_value DEVELOPMENT_TEAM)"
+bundle_id="$(xcconfig_value CUBBY_APP_BUNDLE_IDENTIFIER)"
+readonly team_id bundle_id
+if [[ -z "$team_id" || -z "$bundle_id" ]]; then
+  echo "error: apps/apple/Generated/AppleVersion.xcconfig lacks the team or bundle id; run pnpm generate" >&2
+  exit 1
+fi
 readonly live_activity_bundle_id="$bundle_id.LiveActivity"
 readonly project="apps/apple/Cubby.xcodeproj"
 readonly derived_data="$TESTFLIGHT_OUTPUT_DIR/DerivedData"
@@ -216,7 +225,7 @@ export_options="$TESTFLIGHT_OUTPUT_DIR/ExportOptions-$platform.plist"
 case "$platform" in
   ios)
     require IOS_LIVE_ACTIVITY_PROFILES_JSON
-    profile_uuid="$(resolve_profile "$PROFILES_JSON" "AppStore com.nickysemenza.cubby iOS" IOS_APP_STORE mobileprovision)"
+    profile_uuid="$(resolve_profile "$PROFILES_JSON" "AppStore $bundle_id iOS" IOS_APP_STORE mobileprovision)"
     live_activity_profile_uuid="$(resolve_live_activity_profile)"
     archive_platform Cubby-iOS 'generic/platform=iOS' "$ios_archive" "$profile_uuid" \
       CUBBY_LIVE_ACTIVITY_PROVISIONING_PROFILE_SPECIFIER="$live_activity_profile_uuid"
@@ -231,7 +240,7 @@ case "$platform" in
     ;;
   macos)
     require MAC_INSTALLER_SIGNING_CERTIFICATE
-    profile_uuid="$(resolve_profile "$PROFILES_JSON" "AppStore com.nickysemenza.cubby macOS" MAC_APP_STORE provisionprofile)"
+    profile_uuid="$(resolve_profile "$PROFILES_JSON" "AppStore $bundle_id macOS" MAC_APP_STORE provisionprofile)"
     archive_platform Cubby-macOS 'generic/platform=macOS' "$macos_archive" "$profile_uuid" ARCHS=arm64
     verify_archive \
       "$macos_archive" \

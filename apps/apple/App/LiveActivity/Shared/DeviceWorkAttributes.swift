@@ -2,6 +2,9 @@ import ActivityKit
 import Foundation
 
 nonisolated struct DeviceWorkAttributes: ActivityAttributes {
+    /// The companion image queue's activity, shared by the app and the widget extension.
+    static let imageQueueActivityID = "companion-image-queue"
+
     nonisolated struct ContentState: Codable, Hashable {
         let title: String
         let detail: String
@@ -24,7 +27,7 @@ nonisolated struct DeviceWorkAttributes: ActivityAttributes {
         var destinationURL: URL? {
             URL(
                 string: destination
-                    ?? (localActivityID == "companion-image-queue"
+                    ?? (localActivityID == DeviceWorkAttributes.imageQueueActivityID
                         ? "cubby://activity" : "cubby://activity/local/\(localActivityID)"))
         }
     }

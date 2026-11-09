@@ -157,7 +157,7 @@ struct CubbyApp: App {
 
         #if os(macOS)
             static var isMacImportFixture: Bool {
-                Bundle.main.bundleIdentifier == "com.nickysemenza.cubby.e2e"
+                Bundle.main.bundleIdentifier == AppleAppIdentity.e2eBundleIdentifier
                     && e2eServerURL != nil
             }
         #endif

@@ -13,6 +13,7 @@ import { setTimeout } from "node:timers/promises";
 import { z } from "zod";
 import { ensureMacPresentationHelper } from "../../apple/tooling/mac-presentation-helper.ts";
 import {
+  macFixtureBundleID,
   macFixturePaths,
   macFixtureSigningIdentity,
 } from "./mac-fixture-identity";
@@ -103,6 +104,7 @@ export class MacImportDriver {
           ),
           containerID,
           value,
+          macFixtureBundleID,
         ],
         { timeout: 10000 },
       );
@@ -131,7 +133,7 @@ export class MacImportDriver {
     const prepared = ensureMacPresentationHelper(
       presentationSource,
       path.join(macFixturePaths().root, "PresentationHelper"),
-      macFixtureSigningIdentity(this.repoRoot),
+      macFixtureSigningIdentity(),
     );
     this.presentationBinary = prepared.binary;
     const archivedHelper = path.join(this.artifacts, "mac-presentation-ax");
@@ -369,6 +371,7 @@ export class MacImportDriver {
                 ),
                 "*",
                 "*",
+                macFixtureBundleID,
               ],
               { timeout: 10000, encoding: "utf8" },
             ),

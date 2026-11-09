@@ -58,7 +58,6 @@ settings:
     # `generic/platform=iOS Simulator` build must not try to link an Intel slice.
     "EXCLUDED_ARCHS[sdk=iphonesimulator*]": x86_64
     CODE_SIGN_STYLE: Automatic
-    DEVELOPMENT_TEAM: Y9A97FXT63
     # Local default; TestFlight releases pass their build number.
     CURRENT_PROJECT_VERSION: "2"
 
@@ -148,7 +147,6 @@ targetTemplates:
           # settings also applies the app profile to SwiftPM resource-bundle targets.
           CODE_SIGN_STYLE: Manual
           CODE_SIGN_IDENTITY: Apple Distribution
-          DEVELOPMENT_TEAM: Y9A97FXT63
           PROVISIONING_PROFILE_SPECIFIER: "$(CUBBY_PROVISIONING_PROFILE_SPECIFIER)"
     preBuildScripts:
       # Fails the build when the scheme pre-action's `pnpm generate` failed (see `schemes`).
@@ -199,9 +197,9 @@ targets:
       properties:
         UILaunchStoryboardName: LaunchScreen
         BGTaskSchedulerPermittedIdentifiers:
-          - com.nickysemenza.cubby.photo-matching
-          - com.nickysemenza.cubby.library-sync
-          - com.nickysemenza.cubby.image-queue
+          - $(CUBBY_BACKGROUND_TASK_PHOTO_MATCHING)
+          - $(CUBBY_BACKGROUND_TASK_LIBRARY_SYNC)
+          - $(CUBBY_BACKGROUND_TASK_IMAGE_QUEUE)
         NSSupportsLiveActivities: true
         UIBackgroundModes:
           - processing
@@ -253,7 +251,6 @@ targets:
           # passes its UUID alongside the app's.
           CODE_SIGN_STYLE: Manual
           CODE_SIGN_IDENTITY: Apple Distribution
-          DEVELOPMENT_TEAM: Y9A97FXT63
           PROVISIONING_PROFILE_SPECIFIER: "$(CUBBY_LIVE_ACTIVITY_PROVISIONING_PROFILE_SPECIFIER)"
   Cubby-macOS:
     templates: [CubbyApp]

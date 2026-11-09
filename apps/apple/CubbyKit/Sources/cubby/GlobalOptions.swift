@@ -9,7 +9,7 @@ struct GlobalOptions: ParsableArguments {
         name: .customLong("base-url"),
         help: "Cubby server base URL. Defaults to $CUBBY_BASE_URL, else https://cubby.nickysemenza.com.")
     var baseURLString: String =
-        ProcessInfo.processInfo.environment["CUBBY_BASE_URL"] ?? "https://cubby.nickysemenza.com"
+        ProcessInfo.processInfo.environment["CUBBY_BASE_URL"] ?? SharedConstants.appOrigin
 
     @Option(
         name: .customLong("api-key"),

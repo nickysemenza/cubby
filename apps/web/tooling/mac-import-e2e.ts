@@ -615,7 +615,7 @@ async function main(): Promise<void> {
     phase = "fixture-identity-preflight";
     fixtureLease = acquireMacFixtureLease(fixturePaths.root, nonce);
     assertMacFixturesIdle();
-    const signingIdentity = macFixtureSigningIdentity(repoRoot);
+    const signingIdentity = macFixtureSigningIdentity();
     signingTeam = signingIdentity.team;
     const identityEvidence = path.join(
       artifacts,

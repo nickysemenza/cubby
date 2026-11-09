@@ -121,7 +121,7 @@ final class DeviceWorkLiveActivityCoordinator {
         let state = snapshot.contentState(
             // The queue detail already carries the server's pace. Local percentage changes use
             // a frozen waiting baseline and must not be extrapolated into a second ETA.
-            estimatedRemaining: snapshot.id == "companion-image-queue"
+            estimatedRemaining: snapshot.id == DeviceWorkAttributes.imageQueueActivityID
                 ? nil : progressETA.remaining(at: .now).map(PhotoStageETA.format))
         if let id = activityIDs.first {
             let changedTask = lastPublished?.localActivityID != state.localActivityID
