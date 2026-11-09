@@ -755,7 +755,10 @@ Needs you is the embedded `WorkQueue` grouped by Reason, over `NEEDS_YOU_FILTERS
 (mine plus shared, optional proposals excluded): one population with the sidebar
 and Home's preview. With nothing to show the page reads `Nothing needs you.` at
 its largest size. While inputs are incomplete it keeps the queue's known-work
-notice instead, because an unknown source cannot be claimed empty.
+notice instead, because an unknown source cannot be claimed empty. Work, the full
+queue and Home share that notice: one quiet line naming how many checks are
+updating, with each check's declared label and extent behind its disclosure.
+Source and Problem keys never reach the member.
 
 The sidebar's Work row shows the needs-you count and, only when something is
 stuck, a static warning glyph; the collapsed rail shows one dot with the same
