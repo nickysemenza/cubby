@@ -1,7 +1,6 @@
 import { amount, dateTime } from "@cubby/schemas/codec";
 import type { ActorContext } from "@cubby/schemas/context";
 import { problemQueryDeclarations } from "@cubby/schemas/entity-definitions/problems/problem-registry";
-import { displayGtin } from "@cubby/schemas/external-id";
 /** Problems service composes detector repos and cross-entity services without direct database access. */
 import {
   type IngredientId,
@@ -90,7 +89,6 @@ import {
   loadSoldButStockedPresenterTotals,
   synthesizeEffectiveMappings,
 } from "~/server/generic/problems/repo/detectors-product";
-import { loadVendorLogoPresenterCounts } from "~/server/generic/problems/repo/detectors-vendor";
 import {
   applyReparsedStaleLines,
   countReparseableLines,
@@ -697,7 +695,6 @@ type ExactProblemPresentationRow = z.infer<
   typeof exactProblemPresentationRowSchema
 >;
 type FastProblemHydration = {
-  vendorExpenseCounts?: Map<string, { expenseRowCount: number }>;
   soldTotals?: Map<
     string,
     {
@@ -871,16 +868,6 @@ const fastExactPresenters = {
         ...exitExpenseFields(row),
       ]),
   ),
-  productsWithNoImages: selectedFastCard(
-    exactProblemPresentationRowSchema
-      .pick({ id: true, name: true, brandName: true, primaryGtin: true })
-      .required(),
-    (row) =>
-      problemRow("product", productRef(row), [
-        manufacturerField(row.brandName, { missingIsDefect: true }),
-        row.primaryGtin ? field("GTIN", displayGtin(row.primaryGtin)) : null,
-      ]),
-  ),
   imageProcessingIssues: selectedFastCard(
     exactProblemPresentationRowSchema
       .pick({ id: true, filename: true, processingIssue: true })
@@ -978,26 +965,6 @@ const fastExactPresenters = {
         ),
       ]),
   ),
-  vendorsWithoutLogos: selectedFastCard(
-    exactProblemPresentationRowSchema
-      .pick({ id: true, name: true, website: true, purchaseCount: true })
-      .required(),
-    (row, hydration) => {
-      const counts = hydration?.vendorExpenseCounts?.get(row.id);
-      if (!counts) {
-        throw new Error(
-          `Canonical vendor-logo Problem selected ${row.id}, but bounded presentation hydration found no row`,
-        );
-      }
-      return allProblemsSchema.shape.vendorsWithoutLogos.element.parse({
-        id: row.id,
-        name: String(row.name),
-        website: row.website ?? null,
-        purchaseCount: Number(row.purchaseCount ?? 0),
-        expenseRowCount: counts.expenseRowCount,
-      });
-    },
-  ),
   purchasesNotReconciling: selectedFastCard(
     exactProblemPresentationRowSchema
       .pick({
@@ -1093,16 +1060,6 @@ const presentSingleFastProblem = async (
   key: (typeof FAST_ENTITY_PROBLEM_KEYS)[number],
   page: ExactProblemPage,
 ): Promise<unknown[]> => {
-  if (key === "vendorsWithoutLogos") {
-    return allProblemsSchema.shape.vendorsWithoutLogos.parse(
-      presentFastExactRows(key, page, {
-        vendorExpenseCounts: await loadVendorLogoPresenterCounts(
-          db,
-          page.data.map((row) => row.id),
-        ),
-      }),
-    );
-  }
   if (key === "soldButStillStocked") {
     return allProblemsSchema.shape.soldButStillStocked.parse(
       presentFastExactRows(key, page, {
@@ -1132,12 +1089,10 @@ const FAST_ENTITY_PROBLEM_KEYS = [
   "kitsCountedTwice",
   "unlinkedExitExpenses",
   "purchaselessExitExpenses",
-  "productsWithNoImages",
   "imageProcessingIssues",
   "understatedCostMeals",
   "unknownParkedItems",
   "inventoryWithoutPricePath",
-  "vendorsWithoutLogos",
   "purchasesNotReconciling",
   "purchaseFinancialSettlementMismatches",
   "financialTransactionAllocationDefects",

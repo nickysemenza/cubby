@@ -28,7 +28,7 @@ export const workQueueContract = defineContract(
     status: query({
       exposure: "capability",
       description:
-        "Whether background work is healthy: stuck work with its raw failure, whether work is catching up, when work last finished, and how many items need the current member (mine plus shared). A kind is stuck when work has been due for 30 minutes with no completion in that time, when it keeps failing, or when Apple-device work has no device. Use job.activity and job.queue to diagnose a stuck kind.",
+        "Whether background work is healthy: stuck work with its raw failure, whether work is catching up, and when work last finished. A kind is stuck when work has been due for 30 minutes with no completion in that time, when it keeps failing, or when Apple-device work has no device. Use job.activity and job.queue to diagnose a stuck kind.",
       input: z.strictObject({}),
       output: workStatus,
       // Not entity roots: a status mounted in the shell must not refetch on every write.
@@ -37,7 +37,7 @@ export const workQueueContract = defineContract(
     queue: query({
       exposure: "capability",
       description:
-        "Actionable work (research, review, repair, Problems, waiting) across the household's work sources. An agent sees shared work and work routed only to its own member; private work belonging to another member is excluded before counts and pagination. Filters: `entity` (record type), `owner` (member shortcodes or `@me`; `ownerPresence: none` is unresolved routing), `family`, `executor` (automatic, agent, human, external), and `reason` (stable keys: data checks, problem keys, or source keys); each also takes its `…Exclude` key. `view` selects a saved view (automatic, agent, human, external, problems).",
+        "Actionable work (research, review, repair, Problems, waiting) across the household's work sources. Needs you is `executor: human` with `owner: @me`. An agent sees shared work and work routed only to its own member; private work belonging to another member is excluded before counts and pagination. Filters: `entity` (record type), `owner` (member shortcodes or `@me`; `ownerPresence: none` is unresolved routing), `family`, `executor` (automatic, agent, human, external), and `reason` (stable keys: data checks, problem keys, or source keys); each also takes its `…Exclude` key. `view` selects a saved view (automatic, agent, human, external, problems).",
       input: workQueueInput,
       output: workQueueOutSchema,
       cache: { tags: WORK_QUEUE_TAGS },

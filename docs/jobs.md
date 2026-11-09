@@ -1007,14 +1007,17 @@ the minimum only for unsafe writes; see
 
 ## Member-facing work explanations
 
-Work is the web entry point at `/activity`: one health line, Stuck when something
-is, and one Needs you queue. `workQueue.status` is the single read behind the page
-and the sidebar, and agents can read it too. It adds no alert engine, stored lanes
-or retry policy; old `tab=` links redirect to `/history`, `/suggestions` and
-Settings, and a `refresh=` locator to the value's record.
-The status read resolves the current-member filter before counting its internal
-queue, through the same filter boundary as the queue page. Its Needs you count
-therefore uses the same member population, including shared work.
+Work is the web entry point at `/activity`: one Background work list (the
+health verdict, then each stuck or failed kind, device wait and stopped Run with
+its retry) and one Needs you queue. `workQueue.status` is the single read behind
+that list and the sidebar's stuck glyph, and agents can read it too. It adds no
+alert engine, stored lanes or retry policy; old `tab=` links redirect to
+`/history`, `/suggestions` and Settings, and a `refresh=` locator to the value's
+record. The Needs you count is the Work queue's own published total
+([work queue](guide/work-queue.md)); the status read carries none. A failing
+kind reads as failing since the earliest `Job.failingSince` of its rows (the last
+update for rows from before that column), and its diagnostic names the last
+execution's error class with the stored error.
 
 Stuck is decided on the server from completions over a window, never from a
 snapshot of what is running, which reads as stopped between a drain's bursts:

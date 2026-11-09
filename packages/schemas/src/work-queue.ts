@@ -286,10 +286,17 @@ export const workQueueLayout = z.enum(["summary", "pivot", "table"]);
  * improvements a member may take up whenever they like, so they stay out.
  */
 export const NEEDS_YOU_FILTERS = {
-  view: "human" as const,
+  // A filter, not the Review view: executor filters prune the sources that
+  // cannot route to a member before any candidate SQL is planned.
+  executor: "human" as const,
   owner: CURRENT_MEMBER_FILTER,
   reasonExclude: ["suggestions:field", "suggestions:recommendation"],
 };
+/** Home's preview page; the sidebar count shares this one cached read. */
+export const NEEDS_YOU_INPUT = workQueueInput.parse({
+  ...NEEDS_YOU_FILTERS,
+  pageSize: 3,
+});
 export type WorkQueueInput = z.input<typeof workQueueInput>;
 export type WorkQueueView = NonNullable<
   z.output<typeof workQueueInput>["view"]

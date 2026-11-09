@@ -1,3 +1,4 @@
+import { NEEDS_YOU_INPUT } from "@cubby/schemas/work-queue";
 import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
 import { useQuery } from "@tanstack/react-query";
 
@@ -14,8 +15,13 @@ function useWorkNavStatus() {
     ...workQueue.status.queryOptions({}),
     refetchInterval: false,
   });
+  // Home's Needs-you read: one cached query, one count.
+  const needsYou = useQuery({
+    ...workQueue.queue.queryOptions(NEEDS_YOU_INPUT),
+    refetchInterval: false,
+  });
   return {
-    needsYou: data?.needsYou.count ?? 0,
+    needsYou: needsYou.data?.meta.totalCount ?? 0,
     stuck: Boolean(data?.stuck.length),
   };
 }

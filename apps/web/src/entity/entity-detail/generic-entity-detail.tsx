@@ -94,7 +94,6 @@ import {
   RelationStaticSkeleton,
   relationSkeletonRows,
 } from "./entity-relation-table";
-import { NeedsYou, NeedsYouProvider, useNeedsYouTarget } from "./needs-you";
 import {
   QualitySectionChecks,
   RecordQualityProvider,
@@ -630,14 +629,6 @@ function DetailBody({
   );
 }
 
-/** Suggestion status lands in the page's Needs-you block. */
-function DetailSuggestions(
-  props: Omit<ComponentProps<typeof RecordSuggestionsProvider>, "statusTarget">,
-) {
-  const target = useNeedsYouTarget("suggestions");
-  return <RecordSuggestionsProvider {...props} statusTarget={target} />;
-}
-
 function FullEntityDetail<E extends GenericDetailEntity>({
   entity,
   record,
@@ -947,52 +938,48 @@ function FullEntityDetail<E extends GenericDetailEntity>({
         summary={<DetailSummary entity={entity} record={record} />}
         heroActions={plateActions}
       >
-        <NeedsYouProvider>
-          <FactsAddProvider onAdd={editable ? () => setEditing(true) : null}>
-            <DetailSuggestions
+        <FactsAddProvider onAdd={editable ? () => setEditing(true) : null}>
+          <RecordSuggestionsProvider
+            entity={entity}
+            records={[record]}
+            fieldKeys={entityMetadata(queryClient, entity)
+              .fields.fields.filter((field) => field.display.detail)
+              .map((field) => field.key)}
+          >
+            <RecordQualityProvider
               entity={entity}
-              records={[record]}
-              fieldKeys={entityMetadata(queryClient, entity)
-                .fields.fields.filter((field) => field.display.detail)
-                .map((field) => field.key)}
+              id={bag.id}
+              renderedSections={placed.map((section) => section.id)}
+              visibleFields={renderedFields}
             >
-              <RecordQualityProvider
-                entity={entity}
-                id={bag.id}
-                renderedSections={placed.map((section) => section.id)}
-                visibleFields={renderedFields}
-              >
-                <DetailBody
-                  sections={placed
-                    .filter((section) => !leadIds.has(section.id))
-                    .map(withQualityChecks)}
-                  rawData={record}
-                  omitActivity={timeline}
-                  leadIndex={[
-                    ...leadSections.map((section) => ({
-                      id: section.id,
-                      title: section.title,
-                    })),
-                    ...(timeline ? [{ id: "history", title: "Activity" }] : []),
-                  ]}
-                  lead={
-                    <>
-                      <SectionStack sections={leadSections} />
-                      <SectionPair>
-                        <NeedsYou>
-                          <RecordWorkQueue id={bag.id} variant="rows" />
-                        </NeedsYou>
-                        {timeline ? (
-                          <DetailActivity entity={entity} id={bag.id} />
-                        ) : null}
-                      </SectionPair>
-                    </>
-                  }
-                />
-              </RecordQualityProvider>
-            </DetailSuggestions>
-          </FactsAddProvider>
-        </NeedsYouProvider>
+              <DetailBody
+                sections={placed
+                  .filter((section) => !leadIds.has(section.id))
+                  .map(withQualityChecks)}
+                rawData={record}
+                omitActivity={timeline}
+                leadIndex={[
+                  ...leadSections.map((section) => ({
+                    id: section.id,
+                    title: section.title,
+                  })),
+                  ...(timeline ? [{ id: "history", title: "Activity" }] : []),
+                ]}
+                lead={
+                  <>
+                    <SectionStack sections={leadSections} />
+                    <SectionPair>
+                      <RecordWorkQueue id={bag.id} variant="needs-you" />
+                      {timeline ? (
+                        <DetailActivity entity={entity} id={bag.id} />
+                      ) : null}
+                    </SectionPair>
+                  </>
+                }
+              />
+            </RecordQualityProvider>
+          </RecordSuggestionsProvider>
+        </FactsAddProvider>
         {editable && editing ? (
           EditOverride ? (
             <EditOverride

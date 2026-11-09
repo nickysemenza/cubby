@@ -7,6 +7,7 @@ import {
   type WorkDiagnosticFacts,
 } from "@cubby/schemas/work-diagnostic-facts";
 import {
+  NEEDS_YOU_FILTERS,
   workQueueInput,
   type WorkQueueInput,
   type WorkFamily,
@@ -15,20 +16,35 @@ import {
 import { CURRENT_MEMBER_FILTER } from "@cubby/shared";
 import { eq, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
+import { seedFieldSuggestion } from "tooling/shared-suggestion-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
+import { afterExecutionTasks, runWithExecutionCtx } from "~/server/cf-env";
 import { user } from "~/server/db/auth.schema";
 import { getDb } from "~/server/db/helpers";
-import { project, financialAccount } from "~/server/db/schema";
+import {
+  project,
+  financialAccount,
+  product as productTable,
+} from "~/server/db/schema";
+import { upsertAgentProductMatch } from "~/server/domains/product/repo/match/product-match-candidate";
 import { loadWorkDiagnosticFacts } from "~/server/domains/work/repo/work-diagnostic-facts";
 import {
   diagnosticWorkSources,
   computeWorkDiagnosticFacts,
 } from "~/server/domains/work/service/work-diagnostics";
-import { readWorkQueue as readComposedQueue } from "~/server/domains/work/service/work-queue-read";
+import {
+  readPublishedWorkQueue,
+  readWorkQueue as readComposedQueue,
+} from "~/server/domains/work/service/work-queue-read";
 import { resolveFilterTokens } from "~/server/entity-kernel/filter-tokens";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import {
+  markWorkPublicationDirty,
+  readWorkPublication,
+  workPublicationStale,
+} from "~/server/generic/work-queue/repo/work-publication";
 import { drainStoredDerived } from "~/server/testing/background-queue";
 import { publishAllQualityFixtures } from "~/server/testing/quality.fixtures";
 import {
@@ -654,6 +670,122 @@ describe("composed Work queue engine", () => {
     ).toBe(0);
   });
 
+  // Regression: a failed first publication left WorkItem empty and the read
+  // served it as a complete zero.
+  it("fails a cold read with the raw publication error until a publication succeeds", async () => {
+    const execute = (statement: ReturnType<typeof sql>) =>
+      getDb(ctx.db).execute(statement);
+    await execute(sql`
+      CREATE FUNCTION synthetic_work_item_failure() RETURNS trigger LANGUAGE plpgsql AS $$
+      BEGIN RAISE EXCEPTION 'synthetic publication failure'; END $$`);
+    await execute(sql`
+      CREATE TRIGGER synthetic_work_item_failure BEFORE INSERT ON "WorkItem"
+      FOR EACH STATEMENT EXECUTE FUNCTION synthetic_work_item_failure()`);
+    const read = {
+      input: NEEDS_YOU_FILTERS,
+      memberPartyId: null,
+      memberOnly: false,
+    } as const;
+    try {
+      await expect(readPublishedWorkQueue(ctx.db, read)).rejects.toThrow(
+        /not published yet; the last attempt failed: .*synthetic publication failure/,
+      );
+      const failed = await readWorkPublication(ctx.db);
+      expect(failed).toMatchObject({ publishedAt: null, meta: null });
+      expect(failed?.attemptedAt).toBeInstanceOf(Date);
+      // Within the backoff the next read reports the same attempt.
+      await expect(readPublishedWorkQueue(ctx.db, read)).rejects.toThrow(
+        /synthetic publication failure/,
+      );
+      expect((await readWorkPublication(ctx.db))?.attemptedAt).toEqual(
+        failed?.attemptedAt,
+      );
+
+      await execute(
+        sql`DROP TRIGGER synthetic_work_item_failure ON "WorkItem"`,
+      );
+      await execute(
+        sql`UPDATE "WorkPublication" SET "attemptedAt" = "attemptedAt" - interval '2 minutes'`,
+      );
+      await readPublishedWorkQueue(ctx.db, read);
+      expect(await readWorkPublication(ctx.db)).toMatchObject({
+        error: null,
+        attemptedAt: null,
+        publishedAt: expect.any(Date),
+      });
+    } finally {
+      // The file shares one database; later cases start from no publication.
+      await execute(
+        sql`DROP TRIGGER IF EXISTS synthetic_work_item_failure ON "WorkItem"`,
+      );
+      await execute(sql`DROP FUNCTION synthetic_work_item_failure()`);
+      await execute(sql`DELETE FROM "WorkPublication"`);
+      await execute(sql`DELETE FROM "WorkItem"`);
+    }
+  });
+
+  // Regression: the publication stored one record's pending families together,
+  // so excluding one family (Needs you excludes field suggestions) dropped a
+  // Product that also had a product-pair review.
+  it("keeps a mixed suggestion record's admitted families in the publication", async () => {
+    const [lamp, partner] = await Promise.all(
+      ["Synthetic mixed suggestion lamp", "Synthetic pair partner lamp"].map(
+        (name) =>
+          createProductIdentityFixture(
+            ctx.db,
+            makeProductInput({ name }),
+            ctx.actor,
+          ),
+      ),
+    );
+    if (!lamp || !partner)
+      throw new Error("Synthetic products were not created");
+    await seedFieldSuggestion(ctx.db, {
+      entity: "product",
+      recordId: lamp.entityId,
+      field: "model",
+      currentValue: null,
+      suggestedValue: "Synthetic model",
+      confidence: 0.9,
+      model: "typesafe/jev",
+      kind: "addition",
+      status: "pending",
+      createdAt: new Date(),
+    });
+    await upsertAgentProductMatch(ctx.db, {
+      productIds: [lamp.entityId, partner.entityId],
+      evidence: "Synthetic same lamp",
+      sourceUrls: [],
+    });
+    const both = ["suggestions:field", "suggestions:product_pair"];
+    for (const [filters, reasonKeys] of [
+      [
+        { reasonExclude: NEEDS_YOU_FILTERS.reasonExclude },
+        ["suggestions:product_pair"],
+      ],
+      [{ reason: "suggestions:field" }, ["suggestions:field"]],
+      [{ reason: both }, both],
+      [{}, both],
+    ] as const) {
+      const read = {
+        input: {
+          ...filters,
+          entity: "product",
+          query: "Synthetic mixed suggestion",
+        },
+        memberPartyId: null,
+        memberOnly: false,
+      } as const;
+      const live = await readComposedQueue(ctx.db, read);
+      expect(
+        live.items.filter((row) => row.family === "suggestion"),
+      ).toMatchObject([{ id: lamp.id, reasonKeys }]);
+      const published = await readPublishedWorkQueue(ctx.db, read);
+      expect(published.items).toEqual(live.items);
+      expect(published.meta.totalCount).toBe(live.meta.totalCount);
+    }
+  });
+
   it("composes real gap sources with their declared labels and fresh record facts", async () => {
     const product = await createProductIdentityFixture(
       ctx.db,
@@ -724,6 +856,54 @@ describe("composed Work queue engine", () => {
       "product_category",
     );
     expect(queue.meta.incompleteSources).toEqual([]);
+    // The household web's publication reads the same rows, counts and gaps.
+    const published = await readPublishedWorkQueue(ctx.db, {
+      input: {
+        reason: "product_category",
+        query: "Synthetic source gap widget",
+      },
+      memberPartyId: null,
+      memberOnly: false,
+    });
+    expect(published.items).toEqual(queue.items);
+    expect(published.meta.totalCount).toBe(queue.meta.totalCount);
+
+    // A member write leaves the rows readable and republishes after the
+    // response as a tracked waitUntil task: withRequestDb's pool close
+    // (afterExecutionTasks) runs only once the new rows are published.
+    await getDb(ctx.db)
+      .update(productTable)
+      .set({ deletedAt: new Date() })
+      .where(eq(productTable.shortcode, product.id));
+    await markWorkPublicationDirty(ctx.db);
+    const read = {
+      input: {
+        reason: "product_category",
+        query: "Synthetic source gap widget",
+      },
+      memberPartyId: null,
+      memberOnly: false,
+    } as const;
+    const tasks: Promise<unknown>[] = [];
+    let freshAtPoolClose: boolean | undefined;
+    const stale = await runWithExecutionCtx(
+      { waitUntil: (task) => void tasks.push(task) },
+      async () => {
+        const result = await readPublishedWorkQueue(ctx.db, read);
+        afterExecutionTasks(Promise.resolve(), async () => {
+          freshAtPoolClose = !workPublicationStale(
+            await readWorkPublication(ctx.db),
+          );
+        });
+        return result;
+      },
+    );
+    expect(stale.items.map((row) => row.id)).toEqual([product.id]);
+    await Promise.all(tasks);
+    expect(freshAtPoolClose).toBe(true);
+    expect((await readPublishedWorkQueue(ctx.db, read)).meta.totalCount).toBe(
+      0,
+    );
     const excluded = await readComposedQueue(ctx.db, {
       input: { reason: "product_category", reasonExclude: "product_category" },
       memberPartyId: null,

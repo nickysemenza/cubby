@@ -6,36 +6,26 @@ import {
 import type { Entity } from "@cubby/schemas/entity";
 import { shortcodeEntities } from "@cubby/schemas/entity-roster";
 import type { FieldExplanationOutput } from "@cubby/schemas/field-explanation";
-import {
-  workQueueRecordInput,
-  type WorkQueueRow,
-} from "@cubby/schemas/work-queue";
 import { countLabel } from "@cubby/shared/pluralize";
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 import { MinusCircleIcon } from "@phosphor-icons/react/dist/csr/MinusCircle";
 import { WarningCircleIcon } from "@phosphor-icons/react/dist/csr/WarningCircle";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { cn } from "cn";
 import { createContext, useContext, useId, type ReactNode } from "react";
-import { createPortal } from "react-dom";
 
 import { WhyValue } from "~/entity/fields/explanation/why-value";
 import { fieldExplanation } from "~/integrations/tanstack-query/generated/domains/fieldExplanation.gen";
 import { suggestions } from "~/integrations/tanstack-query/generated/domains/suggestions.gen";
-import { workQueue } from "~/integrations/tanstack-query/generated/domains/workQueue.gen";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Section, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Ledger, LedgerCell, LedgerRow } from "~/ui/records/ledger";
 
-import { useNeedsYouTarget } from "./needs-you";
-
 type Breakdown = NonNullable<FieldExplanationOutput["qualityBreakdown"]>;
 export type RecordQualityCheck = Breakdown["checks"][number];
 const EMPTY_CHECKS: readonly RecordQualityCheck[] = [];
-const EMPTY_WORK_ROWS: readonly WorkQueueRow[] = [];
 const QualityContext = createContext<{
   entity: Entity;
   id: string;
@@ -272,32 +262,12 @@ function AssessedRecordQuality({
   };
   const checks = allChecks.filter(placed);
   const orphaned = allChecks.filter((check) => !placed(check));
-  const target = useNeedsYouTarget("quality");
-  // Work-queue rows in the same block already name their gaps. An unscored
-  // check only caps a record just short of 100, so it stays beside its evidence
-  // rather than asking the member for anything here.
-  const queued = useQuery({
-    ...workQueue.forRecord.queryOptions(
-      workQueueRecordInput.safeParse({ id }).data ?? { id },
-    ),
-    enabled:
-      hydrated &&
-      target != null &&
-      workQueueRecordInput.safeParse({ id }).success,
-  });
-  const queuedChecks = new Set<string>(
-    (queued.data?.items ?? EMPTY_WORK_ROWS).flatMap((row) =>
-      row.gaps.map((gap) => gap.check),
-    ),
-  );
+  // An unscored check only caps a record just short of 100, so it stays
+  // beside its evidence rather than asking the member for anything here.
   const unresolved = allChecks.filter((check) => check.state === "gap");
   const attention = unresolved.filter(
-    (check) =>
-      !queuedChecks.has(check.check) &&
-      (check.weight > 0 || check.kind === "defect"),
+    (check) => check.weight > 0 || check.kind === "defect",
   );
-  // Loading holds the block open; a clean record does not.
-  const needsYou = result.isPending || result.isError || attention.length > 0;
   const anchor = (check: RecordQualityCheck) => {
     const placement = placementOf(check);
     return placement && "field" in placement && placed(check)
@@ -322,9 +292,7 @@ function AssessedRecordQuality({
           </Button>
         </div>
       ) : breakdown ? (
-        <div
-          className={cn("text-xs", !target && "border-b border-border pb-2")}
-        >
+        <div className="border-b border-border pb-2 text-xs">
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
             <strong>
               {breakdown.status === "not_assessed"
@@ -390,30 +358,13 @@ function AssessedRecordQuality({
       value={{ entity, id, prefix, checks, resolution: result.data?.envelope }}
     >
       <Stack gap="sm">
-        {target === undefined
-          ? summary
-          : target
-            ? createPortal(
-                <div
-                  data-needs-row={needsYou || undefined}
-                  data-needs-count={attention.length > 0 || undefined}
-                >
-                  {summary}
-                </div>,
-                target,
-              )
-            : null}
-        {/* Outside the Needs-you page only hosted Run evidence lands here, and
-            it keeps its heading; a record page never grows one for this. */}
-        {orphaned.length > 0 && target === undefined ? (
+        {summary}
+        {orphaned.length > 0 ? (
           <Section title="Record quality" headingAs="h2">
             <QualityCheckRows checks={orphaned} />
           </Section>
         ) : null}
         {children}
-        {orphaned.length > 0 && target !== undefined ? (
-          <QualityCheckRows checks={orphaned} />
-        ) : null}
       </Stack>
     </QualityContext>
   );

@@ -1,3 +1,4 @@
+import { NEEDS_YOU_INPUT } from "@cubby/schemas/work-queue";
 import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { lazy, Suspense } from "react";
 
@@ -12,7 +13,7 @@ import { HomeMoney } from "~/features/home/home-money";
 import { HomePantry } from "~/features/home/home-pantry";
 import { TodayAttention } from "~/features/home/house-card";
 import { TodayMeals } from "~/features/home/meals-card";
-import { NeedsYou, NEEDS_YOU_INPUT } from "~/features/home/needs-you";
+import { NeedsYou } from "~/features/home/needs-you";
 import { PinnedViews } from "~/features/home/pinned-views";
 import { RecentActivityFeed } from "~/features/home/recent-activity-feed";
 import { TodayNutrition } from "~/features/meal/daily-nutrition";

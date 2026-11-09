@@ -467,22 +467,10 @@ const orphanedProductDeleteAction = lazy(() =>
     "OrphanedProductDeleteAction",
   ),
 );
-const fetchProductImagesAction = lazy(() =>
-  named(
-    import("~/features/product/product-problem-actions"),
-    "FetchProductImagesAction",
-  ),
-);
 const duplicateVendorMergeAction = lazy(() =>
   named(
     import("~/features/vendor/vendor-problem-actions"),
     "DuplicateVendorMergeAction",
-  ),
-);
-const vendorLogoFetchWorkAction = lazy(() =>
-  named(
-    import("~/features/vendor/vendor-problem-actions"),
-    "VendorLogoFetchWorkAction",
   ),
 );
 const duplicateTransactionRefAction = lazy(() =>
@@ -548,9 +536,7 @@ const workActions: WorkActionTable = {
   problems: {
     duplicateProductIdentities: { merge: duplicateProductMergeAction },
     orphanedProducts: { delete: orphanedProductDeleteAction },
-    productsWithNoImages: { "fetch-images": fetchProductImagesAction },
     duplicateVendors: { merge: duplicateVendorMergeAction },
-    vendorsWithoutLogos: { "fetch-logo": vendorLogoFetchWorkAction },
     duplicateFinancialTransactionSourceRefs: {
       "choose-keeper": duplicateTransactionRefAction,
     },

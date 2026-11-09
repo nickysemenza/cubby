@@ -8,6 +8,7 @@ import {
   repositoryTransaction,
   type RepositoryQueryInput,
 } from "~/server/db/repository-access.boundary";
+import { markWorkPublicationDirty } from "~/server/generic/work-queue/repo/work-publication";
 
 /**
  * Reader notifications. Derived work needs no registration here: generated
@@ -43,7 +44,9 @@ export async function recordChange(
     await repositoryTransaction(db, (tx) => recordChange(tx, change));
     return;
   }
-  if (change.ringFromBackground || inHttpRequest())
+  if (change.ringFromBackground || inHttpRequest()) {
+    // The member's next Work read republishes from this write's results.
+    await repositoryAfterCommit(db, markWorkPublicationDirty);
     await recordCommittedChanges(
       db,
       Object.fromEntries(
@@ -53,6 +56,7 @@ export async function recordChange(
         ]),
       ),
     );
+  }
   if (change.kind !== "source") return;
   await repositoryBeforeCommit(
     db,

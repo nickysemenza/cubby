@@ -1,7 +1,5 @@
 import type { WorkStatus, WorkStuckItem } from "@cubby/schemas/work-status";
-import { getErrorMessage } from "@cubby/shared";
 import { countLabel } from "@cubby/shared/pluralize";
-import { createLogger } from "@cubby/worker-tracing";
 
 import type { Database } from "~/server/db";
 import { readDeviceBacklog } from "~/server/domains/image-processing/repo/device-backlog";
@@ -11,43 +9,14 @@ import {
   STUCK_WINDOW_MINUTES,
 } from "~/server/generic/jobs/repo/observation";
 
-import { readWorkQueue } from "./work-queue-read";
-
-const log = createLogger("work-status");
-
-type NeedsYouRead = Parameters<typeof readWorkQueue>[1];
-
-/** A failed count must not read as "background work is unknown". The page's own queue shows the error. */
-async function readNeedsYou(
-  db: Database,
-  read: NeedsYouRead,
-): Promise<WorkStatus["needsYou"]> {
-  try {
-    const { meta } = await readWorkQueue(db, read);
-    return {
-      count: meta.totalCount,
-      complete: !(
-        meta.incompleteProjectIds?.length ||
-        meta.incompleteDiagnosticSources?.length ||
-        meta.incompleteSources?.length
-      ),
-    };
-  } catch (error) {
-    log.warn("needs-you count failed", { error: getErrorMessage(error) });
-    return { count: 0, complete: false };
-  }
-}
-
 /** The one server rule for what is stuck: the sidebar and the Work page share it. */
 export async function readWorkStatus(
   db: Database,
-  read: NeedsYouRead,
   now = new Date(),
 ): Promise<WorkStatus> {
-  const [background, device, needsYou, runs] = await Promise.all([
+  const [background, device, runs] = await Promise.all([
     readBackgroundWorkStatus(db, now),
     readDeviceBacklog(db, now),
-    readNeedsYou(db, read),
     readStoppedRuns(db, now),
   ]);
   const deviceWindow = new Date(now.getTime() - STUCK_WINDOW_MINUTES * 60_000);
@@ -73,7 +42,6 @@ export async function readWorkStatus(
       : [];
   return {
     readAt: now.toISOString(),
-    needsYou,
     lastFinishedAt: background.lastFinishedAt?.toISOString() ?? null,
     behind: background.behind,
     stuck: [...deviceStuck, ...background.stuck, ...runs],

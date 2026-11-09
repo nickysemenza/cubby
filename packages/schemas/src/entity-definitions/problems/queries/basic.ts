@@ -32,23 +32,6 @@ export const basicProblemQueries = [
     },
   }),
   defineProblem({
-    key: "vendorsWithoutLogos",
-    problemClass: PROBLEM_CLASS.vendorsWithoutLogos,
-    executionLane: "fast",
-    continuation: { kind: "entity-list" },
-    freshness: { kind: "live" },
-    title: "Vendors without logos",
-    description: "Vendors with no displayable logo image.",
-    emptyMessage: "Every vendor has a logo or a recorded exception.",
-    source: {
-      kind: "entity",
-      entity: "vendor",
-      filters: [{ id: "dataGaps", value: ["vendor_logo"] }],
-      sort: [{ id: "purchaseCount", desc: true }],
-      columnVisibility: { logo: true, purchaseCount: true },
-    },
-  }),
-  defineProblem({
     key: "imageProcessingIssues",
     problemClass: PROBLEM_CLASS.imageProcessingIssues,
     executionLane: "fast",

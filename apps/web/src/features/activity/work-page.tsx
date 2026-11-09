@@ -1,9 +1,9 @@
 import { NEEDS_YOU_FILTERS } from "@cubby/schemas/work-queue";
 import type { WorkStatus, WorkStuckItem } from "@cubby/schemas/work-status";
 import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 
 import { RetryJobsButton } from "~/features/job/retry-jobs";
 import { hasIncompleteWorkInputs } from "~/features/work-queue/work-input-status";
@@ -125,10 +125,17 @@ function StuckRow({
   );
 }
 
-function StuckSection({
+/**
+ * The one list of background work that stopped or keeps failing, each row with
+ * its retry, under the page's health verdict. Every stuck or failed kind,
+ * device wait and stopped Run reads from `workQueue.status`.
+ */
+function BackgroundWork({
+  sentence,
   items,
   onRetried,
 }: {
+  sentence: string;
   items: readonly WorkStuckItem[];
   onRetried: () => void;
 }) {
@@ -136,10 +143,13 @@ function StuckSection({
   return (
     <Section
       headingAs="h2"
-      title="Stuck"
-      count={formatCount(items.length)}
+      title="Background work"
+      count={items.length ? formatCount(items.length) : undefined}
       ruled
     >
+      <p className="min-h-5.5 text-muted-foreground" data-testid="work-health">
+        {sentence}
+      </p>
       <ul>
         {(expanded ? items : items.slice(0, STUCK_ROW_CAP)).map((item) => (
           <StuckRow key={item.key} item={item} onRetried={onRetried} />
@@ -195,33 +205,16 @@ function UnknownStatus({
 
 /**
  * One queue, grouped by reason. It stays mounted while empty so a new item
- * appears without a reload, and it settles the sidebar's count: both read the
- * same population, so they can never disagree on this page.
+ * appears without a reload. Its total and the sidebar's are the same
+ * published population, so they agree once both have read it.
  */
-function NeedsYouQueue({
-  status,
-}: {
-  status: { count: number; complete: boolean } | undefined;
-}) {
-  const queryClient = useQueryClient();
+function NeedsYouQueue() {
   const [total, setTotal] = useState<number>();
   const [incomplete, setIncomplete] = useState(false);
-  const statusKey = workQueue.status.queryKey(STATUS_INPUT);
-  const onMeta = (meta: WorkQueueMeta) => {
+  const onMeta = useCallback((meta: WorkQueueMeta) => {
     setTotal(meta.totalCount);
     setIncomplete(hasIncompleteWorkInputs(meta));
-  };
-  useEffect(() => {
-    if (total === undefined || status?.count === total) return;
-    queryClient.setQueryData<WorkStatus>(statusKey, (current) =>
-      current
-        ? {
-            ...current,
-            needsYou: { count: total, complete: !incomplete },
-          }
-        : current,
-    );
-  }, [total, incomplete, status?.count, queryClient, statusKey]);
+  }, []);
   const empty = total === 0 && !incomplete;
   return (
     <>
@@ -279,8 +272,8 @@ function AutomaticWorkStopped({
       data-testid="automatic-work-stopped"
     >
       <p className="max-w-prose text-foreground-strong">
-        Automatic AI work stopped {formatRelative(stoppedAt, now)}. Refresh and
-        connection discovery wait until you resume.
+        Automatic AI work stopped {formatRelative(stoppedAt, now)}. Refresh
+        waits until you resume.
       </p>
       <Button
         variant="outline"
@@ -307,17 +300,21 @@ export function WorkPage({ fromRetiredJobs }: { fromRetiredJobs: boolean }) {
   const automatic = useAutomaticWork();
   return (
     <Stack gap="lg">
-      <p className="min-h-5.5 text-muted-foreground" data-testid="work-health">
-        {data
-          ? healthSentence(data, now)
-          : status.isError
-            ? "Couldn't read background status, so this page can't say whether anything is stuck."
-            : "Checking…"}
-      </p>
+      <BackgroundWork
+        sentence={
+          data
+            ? healthSentence(data, now)
+            : status.isError
+              ? "Couldn't read background status, so this page can't say whether anything is stuck."
+              : "Checking…"
+        }
+        items={data?.stuck ?? []}
+        onRetried={onRetried}
+      />
       {fromRetiredJobs ? (
         <p className="max-w-prose text-muted-foreground">
-          The Jobs page is gone. Stuck background work shows here, and a Run's
-          Jobs show on that Run.
+          The Jobs page is gone. Stuck and failed background work shows under
+          Background work, and a Run's Jobs show on that Run.
         </p>
       ) : null}
       {status.isError && !data ? (
@@ -326,9 +323,6 @@ export function WorkPage({ fromRetiredJobs }: { fromRetiredJobs: boolean }) {
           onRetry={() => void status.refetch()}
         />
       ) : null}
-      {data?.stuck.length ? (
-        <StuckSection items={data.stuck} onRetried={onRetried} />
-      ) : null}
       {automatic.stoppedAt ? (
         <AutomaticWorkStopped
           stoppedAt={automatic.stoppedAt}
@@ -336,7 +330,7 @@ export function WorkPage({ fromRetiredJobs }: { fromRetiredJobs: boolean }) {
           resume={automatic.resume}
         />
       ) : null}
-      <NeedsYouQueue status={data?.needsYou} />
+      <NeedsYouQueue />
       <nav
         aria-label="More work"
         className="flex flex-wrap items-center gap-x-3.5 gap-y-1 border-t border-border pt-2 [&>a]:text-link [&>a]:hover:underline [&>a]:max-md:inline-flex [&>a]:max-md:min-h-11 [&>a]:max-md:items-center"

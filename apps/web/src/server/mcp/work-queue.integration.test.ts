@@ -4,7 +4,6 @@ import {
   NEEDS_YOU_FILTERS,
   workQueueOutSchema,
 } from "@cubby/schemas/work-queue";
-import { workStatus } from "@cubby/schemas/work-status";
 import { CURRENT_MEMBER_FILTER } from "@cubby/shared";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
@@ -167,22 +166,6 @@ describe("activity.queue member routing", () => {
       reason: undefined,
     });
     expect(human.meta.totalCount).toBeGreaterThan(0);
-    const status = await callMcpTool(
-      createMcpServer(),
-      "activity_read",
-      { action: "status" },
-      requireActor({
-        ...createTestRequestContext(ctx.db, {
-          auth: { userId: ctx.actor.userId },
-        }),
-        actorContext: buildActorContext(ctx.actor.userId, "mcp"),
-      }),
-      {},
-    );
-    expect(status.isError).not.toBe(true);
-    expect(workStatus.parse(status.structuredContent).needsYou.count).toBe(
-      human.meta.totalCount,
-    );
     expect((await read(otherUser, { reason: "finding" })).meta.totalCount).toBe(
       0,
     );

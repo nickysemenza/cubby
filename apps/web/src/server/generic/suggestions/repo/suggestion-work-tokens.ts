@@ -46,7 +46,12 @@ export const UNAPPLIED_CORRECTION_REASON = "unapplied_correction";
  * Suggestion columns; small families use their declared records. Tokens are UUIDs
  * or shortcodes, as stored. Current evidence is rechecked when a row is opened.
  */
-export function pendingSuggestionRecordsSql(ids?: readonly string[]) {
+export function pendingSuggestionRecordsSql(
+  ids?: readonly string[],
+  /** Reason suffixes the read admits; branches outside it are not planned. */
+  admitted?: ReadonlySet<string>,
+) {
+  const admits = (key: string) => !admitted || admitted.has(key);
   const pending = (families: readonly SuggestionFamily[]) =>
     sql`s.family IN (${sql.join(
       families.map((family) => sql`${family}`),
@@ -54,30 +59,48 @@ export function pendingSuggestionRecordsSql(ids?: readonly string[]) {
     )}) AND s.active AND s.status = ${suggestionStatus.enum.pending}
       ${ids ? sql`AND s.id = ANY(${uuidArrayParam(ids)})` : sql``}`;
   const { recommendation, statement_transaction } = suggestionFamily.enum;
-  return sql`SELECT s.family, s.entity, s."recordId"::text AS token
-      FROM "Suggestion" s WHERE ${pending([recommendation])}
-    UNION ALL
-    SELECT s.family, s.data #>> '{connectionTarget,entityKind}', s.data #>> '{connectionTarget,entityId}'
+  const declared = [
+    suggestionFamily.enum.field,
+    suggestionFamily.enum.transfer_pair,
+    suggestionFamily.enum.product_pair,
+  ].filter(admits);
+  const branches = [
+    ...(admits(recommendation)
+      ? [
+          sql`SELECT s.family, s.entity, s."recordId"::text AS token
+      FROM "Suggestion" s WHERE ${pending([recommendation])}`,
+          sql`SELECT s.family, s.data #>> '{connectionTarget,entityKind}', s.data #>> '{connectionTarget,entityId}'
       FROM "Suggestion" s
-      WHERE ${pending([recommendation])} AND jsonb_typeof(s.data->'connectionTarget') = 'object'
-    -- Statement review belongs to the account, not every settlement reference.
-    UNION ALL
-    SELECT s.family, ${entities.financialAccount}::text, s.data->>'accountId'
-      FROM "Suggestion" s WHERE ${pending([statement_transaction])}
-    -- An explicit correction its Suggestion never applied stays a manual notice.
-    UNION ALL
-    SELECT ${UNAPPLIED_CORRECTION_REASON}::text, s.entity, s."recordId"::text
+      WHERE ${pending([recommendation])} AND jsonb_typeof(s.data->'connectionTarget') = 'object'`,
+        ]
+      : []),
+    // Statement review belongs to the account, not every settlement reference.
+    ...(admits(statement_transaction)
+      ? [
+          sql`SELECT s.family, ${entities.financialAccount}::text AS entity, s.data->>'accountId' AS token
+      FROM "Suggestion" s WHERE ${pending([statement_transaction])}`,
+        ]
+      : []),
+    // An explicit correction its Suggestion never applied stays a manual notice.
+    ...(admits(UNAPPLIED_CORRECTION_REASON)
+      ? [
+          sql`SELECT ${UNAPPLIED_CORRECTION_REASON}::text AS family, s.entity, s."recordId"::text AS token
       FROM "Suggestion" s
       WHERE s.status = ${suggestionStatus.enum.superseded}
         AND s.decisions @> ${JSON.stringify([{ authority: "member", correction: { present: true } }])}::jsonb
-        ${ids ? sql`AND s.id = ANY(${uuidArrayParam(ids)})` : sql``}
-    UNION ALL
-    SELECT s.family, record->>'entity', record->>'id'
+        ${ids ? sql`AND s.id = ANY(${uuidArrayParam(ids)})` : sql``}`,
+        ]
+      : []),
+    ...(declared.length
+      ? [
+          sql`SELECT s.family, record->>'entity' AS entity, record->>'id' AS token
       FROM "Suggestion" s
       CROSS JOIN LATERAL jsonb_array_elements(${suggestionRecordsSql(undefined, sql`s.family`)}) record
-      WHERE ${pending([
-        suggestionFamily.enum.field,
-        suggestionFamily.enum.transfer_pair,
-        suggestionFamily.enum.product_pair,
-      ])} AND (s.family <> ${suggestionFamily.enum.product_pair} OR s.suppression IS NULL)`;
+      WHERE ${pending(declared)} AND (s.family <> ${suggestionFamily.enum.product_pair} OR s.suppression IS NULL)`,
+        ]
+      : []),
+  ];
+  return branches.length
+    ? sql.join(branches, sql` UNION ALL `)
+    : sql`SELECT NULL::text AS family, NULL::text AS entity, NULL::text AS token WHERE false`;
 }
