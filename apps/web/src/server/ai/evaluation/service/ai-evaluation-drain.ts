@@ -440,12 +440,7 @@ export async function runAiEvaluationPage(
   feature: string,
   /** A test seam around the page's transactions. */
   around: (context: JobContext) => JobContext = (context) => context,
-): Promise<{
-  outcome: AiEvaluationPageOutcome;
-  claimed: number;
-  published: number;
-  failed: number;
-}> {
+): Promise<{ outcome: AiEvaluationPageOutcome; claimed: number }> {
   const token = crypto.randomUUID();
   const assertHeld = async (client: Database) => {
     if (!(await aiEvaluationPageHeld(client, token)))
@@ -492,18 +487,11 @@ export async function runAiEvaluationPage(
         deferred.reason,
         deferred.message,
       );
-      return {
-        outcome: "deferred",
-        claimed: page.claimed,
-        published: page.published ?? 0,
-        failed: page.failed ?? 0,
-      };
+      return { outcome: "deferred", claimed: page.claimed };
     }
     return {
       outcome: page.claimed ? "succeeded" : "skipped",
       claimed: page.claimed,
-      published: page.published ?? 0,
-      failed: page.failed ?? 0,
     };
   } catch (error) {
     let failure = classifyJobFailure(error);
@@ -521,10 +509,10 @@ export async function runAiEvaluationPage(
         errorMessage(error),
       );
       // The page ran: its successor permit waits for the deferral to end.
-      return { outcome: "deferred", claimed: 1, published: 0, failed: 0 };
+      return { outcome: "deferred", claimed: 1 };
     }
     if (failure.kind === "interrupted")
-      return { outcome: "superseded", claimed: 0, published: 0, failed: 0 };
+      return { outcome: "superseded", claimed: 0 };
     await deferAiEvaluationFeature(
       db,
       feature,
@@ -550,13 +538,13 @@ export function aiEvaluationDrain(
     next: aiEvaluationNext,
     async page(db, unit) {
       const feature = unit.slice(name.length + 1);
-      const { outcome, ...counts } = await runAiEvaluationPage(
+      const { outcome, claimed } = await runAiEvaluationPage(
         db,
         execution,
         feature,
       );
       // A funding or provider wait is the page's recorded outcome, not success.
-      return outcome === "failed" ? counts : { outcome, ...counts };
+      return outcome === "failed" ? { claimed } : { outcome, claimed };
     },
   };
 }

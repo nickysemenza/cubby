@@ -8,16 +8,13 @@ export const queueMessageEnvelope = {
 export const BACKGROUND_TASK_MESSAGE_VERSION = 3;
 
 /**
- * The claim a delayed recovery message checks when it arrives: it runs only
- * if that claim is still leased and its lease lapsed (its invocation died),
- * and otherwise exits without running or sending anything.
+ * The one claim a delayed recovery message names, sent at that claim's lease
+ * expiry: it runs only if that claim is still leased and its lease lapsed (its
+ * invocation died), and otherwise exits without running or sending anything.
  */
 export const permitRecovery = z.discriminatedUnion("kind", [
   z.strictObject({ kind: z.literal("job"), id: z.uuid(), lease: z.uuid() }),
-  z.strictObject({
-    kind: z.literal("image"),
-    ids: z.array(z.uuid()).min(1).max(16),
-  }),
+  z.strictObject({ kind: z.literal("image"), id: z.uuid(), attempt: z.uuid() }),
 ]);
 export type PermitRecovery = z.infer<typeof permitRecovery>;
 

@@ -42,8 +42,14 @@ import { safeImageProcessingError } from "./safe-error";
 export type CloudImageDispatchOptions = {
   /** External storage/provider boundary; adoption still uses the real job ledger. */
   describe?: Parameters<typeof completeCloudImageDescription>[2];
+  /** Reclaim only this lapsed attempt (a lease recovery). */
+  attemptId?: string;
   /** Runs once the row's lease is held, before any provider work. */
-  onClaimed?: () => Promise<void>;
+  onClaimed?: (claim: {
+    id: ImageJobId;
+    attemptId: string;
+    leaseExpiresAt: Date;
+  }) => Promise<void>;
 };
 
 /**
@@ -51,7 +57,7 @@ export type CloudImageDispatchOptions = {
  * an expired lease means its invocation is gone. Nothing renews it. A crashed page
  * waits this long to retry, and the attempt fence protects a late publication.
  */
-export const CLOUD_IMAGE_LEASE_MS = 16 * 60_000;
+const CLOUD_IMAGE_LEASE_MS = 16 * 60_000;
 
 /** An AVIF identification waits this long for a device to prepare its rendition. */
 const RENDITION_WAIT_MS = 10 * 60_000;
@@ -79,9 +85,10 @@ export async function dispatchImageProcessingWakeup(
     jobId,
     kinds: ["identify_image", "describe_image"],
     leaseMs: CLOUD_IMAGE_LEASE_MS,
+    ...(options.attemptId && { attemptId: options.attemptId }),
   });
   if (!claimed) return "skipped";
-  await options.onClaimed?.();
+  await options.onClaimed?.(claimed);
   // Stops the next paid request, and any fenced publication, once the row is lost.
   const fence = {
     check: () => assertImageLeaseHeld(db, claimed),

@@ -7,6 +7,7 @@ import { getDb, withTransaction } from "~/server/db/helpers";
 import { job, run } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import type { BackgroundDrain } from "~/server/generic/background/drains";
+import { addJobAiCost, countDrainItems } from "~/server/generic/jobs/context";
 import {
   runPermit,
   runRecovery,
@@ -216,6 +217,45 @@ describe("durable Job selection", () => {
       }),
     ).not.toBeNull();
     expect(ran.at(-1)).toBe("synthetic.b-progress");
+  });
+
+  it("records a failed drain page's committed items and AI cost", async () => {
+    const drain: BackgroundDrain = {
+      name: "synthetic.failing",
+      due: () =>
+        sql`SELECT 'synthetic.failing'::text AS unit, false AS demand, now()::timestamp AS since`,
+      next: () => null,
+      page: async () => {
+        countDrainItems({ claimed: 2, published: 1 });
+        addJobAiCost(0.25);
+        throw new Error("Synthetic page failure after one publication");
+      },
+    };
+    const captured: unknown[] = [];
+    expect(
+      await runPermit({
+        db: ctx.db,
+        handlers: {},
+        drains: [drain],
+        ports: {
+          send: async () => {
+            throw new Error("A failed page sends nothing");
+          },
+          captureException: (error) => captured.push(error),
+        },
+      }),
+    ).toBeNull();
+    expect(captured).toHaveLength(1);
+    const [record] = await getDb(ctx.db)
+      .select({ lastExecution: job.lastExecution })
+      .from(job)
+      .where(eq(job.key, "drain:synthetic.failing"));
+    expect(record?.lastExecution).toMatchObject({
+      outcome: "failed",
+      errorClass: "failed",
+      aiCostUsd: 0.25,
+      items: { claimed: 2, published: 1, failed: 0 },
+    });
   });
 
   it("walks past a locked reconciliation page and revisits skipped Runs on a later pass", async () => {

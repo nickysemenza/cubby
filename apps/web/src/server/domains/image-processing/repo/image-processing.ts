@@ -614,31 +614,6 @@ export const cloudImageDue = (unit: string) =>
     WHERE ${eq(imageProcessingJob.lane, "cloud")} AND ${imageJobClaimable(new Date())}
     HAVING count(*) > 0`;
 
-/** Whether any of these cloud rows is still leased past its lease: its page died. */
-export async function cloudImageLeaseLapsed(
-  db: Database,
-  ids: readonly string[],
-): Promise<boolean> {
-  if (!ids.length) return false;
-  const [row] = await getDb(db)
-    .select({ id: imageProcessingJob.id })
-    .from(imageProcessingJob)
-    .where(
-      and(
-        inArray(
-          imageProcessingJob.id,
-          ids.map((id) => parseEntityId("imageJob", id)),
-        ),
-        eq(imageProcessingJob.lane, "cloud"),
-        eq(imageProcessingJob.state, "pending"),
-        isNotNull(imageProcessingJob.leaseUntil),
-        lte(imageProcessingJob.leaseUntil, new Date()),
-      ),
-    )
-    .limit(1);
-  return row !== undefined;
-}
-
 /** When the next open cloud row comes due or its lease lapses. */
 export const cloudImageNext = () =>
   sql`SELECT min(coalesce(${imageProcessingJob.leaseUntil}, ${imageProcessingJob.runAt}))
@@ -677,6 +652,11 @@ export async function claimImageProcessingJob(
     leaseMs: number;
     /** The cloud drain claims the one row it selected. */
     jobId?: ImageJobId;
+    /**
+     * A lease recovery reclaims only this lapsed attempt: once any executor
+     * reclaimed or settled the row, its attempt changed and nothing is claimed.
+     */
+    attemptId?: string;
     /** Device pulls can execute only declared processor revisions, never cloud jobs. */
     processorRevisions?: readonly number[];
     /** A normalization-capable device may prepare cloud AVIF input, never other cloud jobs. */
@@ -740,6 +720,9 @@ export async function claimImageProcessingJob(
           .where(
             and(
               input.jobId ? eq(imageProcessingJob.id, input.jobId) : undefined,
+              input.attemptId
+                ? eq(imageProcessingJob.attemptId, input.attemptId)
+                : undefined,
               input.deviceBatch?.handedOffIds.length
                 ? notInArray(
                     imageProcessingJob.id,
