@@ -30,7 +30,7 @@ describe("MCP response policies", () => {
     const tools = compiledMcpTools(MCP_TOOL_BINDINGS, MCP_TOOL_DECLARATIONS);
     for (const [toolName, actionName] of [
       ["activity_read", "report"],
-      ["usda_food", "search"],
+      ["product_enrichment_read", "search"],
     ] as const) {
       const tool = tools.find((candidate) => candidate.name === toolName);
       if (!tool) throw new Error(`Missing tool ${toolName}`);
@@ -44,7 +44,7 @@ describe("MCP response policies", () => {
       });
     }
     const recipeInsights = tools.find(
-      (candidate) => candidate.name === "recipe_insights_read",
+      (candidate) => candidate.name === "nutrition_read",
     );
     if (!recipeInsights) throw new Error("Missing recipe_insights_read tool");
     expect(
@@ -65,7 +65,7 @@ describe("MCP response policies", () => {
       const listFoods = vi.fn(async () => ({ data: [], count: 123 }));
       const result = await callMcpTool(
         createMcpServer(),
-        "usda_food",
+        "product_enrichment_read",
         {
           action: "search",
           input: { query: "synthetic food", ...input },
@@ -106,7 +106,7 @@ describe("MCP response policies", () => {
     };
     const result = await callMcpTool(
       createMcpServer(),
-      "usda_food",
+      "product_enrichment_read",
       { action: "search", input: { query: "synthetic oats" } },
       {
         usdaService: fromPartial({
@@ -128,7 +128,7 @@ describe("MCP response policies", () => {
 
   it.each([
     ["activity", "problems"],
-    ["usda_food", "search"],
+    ["product_enrichment_read", "search"],
   ])(
     "rejects invalid pagination before executing %s.%s",
     async (tool, action) => {

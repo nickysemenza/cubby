@@ -22,10 +22,10 @@ describe("MCP tool generation", () => {
     ]);
     expect([
       ...splitByKind(
-        "usda_food",
+        "product_enrichment_read",
         new Map([["search", { kind: "query" as const }]]),
       ),
-    ]).toEqual([["usda_food", null]]);
+    ]).toEqual([["product_enrichment_read", null]]);
     expect(() =>
       toolKind("finance", [
         { name: "summary", kind: "query" },

@@ -39,7 +39,7 @@ export const usdaFoodContract = defineContract(
   {
     list: query({
       exposure: "view",
-      note: "Native browse with linked-product filters; agents search with usda_food.search",
+      note: "Native browse with linked-product filters; agents search with product_enrichment_read.search",
       input: usdaListInput,
       output: usdaFoodListOut,
       cache: { tags: [["usda-food"]] },
@@ -53,7 +53,7 @@ export const usdaFoodContract = defineContract(
     // AI and externally hydrated food reads own authoritative database helpers.
     alternateId: query({
       exposure: "view",
-      note: "UPC and NDB lookups; an FDC id goes through usda_food.by_fdc_id",
+      note: "UPC and NDB lookups; an FDC id goes through product_enrichment_read.by_fdc_id",
       input: usdaFoodLookupInput,
       output: foodSummaryWithLinkedProducts.nullable(),
       cache: { tags: [["usda-food"]] },
@@ -103,5 +103,5 @@ export const usdaFoodContract = defineContract(
       output: usdaProductSuggestionsOut,
     }),
   },
-  { exposure: "capability", mcpToolGroup: "usda_food" },
+  { exposure: "capability", mcpToolGroup: "product_enrichment" },
 );

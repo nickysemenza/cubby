@@ -36,8 +36,8 @@ const DECLARED_UUID_OUTPUT_PATHS = new Set([
   "entity_read.items[].unitMappings[].id",
   // Image processing jobs are internal queue handles, not Image entity links.
   "image.jobIds[]",
-  // A recipe line has no shortcode; recipe_insights.patch_line takes this id.
-  "recipe_insights_read.recipes[].usages[].lineId",
+  // A recipe line has no shortcode; nutrition.patch_line takes this id.
+  "nutrition_read.recipes[].usages[].lineId",
   // MealRecipe has no shortcode. nutrition.plan_recipe exposes the newly inserted
   // occurrence handle that nutrition update/remove/save_preparation take.
   "nutrition.recipes[].id",
@@ -60,10 +60,10 @@ const DECLARED_UUID_OUTPUT_PATHS = new Set([
   "activity.id",
   "entity_graph.proposals[].review.suggestionId",
   "image.deletedIds[]",
-  "inventory.items[].product.externalIds[].id",
-  "inventory.items[].product.unitMappings[].id",
-  "inventory.item.product.externalIds[].id",
-  "inventory.item.product.unitMappings[].id",
+  "entity.items[].product.externalIds[].id",
+  "entity.items[].product.unitMappings[].id",
+  "entity.item.product.externalIds[].id",
+  "entity.item.product.unitMappings[].id",
   "maintenance.nextCursor",
   "maintenance_read.items[].targetId",
   "maintenance_read.items[].sourceId",
@@ -71,11 +71,11 @@ const DECLARED_UUID_OUTPUT_PATHS = new Set([
   "nutrition.id",
   // Photo approval retains shared Suggestion child handles for review provenance.
   // These are not Product/Vendor/Image identities or entity lookup selectors.
-  "photo_run.proposals[].review.fieldSuggestions[].id",
-  "photo_run.fieldSuggestions[].id",
-  "photo_run_read.proposals[].review.fieldSuggestions[].id",
-  "photo_run_read.boundaryGroup.review.fieldSuggestions[].id",
-  "photo_run_read.candidates[].purchaseLines[].acceptedSourceLines[].sourceOrderId",
+  "run.proposals[].review.fieldSuggestions[].id",
+  "run.fieldSuggestions[].id",
+  "run_read.proposals[].review.fieldSuggestions[].id",
+  "run_read.boundaryGroup.review.fieldSuggestions[].id",
+  "run_read.candidates[].purchaseLines[].acceptedSourceLines[].sourceOrderId",
   "product_enrichment.product.externalIds[].id",
   "purchase_import_read.items[].suggestionId",
   "purchase_import_read.items[].producer.evaluationId",

@@ -32,8 +32,8 @@ const SELF_GOVERNED_ACTIONS = new Set<string>([
   "purchase_import.mail_resolve",
   "purchase_import.prepare",
   "purchase_import.commit",
-  "photo_run.propose_groups",
-  "photo_run.commit_group",
+  "run.propose_groups",
+  "run.commit_group",
 ] satisfies CubbyMcpMutationAction[]);
 
 export const purchaseAgentSelfGoverned = (action: string) =>

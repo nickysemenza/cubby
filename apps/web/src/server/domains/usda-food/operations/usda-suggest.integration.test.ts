@@ -51,7 +51,7 @@ const scriptedUsda = (script: {
  * brandName-qualified search that finds nothing never retries on the bare
  * name; a barcode hit is repeated by the name search.
  */
-describe("usda_food.suggest_for_product", () => {
+describe("product_enrichment_read.suggest_for_product", () => {
   const ctx = withTestDb();
 
   it("returns the barcode match first, then name+brandName matches without repeating it", async () => {

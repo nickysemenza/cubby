@@ -296,14 +296,14 @@ export const photoImportContract = defineContract(
     }),
     review: query({
       exposure: "view",
-      note: "Agents read proposals through photo_run_read.proposals",
+      note: "Agents read proposals through run_read.proposals",
       input: z.object({ runId: runShortcode }),
       output: photoRunReviewResponse,
       cache: { tags: [["run"]] },
     }),
     candidates: query({
       exposure: "view",
-      note: "Agents read candidates through photo_run_read.product_candidates",
+      note: "Agents read candidates through run_read.product_candidates",
       input: z.object({
         runId: runShortcode,
         groupKey: z.string().min(1).max(200),
@@ -613,7 +613,7 @@ export const photoImportContract = defineContract(
     /** Upsert proposed groups for human review; writes no Product or Inventory. */
     proposeGroups: mutation({
       description:
-        "Propose how a run's images group into items, for a human to review and approve on the run page — nothing is written to Products or Inventory until approval, which runs photo_run.commit_group with each group's payload. Each group has commit_group's shape (minus runId) plus optional `evidence` (why these photos are one item, and why this Product). Upserts by groupKey: a still-`proposed` group is replaced; a `committed` or `discarded` groupKey is left untouched and returned in `frozenGroupKeys`. `removeGroupKeys` drops proposed groups. Every image must be a `pending` target of the run and, across the run's proposed groups after this call, appear in exactly one group (attached or skipped) — otherwise the whole call is refused. For paged grouping, save the last provisional group too and set `boundaryGroupKey` to its key in this same mutation; null closes the boundary on the final page. The boundary must name a mutable agent proposal. Returns every proposal plus the pending images no group mentions yet.",
+        "Propose how a run's images group into items, for a human to review and approve on the run page — nothing is written to Products or Inventory until approval, which runs run.commit_group with each group's payload. Each group has commit_group's shape (minus runId) plus optional `evidence` (why these photos are one item, and why this Product). Upserts by groupKey: a still-`proposed` group is replaced; a `committed` or `discarded` groupKey is left untouched and returned in `frozenGroupKeys`. `removeGroupKeys` drops proposed groups. Every image must be a `pending` target of the run and, across the run's proposed groups after this call, appear in exactly one group (attached or skipped) — otherwise the whole call is refused. For paged grouping, save the last provisional group too and set `boundaryGroupKey` to its key in this same mutation; null closes the boundary on the final page. The boundary must name a mutable agent proposal. Returns every proposal plus the pending images no group mentions yet.",
       input: proposePhotoGroupsInput,
       output: proposePhotoGroupsOutput,
       invalidates: ["runOnly"],
@@ -621,11 +621,11 @@ export const photoImportContract = defineContract(
     /** The bounded writer approval runs; idempotent per (runId, groupKey). */
     commitGroup: mutation({
       description:
-        'The bounded writer approval runs. Product/Inventory writes require explicit review with observedName, stockIntent and a null unresolvedReason; skip-only groups need no review. Prefer photo_run.propose_groups and let the user approve on the run page; call this only when the user explicitly asks to skip review. Turns one group of already-staged images into one Product (an existing Product by id, or a genuinely new one) with each image attached under an `item` or `label` purpose, and optionally one Inventory entry. Idempotent per (runId, groupKey): the exact same call replays the prior result; a changed payload under the same groupKey is refused unless the earlier attempt failed. When a `create` name or alias exactly (case-insensitively) matches a live Product, nothing is written and the call returns `outcome: "conflict"` with the colliding Product ids — never a speculative new Product. Every listed image must be a `pending` target of the run and appear in exactly one of `images` (attach) or `skip` (with a reason); a skip-only group touches no Product. Marks the run `completed` once no `pending` target remains.',
+        'The bounded writer approval runs. Product/Inventory writes require explicit review with observedName, stockIntent and a null unresolvedReason; skip-only groups need no review. Prefer run.propose_groups and let the user approve on the run page; call this only when the user explicitly asks to skip review. Turns one group of already-staged images into one Product (an existing Product by id, or a genuinely new one) with each image attached under an `item` or `label` purpose, and optionally one Inventory entry. Idempotent per (runId, groupKey): the exact same call replays the prior result; a changed payload under the same groupKey is refused unless the earlier attempt failed. When a `create` name or alias exactly (case-insensitively) matches a live Product, nothing is written and the call returns `outcome: "conflict"` with the colliding Product ids — never a speculative new Product. Every listed image must be a `pending` target of the run and appear in exactly one of `images` (attach) or `skip` (with a reason); a skip-only group touches no Product. Marks the run `completed` once no `pending` target remains.',
       input: commitPhotoGroupInput,
       output: commitPhotoGroupOutput,
       invalidates: ["runOnly", "product", "inventory"],
     }),
   },
-  { exposure: "capability", mcpToolGroup: "photo_run" },
+  { exposure: "capability", mcpToolGroup: "run" },
 );

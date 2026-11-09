@@ -279,7 +279,7 @@ describe("expense quantity filters", () => {
 
 describe("describeAttentionItem", () => {
   /**
-   * The sentence every prose consumer reads (MCP `project_overview_read.house_status`,
+   * The sentence every prose consumer reads (MCP `entity_read.house_status`,
    * `activity_read.report`). Two properties are load-bearing and asserted here:
    *
    * 1. Every rule NAMES its entity. The two `date_window_drift` sentences did

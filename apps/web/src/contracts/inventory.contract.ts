@@ -81,7 +81,7 @@ export const inventoryContract = defineContract(
     }),
     bulkMove: mutation({
       exposure: "view",
-      note: "The web multi-select move; inventory.move_entries moves entries per destination",
+      note: "The web multi-select move; entity.move_entries moves entries per destination",
       command: { label: "Move inventory", confirmation: null },
       input: bulkMovePayload,
       output: inventoryWithLocationAndProductListAndSideEffectsOut.extend({
@@ -153,5 +153,5 @@ export const inventoryContract = defineContract(
       invalidates: ["inventory"],
     }),
   },
-  { exposure: "capability" },
+  { exposure: "capability", mcpToolGroup: "entity" },
 );

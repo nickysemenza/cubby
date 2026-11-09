@@ -73,7 +73,7 @@ export const expenseContract = defineContract(
       readPolicy: "strong",
       exposure: "capability",
       description:
-        "An inventory entry's inherited owner and beneficiary evidence with its evidenceFingerprint, for inventory.confirm_ownership and expenses.confirm_inventory_beneficiary.",
+        "An inventory entry's inherited owner and beneficiary evidence with its evidenceFingerprint, for entity.confirm_ownership and finance.confirm_inventory_beneficiary.",
       input: expenseInventoryOwnershipContextInput,
       output: expenseInventoryOwnershipContextOut,
     }),
@@ -108,5 +108,5 @@ export const expenseContract = defineContract(
       cache: { tags: [] },
     }),
   },
-  { exposure: "view", mcpToolGroup: "expenses" },
+  { exposure: "view", mcpToolGroup: "finance" },
 );

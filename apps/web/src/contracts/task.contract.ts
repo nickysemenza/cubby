@@ -58,5 +58,5 @@ export const taskContract = defineContract(
       invalidates: ["task"],
     }),
   },
-  { exposure: "view", mcpToolGroup: "tasks_overview" },
+  { exposure: "view", mcpToolGroup: "entity" },
 );

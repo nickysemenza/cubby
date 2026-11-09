@@ -336,14 +336,14 @@ describe("MCP entity kernel boundary", () => {
   it("annotates read-only tools from the registry", async () => {
     // The registry's own annotations are the invariant, in both directions:
     // no tool that writes (`product_enrichment.find_or_create_by_upc` mints a Product) and no
-    // read-only tool left out (`recipe_insights_read`, whose costing reads).
+    // read-only tool left out (`nutrition_read`, whose costing reads).
     const catalog = await listMcpToolCatalog();
     const readOnlyNames = catalog.tools
       .filter((tool) => tool.annotations?.readOnlyHint === true)
       .map((tool) => tool.name)
       .sort();
     expect(readOnlyNames).toContain("entity_read");
-    expect(readOnlyNames).toContain("recipe_insights_read");
+    expect(readOnlyNames).toContain("nutrition_read");
     expect(readOnlyNames).not.toContain("entity");
     expect(readOnlyNames).not.toContain("upc");
   });

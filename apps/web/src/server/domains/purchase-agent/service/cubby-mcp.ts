@@ -207,11 +207,10 @@ export function photoCoordinatorToolResult(
   args: JsonObject,
   result: z.output<typeof callResult>,
 ): ToolExecutionResult {
-  if (tool !== "photo_run" && tool !== "photo_run_read")
-    return cubbyToolResult(result);
+  if (tool !== "run" && tool !== "run_read") return cubbyToolResult(result);
   if (result.isError) return cubbyToolResult(result);
-  const written = tool === "photo_run" && args.action === "propose_groups";
-  const read = tool === "photo_run_read" && args.action === "proposals";
+  const written = tool === "run" && args.action === "propose_groups";
+  const read = tool === "run_read" && args.action === "proposals";
   if (!written && !read) return cubbyToolResult(result);
   const text = result.content
     .flatMap((part) => textBlock.safeParse(part).data?.text ?? [])

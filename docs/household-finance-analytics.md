@@ -9,8 +9,8 @@ Net worth stays gated on amending the trusted-household tenet.
 
 ## Category breakdown
 
-`expense.analyze` (MCP `expenses_read.analyze`; it exceeds
-`project_overview`'s schema budget) accepts `spendingCategoryRollup: "root"` on
+`expense.analyze` (MCP `finance_read.analyze`; it exceeds
+`entity_read.budget`'s schema) accepts `spendingCategoryRollup: "root"` on
 a Spending Category row or column. Buckets are root categories plus two
 unresolved buckets that stay distinct so totals reconcile:
 

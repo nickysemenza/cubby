@@ -7,7 +7,7 @@ grouping, ownership, and location rules.
 1. In the hosted import agent, report preparing and call `claim_next_import_work`.
    An external Claude/Codex session uses the available MCP reads and proposals;
    it does not need hosted-only claim/progress tools. Pass `{{runId}}` as the
-   public run code to `photo_run_read.run_context`. It returns the owner, structured
+   public run code to `run_read.run_context`. It returns the owner, structured
    capture defaults (intent and optional storage location), notes,
    and one page of photos in capture order with their analysis summaries.
    Hosted agents use `remaining: true` without a cursor: this returns uncovered
@@ -19,7 +19,7 @@ grouping, ownership, and location rules.
    when `boundaryReviewRequired` is present; continue the uncovered photos.
    External sessions keep ordinary full-scan pagination, passing `nextCursor`
    as `cursor` until null and holding the last group across page boundaries.
-2. For each distinct item, call `photo_run_read.product_candidates` with its
+2. For each distinct item, call `run_read.product_candidates` with its
    observed name and brand text (`brandName`), working within the current page.
    Compare the physical variant to the returned
    Products. Prefer a matching Product with no own-item photo or earlier photo
@@ -32,13 +32,13 @@ grouping, ownership, and location rules.
    has no destination, propose receive without inventory and let the member
    choose the location once on web. Do not downgrade it to reference or turn
    the missing shared destination into a repeated identity concern.
-3. Cover every pending image exactly once with `photo_run.propose_groups`. Include
+3. Cover every pending image exactly once with `run.propose_groups`. Include
    `_runExecution: { run: "{{runId}}", operationId: <stable proposal id> }` on
    the mutation in an external member session (the hosted runtime supplies its
    private execution identity). Include each group's structured `review`
-   decision, leaving ambiguous identity explicitly unresolved. Read `photo_run_read.proposals` to check for conflicts and
+   decision, leaving ambiguous identity explicitly unresolved. Read `run_read.proposals` to check for conflicts and
    uncovered photos. The human approves groups; this agent does not call
-   `photo_run.commit_group`.
+   `run.commit_group`.
 4. Once every photo is covered by a valid proposal, the hosted agent calls
    `report_agent_progress` with `phase: "awaiting_approval"` and
    `awaitingApproval: true`, then end this submission. The run completes after

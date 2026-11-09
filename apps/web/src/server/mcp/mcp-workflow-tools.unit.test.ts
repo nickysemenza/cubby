@@ -294,7 +294,7 @@ describe("MCP workflow tools", () => {
     );
     await callMcpTool(
       createMcpServer(),
-      "expenses_read",
+      "finance_read",
       { action: "analytics", input: { unknownFilter: "not-a-filter" } },
       {},
       { telemetry: { identity, emit } },
@@ -317,7 +317,7 @@ describe("MCP workflow tools", () => {
     );
     expect(emit).toHaveBeenCalledWith(
       expect.objectContaining({
-        toolName: "expenses_read",
+        toolName: "finance_read",
         outcome: "error",
       }),
     );
@@ -360,7 +360,7 @@ describe("MCP workflow tools", () => {
 
   it("rejects unknown filters and semantic pairs outside the allowlist before running", async () => {
     const server = createMcpServer();
-    const unknown = await callMcpTool(server, "expenses_read", {
+    const unknown = await callMcpTool(server, "finance_read", {
       action: "analytics",
       costMinn: 500,
     });
@@ -376,7 +376,7 @@ describe("MCP workflow tools", () => {
     expect(JSON.stringify(rejected.content)).toContain("pair");
   });
 
-  it("recipe_insights_read.costing_explanation detail=lines drops both totals blocks and drift", () => {
+  it("nutrition_read.costing_explanation detail=lines drops both totals blocks and drift", () => {
     const explain = mock(recipeCostingExplain, {
       overrides: {
         persisted: { totals: knownTotals },
