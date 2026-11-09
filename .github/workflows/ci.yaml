@@ -152,14 +152,24 @@ jobs:
         run: pnpm exec nx run cubby-checks:format --outputStyle=stream
       - name: Check relative Markdown links
         if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
-        uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
-        with:
-          args: >-
-            --offline
-            --no-progress
-            --exclude-path '(^|/)node_modules/'
-            --root-dir "${{ github.workspace }}"
-            './**/*.md'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          lychee_dir="$RUNNER_TEMP/lychee"
+          lychee_archive="$lychee_dir/lychee-x86_64-unknown-linux-gnu.tar.gz"
+          mkdir -p "$lychee_dir"
+          gh release download lychee-v0.24.2 --repo lycheeverse/lychee \
+            --pattern lychee-x86_64-unknown-linux-gnu.tar.gz --dir "$lychee_dir"
+          printf '%s  %s\n' \
+            '1f4e0ef7f6554a6ed33dd7ac144fb2e1bbed98598e7af973042fc5cd43951c9a' \
+            "$lychee_archive" | sha256sum --check --strict
+          tar -xzf "$lychee_archive" -C "$lychee_dir"
+          "$lychee_dir/lychee-x86_64-unknown-linux-gnu/lychee" \
+            --offline \
+            --no-progress \
+            --exclude-path '(^|/)node_modules/' \
+            --root-dir "$GITHUB_WORKSPACE" \
+            './**/*.md' \
             './**/*.mdx'
 
   # Each GitHub test shard owns fresh database services.
