@@ -1619,7 +1619,7 @@ export function createBooleanColumn<K extends PropertyKey, T extends object>(
     placeholder?: string;
     /**
      * The two decided states, as a `{value: "true"|"false", label, color}` roster
-     * — build it with `booleanCellOptions` (~/lib/select-options).
+     * — build it with `booleanCellOptions` (~/ui/combobox/select-options).
      *
      * A roster rather than a `labels` pair plus built-in tones, because "true" is
      * not always the good outcome: a planned Expense is amber rather than
