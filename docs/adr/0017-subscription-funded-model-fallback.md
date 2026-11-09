@@ -155,6 +155,10 @@ pi-ai returns its fixed usage-limit message without the code, including an
 HTTP 200 stream. Failed-attempt events stay buffered and are discarded before
 choosing the next permitted rung. This does not broaden raw HTTP stream replay
 admission or authorize another funding route.
+The plan availability read recognizes the same message-only terminal, so the
+recorded quota refusal cannot appear available merely because the SDK omitted
+its code. Without an OpenAI reset hint, the window remains an internal probe
+deadline rather than a claimed provider reset time.
 
 The isolate shares concurrent reads of a Run's immutable lineage origin and
 retains only found roots. Missing roots and failed reads remain retryable.

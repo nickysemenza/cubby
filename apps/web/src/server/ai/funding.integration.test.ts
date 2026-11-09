@@ -157,7 +157,10 @@ describe("AI funding availability", () => {
           operation: "synthetic.generation",
           durationMs: 1,
           transport: "chatgpt",
-          failure: `{"error":{"code":"subscription_sharing_usage_limit_exceeded"${hint}}}`,
+          status: "failed",
+          failure: hint
+            ? `{"error":{"code":"subscription_sharing_usage_limit_exceeded"${hint}}}`
+            : "The ChatGPT user has reached their Subscription Sharing usage limit. Ask the user to try again after their usage limit resets or use an API key instead.",
           createdAt: new Date("2026-10-01T01:00:00.000Z"),
         });
       const planConnection = async () => ({
