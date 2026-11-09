@@ -7,7 +7,12 @@ import type { PurchaseDispatchEnvironment } from "./environment";
 export async function deliverPurchaseDispatch(
   event: PurchaseAgentEvent,
   env: PurchaseDispatchEnvironment,
-): Promise<"dispatched" | "fenced" | "acknowledged_by_peer"> {
+): Promise<
+  | "dispatched"
+  | "fenced"
+  | "acknowledged_by_peer"
+  | { waiting: { holders: number } }
+> {
   const services = env.run(event.runId);
   if (await services.coordinatorRetired()) return "fenced";
   // Only run-start deliveries participate in the dispatch generation fence.
@@ -22,11 +27,13 @@ export async function deliverPurchaseDispatch(
   if (scope.agentId !== importRunAgentIdentity(event.runId, scope.purpose)) {
     throw new Error("Import run agent identity does not match its purpose");
   }
-  const { accepted } = await env
+  const { accepted, waiting } = await env
     .coordinator(scope.agentId)
     .dispatch(
       dispatchInputForEvent(event, scope.purpose, scope.coordinatorModel),
     );
+  // Every coordinator turn is taken: nothing ran, so nothing is acknowledged.
+  if (waiting) return { waiting };
   if (accepted && event.type === "start_or_resume")
     await services.updateAgentProgress({
       eventId: `coordinator-started:${event.eventId}`,

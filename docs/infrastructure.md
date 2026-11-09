@@ -392,15 +392,31 @@ a second one. The invariant is
 
 `2 × (background max_concurrency + telemetry max_concurrency + cron + live Durable Object requests) ≤ 40` (the background origin cap)
 
-Only part of it is enforced. The queue consumers' `max_concurrency` bounds
-permit and telemetry invocations: 8 background
-(`packages/shared/src/background-queue-consumer.json`) and 1 telemetry
-(`apps/web/cloudflare.config.ts`), so at most 18 sockets. The cron runs its
-backstop and the daily pass one after the other, so 2 more. Nothing bounds
-Durable Object requests except their own traffic: purchase coordinators open a
-pool per service call for each active Run, and the CalendarFeed object per
-rebuild. That leaves 20 sockets, or 10 concurrent Durable Object requests,
-before Hyperdrive queues for an origin slot; past its wait it fails the query
+The queue consumers' `max_concurrency` bounds permit and telemetry
+invocations: 8 background (`packages/shared/src/background-queue-consumer.json`)
+and 1 telemetry (`apps/web/cloudflare.config.ts`), so at most 18 sockets. The
+cron runs its backstop and the daily pass one after the other, so 2 more. That
+leaves 20 sockets for Durable Object requests.
+
+Purchase coordinators (one `PurchaseImportRunAgent` per import Run) share a
+household-wide cap of `COORDINATOR_TURN_CAP` = 6 concurrent work turns
+(`domains/run/repo/coordinator-turns.ts`): about 12 sockets, leaving room for
+the CalendarFeed object's rebuilds and other Durable Object requests, which
+are bounded only by their own traffic. Before an alarm, a dispatch or a member
+prompt loads the agent, its host takes or renews the Run's turn in one short
+transaction (a `CoordinatorTurn` row under one advisory lock) and keeps it while
+pi has work running; the entry that finds pi idle releases it. A crashed holder's
+turn lapses after its 16-minute lease, longer than an alarm can run. A refused
+coordinator's row (`held = false`) records that it is alive and waiting, so
+stale-Run expiry never ends a Run for waiting its turn. Without a turn, nothing
+loads: an alarm re-arms itself 15 s–5 min later (doubling,
+jittered), a `purchase.dispatch` Job defers with `provider_capacity` (no attempt
+spent) until a released turn brings the oldest one forward, and a prompt answers
+503 with `Retry-After`. A member's stop never waits for a turn. The cap neither
+starts, resumes, retries nor cancels a Run: a running coordinator simply waits
+its turn. Each coordinator still opens a pool per service call within its turn.
+
+Past the budget, Hyperdrive queues for an origin slot and then fails the query
 with SQLSTATE 58000 "Timed out while waiting for an open slot in the pool".
 Those failures are transient (no attempts spent; see [Jobs](jobs.md)), so
 exceeding the budget slows work rather than losing it.
@@ -414,6 +430,12 @@ Watch for the margin running out:
 - Long `db.acquire` spans on queue, cron and Durable Object traces.
 - The background configuration's origin connection count in the Hyperdrive
   dashboard approaching 40.
+- Coordinator turn waits: `cubby.coordinator.turn = waiting` (with `.holders`
+  and `.retry_ms`) on `purchase-agent.alarm`/`.dispatch` spans and as a Sentry
+  tag, the `purchase-agent.turn` log, and `purchase.dispatch` Jobs deferred with
+  "Waiting for a coordinator turn" (`Job.lastExecution.outcome = 'deferred'`).
+  `SELECT held, count(*) FROM "CoordinatorTurn" WHERE "leaseExpiresAt" > now()
+  GROUP BY held` counts turns held and coordinators waiting now.
 
 Raise `max_concurrency` only with the origin cap, and only after measuring pool
 waits.

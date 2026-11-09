@@ -63,6 +63,13 @@ failure backoff. A kind absent there is a server kind with three attempts and
 | `external` | `purchase.dispatch` | a coordinator, handed off by a permit           |
 | `server`   | every other kind    | a [background permit](#selection-and-admission) |
 
+Coordinators run at most `COORDINATOR_TURN_CAP` (6) work turns at once across
+the household ([budget](infrastructure.md#background-connection-budget)). A
+`purchase.dispatch` whose coordinator finds every turn held defers with
+`provider_capacity` and no attempt ("Waiting for a coordinator turn"); each
+released turn brings the oldest such Job forward, and its 2–4 minute fallback
+covers a turn that lapsed instead.
+
 `background.drain` is an internal record kind: one completed row per drain
 unit (`key` `drain:<unit>`) whose `lastClaimedAt` places the unit in rotation.
 It is never claimed or executed. Its `lastExecution` is the unit's last page,

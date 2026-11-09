@@ -9,6 +9,7 @@ import type { Database } from "~/server/db";
 import { emailPurchaseDiscoveryDrain } from "~/server/domains/connection/service/email-purchase-discovery";
 import { cloudImageDrain } from "~/server/domains/image-processing/service/cloud-drain";
 import { deliverPurchaseDispatch } from "~/server/domains/purchase-agent/service/dispatch";
+import type { PurchaseDispatchEnvironment } from "~/server/domains/purchase-agent/service/environment";
 import {
   failedCoordinatorDispatchesExist,
   reconcileCoordinatorDispatches,
@@ -26,6 +27,7 @@ import {
 } from "~/server/generic/derived/service/rebuild";
 import { embeddingCleanupDrain } from "~/server/generic/embedding/service/embedding-cleanup";
 import { embeddingRefreshDrain } from "~/server/generic/embedding/service/embedding-refresh";
+import { JobDeferredError } from "~/server/generic/jobs/errors";
 import { defineJobHandler } from "~/server/generic/jobs/service/jobs";
 import type { PermitRuntime } from "~/server/generic/jobs/service/permits";
 import type { JobHandler, JobHandlers } from "~/server/generic/jobs/types";
@@ -39,30 +41,43 @@ import {
 
 import { derivedComputes } from "./derived-computes";
 
+/** Deliver one coordinator event through the environment `open` builds. */
+export const purchaseDispatchHandler = (
+  open: (
+    waitUntil: (work: Promise<unknown>) => void,
+  ) => Promise<PurchaseDispatchEnvironment>,
+) =>
+  defineJobHandler(purchaseAgentEvent, async (_db, _claim, event) => {
+    const pending: Promise<unknown>[] = [];
+    const outcome = await deliverPurchaseDispatch(
+      event,
+      await open((work) => {
+        pending.push(work);
+      }),
+    );
+    await Promise.all(pending);
+    // A full coordinator cap is a capacity wait, not a failed attempt; the
+    // next released turn brings this Job forward before the fallback time.
+    if (typeof outcome === "object")
+      throw new JobDeferredError(
+        `Waiting for a coordinator turn (${outcome.waiting.holders} running)`,
+        new Date(Date.now() + 120_000 + Math.random() * 120_000),
+        jobWaitReason.enum.provider_capacity,
+      );
+    return { page: { done: true, result: { outcome } } };
+  });
+
 export const productionJobHandlers: JobHandlers = {
   ...backgroundJobHandlers,
   "run.execute": runJobHandler,
-  "purchase.dispatch": defineJobHandler(
-    purchaseAgentEvent,
-    async (_db, _claim, event) => {
-      const env = getPurchaseDispatchHostEnv();
-      if (!env)
-        throw new Error("Purchase dispatch host environment is unavailable");
-      const { purchaseDispatchEnvironment } =
-        await import("~/server/domains/purchase-import/operations/agent-services");
-      const pending: Promise<unknown>[] = [];
-      const outcome = await deliverPurchaseDispatch(
-        event,
-        purchaseDispatchEnvironment(env, {
-          waitUntil: (work) => {
-            pending.push(work);
-          },
-        }),
-      );
-      await Promise.all(pending);
-      return { page: { done: true, result: { outcome } } };
-    },
-  ),
+  "purchase.dispatch": purchaseDispatchHandler(async (waitUntil) => {
+    const env = getPurchaseDispatchHostEnv();
+    if (!env)
+      throw new Error("Purchase dispatch host environment is unavailable");
+    const { purchaseDispatchEnvironment } =
+      await import("~/server/domains/purchase-import/operations/agent-services");
+    return purchaseDispatchEnvironment(env, { waitUntil });
+  }),
   "run.funding-resume": defineJobHandler(
     // Rows enqueued before window keys still carry their Run; the handler resumes all.
     fundingResumeInput,

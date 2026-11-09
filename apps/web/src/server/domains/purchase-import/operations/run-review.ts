@@ -29,6 +29,7 @@ import {
   isNull,
   lt,
   ne,
+  not,
   notInArray,
   or,
   sql,
@@ -61,6 +62,7 @@ import {
   readMailSourceTransfers,
   releaseUnsettledMailRunSources,
 } from "~/server/domains/purchase-import/repo/mail-run-membership";
+import { coordinatorTurnLive } from "~/server/domains/run/repo/coordinator-turns";
 import { pauseForFunding } from "~/server/domains/run/repo/execution-context";
 import {
   loadRunScope,
@@ -403,6 +405,8 @@ function staleRunWhere(cutoff: Date) {
     // Raw Date parameters use the host offset; stored timestamps are UTC wall time.
     sql`NOT EXISTS (SELECT 1 FROM ${runOperation} WHERE ${runOperation.runId} = ${runTable.id} AND ${runOperation.startedAt} >= ${cutoff.toISOString()}::timestamp)`,
     or(isNull(runTable.heartbeatAt), lt(runTable.heartbeatAt, cutoff)),
+    // A coordinator waiting for a household turn is alive, however long the wait.
+    not(coordinatorTurnLive(runTable.id)),
   );
 }
 
