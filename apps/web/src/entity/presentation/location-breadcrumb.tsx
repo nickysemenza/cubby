@@ -69,7 +69,6 @@ interface LocationBreadcrumbProps {
   compact?: boolean;
   /** Add bg-primary/10 tint to active (last) segment */
   activeHighlight?: boolean;
-  /** Additional class name */
   className?: string;
 }
 

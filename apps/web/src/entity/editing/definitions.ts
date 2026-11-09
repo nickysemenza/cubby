@@ -769,9 +769,7 @@ const operationDefinition = <E extends EditableEntity>(
 interface EntityEditHooks<E extends EditableEntity> {
   /** Field behavior beyond what the declaration derives. */
   fields?: FieldOverrides<E>;
-  /** Options for the named create intents. */
   create?: Readonly<Record<string, IntentOptions<E>>>;
-  /** Options for the named update intents. */
   update?: Readonly<Record<string, IntentOptions<E>>>;
 }
 

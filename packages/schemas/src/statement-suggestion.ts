@@ -245,7 +245,6 @@ export const statementSuggestionOut = z.object({
   source: z.string(),
   chargeKey: z.string(),
   accountId: financialAccountShortcode,
-  /** The account's owner. */
   ownerId: ledgerPartyShortcode.nullable(),
   statementDate: plainDate,
   amount: z.number(),

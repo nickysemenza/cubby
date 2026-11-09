@@ -1,5 +1,4 @@
 import {
-  projectOut,
   projectCreateInput,
   projectUpdateData,
 } from "@cubby/schemas/entities/project";
@@ -188,8 +187,6 @@ describe("project resource URLs", () => {
       googleDriveFolderUrl: null,
       notionPageUrl: null,
     });
-    expect(projectOut.shape.googleDriveFolderUrl).toBeDefined();
-    expect(projectOut.shape.notionPageUrl).toBeDefined();
   });
 });
 

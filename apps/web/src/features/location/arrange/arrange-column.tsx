@@ -19,7 +19,6 @@ interface ArrangeColumnProps {
   locationId: LocationShortcode | null;
   /** Header location, or null while the hierarchy is unavailable. */
   headerLocation: LocationTreeNode | null;
-  /** Child-location cards to render. */
   nodes: LocationTreeNode[];
   /** The header location's own inventory items (loose items at this location). */
   items: InventoryItemForTree[];

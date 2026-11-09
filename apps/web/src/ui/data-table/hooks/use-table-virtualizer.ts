@@ -199,7 +199,6 @@ interface UseTableVirtualizerResult {
   scrollOffset: number;
   /** Size of the index space: rows plus any interleaved group headers. */
   virtualRowCount: number;
-  /** Currently virtualized rows. */
   virtualRows: VirtualItem[];
   /** End of the normal rendered range, excluding manually retained items. */
   lastRangeIndex: number;

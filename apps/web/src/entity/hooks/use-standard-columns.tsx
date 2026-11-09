@@ -58,7 +58,6 @@ interface BaseListRow {
 const titleValueSchema = z.string().nullish().catch(null);
 
 interface UseStandardColumnsOptions<TData extends BaseListRow> {
-  /** The entity type */
   entity: BrowserRoutedEntity;
   /** Column helper instance (must be memoized) */
   columnHelper: ColumnHelper<TData>;
@@ -77,13 +76,11 @@ interface UseStandardColumnsOptions<TData extends BaseListRow> {
    * page) or the columns memo churns every render.
    */
   filterOptions?: RuntimeFilterOptions;
-  /** Whether row selection is enabled */
   enableRowSelection: boolean;
   /** Combined extra actions renderer for row actions */
   combinedExtraActions?: (row: TData) => ReactNode;
   /** Unit mappings map (id -> mappings), null if not used */
   mappingsMap: Record<string, UnitMapping[]> | null;
-  /** Whether unit mappings should be shown */
   hasUnitMappings: boolean;
   /**
    * Width class for the standard name column. Defaults to auto (`min-w-0`).

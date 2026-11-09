@@ -18,7 +18,6 @@ import { statusTone } from "./status-tone";
 interface StatusBadgeProps {
   label: string;
   variant: BadgeVariant;
-  /** Optional icon for status displays. */
   icon?: Icon;
 }
 

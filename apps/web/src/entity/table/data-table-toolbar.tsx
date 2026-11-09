@@ -65,7 +65,6 @@ interface DataTableToolbarProps<TData extends RowData> {
   bulkActionBar?: ReactNode;
   /** Show desktop view options dropdown (column toggles) */
   showViewOptions?: boolean;
-  /** Additional className for styling */
   className?: string;
   /** Previous-query rows remain visible while the next first page is loading. */
   isTransitioning?: boolean;

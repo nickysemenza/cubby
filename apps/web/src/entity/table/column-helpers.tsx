@@ -1882,7 +1882,6 @@ export function createPlainDateColumn<K extends PropertyKey, T extends object>(
     className?: string;
     mobile?: MobileColumnMeta;
     filterConfig?: FilterConfig;
-    /** Enable inline editing */
     editable?: {
       onSave: (newValue: string | null, row: T) => Promise<void>;
       clearable?: (row: T) => boolean;

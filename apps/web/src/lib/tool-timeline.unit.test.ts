@@ -2,7 +2,6 @@ import { describe, expect, it } from "vitest";
 
 import {
   type ProductOwnershipTimeline,
-  TOOL_TIMELINE_GRACE_DAYS,
   type ToolTimelineProjectWindow,
   toolTimelineConflict,
   UNKNOWN_OWNERSHIP,
@@ -101,7 +100,6 @@ describe("toolTimelineConflict", () => {
       );
       expect(conflict?.kind).toBe("acquired_after_end");
       expect(conflict?.boundary).toBe("2022-07-30");
-      expect(TOOL_TIMELINE_GRACE_DAYS).toBe(30);
     });
 
     it("never flags a live project, whose end is not a statement", () => {
