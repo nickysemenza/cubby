@@ -13,6 +13,9 @@ wait "role=Button id=detail.product.edit" 60000
 # Locate the inline Price field directly; Contents dismisses after choosing a section.
 scroll top
 scroll down 0.5 --until "id=field.explanation.product.${PRODUCT_ID}.price"
+# Move the field clear of the floating tab bar before opening its context menu.
+scroll down 0.3
+wait stable 500 10000
 longpress "id=field.explanation.product.${PRODUCT_ID}.price" 800
 wait "role=Button label=Explain" 30000
 wait "role=Button label=\"Use inherited\"" 30000
