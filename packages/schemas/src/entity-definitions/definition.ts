@@ -1547,7 +1547,7 @@ const buildMetadataSchemas = () => {
   });
   const listViewSchema = z.union([
     boardListViewSchema,
-    z.enum(["table", "shelf", "timeline"]),
+    z.enum(BUILT_IN_LIST_VIEWS),
     z.strictObject({
       kind: z.literal("slot"),
       id: sectionId,

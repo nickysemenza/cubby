@@ -188,7 +188,6 @@
     "./task-fields": "./src/task-fields.ts",
     "./vendor": "./src/vendor.ts",
     "./vendor-import-fields": "./src/vendor-import-fields.ts",
-    "./vendor-account": "./src/vendor-account.ts",
     "./vendor-account-fields": "./src/vendor-account-fields.ts",
     "./run-fields": "./src/run-fields.ts",
     "./run-step": "./src/run-step.ts",

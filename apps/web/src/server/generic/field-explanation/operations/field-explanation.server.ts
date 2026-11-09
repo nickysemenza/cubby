@@ -66,8 +66,8 @@ import { readPublicEntityRow } from "~/server/generic/derived/service/public-rea
 import { explanationReferenceValues } from "~/server/generic/field-explanation/repo/explanation-reference-values";
 import { loadFieldCountEvidence } from "~/server/generic/field-explanation/repo/field-count-evidence";
 import { withFieldExplanationSnapshot } from "~/server/generic/field-explanation/repo/field-explanation-evidence";
-import { loadFieldResolutionEvidence } from "~/server/generic/field-explanation/repo/field-resolution-evidence";
 import { inheritedResetPreview } from "~/server/generic/field-explanation/repo/inherited-reset-preview";
+import { loadFieldResolutionEvidence } from "~/server/generic/field-explanation/repo/resolution-contributors";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
 

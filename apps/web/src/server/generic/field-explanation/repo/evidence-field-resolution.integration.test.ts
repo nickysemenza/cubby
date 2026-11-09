@@ -19,8 +19,8 @@ import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
-import { loadFieldResolutionEvidence } from "./field-resolution-evidence";
 import { inheritedResetPreview } from "./inherited-reset-preview";
+import { loadFieldResolutionEvidence } from "./resolution-contributors";
 
 // Unsaved dependency changes must use live policy without materializing an
 // inherited value, and an explicit unknown remains a deliberate override.
