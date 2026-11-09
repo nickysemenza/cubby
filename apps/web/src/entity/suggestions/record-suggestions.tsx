@@ -1903,13 +1903,11 @@ function BoundRecordSuggestions({
         unasked={unasked}
       />
       {storedQuery?.error ? (
-        <div data-needs-row>
-          <ErrorDisplay
-            error={storedQuery.error}
-            title="stored suggestions"
-            onRetry={() => void storedQuery.refetch()}
-          />
-        </div>
+        <ErrorDisplay
+          error={storedQuery.error}
+          title="stored suggestions"
+          onRetry={() => void storedQuery.refetch()}
+        />
       ) : null}
     </>
   );
