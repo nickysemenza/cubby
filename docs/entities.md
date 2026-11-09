@@ -4640,7 +4640,7 @@ Two generic tables carry the relationships and identifiers that used to have a
 table each (ADR 0007):
 
 - `EntityLink(kind, fromEntityId/fromKind, toEntityId/toKind, quantity)` holds
-  every pure pairing of two entities: `wishCandidate`, `purchaseProduct`,
+  every pure pairing of two entities: `purchaseProduct`,
   `projectTool`, `gardenEntryPlanting`, `productComponent`, `taskDependency`,
   `projectDependency`. Link kinds are declared in
   `packages/schemas/src/entity-links.ts` (endpoint kinds, quantity, self-link and

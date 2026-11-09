@@ -1,0 +1,168 @@
+{
+  "type": "diff",
+  "version": "9",
+  "dialect": "postgres",
+  "id": "04ccf317-c1a6-45d3-895c-46c8051782b3",
+  "prevIds": [
+    "bc528645-a1c4-4e0c-ba33-3458aaa6a2bf"
+  ],
+  "footprints": [
+    {
+      "statementType": "drop_table",
+      "statementTarget": [
+        "table",
+        "public",
+        "Wish"
+      ],
+      "writes": [
+        "s|tbl|public.Wish",
+        "n|tbl|public.Wish",
+        "e|tbl|public.Wish",
+        "n|rel|public.Wish",
+        "n|type|public.Wish"
+      ],
+      "reads": [
+        "n|sch|public"
+      ]
+    },
+    {
+      "statementType": "alter_check",
+      "statementTarget": [
+        "table",
+        "public",
+        "Entity"
+      ],
+      "writes": [
+        "s|ck|public.Entity.Entity_kind_check"
+      ],
+      "reads": [
+        "n|tbl|public.Entity",
+        "n|sch|public",
+        "n|col|public.Entity.kind",
+        "e|col|public.Entity.kind"
+      ],
+      "sqlHash": "fb06cc301dac0f5c"
+    },
+    {
+      "statementType": "alter_check",
+      "statementTarget": [
+        "table",
+        "public",
+        "Entity"
+      ],
+      "writes": [
+        "s|ck|public.Entity.Entity_shortcode_prefix_check"
+      ],
+      "reads": [
+        "n|tbl|public.Entity",
+        "n|sch|public",
+        "n|col|public.Entity.shortcode",
+        "n|col|public.Entity.kind",
+        "e|col|public.Entity.shortcode",
+        "e|col|public.Entity.kind"
+      ],
+      "sqlHash": "17181ab06cb1362b"
+    },
+    {
+      "statementType": "alter_check",
+      "statementTarget": [
+        "table",
+        "public",
+        "EntityLink"
+      ],
+      "writes": [
+        "s|ck|public.EntityLink.EntityLink_kind_check"
+      ],
+      "reads": [
+        "n|tbl|public.EntityLink",
+        "n|sch|public",
+        "n|col|public.EntityLink.kind",
+        "n|col|public.EntityLink.fromKind",
+        "n|col|public.EntityLink.toKind",
+        "e|col|public.EntityLink.kind",
+        "e|col|public.EntityLink.fromKind",
+        "e|col|public.EntityLink.toKind"
+      ],
+      "sqlHash": "86ebc66dda53b56c"
+    }
+  ],
+  "deltas": [
+    {
+      "op": "drop",
+      "key": "tables\u0000[\"public\",\"Wish\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"Wish\",\"id\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"Wish\",\"shortcode\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"Wish\",\"name\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"Wish\",\"notes\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"Wish\",\"acquiredAt\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"Wish\",\"createdAt\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"Wish\",\"updatedAt\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"Wish\",\"deletedAt\"]"
+    },
+    {
+      "op": "drop",
+      "key": "indexes\u0000[\"public\",\"Wish_shortcode_unique\"]"
+    },
+    {
+      "op": "drop",
+      "key": "indexes\u0000[\"public\",\"Wish_createdAt_idx\"]"
+    },
+    {
+      "op": "drop",
+      "key": "indexes\u0000[\"public\",\"Wish_acquiredAt_idx\"]"
+    },
+    {
+      "op": "drop",
+      "key": "fks\u0000[\"public\",\"Wish\",\"Wish_entity_identity_fk\"]"
+    },
+    {
+      "op": "drop",
+      "key": "pks\u0000[\"public\",\"Wish\",\"Wish_pkey\"]"
+    },
+    {
+      "op": "alter",
+      "key": "checks\u0000[\"public\",\"Entity\",\"Entity_kind_check\"]",
+      "set": {
+        "value": "\"kind\" IN ('product', 'recipe', 'ingredient', 'cookbook', 'location', 'inventory', 'meal', 'ledgerParty', 'ledgerTransfer', 'project', 'task', 'vendor', 'purchase', 'financialAccount', 'financialTransaction', 'expense', 'image', 'planting', 'gardenEntry', 'vendorAccount', 'productCategory', 'run', 'device', 'plant', 'spendingCategory', 'email', 'imageJob', 'sourceTransactionRecord', 'transactionImport', 'shipment', 'sourceOccurrence')"
+      }
+    },
+    {
+      "op": "alter",
+      "key": "checks\u0000[\"public\",\"Entity\",\"Entity_shortcode_prefix_check\"]",
+      "set": {
+        "value": "\"shortcode\" IS NULL OR CASE \"kind\" WHEN 'product' THEN \"shortcode\" LIKE 'PRD-%' WHEN 'recipe' THEN \"shortcode\" LIKE 'RCP-%' WHEN 'ingredient' THEN \"shortcode\" LIKE 'ING-%' WHEN 'cookbook' THEN \"shortcode\" LIKE 'CKB-%' WHEN 'location' THEN \"shortcode\" LIKE 'LOC-%' WHEN 'inventory' THEN \"shortcode\" LIKE 'INV-%' WHEN 'meal' THEN \"shortcode\" LIKE 'MEL-%' WHEN 'ledgerParty' THEN \"shortcode\" LIKE 'LPY-%' WHEN 'ledgerTransfer' THEN \"shortcode\" LIKE 'LTR-%' WHEN 'project' THEN \"shortcode\" LIKE 'PRJ-%' WHEN 'task' THEN \"shortcode\" LIKE 'TSK-%' WHEN 'vendor' THEN \"shortcode\" LIKE 'VEN-%' WHEN 'purchase' THEN \"shortcode\" LIKE 'PUR-%' WHEN 'financialAccount' THEN \"shortcode\" LIKE 'FAC-%' WHEN 'financialTransaction' THEN \"shortcode\" LIKE 'FTX-%' WHEN 'expense' THEN \"shortcode\" LIKE 'EXP-%' WHEN 'image' THEN \"shortcode\" LIKE 'IMG-%' WHEN 'planting' THEN \"shortcode\" LIKE 'PLT-%' WHEN 'gardenEntry' THEN \"shortcode\" LIKE 'GDE-%' WHEN 'vendorAccount' THEN \"shortcode\" LIKE 'VACCT-%' WHEN 'productCategory' THEN \"shortcode\" LIKE 'CAT-%' WHEN 'run' THEN \"shortcode\" LIKE 'RUN-%' WHEN 'device' THEN \"shortcode\" LIKE 'DEV-%' WHEN 'plant' THEN \"shortcode\" LIKE 'PLANT-%' WHEN 'spendingCategory' THEN \"shortcode\" LIKE 'SPC-%' WHEN 'email' THEN \"shortcode\" LIKE 'EML-%' WHEN 'imageJob' THEN \"shortcode\" LIKE 'IPR-%' WHEN 'sourceTransactionRecord' THEN \"shortcode\" LIKE 'STR-%' WHEN 'transactionImport' THEN \"shortcode\" LIKE 'TIM-%' WHEN 'shipment' THEN \"shortcode\" LIKE 'SHIP-%' WHEN 'sourceOccurrence' THEN \"shortcode\" LIKE 'SOC-%' ELSE false END"
+      }
+    },
+    {
+      "op": "alter",
+      "key": "checks\u0000[\"public\",\"EntityLink\",\"EntityLink_kind_check\"]",
+      "set": {
+        "value": "(\"kind\", \"fromKind\", \"toKind\") IN (('purchaseProduct', 'purchase', 'product'), ('purchasePaymentAccount', 'purchase', 'financialAccount'), ('projectTool', 'project', 'product'), ('gardenEntryPlanting', 'gardenEntry', 'planting'), ('productComponent', 'product', 'product'), ('taskDependency', 'task', 'task'), ('projectDependency', 'project', 'project'))"
+      }
+    }
+  ]
+}
