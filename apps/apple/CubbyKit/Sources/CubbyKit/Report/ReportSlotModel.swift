@@ -109,9 +109,9 @@ public enum ReportActionError: Error, LocalizedError, Equatable {
 /// live. Polling is the only refresh mechanism: there is no realtime transport. Actions run the
 /// exact request the server composed, and only after the confirmation the action declares.
 @MainActor @Observable
-public final class ReportSlotModel {
+public final class ReportSlotModel: PolledReadOwner {
     public private(set) var ownPresentation: ReportPresentation?
-    public private(set) var isLoading = false
+    public var isLoading: Bool { poll.isLoading }
     public private(set) var loadError: String?
     public private(set) var busyActionID: String?
     public private(set) var actionError: String?
@@ -132,14 +132,9 @@ public final class ReportSlotModel {
 
     @ObservationIgnored private let service: any ReportServing
     @ObservationIgnored private let batch: ReportBatchModel?
-    @ObservationIgnored private let waitForNextPoll: @Sendable () async throws -> Void
-    @ObservationIgnored private var watchers = 0
-    @ObservationIgnored private(set) var pollTask: Task<Void, Never>?
-    /// Callers waiting for the read in flight to finish; a later read never overlaps it. Observed,
-    /// so a test can see a read queue behind the one in flight.
-    private var loadWaiters: [CheckedContinuation<Void, Never>] = []
-    var queuedLoads: Int { loadWaiters.count }
-    @ObservationIgnored private var staleStatusReported: String?
+    private let poll: PolledRead
+    var pollTask: Task<Void, Never>? { poll.pollTask }
+    var queuedLoads: Int { poll.queuedLoads }
     /// Pages after the first, kept across a refresh so polling never drops what was loaded.
     @ObservationIgnored private var laterPages: [ReportPresentation] = []
 
@@ -148,16 +143,15 @@ public final class ReportSlotModel {
     public init(
         slot: ReportSlot, id: String, shownStatus: String? = nil, batch: ReportBatchModel? = nil,
         service: any ReportServing,
-        waitForNextPoll: @escaping @Sendable () async throws -> Void = {
-            try await Task.sleep(for: .seconds(3))
-        }
+        waitForNextPoll: (@Sendable () async throws -> Void)? = nil
     ) {
         self.slot = slot
         self.id = id
         self.shownStatus = shownStatus
         self.batch = batch
         self.service = service
-        self.waitForNextPoll = waitForNextPoll
+        poll = PolledRead(waitForNextPoll: waitForNextPoll ?? PolledRead.defaultPause)
+        poll.owner = self
     }
 
     public var presentation: ReportPresentation? {
@@ -172,93 +166,57 @@ public final class ReportSlotModel {
     public func refresh() async {
         if let reload { return await reload() }
         if let batch { return await batch.refresh() }
-        await loadFinished()
-        isLoading = true
-        defer { endLoading() }
-        do {
-            let first = ReportPresentation(try await service.report(slot: slot, id: id, cursor: nil))
-            ownPresentation = laterPages.reduce(first) { $0.appending($1) }
-            noteStatus(first.status)
-            loadError = nil
-        } catch {
-            loadError = error.localizedDescription
+        await poll.read {
+            do {
+                let first = ReportPresentation(try await service.report(slot: slot, id: id, cursor: nil))
+                ownPresentation = laterPages.reduce(first) { $0.appending($1) }
+                noteStatus(first.status)
+                loadError = nil
+            } catch {
+                loadError = error.localizedDescription
+            }
         }
     }
 
     /// Appends the next page under the first page's blocks; a poll in flight finishes first.
     public func loadMore() async {
-        await loadFinished()
-        guard let current = ownPresentation, let cursor = current.nextCursor else { return }
-        isLoading = true
-        defer { endLoading() }
-        do {
-            let page = ReportPresentation(try await service.report(slot: slot, id: id, cursor: cursor))
-            laterPages.append(page)
-            ownPresentation = current.appending(page)
-            noteStatus(page.status)
-            loadError = nil
-        } catch {
-            loadError = error.localizedDescription
+        await poll.read {
+            guard let current = ownPresentation, let cursor = current.nextCursor else { return }
+            do {
+                let page = ReportPresentation(try await service.report(slot: slot, id: id, cursor: cursor))
+                laterPages.append(page)
+                ownPresentation = current.appending(page)
+                noteStatus(page.status)
+                loadError = nil
+            } catch {
+                loadError = error.localizedDescription
+            }
         }
     }
 
     private func noteStatus(_ status: String?) {
-        if let status, let shownStatus, shownStatus != status, staleStatusReported != status {
-            staleStatusReported = status
-            onRecordStale?()
-        }
-    }
-
-    private func loadFinished() async {
-        while isLoading { await withCheckedContinuation { loadWaiters.append($0) } }
-    }
-
-    private func endLoading() {
-        isLoading = false
-        let waiters = loadWaiters
-        loadWaiters = []
-        for waiter in waiters { waiter.resume() }
+        if poll.isStale(status, shown: shownStatus) { onRecordStale?() }
     }
 
     // MARK: Polling
 
-    /// Keeps the report fresh until the matching `release()`; the first reader starts the loop
-    /// and the last one stops it. The loop polls only while the server reports `live`.
+    /// Keeps the report fresh until the matching `release()`; the loop polls only while the
+    /// server reports `live`.
     public func retain() {
-        watchers += 1
         if let batch { return batch.retain() }
-        startPolling()
+        poll.retain()
     }
 
     public func release() {
-        watchers = max(0, watchers - 1)
         if let batch { return batch.release() }
-        if watchers == 0 {
-            pollTask?.cancel()
-            pollTask = nil
-        }
+        poll.release()
     }
 
     /// Starts polling again if a reader waits and none runs: the record's status changed (a
     /// stopped run resumed) or an action ran.
     public func restartPolling() {
         if let batch { return batch.restartPolling() }
-        startPolling()
-    }
-
-    private func startPolling() {
-        guard pollTask == nil, watchers > 0 else { return }
-        pollTask = Task { [weak self] in
-            guard let self else { return }
-            await self.refresh()
-            while !Task.isCancelled, self.live {
-                try? await self.waitForNextPoll()
-                if Task.isCancelled { return }
-                await self.refresh()
-            }
-            // A stopped record is not polled; a later `retain()` or action starts it again.
-            self.pollTask = nil
-        }
+        poll.startPolling()
     }
 
     // MARK: Actions
