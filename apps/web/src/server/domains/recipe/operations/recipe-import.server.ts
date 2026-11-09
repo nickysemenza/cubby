@@ -872,6 +872,5 @@ export async function forwardGatewayRequestWorkflow(
   return forwardGatewayRequest(input, {
     db: context.db,
     ...aiCallOwner(context.actorContext),
-    feature: "cookbook-epub-parsing",
   });
 }

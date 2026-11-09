@@ -104,6 +104,14 @@ function crateCallTags(headers: readonly (readonly [string, string])[]) {
   return gatewayMetadataKeys.parse(parsed?.success ? parsed.data : {});
 }
 
+const FEATURE = "cookbook-epub-parsing";
+
+type GatewayForwardOptions = {
+  db: Database;
+  runId?: RunId;
+  interactive?: boolean;
+};
+
 /** The usage ledger's and the gateway's operation for one crate call. */
 function cookbookOperation(purpose: string | undefined) {
   return purpose ? `cookbook.${purpose}` : "cookbook.extract";
@@ -169,7 +177,6 @@ async function sendWithTimeout(
  * own, so `cacheStatus` is `none`.
  */
 function usageRecord(
-  feature: string,
   model: string,
   purpose: string | undefined,
   usage: WGatewayCallUsage,
@@ -179,7 +186,7 @@ function usageRecord(
   runId: RunId | undefined,
 ): AiUsageRecord {
   return {
-    feature,
+    feature: FEATURE,
     provider: usage.provider,
     model,
     operation: cookbookOperation(purpose),
@@ -266,12 +273,7 @@ async function foldResponsesStream(response: Response): Promise<Response> {
 
 export async function forwardGatewayRequest(
   request: GatewayForwardRequest,
-  opts: {
-    db?: Database;
-    runId?: RunId;
-    interactive?: boolean;
-    feature: string;
-  },
+  opts: GatewayForwardOptions,
   port: GatewayForwardPort = productionGatewayForwardPort,
 ): Promise<GatewayForwardResponse> {
   const { provider } = splitProviderRoute(request.path);
@@ -304,18 +306,13 @@ export async function forwardGatewayRequest(
  * The body and provider path pass through untouched; the server strips any
  * client-supplied credentials, authenticates through the shared gateway
  * transport (Worker binding in prod, REST in dev), labels the call with the
- * server's `feature` and the crate's purpose as `operation`, and records usage and cost for the AI-usage ledger. Non-2xx
+ * server's feature and the crate's purpose as `operation`, and records usage and cost for the AI-usage ledger. Non-2xx
  * responses are returned as-is so the Rust ladder can react (retry, step
  * down, mark a model exhausted); only a transport failure throws.
  */
 async function forwardGatewayAttempt(
   request: GatewayForwardRequest,
-  opts: {
-    db?: Database;
-    runId?: RunId;
-    interactive?: boolean;
-    feature: string;
-  },
+  opts: GatewayForwardOptions,
   port: GatewayForwardPort,
   funding: InferenceFunding,
 ): Promise<GatewayForwardResponse> {
@@ -325,9 +322,9 @@ async function forwardGatewayAttempt(
   const startedAt = performance.now();
   let transport: GatewayTransport | "unknown" = "unknown";
   const recordFailure = async (failed?: Response) => {
-    if (!opts.db || !model) return;
+    if (!model) return;
     await port.recordUsage(opts.db, {
-      feature: opts.feature,
+      feature: FEATURE,
       provider,
       model,
       operation,
@@ -343,7 +340,7 @@ async function forwardGatewayAttempt(
   const response = await sendWithTimeout(
     // The crate decides its own caching; only the app-side adapters skip it.
     port.transport(provider, {
-      metadata: { feature: opts.feature, operation },
+      metadata: { feature: FEATURE, operation },
       funding,
       // Paid calls and background plan calls use their own window budgets.
       beforePlanRequest: model
@@ -380,13 +377,11 @@ async function forwardGatewayAttempt(
   });
   const durationMs = Math.max(0, Math.round(performance.now() - startedAt));
 
-  const usage =
-    opts.db && response.ok && model ? port.callUsage(model, body) : undefined;
-  if (opts.db && model && usage) {
+  const usage = response.ok && model ? port.callUsage(model, body) : undefined;
+  if (model && usage) {
     await port.recordUsage(
       opts.db,
       usageRecord(
-        opts.feature,
         model,
         purpose,
         usage,

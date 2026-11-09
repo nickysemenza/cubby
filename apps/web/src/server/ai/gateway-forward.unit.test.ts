@@ -105,11 +105,7 @@ describe("forwardGatewayRequest", () => {
       const { port, sent, recorded } = fakePort(
         () => new Response(body, { status }),
       );
-      const out = await forwardGatewayRequest(
-        request,
-        { db, runId, feature: "cookbook-epub-parsing" },
-        port,
-      );
+      const out = await forwardGatewayRequest(request, { db, runId }, port);
       expect(out).toMatchObject({ status, body });
       expect(sent).toHaveLength(1);
       expect(sent[0]?.opts.funding).toBe("subscriber_credit");
@@ -149,7 +145,7 @@ describe("forwardGatewayRequest", () => {
       );
       const out = await forwardGatewayRequest(
         { ...request, path: "/openai/responses" },
-        { db, runId, feature: "cookbook-epub-parsing" },
+        { db, runId },
         port,
       );
       expect(JSON.parse(out.body)).toEqual(completed);
@@ -191,7 +187,7 @@ describe("forwardGatewayRequest", () => {
       );
       const out = await forwardGatewayRequest(
         { ...request, path: "/openai/responses" },
-        { db, runId, feature: "cookbook-epub-parsing" },
+        { db, runId },
         port,
       );
       const retry = code !== "unknown_failure";
@@ -221,11 +217,7 @@ describe("forwardGatewayRequest", () => {
   // A paid frontier transmission is checked against the household AI budget.
   it("attaches the budget check to a frontier model's paid transmission", async () => {
     const { port, sent } = fakePort(() => new Response("{}", { status: 200 }));
-    await forwardGatewayRequest(
-      request,
-      { db, runId, feature: "cookbook-epub-parsing" },
-      port,
-    );
+    await forwardGatewayRequest(request, { db, runId }, port);
     expect(sent[0]?.opts.beforePaidRequest).toBeTypeOf("function");
   });
 
@@ -245,7 +237,7 @@ describe("forwardGatewayRequest", () => {
     );
     const out = await forwardGatewayRequest(
       { ...request, path: "/openai/responses" },
-      { db, runId, feature: "cookbook-epub-parsing" },
+      { db, runId },
       port,
     );
     expect(JSON.parse(out.body)).toEqual({ error });
@@ -266,11 +258,7 @@ describe("forwardGatewayRequest", () => {
       "gateway",
       { read: 40, write: 7 },
     );
-    await forwardGatewayRequest(
-      request,
-      { db, runId, feature: "cookbook-epub-parsing" },
-      port,
-    );
+    await forwardGatewayRequest(request, { db, runId }, port);
     expect(recorded).toEqual([
       expect.objectContaining({
         cacheReadTokens: 40,
@@ -293,7 +281,7 @@ describe("forwardGatewayRequest", () => {
     );
     await forwardGatewayRequest(
       { ...request, path: "/openai/responses" },
-      { db, runId, feature: "cookbook-epub-parsing" },
+      { db, runId },
       port,
     );
     expect(recorded).toEqual([
@@ -317,11 +305,7 @@ describe("forwardGatewayRequest", () => {
           },
         }),
     );
-    const out = await forwardGatewayRequest(
-      request,
-      { db, runId, feature: "cookbook-epub-parsing" },
-      port,
-    );
+    const out = await forwardGatewayRequest(request, { db, runId }, port);
     expect(out.headers).toContainEqual(["cf-aig-cache-status", "HIT"]);
     expect(recorded[0]?.costEvidence?.billingReason).toBe("cache");
     expect(recorded).toEqual([
@@ -346,11 +330,7 @@ describe("forwardGatewayRequest", () => {
           { status: 429, headers: { "retry-after": "7" } },
         ),
     );
-    const out = await forwardGatewayRequest(
-      request,
-      { db, runId, feature: "cookbook-epub-parsing" },
-      port,
-    );
+    const out = await forwardGatewayRequest(request, { db, runId }, port);
     expect(out.status).toBe(429);
     expect(out.headers).toContainEqual(["retry-after", "7"]);
     expect(out.body).toContain("Wholesale");
@@ -373,7 +353,7 @@ describe("forwardGatewayRequest", () => {
     await expect(
       forwardGatewayRequest(
         { ...request, path: "/openai/responses" },
-        { db, runId, feature: "cookbook-epub-parsing" },
+        { db, runId },
         port,
       ),
     ).rejects.toThrow("Gateway request failed: ChatGPT plan connection reset");
@@ -404,7 +384,7 @@ describe("forwardGatewayRequest", () => {
       await expect(
         forwardGatewayRequest(
           { ...request, path: "/openai/responses" },
-          { db, runId, feature: "cookbook-epub-parsing" },
+          { db, runId },
           port,
         ),
       ).rejects.toThrow("synthetic stream reset");
@@ -422,13 +402,9 @@ describe("forwardGatewayRequest", () => {
     const { port } = fakePort(() => {
       throw new Error("socket hang up");
     });
-    await expect(
-      forwardGatewayRequest(
-        request,
-        { feature: "cookbook-epub-parsing" },
-        port,
-      ),
-    ).rejects.toThrow(/socket hang up/);
+    await expect(forwardGatewayRequest(request, { db }, port)).rejects.toThrow(
+      /socket hang up/,
+    );
   });
 
   it("surfaces the shim's dev-only missing-credential error", async () => {
@@ -436,7 +412,7 @@ describe("forwardGatewayRequest", () => {
     await expect(
       forwardGatewayRequest(
         request,
-        { feature: "cookbook-epub-parsing" },
+        { db },
         {
           ...port,
           transport: () => () => {
@@ -452,7 +428,7 @@ describe("forwardGatewayRequest", () => {
     await expect(
       forwardGatewayRequest(
         { ...request, path: "/not-a-provider/v1/messages" },
-        { feature: "cookbook-epub-parsing" },
+        { db },
         port,
       ),
     ).rejects.toThrow(/Unsupported gateway provider route/);
