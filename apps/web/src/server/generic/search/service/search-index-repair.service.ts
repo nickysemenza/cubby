@@ -2,7 +2,7 @@ import { type SearchIndexRepairEvent } from "@cubby/schemas/maintenance";
 import { sleep } from "@cubby/shared/retry";
 
 import type { Database } from "~/server/db";
-import { WorkflowCancelledError } from "~/server/workflows/runtime";
+import { WorkflowCancelledError } from "~/server/workflows/runtime/execute";
 
 import {
   scheduleSearchRepair,

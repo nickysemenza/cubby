@@ -41,7 +41,7 @@ import {
   renameFixtureRaw,
 } from "~/server/testing/repo.fixtures";
 import type { EmbeddingRefreshPort } from "~/server/workflows/background-tasks/embedding";
-import { executeWorkflow } from "~/server/workflows/runtime";
+import { executeWorkflow } from "~/server/workflows/runtime/execute";
 
 import {
   advanceEmbeddingFixture,

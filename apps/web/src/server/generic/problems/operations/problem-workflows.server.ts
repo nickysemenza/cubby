@@ -12,11 +12,11 @@ import {
 } from "~/server/generic/problems/service/problems.service";
 import { resolveAllOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import type { AuthenticatedOperationContext } from "~/server/operation-runtime/operation.server";
+import { workflow } from "~/server/workflows/runtime/builder";
 import {
   bindCoordinatorStream,
   defineCoordinatorStream,
-  workflow,
-} from "~/server/workflows/runtime";
+} from "~/server/workflows/runtime/stream";
 
 /**
  * The problem operations with real logic. Plain detector reads live in

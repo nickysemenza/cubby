@@ -38,7 +38,8 @@ import {
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
-import { executeWorkflow, workflow } from "~/server/workflows/runtime";
+import { workflow } from "~/server/workflows/runtime/builder";
+import { executeWorkflow } from "~/server/workflows/runtime/execute";
 
 import {
   createIngredient,

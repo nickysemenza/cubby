@@ -96,15 +96,15 @@ import { appErrorFromUnknown, createAppError } from "~/server/errors/app-error";
 import { readPublicEntityRow } from "~/server/generic/derived/service/public-read";
 import { bindShortcodeResolver } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import type { AuthenticatedOperationContext } from "~/server/operation-runtime/operation.server";
+import { workflow } from "~/server/workflows/runtime/builder";
 import {
   bindBulkWorkflow,
-  bindWorkflow,
   defineBulkWorkflow,
   executeBulkWorkflow,
-  executeWorkflow,
   type BulkWorkflowSummary,
-  workflow,
-} from "~/server/workflows/runtime";
+} from "~/server/workflows/runtime/bulk";
+import { executeWorkflow } from "~/server/workflows/runtime/execute";
+import { bindWorkflow } from "~/server/workflows/runtime/operation";
 
 const log = createLogger("cookbook.upsert");
 

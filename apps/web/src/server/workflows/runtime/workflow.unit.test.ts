@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 
+import { workflow } from "./builder";
 import {
-  bindWorkflow,
   executeWorkflow,
-  workflow,
   WorkflowCancelledError,
   WorkflowEffectError,
-} from "./index";
+} from "./execute";
+import { bindWorkflow } from "./operation";
 
 const flow = workflow<undefined, number>("arithmetic")
   .call("doubled", async (_, { input }) => input * 2)

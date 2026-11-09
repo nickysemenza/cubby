@@ -35,7 +35,8 @@ import {
   resolveOrThrow,
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
-import { bindWorkflow, workflow } from "~/server/workflows/runtime";
+import { workflow } from "~/server/workflows/runtime/builder";
+import { bindWorkflow } from "~/server/workflows/runtime/operation";
 
 type MutationContext = { db: Database; actor: ActorContext };
 type CreateFromTasksInput = z.output<typeof createProjectFromTasksInput>;

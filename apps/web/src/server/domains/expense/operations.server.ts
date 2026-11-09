@@ -49,7 +49,8 @@ import { listAll } from "~/server/generic/list/repo/list-all";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { TraceNames } from "~/server/observability/tracing";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
-import { tracedWorkflow, workflow } from "~/server/workflows/runtime";
+import { workflow } from "~/server/workflows/runtime/builder";
+import { tracedWorkflow } from "~/server/workflows/runtime/operation";
 
 export {
   expenseAnalyzeInput,

@@ -42,7 +42,8 @@ import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-runtime
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { readPublicEntityRows } from "~/server/generic/derived/service/public-read";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
-import { bindWorkflow, workflow } from "~/server/workflows/runtime";
+import { workflow } from "~/server/workflows/runtime/builder";
+import { bindWorkflow } from "~/server/workflows/runtime/operation";
 
 export const linkExpensesToPurchaseWorkflow = bindWorkflow(
   workflow<EntityKernelContext, typeof linkExpensesToPurchaseInput._output>(

@@ -91,14 +91,16 @@ import { memberRejectedSql } from "~/server/generic/suggestions/repo/suggestion-
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
 import type { AuthenticatedOperationContext } from "~/server/operation-runtime/operation.server";
 import { implementSubscriptionDomain } from "~/server/operation-runtime/subscription-domain.server";
+import { workflow } from "~/server/workflows/runtime/builder";
 import {
   bindBulkWorkflow,
-  bindCoordinatorStream,
   defineBulkWorkflow,
-  defineCoordinatorStream,
   type BulkWorkflowSummary,
-  workflow,
-} from "~/server/workflows/runtime";
+} from "~/server/workflows/runtime/bulk";
+import {
+  bindCoordinatorStream,
+  defineCoordinatorStream,
+} from "~/server/workflows/runtime/stream";
 
 const log = createLogger("precomputeEnrichmentProposals");
 const suggestionLog = createLogger("suggestFields");

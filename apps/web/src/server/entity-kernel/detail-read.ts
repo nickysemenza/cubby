@@ -12,7 +12,8 @@ import {
 import { createAppError } from "~/server/errors/app-error";
 import { publicFieldEnvelopeRows } from "~/server/generic/derived/repo/public-read";
 import { detailBreadcrumb } from "~/server/generic/entity-detail/repo/detail-breadcrumb";
-import { bindWorkflow, workflow } from "~/server/workflows/runtime";
+import { workflow } from "~/server/workflows/runtime/builder";
+import { bindWorkflow } from "~/server/workflows/runtime/operation";
 
 import type {
   EntityBindingSchemas,

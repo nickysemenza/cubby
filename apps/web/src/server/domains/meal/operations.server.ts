@@ -62,7 +62,8 @@ import { publicFieldEnvelopeRows } from "~/server/generic/derived/repo/public-re
 import { readPublicEntityRows } from "~/server/generic/derived/service/public-read";
 import { bindShortcodeResolver } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
-import { bindWorkflow, workflow } from "~/server/workflows/runtime";
+import { workflow } from "~/server/workflows/runtime/builder";
+import { bindWorkflow } from "~/server/workflows/runtime/operation";
 
 const mealShortcodes = bindShortcodeResolver("meal");
 

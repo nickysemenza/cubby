@@ -11,7 +11,8 @@ import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { publicFieldEnvelopeRows } from "~/server/generic/derived/repo/public-read";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
 import { publishBackgroundTasks } from "~/server/workflows/background-tasks/publish";
-import { bindWorkflow, workflow } from "~/server/workflows/runtime";
+import { workflow } from "~/server/workflows/runtime/builder";
+import { bindWorkflow } from "~/server/workflows/runtime/operation";
 
 /** The logo writer registers its change inside the attachment transaction. */
 const fetchVendorLogoWorkflow = bindWorkflow(

@@ -60,12 +60,12 @@ import {
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
 import type { AuthenticatedOperationContext } from "~/server/operation-runtime/operation.server";
 import { implementSubscriptionDomain } from "~/server/operation-runtime/subscription-domain.server";
+import { workflow } from "~/server/workflows/runtime/builder";
+import { bindWorkflow } from "~/server/workflows/runtime/operation";
 import {
-  bindWorkflow,
   bindCoordinatorStream,
   defineCoordinatorStream,
-  workflow,
-} from "~/server/workflows/runtime";
+} from "~/server/workflows/runtime/stream";
 
 import * as imports from "./recipe-import.server";
 import { patchRecipeLine } from "./recipe-line-patch";
