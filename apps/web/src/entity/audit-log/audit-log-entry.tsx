@@ -367,6 +367,19 @@ export const auditFacts = (entry: AuditLogEntry): Fact[] => [
     : []),
 ];
 
+/**
+ * How a write arrived: its OAuth client, else its device, else its channel.
+ * Plain web edits are the default route and read as null.
+ */
+export const auditVia = (entry: AuditLogEntry): string | null =>
+  entry.oauthClient
+    ? (entry.oauthClient.name ?? "OAuth client")
+    : entry.device
+      ? (entry.device.name ?? entry.device.id)
+      : entry.channel === "web"
+        ? null
+        : entry.channel;
+
 const actorName = (entry: AuditLogEntry) =>
   entry.user ? (entry.user.name ?? entry.user.email) : "System";
 
@@ -381,7 +394,7 @@ const auditUserInitials = (user: AuditLogEntry["user"]): string => {
 };
 
 /** The writer as an initial badge; the full "by …" reads in its title and to assistive tech. */
-function AuditActor({ entry }: { entry: AuditLogEntry }) {
+export function AuditActor({ entry }: { entry: AuditLogEntry }) {
   const name = actorName(entry);
   return (
     <Avatar className="size-4 shrink-0" title={`by ${name}`}>
