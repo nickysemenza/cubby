@@ -197,14 +197,18 @@ function narrowedEntityRead(
 
 /** Model-facing MCP inputs, with Mail's delegated identity supplied by the host. */
 export function purchaseAgentToolCatalog(purpose: AgentImportRunPurpose) {
-  const { mcpActions, entityRead, mcpInputActions }: ImportRunAgentConfig =
-    importRunAgentManifest[purpose];
+  const {
+    mcpActions,
+    entityRead,
+    mcpInputActions,
+    delegatedRunIdentity,
+  }: ImportRunAgentConfig = importRunAgentManifest[purpose];
   return purchaseAgentTools(
     new Set(mcpActions),
     entityRead,
     mcpInputActions,
   ).map((tool) => {
-    if (purpose !== "mail_import") return tool;
+    if (!delegatedRunIdentity) return tool;
     const schema = tool.inputSchema;
     const properties = schema.properties;
     if (!isJsonObject(properties)) return tool;
