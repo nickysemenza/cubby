@@ -4,7 +4,7 @@ import {
   aiProvenance,
   type AiEvaluationTarget,
 } from "@cubby/schemas/ai-evaluation";
-import { buildActorContext, systemActor } from "@cubby/schemas/context";
+import { systemActor } from "@cubby/schemas/context";
 import { entityRefKey } from "@cubby/schemas/entity";
 import { entityFieldEnvelopeFields } from "@cubby/schemas/entity-field-envelopes";
 import { fieldEnvelopeFor, fieldValueOf } from "@cubby/schemas/field-envelope";

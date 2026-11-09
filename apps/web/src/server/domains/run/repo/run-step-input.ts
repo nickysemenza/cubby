@@ -18,7 +18,6 @@ import {
   statementInputCharges,
   statementPendingInputTransactions,
 } from "~/server/domains/transaction-import/repo/statement-input";
-import { transferPairSeedKeys } from "~/server/domains/transaction-import/repo/transfer-pair-input";
 import { createAppError } from "~/server/errors/app-error";
 import { listPrepare } from "~/server/generic/list/repo/field-compiler";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";

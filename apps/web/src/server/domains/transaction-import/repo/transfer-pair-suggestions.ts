@@ -11,11 +11,9 @@ import {
   type FinancialTransactionSourceRef,
 } from "@cubby/schemas/financial-transaction-fields";
 import {
-  type RunId,
   parseShortcodeFor,
   type FinancialTransactionShortcode,
 } from "@cubby/schemas/identifiers";
-import { type RunStepError } from "@cubby/schemas/run-step";
 import { sourceOccurrenceReviewState } from "@cubby/schemas/source-occurrence-fields";
 import {
   suggestionFamily,
@@ -35,11 +33,10 @@ import {
 } from "@cubby/schemas/transfer-pair-suggestion";
 import { cents } from "@cubby/shared";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { sql, type SQL, and, eq, inArray } from "drizzle-orm";
+import { sql, type SQL, eq } from "drizzle-orm";
 import { chunk, uniq, uniqBy } from "es-toolkit";
 import { z } from "zod";
 
-import { forEachConcurrently } from "~/lib/concurrency-limiter";
 import { plainDateDaysBetween, shiftPlainDate } from "~/lib/household-date";
 import { type Database } from "~/server/db";
 import { advisoryLockKey, advisoryXactLock } from "~/server/db/advisory-lock";
@@ -83,18 +80,14 @@ import {
   previewRowFor,
   type ChargeRef,
 } from "~/server/domains/transaction-import/repo/statement-input";
-import { STATEMENT_SUGGESTION_REVISION } from "~/server/domains/transaction-import/repo/statement-suggestion-revision";
 import {
   foldProviderCategory,
   MONEY_MOVE_KINDS,
   statementTransactionKind,
 } from "~/server/domains/transaction-import/repo/statement-transaction-kind";
-import {
-  transferPoolAmountSql,
-} from "~/server/domains/transaction-import/repo/transfer-pair-input";
+import { transferPoolAmountSql } from "~/server/domains/transaction-import/repo/transfer-pair-input";
 import { type EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { createAppError } from "~/server/errors/app-error";
-import { type PageWork, peakWorkers } from "~/server/generic/jobs/page-work";
 import { type SuggestionFamilyDeclaration } from "~/server/generic/suggestions/repo/suggestion-family-declaration";
 import { outcomes } from "~/server/generic/suggestions/repo/suggestion-outcomes";
 import {
@@ -106,31 +99,20 @@ import {
   transferPairRows,
   TRANSFER_WEAK_BLOCKERS,
 } from "~/server/generic/suggestions/repo/suggestion-presentation";
-import {
-  countSuggestionLabelBacklog,
-  publishSuggestion,
-  type SuggestionFamily,
-  suggestionLabelBacklog,
-  type SuggestionLabelCursor,
-} from "~/server/generic/suggestions/repo/suggestion-publication";
+import { type SuggestionFamily } from "~/server/generic/suggestions/repo/suggestion-publication";
 import {
   entities,
   relatedRecordMatch,
   leg,
   declareAffectedRecords,
 } from "~/server/generic/suggestions/repo/suggestion-record-discovery";
-import { suggestionStateData as stateData } from "~/server/generic/suggestions/repo/suggestion-state";
 import {
   type SuggestionStateRow,
   transitionSuggestionState,
   transitionSuggestionStates,
 } from "~/server/generic/suggestions/repo/suggestion-state";
 import { canonicalJson } from "~/server/lib/canonical-json";
-import {
-  assertWorkflowEffect,
-  isWorkflowInterrupted,
-} from "~/server/workflows/runs/execution";
-import { runFailureText } from "~/server/workflows/runs/lifecycle";
+import { assertWorkflowEffect } from "~/server/workflows/runs/execution";
 
 /** Rule revision stamped on every published pair; bump with any policy change. */
 const TRANSFER_PAIR_REVISION = "2026-10-29.1";
@@ -145,13 +127,6 @@ const OVERLAP_WINDOW_DAYS = 3;
 const POOL_WINDOW_DAYS = 2 * CANDIDATE_WINDOW_DAYS;
 
 const PREVIEW_CHUNK = 500;
-// Amortize Job dispatch between pages; the byte bound still limits publications.
-const TRANSFER_PAIR_GENERATION_PAGE = 128;
-const TRANSFER_PAIR_GENERATION_BYTES = 256 * 1024;
-const TRANSFER_PAIR_PUBLICATION_CONCURRENCY = 4;
-/** Label pages publish this many pairs at once; database work only, model calls never occupy this lane. */
-export const TRANSFER_PAIR_PUBLISH_CONCURRENCY = 4;
-
 /** Kinds that move money between accounts; they retrieve a leg, never prove it. */
 const MONEY_MOVES = new Set<FinancialTransactionKind>(MONEY_MOVE_KINDS);
 /**
@@ -694,7 +669,7 @@ function derive(judgment: TransferPairJudgment): TransferPairJudgment {
 }
 
 /** The pair with these legs' labels; absent keys keep their label. */
-export function labelTransferPair(
+function labelTransferPair(
   judgment: TransferPairJudgment,
   labels: {
     outflow?: TransferPairMovementLabel | null;
@@ -723,13 +698,11 @@ export function labelTransferPair(
 }
 
 /** Publication fingerprint: the evidence plus any labels. */
-export const fingerprintTransferPair = (judgment: TransferPairJudgment) =>
+const fingerprintTransferPair = (judgment: TransferPairJudgment) =>
   sha256Hex(canonicalJson({ revision: TRANSFER_PAIR_REVISION, judgment }));
 
 /** The rule evidence alone: labels and what they derive are stripped. */
-export const transferPairEvidenceFingerprint = (
-  judgment: TransferPairJudgment,
-) =>
+const transferPairEvidenceFingerprint = (judgment: TransferPairJudgment) =>
   fingerprintTransferPair(
     labelTransferPair(judgment, { outflow: null, inflow: null }),
   );
@@ -939,14 +912,6 @@ function buildPair(
   };
 }
 
-/** Which unmatched movements a discovery pass covers; empty covers the ledger. */
-export type TransferPairScope = {
-  /** Only pairs with a leg on these FinancialAccount UUIDs. */
-  accountIds?: readonly string[];
-  /** Only pairs a movement dated on or after this day retrieves. */
-  since?: string | null;
-};
-
 type Seeds = { kind: "legs"; keys: readonly string[]; seedOnly?: boolean };
 
 const parseLegKey = (key: string) => {
@@ -1087,13 +1052,8 @@ async function discover(
   );
 }
 
-const inScope = (pair: Pair, scope: TransferPairScope) =>
-  !scope.accountIds?.length ||
-  scope.accountIds.includes(pair.outflowAccountId) ||
-  scope.accountIds.includes(pair.inflowAccountId);
-
 /** One pair's current rule judgment, or null when it is no longer a candidate. */
-export async function buildTransferPair(
+async function buildTransferPair(
   db: Database,
   key: string,
 ): Promise<Pair | null> {
@@ -1104,29 +1064,6 @@ export async function buildTransferPair(
     keys: cash ? legKeys.slice(0, 1) : legKeys,
   });
   return pairs.find((pair) => pair.judgment.key === key) ?? null;
-}
-
-export async function currentTransferPair(
-  db: Database,
-  key: string,
-): Promise<TransferPairJudgment | null> {
-  return (await buildTransferPair(db, key))?.judgment ?? null;
-}
-
-/** Refresh listed pairs from their legs, retaining the full competing-candidate pool. */
-export async function currentTransferPairs(
-  db: Database,
-  pairKeys: readonly string[],
-): Promise<TransferPairJudgment[]> {
-  if (!pairKeys.length) return [];
-  const wanted = new Set(pairKeys);
-  const pairs = await discover(db, {
-    kind: "legs",
-    keys: uniq(pairKeys.flatMap((key) => key.split("~"))),
-  });
-  return pairs
-    .filter((pair) => wanted.has(pair.judgment.key))
-    .map((pair) => pair.judgment);
 }
 
 // ------------------------------------------------------------- publication
@@ -1167,11 +1104,6 @@ export async function lockTransferPairLegs(db: Database, pairKey: string) {
   for (const key of [...new Set(pairKey.split("~"))].sort())
     await advisoryXactLock(getDb(db), "transfer-pair-leg", key);
 }
-
-export type TransferPairPublishOutcome =
-  | "published"
-  | "unchanged"
-  | "suppressed";
 
 /**
  * The `transfer_pair` Suggestion family: one slot per pair key. Unchanged
@@ -1509,16 +1441,6 @@ export async function findTransferPairsForCharges(
       refs.length === 1 ? refs[0]! : { ...refs[0]!, clean: false },
     );
   return result;
-}
-
-export async function findTransferPairForCharge(
-  db: Database,
-  charge: ChargeRef,
-): Promise<StatementTransferPairRef | null> {
-  return (
-    (await findTransferPairsForCharges(db, [charge])).get(chargeId(charge)) ??
-    null
-  );
 }
 
 // ------------------------------------------------------------------ apply
