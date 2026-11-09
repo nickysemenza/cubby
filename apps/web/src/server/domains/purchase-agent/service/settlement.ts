@@ -13,8 +13,13 @@ export type SettlementReport =
   | { kind: "reconcile" }
   | { kind: "fail"; failureCode: AgentFailureCode; detail: string };
 
-/** Harness stops that a fresh conversation outlives. */
-const TRANSIENT_HARNESS_REASONS = new Set(["stale", "reset"]);
+/**
+ * Harness stops that a fresh conversation outlives. `restart_limit` is pi
+ * parking a task that crashes, evictions or resets cut off five times in a
+ * row; a deploy did this to six Runs at once (2026-11-09). The per-revision
+ * attempt bound still caps a task that crashes every time.
+ */
+const TRANSIENT_HARNESS_REASONS = new Set(["stale", "reset", "restart_limit"]);
 /**
  * Provider, gateway and database faults a later attempt can outlive: retryable
  * HTTP statuses (as `classifyJobFailure` treats provider capacity), deadlines,
