@@ -60,15 +60,32 @@ const inputSchema = z.object({
   includeCount: z.boolean().optional(),
 });
 
+const filterIdsSchema = z
+  .object({ ids: z.array(z.string()).max(500).optional() })
+  .passthrough();
+const listReadRowsSchema = z.array(listReadRowSchema);
+type SelectedEnvelopeSchema = ReturnType<typeof selectedFieldEnvelopeSchema>;
+const extendChildCount = (schema: SelectedEnvelopeSchema) =>
+  schema.extend({ childCount: listChildCountSchema });
+const nestedSchemas = new WeakMap<
+  SelectedEnvelopeSchema,
+  ReturnType<typeof extendChildCount>
+>();
+/** Tree pages add their structural child count to the memoized selection. */
+const withChildCount = (schema: SelectedEnvelopeSchema) => {
+  let nested = nestedSchemas.get(schema);
+  if (!nested) {
+    nested = extendChildCount(schema);
+    nestedSchemas.set(schema, nested);
+  }
+  return nested;
+};
 export function defineListOperations<
   E extends ListEntity,
   S extends EntityBindingSchemas,
 >(binding: EntityKernelReadBinding<E, S>) {
   const parseFilters = (input: z.output<typeof inputSchema>["filters"]) => {
-    const { ids, ...rest } = z
-      .object({ ids: z.array(z.string()).max(500).optional() })
-      .passthrough()
-      .parse(input);
+    const { ids, ...rest } = filterIdsSchema.parse(input);
     for (const id of ids ?? []) binding.schemas.id.parse(id);
     return Object.assign(
       {},
@@ -129,15 +146,9 @@ export function defineListOperations<
       const rows = projection.some(
         (field) => field === "displayImages" || field === "images",
       )
-        ? z
-            .array(listReadRowSchema)
-            .parse(
-              await withListEntityMedia(
-                context.db,
-                binding.entity,
-                result.data,
-              ),
-            )
+        ? listReadRowsSchema.parse(
+            await withListEntityMedia(context.db, binding.entity, result.data),
+          )
         : projection.includes(
               entityInspectorMetadata[binding.entity].recordEmojiField ?? "",
             )
@@ -157,7 +168,7 @@ export function defineListOperations<
       const outputSchema =
         parseNesting(binding, input.nesting).scope === "flat"
           ? selectedSchema
-          : selectedSchema.extend({ childCount: listChildCountSchema });
+          : withChildCount(selectedSchema);
       const enveloped = await publicFieldEnvelopeRows({
         db: context.db,
         entity: binding.entity,

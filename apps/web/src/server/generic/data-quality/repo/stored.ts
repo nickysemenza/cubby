@@ -19,6 +19,15 @@ import type { ScoredTable } from "~/server/generic/data-quality/repo/registry";
 import { storedEntryFor } from "./entry";
 import type { QualityEvaluation, StoredEntityChecks } from "./stored-registry";
 
+const publishedQualityRows = z.array(
+  z.object({
+    id: z.string(),
+    shortcode: z.string(),
+    checks: z.record(z.string(), entityQualityCheckState),
+  }),
+);
+const writtenEntityRows = z.array(z.object({ entityId: z.string() }));
+
 type ReaderDb = Database | DrizzleTransaction;
 export type StoredEvaluation = QualityEvaluation & {
   exceptions: z.infer<typeof dataException>[];
@@ -95,27 +104,18 @@ export async function loadPublishedQuality(
     ),
     loadExceptions(db, kind, ids),
   ]);
-  return z
-    .array(
-      z.object({
-        id: z.string(),
-        shortcode: z.string(),
-        checks: z.record(z.string(), entityQualityCheckState),
-      }),
-    )
-    .parse(result)
-    .map((row) => ({
-      ...row,
-      checks: Object.fromEntries(
-        dataChecksByEntity[kind].options.map((key) => [
-          key,
-          row.checks[key] ?? "not_applicable",
-        ]),
-      ),
-      exceptions: exceptions
-        .filter((exception) => exception.entityId === row.id)
-        .map((exception) => dataException.parse(exception)),
-    }));
+  return publishedQualityRows.parse(result).map((row) => ({
+    ...row,
+    checks: Object.fromEntries(
+      dataChecksByEntity[kind].options.map((key) => [
+        key,
+        row.checks[key] ?? "not_applicable",
+      ]),
+    ),
+    exceptions: exceptions
+      .filter((exception) => exception.entityId === row.id)
+      .map((exception) => dataException.parse(exception)),
+  }));
 }
 
 export type QualityPublication = {
@@ -180,8 +180,5 @@ export async function publishQualitySnapshots(
     ) SELECT "entityId" FROM written UNION ALL SELECT "entityId" FROM removed`,
     "objects",
   );
-  return z
-    .array(z.object({ entityId: z.string() }))
-    .parse(result)
-    .map((row) => row.entityId);
+  return writtenEntityRows.parse(result).map((row) => row.entityId);
 }

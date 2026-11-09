@@ -2418,6 +2418,12 @@ the envelope constructor applies declared entity projectors before its final
 public-schema parse, and compact leaves keep their validation. Projectors receive
 assembled fields rather than a separately parsed public root; their output never
 bypasses the constructor's final validation.
+The `entity.list` and `entity.detail` operation runtimes add only server-computed
+action states to those validated envelopes; they do not re-parse the page or
+record. Selected list responses therefore omit schema defaults for unrequested
+keys; the browser's selected-list parse restores them. Build request-path
+schemas once at module scope (selected envelope schemas are memoized per
+selection); constructing Zod schemas per request or row is measurable Worker CPU.
 
 Domain envelope projectors use their own canonical per-entity schemas. Product's
 price-only projection does not import the aggregate envelope-schema roster; both

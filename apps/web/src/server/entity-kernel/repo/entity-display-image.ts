@@ -636,6 +636,15 @@ const displayImageRowSchema = z.object({
   representations: z.array(imageRepresentationRow).optional(),
   images: z.array(rankedImageSchema),
 });
+const displayImageRowsSchema = z.array(displayImageRowSchema);
+const coverRowsSchema = z.array(
+  displayImageRowSchema.omit({ images: true }).extend({
+    cover: z.object({
+      image: rankedImageSchema.nullable(),
+      count: z.number().int().nonnegative(),
+    }),
+  }),
+);
 
 /**
  * Resolve every displayable image, in display order, for a mixed batch of
@@ -840,22 +849,12 @@ async function resolveRankedDisplayMedia(
   const counts = new Map<string, number>();
   const normalized =
     mode === "cover"
-      ? z
-          .array(
-            displayImageRowSchema.omit({ images: true }).extend({
-              cover: z.object({
-                image: rankedImageSchema.nullable(),
-                count: z.number().int().nonnegative(),
-              }),
-            }),
-          )
-          .parse(result)
-          .map(({ cover, ...row }) => {
-            counts.set(row.refKey, cover.count);
-            return { ...row, images: cover.image ? [cover.image] : [] };
-          })
+      ? coverRowsSchema.parse(result).map(({ cover, ...row }) => {
+          counts.set(row.refKey, cover.count);
+          return { ...row, images: cover.image ? [cover.image] : [] };
+        })
       : result;
-  const rows = z.array(displayImageRowSchema).parse(normalized);
+  const rows = displayImageRowsSchema.parse(normalized);
   const ranked = new Map(
     rows.map((row) => [
       row.refKey,

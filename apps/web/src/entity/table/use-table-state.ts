@@ -97,11 +97,14 @@ const routerSearchSchema = z.record(z.string(), z.json().optional());
 type RouterSearchState = z.output<typeof routerSearchSchema>;
 const NO_URL_STATE: RouterSearchState = {};
 const NO_INITIAL_FILTER: ColumnFiltersState = [];
-const filterValueSchema = z.union([z.string(), z.array(z.string())]).optional();
-
+// A type check, not safeParse: rejected values construct a ZodError per
+// column per render, which showed up in SSR document CPU profiles.
 function parseFilterValue(value: ColumnFilter["value"]): FilterValue {
-  const parsed = filterValueSchema.safeParse(value);
-  return parsed.success ? parsed.data : undefined;
+  if (typeof value === "string") return value;
+  return Array.isArray(value) &&
+    value.every((item): item is string => typeof item === "string")
+    ? value
+    : undefined;
 }
 
 const SORT_KEY = "sort";

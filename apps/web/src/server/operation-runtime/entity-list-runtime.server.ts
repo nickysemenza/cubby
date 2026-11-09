@@ -1,3 +1,5 @@
+import type { z } from "zod";
+
 import { entityListContract } from "~/contracts/entity-list.contract";
 import { entityListInputSchema } from "~/entity/model/list-contracts";
 import { loadEntityListSchemas } from "~/entity/model/read-schemas/loaders";
@@ -40,18 +42,23 @@ export const entityListHandlers = implementOperationDomain(entityListContract, {
             ...entityActionReadFields(input.entity),
           ]),
         ]);
-        return schemas.selectedListOutput.parse({
+        // SAFETY: the envelope builder validated each row against its selected
+        // schema; re-parsing the page here only repeated that work. Only the
+        // server-computed action states are added.
+        // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- selected rows are validated but typed as generic records.
+        return {
           items: withEntityActionStates(input.entity, [...result.items]),
           meta: result.meta,
           selectedFields: input.fields,
-        });
+        } as unknown as z.output<typeof schemas.selectedListOutput>;
       }
       const { executeEntityAs } = await import("~/server/entity-kernel");
       const result = await executeEntityAs(context, "list", resolved);
-      return schemas.listOutput.parse({
+      // SAFETY: as above, the kernel list returns validated public envelopes.
+      return {
         items: withEntityActionStates(input.entity, [...result.items]),
         meta: result.meta,
-      });
+      } as z.output<typeof schemas.listOutput>;
     },
   },
 });

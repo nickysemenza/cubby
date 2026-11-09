@@ -26,6 +26,12 @@ const intentRow = z.object({
   id: z.string(),
   raw: currentReadFacts,
 });
+const intentRows = z.array(intentRow);
+const referenceIdSchema = z.string();
+const referenceUuidSchema = z.uuid();
+const identityRows = z.array(
+  z.object({ id: z.string(), shortcode: z.string() }),
+);
 
 /** Hydration may replace a stored value; page facts retain the assignment before that projection. */
 export async function loadCurrentAssignmentFacts(
@@ -85,10 +91,7 @@ export async function loadCurrentAssignmentFacts(
       )
     : [];
   const stored = new Map(
-    z
-      .array(intentRow)
-      .parse(rows)
-      .map((fact) => [fact.id, fact.raw]),
+    intentRows.parse(rows).map((fact) => [fact.id, fact.raw]),
   );
   const facts = ids.map((id) => ({
     id,
@@ -107,10 +110,11 @@ export async function loadCurrentAssignmentFacts(
       if (value == null) continue;
       const physical = Object.hasOwn(stored.get(fact.id) ?? {}, field.key);
       for (const valueId of Array.isArray(value) ? value : [value]) {
-        const id = physical ? z.string().parse(valueId) : valueId;
+        const id = physical ? referenceIdSchema.parse(valueId) : valueId;
         if (typeof id !== "string" || parseShortcode(id)) continue;
-        const parsed = z.uuid().safeParse(id);
-        if (physical || parsed.success) referenceIds.add(z.uuid().parse(id));
+        const parsed = referenceUuidSchema.safeParse(id);
+        if (physical) referenceIds.add(referenceUuidSchema.parse(id));
+        else if (parsed.success) referenceIds.add(parsed.data);
       }
     }
   if (referenceIds.size) {
@@ -121,13 +125,12 @@ export async function loadCurrentAssignmentFacts(
       "objects",
     );
     const codes = new Map(
-      z
-        .array(z.object({ id: z.string(), shortcode: z.string() }))
+      identityRows
         .parse(identities)
         .map((identity) => [identity.id, identity.shortcode]),
     );
     const codeFor = (value: unknown, physical: boolean) => {
-      const id = physical ? z.string().parse(value) : value;
+      const id = physical ? referenceIdSchema.parse(value) : value;
       if (typeof id !== "string" || parseShortcode(id)) return id;
       const code = codes.get(id);
       if (!code && physical)

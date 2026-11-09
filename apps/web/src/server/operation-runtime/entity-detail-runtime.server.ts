@@ -1,3 +1,5 @@
+import type { z } from "zod";
+
 import { entityDetailContract } from "~/contracts/entity-detail.contract";
 import { entityDetailInputSchema } from "~/entity/model/detail-contracts";
 import { loadEntityDetailSchemas } from "~/entity/model/read-schemas/loaders";
@@ -39,12 +41,14 @@ export const entityDetailHandlers = implementOperationDomain(
           id: input.shortcode,
           missing: "null",
         });
+        // SAFETY: the detail read returns its envelope validated; only the
+        // server-computed action states are added here.
         return result.item === null
           ? null
-          : schemas.detailOutput.parse({
+          : ({
               ...result.item,
               actions: entityActionStates(input.entity, result.item),
-            });
+            } as z.output<typeof schemas.detailOutput>);
       },
     },
   },

@@ -160,6 +160,11 @@ import {
   descriptorAvailabilitySql,
   declaredFilterPredicates,
 } from "./predicate-compiler";
+const totalFlagsSchema = z.record(
+  z.string(),
+  z.union([z.number(), z.boolean()]),
+);
+
 export {
   declaredFilterPredicates,
   rowSetFilterKeys,
@@ -1712,9 +1717,7 @@ export function listScaffold<
       const [row] = await summary
         // Unknown candidates establish completeness but never enter the known subtotal.
         .where(unresolved ? or(where ?? sql`true`, unresolved) : where);
-      const flags = z
-        .record(z.string(), z.union([z.number(), z.boolean()]))
-        .parse(row);
+      const flags = totalFlagsSchema.parse(row);
       return {
         sums: Object.fromEntries(
           keys.map((key, index) => [key, Number(flags[`sum_${index}`])]),
