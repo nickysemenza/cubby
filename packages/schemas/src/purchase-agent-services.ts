@@ -13,6 +13,14 @@ import { runProgressStamp } from "./run-fields";
 
 import { aiUsageTransport } from "./telemetry";
 
+/**
+ * Starts the message of an admission check that failed on a database fault
+ * rather than refusing. Workers RPC carries only the message, so the
+ * coordinator's transport recognizes this prefix and answers a retryable 502
+ * instead of the final 403 a budget or executability refusal earns.
+ */
+export const ADMISSION_DATABASE_FAULT = "Admission database fault:";
+
 export const purchaseAgentOperationRef = z.object({
   operationId: z.string().min(1).max(256),
 });

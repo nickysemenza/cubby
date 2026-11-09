@@ -291,7 +291,9 @@ pending: nothing here starts Product research.
    a funding stop pauses; `agent_transient` retries in `markRunFailed` as one
    successor (`cause: retry`, escalation coordinator model) taking only the
    Run's held unsettled Emails with an attempt left; `agent_failed` (including
-   any explicit 401/403) never retries. The last failed attempt carries one Run
+   any explicit 401/403) never retries. A database fault in paid or free
+   admission is not a refusal: `admissionRead` marks it and the coordinator's
+   transport answers a retryable 502 rather than the final 403. The last failed attempt carries one Run
    finding with the class and raw error. Every admission counts against the
    evidence revision that admitted it (`Email.importAttempts`: checksum plus
    the Run's `evidenceRevision`; `MAIL_IMPORT_ATTEMPTS_PER_REVISION` in

@@ -54,6 +54,12 @@ describe("settlementReport", () => {
     ["model_error", "429 Too Many Requests", "agent_transient"],
     ["model_error", "AI gateway egress deadline exceeded", "agent_transient"],
     ["model_error", "Request status code: 502", "agent_transient"],
+    // An admission database fault without a SQLSTATE (2026-11-09).
+    [
+      "model_error",
+      'OpenAI API error (502): {"type":"cubby_transport_failed","message":"Admission database fault: Failed query: select 1"}',
+      "agent_transient",
+    ],
     ["faulted", "Connection terminated unexpectedly", "agent_transient"],
     ["stale", undefined, "agent_transient"],
     ["reset", undefined, "agent_transient"],

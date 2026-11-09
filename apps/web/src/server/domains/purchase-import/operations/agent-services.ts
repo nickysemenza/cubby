@@ -10,6 +10,7 @@ import {
   type AgentImportRunPurpose,
 } from "@cubby/schemas/import-run-agent";
 import {
+  ADMISSION_DATABASE_FAULT,
   mailAttemptInput,
   agentProgressReport,
   agentUsageEvent,
@@ -65,16 +66,21 @@ const ADMISSION_ATTEMPTS = 3;
 
 /**
  * Frontier admission runs before every coordinator model call, so a transient
- * pool-slot timeout there failed whole Runs (2026-10-19). Retry those; a final
- * failure keeps its Postgres cause in the message, the only part Workers RPC
- * carries back to the coordinator.
+ * pool-slot timeout there failed whole Runs (2026-10-19). Retry those. A final
+ * database failure is marked {@link ADMISSION_DATABASE_FAULT} with its cause
+ * in the message, the only part Workers RPC carries back to the coordinator:
+ * unmarked, a pool timeout without a SQLSTATE read as a final refusal and
+ * stranded the Run's Emails unsettled (2026-11-09).
  */
 export async function admissionRead<T>(
   read: () => Promise<T>,
   wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms)),
 ): Promise<T> {
-  const { findPgError, isTransientConnectionError } =
-    await import("~/server/errors/db-errors");
+  const [{ findPgError, isTransientConnectionError }, { DrizzleQueryError }] =
+    await Promise.all([
+      import("~/server/errors/db-errors"),
+      import("drizzle-orm"),
+    ]);
   for (let attempt = 1; ; attempt++) {
     try {
       return await read();
@@ -84,16 +90,22 @@ export async function admissionRead<T>(
         continue;
       }
       const pg = findPgError(error);
+      if (!(error instanceof Error)) throw error;
+      // A budget or executability refusal is a plain Error and stays final.
+      if (!pg && !(error instanceof DrizzleQueryError)) throw error;
+      const root = pg
+        ? `${pg.code} ${pg.message ?? ""}`.trim()
+        : error.cause instanceof Error
+          ? error.cause.message
+          : "";
       // A bare Postgres error already carries its own message.
-      if (
-        pg?.message &&
-        error instanceof Error &&
-        !error.message.includes(pg.message)
-      )
-        throw new Error(`${error.message}\ncause: ${pg.code} ${pg.message}`, {
-          cause: error,
-        });
-      throw error;
+      const cause =
+        root && !error.message.includes(pg?.message ?? root)
+          ? `\ncause: ${root}`
+          : "";
+      throw new Error(`${ADMISSION_DATABASE_FAULT} ${error.message}${cause}`, {
+        cause: error,
+      });
     }
   }
 }

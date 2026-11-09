@@ -1,3 +1,4 @@
+import { ADMISSION_DATABASE_FAULT } from "@cubby/schemas/purchase-agent-services";
 import type { AiUsageTransport } from "@cubby/schemas/telemetry";
 import {
   type AiGatewayCallMetadata,
@@ -293,7 +294,10 @@ export function createCubbyGatewayFetch(
           }),
       })(input, init);
     } catch (error: unknown) {
-      if (refusal) return admissionRefusal(refusal.error);
+      if (refusal)
+        return errorMessage(refusal.error).startsWith(ADMISSION_DATABASE_FAULT)
+          ? transportFailure(refusal.error)
+          : admissionRefusal(refusal.error);
       if (init?.signal?.aborted) throw error;
       if (error instanceof SubscriptionRequiredError)
         return admissionRefusal(error);
@@ -310,8 +314,9 @@ const errorMessage = (error: unknown) =>
  * "Connection error.", hiding the cause from the transcript. Paid admission
  * (household AI budget, Run no longer executable) and a disconnected required
  * plan refuse with a final 403;
- * any other failure is a 502, which pi still retries and the funding ladder
- * never mistakes for a funding refusal.
+ * any other failure, including an admission check's database fault, is a 502,
+ * which pi still retries and the funding ladder never mistakes for a funding
+ * refusal.
  */
 function admissionRefusal(error: unknown): Response {
   return Response.json(
