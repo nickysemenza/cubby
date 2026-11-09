@@ -1,46 +1,34 @@
-import { mailboxClassificationStage } from "@cubby/schemas/mailbox-research";
 import { runPurpose, runStatus } from "@cubby/schemas/run-fields";
 import { and, eq, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { notDeleted, unwrapDb, uuidArrayParam } from "~/server/db/helpers";
 import { email, orderMail } from "~/server/db/schema";
-import {
-  emailLinkedSql,
-  emailMemberClassificationSql,
-} from "~/server/domains/email/repo/email-sql";
+import { emailLinkedSql } from "~/server/domains/email/repo/email-sql";
 import { entityDisplayImagePresenceSql } from "~/server/entity-kernel/repo/entity-display-image";
 import { qualityCheck } from "~/server/generic/data-quality/repo/builders";
 import { defineStoredEntityChecks } from "~/server/generic/data-quality/repo/stored-registry";
 
 /** Bump when the rules or their declared scoring metadata change. */
-export const EMAIL_QUALITY_RULES_VERSION = 1;
+export const EMAIL_QUALITY_RULES_VERSION = 2;
 
 type EmailQualityRecord = Awaited<
   ReturnType<typeof loadEmailQualityRecords>
 >[number];
 const observed = qualityCheck.observed<EmailQualityRecord>;
 const when = qualityCheck.when<EmailQualityRecord>;
-const { rule, decision, model } = mailboxClassificationStage.enum;
 
-/** Settled automated negatives require no member review. */
+/** Automated decisions are final; an import outcome resolves relevance, so
+ * linked or imported mail is never undecided and no member review is owed. */
 export const emailChecks = defineStoredEntityChecks({
   entity: "email",
   table: email,
   rulesVersion: EMAIL_QUALITY_RULES_VERSION,
   load: loadEmailQualityRecords,
   checks: {
-    email_relevance_undecided: observed(
-      (r) => r.classification !== "uncertain",
-    ),
-    email_relevance_unreviewed: when(
-      (r) =>
-        r.classification !== null &&
-        r.classification !== "unrelated" &&
-        (r.classificationStage === rule ||
-          r.classificationStage === decision ||
-          r.classificationStage === model),
-      observed((r) => r.memberClassification !== null),
+    email_relevance_undecided: when(
+      (r) => !r.linked && !r.completedImport,
+      observed((r) => r.classification !== "uncertain"),
     ),
     email_original_missing: when(
       (r) => r.classification === "related" || r.classification === "uncertain",
@@ -75,7 +63,6 @@ async function loadEmailQualityRecords(
       id: email.id,
       shortcode: email.shortcode,
       classification: email.classification,
-      classificationStage: email.classificationStage,
       orderMailId: email.orderMailId,
       contentClearedAt: email.contentClearedAt,
       hasRetainedText: orderMail.hasRetainedText,
@@ -89,7 +76,6 @@ async function loadEmailQualityRecords(
       WHERE preview."emailId" = "Email"."id"
         AND preview.preview->>'checksum' = "Email"."checksum"
     )`,
-      memberClassification: emailMemberClassificationSql(),
       linked: emailLinkedSql(),
       // Preserve JSON containment, including explicit null, missing-key/scalar
       // exclusion and completed, live, same-member Mail import ownership.

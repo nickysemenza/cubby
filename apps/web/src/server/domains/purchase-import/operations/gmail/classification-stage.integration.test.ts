@@ -108,7 +108,8 @@ describe("Gmail classification stage and reason", () => {
     ).toEqual({
       classification: "unrelated",
       stage: "decision",
-      reason: "The decision model classified the message unrelated",
+      reason:
+        "The decision model chose unrelated for the message from shop.example: no purchase cues",
     });
   });
 

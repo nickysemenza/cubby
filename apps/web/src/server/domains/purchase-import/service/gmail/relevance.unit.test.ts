@@ -272,14 +272,23 @@ describe("transient original attachment relevance", () => {
     expect(evidence).toContain("Receipt for order #SYN-12345");
   });
 
-  it("omits HTML layout bytes while keeping original visible order content and exact links", async () => {
+  it("omits HTML layout, transport headers and marketing link bytes while keeping order content and exact links", async () => {
+    const trackingLinks = Array.from(
+      { length: 400 },
+      (_, index) =>
+        `<a href="https://click.example.test/t/${"x".repeat(400)}${index}">Shop ${index}</a>`,
+    ).join("");
     const normalized = {
       ...original,
       attachments: [],
       mail: {
         ...original.mail,
+        headers: {
+          ...original.mail.headers,
+          received: "by synthetic.relay ".repeat(2_000),
+        },
         bodyText: "Order confirmed: Synthetic basil plant",
-        bodyHtml: `<html><head><style>${".layout{color:red}".repeat(20_000)}</style></head><body><p>Order confirmed: Synthetic basil plant</p><a href="https://merchant.example.test/orders/exact-order">View order</a></body></html>`,
+        bodyHtml: `<html><head><style>${".layout{color:red}".repeat(20_000)}</style></head><body><p>Order confirmed: Synthetic basil plant</p><a href="https://merchant.example.test/orders/exact-order">View order</a>${trackingLinks}</body></html>`,
       },
     };
     const before = JSON.stringify(normalized);
@@ -295,7 +304,8 @@ describe("transient original attachment relevance", () => {
       "https://merchant.example.test/orders/exact-order",
     );
     expect(request.includes(".layout")).toBe(false);
-    expect(request.length).toBeLessThan(4_000);
+    expect(request.includes("synthetic.relay")).toBe(false);
+    expect(request.length).toBeLessThan(12_000);
     expect(JSON.stringify(normalized)).toBe(before);
   });
   it("preserves structured order evidence behind a generic visible notification", async () => {

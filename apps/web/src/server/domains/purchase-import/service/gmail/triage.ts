@@ -15,6 +15,8 @@ import type {
 } from "~/server/domains/purchase-import/repo/gmail/types";
 import { wasm } from "~/server/wasm";
 
+import { mailRelevanceRule } from "./mail-relevance-rules";
+
 export type MailTriage = (content: string) => Promise<MailboxClassification>;
 
 const incompletePart = (part: GmailMessagePart): boolean => {
@@ -114,9 +116,10 @@ function purchaseCueCheck(
       ]),
     ).keys(),
   ];
-  return (serialized: string, bodyFull: boolean) =>
+  const missing = (serialized: string, bodyFull: boolean) =>
     (cuesOmitted && (!bodyFull || preheaderClipped)) ||
     cues.some((cue) => !serialized.includes(cue));
+  return { cues, missing };
 }
 
 function triageView(
@@ -227,7 +230,11 @@ function triageView(
       !reasons.has("links_clipped") &&
       !reasons.has("images_clipped");
   }
-  const cueMissing = purchaseCueCheck(html, plain, preheader);
+  const { cues, missing: cueMissing } = purchaseCueCheck(
+    html,
+    plain,
+    preheader,
+  );
 
   const encode = (length: number) => {
     const full = length === body.length;
@@ -279,7 +286,30 @@ function triageView(
     content,
     bytes: utf8Bytes(content),
     incompleteReasons: [...reasons],
+    senderDomain,
+    cues,
   };
+}
+
+const REASON_CUES = 3;
+
+/** One auditable line naming the evidence behind a decision-model choice. */
+function decisionReason(
+  choice: MailboxClassification,
+  view: MailTriageView,
+  senderDomain: string | null,
+  cues: readonly string[],
+) {
+  const shown = cues
+    .slice(0, REASON_CUES)
+    .map((cue) => (cue.length > 40 ? `${cue.slice(0, 40)}…` : cue));
+  const evidence = shown.length
+    ? `purchase cues ${shown.join(", ")}${cues.length > shown.length ? ` and ${cues.length - shown.length} more` : ""}`
+    : "no purchase cues";
+  const omitted = view.incompleteReasons.length
+    ? `; omitted ${view.incompleteReasons.join(", ")}`
+    : "";
+  return `The decision model chose ${choice} for ${view.complete ? "the" : "a partial"} message from ${senderDomain ?? "an unknown sender"}: ${evidence}${omitted}`;
 }
 
 /** What the decision model read: its size and evidence omitted from the bounded view. */
@@ -299,6 +329,12 @@ export async function routeGmailMessage(
   decision: MailboxClassificationDecision;
   view: MailTriageView | null;
 }> {
+  const rule = mailRelevanceRule(normalized.mail);
+  if (rule)
+    return {
+      decision: { classification: "unrelated", stage: "rule", reason: rule },
+      view: null,
+    };
   const body = normalized.mail.bodyText || normalized.mail.bodyHtml;
   if (!body?.trim() || (raw.payload && incompletePart(raw.payload)))
     return {
@@ -309,7 +345,7 @@ export async function routeGmailMessage(
       },
       view: null,
     };
-  const { content, bytes, incompleteReasons } = triageView(
+  const { content, bytes, incompleteReasons, senderDomain, cues } = triageView(
     raw,
     normalized,
     prompt,
@@ -324,7 +360,7 @@ export async function routeGmailMessage(
     decision: {
       classification: choice,
       stage: "decision",
-      reason: `The decision model classified the ${view.complete ? "message" : "partial message"} ${choice}`,
+      reason: decisionReason(choice, view, senderDomain, cues),
     },
     view,
   };

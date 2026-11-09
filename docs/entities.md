@@ -3780,8 +3780,9 @@ the same status as the TypeScript core from those check states.
 Each scored entity's `dataQuality` block declares the rows its evaluator reads
 beyond its own row; its waivers, attachments and attached images' integrity are
 inputs of every scored entity. The drain re-evaluates marked records and
-publishes changed outcomes; a rules-version change marks every record of the
-kind in its migration, and hourly reconciliation catches undeclared reads.
+publishes changed outcomes. The hourly pass revisits the full declared
+population, so a rules-version change republishes every record of the kind
+without a migration and also catches undeclared reads.
 Tombstoning a record removes its stored quality. Reads never repair stored
 quality.
 
@@ -3824,15 +3825,23 @@ attachment rows are declared inputs, and image integrity reaches attached
 Products through a join path; a kit's acquisition lines reach its components.
 Reads leave old publications intact until the drain republishes.
 
-Email uses stored TypeScript checks at rules version 1. A single loader reads
+Email uses stored TypeScript checks at rules version 2. A single loader reads
 only its ID page's classification, retained-text/attachment presence, current
-preview, owner review, accepted/link evidence and completed same-member Mail
-import membership. The checks retain current-checksum review and preview rules,
-settled automated negatives, live Purchase/account ownership fences, and JSON
-source containment (including explicit null). Bodies are never selected for
+preview, accepted/link evidence and completed same-member Mail import
+membership. Automated relevance decisions are final: no check asks for member
+review, and a linked or imported Email is never undecided because its import
+outcome resolved relevance. The checks retain current-checksum preview rules,
+live Purchase/account ownership fences, and JSON source containment (including
+explicit null). Bodies are never selected for
 quality evaluation. List quality facets/counts, score sorts and the Email Work
 queue branch read stored outcomes; no mailbox-wide acceptance or review relation
-runs on those reads. Missing publications stay unassessed until refresh.
+runs on those reads. Missing publications stay unassessed until refresh. The
+Email Work branch routes each row by its gaps: undecided relevance is member
+work, a missing original is agent work, and import and preview gaps close
+automatically through Mail import. An Email without a publication stays
+possible member work, so the member view reports it as unassessed rather than
+a confident zero. Gap counts read only currently declared checks, so a key a
+rules change removed stops counting before republication.
 
 Email metadata, original/attachment persistence, candidate/classification
 observations, `EmailReview`, `EmailPurchaseDecision`, linked Purchase writes and Mail import
