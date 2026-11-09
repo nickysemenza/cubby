@@ -57,6 +57,7 @@ import {
 } from "~/server/domains/expense/repo/expense-inheritance";
 import { financialEvidenceAmountMinor } from "~/server/domains/financial-transaction/repo/financial-evidence";
 import { readRetainedMail } from "~/server/domains/mail/repo/retained-mail";
+import { amazonAsin } from "~/server/domains/product/repo/amazon-asin";
 import {
   externalIdKey,
   findProductsByExternalIds,
@@ -376,17 +377,6 @@ async function attachEvidence(
       .onConflictDoNothing();
   }
 }
-
-export const amazonAsin = (url: string | undefined): string | null => {
-  if (!url) return null;
-  const parsed = new URL(url);
-  if (!/(^|\.)amazon\./u.test(parsed.hostname.toLowerCase())) return null;
-  return (
-    /\/(?:dp|gp\/product)\/([A-Z0-9]{10})(?:[/?]|$)/iu
-      .exec(parsed.pathname)?.[1]
-      ?.toUpperCase() ?? null
-  );
-};
 
 const lineIdentifiers = (
   line: Pick<ExtractedPurchaseLine, "productUrl" | "sku">,

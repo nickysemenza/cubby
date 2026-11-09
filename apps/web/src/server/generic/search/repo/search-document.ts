@@ -25,11 +25,9 @@ import {
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { loadSelectedDescriptions } from "~/server/domains/image/repo/image-description-selection";
 import { recordChange } from "~/server/generic/changes/repo/change";
-import {
-  getEmbeddingTextsForRefs,
-  type SearchableEntityText,
-} from "~/server/generic/embedding/repo/entity-embedding";
+import { getEmbeddingTextsForRefs } from "~/server/generic/embedding/repo/entity-embedding-refresh";
 import type { SemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
+import type { SearchableEntityText } from "~/server/generic/search/repo/search-read-port";
 import { liveAliasSql } from "~/server/lib/live-row";
 
 interface SearchDocumentSource {

@@ -40,7 +40,7 @@ import { getRunLiveProgress } from "~/server/domains/run/repo/run-progress";
 import { readRunSteps } from "~/server/domains/run/repo/run-step";
 import { identityShortcodes } from "~/server/entity-kernel/repo/entity-identity";
 import { createEntityReader } from "~/server/entity-kernel/repo/repository";
-import { getAuditLog } from "~/server/generic/audit-log/repo/audit-log";
+import { getAuditLog } from "~/server/generic/audit-log/repo/audit-log-read";
 import {
   reportDependency,
   type ReportExecution,

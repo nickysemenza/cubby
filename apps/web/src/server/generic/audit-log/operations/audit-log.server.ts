@@ -4,7 +4,7 @@ import type { z } from "zod";
 
 import { auditLogContract } from "~/contracts/audit-log.contract";
 import type { Database } from "~/server/db";
-import { getAuditLog } from "~/server/generic/audit-log/repo/audit-log";
+import { getAuditLog } from "~/server/generic/audit-log/repo/audit-log-read";
 import { resolveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
 

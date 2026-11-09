@@ -33,6 +33,7 @@ import {
   vendorAccount,
 } from "~/server/db/schema";
 import type { RetainedMail } from "~/server/domains/mail/repo/retained-mail";
+import { amazonAsin } from "~/server/domains/product/repo/amazon-asin";
 import {
   externalIdKey,
   findProductsByExternalIds,
@@ -42,7 +43,7 @@ import { lookupProductIdentifierSources } from "~/server/domains/product/repo/pr
 import { wasm } from "~/server/wasm";
 
 import { mailReadContent } from "./gmail/read-content";
-import { amazonAsin, lineIdentifierRequests } from "./writer";
+import { lineIdentifierRequests } from "./writer";
 
 const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9_/-]{2,39}$/u;
 

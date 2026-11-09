@@ -23,7 +23,7 @@ import { householdDateTime, householdLocalDate } from "~/lib/household-date";
 import { wasm } from "~/lib/wasm";
 import { executeEntityAs } from "~/server/entity-kernel";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
-import { getAuditLog } from "~/server/generic/audit-log/repo/audit-log";
+import { getAuditLog } from "~/server/generic/audit-log/repo/audit-log-read";
 import { resolveLiveShortcodes } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 /** Audit entries read for the page's records, newest first. */

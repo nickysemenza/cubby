@@ -15,8 +15,8 @@ import {
   purchase,
   product,
 } from "~/server/db/schema";
+import { amazonAsin } from "~/server/domains/product/repo/amazon-asin";
 import { lookupProductIdentifierSources } from "~/server/domains/product/repo/product-identifier-source";
-import { amazonAsin } from "~/server/domains/purchase-import/repo/writer";
 
 const log = createLogger("product-identity-claims");
 

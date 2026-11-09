@@ -4,7 +4,6 @@ import {
   type TaskCreateInput,
   type TaskUpdateInput,
 } from "@cubby/schemas/entities/task";
-import { entityRefKey } from "@cubby/schemas/entity";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import type {
@@ -15,14 +14,12 @@ import type {
   TaskId,
   TaskShortcode,
 } from "@cubby/schemas/identifiers";
-import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { TaskBulkReorderInput } from "@cubby/schemas/project";
 import { taskFiltersSchema } from "@cubby/schemas/project";
 import type { Trade } from "@cubby/schemas/task-fields";
 import { rawTaskOut, type RawTaskOut } from "@cubby/schemas/work-raw-read";
-import { and, asc, count, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
-import { uniq } from "es-toolkit";
 
 import { type ListReadRow } from "~/entity/model/list-read-fields";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
@@ -32,7 +29,6 @@ import {
   associatePendingImages,
   batchUpdateWithCaseWhen,
   buildPartialUpdateValues,
-  getDb,
   galleryBinding,
   notDeleted,
   updateLiveAndReturn,
@@ -54,10 +50,7 @@ import {
   logAuditEntry,
 } from "~/server/generic/audit-log/repo/audit-log";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
-import {
-  dependencyIdsFor,
-  replaceDependencyEdges,
-} from "~/server/generic/entity-links/repo/dependency-edges";
+import { replaceDependencyEdges } from "~/server/generic/entity-links/repo/dependency-edges";
 import { validateLiveEffectiveTrades } from "~/server/generic/inheritance/repo/inheritance-validation";
 import { selectListReadFields } from "~/server/generic/list/repo/list-read-schema";
 /**
@@ -70,8 +63,6 @@ import { selectListReadFields } from "~/server/generic/list/repo/list-read-schem
  */
 import { policyDelete } from "~/server/generic/removal/repo/dispositions";
 import {
-  type EntityRef,
-  lookupShortcodes,
   resolveAllOrThrow,
   resolveAllPresent,
   resolveOrThrow,
@@ -79,6 +70,7 @@ import {
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { taskScaffold } from "./lookup";
+import { taskDependencyIds } from "./task-relations";
 
 type TaskUpdateAuditEntry = Exclude<AuditEntryInput, { action: "delete" }>;
 type TaskUpdateChanges = NonNullable<TaskUpdateAuditEntry["changes"]>;
@@ -130,80 +122,6 @@ export type TaskMutationHooks = {
 };
 
 const fetchTaskRow = createEntityRowFetcher(task);
-
-/**
- * Blocked-by / blocking id arrays for a set of tasks — thin wrapper over the
- * generic `dependencyIdsFor` (mirrors project/analytics.ts's
- * `projectDependencyIds`). Kept as a named export since it's consumed by name
- * elsewhere (this file's reader, task/lookup.ts's list).
- */
-export async function taskDependencyIds(
-  db: Database,
-  taskIds: TaskId[],
-): Promise<{
-  blockedBy: Map<TaskId, TaskShortcode[]>;
-  blocking: Map<TaskId, TaskShortcode[]>;
-}> {
-  const raw = await dependencyIdsFor(db, "task", taskIds);
-
-  // The edge VALUES (other tasks' ids) are resolved to shortcodes here, once,
-  // batched — the task read takes
-  // `blockedByIds`/`blockingIds` as public ids, and a uuid must never reach
-  // that far. The KEYS stay the caller's own uuids (that's what every
-  // `.get(row.id)` call site keys on).
-  const allTaskIds = uniq(
-    [...raw.blockedBy.values(), ...raw.blocking.values()].flat(),
-  );
-  const refs: EntityRef[] = allTaskIds.map((id) => ({ entity: "task", id }));
-  const codes = await lookupShortcodes(db, refs);
-  const toShortcodes = (ids: TaskId[]): TaskShortcode[] =>
-    ids.map((id) => {
-      const shortcode = codes.get(entityRefKey("task", id));
-      if (!shortcode)
-        throw new Error(`Task relation is missing shortcode for ${id}`);
-      return parseShortcodeFor("task", shortcode);
-    });
-
-  return {
-    blockedBy: new Map(
-      [...raw.blockedBy].map(([id, ids]) => [id, toShortcodes(ids)]),
-    ),
-    blocking: new Map(
-      [...raw.blocking].map(([id, ids]) => [id, toShortcodes(ids)]),
-    ),
-  };
-}
-
-/**
- * Live subtask counts (total + done) for a set of parent task ids — one
- * grouped query, batched like dependency and project rollups (never one query
- * per parent). Counts ALL live subtasks
- * including done ones, so callers whose row source already excludes done
- * tasks (e.g. actionable.ts's open-task fetch) still get the right totals.
- */
-export async function taskSubtaskCounts(
-  db: Database,
-  parentIds: TaskId[],
-): Promise<Map<TaskId, { count: number; doneCount: number }>> {
-  const out = new Map<TaskId, { count: number; doneCount: number }>();
-  if (parentIds.length === 0) return out;
-
-  const rows = await getDb(db)
-    .select({
-      parentTaskId: task.parentTaskId,
-      count: count(),
-      doneCount: sql<number>`count(*) filter (where ${task.status} = ${"done"})::int`,
-    })
-    .from(task)
-    .where(and(inArray(task.parentTaskId, parentIds), notDeleted(task)))
-    .groupBy(task.parentTaskId);
-
-  for (const row of rows) {
-    if (!row.parentTaskId) continue;
-    out.set(row.parentTaskId, { count: row.count, doneCount: row.doneCount });
-  }
-  return out;
-}
 
 /**
  * One-level subtask validation, shared by create/update:

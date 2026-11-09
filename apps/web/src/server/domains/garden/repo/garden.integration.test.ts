@@ -7,6 +7,7 @@ import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { relationalSql } from "~/server/db/helpers/relational-sql";
+import { getAuditLog } from "~/server/generic/audit-log/repo/audit-log-read";
 import {
   drainDerivedRefreshFrontier,
   captureBackgroundQueue,
@@ -33,7 +34,6 @@ import { createLocation } from "~/server/domains/location/repo/crud";
 import { createTask } from "~/server/domains/task/repo/crud";
 import { taskRepository } from "~/server/domains/task/repo/repository";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
-import { getAuditLog } from "~/server/generic/audit-log/repo/audit-log";
 import { liveLinks } from "~/server/generic/entity-links/repo/entity-links";
 import { getSearchDocumentEmbeddingText } from "~/server/generic/search/repo/search-document";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";

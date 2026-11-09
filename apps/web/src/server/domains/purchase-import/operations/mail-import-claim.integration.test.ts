@@ -50,7 +50,7 @@ import { storedMailOutcome } from "~/server/domains/purchase-import/repo/mail-ou
 import { readMailProductCandidates } from "~/server/domains/purchase-import/repo/mail-rule-evidence";
 import { insertOperation } from "~/server/domains/run/repo/run-operation";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
-import { describeToolError } from "~/server/mcp/tools/tool-registration";
+import { describeToolError } from "~/server/mcp/tools/tool-error";
 import { activeEmailPurchaseDecision } from "~/server/testing/email-link.fixtures";
 import {
   createProductIdentityFixture,

@@ -53,6 +53,7 @@ import {
 } from "~/server/db/schema";
 import { readEmailPurchaseAssociations } from "~/server/domains/email/repo/email-purchase-associations";
 import { decideExpenseLineRole } from "~/server/domains/expense/service/expense-line-role";
+import { amazonAsin } from "~/server/domains/product/repo/amazon-asin";
 import {
   externalIdKey,
   findProductsByExternalIds,
@@ -98,11 +99,7 @@ import {
   importVendorCandidates,
   resolveImportVendor,
 } from "../repo/import-vendor";
-import {
-  amazonAsin,
-  importVendorOrder,
-  lineIdentifierRequests,
-} from "../repo/writer";
+import { importVendorOrder, lineIdentifierRequests } from "../repo/writer";
 import { chooseLineStage } from "../service/line-stage";
 import { attachOrderLineThumbnails } from "./line-thumbnails";
 import {
