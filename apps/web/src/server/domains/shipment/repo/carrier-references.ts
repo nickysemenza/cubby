@@ -9,21 +9,16 @@ import {
   type RepositoryQueryInput,
 } from "~/server/db/repository-access.boundary";
 import { shipment, vendor } from "~/server/db/schema";
+import { normalizeTrackingNumber } from "~/server/domains/shipment/repo/carrier-recognition";
 import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntries } from "~/server/generic/audit-log/repo/audit-log";
-
-const normalizeTrackingReference = (number: string) =>
-  number.replaceAll(/\s/g, "").toUpperCase();
 
 /** Distinct known carriers under one number stay separate: they can be a real handoff. */
 export const shipmentTrackingReferenceKey = (ref: {
   trackingNumber: string;
   carrierId: string | null;
 }) =>
-  JSON.stringify([
-    normalizeTrackingReference(ref.trackingNumber),
-    ref.carrierId,
-  ]);
+  JSON.stringify([normalizeTrackingNumber(ref.trackingNumber), ref.carrierId]);
 
 export async function deduplicateShipmentTrackingReferences(
   db: RepositoryQueryInput,
@@ -39,16 +34,16 @@ export async function deduplicateShipmentTrackingReferences(
         .where(eq(vendor.id, row.carrierId))
     : [];
   const primary = row.trackingNumber
-    ? normalizeTrackingReference(row.trackingNumber)
+    ? normalizeTrackingNumber(row.trackingNumber)
     : null;
   const knownNumbers = new Set(
     row.extraTrackingNumbers
       .filter((ref) => ref.carrierId)
-      .map((ref) => normalizeTrackingReference(ref.trackingNumber)),
+      .map((ref) => normalizeTrackingNumber(ref.trackingNumber)),
   );
   const unique = new Map<string, (typeof row.extraTrackingNumbers)[number]>();
   for (const ref of row.extraTrackingNumbers) {
-    const number = normalizeTrackingReference(ref.trackingNumber);
+    const number = normalizeTrackingNumber(ref.trackingNumber);
     // Carrier wording is evidence, not a second reference.
     if (
       number === primary &&

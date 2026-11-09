@@ -39,6 +39,7 @@ import {
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
+import { advisoryXactLock } from "~/server/db/advisory-lock";
 import { vendorAccountLabelSql } from "~/server/db/computed/vendor-account-label";
 import { getDb, notDeleted, withTransaction } from "~/server/db/helpers";
 import { outer, related } from "~/server/db/helpers/related";
@@ -533,9 +534,7 @@ export async function controlRun(
     throw new Error("Only the member this Run belongs to can control it");
   return withTransaction(db, async (tx) => {
     if (scope.vendorAccountId)
-      await tx.execute(
-        sql`SELECT pg_advisory_xact_lock(hashtext(${scope.vendorAccountId}))`,
-      );
+      await advisoryXactLock(tx, "run-vendor-account", scope.vendorAccountId);
     const [locked] = await tx
       .select({
         status: runTable.status,

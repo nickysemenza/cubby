@@ -219,6 +219,8 @@ establish a historical event date. Label creation and vendor-shipped
 reports do not establish carrier possession. Repeated source observations use
 the shared writer's idempotent path; conflicts remain evidence.
 
+Mail and Shipment share tracking-number normalization and mail carrier recognition;
+carrier evidence still requires a bounded source claim or tracking link.
 Carrier resolution uses ordinary Vendor identities through unambiguous names and
 aliases. Service wording stays in the source evidence rather than creating another
 Vendor. Never create a Vendor from a tracking-number

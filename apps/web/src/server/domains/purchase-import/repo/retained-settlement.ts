@@ -35,6 +35,7 @@ import {
 } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
+import { advisoryXactLock } from "~/server/db/advisory-lock";
 import { getDb, notDeleted, withTransaction } from "~/server/db/helpers";
 import { outer } from "~/server/db/helpers/related";
 import { quotedTable } from "~/server/db/helpers/related";
@@ -89,9 +90,7 @@ export async function lockPartySettlement(
   tx: SettlementReader,
   ledgerPartyId: LedgerPartyId,
 ): Promise<void> {
-  await tx.execute(
-    sql`SELECT pg_advisory_xact_lock(hashtext(${`purchase-settlement:${ledgerPartyId}`}))`,
-  );
+  await advisoryXactLock(tx, "purchase-settlement", ledgerPartyId);
 }
 
 type RetainedPayment = Readonly<

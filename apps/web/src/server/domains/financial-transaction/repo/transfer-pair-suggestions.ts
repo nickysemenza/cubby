@@ -42,6 +42,7 @@ import { z } from "zod";
 import { forEachConcurrently } from "~/lib/concurrency-limiter";
 import { plainDateDaysBetween, shiftPlainDate } from "~/lib/household-date";
 import { type Database } from "~/server/db";
+import { advisoryXactLock } from "~/server/db/advisory-lock";
 import {
   unwrapDb,
   databaseForTransaction,
@@ -50,6 +51,7 @@ import {
   withTransactionDatabase,
 } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
+import { transactionImportRecord } from "~/server/db/retained-tables";
 import { suggestionTable } from "~/server/db/schema";
 import { sqlEnumConstant } from "~/server/db/sql-enum";
 import { lockFinancialEvidenceKeys } from "~/server/domains/financial-transaction/repo/financial-evidence";
@@ -91,7 +93,6 @@ import {
   MONEY_MOVE_KINDS,
   statementTransactionKind,
 } from "~/server/domains/transaction-import/repo/statement-transaction-kind";
-import { transactionImportMembers } from "~/server/domains/transaction-import/repo/transaction-import-membership";
 import { type EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { createAppError } from "~/server/errors/app-error";
 import { type PageWork, peakWorkers } from "~/server/generic/jobs/page-work";
@@ -486,7 +487,7 @@ async function loadStatementLegs(
       r."statementDate"::text AS "statementDate", r."providerAmount", r.merchant,
       r."rawDescription", r."sourceCategory", r."providerStatus", r."providerNotes",
       r."accountId"::text AS "accountId", si.fingerprint AS "importFingerprint",
-      ARRAY(SELECT m."importId"::text FROM ${transactionImportMembers} m WHERE m."statementRowId" = r.id) AS "importIds"
+      ARRAY(SELECT m."importId"::text FROM ${transactionImportRecord} m WHERE m."statementRowId" = r.id) AS "importIds"
     FROM ${state} cs
     JOIN ${sourceObservations} r ON r.source = cs.source AND ${chargeKeyOf("r")} = cs."chargeKey"
       AND ${notDeleted("r")}
@@ -1239,15 +1240,10 @@ const transferPairNeedsLabels = (judgment: TransferPairJudgment) =>
 
 const isRule = (producer: SuggestionProducer) => producer.kind === "rule";
 
-const pairLock = (key: string) =>
-  sql`SELECT pg_advisory_xact_lock(hashtextextended(${`transfer-pair:${key}`}, 0))`;
-
 /** Acquire shared leg locks before any review-state or settlement-ref locks. */
 export async function lockTransferPairLegs(db: Database, pairKey: string) {
   for (const key of [...new Set(pairKey.split("~"))].sort())
-    await getDb(db).execute(
-      sql`SELECT pg_advisory_xact_lock(hashtextextended(${`transfer-pair-leg:${key}`}, 0))`,
-    );
+    await advisoryXactLock(getDb(db), "transfer-pair-leg", key);
 }
 
 export type TransferPairPublishOutcome =
@@ -1541,7 +1537,7 @@ export async function refreshTransferPairStatements(
   return withTransactionDatabase(db, async (tx) => {
     await assertWorkflowEffect(tx);
     const client = getDb(tx);
-    await client.execute(pairLock(pairKey));
+    await advisoryXactLock(client, "transfer-pair", pairKey);
     const receipts = await client.execute<{ id: string }>(
       sql`
       SELECT id FROM "Suggestion" WHERE ${pending} FOR UPDATE
@@ -1853,7 +1849,7 @@ export async function generateTransferPairSuggestionsPage(
             }
             const retired = await withTransactionDatabase(db, async (tx) => {
               await assertWorkflowEffect(tx);
-              await getDb(tx).execute(pairLock(row.pairKey));
+              await advisoryXactLock(getDb(tx), "transfer-pair", row.pairKey);
               const retiredRows = await transitionSuggestionStates(
                 tx,
                 and(

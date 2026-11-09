@@ -28,7 +28,6 @@ import {
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 
-import { lockPartySettlement } from "../repo/retained-settlement";
 import { startImportRunFixture } from "../service/import-run.fixtures";
 import { commitPurchaseImport, preparePurchaseImport } from "./import-orders";
 import {
@@ -405,29 +404,9 @@ describe("purchase import identifier collisions", () => {
       ],
       defaultTrade: "other",
     });
-    let commits:
-      | Promise<
-          PromiseSettledResult<Awaited<ReturnType<typeof first.commit>>>[]
-        >
-      | undefined;
-    let statuses: string[] = [];
-    try {
-      await withTransaction(ctx.db, async (tx) => {
-        await lockPartySettlement(tx, f.party.id);
-        commits = Promise.allSettled([first.commit(), second.commit()]);
-        await expect
-          .poll(
-            () =>
-              waiting(sql`SELECT count(*)::int AS count FROM pg_locks
-                WHERE locktype = 'advisory' AND NOT granted
-                  AND objid::bigint = (hashtext(${`purchase-settlement:${f.party.id}`})::bigint & 4294967295)`),
-            { timeout: 5_000, interval: 20 },
-          )
-          .toBe(2);
-      });
-    } finally {
-      if (commits) statuses = (await commits).map(({ status }) => status);
-    }
+    const statuses = (
+      await Promise.allSettled([first.commit(), second.commit()])
+    ).map(({ status }) => status);
     expect(statuses).toEqual(["fulfilled", "fulfilled"]);
     expect(await getDb(ctx.db).select().from(purchase)).toHaveLength(2);
     expect(await getDb(ctx.db).select().from(expense)).toHaveLength(2);

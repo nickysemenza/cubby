@@ -78,6 +78,10 @@ import {
   deliveryFieldCodes,
   withoutDeliveryFieldCarrier,
 } from "~/server/domains/shipment/repo/carrier-evidence";
+import {
+  normalizeTrackingNumber,
+  vendorPackageLink,
+} from "~/server/domains/shipment/repo/carrier-recognition";
 import { resolveProductBrand } from "~/server/domains/vendor/repo/product-brand";
 import { resolveEntityIdentity } from "~/server/entity-kernel/repo/entity-identity";
 import { constraintViolation, createAppError } from "~/server/errors/app-error";
@@ -94,8 +98,6 @@ import {
 } from "./carrier-references";
 
 const canonical = (value: unknown) => canonicalJson(jsonSnapshot.parse(value));
-const normalizeNumber = (value: string) =>
-  value.replaceAll(/\s/g, "").toUpperCase();
 // Re-extraction can respell one source's key. Only that same source may match it:
 // generic labels such as an origin state recur across unrelated orders.
 const sourcePackageSpelling = (key: string) =>
@@ -104,41 +106,6 @@ const shipmentPurposesDisagree = (
   first: ShipmentPurpose,
   second: ShipmentPurpose,
 ) => first !== "unknown" && second !== "unknown" && first !== second;
-
-const amazonLink = (href: string) => {
-  const url = URL.canParse(href) ? new URL(href) : null;
-  return url?.protocol === "https:" &&
-    !url.username &&
-    !url.password &&
-    !url.port &&
-    /^(?:www\.)?amazon\.com$/.test(url.hostname)
-    ? url
-    : null;
-};
-
-/** The one bounded vendor route known to name a parcel: Amazon's package tracker
- * identifies it by order, shipment and package index, directly or through its own
- * redirect. An Amazon shipment can span parcels, so the index is required.
- */
-function vendorPackageLink(href: string) {
-  const link = amazonLink(href);
-  const redirect =
-    link?.pathname === "/gp/r.html" ? link.searchParams.getAll("U") : [];
-  const url = redirect[0] && !redirect[1] ? amazonLink(redirect[0]) : link;
-  if (!url || !/^\/progress-tracker\/package(?:\/|$)/.test(url.pathname))
-    return null;
-  const [order, shipmentId, index] = [
-    "orderId",
-    "shipmentId",
-    "packageIndex",
-  ].map((name) => {
-    const values = url.searchParams.getAll(name);
-    return values.length === 1 ? values[0] : undefined;
-  });
-  return order && shipmentId && index && /^\d+$/.test(index)
-    ? { order, shipmentId, index }
-    : null;
-}
 
 /** Parcels the retained original links that this source key names. The key is extractor
  * text and cannot prove anything alone: counters, labels and order ids can share its
@@ -259,7 +226,7 @@ const restatedEvent = (event: ShipmentObservationInput) =>
     kind: event.kind,
     time: event.time,
     forecast: event.timeBasis === "estimate",
-    trackingNumber: normalizeNumber(event.trackingNumber ?? ""),
+    trackingNumber: normalizeTrackingNumber(event.trackingNumber ?? ""),
   });
 const eventPlace = (event: ShipmentObservationInput) =>
   event.location?.trim().toLowerCase() ?? null;
@@ -667,7 +634,7 @@ async function projectCarrierReferences(
         !correctingCarrier ||
         !(
           ref.carrierId === previousCarrier?.shortcode &&
-          normalizeNumber(ref.trackingNumber) === number
+          normalizeTrackingNumber(ref.trackingNumber) === number
         ),
     ),
     ...extraTrackingNumbers,
@@ -677,11 +644,13 @@ async function projectCarrierReferences(
     : !row.trackingNumber
       ? (carrier.id ?? row.carrierId)
       : (row.carrierId ??
-        (normalizeNumber(row.trackingNumber) === number ? carrier.id : null));
+        (normalizeTrackingNumber(row.trackingNumber) === number
+          ? carrier.id
+          : null));
   if (
     number &&
     row.trackingNumber &&
-    (normalizeNumber(row.trackingNumber) !== number ||
+    (normalizeTrackingNumber(row.trackingNumber) !== number ||
       (adoptedCarrier && carrier.id && adoptedCarrier !== carrier.id))
   )
     refs.push({
@@ -979,13 +948,13 @@ async function writeShipmentEvidence(
         : packet.carrierClaims?.some(
               (claim) =>
                 claim.role === "intermediary" &&
-                normalizeNumber(claim.trackingNumber) ===
-                  normalizeNumber(packet.trackingNumber ?? ""),
+                normalizeTrackingNumber(claim.trackingNumber) ===
+                  normalizeTrackingNumber(packet.trackingNumber ?? ""),
             )
           ? { id: null, code: null }
           : await carrierReference(tdb, packet.carrierId, packet.carrierName);
       const number = packet.trackingNumber
-        ? normalizeNumber(packet.trackingNumber)
+        ? normalizeTrackingNumber(packet.trackingNumber)
         : null;
       const packageKey =
         packet.sourceShipmentKey ??
@@ -1118,13 +1087,13 @@ async function writeShipmentEvidence(
         };
       const extraTrackingNumbers = [];
       for (const extra of packet.extraTrackingNumbers) {
-        const number = normalizeNumber(extra.trackingNumber);
+        const number = normalizeTrackingNumber(extra.trackingNumber);
         const supported = suggestion.forReference(number).carrier;
         const retained =
           binding && row
             ? [
                 ...(row.trackingNumber &&
-                normalizeNumber(row.trackingNumber) === number &&
+                normalizeTrackingNumber(row.trackingNumber) === number &&
                 boundCarrier
                   ? [
                       {
@@ -1138,7 +1107,7 @@ async function writeShipmentEvidence(
                   : []),
                 ...row.extraTrackingNumbers.filter(
                   (ref) =>
-                    normalizeNumber(ref.trackingNumber) === number &&
+                    normalizeTrackingNumber(ref.trackingNumber) === number &&
                     ref.carrierId,
                 ),
               ]
@@ -1147,7 +1116,7 @@ async function writeShipmentEvidence(
         const intermediary = packet.carrierClaims?.some(
           (claim) =>
             claim.role === "intermediary" &&
-            normalizeNumber(claim.trackingNumber) === number,
+            normalizeTrackingNumber(claim.trackingNumber) === number,
         );
         const reference = supported
           ? await carrierReference(tdb, supported.code, null)
@@ -1165,7 +1134,8 @@ async function writeShipmentEvidence(
       }
       const primaryCarrierCode =
         carrier.code ??
-        (row?.trackingNumber && normalizeNumber(row.trackingNumber) === number
+        (row?.trackingNumber &&
+        normalizeTrackingNumber(row.trackingNumber) === number
           ? (boundCarrier?.code ?? null)
           : null);
       const references = [
@@ -1290,7 +1260,8 @@ async function writeShipmentEvidence(
         carrier.id &&
         row.carrierId &&
         row.carrierId !== carrier.id &&
-        (!row.trackingNumber || normalizeNumber(row.trackingNumber) === number)
+        (!row.trackingNumber ||
+          normalizeTrackingNumber(row.trackingNumber) === number)
       ) {
         if (suggestion.primary.carrier) correctingCarrier = !carrierIssue;
         else
@@ -1330,13 +1301,13 @@ async function writeShipmentEvidence(
           ...(projection.trackingNumber
             ? [
                 {
-                  number: normalizeNumber(projection.trackingNumber),
+                  number: normalizeTrackingNumber(projection.trackingNumber),
                   carrier: primaryCarrier?.code ?? null,
                 },
               ]
             : []),
           ...projection.extraTrackingNumbers.map((ref) => ({
-            number: normalizeNumber(ref.trackingNumber),
+            number: normalizeTrackingNumber(ref.trackingNumber),
             carrier: ref.carrierId,
           })),
         ];
