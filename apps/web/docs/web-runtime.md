@@ -448,6 +448,11 @@ replace this fresh decision read or the receiving command's current-stock checks
 
 ## List loading and enrichment
 
+Inventory cells reuse the Location slice admitted by their Product or Location
+page. They must not subscribe to a separate Location metadata bundle per cell:
+that admits unrelated dependencies and can suspend the populated table. The
+opened location picker and quick-edit dialog still own their metadata admission.
+
 The generic `useInfiniteTableList` query keys own filter, ordering, grouping and
 projection scope. A new scope shows its own cached rows or initial skeletons,
 never the preceding scope's rows or totals. Same-key refreshes retain data and block further offset paging

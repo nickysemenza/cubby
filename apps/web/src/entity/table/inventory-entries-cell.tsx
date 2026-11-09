@@ -8,7 +8,6 @@ import {
   EntityRefLink,
   EntityRefList,
 } from "~/entity/components/entity-ref-link";
-import { useEntityMetadata } from "~/entity/metadata";
 import { FieldRecordValue } from "~/ui/derived/record-value";
 import { Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
@@ -87,7 +86,7 @@ function InventoryEntriesCellBody<
   context,
 }: InventoryEntriesCellProps<T, TEntry, TEntity>) {
   const queryClient = useQueryClient();
-  useEntityMetadata("location");
+  // Product and Location pages admit the Location slice before rendering cells.
   const displayImages = useEntityDisplayImageMap();
   // A dense cell stacks the amount under the name instead of "1 each @".
   const dense = useDenseCell();
