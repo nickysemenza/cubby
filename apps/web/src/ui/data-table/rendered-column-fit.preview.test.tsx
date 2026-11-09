@@ -25,6 +25,7 @@ import {
   columnWidthVariables,
   columnWidthValue,
   columnOffsetValue,
+  pinnedColumnWidthVariables,
   resolvedTableColumnWidths,
 } from "./column-layout";
 import { ROW_DENSITY } from "./density";
@@ -96,7 +97,7 @@ function FitFixture({
     0,
   );
   const cellStyle = (id: string) => {
-    const style: React.CSSProperties = { width: columnWidthValue(id) };
+    const style: React.CSSProperties = {};
     if (pinned) {
       style.position = "sticky";
       style.insetInlineStart = columnOffsetValue(
@@ -107,6 +108,12 @@ function FitFixture({
     }
     return style;
   };
+  const variables = columnWidthVariables(
+    table.getVisibleLeafColumns(),
+    0,
+    manual,
+    measured,
+  );
   return (
     <>
       <button
@@ -119,15 +126,23 @@ function FitFixture({
         <Table
           className="table-fixed border-separate border-spacing-0 text-sm"
           style={{
-            ...columnWidthVariables(
-              table.getVisibleLeafColumns(),
-              0,
-              manual,
-              measured,
+            ...pinnedColumnWidthVariables(
+              table.getStartVisibleLeafColumns(),
+              table.getEndVisibleLeafColumns(),
+              variables,
             ),
             width: totalWidth + 400,
           }}
         >
+          <colgroup style={variables}>
+            {table.getVisibleLeafColumns().map((column) => (
+              <col
+                key={column.id}
+                style={{ width: columnWidthValue(column.id) }}
+              />
+            ))}
+            <col style={{ width: 400 }} />
+          </colgroup>
           <TableHeader>
             <TableRow>
               {["quality", "location"].map((id) => (
@@ -277,22 +292,23 @@ function DateFitFixture() {
       <Table
         className="table-fixed border-separate border-spacing-0 text-sm tabular-nums"
         style={{
-          ...columnWidthVariables(
+          width: fitted + 400,
+        }}
+      >
+        <colgroup
+          style={columnWidthVariables(
             table.getVisibleLeafColumns(),
             0,
             new Set(),
             measured,
-          ),
-          width: fitted + 400,
-        }}
-      >
+          )}
+        >
+          <col style={{ width: columnWidthValue("date") }} />
+          <col style={{ width: 400 }} />
+        </colgroup>
         <TableHeader>
           <TableRow>
-            <TableHead
-              data-column-id="date"
-              className="px-1 text-xs"
-              style={{ width: columnWidthValue("date") }}
-            >
+            <TableHead data-column-id="date" className="px-1 text-xs">
               Date
             </TableHead>
             <TableHead style={{ width: 400 }} />
@@ -304,7 +320,6 @@ function DateFitFixture() {
               data-column-id="date"
               data-testid="date"
               className={`${ROW_DENSITY.cellClass} overflow-hidden text-ellipsis`}
-              style={{ width: columnWidthValue("date") }}
             >
               <div className={ROW_DENSITY.cellContentClass}>
                 <div className="min-w-0">

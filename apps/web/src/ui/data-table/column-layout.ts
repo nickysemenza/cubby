@@ -425,6 +425,8 @@ function columnIdHash(id: string) {
 
 /** Collision-resistant CSS custom property shared by every column surface. */
 type ColumnWidthVariable = `--cubby-column-${string}`;
+type ColumnWidthVariables = CSSProperties &
+  Partial<Record<ColumnWidthVariable, string>>;
 
 function columnWidthVariable(id: string): ColumnWidthVariable {
   const readable = id.replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 32);
@@ -435,8 +437,10 @@ function isNonEmptyColumnHeader(header: unknown): header is string {
   return typeof header === "string" && header.trim().length > 0;
 }
 
-export function columnWidthValue(id: string) {
-  return `var(${columnWidthVariable(id)})`;
+export function columnWidthValue(id: string, variables?: ColumnWidthVariables) {
+  return (
+    variables?.[columnWidthVariable(id)] ?? `var(${columnWidthVariable(id)})`
+  );
 }
 
 /** Sticky insets share the same painted widths as cells. */
@@ -444,13 +448,14 @@ export function columnOffsetValue(
   columns: readonly { id: string; getSize: () => number }[],
   id: string,
   side: "start" | "end",
+  variables?: ColumnWidthVariables,
 ) {
   const index = columns.findIndex((column) => column.id === id);
   const preceding =
     side === "start" ? columns.slice(0, index) : columns.slice(index + 1);
   return preceding.length === 0
     ? "0px"
-    : `calc(${preceding.map((column) => columnWidthValue(column.id)).join(" + ")})`;
+    : `calc(${preceding.map((column) => columnWidthValue(column.id, variables)).join(" + ")})`;
 }
 
 type TableWidthColumn = {
@@ -698,7 +703,7 @@ export function columnWidthVariables(
   userSized?: ReadonlySet<string>,
   measured?: Readonly<Record<string, number>>,
   collapsed?: ReadonlySet<string>,
-): CSSProperties {
+): ColumnWidthVariables {
   const { widths, spacer } = resolvedTableColumnWidths(
     columns,
     availableWidth,
@@ -706,14 +711,27 @@ export function columnWidthVariables(
     measured,
     collapsed,
   );
-  const variables: CSSProperties &
-    Partial<Record<ColumnWidthVariable, string>> = {};
+  const variables: ColumnWidthVariables = {};
   for (const column of columns) {
     variables[columnWidthVariable(column.id)] =
       `${widths[column.id] ?? column.getSize()}px`;
   }
   variables[SPACER_WIDTH_VARIABLE] = `${spacer}px`;
   return variables;
+}
+
+/** Only widths used by sticky offsets need to inherit into the row tree. */
+export function pinnedColumnWidthVariables(
+  start: readonly { id: string }[],
+  end: readonly { id: string }[],
+  variables: ColumnWidthVariables,
+): ColumnWidthVariables {
+  const inherited: ColumnWidthVariables = {};
+  for (const column of [...start.slice(0, -1), ...end.slice(1)]) {
+    const key = columnWidthVariable(column.id);
+    inherited[key] = variables[key];
+  }
+  return inherited;
 }
 
 type ColumnDescriptor = { id: string; role?: EntityColumnRole; group?: string };

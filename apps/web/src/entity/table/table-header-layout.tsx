@@ -46,11 +46,9 @@ import {
 import { TableHead, TableRow } from "~/ui/primitives/table";
 
 import {
-  columnWidthValue,
   columnOffsetValue,
   isLockedColumn,
   moveColumn,
-  spacerWidthValue,
   useColumnLayoutDndProps,
 } from "../../ui/data-table/column-layout";
 import { ColumnResizeHandle } from "../../ui/data-table/column-resize-handle";
@@ -413,7 +411,6 @@ function SortableHeader<TData extends RowData>({
   const canSort = header.column.getCanSort();
   const numeric = header.column.columnDef.meta?.numeric ?? false;
   const pinned = header.column.getIsPinned();
-  const width = columnWidthValue(header.column.id);
   const provenance = header.column.columnDef.meta?.provenance;
   const headerLabel = sortableHeaderLabel(header);
 
@@ -480,9 +477,6 @@ function SortableHeader<TData extends RowData>({
         isDragging && "z-50 opacity-70",
       )}
       style={{
-        width,
-        minWidth: width,
-        maxWidth: width,
         transform: CSS.Translate.toString(transform),
         transition,
         ...(pinned === "start"
@@ -667,7 +661,6 @@ export default function TableHeaderLayout<TData extends RowData>({
                 aria-hidden
                 scope={undefined}
                 className={cn(styles.header, "px-0")}
-                style={{ width: spacerWidthValue }}
               />
               {trailing
                 .filter((header) => painted(header.column))
