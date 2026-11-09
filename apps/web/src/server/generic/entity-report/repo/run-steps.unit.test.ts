@@ -72,20 +72,14 @@ describe("Steps ledger", () => {
       (block) => block.kind === "table" && block.title === "Plan",
     );
     if (plan?.kind !== "table") throw new Error("expected plan table");
+    // The retired transfer-pair family stays readable history; it plans no steps.
     expect(plan.rows.map((row) => row.id)).toEqual([
-      "transfer_pair_scan",
-      "transfer_pair_retire",
-      "transfer_pair_label",
       "statement_generate",
       "statement_holds",
       "statement_label",
     ]);
     expect(plan.rows[0]?.cells).toEqual(
-      expect.arrayContaining([
-        "Since Oct 1, 2026",
-        "Counted when step starts",
-        "Not started",
-      ]),
+      expect.arrayContaining(["Counted when step starts", "Not started"]),
     );
     expect(blocks).toContainEqual(
       expect.objectContaining({
@@ -98,14 +92,14 @@ describe("Steps ledger", () => {
         ],
       }),
     );
-    expect(runWorkLabel(run)).toBe("Financial reconciliation");
+    expect(runWorkLabel(run)).toBe("Sweep");
     expect(run.purpose).toBe("sweep");
     const resumed = runStepsBlocks({
       ...run,
       steps: [
         step({
-          key: "transfer_pair_scan",
-          label: "Transfer pairs: scan",
+          key: "statement_generate",
+          label: "Statements: match",
           state: "queued",
           pages: 2,
           found: 100,
@@ -116,7 +110,7 @@ describe("Steps ledger", () => {
     }).find((block) => block.kind === "table" && block.title === "Plan");
     if (resumed?.kind !== "table") throw new Error("expected resumed plan");
     expect(resumed.rows[0]?.cells).toEqual(
-      expect.arrayContaining(["Queued to resume", "100 movements"]),
+      expect.arrayContaining(["Queued to resume", "100 charges"]),
     );
     expect(
       runStepsBlocks({ ...run, steps: [] }).some(
@@ -186,8 +180,8 @@ describe("Steps ledger", () => {
     const [block] = runStepsBlocks(
       report("sweep", "running", [
         step({
-          key: "transfer_pair_scan",
-          label: "Transfer pairs: scan",
+          key: "statement_generate",
+          label: "Statements: match",
           state: "running",
           found: 1_280,
           done: 410,
@@ -206,10 +200,10 @@ describe("Steps ledger", () => {
     if (block?.kind !== "records") throw new Error("expected records");
     const [scan] = block.rows;
     expect(scan?.commands).toEqual([]);
-    expect(scan?.trailing).toBe("410 of 1,280 movements");
+    expect(scan?.trailing).toBe("410 of 1,280 charges");
     expect(scan?.lines?.map((line) => line.text)).toEqual(
       expect.arrayContaining([
-        "Scanning movements",
+        "Matching charges",
         "12 pairs",
         "No result: 380 no candidate · 4 suppressed",
       ]),

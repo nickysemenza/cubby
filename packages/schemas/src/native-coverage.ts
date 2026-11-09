@@ -342,7 +342,7 @@ export const nativeCoverage = {
     // hero it is the same field editor over one row, which the toolbar `edit` already is, and a
     // selection-wide edit has no row to anchor to on a detail screen.
     // Native uses one Fetch or refresh logo operation for both states.
-    ...ownedElsewhere(["edit", "bulkEdit", "refreshLogo", "markPurchased"]),
+    ...ownedElsewhere(["edit", "bulkEdit", "refreshLogo"]),
   },
   /**
    * `implemented` slots are the generated `ImplementedDetailSlotID`, which `DetailSlotRegistry`
