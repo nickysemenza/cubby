@@ -457,8 +457,10 @@ stored with a null column uses its kind's. `releaseJobClaim` hands a claim back
 without an attempt, and deferrals never count.
 
 Transient failures — a Hyperdrive pool-slot timeout (SQLSTATE 58000, "Timed out
-while waiting for an open slot in the pool"), a dropped connection, a
-`JobRetryableError` or an exhausted snapshot replay — back off without spending
+while waiting for an open slot in the pool"), a dropped connection (SQLSTATE
+class 08 or 57P01, or anywhere in the cause chain a code-less "Connection
+terminated unexpectedly", a pool connect timeout or an `ECONNRESET`/`EPIPE`/
+`ETIMEDOUT` socket error), a `JobRetryableError` or an exhausted snapshot replay — back off without spending
 attempts; their delay grows with the failing streak's age. `failingSince` records
 the streak's first failure and any successful or deferred page clears it.
 Whatever the class, a Job still failing `JOB_FAILING_LIMIT_MS` (24 hours) after

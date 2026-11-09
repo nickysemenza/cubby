@@ -66,8 +66,9 @@ export function classifyJobFailure(
     return { kind: "isolated" };
   // A fresh durable attempt can recover after bounded whole-transaction replay.
   // Classification never replays a committed transaction or its effects here.
-  // A Hyperdrive pool-slot timeout (58000) or a dropped connection is capacity,
-  // not the work's fault: it backs off without spending attempts.
+  // A Hyperdrive pool-slot timeout (58000) or a dropped connection (with or
+  // without a SQLSTATE) is capacity, not the work's fault: it backs off
+  // without spending attempts.
   if (
     chain.some((cause) => cause instanceof JobRetryableError) ||
     chain.some((cause) => cause instanceof SnapshotWriteConflictError) ||
