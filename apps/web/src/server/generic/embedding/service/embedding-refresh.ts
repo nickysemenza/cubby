@@ -15,6 +15,8 @@ import {
   type EmbeddingUploadReceipt,
 } from "~/server/generic/embedding/repo/embedding-drain";
 import {
+  embeddingRefreshDue,
+  embeddingRefreshNext,
   embeddingRefreshStore,
   postponeEmbeddingRefresh,
   type EmbeddingRefreshStore,
@@ -218,13 +220,14 @@ async function prepareRefreshPage(
 export function embeddingRefreshDrain(
   port: EmbeddingRefreshPort = productionEmbeddingRefreshPort,
 ): BackgroundDrain {
+  const name = "embedding.refresh";
   return {
-    name: "embedding.refresh",
-    async page(db, round) {
-      if (!port.configured()) return { more: false, nextAt: null };
+    name,
+    due: () => (port.configured() ? embeddingRefreshDue(name) : null),
+    next: () => (port.configured() ? embeddingRefreshNext() : null),
+    async page(db) {
       const store = embeddingRefreshStore(crypto.randomUUID());
       return rowDrain<RefreshPage>({
-        name: "embedding.refresh",
         store,
         backoff: EMBEDDING_BACKOFF,
         limit: PAGE_LIMIT,
@@ -251,7 +254,7 @@ export function embeddingRefreshDrain(
           await publishEmbeddingDrainSelections(tx, store, items, prepared);
           return { retain: postponed };
         },
-      }).page(db, round);
+      })(db);
     },
   };
 }

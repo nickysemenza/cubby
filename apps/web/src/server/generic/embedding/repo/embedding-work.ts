@@ -15,10 +15,8 @@ import {
   asc,
   eq,
   inArray,
-  isNotNull,
   isNull,
   lte,
-  min,
   or,
   sql,
   type SQL,
@@ -220,22 +218,6 @@ export function embeddingRefreshStore(token: string): EmbeddingRefreshStore {
           ),
         );
     },
-    nextReadyAt: async (db) => {
-      const [row] = await getDb(db)
-        .select({
-          at: sql<Date | null>`min(greatest(${searchDocument.embeddingDueAt}, ${searchDocument.embeddingLeaseUntil}))`.mapWith(
-            searchDocument.embeddingDueAt,
-          ),
-        })
-        .from(searchDocument)
-        .where(
-          and(
-            isNotNull(searchDocument.embeddingDueAt),
-            isNull(searchDocument.deletedAt),
-          ),
-        );
-      return row?.at ?? null;
-    },
   };
 }
 
@@ -303,11 +285,24 @@ export const embeddingCleanupStore: DrainStore = {
         ),
       );
   },
-  nextReadyAt: async (db) => {
-    const [row] = await getDb(db)
-      .select({ at: min(entityEmbedding.deletionRetryAt) })
-      .from(entityEmbedding)
-      .where(cleanupOwed());
-    return row?.at ?? null;
-  },
 };
+
+/** Permit selection: refresh is due while a live document owes a vector and no page holds it. */
+export const embeddingRefreshDue = (unit: string) =>
+  sql`SELECT ${unit}::text AS unit, false AS demand, min(${searchDocument.embeddingDueAt}) AS since
+    FROM ${searchDocument}
+    WHERE ${searchDocument.embeddingDueAt} <= now() AND ${leaseFree()} AND ${searchDocument.deletedAt} IS NULL
+    HAVING count(*) > 0`;
+export const embeddingRefreshNext = () =>
+  sql`SELECT min(greatest(${searchDocument.embeddingDueAt}, ${searchDocument.embeddingLeaseUntil}))
+    FROM ${searchDocument}
+    WHERE ${searchDocument.embeddingDueAt} IS NOT NULL AND ${searchDocument.deletedAt} IS NULL`;
+
+/** Permit selection: cleanup is due while a stopped artifact still holds a vector. */
+export const embeddingCleanupDue = (unit: string) =>
+  sql`SELECT ${unit}::text AS unit, false AS demand, now()::timestamp AS since
+    -- includes-deleted: a deleted artifact still owes its vector deletion.
+    WHERE EXISTS (SELECT 1 FROM ${entityEmbedding}
+      WHERE ${cleanupOwed()} AND coalesce(${entityEmbedding.deletionRetryAt} <= now(), true))`;
+export const embeddingCleanupNext = () =>
+  sql`SELECT min(coalesce(${entityEmbedding.deletionRetryAt}, now()::timestamp)) FROM ${entityEmbedding} WHERE ${cleanupOwed()}`;

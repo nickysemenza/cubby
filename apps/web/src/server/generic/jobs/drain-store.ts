@@ -26,5 +26,4 @@ export type DrainStore = {
     error: string,
     backoff: JobBackoff,
   ): Promise<void>;
-  nextReadyAt(db: Database): Promise<Date | null>;
 };

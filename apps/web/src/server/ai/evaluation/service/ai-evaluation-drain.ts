@@ -27,12 +27,12 @@ import {
 } from "~/server/ai/evaluation/repo/ai-evaluation";
 import { PENDING_AI_STATES } from "~/server/ai/evaluation/repo/ai-evaluation-requests";
 import {
+  aiEvaluationDue,
+  aiEvaluationNext,
   aiEvaluationPageHeld,
   aiEvaluationPageKey,
   aiEvaluationStore,
   deferAiEvaluationFeature,
-  dueAiEvaluationFeatures,
-  nextAiEvaluationDue,
   releaseAiEvaluationPage,
 } from "~/server/ai/evaluation/repo/ai-evaluation-work";
 import type {
@@ -59,7 +59,6 @@ import {
   type DrainContext,
   stopsDrainPage,
 } from "~/server/generic/background/drains";
-import { runBackgroundPage } from "~/server/generic/background/page-budget";
 import type { DrainItem } from "~/server/generic/jobs/drain-store";
 import {
   JobDeferredError,
@@ -91,8 +90,6 @@ const PAGE_LIMIT = 8;
 const ITEM_CONCURRENCY = 2;
 /** Consecutive failures before an item settles its evaluation `failed`. */
 const AI_EVALUATION_MAX_ATTEMPTS = 3;
-/** A page of each of this many features at once; pages may hold provider calls for minutes. */
-const FEATURE_LANES = 2;
 const AI_EVALUATION_BACKOFF = { baseMs: 60_000, maxMs: 15 * 60_000 };
 
 type Entry =
@@ -234,7 +231,6 @@ function aiEvaluationPage(
 ) {
   let deferred: JobDeferredError | undefined;
   const drain = rowDrain<Prepared>({
-    name: aiEvaluationPageKey(feature),
     transaction: publicationTransaction,
     store: aiEvaluationStore(feature, token),
     backoff: AI_EVALUATION_BACKOFF,
@@ -442,7 +438,11 @@ export async function runAiEvaluationPage(
   feature: string,
   /** A test seam around the page's transactions. */
   around: (context: JobContext) => JobContext = (context) => context,
-): Promise<{ outcome: AiEvaluationPageOutcome; settled: number }> {
+): Promise<{
+  outcome: AiEvaluationPageOutcome;
+  claimed: number;
+  published: number;
+}> {
   const token = crypto.randomUUID();
   const assertHeld = async (client: Database) => {
     if (!(await aiEvaluationPageHeld(client, token)))
@@ -478,9 +478,7 @@ export async function runAiEvaluationPage(
       // here creates serialization dependencies on unrelated evaluation work.
       context.fenced,
     );
-    const page = await preparedPage.drain.page(db, {
-      deadline: Date.now() + 20_000,
-    });
+    const page = await preparedPage.drain(db);
     const deferred = preparedPage.deferral();
     if (deferred) {
       await deferAiEvaluationFeature(
@@ -491,11 +489,16 @@ export async function runAiEvaluationPage(
         deferred.reason,
         deferred.message,
       );
-      return { outcome: "deferred", settled: page.settled ?? 0 };
+      return {
+        outcome: "deferred",
+        claimed: page.claimed,
+        published: page.published ?? 0,
+      };
     }
     return {
-      outcome: page.processed ? "succeeded" : "skipped",
-      settled: page.settled ?? 0,
+      outcome: page.claimed ? "succeeded" : "skipped",
+      claimed: page.claimed,
+      published: page.published ?? 0,
     };
   } catch (error) {
     let failure = classifyJobFailure(error);
@@ -512,10 +515,11 @@ export async function runAiEvaluationPage(
         failure.reason ?? "provider_capacity",
         errorMessage(error),
       );
-      return { outcome: "deferred", settled: 0 };
+      // The page ran: its successor permit waits for the deferral to end.
+      return { outcome: "deferred", claimed: 1, published: 0 };
     }
     if (failure.kind === "interrupted")
-      return { outcome: "superseded", settled: 0 };
+      return { outcome: "superseded", claimed: 0, published: 0 };
     await deferAiEvaluationFeature(
       db,
       feature,
@@ -530,41 +534,19 @@ export async function runAiEvaluationPage(
   }
 }
 
-/** Up to `FEATURE_LANES` features each round, most urgent first; product and connections page. */
+/** One unit per feature (`ai-evaluation:<feature>`); a permit pages one of them. */
 export function aiEvaluationDrain(
   execution: AiEvaluationExecution,
 ): BackgroundDrain {
+  const name = "ai-evaluation";
   return {
-    name: "ai.evaluation",
-    async page(db, round) {
-      const features = await dueAiEvaluationFeatures(db);
-      const pages = await Promise.allSettled(
-        features.slice(0, FEATURE_LANES).map((feature) =>
-          runBackgroundPage({
-            admit: round.runPage,
-            work: () => runAiEvaluationPage(db, execution, feature),
-          }),
-        ),
-      );
-      const failure = pages.find((page) => page.status === "rejected");
-      if (failure?.status === "rejected") throw failure.reason;
-      const settled = pages.some(
-        (page) =>
-          page.status === "fulfilled" &&
-          page.value.kind === "started" &&
-          page.value.value.settled > 0,
-      );
-      const next = await nextAiEvaluationDue(db);
-      const held = pages.flatMap((page) =>
-        page.status === "fulfilled" && page.value.kind === "held"
-          ? [page.value.retryAt.getTime()]
-          : [],
-      );
-      if (next) held.push(next.getTime());
-      return {
-        more: settled && (await dueAiEvaluationFeatures(db)).length > 0,
-        nextAt: held.length ? new Date(Math.min(...held)) : null,
-      };
+    name,
+    due: () => aiEvaluationDue(name),
+    next: aiEvaluationNext,
+    async page(db, unit) {
+      const feature = unit.slice(name.length + 1);
+      const { claimed } = await runAiEvaluationPage(db, execution, feature);
+      return { claimed };
     },
   };
 }

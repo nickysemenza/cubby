@@ -7,7 +7,11 @@ import {
   findDeletableEmbeddingArtifactIds,
   recordEmbeddingDeletions,
 } from "~/server/generic/embedding/repo/embedding-cleanup";
-import { embeddingCleanupStore } from "~/server/generic/embedding/repo/embedding-work";
+import {
+  embeddingCleanupDue,
+  embeddingCleanupNext,
+  embeddingCleanupStore,
+} from "~/server/generic/embedding/repo/embedding-work";
 import {
   productionVectorStore,
   type VectorStorePort,
@@ -85,8 +89,7 @@ async function prepareCleanupPage(
 export function embeddingCleanupDrain(
   store: VectorStorePort = productionVectorStore,
 ): BackgroundDrain {
-  const drain = rowDrain<CleanupPage>({
-    name: "embedding.cleanup",
+  const page = rowDrain<CleanupPage>({
     store: embeddingCleanupStore,
     backoff: EMBEDDING_BACKOFF,
     limit: PAGE_LIMIT,
@@ -102,11 +105,11 @@ export function embeddingCleanupDrain(
       );
     },
   });
+  const name = "embedding.cleanup";
   return {
-    name: drain.name,
-    page: (db, round) =>
-      store.configured()
-        ? drain.page(db, round)
-        : Promise.resolve({ more: false, nextAt: null }),
+    name,
+    due: () => (store.configured() ? embeddingCleanupDue(name) : null),
+    next: () => (store.configured() ? embeddingCleanupNext() : null),
+    page: (db) => page(db),
   };
 }

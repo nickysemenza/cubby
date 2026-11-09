@@ -9,7 +9,7 @@ import { failJob, claimJob } from "~/server/generic/jobs/repo/queue";
 
 import { JobDeferredError, JobPausedError } from "../errors";
 import { advanceJob } from "../service/jobs";
-import { nextJobDue } from "./queue";
+import { nextDueAt } from "./queue";
 
 describe("Job retry policy", () => {
   const ctx = withTestDb();
@@ -30,7 +30,7 @@ describe("Job retry policy", () => {
     });
     const first = await claimJob(ctx.db, saved.id, 1_000);
     expect(first?.attempts).toBe(0);
-    expect(await nextJobDue(ctx.db)).toEqual(first!.leaseExpiresAt);
+    expect(await nextDueAt(ctx.db, [])).toEqual(first!.leaseExpiresAt);
     await getDb(ctx.db)
       .update(job)
       .set({ leaseExpiresAt: new Date(0) })
@@ -124,7 +124,7 @@ describe("Job retry policy", () => {
         },
       }),
     ).resolves.toBe("deferred");
-    expect(await nextJobDue(ctx.db)).toEqual(until);
+    expect(await nextDueAt(ctx.db, [])).toEqual(until);
     expect(await read(saved.id)).toMatchObject({
       state: "queued",
       attempts: 0,
@@ -148,7 +148,7 @@ describe("Job retry policy", () => {
         },
       }),
     ).resolves.toBe("paused");
-    expect(await nextJobDue(ctx.db)).toBeNull();
+    expect(await nextDueAt(ctx.db, [])).toBeNull();
     expect(await read(saved.id)).toMatchObject({
       state: "paused",
       attempts: 0,

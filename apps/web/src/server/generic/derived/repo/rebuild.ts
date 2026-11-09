@@ -97,6 +97,28 @@ export async function claimRebuild(
   return row ? { ...row, token } : null;
 }
 
+/** `claimRebuild`'s eligibility: a lapsed or absent lease on a running pass, or a new hour. */
+const rebuildClaimable = sql`(r."leaseExpiresAt" IS NULL OR r."leaseExpiresAt" < now() AT TIME ZONE 'UTC')
+  AND (r.running OR r."startedAt" IS NULL OR r."startedAt" < date_trunc('hour', now() AT TIME ZONE 'UTC'))`;
+
+/** Permit selection: the pass can take a page now. */
+export const derivedRebuildDue = (unit: string) =>
+  sql`SELECT ${unit}::text AS unit, false AS demand,
+      coalesce(r."leaseExpiresAt", r."startedAt", now() AT TIME ZONE 'UTC') AS since
+    FROM (SELECT 1) one LEFT JOIN "DerivedRebuild" r ON r.key = ${DERIVED_REBUILD_KEY}
+    WHERE r.key IS NULL OR (${rebuildClaimable})`;
+
+/** When the pass can next take a page: its lease lapsing, or the next hour's pass. */
+export const derivedRebuildNext = () =>
+  sql`SELECT CASE
+      WHEN r.key IS NULL THEN now() AT TIME ZONE 'UTC'
+      WHEN r.running THEN coalesce(r."leaseExpiresAt", now() AT TIME ZONE 'UTC')
+      WHEN r."startedAt" IS NULL OR r."startedAt" < date_trunc('hour', now() AT TIME ZONE 'UTC')
+        THEN coalesce(r."leaseExpiresAt", now() AT TIME ZONE 'UTC')
+      ELSE date_trunc('hour', now() AT TIME ZONE 'UTC') + interval '1 hour'
+    END
+    FROM (SELECT 1) one LEFT JOIN "DerivedRebuild" r ON r.key = ${DERIVED_REBUILD_KEY}`;
+
 /** Record an attempt and enumerate its bounded population in one committed statement. */
 export async function beginRebuildPage(
   db: Database,

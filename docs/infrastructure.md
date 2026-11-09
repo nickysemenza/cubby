@@ -58,17 +58,18 @@ remain in their domain records. [ADR 0015](adr/0015-unified-durable-work-coordin
 owns the execution contract; mailbox page and retention behavior lives in the
 [purchase-import module guide](../apps/web/src/server/domains/purchase-import/service/README.md#mail-import-end-to-end).
 
-`cubby-background` carries only the version-3 wake envelope. Every delivery,
-including an unreadable envelope, attempts the same due-Job drain and acknowledges
-successful processing. Runtime or transport failures retry delivery up to three
-times; durable Job policy still owns execution retries. The hourly cron and
-app-open catch-up repair lost wakes. Telemetry has its separate queue.
+`cubby-background` carries only the version-3 permit envelope. Every delivery,
+including an unreadable envelope, is one permit to run one unit (one Job page or
+one drain page) and acknowledges whatever the unit's outcome. Failures before or
+around selection retry delivery up to three times; durable Job and drain policy
+own execution retries. The hourly cron and app-open catch-up repair lost permits.
+Telemetry has its separate queue.
 
-One SQL window query interleaves due kinds, starting with the least recently
-served kind derived from existing Job timestamps. Priority ranks only within a
-kind; manual Run execution has raised priority. The drain reselects batches of
-25 with a default 256-page / 20-second budget. Budget exhaustion publishes a
-new wake. Claims use `SKIP LOCKED`, renewed leases and generation/token fences;
+One SQL query chooses the unit: Run-owned work first, then units take turns,
+starting with the least recently served (Job timestamps and drain record rows).
+Priority ranks only within a kind; manual Run execution has raised priority. A
+unit that claimed work sends one successor permit
+([Selection and admission](jobs.md#selection-and-admission)). Claims use `SKIP LOCKED`, renewed leases and generation/token fences;
 effect-only transactions hold shared Job row locks and recheck ownership and
 wall-clock lease expiry before commit. Shared holders permit unrelated effects,
 while renewal and member controls remain excluded until every holder finishes.
@@ -342,9 +343,9 @@ data; profile/provenance contracts belong in
 
 ### PostgreSQL and Hyperdrive
 
-The hourly cron and app-open catch-up inspect Postgres Job intent and use the same
-drain as background wakes. The cron runs that drain itself rather than sending a
-wake, so it is both the timer and the backstop: a dropped wake or broken queue
+The hourly cron and app-open catch-up inspect Postgres Job intent and run the same
+units as background permits. The cron runs units itself before sending permits,
+so it is both the timer and the backstop: a dropped permit or broken queue
 delivery recovers within one hour. Stateful Durable Objects retain only their provider
 admission, cache or coordinator responsibilities. AI refresh policy details
 live in the [refresh runbook](runbooks/ai-refresh.md).
@@ -872,12 +873,12 @@ are owned by [Durable Jobs](jobs.md#image-processing).
 
 Cloud and native image execution share the lease on their `ImageProcessingJob`
 row. Processing attempts preserve executor attribution and output receipts. The
-background consumer's concurrency and each drain's page concurrency are in
-`packages/shared/src/background-queue-consumer.json` and `JOB_DRAIN`;
-provider admission separately bounds paid model starts. These limits do not
+background consumer's concurrency is in
+`packages/shared/src/background-queue-consumer.json`; a cloud image page runs
+two rows at once; provider admission separately bounds paid model starts. These limits do not
 reserve interactive Hyperdrive connections. JPEG analysis reads are bounded before buffering: description and
 companion normalization at 4 MiB, identification at 2 MiB. Four overlapping
-description invocations hold at most 16 MiB of retained rendition bytes, with
+descriptions hold at most 16 MiB of retained rendition bytes, with
 additional bounded streaming, inspection and upload copies; this is a payload
 bound, not a measurement of total isolate memory. Originals remain unchanged
 when an oversized rendition fails with its raw size diagnostic.

@@ -22,7 +22,6 @@ import {
   inArray,
   isNotNull,
   isNull,
-  min,
   or,
   sql,
   type SQL,
@@ -154,30 +153,17 @@ export async function dropAiEvaluationWork(db: Database, where: SQL) {
     .where(where);
 }
 
-/** Features with claimable evaluations, most urgent first. */
-export async function dueAiEvaluationFeatures(db: Database) {
-  const rows = await getDb(db)
-    .select({ feature: aiEvaluation.feature })
-    .from(aiEvaluation)
-    .where(and(pendingAndOwed(), claimable()))
-    .groupBy(aiEvaluation.feature)
-    .orderBy(min(aiEvaluation.priority), min(aiEvaluation.runAt));
-  return rows.map((row) => row.feature);
-}
+/** Permit selection: one unit per feature with claimable rows; priority 0 is member demand. */
+export const aiEvaluationDue = (prefix: string) =>
+  sql`SELECT ${prefix}::text || ':' || ${aiEvaluation.feature} AS unit,
+      min(${aiEvaluation.priority}) = 0 AS demand, min(${aiEvaluation.runAt}) AS since
+    FROM ${aiEvaluation}
+    WHERE ${pendingAndOwed()} AND ${claimable()}
+    GROUP BY ${aiEvaluation.feature}`;
 
-/** When the next owed evaluation falls due or a lease lapses, if later than now. */
-export async function nextAiEvaluationDue(db: Database): Promise<Date | null> {
-  const [row] = await getDb(db)
-    .select({
-      // Epoch milliseconds: the driver would read a zoneless timestamp as local time.
-      at: sql<
-        number | null
-      >`(extract(epoch FROM min(coalesce(${aiEvaluation.leaseUntil}, ${aiEvaluation.runAt}))) * 1000)::float8`,
-    })
-    .from(aiEvaluation)
-    .where(pendingAndOwed());
-  return row?.at == null ? null : new Date(row.at);
-}
+/** When the next owed evaluation falls due or a lease lapses. */
+export const aiEvaluationNext = () =>
+  sql`SELECT min(coalesce(${aiEvaluation.leaseUntil}, ${aiEvaluation.runAt})) FROM ${aiEvaluation} WHERE ${pendingAndOwed()}`;
 
 /** Give back whatever this page still holds, unchanged: it stays owed. */
 export async function releaseAiEvaluationPage(db: Database, token: string) {
@@ -339,6 +325,5 @@ export const aiEvaluationStore = (
         })
         .where(held(items));
     },
-    nextReadyAt: nextAiEvaluationDue,
   };
 };

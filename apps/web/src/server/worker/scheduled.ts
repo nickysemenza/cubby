@@ -1,4 +1,5 @@
 import { systemActor } from "@cubby/schemas/context";
+import { BACKGROUND_QUEUE_CONSUMER } from "@cubby/shared/background-queue";
 import { createLogger } from "@cubby/worker-tracing";
 import * as Sentry from "@sentry/cloudflare";
 
@@ -10,12 +11,16 @@ import { withInvocationTrace, withTrace } from "~/server/observability/tracing";
 import { CRON_SCHEDULES } from "~/server/worker-identity";
 const cronLog = createLogger("cron");
 
+/** Units the cron runs itself before handing the rest to queue permits. */
+const BACKSTOP_BUDGET_MS = 5 * 60_000;
+
 /**
- * The timer and backstop for every wake: one drain of whatever is due, run here
- * rather than sent through the queue, so a dropped or failed wake recovers within
- * the hour even while delivery itself is broken, and parked device work that came
- * due gets its ring. A failure still lets the daily
- * pass run, then rejects the event.
+ * The timer and backstop for every permit: work due past the queue's 12-hour
+ * delay, a lost permit, or broken delivery. It reconciles, maintains, then runs
+ * units itself (so a broken queue still drains within the hour), and finally
+ * sends up to `maxConcurrency` permits for what is still due. Parked device
+ * work that came due gets its ring. A failure still lets the daily pass run,
+ * then rejects the event.
  */
 async function runHourlyBackstop(
   env: Env,
@@ -25,33 +30,45 @@ async function runHourlyBackstop(
       env.HYPERDRIVE_BACKGROUND.connectionString,
       async () => {
         const [
-          { drainProductionJobs },
+          { productionPermitRuntime, reconcileStoppedWork },
+          { runPermit, sendSuccessor },
           { ringDueDeviceWork },
           { publishAiRefreshActivation },
+          { maintainJobs },
         ] = await Promise.all([
           import("~/server/workflows/jobs"),
+          import("~/server/generic/jobs/service/permits"),
           import("~/server/domains/image-processing/repo/image-processing-ring"),
           import("~/server/workflows/ai-refresh-startup"),
+          import("~/server/workflows/job-maintenance"),
         ]);
         await withTrace(
           "cf.scheduled.job",
           async () => {
             // The first tick after a deploy activates that version's AI policy.
-            // A failure here must not stop the drain; the next tick tries again.
+            // A failure here must not stop the backstop; the next tick tries again.
             await publishAiRefreshActivation(
               db,
               env.CF_VERSION_METADATA.id,
               getSourceRelease(env).commit,
             ).catch((error: unknown) => Sentry.captureException(error));
             await ringDueDeviceWork(db);
-            const steps = await Promise.allSettled([
-              drainProductionJobs(db),
-              (await import("~/server/workflows/job-maintenance")).maintainJobs(
-                db,
-              ),
-            ]);
-            const errors = steps.flatMap((step) =>
-              step.status === "rejected" ? [step.reason] : [],
+            const errors: unknown[] = [];
+            for (const step of [reconcileStoppedWork, maintainJobs])
+              await step(db).catch((error: unknown) => errors.push(error));
+            const runtime = productionPermitRuntime(db, (error, unit) =>
+              Sentry.withScope((scope) => {
+                if (unit) scope.setTag("cubby.background.unit", unit);
+                Sentry.captureException(error);
+              }),
+            );
+            const deadline = Date.now() + BACKSTOP_BUDGET_MS;
+            for (let ran = true; ran && Date.now() < deadline;)
+              ran = (await runPermit(runtime, { successor: false })) !== null;
+            await sendSuccessor(
+              runtime,
+              "cron.backstop",
+              BACKGROUND_QUEUE_CONSUMER.maxConcurrency,
             );
             if (errors.length)
               throw new AggregateError(errors, "Hourly background work failed");

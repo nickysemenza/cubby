@@ -75,7 +75,7 @@ describe("device work waits parked and records no attempt", () => {
       state: "queued",
       attempts: 0,
     });
-    await cloudImageDrain.page(ctx.db, { deadline: Date.now() + 10_000 });
+    await cloudImageDrain.page(ctx.db, cloudImageDrain.name);
     expect(await readImageExecutions(ctx.db, jobId)).toMatchObject([
       { state: "queued", attempts: 0 },
     ]);

@@ -38,6 +38,16 @@ export async function emailsWithSuggestedPurchases(
   return z.array(z.object({ id: z.uuid(), shortcode: z.string() })).parse(rows);
 }
 
+const cursorNextAt = sql`(SELECT ((${appSettings.metadata}->>'nextAt')::timestamptz AT TIME ZONE 'UTC')
+  FROM ${appSettings} WHERE ${appSettings.id} = ${CURSOR_ID}::uuid)`;
+
+/** Permit selection: the pass takes a page unless its cursor waits for a later hour. */
+export const emailPurchaseDiscoveryDue = (unit: string) =>
+  sql`SELECT ${unit}::text AS unit, false AS demand, now()::timestamp AS since
+    WHERE coalesce(${cursorNextAt} <= now() AT TIME ZONE 'UTC', true)`;
+export const emailPurchaseDiscoveryNext = () =>
+  sql`SELECT coalesce(${cursorNextAt}, now() AT TIME ZONE 'UTC')`;
+
 /** Serializes one pass page on its cursor row and saves the cursor `work` returns. */
 export function emailPurchaseDiscoveryPage<T extends { nextAt: Date | null }>(
   db: Database,

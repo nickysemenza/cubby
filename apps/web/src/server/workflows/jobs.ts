@@ -1,32 +1,41 @@
 import { jobWaitReason, type JOB_KIND_POLICY } from "@cubby/schemas/job";
 import { purchaseAgentEvent } from "@cubby/schemas/purchase-import";
-import { captureException } from "@sentry/tanstackstart-react";
+import { sql } from "drizzle-orm";
 
+import type { UnparsedError } from "~/lib/error-utils";
 import { aiEvaluationDrain } from "~/server/ai/evaluation/service/ai-evaluation-drain";
 import { getPurchaseDispatchHostEnv } from "~/server/cf-env";
 import type { Database } from "~/server/db";
-import { DERIVED_REBUILD_LEASE_SECONDS } from "~/server/db/derived-rebuild-schema";
 import { emailPurchaseDiscoveryDrain } from "~/server/domains/connection/service/email-purchase-discovery";
 import { cloudImageDrain } from "~/server/domains/image-processing/service/cloud-drain";
 import { deliverPurchaseDispatch } from "~/server/domains/purchase-agent/service/dispatch";
+import {
+  failedCoordinatorDispatchesExist,
+  reconcileCoordinatorDispatches,
+} from "~/server/domains/run/repo/coordinator-dispatch";
 import { fundingResumeInput } from "~/server/domains/run/repo/execution-context";
 import { runAiEvaluationExecution } from "~/server/domains/run/service/ai-evaluation-execution";
+import type { BackgroundDrain } from "~/server/generic/background/drains";
 import {
-  admittedDrain,
-  type BackgroundDrain,
-} from "~/server/generic/background/drains";
-import { runBackgroundRound } from "~/server/generic/background/work-round";
+  derivedRebuildDue,
+  derivedRebuildNext,
+} from "~/server/generic/derived/repo/rebuild";
 import {
   rebuildDerived,
   DerivedRebuildBusyError,
 } from "~/server/generic/derived/service/rebuild";
 import { embeddingCleanupDrain } from "~/server/generic/embedding/service/embedding-cleanup";
 import { embeddingRefreshDrain } from "~/server/generic/embedding/service/embedding-refresh";
-import { readRebuildObservation as readDerivedRebuildStatus } from "~/server/generic/jobs/repo/observation";
 import { defineJobHandler } from "~/server/generic/jobs/service/jobs";
+import type { PermitRuntime } from "~/server/generic/jobs/service/permits";
 import type { JobHandler, JobHandlers } from "~/server/generic/jobs/types";
 import { backgroundJobHandlers } from "~/server/workflows/background-tasks/kinds";
+import { wakeAt, wakeJobs } from "~/server/workflows/background-tasks/publish";
 import { runJobHandler } from "~/server/workflows/runs/job-execution";
+import {
+  reconcileWorkflowRuns,
+  workflowRunsToReconcile,
+} from "~/server/workflows/runs/lifecycle";
 
 import { derivedComputes } from "./derived-computes";
 
@@ -76,37 +85,54 @@ export const productionJobHandlers: JobHandlers = {
       return { page: { done: true } };
     },
   ),
-} satisfies Record<keyof typeof JOB_KIND_POLICY, JobHandler>;
+} satisfies Record<
+  // Drain record rows are never claimed as Jobs.
+  Exclude<keyof typeof JOB_KIND_POLICY, "background.drain">,
+  JobHandler
+>;
 
-/** Work owned by its domain's rows: no Job row, one registration here. */
-const derivedRebuildDrain: BackgroundDrain = admittedDrain({
+/** Derived values keep one resumable hourly pass; a permit commits one page of it. */
+const derivedRebuildDrain: BackgroundDrain = {
   name: "derived-rebuild",
-  page: async (db, { deadline }) => {
+  due: () => derivedRebuildDue("derived-rebuild"),
+  next: derivedRebuildNext,
+  async page(db) {
     try {
-      const more = await rebuildDerived(db, derivedComputes, {
-        deadline,
-        pageLimit: 1,
-      });
-      const status = more ? null : await readDerivedRebuildStatus(db);
-      return {
-        more,
-        nextAt:
-          status?.running && status.failures
-            ? new Date(Date.now() + 5 * 60_000)
-            : null,
-      };
+      await rebuildDerived(db, derivedComputes);
+      return { claimed: 1 };
     } catch (error) {
-      if (error instanceof DerivedRebuildBusyError)
-        return {
-          more: false,
-          nextAt: new Date(Date.now() + DERIVED_REBUILD_LEASE_SECONDS * 1000),
-        };
-      captureException(error);
-      return { more: false, nextAt: new Date(Date.now() + 5 * 60_000) };
+      // Another permit holds the pass lease; its own successor continues it.
+      if (error instanceof DerivedRebuildBusyError) return { claimed: 0 };
+      throw error;
     }
   },
-});
-// Built per round: production ports participate in this module's import cycle.
+};
+
+/**
+ * Run and dispatch reconciliation as a unit: due only while a stopped
+ * execution leaves its Run reading as running. The cron also runs it each tick.
+ */
+const reconcileDrain: BackgroundDrain = {
+  name: "reconcile",
+  due: () =>
+    sql`SELECT 'reconcile'::text AS unit, false AS demand, now()::timestamp AS since
+      WHERE ${failedCoordinatorDispatchesExist()} OR ${workflowRunsToReconcile()}`,
+  next: () => null,
+  page: async (db) => ({ claimed: await reconcileStoppedWork(db) }),
+};
+
+export async function reconcileStoppedWork(db: Database) {
+  let reconciled = await reconcileCoordinatorDispatches(db);
+  let after: string | null = null;
+  do {
+    const page = await reconcileWorkflowRuns(db, after);
+    reconciled += page.reconciled;
+    after = page.next;
+  } while (after);
+  return reconciled;
+}
+
+// Built per permit: production ports participate in this module's import cycle.
 const productionDrains = (): readonly BackgroundDrain[] => [
   cloudImageDrain,
   embeddingRefreshDrain(),
@@ -114,36 +140,22 @@ const productionDrains = (): readonly BackgroundDrain[] => [
   aiEvaluationDrain(runAiEvaluationExecution()),
   derivedRebuildDrain,
   emailPurchaseDiscoveryDrain,
+  reconcileDrain,
 ];
 
-export async function drainProductionJobs(
+/** The production permit runtime: these handlers and drains, waking through the background queue. */
+export function productionPermitRuntime(
   db: Database,
-  options: { limit?: number; afterDrain?: string } = {},
-) {
-  const round = await runBackgroundRound(
+  captureException: (error: UnparsedError, unit?: string) => void,
+): PermitRuntime {
+  return {
     db,
-    productionJobHandlers,
-    productionDrains(),
-    options,
-  );
-  const { wakeAt, wakeJobs } =
-    await import("~/server/workflows/background-tasks/publish");
-  if (round.more)
-    await wakeJobs({ source: "background.more", afterDrain: round.afterDrain });
-  else if (round.nextAt)
-    await wakeAt(round.nextAt, {
-      source: "background.next-due",
-      afterDrain: round.afterDrain,
-    });
-  // Preserve the continuation before transport retries an older failed envelope.
-  if (round.failures.length === 1) throw round.failures[0];
-  if (round.failures.length)
-    throw new AggregateError(round.failures, "Background pages failed");
-  await (
-    await import("~/server/domains/run/repo/coordinator-dispatch")
-  ).reconcileCoordinatorDispatches(db);
-  await (
-    await import("~/server/workflows/runs/lifecycle")
-  ).reconcileWorkflowRuns(db);
-  return round.outcomes;
+    handlers: productionJobHandlers,
+    drains: productionDrains(),
+    ports: {
+      send: (at, source) =>
+        at ? wakeAt(at, { source }) : wakeJobs({ source }),
+      captureException,
+    },
+  };
 }

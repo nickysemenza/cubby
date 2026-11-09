@@ -41,6 +41,7 @@ import { classifyJobFailure, stopsPage } from "~/server/generic/jobs/failure";
 import {
   lockUnchangedJob,
   stoppedRunExecutions,
+  stoppedRunExecutionsExist,
 } from "~/server/generic/jobs/repo/job-reads";
 import {
   makeJobsDueNow,
@@ -621,19 +622,24 @@ export async function failWorkflowRun(
   return Boolean(failed);
 }
 
-/** Lost wakes and interrupted workers are recovered by dueJobs, never new Run attempts. */
+const reconcilable = () =>
+  or(
+    eq(runTable.status, "running"),
+    and(
+      eq(runTable.status, "paused_auth"),
+      eq(runTable.failureCode, "execution_limit"),
+    ),
+  )!;
+
+/** Permit selection: a stopped execution whose Run still reads as running. */
+export const workflowRunsToReconcile = () =>
+  stoppedRunExecutionsExist(reconcilable() ?? sql`false`);
+
+/** Lost permits and interrupted workers are recovered by permit selection, never new Run attempts. */
 export async function reconcileWorkflowRuns(
   db: Database,
   after: string | null = null,
 ) {
-  const reconcilable = () =>
-    or(
-      eq(runTable.status, "running"),
-      and(
-        eq(runTable.status, "paused_auth"),
-        eq(runTable.failureCode, "execution_limit"),
-      ),
-    );
   const rows = await stoppedRunExecutions(db, reconcilable(), 100, after);
   let reconciled = 0;
   for (const row of rows) {

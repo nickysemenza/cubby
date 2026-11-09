@@ -176,6 +176,11 @@ export const stoppedRunExecutions = (
     .orderBy(asc(job.id))
     .limit(limit);
 
+/** Permit selection: whether any stopped `run.execute` Job's Run matches `runWhere`. */
+export const stoppedRunExecutionsExist = (runWhere: SQL) =>
+  sql`EXISTS (SELECT 1 FROM ${job} JOIN ${run} ON ${run.id} = ${job.runId}
+    WHERE ${job.kind} = 'run.execute' AND ${inArray(job.state, STOPPED)} AND ${runWhere})`;
+
 /**
  * Lock the Job while it is still at this generation and state; false when it
  * moved on or another writer holds it.

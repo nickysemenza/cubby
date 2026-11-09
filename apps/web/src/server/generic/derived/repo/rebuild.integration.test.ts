@@ -65,13 +65,13 @@ describe("hourly deterministic rebuild", () => {
       }
     };
     await abandon(3);
-    await rebuildDerived(ctx.db, computes, { pageLimit: 1 });
+    await rebuildDerived(ctx.db, computes);
     expect(seen).toEqual([[sorted[0]]]);
     await getDb(ctx.db)
       .execute(sql`INSERT INTO "ProductReadSnapshot" ("entityId", price, "priceComputedAt") VALUES (${sorted[1]}::uuid, 12, now())
       ON CONFLICT ("entityId") DO UPDATE SET price = EXCLUDED.price`);
     await abandon(6);
-    await rebuildDerived(ctx.db, computes, { pageLimit: 1 });
+    await rebuildDerived(ctx.db, computes);
     const [skipped] = await getDb(ctx.db).select().from(derivedRebuild);
     expect(skipped).toMatchObject({
       afterId: sorted[1],
@@ -88,7 +88,7 @@ describe("hourly deterministic rebuild", () => {
     await getDb(ctx.db).execute(
       sql`UPDATE "DerivedRebuild" SET "startedAt" = (now() AT TIME ZONE 'UTC') - interval '2 hours'`,
     );
-    await rebuildDerived(ctx.db, computes, { pageLimit: 1 });
+    await rebuildDerived(ctx.db, computes);
     expect(seen.at(-1)).toEqual([sorted[2]]);
     const old = await claimRebuild(ctx.db);
     expect(old).not.toBeNull();
@@ -157,18 +157,17 @@ describe("hourly deterministic rebuild", () => {
         { preparationBatchSize: 1 },
       ),
     };
-    expect(
-      await rebuildDerived(ctx.db, computes, { force: true, pageLimit: 2 }),
-    ).toBe(true);
+    expect(await rebuildDerived(ctx.db, computes, { force: true })).toBe(true);
+    expect(await rebuildDerived(ctx.db, computes)).toBe(true);
     const [failed] = await getDb(ctx.db).select().from(derivedRebuild);
     expect(failed).toMatchObject({ target: "product.price", afterId: ids[1] });
     expect(failed?.failures).toBe(1);
     await getDb(ctx.db).execute(
       sql`UPDATE "DerivedRebuild" SET "startedAt" = (now() AT TIME ZONE 'UTC') - interval '2 hours'`,
     );
-    expect(
-      await rebuildDerived(ctx.db, computes, { deadline: Date.now() + 60_000 }),
-    ).toBe(false);
+    let pages = 0;
+    while (await rebuildDerived(ctx.db, computes))
+      if (++pages > 100) throw new Error("Synthetic pass did not finish");
     const [finished] = await getDb(ctx.db).select().from(derivedRebuild);
     expect(finished).toMatchObject({
       running: false,

@@ -3272,12 +3272,12 @@ hierarchies handled by the computation, never scheduler tickets.
 
 `DerivedRebuild` holds one coarse pass cursor (target and last committed UUID),
 a single-writer lease, cursor attempts, pass failures and the last three wall-clock
-durations. Each Worker invocation publishes bounded pages until its 20-second
-round deadline. Product read facts, ownership, food and conversion coverage
-prepare at most 100 identities per page through their existing batched loaders.
-The recipe ingredient graph remains chunked at 20. Cursor-attempt shrinking still
-bounds a retry independently of these configured maxima. SQL-backed Product quantity adapters prepare 200 identities per
-page to amortize corpus-wide round trips. Publication, cursor advancement, page counters and movement time commit together.
+durations. Each background permit publishes one page of the pass; the hourly
+pass is due again at the next hour. A page holds at most 50 identities: adapters
+declare a smaller `preparationBatchSize` (default 20), and larger declarations
+are capped at 50 to bound prepared values per page. The recipe ingredient graph
+remains chunked at 20. Cursor-attempt shrinking still bounds a retry
+independently of these configured maxima. Publication, cursor advancement, page counters and movement time commit together.
 The last three pass summaries retain processed-record and failed-page counts and
 whole-pass duration. `finishedAt` records completion even with errors; `cleanAt`
 advances only for a pass with no failures. Reading IDs and recording the page's

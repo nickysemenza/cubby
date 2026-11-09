@@ -3,24 +3,16 @@ import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import {
-  runBackgroundPage,
-  type PageWork,
-} from "~/server/generic/background/page-budget";
-import {
   withJobExecution,
   type JobExecutionDetails,
 } from "~/server/generic/jobs/context";
 import { classifyJobFailure } from "~/server/generic/jobs/failure";
-import { JOB_DRAIN } from "~/server/generic/jobs/limits";
 import {
   assertJobClaim,
   claimJob,
-  dueJobs,
   fenceJob,
   failJob,
   fencedJobTransaction,
-  JOB_LEASE_MS,
-  nextJobDue,
   pauseClaimedJob,
   publishJobPage,
   type JobClaim,
@@ -208,123 +200,4 @@ async function executeClaim(
         return "failed";
     }
   }
-}
-
-/**
- * Free lanes reselect fair work without waiting for a slow sibling. Selected
- * Jobs stay reserved locally until their page finishes; leases protect claims
- * across independent drains.
- */
-export async function drainDueJobs(
-  db: Database,
-  handlers: JobHandlers,
-  limit = JOB_DRAIN.pageLimit,
-  timeBudgetMs = JOB_DRAIN.timeBudgetMs,
-  concurrency = JOB_DRAIN.concurrency,
-  options: { pageWork?: PageWork; deadline?: number } = {},
-) {
-  const outcomes: JobOutcome[] = [];
-  const deadline = options.deadline ?? Date.now() + timeBudgetMs;
-  let scheduled = 0;
-  let settled = 0;
-  let progressed = 0;
-  const reserved = new Set<string>();
-  // A row lock may clear while a sibling publishes, so reconsider refusals
-  // after real progress.
-  const busy = new Set<string>();
-  const selected: Awaited<ReturnType<typeof dueJobs>> = [];
-  let selecting: Promise<boolean> | undefined;
-  let failure: { reason: unknown } | undefined;
-  const spent = () =>
-    failure !== undefined || scheduled >= limit || Date.now() >= deadline;
-  const refill = async () => {
-    const settledBefore = settled;
-    const remaining = Math.min(
-      JOB_DRAIN.batch,
-      limit - scheduled - selected.length,
-    );
-    if (remaining <= 0) return false;
-    const candidates = await dueJobs(db, remaining, {
-      excludeIds: [...reserved, ...busy],
-    });
-    for (const candidate of candidates) {
-      reserved.add(candidate.id);
-      selected.push(candidate);
-    }
-    // A page may finish while selection is in flight. Reselect before every
-    // idle lane exits on an empty result from that older snapshot.
-    return candidates.length > 0 || settledBefore !== settled;
-  };
-  const next = async () => {
-    while (!spent()) {
-      const candidate = selected.shift();
-      if (candidate) {
-        scheduled++;
-        return candidate;
-      }
-      selecting ??= refill().finally(() => {
-        selecting = undefined;
-      });
-      if (!(await selecting)) return undefined;
-    }
-    return undefined;
-  };
-  let leaseRecovery: Promise<void> | undefined;
-  let heldUntil: Date | undefined;
-  const lane = async () => {
-    for (;;) {
-      // Admission precedes selection/claim, so queued work holds no payload or lease.
-      const admitted = await runBackgroundPage({
-        admit: options.pageWork,
-        work: async () => {
-          const candidate = await next();
-          if (!candidate) return false;
-          const progressBefore = progressed;
-          try {
-            if (Date.now() >= deadline) return false;
-            // Arm recovery before claiming, without holding a lease while queued.
-            leaseRecovery ??= (async () => {
-              const { wakeAt } =
-                await import("~/server/workflows/background-tasks/publish");
-              await wakeAt(new Date(Date.now() + JOB_LEASE_MS + 5_000), {
-                source: "job.lease-recovery",
-              });
-            })();
-            await leaseRecovery;
-            if (Date.now() >= deadline) return false;
-            const outcome = await advanceJob(db, candidate.id, handlers);
-            outcomes.push(outcome);
-            if (outcome === "skipped") {
-              if (progressBefore === progressed) busy.add(candidate.id);
-            } else {
-              progressed++;
-              busy.clear();
-            }
-            return true;
-          } finally {
-            reserved.delete(candidate.id);
-            settled++;
-          }
-        },
-      });
-      if (admitted.kind === "held") {
-        heldUntil = admitted.retryAt;
-        return;
-      }
-      if (!admitted.value) return;
-    }
-  };
-  // Invocation cleanup must not close clients while a sibling still owns work.
-  // Stop new selection on an escaped error, join active lanes, then rethrow it.
-  await Promise.all(
-    Array.from({ length: Math.max(1, Math.min(concurrency, limit)) }, () =>
-      lane().catch((reason: unknown) => {
-        failure ??= { reason };
-      }),
-    ),
-  );
-  if (failure) throw failure.reason;
-  if (heldUntil) return { outcomes, more: false, nextAt: heldUntil };
-  const more = (await dueJobs(db, 1, { excludeIds: [...busy] })).length > 0;
-  return { outcomes, more, nextAt: more ? null : await nextJobDue(db) };
 }

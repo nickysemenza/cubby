@@ -606,24 +606,19 @@ export const dueCloudImageJobs = async (db: Database, limit: number) =>
       .limit(limit)
   ).map((row): ImageJobId => row.id);
 
+/** Permit selection: cloud work is due when a row is claimable now; Run-owned rows are demand. */
+export const cloudImageDue = (unit: string) =>
+  sql`SELECT ${unit}::text AS unit, coalesce(bool_or(${imageRunOwned()}), false) AS demand,
+      min(${imageProcessingJob.runAt}) AS since
+    FROM ${imageProcessingJob}
+    WHERE ${eq(imageProcessingJob.lane, "cloud")} AND ${imageJobClaimable(new Date())}
+    HAVING count(*) > 0`;
+
 /** When the next open cloud row comes due or its lease lapses. */
-export async function nextCloudImageDue(db: Database): Promise<Date | null> {
-  const [row] = await getDb(db)
-    .select({
-      // Epoch milliseconds: the driver would read a zoneless timestamp as local time.
-      at: sql<
-        number | null
-      >`(extract(epoch FROM min(coalesce(${imageProcessingJob.leaseUntil}, ${imageProcessingJob.runAt}))) * 1000)::float8`,
-    })
-    .from(imageProcessingJob)
-    .where(
-      and(
-        eq(imageProcessingJob.lane, "cloud"),
-        eq(imageProcessingJob.state, "pending"),
-      ),
-    );
-  return row?.at == null ? null : new Date(row.at);
-}
+export const cloudImageNext = () =>
+  sql`SELECT min(coalesce(${imageProcessingJob.leaseUntil}, ${imageProcessingJob.runAt}))
+    FROM ${imageProcessingJob}
+    WHERE ${eq(imageProcessingJob.lane, "cloud")} AND ${eq(imageProcessingJob.state, "pending")}`;
 
 /** Throws `JobSupersededError` once this attempt no longer holds a live lease on its row. */
 export async function assertImageLeaseHeld(

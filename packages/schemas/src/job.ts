@@ -371,6 +371,20 @@ export const JOB_KIND_POLICY = {
     cost: "Downstream work follows its model and funding policy.",
     exclusions: "Eligibility remains owned by purchase discovery.",
   },
+  "background.drain": {
+    ...SERVER,
+    internal: true,
+    label: "Background drain page",
+    purpose:
+      "Records the latest page of one drain unit (cloud images, embeddings, AI evaluation, derived rebuild, reconciliation).",
+    trigger: "A background permit selecting that unit.",
+    targets: "The rows the drain unit owes; its record row holds no work.",
+    effects: "Records when the unit last ran and that execution's outcome.",
+    dependencies: "The drain's own rows and providers.",
+    cost: "Follows the drain's own model and provider policy.",
+    exclusions:
+      "Never claimed or executed as a Job; item retries live on the drain's rows.",
+  },
   "calendar-feed.mark-dirty": {
     ...SERVER,
     label: "Refresh calendar feed",
