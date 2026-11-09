@@ -295,8 +295,12 @@ when discovery awaits SQL. While
 that traversal is pending, at most one Job page from the invocation runs; no
 parent permit is held during discovery. Once the traversal ends, Jobs may use
 all free capacity. Individual AI pages still admit independently. Feature
-continuations carry the last visited registration through the existing wake
-message, so a deadline-limited round resumes at unvisited work. A batch prefers
+continuations carry their position through the existing wake message. A later
+registration that requests capacity but starts no page gets the first opportunity
+in the next round; discovery I/O in a short remaining window cannot repeatedly
+skip it. The first registration still yields when denied, so long discovery or
+unavailable capacity cannot pin the head. Other visited registrations advance the
+position normally. A batch prefers
 the newest timestamped continuation; ordinary wakes do not reset it. This is
 best-effort service fairness, not a durable per-feature allocation or a delivery
 deadline. Two already-running slow pages can occupy both slots until they
