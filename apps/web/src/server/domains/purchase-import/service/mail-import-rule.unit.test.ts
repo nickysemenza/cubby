@@ -157,6 +157,22 @@ describe("mail import rule", () => {
       [],
       true,
     ],
+    [
+      "Tracking: 1Z999AA10123456784. Second package tracking:\nAB12-3456-7890",
+      [],
+      true,
+    ],
+    [
+      "Tracking: 1Z999AA10123456784. Second package tracking: AB-1234567",
+      [],
+      true,
+    ],
+    // Two labelled references, one recognised key: a second package.
+    [
+      "Tracking: 1Z999AA10123456784. Return parcel 1Z999AA10123456784",
+      [],
+      true,
+    ],
     ["Tracking number: 1Z999AA10123456784. Thanks for shopping.", [], false],
     [
       "Your shipment for order 112-3344556-7788990 left. Tracking number: 1Z999AA10123456784",

@@ -420,19 +420,35 @@ describe("Mail import claim", () => {
       "Your order SYN-5001 has shipped",
       "Tracking: 1Z999AA10123456784. Second package tracking: AB12-3456-7890",
     );
+    const separatedAcrossLines = await retain(
+      "rule-separated-across-lines",
+      "Your order SYN-5001 has shipped",
+      "Tracking: 1Z999AA10123456784. Second package tracking:\nAB12-3456-7890",
+    );
+    const shortReference = await retain(
+      "rule-short-reference",
+      "Your order SYN-5001 has shipped",
+      "Tracking: 1Z999AA10123456784. Second package tracking: AB-1234567",
+    );
     const { owner, pi } = await admit(party, [
       seed,
       contradicting,
       twoPackages,
       unknownCarrier,
       separated,
+      separatedAcrossLines,
+      shortReference,
     ]);
 
     const sources = new Map(
-      [contradicting, twoPackages, unknownCarrier, separated].map((source) => [
-        source.messageId,
-        source,
-      ]),
+      [
+        contradicting,
+        twoPackages,
+        unknownCarrier,
+        separated,
+        separatedAcrossLines,
+        shortReference,
+      ].map((source) => [source.messageId, source]),
     );
     const claimed: string[] = [];
     for (;;) {
@@ -463,6 +479,8 @@ describe("Mail import claim", () => {
       twoPackages.messageId,
       unknownCarrier.messageId,
       separated.messageId,
+      separatedAcrossLines.messageId,
+      shortReference.messageId,
     ]);
     expect(await linkRows(seed)).toMatchObject({
       email: { status: "completed" },

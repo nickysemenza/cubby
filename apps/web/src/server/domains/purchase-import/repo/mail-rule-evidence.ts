@@ -163,7 +163,9 @@ function trackingKeys(text: string, links: readonly string[]) {
 }
 
 const PACKAGE_LABEL = /\b(?:track(?:ing)?|package|parcel|shipment)s?\b/giu;
-const PACKAGE_LABEL_WINDOW = 160;
+/** How far past a label (across line breaks) a reference may follow it. */
+const PACKAGE_LABEL_WINDOW = 80;
+const MIN_REFERENCE = 6;
 /** A USPS IMpb routing prefix (420 + ZIP or ZIP+4) printed before its number. */
 const USPS_ROUTING_PREFIX = /^420\d{5}(?:\d{4})?$/u;
 
@@ -171,44 +173,50 @@ const USPS_ROUTING_PREFIX = /^420\d{5}(?:\d{4})?$/u;
 const ORDER_WORD = /^(?:order|invoice|receipt|confirmation)$/iu;
 
 /**
- * Reference-shaped runs after a package label: groups of letters and digits
- * that each hold a digit, joined across single spaces or hyphens
- * (`AB12-3456-7890`, `9400 1000 …`). Other punctuation or a word without a
- * digit ends a run; a sentence end resets the preceding word.
+ * The references following each package label, up to the next label or
+ * `PACKAGE_LABEL_WINDOW` characters, across line breaks and never cutting a
+ * token in half. A token is letters and digits with hyphens removed
+ * (`AB-1234567` reads `AB1234567`); consecutive tokens holding a digit join
+ * (`9400 1000 …`), and a run of 6 or more characters with a digit is a
+ * reference. A word without a digit ends a run.
  */
 function labelledReferences(text: string) {
-  const references: string[] = [];
-  for (const match of text.matchAll(PACKAGE_LABEL)) {
+  const labels = [...text.matchAll(PACKAGE_LABEL)];
+  return labels.map((match, index) => {
     const start = match.index + match[0].length;
-    // The rest of the label's sentence, never cutting a reference in half.
-    let end = Math.min(text.length, start + PACKAGE_LABEL_WINDOW);
-    while (end < text.length && /[A-Za-z0-9]/u.test(text[end]!)) end += 1;
-    const [sentence = ""] = text.slice(start, end).split(/[.;!?](?:\s|$)|\n/u);
+    let end = Math.min(
+      labels[index + 1]?.index ?? text.length,
+      start + PACKAGE_LABEL_WINDOW,
+    );
+    while (end < text.length && /[A-Za-z0-9-]/u.test(text[end]!)) end += 1;
+    const references: string[] = [];
+    let run: string[] = [];
+    let runAfter = "";
     let previousWord = "";
-    for (const segment of sentence
-      .replaceAll(/[^A-Za-z0-9 -]/gu, "|")
-      .split("|")) {
-      let run: string[] = [];
-      let runAfter = previousWord;
-      const flush = () => {
-        if (run.length && !ORDER_WORD.test(runAfter))
-          references.push(run.join("").toUpperCase());
-        run = [];
-      };
-      for (const token of segment.split(/[ -]+/u)) {
-        if (!token) continue;
-        if (/\d/u.test(token)) {
-          if (!run.length) runAfter = previousWord;
-          run.push(token);
-        } else {
-          flush();
-          previousWord = token;
-        }
+    const flush = () => {
+      const reference = run.join("").toUpperCase();
+      if (
+        reference.length >= MIN_REFERENCE &&
+        /\d/u.test(reference) &&
+        !ORDER_WORD.test(runAfter)
+      )
+        references.push(reference);
+      run = [];
+    };
+    for (const raw of text.slice(start, end).split(/[^A-Za-z0-9-]+/u)) {
+      const token = raw.replaceAll("-", "");
+      if (!token) continue;
+      if (/\d/u.test(token)) {
+        if (!run.length) runAfter = previousWord;
+        run.push(token);
+      } else {
+        flush();
+        previousWord = token;
       }
-      flush();
     }
-  }
-  return references;
+    flush();
+    return references;
+  });
 }
 
 /** Tracking-shaped query values in tracking links, separators removed. */
@@ -234,29 +242,37 @@ function linkedReferences(links: readonly string[]) {
 }
 
 /**
- * Whether the Email names a package reference that is not one of its
- * recognised tracking keys, after a tracking, package or shipment label or in a
- * tracking link. Recognised tracking numbers are removed from each reference
- * first; any remainder of 8 or more characters (other than a USPS routing
- * prefix) is a package a rule cannot record. Order keys are not subtracted:
- * `purchase_cues` also reads tracking-introduced identifiers as order keys.
+ * Whether the Email may name a package a rule cannot record, deliberately
+ * erring toward the coordinator: more labels followed by a reference than
+ * recognised tracking keys, or any labelled or linked reference that is not
+ * covered by a recognised key (a remainder of 6 or more characters other than a
+ * USPS routing prefix). Order keys are not subtracted: `purchase_cues` also
+ * reads tracking-introduced identifiers as order keys.
  */
 export function hasUnrecognisedTracking(input: {
   text: string;
   links: readonly string[];
   keys: EmailTrackingKeys;
 }) {
+  const labelled = labelledReferences(input.text);
+  if (
+    labelled.filter((references) => references.length).length >
+    input.keys.length
+  )
+    return true;
   const known = input.keys
     .map((key) => key.number)
     .sort((a, b) => b.length - a.length);
-  return [
-    ...labelledReferences(input.text),
-    ...linkedReferences(input.links),
-  ].some((reference) => {
-    let remainder = reference;
-    for (const value of known) remainder = remainder.replaceAll(value, "");
-    return remainder.length >= 8 && !USPS_ROUTING_PREFIX.test(remainder);
-  });
+  return [...labelled.flat(), ...linkedReferences(input.links)].some(
+    (reference) => {
+      let remainder = reference;
+      for (const value of known) remainder = remainder.replaceAll(value, "");
+      return (
+        remainder.length >= MIN_REFERENCE &&
+        !USPS_ROUTING_PREFIX.test(remainder)
+      );
+    },
+  );
 }
 
 /**

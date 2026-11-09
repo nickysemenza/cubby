@@ -282,8 +282,9 @@ Shipment, or the sender-proven Vendor's normalized order number. Conflicting
 evidence, including an order number on another member's account, goes to the
 coordinator. So does a shipping or delivery notice whose packages the link
 could not fully record: no recognised tracking, more than one package, an
-unknown carrier, or any package reference after a tracking, package or
-shipment label, or in a tracking link, that is not a recognised key. A
+unknown carrier, more labelled references than recognised tracking numbers,
+or any package reference after a tracking, package, parcel or shipment label,
+or in a tracking link, that is not a recognised key. A
 tracking or order-number link records the Email's one package as shipment
 evidence; a confirmation links only to a Purchase an import already sourced.
 Run targets retain that Run's recorded Email outcomes. An unsettled target

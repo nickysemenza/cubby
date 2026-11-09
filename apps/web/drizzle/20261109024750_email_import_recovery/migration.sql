@@ -2,9 +2,15 @@
 -- migration; the runner's transaction rolls back whole and Deploy stops.
 SET LOCAL lock_timeout = '5s';
 --> statement-breakpoint
+-- Serialization boundary: every admission, transfer and roster append writes
+-- "Run", so this lock (held to commit) freezes the rosters the attempt
+-- counts are aggregated from. Run reads continue; Run writers wait for the
+-- seconds the aggregation and the Email rewrite take. Taken before Email, in
+-- the household Run-then-Email order.
+LOCK TABLE "Run" IN SHARE ROW EXCLUSIVE MODE;
+--> statement-breakpoint
 -- The revision fence now reads the frozen input, which a release never
--- clears; carry each sender-proof revision out of its replay key. Run row
--- locks only.
+-- clears; carry each sender-proof revision out of its replay key.
 UPDATE "Run"
 SET input = input || jsonb_build_object('evidenceRevision', substring("clientKey" from 'sender-proof:([0-9a-f]{64}):'))
 WHERE purpose = 'mail_import' AND jsonb_typeof(input) = 'object'

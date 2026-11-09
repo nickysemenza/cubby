@@ -351,9 +351,10 @@ separately on the Email (`orderKeys`, `trackingKeys`, bound to
 alone does not extract package evidence, a tracking or order-key link records
 the Email's one recognised package as shipment evidence. A shipping or delivery
 notice without recognised tracking, with more than one package, with an
-unknown carrier, or with any package reference after a tracking, package or
-shipment label (separators normalized) or in a tracking link that is not a
-recognised key still goes to the coordinator.
+unknown carrier, with more labels followed by a reference than recognised
+keys, or with any package reference after a tracking, package, parcel or
+shipment label (scanned across line breaks, separators normalized) or in a
+tracking link that is not a recognised key still goes to the coordinator.
 
 ### Complete original capture
 
