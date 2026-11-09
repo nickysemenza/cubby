@@ -8,7 +8,7 @@ import { createLedgerParty } from "~/server/domains/ledger-party/repo/ledger-par
 import {
   listMemberLogins,
   setMemberLoginParty,
-} from "~/server/http/member-login";
+} from "~/server/domains/ledger-party/repo/member-login";
 
 describe("member login ownership", () => {
   const ctx = withTestDb();

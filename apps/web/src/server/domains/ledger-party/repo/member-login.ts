@@ -11,8 +11,6 @@ import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
-export { currentMemberLedgerParty } from "~/server/domains/ledger-party/repo/current-member-party";
-
 export type MemberLoginUser = {
   id: string;
   name: string;
