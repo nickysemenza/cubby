@@ -69,7 +69,7 @@ import { createInventoryEntriesColumn } from "../inventory/list-columns";
 // Module-level fallbacks keep the runtime options reference stable while a
 // roster query is loading.
 const NO_FILTER_OPTIONS: PickerOption[] = [];
-/** Stable empty default so `nest` keeps its identity while kits load. */
+/** Reuse an empty per-batch fallback while components load. */
 const EMPTY_KIT_ROWS: KitComponentRowOut[] = [];
 
 const combineKitRows = (results: UseQueryResult<KitComponentRowOut[]>[]) =>
@@ -482,8 +482,22 @@ export const productListOverride = defineListOverride<
     // than per expanded row: fetching on expand would deliver children AFTER
     // render, where `DesktopDataRow`'s memo (which compares `row.original`)
     // cannot see them. Nesting before rows are built sidesteps that.
-    const [kitIds, setKitIds] = useState<string[]>([]);
-    const kitBatches = useMemo(() => chunk(kitIds, ID_CHUNK_SIZE), [kitIds]);
+    const [kitBatches, setKitBatches] = useState<string[][]>([]);
+    const publishKitIds = useCallback((ids: string[]) => {
+      setKitBatches((current) => {
+        const wanted = new Set(ids);
+        const retained = current.filter((batch) =>
+          batch.every((id) => wanted.has(id)),
+        );
+        const covered = new Set(retained.flat());
+        const added = ids.filter((id) => !covered.has(id));
+        if (retained.length === current.length && added.length === 0)
+          return current;
+        // Growing an existing key drops its children while the replacement
+        // query loads, unmounting open child editors. Keep admitted batches.
+        return [...retained, ...chunk(added, ID_CHUNK_SIZE)];
+      });
+    }, []);
     const kitRows = useQueries({
       queries: kitBatches.map((parentProductIds) =>
         productOperations.kitComponentRows.queryOptions({ parentProductIds }),
@@ -542,7 +556,7 @@ export const productListOverride = defineListOverride<
         ) : null;
       },
       wrap: (children, { data }) => (
-        <ProductListHydration data={data} onKitIds={setKitIds}>
+        <ProductListHydration data={data} onKitIds={publishKitIds}>
           {children}
         </ProductListHydration>
       ),
@@ -551,8 +565,8 @@ export const productListOverride = defineListOverride<
 });
 
 /**
- * Preserve loaded order so complete batches keep their query keys as pages
- * append. Sorting the whole growing set would reshuffle earlier batches.
+ * Publish a stable de-duplicated roster in loaded order. The query owner
+ * reconciles membership without replacing batches on page appends.
  */
 function ProductListHydration({
   data,
