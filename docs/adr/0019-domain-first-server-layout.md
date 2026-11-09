@@ -77,6 +77,7 @@ domains between `src/app/` and `src/features/` under different names.
   concerns. The cross-repository simplification retires source-layout tests and
   file-count ceilings: coherent ownership and deleted duplication matter more
   than mechanically splitting files or folders to meet a number.
+- Generated entity rosters contain data only; runtime predicates depend on the roster without a generated re-export.
 - `~/` stays the only import alias.
 
 ## Consequences

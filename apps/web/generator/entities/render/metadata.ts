@@ -541,10 +541,6 @@ export const renderEntityMetadataArtifacts = (
           from: "@cubby/shared/entity-keys",
           names: ["ENTITY_KEYS as entityKeys"],
         },
-        {
-          from: "../entity-roster-runtime",
-          names: ["isAuditableEntity", "isGalleryEntity"],
-        },
       ],
     }),
     artifact("apps/web/src/entity/generated/entity-metadata-types.gen.ts", {
