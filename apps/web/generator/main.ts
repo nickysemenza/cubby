@@ -183,6 +183,7 @@ const main = async () => {
       kernelHttpActionsFor(entities),
       operations.operationIds,
       entityOutputsFor(entities),
+      entities,
     ),
   );
   await settle(renderApplePreviewFixtures());

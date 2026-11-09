@@ -2,7 +2,7 @@ import {
   childTableMetadataSchema,
   type ChildTableMetadata,
 } from "@cubby/schemas/compiler/entity-definitions/child-definition";
-import { EntityDeclarationError } from "./declarations.ts";
+import { EntityDeclarationError } from "./declaration-types.ts";
 import { TABLE_SQL_PLACEHOLDER } from "./table-storage.ts";
 
 /** Children keep their declared indexes exactly; adopting declarations must not add DDL. */

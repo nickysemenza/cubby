@@ -13,7 +13,7 @@ import {
   type EntityTableColumn,
   type EntityTableIndex,
   type EntityTableRelation,
-} from "./declarations.ts";
+} from "./declaration-types.ts";
 
 /** `{columnKey}` placeholders in declared table SQL. */
 export const TABLE_SQL_PLACEHOLDER = /\{([A-Za-z_][A-Za-z0-9_]*)\}/g;

@@ -249,7 +249,12 @@ export const renderEntityMetadataArtifacts = (
   ) => {
     if (resolution?.reset === undefined) return null;
     const { inherit: _inherit, ...rest } = resolution;
-    return rest;
+    return {
+      ...rest,
+      ...(resolution.inherit?.mode
+        ? { inheritMode: resolution.inherit.mode }
+        : {}),
+    };
   };
   const fieldModels = Object.fromEntries(
     entities.map(({ key, fieldModel }) => {

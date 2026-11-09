@@ -1,5 +1,5 @@
 import { parseSync } from "oxc-parser";
-import { EntityDeclarationError } from "./declarations.ts";
+import { EntityDeclarationError } from "./declaration-types.ts";
 
 /** A removed infrastructure table is allowed; new storage belongs in declarations. */
 export const validateRetainedTableBoundary = (

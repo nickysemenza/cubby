@@ -1,4 +1,4 @@
-import type { CompiledEntity } from "./declarations.ts";
+import type { CompiledEntity } from "./declaration-types.ts";
 
 /**
  * The kernel serves `get` (and so the generic detail page) for every entity

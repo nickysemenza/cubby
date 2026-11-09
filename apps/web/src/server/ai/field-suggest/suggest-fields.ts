@@ -26,7 +26,10 @@ import type {
  */
 import { entityRefKey } from "@cubby/schemas/entity";
 import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
-import { entityFieldModels } from "@cubby/schemas/entity-fields";
+import {
+  entityFieldModels,
+  type EntityFieldModel,
+} from "@cubby/schemas/entity-fields";
 import { fieldEnvelope } from "@cubby/schemas/field-envelope";
 import {
   type FieldResolution,
@@ -162,17 +165,17 @@ async function resolveSuggestionInheritance(
       assignment?.kind === "value" ? assignment.value : null,
     );
     draft[field] = stored;
-    if (input.entity === "task" && field === "assigneeId") {
-      draft.assigneeMode =
-        assignment?.kind === "inherit" ? "inherit" : "explicit";
-    }
-    if (input.entity === "task" && field === "projectId") {
-      draft.projectMode =
-        assignment?.kind === "inherit" ? "inherit" : "explicit";
-    }
-    if (input.entity === "task" && field === "subjectProductId") {
-      draft.subjectProductMode =
-        assignment?.kind === "inherit" ? "inherit" : "explicit";
+    // SAFETY: the suggestion entity roster is a subset of the generated field models.
+    const model: EntityFieldModel<string> | undefined =
+      entityFieldModels[input.entity as keyof typeof entityFieldModels];
+    const resolution = model?.fields.find(
+      (candidate) => candidate.key === field,
+    )?.resolution;
+    const mode = resolution?.inheritMode;
+    const explicit = mode && resolution?.none?.[mode.field];
+    if (input.entity === "task" && mode && typeof explicit === "string") {
+      draft[mode.field] =
+        assignment?.kind === "inherit" ? mode.inherit : explicit;
     }
   }
   const inheritance = resolveSuggestionDraft(db, input.entity, draft);

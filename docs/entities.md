@@ -166,6 +166,8 @@ model. "Beyond the declaration" lists the code an adoption still needs, and why.
 | Derived values           | `model.derived`, `model.stored`                                         | Rollups and `via` paths need nothing. `compute` functions and snapshots are domain code; [Background derived data](#background-derived-data) owns them.                                       |
 | List and detail sections | `presentation.list`, `presentation.detail`                              | None for `fields`, `relation` and `timeline` sections or `fields`, `records` and `chart` summary cells. A `slot` needs its renderer on each platform, and a `report` cell its server builder. |
 
+A route can declare `nativeRead` when native list reads use a dedicated external catalog instead of the entity kernel.
+
 ### Search result facts
 
 `presentation.searchFacts` declares zero to two ordered existing list-field keys

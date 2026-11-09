@@ -4,7 +4,7 @@ import {
   EntityDeclarationError,
   type CompiledEntity,
   type EntityArtifacts,
-} from "./declarations.ts";
+} from "./declaration-types.ts";
 
 type DeclaredPolicy = CompiledEntity["classificationPolicies"][number];
 

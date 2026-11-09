@@ -7,7 +7,7 @@ import {
   type DeclarationValue,
   EntityDeclarationError,
   objectValue,
-} from "./declarations.ts";
+} from "./declaration-types.ts";
 import {
   hasBrowserListPage,
   feedsRelationTables,

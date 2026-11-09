@@ -28,7 +28,7 @@ import { dirname, join, matchesGlob, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readJsonFile } from "nx/src/utils/fileutils";
 import { z } from "zod";
-import { EntityDeclarationError } from "./declarations.ts";
+import { EntityDeclarationError } from "./declaration-types.ts";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(HERE, "../../../..");

@@ -1372,6 +1372,7 @@ const buildMetadataSchemas = () => {
     .strictObject({
       basePath: nonEmptyString(),
       detailParamOverride: nonEmptyString().optional(),
+      nativeRead: z.literal("usdaFood").optional(),
       /** Replaces the capture-dialog default; null opts out. */
       createOverride: z.enum(["dialog", "page"]).nullable().optional(),
       /**
@@ -1393,6 +1394,7 @@ const buildMetadataSchemas = () => {
       ({
         basePath,
         detailParamOverride,
+        nativeRead,
         createOverride,
         list,
         listColumns,
@@ -1401,6 +1403,7 @@ const buildMetadataSchemas = () => {
       }) => ({
         basePath,
         detailParam: detailParamOverride,
+        nativeRead,
         create: createOverride,
         list,
         listColumns,

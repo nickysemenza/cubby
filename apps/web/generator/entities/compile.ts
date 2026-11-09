@@ -45,7 +45,7 @@ import {
   required,
   stringValue,
   booleanValue,
-} from "./declarations.ts";
+} from "./declaration-types.ts";
 import {
   compileDataQuality,
   validateDataQualityDeclarations,
@@ -69,7 +69,7 @@ import {
   type EntityStorageField,
   type FilterDescriptor,
   type RelationMutation,
-} from "./declarations.ts";
+} from "./declaration-types.ts";
 import {
   compilePresentation,
   validateRelationSections,

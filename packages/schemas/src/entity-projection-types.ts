@@ -95,6 +95,9 @@ export type GeneratedEntityFieldModel<E extends string = Entity> = {
     resolution: {
       reset: Readonly<Record<string, GeneratedEntityFieldResolutionValue>>;
       resetSource?: NonNullable<DeclaredField["resolution"]>["resetSource"];
+      inheritMode?: NonNullable<
+        NonNullable<DeclaredField["resolution"]>["inherit"]
+      >["mode"];
       none: Readonly<
         Record<string, GeneratedEntityFieldResolutionValue>
       > | null;

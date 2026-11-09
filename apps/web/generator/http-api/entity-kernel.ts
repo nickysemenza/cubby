@@ -10,7 +10,10 @@ import {
 import { ENTITY_SCHEMA_BINDINGS } from "../../src/server/generated/entity-bindings.gen.ts";
 import { toWire } from "../../src/lib/operation-wire.ts";
 import { generatedHeader } from "../artifacts.ts";
-import type { EntityArtifacts } from "../entities/declarations.ts";
+import type {
+  CompiledEntity,
+  EntityArtifacts,
+} from "../entities/declarations.ts";
 import type { KernelActions } from "../entities/render/index.ts";
 
 /**
@@ -178,6 +181,7 @@ const parametersFor = (entity: BoundEntity, timeline: boolean) => {
 const entityKernelCapabilities = (
   actions: KernelActions,
   nativeOperations: readonly string[],
+  entities: readonly CompiledEntity[],
 ): Record<string, EntityKernelCapabilities> =>
   Object.fromEntries(
     entityKeys.flatMap((entity) => {
@@ -195,6 +199,8 @@ const entityKernelCapabilities = (
         verbs.includes("update") ? (binding?.updateInput ?? null) : null,
       );
       const listed = verbs.includes("list");
+      const nativeRead = entities.find((item) => item.key === entity)?.route
+        ?.nativeRead;
       return [
         [
           entity,
@@ -203,8 +209,8 @@ const entityKernelCapabilities = (
             nativeActions,
             read: listed
               ? "kernel"
-              : entity === "usda-food" && rpcReads.includes("list")
-                ? "usdaFood"
+              : rpcReads.includes("list") && nativeRead
+                ? nativeRead
                 : "unavailable",
             imageAttach: update.has("pendingImageIds"),
             imageOrder: update.has("imageOrder"),
@@ -279,8 +285,13 @@ const entityHandoffs = (entity: string): string[] =>
 export const renderEntityKernelArtifacts = (
   actions: KernelActions,
   nativeOperations: readonly string[],
+  entities: readonly CompiledEntity[],
 ): EntityArtifacts[] => {
-  const capabilities = entityKernelCapabilities(actions, nativeOperations);
+  const capabilities = entityKernelCapabilities(
+    actions,
+    nativeOperations,
+    entities,
+  );
   checkFilterWires(capabilities);
   const coverage = Object.fromEntries(
     entityKeys.map((entity) => [
