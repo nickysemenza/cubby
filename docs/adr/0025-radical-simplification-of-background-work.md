@@ -90,7 +90,10 @@ evidence and photo-group decisions.
     reader and writer, with no Neon snapshot; old requests may fail during the
     cutover. Authoritative tables replaced by a reshape, and the Assessment and
     Feedback ledgers, are retained under an archive name until the owner decides
-    otherwise.
+    otherwise. Amended 2026-11-09: archived Feedback rows are deleted once
+    decision-grading no longer reads them (the subset it reads is kept), and failed
+    Job rows older than fourteen days are pruned when their Run is terminal,
+    scheduled and neither mail nor financial import work. Runs stay as cost evidence.
 11. **Entity features are composable capabilities declared in the manifest.** Each
     capability has one owner and brings its own fields, list columns, detail slot,
     filters, MCP output and native presentation, so adopting it means declaring it

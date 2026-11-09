@@ -730,7 +730,11 @@ The web audit-log changes feed follows the queue.
 The hourly cron calls `maintainJobs` directly: one bounded image-repair page and
 one retention page per tick. No maintenance Job or result timestamp is enrolled.
 Completed Jobs retain eight days, cancelled fourteen and failed thirty, under
-the existing pending-work and identity safeguards. Domain evidence stays.
+the existing pending-work and identity safeguards. A failed Job whose Run is
+terminal, not manual, not a member request and not mail or financial import work
+(`mail_import`, `mail_discovery`, `mail_search`, `mail_reclassify`,
+`purchase_validation`, `account_sync`) is pruned after fourteen days. Only Job
+rows are deleted; Runs stay as AiUsage cost evidence. Domain evidence stays.
 
 `generic/jobs/repo/observation.ts` reads the real owners for Activity, maintenance,
 MCP and native clients. `job.activity.rebuild` replaces the standalone maintenance rebuild-status operation. Rebuild movement is its last committed page, independently
