@@ -4,12 +4,14 @@ import type { ReactNode } from "react";
 import { useCallback, useMemo, useState } from "react";
 
 import { EntityIcon } from "~/entity/entities";
-import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import {
   entityDisplayImageKey,
   useEntityDisplayImages,
 } from "~/entity/entity-media/entity-display-images";
-import { useProductCategories } from "~/entity/hooks/use-product-categories";
+import {
+  type ProductCategoryVocabularyRow,
+  useProductCategories,
+} from "~/entity/hooks/use-product-categories";
 
 import type {
   ComboboxItem,
@@ -26,10 +28,12 @@ import { WithVendorShortcodeSearch } from "./with-vendor-search";
 
 /** `useProductCategories()`'s own list row shape — just what the tree/search
  * projections below read off it. */
-export type ProductCategoryRow = Pick<
-  ProductCategoryOut,
-  "id" | "name" | "parentId" | "aliases" | "description"
-> & { fields: Pick<ProductCategoryOut["fields"], "path"> };
+export type ProductCategoryRow = Omit<
+  ProductCategoryVocabularyRow,
+  "fields"
+> & {
+  fields: Pick<ProductCategoryVocabularyRow["fields"], "path">;
+};
 
 /**
  * The pure "categories + query -> picker items" projection, split out from
@@ -181,5 +185,3 @@ export function requireReferenceEntitySearch(entity: string): SearchProvider {
   }
   return referenceEntitySearch(entity);
 }
-
-type ProductCategoryOut = DetailRecordOf<"productCategory">;

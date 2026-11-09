@@ -59,6 +59,7 @@ import {
   renderJoins,
   tableFacts,
 } from "~/server/generic/relatedness/repo/traversal";
+import { isSortOnlySql } from "~/server/lib/sort-only-sql";
 
 /** A list request's raw filter values, by URL key. */
 export const listFilterValues = z.record(z.string(), z.unknown());
@@ -506,7 +507,8 @@ export const derivedSelectSql = (
   const parts = derivedValueParts(entity, derived, key, context);
   const [value] = parts;
   if (value === undefined || parts.length > 1) return null;
-  return value instanceof SQL ? value : value.sql;
+  const selected = value instanceof SQL ? value : value.sql;
+  return isSortOnlySql(selected) ? null : selected;
 };
 
 /**

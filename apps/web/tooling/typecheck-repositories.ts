@@ -88,6 +88,7 @@ export const repositoryOwners = [
   "src/server/db/computed/text-whitespace.ts",
   "src/server/lib/name-alias-match.ts",
   "src/server/lib/live-row.ts",
+  "src/server/lib/sort-only-sql.ts",
   "src/server/db/computed/image-read-scope.ts",
   "src/server/generated/shortcode-tables.gen.ts",
   "src/server/generic/shortcode/repo/shortcode-tables.ts",

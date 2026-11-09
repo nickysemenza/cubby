@@ -20,6 +20,8 @@ import {
 } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 
+import { sortOnlySql } from "~/server/lib/sort-only-sql";
+
 /**
  * A table's quoted name, from its Drizzle declaration, for the remaining
  * string-built fragments that correlate with an outer select by table name.
@@ -211,7 +213,10 @@ export const rankOf = (
   const name = nextAlias();
   const id = sql`${sql.identifier(name)}.${sql.identifier(table.id.name)}`;
   const deletedAt = sql`${sql.identifier(name)}.${sql.identifier(table.deletedAt.name)}`;
-  return sql<
-    number | null
-  >`array_position((SELECT array_agg(${id} ORDER BY ${key(id)}) FROM ${sql.identifier(getTableName(table))} ${sql.identifier(name)} WHERE ${deletedAt} IS NULL), ${value})`;
+  // A rank orders rows; it is not the field's value for row reads.
+  return sortOnlySql(
+    sql<
+      number | null
+    >`array_position((SELECT array_agg(${id} ORDER BY ${key(id)}) FROM ${sql.identifier(getTableName(table))} ${sql.identifier(name)} WHERE ${deletedAt} IS NULL), ${value})`,
+  );
 };
