@@ -8,7 +8,9 @@ import {
   sweepRunInput,
   SWEEP_FAMILY_LABEL,
   runWorkLabel,
-  type SweepFamilyScope,
+  type StoredSweepFamilyScope,
+  RETIRED_SWEEP_FAMILY_LABEL,
+  isExecutableSweepFamily,
 } from "@cubby/schemas/run-fields";
 import { runStepMeta } from "@cubby/schemas/run-step";
 import {
@@ -112,8 +114,14 @@ export function declaredRunSteps(
   );
 }
 
+const sweepFamilyLabel = (entry: StoredSweepFamilyScope) =>
+  isExecutableSweepFamily(entry)
+    ? SWEEP_FAMILY_LABEL[entry.family]
+    : `${RETIRED_SWEEP_FAMILY_LABEL[entry.family]} (retired)`;
+
 /** Scope summaries expose the extent of a selection, never private source identifiers. */
-function scopeLabel(entry: SweepFamilyScope) {
+function scopeLabel(entry: StoredSweepFamilyScope) {
+  if (!isExecutableSweepFamily(entry)) return "Retired, not run";
   const scope = entry.scope;
   const parts: string[] = [];
   if ("accountIds" in scope && scope.accountIds)
@@ -245,7 +253,7 @@ export function runPlanBlocks(
   return [
     {
       kind: "note",
-      text: `${runWorkLabel(run)}${run.purpose === "sweep" ? " · Purpose: Sweep" : ""}${families ? ` · Selected families: ${families.map((entry) => SWEEP_FAMILY_LABEL[entry.family]).join(", ")}` : run.purpose === "sweep" ? " · Selected families unavailable in historical input" : ""}`,
+      text: `${runWorkLabel(run)}${run.purpose === "sweep" ? " · Purpose: Sweep" : ""}${families ? ` · Selected families: ${families.map((entry) => sweepFamilyLabel(entry)).join(", ")}` : run.purpose === "sweep" ? " · Selected families unavailable in historical input" : ""}`,
     },
     {
       kind: "table",

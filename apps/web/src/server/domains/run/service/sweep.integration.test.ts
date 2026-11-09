@@ -798,6 +798,41 @@ describe("Sweeps", () => {
       .from(run)
       .where(eq(run.parentRunId, runId as never));
 
+  // Retired families stay readable in stored inputs but never plan or run.
+  it("plans only the surviving steps of a Sweep that stored retired families", async () => {
+    // Start a real Sweep, then store the historical input over its own.
+    const stored = async (families: unknown[]) => {
+      const runId = await startSweep(ctx.db, ctx.actor, {
+        trigger: "manual",
+        families: [{ family: "statement_transaction", scope: {} }],
+      });
+      await getDb(ctx.db)
+        .update(run)
+        .set({ input: sweepRunInput.parse({ kind: "sweep", families }) })
+        .where(eq(run.id, runId));
+      return runId;
+    };
+    const retired = [
+      { family: "transfer_pair", scope: { since: "2026-01-01" } },
+      { family: "recommendation", scope: { entityKinds: ["product"] } },
+    ];
+    const mixed = await stored([
+      { family: "statement_transaction", scope: {} },
+      ...retired,
+    ]);
+    expect(await drive(mixed)).toBe("finished");
+    const keys = (await readRunSteps(ctx.db, mixed)).map((step) => step.key);
+    expect(keys).toEqual(
+      expect.arrayContaining(["statement_generate", "statement_holds"]),
+    );
+    expect(keys.some((key) => /^(transfer_pair|connection)_/.test(key))).toBe(
+      false,
+    );
+    const onlyRetired = await stored(retired);
+    expect(await drive(onlyRetired)).toBe("finished");
+    expect(await readRunSteps(ctx.db, onlyRetired)).toEqual([]);
+  });
+
   const fieldSweep = () =>
     startSweep(ctx.db, ctx.actor, {
       trigger: "manual",

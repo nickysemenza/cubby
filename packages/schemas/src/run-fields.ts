@@ -423,6 +423,35 @@ export const sweepFamilyScope = z.discriminatedUnion("family", [
 ]);
 export type SweepFamilyScope = z.infer<typeof sweepFamilyScope>;
 export type SweepFamily = SweepFamilyScope["family"];
+/**
+ * Families a Sweep once covered and no longer runs (#3899). Stored inputs keep
+ * them as non-executable history: they parse and display as retired, never plan
+ * steps and never run. Their scopes are not interpreted.
+ */
+export const retiredSweepFamilyScope = z.discriminatedUnion("family", [
+  z.object({
+    family: z.literal("transfer_pair"),
+    scope: z.record(z.string(), z.json()).default({}),
+  }),
+  z.object({
+    family: z.literal("recommendation"),
+    scope: z.record(z.string(), z.json()).default({}),
+  }),
+]);
+export type RetiredSweepFamilyScope = z.infer<typeof retiredSweepFamilyScope>;
+export const RETIRED_SWEEP_FAMILY_LABEL = {
+  transfer_pair: "Transfer pairs",
+  recommendation: "Connections",
+} as const satisfies Record<RetiredSweepFamilyScope["family"], string>;
+/** A stored Sweep input's family: executable or retired history. */
+export const storedSweepFamilyScope = z.discriminatedUnion("family", [
+  ...sweepFamilyScope.options,
+  ...retiredSweepFamilyScope.options,
+]);
+export type StoredSweepFamilyScope = z.infer<typeof storedSweepFamilyScope>;
+export const isExecutableSweepFamily = (
+  entry: StoredSweepFamilyScope,
+): entry is SweepFamilyScope => entry.family in SWEEP_FAMILY_LABEL;
 /** Each Suggestion family's plural name, shared by Sweep steps, chips, and dialogs. */
 export const SWEEP_FAMILY_LABEL = {
   statement_transaction: "Statements",
@@ -430,7 +459,7 @@ export const SWEEP_FAMILY_LABEL = {
 } as const satisfies Record<SweepFamily, string>;
 export const sweepRunInput = z.strictObject({
   kind: z.literal("sweep"),
-  families: z.array(sweepFamilyScope).min(1).max(2),
+  families: z.array(storedSweepFamilyScope).min(1).max(4),
 });
 export type SweepRunInput = z.infer<typeof sweepRunInput>;
 export const maintenanceRunInput = z.strictObject({
