@@ -65,7 +65,9 @@ failure backoff. A kind absent there is a server kind with three attempts and
 
 `background.drain` is an internal record kind: one completed row per drain
 unit (`key` `drain:<unit>`) whose `lastClaimedAt` places the unit in rotation.
-It is never claimed or executed.
+It is never claimed or executed. Its `lastExecution` is the unit's last page,
+including a page that threw: the permit meters AI cost and item counts outside
+the page, so a failed record keeps what committed before the failure.
 
 Device image work is parked on its own row and never reaches a permit.
 Enqueueing it rings connected
@@ -295,8 +297,12 @@ across Jobs, leases and drains (`nextDueAt`): now if anything is due, else
 delayed until it is due (at most twelve hours). A permit that claimed nothing,
 including an over-produced one, exits after its one selection query and sends
 nothing, and a failed drain page sends no successor; so wake chains end when
-the household goes idle. A Job claim also sends one delayed permit for its
-lease lapsing, so a killed invocation is recovered without waiting for cron.
+the household goes idle. Each Job claim and each cloud image claim also sends
+one recovery permit due when that claim's own lease lapses, naming the claim
+(Job lease token, image attempt), so a killed invocation is recovered without
+waiting for cron. A Job recovery runs only if that lease lapsed unsettled; an
+image recovery atomically reclaims exactly that attempt, so of two overlapping
+recoveries one runs and the other exits without work or a successor.
 
 Member-first ordering inside a drain is item priority: root transactions in
 Job execution mark derived inputs at priority 1, member transactions at 0, and

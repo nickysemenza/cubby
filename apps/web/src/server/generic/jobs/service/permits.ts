@@ -16,10 +16,11 @@ import type { UnparsedError } from "~/lib/error-utils";
 import { getWorkerVersion } from "~/server/cf-env";
 import type { Database } from "~/server/db";
 import type {
+  ArmDrainRecovery,
   BackgroundDrain,
   DrainPage,
 } from "~/server/generic/background/drains";
-import { meterDrainAiCost } from "~/server/generic/jobs/context";
+import { type DrainMeter, meterDrainPage } from "~/server/generic/jobs/context";
 import { classifyJobFailure } from "~/server/generic/jobs/failure";
 import { withExecutionMetrics } from "~/server/generic/jobs/page-work";
 import {
@@ -92,57 +93,82 @@ async function runUnit(
   }
   const drain = drainFor(drains, candidate.unit);
   if (!drain) return false;
-  await claimDrainUnit(db, candidate.unit);
+  return runDrainPage(runtime, candidate.unit, (armRecovery) =>
+    drain.page(db, candidate.unit, armRecovery),
+  );
+}
+
+/**
+ * One drain page under a meter the permit owns, so its execution record keeps
+ * the AI cost and committed item counts even when the page throws.
+ */
+async function runDrainPage(
+  { db, ports }: PermitRuntime,
+  unit: string,
+  page: (armRecovery: ArmDrainRecovery) => Promise<DrainPage>,
+  { recovery = false } = {},
+): Promise<boolean> {
+  // A recovery leaves the unit's rotation alone, and one that reclaimed
+  // nothing leaves the unit's record as its last real page wrote it.
+  if (!recovery) await claimDrainUnit(db, unit);
+  const meter: DrainMeter = {
+    aiCostUsd: 0,
+    claimed: 0,
+    published: 0,
+    failed: 0,
+  };
   return withExecutionMetrics(async (sample) => {
     const record = (
       outcome: JobExecution["outcome"],
       errorClass: string | null,
-      page?: DrainPage,
+      claimed: number,
     ) =>
       recordJobExecution(
         db,
-        { unit: candidate.unit },
+        { unit },
         {
           outcome,
           errorClass,
           ...sample(),
-          aiCostUsd: page?.aiCostUsd ?? null,
+          aiCostUsd: meter.aiCostUsd || null,
           workerVersion: getWorkerVersion(),
-          ...(page && {
+          ...((claimed || meter.published || meter.failed) && {
             items: {
-              claimed: page.claimed,
-              published: page.published ?? 0,
-              failed: page.failed ?? 0,
+              claimed,
+              published: meter.published,
+              failed: meter.failed,
             },
           }),
           finishedAt: new Date().toISOString(),
         },
       ).catch((error: unknown) =>
-        log.error("execution record failed", { unit: candidate.unit, error }),
+        log.error("execution record failed", { unit, error }),
       );
     try {
-      const { result, aiCostUsd } = await meterDrainAiCost(() =>
-        drain.page(db, candidate.unit, (recover) =>
-          ports.send(new Date(Date.now() + recover.afterMs), recover.source, {
-            kind: "image",
-            ids: recover.ids,
-          }),
+      const result = await meterDrainPage(meter, () =>
+        page((claim) =>
+          ports.send(
+            new Date(claim.leaseExpiresAt.getTime() + 5_000),
+            claim.source,
+            { kind: "image", id: claim.id, attempt: claim.attempt },
+          ),
         ),
       );
-      const page = { ...result, aiCostUsd: result.aiCostUsd ?? aiCostUsd };
+      const claimed = Math.max(result.claimed, meter.claimed);
+      if (recovery && !claimed) return false;
       await record(
-        page.outcome ?? (page.claimed ? "succeeded" : "skipped"),
+        result.outcome ?? (claimed ? "succeeded" : "skipped"),
         null,
-        page,
+        claimed,
       );
-      return page.claimed > 0;
+      return result.claimed > 0;
     } catch (error) {
       // Item state, backoff and waits live on the drain's rows. A failed page
       // sends no successor: a persistent failure must not loop; the unit's
       // record row moves it back in rotation for other permits and the cron.
-      log.error("drain page failed", { unit: candidate.unit, error });
-      ports.captureException(error, candidate.unit);
-      await record("failed", classifyJobFailure(error).kind);
+      log.error("drain page failed", { unit, error });
+      ports.captureException(error, unit);
+      await record("failed", classifyJobFailure(error).kind, meter.claimed);
       return false;
     }
   });
@@ -167,9 +193,22 @@ export async function runRecovery(
         runOwned: false,
       };
   } else {
-    const drain = drains.find((entry) => entry.recovers);
-    if (drain?.recovers && (await drain.recovers(db, recover.ids)))
-      candidate = { type: "drain", unit: drain.name, runOwned: false };
+    // The reclaim itself is the check: overlapping recoveries for one attempt
+    // cannot both claim it, and the loser runs nothing and sends nothing.
+    const drain = drains.find((entry) => entry.recover);
+    if (
+      drain?.recover &&
+      (await runDrainPage(
+        runtime,
+        drain.name,
+        (armRecovery) => drain.recover!(db, recover, armRecovery),
+        { recovery: true },
+      ))
+    ) {
+      await sendSuccessor(runtime, "permit.successor");
+      return drain.name;
+    }
+    return null;
   }
   if (!candidate || !(await runUnit(runtime, candidate))) return null;
   await sendSuccessor(runtime, "permit.successor");

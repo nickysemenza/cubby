@@ -33,25 +33,42 @@ export const setJobStepKey = (stepKey: string) => {
 
 export const currentJobExecution = () => execution.getStore();
 
-const drainAiCost = new AsyncLocalStorage<{ usd: number }>();
+/**
+ * What a drain page committed, owned by the permit outside the page so a page
+ * that throws still reports the AI cost and item settlements before it threw.
+ */
+export type DrainMeter = {
+  aiCostUsd: number;
+  claimed: number;
+  published: number;
+  failed: number;
+};
+const drainMeter = new AsyncLocalStorage<DrainMeter>();
 
 /** Attribute a recorded AI charge to the executing Job's or drain page's record. */
 export const addJobAiCost = (usd: number | null | undefined) => {
   if (!usd) return;
   const details = execution.getStore()?.details;
   if (details) details.aiCostUsd = (details.aiCostUsd ?? 0) + usd;
-  const meter = drainAiCost.getStore();
-  if (meter) meter.usd += usd;
+  const meter = drainMeter.getStore();
+  if (meter) meter.aiCostUsd += usd;
 };
 
-/** Run one drain page, totalling the AI charges it records (null when none). */
-export async function meterDrainAiCost<T>(
-  work: () => Promise<T>,
-): Promise<{ result: T; aiCostUsd: number | null }> {
-  const meter = { usd: 0 };
-  const result = await drainAiCost.run(meter, work);
-  return { result, aiCostUsd: meter.usd || null };
-}
+/** Count items a drain page claimed, or settled in a committed transaction. */
+export const countDrainItems = (
+  counts: Partial<Pick<DrainMeter, "claimed" | "published" | "failed">>,
+) => {
+  const meter = drainMeter.getStore();
+  if (!meter) return;
+  meter.claimed += counts.claimed ?? 0;
+  meter.published += counts.published ?? 0;
+  meter.failed += counts.failed ?? 0;
+};
+
+/** Run one drain page against the caller's meter. */
+export const meterDrainPage = <T>(meter: DrainMeter, work: () => Promise<T>) =>
+  drainMeter.run(meter, work);
+
 export const withJobExecution = <T>(
   db: Database,
   claim: JobClaim,

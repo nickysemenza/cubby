@@ -6,7 +6,7 @@ import type { UnparsedError } from "~/lib/error-utils";
 import type { Database } from "~/server/db/database";
 import { repositorySnapshotWriteDatabase } from "~/server/db/repository-access.boundary";
 import { repositoryTransactionDatabase } from "~/server/db/repository-access.boundary";
-import { withJobPhase } from "~/server/generic/jobs/context";
+import { countDrainItems, withJobPhase } from "~/server/generic/jobs/context";
 import type { DrainItem, DrainStore } from "~/server/generic/jobs/drain-store";
 import { classifyJobFailure, stopsPage } from "~/server/generic/jobs/failure";
 import type { JobBackoff } from "~/server/generic/jobs/kind-policy";
@@ -15,22 +15,18 @@ import type { JobContext } from "~/server/generic/jobs/types";
 export type DrainPage = {
   /** Owed items this page claimed; zero means a sibling or nobody holds the work. */
   claimed: number;
-  /** Committed settlements, recorded on the unit's execution record. */
-  published?: number;
-  failed?: number;
   /** The page's own outcome when it is not plain success (a funding or provider wait). */
   outcome?: "succeeded" | "skipped" | "deferred" | "superseded";
-  /** Charged AI cost the page recorded, when attributable. */
-  aiCostUsd?: number | null;
 };
 
 /**
- * Arm one delayed recovery for rows this page holds under a lease nothing
- * renews; it runs only if one of them is still leased past `afterMs`.
+ * Arm a delayed recovery for one claim this page holds under a lease nothing
+ * renews, due when that lease expires; it reclaims exactly that attempt.
  */
-type ArmDrainRecovery = (recovery: {
-  ids: string[];
-  afterMs: number;
+export type ArmDrainRecovery = (claim: {
+  id: string;
+  attempt: string;
+  leaseExpiresAt: Date;
   source: string;
 }) => Promise<void>;
 
@@ -52,14 +48,25 @@ export type BackgroundDrain = {
   due(): SQL | null;
   /** Scalar timestamp: when owed work next becomes claimable (may be past), or null. */
   next(): SQL | null;
-  /** One page of `unit`; it claims, prepares and publishes, then returns. */
+  /**
+   * One page of `unit`; it claims, prepares and publishes, then returns.
+   * Item counts and AI cost go to the permit's meter (`countDrainItems`,
+   * `addJobAiCost`) as they commit, so a page that throws still reports them.
+   */
   page(
     db: Database,
     unit: string,
     armRecovery?: ArmDrainRecovery,
   ): Promise<DrainPage>;
-  /** Whether any of these rows is still leased past its lease (its page died). */
-  recovers?(db: Database, ids: readonly string[]): Promise<boolean>;
+  /**
+   * Atomically reclaim and run exactly this lapsed attempt; claims nothing
+   * once the attempt was reclaimed or settled.
+   */
+  recover?(
+    db: Database,
+    claim: { id: string; attempt: string },
+    armRecovery: ArmDrainRecovery,
+  ): Promise<DrainPage>;
 };
 
 /** Pause, defer and lease loss stop the page; an adapter must rethrow them rather than settle an item. */
@@ -194,8 +201,7 @@ export function rowDrain<P>(
         store.claim(db, spec.limit),
       );
       if (!items.length) return { claimed: 0 };
-      let published = 0;
-      let failed = 0;
+      countDrainItems({ claimed: items.length });
       // Unset until preparation returns; a page-level failure settles without it.
       let preparation: { prepared: P } | undefined;
       // Fenced callbacks roll back and may replay on 40001, so each one returns
@@ -235,9 +241,11 @@ export function rowDrain<P>(
         for (const error of preparationFailures.values())
           if (stopsDrainPage(error)) throw error;
         if (preparationFailures.size)
-          failed += await context.fenced((tx) =>
-            settleFailed(tx, [...preparationFailures]),
-          );
+          countDrainItems({
+            failed: await context.fenced((tx) =>
+              settleFailed(tx, [...preparationFailures]),
+            ),
+          });
         // A rolled-back chunk splits; committed siblings never replay.
         const publish = async (chunk: readonly DrainItem[]): Promise<void> => {
           try {
@@ -265,7 +273,7 @@ export function rowDrain<P>(
                 { isolationLevel: spec.isolationLevel },
               ),
             );
-            published += committed;
+            countDrainItems({ published: committed });
           } catch (error) {
             if (
               classifyJobFailure(error, { publication: true }).kind !==
@@ -273,9 +281,11 @@ export function rowDrain<P>(
             )
               throw error;
             if (chunk.length === 1) {
-              failed += await context.fenced((tx) =>
-                settleFailed(tx, [[chunk[0]!, error]]),
-              );
+              countDrainItems({
+                failed: await context.fenced((tx) =>
+                  settleFailed(tx, [[chunk[0]!, error]]),
+                ),
+              });
               return;
             }
             const middle = Math.ceil(chunk.length / 2);
@@ -303,6 +313,7 @@ export function rowDrain<P>(
                 items.map((item) => [item, error] as const),
               ),
             )
+            .then((failed) => countDrainItems({ failed }))
             // SILENT: the page's own error is rethrown below and reported by
             // its permit; an unreachable database leaves the items owed.
             .catch(() => undefined);
@@ -310,7 +321,7 @@ export function rowDrain<P>(
       }
       released = true;
       await spec.store.release?.(db);
-      return { claimed: items.length, published, failed };
+      return { claimed: items.length };
     } finally {
       if (!released) await spec.store.release?.(db);
     }
