@@ -1,5 +1,5 @@
 {
-  "_doc": "Scanned-bin verdict vectors. Read by sweep-bin-plan.ts tests and Swift BinPlan tests. Verdict `reason` uses the Swift vocabulary (`root` = TS `home`). `{verb}` in a message is 'sweeping' on web and 'counting' on Apple.",
+  "_doc": "Scanned-bin verdict vectors for CubbyKit BinPlan, the only implementation since the web sweep planner was retired. `{verb}` in a message is 'counting'.",
   "nodes": [
     { "code": "LOC-2345", "name": "Home", "parent": null },
     { "code": "LOC-3456", "name": "Garage", "parent": "LOC-2345" },
