@@ -74,7 +74,7 @@ describe("createCubbyGatewayFetch", () => {
         },
       }))
         models.setProvider(provider);
-      const selected = cubbyAgentModel("claude-opus-5-5", "openai-responses");
+      const selected = cubbyAgentModel("gpt-6.1-terra", "openai-responses");
       const model = models.getModel(selected.provider, selected.modelId);
       if (!model) throw new Error("Missing test model");
       const result = await models.complete(
@@ -126,7 +126,7 @@ describe("createCubbyGatewayFetch", () => {
       },
     }))
       models.setProvider(provider);
-    const selected = cubbyAgentModel("claude-opus-5-5");
+    const selected = cubbyAgentModel("gpt-6.1-sol");
     const model = models.getModel(selected.provider, selected.modelId);
     if (!model) throw new Error("Missing test model");
     const result = await models.completeSimple(

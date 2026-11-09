@@ -605,23 +605,24 @@ the gateway before relying on a feature that selects it.
 
 ### Claude subscriber credits
 
-Every tier-routed chat call uses subscriber credits first (Opus), then OpenAI API credits (Sol), then the
-ChatGPT subscription transport (Sol), then paid Unified Billing (Sol);
-`fundedChatAttempts` owns the ladder. The implementation
-and model declarations own the model choices; [ADR 0017](adr/0017-subscription-funded-model-fallback.md#background-work-spends-within-window-budgets)
-records when paid fallback is allowed. Fixed-model evaluations do not change model.
+Every tier-routed chat call uses subscriber credits first, then OpenAI API
+credits, then the ChatGPT subscription transport, then paid Unified Billing;
+each source answers with its route's model of the call's tier
+(`CHAT_TIER_MODELS`: fast Haiku/Luna, standard Sonnet/Terra, quality
+Sonnet/Sol). `fundedChatAttempts` owns the ladder;
+[ADR 0027](adr/0027-tier-routed-models-on-a-funding-first-ladder.md) records
+the tiers and when paid fallback is allowed. Fixed-model evaluations do not
+change model.
 
-Background work (a Run whose lineage root was scheduled, discovered or
-backfilled) draws each free rung only within its window budget: the Claude
-credit's (default $1.50) and the ChatGPT plan's ($2, `PLAN_BUDGET_LIMIT_USD`),
-both at standard cost, because the household shares both with its own use.
-OpenAI API credits have a separate $1.50 six-hour default budget, editable as
-`openaiCreditLimitUsd`; usage is split by provider under billing reason
-`subscriber_credit`. Existing Claude settings and usage are retained.
-Past one, `beforeFreeRequest` returns a `cubby_credit_budget_reached` or
-`cubby_plan_budget_reached` funding refusal and the ladder moves on; an
-unladdered plan call skips the plan for its paid or subscription-required
-path. Every Run then pays within the paid budget, and once that is spent
+Provider credits (Claude and OpenAI API) have no window budget: each runs
+until its provider refuses, and the status reports its standard-cost spend by
+provider under billing reason `subscriber_credit`. Background work (a Run
+whose lineage root was scheduled, discovered or backfilled) draws the ChatGPT
+plan only within its window budget (default $2, `PLAN_BUDGET_LIMIT_USD`, at
+standard cost), because the household shares the plan with its own use. Past
+it, `beforePlanRequest` returns a `cubby_plan_budget_reached` funding refusal
+and the ladder moves on; an unladdered plan call skips the plan for its paid or
+subscription-required path. Every Run then pays within the paid budget, and once that is spent
 `paidRunPreflight` pauses the Run (`paused_auth`, `execution_limit`). The funding pause transaction records a `run.funding-resume` Job due just after
 the window end, with `waitReason=ai_funding_window` and `waitUntil`.
 `resumeFundingPausedRuns` redispatches eligible agent imports and resumes paused
@@ -630,12 +631,12 @@ event ("Run now, paid allowed" on the Run page, "Run discovery now, paid
 allowed" on the Mail import card, or MCP `run.lifecycle`/`run.discover_mail`)
 resumes that Run now and lets it and the imports its discovery starts pay past
 the paid budget by the confirmed `paidOverBudgetUsd` for the granting window.
-The free-rung preflight (`freeRunPreflight`) recognizes a chat call by endpoint
+The plan preflight (`planRunPreflight`) recognizes a chat call by endpoint
 path: pi-ai's Anthropic SDK posts `v1/messages?beta=true`.
 
 A provider credit refusal is held, not retried. When a credit response is a
 funding refusal `isInferenceFundingRefusal` recognizes (a Console spend limit,
-a spent balance; never Cubby's own `cubby_credit_budget_reached`), the
+a spent balance), the
 `AI_GATEWAY_EGRESS` Durable Object records it with the raw body until the date
 Anthropic names ("You will regain access on …"), else the end of the current
 six-hour window. While it holds, credit admission answers at once with a
@@ -644,8 +645,7 @@ so every ladder moves on to OpenAI API credits; unified (paid) traffic is
 unaffected. One credit request per window passes as a probe: success clears
 the refusal, another refusal records it again. "Retry Claude credit now"
 (Settings → AI funding, MCP `ai_funding.reset_funding_refusal` with `source:
-"credit"`) and any credit budget change clear it and resume funding-paused
-Runs. `ai_funding_read.status` and the AI funding card report it as
+"credit"`) clears it and resumes funding-paused Runs. `ai_funding_read.status` and the AI funding card report it as
 `credit.state` `refused`, with `until` and `reason`. Refusals that arrive only
 inside a stream are not recorded.
 

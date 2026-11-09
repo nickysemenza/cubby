@@ -1688,7 +1688,7 @@ describe("mail research admission", () => {
       expect(successor).toMatchObject({
         cause: "retry",
         status: "running",
-        coordinatorModel: "claude-opus-5-5",
+        coordinatorModel: "gpt-6.1-terra",
       });
       expect(await frozenSources(successor!.id)).toEqual([
         { orderMailId: mail.id, checksum: mail.rawChecksum },
@@ -1964,7 +1964,7 @@ describe("mail research admission", () => {
     },
     {
       provider: "anthropic",
-      model: "claude-opus-5-5",
+      model: "claude-sonnet-5-5",
       endpoint: "v1/messages",
     },
   ] as const)(

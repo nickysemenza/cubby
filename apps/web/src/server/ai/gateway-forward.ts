@@ -17,7 +17,7 @@ import { createParser } from "eventsource-parser";
 import { z } from "zod";
 
 import { type UnparsedError } from "~/lib/error-utils";
-import { withAiBudget, withFreeBudget } from "~/server/ai/budget";
+import { withAiBudget, withPlanBudget } from "~/server/ai/budget";
 import { gatewayFetch, type GatewayTransport } from "~/server/ai/gateway";
 import { recordAiUsage } from "~/server/ai/usage";
 import type { Database } from "~/server/db";
@@ -345,9 +345,9 @@ async function forwardGatewayAttempt(
     port.transport(provider, {
       metadata: { feature: opts.feature, operation },
       funding,
-      // Paid calls and background free calls use their own funding budgets.
-      beforeFreeRequest: model
-        ? withFreeBudget(
+      // Paid calls and background plan calls use their own window budgets.
+      beforePlanRequest: model
+        ? withPlanBudget(
             opts.db,
             { model, runId: opts.runId, interactive: opts.interactive },
             undefined,

@@ -168,7 +168,7 @@ Start streams   →  cancellable workflow streams
 - Tier-routed OpenAI Responses calls try the household's OpenAI API credits
   before its ChatGPT plan. Fixed-model calls retain their declared funding.
   The plan is connected in
-  Settings, retaining the declared Luna/Sol choices. `CHATGPT_PLAN` owns OAuth
+  Settings; each tier keeps its OpenAI model there. `CHATGPT_PLAN` owns OAuth
   credentials and serializes rotating refreshes. Other providers and embeddings
   use AI Gateway through the shared production egress Durable Object. It
   admits managed-credential traffic under an aggregate rolling window and

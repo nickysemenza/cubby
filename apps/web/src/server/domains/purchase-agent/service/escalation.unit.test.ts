@@ -8,18 +8,16 @@ import { coordinatorEscalation } from "./escalation";
 
 function harness(
   models: { primary: SupportedChatModel; escalation?: SupportedChatModel } = {
-    primary: "claude-haiku-5-5",
-    escalation: "claude-opus-5-5",
+    primary: "gpt-6-luna",
+    escalation: "gpt-6.1-terra",
   },
   configure?: (model: SupportedChatModel) => Promise<void>,
-  unavailable?: (model: SupportedChatModel) => Promise<string | null>,
-  fundedAlternative?: SupportedChatModel,
+  unavailable?: () => Promise<string | null>,
 ) {
   const state = new Map<string, string>();
   const configured: SupportedChatModel[] = [];
   const escalation = coordinatorEscalation({
     models,
-    fundedAlternative,
     store: {
       read: (key) => state.get(key),
       write: (key, value) => {
@@ -58,44 +56,24 @@ function harness(
 }
 
 describe("coordinator escalation", () => {
-  it.each([true, false])(
-    "selects Sol before transmission only when its free funding is available=%s",
-    async (available) => {
-      const models = {
-        primary: "gpt-6-luna",
-        escalation: "claude-opus-5-5",
-      } as const;
-      const { escalation, configured, claim, state } = harness(
-        models,
-        undefined,
-        async (model) =>
-          model === "gpt-6.1-sol" && available
-            ? null
-            : "Synthetic credit unavailable",
-        "gpt-6.1-sol",
-      );
-      await claim("claim", "synthetic-order");
-      expect(
-        await escalation.escalate({
-          category: "identity",
-          reason: "Synthetic variant ambiguity",
-        }),
-      ).toMatchObject({
-        escalated: available,
-        model: available ? "gpt-6.1-sol" : "gpt-6-luna",
-      });
-      expect(configured).toEqual(available ? ["gpt-6.1-sol"] : []);
-      const recovered = coordinatorEscalation({
-        models,
-        store: {
-          read: (key) => state.get(key),
-          write: (key, value) => state.set(key, value),
-        },
-        useModel: async () => {},
-      });
-      expect(recovered.model()).toBe(available ? "gpt-6.1-sol" : "gpt-6-luna");
-    },
-  );
+  // Cutover: a decision stored before a model retired must resume on the
+  // current escalation model instead of failing to parse.
+  it("resumes a decision that names a retired model on the escalation model", async () => {
+    const { escalation, claim, state } = harness();
+    await claim("claim", "synthetic-order");
+    await escalation.escalate({ category: "identity", reason: "Synthetic" });
+    for (const [key, value] of state)
+      state.set(key, value.replaceAll('"gpt-6.1-terra"', '"retired-model"'));
+    const recovered = coordinatorEscalation({
+      models: { primary: "gpt-6-luna", escalation: "gpt-6.1-terra" },
+      store: {
+        read: (key) => state.get(key),
+        write: (key, value) => state.set(key, value),
+      },
+      useModel: async () => {},
+    });
+    expect(recovered.model()).toBe("gpt-6.1-terra");
+  });
   it.each([
     "missing_evidence",
     "member_decision",
@@ -106,7 +84,7 @@ describe("coordinator escalation", () => {
     await claim("claim-1", "synthetic-a");
     expect(
       await escalation.escalate({ category, reason: "Synthetic blocker" }),
-    ).toMatchObject({ escalated: false, model: "claude-haiku-5-5" });
+    ).toMatchObject({ escalated: false, model: "gpt-6-luna" });
     expect(configured).toEqual([]);
   });
 
@@ -117,7 +95,7 @@ describe("coordinator escalation", () => {
     const { escalation, configured, claim } = harness(
       undefined,
       async (model) => {
-        if (model === "claude-opus-5-5" && refuse) {
+        if (model === "gpt-6.1-terra" && refuse) {
           refuse = false;
           throw new Error("Synthetic configure interruption");
         }
@@ -134,7 +112,7 @@ describe("coordinator escalation", () => {
     );
     const attempts = configured.length;
     await transition();
-    expect(configured.slice(attempts)).toEqual(["claude-opus-5-5"]);
+    expect(configured.slice(attempts)).toEqual(["gpt-6.1-terra"]);
   });
 
   it("reconciles an interrupted next-claim reset before accepting the replay", async () => {
@@ -142,7 +120,7 @@ describe("coordinator escalation", () => {
     const { escalation, configured, claim } = harness(
       undefined,
       async (model) => {
-        if (model === "claude-haiku-5-5" && refuse) {
+        if (model === "gpt-6-luna" && refuse) {
           refuse = false;
           throw new Error("Synthetic reset interruption");
         }
@@ -159,25 +137,25 @@ describe("coordinator escalation", () => {
     );
     const attempts = configured.length;
     await claim("claim-2");
-    expect(configured.slice(attempts)).toEqual(["claude-haiku-5-5"]);
+    expect(configured.slice(attempts)).toEqual(["gpt-6-luna"]);
   });
 
   it("escalates the current Email on request and returns to the primary at the next claim", async () => {
     const { escalation, configured, claim } = harness();
     expect(escalation.active).toBe(true);
     await claim("claim-1");
-    expect(escalation.model()).toBe("claude-haiku-5-5");
+    expect(escalation.model()).toBe("gpt-6-luna");
     expect(
       await escalation.escalate({ category: "identity", reason: "Unclear" }),
-    ).toEqual({ escalated: true, model: "claude-opus-5-5" });
-    expect(escalation.model()).toBe("claude-opus-5-5");
+    ).toEqual({ escalated: true, model: "gpt-6.1-terra" });
+    expect(escalation.model()).toBe("gpt-6.1-terra");
     // A second request on the same Email changes nothing.
     expect(
       await escalation.escalate({ category: "identity", reason: "Again" }),
-    ).toEqual({ escalated: false, model: "claude-opus-5-5" });
+    ).toEqual({ escalated: false, model: "gpt-6.1-terra" });
     await claim("claim-2");
-    expect(escalation.model()).toBe("claude-haiku-5-5");
-    expect(configured).toEqual(["claude-opus-5-5", "claude-haiku-5-5"]);
+    expect(escalation.model()).toBe("gpt-6-luna");
+    expect(configured).toEqual(["gpt-6.1-terra", "gpt-6-luna"]);
   });
 
   // Regression (2026-10-19): the escalation model re-claimed its unsettled
@@ -187,10 +165,10 @@ describe("coordinator escalation", () => {
     await claim("claim-1", "synthetic-a");
     await escalation.escalate({ category: "identity", reason: "Unclear" });
     await claim("claim-2", "synthetic-a");
-    expect(escalation.model()).toBe("claude-opus-5-5");
+    expect(escalation.model()).toBe("gpt-6.1-terra");
     await claim("claim-3", "synthetic-b");
-    expect(escalation.model()).toBe("claude-haiku-5-5");
-    expect(configured).toEqual(["claude-opus-5-5", "claude-haiku-5-5"]);
+    expect(escalation.model()).toBe("gpt-6-luna");
+    expect(configured).toEqual(["gpt-6.1-terra", "gpt-6-luna"]);
   });
 
   it("lets the primary settle an Email whose escalation model cannot be funded", async () => {
@@ -209,7 +187,7 @@ describe("coordinator escalation", () => {
       await escalation.escalate({ category: "identity", reason: "Unclear" }),
     ).toEqual({
       escalated: false,
-      model: "claude-haiku-5-5",
+      model: "gpt-6-luna",
       unavailable: "Synthetic credit refusal",
     });
     // Decided once per Email: a recovered call decides as it first did.
@@ -229,19 +207,19 @@ describe("coordinator escalation", () => {
           reason: "Synthetic ambiguity",
         })
       ).model,
-    ).toBe("claude-opus-5-5");
+    ).toBe("gpt-6.1-terra");
   });
 
   it.each([
-    { primary: "claude-opus-5-5", escalation: "claude-opus-5-5" },
-    { primary: "claude-opus-5-5" },
+    { primary: "gpt-6.1-terra", escalation: "gpt-6.1-terra" },
+    { primary: "gpt-6.1-terra" },
   ] as const)("is inert when %o", async (models) => {
     const { escalation, configured, claim } = harness(models);
     expect(escalation.active).toBe(false);
     await claim("claim-1");
     expect(
       await escalation.escalate({ category: "identity", reason: "Unclear" }),
-    ).toEqual({ escalated: false, model: "claude-opus-5-5" });
+    ).toEqual({ escalated: false, model: "gpt-6.1-terra" });
     expect(configured).toEqual([]);
   });
 });

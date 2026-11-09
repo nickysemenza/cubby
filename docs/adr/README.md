@@ -24,7 +24,7 @@ rewriting its decision.
 | [0014](0014-path-routed-ci-lanes.md)                          | Start only the CI lanes whose inputs changed (superseded by 0020)      |
 | [0015](0015-unified-durable-work-coordination.md)             | Shared durable execution for member-requested AI work                  |
 | [0016](0016-shared-assessments-and-feedback.md)               | Shared Assessments and Feedback                                        |
-| [0017](0017-subscription-funded-model-fallback.md)            | Subscription-funded model fallback                                     |
+| [0017](0017-subscription-funded-model-fallback.md)            | Subscription-funded model fallback (superseded by 0027)                |
 | [0018](0018-current-member-filter-token.md)                   | `@me` is a declared value of Ledger Party filters                      |
 | [0019](0019-domain-first-server-layout.md)                    | Domain-first server layout                                             |
 | [0020](0020-cache-routed-ci.md)                               | Start every Linux lane and let the cache route                         |
@@ -35,3 +35,4 @@ rewriting its decision.
 | [0025](0025-radical-simplification-of-background-work.md)     | Shrink Cubby's machinery in place on Workers and Neon                  |
 
 | [0026](0026-source-occurrence-and-accepted-evidence.md) | Source occurrence owns accepted bank evidence |
+| [0027](0027-tier-routed-models-on-a-funding-first-ladder.md) | Tier-routed models on a funding-first ladder |

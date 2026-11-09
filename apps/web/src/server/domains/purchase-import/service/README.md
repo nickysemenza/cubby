@@ -137,10 +137,10 @@ pending: nothing here starts Product research.
    automatically spend a stronger-model turn; repairable extraction, identity,
    contradictory evidence or an unclassified reasoning gap may request one.
    Its durable per-Email decision survives re-claims and coordinator recovery.
-   When Claude escalation credit is already known unavailable, production
-   checks Sol's free funding before selecting it directly; it does not spend a
-   failed Claude request to reach the existing provider-ladder alternative.
-   The selected model is retained in the escalation receipt across recovery.
+   Escalation moves Luna's `fast` tier to `standard` (Sonnet on Claude credit,
+   Terra elsewhere; ADR 0027). A background Run whose free sources are all
+   refused or spent lets the primary settle the Email rather than escalate onto
+   paid funding. A receipt naming a retired model resumes on the current one.
    The RunOperation ledger owns claim-evidence extraction budgets across Runs: two
    primary submissions (initial plus repair) and one escalation submission.
    Identical extraction replay does not consume another attempt; repeated claims

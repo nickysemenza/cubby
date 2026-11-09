@@ -44,8 +44,8 @@ it("restarts a credit-refused generation on the subscription with its actual mod
     },
   ))
     models.setProvider(provider);
-  const model = models.getModel("anthropic", "claude-opus-5-5");
-  if (!model) throw new Error("Missing Opus");
+  const model = models.getModel("openai", "gpt-6.1-sol");
+  if (!model) throw new Error("Missing Sol");
   const response = await models.completeSimple(
     model,
     { messages: [] },
@@ -87,8 +87,8 @@ it("advances past a credit attempt the egress object refuses from its recorded r
     },
   ))
     models.setProvider(provider);
-  const model = models.getModel("anthropic", "claude-opus-5-5");
-  if (!model) throw new Error("Missing Opus");
+  const model = models.getModel("openai", "gpt-6.1-sol");
+  if (!model) throw new Error("Missing Sol");
   const response = await models.completeSimple(
     model,
     { messages: [] },
@@ -103,57 +103,60 @@ it("advances past a credit attempt the egress object refuses from its recorded r
   ]);
 });
 
-// A coordinator whose manifest names a cheaper primary (or escalates to
-// another model) must be answered by that model: the household ladder alone
-// always led with Opus, silently replacing the requested model.
-describe("a ladder that leads with the requested model", () => {
-  const credit = {
-    error: {
-      type: "invalid_request_error",
-      message: "Your credit balance is too low to access the Anthropic API.",
-    },
-  };
+// Every source answers with its own route's model of the requested tier; a
+// fast request must never be answered by a quality model.
+describe("a ladder that keeps the requested tier on every source", () => {
   it.each([
-    ["claude-haiku-5-5", "anthropic:subscriber_credit:claude-haiku-5-5"],
-    ["claude-sonnet-5-5", "anthropic:subscriber_credit:claude-sonnet-5-5"],
-  ] as const)(
-    "funds %s from the Claude credit first, then the household ladder",
-    async (requested, first) => {
-      const attempts: string[] = [];
-      const models = createModels();
-      for (const provider of fundedCubbyPiProviders(
-        (route, _unbilled, funding) => async (_input, init) => {
-          const body = z
-            .object({ model: z.string() })
-            .parse(JSON.parse(String(init?.body)));
-          attempts.push(`${route}:${funding}:${body.model}`);
-          if (funding === "openai_credit")
-            return Response.json(
-              { error: { code: "credit_balance_exhausted" } },
-              { status: 429 },
-            );
-          if (funding === "subscriber_credit")
-            return Response.json(credit, { status: 400 });
-          return openAiCompleted();
-        },
-        undefined,
-        { paid: true, leadWithRequested: true },
-      ))
-        models.setProvider(provider);
-      const model = models.getModel("anthropic", requested);
-      if (!model) throw new Error(`Missing ${requested}`);
-      const response = await models.completeSimple(model, { messages: [] });
-      expect(response.errorMessage).toBeUndefined();
-      expect(attempts).toEqual([
-        first,
-        "anthropic:subscriber_credit:claude-opus-5-5",
-        "openai:openai_credit:gpt-6.1-sol",
-        "openai:subscription:gpt-6.1-sol",
-      ]);
-    },
-  );
+    ["gpt-6-luna", "claude-haiku-5-5"],
+    ["gpt-6.1-terra", "claude-sonnet-5-5"],
+    ["gpt-6.1-sol", "claude-sonnet-5-5"],
+  ] as const)("funds %s as %s on Claude credit", async (requested, credit) => {
+    const attempts: string[] = [];
+    const local: boolean[] = [];
+    const models = createModels();
+    for (const provider of fundedCubbyPiProviders(
+      (route, _unbilled, funding) => async (_input, init) => {
+        const body = z
+          .object({ model: z.string() })
+          .parse(JSON.parse(String(init?.body)));
+        attempts.push(`${route}:${funding}:${body.model}`);
+        if (funding === "subscriber_credit")
+          return creditRefusedResponse({
+            until: Date.parse("2099-11-01T00:00:00Z"),
+            reason: "Synthetic refusal",
+          });
+        if (funding === "openai_credit")
+          return Response.json(
+            { error: { code: "credit_balance_exhausted" } },
+            { status: 429 },
+          );
+        return openAiCompleted();
+      },
+      async (_message, attempt) => {
+        local.push(attempt.local);
+      },
+    ))
+      models.setProvider(provider);
+    const model = models.getModel("openai", requested);
+    if (!model) throw new Error(`Missing ${requested}`);
+    const response = await models.completeSimple(model, { messages: [] });
+    expect(response.errorMessage).toBeUndefined();
+    expect(response.model).toBe(requested);
+    expect(attempts).toEqual([
+      `anthropic:subscriber_credit:${credit}`,
+      `openai:openai_credit:${requested}`,
+      `openai:subscription:${requested}`,
+    ]);
+    // Cubby's own recorded refusal made no provider call; OpenAI's did.
+    expect(local).toEqual([true, false]);
+  });
 
-  it("funds an OpenAI primary from API credits first", async () => {
+  // A harness override measures the model it names: never a tier substitute,
+  // and an Anthropic model outside the tier table still runs.
+  it.each([
+    ["gpt-6-luna", ["openai:openai_credit:gpt-6-luna"]],
+    ["claude-sonnet-5-5", ["anthropic:subscriber_credit:claude-sonnet-5-5"]],
+  ] as const)("keeps a pinned %s on its own route", async (pinned, sent) => {
     const attempts: string[] = [];
     const models = createModels();
     for (const provider of fundedCubbyPiProviders(
@@ -162,21 +165,20 @@ describe("a ladder that leads with the requested model", () => {
           .object({ model: z.string() })
           .parse(JSON.parse(String(init?.body)));
         attempts.push(`${route}:${funding}:${body.model}`);
-        return openAiCompleted();
+        return route === "anthropic"
+          ? anthropicStream(anthropicDone)
+          : openAiCompleted();
       },
       undefined,
-      { paid: true, leadWithRequested: true },
+      { paid: false, pinned: true },
     ))
       models.setProvider(provider);
-    const model = models.getModel("openai", "gpt-6-luna");
-    if (!model) throw new Error("Missing Luna");
+    const route = pinned.startsWith("claude") ? "anthropic" : "openai";
+    const model = models.getModel(route, pinned);
+    if (!model) throw new Error(`Missing ${pinned}`);
     const response = await models.completeSimple(model, { messages: [] });
-    expect(response.model).toBe("gpt-6-luna");
-    expect(attempts).toEqual(["openai:openai_credit:gpt-6-luna"]);
-    expect(piTokenUsage(response)).toMatchObject({
-      chargedCost: 0,
-      costEvidence: { billingReason: "subscriber_credit" },
-    });
+    expect(response.errorMessage).toBeUndefined();
+    expect(attempts).toEqual(sent);
   });
 });
 
@@ -206,7 +208,7 @@ const anthropicStart = {
     type: "message",
     role: "assistant",
     content: [],
-    model: "claude-opus-5-5",
+    model: "claude-sonnet-5-5",
     stop_reason: null,
     usage: { input_tokens: 100, output_tokens: 0 },
   },
@@ -231,8 +233,8 @@ it("records subscriber-credit cost separately and skips later funding on success
     },
   ))
     models.setProvider(provider);
-  const model = models.getModel("anthropic", "claude-opus-5-5");
-  if (!model) throw new Error("Missing Opus");
+  const model = models.getModel("openai", "gpt-6.1-sol");
+  if (!model) throw new Error("Missing Sol");
   const response = await models.completeSimple(model, { messages: [] });
   expect(response.errorMessage).toBeUndefined();
   expect(attempts).toEqual(["subscriber_credit"]);
@@ -296,8 +298,8 @@ it("discards a partial tool call before falling through both included funding ro
     },
   ))
     models.setProvider(provider);
-  const model = models.getModel("anthropic", "claude-opus-5-5");
-  if (!model) throw new Error("Missing Opus");
+  const model = models.getModel("openai", "gpt-6.1-sol");
+  if (!model) throw new Error("Missing Sol");
   const stream = models.streamSimple(model, { messages: [] });
   const emitted: string[] = [];
   for await (const event of stream) emitted.push(event.type);
@@ -309,7 +311,7 @@ it("discards a partial tool call before falling through both included funding ro
     "subscription",
     "paid",
   ]);
-  expect(refused).toEqual(["claude-opus-5-5", "gpt-6.1-sol", "gpt-6.1-sol"]);
+  expect(refused).toEqual(["claude-sonnet-5-5", "gpt-6.1-sol", "gpt-6.1-sol"]);
   expect(emitted).not.toContain("toolcall_start");
   expect(piTokenUsage(result).costEvidence?.billingReason).toBe("standard");
 });
@@ -360,8 +362,8 @@ it.each(["error", "response.failed", "named_error"])(
       },
     ))
       models.setProvider(provider);
-    const model = models.getModel("anthropic", "claude-opus-5-5");
-    if (!model) throw new Error("Missing Opus");
+    const model = models.getModel("openai", "gpt-6.1-sol");
+    if (!model) throw new Error("Missing Sol");
     const response = await models.completeSimple(model, { messages: [] });
     expect(response.errorMessage).toBeUndefined();
     expect(attempts).toEqual([
@@ -416,7 +418,7 @@ it.each([
     if (!model) throw new Error("Missing Luna");
     const response = await models.completeSimple(model, { messages: [] });
     expect(attempts).toEqual(expected);
-    expect(response.model).toBe("gpt-6.1-sol");
+    expect(response.model).toBe("gpt-6-luna");
     expect(Boolean(response.errorMessage)).toBe(!paid);
   },
 );
@@ -429,8 +431,8 @@ it("sends PDF user content and nested tool results as Anthropic documents", asyn
     return anthropicStream(anthropicDone);
   }))
     models.setProvider(provider);
-  const model = models.getModel("anthropic", "claude-opus-5-5");
-  if (!model) throw new Error("Missing Opus");
+  const model = models.getModel("anthropic", "claude-sonnet-5-5");
+  if (!model) throw new Error("Missing Sonnet");
   const pdf = {
     type: "image",
     data: "JVBERi0=",
@@ -494,8 +496,8 @@ it("sends PDF user content and nested tool results as Anthropic documents", asyn
   );
 });
 
-// Structured runs force their respond tool on OpenAI; Opus always thinks and
-// rejects a forced tool_choice (400), so the credit attempt asks with "auto".
+// Structured runs force their respond tool on OpenAI; Claude's thinking models
+// reject a forced tool_choice (400), so the credit attempt asks with "auto".
 it("relaxes a forced tool call to auto on the credit attempt", async () => {
   let body: unknown;
   const models = createModels();
@@ -529,7 +531,7 @@ it("relaxes a forced tool call to auto on the credit attempt", async () => {
     } as never,
   );
   expect(body).toMatchObject({
-    model: "claude-opus-5-5",
+    model: "claude-haiku-5-5",
     tool_choice: { type: "auto" },
   });
 });

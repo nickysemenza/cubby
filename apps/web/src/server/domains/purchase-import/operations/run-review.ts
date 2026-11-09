@@ -169,7 +169,7 @@ async function reconcileSettledRunOnce(
   if (input.receivedEventIds && unreceivedWake(scope, input.receivedEventIds))
     return { reconciled: false as const, status: "running" as const };
   if (input.failure) {
-    // ADR 0017: with no funding the Run waits for the next window and keeps its
+    // ADR 0027: with no funding the Run waits for the next window and keeps its
     // Emails. Failing would release them to a discovery pass that fails the same way.
     if (input.fundingUnavailable) {
       // The agent's last turn found the paid gateway without funding; the

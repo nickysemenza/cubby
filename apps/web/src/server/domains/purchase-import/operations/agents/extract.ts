@@ -3,30 +3,13 @@ import {
   browserCapture,
   type BrowserCapture,
   type ImportExtractionOutcome,
-  importAuditModelOutput,
   normalizeImportAuditModelOutput,
   normalizeImportExtractionModelOutput,
 } from "@cubby/schemas/purchase-import";
-import type { AiUsageTransport } from "@cubby/schemas/telemetry";
 import { cents } from "@cubby/shared";
-import {
-  gatewayBaseURL,
-  type GatewayResponseInfo,
-} from "@cubby/shared/ai/gateway-request";
-import {
-  AUDIT_RECOVERY_MODEL,
-  getChatModelConfig,
-  providerFor,
-} from "@cubby/shared/ai/models";
 import { and, eq } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
-import { z } from "zod";
 
-import { findErrorCause } from "~/lib/error-diagnostics";
-import type { UnparsedError } from "~/lib/error-utils";
-import { cachedCall } from "~/server/ai/adapters";
-import { AiBudgetExhaustedError, withAiBudget } from "~/server/ai/budget";
-import { gatewayFetch } from "~/server/ai/gateway";
 import {
   PURCHASE_IMPORT_AUDIT_FEATURE,
   PURCHASE_IMPORT_EXTRACTION_FEATURE,
@@ -37,12 +20,7 @@ import {
   SUM_MISMATCH_ISSUE,
   type PurchaseAuditRenderedBatch,
 } from "~/server/ai/policy/prompts/purchase-import";
-import {
-  type AiResponseCacheKeyInput,
-  withAiResponseCache,
-} from "~/server/ai/response-cache";
 import { runStructuredFeature } from "~/server/ai/run-feature";
-import { recordAiUsage } from "~/server/ai/usage";
 import { getR2PublicUrl } from "~/server/clients/r2-public-url";
 import type { Database } from "~/server/db";
 import { getDb, notDeleted } from "~/server/db/helpers";
@@ -218,224 +196,22 @@ export function settleRepairedExtraction(
 }
 
 /** Loaded lazily by the purchase-import service to keep its bootstrap small. */
-const auditRecoveryResponse = z.object({
-  content: z.array(z.object({ type: z.string(), text: z.string().optional() })),
-  usage: z.object({
-    input_tokens: z.number(),
-    output_tokens: z.number(),
-    cache_read_input_tokens: z.number().nullish(),
-    cache_creation_input_tokens: z.number().nullish(),
-  }),
-});
-
-export interface PurchaseAuditPorts {
-  runStructured: typeof runStructuredFeature;
-  gateway: typeof gatewayFetch;
-  usage: typeof recordAiUsage;
-  /** Replays an identical recovery from the application response cache. */
-  cache?: boolean;
-}
-
-const productionPurchaseAuditPorts: PurchaseAuditPorts = {
-  runStructured: runStructuredFeature,
-  gateway: gatewayFetch,
-  usage: recordAiUsage,
-  cache: true,
-};
-
-async function recoverPurchaseAudit(
-  args: {
-    db: Database;
-    runId: string;
-    renderedBatch: PurchaseAuditRenderedBatch;
-  },
-  ports: PurchaseAuditPorts,
-) {
-  const request = PURCHASE_IMPORT_AUDIT_FEATURE.request(args.renderedBatch);
-  const schema = z.toJSONSchema(importAuditModelOutput);
-  // Anthropic accepts the same portable object as OpenAI once the generated
-  // dialect marker is removed. No union or numeric bounds reach the provider.
-  const { $schema: _dialect, ...outputSchema } = schema;
-  const operation = "purchaseImport.audit.recovery";
-  const usage = {
-    provider: providerFor(AUDIT_RECOVERY_MODEL),
-    model: AUDIT_RECOVERY_MODEL,
-    feature: PURCHASE_IMPORT_AUDIT_FEATURE.feature,
-    operation,
-    runId: runEntityId.parse(args.runId),
-  };
-  const keyInput: AiResponseCacheKeyInput = {
-    feature: PURCHASE_IMPORT_AUDIT_FEATURE.feature,
-    model: AUDIT_RECOVERY_MODEL,
-    // The suffix pins this call's fixed Anthropic options (adaptive thinking,
-    // native JSON-schema output); change it when they change.
-    promptVersion: `${PURCHASE_IMPORT_AUDIT_FEATURE.promptVersion}/anthropic-recovery-1`,
-    maxTokens: PURCHASE_IMPORT_AUDIT_FEATURE.maxTokens,
-    effort: "high",
-    outputSchema,
-    request,
-  };
-  // The model's own output is cached; normalization runs on every answer.
-  const output = await withAiResponseCache({
-    enabled: ports.cache === true,
-    keyInput,
-    validate: (value) => importAuditModelOutput.parse(value),
-    // A replay made no model call; it is booked under the recovery model.
-    onHit: (durationMs, avoidedUsage) =>
-      ports.usage(args.db, {
-        ...usage,
-        transport: "cache",
-        inputTokens: 0,
-        outputTokens: 0,
-        durationMs,
-        applicationCacheStatus: "hit",
-        avoidedUsage,
-      }),
-    compute: async (applicationCacheStatus, recordUsage) => {
-      const started = Date.now();
-      let transport: AiUsageTransport = "unknown";
-      let gateway: GatewayResponseInfo | undefined;
-      const fetchThroughGateway = ports.gateway(
-        getChatModelConfig(AUDIT_RECOVERY_MODEL).gatewayProvider,
-        {
-          ...cachedCall({
-            metadata: {
-              feature: PURCHASE_IMPORT_AUDIT_FEATURE.feature,
-              operation,
-            },
-          }),
-          beforePaidRequest: withAiBudget(
-            args.db,
-            { model: AUDIT_RECOVERY_MODEL, runId: usage.runId },
-            undefined,
-          ),
-          onTransport: (selected) => {
-            transport = selected;
-          },
-          onResponse: (info) => {
-            gateway = info;
-          },
-        },
-      );
-      const body = await requestAuditRecovery(
-        fetchThroughGateway,
-        request,
-        outputSchema,
-      ).catch(async (error: UnparsedError) => {
-        // A failed attempt is still a call on its selected transport.
-        await ports.usage(args.db, {
-          ...usage,
-          transport,
-          status: "failed",
-          durationMs: Date.now() - started,
-          gatewayLogId: gateway?.gatewayLogId,
-          gatewayCacheStatus: gateway?.gatewayCacheStatus,
-          applicationCacheStatus,
-        });
-        throw error;
-      });
-      const tokens = {
-        inputTokens: body.usage.input_tokens,
-        outputTokens: body.usage.output_tokens,
-        cacheReadTokens: body.usage.cache_read_input_tokens ?? null,
-        cacheWriteTokens: body.usage.cache_creation_input_tokens ?? null,
-      };
-      recordUsage(tokens);
-      // Unpriced here: the telemetry consumer prices every token class from the
-      // catalog, and the usage writer zeroes a gateway cache hit or plan answer.
-      await ports.usage(args.db, {
-        ...usage,
-        ...tokens,
-        transport,
-        durationMs: Date.now() - started,
-        gatewayLogId: gateway?.gatewayLogId,
-        gatewayCacheStatus: gateway?.gatewayCacheStatus,
-        applicationCacheStatus,
-      });
-      const text = body.content
-        .filter((part) => part.type === "text")
-        .map((part) => part.text ?? "")
-        .join("");
-      return importAuditModelOutput.parse(JSON.parse(text));
-    },
-  });
-  return normalizeImportAuditModelOutput(output);
-}
-
-async function requestAuditRecovery(
-  fetchThroughGateway: typeof fetch,
-  request: ReturnType<typeof PURCHASE_IMPORT_AUDIT_FEATURE.request>,
-  outputSchema: Omit<z.core.JSONSchema.BaseSchema, "$schema">,
-) {
-  const response = await fetchThroughGateway(
-    `${gatewayBaseURL("anthropic")}/v1/messages`,
-    {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "anthropic-version": "2023-06-01",
+export const auditPurchaseImportBatch = async (args: {
+  db: Database;
+  runId: string;
+  renderedBatch: PurchaseAuditRenderedBatch;
+}) =>
+  normalizeImportAuditModelOutput(
+    await runStructuredFeature(
+      PURCHASE_IMPORT_AUDIT_FEATURE,
+      PURCHASE_IMPORT_AUDIT_FEATURE.request(args.renderedBatch),
+      {
+        db: args.db,
+        operation: "purchaseImport.audit",
+        runId: runEntityId.parse(args.runId),
       },
-      body: JSON.stringify({
-        model: AUDIT_RECOVERY_MODEL,
-        max_tokens: PURCHASE_IMPORT_AUDIT_FEATURE.maxTokens,
-        thinking: { type: "adaptive" },
-        output_config: {
-          effort: "high",
-          format: { type: "json_schema", schema: outputSchema },
-        },
-        system: request.systemPrompts.join("\n\n"),
-        messages: request.messages,
-      }),
-    },
+    ),
   );
-  if (!response.ok)
-    throw new Error(
-      `Audit recovery failed (${response.status}): ${await response.text()}`,
-    );
-  return auditRecoveryResponse.parse(await response.json());
-}
-
-export const auditPurchaseImportBatch = async (
-  args: {
-    db: Database;
-    runId: string;
-    renderedBatch: PurchaseAuditRenderedBatch;
-  },
-  ports: PurchaseAuditPorts = productionPurchaseAuditPorts,
-) => {
-  try {
-    return normalizeImportAuditModelOutput(
-      await ports.runStructured(
-        PURCHASE_IMPORT_AUDIT_FEATURE,
-        PURCHASE_IMPORT_AUDIT_FEATURE.request(args.renderedBatch),
-        {
-          db: args.db,
-          operation: "purchaseImport.audit",
-          runId: runEntityId.parse(args.runId),
-        },
-      ),
-    );
-  } catch (primaryError) {
-    // A spent budget is not a model failure; the fallback must not buy past it.
-    if (
-      findErrorCause(
-        primaryError,
-        (cause): cause is AiBudgetExhaustedError =>
-          cause instanceof AiBudgetExhaustedError,
-      )
-    )
-      throw primaryError;
-    try {
-      return await recoverPurchaseAudit(args, ports);
-    } catch (recoveryError) {
-      throw new AggregateError(
-        [primaryError, recoveryError],
-        "Purchase import audit failed on both models",
-        { cause: recoveryError },
-      );
-    }
-  }
-};
 
 export const extractPurchaseEvidence = async (args: {
   db: Database;

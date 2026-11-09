@@ -52,7 +52,6 @@ interface ChatModelDeclaration extends ModelDeclaration {
   gatewayProvider: ChatGatewayProvider;
   /** Explicit Cloudflare catalog id for the dedicated paid REST API. */
   unifiedModelId: string;
-  vision: boolean;
 }
 
 interface EmbeddingModelDeclaration extends ModelDeclaration {
@@ -98,7 +97,13 @@ export const AI_MODELS = {
     provider: "openai",
     catalogProvider: "openai",
     gatewayProvider: "openai",
-    vision: true,
+  },
+  "gpt-6.1-terra": {
+    role: "chat",
+    unifiedModelId: "openai/gpt-6.1-terra",
+    provider: "openai",
+    catalogProvider: "openai",
+    gatewayProvider: "openai",
   },
   "gpt-6.1-sol": {
     role: "chat",
@@ -106,15 +111,6 @@ export const AI_MODELS = {
     provider: "openai",
     catalogProvider: "openai",
     gatewayProvider: "openai",
-    vision: true,
-  },
-  "claude-opus-5-5": {
-    role: "chat",
-    unifiedModelId: "anthropic/claude-opus-5.5",
-    provider: "anthropic",
-    catalogProvider: "anthropic",
-    gatewayProvider: "anthropic",
-    vision: true,
   },
   "claude-sonnet-5-5": {
     role: "chat",
@@ -122,7 +118,6 @@ export const AI_MODELS = {
     provider: "anthropic",
     catalogProvider: "anthropic",
     gatewayProvider: "anthropic",
-    vision: true,
   },
   // Haiku 5.5 rejects a thinking budget or a forced tool (400).
   "claude-haiku-5-5": {
@@ -131,7 +126,6 @@ export const AI_MODELS = {
     provider: "anthropic",
     catalogProvider: "anthropic",
     gatewayProvider: "anthropic",
-    vision: true,
   },
   "text-embedding-3-small": {
     role: "embedding",
@@ -230,15 +224,43 @@ type AnthropicChatModel = z.infer<typeof anthropicChatModelSchema>;
 /** Every model a feature record can name. */
 export type AiModel = SupportedChatModel | SupportedDecisionModel;
 
-/** The fast chat tier: interactive and bulk background calls. */
-export const FAST_MODEL = "gpt-6-luna" satisfies OpenAiChatModel;
+export const chatTierSchema = z.enum(["fast", "standard", "quality"]);
 /**
- * The quality chat tier: calls whose accuracy outweighs latency (purchase
- * evidence, recipe flow, photo identity).
+ * What a chat call needs from its model, not which model it is: `fast` for
+ * interactive and bulk calls, `standard` for evidence that writes money,
+ * `quality` where accuracy outweighs cost.
  */
-export const QUALITY_MODEL = "gpt-6.1-sol" satisfies OpenAiChatModel;
-export const AUDIT_RECOVERY_MODEL =
-  "claude-opus-5-5" satisfies AnthropicChatModel;
+export type ChatTier = z.infer<typeof chatTierSchema>;
+
+/**
+ * Each tier's model on each funding route (ADR 0027). The funding ladder asks
+ * every source for its route's model of the requested tier; changing a tier's
+ * model is one edit here. Anthropic has no model priced like Terra, so Sonnet
+ * serves both upper tiers on Claude credit.
+ */
+export const CHAT_TIER_MODELS = {
+  fast: { openai: "gpt-6-luna", anthropic: "claude-haiku-5-5" },
+  standard: { openai: "gpt-6.1-terra", anthropic: "claude-sonnet-5-5" },
+  quality: { openai: "gpt-6.1-sol", anthropic: "claude-sonnet-5-5" },
+} as const satisfies Record<
+  ChatTier,
+  { openai: OpenAiChatModel; anthropic: AnthropicChatModel }
+>;
+
+/**
+ * Callers name a tier by its OpenAI model: features, agent manifests and usage
+ * rows keep one model id per tier, and the ladder substitutes the route's model.
+ */
+export const FAST_MODEL = CHAT_TIER_MODELS.fast.openai;
+export const STANDARD_MODEL = CHAT_TIER_MODELS.standard.openai;
+export const QUALITY_MODEL = CHAT_TIER_MODELS.quality.openai;
+
+/** The tier a requested model names, if it names one. */
+export function chatTierOf(model: SupportedChatModel): ChatTier | undefined {
+  return chatTierSchema.options.find(
+    (tier) => CHAT_TIER_MODELS[tier].openai === model,
+  );
+}
 /**
  * The decision tier's baseline model: TypeSafe's Jev, a closed-set decision model
  * served through AI Gateway with TypeSafe BYOK rather than a chat endpoint, so it

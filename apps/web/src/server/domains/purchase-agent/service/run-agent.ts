@@ -308,10 +308,13 @@ export class PurchaseImportRunAgent
     for (const provider of cubbyAgentProviders({
       fundingFallback: true,
       fixedModel: this.agentEnv.fixedModel,
+      // A harness override measures its named models, never tier substitutes.
+      pinnedModel: this.agentEnv.coordinatorModels !== undefined,
       cacheKey: () => this.identity()?.runId,
-      onFundingRefusal: async (message) => {
-        // The usage row records the refusal text in `failure`.
-        await this.afterResponse(message);
+      onFundingRefusal: async (message, { local }) => {
+        // The usage row records the refusal text in `failure`; Cubby's own
+        // refusal made no provider call and records nothing.
+        if (!local) await this.afterResponse(message);
         // The next rung is a new attempt: its usage row must not inherit this
         // rung's transport, start time or gateway log.
         this.requestStartedAt = Date.now();
@@ -329,8 +332,8 @@ export class PurchaseImportRunAgent
           subscriptionFallback: photo ? undefined : "budgeted",
           beforePaidRequest: (request) =>
             this.services().admitPaidInference(request),
-          beforeFreeRequest: (request, funding) =>
-            this.services().admitFreeInference(request, funding),
+          beforePlanRequest: (request) =>
+            this.services().admitPlanInference(request),
         };
       },
       onTransport: (transport) => {
@@ -377,18 +380,12 @@ export class PurchaseImportRunAgent
     );
     const escalation = coordinatorEscalation({
       models,
-      // The provider ladder already reaches Sol after Claude credit refuses.
-      // Reuse that funded model without first sending a known-refused request.
-      fundedAlternative:
-        purpose === "mail_import" && !this.agentEnv.coordinatorModels
-          ? importRunAgentManifest.mail_import.escalationAlternative
-          : undefined,
       store: {
         read: (key) => this.readState(key),
         write: (key, value) => this.writeState(key, value),
       },
       useModel: (model) => this.useModel(model),
-      unavailable: (model) => this.services().escalationUnavailable(model),
+      unavailable: () => this.services().escalationUnavailable(),
     });
     const attempts =
       purpose === "mail_import"

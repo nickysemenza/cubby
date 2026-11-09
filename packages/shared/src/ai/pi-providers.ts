@@ -24,11 +24,15 @@ import {
   gatewayResponseInfo,
   isInferenceFundingRefusal,
   isInferenceStreamFundingRefusal,
+  isLocalFundingRefusal,
   type InferenceFunding,
 } from "./gateway-request";
 import {
   anthropicChatModelSchema,
+  CHAT_TIER_MODELS,
   type ChatGatewayProvider,
+  type ChatTier,
+  chatTierOf,
   openAiChatModelSchema,
   getChatModelConfig,
   supportedChatModelSchema,
@@ -313,66 +317,63 @@ export function cubbyPiProviders(fetchFor: GatewayFetchFor): Provider[] {
 }
 
 /**
- * The household's one funding order for frontier chat (ADR 0017): the Claude
- * subscriber credit first, then OpenAI credits, then the ChatGPT plan, then paid only where the
- * caller allows it. Each step advances only on a funding refusal.
+ * The household's one funding order for frontier chat (ADR 0027): the Claude
+ * subscriber credit, then OpenAI credits, then the ChatGPT plan, then paid only
+ * where the caller allows it. Each source answers with its route's model of the
+ * requested tier, and a step advances only on a funding refusal. A pinned
+ * `model` (an explicit override or comparison) is never substituted: it runs
+ * on its own route's sources only.
  */
-export function fundedChatAttempts(policy: {
-  paid: boolean;
-  /**
-   * A model that answers first, on its own vendor's plan funding (the
-   * Claude or OpenAI API credit), before the household order.
-   */
-  lead?: SupportedChatModel;
-}): readonly {
+export function fundedChatAttempts(
+  policy: { paid: boolean } & (
+    | { tier: ChatTier }
+    | { model: SupportedChatModel }
+  ),
+): readonly {
   model: SupportedChatModel;
   funding: InferenceFunding;
 }[] {
-  const household = [
-    { model: "claude-opus-5-5", funding: "subscriber_credit" },
-    { model: "gpt-6.1-sol", funding: "openai_credit" },
-    { model: "gpt-6.1-sol", funding: "subscription" },
-    ...(policy.paid
-      ? [{ model: "gpt-6.1-sol" as const, funding: "paid" as const }]
-      : []),
-  ] as const;
-  if (!policy.lead) return household;
-  const lead = {
-    model: policy.lead,
-    funding:
-      getChatModelConfig(policy.lead).gatewayProvider === "anthropic"
-        ? ("subscriber_credit" as const)
-        : ("openai_credit" as const),
-  };
+  if ("model" in policy) {
+    const sources: InferenceFunding[] =
+      getChatModelConfig(policy.model).gatewayProvider === "anthropic"
+        ? ["subscriber_credit"]
+        : ["openai_credit", "subscription"];
+    return [...sources, ...(policy.paid ? ["paid" as const] : [])].map(
+      (funding) => ({ model: policy.model, funding }),
+    );
+  }
+  const { openai, anthropic } = CHAT_TIER_MODELS[policy.tier];
   return [
-    lead,
-    ...household.filter(
-      (attempt) =>
-        attempt.model !== lead.model || attempt.funding !== lead.funding,
-    ),
+    { model: anthropic, funding: "subscriber_credit" },
+    { model: openai, funding: "openai_credit" },
+    { model: openai, funding: "subscription" },
+    ...(policy.paid ? [{ model: openai, funding: "paid" as const }] : []),
   ];
 }
 
-type FundingPolicy = {
-  paid: boolean;
+/** Why a funding attempt ended without an answer. */
+export interface RefusedAttempt {
   /**
-   * The requested model answers first (`fundedChatAttempts`'s `lead`); the
-   * purchase coordinator sets it so its manifest's primary and escalation
-   * models are the ones that run. Otherwise the requested model only selects
-   * the provider entry and the household order decides which model answers.
+   * Cubby refused it before any provider call (a recorded credit refusal or a
+   * spent window budget), so it is not a call to record.
    */
-  leadWithRequested?: boolean;
-};
+  local: boolean;
+}
 
 /**
  * Funding retries restart one generation from its input transcript. Hold every
  * event until that attempt settles, so a refused partial tool call never runs.
  * Completed prior turns and their writes remain in pi's durable transcript.
+ * The requested model names the tier (`chatTierOf`), unless `pinned` keeps
+ * that exact model.
  */
 export function fundedCubbyPiProviders(
   fetchFor: GatewayFetchFor,
-  onRefusedAttempt?: (message: AssistantMessage) => Promise<void>,
-  policy: FundingPolicy = { paid: true },
+  onRefusedAttempt?: (
+    message: AssistantMessage,
+    attempt: RefusedAttempt,
+  ) => Promise<void>,
+  policy: { paid: boolean; pinned?: boolean } = { paid: true },
 ): Provider[] {
   const base = cubbyPiProviders(fetchFor);
   return base.map((provider): Provider => {
@@ -384,24 +385,31 @@ export function fundedCubbyPiProviders(
     ) => {
       const output = createAssistantMessageEventStream();
       void (async () => {
-        const attempts = fundedChatAttempts({
-          paid: policy.paid,
-          lead: policy.leadWithRequested
-            ? supportedChatModelSchema.parse(model.id)
-            : undefined,
-        });
+        const requested = supportedChatModelSchema.parse(model.id);
+        const tier = chatTierOf(requested);
+        if (!tier && !policy.pinned)
+          throw new Error(`${requested} names no chat tier`);
+        const attempts = fundedChatAttempts(
+          tier && !policy.pinned
+            ? { tier, paid: policy.paid }
+            : { model: requested, paid: policy.paid },
+        );
         for (const [index, attempt] of attempts.entries()) {
           let refused = false;
+          let local = false;
           const providers = cubbyPiProviders((route, unbilled) => {
             const fetch = fetchFor(route, unbilled, attempt.funding);
             return async (input, init) => {
               const response = await fetch(input, init);
-              if (!response.ok)
+              if (!response.ok) {
+                const body = await response.clone().text();
                 refused = isInferenceFundingRefusal(
                   response.status,
-                  await response.clone().text(),
+                  body,
                   attempt.funding,
                 );
+                local = refused && isLocalFundingRefusal(body);
+              }
               if (
                 response.ok &&
                 (attempt.funding === "subscriber_credit" ||
@@ -451,7 +459,7 @@ export function fundedCubbyPiProviders(
             !options?.signal?.aborted &&
             index < attempts.length - 1
           ) {
-            await onRefusedAttempt?.(result);
+            await onRefusedAttempt?.(result, { local });
             continue;
           }
           for (const event of events) output.push(event);

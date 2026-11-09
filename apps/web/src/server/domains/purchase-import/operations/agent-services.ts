@@ -179,20 +179,17 @@ export function runServicesFor(
           await paidRunPreflight(db, runEntityId.parse(runId))(request);
         }),
       ),
-    admitFreeInference: (request, funding) =>
+    admitPlanInference: (request) =>
       admissionRead(() =>
         withDatabase(async (db) => {
-          const [{ freeRunPreflight }, { runEntityId }] = await Promise.all([
+          const [{ planRunPreflight }, { runEntityId }] = await Promise.all([
             import("~/server/domains/run/service/execution-transport"),
             import("@cubby/schemas/identifiers"),
           ]);
-          return freeRunPreflight(db, runEntityId.parse(runId))(
-            request,
-            funding,
-          );
+          return planRunPreflight(db, runEntityId.parse(runId))(request);
         }),
       ),
-    escalationUnavailable: (model) =>
+    escalationUnavailable: () =>
       admissionRead(() =>
         withDatabase(async (db) => {
           const [{ escalationFundingRefusal }, { runEntityId }] =
@@ -200,7 +197,7 @@ export function runServicesFor(
               import("~/server/ai/funding"),
               import("@cubby/schemas/identifiers"),
             ]);
-          return escalationFundingRefusal(db, runEntityId.parse(runId), model);
+          return escalationFundingRefusal(db, runEntityId.parse(runId));
         }),
       ),
     coordinatorRetired: () =>

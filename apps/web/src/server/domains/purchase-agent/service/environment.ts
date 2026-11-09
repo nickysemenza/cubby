@@ -77,16 +77,13 @@ export interface RunServices {
   authorize(): Promise<void>;
   /** Commit the bound Run allowance before one physical paid transmission. */
   admitPaidInference(request: GatewayFetchRequest): Promise<void>;
-  /** A refusal when background work has spent this window's credit or plan budget. */
-  admitFreeInference(
-    request: GatewayFetchRequest,
-    funding: "subscriber_credit" | "openai_credit" | "subscription",
-  ): Promise<string | null>;
+  /** A refusal when background work has spent this window's plan budget. */
+  admitPlanInference(request: GatewayFetchRequest): Promise<string | null>;
   /**
-   * Why `model` cannot be funded for this Run now (a refused Claude credit, a
-   * spent background window budget), else null.
+   * Why no free source can fund this background Run's escalation now (each is
+   * refused or has spent its window budget), else null.
    */
-  escalationUnavailable(model: SupportedChatModel): Promise<string | null>;
+  escalationUnavailable(): Promise<string | null>;
   /** The Run's public identity: its purpose and agent instance name. */
   loadScope(): Promise<{
     purpose: AgentImportRunPurpose;

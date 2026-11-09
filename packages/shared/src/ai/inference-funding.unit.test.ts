@@ -63,7 +63,7 @@ describe("inference funding", () => {
               tools: [{ type: "function", name: "synthetic" }],
             }
           : {
-              model: "claude-opus-5-5",
+              model: "claude-sonnet-5-5",
               messages: [],
               stream: true,
               thinking: { type: "adaptive" },
@@ -115,7 +115,7 @@ describe("inference funding", () => {
         funding === "paid" ? "cubby" : null,
       );
       expect(query.model).toBe(
-        provider === "openai" ? "gpt-6.1-sol" : "claude-opus-5-5",
+        provider === "openai" ? "gpt-6.1-sol" : "claude-sonnet-5-5",
       );
       expect(await sent?.json()).toEqual(
         funding === "paid"
@@ -124,7 +124,7 @@ describe("inference funding", () => {
               model:
                 provider === "openai"
                   ? "openai/gpt-6.1-sol"
-                  : "anthropic/claude-opus-5.5",
+                  : "anthropic/claude-sonnet-5.5",
             }
           : query,
       );
@@ -186,41 +186,55 @@ describe("inference funding", () => {
     ).toBe(429);
     expect(calls).toEqual([]);
   });
-  // A spent Claude credit budget must advance the ladder like a Console
-  // refusal, before anything is transmitted on the credit key.
+  // Provider credits have no window budget (ADR 0027): a spent plan budget
+  // must never stop a credit attempt, which runs until the provider refuses.
   it.each(["subscriber_credit", "openai_credit"] as const)(
-    "refuses a %s attempt Cubby's credit budget stops as a funding refusal",
+    "transmits a %s attempt regardless of the plan budget",
     async (funding) => {
       const sent: string[] = [];
-      const send = (refusal: string | null) =>
+      const response = await gatewayFetchThrough({
+        provider: funding === "openai_credit" ? "openai" : "anthropic",
+        funding,
+        chatGpt: async () => {
+          throw new Error("Credit attempt must bypass OAuth");
+        },
+        beforePlanRequest: async () =>
+          "ChatGPT plan budget reached: $2 of $2 standard cost",
+        gateway: async () => {
+          sent.push("credit");
+          return Response.json({});
+        },
+      })(
+        `https://ai-gateway.invalid/${funding === "openai_credit" ? "openai/responses" : "anthropic/v1/messages"}`,
+        { method: "POST", body: '{"model":"claude-sonnet-5-5"}' },
+      );
+      expect(response.status).toBe(200);
+      expect(sent).toEqual(["credit"]);
+    },
+  );
+
+  // A workflow that lost its Job must not transmit on a credit key either.
+  it.each(["subscriber_credit", "openai_credit"] as const)(
+    "stops a %s attempt whose execution admission throws, before transmitting",
+    async (funding) => {
+      const sent: string[] = [];
+      await expect(
         gatewayFetchThrough({
           provider: funding === "openai_credit" ? "openai" : "anthropic",
           funding,
-          chatGpt: async () => {
-            throw new Error("Credit attempt must bypass OAuth");
+          beforeCreditRequest: async () => {
+            throw new Error("Synthetic workflow no longer current");
           },
-          beforeFreeRequest: async () => refusal,
           gateway: async () => {
             sent.push("credit");
             return Response.json({});
           },
         })(
           `https://ai-gateway.invalid/${funding === "openai_credit" ? "openai/responses" : "anthropic/v1/messages"}`,
-          {
-            method: "POST",
-            body: '{"model":"claude-opus-5-5"}',
-          },
-        );
-      const refused = await send(
-        "Claude credit budget reached: $5 of $5 standard cost",
-      );
-      const body = await refused.text();
-      expect(refused.status).toBe(429);
-      expect(body).toContain("Claude credit budget reached");
-      expect(isInferenceFundingRefusal(429, body, funding)).toBe(true);
+          { method: "POST", body: '{"model":"claude-sonnet-5-5"}' },
+        ),
+      ).rejects.toThrow("Synthetic workflow no longer current");
       expect(sent).toEqual([]);
-      expect((await send(null)).status).toBe(200);
-      expect(sent).toEqual(["credit"]);
     },
   );
 
@@ -235,10 +249,8 @@ describe("inference funding", () => {
         funding,
         subscriptionFallback: funding ? undefined : "budgeted",
         beforePaidRequest: async () => undefined,
-        beforeFreeRequest: async (_request, rung) =>
-          rung === "subscription"
-            ? "ChatGPT plan budget reached: $2 of $2 standard cost"
-            : null,
+        beforePlanRequest: async () =>
+          "ChatGPT plan budget reached: $2 of $2 standard cost",
         chatGpt: async () => {
           sent.push("plan");
           return Response.json({});

@@ -404,11 +404,11 @@ describe("Mail import switch and discovery through MCP", () => {
   });
 
   // Failure modes: household funding (budgets, a recorded credit refusal with
-  // its raw reason, the plan state) is missing from MCP; the credit budget
-  // cannot be changed, or changing it leaves Claude credit refused; the
-  // refusal cannot be reset; "Run discovery now, paid allowed" starts
+  // its raw reason, the plan state) is missing from MCP; the plan and paid
+  // budgets cannot be changed; the refusal cannot be reset; "Run discovery
+  // now, paid allowed" starts
   // discovery without recording the member's paid grant.
-  it("reports household funding, resets a credit refusal, sets the credit budget, and grants paid discovery", async () => {
+  it("reports household funding, resets a credit refusal, sets the plan and paid budgets, and grants paid discovery", async () => {
     await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Synthetic MCP approval member",
       kind: "member",
@@ -425,7 +425,6 @@ describe("Mail import switch and discovery through MCP", () => {
       (await call("ai_funding_read", { action: "status" })).structuredContent,
     ).toMatchObject({
       credit: {
-        limitUsd: 1.5,
         spentUsd: 0,
         state: "refused",
         until: "2099-11-01T00:00:00.000Z",
@@ -467,23 +466,19 @@ describe("Mail import switch and discovery through MCP", () => {
     });
     creditRefusal = { until, reason: CONSOLE_LIMIT };
     const set = await call("ai_funding", {
-      action: "set_credit_budget",
-      creditLimitUsd: 7.5,
+      action: "set_budget",
       planLimitUsd: 4,
       paidLimitUsd: 3,
     });
     expect(set.isError).not.toBe(true);
     expect(set.structuredContent).toMatchObject({
-      credit: { limitUsd: 7.5, state: "available" },
       plan: { limitUsd: 4 },
       paid: { limitUsd: 3 },
     });
-    expect(creditRefusal).toBeNull();
-    // A budget change says nothing about the gateway balance.
+    // A budget change says nothing about provider refusals.
+    expect(creditRefusal).not.toBeNull();
     expect(paidRefusal).not.toBeNull();
-    expect((await call("run", { action: "set_credit_budget" })).isError).toBe(
-      true,
-    );
+    expect((await call("run", { action: "set_budget" })).isError).toBe(true);
     expect((await call("run", enable())).isError).not.toBe(true);
     const discovered = await call("run", {
       action: "discover_mail",

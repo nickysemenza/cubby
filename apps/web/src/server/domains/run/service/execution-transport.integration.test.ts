@@ -1,10 +1,5 @@
 import { parseEntityId, type RunId } from "@cubby/schemas/identifiers";
-import {
-  gatewayFetchThrough,
-  type GatewayFetchRequest,
-} from "@cubby/shared/ai/gateway-request";
-import { fundedCubbyPiProviders } from "@cubby/shared/ai/pi-providers";
-import { createModels } from "@earendil-works/pi-ai";
+import type { GatewayFetchRequest } from "@cubby/shared/ai/gateway-request";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it } from "vitest";
@@ -12,11 +7,10 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   AI_BUDGET_LIMIT_USD,
   AiBudgetExhaustedError,
-  DEFAULT_CREDIT_BUDGET_USD,
   PLAN_BUDGET_LIMIT_USD,
   readAiBudget,
   withAiBudget,
-  withFreeBudget,
+  withPlanBudget,
 } from "~/server/ai/budget";
 import { aiBudgetWindow } from "~/server/ai/budget-window";
 import { setCfEnv } from "~/server/cf-env";
@@ -32,7 +26,7 @@ import { productionJobHandlers } from "~/server/workflows/jobs";
 
 import { ensureRun } from "../repo/ensure-run";
 import { resumeFundingPausedRuns } from "./ai-work";
-import { freeRunPreflight, paidRunPreflight } from "./execution-transport";
+import { planRunPreflight, paidRunPreflight } from "./execution-transport";
 
 const chatRequest = (model = "gpt-6.1-sol"): GatewayFetchRequest => ({
   // pi-ai's Anthropic SDK sends the beta query; budget checks must see past it.
@@ -146,7 +140,8 @@ describe("household AI funding at the paid transport boundary", () => {
         feature: options.feature ?? "purchase_import_agent",
         provider: options.credit ? "anthropic" : "openai",
         model:
-          options.model ?? (options.credit ? "claude-opus-5-5" : "gpt-6.1-sol"),
+          options.model ??
+          (options.credit ? "claude-sonnet-5-5" : "gpt-6.1-sol"),
         operation: "agent.generation",
         durationMs: 1,
         transport: options.transport ?? (options.plan ? "chatgpt" : "gateway"),
@@ -216,22 +211,22 @@ describe("household AI funding at the paid transport boundary", () => {
 
   // Automatic feature refreshes have purpose background but the default
   // ephemeral trigger; interactive ephemeral Runs must retain their ladder.
-  it("caps credit for ephemeral background work only and lets both pay within the paid budget", async () => {
+  it("caps the plan for ephemeral background work only and lets both pay within the paid budget", async () => {
     const automatic = await ensureRun(ctx.db, ctx.actor, {
       purpose: "background",
     });
     const interactive = await ensureRun(ctx.db, ctx.actor, {
       purpose: "ai_suggest",
     });
-    await spend(automatic, DEFAULT_CREDIT_BUDGET_USD, { credit: true });
-    const automaticCredit = withFreeBudget(
+    await spend(automatic, PLAN_BUDGET_LIMIT_USD, { plan: true });
+    const automaticPlan = withPlanBudget(
       ctx.db,
-      { model: "claude-opus-5-5", runId: automatic },
+      { model: "claude-sonnet-5-5", runId: automatic },
       undefined,
     );
-    const interactiveCredit = withFreeBudget(
+    const interactivePlan = withPlanBudget(
       ctx.db,
-      { model: "claude-opus-5-5", runId: interactive },
+      { model: "claude-sonnet-5-5", runId: interactive },
       undefined,
     );
     const automaticPaid = withAiBudget(
@@ -245,41 +240,39 @@ describe("household AI funding at the paid transport boundary", () => {
       undefined,
     );
     if (
-      !automaticCredit ||
-      !interactiveCredit ||
+      !automaticPlan ||
+      !interactivePlan ||
       !automaticPaid ||
       !interactivePaid
     )
       throw new Error("Synthetic frontier admissions missing");
-    expect(await automaticCredit(chatRequest(), "subscriber_credit")).toContain(
-      "Claude credit budget reached",
+    expect(await automaticPlan(chatRequest())).toContain(
+      "ChatGPT plan budget reached",
     );
-    expect(
-      await interactiveCredit(chatRequest(), "subscriber_credit"),
-    ).toBeNull();
+    expect(await interactivePlan(chatRequest())).toBeNull();
     await expect(automaticPaid(chatRequest())).resolves.toBeUndefined();
     await expect(interactivePaid(chatRequest())).resolves.toBeUndefined();
   });
 
   // With no Run there is no origin to read, so the signal has to fail closed.
   it("refuses an automatic call with no Run at an exhausted window, but not a waiting member", async () => {
-    await spend(null, DEFAULT_CREDIT_BUDGET_USD, { credit: true });
-    const automatic = withFreeBudget(
+    await spend(null, PLAN_BUDGET_LIMIT_USD, { plan: true });
+    const automatic = withPlanBudget(
       ctx.db,
-      { model: "claude-opus-5-5" },
+      { model: "claude-sonnet-5-5" },
       undefined,
     );
-    const interactive = withFreeBudget(
+    const interactive = withPlanBudget(
       ctx.db,
-      { model: "claude-opus-5-5", interactive: true },
+      { model: "claude-sonnet-5-5", interactive: true },
       undefined,
     );
     if (!automatic || !interactive)
-      throw new Error("Synthetic free admissions missing");
-    expect(await automatic(chatRequest(), "subscriber_credit")).toContain(
-      "Claude credit budget reached",
+      throw new Error("Synthetic plan admissions missing");
+    expect(await automatic(chatRequest())).toContain(
+      "ChatGPT plan budget reached",
     );
-    expect(await interactive(chatRequest(), "subscriber_credit")).toBeNull();
+    expect(await interactive(chatRequest())).toBeNull();
   });
 
   // Storage refuses a paid amount that is not a positive run_now_paid grant.
@@ -344,97 +337,36 @@ describe("household AI funding at the paid transport boundary", () => {
       limitUsd: AI_BUDGET_LIMIT_USD,
       spentUsd: expect.closeTo(0.75),
     });
-    expect(budget.credit).toEqual({
-      limitUsd: DEFAULT_CREDIT_BUDGET_USD,
-      spentUsd: expect.closeTo(3),
-    });
+    expect(budget.credit).toEqual({ spentUsd: expect.closeTo(3) });
     expect(budget.plan).toEqual({
       limitUsd: PLAN_BUDGET_LIMIT_USD,
       spentUsd: expect.closeTo(3),
     });
   });
 
-  it("refuses background credit and plan once each window budget is spent, but not interactive work", async () => {
+  // Provider credits have no window budget (ADR 0027); only the plan's stops
+  // background work, and interactive work never.
+  it("refuses background plan once its window budget is spent, but not interactive work", async () => {
     const background = await setup("mail_import");
     const interactive = await setup("mail_import", "manual");
-    const opus = chatRequest("claude-opus-5-5");
-    const credit = "subscriber_credit" as const;
-    const plan = "subscription" as const;
-    expect(await freeRunPreflight(ctx.db, background)(opus, credit)).toBeNull();
-    await spend(background, DEFAULT_CREDIT_BUDGET_USD, { credit: true });
-    expect(await freeRunPreflight(ctx.db, background)(opus, credit)).toMatch(
-      /^Claude credit budget reached: \$1\.5 of \$1\.5 standard cost/u,
-    );
-    // Each budget refuses only its own rung.
+    await spend(background, 50, { credit: true });
     expect(
-      await freeRunPreflight(ctx.db, background)(chatRequest(), plan),
+      await planRunPreflight(ctx.db, background)(chatRequest()),
     ).toBeNull();
     await spend(background, PLAN_BUDGET_LIMIT_USD, { plan: true });
-    expect(
-      await freeRunPreflight(ctx.db, background)(chatRequest(), plan),
-    ).toMatch(/^ChatGPT plan budget reached: \$2 of \$2 standard cost/u);
-    expect(
-      await freeRunPreflight(ctx.db, interactive)(opus, credit),
-    ).toBeNull();
-    expect(
-      await freeRunPreflight(ctx.db, interactive)(chatRequest(), plan),
-    ).toBeNull();
-    expect(
-      await freeRunPreflight(ctx.db, background)(decisionRequest(), credit),
-    ).toBeNull();
-  });
-
-  // Regression (2026-10-19): pi-ai's Anthropic SDK posts
-  // `v1/messages?beta=true`, which the credit preflight did not recognize as a
-  // chat call, so background coordinator and relevance calls spent $9.98 of a
-  // $5 window budget without one refusal. Drive the real SDK request.
-  it("stops background Claude credit at the window budget on pi-ai's real Anthropic request", async () => {
-    const runId = await setup("mail_import");
-    await spend(runId, DEFAULT_CREDIT_BUDGET_USD, { credit: true });
-    const sent: string[] = [];
-    const models = createModels();
-    for (const provider of fundedCubbyPiProviders(
-      (route, _unbilled, funding) =>
-        gatewayFetchThrough({
-          provider: route,
-          funding,
-          beforeFreeRequest: freeRunPreflight(ctx.db, runId),
-          chatGpt: async () => {
-            sent.push("chatgpt");
-            return new Response(
-              `data: ${JSON.stringify({ type: "response.completed", response: { id: "synthetic-response", status: "completed", output: [], usage: { input_tokens: 100, output_tokens: 10, total_tokens: 110 } } })}\n\n`,
-              { headers: { "content-type": "text/event-stream" } },
-            );
-          },
-          gateway: async (request) => {
-            sent.push(`gateway:${funding}:${request.endpoint}`);
-            return funding === "openai_credit"
-              ? Response.json(
-                  { error: { code: "credit_balance_exhausted" } },
-                  { status: 429 },
-                )
-              : new Response("synthetic gateway failure", { status: 500 });
-          },
-        }),
-      undefined,
-      { paid: false },
-    ))
-      models.setProvider(provider);
-    const model = models.getModel("anthropic", "claude-opus-5-5");
-    if (!model) throw new Error("Missing Opus");
-    const response = await models.completeSimple(
-      model,
-      { messages: [] },
-      { maxTokens: 512 },
+    expect(await planRunPreflight(ctx.db, background)(chatRequest())).toMatch(
+      /^ChatGPT plan budget reached: \$2 of \$2 standard cost/u,
     );
-    expect(sent).toEqual(["gateway:openai_credit:responses", "chatgpt"]);
-    expect(response.stopReason).not.toBe("error");
-    expect(response.model).toBe("gpt-6.1-sol");
+    expect(
+      await planRunPreflight(ctx.db, interactive)(chatRequest()),
+    ).toBeNull();
+    expect(
+      await planRunPreflight(ctx.db, background)(decisionRequest()),
+    ).toBeNull();
   });
 
-  it("pays for background work within the paid budget once both free budgets are spent, then pauses it", async () => {
+  it("pays for background work within the paid budget once the plan budget is spent, then pauses it", async () => {
     const runId = await setup("mail_import");
-    await spend(runId, DEFAULT_CREDIT_BUDGET_USD, { credit: true });
     await spend(runId, PLAN_BUDGET_LIMIT_USD, { plan: true });
     await paidRunPreflight(ctx.db, runId)(chatRequest());
     await spend(runId, AI_BUDGET_LIMIT_USD);

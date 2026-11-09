@@ -794,8 +794,8 @@ describe("scheduled Gmail discovery", () => {
       {
         windowStart: new Date().toISOString(),
         windowEnd,
-        credit: { limitUsd: 1, spentUsd: 1 },
-        openaiCredit: { limitUsd: 1, spentUsd: 1 },
+        credit: { spentUsd: 1 },
+        openaiCredit: { spentUsd: 1 },
         plan: { limitUsd: 1, spentUsd: 1 },
         paid: { limitUsd: 1, spentUsd: 1 },
       },

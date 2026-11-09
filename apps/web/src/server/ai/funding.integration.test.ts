@@ -9,7 +9,7 @@ import { aiUsage, run } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
-import { readAiBudget, setCreditBudget } from "./budget";
+import { readAiBudget, setAiBudget } from "./budget";
 import { isBackgroundRun, readChatGptPlanAvailability } from "./funding";
 
 describe("AI budget admission", () => {
@@ -17,18 +17,13 @@ describe("AI budget admission", () => {
   it("reads fresh settings and filtered usage together, including an empty ledger", async () => {
     const now = new Date("2026-10-01T01:00:00.000Z");
     expect(await readAiBudget(ctx.db, now)).toMatchObject({
-      credit: { limitUsd: 1.5, spentUsd: 0 },
+      credit: { spentUsd: 0 },
       plan: { limitUsd: 2, spentUsd: 0 },
       paid: { limitUsd: 1, spentUsd: 0 },
     });
-    await setCreditBudget(ctx.db, {
-      creditLimitUsd: 3,
-      openaiCreditLimitUsd: 1.5,
-      planLimitUsd: 4,
-      paidLimitUsd: 5,
-    });
+    await setAiBudget(ctx.db, { planLimitUsd: 4, paidLimitUsd: 5 });
     expect(await readAiBudget(ctx.db, now)).toMatchObject({
-      credit: { limitUsd: 3, spentUsd: 0 },
+      credit: { spentUsd: 0 },
       plan: { limitUsd: 4, spentUsd: 0 },
       paid: { limitUsd: 5, spentUsd: 0 },
     });
@@ -83,8 +78,8 @@ describe("AI budget admission", () => {
         },
       ]);
     expect(await readAiBudget(ctx.db, now)).toMatchObject({
-      credit: { limitUsd: 3, spentUsd: 0 },
-      openaiCredit: { limitUsd: 1.5, spentUsd: 0.25 },
+      credit: { spentUsd: 0 },
+      openaiCredit: { spentUsd: 0.25 },
       plan: { limitUsd: 4, spentUsd: 0.5 },
       paid: { limitUsd: 5, spentUsd: 0.6 },
     });

@@ -21,7 +21,7 @@ const egressRequest = (headers: Record<string, string>) =>
       provider: "anthropic",
       endpoint: "v1/messages",
       query: {
-        model: "claude-opus-5-5",
+        model: "claude-sonnet-5-5",
         messages: [],
         thinking: { type: "adaptive" },
       },
@@ -137,14 +137,9 @@ describe("Claude credit refusal", () => {
     },
   );
 
-  it("never records Cubby's own credit-budget stop or a non-funding failure", async () => {
+  it("never records a non-funding failure", async () => {
     const stub = env.AI_GATEWAY_EGRESS.getByName(crypto.randomUUID());
     const now = Date.now();
-    await stub.noteCreditResponse(
-      429,
-      '{"error":{"type":"cubby_credit_budget_reached","message":"Claude credit budget reached"}}',
-      now,
-    );
     await stub.noteCreditResponse(400, "tool_choice is invalid", now);
     expect(await stub.creditRefusal(now)).toBeNull();
     expect((await stub.admit(CREDIT, now)).kind).toBe("admitted");
@@ -419,7 +414,7 @@ describe("shared Gateway admission", () => {
             provider: "anthropic",
             endpoint: "v1/messages",
             query: {
-              model: "claude-opus-5-5",
+              model: "claude-sonnet-5-5",
               messages: [],
               thinking: { type: "adaptive" },
             },
@@ -445,7 +440,7 @@ describe("shared Gateway admission", () => {
         expect(calls[0]?.headers.has("cf-aig-authorization")).toBe(false);
         expect(calls[0]?.headers.get("cf-aig-gateway-id")).toBe("cubby");
         expect(await calls[0]?.json()).toEqual({
-          model: "anthropic/claude-opus-5.5",
+          model: "anthropic/claude-sonnet-5.5",
           messages: [],
           thinking: { type: "adaptive" },
         });

@@ -3396,8 +3396,8 @@ describe("statement Transaction suggestions", () => {
       {
         windowStart: "2026-05-04T00:00:00Z",
         windowEnd: "2026-05-04T06:00:00Z",
-        credit: { limitUsd: 1, spentUsd: 0 },
-        openaiCredit: { limitUsd: 1.5, spentUsd: 0 },
+        credit: { spentUsd: 0 },
+        openaiCredit: { spentUsd: 0 },
         plan: { limitUsd: 1, spentUsd: 0 },
         paid: { limitUsd: 1, spentUsd: 1 },
       },
@@ -4476,8 +4476,8 @@ describe("statement Transaction suggestions", () => {
       {
         windowStart: "2026-05-04T00:00:00Z",
         windowEnd: "2026-05-04T06:00:00Z",
-        credit: { limitUsd: 1, spentUsd: 0 },
-        openaiCredit: { limitUsd: 1.5, spentUsd: 0 },
+        credit: { spentUsd: 0 },
+        openaiCredit: { spentUsd: 0 },
         plan: { limitUsd: 1, spentUsd: 0 },
         paid: { limitUsd: 1, spentUsd: 1 },
       },

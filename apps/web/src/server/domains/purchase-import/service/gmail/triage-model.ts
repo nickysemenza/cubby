@@ -16,7 +16,7 @@ import { mailTriageChoices } from "~/server/ai/policy/prompts/mail";
 import { runStructuredFeature } from "~/server/ai/run-feature";
 import type { Database } from "~/server/db";
 import {
-  freeRunPreflight,
+  planRunPreflight,
   paidRunPreflight,
 } from "~/server/domains/run/service/execution-transport";
 
@@ -85,7 +85,7 @@ export const productionMailRelevance =
         subscriptionRequired: true,
         subscriptionFallback: "budgeted",
         beforePaidRequest: paidRunPreflight(db, runEntityId.parse(runId)),
-        beforeFreeRequest: freeRunPreflight(db, runEntityId.parse(runId)),
+        beforePlanRequest: planRunPreflight(db, runEntityId.parse(runId)),
         onAnswered: (model) => {
           answeredModel = model;
         },

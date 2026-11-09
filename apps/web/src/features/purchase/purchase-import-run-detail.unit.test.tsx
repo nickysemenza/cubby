@@ -168,7 +168,6 @@ beforeEach(() => {
           windowStart: "2026-09-20T12:00:00.000Z",
           windowEnd: "2026-09-20T18:00:00.000Z",
           credit: {
-            limitUsd: 5,
             spentUsd: 5,
             state: "available",
             until: null,
@@ -176,7 +175,6 @@ beforeEach(() => {
             availability: SPENT,
           },
           openaiCredit: {
-            limitUsd: 1.5,
             spentUsd: 1.5,
             state: "available",
             until: null,

@@ -1,5 +1,5 @@
 /**
- * The fixed six-hour UTC window the household AI budgets (ADR 0017) and the
+ * The fixed six-hour UTC window the household AI budgets (ADR 0027) and the
  * egress Durable Object's Claude credit-refusal probe share. Pure, so the
  * Durable Object reads it without the budget module's database imports.
  */

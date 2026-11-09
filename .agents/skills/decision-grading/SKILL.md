@@ -157,8 +157,9 @@ existing local-secret loader. Keep calls sequential and show sample sizes first.
    operation for any requested correction. Report aggregate parity, unavailable
    cases, member grades, context gaps and funding substitutions separately.
 
-Keep the production Mail import coordinator on Opus until real held-out replay
-and member grading justify a change. The synthetic scripted mode checks plumbing
+Keep the production Mail import coordinator on Luna, escalating to the
+standard tier ([ADR 0027](../../../docs/adr/0027-tier-routed-models-on-a-funding-first-ladder.md)),
+until real held-out replay and member grading justify a change. The synthetic scripted mode checks plumbing
 only; it provides no model-quality evidence. UI grading is tracked separately in
 [#2753](https://github.com/nickysemenza/cubby/issues/2753).
 
