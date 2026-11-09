@@ -8,13 +8,13 @@ import {
   type DecisionChoiceResult,
   type DecisionPort,
 } from "~/server/ai/decision-model";
+import { aiCallOwner } from "~/server/ai/policy/call-owner";
 import { MAIL_ATTACHMENT_PURPOSE_FEATURE } from "~/server/ai/policy/features";
 import type { AiRunContext } from "~/server/ai/run-feature";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
 import { orderMailAttachment } from "~/server/db/schema";
 import type { RetainedMail } from "~/server/domains/mail/repo/retained-mail";
-import { aiCallOwner } from "~/server/domains/run/repo/ai-call-owner";
 import { wasm } from "~/server/wasm";
 
 type AttachmentEvidence = Pick<

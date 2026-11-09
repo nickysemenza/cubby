@@ -11,8 +11,8 @@ import {
 import { runEntityId } from "@cubby/schemas/identifiers";
 import type { z } from "zod";
 
+import { aiRunOwner } from "~/server/ai/policy/call-owner";
 import type { Database } from "~/server/db";
-import { aiRunOwner } from "~/server/domains/run/repo/ai-call-owner";
 import { defineJobHandler } from "~/server/generic/jobs/service/jobs";
 import type { Fenced, JobHandler } from "~/server/generic/jobs/types";
 import { withJobFence } from "~/server/workflows/runs/execution";

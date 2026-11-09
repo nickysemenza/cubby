@@ -14,13 +14,13 @@ import {
   suggestFields,
   type SuggestFieldsPorts,
 } from "~/server/ai/field-suggest/suggest-fields";
+import { type AiCallOwner } from "~/server/ai/policy/call-owner";
 import {
   MERCHANT_IDENTITY_FEATURE,
   MERCHANT_IDENTITY_SUPPORT_FEATURE,
 } from "~/server/ai/policy/features";
 import { runStructuredFeature } from "~/server/ai/run-feature";
 import type { Database } from "~/server/db";
-import { type AiCallOwner } from "~/server/domains/run/repo/ai-call-owner";
 
 import {
   financialSpendingCategoryHistory,

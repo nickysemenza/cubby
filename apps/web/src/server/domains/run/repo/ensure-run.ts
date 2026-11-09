@@ -1,8 +1,4 @@
-import {
-  type ActorContext,
-  buildActorContext,
-  SYSTEM_USER_ID,
-} from "@cubby/schemas/context";
+import type { ActorContext } from "@cubby/schemas/context";
 import {
   type RunId,
   type UserId,
@@ -34,14 +30,6 @@ import {
   type ShortcodeGeneratorPort,
 } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { isExecutedRunPurpose } from "~/server/workflows/runs/contract";
-
-/**
- * The actor for work with nobody behind it: crons, retries, scheduled
- * refreshes. Work a member starts (a backfill button) stays attributed to
- * that member. The reserved user exists in the production database.
- */
-export const systemActor = (): ActorContext =>
-  buildActorContext(SYSTEM_USER_ID, "system");
 
 export type EnsureRunInput = {
   purpose: RunPurpose;

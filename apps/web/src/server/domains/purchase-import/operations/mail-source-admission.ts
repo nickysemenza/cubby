@@ -12,6 +12,7 @@ import type { MailMessageRef } from "@cubby/schemas/mailbox-research";
 import { and, eq } from "drizzle-orm";
 
 import type { DecisionPort } from "~/server/ai/decision-model";
+import { aiCallOwner } from "~/server/ai/policy/call-owner";
 import type { Database } from "~/server/db";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { ledgerParty, run as runTable } from "~/server/db/schema";
@@ -23,7 +24,6 @@ import {
   admitSupportingMailSource,
   readMailRunSources,
 } from "~/server/domains/purchase-import/repo/mail-run-membership";
-import { aiCallOwner } from "~/server/domains/run/repo/ai-call-owner";
 import { createAppError } from "~/server/errors/app-error";
 
 import { readMailOwnerEvidence } from "../repo/mail-owner";

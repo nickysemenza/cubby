@@ -55,6 +55,7 @@ import {
   suggestFields,
   withFieldSuggestionBatch,
 } from "~/server/ai/field-suggest/suggest-fields";
+import { aiCallOwner, type AiCallOwner } from "~/server/ai/policy/call-owner";
 import {
   dependencyStamps,
   fieldDependencyKeys,
@@ -72,10 +73,6 @@ import type { Database } from "~/server/db";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import { suggestionTable } from "~/server/db/schema";
 import { applyFinanceCategorySuggestion } from "~/server/domains/financial-transaction/repo/finance-suggestion-context";
-import {
-  aiCallOwner,
-  type AiCallOwner,
-} from "~/server/domains/run/repo/ai-call-owner";
 import {
   readAutomaticAiStop,
   resumeAutomaticAi,

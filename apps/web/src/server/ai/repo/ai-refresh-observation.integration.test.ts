@@ -1,3 +1,4 @@
+import { systemActor } from "@cubby/schemas/context";
 import { withTestDb } from "tooling/test-setup";
 import { beforeEach, describe, expect, it } from "vitest";
 
@@ -8,7 +9,6 @@ import {
   readMailImportSettings,
   setMailImport,
 } from "~/server/domains/purchase-import/repo/mail-import-settings";
-import { systemActor } from "~/server/domains/run/repo/ensure-run";
 
 import {
   activateAiRefresh,

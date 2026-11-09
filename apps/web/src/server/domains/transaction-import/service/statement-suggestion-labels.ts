@@ -30,6 +30,7 @@ import {
 } from "~/server/ai/decision-model";
 import { withAiInputs } from "~/server/ai/evaluation-inputs";
 import { withFieldSuggestionBatch } from "~/server/ai/field-suggest/suggest-fields";
+import { aiRunOwner } from "~/server/ai/policy/call-owner";
 import {
   STATEMENT_CHARGE_IDENTITY_FEATURE,
   STATEMENT_COUNTERPARTY_FEATURE,
@@ -43,7 +44,6 @@ import {
   needsSpendingAdvice,
   type SpendingAdvicePort,
 } from "~/server/domains/financial-transaction/service/spending-advice";
-import { aiRunOwner } from "~/server/domains/run/repo/ai-call-owner";
 import {
   statementLabelSubject,
   statementCandidateSubject,

@@ -1,3 +1,4 @@
+import { systemActor } from "@cubby/schemas/context";
 import type { ActorContext } from "@cubby/schemas/context";
 import type {
   CookbookExtraction,
@@ -51,7 +52,6 @@ import {
   user,
   vendor,
 } from "~/server/db/schema";
-import { systemActor } from "~/server/domains/run/repo/ensure-run";
 import {
   insertPayloadsWithIdentities,
   type EntityPayloadValues,

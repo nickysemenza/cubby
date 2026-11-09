@@ -10,6 +10,7 @@ import {
 } from "@cubby/schemas/recipe-flow";
 import type { RawRecipeOutput as RecipeOut } from "@cubby/schemas/recipe-raw-read";
 
+import { type AiCallOwner } from "~/server/ai/policy/call-owner";
 import { RECIPE_FLOW_PRIMARY_FEATURE } from "~/server/ai/policy/features";
 import { upsertAiAnalysis } from "~/server/ai/repo/ai-analysis";
 import { recordFeatureUsage } from "~/server/ai/run-feature";
@@ -23,7 +24,6 @@ import {
   recipeFlowOrThrow,
   type RecipeFlowReadPorts,
 } from "~/server/domains/recipe/repo/recipe-flow-state";
-import { type AiCallOwner } from "~/server/domains/run/repo/ai-call-owner";
 
 import { validateRecipeFlowPlan } from "./validation";
 

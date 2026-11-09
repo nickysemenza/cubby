@@ -3,6 +3,7 @@ import {
   aiProvenance,
   aiRefreshRunInput,
 } from "@cubby/schemas/ai-evaluation";
+import { systemActor } from "@cubby/schemas/context";
 import { entitySchema, type EntityRef } from "@cubby/schemas/entity";
 import type { RunId } from "@cubby/schemas/identifiers";
 import { sha256Hex } from "@cubby/shared/sha256";
@@ -45,7 +46,6 @@ import {
   scheduleEvaluationRun,
 } from "./ai-refresh-state";
 import { readAutomaticAiStop } from "./automatic-ai-stop";
-import { systemActor } from "./ensure-run";
 
 const discoveryEntities = [
   "product",

@@ -1,3 +1,4 @@
+import { systemActor } from "@cubby/schemas/context";
 import type { ActorContext } from "@cubby/schemas/context";
 /**
  * UPC identity lookups served from Postgres `UpcLookupCache`, with upcitemdb
@@ -18,6 +19,7 @@ import type {
   UPCLookupResponse,
 } from "~/contracts/upc.contract";
 import { env } from "~/env";
+import { aiCallOwner } from "~/server/ai/policy/call-owner";
 import type { AiRunContext } from "~/server/ai/run-feature";
 import type { DecideOfferComparability } from "~/server/clients/upc/price";
 import type { ExternalLookupResult } from "~/server/clients/upc/types";
@@ -34,8 +36,6 @@ import {
   UpcBatchDeferredError,
   UpcLookupUnavailableError,
 } from "~/server/domains/product/repo/upc-lookup-cache";
-import { aiCallOwner } from "~/server/domains/run/repo/ai-call-owner";
-import { systemActor } from "~/server/domains/run/repo/ensure-run";
 import { TraceNames, withTrace } from "~/server/observability/tracing";
 
 const log = createLogger("UPC Lookup");

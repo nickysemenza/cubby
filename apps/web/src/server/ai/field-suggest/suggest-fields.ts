@@ -52,6 +52,7 @@ import {
   withFieldSuggestionPreparation,
   type FieldSuggestSpec,
 } from "~/server/ai/field-suggest/registry";
+import { type AiCallOwner } from "~/server/ai/policy/call-owner";
 import { type AiSelectionSpec } from "~/server/ai/policy/decision-choice";
 import { FIELD_SUGGESTION_FEATURE } from "~/server/ai/policy/features";
 import {
@@ -67,7 +68,6 @@ import {
   loadFinanceSuggestionContext,
 } from "~/server/domains/financial-transaction/repo/finance-suggestion-context";
 import { resolveDraftEvidenceFields } from "~/server/domains/purchase/repo/purchase-evidence-policy";
-import { type AiCallOwner } from "~/server/domains/run/repo/ai-call-owner";
 import { classificationAllowsField } from "~/server/domains/spending-category/repo/classification-field-policy";
 import { classificationRefusesField } from "~/server/domains/spending-category/repo/classification-field-policy";
 import { resolveDraftTaskFields } from "~/server/domains/task/repo/task-project-inheritance";

@@ -1,5 +1,6 @@
 import { suggestionStatus } from "@cubby/schemas/ai";
 import { type AutomaticRuleKey } from "@cubby/schemas/automatic-rule";
+import { systemActor } from "@cubby/schemas/context";
 import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
 import { runEntityId } from "@cubby/schemas/identifiers";
 import { statementTransactionJudgment } from "@cubby/schemas/statement-suggestion";
@@ -14,7 +15,6 @@ import {
 } from "~/lib/error-diagnostics";
 import type { Database } from "~/server/db";
 import { unwrapDb } from "~/server/db/helpers";
-import { systemActor } from "~/server/domains/run/repo/ensure-run";
 import type { StatementSuggestionScope } from "~/server/domains/transaction-import/repo/statement-input";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { isSerializationFailure } from "~/server/errors/db-errors";

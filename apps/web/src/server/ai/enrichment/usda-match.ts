@@ -9,10 +9,10 @@ import type { IngredientId } from "@cubby/schemas/identifiers";
 import { createLogger } from "@cubby/worker-tracing";
 
 import { settleDecisionWorkItems } from "~/server/ai/decision-model";
+import { type AiCallOwner } from "~/server/ai/policy/call-owner";
 import { USDA_FOOD_SUGGEST_FEATURE } from "~/server/ai/policy/features";
 import { runAiSelection } from "~/server/ai/selection";
 import type { Database } from "~/server/db";
-import { type AiCallOwner } from "~/server/domains/run/repo/ai-call-owner";
 
 import {
   buildUsdaShortlist,

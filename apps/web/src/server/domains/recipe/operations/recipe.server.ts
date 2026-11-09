@@ -29,6 +29,7 @@ import {
 import { scaleTotals } from "~/lib/nutrition-estimates";
 import { getIngredientMappings } from "~/lib/unit-mapping-utils";
 import { wasm } from "~/lib/wasm";
+import { aiCallOwner } from "~/server/ai/policy/call-owner";
 import type { Database } from "~/server/db";
 import { getIngredientsByIDs } from "~/server/domains/ingredient/repo/ingredient-with-food";
 import { getMultiMeasureRecipeIngredients } from "~/server/domains/product/repo/equivalences";
@@ -46,7 +47,6 @@ import {
 } from "~/server/domains/recipe/repo/queries";
 import { getRecipeFlowState } from "~/server/domains/recipe/repo/recipe-flow-state";
 import { generateRecipeFlow } from "~/server/domains/recipe/service/recipe-flow/recipe-flow.service";
-import { aiCallOwner } from "~/server/domains/run/repo/ai-call-owner";
 import {
   type EntityKernelContext,
   executeEntityAs,

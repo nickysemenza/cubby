@@ -35,6 +35,7 @@ import {
   recipeOutSignature,
 } from "~/lib/recipe-signature";
 import { forwardGatewayRequest } from "~/server/ai/gateway-forward";
+import { aiCallOwner } from "~/server/ai/policy/call-owner";
 import {
   lintImportRecipe,
   notionPageToImportRecipe,
@@ -87,7 +88,6 @@ import {
   upsertImportRecipe,
   upsertNotionRecipeFromImport,
 } from "~/server/domains/recipe/repo/import-recipe-convert";
-import { aiCallOwner } from "~/server/domains/run/repo/ai-call-owner";
 import {
   actorWithRun,
   cookbookRunInput,

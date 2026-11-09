@@ -8,6 +8,7 @@ import {
   decisionChoiceFitsContext,
   runDecisionChoice,
 } from "~/server/ai/decision-model";
+import { aiCallOwner } from "~/server/ai/policy/call-owner";
 import { PURCHASE_IMPORT_EXPENSE_LINE_ROLE_FEATURE } from "~/server/ai/policy/features";
 import { expenseLineRoleRules } from "~/server/ai/policy/prompts/purchase-lines";
 import type { AiRunContext } from "~/server/ai/run-feature";
@@ -16,7 +17,6 @@ import type {
   ExpenseLineRoleClassifier,
   ExpenseLineRoleEvidence,
 } from "~/server/domains/expense/repo/line-role-classifier";
-import { aiCallOwner } from "~/server/domains/run/repo/ai-call-owner";
 
 const roleChoices = expenseLineKindValues.filter(
   (lineKind): lineKind is Exclude<ExpenseLineKind, "unclassified"> =>

@@ -8,6 +8,7 @@ import type {
 } from "@cubby/schemas/search";
 import { z } from "zod";
 
+import { aiRunOwner } from "~/server/ai/policy/call-owner";
 import type { Database } from "~/server/db";
 import {
   acquisitionBrandKey,
@@ -22,7 +23,6 @@ import {
   retrieveAcquisitionNotes,
 } from "~/server/domains/connection/repo/connection-candidates";
 import { connectionRecord } from "~/server/domains/connection/repo/connection-evidence";
-import { aiRunOwner } from "~/server/domains/run/repo/ai-call-owner";
 import { semanticEntityCandidateScan } from "~/server/generic/embedding/service/semantic-search.service";
 import { SEMANTIC_MATCH_MIN_SIMILARITY } from "~/server/generic/embedding/service/semantic/constants";
 import { findLexicalSearchCandidates } from "~/server/generic/search/service/search.service";

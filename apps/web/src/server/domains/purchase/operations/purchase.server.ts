@@ -9,6 +9,7 @@ import {
 import type { RawPurchaseOut } from "@cubby/schemas/purchase-raw-read";
 
 import { purchaseContract } from "~/contracts/purchase.contract";
+import { aiCallOwner } from "~/server/ai/policy/call-owner";
 import { suggestSettlementMatch } from "~/server/ai/settlement-candidate-rank";
 import { withTransactionDatabase } from "~/server/db/helpers";
 import { recomputeRecipesForPriceAffectedProducts } from "~/server/domains/expense/repo/price-affected-recipes";
@@ -34,7 +35,6 @@ import { checkSettlementAllocationDraft } from "~/server/domains/purchase/repo/p
 import { listPurchaseSettlementCandidates } from "~/server/domains/purchase/repo/purchase-settlement-candidates";
 import { composeSettlementReview } from "~/server/domains/purchase/repo/purchase-settlement-review";
 import { startSplitDraft } from "~/server/domains/purchase/repo/purchase-split-draft";
-import { aiCallOwner } from "~/server/domains/run/repo/ai-call-owner";
 import { executeEntity, executeEntityAs } from "~/server/entity-kernel";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { createAppError } from "~/server/errors/app-error";

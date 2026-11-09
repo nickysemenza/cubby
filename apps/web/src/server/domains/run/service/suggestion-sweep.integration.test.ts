@@ -1,3 +1,4 @@
+import { systemActor } from "@cubby/schemas/context";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { and, eq } from "drizzle-orm";
 import {
@@ -18,7 +19,6 @@ import {
   product as productTable,
 } from "~/server/db/schema";
 import { loadFinanceSuggestionContext } from "~/server/domains/financial-transaction/repo/finance-suggestion-context";
-import { systemActor } from "~/server/domains/run/repo/ensure-run";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { declaredFilterPredicates } from "~/server/generic/list/repo/list";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";

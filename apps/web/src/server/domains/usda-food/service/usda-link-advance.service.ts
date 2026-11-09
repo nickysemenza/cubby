@@ -1,3 +1,4 @@
+import { systemActor } from "@cubby/schemas/context";
 import type { ProductId } from "@cubby/schemas/identifiers";
 
 import type { USDAClient } from "~/server/clients/usda";
@@ -7,7 +8,6 @@ import { listProductFdcLinks } from "~/server/domains/product/repo/lookup";
 import { updateProductWithSideEffects } from "~/server/domains/product/repo/write/product-orchestration";
 import { createProductWriteActions } from "~/server/domains/product/repo/write/product-writes";
 import { RecipeCostingService } from "~/server/domains/recipe/repo/recipe-costing";
-import { systemActor } from "~/server/domains/run/repo/ensure-run";
 
 // Bounds each lookupBatch response; a full FoodSummary is a few KB.
 const LOOKUP_CHUNK = 200;

@@ -1,5 +1,5 @@
 import { aiExecutionKind } from "@cubby/schemas/ai-evaluation";
-import { buildActorContext } from "@cubby/schemas/context";
+import { buildActorContext, systemActor } from "@cubby/schemas/context";
 import { suggestFieldKeys } from "@cubby/schemas/entity-fields";
 import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
 import {
@@ -47,7 +47,7 @@ import {
   countConnectionSweepSources,
   prepareConnectionSweepPage,
 } from "../repo/connection-refresh";
-import { ensureRun, systemActor } from "../repo/ensure-run";
+import { ensureRun } from "../repo/ensure-run";
 import { activeSweepFor, type StepRunOwner } from "../repo/run-step";
 import type { StepDriversFor } from "./run-step-registry";
 import {

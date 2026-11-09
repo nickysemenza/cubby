@@ -2,6 +2,7 @@ import {
   aiEvaluationState,
   MEMBER_CANCELLED_AI_WORK,
 } from "@cubby/schemas/ai-evaluation";
+import { systemActor } from "@cubby/schemas/context";
 import type { ActorContext } from "@cubby/schemas/context";
 import { runShortcode, type RunId } from "@cubby/schemas/identifiers";
 import {
@@ -19,7 +20,6 @@ import { runEvaluationRosterExists } from "~/server/ai/evaluation/repo/evaluatio
 import type { Database } from "~/server/db";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import { ledgerParty, runStep, run as runTable } from "~/server/db/schema";
-import { systemActor } from "~/server/domains/run/repo/ensure-run";
 import { recordPaidGrant } from "~/server/domains/run/repo/paid-grant";
 import { reopenRunStep } from "~/server/domains/run/repo/run-step";
 import { createAppError } from "~/server/errors/app-error";

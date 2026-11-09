@@ -7,8 +7,8 @@ import { requiresSuggestionReview } from "@cubby/schemas/field-suggestion-policy
 import { z } from "zod";
 
 import { suggestFields } from "~/server/ai/field-suggest/suggest-fields";
+import { aiCallOwner } from "~/server/ai/policy/call-owner";
 import { resolveDraftExpenseFields } from "~/server/domains/expense/repo/expense-inheritance";
-import { aiCallOwner } from "~/server/domains/run/repo/ai-call-owner";
 import { resolveDraftTaskFields } from "~/server/domains/task/repo/task-project-inheritance";
 import { ENTITY_SCHEMA_BINDINGS } from "~/server/generated/entity-bindings.gen";
 import { generatedMcpEntityActionEntities } from "~/server/generated/entity-kernel-entities.gen";

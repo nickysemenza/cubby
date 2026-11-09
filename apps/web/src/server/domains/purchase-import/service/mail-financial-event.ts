@@ -14,6 +14,7 @@ import type { MailFinancialEventModelOutput } from "@cubby/schemas/mailbox-resea
 
 import { currencyMinorDigits } from "~/lib/number-format";
 import type { DecisionPort } from "~/server/ai/decision-model";
+import { aiCallOwner } from "~/server/ai/policy/call-owner";
 import type { AiChatRequest } from "~/server/ai/policy/feature-identity";
 import { MAIL_FINANCIAL_EVENT_FEATURE } from "~/server/ai/policy/features";
 import {
@@ -29,7 +30,6 @@ import {
   type PreparedMailFinancialEvent,
 } from "~/server/domains/purchase-import/repo/mail-financial-event";
 import { readMailOwnerEvidence } from "~/server/domains/purchase-import/repo/mail-owner";
-import { aiCallOwner } from "~/server/domains/run/repo/ai-call-owner";
 
 import {
   describeMailAttribution,

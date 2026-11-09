@@ -6,8 +6,8 @@ import type {
 import { getErrorMessage } from "@cubby/shared";
 import { createLogger } from "@cubby/worker-tracing";
 
+import { type AiCallOwner } from "~/server/ai/policy/call-owner";
 import type { Database } from "~/server/db";
-import { type AiCallOwner } from "~/server/domains/run/repo/ai-call-owner";
 import {
   findSemanticEntityCandidates,
   type SemanticCandidateScan,

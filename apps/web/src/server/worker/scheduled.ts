@@ -1,3 +1,4 @@
+import { systemActor } from "@cubby/schemas/context";
 import { createLogger } from "@cubby/worker-tracing";
 import * as Sentry from "@sentry/cloudflare";
 
@@ -108,15 +109,11 @@ export async function handleScheduledInvocation(
             await withInvocationDb(
               env.HYPERDRIVE_BACKGROUND.connectionString,
               async () => {
-                const [
-                  { launchMaintenanceRun },
-                  { systemActor },
-                  { recoverMissedWork },
-                ] = await Promise.all([
-                  import("~/server/domains/maintenance/service/maintenance.service"),
-                  import("~/server/domains/run/repo/ensure-run"),
-                  import("~/server/workflows/catch-up"),
-                ]);
+                const [{ launchMaintenanceRun }, { recoverMissedWork }] =
+                  await Promise.all([
+                    import("~/server/domains/maintenance/service/maintenance.service"),
+                    import("~/server/workflows/catch-up"),
+                  ]);
                 const jobs = await Promise.allSettled([
                   withTrace(
                     "cf.scheduled.job",
