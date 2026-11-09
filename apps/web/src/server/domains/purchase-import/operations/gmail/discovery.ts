@@ -54,7 +54,10 @@ import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { recordPaidGrant } from "~/server/domains/run/repo/paid-grant";
 import { recordRunProgress } from "~/server/domains/run/repo/run-progress";
 import { reportServerError } from "~/server/errors/report-error";
-import { currentJobExecution } from "~/server/generic/jobs/context";
+import {
+  currentJobExecution,
+  withJobPhase,
+} from "~/server/generic/jobs/context";
 import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 import type { WorkflowRunParams } from "~/server/workflows/runs/contract";
 import {
@@ -597,31 +600,33 @@ export async function listMailDiscovery(
         return { kind: "stopped" };
       coverage = merged;
     }
-    const page = await listGmailPage(
-      provider,
-      claimed.input.mailboxId,
-      coverage,
-      claimed.input.controlled || queryKey !== undefined
-        ? "targeted"
-        : claimed.progress.discoveryScope?.kind === "mailbox" &&
-            claimed.progress.discoveryScope.mode === "new_mail"
-          ? "new_mail"
-          : discoveryMode(coverage),
-      claimed.input.controlled
-        ? claimed.input.scopedQueries.map((query) => query.key)
-        : queryKey !== undefined
-          ? coverage.scoped
-              .filter(
-                (current) =>
-                  current.key === queryKey &&
-                  claimed.input.scopedQueries.some(
-                    (frozen) =>
-                      frozen.key === current.key &&
-                      frozen.query === current.query,
-                  ),
-              )
-              .map((query) => query.key)
-          : undefined,
+    const page = await withJobPhase("mail.list", () =>
+      listGmailPage(
+        provider,
+        claimed.input.mailboxId,
+        coverage,
+        claimed.input.controlled || queryKey !== undefined
+          ? "targeted"
+          : claimed.progress.discoveryScope?.kind === "mailbox" &&
+              claimed.progress.discoveryScope.mode === "new_mail"
+            ? "new_mail"
+            : discoveryMode(coverage),
+        claimed.input.controlled
+          ? claimed.input.scopedQueries.map((query) => query.key)
+          : queryKey !== undefined
+            ? coverage.scoped
+                .filter(
+                  (current) =>
+                    current.key === queryKey &&
+                    claimed.input.scopedQueries.some(
+                      (frozen) =>
+                        frozen.key === current.key &&
+                        frozen.query === current.query,
+                    ),
+                )
+                .map((query) => query.key)
+            : undefined,
+      ),
     );
     const frozen = await (
       await import("~/server/domains/run/repo/ai-work-state")
@@ -748,105 +753,113 @@ export async function saveMailDiscoveryBatch(
       if (!(await claimDiscovery(db, params))) return { kind: "stopped" };
       // Admission commits durable child dispatch intent. An existing child's
       // terminal failure belongs to that child, not to discovery's checkpoint.
-      await (
-        ports.research ??
-        (await import("../../repo/mail-import-run")).startMailImport
-      )(db, {
-        ledgerPartyId: claimed.ledgerPartyId,
-        userId: claimed.row.actorUserId,
-        parentRunId: claimed.row.id,
-        automatic: true,
-        mailboxId: claimed.input.mailboxId,
-        messageIds: importMailIds.slice(offset, offset + 50),
-      });
+      await withJobPhase("mail.admit", async () =>
+        (
+          ports.research ??
+          (await import("../../repo/mail-import-run")).startMailImport
+        )(db, {
+          ledgerPartyId: claimed.ledgerPartyId,
+          userId: claimed.row.actorUserId,
+          parentRunId: claimed.row.id,
+          automatic: true,
+          mailboxId: claimed.input.mailboxId,
+          messageIds: importMailIds.slice(offset, offset + 50),
+        }),
+      );
     }
-    return withTransactionDatabase(db, async (tx) => {
-      const [locked] = await getDb(tx)
-        .select({ id: runTable.id })
-        .from(runTable)
-        .where(eligibleAttempt(params))
-        .for("update")
-        .limit(1);
-      if (!locked) return { kind: "stopped" as const };
-      const current = await claimDiscovery(tx, params);
-      if (!current || current.progress.pagesDone !== index)
-        return { kind: "stopped" as const };
-      const batchProgress = {
-        ...current.progress,
-        saved: current.progress.saved + ingested.orderMailIds.length,
-        deleted: current.progress.deleted + ingested.deleted.length,
-        excluded: current.progress.excluded + ingested.excluded.length,
-        unrelated: current.progress.unrelated + ingested.unrelated.length,
-      };
-      if (more) {
-        await getDb(tx)
-          .update(runTable)
-          .set({
-            progress: {
-              ...batchProgress,
-              page: { ...page, messageOffset, retainedOrderMailIds: retained },
-            },
-          })
-          .where(eq(runTable.id, current.row.id));
-        return { kind: "more" as const };
-      }
-      const events = await persistGmailEvents(tx, {
-        ledgerPartyId: claimed.ledgerPartyId,
-        mailboxId: claimed.input.mailboxId,
-        events: page.events,
-      });
-      const { coverage } = await loadGmailCursor(tx, {
-        ledgerPartyId: claimed.ledgerPartyId,
-        mailboxId: claimed.input.mailboxId,
-        // Merge into the latest position while the short cursor write is locked.
-        lock: true,
-      });
-      const rebased =
-        coverage &&
-        rebaseMailboxPage({
-          page,
-          coverage,
-          restoreScopedQuery: Boolean(claimed.input.controlled),
-        });
-      if (
-        !rebased ||
-        !(await checkpointMailboxCoverage(tx, {
+    return withJobPhase("mail.checkpoint", () =>
+      withTransactionDatabase(db, async (tx) => {
+        const [locked] = await getDb(tx)
+          .select({ id: runTable.id })
+          .from(runTable)
+          .where(eligibleAttempt(params))
+          .for("update")
+          .limit(1);
+        if (!locked) return { kind: "stopped" as const };
+        const current = await claimDiscovery(tx, params);
+        if (!current || current.progress.pagesDone !== index)
+          return { kind: "stopped" as const };
+        const batchProgress = {
+          ...current.progress,
+          saved: current.progress.saved + ingested.orderMailIds.length,
+          deleted: current.progress.deleted + ingested.deleted.length,
+          excluded: current.progress.excluded + ingested.excluded.length,
+          unrelated: current.progress.unrelated + ingested.unrelated.length,
+        };
+        if (more) {
+          await getDb(tx)
+            .update(runTable)
+            .set({
+              progress: {
+                ...batchProgress,
+                page: {
+                  ...page,
+                  messageOffset,
+                  retainedOrderMailIds: retained,
+                },
+              },
+            })
+            .where(eq(runTable.id, current.row.id));
+          return { kind: "more" as const };
+        }
+        const events = await persistGmailEvents(tx, {
           ledgerPartyId: claimed.ledgerPartyId,
           mailboxId: claimed.input.mailboxId,
-          from: rebased.startCoverage,
-          to: creditScopedPage(
-            rebased,
-            retained.length,
-            new Date(),
-            runShortcode.parse(claimed.row.shortcode),
-          ),
-        }))
-      )
-        throw new Error("Mailbox page coverage changed before checkpoint");
-      const progress = {
-        ...batchProgress,
-        phase: "listing" as const,
-        pagesDone: index + 1,
-        deleted: batchProgress.deleted + removed.size,
-        events: current.progress.events + events.saved,
-        droppedEvents: current.progress.droppedEvents + events.dropped,
-      };
-      delete progress.page;
-      await getDb(tx)
-        .update(runTable)
-        .set({ progress })
-        .where(eq(runTable.id, current.row.id));
-      await recordRunProgress(tx, {
-        runId: current.row.id,
-        eventId: `gmail:${params.attempt}:page:${index}`,
-        // Discovery progress is fenced by its universal Job generation.
-        generation: `job:${params.attempt}`,
-        sequence: index + 1,
-        phase: "page_saved",
-        detail: `Processed Gmail page ${index + 1}; ${ingested.orderMailIds.length} sources retained, ${ingested.unrelated.length} unrelated messages`,
-      });
-      return { kind: "done" as const };
-    });
+          events: page.events,
+        });
+        const { coverage } = await loadGmailCursor(tx, {
+          ledgerPartyId: claimed.ledgerPartyId,
+          mailboxId: claimed.input.mailboxId,
+          // Merge into the latest position while the short cursor write is locked.
+          lock: true,
+        });
+        const rebased =
+          coverage &&
+          rebaseMailboxPage({
+            page,
+            coverage,
+            restoreScopedQuery: Boolean(claimed.input.controlled),
+          });
+        if (
+          !rebased ||
+          !(await checkpointMailboxCoverage(tx, {
+            ledgerPartyId: claimed.ledgerPartyId,
+            mailboxId: claimed.input.mailboxId,
+            from: rebased.startCoverage,
+            to: creditScopedPage(
+              rebased,
+              retained.length,
+              new Date(),
+              runShortcode.parse(claimed.row.shortcode),
+            ),
+          }))
+        )
+          throw new Error("Mailbox page coverage changed before checkpoint");
+        const progress = {
+          ...batchProgress,
+          phase: "listing" as const,
+          pagesDone: index + 1,
+          deleted: batchProgress.deleted + removed.size,
+          events: current.progress.events + events.saved,
+          droppedEvents: current.progress.droppedEvents + events.dropped,
+        };
+        delete progress.page;
+        await getDb(tx)
+          .update(runTable)
+          .set({ progress })
+          .where(eq(runTable.id, current.row.id));
+        await recordRunProgress(tx, {
+          runId: current.row.id,
+          eventId: `gmail:${params.attempt}:page:${index}`,
+          // Discovery progress is fenced by its universal Job generation.
+          generation: `job:${params.attempt}`,
+          sequence: index + 1,
+          phase: "page_saved",
+          detail: `Processed Gmail page ${index + 1}; ${ingested.orderMailIds.length} sources retained, ${ingested.unrelated.length} unrelated messages`,
+        });
+        return { kind: "done" as const };
+      }),
+    );
   } catch (error) {
     if (await pauseAuthorization(db, params, error)) return { kind: "stopped" };
     throw error;
