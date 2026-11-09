@@ -3,6 +3,7 @@ import { agentImportRunPurpose } from "@cubby/schemas/import-run-agent";
 import { jobState } from "@cubby/schemas/job";
 import {
   purchaseAgentEvent,
+  purchaseAgentEventKeys,
   type PurchaseAgentEvent,
 } from "@cubby/schemas/purchase-import";
 import { runStatus } from "@cubby/schemas/run-fields";
@@ -17,13 +18,13 @@ import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 import { wakeJobs } from "~/server/workflows/background-tasks/publish";
 
 /** Commit handoff intent with admission. Retries retain one operation identity. */
-export async function dispatchRunEvent(
+async function dispatchRunEvent(
   db: RepositoryQueryInput,
   submitted: PurchaseAgentEvent,
 ) {
   const event = purchaseAgentEvent.parse(submitted);
   const saved = await enqueueJob(db, {
-    key: `purchase-dispatch:${event.runId}:${event.type}:${event.eventId}`,
+    key: purchaseAgentEventKeys(event).job,
     kind: "purchase.dispatch",
     runId: event.runId,
     input: event,

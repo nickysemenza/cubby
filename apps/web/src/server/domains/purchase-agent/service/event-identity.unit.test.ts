@@ -2,15 +2,17 @@ import {
   importRunAgentIdentity,
   importRunIdFromAgentIdentity,
 } from "@cubby/schemas/import-run-agent";
-import { purchaseAgentEvent } from "@cubby/schemas/purchase-import";
+import {
+  purchaseAgentEvent,
+  purchaseAgentEventKeys,
+} from "@cubby/schemas/purchase-import";
 import { describe, expect, it } from "vitest";
-
-import { purchaseAgentEventIdempotencyKey } from "./contracts";
 
 const runId = "f47ac10b-58cc-4372-a567-0e02b2c3d479";
 
 describe("PurchaseAgentEvent", () => {
-  it("uses a stable run identity and delivery idempotency key", () => {
+  // Queued Jobs and coordinator history store these spellings.
+  it("uses a stable run identity and delivery keys", () => {
     const event = purchaseAgentEvent.parse({
       version: 1,
       type: "retry",
@@ -23,9 +25,10 @@ describe("PurchaseAgentEvent", () => {
     expect(importRunAgentIdentity(runId, "mail_import")).toBe(
       `import-run:${runId}`,
     );
-    expect(purchaseAgentEventIdempotencyKey(event)).toBe(
-      `purchase-agent:${runId}:retry:retry-after-transient-failure`,
-    );
+    expect(purchaseAgentEventKeys(event)).toEqual({
+      job: `purchase-dispatch:${runId}:retry:retry-after-transient-failure`,
+      operation: `purchase-agent:${runId}:retry:retry-after-transient-failure`,
+    });
   });
 
   it("keeps both durable prefixes and resolves photo observations", () => {

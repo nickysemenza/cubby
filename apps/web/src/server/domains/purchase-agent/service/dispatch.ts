@@ -1,6 +1,6 @@
 import { importRunAgentIdentity } from "@cubby/schemas/import-run-agent";
+import type { PurchaseAgentEvent } from "@cubby/schemas/purchase-import";
 
-import type { PurchaseAgentEvent } from "./contracts";
 import { dispatchInputForEvent } from "./dispatch-input";
 import type { PurchaseDispatchEnvironment } from "./environment";
 
