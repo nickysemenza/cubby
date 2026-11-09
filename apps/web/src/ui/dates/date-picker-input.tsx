@@ -217,6 +217,7 @@ export function DatePickerInput({
   const handleOpenChange = (nextOpen: boolean) => {
     setOpen(nextOpen);
     if (nextOpen) return;
+    // The picker closes before focus moves; read the new focus once the close settles.
     queueMicrotask(() => {
       if (isPickerElement(document.activeElement)) return;
       commitDraft();

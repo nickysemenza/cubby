@@ -128,6 +128,9 @@ interface UseStandardColumnsOptions<TData extends BaseListRow> {
   hiddenFilterColumns?: string[];
 }
 
+const mappingsColumnId = (entity: string) =>
+  entity === "product" ? "unitMappingQuality" : "unitMappings";
+
 function columnIdentifier<TData extends BaseListRow, TValue extends CellData>(
   column: CubbyColumnDef<TData, TValue>,
 ): string | null {
@@ -260,8 +263,7 @@ export function useStandardColumns<TData extends BaseListRow>({
     const imageField = standardColumns.find(
       (field) => field.display.standard === "image",
     );
-    const mappingsId =
-      entity === "product" ? "unitMappingQuality" : "unitMappings";
+    const mappingsId = mappingsColumnId(entity);
     return {
       image: createImageColumn(columnHelper, {
         entity,
@@ -440,8 +442,7 @@ export function useStandardColumns<TData extends BaseListRow>({
           // USDA-derived edges the server never loads), which no SQL ORDER BY can
           // reproduce. The old sort ordered by an edge-count proxy instead, i.e.
           // by a quantity that isn't on screen.
-          const mappingsColId =
-            entity === "product" ? "unitMappingQuality" : "unitMappings";
+          const mappingsColId = mappingsColumnId(entity);
           add(withManifestFilter(standardDefinitions.mappings, mappingsColId));
         }
 

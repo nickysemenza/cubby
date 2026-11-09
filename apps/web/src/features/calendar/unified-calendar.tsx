@@ -744,6 +744,7 @@ export function UnifiedCalendar({
               payload={item}
               className={calendarItemTriggerClassName(item)}
               onClick={() => {
+                // Close the day sheet after the editor popover has anchored to this trigger.
                 requestAnimationFrame(() => setSelectedDay(undefined));
               }}
             >

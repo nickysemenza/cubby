@@ -3190,6 +3190,7 @@ function ProposalCard({
                 step="identity"
                 onShowEvidence={() => {
                   setEvidenceOpen(true);
+                  // The evidence panel mounts with the next commit.
                   requestAnimationFrame(() =>
                     document
                       .getElementById(`photo-evidence-${proposal.groupKey}`)
@@ -4066,6 +4067,7 @@ function PhotoItemList({
               }}
               onClick={() => {
                 setActiveGroupKey(item.groupKey);
+                // The newly active group renders with the next commit.
                 if (isMobile)
                   requestAnimationFrame(() =>
                     document
@@ -4436,6 +4438,7 @@ export function PhotoGroupReview({
                       const target = document.getElementById(
                         `photo-group-${unresolved.groupKey}`,
                       );
+                      // The newly active group renders with the next commit.
                       requestAnimationFrame(() => {
                         target?.scrollIntoView({ block: "start" });
                         target?.focus({ preventScroll: true });
