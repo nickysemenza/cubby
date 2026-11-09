@@ -115,6 +115,7 @@ import {
   entities,
   entityPluralLabel,
   isBrowserRoutedEntity,
+  isShortcodeRoutedEntity,
 } from "../entities";
 import {
   readDisplayReferenceField,
@@ -604,7 +605,7 @@ function copyScalarField<TRecord extends object>(
 /** Routed manifest reference targets whose shortcode is a display-image ref. */
 const referenceMediaEntity = (entity: string): BrowserRoutedEntity | null =>
   // SAFETY: a manifest reference target is always a declared entity key.
-  isBrowserRoutedEntity(entity as Entity) && entity !== "usda-food"
+  isShortcodeRoutedEntity(entity as Entity)
     ? (entity as BrowserRoutedEntity)
     : null;
 

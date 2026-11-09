@@ -18,7 +18,7 @@ import { Link } from "@tanstack/react-router";
 import { cn } from "cn";
 import { type ReactNode, useId, useMemo, useState } from "react";
 
-import { entityDetailLink, isBrowserRoutedEntity } from "~/entity/entities";
+import { entityDetailLink, isShortcodeRoutedEntity } from "~/entity/entities";
 import {
   type EntityTimelineFiltersByEntity,
   entityTimelineFor,
@@ -164,12 +164,7 @@ function TimelineLink({
   children: ReactNode;
 }) {
   const parsed = link ? entitySchema.safeParse(link.entity) : undefined;
-  if (
-    !link ||
-    !parsed?.success ||
-    parsed.data === "usda-food" ||
-    !isBrowserRoutedEntity(parsed.data)
-  )
+  if (!link || !parsed?.success || !isShortcodeRoutedEntity(parsed.data))
     return <span className={className}>{children}</span>;
   return (
     <Link

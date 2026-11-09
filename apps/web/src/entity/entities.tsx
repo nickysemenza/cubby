@@ -2,9 +2,10 @@ import { purchaseFieldEnvelopeSchemas } from "@cubby/schemas/compiler/generated/
 import { vendorFieldEnvelopeSchemas } from "@cubby/schemas/compiler/generated/entity-field-envelopes/vendor";
 import { productListItemOut } from "@cubby/schemas/entities/product";
 import type { Entity } from "@cubby/schemas/entity";
-import type {
-  BrowserRoutedEntity,
-  ShortcodeEntity,
+import {
+  type BrowserRoutedEntity,
+  type ShortcodeEntity,
+  shortcodeEntities,
 } from "@cubby/schemas/entity-manifest";
 import { entityRoster } from "@cubby/schemas/entity-roster";
 import { displayGtin } from "@cubby/schemas/external-id";
@@ -397,6 +398,14 @@ export const mergeConfigFor = (
 export const isBrowserRoutedEntity = (
   entity: Entity,
 ): entity is BrowserRoutedEntity => entity in entityDefinitions;
+
+const shortcodeEntitySet: ReadonlySet<Entity> = new Set(shortcodeEntities);
+
+/** A browser-routed entity whose detail route is addressed by shortcode. */
+export const isShortcodeRoutedEntity = (
+  entity: Entity,
+): entity is Extract<ShortcodeEntity, BrowserRoutedEntity> =>
+  isBrowserRoutedEntity(entity) && shortcodeEntitySet.has(entity);
 
 /** Presentation metadata for an entity whose browser-route capability is known. */
 export const browserEntityDefinition = (
