@@ -6,7 +6,10 @@ open "cubby://entity/${PRODUCT_ID}"
 wait "role=Button label=More" 90000
 click "role=Button label=More"
 wait "role=Button label=Discard" 90000
-click "role=Button label=Discard"
+# The popup exposes offscreen items to accessibility; swipe inside its iPhone 17 bounds first.
+swipe 300 500 300 150
+wait stable 500
+click "label=Discard"
 wait text "Also take these units off the shelf" 90000
 wait text "Take from" 90000
 click "role=Button label=\"Take from, Choose a shelf\""
@@ -18,4 +21,4 @@ click "id=heroAction.submit"
 wait text "Discard Synthetic Flour Bag?" 90000
 # The alert button shares its label with the sheet toolbar button (and `alert accept` stalls over a sheet); tap it by position (iPhone 17).
 click 201 506
-wait text "Discarded 1" 90000
+wait text "Stored quantity: -1" 90000
