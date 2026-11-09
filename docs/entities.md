@@ -2404,12 +2404,6 @@ Only an explicit contextual `storedProjection` may replace its default stored
 path; its declaration still owns availability and provenance. Filter-only
 `fromResult` members use the same typed path SQL as visible stored fields.
 
-When a page binding supplies a derived value, mark its SQL `projection: "binding"`
-on either a plain SQL value or its preparation. Filtering and ordering retain
-that SQL; loading rows does not evaluate a value the binding replaces. Expense's
-allocated category identity uses its bounded page binding, keeping the
-whole-population category-name expression out of the ordinary page SELECT.
-
 Work Problems project filter values, readiness and related predicates into a
 materialized facts relation per entity and request, then compute membership and
 shared label/authority columns once in its base. Expression reuse includes bound
@@ -3137,9 +3131,12 @@ value. A predicate and a value both receive the caller's quality read context
 SQL that needs request data (inventory valuations, an Email list's scope) wraps a
 `listPrepare(load)` handle, whose `load` receives the request's filters, with
 `.value`/`.predicate`; fields share a prepare by sharing the handle.
-`.value(render, { projection: "binding" })` keeps prepared SQL for filters,
-sorting and grouping while requiring a read binding to supply the projected
-value. Projection alone does not run that prepare. Vendor Mail search uses
+`.value(render, { projection: "binding" })`, or `projection: "binding"` on a
+top-level plain SQL value, keeps SQL for filters, sorting and grouping while
+requiring a read binding to supply the projected value. Projection alone does
+not run that prepare or evaluate the plain SQL. Expense's bounded page binding
+supplies allocated category identity, keeping the whole-population category-name
+expression out of the ordinary page SELECT. Vendor Mail search uses
 the page's ids unless its query context already holds global search states;
 sender-conflict attribution still checks the whole Vendor population.
 `scaffold.context(db, request)` loads each needed prepare at most once, and

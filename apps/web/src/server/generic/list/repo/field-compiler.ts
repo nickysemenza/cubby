@@ -119,7 +119,6 @@ type DerivedPart =
       readonly sql: SQL;
       readonly nulls?: "high";
       readonly direction?: "asc" | "desc";
-      readonly projection?: "binding";
     };
 
 /**
@@ -339,7 +338,12 @@ export class ListContext {
   }
 }
 
-type DerivedValueSql = DerivedValue | PreparedValue | ReadValue | SetValue;
+type DerivedValueSql =
+  | DerivedValue
+  | (Exclude<DerivedPart, SQL> & { readonly projection: "binding" })
+  | PreparedValue
+  | ReadValue
+  | SetValue;
 type DerivedPredicateSql<V> =
   | ((value: V, read: QualityReadContext | undefined) => SQL | undefined)
   | PreparedPredicate<V>;
