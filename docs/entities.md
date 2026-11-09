@@ -3664,7 +3664,7 @@ Audit change fields can name a declared relationship when recording reference li
 
 ## Child storage
 
-Child bigint columns can declare `bigintMode: "bigint"` for exact money; existing number-shaped child values keep the default number decoder. The checked money owner converts only at public dollar boundaries. Raw verification sets retain bigint values as integer strings.
+Child bigint columns can declare `bigintMode: "bigint"` for exact money; existing number-shaped child values keep the default number decoder. The checked money owner converts only at public dollar boundaries. Raw verification sets retain bigint values as integer strings. SQL dollar reads use `minorToDollarsSql` and retain the existing PostgreSQL result type.
 
 An entity's `children` declares its physical child tables using
 `defineChildTable` (`entity-definitions/child-definition.ts`). Family modules

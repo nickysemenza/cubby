@@ -34,6 +34,7 @@ import {
   effectiveFieldSql,
   inheritedFieldOfColumn,
 } from "~/server/db/computed/effective-field";
+import { minorToDollarsSql } from "~/server/db/computed/money";
 import {
   trimTextSql,
   nonEmptyTextValuesSql,
@@ -596,7 +597,7 @@ export const storedFieldValueSql = (
       ? sql`${sql.raw(leaf)}.${sql.identifier(column)}`
       : effectiveFieldSql(target, inherited, leaf);
   return storage?.specialized === "minor-unit-money" && units === "display"
-    ? sql`(${value}::numeric / 100)`
+    ? sql`(${minorToDollarsSql(value, "numeric")})`
     : value;
 };
 

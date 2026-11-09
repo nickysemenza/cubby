@@ -11,8 +11,10 @@ import {
   purchase,
   run,
 } from "~/server/db/schema";
+import { financialTransactionWorkFacts } from "~/server/domains/financial-transaction/repo/work-facts";
 
 type RecordFacts = { amount: SQL; date: SQL };
+const transactionFacts = financialTransactionWorkFacts();
 const recordFacts = {
   run: {
     table: sql`${run}`,
@@ -32,8 +34,8 @@ const recordFacts = {
   },
   financialTransaction: {
     table: sql`${financialTransaction}`,
-    amount: sql`("FinancialTransaction"."amountMinor"::numeric / 100)::double precision`,
-    date: sql`coalesce("FinancialTransaction"."postedDate", "FinancialTransaction"."transactionDate")`,
+    ...transactionFacts,
+    amount: sql`(${transactionFacts.amount})::double precision`,
   },
   email: {
     table: sql`${email}`,

@@ -1,10 +1,11 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { parseShortcodeFor } from "@cubby/shared";
-import { sql, and, asc, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
+import { minorToDollarsSql } from "~/server/db/computed/money";
 import {
   databaseForTransaction,
   getDb,
@@ -459,10 +460,9 @@ export async function loadFinancialAccountTransactionEvidence(
   const rows = await unwrapDb(db)
     .select({
       shortcode: financialTransaction.shortcode,
-      amount:
-        sql<number>`${financialTransaction.amount}::numeric / 100`.mapWith(
-          Number,
-        ),
+      amount: minorToDollarsSql(financialTransaction.amount, "numeric").mapWith(
+        Number,
+      ),
       status: financialTransaction.status,
       transactionDate: financialTransaction.transactionDate,
       postedDate: financialTransaction.postedDate,
