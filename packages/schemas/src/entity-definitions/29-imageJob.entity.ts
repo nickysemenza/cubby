@@ -7,6 +7,7 @@ import {
   ACTIVITY_KIND_LABEL,
   imageProcessingJobKind,
   imageProcessingJobState,
+  imageJobDisplayState,
 } from "../activity-fields.js";
 import {
   deviceShortcode,
@@ -51,6 +52,11 @@ const stateOptions = [
   {
     value: "skipped",
     label: "Skipped",
+    color: "neutral-status",
+  },
+  {
+    value: "cloud_satisfied",
+    label: "Satisfied by cloud",
     color: "neutral-status",
   },
   {
@@ -172,7 +178,7 @@ export const { definition, readSchemas } = defineEntityModel({
           id: "attention",
           label: "Needs attention",
           description:
-            "Stopped image jobs and repeated failures; stopped jobs require explicit retry",
+            "Uncovered stopped image jobs and repeated failures needing attention",
           filters: [{ id: "state", value: ["failed"] }],
         },
         {
@@ -247,7 +253,12 @@ export const { definition, readSchemas } = defineEntityModel({
           optionRole: "status",
           optionColor: "neutral-status",
         },
-        validation: readOnly(imageProcessingJobState),
+        validation: readOnly(imageJobDisplayState),
+        explanation: {
+          ruleId: "image-job.state",
+          description:
+            "Satisfied by cloud means a current preferred cloud description covers this source. The Apple evaluation still failed; its error, attempts and explicit image retry remain available.",
+        },
       },
       {
         key: "imageId",
@@ -431,7 +442,11 @@ export const { definition, readSchemas } = defineEntityModel({
       { key: "shortcode", specialized: "shortcode" },
       "imageId",
       { key: "kind", specialized: "enum:kind" },
-      { key: "state", specialized: "enum:state" },
+      {
+        key: "state",
+        specialized: "enum:state",
+        enum: { values: [...imageProcessingJobState.options] },
+      },
       "runId",
       { key: "attempts", defaultValue: 0 },
       "lastError",
@@ -470,7 +485,7 @@ export const { definition, readSchemas } = defineEntityModel({
       // column keeps only the outcome (docs/jobs.md#image-processing).
       state: {
         type: "enum",
-        options: [...imageProcessingJobState.options],
+        options: [...imageJobDisplayState.options],
       },
     },
     sort: { fields: ["createdAt", "completedAt", "state", "kind"] },
@@ -522,7 +537,12 @@ export const { definition, readSchemas } = defineEntityModel({
       },
       { name: "ImageProcessingJob_failures_check", sql: "{failures} >= 0" },
       { name: "ImageProcessingJob_kind_check", column: "kind", bare: true },
-      { name: "ImageProcessingJob_state_check", column: "state", bare: true },
+      {
+        name: "ImageProcessingJob_state_check",
+        column: "state",
+        values: imageProcessingJobState.options,
+        bare: true,
+      },
       { name: "ImageProcessingJob_attempts_check", sql: "{attempts} >= 0" },
     ],
   },
@@ -630,14 +650,40 @@ export const { definition, readSchemas } = defineEntityModel({
     merge: false,
     lifecycle: "readOnly",
     dataQuality: {
+      inputs: [
+        {
+          table: "Image",
+          match: { id: "imageId" },
+          columns: ["sha256", "deletedAt"],
+          path: [{ table: "ImageProcessingJob", from: "imageId", to: "id" }],
+        },
+        {
+          table: "AiAnalysis",
+          match: { entityId: "imageId" },
+          columns: [
+            "entityKind",
+            "entityId",
+            "feature",
+            "provider",
+            "model",
+            "promptVersion",
+            "resultSchemaRevision",
+            "inputFingerprint",
+            "result",
+            "deletedAt",
+          ],
+          path: [{ table: "ImageProcessingJob", from: "imageId", to: "id" }],
+        },
+      ],
       checks: [
         {
           id: "image_job_failed",
-          satisfiedLabel: "Not failed",
+          satisfiedLabel: "No action needed",
           placement: { field: "state" },
           facet: "integrity",
           label: "Processing",
-          message: "The job failed; its last error and attempts are retained.",
+          message:
+            "Processing needs attention; its last error and attempts are retained.",
         },
         {
           id: "image_job_unexplained_skip",

@@ -1,4 +1,5 @@
 import {
+  imageJobDisplayState,
   imageProcessingJobState,
   type ImageProcessingJobState,
 } from "@cubby/schemas/image-processing";
@@ -9,9 +10,11 @@ import {
   type JobWaitingOn,
   type JobWaitingOnReason,
 } from "@cubby/schemas/job";
-import { and, eq, isNull, lte, or, sql } from "drizzle-orm";
+import { and, eq, isNull, lte, or, sql, type SQL } from "drizzle-orm";
 
+import { notDeleted } from "~/server/db/helpers/predicates";
 import { imageProcessingJob } from "~/server/db/image-processing-schema";
+import { appleFailureCoveredByCloudDescriptionSql } from "~/server/domains/image-processing/repo/processor-policy";
 
 const STATE = imageProcessingJobState.enum;
 
@@ -118,4 +121,15 @@ export function imageJobWaitingOn(
           : null,
     };
   return row.lane === "device" ? device : { reason: "due", lane };
+}
+
+/** Read-only actionability; the stored job and every attempt retain their outcome. */
+export function imageJobActionStateSql(
+  alias = "ImageProcessingJob",
+): SQL<ImageProcessingJobState | "cloud_satisfied"> {
+  const covered = sql<boolean>`EXISTS (SELECT 1 FROM "Image" satisfaction_source
+    WHERE satisfaction_source.id = ${column(alias, "imageId")}
+      AND ${notDeleted("satisfaction_source")}
+      AND ${appleFailureCoveredByCloudDescriptionSql({ jobAlias: alias, imageId: sql`satisfaction_source.id`, sourceContentHash: sql`satisfaction_source.sha256` })})`;
+  return sql`CASE WHEN ${covered} THEN ${imageJobDisplayState.enum.cloud_satisfied} ELSE ${imageJobDisplayStateSql(alias)} END`;
 }

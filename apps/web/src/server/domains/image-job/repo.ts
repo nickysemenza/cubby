@@ -10,7 +10,6 @@ import {
   deviceShortcode,
   type DeviceShortcode,
 } from "@cubby/schemas/identifiers";
-import type { ImageProcessingJobState } from "@cubby/schemas/image-processing";
 import { describeJobWaitingOn } from "@cubby/schemas/job";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
@@ -33,7 +32,7 @@ import { type ListReadOptions } from "~/server/generic/list/repo/list-projection
 import { lookupEntityReferences } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import {
-  imageJobDisplayStateSql,
+  imageJobActionStateSql,
   imageJobWaitingOn,
 } from "../image-processing/repo/image-job-state";
 
@@ -44,7 +43,7 @@ type Facts = {
   standardCost: number;
   lastExecutor: string | null;
   deviceRan: boolean;
-  state: ImageProcessingJobState;
+  state: RawImageJobOut["state"];
   storedState: string;
 };
 
@@ -63,7 +62,7 @@ const loadFacts = async (
     standard: string | number | null;
     executor: string | null;
     deviceRan: boolean;
-    state: ImageProcessingJobState;
+    state: RawImageJobOut["state"];
     storedState: string;
   }>(sql`
     SELECT j.id, j.state AS "storedState", cost.charged, cost.standard,
@@ -77,7 +76,7 @@ const loadFacts = async (
       ) AS executor,
       EXISTS (SELECT 1 FROM "ImageProcessingAttempt" a
         WHERE a."jobId" = j.id AND a.executor->>${"kind"} = ${"device"}) AS "deviceRan",
-      ${imageJobDisplayStateSql("j")} AS state
+      ${imageJobActionStateSql("j")} AS state
     FROM "ImageProcessingJob" j
     -- Each usage source probes "AiUsage_job_idx" by its own (jobKind, jobId).
     -- An OR with an attempt-id IN list cannot, and scanned every attempt's
@@ -301,7 +300,7 @@ const imageJobRead = {
 const imageJobScaffold = listScaffold("imageJob", imageProcessingJob, {
   readSchema: imageJobRepositoryReadSchema,
   // Built per read: the derivation compares lease expiry with the read's time.
-  derived: { state: listReadValue(() => imageJobDisplayStateSql()) },
+  derived: { state: listReadValue(() => imageJobActionStateSql()) },
   read: {
     ...imageJobRead,
     title: sql`${imageProcessingJob.kind}`,

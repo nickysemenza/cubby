@@ -1,3 +1,5 @@
+import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { type ImageJobId, parseEntityId } from "@cubby/schemas/identifiers";
 import {
   IMAGE_DESCRIPTION_PROMPT_REVISION,
@@ -12,6 +14,7 @@ import { fromPartial } from "@total-typescript/shoehorn";
 import { eq, inArray, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 
 import type { DatabaseChanges } from "~/lib/doorbell";
 import { IMAGE_DESCRIPTION_FEATURE } from "~/server/ai/policy/features";
@@ -49,6 +52,10 @@ import {
 import { confirmImageDescription } from "~/server/domains/image/repo/image-description-confirmation";
 import { loadSelectedDescriptionEvidence } from "~/server/domains/image/repo/image-description-selection";
 import { hydrateImageReadProjection } from "~/server/domains/image/repo/image-read-projection";
+import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
+import { executeEntity } from "~/server/entity-kernel";
+import { entityCommandSchema } from "~/server/entity-kernel/contracts";
+import { imageJobChecks } from "~/server/generic/data-quality/repo/checks/image-job";
 import { readBackgroundWorkStatus } from "~/server/generic/jobs/repo/observation";
 import {
   publishSuggestion,
@@ -937,7 +944,55 @@ describe("durable image representations", () => {
       .from(imageProcessingJob)
       .where(eq(imageProcessingJob.id, refusedJobId));
     if (!retainedRefusal) throw new Error("Expected retained Apple refusal");
-    const assertAttention = async (attention: boolean, preferred: boolean) => {
+    const assertJobStatus = async (covered: boolean) => {
+      const read = await executeEntity(
+        kernelCtx(ctx),
+        entityCommandSchema.parse({
+          action: "get",
+          entity: "imageJob",
+          id: retainedRefusal.shortcode,
+        }),
+      );
+      const { item } = z
+        .object({ item: entityFieldEnvelopeSchemas.imageJob.detail })
+        .parse(read);
+      expect(fieldValueOf(item.fields.state)).toBe(
+        covered ? "cloud_satisfied" : "failed",
+      );
+      const filtered = await executeEntity(
+        kernelCtx(ctx),
+        entityCommandSchema.parse({
+          action: "list",
+          entity: "imageJob",
+          filters: {
+            imageId: [refused.shortcode],
+            kind: ["describe_image"],
+            state: ["failed"],
+          },
+          pagination: { pageIndex: 0, pageSize: 10 },
+        }),
+      );
+      expect(
+        z.object({ meta: z.object({ totalCount: z.number() }) }).parse(filtered)
+          .meta.totalCount,
+      ).toBe(covered ? 0 : 1);
+      expect(item.lastError).toBe(
+        (
+          await getDb(ctx.db)
+            .select()
+            .from(imageProcessingJob)
+            .where(eq(imageProcessingJob.id, refusedJobId))
+        )[0]?.lastError,
+      );
+      const [quality] = await imageJobChecks.evaluate(ctx.db, [refusedJobId]);
+      expect(quality?.checks.image_job_failed).toBe(covered ? "pass" : "gap");
+    };
+    const assertAttention = async (
+      attention: boolean,
+      preferred: boolean,
+      covered = !attention,
+    ) => {
+      await assertJobStatus(covered);
       expect(
         (await loadImageProcessingIssues(ctx.db, [refused.shortcode])).get(
           refused.shortcode,
@@ -1011,6 +1066,15 @@ describe("durable image representations", () => {
           .where(eq(imageProcessingJob.id, refusedJobId))
       )[0],
     ).toEqual(retainedRefusal);
+    await getDb(ctx.db)
+      .update(image)
+      .set({ sha256: "d".repeat(64) })
+      .where(eq(image.id, refusedImageId));
+    await assertJobStatus(false);
+    await getDb(ctx.db)
+      .update(image)
+      .set({ sha256: hash })
+      .where(eq(image.id, refusedImageId));
     const [cloud] = await getDb(ctx.db)
       .select()
       .from(aiAnalysis)
@@ -1019,6 +1083,9 @@ describe("durable image representations", () => {
     const changes = [
       { inputFingerprint: fingerprint.replace(hash, "c".repeat(64)) },
       { model: "synthetic-retired-model" },
+      { provider: "synthetic-retired-provider" },
+      { promptVersion: "0" },
+      { resultSchemaRevision: 0 },
       { deletedAt: new Date() },
       { inputFingerprint: "synthetic-invalid-json" },
       { inputFingerprint: '"synthetic-json-scalar"' },
@@ -1047,6 +1114,9 @@ describe("durable image representations", () => {
         .set({
           inputFingerprint: cloud.inputFingerprint,
           model: cloud.model,
+          provider: cloud.provider,
+          promptVersion: cloud.promptVersion,
+          resultSchemaRevision: cloud.resultSchemaRevision,
           deletedAt: cloud.deletedAt,
         })
         .where(eq(aiAnalysis.id, cloud.id));
@@ -1101,7 +1171,7 @@ describe("durable image representations", () => {
         },
       },
     });
-    await assertAttention(true, true);
+    await assertAttention(true, true, true);
     expect(
       await retryImageProcessingNow(ctx.db, { imageId: refusedImageId }),
     ).toEqual(expect.arrayContaining([refusedJobId]));

@@ -758,6 +758,12 @@ export const imageProcessingJobState = z.enum([
 ]);
 export type ImageProcessingJobState = z.infer<typeof imageProcessingJobState>;
 
+/** Read-only job actionability; cloud satisfaction never becomes a stored outcome. */
+export const imageJobDisplayState = z.enum([
+  ...imageProcessingJobState.options,
+  "cloud_satisfied",
+]);
+
 export const activityKind = z.enum([
   ...runPurpose.options,
   ...imageProcessingJobKind.options,
