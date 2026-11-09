@@ -513,7 +513,7 @@ public struct ReportPresentation: Hashable, Sendable {
     /// Money and counts print as the web prints them; a missing figure is a dash, never zero.
     private static func text(_ value: Double?, money: Bool) -> String {
         guard let value else { return "—" }
-        return money ? DisplayFormat.currency(value) : DisplayFormat.number(value)
+        return money ? ValueFormat.currency(value) : ValueFormat.number(value)
     }
 
 }

@@ -474,7 +474,7 @@ struct WhyThisValueView: View {
         }
         switch value {
         case .bool(let flag): return flag ? "Yes" : "No"
-        case .number(let number): return DisplayFormat.number(number)
+        case .number(let number): return ValueFormat.number(number)
         case .string(let string): return string
         default: return nil
         }

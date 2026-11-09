@@ -27,12 +27,12 @@ private struct RecountSummaryContent: View {
     var body: some View {
         List {
             Section("Walk complete") {
-                LabeledContent("Verified", value: summary.verified.formatted())
-                LabeledContent("Changed", value: summary.changed.formatted())
-                LabeledContent("Added", value: summary.added.formatted())
-                LabeledContent("Adopted", value: summary.adopted.formatted())
-                LabeledContent("Bins done", value: summary.binsDone.formatted())
-                LabeledContent("Bins skipped", value: summary.binsSkipped.formatted())
+                LabeledContent("Verified", value: ValueFormat.count(summary.verified))
+                LabeledContent("Changed", value: ValueFormat.count(summary.changed))
+                LabeledContent("Added", value: ValueFormat.count(summary.added))
+                LabeledContent("Adopted", value: ValueFormat.count(summary.adopted))
+                LabeledContent("Bins done", value: ValueFormat.count(summary.binsDone))
+                LabeledContent("Bins skipped", value: ValueFormat.count(summary.binsSkipped))
             }
             Section {
                 if canRevisitSkipped {

@@ -16,7 +16,7 @@ struct EntityMergeSheet: View {
     var body: some View {
         NavigationStack {
             content
-                .navigationTitle("Merge \(model.ids.count.formatted()) \(model.descriptor.plural)")
+                .navigationTitle("Merge \(ValueFormat.count(model.ids.count)) \(model.descriptor.plural)")
                 #if os(iOS)
                     .navigationBarTitleDisplayMode(.inline)
                 #endif
@@ -35,7 +35,8 @@ struct EntityMergeSheet: View {
                     "Merge into \(survivorName)?", isPresented: $confirming, titleVisibility: .visible
                 ) {
                     Button(
-                        "Merge \(model.ids.count.formatted()) \(model.descriptor.plural)", role: .destructive
+                        "Merge \(ValueFormat.count(model.ids.count)) \(model.descriptor.plural)",
+                        role: .destructive
                     ) {
                         Task {
                             if await model.merge() {
@@ -170,7 +171,7 @@ struct EntityMergeSheet: View {
     private func connectionRow(_ group: EntityConnectionGroup) -> some View {
         let blocking = group.disposition?.effect == .block
         return VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
-            LabeledContent("\(group.label) (\(group.count.formatted()))") {
+            LabeledContent("\(group.label) (\(ValueFormat.count(group.count)))") {
                 Text(dispositionPhrase(group.disposition?.effect))
                     .foregroundStyle(blocking ? FieldGuideTokens.destructive : .secondary)
             }
@@ -200,7 +201,7 @@ struct EntityMergeSheet: View {
 
     private func candidateCaption(_ candidate: EntityMergeCandidate, suggested: Bool) -> String {
         let connections =
-            "\(candidate.connectionCount.formatted()) connection\(candidate.connectionCount == 1 ? "" : "s")"
+            "\(ValueFormat.count(candidate.connectionCount)) connection\(candidate.connectionCount == 1 ? "" : "s")"
         let created = "Created \(candidate.createdAt.formatted(date: .abbreviated, time: .omitted))"
         return ([candidate.id, connections, created] + (suggested ? ["Suggested"] : [])).joined(
             separator: " · ")

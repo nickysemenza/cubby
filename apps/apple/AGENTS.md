@@ -181,15 +181,15 @@ None is committed; edit the generator or its inputs, never the output. A missing
   implementations.
 - Value formatting is single-sourced in Rust (`recipebridge/src/display_format.rs` plus
   `format_amount_labeled`): `currency`, `signedCurrency`, bare numbers, `{value, unit}` amounts, and
-  nutrition/cost estimates (the compact cell and the long `DisplayFormat.estimate` form) run the
+  nutrition/cost estimates (the compact cell and the long `ValueFormat.estimate` form) run the
   same code as web (WASM) and native (UniFFI `format_*` in `cubby-ffi`, wrapped by `CubbyKit`
-  `ValueFormat`). Declared list totals arrive worded by the server (`ListPageMeta.totalLabels`);
+  `ValueFormat` in `FFI/ValueFormat.swift`). Declared list totals arrive worded by the server (`ListPageMeta.totalLabels`);
   `ListTotalsSummary` only prints them. The Rust tests read `display-format.json`
-  directly; Swift `DisplayFormatTests` / `ValueFormatTests` and web
+  directly; Swift `ValueFormatTests` and web
   `display-format.unit.test.ts` / `format-amount.unit.test.ts` check the bindings. Plain dates,
-  grouped counts and empty text also use Rust through `DisplayFormat` / `ValueFormat` and the web
+  grouped counts and empty text also use Rust through `ValueFormat` and the web
   formatting helpers; plain dates need no timezone conversion. Timestamps stay locale-aware
-  platform code. Never format a catalog value
+  platform code. Never format a catalog value, amount or count
   with `.formatted()` in a view, and never re-implement a rule in Swift or TypeScript: edit the
   vector, then Rust.
 - Recipe scaling is single-sourced in Rust too (`recipebridge/src/scaling.rs` plus `scale_amount`):

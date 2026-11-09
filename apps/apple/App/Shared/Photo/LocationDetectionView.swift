@@ -93,7 +93,7 @@ private struct DetectedItemRow: View {
 
     private var detail: String {
         let match = item.matchedProduct == nil ? "New product" : "Existing product"
-        let quantity = "\(item.estimatedQuantity.formatted()) \(item.unit)"
+        let quantity = ValueFormat.amount(unit: item.unit, value: item.estimatedQuantity)
         return [match, quantity, "\(item.confidence.rawValue) confidence"].joined(separator: " · ")
     }
 

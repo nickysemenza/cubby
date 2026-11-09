@@ -80,7 +80,9 @@ public final class HeroActionModel: Identifiable {
         return preview.shelves.map { shelf in
             LabeledOption(
                 value: shelf.id.rawValue,
-                label: "\(shelf.location.name) — \(shelf.amount.value.formatted()) \(shelf.amount.unit)")
+                label:
+                    "\(shelf.location.name) — \(ValueFormat.amount(unit: shelf.amount.unit, value: shelf.amount.value))"
+            )
         }
     }
 
@@ -92,7 +94,7 @@ public final class HeroActionModel: Identifiable {
         case .addToInventory(let preview)?:
             guard let kit = preview.kitWarning else { return nil }
             return (
-                "Its parts hold \(kit.accounted.formatted()) of the \(kit.expected.formatted()) you bought. "
+                "Its parts hold \(ValueFormat.count(kit.accounted, maxFractionDigits: 6)) of the \(ValueFormat.count(kit.expected, maxFractionDigits: 6)) you bought. "
                     + "Adding one here counts a unit you don't own unless you have another still assembled or sealed.",
                 true
             )

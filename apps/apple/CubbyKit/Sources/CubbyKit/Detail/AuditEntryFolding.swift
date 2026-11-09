@@ -113,11 +113,11 @@ extension AuditLogEntryOut {
         case .null: return nil
         case .string(let string): return string
         case .bool(let flag): return flag ? "Yes" : "No"
-        case .number(let number): return DisplayFormat.number(number)
+        case .number(let number): return ValueFormat.number(number)
         default:
             // An `Amount` is the common object diff; it reads as "3 ea", not raw JSON.
             if let amount = json["value"]?.doubleValue, let unit = json["unit"]?.stringValue {
-                return "\(DisplayFormat.number(amount)) \(unit)"
+                return "\(ValueFormat.number(amount)) \(unit)"
             }
             return String(decoding: data, as: UTF8.self)
         }

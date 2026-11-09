@@ -185,11 +185,8 @@ extension MealNutritionFood: Identifiable {
     }
 
     public var amountDescription: String {
-        if let amount {
-            return "\(amount.value.formatted(.number.precision(.fractionLength(0...6)))) \(amount.unit)"
-        }
-        return grams.map { "\($0.formatted(.number.precision(.fractionLength(0...1)))) g" }
-            ?? "Entered macros"
+        if let amount { return ValueFormat.amount(unit: amount.unit, value: amount.value) }
+        return grams.map { ValueFormat.amount(unit: "g", value: $0) } ?? "Entered macros"
     }
 }
 

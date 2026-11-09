@@ -197,10 +197,10 @@ struct NativeCountBadge: View {
     let count: Int
 
     var body: some View {
-        Text(count.formatted())
+        Text(ValueFormat.count(count))
             .font(.footnote.monospacedDigit())
             .foregroundStyle(.secondary)
-            .accessibilityLabel("\(count.formatted()) records")
+            .accessibilityLabel("\(ValueFormat.count(count)) records")
     }
 }
 

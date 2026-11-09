@@ -5,13 +5,9 @@ import Testing
 
 /// Shared with `apps/web/src/lib/display-format.unit.test.ts`: both clients render a field's
 /// display format identically (`packages/shared/golden-vectors/display-format.json`).
-@Suite("DisplayFormat")
-struct DisplayFormatTests {
-    @Test func incompleteAiCostCoverage() {
-        #expect(aiCostSubtotal(0, unpriced: 0, count: 0, complete: false) == "unpriced · coverage unknown")
-        #expect(aiCostSubtotal(0.25, unpriced: 0, complete: false) == "$0.2500 known · coverage unknown")
-    }
-
+/// The Rust tests own the rules; these check the UniFFI bindings against the same vectors.
+@Suite("ValueFormat")
+struct ValueFormatTests {
     private struct MoneyVector: Decodable {
         let value: Double
         let out: String
@@ -42,7 +38,14 @@ struct DisplayFormatTests {
         let estimate: MeasureEstimate
         let out: String
     }
+    private struct AmountVector: Decodable {
+        let unit: String
+        let value: Double
+        let upper: Double?
+        let out: String
+    }
     private struct File: Decodable {
+        let amount: [AmountVector]
         let currency: [MoneyVector]
         let signedCurrency: [MoneyVector]
         let plainDate: [DateVector]
@@ -59,32 +62,32 @@ struct DisplayFormatTests {
 
     @Test func currencyMatchesTheSharedVectors() throws {
         for vector in try vectors().currency {
-            #expect(DisplayFormat.currency(vector.value) == vector.out, "value \(vector.value)")
+            #expect(ValueFormat.currency(vector.value) == vector.out, "value \(vector.value)")
         }
     }
 
     @Test func signedCurrencyMatchesTheSharedVectors() throws {
         for vector in try vectors().signedCurrency {
-            #expect(DisplayFormat.currency(vector.value) == vector.out, "value \(vector.value)")
+            #expect(ValueFormat.currency(vector.value) == vector.out, "value \(vector.value)")
         }
     }
 
     @Test func plainDateMatchesTheSharedVectors() throws {
         for vector in try vectors().plainDate {
-            #expect(DisplayFormat.plainDate(vector.in) == vector.out, "input \(vector.in)")
+            #expect(ValueFormat.plainDate(vector.in) == vector.out, "input \(vector.in)")
         }
     }
 
     @Test func numberMatchesTheSharedVectors() throws {
         for vector in try vectors().number {
-            #expect(DisplayFormat.number(vector.value) == vector.out, "value \(vector.value)")
+            #expect(ValueFormat.number(vector.value) == vector.out, "value \(vector.value)")
         }
     }
 
     @Test func textMatchesTheSharedVectors() throws {
         for vector in try vectors().text {
             #expect(
-                DisplayFormat.text(vector.value, emptyLabel: vector.emptyLabel, detail: vector.detail)
+                ValueFormat.text(vector.value, emptyLabel: vector.emptyLabel, detail: vector.detail)
                     == vector.out)
         }
     }
@@ -97,9 +100,9 @@ struct DisplayFormatTests {
 
     @Test func compactEstimateMatchesTheSharedVectors() throws {
         for vector in try vectors().compactEstimate {
-            let unit: DisplayFormat.EstimateUnit = vector.unit == "kcal" ? .kcal : .macro
+            let unit: ValueFormat.CompactUnit = vector.unit == "kcal" ? .kcal : .macro
             #expect(
-                DisplayFormat.compactEstimate(vector.estimate, unit: unit) == vector.out,
+                ValueFormat.compactEstimate(vector.estimate, unit: unit) == vector.out,
                 "\(vector.unit) \(vector.out)")
         }
     }
@@ -111,28 +114,13 @@ struct DisplayFormatTests {
         for vector in try vectors().estimate {
             let measure = try #require(measures[vector.measure])
             #expect(
-                DisplayFormat.estimate(vector.estimate, measure: measure, unit: vector.unit) == vector.out,
+                ValueFormat.estimate(vector.estimate, measure: measure, unit: vector.unit) == vector.out,
                 "\(vector.measure) \(vector.out)")
         }
     }
-}
-
-/// Amounts are formatted by the same Rust the web calls (`wasm.format_amount_labeled`), pinned by the
-/// `amount` cases in `display-format.json`.
-@Suite("ValueFormat")
-struct ValueFormatTests {
-    private struct AmountVector: Decodable {
-        let unit: String
-        let value: Double
-        let upper: Double?
-        let out: String
-    }
-    private struct File: Decodable {
-        let amount: [AmountVector]
-    }
 
     @Test func amountMatchesTheSharedVectors() throws {
-        for vector in try GoldenVectors.decode(File.self, named: "display-format").amount {
+        for vector in try vectors().amount {
             #expect(
                 ValueFormat.amount(unit: vector.unit, value: vector.value, upperValue: vector.upper)
                     == vector.out,

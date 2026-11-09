@@ -208,9 +208,9 @@ struct EntityRowPresentation: Sendable, Hashable {
 
     /// Empty and placeholder values add no information to the compact context line.
     static func isVisibleListFactValue(_ value: String) -> Bool {
-        let normalized = DisplayFormat.text(value.trimmingCharacters(in: .whitespacesAndNewlines))
+        let normalized = ValueFormat.text(value.trimmingCharacters(in: .whitespacesAndNewlines))
             .lowercased()
-        return !["unknown", "not recorded", "unavailable", "not assessed", DisplayFormat.text(nil), "-"]
+        return !["unknown", "not recorded", "unavailable", "not assessed", ValueFormat.text(nil), "-"]
             .contains(normalized)
     }
 

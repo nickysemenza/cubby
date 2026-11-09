@@ -166,8 +166,10 @@ struct ReceiveExpenseSheet: View {
         Section {
             if !snapshot.stock.isEmpty {
                 Text(
-                    "\(snapshot.productName) already has \(model.ownUnits.formatted()) on hand ("
-                        + snapshot.stock.map { "\($0.value.formatted()) \($0.unit) at \($0.locationName)" }
+                    "\(snapshot.productName) already has \(ValueFormat.count(model.ownUnits, maxFractionDigits: 6)) on hand ("
+                        + snapshot.stock.map {
+                            "\(ValueFormat.amount(unit: $0.unit, value: $0.value)) at \($0.locationName)"
+                        }
                         .joined(separator: ", ") + "). Importing this purchase did not change it."
                 )
                 .font(.callout)

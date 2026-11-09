@@ -82,7 +82,7 @@ nonisolated enum EntityFieldValue {
         }
         switch field.format {
         case "currency", "signedCurrency": return money(value)
-        case "plainDate": return value.stringValue.map { DisplayFormat.plainDate($0) }
+        case "plainDate": return value.stringValue.map { ValueFormat.plainDate($0) }
         case "timestamp": return date(value)
         case "amount": return amount(value)
         case "resolvedList":
@@ -90,7 +90,7 @@ nonisolated enum EntityFieldValue {
             return labels.isEmpty ? field.emptyLabel : labels.joined(separator: ", ")
         case "external-link":
             if let string = value.stringValue { return string.isEmpty ? nil : string }
-            if let number = number(value) { return DisplayFormat.number(number) }
+            if let number = number(value) { return ValueFormat.number(number) }
             return nil
         default: break
         }
@@ -98,12 +98,12 @@ nonisolated enum EntityFieldValue {
         case .null: return nil
         case .string(let string):
             if string.isEmpty { return nil }
-            if field.kind == .date { return DisplayFormat.plainDate(string) }
+            if field.kind == .date { return ValueFormat.plainDate(string) }
             if field.kind == .timestamp { return date(value) ?? string }
             if field.kind == .enum { return enumLabel(string, field: field) }
             // A non-enum field (a nested kind, a derived status) names its choices in `valueOptions`.
             return field.optionLabel(for: value) ?? string
-        case .number(let number): return DisplayFormat.number(number)
+        case .number(let number): return ValueFormat.number(number)
         case .bool(let flag): return flag ? "Yes" : "No"
         case .array(let items):
             if items.isEmpty { return nil }
@@ -165,7 +165,7 @@ nonisolated enum EntityFieldValue {
 
     static func money(_ value: JSONValue?) -> String? {
         guard let amount = number(value) else { return nil }
-        return DisplayFormat.currency(amount)
+        return ValueFormat.currency(amount)
     }
 
     /// `{ value, unit }` is Cubby's amount shape; a bare number means units. Rendered by the
@@ -183,7 +183,7 @@ nonisolated enum EntityFieldValue {
 
     static func dateRange(_ value: JSONValue, semantics: String?) -> String? {
         func day(_ key: String) -> String? {
-            value[key]?.stringValue.map { DisplayFormat.plainDate($0) }
+            value[key]?.stringValue.map { ValueFormat.plainDate($0) }
         }
         switch (day("start"), day("end")) {
         case (let start?, let end?): return start == end ? start : "\(start) – \(end)"
