@@ -11,6 +11,17 @@ import {
   type ImageIngressRoute,
 } from "./generated/image-policy.gen";
 import { entityKeys } from "./generated/entity-summary.gen";
+import type {
+  auditableEntities,
+  browserRoutedEntities,
+  countableEntities,
+  coverEntities,
+  embeddableEntities,
+  galleryEntities,
+  logoEntities,
+  searchableEntities,
+  shortcodeEntities,
+} from "./generated/entity-roster.gen";
 import { mapRecord } from "@cubby/shared";
 export {
   imagePolicyCatalog,
@@ -157,12 +168,6 @@ export type EntityDescriptor = z.infer<typeof entityDescriptor>;
 export const entityManifest = generatedEntityManifest;
 export type EntityManifest = typeof entityManifest;
 
-const parsedEntityManifest = z
-  .record(entitySchema, entityDescriptor)
-  .parse(entityManifest);
-const descriptorFor = (entity: Entity): EntityDescriptor =>
-  parsedEntityManifest[entity];
-
 export type LocalPathRelationship = EntityRelationship & {
   provenance: { kind: "local-path"; steps: readonly RelationshipPathStep[] };
 };
@@ -204,100 +209,35 @@ export const entityReferences = (entity: Entity): readonly Entity[] => [
   ),
 ];
 
-type BooleanTrait = {
-  [K in keyof EntityDescriptor]-?: NonNullable<
-    EntityDescriptor[K]
-  > extends boolean
-    ? K
-    : never;
-}[keyof EntityDescriptor];
-type EntityWithTrait<K extends BooleanTrait> = {
-  [E in Entity]: EntityManifest[E] extends Record<K, true> ? E : never;
-}[Entity];
+export {
+  auditableEntities,
+  browserRoutedEntities,
+  countableEntities,
+  coverEntities,
+  displayImageEntities,
+  embeddableEntities,
+  galleryEntities,
+  imageEntities,
+  logoEntities,
+  searchableEntities,
+  shortcodeEntities,
+} from "./generated/entity-roster.gen";
+export { isAuditableEntity, isGalleryEntity } from "./entity-roster-runtime";
 
-const entitiesWithTrait = <K extends BooleanTrait>(
-  trait: K,
-): readonly EntityWithTrait<K>[] =>
-  Object.freeze(
-    allEntities.filter(
-      (entity): entity is EntityWithTrait<K> =>
-        descriptorFor(entity)[trait] === true,
-    ),
-  );
-
-export const auditableEntities = entitiesWithTrait("auditable");
-export const imageEntities = entitiesWithTrait("hasImages");
-/** Entities whose public read rows carry server-resolved `displayImages`. */
-export const displayImageEntities = entitiesWithTrait("displayImages");
-
-type EntityWithImageStorage<S extends "gallery" | "cover" | "logo"> = {
-  [E in Entity]: EntityManifest[E] extends { imageStorage: S } ? E : never;
-}[Entity];
 /** Entities whose images live in an ordered `<Entity>Image` join table. */
-export type GalleryEntity = EntityWithImageStorage<"gallery">;
-export const galleryEntities: readonly GalleryEntity[] = Object.freeze(
-  allEntities.filter(
-    (entity): entity is GalleryEntity =>
-      descriptorFor(entity).imageStorage === "gallery",
-  ),
-);
+export type GalleryEntity = (typeof galleryEntities)[number];
 /** Entities whose single photo is one `cover` attachment. */
-export type CoverEntity = EntityWithImageStorage<"cover">;
-export const coverEntities: readonly CoverEntity[] = Object.freeze(
-  allEntities.filter(
-    (entity): entity is CoverEntity =>
-      descriptorFor(entity).imageStorage === "cover",
-  ),
-);
+export type CoverEntity = (typeof coverEntities)[number];
 /** Entities whose single logo is one `logo` attachment. */
-export type LogoEntity = EntityWithImageStorage<"logo">;
-export const logoEntities: readonly LogoEntity[] = Object.freeze(
-  allEntities.filter(
-    (entity): entity is LogoEntity =>
-      descriptorFor(entity).imageStorage === "logo",
-  ),
-);
-export const searchableEntities = entitiesWithTrait("searchable");
-export const embeddableEntities = entitiesWithTrait("embeddable");
-export const countableEntities = entitiesWithTrait("countable");
-
-export const entityMembership = <E extends string>(entities: readonly E[]) => {
-  const members: readonly string[] = entities;
-  return { has: (entity: string): entity is E => members.includes(entity) };
-};
-
-type EntityWithBrowserRoute = {
-  [E in Entity]: EntityManifest[E] extends { browserRoutes: false } ? never : E;
-}[Entity];
-export const browserRoutedEntities: readonly EntityWithBrowserRoute[] =
-  Object.freeze(
-    allEntities.filter(
-      (entity): entity is EntityWithBrowserRoute =>
-        descriptorFor(entity).browserRoutes !== false,
-    ),
-  );
-
-type EntityWithShortcode = {
-  [E in Entity]: EntityManifest[E] extends { shortcodePrefix: string }
-    ? E
-    : never;
-}[Entity];
-export const shortcodeEntities: readonly EntityWithShortcode[] = Object.freeze(
-  allEntities.filter(
-    (entity): entity is EntityWithShortcode =>
-      descriptorFor(entity).shortcodePrefix !== undefined,
-  ),
-);
-
-export type ShortcodeEntity = EntityWithShortcode;
-export type BrowserRoutedEntity = EntityWithBrowserRoute;
+export type LogoEntity = (typeof logoEntities)[number];
+export type ShortcodeEntity = (typeof shortcodeEntities)[number];
+export type BrowserRoutedEntity = (typeof browserRoutedEntities)[number];
 export type AuditableEntity = (typeof auditableEntities)[number];
 export type CountableEntity = (typeof countableEntities)[number];
 export type SearchableEntity = (typeof searchableEntities)[number];
 export type EmbeddableEntity = (typeof embeddableEntities)[number];
 
-export const isAuditableEntity = (entity: Entity): entity is AuditableEntity =>
-  entityManifest[entity].auditable;
-
-export const isGalleryEntity = (entity: Entity): entity is GalleryEntity =>
-  entityManifest[entity].imageStorage === "gallery";
+export const entityMembership = <E extends string>(entities: readonly E[]) => {
+  const members: readonly string[] = entities;
+  return { has: (entity: string): entity is E => members.includes(entity) };
+};

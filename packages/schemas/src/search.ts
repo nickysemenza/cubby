@@ -21,10 +21,10 @@ export {
   embeddableEntities,
   searchableEntities,
 } from "./generated/entity-roster.gen";
-export type { EmbeddableEntity } from "./entity-manifest";
+export type { EmbeddableEntity, SearchableEntity } from "./entity-manifest";
+import type { SearchableEntity } from "./entity-manifest";
 
 export const searchableEntitySchema = z.enum(searchableEntities);
-export type SearchableEntity = z.infer<typeof searchableEntitySchema>;
 
 export const embeddableEntitySchema = z.enum(embeddableEntities);
 export const isEmbeddableEntity = (
