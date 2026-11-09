@@ -42,7 +42,7 @@ import { z } from "zod";
 import { forEachConcurrently } from "~/lib/concurrency-limiter";
 import { plainDateDaysBetween, shiftPlainDate } from "~/lib/household-date";
 import { type Database } from "~/server/db";
-import { advisoryXactLock } from "~/server/db/advisory-lock";
+import { advisoryLockKey, advisoryXactLock } from "~/server/db/advisory-lock";
 import { minorToDollarsSql } from "~/server/db/computed/money";
 import {
   unwrapDb,
@@ -1266,7 +1266,7 @@ export const transferPairSuggestions: SuggestionFamilyDeclaration<"transfer_pair
   SuggestionFamily<Pair> = {
   family: suggestionFamily.enum.transfer_pair,
   slot: ({ judgment }) => ({
-    lock: `transfer-pair:${judgment.key}`,
+    lock: advisoryLockKey("transfer-pair", judgment.key),
     fields: { pairKey: judgment.key },
   }),
   fingerprint: ({ judgment }) => fingerprintTransferPair(judgment),

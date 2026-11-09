@@ -168,8 +168,15 @@ export async function retireSettledCoordinators(
     if (!agentId) continue;
     try {
       // Disposal and its empty-storage receipt are separate coordinator phases.
-      const disposed = await coordinator(agentId).retire();
-      if (!disposed.disposed && !(await coordinator(agentId).retire()).disposed)
+      // Disposal aborts the isolate, so the first call may reject after it
+      // took effect; a real failure repeats on the follow-up, which reports it.
+      const disposed = await coordinator(agentId)
+        .retire()
+        .then(
+          (result) => result.disposed,
+          () => false,
+        );
+      if (!disposed && !(await coordinator(agentId).retire()).disposed)
         continue;
       // Reopened Runs must neither be stamped retired nor lose their findings.
       const stamped = await withTransaction(db, async (tx) => {

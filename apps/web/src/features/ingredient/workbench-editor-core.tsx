@@ -96,14 +96,29 @@ export const buildPreviewMappings = (
     convRows?: PreviewConvRow[];
   },
 ): UnitMapping[] => {
-  const base: UnitMapping[] = getIngredientMappings({
-    product: row.product.map((product) => ({
-      ...product,
-      food: fieldValueOf(product.fields.food) ?? null,
-      price: fieldValueOf(product.fields.price) ?? null,
-    })),
-  });
-  if (food) base.push(...unitMappingsFromFood(food));
+  // SILENT: this is a live preview built from in-progress form input; data
+  // that can't synthesize a mapping contributes nothing rather than blocking
+  // the rest of the editor.
+  const base: UnitMapping[] = (() => {
+    try {
+      return getIngredientMappings({
+        product: row.product.map((product) => ({
+          ...product,
+          food: fieldValueOf(product.fields.food) ?? null,
+          price: fieldValueOf(product.fields.price) ?? null,
+        })),
+      });
+    } catch {
+      return [];
+    }
+  })();
+  if (food) {
+    try {
+      base.push(...unitMappingsFromFood(food));
+    } catch {
+      // SILENT: see above; an unsynthesizable food adds no mapping.
+    }
+  }
   const d = dollars;
   if (d != null && d > 0) {
     base.push(
@@ -202,13 +217,21 @@ interface GapAnalysis {
  * Browse editor and the review card.
  */
 export const analyzeGaps = (row: IngredientEnrichmentRead): GapAnalysis => {
-  const currentMappings = getIngredientMappings({
-    product: row.product.map((product) => ({
-      ...product,
-      food: fieldValueOf(product.fields.food) ?? null,
-      price: fieldValueOf(product.fields.price) ?? null,
-    })),
-  }).filter(isDisplayMapping);
+  const currentMappings = (() => {
+    try {
+      return getIngredientMappings({
+        product: row.product.map((product) => ({
+          ...product,
+          food: fieldValueOf(product.fields.food) ?? null,
+          price: fieldValueOf(product.fields.price) ?? null,
+        })),
+      }).filter(isDisplayMapping);
+    } catch {
+      // SILENT: the review card's mapping preview, like the editor's, shows
+      // nothing for data that can't synthesize a mapping.
+      return [];
+    }
+  })();
   const covered = new Set(row.coverage.covered);
   const applicable = new Set(row.coverage.applicable);
   const usdaLinked = hasUsdaLink(row);
