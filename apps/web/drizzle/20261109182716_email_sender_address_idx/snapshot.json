@@ -1,0 +1,56 @@
+{
+  "type": "diff",
+  "version": "9",
+  "dialect": "postgres",
+  "id": "bf5683c8-5cc4-4ef6-8f93-0ccbe417243f",
+  "prevIds": [
+    "bc528645-a1c4-4e0c-ba33-3458aaa6a2bf"
+  ],
+  "footprints": [
+    {
+      "statementType": "create_index",
+      "statementTarget": [
+        "index",
+        "public",
+        "Email",
+        "Email_sender_address_idx"
+      ],
+      "writes": [
+        "s|idx|public.Email_sender_address_idx",
+        "n|idx|public.Email_sender_address_idx",
+        "e|idx|public.Email_sender_address_idx",
+        "n|rel|public.Email_sender_address_idx"
+      ],
+      "reads": [
+        "n|tbl|public.Email",
+        "n|sch|public"
+      ]
+    }
+  ],
+  "deltas": [
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "Email",
+        "name": "Email_sender_address_idx",
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "lower(trim(coalesce(substring(\"sender\" from '<([^>]+)>'), \"sender\")))",
+            "isExpression": true,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": "\"deletedAt\" IS NULL",
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "entityType": "indexes"
+      }
+    }
+  ]
+}
