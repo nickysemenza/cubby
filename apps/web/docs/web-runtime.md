@@ -447,6 +447,10 @@ Desktop page tables start inside the same `60vh` bound the virtualizer uses
 before measurement. The measured remaining viewport then replaces that bound.
 An unbounded first layout would mount the full page and admit premature paging;
 embedded tables retain their `60vh` cap.
+Desktop virtualization keeps four extra rows beyond each visible edge. The
+virtualizer owns pane measurement; do not add a separate resize/state cycle
+to scale an offscreen buffer with the pane's height. Preserve sticky group
+headers and scroll restoration through the existing range and offset owners.
 
 Filter option sources compile from declarations: fixed choices remain complete
 local rosters; entity references use the shared live roster; a relation source
