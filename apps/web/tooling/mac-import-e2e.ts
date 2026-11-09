@@ -34,8 +34,8 @@ import {
 import { openWorkerdRuntime, type WorkerdRuntime } from "./workerd-runtime";
 import { leaseNamedDatabase } from "./test-database-lease";
 import { buildWebWorker } from "./build-cf";
-import { appleFfiFingerprint } from "cubby/tooling/apple-ffi";
-import { digestFiles, walkFiles } from "cubby/tooling/tree-digest";
+import { localTestEnvironment } from "./e2e-process-env.ts";
+import { nativeSourceFingerprint } from "./native-source-fingerprint.ts";
 
 const webRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -160,17 +160,15 @@ async function run(
 
 function installScenarioEnvironment(storageURL: string): () => void {
   const previous = new Map<string, string | undefined>();
-  for (const [key, value] of Object.entries({
-    NODE_ENV: "test",
-    R2_ACCESS_KEY_ID: "dummy",
-    R2_SECRET_ACCESS_KEY: "dummy",
-    R2_ENDPOINT: storageURL,
-    R2_BUCKET_NAME: "e2e-bucket",
-    R2_PUBLIC_URL: storageURL,
-    R2_KEY_PREFIX: "e2e",
-    UPC_UPSTREAM_DISABLED: "true",
-    AI_GATEWAY_API_KEY: "",
-  })) {
+  for (const [key, value] of Object.entries(
+    localTestEnvironment({
+      NODE_ENV: "test",
+      R2_ENDPOINT: storageURL,
+      R2_PUBLIC_URL: storageURL,
+      R2_KEY_PREFIX: "e2e",
+      AI_GATEWAY_API_KEY: "",
+    }),
+  )) {
     previous.set(key, process.env[key]);
     process.env[key] = value;
   }
@@ -182,29 +180,11 @@ function installScenarioEnvironment(storageURL: string): () => void {
   };
 }
 
-function nativeSourceFingerprint(): string {
-  const appleRoot = path.join(repoRoot, "apps/apple");
-  const trees = ["App", "CubbyKit/Sources", "CubbyKit/Frameworks", "scripts"];
-  const files = [
-    ...trees.flatMap((tree) =>
-      walkFiles(path.join(appleRoot, tree), {
-        skip: (name) => name === ".DS_Store",
-      }),
-    ),
-    ...[
-      "project.yml",
-      "packages.yml",
-      "CubbyKit/Package.swift",
-      "CubbyKit/Package.resolved",
-      "Cubby.xcodeproj/project.pbxproj",
-      "Cubby.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved",
-    ].map((file) => path.join(appleRoot, file)),
-  ];
-  const rust = appleFfiFingerprint();
-  return digestFiles(appleRoot, files, {
-    seed: `native-inputs-v3\0fixture-build:ENABLE_DEBUG_DYLIB=NO\0${rust}`,
+const fixtureSourceFingerprint = () =>
+  nativeSourceFingerprint({
+    includeApp: true,
+    seed: "fixture-build:ENABLE_DEBUG_DYLIB=NO",
   });
-}
 
 async function reuseNativeBuild(reuseManifest: string): Promise<void> {
   const previous = z
@@ -325,7 +305,7 @@ function saveArtifact(): void {
       fingerprint: binaryFingerprint,
       // The Worker is Nx-built from the recorded checkout.
       matchesSource: Boolean(
-        binaryFingerprint && sourceFingerprint === nativeSourceFingerprint(),
+        binaryFingerprint && sourceFingerprint === fixtureSourceFingerprint(),
       ),
       details: {
         app: "Cubby.app",
@@ -746,13 +726,13 @@ async function main(): Promise<void> {
       }
     }
     phase = "native-build";
-    sourceFingerprint = nativeSourceFingerprint();
+    sourceFingerprint = fixtureSourceFingerprint();
     const reuseManifest = process.env.CUBBY_E2E_REUSE_NATIVE_MANIFEST;
     if (reuseManifest) {
       await reuseNativeBuild(reuseManifest);
     } else {
       await run("pnpm", ["apple", "gen"]);
-      sourceFingerprint = nativeSourceFingerprint();
+      sourceFingerprint = fixtureSourceFingerprint();
       await withKitPackageResolution(repoRoot, async () => {
         await run("xcodebuild", [
           "-project",
