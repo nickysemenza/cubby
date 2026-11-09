@@ -4,9 +4,6 @@ import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
 import { useActionMutation } from "~/entity/hooks/use-action-mutation";
 import { EntityMergeDialog } from "~/entity/merge/entity-merge-dialog";
 import type { WorkActionProps } from "~/entity/work-queue/work-actions";
-import { WorkActionTrigger } from "~/entity/work-queue/work-actions";
-import { useBackfill } from "~/features/maintenance/backfill-button";
-import { BACKFILL } from "~/features/maintenance/backfill-registry";
 import { ProblemItemsAction } from "~/features/work-queue/problem-items-action";
 import { productMatch } from "~/integrations/tanstack-query/generated/domains/productMatch.gen";
 import { Stack } from "~/ui/layout";
@@ -139,17 +136,5 @@ export function DuplicateProductMergeAction(props: WorkActionProps<"item">) {
         <DuplicateProductMergeFix variant={variant} close={close} />
       )}
     </ProblemItemsAction>
-  );
-}
-
-/** `productsWithNoImages:fetch-images`: the UPC image backfill. */
-export function FetchProductImagesAction(props: WorkActionProps) {
-  const backfill = useBackfill(BACKFILL.fetchUpcImages);
-  return (
-    <WorkActionTrigger
-      {...props}
-      pending={backfill.running}
-      onRun={backfill.start}
-    />
   );
 }

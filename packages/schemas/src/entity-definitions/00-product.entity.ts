@@ -3916,7 +3916,6 @@ Rules:
             facet: "provenance",
             label: "No image (stocked)",
             message: "No product image is attached.",
-            coverage: "productsWithNoImages",
           },
           {
             id: "amazon_asin",

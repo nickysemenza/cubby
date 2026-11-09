@@ -10,10 +10,6 @@ import {
   cookbookPublicReadFields,
 } from "./generated/entity-field-envelope-fields.cookbook.gen";
 import {
-  vendorFieldEnvelopeFields,
-  vendorPublicReadFields,
-} from "./generated/entity-field-envelope-fields.vendor.gen";
-import {
   locationFieldEnvelopeFields,
   locationPublicReadFields,
 } from "./generated/entity-field-envelope-fields.location.gen";
@@ -336,20 +332,6 @@ export const duplicateVendorSchema = z.object({
   sampleId: vendorShortcode,
   canonicalSampleId: vendorShortcode,
 });
-
-export const rawVendorWithoutLogoSchema = z.object({
-  id: vendorShortcode,
-  name: z.string(),
-  website: z.string().nullable(),
-  purchaseCount: z.number().int(),
-  expenseRowCount: z.number().int(),
-});
-
-export const vendorWithoutLogoSchema = withFieldEnvelopes(
-  rawVendorWithoutLogoSchema,
-  { purchaseCount: vendorFieldEnvelopeFields.purchaseCount },
-  vendorPublicReadFields,
-);
 
 export const rawProductWithIslandedMappingsSchema = z.object({
   ...productProblemFields,
@@ -795,12 +777,6 @@ export const rawProblemDetectors = {
     "defect",
     rawToolUsedOutsideOwnershipSchema,
   ),
-  productsWithNoImages: detector(
-    "fast",
-    "coverage",
-    problemRowSchema,
-    "productsWithNoImages",
-  ),
   // Failed processing is actionable, while review-needed eligibility is an
   // intentionally ambiguous human worklist; keep both under one attention
   // section so the list and Problems page share one membership predicate.
@@ -842,12 +818,6 @@ export const rawProblemDetectors = {
   // and unlike `purchasesNotReconciling` a reported row is never legitimately
   // correct as it stands.
   duplicateVendors: detector("fast", "defect", duplicateVendorSchema),
-  vendorsWithoutLogos: detector(
-    "fast",
-    "coverage",
-    rawVendorWithoutLogoSchema,
-    "vendors",
-  ),
   // Advisory, not backlog (see the note above): a purchase whose expenses disagree
   // with its stated total is often correct as-is, and the only mechanical "fix"
   // would be back-computing a cost from `statedTotal` — which nothing may do. So
@@ -1087,10 +1057,6 @@ export const problemDetectors = {
     ...rawProblemDetectors.partiallyImportedCookbooks,
     item: partiallyImportedCookbookSchema,
   },
-  vendorsWithoutLogos: {
-    ...rawProblemDetectors.vendorsWithoutLogos,
-    item: vendorWithoutLogoSchema,
-  },
   emptyLocations: {
     ...rawProblemDetectors.emptyLocations,
     item: emptyLocationSchema,
@@ -1141,7 +1107,6 @@ export const problemLiveReadProjections = {
     entity: "cookbook",
     schema: partiallyImportedCookbookSchema,
   },
-  vendorsWithoutLogos: { entity: "vendor", schema: vendorWithoutLogoSchema },
   emptyLocations: { entity: "location", schema: emptyLocationSchema },
   purchasesNotReconciling: {
     entity: "purchase",

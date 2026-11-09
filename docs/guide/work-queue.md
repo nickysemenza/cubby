@@ -156,7 +156,9 @@ waits remain visible.
 
 ## Problems and declared actions
 
-Problems is the queue's saved view of the `problem` Work family. Each Problems
+Problems is the queue's saved view of the `problem` Work family. A Problem never
+restates a gap that its record already shows as Research work: missing Vendor
+logos and Product images appear once, as Research rows. Each Problems
 declaration is a Work source: record-grain detectors contribute one row per
 record, and derived diagnostics contribute one row per count that filters the
 queue to its reason group. A source declares its remediations as actions: an

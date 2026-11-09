@@ -124,28 +124,12 @@ export const problemActionCapabilities = {
       target: "item",
     }),
   ],
-  vendorsWithoutLogos: [
-    action({
-      id: "fetch-logo",
-      label: "Fetch logo",
-      scope: "item",
-      target: "item",
-    }),
-  ],
   unknownParkedItems: [
     action({
       id: "start-recount",
       label: "Start recount",
       scope: "item",
       target: "guided-flow",
-    }),
-  ],
-  productsWithNoImages: [
-    action({
-      id: "fetch-images",
-      label: "Fetch images",
-      scope: "group",
-      target: "global-backfill",
     }),
   ],
   locationsWithoutAiDescription: [

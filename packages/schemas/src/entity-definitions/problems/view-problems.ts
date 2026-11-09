@@ -232,29 +232,6 @@ const standaloneEntityProblems = [
     },
   }),
   defineProblem({
-    key: "productsWithNoImages",
-    problemClass: PROBLEM_CLASS.productsWithNoImages,
-    executionLane: "fast",
-    continuation: { kind: "entity-list" as const },
-    freshness: { kind: "live" as const },
-    title: "Products with no images",
-    // `product_image`'s own `expected` is "has inventory" (checks/product.ts)
-    // — STOCKED products, regardless of ingredient link. NARROWER than the old
-    // predicate for a non-stocked, non-ingredient product with no image (now
-    // excluded), and WIDER for a stocked product that IS an ingredient (now
-    // included, where it used to be excluded). See the migration note in this
-    // lane's report for the population delta.
-    description: "Non-ingredient products with no displayable image.",
-    emptyMessage: "Every standalone product has an image.",
-    source: {
-      kind: "entity" as const,
-      entity: "product" as const,
-      filters: [{ id: "dataGaps", value: ["product_image"] }],
-      sort: [{ id: "createdAt", desc: false }],
-      columnVisibility: { image: true, ingredient: true },
-    },
-  }),
-  defineProblem({
     key: "duplicateInventory",
     problemClass: PROBLEM_CLASS.duplicateInventory,
     executionLane: "fast",

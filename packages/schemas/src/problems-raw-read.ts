@@ -12,7 +12,6 @@ export { rawIngredientWithPartialCoverageSchema as ingredientWithPartialCoverage
 export { rawProductWithIslandedMappingsSchema as productWithIslandedMappingsSchema } from "./problems";
 export { rawProductWithBetterUpcDataSchema as productWithBetterUpcDataSchema } from "./problems";
 export { rawPartiallyImportedCookbookSchema as partiallyImportedCookbookSchema } from "./problems";
-export { rawVendorWithoutLogoSchema as vendorWithoutLogoSchema } from "./problems";
 export { rawEmptyLocationSchema as emptyLocationSchema } from "./problems";
 export { rawPurchaseNotReconcilingSchema as purchaseNotReconcilingSchema } from "./problems";
 export { rawPurchaseFinancialSettlementMismatchSchema as purchaseFinancialSettlementMismatchSchema } from "./problems";
@@ -31,7 +30,6 @@ export const problemsFastSchema = publicProblems.problemsFastSchema.extend({
   partiallyImportedCookbooks: z.array(
     problemDetectors.partiallyImportedCookbooks.item,
   ),
-  vendorsWithoutLogos: z.array(problemDetectors.vendorsWithoutLogos.item),
   purchasesNotReconciling: z.array(
     problemDetectors.purchasesNotReconciling.item,
   ),
@@ -96,7 +94,6 @@ export const allProblemsSchema = publicProblems.allProblemsSchema.extend({
   partiallyImportedCookbooks: z.array(
     problemDetectors.partiallyImportedCookbooks.item,
   ),
-  vendorsWithoutLogos: z.array(problemDetectors.vendorsWithoutLogos.item),
   emptyLocations: z.array(problemDetectors.emptyLocations.item),
   purchasesNotReconciling: z.array(
     problemDetectors.purchasesNotReconciling.item,

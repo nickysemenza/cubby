@@ -1,15 +1,8 @@
 import { ProblemItem } from "@cubby/schemas/problems";
 import { countLabel } from "@cubby/shared/pluralize";
 
-import {
-  productionLogoOperations,
-  useFetchVendorLogo,
-} from "~/entity/actions/vendor-logo-entity-action";
 import { useActionMutation } from "~/entity/hooks/use-action-mutation";
-import {
-  WorkActionTrigger,
-  type WorkActionProps,
-} from "~/entity/work-queue/work-actions";
+import type { WorkActionProps } from "~/entity/work-queue/work-actions";
 import { ProblemItemsAction } from "~/features/work-queue/problem-items-action";
 import { vendor } from "~/integrations/tanstack-query/generated/domains/vendor.gen";
 import { Stack } from "~/ui/layout";
@@ -90,23 +83,5 @@ export function DuplicateVendorMergeAction(props: WorkActionProps<"item">) {
         <DuplicateVendorMergeFix variant={variant} close={close} />
       )}
     </ProblemItemsAction>
-  );
-}
-
-/** `vendorsWithoutLogos:fetch-logo`: fetch the row's Vendor logo. */
-export function VendorLogoFetchWorkAction(props: WorkActionProps<"item">) {
-  const fetchLogo = useFetchVendorLogo(productionLogoOperations);
-  const id = props.target.row.id;
-  if (!id) return null;
-  return (
-    <WorkActionTrigger
-      {...props}
-      pending={fetchLogo.isPending(id)}
-      onRun={() => {
-        void fetchLogo.fetch(id).catch(() => {
-          // SILENT: useFetchVendorLogo already displays the raw mutation error.
-        });
-      }}
-    />
   );
 }

@@ -14,23 +14,16 @@ import { defineEntityAction } from "./entity-action-definition";
 import type { EntityActionHandles, EntityActionRow } from "./entity-actions";
 import { serverActionState } from "./server-action-state";
 
-export const productionLogoOperations = {
-  fetchLogo: vendor.fetchLogo.mutationOptions,
-};
-export type VendorLogoFetchOperations = typeof productionLogoOperations;
-
 /** Every surface observes the same record's in-flight operation. */
-export function useFetchVendorLogo(
-  operations: VendorLogoFetchOperations = productionLogoOperations,
-) {
+function useFetchVendorLogo() {
   const client = useQueryClient();
   const filters = useMemo(
     () => ({
       exact: true,
-      mutationKey: operations.fetchLogo().mutationKey,
+      mutationKey: vendor.fetchLogo.mutationOptions().mutationKey,
       status: "pending" as const,
     }),
-    [operations],
+    [],
   );
   const pending = useMutationState({
     filters,
@@ -38,7 +31,7 @@ export function useFetchVendorLogo(
       fetchVendorLogoInput.safeParse(mutation.state.variables),
   });
   const mutation = useActionMutation({
-    mutationFn: operations.fetchLogo,
+    mutationFn: vendor.fetchLogo.mutationOptions,
     success: "Vendor logo saved",
   });
   const mutateAsync = mutation.mutateAsync;
