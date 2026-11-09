@@ -1,4 +1,5 @@
 import { emailFiltersSchema } from "@cubby/schemas/email";
+import { workExecutor } from "@cubby/schemas/work-queue";
 import { and, sql } from "drizzle-orm";
 
 import { householdDaySql } from "~/server/db/helpers/query";
@@ -13,7 +14,10 @@ import {
   selectWorkCandidates,
   type WorkSource,
 } from "~/server/generic/work-queue/repo/work-source";
-const declaration = gapDeclaration("email");
+const declaration = gapDeclaration("email", "dynamic");
+const { human, agent, automatic } = workExecutor.enum;
+/** Only undecided relevance needs the member. Import and preview gaps close
+ * through background Mail import, and a missing original needs an agent. */
 export const emailWorkSources: WorkSource[] = [
   {
     ...declaration,
@@ -32,6 +36,10 @@ export const emailWorkSources: WorkSource[] = [
           owners: sql`ARRAY["Email"."ledgerPartyId"]`,
           exclusiveOwner: sql`"Email"."ledgerPartyId"`,
           date: householdDaySql(sql`"Email"."receivedAt"`),
+          executor: sql`CASE
+            WHEN ${readGap.failed("email_relevance_undecided")} THEN ${human}
+            WHEN ${readGap.failed("email_original_missing")} THEN ${agent}
+            ELSE ${automatic} END`,
           ...readGap.columns,
           ...(missingInputs ? readGap.missingColumns : {}),
         })

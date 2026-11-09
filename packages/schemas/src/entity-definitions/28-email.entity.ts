@@ -232,13 +232,12 @@ export const { definition, readSchemas } = defineEntityModel({
           id: "pipeline-worklist",
           label: "Needs attention",
           description:
-            "Emails whose Relevance, review, original, preview or import is incomplete, most missing first",
+            "Emails whose Relevance, original, preview or import is incomplete, most missing first",
           filters: [
             {
               id: "dataGaps",
               value: [
                 "email_relevance_undecided",
-                "email_relevance_unreviewed",
                 "email_original_missing",
                 "email_preview_missing",
                 "email_not_imported",
@@ -1117,15 +1116,6 @@ export const { definition, readSchemas } = defineEntityModel({
           facet: "content",
           label: "Relevance",
           message: "Relevance is uncertain.",
-        },
-        {
-          id: "email_relevance_unreviewed",
-          satisfiedLabel: "Member review complete",
-          placement: { field: "reviewedClassification" },
-          facet: "provenance",
-          label: "Member review",
-          message:
-            "A rule, the decision model or the relevance model decided; no member review.",
         },
         {
           id: "email_original_missing",

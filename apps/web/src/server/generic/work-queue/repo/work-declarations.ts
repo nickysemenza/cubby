@@ -60,10 +60,14 @@ const gapView = (entity: GapEntity) => {
   return view;
 };
 
-export const gapDeclaration = (entity: GapEntity) => ({
+/** `dynamic` sources route each row from its gaps (see `gapPublicationRead`). */
+export const gapDeclaration = (
+  entity: GapEntity,
+  executor: "agent" | "dynamic" = "agent",
+) => ({
   id: `${gapView(entity).family}:${entity}`,
   family: gapView(entity).family,
-  executor: entity === "email" ? ("human" as const) : ("agent" as const),
+  executor,
   entity,
   link: { kind: "record" as const },
   carriesGaps: true,
@@ -124,6 +128,7 @@ const gapColumns = (
       failed(check),
     ]);
   return {
+    failed,
     reason: sql`concat_ws(' ', ${sql.join(
       [...byMessage].map(
         ([message, conditions]) =>
@@ -158,11 +163,14 @@ export const gapPublicationRead = ({
   const admittedChecks = (oneOrManyValues(dataGap) ?? []).map((check) =>
     dataCheck.parse(check),
   );
+  const { failed, ...columns } = gapColumns(scope, entity, publishedGap);
   return {
     filters: otherFilters,
     publication,
     match: eq(publication.entityId, storedEntryFor(entity).table.id),
-    columns: gapColumns(scope, entity, publishedGap),
+    columns,
+    /** Whether the row fails one check, for per-row executor routing. */
+    failed,
     // Missing values cannot decide gap membership. Keep their routing and
     // possible reason text available for the queue's scoped completeness read.
     missingInputs: scope.record?.quality

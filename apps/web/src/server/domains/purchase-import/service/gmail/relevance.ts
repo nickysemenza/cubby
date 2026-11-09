@@ -33,6 +33,42 @@ export type MailRelevance = (
 const MAX_TRANSIENT_BYTES = 256 * 1024;
 const MAX_ORIGINAL_BYTES = 3 * 1024 * 1024;
 const MAX_IMAGES = 6;
+// The model reads identifying headers, every purchase-cue link and image, and a
+// bounded sample of the rest. Transport headers and hundreds of marketing
+// tracking links are not relevance evidence and used to exhaust the budget.
+const RELEVANCE_HEADERS = [
+  "from",
+  "sender",
+  "reply-to",
+  "to",
+  "cc",
+  "subject",
+  "date",
+  "list-id",
+] as const;
+const CONTEXT_LINKS = 12;
+const CONTEXT_IMAGES = 6;
+const CONTEXT_LABELS = 12;
+
+const clipped = (value: string, chars: number) =>
+  value.length > chars ? `${value.slice(0, chars)}…` : value;
+
+/** Cue items stay exact; other items are a clipped sample with an omitted count. */
+function cueFirst<T extends { cue: boolean }, U>(
+  items: readonly T[],
+  sample: number,
+  exact: (item: T) => U,
+  clip: (item: T) => U,
+) {
+  const context = items.filter((item) => !item.cue);
+  return {
+    items: [
+      ...items.filter((item) => item.cue).map(exact),
+      ...context.slice(0, sample).map(clip),
+    ],
+    omitted: Math.max(0, context.length - sample),
+  };
+}
 
 function inlineImageContentId(source: string) {
   const match = /^cid:(.+)$/iu.exec(source);
@@ -66,6 +102,18 @@ function readableMailView({
           ? 0
           : html.unresolved_images,
     };
+  const links = cueFirst(
+    html?.links ?? [],
+    CONTEXT_LINKS,
+    ({ href, text }) => ({ url: href, label: text }),
+    ({ href, text }) => ({ url: clipped(href, 256), label: clipped(text, 96) }),
+  );
+  const images = cueFirst(
+    html?.images ?? [],
+    CONTEXT_IMAGES,
+    ({ src, alt }) => ({ url: src, alt }),
+    ({ src, alt }) => ({ url: clipped(src, 256), alt: clipped(alt, 128) }),
+  );
   return {
     images: html?.images ?? [],
     needsPixels: (availableContentIds: ReadonlySet<string>) =>
@@ -76,15 +124,25 @@ function readableMailView({
           )
         : false,
     original: JSON.stringify({
-      ...mail,
+      headers: Object.fromEntries(
+        RELEVANCE_HEADERS.flatMap((name) =>
+          mail.headers[name] ? [[name, clipped(mail.headers[name], 512)]] : [],
+        ),
+      ),
+      labelIds: mail.labelIds,
+      snippet: mail.snippet,
+      bodyText: mail.bodyText,
       htmlText:
         html?.text.trim() === mail.bodyText?.trim()
           ? null
           : (html?.text ?? null),
-      links:
-        html?.links.map(({ href, text }) => ({ url: href, label: text })) ?? [],
-      images: html?.images.map(({ src, alt }) => ({ url: src, alt })) ?? [],
-      trackingImageLabels: html?.tracking_image_labels ?? [],
+      links: links.items,
+      linksOmitted: links.omitted,
+      images: images.items,
+      imagesOmitted: images.omitted,
+      trackingImageLabels: (html?.tracking_image_labels ?? [])
+        .slice(0, CONTEXT_LABELS)
+        .map((label) => clipped(label, 128)),
       unresolvedImages: html?.unresolved_image_sources ?? [],
       preheader: html?.preheader ?? null,
       structuredData: html?.structured_data ?? [],

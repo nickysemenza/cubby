@@ -178,6 +178,11 @@ logos, including ordinary Vendors created only as Brands before any Purchase.
 Generic / Unbranded is exempt from both checks and does not enter that queue. A supported website
 exception closes that gap without suppressing independent logo research.
 
+Email relevance decided by a rule, the decision model or the relevance model is
+final, and an import outcome settles it. Only Email whose relevance stays
+uncertain after escalation reaches a member; import and preview gaps wait on
+Mail import, and a missing original goes to an agent.
+
 People resolve material ambiguity and conflicting accepted facts. Supported
 unambiguous work should complete automatically within the Mail import switch
 and the AI budget; review should explain the unresolved choice and exact impact,

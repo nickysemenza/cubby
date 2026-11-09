@@ -2,7 +2,6 @@ import { parseEntityId } from "@cubby/schemas/identifiers";
 import { workQueueInput } from "@cubby/schemas/work-queue";
 import { eq, sql } from "drizzle-orm";
 import { createRepoIdentity } from "tooling/factories/repo";
-import { seedEmailClassificationFeedback } from "tooling/shared-suggestion-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
@@ -17,8 +16,6 @@ import {
 } from "~/server/db/schema";
 import { emailScaffold } from "~/server/domains/email/repo/email";
 import { resolveMail } from "~/server/domains/purchase-import/operations/mail-tool";
-import { confirmEmailClassification } from "~/server/domains/purchase-import/repo/gmail/ingest-state";
-import { recordEmailClassificationObservation } from "~/server/domains/purchase-import/repo/gmail/observations";
 import {
   saveEmail,
   upsertOrderMail,
@@ -212,6 +209,11 @@ describe("Email data quality", () => {
     expect(queue.meta.totalCount).toBe(4);
     expect(queue.items).toHaveLength(4);
     expect(queue.items.every((item) => item.entity === "email")).toBe(true);
+    // Import gaps never need the member; these originals are unretained, so an
+    // agent owns them.
+    expect(queue.items.map((item) => item.executor)).toEqual(
+      Array(4).fill("agent"),
+    );
   });
 
   it("enrolls mail inputs and retains publications across reads until refresh", async () => {
@@ -286,28 +288,6 @@ describe("Email data quality", () => {
     await refresh();
     expect((await published()).gaps.map((gap) => gap.check)).not.toContain(
       "email_original_missing",
-    );
-    await confirmEmailClassification(ctx.db, message.id, {
-      stage: "model",
-      reason: "Synthetic stage update",
-    });
-    const prediction = await recordEmailClassificationObservation(ctx.db, {
-      emailId: message.id,
-      checksum: input.checksum,
-      classification: "related",
-      stage: "model",
-      reason: "Synthetic observed classification",
-      classificationVersion: "synthetic-v1",
-    });
-    await seedEmailClassificationFeedback(ctx.db, {
-      predictionId: prediction.id,
-      classification: "related",
-      reason: null,
-      actorUserId: ctx.actor.userId,
-    });
-    await refresh();
-    expect((await published()).gaps.map((gap) => gap.check)).not.toContain(
-      "email_relevance_unreviewed",
     );
     await ensureRun(ctx.db, ctx.actor, {
       purpose: "mail_import",
@@ -546,23 +526,21 @@ describe("Email data quality", () => {
       "email_not_imported",
       "email_original_missing",
       "email_preview_missing",
-      "email_relevance_unreviewed",
     ]);
     expect(gaps(retained)).toEqual([
       "email_display_image",
       "email_not_imported",
       "email_preview_missing",
-      "email_relevance_unreviewed",
     ]);
     expect(gaps(linked)).toEqual(["email_display_image"]);
 
     await refresh();
-    const reviewQueue = await emailScaffold.read(ctx.db, {
-      filters: { dataGap: ["email_relevance_unreviewed"] },
+    const importQueue = await emailScaffold.read(ctx.db, {
+      filters: { dataGap: ["email_not_imported"] },
       sorts: [],
       pagination: { pageIndex: 0, pageSize: 10 },
     });
-    expect(reviewQueue.data.map((row) => row.id)).not.toContain(
+    expect(importQueue.data.map((row) => row.id)).not.toContain(
       unrelated.shortcode,
     );
 
