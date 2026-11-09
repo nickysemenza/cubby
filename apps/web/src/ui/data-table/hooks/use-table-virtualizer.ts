@@ -126,16 +126,6 @@ function flatRowToVirtualIndex(
   );
 }
 
-/**
- * Rows rendered beyond each edge of the pane: about a third of the pane's own
- * height, so a fast fling stays covered without mounting a whole table. Sized
- * from the pane, not the window — a 60vh related table used to overscan by a
- * full window each side, which mounted every row of every table on a page.
- */
-function tableOverscan(paneHeight: number, rowHeight: number): number {
-  return Math.min(16, Math.max(6, Math.ceil(paneHeight / rowHeight / 3)));
-}
-
 /** The last section header at or above the first visible index. */
 export function stickyHeaderIndex(
   headerIndexes: readonly number[],
@@ -280,21 +270,6 @@ export function useTableVirtualizer({
   // Always virtualize for consistent rendering
   const baseCount = groupedItems ? groupedItems.length : rowCount;
   const virtualizerCount = baseCount + (trailingSentinel ? 1 : 0);
-  // The pane's measured height drives overscan; before the first measurement
-  // use the initial 60vh cap shared by page and embedded panes.
-  const [paneHeight, setPaneHeight] = useState(
-    () => (globalThis.window?.innerHeight ?? 800) * 0.6,
-  );
-  useEffect(() => {
-    const pane = tableContainerRef.current;
-    if (isMobile || !pane || !globalThis.ResizeObserver) return;
-    const measure = () => setPaneHeight(pane.clientHeight);
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(pane);
-    return () => observer.disconnect();
-  }, [isMobile]);
-  const overscan = tableOverscan(paneHeight, rowHeight);
   const getItemKey = useCallback(
     (index: number) =>
       tableVirtualItemKey(index, rowKeys, groupedItems, trailingSentinel),
@@ -337,7 +312,8 @@ export function useTableVirtualizer({
       if (kind === "detail") return ROW_DETAIL_ESTIMATE;
       return rowHeight;
     },
-    overscan,
+    // Keep a bounded runway without mounting a pane-sized buffer of cells.
+    overscan: 4,
     rangeExtractor,
   });
 
@@ -375,7 +351,12 @@ export function useTableVirtualizer({
     tableContainerRef,
     paneWrapperRef,
     paneMaxHeight,
-    paneRows: Math.ceil(paneHeight / rowHeight),
+    // Paging and rendering share the virtualizer's measured pane, including
+    // the initial 60vh estimate before its observer attaches.
+    paneRows: Math.ceil(
+      (rowVirtualizer.scrollRect?.height ??
+        (globalThis.window?.innerHeight ?? 800) * 0.6) / rowHeight,
+    ),
     // Keep virtual-core's seeded offset, not the pane's clamped scrollTop:
     // pending restoration still needs to admit pages before the offset fits.
     scrollOffset: rowVirtualizer.scrollOffset ?? initialOffset,
