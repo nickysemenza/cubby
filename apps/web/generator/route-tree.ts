@@ -1,3 +1,4 @@
+import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { Generator, getConfig } from "@tanstack/router-generator";
 
@@ -30,4 +31,17 @@ declare module '@tanstack/react-start' {
     webRoot,
   );
   await new Generator({ config, root: webRoot }).run();
+  writeRouterPaths(webRoot);
+};
+
+/** Router path patterns for the trace-route allowlist (`lib/http-route-template.ts`). */
+const writeRouterPaths = (webRoot: string) => {
+  const tree = readFileSync(resolve(webRoot, "src/routeTree.gen.ts"), "utf8");
+  const paths = [
+    ...new Set([...tree.matchAll(/fullPath: '([^']+)'/gu)].map((m) => m[1]!)),
+  ].sort();
+  writeFileSync(
+    resolve(webRoot, "src/lib/generated/router-paths.gen.ts"),
+    `// Generated from routeTree.gen.ts by generator/route-tree.ts.\nexport const ROUTER_PATHS = ${JSON.stringify(paths, null, 2)} as const;\n`,
+  );
 };
