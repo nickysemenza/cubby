@@ -735,6 +735,9 @@ terminal, not manual, not a member request and not mail or financial import work
 (`mail_import`, `mail_discovery`, `mail_search`, `mail_reclassify`,
 `purchase_validation`, `account_sync`) is pruned after fourteen days. Only Job
 rows are deleted; Runs stay as AiUsage cost evidence. Domain evidence stays.
+The same tick retires pending field Suggestions older than fourteen days when
+the field is not `reviewRequired` and no member decided them; statement and
+recommendation Suggestions wait for a member and never expire.
 
 `generic/jobs/repo/observation.ts` reads the real owners for Activity, maintenance,
 MCP and native clients. `job.activity.rebuild` replaces the standalone maintenance rebuild-status operation. Rebuild movement is its last committed page, independently
