@@ -35,9 +35,9 @@ export const kitMembershipsInput = z.object({
 });
 
 /**
- * Several kits at once — the Products list expands every kit on the page, so
- * it asks once rather than per expanded row. Bounded well above the 21 kits
- * that exist; the cap is a guard, not a paging scheme.
+ * Several kits per bounded collection read. The Products list batches its
+ * loaded kit roster rather than requesting children from individual rows.
+ * The cap applies to each request, independently of the loaded list's size.
  */
 export const kitComponentRowsInput = z.object({
   // The products route constructs this query before its first page arrives and

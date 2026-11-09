@@ -7,8 +7,14 @@ import { ProductCostValue } from "~/entity/display/product-cost-value";
 import { useEntityMetadata } from "~/entity/metadata";
 
 type ProductListItem = EntityFieldEnvelopeRead<"product", "list">;
+import { ID_CHUNK_SIZE } from "@cubby/schemas/entity-media";
 import type { KitComponentRowOut } from "@cubby/schemas/product-components";
-import { useQuery } from "@tanstack/react-query";
+import {
+  type UseQueryResult,
+  useQueries,
+  useQuery,
+} from "@tanstack/react-query";
+import { chunk, uniq } from "es-toolkit";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -54,7 +60,6 @@ import {
 } from "~/ui/data-table/table-features";
 import { NoneValue } from "~/ui/text/none-value";
 
-import { useStableIds } from "../../entity/list-columns/stable-ids";
 import {
   defineListOverride,
   interleaveDeclared,
@@ -66,6 +71,9 @@ import { createInventoryEntriesColumn } from "../inventory/list-columns";
 const NO_FILTER_OPTIONS: PickerOption[] = [];
 /** Stable empty default so `nest` keeps its identity while kits load. */
 const EMPTY_KIT_ROWS: KitComponentRowOut[] = [];
+
+const combineKitRows = (results: UseQueryResult<KitComponentRowOut[]>[]) =>
+  results.flatMap((result) => result.data ?? EMPTY_KIT_ROWS);
 
 // The generic tones fit here: tracked really is the resolved/good outcome.
 const STOCK_TRACKED_OPTIONS = booleanCellOptions({
@@ -475,15 +483,16 @@ export const productListOverride = defineListOverride<
     // render, where `DesktopDataRow`'s memo (which compares `row.original`)
     // cannot see them. Nesting before rows are built sidesteps that.
     const [kitIds, setKitIds] = useState<string[]>([]);
-    const kitComponentsQuery = useQuery({
-      ...productOperations.kitComponentRows.queryOptions({
-        parentProductIds: kitIds,
-      }),
-      enabled: kitIds.length > 0,
+    const kitBatches = useMemo(() => chunk(kitIds, ID_CHUNK_SIZE), [kitIds]);
+    const kitRows = useQueries({
+      queries: kitBatches.map((parentProductIds) =>
+        productOperations.kitComponentRows.queryOptions({ parentProductIds }),
+      ),
+      combine: combineKitRows,
     });
     const componentsByParent = useMemo(
-      () => groupComponentsByParent(kitComponentsQuery.data ?? EMPTY_KIT_ROWS),
-      [kitComponentsQuery.data],
+      () => groupComponentsByParent(kitRows),
+      [kitRows],
     );
     const tree = useMemo(
       () => ({
@@ -542,8 +551,8 @@ export const productListOverride = defineListOverride<
 });
 
 /**
- * Derives the kit id set from the loaded rows as a stable array, so the query
- * key does not churn while the table rerenders.
+ * Preserve loaded order so complete batches keep their query keys as pages
+ * append. Sorting the whole growing set would reshuffle earlier batches.
  */
 function ProductListHydration({
   data,
@@ -554,16 +563,21 @@ function ProductListHydration({
   onKitIds: (ids: string[]) => void;
   children: ReactNode;
 }) {
-  const kitCandidates = useMemo(
+  const kitIdsKey = useMemo(
     () =>
-      data
-        .filter(
-          (product) => (fieldValueOf(product.fields.componentCount) ?? 0) > 0,
-        )
-        .map((p) => p.id),
+      uniq(
+        data
+          .filter(
+            (product) => (fieldValueOf(product.fields.componentCount) ?? 0) > 0,
+          )
+          .map((product) => product.id),
+      ).join(","),
     [data],
   );
-  const stableKitIds = useStableIds(kitCandidates);
-  useEffect(() => onKitIds([...stableKitIds]), [onKitIds, stableKitIds]);
+  const stableKitIds = useMemo(
+    () => (kitIdsKey ? kitIdsKey.split(",") : []),
+    [kitIdsKey],
+  );
+  useEffect(() => onKitIds(stableKitIds), [onKitIds, stableKitIds]);
   return children;
 }

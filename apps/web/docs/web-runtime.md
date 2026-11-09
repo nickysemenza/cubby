@@ -635,6 +635,14 @@ path. Virtualized rendering alone does not bound the records passed to a data pr
 server operation and SQL counts as well as HTTP request counts when changing
 list loading; increasing concurrency is not a substitute for shared work.
 
+Product kit enrichment batches the loaded kit roster through the existing
+bounded `kitComponentRows` query. Keep loaded order across page appends so full
+batches retain their query keys; only a growing partial tail changes membership.
+Do not sort the entire growing roster before chunking or send it in one request.
+Every request keeps the operation's input bound, and all returned component rows
+participate in nesting. Query caching and mutation invalidation remain owned by
+the existing operation options.
+
 Product list pages carry storage IDs through USDA and pricing enrichment; they
 must not resolve each public row code back to its ID. Multi-record identity
 resolution uses the shared `resolveLiveShortcodes` / `resolveAllOrThrow` helpers
