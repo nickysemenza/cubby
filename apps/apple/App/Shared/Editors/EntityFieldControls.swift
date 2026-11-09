@@ -462,10 +462,13 @@ struct EntityFieldControl: View {
                 .buttonStyle(.plain)
                 .disabled(pickerScope?.ready == false)
                 if let id = value.stringValue, !id.isEmpty, field.nullable {
-                    Button("Clear", systemImage: "xmark.circle.fill") {
+                    Button {
                         model.stageReferenceSelection(key, value: .null)
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .frame(minWidth: referenceActionTarget, minHeight: referenceActionTarget)
+                            .contentShape(Rectangle())
                     }
-                    .labelStyle(.iconOnly)
                     .foregroundStyle(.secondary)
                     .buttonStyle(.borderless)
                     .accessibilityLabel("Clear \(field.label)")
