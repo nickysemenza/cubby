@@ -19,6 +19,25 @@ WHERE jsonb_array_length("decisions") = 0
     OR "entity" = 'wish'
   );
 --> statement-breakpoint
+-- Suggestion.evaluationId references AiEvaluation with NO ACTION. A retained decided or
+-- applied row keeps its provenance and only loses the pointer to the retiring evaluation.
+UPDATE "Suggestion" SET "evaluationId" = NULL
+WHERE "evaluationId" IN (
+  SELECT id FROM "AiEvaluation" WHERE "target"->>'kind' IN ('connection', 'product', 'product_pair')
+);
+--> statement-breakpoint
+-- A Sweep's step of a removed family can never run again. Production has none open; settle any
+-- so a mixed Sweep resumes only its surviving statement and field steps. RunStep has no
+-- `skipped` state, so the step ends `done` with nothing counted.
+UPDATE "RunStep" st
+SET "state" = 'done', "pausedReason" = NULL, "pausedUntil" = NULL,
+    "endedAt" = COALESCE(st."endedAt", now()), "updatedAt" = now()
+FROM "Run" r
+WHERE st."runId" = r.id
+  AND r.purpose = 'sweep'
+  AND st.key IN ('transfer_pair_scan', 'transfer_pair_retire', 'transfer_pair_label', 'connection_roster', 'connection_evaluate')
+  AND st."state" IN ('queued', 'running', 'waiting', 'paused');
+--> statement-breakpoint
 DELETE FROM "AiEvaluationRequest" r
 USING "AiEvaluation" e
 WHERE r."evaluationId" = e.id

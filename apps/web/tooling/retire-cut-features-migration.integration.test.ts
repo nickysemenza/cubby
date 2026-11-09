@@ -42,12 +42,17 @@ it("retires cut features' undecided output and keeps decided work, Runs and cost
       n: number,
       family: string,
       scope: string | null,
-      options: { decided?: boolean; status?: string; entity?: string } = {},
+      options: {
+        decided?: boolean;
+        status?: string;
+        entity?: string;
+        evaluationId?: string;
+      } = {},
     ) => {
       const entity = options.entity ?? "product";
       await client.query(
-        `INSERT INTO "Suggestion" (id, "publicationKey", family, subject, judgment, decisions, entity, "recordId", status, active)
-         VALUES ($1, $2, $3, $4::jsonb, '{}'::jsonb, $5::jsonb, $6, $7, $8, true)`,
+        `INSERT INTO "Suggestion" (id, "publicationKey", family, subject, judgment, decisions, entity, "recordId", status, active, "evaluationId")
+         VALUES ($1, $2, $3, $4::jsonb, '{}'::jsonb, $5::jsonb, $6, $7, $8, true, $9)`,
         [
           id(n),
           `synthetic:${n}`,
@@ -57,13 +62,17 @@ it("retires cut features' undecided output and keeps decided work, Runs and cost
           entity,
           id(n + 500),
           options.status ?? "pending",
+          options.evaluationId ?? null,
         ],
       );
     };
     await suggestion(10, "recommendation", "connection.expense-project");
-    await suggestion(11, "recommendation", "connection.email-purchase", {
-      decided: true,
-    });
+    // Seeded after the evaluation below so the foreign key holds.
+    const decidedLinkedEmailPurchase = () =>
+      suggestion(11, "recommendation", "connection.email-purchase", {
+        decided: true,
+        evaluationId: id(20),
+      });
     await suggestion(12, "recommendation", "connection.product-expense", {
       status: "applied",
     });
@@ -85,12 +94,23 @@ it("retires cut features' undecided output and keeps decided work, Runs and cost
       );
     };
     await evaluation(20, "connection", id(1), "queued");
+    await decidedLinkedEmailPurchase();
     await client.query(
       `INSERT INTO "AiEvaluationRequest" ("runId", "evaluationId", receipt) VALUES ($1, $2, '{}')`,
       [id(1), id(20)],
     );
     await evaluation(21, "field", id(1), "queued");
     await evaluation(22, "email", id(1), "queued");
+
+    for (const [key, state] of [
+      ["transfer_pair_scan", "running"],
+      ["connection_evaluate", "paused"],
+      ["statement_generate", "running"],
+    ] as const)
+      await client.query(
+        `INSERT INTO "RunStep" ("runId", key, label, position, state) VALUES ($1, $2, 'Synthetic', 0, $3)`,
+        [id(3), key, state],
+      );
 
     for (const [n, runN, state] of [
       [30, 1, "failed"],
@@ -142,6 +162,27 @@ it("retires cut features' undecided output and keeps decided work, Runs and cost
       id(12),
       id(14),
       id(15),
+    ]);
+    // The retained decided row loses only its pointer to the retired evaluation.
+    expect(
+      (
+        await client.query(
+          `SELECT "evaluationId" FROM "Suggestion" WHERE id = $1`,
+          [id(11)],
+        )
+      ).rows,
+    ).toEqual([{ evaluationId: null }]);
+    expect(
+      (
+        await client.query(
+          `SELECT key, state FROM "RunStep" WHERE "runId" = $1 ORDER BY key`,
+          [id(3)],
+        )
+      ).rows,
+    ).toEqual([
+      { key: "connection_evaluate", state: "done" },
+      { key: "statement_generate", state: "running" },
+      { key: "transfer_pair_scan", state: "done" },
     ]);
     expect(await ids(`SELECT id FROM "AiEvaluation" ORDER BY id`)).toEqual([
       id(21),
