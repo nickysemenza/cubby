@@ -328,9 +328,11 @@ Ordinary browser display operations use `HYPERDRIVE_CACHED`: at most 60 seconds
 of cached data plus 15 seconds of stale-while-revalidate. Authentication and
 identity resolution remain authoritative. Mutations, money entry, financial
 record reads/reports, settlement/reconciliation previews and receiving decisions
-always use `HYPERDRIVE` with caching disabled. The shared operation runner makes
-the policy decision after validating input, including the generic entity or
-report slot, so an operation's explicit context policy cannot downgrade money.
+always use `HYPERDRIVE` with caching disabled. Each query contract member (or
+its contract default) declares `readPolicy`; the shared operation runner applies
+it after validating input. Generic entity and report contracts declare
+`financialEntity`, so a read of a financial entity or report slot cannot
+downgrade money.
 
 Read-your-writes belongs to the member's browser session. Attempted writes return
 a signed `cubby.last_write` cookie carrying the member, session and write time;

@@ -19,7 +19,6 @@ export const sourceTransactionRecordContract = defineContract(
     previewSuggestion: query({
       description:
         "Preview a statement Suggestions review draft against current evidence without writing. Pass the listed suggestionId, expectedFingerprint and declared application. Returns current transaction, Purchase/Expense, vendor and settlement effects or refuses stale/unsupported evidence. A successful preview does not apply the draft; explicit Suggestions review revalidates it again.",
-      readPolicy: "strong",
       input: statementSuggestionPreviewInput,
       output: statementSuggestionPreviewOut,
     }),
@@ -33,7 +32,6 @@ export const sourceTransactionRecordContract = defineContract(
     summary: query({
       description:
         "Count and total source transaction records by match state for a filter — total, matched, unmatched, ignored, superseded, the dollar amount in total and per match state, and unmatchedCharges (distinct charges behind the unmatched observations). Size the remaining drift before working it, or confirm a bulk disposition landed.",
-      readPolicy: "strong",
       input: sourceTransactionRecordSummaryInput,
       output: sourceTransactionRecordSummaryOut,
     }),
@@ -45,5 +43,5 @@ export const sourceTransactionRecordContract = defineContract(
       output: findSourceTransactionRecordDriftOut,
     }),
   },
-  { exposure: "capability", mcpToolGroup: "finance" },
+  { exposure: "capability", mcpToolGroup: "finance", readPolicy: "strong" },
 );

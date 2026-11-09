@@ -35,7 +35,6 @@ export const expenseContract = defineContract(
     }),
     // Home summaries are bounded, single-round-trip reads. Asking the freshness Durable Object first adds another network hop before these short queries.
     monthlySummary: query({
-      readPolicy: "strong",
       input: schemas.expenseFiltersSchema,
       output: schemas.expenseMonthlySummaryOut,
     }),
@@ -61,6 +60,7 @@ export const expenseContract = defineContract(
       output: z.array(schemas.expenseTradeAffinityOut),
     }),
     chargeContext: query({
+      readPolicy: "strong",
       input: expenseShortcode,
       output: schemas.expenseChargeContextOut
         .unwrap()
@@ -70,6 +70,7 @@ export const expenseContract = defineContract(
         .nullable(),
     }),
     inventoryOwnershipContext: query({
+      readPolicy: "strong",
       exposure: "capability",
       description:
         "An inventory entry's inherited owner and beneficiary evidence with its evidenceFingerprint, for inventory.confirm_ownership and expenses.confirm_inventory_beneficiary.",
@@ -78,6 +79,7 @@ export const expenseContract = defineContract(
     }),
     /** Beneficiaries/funders last used with a vendor, for prefilling the create form. */
     vendorAttributionDefaults: query({
+      readPolicy: "strong",
       note: "Create-form prefill",
       input: vendorAttributionDefaultsInput,
       output: vendorAttributionDefaultsOut,

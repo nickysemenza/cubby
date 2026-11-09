@@ -138,5 +138,9 @@ export const connectionContract = defineContract(
       invalidates: ["connections"],
     }),
   },
-  { exposure: "view", mcpToolGroup: "entity_graph" },
+  {
+    exposure: "view",
+    mcpToolGroup: "entity_graph",
+    readPolicy: "financialEntity",
+  },
 );

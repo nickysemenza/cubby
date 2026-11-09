@@ -51,8 +51,6 @@ export type ContractMember = {
     entities?: readonly string[];
     productPhases?: readonly string[];
   };
-  /** Keeps a query on the authoritative adapter (see contracts/define.ts). */
-  readPolicy?: "strong";
   /** Browser cache tags / profile of a query (see contracts/cache-policy.ts). */
   cache?: {
     tags?: readonly (readonly string[])[];
@@ -77,7 +75,6 @@ type DeclaredOperation = {
   kind: Kind;
   exposure?: "capability" | "view" | "internal";
   observability: OperationObservability;
-  strongRead: boolean;
   exportName: string;
   member: string;
 };
@@ -338,7 +335,6 @@ const collectDeclaredOperations = (): Promise<
             entities: [...(definition.observability?.entities ?? [])],
             productPhases: [...(definition.observability?.productPhases ?? [])],
           },
-          strongRead: definition.readPolicy === "strong",
           exportName,
           member,
         });
@@ -556,22 +552,6 @@ export const collectOperations = async (): Promise<
       },
     ]),
   );
-};
-
-/**
- * Validate contract members declaring `readPolicy: "strong"`. A
- * flag on a mutation or subscription is an error here: mutations are always
- * strong and subscriptions run through the workflow stream's own policy, so a
- * flag there would be silently meaningless.
- */
-export const validateStrongQueryOperations = async (): Promise<void> => {
-  for (const [operation, declared] of await collectDeclaredOperations()) {
-    if (!declared.strongRead) continue;
-    if (declared.kind !== "query")
-      throw new Error(
-        `${operation} declares readPolicy: "strong" but is a ${declared.kind}; only queries choose a read policy.`,
-      );
-  }
 };
 
 /** Every capability and view operation is reachable through shared HTTP. */

@@ -104,7 +104,6 @@ export const mealContract = defineContract(
     getNutrition: query({
       exposure: "view",
       note: "Home macro tiles for a meal or a household day; agents read nutrition_read.daily_intake per person and nutrition_read.preparations_detail per meal",
-      readPolicy: "strong",
       input: schemas.mealNutritionInput,
       output: schemas.mealNutritionOut,
       cache: {
@@ -141,7 +140,6 @@ export const mealContract = defineContract(
     }),
     upcomingSummary: query({
       exposure: "view",
-      readPolicy: "strong",
       input: schemas.mealDateRange,
       output: schemas.upcomingMealSummaryOut,
     }),

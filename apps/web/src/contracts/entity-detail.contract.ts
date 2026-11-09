@@ -33,5 +33,5 @@ export const entityDetailContract = defineContract(
       },
     }),
   },
-  { exposure: "view" },
+  { exposure: "view", readPolicy: "financialEntity" },
 );

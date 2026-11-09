@@ -132,13 +132,11 @@ export const aiContract = defineContract(
       description:
         "Decision-model field suggestions for a record or draft (`targets`, `basis`); a spending field also returns financeReview, whose fingerprint ai.apply_finance_category_suggestion takes. Mint one runKey uuid per session and reuse it for entity.record_suggestion_miss. decisionModel pins Jev (typesafe/jev) or Clef (@cf/cloudflare/clef) to replay one record through each trial model.",
       modelBacked: true,
-      readPolicy: "strong",
       input: fieldSuggestionsInput,
       output: fieldSuggestionsOut,
       cache: { profile: "stable" },
     }),
     suggestFieldsBatch: query({
-      readPolicy: "strong",
       input: fieldSuggestionsBatchInput,
       output: fieldSuggestionsBatchOut,
       cache: { profile: "stable" },
@@ -147,7 +145,6 @@ export const aiContract = defineContract(
       note: "List pages skip re-asking declined suggestion questions",
       input: settledSuggestionQuestionsInput,
       output: settledSuggestionQuestionsOut,
-      readPolicy: "strong",
       // List pages batch this read and cache each question separately, tagged
       // with the entity kinds its decision reads (`record-suggestions.tsx`).
       cache: { profile: "stable", tags: [["ai", "settledSuggestionQuestion"]] },
@@ -185,7 +182,6 @@ export const aiContract = defineContract(
       invalidates: ["runOnly"],
     }),
     suggestExternalIdKind: query({
-      readPolicy: "strong",
       input: externalIdKindSuggestionInput,
       output: suggestExternalIdKindOut,
       cache: { profile: "stable" },

@@ -139,7 +139,6 @@ export const purchaseImportContract = defineContract(
         "Read bounded immutable import outcomes for one owned Email, newest first. Read purchase_import_read.mail_read and lock a blind grade before revealing these predictions. Includes Suggestion handles, imported lines/total or linked/unrelated/unresolved disposition and rule/model producer. Grade member-confirmed outcomes through suggestions.review_batch with intent history; grades never change the ledger.",
       input: mailImportOutcomesInput,
       output: mailImportOutcomesOut,
-      readPolicy: "strong",
     }),
     mailRead: query({
       description:
@@ -152,7 +151,6 @@ export const purchaseImportContract = defineContract(
       description:
         "Preview the full deployed classification of one retained Email's Gmail original: Jev/Clef triage, then Luna with bounded image evidence only when uncertain. Records only a diagnostic Run and model usage; never changes Relevance, observations or retained content. Pass decisionModel to pin Jev or Clef; omitted samples the live split. Returns the final classification/model, triage result/view, fallback result, image evidence/refusal diagnostics, Run, elapsed time and priced usage (unknown costs stay null).",
       modelBacked: true,
-      readPolicy: "strong",
       input: mailTriagePreviewInput,
       output: mailTriagePreviewOut,
     }),

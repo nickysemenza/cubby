@@ -1,6 +1,7 @@
 import { createLogger } from "@cubby/worker-tracing";
 import { z } from "zod";
 
+import type { QueryReadPolicy } from "~/contracts/define";
 import {
   CLOUDFLARE_OBSERVABILITY_URL,
   describeErrorCauses,
@@ -22,11 +23,7 @@ import {
   memberWriteCookie,
 } from "~/server/db/freshness/member-marker";
 import { runAfterCommit } from "~/server/db/helpers";
-import {
-  type ReadPolicy,
-  mutationChangesHouseholdData,
-  readPolicyFor,
-} from "~/server/db/read-policy";
+import { inputReadPolicy } from "~/server/db/read-policy";
 import { scheduleCalendarFeedDirty } from "~/server/domains/calendar/repo/client";
 import {
   AppError,
@@ -596,7 +593,9 @@ export type RunOperationOptions<
   inputSchema: InputSchema;
   outputSchema: OutputSchema | OutputSchemaResolver<InputSchema, OutputSchema>;
   request: OperationRequest;
-  readPolicy?: ReadPolicy;
+  readPolicy?: QueryReadPolicy;
+  /** False for a bookkeeping-only mutation (see `MutationContract`). */
+  changesHouseholdData?: false;
   workload?: Workload;
   run: (
     context: AuthenticatedOperationContext,
@@ -682,7 +681,9 @@ export function createOperationExecutor(runtime: OperationExecutorRuntime) {
             ? "strong"
             : options.readPolicy === "strong"
               ? "strong"
-              : readPolicyFor(definition.id, "query", state.entity, slots);
+              : options.readPolicy === "financialEntity"
+                ? inputReadPolicy(state.entity, slots)
+                : "context";
         const context = await selectOperationContext(
           principal.context,
           readPolicy,
@@ -706,8 +707,7 @@ export function createOperationExecutor(runtime: OperationExecutorRuntime) {
 
         state.stage = "run";
         state.mutationStarted =
-          options.type === "mutation" &&
-          mutationChangesHouseholdData(definition.id);
+          options.type === "mutation" && options.changesHouseholdData !== false;
         const rawOutput = await options.run(context, input, signal);
         throwIfOperationAborted(options.request.signal);
 

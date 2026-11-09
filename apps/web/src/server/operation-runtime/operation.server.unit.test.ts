@@ -96,7 +96,6 @@ describe("executeOperation", () => {
           context: { ...context, requestOrigin: "api" },
         }),
       ),
-      readPolicy: "context",
       run: async (actor) => {
         expect(actor.auth.userId).toBe(context.auth.userId);
         expect(actor.db).toBe(database);
@@ -253,7 +252,7 @@ describe("executeOperation", () => {
     expect(recordDatabaseWrite).toHaveBeenCalledOnce();
   });
 
-  it("does not mark a catch-up claim as a household data write", async () => {
+  it("does not mark a bookkeeping-only mutation as a household data write", async () => {
     await executeOperation({
       operation: "maintenance.requestCatchUp",
       type: "mutation",
@@ -261,6 +260,7 @@ describe("executeOperation", () => {
       inputSchema: z.undefined(),
       outputSchema: z.object({ status: z.literal("recent") }),
       request: request(),
+      changesHouseholdData: false,
       run: async () => ({ status: "recent" as const }),
     });
 

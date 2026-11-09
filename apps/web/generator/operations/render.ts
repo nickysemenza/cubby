@@ -6,7 +6,6 @@ import type { EntityArtifacts } from "../entities/declarations.ts";
 import {
   collectOperationIds,
   collectOperationHandlers,
-  validateStrongQueryOperations,
   collectOperations,
   loadContracts,
 } from "./collect.ts";
@@ -15,7 +14,6 @@ const renderOperationRegistry = async (): Promise<string> => {
   const operations = [...(await collectOperations())].sort(([a], [b]) =>
     a.localeCompare(b),
   );
-  await validateStrongQueryOperations();
   const commands = new Map<
     string,
     {

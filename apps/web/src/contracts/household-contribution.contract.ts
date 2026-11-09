@@ -11,6 +11,7 @@ export const householdContributionContract = defineContract(
   "householdContribution",
   {
     ledger: query({
+      readPolicy: "strong",
       description:
         "The household-wide contribution ledger as of a date (today when omitted). Positions include Expenses and Ledger Transfers dated through that day; evidence-gap counts describe currently attached Financial Transaction evidence. Never records attribution, transfers, or evidence.",
       input: householdContributionLedgerInput,

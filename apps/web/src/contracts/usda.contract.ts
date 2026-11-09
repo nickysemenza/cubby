@@ -40,14 +40,12 @@ export const usdaFoodContract = defineContract(
     list: query({
       exposure: "view",
       note: "Native browse with linked-product filters; agents search with usda_food.search",
-      readPolicy: "strong",
       input: usdaListInput,
       output: usdaFoodListOut,
       cache: { tags: [["usda-food"]] },
     }),
     detail: query({
       exposure: "view",
-      readPolicy: "strong",
       input: usdaFoodIdInput,
       output: foodSummaryWithLinkedProducts.nullable(),
       cache: { tags: [["usda-food"]], profile: "stable" },
@@ -56,7 +54,6 @@ export const usdaFoodContract = defineContract(
     alternateId: query({
       exposure: "view",
       note: "UPC and NDB lookups; an FDC id goes through usda_food.by_fdc_id",
-      readPolicy: "strong",
       input: usdaFoodLookupInput,
       output: foodSummaryWithLinkedProducts.nullable(),
       cache: { tags: [["usda-food"]] },

@@ -32,7 +32,6 @@ export const problemsContract = defineContract(
   "problems",
   {
     getMaintenanceCounts: query({
-      readPolicy: "strong",
       input: noInput,
       output: maintenanceCountsSchema,
       cache: { profile: "stable" },
@@ -41,7 +40,6 @@ export const problemsContract = defineContract(
       exposure: "capability",
       description:
         "Preview which retained records would change if the selected parser data were reparsed. This is read-only; inspect the candidates before requesting a repair.",
-      readPolicy: "strong",
       input: noInput,
       output: dryRunReparseOut,
     }),
@@ -50,7 +48,6 @@ export const problemsContract = defineContract(
       exposure: "capability",
       description:
         "Preview aliases that are safe to prune from the selected entities. This is read-only and reports the rows that delete_unused would remove.",
-      readPolicy: "strong",
       input: noInput,
       output: dryRunPruneAliasesOut,
     }),

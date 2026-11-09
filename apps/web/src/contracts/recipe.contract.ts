@@ -222,13 +222,11 @@ export const recipeContract = defineContract(
       exposure: "capability",
       description:
         "Preview recipes whose derived totals would change under the current calculation rules. This is read-only; use recompute_one only for the reviewed recipe.",
-      readPolicy: "strong",
       input: z.undefined(),
       output: recipeDryRunRecomputeTotalsOut,
       cache: { tags: [["recipe", "dryRun"]] },
     }),
     explainCosting: query({
-      readPolicy: "strong",
       input: recipeIdInput,
       output: recipeCostingExplain,
       cache: { tags: [["recipe", "costing"]] },
@@ -271,7 +269,6 @@ export const recipeContract = defineContract(
       exposure: "capability",
       description:
         'A recipe\'s cost/calorie totals with per-ingredient diagnostics. `detail: "lines"` (default) drops the two full nutrient-totals blocks and the drift record and returns only the per-line diagnostics plus a cost/kcal coverage headline — use it when hunting the uncovered line, not the number.',
-      readPolicy: "strong",
       input: z.object({
         id: recipeShortcode,
         detail: recipeCostingExplainDetail.default("lines"),
@@ -364,19 +361,16 @@ export const recipeContract = defineContract(
       invalidates: ["cookbook"],
     }),
     getCookbookSource: query({
-      readPolicy: "strong",
       input: cookbookIdInput,
       output: cookbookSourceOut,
       cache: { tags: [["cookbook", "source"]] },
     }),
     getCookbookDiff: query({
-      readPolicy: "strong",
       input: cookbookDiffInput,
       output: cookbookDiffOut,
       cache: { tags: [["cookbook", "diff"]] },
     }),
     previewNotionSync: query({
-      readPolicy: "strong",
       input: z.undefined(),
       output: notionPreviewOut,
       cache: { tags: [["recipe", "notionPreview"]] },

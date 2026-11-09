@@ -14,7 +14,6 @@ export const oauthContract = defineContract(
   {
     listConnectedApps: query({
       exposure: "internal",
-      readPolicy: "strong",
       input: z.null(),
       output: connectedAppsOut,
       cache: { tags: [["oauth", "connectedApps"]] },
@@ -29,7 +28,6 @@ export const oauthContract = defineContract(
     countOrphanedClients: query({
       description:
         "Count OAuth client records that no longer have a connected app. This is a read-only preview of what prune_orphaned_clients would remove.",
-      readPolicy: "strong",
       input: z.null(),
       output: orphanedOAuthClientsOut,
       cache: { tags: [["oauth", "orphaned"]] },

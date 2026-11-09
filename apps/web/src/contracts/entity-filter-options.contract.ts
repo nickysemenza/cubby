@@ -13,5 +13,5 @@ export const entityFilterOptionsContract = defineContract(
       output: filterOptionsOut,
     }),
   },
-  { exposure: "view" },
+  { exposure: "view", readPolicy: "financialEntity" },
 );

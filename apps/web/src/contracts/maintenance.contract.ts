@@ -24,6 +24,7 @@ export const maintenanceContract = defineContract(
     requestCatchUp: mutation({
       exposure: "view",
       note: "Apple app launch hook",
+      changesHouseholdData: false,
       input: z.undefined(),
       output: z.object({ status: z.enum(["queued", "recent"]) }),
     }),
@@ -44,7 +45,6 @@ export const maintenanceContract = defineContract(
     status: query({
       description:
         "Read the status and latest result of a maintenance operation. This does not start or retry it.",
-      readPolicy: "strong",
       input: z.undefined(),
       output: maintenanceStatusSchema,
     }),

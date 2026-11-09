@@ -82,5 +82,5 @@ export const entityReportContract = defineContract(
       },
     }),
   },
-  { exposure: "view" },
+  { exposure: "view", readPolicy: "financialEntity" },
 );
