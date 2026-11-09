@@ -14,6 +14,7 @@ import {
   unwrapDb,
   withTransaction,
 } from "~/server/db/helpers";
+import { transactionImportRecord } from "~/server/db/retained-tables";
 import { sourceOccurrence } from "~/server/db/schema";
 import { expenseScaffold } from "~/server/domains/expense/repo/lookup";
 import { defineRepository } from "~/server/entity-kernel/repo/repository";
@@ -75,7 +76,7 @@ async function loadOccurrenceClosures(
       allocations AS MATERIALIZED (SELECT * FROM "FinancialTransactionAllocation" WHERE "transactionId" IN (SELECT id FROM transactions)),
       purchases AS MATERIALIZED (SELECT * FROM "Purchase" WHERE id IN (SELECT "purchaseId" FROM allocations)),
       expenses AS MATERIALIZED (SELECT * FROM "Expense" WHERE "purchaseId" IN (SELECT id FROM purchases)),
-      memberships AS MATERIALIZED (SELECT * FROM "TransactionImportRecord" WHERE "statementRowId" IN (SELECT id FROM observations)),
+      memberships AS MATERIALIZED (SELECT * FROM ${transactionImportRecord} WHERE "statementRowId" IN (SELECT id FROM observations)),
       aliases AS MATERIALIZED (SELECT * FROM observation_aliases UNION SELECT * FROM bindings),
       judgments AS MATERIALIZED (SELECT * FROM "SourceObservationAnnotation" WHERE "observationId" IN (SELECT id FROM observations)),
       collections AS MATERIALIZED (SELECT * FROM "TransactionImport" WHERE id IN (SELECT "importId" FROM memberships)),

@@ -14,6 +14,7 @@ import { sql } from "drizzle-orm";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { unwrapDb } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
+import { transactionImportRecord } from "~/server/db/retained-tables";
 import { sqlEnumConstant } from "~/server/db/sql-enum";
 import { sourceObservations } from "~/server/domains/transaction-import/repo/source-observation-state";
 import {
@@ -21,7 +22,6 @@ import {
   chargeKeyOf,
   chargeStateOf,
 } from "~/server/domains/transaction-import/repo/statement-charge";
-import { transactionImportMembers } from "~/server/domains/transaction-import/repo/transaction-import-membership";
 
 /** Which charge identities a generation or label pass covers; empty covers the ledger. */
 export type StatementSuggestionScope = {
@@ -43,7 +43,7 @@ export const scopedStatementChargeKeys = (scope: StatementSuggestionScope) => {
   const filters = [
     ...(importId
       ? [
-          sql`(seen.id IN (SELECT m."statementRowId" FROM ${transactionImportMembers} m WHERE m."importId" = ${importId}::uuid) OR seen."withdrawalImportId" = ${importId}::uuid)`,
+          sql`(seen.id IN (SELECT m."statementRowId" FROM ${transactionImportRecord} m WHERE m."importId" = ${importId}::uuid) OR seen."withdrawalImportId" = ${importId}::uuid)`,
         ]
       : []),
     ...(since ? [sql`seen."statementDate" >= ${since}::date`] : []),

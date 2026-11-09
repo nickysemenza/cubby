@@ -14,6 +14,7 @@ import {
   notDeleted,
   unwrapDb,
 } from "~/server/db/helpers";
+import { transactionImportRecord } from "~/server/db/retained-tables";
 import {
   financialAccount,
   financialEvidenceAlias,
@@ -195,7 +196,7 @@ export async function resolveSourceIdentity(
       : input.judgment;
   if (originalOwner.withdrawnAt && input.decision !== "assign") {
     const positive = await db.execute(
-      sql`SELECT 1 FROM "TransactionImportRecord" member
+      sql`SELECT 1 FROM ${transactionImportRecord} member
       JOIN "TransactionImport" collection ON collection.id=member."importId" AND ${notDeleted("collection")}
       WHERE member."statementRowId"=${observation.id}::uuid AND collection."observedAt">${originalOwner.withdrawnAt} LIMIT 1`,
       "objects",

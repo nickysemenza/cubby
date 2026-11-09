@@ -310,8 +310,8 @@ pending: nothing here starts Product research.
    disposal destroys settled Runs' transcripts (`run-retirement.ts`), oldest
    first in bounded batches; the destroying call and an immediate follow-up
    that reaches a fresh, empty coordinator let one pass stamp
-   `Run.retiredAt`, and a failing coordinator does not block the Runs behind
-   it. Runs of retired purposes are destroyed by their stored
+   `Run.retiredAt`. A failing coordinator is reported and does not block the
+   Runs behind it. Runs of retired purposes are destroyed by their stored
    coordinator identity without loading the current agent. Once disposal is
    authorized the coordinator writes a durable fence table, refuses every
    entry point (also after a restart) and drains admitted ones before

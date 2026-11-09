@@ -10,6 +10,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import { getDb, notDeleted, unwrapDb } from "~/server/db/helpers";
+import { transactionImportRecord } from "~/server/db/retained-tables";
 import { transactionImport, sourceTransactionRecord } from "~/server/db/schema";
 import { sqlEnumConstant } from "~/server/db/sql-enum";
 import { reconcileFinancialEvidenceCorrection } from "~/server/domains/financial-transaction/repo/financial-evidence-correction";
@@ -77,7 +78,7 @@ export async function reconcileRecordedFinancialEvidence(
               count: number;
             }>(
               sql`
-            SELECT count(*)::int AS count FROM "TransactionImportRecord" member WHERE member."importId"=${observation.withdrawalImportId}::uuid`,
+            SELECT count(*)::int AS count FROM ${transactionImportRecord} member WHERE member."importId"=${observation.withdrawalImportId}::uuid`,
               "objects",
             );
             const parsed = transactionImportInput.shape.coverage.safeParse(

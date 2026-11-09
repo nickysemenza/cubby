@@ -281,7 +281,7 @@ export async function previewFinancialTransactionImport(
     )}) value(key, source, fingerprint, position, provider, account))
     SELECT requested.key, owner.shortcode FROM requested
     JOIN "TransactionImport" collection ON collection.source = requested.source AND collection.fingerprint = requested.fingerprint
-    JOIN "TransactionImportRecord" membership ON membership."importId"=collection.id AND membership."rowPosition"=requested.position
+    JOIN ${transactionImportRecord} membership ON membership."importId"=collection.id AND membership."rowPosition"=requested.position
     JOIN "SourceTransactionRecord" observation ON observation.id=membership."statementRowId"
     JOIN "SourceOccurrence" owner ON owner.id = observation."occurrenceId"
     WHERE ${notDeleted("owner")} AND ${notDeleted("observation")} AND owner."reviewState" = ${sqlEnumConstant(sourceOccurrenceReviewState, sourceOccurrenceReviewState.enum.ready)}

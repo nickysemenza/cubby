@@ -55,6 +55,7 @@ import {
   withSnapshotWriteDatabase,
 } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
+import { transactionImportRecord } from "~/server/db/retained-tables";
 import { suggestionTable } from "~/server/db/schema";
 import { sqlEnumConstant } from "~/server/db/sql-enum";
 import { financialSourceReferenceRows } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
@@ -106,7 +107,6 @@ import {
   ownAccountNamed,
   statementTransactionKind,
 } from "~/server/domains/transaction-import/repo/statement-transaction-kind";
-import { transactionImportMembers } from "~/server/domains/transaction-import/repo/transaction-import-membership";
 import { createAppError } from "~/server/errors/app-error";
 import { type PageWork, peakWorkers } from "~/server/generic/jobs/page-work";
 import {
@@ -471,7 +471,7 @@ async function siblingsFor(
       sql`(r.source, ${chargeKeyOf("r")}) IN (SELECT source, "chargeKey" FROM o)`,
     )},
     members AS MATERIALIZED (
-      SELECT m."importId", m."statementRowId" FROM ${transactionImportMembers} m
+      SELECT m."importId", m."statementRowId" FROM ${transactionImportRecord} m
       WHERE m."statementRowId" IN (SELECT id FROM o UNION SELECT unnest("rowIds") FROM p)
     )
     SELECT o.key, array_agg(DISTINCT o."chargeKey" ORDER BY o."chargeKey") AS siblings
@@ -2785,7 +2785,7 @@ async function admitRetriedCharge(
       SELECT 1 FROM ${sourceObservations} r WHERE ${notDeleted("r")}
         AND r.source = ${charge.source} AND r."chargeKey" = ${charge.chargeKey}
         ${scope.since ? sql`AND r."statementDate" >= ${scope.since}::date` : sql``}
-        ${scope.importId ? sql`AND (r.id IN (SELECT m."statementRowId" FROM ${transactionImportMembers} m WHERE m."importId" = ${scope.importId}::uuid) OR r."withdrawalImportId" = ${scope.importId}::uuid)` : sql``}
+        ${scope.importId ? sql`AND (r.id IN (SELECT m."statementRowId" FROM ${transactionImportRecord} m WHERE m."importId" = ${scope.importId}::uuid) OR r."withdrawalImportId" = ${scope.importId}::uuid)` : sql``}
       LIMIT 1
     `,
       "objects",

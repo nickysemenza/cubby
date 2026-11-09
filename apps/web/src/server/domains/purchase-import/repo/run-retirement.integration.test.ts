@@ -209,8 +209,7 @@ describe("settled coordinator retirement", () => {
     });
     const before = new Date(Date.now() - 1_000);
 
-    // The first call destroys the transcript and one follow-up asks for the
-    // empty-inventory proof; without it nothing is stamped yet.
+    // Without an empty-inventory receipt, nothing is stamped yet.
     expect(
       await retireSettledCoordinators(ctx.db, coordinator, before),
     ).toEqual({ considered: 1, retired: 0 });
