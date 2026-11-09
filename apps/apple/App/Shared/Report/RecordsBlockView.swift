@@ -69,23 +69,53 @@ struct RecordRowView: View {
 
     var body: some View {
         let links = RecordRowLinks(row)
+        let leading = leadingCommand
         VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
-            if let destination = links.destination {
-                NavigationLink(value: destination) { content(linked: true) }
-                    // Several rows share one list cell: each link takes only its own tap.
-                    .buttonStyle(.plain)
-                    .contextMenu { menu(links) }
-            } else {
-                content(linked: false)
+            HStack(alignment: .center, spacing: FieldGuideTokens.Space.xs) {
+                if let leading, let model {
+                    LeadingReportCommand(
+                        command: leading.command, symbol: leading.symbol, title: row.title, model: model)
+                }
+                if let destination = links.destination {
+                    NavigationLink(value: destination) { content(linked: true) }
+                        // Several rows share one list cell: each link takes only its own tap.
+                        .buttonStyle(.plain)
+                        .contextMenu { menu(links, leading: leading) }
+                } else {
+                    content(linked: false)
+                }
             }
-            if !informational, let model, !row.commands.isEmpty {
-                ReportCommandBar(commands: row.commands, model: model)
+            let trailing = row.commands.filter { $0.id != leading?.command.id }
+            if !informational, let model, !trailing.isEmpty {
+                ReportCommandBar(commands: trailing, model: model)
             }
         }
     }
 
+    /// The row's sole one-tap command when it is its entity's declared `list.rowCommand` (a
+    /// task's Done): drawn leading with the declared verb's glyph, as list rows draw it, instead
+    /// of a second line of buttons. Commands with inputs or a confirmation keep the bar.
+    private var leadingCommand: (command: ReportCommand, symbol: String)? {
+        guard !informational, model != nil, row.commands.count == 1, let command = row.commands.first,
+            (command.inputs ?? []).isEmpty, command.declaredConfirmation == nil,
+            let entity = row.entity, EntityCatalog[entity].presentation.listRowCommand == command.id,
+            let verb = EntityHeroActionID(rawValue: command.id),
+            let plan = HeroActionRunner.plan(for: verb, on: entity)
+        else { return nil }
+        return (command, plan.symbol)
+    }
+
     /// The row's other targets, ahead of nothing else: a long press never navigates.
-    @ViewBuilder private func menu(_ links: RecordRowLinks) -> some View {
+    @ViewBuilder private func menu(
+        _ links: RecordRowLinks, leading: (command: ReportCommand, symbol: String)? = nil
+    ) -> some View {
+        if let leading, let model {
+            Button(leading.command.label, systemImage: leading.symbol) {
+                Task { await model.run(leading.command, confirmed: false) }
+            }
+            .disabled(model.busyActionID != nil)
+            Divider()
+        }
         ForEach(links.references, id: \.record) { reference in
             Button(reference.label, systemImage: EntityCatalog[reference.record.key].sfSymbol) {
                 appModel.navigator.openRecord(reference.record)
@@ -104,14 +134,23 @@ struct RecordRowView: View {
             title: row.title,
             imageURL: row.imageURL,
             symbol: row.entity.map { EntityCatalog[$0].sfSymbol } ?? "square.dashed",
-            thumbnailSize: large ? 112 : 36
+            thumbnailSize: large ? 112 : 36,
+            // The leading command already supplies the row's glyph; real images still show.
+            showsFallbackImage: leadingCommand == nil
         ) {
-            ForEach(Array(row.lines.enumerated()), id: \.offset) { _, line in
-                if !linked, line.ref == nil, let url = line.url {
-                    Link(line.text, destination: url).buttonStyle(.borderless)
-                } else {
-                    Text(line.text).foregroundStyle(line.tone?.color ?? Color.primary)
-                        .textSelection(.enabled)
+            // One server status leads line two, as a list row's status mark does; several keep
+            // their own wrapping line below.
+            if row.badges.count == 1, let badge = row.badges.first {
+                HStack(spacing: FieldGuideTokens.Space.xs) {
+                    StatusChip(text: badge.label, tone: badge.tone?.chipTone ?? .neutral)
+                    if let first = row.lines.first { lineView(first, linked: linked) }
+                }
+                ForEach(Array(row.lines.dropFirst().enumerated()), id: \.offset) { _, line in
+                    lineView(line, linked: linked)
+                }
+            } else {
+                ForEach(Array(row.lines.enumerated()), id: \.offset) { _, line in
+                    lineView(line, linked: linked)
                 }
             }
         } rail: {
@@ -149,9 +188,18 @@ struct RecordRowView: View {
         .accessibilityElement(children: .contain)
     }
 
+    @ViewBuilder private func lineView(_ line: ReportPresentation.Line, linked: Bool) -> some View {
+        if !linked, line.ref == nil, let url = line.url {
+            Link(line.text, destination: url).buttonStyle(.borderless)
+        } else {
+            Text(line.text).foregroundStyle(line.tone?.color ?? Color.primary)
+                .textSelection(.enabled)
+        }
+    }
+
     /// Toned badges, the raw block and an external link a row carries beyond its title and lines.
     @ViewBuilder private func extras(linked: Bool) -> some View {
-        if !row.badges.isEmpty {
+        if row.badges.count > 1 {
             WrappingFactsLayout(spacing: FieldGuideTokens.Space.xs) {
                 ForEach(Array(row.badges.enumerated()), id: \.offset) { _, badge in
                     StatusChip(text: badge.label, tone: badge.tone?.chipTone ?? .neutral)
@@ -176,6 +224,42 @@ struct RecordRowView: View {
                 Text(hint).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
             }
         }
+    }
+}
+
+/// A row's one-tap command leading its link (Reminders' completion circle): the declared verb's
+/// glyph in ink, a 44-point target on iPhone, and a label naming the row it acts on.
+private struct LeadingReportCommand: View {
+    let command: ReportCommand
+    let symbol: String
+    let title: String
+    let model: ReportSlotModel
+
+    var body: some View {
+        Button {
+            Task { await model.run(command, confirmed: false) }
+        } label: {
+            Image(systemName: symbol)
+                .font(.title3)
+                .foregroundStyle(model.busyActionID == nil ? FieldGuideTokens.interaction : Color.secondary)
+                .frame(width: target, height: target)
+                .contentShape(Rectangle())
+        }
+        // Borderless so the List row fires only this control, never the adjacent link.
+        .buttonStyle(.borderless)
+        .disabled(model.busyActionID != nil)
+        .help("\(command.label): \(title)")
+        // Names the row it acts on, so VoiceOver never hears a bare "Done".
+        .accessibilityLabel("\(command.label): \(title)")
+        .accessibilityIdentifier("report.command.\(command.id)")
+    }
+
+    private var target: CGFloat {
+        #if os(iOS)
+            FieldGuideTokens.touchTarget
+        #else
+            24
+        #endif
     }
 }
 
@@ -484,7 +568,8 @@ struct RecordsBlockView: View {
                 actionButton(id, plan, itemID: nil)
             }
             if records.rows.isEmpty {
-                Text(records.empty.isEmpty ? "No items" : records.empty).foregroundStyle(.secondary)
+                Text(records.empty.isEmpty ? "No items" : records.empty)
+                    .font(.callout).foregroundStyle(.secondary)
             }
             if records.filmstrip { captureFilmstrip }
             ForEach(records.filmstrip ? [] : records.rows) { row in

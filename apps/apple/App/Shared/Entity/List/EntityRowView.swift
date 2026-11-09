@@ -34,9 +34,13 @@ struct EntityRowView: View {
     let row: EntityRow
     var columns: [String]? = nil
     var photoMode = false
+    /// Facts supplied by the containing section need no second copy in the row.
+    var contextFields: Set<String> = []
     /// Preview-only image injection keeps the production row on the shared URL-backed Thumb
     /// while allowing previews to exercise the real image geometry and clipping.
     var previewImage: Image? = nil
+    var showsFallbackImage = true
+    @Environment(\.dynamicTypeSize) private var textSize
 
     /// One manifest projection feeds both visible lines and the complete spoken row label.
     private struct Layout {
@@ -59,6 +63,7 @@ struct EntityRowView: View {
         let status = EntityRowPresentation.status(descriptor: descriptor, row: row)
         let statusKey = EntityRowPresentation.statusField(descriptor: descriptor)?.key
         let rail = EntityRowPresentation.rail(descriptor: descriptor, row: row)
+            .filter { !contextFields.contains($0.id) }
         let railKeys = Set(
             (descriptor.presentation.listRail ?? []).prefix(2).flatMap {
                 [$0.field] + [$0.sub].compactMap { $0 }
@@ -66,7 +71,7 @@ struct EntityRowView: View {
 
         // The status field reads as line 2's mark (or stays quiet) and rail fields read in their
         // columns; neither repeats as the subtitle.
-        let lineExcluded = railKeys.union([statusKey].compactMap { $0 })
+        let lineExcluded = railKeys.union([statusKey].compactMap { $0 }).union(contextFields)
         let titleSubtitle = EntityRowPresentation.titleSubtitle(descriptor: descriptor, row: row)
             .flatMap { lineExcluded.contains($0.id) ? nil : $0 }
         let mobileSubtitle = EntityRowPresentation.subtitleFact(
@@ -87,9 +92,12 @@ struct EntityRowView: View {
         var trailingValue: EntityRowPresentation.Fact?
         var date: EntityRowPresentation.Fact?
         if rail.isEmpty {
-            date = presentation.facts.first { $0.isDate && $0.id != "dataQuality" }
+            date = presentation.facts.first {
+                $0.isDate && $0.id != "dataQuality" && !contextFields.contains($0.id)
+            }
             trailingValue = presentation.facts.filter {
                 !$0.isDate && $0.id != "dataQuality" && $0.id != statusKey
+                    && !contextFields.contains($0.id)
                     && descriptor.field($0.id)?.mobileSlot == "trailing"
             }.min { left, right in
                 (descriptor.field(left.id)?.mobilePriority ?? 0)
@@ -98,7 +106,7 @@ struct EntityRowView: View {
         }
         let omitted = Set(
             ["dataQuality", statusKey, subtitle?.id, trailingValue?.id, date?.id].compactMap { $0 }
-        ).union(railKeys)
+        ).union(railKeys).union(contextFields)
         let facts = presentation.facts.filter { !omitted.contains($0.id) && addsToTitle($0) }
         return Layout(
             presentation: presentation, title: titleParts.title, status: status, facts: facts,
@@ -115,9 +123,17 @@ struct EntityRowView: View {
         RecordListRow(
             title: layout.title, imageURL: presentation.imageURL,
             symbol: EntityCatalog[key].recordSymbol(in: row), emoji: EntityCatalog[key].recordEmoji(in: row),
-            previewImage: previewImage, titleIdentifier: "entity.row.title.\(key.rawValue).\(row.id)"
+            previewImage: previewImage, titleIdentifier: "entity.row.title.\(key.rawValue).\(row.id)",
+            showsFallbackImage: showsFallbackImage
         ) {
-            HStack(spacing: FieldGuideTokens.Space.xs) {
+            // RecordListRow owns line 2's clamp (one line, unbounded at accessibility sizes); a
+            // nested limit here would still truncate context there. Accessibility sizes stack
+            // the status mark over the facts instead of sharing one cramped line.
+            let lineLayout =
+                textSize.isAccessibilitySize
+                ? AnyLayout(VStackLayout(alignment: .leading, spacing: 2))
+                : AnyLayout(HStackLayout(spacing: FieldGuideTokens.Space.xs))
+            lineLayout {
                 FieldValueStatus(raw: row.raw)
                 if let status = layout.status { statusMark(status) }
                 if layout.needsData {
@@ -126,7 +142,6 @@ struct EntityRowView: View {
                 let facts = lineFacts(layout)
                 if !facts.isEmpty {
                     Text(facts.joined(separator: " · "))
-                        .lineLimit(1)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }

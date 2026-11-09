@@ -8,12 +8,16 @@ import SwiftUI
 struct ConnectionsWorkspaceSelection: Codable, Hashable {
     var entity: String? = nil
     var recordID: String? = nil
+    /// The record's display title for the window subtitle; restored windows without it fall back
+    /// to `recordID`.
+    var recordTitle: String? = nil
 }
 
 struct ConnectionsWorkspaceLink: View {
     var entity: String?
     var recordID: String?
     var title = "Open connections"
+    var recordTitle: String? = nil
     #if os(macOS)
         @Environment(\.openWindow) private var openWindow
     #else
@@ -25,7 +29,8 @@ struct ConnectionsWorkspaceLink: View {
             #if os(macOS)
                 openWindow(
                     id: "connections",
-                    value: ConnectionsWorkspaceSelection(entity: entity, recordID: recordID))
+                    value: ConnectionsWorkspaceSelection(
+                        entity: entity, recordID: recordID, recordTitle: recordTitle))
             #else
                 showing = true
             #endif
@@ -34,7 +39,8 @@ struct ConnectionsWorkspaceLink: View {
             .fullScreenCover(isPresented: $showing) {
                 NavigationStack {
                     HostedWorkspaceView(
-                        surface: .connections(entity: entity, id: recordID), title: "Connections")
+                        surface: .connections(entity: entity, id: recordID), title: "Connections",
+                        context: recordTitle)
                 }
             }
         #endif
@@ -68,7 +74,7 @@ struct ConnectionsWorkspaceLink: View {
             NavigationStack {
                 HostedWorkspaceView(
                     surface: .connections(entity: selection.entity, id: selection.recordID),
-                    title: "Connections"
+                    title: "Connections", context: selection.recordTitle
                 )
                 .toolbar {
                     Button("Toggle full screen", systemImage: "arrow.up.left.and.arrow.down.right") {

@@ -1,8 +1,8 @@
 context platform=ios timeout=240000
 
 open com.nickysemenza.cubby
-wait text "All activity" 60000
-click "label=\"All activity\""
+scroll down 0.5 --until "id=today.work.all"
+click "id=today.work.all"
 wait "id=activity.run.${RUN_ID}" 60000
 click "id=activity.run.${RUN_ID}"
 wait "id=run.console" 60000

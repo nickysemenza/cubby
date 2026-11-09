@@ -256,8 +256,9 @@ struct ContinuousDetailSection<Content: View>: View {
             content
         } header: {
             HStack {
+                // The body's own empty row says why; a muted heading is enough, never a second
+                // "Empty" tag beside it.
                 Text(title).foregroundStyle(empty ? .secondary : .primary)
-                if empty { Text("Empty").font(.caption).foregroundStyle(.secondary) }
             }.detailContentsHeader(empty: empty)
         }
         .onPreferenceChange(DetailSectionEmpty.self) { empty = $0 }
@@ -299,7 +300,6 @@ struct ExplainedDetailSection<Content: View, Header: View>: View {
         } header: {
             HStack {
                 header(empty)
-                if empty { Text("Empty").font(.caption).foregroundStyle(.secondary) }
             }.detailContentsHeader(empty: empty)
         }
         .onPreferenceChange(DetailSectionEmpty.self) { empty = $0 }

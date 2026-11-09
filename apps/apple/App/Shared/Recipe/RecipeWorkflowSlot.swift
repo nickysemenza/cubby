@@ -31,6 +31,7 @@ struct RecipeWorkflowView: View {
     @State private var customText = ""
     @State private var weightText = ""
     @State private var weightOpen = false
+    @State private var customOpen = false
     @Environment(AppModel.self) private var appModel
     /// The unscaled total weight in grams, from the server's costing report; nil until it loads
     /// or when no ingredient line reaches grams.
@@ -47,10 +48,12 @@ struct RecipeWorkflowView: View {
                 ReportDetailSlot(slot: .recipeAvailability, id: recipeID)
                     .transformPreference(DetailSectionEmpty.self) { $0 = false }
             }
-            scaleControls
+            // The resulting yield leads; the multiplier is how to change it.
             if let makes = plan.yieldLabel(factor: factor) {
-                Text("Makes \(makes)").font(.subheadline).foregroundStyle(.secondary)
+                Text("Makes \(makes)").font(.headline)
+                    .accessibilityIdentifier("recipe.workflow.yield")
             }
+            scaleControls
             ForEach(plan.sections) { section in
                 VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
                     if let name = section.name {
@@ -99,28 +102,47 @@ struct RecipeWorkflowView: View {
                 }
             }
             .pickerStyle(.segmented)
+            #if os(macOS)
+                .fixedSize()
+            #endif
             .accessibilityIdentifier("recipe.workflow.scale")
-            HStack {
-                TextField("Custom multiplier", text: $customText)
-                    #if os(iOS)
-                        .keyboardType(.decimalPad)
-                    #endif
-                    .onSubmit(applyCustom)
-                    .accessibilityIdentifier("recipe.workflow.custom")
-                Button("Apply", action: applyCustom)
-                    .disabled(Double(customText) == nil)
+            if customOpen {
+                HStack {
+                    TextField("Multiplier, such as 1.5", text: $customText)
+                        #if os(iOS)
+                            .keyboardType(.decimalPad)
+                        #endif
+                        .onSubmit(applyCustom)
+                        .accessibilityIdentifier("recipe.workflow.custom")
+                    Button("Apply", action: applyCustom)
+                        .disabled(Double(customText) == nil)
+                    Button("Cancel") {
+                        customOpen = false
+                        customText = ""
+                    }
+                }
             }
-            if recipeID != nil { weightAnchor }
+            // The other two ways to scale stay one tap away instead of permanently open.
+            HStack(spacing: FieldGuideTokens.Space.md) {
+                if !customOpen {
+                    Button("Custom scale…") { customOpen = true }
+                        .accessibilityIdentifier("recipe.workflow.customOpen")
+                }
+                if recipeID != nil, !weightOpen {
+                    Button("Scale to a total weight…") { weightOpen = true }
+                        .accessibilityIdentifier("recipe.workflow.weightOpen")
+                }
+            }
+            .buttonStyle(.borderless)
+            .font(.subheadline)
+            if recipeID != nil, weightOpen { weightAnchor }
         }
     }
 
     /// "Make this much": the target weight is measured against the unscaled weight the server
     /// reported, by the same Rust rule web runs, so it never compounds on the current scale.
     @ViewBuilder private var weightAnchor: some View {
-        if !weightOpen {
-            Button("Scale to a total weight…") { weightOpen = true }
-                .accessibilityIdentifier("recipe.workflow.weightOpen")
-        } else if let baseWeight {
+        if let baseWeight {
             HStack {
                 TextField(
                     "Target total weight (g) — now \(Int((baseWeight * factor).rounded()))",
@@ -160,6 +182,7 @@ struct RecipeWorkflowView: View {
         // The clamp (finite, positive, floored) is Rust's, not a Swift rule.
         factor = RecipeScaling.clamp(value)
         customText = ""
+        customOpen = false
     }
 }
 
@@ -296,43 +319,58 @@ struct RecipeCookModeView: View {
         }
     }
 
-    private var controls: some View {
-        let layout =
-            dynamicTypeSize.isAccessibilitySize
-            ? AnyLayout(VStackLayout(spacing: FieldGuideTokens.Space.sm))
-            : AnyLayout(HStackLayout(spacing: FieldGuideTokens.Space.md))
-        return layout {
+    /// Phone and iPad stack the controls at accessibility text sizes. macOS has no Dynamic Type,
+    /// so the Mac stacks only when the sheet is too narrow for both side by side.
+    @ViewBuilder private var controls: some View {
+        #if os(macOS)
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: FieldGuideTokens.Space.md) { controlButtons }
+                VStack(spacing: FieldGuideTokens.Space.sm) { controlButtons }
+            }
+            .font(.headline)
+        #else
+            let layout =
+                dynamicTypeSize.isAccessibilitySize
+                ? AnyLayout(VStackLayout(spacing: FieldGuideTokens.Space.sm))
+                : AnyLayout(HStackLayout(spacing: FieldGuideTokens.Space.md))
+            layout { controlButtons }
+                .font(.headline)
+                .fixedSize(horizontal: false, vertical: true)
+        #endif
+    }
+
+    /// Arrow keys step through the method from a hardware keyboard on every platform.
+    @ViewBuilder private var controlButtons: some View {
+        Button {
+            session.index -= 1
+        } label: {
+            Text("Previous")
+                .frame(maxWidth: .infinity, minHeight: FieldGuideTokens.touchTarget)
+        }
+        .buttonStyle(.bordered)
+        .disabled(session.index == 0)
+        .keyboardShortcut(.leftArrow, modifiers: [])
+        .accessibilityIdentifier("recipe.cook.previous")
+        if session.index == session.plan.steps.count - 1 {
             Button {
-                session.index -= 1
+                dismiss()
             } label: {
-                Text("Previous")
+                Text("Done")
                     .frame(maxWidth: .infinity, minHeight: FieldGuideTokens.touchTarget)
             }
-            .buttonStyle(.bordered)
-            .disabled(session.index == 0)
-            .accessibilityIdentifier("recipe.cook.previous")
-            if session.index == session.plan.steps.count - 1 {
-                Button {
-                    dismiss()
-                } label: {
-                    Text("Done")
-                        .frame(maxWidth: .infinity, minHeight: FieldGuideTokens.touchTarget)
-                }
-                .buttonStyle(.borderedProminent)
-                .accessibilityIdentifier("recipe.cook.finish")
-            } else {
-                Button {
-                    session.index += 1
-                } label: {
-                    Text("Next")
-                        .frame(maxWidth: .infinity, minHeight: FieldGuideTokens.touchTarget)
-                }
-                .buttonStyle(.borderedProminent)
-                .accessibilityIdentifier("recipe.cook.next")
+            .buttonStyle(.borderedProminent)
+            .accessibilityIdentifier("recipe.cook.finish")
+        } else {
+            Button {
+                session.index += 1
+            } label: {
+                Text("Next")
+                    .frame(maxWidth: .infinity, minHeight: FieldGuideTokens.touchTarget)
             }
+            .buttonStyle(.borderedProminent)
+            .keyboardShortcut(.rightArrow, modifiers: [])
+            .accessibilityIdentifier("recipe.cook.next")
         }
-        .font(.headline)
-        .fixedSize(horizontal: false, vertical: true)
     }
 }
 

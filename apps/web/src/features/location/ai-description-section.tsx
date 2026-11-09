@@ -31,17 +31,14 @@ interface DescriptionReview {
  * "What is in this bin?", answered from the location's photos. The `ai-description`
  * collection section lists the saved description; this is its analyze action.
  *
- * The result is reviewed rather than dropped in silently: the card shows the
- * previous description beside the new one, so a re-analysis that lost a detail
- * is visible instead of being discovered weeks later. Accept keeps it; Dismiss
- * closes the review and leaves the "Re-analyze" affordance in reach.
+ * The result is shown rather than dropped in silently: the card sets the
+ * previous description beside the saved one, so a re-analysis that lost a
+ * detail is visible instead of being discovered weeks later.
  *
- * KNOWN GAP: `describeLocation` persists the description server-side before it
- * returns, and `Location.aiDescription` is a read-only field with no client
- * write path, so Dismiss cannot undo the write and Keep is an acknowledgement
- * rather than the write itself. Making acceptance the write needs
- * `describeLocation` to stop persisting plus a writable field. The review, the
- * diff and the provenance are the parts that were missing entirely.
+ * `describeLocation` persists the description before it returns and
+ * `Location.aiDescription` has no client write path, so the card reports a
+ * saved result and offers only Done, as native does. Making acceptance the
+ * write would need `describeLocation` to stop persisting plus a writable field.
  */
 export const AiDescriptionSection: FC<AiDescriptionSectionProps> = ({
   locationId,
@@ -110,6 +107,7 @@ export const AiDescriptionSection: FC<AiDescriptionSectionProps> = ({
             <AiTextDiff
               current={review.result.previous}
               proposed={review.result.next}
+              labels={{ current: "Previous", proposed: "Saved" }}
             />
           }
           provenance={
@@ -119,9 +117,7 @@ export const AiDescriptionSection: FC<AiDescriptionSectionProps> = ({
               cacheStatus={review.result.cache.status}
             />
           }
-          acceptLabel="Keep"
-          dismissLabel="Hide"
-          onAccept={dismiss}
+          dismissLabel="Done"
           onDismiss={dismiss}
         />
       )}

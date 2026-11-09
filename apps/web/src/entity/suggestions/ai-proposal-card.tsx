@@ -70,20 +70,25 @@ export function AiProvenance({
 export function AiTextDiff({
   current,
   proposed,
+  labels = { current: "Current", proposed: current ? "Proposed" : "New" },
 }: {
   current: string | null;
   proposed: string;
+  /** An answer the server already wrote names its sides as saved history. */
+  labels?: { current: string; proposed: string };
 }) {
   return (
     <Stack gap="xs">
       {current && (
         <Stack gap="tight">
-          <span className="eyebrow text-muted-foreground">Current</span>
+          <span className="eyebrow text-muted-foreground">
+            {labels.current}
+          </span>
           <p className="text-sm text-muted-foreground">{current}</p>
         </Stack>
       )}
       <Stack gap="tight">
-        <span className="eyebrow">{current ? "Proposed" : "New"}</span>
+        <span className="eyebrow">{labels.proposed}</span>
         <p className="text-sm">{proposed}</p>
       </Stack>
     </Stack>

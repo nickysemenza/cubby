@@ -7,6 +7,7 @@ struct DailyNutritionView: View {
     @Environment(AppModel.self) private var appModel
     @State private var selectedDay: String
     @State private var nutrition: MealNutritionModel?
+    @State private var choosingDate = false
 
     init(day: String, previewSummary: MealNutritionOut? = nil) {
         self.previewSummary = previewSummary
@@ -27,10 +28,13 @@ struct DailyNutritionView: View {
                 LoadingIndicator.screen(label: "Loading nutrition")
             }
         }
-        .navigationTitle("Nutrition")
+        // The day is the title; stepping and choosing it live in the toolbar.
+        .navigationTitle(displayDate)
+        .navigationSubtitle(HouseholdDay.isFuture(selectedDay) ? "Planned nutrition" : "Nutrition")
         #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
         #endif
+        .toolbar { dayControls }
         .task(id: selectedDay) {
             guard previewSummary == nil else { return }
             nutrition = nil
@@ -45,49 +49,47 @@ struct DailyNutritionView: View {
         onRefresh: @escaping @Sendable () async -> Void
     ) -> some View {
         List {
-            Section {
-                VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
-                    Text(displayDate).font(.fieldGuideHeadline)
-                    if HouseholdDay.isFuture(selectedDay) {
-                        Label("Planned", systemImage: "calendar.badge.clock")
-                            .font(.fieldGuideLabel)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                .padding(.vertical, FieldGuideTokens.Space.xs)
-                DatePicker("Date", selection: selectedDate, displayedComponents: .date)
-                    .environment(\.timeZone, HouseholdDay.timeZone)
-                HStack(spacing: FieldGuideTokens.Space.sm) {
-                    Button("Previous day", systemImage: "chevron.left") { moveDay(by: -1) }
-                        .labelStyle(.iconOnly)
-                        .accessibilityLabel("Previous day")
-                    Spacer()
-                    Button("Today") { selectedDay = HouseholdDay.string(for: .now) }
-                        .disabled(isToday)
-                    Spacer()
-                    Button("Next day", systemImage: "chevron.right") { moveDay(by: 1) }
-                        .labelStyle(.iconOnly)
-                        .accessibilityLabel("Next day")
-                }
-                .buttonStyle(.borderless)
-                .frame(minHeight: FieldGuideTokens.touchTarget)
+            if let refreshError {
+                InlineLoadFailure(message: refreshError, isRetrying: isLoading, retry: onRefresh)
             }
-            Section("Per person") {
-                switch state {
-                case .loading:
-                    LoadingIndicator(label: "Loading nutrition")
-                case .failed(let message):
-                    InlineLoadFailure(message: message, isRetrying: isLoading, retry: onRefresh)
-                case .loaded(let summary):
-                    MealNutritionPeopleView(summary: summary, showMealHeadings: true)
-                }
-                if let refreshError {
-                    InlineLoadFailure(message: refreshError, isRetrying: isLoading, retry: onRefresh)
-                }
+            switch state {
+            case .loading:
+                LoadingIndicator(label: "Loading nutrition")
+            case .failed(let message):
+                InlineLoadFailure(message: message, isRetrying: isLoading, retry: onRefresh)
+            case .loaded(let summary):
+                MealNutritionPeopleView(summary: summary, showMealHeadings: true, layout: .sections)
             }
         }
         .refreshControl(onRefresh)
         .accessibilityIdentifier("nutrition.day")
+    }
+
+    /// Previous and next day (⌘← and ⌘→), Today, and a calendar for any other day.
+    @ToolbarContentBuilder private var dayControls: some ToolbarContent {
+        ToolbarItemGroup(placement: .primaryAction) {
+            Button("Previous day", systemImage: "chevron.backward") { moveDay(by: -1) }
+                .keyboardShortcut(.leftArrow, modifiers: .command)
+            Button("Choose date", systemImage: "calendar") { choosingDate = true }
+                .popover(isPresented: $choosingDate) {
+                    VStack(alignment: .leading, spacing: FieldGuideTokens.Space.md) {
+                        DatePicker("Date", selection: selectedDate, displayedComponents: .date)
+                            .datePickerStyle(.graphical)
+                            .labelsHidden()
+                            .environment(\.timeZone, HouseholdDay.timeZone)
+                        Button("Today") {
+                            selectedDay = HouseholdDay.string(for: .now)
+                            choosingDate = false
+                        }
+                        .disabled(isToday)
+                    }
+                    .padding(FieldGuideTokens.Space.lg)
+                    .frame(minWidth: 300)
+                    .presentationCompactAdaptation(.popover)
+                }
+            Button("Next day", systemImage: "chevron.forward") { moveDay(by: 1) }
+                .keyboardShortcut(.rightArrow, modifiers: .command)
+        }
     }
 
     private var displayDate: String {

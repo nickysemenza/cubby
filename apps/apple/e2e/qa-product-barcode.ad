@@ -42,7 +42,7 @@ wait "id=detail.product.edit" 90000
 click "role=Button label=Capture"
 click "role=Button label=\"Choose a location\""
 fill "role=SearchField" "Synthetic Kitchen"
-click "role=Button label=\"Synthetic Kitchen, Home, ${LOCATION_ID}\""
+click "role=Button id=picker.option.${LOCATION_ID}"
 fill "role=TextField" "088888888880"
 click "role=Button label=Scan"
 wait text "Synthetic Flour Bag" 90000

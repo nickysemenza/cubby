@@ -253,11 +253,13 @@ enum PhotoLibraryStages {
 /// Replaces `PhotoLibraryBrowser.controls`: that stack was up to twelve lines of chrome (a
 /// segmented filter, a category chip row, a mini spinner literally captioned "Loading photo
 /// library", a bare refresh button, a six-line monospaced debug dump, and a two-line explainer)
-/// above every grid the Photos screen ever shows. Filters and the thumbnail dimming preference
-/// stay visible; progress and filter caveats appear only while relevant.
+/// above every grid the Photos screen ever shows. Filters stay visible, the thumbnail dimming
+/// preference and badge key sit in one View options menu, and progress collapses to one status
+/// line with the per-stage detail a tap away. Filter caveats appear only while relevant.
 struct PhotoLibraryHeader: View {
     @Environment(AppModel.self) private var appModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var textSize
     @Binding var filter: PhotoLibraryFilter
     @Binding var selectedCategory: PhotoCategory?
     @Binding var dimPhotosInCubby: Bool
@@ -328,12 +330,6 @@ struct PhotoLibraryHeader: View {
     var body: some View {
         VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
             filterRow
-            Toggle("Dim photos in Cubby", isOn: $dimPhotosInCubby)
-                #if os(iOS)
-                    .frame(minHeight: 44)
-                #endif
-                .accessibilityIdentifier("photos.dimInCubby")
-                .help("Greys out strong Cubby matches. Photos remain selectable.")
             PhotoLibraryStagePanel(
                 status: status, stages: stages,
                 reduceMotion: reduceMotion, barWidth: barWidth)
@@ -359,14 +355,14 @@ struct PhotoLibraryHeader: View {
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: FieldGuideTokens.Space.sm) {
                     filterPicker.fixedSize()
-                    badgeKeyButton
+                    viewOptionsMenu
                     HStack(spacing: 6) { chips }
                     Spacer(minLength: 0)
                 }
                 VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
                     HStack {
                         filterPicker
-                        badgeKeyButton
+                        viewOptionsMenu
                     }
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 6) { chips }
@@ -374,33 +370,54 @@ struct PhotoLibraryHeader: View {
                 }
             }
         } else {
-            filterPicker
+            HStack {
+                filterPicker
+                viewOptionsMenu
+            }
         }
     }
 
-    private var filterPicker: some View {
-        Picker("Show", selection: $filter) {
+    /// Three segments plus the options menu no longer fit at accessibility text sizes, so the
+    /// filter becomes a menu there instead of squeezing its labels.
+    @ViewBuilder private var filterPicker: some View {
+        let picker = Picker("Show", selection: $filter) {
             ForEach(PhotoLibraryFilter.allCases, id: \.self) { Text($0.rawValue).tag($0) }
         }
-        .pickerStyle(.segmented)
+        Group {
+            if textSize.isAccessibilitySize {
+                picker.pickerStyle(.menu)
+            } else {
+                picker.pickerStyle(.segmented)
+            }
+        }
         .accessibilityIdentifier("photos.filter")
         .help(
             "Not in Cubby includes unchecked photos and possible matches. More matches may appear while checking continues."
         )
     }
 
-    private var badgeKeyButton: some View {
-        Button("Badge key", systemImage: "info.circle") { showsBadgeKey = true }
-            .labelStyle(.iconOnly)
-            #if os(iOS)
-                .frame(minWidth: 44, minHeight: 44)
-            #endif
-            .accessibilityLabel("Photo badge key")
-            .help("Explain photo badge colors and symbols")
-            .popover(isPresented: $showsBadgeKey) {
-                PhotoBadgeKey()
-                    .presentationCompactAdaptation(.sheet)
-            }
+    /// Display preferences that change how the grid looks, never which photos it holds.
+    private var viewOptionsMenu: some View {
+        Menu {
+            Toggle("Dim photos in Cubby", isOn: $dimPhotosInCubby)
+                .accessibilityIdentifier("photos.dimInCubby")
+                .help("Greys out strong Cubby matches. Photos remain selectable.")
+            Button("Badge key…", systemImage: "info.circle") { showsBadgeKey = true }
+        } label: {
+            Label("View options", systemImage: "ellipsis.circle")
+                .labelStyle(.iconOnly)
+                #if os(iOS)
+                    .frame(minWidth: 44, minHeight: 44)
+                #endif
+        }
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .accessibilityLabel("View options")
+        .help("Dimming and the photo badge key")
+        .popover(isPresented: $showsBadgeKey) {
+            PhotoBadgeKey()
+                .presentationCompactAdaptation(.sheet)
+        }
     }
 
     @ViewBuilder private var chips: some View {
@@ -463,9 +480,9 @@ private struct PhotoBadgeKey: View {
 /// The stage panel's own layout, taking a `PhotoLibraryStatus` and a `[PhotoLibraryStages.Stage]`
 /// rather than reading `PhotoLibraryHeader`'s live stores directly — every case is then
 /// previewable from plain `derive(...)` calls, with no `PhotoLibraryStore`/`PhotoMatchStore`/
-/// `PhotoClassificationSweep` instance in sight. Shows all four stage rows while any stage is
-/// running or has failed; once every stage is done or off, it collapses to `status.text` — the
-/// same one-line summary the old single-row status showed — behind a disclosure chevron.
+/// `PhotoClassificationSweep` instance in sight. One status line leads in every state, with
+/// Details always available to reveal all four stage rows. A failed stage's row shows on its own
+/// without opening the rest, so its raw message is never hidden.
 private struct PhotoLibraryStagePanel: View {
     let status: PhotoLibraryStatus
     let stages: [PhotoLibraryStages.Stage]
@@ -484,42 +501,55 @@ private struct PhotoLibraryStagePanel: View {
         }
     }
 
+    /// The one line shown while collapsed: the derived status, else the first running stage so
+    /// active work never reads as idle.
+    private var summaryText: String? {
+        if let text = status.text { return text }
+        let running = stages.first { stage in
+            if case .running = stage.state { return true }
+            return false
+        }
+        guard let running else { return nil }
+        return [running.label, running.caption(eta: etaText(for: running))]
+            .compactMap { $0 }
+            .joined(separator: " · ")
+    }
+
+    private var visibleStages: [PhotoLibraryStages.Stage] {
+        expanded ? stages : stages.filter(\.isFailed)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
-            if allSettled, !expanded {
-                collapsedRow
-            } else {
-                ForEach(stages) { stage in stageRow(stage) }
-            }
-            if allSettled {
-                Button(expanded ? "Hide details" : "Show details") {
-                    if reduceMotion { expanded.toggle() } else { withAnimation { expanded.toggle() } }
-                }
-                .buttonStyle(.plain)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .accessibilityIdentifier("photos.stages.disclosure")
-            }
+            summaryRow
+            ForEach(visibleStages) { stage in stageRow(stage) }
         }
-        // One combined element reading every visible stage's label/value, rather than one per
-        // row — a VoiceOver user swiping past the header hears the whole picture at once.
-        .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(.updatesFrequently)
         .onChange(of: stages, initial: true) { _, stages in eta.record(stages, at: .now) }
     }
 
-    @ViewBuilder private var collapsedRow: some View {
-        if let text = status.text {
-            HStack(spacing: 6) {
+    private var summaryRow: some View {
+        HStack(spacing: 6) {
+            Group {
                 statusIndicator
-                Text(text).font(.caption).monospacedDigit()
-                Spacer(minLength: 0)
+                if let summaryText {
+                    Text(summaryText).font(.caption).monospacedDigit()
+                }
             }
-            .foregroundStyle(.secondary)
-            .help(status.detail)
-            .accessibilityLabel(text)
+            // The status line is one element; the stage rows only join it once Details is open,
+            // so a VoiceOver user is not read all four stages on every update.
+            .accessibilityElement(children: .combine)
             .accessibilityValue(status.detail)
+            .accessibilityAddTraits(.updatesFrequently)
+            Spacer(minLength: 0)
+            Button(expanded ? "Hide details" : "Details") {
+                if reduceMotion { expanded.toggle() } else { withAnimation { expanded.toggle() } }
+            }
+            .buttonStyle(.borderless)
+            .font(.caption)
+            .accessibilityIdentifier("photos.stages.disclosure")
         }
+        .foregroundStyle(.secondary)
+        .help(status.detail)
     }
 
     @ViewBuilder private var statusIndicator: some View {

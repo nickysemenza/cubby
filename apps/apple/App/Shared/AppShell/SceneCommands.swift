@@ -84,6 +84,13 @@ struct ListSearchAction {
     let focus: () -> Void
 }
 
+/// Detail visibility belongs to the focused window and stays discoverable in the View menu.
+struct DetailVisibilityAction {
+    let isVisible: Bool
+    let isEnabled: Bool
+    let toggle: () -> Void
+}
+
 struct NewRecordRequest: Identifiable {
     let key: EntityKey
     var id: EntityKey { key }
@@ -92,4 +99,5 @@ struct NewRecordRequest: Identifiable {
 extension FocusedValues {
     @Entry var sceneCommands: SceneCommandActions?
     @Entry var listSearch: ListSearchAction?
+    @Entry var detailVisibility: DetailVisibilityAction?
 }

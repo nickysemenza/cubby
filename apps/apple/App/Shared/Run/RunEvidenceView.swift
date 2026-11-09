@@ -15,5 +15,8 @@ struct RunEvidenceLink: View {
 
 struct RunEvidenceView: View {
     let runID: String
-    var body: some View { HostedWorkspaceView(surface: .runEvidence(runID), title: "Run evidence") }
+    var context: String? = nil
+    var body: some View {
+        HostedWorkspaceView(surface: .runEvidence(runID), title: "Run evidence", context: context)
+    }
 }

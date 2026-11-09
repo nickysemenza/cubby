@@ -202,13 +202,14 @@ struct EntityListView: View {
         .safeAreaInset(edge: .top, spacing: 0) {
             VStack(spacing: 0) {
                 resultMembershipStatus
-                #if os(iOS)
-                    if let model {
-                        EntityFilterChipBar(descriptor: descriptor, filters: model.filters) { filters in
-                            Task { await model.apply(filters: filters) }
-                        }
+                // Both platforms show what is filtering the list; Mac otherwise hides it in View.
+                if let model {
+                    EntityFilterChipBar(
+                        descriptor: descriptor, filters: model.filters, onEdit: { showingFilters = true }
+                    ) { filters in
+                        Task { await model.apply(filters: filters) }
                     }
-                #endif
+                }
             }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) { selectionBar }
@@ -1678,16 +1679,18 @@ struct EntityListView: View {
             Group {
                 #if os(macOS)
                     if usesBrowseSelection {
-                        EntityRowView(key: key, row: row, columns: columns)
-                            .tag(RecordSelection(key: key, id: row.id))
+                        EntityRowView(
+                            key: key, row: row, columns: columns, showsFallbackImage: command == nil
+                        )
+                        .tag(RecordSelection(key: key, id: row.id))
                     } else {
-                        rowLink(row, columns: columns)
+                        rowLink(row, columns: columns, showsFallbackImage: command == nil)
                     }
                 #else
                     if selection.isSelecting {
                         EntityRowView(key: key, row: row, columns: columns)
                     } else {
-                        rowLink(row, columns: columns)
+                        rowLink(row, columns: columns, showsFallbackImage: command == nil)
                     }
                 #endif
             }
@@ -1708,11 +1711,11 @@ struct EntityListView: View {
                 bottom: 0, trailing: FieldGuideTokens.Space.md))
     }
 
-    private func rowLink(_ row: EntityRow, columns: [String]) -> some View {
+    private func rowLink(_ row: EntityRow, columns: [String], showsFallbackImage: Bool = true) -> some View {
         Button {
             open(RecordSelection(key: key, id: row.id))
         } label: {
-            EntityRowView(key: key, row: row, columns: columns)
+            EntityRowView(key: key, row: row, columns: columns, showsFallbackImage: showsFallbackImage)
         }
         .buttonStyle(.plain)
     }

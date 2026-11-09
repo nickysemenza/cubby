@@ -38,6 +38,9 @@ final class PhotoImportManifest {
     private(set) var commitRequiresReview = false
     private(set) var duplicateCandidates: [String: [DedupCandidate]] = [:]
     private(set) var duplicateOwnerShortcodes: [String: [String]] = [:]
+    /// Photos whose existing-image check finished. Absent means not checked (still running, cancelled
+    /// or failed), never "no match".
+    private(set) var duplicateCheckedIDs: Set<String> = []
     /// Developer overlays layer 2: each photo's best-scoring candidate from the deterministic
     /// evidence pass, kept alongside its `PhotoEvidenceScorer.Score` breakdown rather than only the
     /// combined value the routing decision already used.
@@ -89,7 +92,7 @@ final class PhotoImportManifest {
 
     /// Selection controls assignment changes; the final Add action always includes the batch.
     func toggleSelectAll() {
-        guard !isCommitting else { return }
+        guard !isCommitting, !items.isEmpty else { return }
         selectedIDs = selectedIDs.count == items.count ? [] : Set(items.map(\.id))
     }
 
@@ -590,6 +593,7 @@ final class PhotoImportManifest {
                 }
                 guard analysisGeneration == generation, !Task.isCancelled else { throw CancellationError() }
                 for item in items {
+                    duplicateCheckedIDs.insert(item.id)
                     let candidates = Self.uniqueCandidates(matches.storedCandidates(for: item.id))
                     if !candidates.isEmpty {
                         duplicateCandidates[item.id] = candidates
@@ -815,6 +819,21 @@ final class PhotoImportManifest {
 
     func duplicateSelection(_ itemID: String) -> PhotoDuplicateDecision? {
         duplicateDecisions[itemID]
+    }
+
+    /// The review row's direct match wording, so a member need not decode the grid badge key.
+    func matchStatus(_ itemID: String) -> String {
+        if let candidates = duplicateCandidates[itemID] {
+            switch duplicateDecisions[itemID] {
+            case .reuse: return "Using the existing Cubby image"
+            case .keepBoth: return "Adding as a separate image"
+            case nil:
+                let strong = candidates.contains { $0.confidence == .strong }
+                return strong ? "Already in Cubby" : "Possible match"
+            }
+        }
+        if duplicateCheckedIDs.contains(itemID) { return "No existing match" }
+        return analysisState.isRunning ? "Checking for existing matches…" : "Not checked"
     }
 
     func duplicateLabel(_ candidate: DedupCandidate) -> String {

@@ -36,7 +36,7 @@ import SwiftUI
                             OpenOnWebButton(target: destination.webTarget) {
                                 HStack(spacing: FieldGuideTokens.Space.md) {
                                     if let key = destination.entity {
-                                        DomainMark(key, style: .symbol, size: 15)
+                                        DomainMark(key, style: .symbol, size: 15, hued: true)
                                             .fieldGuideIconSlot()
                                     }
                                     Text("Open \(destination.label) on web")
@@ -57,6 +57,20 @@ import SwiftUI
                     }
                 }
                 Section {
+                    // Work and its audit history stay one tap away on iPhone, which has no
+                    // Work tab; Today's Work section shows only what needs attention.
+                    NavigationLink(value: Route.activityList) {
+                        Label("Work", systemImage: AppSection.activity.symbol)
+                            .frame(minHeight: FieldGuideTokens.touchTarget)
+                    }
+                    .accessibilityIdentifier("library.work")
+                    .listRowInsets(browseRowInsets)
+                    NavigationLink(value: Route.auditHistory) {
+                        Label("Changes", systemImage: "clock")
+                            .frame(minHeight: FieldGuideTokens.touchTarget)
+                    }
+                    .accessibilityIdentifier("library.changes")
+                    .listRowInsets(browseRowInsets)
                     NavigationLink(value: Route.photosLibrary) {
                         Label("All photos", systemImage: "photo.on.rectangle.angled")
                             .frame(minHeight: FieldGuideTokens.touchTarget)
@@ -78,7 +92,8 @@ import SwiftUI
             .listStyle(.automatic)
             .fieldGuideScreen()
             .navigationTitle(title)
-            .searchable(text: $query)
+            // "Filter lists", not "Search": the Search tab beside it searches records.
+            .searchable(text: $query, prompt: "Filter lists")
             .overlay {
                 if !query.isEmpty
                     && !SidebarManifest.sections.flatMap(\.destinations).contains(where: {
@@ -98,7 +113,7 @@ import SwiftUI
 
         private func headerTitle(_ title: String, domain: AppDomain? = nil) -> some View {
             HStack(spacing: FieldGuideTokens.Space.sm) {
-                if let domain { DomainMark(domain) }
+                if let domain { DomainMark(domain, style: .chip, size: 7) }
                 Text(title).font(.subheadline.weight(.semibold)).textCase(nil)
                 Spacer()
             }
@@ -177,7 +192,7 @@ final class BrowseCountsModel {
 
         var body: some View {
             HStack(spacing: FieldGuideTokens.Space.md) {
-                DomainMark(descriptor.key, style: .symbol, size: 15)
+                DomainMark(descriptor.key, style: .symbol, size: 15, hued: true)
                     .fieldGuideIconSlot()
                 Text(descriptor.plural)
                     .font(.fieldGuideBody)

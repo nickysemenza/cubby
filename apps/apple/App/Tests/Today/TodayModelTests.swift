@@ -144,7 +144,7 @@ struct TodayModelTests {
 
     @Test
     func todayReadingOrderLeadsWithTasks() {
-        #expect(TodaySection.allCases == [.tasks, .meals, .nutrition, .views])
+        #expect(TodaySection.allCases == [.tasks, .meals, .nutrition, .views, .work])
     }
 
     @Test

@@ -15,7 +15,7 @@ struct WrappingFactsLayout: Layout {
                 ProposedViewSize(width: min(ideal.width, width), height: nil))
             if x > 0, x + size.width > width {
                 x = 0
-                y += lineHeight
+                y += lineHeight + spacing
                 lineHeight = 0
             }
             frames.append(CGRect(origin: CGPoint(x: x, y: y), size: size))

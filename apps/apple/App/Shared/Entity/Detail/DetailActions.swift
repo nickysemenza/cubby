@@ -220,7 +220,9 @@ private struct RecordActionPresentation: ViewModifier {
 
 /// Up to four tiles under the hero (`ActionPlacement.actionBar`): declared quick actions filled,
 /// then routine verbs, flows and quick fields tonal. An unavailable tile stays dimmed and says why
-/// when tapped. Destructive verbs never appear here.
+/// when tapped. Destructive verbs never appear here. iPhone and iPad draw equal-width touch tiles;
+/// Mac draws content-sized native buttons in one leading row, wrapping to a column only when the
+/// labels do not fit, so a window-wide bar never outweighs the record's facts.
 struct DetailActionBar: View {
     let entity: EntityKey
     let actions: [PlacedAction]
@@ -232,6 +234,28 @@ struct DetailActionBar: View {
 
     var body: some View {
         if !actions.isEmpty {
+            tiles
+                .alert(
+                    unavailableReason ?? "",
+                    isPresented: Binding(
+                        get: { unavailableReason != nil }, set: { if !$0 { unavailableReason = nil } })
+                ) { Button("OK") {} }
+        }
+    }
+
+    @ViewBuilder
+    private var tiles: some View {
+        #if os(macOS)
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: FieldGuideTokens.Space.sm) {
+                    ForEach(actions) { action in tile(action) }
+                }
+                VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
+                    ForEach(actions) { action in tile(action) }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        #else
             let layout =
                 dynamicTypeSize.isAccessibilitySize
                 ? AnyLayout(VStackLayout(spacing: FieldGuideTokens.Space.sm))
@@ -239,41 +263,51 @@ struct DetailActionBar: View {
             layout {
                 ForEach(actions) { action in tile(action) }
             }
-            .alert(
-                unavailableReason ?? "",
-                isPresented: Binding(
-                    get: { unavailableReason != nil }, set: { if !$0 { unavailableReason = nil } })
-            ) { Button("OK") {} }
-        }
+        #endif
     }
 
     /// Two or fewer tiles read as wide labelled buttons; three or four stack icon over label.
-    private var stacked: Bool { actions.count > 2 && !dynamicTypeSize.isAccessibilitySize }
+    /// Mac buttons always keep the native icon-and-title label at their content width.
+    private var stacked: Bool {
+        #if os(macOS)
+            false
+        #else
+            actions.count > 2 && !dynamicTypeSize.isAccessibilitySize
+        #endif
+    }
 
     @ViewBuilder
     private func tile(_ action: PlacedAction) -> some View {
         let button = Button {
             if action.enabled { perform(action) } else { unavailableReason = action.reason ?? "Unavailable" }
         } label: {
-            Group {
-                if stacked {
-                    VStack(spacing: 2) {
-                        Image(systemName: action.symbol).imageScale(.medium)
-                        Text(action.label).font(.caption.weight(.medium)).lineLimit(2)
-                            .multilineTextAlignment(.center)
-                    }
-                } else {
-                    HStack(spacing: FieldGuideTokens.Space.sm) {
-                        Image(systemName: action.symbol)
-                        Text(action.label).lineLimit(2)
+            #if os(macOS)
+                Label(action.label, systemImage: action.symbol)
+                    .foregroundStyle(
+                        action.prominence == .filled
+                            ? AnyShapeStyle(FieldGuideTokens.canvas) : AnyShapeStyle(.tint))
+            #else
+                Group {
+                    if stacked {
+                        VStack(spacing: 2) {
+                            Image(systemName: action.symbol).imageScale(.medium)
+                            Text(action.label).font(.caption.weight(.medium)).lineLimit(2)
+                                .multilineTextAlignment(.center)
+                        }
+                    } else {
+                        HStack(spacing: FieldGuideTokens.Space.sm) {
+                            Image(systemName: action.symbol)
+                            Text(action.label).lineLimit(2)
+                        }
                     }
                 }
-            }
-            .frame(maxWidth: .infinity, minHeight: stacked ? 52 : FieldGuideTokens.touchTarget)
-            // The interaction ink flips to near-white in dark mode, so the filled label takes the
-            // canvas colour rather than the prominent style's fixed white.
-            .foregroundStyle(
-                action.prominence == .filled ? AnyShapeStyle(FieldGuideTokens.canvas) : AnyShapeStyle(.tint))
+                .frame(maxWidth: .infinity, minHeight: stacked ? 52 : FieldGuideTokens.touchTarget)
+                // The interaction ink flips to near-white in dark mode, so the filled label takes the
+                // canvas colour rather than the prominent style's fixed white.
+                .foregroundStyle(
+                    action.prominence == .filled
+                        ? AnyShapeStyle(FieldGuideTokens.canvas) : AnyShapeStyle(.tint))
+            #endif
         }
         .opacity(action.enabled ? 1 : 0.45)
         .disabled(busy && action.enabled)

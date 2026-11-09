@@ -15,10 +15,13 @@ struct RecordListRow<Context: View, Rail: View, Supplement: View>: View {
     var thumbnailSize: CGFloat = RecordRowMetrics.thumbnail
     var previewImage: Image? = nil
     var titleIdentifier: String = ""
+    var titleLineLimit: Int? = RecordRowMetrics.titleLineLimit
+    var showsFallbackImage = true
     @ViewBuilder var context: () -> Context
     @ViewBuilder var rail: () -> Rail
     @ViewBuilder var supplement: () -> Supplement
     @Environment(\.dynamicTypeSize) private var textSize
+    @ScaledMetric(relativeTo: .subheadline) private var identityWidth: CGFloat = 160
 
     var body: some View {
         HStack(alignment: .top, spacing: FieldGuideTokens.Space.sm) {
@@ -27,7 +30,7 @@ struct RecordListRow<Context: View, Rail: View, Supplement: View>: View {
                     .frame(width: thumbnailSize, height: thumbnailSize)
                     .clipShape(RoundedRectangle(cornerRadius: FieldGuideTokens.radiusControl))
                     .accessibilityHidden(true)
-            } else {
+            } else if imageURL != nil || emoji != nil || showsFallbackImage {
                 Thumb(url: imageURL, size: thumbnailSize, symbol: symbol, emoji: emoji)
             }
             VStack(alignment: .leading, spacing: 2) {
@@ -36,12 +39,14 @@ struct RecordListRow<Context: View, Rail: View, Supplement: View>: View {
                 let layout =
                     textSize.isAccessibilitySize
                     ? AnyLayout(VStackLayout(alignment: .leading, spacing: 2))
-                    : AnyLayout(RecordRowColumns(spacing: FieldGuideTokens.Space.sm))
+                    : AnyLayout(
+                        RecordRowColumns(
+                            spacing: FieldGuideTokens.Space.sm, minimumIdentityWidth: identityWidth))
                 layout {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(title)
                             .font(RecordRowMetrics.titleFont)
-                            .lineLimit(textSize.isAccessibilitySize ? nil : 1)
+                            .lineLimit(textSize.isAccessibilitySize ? nil : titleLineLimit)
                             .truncationMode(.tail)
                             .accessibilityIdentifier(titleIdentifier)
                             .fixedSize(horizontal: false, vertical: true)
@@ -78,12 +83,14 @@ enum RecordRowMetrics {
         static let verticalPadding: CGFloat = 7
         static let titleFont = Font.subheadline.weight(.semibold)
         static let contextFont = Font.footnote
+        static let titleLineLimit = 2
     #else
         static let thumbnail: CGFloat = 32
         static let minHeight: CGFloat = FieldGuideTokens.touchTarget
         static let verticalPadding: CGFloat = 5
         static let titleFont = Font.subheadline.weight(.medium)
         static let contextFont = Font.caption
+        static let titleLineLimit = 1
     #endif
 
     /// A rail column's width for a field's declared `display.width` bucket, so a column keeps one
@@ -169,34 +176,48 @@ struct RecordRailColumns: View {
 /// Bound the rail during layout rather than updating state from the resulting geometry.
 private struct RecordRowColumns: Layout {
     let spacing: CGFloat
+    let minimumIdentityWidth: CGFloat
 
-    private func widths(proposal: ProposedViewSize, subviews: Subviews) -> (CGFloat, CGFloat) {
+    private func widths(proposal: ProposedViewSize, subviews: Subviews) -> (
+        identity: CGFloat, rail: CGFloat, stacked: Bool
+    ) {
         let railIdeal = subviews[1].sizeThatFits(.unspecified).width
         let ideal = subviews[0].sizeThatFits(.unspecified).width + spacing + railIdeal
         let width = max(0, proposal.width.flatMap { $0.isFinite ? $0 : nil } ?? ideal)
-        // Fixed rail columns keep their declared width; a free trailing value stays bounded.
-        let rail = min(railIdeal, width * 0.5)
-        return (max(0, width - spacing - rail), rail)
+        let gap = railIdeal > 0 ? spacing : 0
+        // Move facts below identity before fixed comparison columns squeeze names or overflow.
+        let stacked = railIdeal > 0 && width - gap - railIdeal < minimumIdentityWidth
+        let rail = min(railIdeal, stacked ? width : width * 0.5)
+        return (stacked ? width : max(0, width - gap - rail), rail, stacked)
     }
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let (identityWidth, railWidth) = widths(proposal: proposal, subviews: subviews)
+        let (identityWidth, railWidth, stacked) = widths(proposal: proposal, subviews: subviews)
         let identity = subviews[0].sizeThatFits(.init(width: identityWidth, height: nil))
         let rail = subviews[1].sizeThatFits(.init(width: railWidth, height: nil))
-        return CGSize(width: identityWidth + spacing + railWidth, height: max(identity.height, rail.height))
+        return CGSize(
+            width: stacked ? identityWidth : identityWidth + (railWidth > 0 ? spacing : 0) + railWidth,
+            height: stacked ? identity.height + 2 + rail.height : max(identity.height, rail.height))
     }
 
     func placeSubviews(
         in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()
     ) {
-        let (identityWidth, railWidth) = widths(
+        let (identityWidth, railWidth, stacked) = widths(
             proposal: .init(width: bounds.width, height: nil), subviews: subviews)
         subviews[0].place(
             at: bounds.origin, anchor: .topLeading,
             proposal: .init(width: identityWidth, height: nil))
-        subviews[1].place(
-            at: CGPoint(x: bounds.maxX, y: bounds.minY), anchor: .topTrailing,
-            proposal: .init(width: railWidth, height: nil))
+        if stacked {
+            let identity = subviews[0].sizeThatFits(.init(width: identityWidth, height: nil))
+            subviews[1].place(
+                at: CGPoint(x: bounds.minX, y: bounds.minY + identity.height + 2), anchor: .topLeading,
+                proposal: .init(width: railWidth, height: nil))
+        } else {
+            subviews[1].place(
+                at: CGPoint(x: bounds.maxX, y: bounds.minY), anchor: .topTrailing,
+                proposal: .init(width: railWidth, height: nil))
+        }
     }
 }
 
@@ -215,7 +236,12 @@ private struct RecordRowColumns: Layout {
 #Preview("Rail columns") {
     List {
         ForEach(0..<3) { index in
-            RecordListRow(title: ["Oat milk, barista 1 L", "Cordless drill 18 V", "Basil seeds"][index]) {
+            RecordListRow(
+                title: [
+                    "Roasted oat drink, barista blend, unsweetened · 1 L",
+                    "Cordless drill 18 V", "Basil seeds",
+                ][index]
+            ) {
                 Text("Pantry › Shelf B")
             } rail: {
                 RecordRailColumns(cells: [

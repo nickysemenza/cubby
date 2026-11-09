@@ -53,7 +53,7 @@ struct CompanionImageWorkerTests {
     }
 
     /// Field finding: the opening protocol ping's pong never arrived from the hibernating
-    /// doorbell, and the worker waited on it forever on "Opening the image-work connection…".
+    /// doorbell, leaving the connection in its opening state forever.
     /// The first frame (the server's greeting ring) now confirms the open, within a deadline
     /// that closes a socket which never greets.
     @Test func aSubscriptionThatNeverGreetsFailsAtTheDeadlineAndClosesTheSocket() async throws {

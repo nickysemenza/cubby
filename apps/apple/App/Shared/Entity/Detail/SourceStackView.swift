@@ -2,26 +2,36 @@ import CubbyKit
 import SwiftUI
 
 /// One ordered evidence chain (web `SourceStack`): a rail with one node per level, the deciding
-/// level filled and emphasized, a blocked level outlined in the warning color. Each level's title
-/// opens its source record when it names one; the caller supplies the level's field content.
-/// Reference chains, resolution evidence and display-image chains all draw through this view.
+/// level filled and emphasized, a blocked level outlined in the destructive color and captioned
+/// Blocked. Each level's title opens its source record when it names one; the caller supplies the
+/// level's field content. Reference chains, resolution evidence and display-image chains all draw
+/// through this view.
 struct SourceStackView<Content: View>: View {
     let label: String
     let levels: [SourceStackLevel]
     var showsTitles = true
     @ViewBuilder let content: (SourceStackLevel) -> Content
 
+    private static var railWidth: CGFloat { 12 }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             ForEach(Array(levels.enumerated()), id: \.element.id) { position, level in
-                HStack(alignment: .top, spacing: FieldGuideTokens.Space.sm) {
-                    rail(level.status, first: position == 0, last: position == levels.count - 1)
-                    VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
-                        if showsTitles { title(level) }
-                        content(level)
+                // The text owns the row height; the rail is a background sized to that measured row
+                // so its flexible connector can never stretch the row (it once filled the viewport).
+                VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
+                    if showsTitles {
+                        title(level)
+                    } else {
+                        statusCaption(level.status)
                     }
-                    .padding(.vertical, FieldGuideTokens.Space.xs)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    content(level)
+                }
+                .padding(.vertical, FieldGuideTokens.Space.xs)
+                .padding(.leading, Self.railWidth + FieldGuideTokens.Space.sm)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(alignment: .topLeading) {
+                    rail(level.status, first: position == 0, last: position == levels.count - 1)
                 }
                 .accessibilityElement(children: .contain)
                 .accessibilityLabel(
@@ -45,11 +55,22 @@ struct SourceStackView<Content: View>: View {
                 Text(level.title).font(emphasis)
                     .foregroundStyle(level.status == .deciding ? .primary : .secondary)
             }
-            if case .unsupported = level.status {
-                Text(level.status.label).font(.caption).foregroundStyle(FieldGuideTokens.warning)
-            }
+            statusCaption(level.status)
         }
         .fixedSize(horizontal: false, vertical: true)
+    }
+
+    /// Blocked and unsupported levels say so in words; the rail outline alone is not enough.
+    @ViewBuilder
+    private func statusCaption(_ status: SourceStackLevel.Status) -> some View {
+        switch status {
+        case .blocked:
+            Text(status.label).font(.caption).foregroundStyle(FieldGuideTokens.destructive)
+        case .unsupported:
+            Text(status.label).font(.caption).foregroundStyle(FieldGuideTokens.warning)
+        case .deciding, .skipped:
+            EmptyView()
+        }
     }
 
     private func rail(_ status: SourceStackLevel.Status, first: Bool, last: Bool) -> some View {
@@ -69,7 +90,8 @@ struct SourceStackView<Content: View>: View {
                 .frame(width: 8, height: 8)
                 .padding(.top, 6)
         }
-        .frame(width: 12)
+        .frame(width: Self.railWidth)
+        .frame(maxHeight: .infinity, alignment: .top)
         .accessibilityHidden(true)
     }
 }
@@ -134,7 +156,7 @@ struct SourceStackImageStrip: View {
         ) { level in
             Text("Level \(level.index) value").font(.caption).foregroundStyle(.secondary)
         }
-        .padding()
+        .padding(FieldGuideTokens.Space.md)
     }
 }
 

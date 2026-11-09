@@ -1,22 +1,24 @@
 import CubbyKit
 import SwiftUI
 
-/// Stages a corrected count for one row. The unit is read-only — a recount corrects the quantity
-/// counted, never the unit a product is tracked in, so there is no unit picker here.
+/// Stages a corrected count for one row; the bin's Done commits it with the rest of the bin. The
+/// unit is read-only — a recount corrects the quantity counted, never the unit a product is
+/// tracked in, so there is no unit picker here.
 struct AdjustCountSheet: View {
     let session: RecountSession
-    let id: InventoryEntryCode
-    let unit: String
+    let row: RecountRow
+    let binName: String?
     private let initialText: String
     @Environment(\.dismiss) private var dismiss
     @State private var draft: AdjustmentQuantityDraft
     @State private var draftDismissal = DraftDismissalState()
+    @FocusState private var countFocused: Bool
 
-    init(session: RecountSession, id: InventoryEntryCode, amount: Amount) {
+    init(session: RecountSession, row: RecountRow, binName: String?) {
         self.session = session
-        self.id = id
-        self.unit = amount.unit
-        let draft = AdjustmentQuantityDraft(value: amount.value)
+        self.row = row
+        self.binName = binName
+        let draft = AdjustmentQuantityDraft(value: row.amount.value)
         initialText = draft.text
         // Presented via `.sheet(isPresented:)` at a fixed call site (`BinRowView`) — dismissing
         // tears the subtree down, so re-presenting rebuilds this seed fresh.
@@ -27,6 +29,15 @@ struct AdjustCountSheet: View {
         NavigationStack {
             Form {
                 Section {
+                    LabeledContent(row.product.name) {
+                        Text(BinRowView.amountText(row.amount))
+                            .font(.fieldGuideData)
+                    }
+                    .accessibilityLabel("\(row.product.name), recorded \(BinRowView.amountText(row.amount))")
+                } footer: {
+                    Text(stagingNote)
+                }
+                Section {
                     HStack(spacing: FieldGuideTokens.Space.sm) {
                         TextField("Count", text: $draft.text)
                             .keyboardDismissBar()
@@ -34,13 +45,15 @@ struct AdjustCountSheet: View {
                                 .keyboardType(.decimalPad)
                             #endif
                             .font(.fieldGuideData)
+                            .focused($countFocused)
+                            .onSubmit(save)
                             .accessibilityIdentifier("audit.adjust-count.amount")
-                        Text(unit)
+                        Text(row.amount.unit)
                             .font(.fieldGuideLabel)
                             .foregroundStyle(FieldGuideTokens.graphiteSecondary)
                     }
                 } header: {
-                    Text("New count")
+                    Text("Counted")
                 } footer: {
                     if hasValidationError {
                         Label("Enter an amount greater than zero.", systemImage: "exclamationmark.circle")
@@ -49,6 +62,8 @@ struct AdjustCountSheet: View {
                     }
                 }
             }
+            .formStyle(.grouped)
+            .onAppear { countFocused = true }
             .navigationTitle("Adjust count")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -57,7 +72,7 @@ struct AdjustCountSheet: View {
                     }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save", action: save)
+                    Button("Use count", action: save)
                         .disabled(draft.value == nil)
                         .accessibilityIdentifier("audit.adjust-count.save")
                 }
@@ -69,8 +84,13 @@ struct AdjustCountSheet: View {
 
     private func save() {
         guard let value = draft.value else { return }
-        session.stage(.adjust(Amount(value: value, unit: unit)), for: id)
+        session.stage(.adjust(Amount(value: value, unit: row.amount.unit)), for: row.id)
         dismiss()
+    }
+
+    private var stagingNote: String {
+        let place = binName.map { "Recorded in \($0). " } ?? ""
+        return "\(place)The new count applies when you finish this bin."
     }
 
     private var isDirty: Bool { draft.text != initialText }
@@ -84,7 +104,7 @@ struct AdjustCountSheet: View {
     @Previewable @State var appModel = PreviewFixtures.signedInModel()
     AdjustCountSheet(
         session: RecountSession(service: appModel.client),
-        id: AuditPreviewData.sampleRow.id,
-        amount: AuditPreviewData.sampleRow.amount
+        row: AuditPreviewData.sampleRow,
+        binName: "Bin 1"
     )
 }

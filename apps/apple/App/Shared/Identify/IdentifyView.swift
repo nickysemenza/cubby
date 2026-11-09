@@ -133,7 +133,7 @@ struct IdentifyResultsSection: View {
                     Image(decorative: probe, scale: 1)
                         .resizable()
                         .scaledToFill()
-                        .frame(width: 160, height: 160)
+                        .frame(width: 88, height: 88)
                         .clipShape(RoundedRectangle(cornerRadius: FieldGuideTokens.radiusPanel))
                         .overlay(
                             RoundedRectangle(cornerRadius: FieldGuideTokens.radiusPanel)
@@ -151,10 +151,9 @@ struct IdentifyResultsSection: View {
                         Text("Couldn't identify this photo")
                             .font(.fieldGuideTitle)
                             .foregroundStyle(FieldGuideTokens.graphite)
-                        Text(failure)
+                        DiagnosticMessage(message: failure)
                             .font(.fieldGuideBody)
                             .foregroundStyle(FieldGuideTokens.destructive)
-                            .fixedSize(horizontal: false, vertical: true)
                     }
                 } else if matches.isEmpty {
                     Panel {
@@ -169,7 +168,9 @@ struct IdentifyResultsSection: View {
                 } else {
                     Panel(padding: 0, spacing: 0) {
                         ForEach(Array(matches.enumerated()), id: \.element.id) { position, match in
-                            if position > 0 { PanelDivider(inset: FieldGuideTokens.Space.lg + 56) }
+                            if position > 0 {
+                                PanelDivider(inset: FieldGuideTokens.Space.md + RecordRowMetrics.thumbnail)
+                            }
                             NavigationLink(value: Route.entityDetail(.product, id: match.productID.rawValue))
                             {
                                 CandidateRow(match: match, best: position == 0)
@@ -188,30 +189,15 @@ private struct CandidateRow: View {
     let best: Bool
 
     var body: some View {
-        HStack(spacing: FieldGuideTokens.Space.md) {
-            Thumb(url: match.imageURL, size: 56, symbol: "shippingbox")
-            VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
-                Text(match.name)
-                    .font(.body.weight(best ? .semibold : .regular))
-                    .foregroundStyle(FieldGuideTokens.graphite)
-                    .lineLimit(2)
-                HStack(spacing: FieldGuideTokens.Space.sm) {
-                    Text("distance \(String(format: "%.3f", match.distance))")
-                        .font(.fieldGuideData)
-                        .foregroundStyle(FieldGuideTokens.graphiteSecondary)
-                    if best {
-                        StatusChip(text: "Best match")
-                    }
-                }
-            }
-            Spacer(minLength: FieldGuideTokens.Space.sm)
-            Image(systemName: "chevron.right")
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(FieldGuideTokens.graphiteSecondary)
+        RecordListRow(title: match.name, imageURL: match.imageURL, symbol: "shippingbox") {
+            if best { Text("Best match") }
+        } rail: {
+            Text("Distance \(String(format: "%.3f", match.distance))")
+                .monospacedDigit()
+        } supplement: {
+            EmptyView()
         }
         .padding(.horizontal, FieldGuideTokens.Space.md)
-        .padding(.vertical, FieldGuideTokens.Space.md)
-        .contentShape(Rectangle())
     }
 }
 

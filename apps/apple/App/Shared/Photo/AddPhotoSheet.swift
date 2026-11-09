@@ -364,4 +364,5 @@ private enum AddPhotoRoute: Hashable {
             featurePrints: model.featurePrints),
         onDone: { _ in }
     )
+    .environment(model)
 }

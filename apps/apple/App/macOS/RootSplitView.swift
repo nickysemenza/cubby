@@ -26,8 +26,8 @@ struct RootSplitView: View {
             sidebar
                 .background {
                     SplitColumnCollapse(
-                        contentCollapsed: !usesContentColumn,
-                        detailCollapsed: usesContentColumn && !detailVisible)
+                        contentCollapsed: false,
+                        detailCollapsed: !usesContentColumn || !detailVisible)
                 }
         } content: {
             Group {
@@ -35,27 +35,27 @@ struct RootSplitView: View {
                     browserList
                 } else if model.navigator.section == .activity {
                     SectionView(section: .activity)
+                } else {
+                    NavigationStack(path: model.navigator.path(for: model.navigator.section)) {
+                        SectionView(section: model.navigator.section)
+                    }
                 }
             }
-            .navigationSplitViewColumnWidth(min: 300, ideal: 460, max: 900)
+            .navigationSplitViewColumnWidth(min: 300, ideal: 460, max: usesContentColumn ? 900 : .infinity)
         } detail: {
             if usesContentColumn {
                 recordDetail
-            } else {
-                NavigationStack(path: model.navigator.path(for: model.navigator.section)) {
-                    SectionView(section: model.navigator.section)
-                }
             }
         }
         .navigationSplitViewStyle(.balanced)
         .toolbar {
-            ToolbarItem {
-                Button(detailVisible ? "Hide Detail" : "Show Detail", systemImage: "sidebar.right") {
-                    detailVisible.toggle()
+            if usesContentColumn {
+                ToolbarItem {
+                    Button(detailVisible ? "Hide Detail" : "Show Detail", systemImage: "sidebar.right") {
+                        detailVisible.toggle()
+                    }
+                    .help("Show or hide detail (⌥⌘D)")
                 }
-                .keyboardShortcut("d", modifiers: [.option, .command])
-                .disabled(!usesContentColumn)
-                .help("Show or hide detail (⌥⌘D)")
             }
             ToolbarItem {
                 Button("Refresh", systemImage: "arrow.clockwise") { refresh.refresh() }
@@ -65,6 +65,12 @@ struct RootSplitView: View {
         }
         .environment(\.sceneRefresh, refresh)
         .focusedSceneValue(\.nativeRefresh, refresh.action)
+        .focusedSceneValue(
+            \.detailVisibility,
+            DetailVisibilityAction(
+                isVisible: detailVisible, isEnabled: usesContentColumn,
+                toggle: { detailVisible.toggle() })
+        )
         .focusedSceneValue(
             \.sceneCommands,
             SceneCommandActions(
@@ -103,7 +109,16 @@ struct RootSplitView: View {
             storedNavigation = try? JSONEncoder().encode(value)
         }
         .onChange(of: columnVisibility) { _, value in
+            if !usesContentColumn && value == .detailOnly {
+                columnVisibility = .doubleColumn
+                return
+            }
             storedVisibility = try? JSONEncoder().encode(value)
+        }
+        .onChange(of: usesContentColumn) { _, usesDetail in
+            if !usesDetail && columnVisibility == .detailOnly {
+                columnVisibility = .doubleColumn
+            }
         }
         .onChange(of: visibleRecords, initial: true) { _, _ in selectFirstRecord() }
         .onChange(of: model.navigator.macDestination) { _, _ in selectFirstRecord() }
@@ -196,7 +211,7 @@ struct RootSplitView: View {
         .listStyle(.sidebar)
         .environment(\.sidebarRowSize, .small)
         .accessibilityIdentifier("sidebar.destinations")
-        .navigationSplitViewColumnWidth(min: 160, ideal: 180, max: 240)
+        .navigationSplitViewColumnWidth(min: 180, ideal: 200, max: 260)
     }
 
     private func isExpanded(_ section: SidebarManifest.Section) -> Binding<Bool> {
@@ -304,8 +319,14 @@ struct RootSplitView: View {
     }
 }
 
-#Preview(traits: .modifier(SignedInPreview())) {
+#Preview("Minimum window", traits: .modifier(SignedInPreview())) {
     RootSplitView()
+        .frame(width: 720, height: 720)
+}
+
+#Preview("Wide window", traits: .modifier(SignedInPreview())) {
+    RootSplitView()
+        .frame(width: 1280, height: 900)
 }
 
 /// In-memory browsing state outlives the split view's changing column content. RootView resets
@@ -334,7 +355,7 @@ final class NativeBrowserSession {
 
 /// SwiftUI visibility can hide the sidebar or content, but cannot keep sidebar + content while
 /// hiding detail. Collapse only the owned root split's items through AppKit for that layout and
-/// for sections without a content column; the NavigationSplitView and sidebar retain identity.
+/// for single-column workspaces; the NavigationSplitView and sidebar retain identity.
 private struct SplitColumnCollapse: NSViewRepresentable {
     var contentCollapsed: Bool
     var detailCollapsed: Bool

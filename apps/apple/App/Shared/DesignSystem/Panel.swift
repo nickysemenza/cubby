@@ -52,6 +52,7 @@ struct LabeledRow: View {
                 .font(valueFont)
                 .foregroundStyle(tone)
                 .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .trailing)
         }
         .padding(.horizontal, FieldGuideTokens.Space.md)
         .padding(.vertical, FieldGuideTokens.Space.sm)

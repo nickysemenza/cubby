@@ -8,6 +8,7 @@ import { startPhotoInventoryRun } from "~/server/domains/photo-import/repo/run/p
 import { getDb } from "~/server/db/helpers";
 import { insertOperation } from "~/server/domains/run/repo/run-operation";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { refreshSearchDocuments } from "~/server/generic/search/repo/search-document";
 
 import { seedBaseWorld } from "../factories/base-world";
 import { createEntity } from "../factories/create";
@@ -173,6 +174,20 @@ export async function seedNativeQa(
     },
   ]);
   const garden = await seedScopedPlantingPicker(pool, context);
+  // These journeys search immediately; the fixture does not run the hourly derived-data pass.
+  const searchableRows = await pool.query<{
+    kind: "product" | "location" | "planting";
+    id: string;
+  }>('SELECT kind, id FROM "Entity" WHERE kind = ANY($1::text[])', [
+    ["product", "location", "planting"],
+  ]);
+  await refreshSearchDocuments(
+    db,
+    searchableRows.rows.map((row) => ({
+      entityKind: row.kind,
+      entityId: row.id,
+    })),
+  );
   return {
     ...pausedRun,
     ...garden,

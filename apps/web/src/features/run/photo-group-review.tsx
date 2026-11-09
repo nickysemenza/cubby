@@ -4128,6 +4128,21 @@ function activePhotoKey(
   return (items.find((item) => item.groupKey === key) ?? items[0])?.groupKey;
 }
 
+function photoDecisionStatus(
+  action: ReturnType<typeof useReviewAction>,
+): string {
+  const saving = action.variables?.action === "save";
+  if (action.isPending)
+    return saving ? "Saving changes…" : "Applying decision…";
+  if (action.isError)
+    return `${saving ? "Changes were not saved" : "Decision was not applied"}: ${action.error.message}`;
+  if (action.isSuccess)
+    return saving
+      ? "Proposal saved · records change only on approval"
+      : "Decision applied";
+  return "Proposal edits save when you leave a field. Approve to apply them.";
+}
+
 export function PhotoGroupReview({
   runId,
   query,
@@ -4314,7 +4329,7 @@ export function PhotoGroupReview({
                 headingAs="h2"
                 title="Import results"
                 inert={approving}
-                caption={`${resultProducts.filter((proposal) => proposal.product.kind === "create").length} Products created · ${resultProducts.filter((proposal) => proposal.product.kind === "existing").length} existing Products matched`}
+                caption={`${countLabel(resultProducts.filter((proposal) => proposal.product.kind === "create").length, "Product")} created · ${countLabel(resultProducts.filter((proposal) => proposal.product.kind === "existing").length, "existing Product")} matched`}
               >
                 <RecordList aria-label="Products from this import">
                   {resultProducts.map((proposal) =>
@@ -4406,15 +4421,7 @@ export function PhotoGroupReview({
                 />
               ) : null}
               <output className="text-xs text-muted-foreground">
-                {action.isPending
-                  ? action.variables?.action === "save"
-                    ? "Saving changes…"
-                    : "Applying decision…"
-                  : action.isError
-                    ? `Changes were not saved: ${action.error.message}`
-                    : action.isSuccess
-                      ? "Proposal saved · records change only on approval"
-                      : "Proposal edits save when you leave a field. Approve to apply them."}
+                {photoDecisionStatus(action)}
               </output>
               {visibleProposals.some(
                 (group) => group.state === "proposed" && group.blockedReason,
@@ -4458,7 +4465,14 @@ export function PhotoGroupReview({
                 >
                   <span className="text-xs text-muted-foreground">
                     {applyingBatch.length
-                      ? `${draft.selected.size ? "Selected items" : "Ready items in this view"} — On apply: ${applyingBatch.filter((group) => group.product.kind === "create").length} new Products · ${applyingBatch.filter((group) => group.product.kind === "existing").length} existing Products matched · ${applyingBatch.reduce((sum, group) => sum + (group.inventory?.quantity ?? 0), 0)} stock units to add · ${applyingBatch.filter((group) => !group.inventory).length} groups with no stock change.`
+                      ? `${draft.selected.size ? "Selected items" : "Ready items in this view"} — On apply: ${countLabel(applyingBatch.filter((group) => group.product.kind === "create").length, "new Product")} · ${countLabel(applyingBatch.filter((group) => group.product.kind === "existing").length, "existing Product")} matched · ${countLabel(
+                          applyingBatch.reduce(
+                            (sum, group) =>
+                              sum + (group.inventory?.quantity ?? 0),
+                            0,
+                          ),
+                          "stock unit",
+                        )} to add · ${countLabel(applyingBatch.filter((group) => !group.inventory).length, "group")} with no stock change.`
                       : "No ready items in this scope. Unresolved items stay in review."}
                   </span>
                   <Row gap="sm" wrap>
@@ -4499,7 +4513,7 @@ export function PhotoGroupReview({
                     >
                       <CheckIcon />
                       {approving
-                        ? "Approving selected items…"
+                        ? `Approving ${countLabel(draft.approving?.length ?? 0, "item")}…`
                         : `Approve ${countLabel(applyingBatch.length, draft.selected.size ? "selected item" : "ready item")}`}
                     </Button>
                   </Row>

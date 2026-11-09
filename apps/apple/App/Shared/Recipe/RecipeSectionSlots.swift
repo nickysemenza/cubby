@@ -114,7 +114,7 @@ struct CookbookContentsSlot: View {
         } catch {
             guard !Task.isCancelled else { return }
             Diagnostics.report(error, context: "Cookbook contents")
-            self.error = error.localizedDescription
+            self.error = error.userMessage
         }
     }
 }
@@ -132,12 +132,8 @@ struct CookbookContentsList: View {
                 .font(.caption).foregroundStyle(.secondary)
             ForEach(usage.rows.prefix(visibleCount), id: \.ingredientId) { row in
                 NavigationLink(value: Route.entityDetail(.ingredient, id: row.ingredientId)) {
-                    LabeledContent(
-                        row.name,
-                        value:
-                            "\(ValueFormat.number(row.recipeCount)) · \(ValueFormat.number(row.sharePercent))%"
-                    )
-                    .frame(minHeight: FieldGuideTokens.touchTarget)
+                    LabeledContent(row.name, value: usageLabel(row))
+                        .frame(minHeight: FieldGuideTokens.touchTarget)
                 }
             }
             if usage.rows.count > visibleCount {
@@ -146,6 +142,13 @@ struct CookbookContentsList: View {
                 }
             }
         }
+    }
+
+    /// The denominator is stated so the share never reads as a share of ingredients.
+    private func usageLabel(_ row: IngredientUsageRowsItem) -> String {
+        let count = ValueFormat.number(row.recipeCount)
+        let total = ValueFormat.number(usage.totalRecipes)
+        return "\(count) of \(total) recipes · \(ValueFormat.number(row.sharePercent))%"
     }
 }
 

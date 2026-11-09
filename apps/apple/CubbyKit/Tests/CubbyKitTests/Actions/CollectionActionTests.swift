@@ -176,7 +176,7 @@ struct CollectionActionTests {
         #expect(recorder.requests.first?.body["locationId"] == "LOC-4K7M")
         // The run already saved the description, so the review is an acknowledgement: it carries
         // both sides of the diff, the model and the answer's age, and the screens that show the
-        // location refresh behind it. Keep and Hide change nothing, as on web.
+        // location refresh behind it. Done acknowledges the saved result without another write.
         guard case .review(let review) = outcome else {
             Issue.record("expected a review")
             return

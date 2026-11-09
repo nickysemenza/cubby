@@ -1034,6 +1034,10 @@ number, boolean, enum, shortcode reference (a pattern that names an entity prefi
 (`{value, unit}`), constants, objects, arrays, maps over an enum of keys, and variants over a
 literal key; `.meta({ opaque: true })` marks a key carried untouched and never shown,
 including nullable enum/text siblings edited through declared scalar projections.
+An input property's standard JSON Schema `.meta({ title: "…" })` owns its
+human-readable label on both clients; absent titles use the humanized key.
+Unit-mapping operands retain stored keys `a` and `b` while reading From and
+Equivalent to in the editor.
 A variant
 starts with no case chosen, so a new account must pick its identity kind. Validation stays
 server-side: issues land at `GenericEntityEditModel.nestedError(key, path:)` on native and at the
@@ -1159,6 +1163,11 @@ Project's derived effective dates and provenance remain a separate read-only
 `extensions.ports.timeline` implementation) publishes the
 entity on `entity.timeline`. The compiler checks every named field,
 relation, descriptor, view and section id.
+
+An event's optional `amount` is signed USD money: positive means spent and
+negative means recovered. Both clients format it as currency through the shared
+formatter; inventory quantities belong in the event's descriptive facts, never
+in `amount`.
 
 Every listable entity receives the shared List (`table`) and Cards (`shelf`)
 presentations without requiring stored photos. Existing first-view defaults

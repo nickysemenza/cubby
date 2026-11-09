@@ -161,6 +161,7 @@ private struct StructuredSchemaView: View {
     let path: [String]
 
     private var value: JSONValue { context.value(path) }
+    @State private var showsUpper = false
 
     var body: some View {
         if let notice = schema.notice {
@@ -251,16 +252,20 @@ private struct StructuredSchemaView: View {
         .accessibilityIdentifier(context.identifier(path))
     }
 
+    /// The field's own label names the input for VoiceOver; the visible label is the row's, so
+    /// Mac never draws a second caption beside it. An empty number is null, so it never prompts 0.
     private func numberRow(integer: Bool) -> some View {
         LabeledContent(title) {
             TextField(
-                "0",
+                title,
                 value: Binding(
                     get: { value.doubleValue },
                     set: { context.set(path, $0.map(JSONValue.number) ?? .null) }),
-                format: .number
+                format: .number,
+                prompt: Text(schema.nullable ? "None" : "Required")
             )
             .multilineTextAlignment(.trailing)
+            .labelsHidden()
             #if os(iOS)
                 .keyboardType(integer ? .numberPad : .decimalPad)
             #endif
@@ -300,7 +305,7 @@ private struct StructuredSchemaView: View {
                     get: { context.value(path + ["value"]).doubleValue },
                     set: { context.set(path + ["value"], $0.map(JSONValue.number) ?? .null) }),
                 format: .number,
-                prompt: Text("0")
+                prompt: Text("Required")
             )
             .multilineTextAlignment(.trailing)
             .labelsHidden()
@@ -310,7 +315,7 @@ private struct StructuredSchemaView: View {
                 .keyboardType(.decimalPad)
             #endif
         }
-        if upper {
+        if upper && (showsUpper || context.value(path + ["upperValue"]) != .null) {
             LabeledContent("Upper amount") {
                 TextField(
                     "Upper amount",
@@ -318,7 +323,7 @@ private struct StructuredSchemaView: View {
                         get: { context.value(path + ["upperValue"]).doubleValue },
                         set: { context.set(path + ["upperValue"], $0.map(JSONValue.number) ?? .null) }),
                     format: .number,
-                    prompt: Text("up to")
+                    prompt: Text("Optional")
                 )
                 .multilineTextAlignment(.trailing)
                 .labelsHidden()
@@ -328,6 +333,12 @@ private struct StructuredSchemaView: View {
                     .keyboardType(.decimalPad)
                 #endif
             }
+        } else if upper {
+            // A range end is optional and rarely used; it stays one tap away instead of an
+            // empty row under every amount. A saved upper value always shows.
+            Button("Add upper amount", systemImage: "plus") { showsUpper = true }
+                .buttonStyle(.borderless)
+                .accessibilityIdentifier(context.identifier(path + ["upperValue", "add"]))
         }
         LabeledContent("Unit") {
             TextField(
@@ -380,7 +391,10 @@ private struct StructuredSchemaView: View {
                 context.set(path, .array(next))
             }
             if item.isComposite {
-                Text(itemTitle).font(.fieldGuideLabel.weight(.semibold))
+                // One item needs no numbered heading under the collection's own title.
+                if items.count > 1 {
+                    Text(itemTitle).font(.fieldGuideLabel.weight(.semibold))
+                }
                 StructuredSchemaView(context: context, schema: item, title: "", path: path + [String(index)])
                 remove.labelStyle(.titleAndIcon)
             } else {

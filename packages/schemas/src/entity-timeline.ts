@@ -59,6 +59,7 @@ export const entityTimelineEvent = z.object({
   /** `audit:<action>`, `field:<key>`, or a custom implementation's own kind. */
   kind: z.string().min(1),
   label: z.string().min(1),
+  /** Signed USD money: positive spent, negative recovered; never an inventory quantity. */
   amount: z.number().nullable().optional(),
   link: entityTimelineLink.nullable().optional(),
   detail: z.string().nullable().optional(),

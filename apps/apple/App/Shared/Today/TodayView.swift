@@ -48,7 +48,7 @@ final class AuditHistoryModel {
             cursor = page.nextCursor
             error = nil
         } catch {
-            self.error = error.localizedDescription
+            self.error = error.userMessage
             Diagnostics.report(error, context: "audit.history")
         }
     }
@@ -61,8 +61,14 @@ struct AuditHistoryView: View {
     var body: some View {
         List {
             if let error = history.error {
-                LoadFailureView(title: "Couldn’t load changes", message: error) {
-                    await history.load(client: appModel.client, reset: true)
+                if history.entries.isEmpty {
+                    LoadFailureView(title: "Couldn’t load changes", message: error) {
+                        await history.load(client: appModel.client, reset: true)
+                    }
+                } else {
+                    InlineLoadFailure(message: error, isRetrying: history.loading) {
+                        await history.load(client: appModel.client, reset: true)
+                    }
                 }
             }
             ForEach(AuditEntryFolding.fold(history.entries)) { AuditEntryRow(group: $0) }
@@ -199,14 +205,9 @@ struct TodayView: View {
     @State private var today: TodayModel?
     @State private var nutrition: MealNutritionModel?
     @State private var highlights = WorkHighlightsModel()
+    @State private var attention = WorkAttentionModel()
     @State private var householdDay = HouseholdDay.string(for: .now)
-    @State private var creation: Creation?
-
-    private enum Creation: String, Identifiable {
-        case task, meal
-        var id: String { rawValue }
-        var key: EntityKey { self == .task ? .task : .meal }
-    }
+    @State private var creation: TodayCreation?
 
     var body: some View {
         Group {
@@ -220,6 +221,7 @@ struct TodayView: View {
                     nutritionDay: householdDay,
                     onRefresh: {
                         async let changesRefresh: Void = highlights.refresh(client: model.client)
+                        async let attentionRefresh: Void = attention.refresh(client: model.client)
                         if let nutrition {
                             async let todayRefresh: Void = today.refresh()
                             async let nutritionRefresh: Void = nutrition.refresh()
@@ -227,7 +229,7 @@ struct TodayView: View {
                         } else {
                             await today.refresh()
                         }
-                        await changesRefresh
+                        _ = await (changesRefresh, attentionRefresh)
                     },
                     tasksError: today.tasksError, mealsError: today.mealsError,
                     nutritionError: nutrition?.refreshError,
@@ -237,7 +239,9 @@ struct TodayView: View {
                     tasksIsLoading: today.tasksIsLoading,
                     mealsIsLoading: today.mealsIsLoading,
                     nutritionIsLoading: nutrition?.isLoading ?? false,
-                    highlights: highlights
+                    highlights: highlights,
+                    attention: attention,
+                    onCreate: { creation = $0 }
                 )
             } else {
                 LoadingIndicator.screen(label: "Loading Today")
@@ -299,11 +303,18 @@ struct TodayView: View {
             if phase == .active {
                 Task {
                     await synchronizeDay(forceRefresh: true)
-                    await highlights.refresh(client: model.client)
+                    async let changes: Void = highlights.refresh(client: model.client)
+                    async let work: Void = attention.refresh(client: model.client)
+                    _ = await (changes, work)
                 }
             }
         }
-        .task(id: model.host) { await highlights.refresh(client: model.client) }
+        .task(id: model.host) {
+            attention = WorkAttentionModel()
+            async let changes: Void = highlights.refresh(client: model.client)
+            async let work: Void = attention.refresh(client: model.client)
+            _ = await (changes, work)
+        }
     }
 
     private var displayDate: String {
@@ -352,12 +363,17 @@ struct TodayContent: View {
     var mealsIsLoading = false
     var nutritionIsLoading = false
     var highlights: WorkHighlightsModel?
+    var attention: WorkAttentionModel?
+    /// Opens the toolbar's own editors from an empty section; nil (previews) hides those rows.
+    var onCreate: ((TodayCreation) -> Void)?
     @Environment(AppModel.self) private var model
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     #if os(iOS)
         @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     #endif
     @State private var macDashboardWidth: CGFloat = 0
+
+    private let pinned = EntityCatalog.pinnedSavedViews(surface: "home")
 
     var body: some View {
         Group {
@@ -380,17 +396,17 @@ struct TodayContent: View {
     #if os(iOS)
         private var iOSList: some View {
             List {
-                ForEach(TodaySection.allCases) { section in
+                ForEach(TodaySection.allCases.filter { $0 != .views || !pinned.isEmpty }) { section in
                     Section(section.rawValue) {
                         switch section {
                         case .tasks: taskContent
                         case .meals: mealContent
                         case .nutrition: nutritionContent
-                        case .views: PinnedViewLinks()
+                        case .views: pinnedViewLinks
+                        case .work: workLinks
                         }
                     }
                 }
-                Section { problemsLink }
             }
             .fieldGuideSectionStyle()
             .environment(\.defaultMinListRowHeight, FieldGuideTokens.touchTarget)
@@ -413,40 +429,64 @@ struct TodayContent: View {
             ReportBlocksView(report: ReportPresentation(presentation.tasks), model: taskCommands)
             ForEach(presentation.moreReady, id: \.self) { footer in
                 NavigationLink(value: Route.entityList(.task)) {
-                    Text(footer)
+                    TodayLinkLabel(title: footer, symbol: "ellipsis.circle")
                 }
+                .todayRowStyle()
             }
-            #if os(macOS)
-                if !presentation.stats.blocks.isEmpty {
-                    Divider()
-                    ReportBlocksView(report: ReportPresentation(presentation.stats))
-                }
-            #endif
+            if presentation.hasNoTasks { createRow(.task) }
         }
         if let tasksError {
             InlineLoadFailure(
                 message: tasksError, isRetrying: tasksIsLoading, retry: onRetryTasks ?? onRefresh)
         }
         if let failure = taskCommands?.actionError {
-            Text(failure).font(.caption).foregroundStyle(FieldGuideTokens.destructive)
+            ActionFailureNotice(title: "Couldn’t update task", message: failure)
         }
     }
 
-    @ViewBuilder private var activityLinks: some View {
+    /// Work needing the member, then the full Work screen and the web Problems handoff. Counts
+    /// come from each entity's declared `attention` saved view; zero hides its row.
+    @ViewBuilder private var workLinks: some View {
+        attentionLink(
+            .run, title: "Runs needing attention", symbol: "exclamationmark.circle",
+            count: attention?.runs ?? .unavailable)
+        attentionLink(
+            .imageJob, title: "Image jobs needing attention", symbol: "photo.badge.exclamationmark",
+            count: attention?.imageJobs ?? .unavailable)
         #if os(macOS)
-            Button("All activity", systemImage: "clock.arrow.circlepath") {
+            Button {
                 model.navigator.section = .activity
+            } label: {
+                TodayLinkLabel(title: "All work", symbol: AppSection.activity.symbol)
             }
+            .todayRowStyle()
+            .accessibilityIdentifier("today.work.all")
         #else
             NavigationLink(value: Route.activityList) {
-                Label("All activity", systemImage: "clock.arrow.circlepath")
+                TodayLinkLabel(title: "All work", symbol: AppSection.activity.symbol)
             }
+            .accessibilityIdentifier("today.work.all")
         #endif
-        NavigationLink(value: Route.entityList(.run, savedView: "attention")) {
-            Label("Runs needing attention", systemImage: "exclamationmark.circle")
-        }
-        NavigationLink(value: Route.entityList(.imageJob, savedView: "attention")) {
-            Label("Image jobs needing attention", systemImage: "photo.badge.checkmark")
+        problemsLink
+    }
+
+    @ViewBuilder private func attentionLink(
+        _ key: EntityKey, title: String, symbol: String, count: WorkAttentionModel.Count
+    ) -> some View {
+        switch count {
+        case .loading, .known(0): EmptyView()
+        case .known(let total):
+            NavigationLink(value: Route.entityList(key, savedView: WorkAttentionModel.savedView)) {
+                TodayLinkLabel(title: title, symbol: symbol, count: total)
+            }
+            .todayRowStyle()
+            .accessibilityIdentifier("today.work.\(key.rawValue)")
+        case .unavailable:
+            NavigationLink(value: Route.entityList(key, savedView: WorkAttentionModel.savedView)) {
+                TodayLinkLabel(title: title, symbol: symbol)
+            }
+            .todayRowStyle()
+            .accessibilityIdentifier("today.work.\(key.rawValue)")
         }
     }
 
@@ -457,9 +497,13 @@ struct TodayContent: View {
             InlineLoadFailure(
                 message: message, isRetrying: mealsIsLoading, retry: onRetryMeals ?? onRefresh)
         case .loaded(let rows):
-            if rows.isEmpty { emptyStateText("No meals planned") }
+            if rows.isEmpty {
+                emptyStateText("No meals planned")
+                createRow(.meal)
+            }
             ForEach(rows) { meal in
                 NavigationLink(value: Route.entityDetail(.meal, id: meal.id)) { mealRow(meal) }
+                    .todayRowStyle()
             }
         }
         if let mealsError {
@@ -477,8 +521,9 @@ struct TodayContent: View {
         case .loaded(let summary):
             MealNutritionCompactView(summary: summary)
             NavigationLink(value: Route.nutrition(day: nutritionDay)) {
-                Label("View food breakdown", systemImage: "chart.bar.doc.horizontal")
+                TodayLinkLabel(title: "Food breakdown", symbol: "chart.bar.doc.horizontal")
             }
+            .todayRowStyle()
         }
         if let nutritionError {
             InlineLoadFailure(
@@ -490,7 +535,10 @@ struct TodayContent: View {
         ForEach(AuditEntryFolding.fold(highlights?.entries ?? [])) { group in
             AuditEntryRow(group: group)
         }
-        NavigationLink(value: Route.auditHistory) { Label("All changes", systemImage: "clock") }
+        NavigationLink(value: Route.auditHistory) {
+            TodayLinkLabel(title: "All changes", symbol: "clock")
+        }
+        .todayRowStyle()
         if let error = highlights?.error {
             InlineLoadFailure(message: error, retry: onRefresh)
         }
@@ -498,25 +546,44 @@ struct TodayContent: View {
 
     private var problemsLink: some View {
         OpenOnWebButton(target: .route(path: "/work-queue", query: ["view": "problems"])) {
-            HStack {
+            HStack(spacing: FieldGuideTokens.Space.sm) {
                 Label("Problems on web", systemImage: "safari")
-                Spacer()
+                    .foregroundStyle(FieldGuideTokens.graphite)
+                Spacer(minLength: FieldGuideTokens.Space.sm)
                 Image(systemName: "arrow.up.right").foregroundStyle(.secondary)
             }
+            .todayRowFrame()
+        }
+        // Same plain row as its Work neighbours; on Mac the default is a grey push button.
+        .todayRowStyle()
+    }
+
+    /// Home-pinned saved views from the manifest (`pin.surface == "home"`), one link per view into
+    /// its entity's generic list with the view's filters, sort and list view applied.
+    @ViewBuilder private var pinnedViewLinks: some View {
+        ForEach(pinned) { item in
+            NavigationLink(value: Route.entityList(item.entity, savedView: item.savedView.id)) {
+                TodayLinkLabel(title: item.savedView.label, symbol: EntityCatalog[item.entity].sfSymbol)
+            }
+            .todayRowStyle()
+            .accessibilityLabel("\(item.savedView.label), \(EntityCatalog[item.entity].plural)")
+            .accessibilityIdentifier("today.pinned.\(item.id)")
         }
     }
 
     #if os(macOS)
+        /// Two columns of native grouped rows: links read as navigation rows with a trailing
+        /// chevron, not push buttons, and section titles are plain headers.
         private var macDashboard: some View {
             ScrollView {
                 Group {
                     if dynamicTypeSize.isAccessibilitySize || macDashboardWidth < 760 {
-                        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.lg) {
+                        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xl) {
                             macLeftColumn
                             macRightColumn
                         }
                     } else {
-                        HStack(alignment: .top, spacing: FieldGuideTokens.Space.lg) {
+                        HStack(alignment: .top, spacing: FieldGuideTokens.Space.xl) {
                             macLeftColumn.frame(maxWidth: .infinity, alignment: .topLeading)
                             macRightColumn.frame(maxWidth: .infinity, alignment: .topLeading)
                         }
@@ -529,7 +596,7 @@ struct TodayContent: View {
                     macDashboardWidth = $0
                 }
                 .frame(maxWidth: .infinity, alignment: .top)
-                .padding(FieldGuideTokens.Space.xxl)
+                .padding(FieldGuideTokens.Space.xl)
             }
             .scrollBounceBehavior(.basedOnSize)
             .background(FieldGuideTokens.canvas)
@@ -538,52 +605,29 @@ struct TodayContent: View {
         }
 
         private var macLeftColumn: some View {
-            VStack(alignment: .leading, spacing: FieldGuideTokens.Space.lg) {
-                dashboardPanel("Next up", systemImage: "checklist") { taskContent }
-                dashboardPanel("Activity inbox", systemImage: "clock.arrow.circlepath") { activityLinks }
-                dashboardPanel("Your views", systemImage: "pin") { PinnedViewLinks() }
-                problemsLink
+            VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xl) {
+                MacTodayGroup(title: TodaySection.tasks.rawValue, detail: taskStats) { taskContent }
+                MacTodayGroup(title: TodaySection.work.rawValue) { workLinks }
+                if !pinned.isEmpty {
+                    MacTodayGroup(title: TodaySection.views.rawValue) { pinnedViewLinks }
+                }
             }
         }
 
         private var macRightColumn: some View {
-            VStack(alignment: .leading, spacing: FieldGuideTokens.Space.lg) {
-                dashboardPanel("Meals today", systemImage: "fork.knife") { mealContent }
-                dashboardPanel("Nutrition today", systemImage: "chart.bar.doc.horizontal") {
-                    nutritionContent
-                }
-                dashboardPanel("Recent changes", systemImage: "clock") { recentChanges }
+            VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xl) {
+                MacTodayGroup(title: TodaySection.meals.rawValue) { mealContent }
+                MacTodayGroup(title: TodaySection.nutrition.rawValue) { nutritionContent }
+                MacTodayGroup(title: "Recent changes") { recentChanges }
             }
         }
 
-        private func dashboardPanel<Content: View>(
-            _ title: String, systemImage: String, @ViewBuilder content: () -> Content
-        ) -> some View {
-            Panel {
-                Label(title, systemImage: systemImage)
-                    .font(.fieldGuideHeadline)
-                    .foregroundStyle(FieldGuideTokens.graphite)
-                Divider()
-                content()
-            }
+        /// The briefing's Overdue and Due this week figures beside the Next up header.
+        private var taskStats: String? {
+            guard case .loaded(let briefing) = tasks else { return nil }
+            return TodayBriefingPresentation(briefing).statsSummary
         }
     #endif
-
-    /// Home-pinned saved views from the manifest (`pin.surface == "home"`), one link per view into
-    /// its entity's generic list with the view's filters, sort and list view applied.
-    private struct PinnedViewLinks: View {
-        private let pinned = EntityCatalog.pinnedSavedViews(surface: "home")
-
-        var body: some View {
-            ForEach(pinned) { item in
-                NavigationLink(value: Route.entityList(item.entity, savedView: item.savedView.id)) {
-                    Label(item.savedView.label, systemImage: EntityCatalog[item.entity].sfSymbol)
-                }
-                .accessibilityLabel("\(item.savedView.label), \(EntityCatalog[item.entity].plural)")
-                .accessibilityIdentifier("today.pinned.\(item.id)")
-            }
-        }
-    }
 
     /// Matches the shared record row's `touchTarget` minHeight so a section's
     /// loading placeholder doesn't collapse to a single text line and then jump taller once its
@@ -594,16 +638,135 @@ struct TodayContent: View {
     }
 
     private func mealRow(_ meal: EntityRow) -> some View {
-        EntityRowView(key: .meal, row: meal, columns: ["mealType", "recipeNames"])
+        let descriptor = EntityCatalog[.meal]
+        var supplied: Set<String> = ["date"]
+        if case .loaded(let rows) = meals {
+            let rails = rows.flatMap { EntityRowPresentation.rail(descriptor: descriptor, row: $0) }
+            if rails.allSatisfy({ $0.value == nil && $0.sub == nil }) {
+                supplied.formUnion(rails.map(\.id))
+            }
+        }
+        return EntityRowView(
+            key: .meal, row: meal, columns: ["mealType", "recipeNames"], contextFields: supplied)
     }
 
-    /// House style for a section's empty/placeholder line (`.fieldGuideLabel` + secondary), shared
-    /// so every Today section's "nothing here" text reads at the same size instead of some
-    /// rendering at the default body size and others at caption size.
+    /// The one empty-section style, matching loading and inline-failure rows (callout, secondary).
     private func emptyStateText(_ text: String) -> some View {
-        Text(text).font(.fieldGuideLabel).foregroundStyle(.secondary)
+        Text(text).font(.callout).foregroundStyle(.secondary)
+    }
+
+    /// An empty section's next step, through the toolbar's own editor.
+    @ViewBuilder private func createRow(_ creation: TodayCreation) -> some View {
+        if let onCreate {
+            Button {
+                onCreate(creation)
+            } label: {
+                Label(
+                    creation == .task ? "New task" : "Log a meal",
+                    systemImage: creation == .task ? "plus.circle" : "fork.knife.circle"
+                )
+                .todayRowFrame()
+            }
+            .buttonStyle(.borderless)
+            .accessibilityIdentifier("today.create.\(creation.rawValue)")
+        }
     }
 }
+
+/// A Today navigation row: glyph and title, then an optional count, then (on Mac, where the
+/// rows sit outside a List) the trailing chevron a navigation row draws.
+private struct TodayLinkLabel: View {
+    let title: String
+    let symbol: String
+    var count: Int?
+
+    var body: some View {
+        HStack(spacing: FieldGuideTokens.Space.sm) {
+            Label(title, systemImage: symbol)
+                .foregroundStyle(FieldGuideTokens.graphite)
+            Spacer(minLength: FieldGuideTokens.Space.sm)
+            if let count {
+                Text(ValueFormat.count(Double(count)))
+                    .font(.callout.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+            #if os(macOS)
+                Image(systemName: "chevron.forward")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.tertiary)
+                    .accessibilityHidden(true)
+            #endif
+        }
+        .todayRowFrame()
+        .accessibilityElement(children: .combine)
+    }
+}
+
+extension View {
+    /// A navigation row's hit area and height: the whole row, 44 points on iPhone, compact on Mac.
+    fileprivate func todayRowFrame() -> some View {
+        #if os(macOS)
+            frame(maxWidth: .infinity, minHeight: 24, alignment: .leading)
+                .contentShape(Rectangle())
+        #else
+            frame(maxWidth: .infinity, minHeight: FieldGuideTokens.touchTarget, alignment: .leading)
+                .contentShape(Rectangle())
+        #endif
+    }
+
+    /// On Mac, where Today's rows sit in a scroll view rather than a List, a NavigationLink or
+    /// Button would draw as a bordered push button; plain style keeps it a row. iPhone's List
+    /// already styles its rows.
+    @ViewBuilder fileprivate func todayRowStyle() -> some View {
+        #if os(macOS)
+            buttonStyle(.plain)
+        #else
+            self
+        #endif
+    }
+}
+
+#if os(macOS)
+    /// One Mac Today section: a plain system header (with optional quiet detail) over grouped rows
+    /// separated by hairlines, on the content surface a grouped Form uses.
+    private struct MacTodayGroup<Content: View>: View {
+        let title: String
+        var detail: String?
+        @ViewBuilder let content: Content
+
+        var body: some View {
+            VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
+                HStack(alignment: .firstTextBaseline, spacing: FieldGuideTokens.Space.sm) {
+                    Text(title).font(.headline)
+                        .accessibilityAddTraits(.isHeader)
+                    Spacer(minLength: FieldGuideTokens.Space.sm)
+                    if let detail {
+                        Text(detail).font(.subheadline.monospacedDigit()).foregroundStyle(.secondary)
+                    }
+                }
+                VStack(alignment: .leading, spacing: 0) {
+                    Group(subviews: content) { rows in
+                        ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
+                            if index > 0 { Divider() }
+                            row.padding(.vertical, FieldGuideTokens.Space.xs)
+                        }
+                    }
+                }
+                .padding(.horizontal, FieldGuideTokens.Space.md)
+                .padding(.vertical, FieldGuideTokens.Space.xs)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(
+                    RoundedRectangle(cornerRadius: FieldGuideTokens.radiusPanel).fill(
+                        FieldGuideTokens.surface)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: FieldGuideTokens.radiusPanel)
+                        .strokeBorder(FieldGuideTokens.hairline, lineWidth: FieldGuideTokens.hairlineWidth)
+                )
+            }
+        }
+    }
+#endif
 
 #Preview("Today", traits: .modifier(SignedInPreview())) {
     NavigationStack {
@@ -622,7 +785,8 @@ struct TodayContent: View {
                         displayImage: nil, action: .update, changes: nil,
                         references: [:], userId: "synthetic-user",
                         channel: .web, oauthClient: nil, device: nil, runId: nil, createdAt: .now, user: nil)
-                ])
+                ]),
+            attention: WorkAttentionModel(runs: .known(2), imageJobs: .known(0))
         )
         .navigationTitle("Today")
     }
@@ -636,7 +800,9 @@ struct TodayContent: View {
                 EntityReportOut(blocks: [])),
             meals: .loaded([]),
             nutrition: .loaded(MealNutritionOut(meals: [], people: [])),
-            onRefresh: {}
+            onRefresh: {},
+            attention: WorkAttentionModel(runs: .known(0), imageJobs: .known(0)),
+            onCreate: { _ in }
         )
         .navigationTitle("Today")
     }
@@ -649,7 +815,8 @@ struct TodayContent: View {
             tasks: .loading,
             meals: .failed("The server returned an error."),
             nutrition: .failed("Nutrition is temporarily unavailable."),
-            onRefresh: {}
+            onRefresh: {},
+            attention: WorkAttentionModel(runs: .unavailable, imageJobs: .loading)
         )
         .navigationTitle("Today")
     }
@@ -702,7 +869,8 @@ struct TodayContent: View {
                 meals: .loaded(PreviewFixtures.sampleTodayMeals),
                 nutrition: .loaded(PreviewFixtures.sampleMealNutrition),
                 nutritionDay: "2026-09-14",
-                onRefresh: {}
+                onRefresh: {},
+                attention: WorkAttentionModel(runs: .known(3), imageJobs: .known(1))
             )
             .navigationTitle("Today")
         }
@@ -718,7 +886,8 @@ struct TodayContent: View {
                 meals: .loaded(PreviewFixtures.sampleTodayMeals),
                 nutrition: .loaded(PreviewFixtures.sampleMealNutrition),
                 onRefresh: {},
-                highlights: WorkHighlightsModel())
+                highlights: WorkHighlightsModel(),
+                attention: WorkAttentionModel(runs: .known(3), imageJobs: .known(1)))
         }
         .frame(width: 1240, height: 900)
         .environment(PreviewFixtures.signedInModel())

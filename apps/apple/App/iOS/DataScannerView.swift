@@ -58,12 +58,13 @@ struct ScannerSlot: View {
                     if phase == .active { status = AVCaptureDevice.authorizationStatus(for: .video) }
                 }
             default:
+                // The button asks the system; it never stands in for the system's own Allow choice.
                 ContentUnavailableView {
-                    Label("Camera", systemImage: "camera")
+                    Label("Scan with the camera", systemImage: "camera")
                 } description: {
-                    Text("Allow camera access to scan barcodes.")
+                    Text("Cubby uses the camera to read barcodes and labels. You can also type a code below.")
                 } actions: {
-                    Button("Allow") { Task { await requestAccess() } }
+                    Button("Use Camera") { Task { await requestAccess() } }
                 }
                 .task {
                     if status == .notDetermined { await requestAccess() }

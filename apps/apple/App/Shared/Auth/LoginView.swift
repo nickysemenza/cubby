@@ -20,109 +20,111 @@ struct LoginView: View {
     var body: some View {
         @Bindable var model = model
         NavigationStack {
-            ScrollView {
-                VStack(spacing: FieldGuideTokens.Space.xl) {
-                    Panel(padding: FieldGuideTokens.Space.xl, spacing: FieldGuideTokens.Space.lg) {
-                        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
-                            Text("Cubby")
-                                .font(.fieldGuideDisplay)
-                                .tracking(-0.6)
-                                .foregroundStyle(FieldGuideTokens.graphite)
-                            Text("Household operating software")
-                                .font(.fieldGuideBody)
-                                .foregroundStyle(FieldGuideTokens.graphiteSecondary)
-                        }
-
-                        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.md) {
-                            FieldBox(focused: focused == .email) {
-                                TextField("Email", text: $email)
-                                    .textContentType(.username)
-                                    .autocorrectionDisabled()
-                                    .focused($focused, equals: .email)
-                                    #if os(iOS)
-                                        .keyboardType(.emailAddress)
-                                        .textInputAutocapitalization(.never)
-                                    #endif
-                                    .onSubmit { focused = .password }
-                            }
-                            FieldBox(focused: focused == .password) {
-                                SecureField("Password", text: $password)
-                                    .textContentType(.password)
-                                    .focused($focused, equals: .password)
-                                    .onSubmit { Task { await submit() } }
-                            }
-                            if let error = model.lastError {
-                                Text(error)
+            // The panel centers vertically when it fits and scrolls when it does not (keyboard,
+            // accessibility sizes), rather than pinning to the top over an empty lower half.
+            GeometryReader { proxy in
+                ScrollView {
+                    VStack(spacing: FieldGuideTokens.Space.xl) {
+                        Panel(padding: FieldGuideTokens.Space.xl, spacing: FieldGuideTokens.Space.lg) {
+                            VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
+                                Text("Cubby")
+                                    .font(.fieldGuideDisplay)
+                                    .tracking(-0.6)
+                                    .foregroundStyle(FieldGuideTokens.graphite)
+                                Text("Household operating software")
                                     .font(.fieldGuideBody)
-                                    .foregroundStyle(FieldGuideTokens.destructive)
-                                    .fixedSize(horizontal: false, vertical: true)
+                                    .foregroundStyle(FieldGuideTokens.graphiteSecondary)
                             }
-                        }
-                        .disabled(submitting)
 
-                        Button {
-                            Task { await submit() }
-                        } label: {
-                            Group {
-                                if submitting {
-                                    LoadingIndicator(label: "Signing in").controlSize(.small)
-                                } else {
-                                    Text("Sign in").font(.fieldGuideTitle)
+                            VStack(alignment: .leading, spacing: FieldGuideTokens.Space.md) {
+                                FieldBox(focused: focused == .email) {
+                                    TextField("Email", text: $email)
+                                        .textContentType(.username)
+                                        .autocorrectionDisabled()
+                                        .focused($focused, equals: .email)
+                                        #if os(iOS)
+                                            .keyboardType(.emailAddress)
+                                            .textInputAutocapitalization(.never)
+                                        #endif
+                                        .onSubmit { focused = .password }
+                                }
+                                FieldBox(focused: focused == .password) {
+                                    SecureField("Password", text: $password)
+                                        .textContentType(.password)
+                                        .focused($focused, equals: .password)
+                                        .onSubmit { Task { await submit() } }
+                                }
+                                if let error = model.lastError {
+                                    // The field values stay; signing in again is the retry.
+                                    ActionFailureNotice(title: "Couldn’t sign in", message: error)
                                 }
                             }
-                            .frame(maxWidth: .infinity, minHeight: FieldGuideTokens.touchTarget - 12)
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .buttonBorderShape(.roundedRectangle(radius: FieldGuideTokens.radiusControl))
-                        .tint(FieldGuideTokens.interaction)
-                        .disabled(submitting || email.isEmpty || password.isEmpty)
+                            .disabled(submitting)
 
-                        HStack(spacing: FieldGuideTokens.Space.sm) {
-                            Rectangle()
-                                .fill(FieldGuideTokens.hairline)
-                                .frame(maxWidth: .infinity, maxHeight: FieldGuideTokens.hairlineWidth)
-                            Text("or")
-                                .font(.fieldGuideLabel)
-                                .foregroundStyle(FieldGuideTokens.graphiteSecondary)
-                            Rectangle()
-                                .fill(FieldGuideTokens.hairline)
-                                .frame(maxWidth: .infinity, maxHeight: FieldGuideTokens.hairlineWidth)
-                        }
-
-                        Button {
-                            Task { await submitGoogle() }
-                        } label: {
-                            Text("Continue with Google")
-                                .font(.fieldGuideTitle)
-                                .frame(
-                                    maxWidth: .infinity,
-                                    minHeight: FieldGuideTokens.touchTarget - 12
-                                )
-                        }
-                        .buttonStyle(.bordered)
-                        .buttonBorderShape(.roundedRectangle(radius: FieldGuideTokens.radiusControl))
-                        .tint(FieldGuideTokens.interaction)
-                        .disabled(submitting)
-
-                        Button {
-                            showServer = true
-                        } label: {
-                            HStack(spacing: FieldGuideTokens.Space.xs) {
-                                Text("Signing in to \(model.host)")
-                                    .foregroundStyle(FieldGuideTokens.graphiteSecondary)
-                                Text("·").foregroundStyle(FieldGuideTokens.hairline)
-                                Text("Change").foregroundStyle(FieldGuideTokens.interaction)
+                            Button {
+                                Task { await submit() }
+                            } label: {
+                                Group {
+                                    if submitting {
+                                        LoadingIndicator(label: "Signing in").controlSize(.small)
+                                    } else {
+                                        Text("Sign in").font(.fieldGuideTitle)
+                                    }
+                                }
+                                .loginButtonWidth()
                             }
-                            .font(.fieldGuideLabel)
-                            .frame(maxWidth: .infinity, minHeight: FieldGuideTokens.touchTarget - 16)
+                            .keyboardShortcut(.defaultAction)
+                            .buttonStyle(.borderedProminent)
+                            .buttonBorderShape(.roundedRectangle(radius: FieldGuideTokens.radiusControl))
+                            .tint(FieldGuideTokens.interaction)
+                            .disabled(submitting || email.isEmpty || password.isEmpty)
+
+                            HStack(spacing: FieldGuideTokens.Space.sm) {
+                                Rectangle()
+                                    .fill(FieldGuideTokens.hairline)
+                                    .frame(maxWidth: .infinity, maxHeight: FieldGuideTokens.hairlineWidth)
+                                Text("or")
+                                    .font(.fieldGuideLabel)
+                                    .foregroundStyle(FieldGuideTokens.graphiteSecondary)
+                                Rectangle()
+                                    .fill(FieldGuideTokens.hairline)
+                                    .frame(maxWidth: .infinity, maxHeight: FieldGuideTokens.hairlineWidth)
+                            }
+
+                            Button {
+                                Task { await submitGoogle() }
+                            } label: {
+                                Text("Continue with Google")
+                                    .font(.fieldGuideTitle)
+                                    .loginButtonWidth()
+                            }
+                            .buttonStyle(.bordered)
+                            .buttonBorderShape(.roundedRectangle(radius: FieldGuideTokens.radiusControl))
+                            .tint(FieldGuideTokens.interaction)
+                            .disabled(submitting)
+
+                            Button {
+                                showServer = true
+                            } label: {
+                                HStack(spacing: FieldGuideTokens.Space.xs) {
+                                    Text("Signing in to \(model.host)")
+                                        .foregroundStyle(FieldGuideTokens.graphiteSecondary)
+                                    Text("·").foregroundStyle(FieldGuideTokens.hairline)
+                                    Text("Change").foregroundStyle(FieldGuideTokens.interaction)
+                                }
+                                .font(.fieldGuideLabel)
+                                .frame(maxWidth: .infinity, minHeight: FieldGuideTokens.touchTarget - 16)
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(submitting)
                         }
-                        .buttonStyle(.plain)
-                        .disabled(submitting)
+                        .frame(maxWidth: 420)
                     }
-                    .frame(maxWidth: 420)
+                    .frame(maxWidth: .infinity)
+                    .padding(FieldGuideTokens.Space.xl)
+                    .frame(minHeight: proxy.size.height)
                 }
-                .frame(maxWidth: .infinity)
-                .padding(FieldGuideTokens.Space.xl)
+                .scrollBounceBehavior(.basedOnSize)
             }
             .fieldGuideScreen()
             .sheet(isPresented: $showServer) {
@@ -151,12 +153,35 @@ struct LoginView: View {
     }
 }
 
-/// A 44pt white field with a hairline that turns ink on focus — a crisp boundary, never a glow.
+extension View {
+    /// Touch-sized, full-width buttons on iPhone; Mac push buttons size to their content.
+    fileprivate func loginButtonWidth() -> some View {
+        #if os(macOS)
+            frame(minHeight: 22)
+        #else
+            frame(maxWidth: .infinity, minHeight: FieldGuideTokens.touchTarget - 12)
+        #endif
+    }
+}
+
+/// iPhone: a 44pt white field with a hairline that turns ink on focus — a crisp boundary, never a
+/// glow. Mac: the system rounded field, so keyboard focus keeps the system focus ring.
 private struct FieldBox<Content: View>: View {
     let focused: Bool
     @ViewBuilder let content: Content
 
     var body: some View {
+        #if os(macOS)
+            content
+                .font(.fieldGuideBody)
+                .textFieldStyle(.roundedBorder)
+                .controlSize(.large)
+        #else
+            box
+        #endif
+    }
+
+    private var box: some View {
         content
             .font(.fieldGuideBody)
             .textFieldStyle(.plain)

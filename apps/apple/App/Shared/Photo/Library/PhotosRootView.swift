@@ -405,28 +405,33 @@ private struct PhotoLibraryBrowser: View {
             VStack(alignment: .leading, spacing: FieldGuideTokens.Space.md) {
                 Image(systemName: "photo.on.rectangle.angled").font(.title2)
                     .foregroundStyle(.secondary).accessibilityHidden(true)
-                Text("Your Photos library, alongside Cubby").font(.headline)
+                // Benefit first; the button only starts the system's own permission prompt.
+                Text("See which photos are already in Cubby").font(.headline)
                 Text(
-                    "Allow full Photos access to browse your camera roll and see which photos are represented in Cubby. Uploads happen only when you choose a destination and add them."
+                    "With full Photos access, Cubby compares your library with the images it already has and marks matches, so you avoid adding duplicates. Nothing uploads until you choose a destination and add a photo."
                 )
                 if library.authorization == .notDetermined {
-                    Button("Allow Photos access") {
+                    Button("Continue to Photos access") {
                         Task { await library.requestAccess(matches: matches, client: appModel.client) }
                     }.buttonStyle(.borderedProminent)
                 } else {
                     #if os(macOS)
                         Text(
-                            "Whole-library browsing needs full access. Allow Photos access for Cubby in System Settings > Privacy & Security > Photos, or select individual photos below."
+                            "Whole-library browsing needs full access. Allow Photos access for Cubby in System Settings > Privacy & Security > Photos."
                         )
                         .foregroundStyle(.secondary)
                     #else
                         Text(
-                            "Whole-library browsing needs full access. Allow Photos access for Cubby in Settings, or select individual photos below."
+                            "Whole-library browsing needs full access. Allow Photos access for Cubby in Settings."
                         )
                         .foregroundStyle(.secondary)
                     #endif
                     PhotoAccessSettingsButton()
                 }
+                Divider()
+                Text("Or add specific photos").font(.headline)
+                Text("Choose only the photos you want; Cubby checks those for existing matches.")
+                    .foregroundStyle(.secondary)
                 PhotoSourceButtons(
                     maxSelectionCount: maxSelectionCount, reviewsUploads: false, onSelection: onSelection)
             }.padding(FieldGuideTokens.Space.lg).frame(maxWidth: 560)

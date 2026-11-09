@@ -69,9 +69,8 @@ struct RunConsoleView: View {
                         InlineLoadFailure(message: error) { await refresh() }
                     }
                     if let error = session.actionError {
-                        Label(error, systemImage: "exclamationmark.triangle")
-                            .foregroundStyle(FieldGuideTokens.destructive)
-                            .textSelection(.enabled)
+                        // A refused command, not a failed load: its own control retries.
+                        ActionFailureNotice(title: "Couldn’t update run", message: error)
                     }
                 }
                 if !descriptor.presentation.summarySlots.isEmpty {
@@ -92,6 +91,9 @@ struct RunConsoleView: View {
                                     .detailContentsHeader().detailContentsAnchor(section.id)
                             }
                             view
+                        } else if case .handoff = NativePresentationCoverage.detailSlot(section.id) {
+                            // The web row already names its surface; a header would repeat it.
+                            Section { view }.detailContentsAnchor(section.id)
                         } else {
                             ContinuousDetailSection(title: section.title ?? "") { view }.detailContentsAnchor(
                                 section.id)

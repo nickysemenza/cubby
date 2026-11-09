@@ -492,36 +492,55 @@ final class ImageDiagnosticsCompareModel {
 struct ImageDiagnosticsCompareView: View {
     let model: ImageDiagnosticsCompareModel
 
+    /// Every compared field, differing and one-sided fields first. Matching fields stay listed,
+    /// collapsed behind their exact value.
+    private var rows: [CompareRow] {
+        let all = [
+            CompareRow(
+                label: "SHA-256", server: model.server?.identity.sha256,
+                device: model.device?.identity.sha256, isCode: true),
+            CompareRow(
+                label: "Classifications",
+                server: model.server?.classifications.map(\.identifier).joined(separator: ", "),
+                device: model.device?.classifications.map(\.identifier).joined(separator: ", ")),
+            CompareRow(
+                label: "Recognized text",
+                server: model.server?.recognizedText.map(\.text).joined(separator: ", "),
+                device: model.device?.recognizedText.map(\.text).joined(separator: ", ")),
+            CompareRow(
+                label: "Suggested source", server: Self.sourceLabel(model.server),
+                device: Self.sourceLabel(model.device)),
+        ]
+        return all.filter { $0.outcome != .same } + all.filter { $0.outcome == .same }
+    }
+
     var body: some View {
         if model.loading {
             Section { LoadingIndicator(label: "Analyzing photo…") }
         }
         if let error = model.error {
-            Section { Text(error).foregroundStyle(FieldGuideTokens.destructive) }
+            Section { DiagnosticMessage(message: error).foregroundStyle(FieldGuideTokens.destructive) }
         }
         if model.server != nil || model.device != nil {
-            Section("Local Vision comparison") {
-                CompareRow(
-                    label: "SHA-256", server: model.server?.identity.sha256,
-                    device: model.device?.identity.sha256)
-                CompareRow(
-                    label: "Classifications",
-                    server: model.server?.classifications.map(\.identifier).joined(separator: ", "),
-                    device: model.device?.classifications.map(\.identifier).joined(separator: ", "))
-                CompareRow(
-                    label: "Recognized text",
-                    server: model.server?.recognizedText.map(\.text).joined(separator: ", "),
-                    device: model.device?.recognizedText.map(\.text).joined(separator: ", "))
-                CompareRow(
-                    label: "Suggested source", server: Self.sourceLabel(model.server),
-                    device: Self.sourceLabel(model.device))
-            }
-            if let note = model.serverNote {
-                Section {
-                    Text(note.label).font(.caption).foregroundStyle(.secondary)
-                }
+            Section {
+                ForEach(rows, id: \.label) { $0 }
+            } header: {
+                Text("Local Vision comparison")
+            } footer: {
+                Text(summary + (model.serverNote.map { " " + $0.label } ?? ""))
             }
         }
+    }
+
+    private var summary: String {
+        let differing = rows.filter { $0.outcome == .differs }.count
+        let unknown = rows.filter { $0.outcome == .unknown }.count
+        var parts: [String] = []
+        if differing > 0 {
+            parts.append("\(differing) \(differing == 1 ? "field differs" : "fields differ")")
+        }
+        if unknown > 0 { parts.append("\(unknown) not available on one side") }
+        return parts.isEmpty ? "Stored and local analysis match." : parts.joined(separator: " · ") + "."
     }
 
     private static func sourceLabel(_ report: PhotoDiagnosticsReport?) -> String? {
@@ -530,39 +549,112 @@ struct ImageDiagnosticsCompareView: View {
     }
 }
 
+/// One compared field. A match collapses to "Same" with the exact value disclosed; a difference
+/// or a missing side stays expanded with both values labelled, never tint alone. A missing value
+/// is "Not available", never treated as equal.
 private struct CompareRow: View {
+    enum Outcome { case same, differs, unknown }
+
     let label: String
     let server: String?
     let device: String?
+    var isCode = false
 
-    private var differs: Bool {
-        guard let server, let device else { return false }
-        return server != device
+    var outcome: Outcome {
+        guard let server, let device else { return .unknown }
+        return server == device ? .same : .differs
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(label).font(Font.fieldGuideLabel).foregroundStyle(.secondary)
-            HStack(alignment: .top, spacing: 12) {
-                CompareColumn(title: "Stored at import", value: server)
-                CompareColumn(title: "Analyzed locally now", value: device)
+        switch outcome {
+        case .same:
+            DisclosureGroup {
+                valueText(server.flatMap { $0.isEmpty ? nil : $0 } ?? "None")
+                copyButton(server.flatMap { $0.isEmpty ? nil : $0 })
+            } label: {
+                LabeledContent(label) {
+                    Label("Same", systemImage: "equal.circle").foregroundStyle(.secondary)
+                }
             }
+        case .differs, .unknown:
+            VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
+                HStack {
+                    Text(label).font(.fieldGuideLabel)
+                    Spacer(minLength: FieldGuideTokens.Space.sm)
+                    Label(
+                        outcome == .differs ? "Differs" : "Not available on one side",
+                        systemImage: outcome == .differs
+                            ? "exclamationmark.triangle" : "questionmark.circle"
+                    )
+                    .font(.caption)
+                    .foregroundStyle(outcome == .differs ? FieldGuideTokens.warning : .secondary)
+                }
+                #if os(macOS)
+                    HStack(alignment: .top, spacing: FieldGuideTokens.Space.md) { columns }
+                #else
+                    VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) { columns }
+                #endif
+            }
+            .accessibilityElement(children: .contain)
         }
-        .foregroundStyle(differs ? FieldGuideTokens.warning : FieldGuideTokens.graphite)
+    }
+
+    /// Mac compares side by side; the phone stacks so two long raw strings never share a line.
+    @ViewBuilder private var columns: some View {
+        CompareColumn(title: "Stored at import", value: server, isCode: isCode)
+        CompareColumn(title: "Analyzed locally now", value: device, isCode: isCode)
+    }
+
+    private func valueText(_ value: String) -> some View {
+        Text(value)
+            .font(isCode ? .fieldGuideCode : .callout)
+            .textSelection(.enabled)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    @ViewBuilder private func copyButton(_ value: String?) -> some View {
+        if let value {
+            Button("Copy", systemImage: "document.on.document") { copyToPasteboard(value) }
+                .buttonStyle(.borderless)
+                .font(.caption)
+        }
     }
 }
 
 private struct CompareColumn: View {
     let title: String
     let value: String?
+    var isCode = false
+
+    /// Absent (no report on this side) and empty (analysed, nothing found) read differently.
+    private var shown: String? { value?.isEmpty == false ? value : nil }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(title).font(.caption2).foregroundStyle(.secondary)
-            Text(value?.isEmpty == false ? value! : "—")
+            Text(shown ?? (value == nil ? "Not available" : "None"))
+                .font(isCode && shown != nil ? .fieldGuideCode : .callout)
+                .foregroundStyle(shown == nil ? .secondary : .primary)
+                .textSelection(.enabled)
+            if let value = shown {
+                Button("Copy", systemImage: "document.on.document") { copyToPasteboard(value) }
+                    .buttonStyle(.borderless)
+                    .font(.caption)
+                    .labelStyle(.iconOnly)
+                    .accessibilityLabel("Copy \(title.lowercased()) value")
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
+}
+
+private func copyToPasteboard(_ string: String) {
+    #if os(macOS)
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(string, forType: .string)
+    #else
+        UIPasteboard.general.string = string
+    #endif
 }
 
 extension ImageDiagnosticsCompareModel {
@@ -579,5 +671,11 @@ extension ImageDiagnosticsCompareModel {
     model.set(
         server: PreviewFixtures.samplePhotoDiagnosticsReport,
         device: PreviewFixtures.samplePhotoDiagnosticsReport, note: .storedAtImport)
+    return List { ImageDiagnosticsCompareView(model: model) }
+}
+
+#Preview("Server vs. device — no stored analysis", traits: .modifier(SignedInPreview())) {
+    let model = ImageDiagnosticsCompareModel()
+    model.set(server: nil, device: PreviewFixtures.samplePhotoDiagnosticsReport, note: nil)
     return List { ImageDiagnosticsCompareView(model: model) }
 }

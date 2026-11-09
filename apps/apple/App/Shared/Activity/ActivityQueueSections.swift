@@ -97,7 +97,7 @@ private struct CompanionConnectionProgress: View {
     }
 
     private func detail(now: Date) -> String {
-        guard activity.connectionAttempt > 0 else { return "Opening the image-work connection…" }
+        guard activity.connectionAttempt > 0 else { return "Connecting to Cubby…" }
         let attempt = "Attempt \(activity.connectionAttempt) failed"
         guard let next = activity.nextConnectAt else { return "\(attempt) · trying again now" }
         let seconds = max(0, Int(next.timeIntervalSince(now).rounded(.up)))
@@ -113,16 +113,13 @@ struct DeviceBacklogBannerSection: View {
     /// The latest `job.deviceBacklog` failure, verbatim; a shown banner keeps its last figures.
     var error: String? = nil
     let thisDeviceProcessing: Bool
+    /// Reloads the backlog; the failure keeps the raw message beside it.
+    var retry: @MainActor () async -> Void = {}
 
     var body: some View {
         if let error {
-            Section {
-                VStack(alignment: .leading, spacing: 2) {
-                    Label("Couldn't load the device backlog", systemImage: "exclamationmark.triangle")
-                        .font(.subheadline).foregroundStyle(FieldGuideTokens.warning)
-                    Text(error).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
-                }
-                .accessibilityElement(children: .combine)
+            Section("Device backlog") {
+                InlineLoadFailure(message: error, retry: retry)
             }
         }
         if let backlog, backlog.isShown {

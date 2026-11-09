@@ -15,7 +15,7 @@ struct USDASummaryFields: View {
                     switch key {
                     case "foodInfo":
                         text("Description", value["description"])
-                        text("Data type", value["data_type"])
+                        dataType(value["data_type"])
                     case "nutritionInfo":
                         let nutrients = value["nutrientSummary"]?.arrayValue ?? []
                         ForEach(Array(nutrients.prefix(4).enumerated()), id: \.offset) { _, nutrient in
@@ -68,6 +68,20 @@ struct USDASummaryFields: View {
             }
         }
         .font(.caption)
+    }
+
+    /// FoodData Central's data type in words. The source token stays in help and VoiceOver, and
+    /// an unlisted token shows verbatim rather than being guessed at.
+    @ViewBuilder private func dataType(_ value: JSONValue?) -> some View {
+        if let raw = value?.stringValue, !raw.isEmpty {
+            let labels = [
+                "foundation_food": "Foundation", "sr_legacy_food": "SR Legacy",
+                "survey_fndds_food": "Survey (FNDDS)", "branded_food": "Branded",
+            ]
+            LabeledContent("Data type", value: labels[raw] ?? raw)
+                .help(raw)
+                .accessibilityValue(labels[raw].map { "\($0), \(raw)" } ?? raw)
+        }
     }
 
     @ViewBuilder private func text(_ label: String, _ value: JSONValue?) -> some View {

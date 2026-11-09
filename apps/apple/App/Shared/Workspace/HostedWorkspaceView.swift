@@ -6,6 +6,9 @@ struct HostedWorkspaceView: View {
     let surface: NativeWorkspaceSurface
     let title: String
     var showsDone = true
+    /// The record or run this workspace is scoped to, shown as the subtitle and in loading and
+    /// failure text. Defaults to the surface's own identifier; nil for the unscoped graph.
+    var context: String? = nil
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
@@ -21,16 +24,17 @@ struct HostedWorkspaceView: View {
                 HostedWorkspaceWebView(host: host)
                     .id(ObjectIdentifier(host))
                 if let error = host.error {
-                    LoadFailureView(title: "Couldn’t load \(title.lowercased())", message: error) { start() }
+                    LoadFailureView(title: "Couldn’t load \(scopedTitle)", message: error) { start() }
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .background(FieldGuideTokens.canvas)
                 } else if !host.ready {
-                    LoadingIndicator.screen(label: "Loading \(title.lowercased())")
+                    LoadingIndicator.screen(label: "Loading \(scopedTitle)")
                         .background(FieldGuideTokens.canvas)
                 }
             }
         }
         .navigationTitle(title)
+        .navigationSubtitle(resolvedContext ?? "")
         #if os(iOS)
             .navigationBarTitleDisplayMode(.inline)
         #endif
@@ -47,6 +51,19 @@ struct HostedWorkspaceView: View {
             .frame(minWidth: 480, idealWidth: 800, minHeight: 420, idealHeight: 640)
         #endif
     }
+    private var resolvedContext: String? {
+        if let context { return context }
+        switch surface {
+        case .runEvidence(let runID): return runID
+        case .connections(_, let id): return id
+        }
+    }
+
+    /// "connections for Sample Product", so a failure names what failed to load.
+    private var scopedTitle: String {
+        resolvedContext.map { "\(title.lowercased()) for \($0)" } ?? title.lowercased()
+    }
+
     private func start() {
         host?.stop()
         let next = HostedWorkspaceHost(

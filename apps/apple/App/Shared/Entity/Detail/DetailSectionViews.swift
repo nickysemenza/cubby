@@ -194,12 +194,15 @@ enum DetailHeaderLine {
         }
         let parts = [crumbs.isEmpty ? nil : crumbs.joined(separator: " › "), when].compactMap { $0 }
         if !parts.isEmpty { return parts.joined(separator: " · ") }
-        return row.subtitle.flatMap { $0.isEmpty ? nil : $0 }
+        func addsContext(_ value: String) -> Bool {
+            !value.isEmpty && value.caseInsensitiveCompare(row.title) != .orderedSame
+        }
+        return row.subtitle.flatMap { addsContext($0) ? $0 : nil }
             ?? descriptor.presentation.summaryFieldKeys.lazy.compactMap { key in
                 descriptor.field(key).flatMap {
                     EntityFieldValue.text(in: row.raw, field: $0, surface: "detail")
                 }
-            }.first
+            }.first(where: addsContext)
     }
 }
 

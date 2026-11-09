@@ -340,7 +340,8 @@ final class PhotoImportRunFlow {
         items: [PhotoSelectionItem], runID: RunShortcode? = nil, createRun: PhotoImportCreateRunInput? = nil,
         persistSelection: Bool = true, start: @escaping () -> Void
     ) {
-        guard flowTask == nil else { return }
+        // A run or checkpoint is only ever made for a nonempty selection.
+        guard flowTask == nil, !items.isEmpty else { return }
         if persistSelection, let url = selectionCheckpointURL {
             do {
                 _ = try PhotoImportSelectionCheckpoint.prepare(
@@ -451,13 +452,15 @@ struct PhotoImportRunSheet: View {
     var body: some View {
         NavigationStack {
             content
-                .safeAreaBar(edge: .bottom) {
-                    if case .choosingRun = flow.step {
-                        startNewRunButton
+                #if os(iOS)
+                    .safeAreaBar(edge: .bottom) {
+                        if case .choosingRun = flow.step {
+                            startNewRunButton
                             .padding(.horizontal, FieldGuideTokens.Space.md)
                             .padding(.vertical, FieldGuideTokens.Space.sm)
+                        }
                     }
-                }
+                #endif
                 .navigationTitle("Add to import run")
                 #if os(iOS)
                     .navigationBarTitleDisplayMode(.inline)
@@ -538,23 +541,31 @@ struct PhotoImportRunSheet: View {
         }
     }
 
+    private var importTitle: String { "Import \(items.count) photo\(items.count == 1 ? "" : "s")" }
+
+    /// The phone's fixed bottom action. Mac uses the toolbar's default action instead.
     private var startNewRunButton: some View {
         Button {
             flow.startNewRun(items: items, client: appModel.client)
         } label: {
-            Label(
-                "Import \(items.count) photo\(items.count == 1 ? "" : "s")",
-                systemImage: "square.and.arrow.up"
-            )
-            .frame(maxWidth: .infinity)
+            Label(importTitle, systemImage: "square.and.arrow.up")
+                .frame(maxWidth: .infinity)
         }
         .buttonStyle(.borderedProminent)
         .controlSize(.large)
+        .disabled(items.isEmpty)
         .accessibilityIdentifier("photos.run.startNew")
     }
 
     private var choosingRunView: some View {
-        List {
+        Form {
+            if items.isEmpty {
+                Section {
+                    Label("No photos selected", systemImage: "photo.on.rectangle")
+                    Text("Go back and select the photos to import.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            }
             if let error = flow.prepareError {
                 Section {
                     Label(error, systemImage: "exclamationmark.triangle")
@@ -603,9 +614,11 @@ struct PhotoImportRunSheet: View {
             } header: {
                 Text("New run")
             } footer: {
-                Text(
-                    "\(items.count) photo\(items.count == 1 ? "" : "s") will upload. The agent will propose item groups for you to review before anything is created."
-                )
+                if !items.isEmpty {
+                    Text(
+                        "\(items.count) photo\(items.count == 1 ? "" : "s") will upload. The agent will propose item groups for you to review before anything is created."
+                    )
+                }
             }
             if flow.loadingRuns {
                 Section { LoadingIndicator(label: "Loading open runs").controlSize(.small) }
@@ -620,11 +633,13 @@ struct PhotoImportRunSheet: View {
                         Button(row.title) {
                             flow.useExistingRun(row.id, items: items)
                         }
+                        .disabled(items.isEmpty)
                         .accessibilityIdentifier("photos.run.existing.\(row.id)")
                     }
                 }
             }
         }
+        .formStyle(.grouped)
     }
 
     private func preparingView(_ completed: Int, _ total: Int) -> some View {
@@ -649,6 +664,16 @@ struct PhotoImportRunSheet: View {
                 Button("Cancel remaining work", role: .destructive) { flow.cancel() }
             }
         }
+        #if os(macOS)
+            if case .choosingRun = flow.step {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(importTitle) { flow.startNewRun(items: items, client: appModel.client) }
+                        .disabled(items.isEmpty)
+                        .keyboardShortcut(.defaultAction)
+                        .accessibilityIdentifier("photos.run.startNew")
+                }
+            }
+        #endif
     }
 
     private func finish(_ runID: RunShortcode) {

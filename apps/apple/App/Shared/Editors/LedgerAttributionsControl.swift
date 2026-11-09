@@ -21,6 +21,10 @@ struct LedgerAttributionsControl: View {
         field.key == "funders" ? "funder" : "beneficiary"
     }
 
+    private var roleLabel: String {
+        field.key == "funders" ? "Funder" : "Beneficiary"
+    }
+
     private var rolePrompt: String {
         field.key == "funders" ? "Who paid for this expense?" : "Who benefited from this expense?"
     }
@@ -34,6 +38,12 @@ struct LedgerAttributionsControl: View {
                 Text(rolePrompt)
                     .font(.caption)
                     .foregroundStyle(FieldGuideTokens.graphiteSecondary)
+                // Weights only mean something once there are two shares to compare.
+                if attributions.count > 1 {
+                    Text("Weights are relative shares. Equal weights split the expense equally.")
+                        .font(.caption)
+                        .foregroundStyle(FieldGuideTokens.graphiteSecondary)
+                }
             }
 
             ForEach(attributions.indices, id: \.self) { index in
@@ -50,10 +60,6 @@ struct LedgerAttributionsControl: View {
                 Label("Add \(roleNoun)", systemImage: "plus")
             }
             .accessibilityIdentifier("editor.expense.\(field.key).add")
-
-            Text("Weights are relative shares. Equal weights split the expense equally.")
-                .font(.caption)
-                .foregroundStyle(FieldGuideTokens.graphiteSecondary)
 
             if let attributionError {
                 Label(attributionError, systemImage: "exclamationmark.circle")
@@ -78,7 +84,7 @@ struct LedgerAttributionsControl: View {
                 Button {
                     pickerTarget = PartyPickerTarget(index: index)
                 } label: {
-                    LabeledContent("Ledger party", value: partyLabel(at: index))
+                    LabeledContent(roleLabel, value: partyLabel(at: index))
                         .frame(minHeight: FieldGuideTokens.touchTarget)
                         .contentShape(Rectangle())
                 }
@@ -92,18 +98,22 @@ struct LedgerAttributionsControl: View {
                 .accessibilityLabel("Remove \(partyLabel(at: index))")
             }
 
-            LabeledContent("Share weight") {
+            // One visible Weight label; the field and stepper name their party for VoiceOver.
+            LabeledContent("Weight") {
                 HStack(spacing: FieldGuideTokens.Space.sm) {
                     TextField("Weight", value: weightBinding(at: index), format: .number)
                         .multilineTextAlignment(.trailing)
+                        .labelsHidden()
                         #if os(iOS)
                             .keyboardType(.numberPad)
                         #endif
                         .frame(minWidth: 64)
+                        .accessibilityLabel("Weight for \(partyLabel(at: index))")
                     Stepper(
                         "Weight", value: weightBinding(at: index), in: 1...maximumWeight
                     )
                     .labelsHidden()
+                    .accessibilityLabel("Weight for \(partyLabel(at: index))")
                 }
             }
         }
