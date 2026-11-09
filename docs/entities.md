@@ -3136,7 +3136,10 @@ top-level plain SQL value, keeps SQL for filters, sorting and grouping while
 requiring a read binding to supply the projected value. Projection alone does
 not run that prepare or evaluate the plain SQL. Expense's bounded page binding
 supplies allocated category identity, keeping the whole-population category-name
-expression out of the ordinary page SELECT. Vendor Mail search uses
+expression out of the ordinary page SELECT. Vendor brand spend uses one grouped
+read for the selected Vendor ids; its scalar remains available for membership,
+sorting and grouping. Live Product and Purchase primary-key joins keep every
+live Expense's contribution singular, including refunds. Vendor Mail search uses
 the page's ids unless its query context already holds global search states;
 sender-conflict attribution still checks the whole Vendor population.
 `scaffold.context(db, request)` loads each needed prepare at most once, and

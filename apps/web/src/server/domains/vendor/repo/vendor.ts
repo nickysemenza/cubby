@@ -335,6 +335,35 @@ const vendorBrandSpend = vendorBrandedProducts()
   .where((e) => related(purchase, (p) => eq(p.id, e.purchaseId)).exists())
   .sum((e) => e.cost);
 
+async function loadVendorBrandSpend(
+  db: Database | DrizzleTransaction,
+  ids: readonly VendorId[],
+) {
+  const totals = new Map<string, number>();
+  if (ids.length === 0) return totals;
+  const database = isTransaction(db) ? databaseForTransaction(db) : db;
+  // Both joins target primary keys, so each live Expense contributes once.
+  const rows = await getDb(database)
+    .select({
+      vendorId: product.brandId,
+      spend: sql<number>`COALESCE(sum(${expense.cost}), 0)::double precision`,
+    })
+    .from(product)
+    .innerJoin(
+      expense,
+      and(eq(expense.productId, product.id), notDeleted(expense)),
+    )
+    .innerJoin(
+      purchase,
+      and(eq(purchase.id, expense.purchaseId), notDeleted(purchase)),
+    )
+    .where(and(inArray(product.brandId, [...ids]), notDeleted(product)))
+    .groupBy(product.brandId);
+  for (const row of rows)
+    if (row.vendorId !== null) totals.set(row.vendorId, row.spend);
+  return totals;
+}
+
 const vendorDocumentedPurchaseCount = sql<number>`(SELECT count(*)::int FROM "Purchase" vp
   WHERE vp."vendorId"=${outer(vendor.id)} AND ${notDeleted("vp")}
     AND ${purchaseHasPrimaryDocumentSql("vp")})`;
@@ -467,7 +496,7 @@ export const vendorScaffold = listScaffold("vendor", vendor, {
     role: vendorRole,
     brandCategoryCount: vendorBrandCategoryCount,
     purchasedBrandProductCount: vendorPurchasedBrandProductCount,
-    brandSpend: vendorBrandSpend,
+    brandSpend: { sql: vendorBrandSpend, projection: "binding" },
     documentedPurchaseCount: vendorDocumentedPurchaseCount,
     missingItemizationCount: vendorMissingItemizationCount,
     // A vendor with no purchases leads a newest-first list.
@@ -492,6 +521,16 @@ export const vendorScaffold = listScaffold("vendor", vendor, {
       },
     },
     bindings: (bind) => [
+      bind
+        .ids(({ db, ids }) =>
+          loadVendorBrandSpend(
+            db,
+            ids.map((id) => parseEntityId("vendor", id)),
+          ),
+        )
+        .fields(rawVendorOut.pick({ brandSpend: true }), (row, totals) => ({
+          brandSpend: totals.get(row.id) ?? 0,
+        })),
       bind
         .ids(({ db, ids, context }) =>
           context.has(vendorMailSearch)

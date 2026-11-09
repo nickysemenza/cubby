@@ -287,7 +287,7 @@ copy of the graph. Volume rows are inserted in
 bounded batches in one transaction, with database identity/relationship constraints
 active. The pack then uses the canonical bulk audit and search writers; it does
 not replay interactive commands for every historical record. It updates planner
-statistics before the first reads. Its real-database
+statistics, including Vendor roster cardinality, before the first reads. Its real-database
 regression checks relationships, ledger totals, search/audit coverage, historical
 Run outcomes and a query-work budget. Seeding time is setup time,
 not request latency. Historical mail outcome receipts use the admitted
