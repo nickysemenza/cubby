@@ -293,11 +293,13 @@ export function useCellEditState<TSaved = void>(
     setIsEditing(true);
   }, []);
 
-  const cancel = useCallback(() => {
+  const requestCancel = useCallback((focusOptions?: FocusOptions) => {
     setIsEditing(false);
     setSeedText(null);
-    triggerRef.current?.focus();
+    triggerRef.current?.focus(focusOptions);
   }, []);
+  // Commit handlers pass the saved value; it must never become focus options.
+  const cancel = useCallback(() => requestCancel(), [requestCancel]);
 
   // In cell-selection mode the range engine (useCellSelection) owns ALL
   // copy/paste and CellEditTrigger skips the per-element registration, so the
@@ -327,6 +329,7 @@ export function useCellEditState<TSaved = void>(
     open,
     triggerRef,
     cancel,
+    requestCancel,
     clipboard: clipboardWithGuard,
   };
 }
@@ -498,7 +501,7 @@ function EditableInputCellInternal<T>({
       {edit.isEditing && (
         <CellEditorOverlay
           anchorEl={edit.triggerRef.current}
-          onRequestCancel={edit.cancel}
+          onRequestCancel={edit.requestCancel}
         >
           <EditableInputEditor
             value={value}
@@ -706,7 +709,7 @@ function EditableSelectCellInternal({
       {edit.isEditing && (
         <CellEditorOverlay
           anchorEl={edit.triggerRef.current}
-          onRequestCancel={edit.cancel}
+          onRequestCancel={edit.requestCancel}
         >
           <EditableSelectEditor
             value={value}
@@ -840,7 +843,7 @@ function EditableDateCellInternal({
       {edit.isEditing && (
         <CellEditorOverlay
           anchorEl={edit.triggerRef.current}
-          onRequestCancel={edit.cancel}
+          onRequestCancel={edit.requestCancel}
           cancelOnOutside={false}
         >
           <EditableDateEditor
@@ -1012,7 +1015,7 @@ export function EditableAmountCell({
       {edit.isEditing && (
         <CellEditorOverlay
           anchorEl={edit.triggerRef.current}
-          onRequestCancel={edit.cancel}
+          onRequestCancel={edit.requestCancel}
         >
           <div className="inline-flex items-center gap-2">
             <NumberInput
@@ -1073,7 +1076,7 @@ export function EditableDateRangeCell({
       {edit.isEditing && (
         <CellEditorOverlay
           anchorEl={edit.triggerRef.current}
-          onRequestCancel={edit.cancel}
+          onRequestCancel={edit.requestCancel}
           cancelOnOutside={false}
         >
           <DateRangeCellEditor

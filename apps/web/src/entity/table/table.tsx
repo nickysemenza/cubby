@@ -20,6 +20,7 @@ import {
   RecordSuggestionBoundary,
 } from "~/entity/suggestions/record-suggestions";
 import type { QueryTiming } from "~/lib/query-timing";
+import { CellEditorRetentionContext } from "~/ui/data-table/cell-editor-retention";
 import { ColumnMarkContext } from "~/ui/data-table/column-presentation";
 import { ColumnVisibilityContext } from "~/ui/data-table/column-visibility-context";
 import {
@@ -746,7 +747,11 @@ function VirtualSelectionRow<TItem extends RowData>({
   columnsKey,
   rowContentVersion,
   unpaintedColumns,
+  virtualKey,
+  retainVirtualRow,
 }: {
+  virtualKey: string;
+  retainVirtualRow: (key: string) => () => void;
   unpaintedColumns: ReadonlySet<string>;
   table: ITable<TItem>;
   rows: readonly Row<TItem>[];
@@ -764,45 +769,51 @@ function VirtualSelectionRow<TItem extends RowData>({
   columnsKey: string;
   rowContentVersion: unknown;
 }) {
+  const retainRow = useCallback(
+    () => retainVirtualRow(virtualKey),
+    [retainVirtualRow, virtualKey],
+  );
   const selectionProjection = projectRowSelection(rows, row.id, rowIndex);
   const classes = cn(rowClassName?.(row));
   return (
-    <RecordSuggestionBoundary record={row.original}>
-      <table.Subscribe
-        source={table.atoms.cellSelection!}
-        selector={selectionProjection}
-      >
-        {(selection) => (
-          <table.Subscribe
-            source={table.atoms.rowSelection!}
-            selector={(selected) => selected[row.id] === true}
-          >
-            {(isSelected) => (
-              <DataRow
-                row={row}
-                rowIndex={rowIndex}
-                isSelected={isSelected}
-                isCurrent={currentRowId === row.id}
-                isExpanded={row.getIsExpanded()}
-                isFocused={selection.focused}
-                isDebugEnabled={isDebugEnabled}
-                onRowClick={onRowClick}
-                onRowHover={onRowHover}
-                onRowHoverEnd={onRowHoverEnd}
-                suppressCellRowClick={suppressCellRowClick}
-                rowClassName={classes}
-                cellClassName={cellClassName}
-                columnsKey={columnsKey}
-                unpaintedColumns={unpaintedColumns}
-                rowContentVersion={rowContentVersion}
-                selectionVersion={selection.version}
-                height={height}
-              />
-            )}
-          </table.Subscribe>
-        )}
-      </table.Subscribe>
-    </RecordSuggestionBoundary>
+    <CellEditorRetentionContext value={retainRow}>
+      <RecordSuggestionBoundary record={row.original}>
+        <table.Subscribe
+          source={table.atoms.cellSelection!}
+          selector={selectionProjection}
+        >
+          {(selection) => (
+            <table.Subscribe
+              source={table.atoms.rowSelection!}
+              selector={(selected) => selected[row.id] === true}
+            >
+              {(isSelected) => (
+                <DataRow
+                  row={row}
+                  rowIndex={rowIndex}
+                  isSelected={isSelected}
+                  isCurrent={currentRowId === row.id}
+                  isExpanded={row.getIsExpanded()}
+                  isFocused={selection.focused}
+                  isDebugEnabled={isDebugEnabled}
+                  onRowClick={onRowClick}
+                  onRowHover={onRowHover}
+                  onRowHoverEnd={onRowHoverEnd}
+                  suppressCellRowClick={suppressCellRowClick}
+                  rowClassName={classes}
+                  cellClassName={cellClassName}
+                  columnsKey={columnsKey}
+                  unpaintedColumns={unpaintedColumns}
+                  rowContentVersion={rowContentVersion}
+                  selectionVersion={selection.version}
+                  height={height}
+                />
+              )}
+            </table.Subscribe>
+          )}
+        </table.Subscribe>
+      </RecordSuggestionBoundary>
+    </CellEditorRetentionContext>
   );
 }
 
@@ -1282,7 +1293,21 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
     filterOptionHints,
     footerContent,
   } = props;
+  const [retainedRow, setRetainedRow] = useState<{ key: string } | null>(null);
+  const retainVirtualRow = useCallback((key: string) => {
+    const owner = { key };
+    setRetainedRow(owner);
+    return () => {
+      // Cancel/save focuses the trigger and can scroll it into view. Let the
+      // virtualizer observe that scroll before releasing its row, or the old
+      // range unmounts the newly focused trigger. A newer editor owns its lease.
+      requestAnimationFrame(() =>
+        setRetainedRow((current) => (current === owner ? null : current)),
+      );
+    };
+  }, []);
   const controller = useDataTableController({
+    retainedItemKey: retainedRow?.key ?? null,
     table,
     // A record's own tables can print meaning for a null bucket ("Unassigned",
     // "No purchase/vendor") and edit in place, which hiding the column would erase.
@@ -1471,26 +1496,6 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
         </>
       );
 
-    // A pinned section header scrolled out of range renders ahead of the top
-    // spacer, which gives up the header's height so the layout keeps its size.
-    const [first, second] = virtualRows;
-    const detachedSticky =
-      first !== undefined &&
-      first.index === stickyIndex &&
-      second !== undefined &&
-      second.start > first.end;
-    const topSpacerHeight = detachedSticky
-      ? second.start - first.size
-      : (first?.start ?? 0);
-    const leadingRows = detachedSticky ? [first] : [];
-    const rangeRows = detachedSticky ? virtualRows.slice(1) : virtualRows;
-    const bottomSpacerHeight =
-      virtualRows.length > 0
-        ? Math.max(
-            0,
-            totalSize - (virtualRows[virtualRows.length - 1]?.end ?? 0),
-          )
-        : 0;
     const bottomSpacerStyle = infiniteScroll
       ? undefined
       : ghostRowsStyle(dConfig.rowHeight);
@@ -1597,6 +1602,8 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
       return (
         <VirtualSelectionRow
           key={item.occurrenceKey ?? row.id}
+          virtualKey={String(virtualRow.key)}
+          retainVirtualRow={retainVirtualRow}
           table={table}
           rows={rows}
           row={row}
@@ -1619,42 +1626,44 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
       );
     };
 
+    // A detached sticky header starts the body, as before. Other retained
+    // rows can be disjoint from the viewport: fill every gap, not only its ends.
+    const stickyRow = virtualRows.find((row) => row.index === stickyIndex);
+    const detachedSticky = stickyRow && stickyRow.end < controller.scrollOffset;
+    const bodyRows: ReactNode[] = [];
+    let cursor = 0;
+    let gapIndex = 0;
+    if (detachedSticky) {
+      bodyRows.push(renderVirtualRow(stickyRow));
+      cursor = stickyRow.size;
+    }
+    const spacer = (key: string, height: number, bottom = false) => (
+      <tr key={key}>
+        <td
+          aria-label={
+            bottom ? "Virtualized rows below" : "Virtualized rows above"
+          }
+          colSpan={colSpan}
+          className="border-0 p-0"
+          style={{
+            height: `${height}px`,
+            ...(bottom ? bottomSpacerStyle : ghostRowsStyle(dConfig.rowHeight)),
+          }}
+        />
+      </tr>
+    );
+    for (const virtualRow of virtualRows) {
+      if (detachedSticky && virtualRow === stickyRow) continue;
+      const gap = virtualRow.start - cursor;
+      if (gap > 0) bodyRows.push(spacer(`gap-${gapIndex++}`, gap));
+      bodyRows.push(renderVirtualRow(virtualRow));
+      cursor = Math.max(cursor, virtualRow.start) + virtualRow.size;
+    }
+    if (totalSize > cursor)
+      bodyRows.push(spacer("gap-bottom", totalSize - cursor, true));
     return (
       <RowActivityStoreContext value={rowActivity}>
-        {leadingRows.map(renderVirtualRow)}
-        {/* Top padding row for scroll position. Offsets are relative to the
-            table's own scroll pane, so `start` is already the gap. */}
-        {topSpacerHeight > 0 && (
-          <tr>
-            <td
-              aria-label="Virtualized rows above"
-              colSpan={colSpan}
-              className="border-0 p-0"
-              style={{
-                height: `${topSpacerHeight}px`,
-                ...ghostRowsStyle(dConfig.rowHeight),
-              }}
-            />
-          </tr>
-        )}
-
-        {/* Render only visible rows (with optional group headers) */}
-        {rangeRows.map(renderVirtualRow)}
-
-        {/* Bottom padding row for remaining scroll space */}
-        {bottomSpacerHeight > 0 && (
-          <tr>
-            <td
-              aria-label="Virtualized rows below"
-              colSpan={colSpan}
-              className="border-0 p-0"
-              style={{
-                height: `${bottomSpacerHeight}px`,
-                ...bottomSpacerStyle,
-              }}
-            />
-          </tr>
-        )}
+        {bodyRows}
       </RowActivityStoreContext>
     );
   };

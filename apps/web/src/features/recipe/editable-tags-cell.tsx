@@ -64,7 +64,7 @@ export function EditableTagsCell({
       {edit.isEditing && (
         <CellEditorOverlay
           anchorEl={edit.triggerRef.current}
-          onRequestCancel={edit.cancel}
+          onRequestCancel={edit.requestCancel}
         >
           <EditableTagsEditor
             value={value}

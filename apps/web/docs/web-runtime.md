@@ -443,14 +443,27 @@ never the preceding scope's rows or totals. Same-key refreshes retain data and b
 until reconciliation succeeds. Skullet boxes supply shared list, detail, inspector
 and media placeholders without rendering hidden data readers or persisting shapes.
 
-Desktop page tables start inside the same `60vh` bound the virtualizer uses
-before measurement. The measured remaining viewport then replaces that bound.
-An unbounded first layout would mount the full page and admit premature paging;
-embedded tables retain their `60vh` cap.
-Desktop virtualization keeps four extra rows beyond each visible edge. The
-virtualizer owns pane measurement; do not add a separate resize/state cycle
-to scale an offscreen buffer with the pane's height. Preserve sticky group
-headers and scroll restoration through the existing range and offset owners.
+Desktop page tables start inside a CSS `60vh` bound. The measured remaining
+viewport then replaces that bound. Paging estimates `60vh` before the pane
+attaches, then uses the virtualizer's measured rect, including hidden zero-height
+panes. An unbounded first layout would mount the full page and admit premature
+paging; embedded tables retain their `60vh` cap.
+
+Desktop virtualization keeps four extra items (records, group headers or detail
+rows) beyond each visible edge. An open inline editor retains its owning row by
+stable occurrence key through save/cancel focus restoration. Release follows the
+virtualizer observing any scroll caused by returning focus to the trigger.
+Outside-press cancellation prevents that focus from scrolling the pane, so the
+intended row click still reaches its target. Draft and focus must survive
+scrolling outside the visible range without mounting intervening records. The
+name editor has its own renderer lifetime: changing row-action resolvers during
+paging must not recreate its component function. The body fills each disjoint
+range's gap while preserving the detached sticky header and total scroll extent.
+Paging follows the normal viewport range; retaining an offscreen editor must not
+create additional paging demand. The virtualizer owns pane measurement; do not
+add a separate resize/state cycle to scale an offscreen buffer with the pane's
+height. Preserve sticky group headers and scroll restoration through the
+existing range and offset owners.
 
 Filter option sources compile from declarations: fixed choices remain complete
 local rosters; entity references use the shared live roster; a relation source

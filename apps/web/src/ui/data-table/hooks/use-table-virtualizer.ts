@@ -50,6 +50,7 @@ type GroupedItem =
 
 /** First estimate for a row detail; the rendered element is then measured. */
 const ROW_DETAIL_ESTIMATE = 160;
+const TABLE_OVERSCAN = 4;
 
 /**
  * What `virtualRow.index` points at, given the grouped/flat index space.
@@ -178,6 +179,8 @@ interface UseTableVirtualizerArgs {
    * stays testable without a router; see useDataTableController.
    */
   initialOffset?: number;
+  /** Stable occurrence key of the row owning an open inline editor. */
+  retainedItemKey?: string | null;
 }
 
 interface UseTableVirtualizerResult {
@@ -198,6 +201,8 @@ interface UseTableVirtualizerResult {
   virtualRowCount: number;
   /** Currently virtualized rows. */
   virtualRows: VirtualItem[];
+  /** End of the normal rendered range, excluding manually retained items. */
+  lastRangeIndex: number;
   /** Total scroll height the spacer rows must fill. */
   totalSize: number;
   /** Resolve a `virtualRow.index` to its render target (header or flat row). */
@@ -234,6 +239,7 @@ export function useTableVirtualizer({
   isMobile,
   trailingSentinel = false,
   initialOffset = 0,
+  retainedItemKey = null,
 }: UseTableVirtualizerArgs): UseTableVirtualizerResult {
   // Ref for virtualization scroll container
   const tableContainerRef = useRef<HTMLDivElement>(null);
@@ -284,15 +290,24 @@ export function useTableVirtualizer({
         : [],
     [groupedItems],
   );
+  const retainedIndex = useMemo(() => {
+    if (retainedItemKey === null) return -1;
+    for (let index = 0; index < baseCount; index++) {
+      if (getItemKey(index) === retainedItemKey) return index;
+    }
+    return -1;
+  }, [baseCount, getItemKey, retainedItemKey]);
   const rangeExtractor = useCallback(
     (range: Range) => {
       const sticky = stickyHeaderIndex(headerIndexes, range.startIndex);
       const indexes = defaultRangeExtractor(range);
-      return sticky === null || indexes.includes(sticky)
-        ? indexes
-        : [sticky, ...indexes];
+      if (sticky !== null && !indexes.includes(sticky)) indexes.push(sticky);
+      // Drafts live in the row component, including its portaled editor.
+      if (retainedIndex >= 0 && !indexes.includes(retainedIndex))
+        indexes.push(retainedIndex);
+      return indexes.sort((a, b) => a - b);
     },
-    [headerIndexes],
+    [headerIndexes, retainedIndex],
   );
   const rowVirtualizer = useVirtualizer({
     getScrollElement: () => tableContainerRef.current,
@@ -313,7 +328,7 @@ export function useTableVirtualizer({
       return rowHeight;
     },
     // Keep a bounded runway without mounting a pane-sized buffer of cells.
-    overscan: 4,
+    overscan: TABLE_OVERSCAN,
     rangeExtractor,
   });
 
@@ -351,17 +366,25 @@ export function useTableVirtualizer({
     tableContainerRef,
     paneWrapperRef,
     paneMaxHeight,
-    // Paging and rendering share the virtualizer's measured pane, including
-    // the initial 60vh estimate before its observer attaches.
+    // Virtual-core seeds an unmeasured rect with zero. Estimate paging until
+    // a pane attaches, then honor measured zero-height (hidden) panes too.
     paneRows: Math.ceil(
-      (rowVirtualizer.scrollRect?.height ??
-        (globalThis.window?.innerHeight ?? 800) * 0.6) / rowHeight,
+      (rowVirtualizer.scrollElement
+        ? (rowVirtualizer.scrollRect?.height ?? 0)
+        : (globalThis.window?.innerHeight ?? 800) * 0.6) / rowHeight,
     ),
     // Keep virtual-core's seeded offset, not the pane's clamped scrollTop:
     // pending restoration still needs to admit pages before the offset fits.
     scrollOffset: rowVirtualizer.scrollOffset ?? initialOffset,
     virtualRowCount: baseCount,
     virtualRows,
+    lastRangeIndex: rowVirtualizer.range
+      ? (defaultRangeExtractor({
+          ...rowVirtualizer.range,
+          count: rowVirtualizer.options.count,
+          overscan: rowVirtualizer.options.overscan,
+        }).at(-1) ?? -1)
+      : -1,
     totalSize,
     resolveIndex: (index) =>
       resolveVirtualIndex(index, groupedItems, trailingSentinel, rowCount),
