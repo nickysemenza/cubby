@@ -1,4 +1,8 @@
-import type { DataCheck, ScoredEntity } from "@cubby/schemas/data-quality";
+import {
+  dataChecksByEntity,
+  type DataCheck,
+  type ScoredEntity,
+} from "@cubby/schemas/data-quality";
 import { sql, type SQL } from "drizzle-orm";
 
 import type { ScoredTable } from "~/server/generic/data-quality/repo/registry";
@@ -21,7 +25,12 @@ export const storedCheckStateSql = (
  * unassessed record never ranks as complete. Worklists order by this.
  */
 export const storedGapCountSql = (kind: ScoredEntity, t: ScoredTable): SQL =>
+  // A key a rules change removed stays until republication; it is not a gap.
   sql`(SELECT nullif(count(*) FILTER (WHERE c.value <> ${"not_applicable"}), 0) * 0
         + count(*) FILTER (WHERE c.value = ${"gap"})
       FROM "QualitySnapshot" dq, jsonb_each_text(dq.checks) c
-      WHERE dq."entityId" = ${t.id} AND dq.kind = ${kind})`;
+      WHERE dq."entityId" = ${t.id} AND dq.kind = ${kind}
+        AND c.key = ANY(ARRAY[${sql.join(
+          dataChecksByEntity[kind].options.map((check) => sql`${check}`),
+          sql`, `,
+        )}]::text[]))`;

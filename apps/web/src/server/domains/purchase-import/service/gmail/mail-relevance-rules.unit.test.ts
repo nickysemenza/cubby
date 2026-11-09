@@ -4,8 +4,8 @@ import { describe, expect, it } from "vitest";
 
 import { mailRelevanceRule } from "./mail-relevance-rules";
 
-const rule = (from: string, subject: string) =>
-  mailRelevanceRule({ from, subject });
+const rule = (from: string, subject: string, bodyText = "") =>
+  mailRelevanceRule({ headers: { from, subject }, bodyText, bodyHtml: null });
 
 describe("mail relevance rules", () => {
   it.each([
@@ -27,21 +27,45 @@ describe("mail relevance rules", () => {
       "We noticed you left an item in your cart",
     ],
     ["Office Depot <officedepot@em.officedepot.com>", "BOGO deals inside"],
+    [
+      '"Office Depot <deals@example.test>" <officedepot@em.officedepot.com>',
+      "BOGO",
+    ],
   ])("settles %s / %s as unrelated", (from, subject) => {
     expect(rule(from, subject)).toEqual(expect.any(String));
   });
 
   it.each([
-    ["CB2 <cb2@mail.cb2.com>", "Your receipt for order #1 from CB2."],
+    ["CB2 <cb2@mail.cb2.com>", "Your receipt for order #1 from CB2.", ""],
     [
       "Store <orders@store.example>",
       "Your quote has been converted to order #42",
+      "",
     ],
-    ["eBay <ebay@ebay.com>", "You won Synthetic Camera Strap"],
-    ["eBay <ebay@ebay.com>", "Order confirmed: Synthetic Drill"],
-    ["USPS <auto-reply@usps.com>", "USPS Expected Delivery on Monday"],
-    ["Store <orders@store.example>", "Delivery estimate updated for order #7"],
-  ])("leaves %s / %s to the models", (from, subject) => {
-    expect(rule(from, subject)).toBeNull();
+    ["eBay <ebay@ebay.com>", "You won Synthetic Camera Strap", ""],
+    ["USPS <auto-reply@usps.com>", "USPS Expected Delivery on Monday", ""],
+    [
+      "Store <orders@store.example>",
+      "Delivery estimate updated for order #7",
+      "",
+    ],
+    [
+      "Marketplace <payments@market.example>",
+      "Refund payout for order #42",
+      "",
+    ],
+    [
+      "eBay - seller <seller_x@members.ebay.com>",
+      "Refund issued for order #42",
+      "",
+    ],
+    [
+      "Landscaper <info@landscape.example>",
+      "Re: Estimate #42",
+      "Payment received. Thank you!",
+    ],
+    ['"Venmo <venmo@venmo.com>" <orders@store.example>', "Your order", ""],
+  ])("leaves %s / %s to the models", (from, subject, body) => {
+    expect(rule(from, subject, body)).toBeNull();
   });
 });

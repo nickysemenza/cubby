@@ -329,7 +329,7 @@ export async function routeGmailMessage(
   decision: MailboxClassificationDecision;
   view: MailTriageView | null;
 }> {
-  const rule = mailRelevanceRule(normalized.mail.headers);
+  const rule = mailRelevanceRule(normalized.mail);
   if (rule)
     return {
       decision: { classification: "unrelated", stage: "rule", reason: rule },

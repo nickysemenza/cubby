@@ -36,7 +36,9 @@ export const emailWorkSources: WorkSource[] = [
           owners: sql`ARRAY["Email"."ledgerPartyId"]`,
           exclusiveOwner: sql`"Email"."ledgerPartyId"`,
           date: householdDaySql(sql`"Email"."receivedAt"`),
+          // An unpublished Email may still need relevance review.
           executor: sql`CASE
+            WHEN ${readGap.missingInputs} THEN ${human}
             WHEN ${readGap.failed("email_relevance_undecided")} THEN ${human}
             WHEN ${readGap.failed("email_original_missing")} THEN ${agent}
             ELSE ${automatic} END`,

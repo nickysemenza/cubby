@@ -48,7 +48,6 @@ const RELEVANCE_HEADERS = [
 ] as const;
 const CONTEXT_LINKS = 12;
 const CONTEXT_IMAGES = 6;
-const CONTEXT_LABELS = 12;
 
 const clipped = (value: string, chars: number) =>
   value.length > chars ? `${value.slice(0, chars)}…` : value;
@@ -140,9 +139,8 @@ function readableMailView({
       linksOmitted: links.omitted,
       images: images.items,
       imagesOmitted: images.omitted,
-      trackingImageLabels: (html?.tracking_image_labels ?? [])
-        .slice(0, CONTEXT_LABELS)
-        .map((label) => clipped(label, 128)),
+      // Labels on tracking pixels can carry receipt text; keep every one.
+      trackingImageLabels: html?.tracking_image_labels ?? [],
       unresolvedImages: html?.unresolved_image_sources ?? [],
       preheader: html?.preheader ?? null,
       structuredData: html?.structured_data ?? [],
