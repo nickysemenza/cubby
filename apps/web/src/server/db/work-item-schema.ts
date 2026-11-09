@@ -64,8 +64,9 @@ export const workPublication = pgTable("WorkPublication", {
   publishedAt: timestamp("publishedAt", { mode: "date" }),
   /** The latest member write a publication has not yet read. */
   dirtyAt: timestamp("dirtyAt", { mode: "date" }),
-  /** The last publish attempt; bounds retries after a failure. */
+  /** The last failed publish attempt, cleared by a success; backs off retries. */
   attemptedAt: timestamp("attemptedAt", { mode: "date" }),
+  /** That failed attempt's raw error. */
   error: text("error"),
   meta: jsonb("meta").$type<WorkPublicationMeta>(),
 });

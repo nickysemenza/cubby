@@ -1,6 +1,7 @@
 import { getErrorMessage } from "@cubby/shared";
 import { createLogger } from "@cubby/worker-tracing";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
+import type { PgInsertValue } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
@@ -16,8 +17,10 @@ const log = createLogger("work-publication");
 const PUBLICATION_ID = 1;
 /** Background-only changes (imports, Runs) reach a reader within this age. */
 const WORK_PUBLICATION_MAX_AGE_MS = 2 * 60_000;
-/** A running or failed attempt holds off others this long; a finished one doesn't. */
-const ATTEMPT_RETRY_SECONDS = 60;
+/** A failed attempt holds off the next one this long. */
+const FAILED_RETRY_SECONDS = 60;
+/** Publishers hold this transaction lock; at most one runs at a time. */
+const PUBLISH_LOCK = "work-publication";
 
 export type WorkPublicationRow = typeof workPublication.$inferSelect;
 
@@ -54,47 +57,67 @@ export async function markWorkPublicationDirty(db: Database): Promise<void> {
 }
 
 /**
- * Replaces the publication with the sources' current union. One attempt runs
- * at a time, so concurrent stale reads publish once; readers keep the previous
- * rows until this transaction commits. Returns whether this call published.
+ * Replaces the publication with the sources' current union. A transaction
+ * try-lock admits one publisher; another returns at once, and readers never
+ * wait, keeping the previous rows until this transaction commits. The insert
+ * runs in a savepoint, so its failure is recorded by the attempt that still
+ * holds the lock. Returns whether this call published.
  */
 export async function publishWorkItems(
   db: Database,
   /** Writes the rows inside the publication transaction (`insertWorkItems`). */
   insert: (tx: Database) => Promise<WorkPublicationMeta>,
 ): Promise<boolean> {
-  const claimed = z.array(z.object({ id: z.number() })).parse(
-    await getDb(db).execute(
-      sql`
-        INSERT INTO "WorkPublication" (id, "attemptedAt") VALUES (${PUBLICATION_ID}, clock_timestamp())
-        ON CONFLICT (id) DO UPDATE SET "attemptedAt" = clock_timestamp()
-        WHERE "WorkPublication"."attemptedAt" IS NULL
-          OR "WorkPublication"."publishedAt" >= "WorkPublication"."attemptedAt"
-          OR "WorkPublication"."attemptedAt" < clock_timestamp() - make_interval(secs => ${ATTEMPT_RETRY_SECONDS})
-        RETURNING id`,
-      "objects",
-    ),
-  );
-  if (!claimed.length) return false;
-  try {
-    await withTransactionDatabase(db, async (tx) => {
-      const meta = await insert(tx);
+  const published = await withTransactionDatabase(db, async (tx) => {
+    const { locked } = z
+      .object({ locked: z.boolean() })
+      .parse(
+        (
+          await getDb(tx).execute(
+            sql`SELECT pg_try_advisory_xact_lock(hashtextextended(${PUBLISH_LOCK}, 0)) AS locked`,
+            "objects",
+          )
+        )[0],
+      );
+    if (!locked) return false;
+    const [backoff] = await getDb(tx)
+      .select({ id: workPublication.id })
+      .from(workPublication)
+      .where(
+        and(
+          eq(workPublication.id, PUBLICATION_ID),
+          sql`${workPublication.attemptedAt} > clock_timestamp() - make_interval(secs => ${FAILED_RETRY_SECONDS})`,
+        ),
+      );
+    if (backoff) return false;
+    const record = (
+      values: Omit<PgInsertValue<typeof workPublication>, "id">,
+    ) =>
+      getDb(tx)
+        .insert(workPublication)
+        .values({ id: PUBLICATION_ID, ...values })
+        .onConflictDoUpdate({ target: workPublication.id, set: values });
+    try {
+      const meta = await withTransactionDatabase(tx, insert);
       // Transaction start precedes the rows' snapshot. Set in SQL: a JS Date
-      // drops microseconds and would sort before this attempt's attemptedAt.
-      await getDb(tx)
-        .update(workPublication)
-        .set({ publishedAt: sql`now()`, meta, error: null })
-        .where(eq(workPublication.id, PUBLICATION_ID));
-    });
-  } catch (error) {
-    log.error("work publication failed", { error });
-    await getDb(db)
-      .update(workPublication)
-      .set({ error: getErrorMessage(error) })
-      .where(eq(workPublication.id, PUBLICATION_ID));
-    return false;
-  }
+      // drops microseconds and could sort before a later dirtyAt it read.
+      await record({
+        publishedAt: sql`now()`,
+        meta,
+        error: null,
+        attemptedAt: null,
+      });
+      return true;
+    } catch (error) {
+      log.error("work publication failed", { error });
+      await record({
+        error: getErrorMessage(error),
+        attemptedAt: sql`clock_timestamp()`,
+      });
+      return false;
+    }
+  });
   // Open Home, Work and sidebar reads refetch the new rows.
-  await recordCommittedChanges(db, { workQueue: null });
-  return true;
+  if (published) await recordCommittedChanges(db, { workQueue: null });
+  return published;
 }

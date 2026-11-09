@@ -4057,9 +4057,13 @@ page hydration run unchanged over that relation, so a count or first page is
 one scan of a few thousand rows instead of planning every source.
 `WorkPublication` records the snapshot instant, the last member write it has not
 read (`dirtyAt`, set after commit by `recordChange` in a request or a
-member-awaited background write), the last attempt and its error. A missing
-publication is written before the first read; a stale one (dirty, or older than
-two minutes) is replaced after the response, one attempt at a time, and its
+member-awaited background write), and the last failed attempt and its raw
+error, which hold off the next attempt for a minute. Publishers take a
+transaction try-lock, so one runs at a time and the others return at once;
+readers never wait and keep the previous rows until the publication commits.
+The insert runs in a savepoint, so the attempt that holds the lock records its
+own failure. A missing publication is written before the first read; a stale
+one (dirty, or older than two minutes) is replaced after the response, and its
 commit rings `workQueue` readers. MCP reads and `workQueue.forRecord` stay live,
 since agents act and reread and a record strip is already scoped. Publication
 captures coverage messages and incomplete Project/diagnostic inputs with the rows.
