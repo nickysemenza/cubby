@@ -178,6 +178,17 @@ describe("mail import rule", () => {
       [],
       true,
     ],
+    // Fragmented references still count.
+    [
+      "Tracking: 1Z999AA10123456784. Second package tracking: AB\t1234\t5678",
+      [],
+      true,
+    ],
+    [
+      "Tracking: 1Z999AA10123456784. Second package tracking: AB 1234\n5678",
+      [],
+      true,
+    ],
     // Two labelled references, one recognised key: a second package.
     [
       "Tracking: 1Z999AA10123456784. Return parcel 1Z999AA10123456784",

@@ -202,13 +202,10 @@ function labelledReferences(text: string) {
         references.push(reference);
       run = [];
     };
-    // Space-grouped digits join (`9400 1000 …`); any other separator, including
-    // a line break, ends the run.
-    for (const [, separator, raw] of text
-      .slice(start, end)
-      .matchAll(/([^A-Za-z0-9-]*)([A-Za-z0-9-]+)/gu)) {
-      if (/[^ ]/u.test(separator!)) flush();
-      const token = raw!.replaceAll("-", "");
+    // Digit-bearing tokens join across any separator, so fragmented references
+    // (`9400 1000 …`, `AB\t1234\t5678`) still reach the minimum length.
+    for (const raw of text.slice(start, end).split(/[^A-Za-z0-9-]+/u)) {
+      const token = raw.replaceAll("-", "");
       if (!token) continue;
       if (/\d/u.test(token)) {
         if (!run.length) {
