@@ -40,7 +40,6 @@ import { Description } from "~/ui/text/description";
 import { EnumPill } from "~/ui/text/enum-pill";
 import { StatusText } from "~/ui/text/status-text";
 
-const usd = (value: number) => formatCurrency(value);
 const clock = (iso: string) =>
   new Date(iso).toLocaleTimeString(undefined, {
     hour: "numeric",
@@ -139,8 +138,10 @@ export function AiFundingLine({ budget }: { budget: AiFundingStatus }) {
     <p className="text-xs text-muted-foreground tabular-nums">
       {SOURCES.map(({ id, source }) => (
         <Fragment key={id}>
-          {source} {usd(budget[id].spentUsd)}
-          {isBudgeted(id) ? ` of ${usd(budget[id].limitUsd)}` : ""},{" "}
+          {source} {formatCurrency(budget[id].spentUsd)}
+          {isBudgeted(id)
+            ? ` of ${formatCurrency(budget[id].limitUsd)}`
+            : ""},{" "}
           {fundingVerdict(budget, id).label} ·{" "}
         </Fragment>
       ))}
@@ -377,10 +378,10 @@ export function FundingBudgetEditor({
               const { id } = row;
               // A credit has no window budget: it runs until the provider refuses.
               if (!isBudgeted(id))
-                return <span>{usd(budget[id].spentUsd)} spent</span>;
+                return <span>{formatCurrency(budget[id].spentUsd)} spent</span>;
               return (
                 <Row align="center" gap="sm">
-                  <span>{usd(budget[id].spentUsd)} of $</span>
+                  <span>{formatCurrency(budget[id].spentUsd)} of $</span>
                   <Input
                     aria-label={`${row.source} budget per window`}
                     type="number"
@@ -484,9 +485,10 @@ export function PaidRunButton({
             <AlertDialogHeader>
               <AlertDialogTitle>Spend past the paid budget?</AlertDialogTitle>
               <AlertDialogDescription>
-                This window has already spent {usd(paid.spentUsd)} of{" "}
-                {usd(paid.limitUsd)} on paid models. Allow this Run up to{" "}
-                {usd(overAmount)} more until {clock(budget.windowEnd)}.
+                This window has already spent {formatCurrency(paid.spentUsd)} of{" "}
+                {formatCurrency(paid.limitUsd)} on paid models. Allow this Run
+                up to {formatCurrency(overAmount)} more until{" "}
+                {clock(budget.windowEnd)}.
               </AlertDialogDescription>
             </AlertDialogHeader>
           ) : (
@@ -497,7 +499,7 @@ export function PaidRunButton({
               <AlertDialogDescription>
                 It resumes now and spends from the paid budget
                 {paid
-                  ? ` (${usd(paid.spentUsd)} of ${usd(paid.limitUsd)} used this window)`
+                  ? ` (${formatCurrency(paid.spentUsd)} of ${formatCurrency(paid.limitUsd)} used this window)`
                   : ""}
                 .
               </AlertDialogDescription>
@@ -520,7 +522,7 @@ export function PaidRunButton({
                   onConfirm(overAmount);
                 }}
               >
-                Allow {usd(overAmount)} over budget
+                Allow {formatCurrency(overAmount)} over budget
               </AlertDialogAction>
             ) : (
               <AlertDialogAction

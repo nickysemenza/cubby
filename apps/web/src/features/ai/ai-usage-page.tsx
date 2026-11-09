@@ -22,7 +22,11 @@ import {
   usageChartDimensions,
 } from "~/features/ai/ai-usage-chart";
 import { ai } from "~/integrations/tanstack-query/generated/domains/ai.gen";
-import { formatCount } from "~/lib/number-format";
+import {
+  formatCount,
+  formatAiCost as formatUsageCost,
+  formatAiCostSubtotal,
+} from "~/lib/number-format";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import { useTableColumnLayout } from "~/ui/data-table/column-layout";
@@ -38,11 +42,7 @@ import { Grid, Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";
 import { Badge } from "~/ui/reui/badge";
-import {
-  AiCost,
-  formatAiCost as formatUsageCost,
-  formatAiCostSubtotal,
-} from "~/ui/values/ai-cost";
+import { AiCost } from "~/ui/values/ai-cost";
 import { DateDisplay } from "~/ui/values/date-display";
 
 const supportedEntityKinds = [

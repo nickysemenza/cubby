@@ -4,6 +4,7 @@ import type {
   TaskStatus,
 } from "@cubby/schemas/project";
 import { taskStatusValues } from "@cubby/schemas/project";
+import { TASK_STATUS_LABELS } from "@cubby/schemas/task-fields";
 import { ListChecksIcon } from "@phosphor-icons/react/dist/csr/ListChecks";
 import { Link } from "@tanstack/react-router";
 import { useMemo } from "react";
@@ -14,8 +15,6 @@ import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import { NoneValue } from "~/ui/text/none-value";
 import { getStatusChartColor } from "~/ui/values/status-colors";
 import { Visualization } from "~/ui/visualizations/visualization";
-
-import { TASK_STATUS_LABELS } from "../shared";
 
 /** `breakdown` -> per-status count lookup, in column order. */
 function counts(row: ProjectTaskStatusBreakdown, status: TaskStatus): number {

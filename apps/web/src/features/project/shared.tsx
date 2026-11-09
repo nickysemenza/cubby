@@ -33,8 +33,6 @@ import { badgeVariantColor } from "~/ui/reui/badge";
 import { NoneValue } from "~/ui/text/none-value";
 import { getStatusBadgeProps } from "~/ui/values/status-colors";
 
-export { TASK_STATUS_LABELS } from "~/entity/presentation/task-options";
-
 export function StatusIcon({ status }: { status: ProjectStatus | TaskStatus }) {
   const { icon: Icon, variant } = getStatusBadgeProps("project", status);
   return Icon ? (

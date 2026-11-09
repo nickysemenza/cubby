@@ -41,6 +41,7 @@ import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { aiFunding } from "~/integrations/tanstack-query/generated/domains/aiFunding.gen";
 import { run as runOperations } from "~/integrations/tanstack-query/generated/domains/run.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
+import { formatDuration } from "~/lib/format-duration";
 import { useSectionEmpty } from "~/ui/data-table/detail-section-state";
 import { Panel, Row, Section, Stack } from "~/ui/layout";
 import { Disclosure } from "~/ui/layout/disclosure";
@@ -63,7 +64,6 @@ import {
   AgentTokenAccounting,
 } from "./agent-context-breakdown";
 import {
-  formatWorkDuration,
   plannedPhotoWorkSteps,
   summarizeAgentWork,
   summarizePhotoDescriptions,
@@ -398,7 +398,7 @@ function AgentWorkOverview({
       <p className="mt-2 text-xs text-muted-foreground">
         Total run wall time{" "}
         <strong className="font-semibold text-foreground tabular-nums">
-          {formatWorkDuration(wallMs)}
+          {formatDuration(wallMs)}
         </strong>
         {run.endedAt ? null : " · still running"}
       </p>
@@ -428,9 +428,9 @@ function AgentWorkOverview({
               item.timing === "elapsed" ? item.durationMs : null;
             const total =
               elapsedMs !== null
-                ? formatWorkDuration(elapsedMs)
+                ? formatDuration(elapsedMs)
                 : toolMs !== null && toolMs !== undefined
-                  ? `≥${formatWorkDuration(toolMs)}`
+                  ? `≥${formatDuration(toolMs)}`
                   : null;
             const evidence = [
               workCount(item),
@@ -449,13 +449,13 @@ function AgentWorkOverview({
                     <RecordDetail summary="Timing">
                       <StepTiming
                         rows={[
-                          ["Tool / attempt", formatWorkDuration(toolMs)],
+                          ["Tool / attempt", formatDuration(toolMs)],
                           [
                             "Waiting",
                             item.waitingMs === null ||
                             item.waitingMs === undefined
                               ? "—"
-                              : `≥${formatWorkDuration(item.waitingMs)}`,
+                              : `≥${formatDuration(item.waitingMs)}`,
                             item.waitingMs === undefined
                               ? "No waiting interval recorded"
                               : "Photo batch wall time outside summed completed attempts; a lower bound",
@@ -494,7 +494,7 @@ function AgentWorkOverview({
               leading={<RecordDot state="done" label={STEP_LABEL.done} />}
               primary="Agent model turns"
               secondary="Lower bound: measured model calls only"
-              trailing={`≥${formatWorkDuration(run.agentModelMs)}`}
+              trailing={`≥${formatDuration(run.agentModelMs)}`}
             />
           ) : messages.length && run.endedAt ? (
             <RecordRow

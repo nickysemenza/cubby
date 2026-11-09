@@ -5,7 +5,6 @@ import {
   formatAiCostSubtotal,
   formatExactCurrency,
 } from "~/lib/number-format";
-export { formatAiCost, formatAiCostSubtotal } from "~/lib/number-format";
 import { CurrencyTooltip } from "~/ui/values/currency-value";
 import { StackedValue } from "~/ui/values/stacked-value";
 

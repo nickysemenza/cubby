@@ -4,7 +4,6 @@ import type { PhotoRunImage } from "@cubby/schemas/photo-import-run";
 import type { RunDetail } from "~/contracts/run.contract";
 
 import { displayToolAction } from "./agent-tool-names";
-export { formatDuration as formatWorkDuration } from "~/lib/format-duration";
 
 type WorkKind =
   | "photo-context"

@@ -4,9 +4,9 @@ import { fromPartial } from "@total-typescript/shoehorn";
 import { describe, expect, it } from "vitest";
 
 import type { RunDetail } from "~/contracts/run.contract";
+import { formatDuration } from "~/lib/format-duration";
 
 import {
-  formatWorkDuration,
   plannedPhotoWorkSteps,
   summarizeAgentWork,
   summarizePhotoDescriptions,
@@ -220,7 +220,7 @@ describe("agent work summary", () => {
     const [step] = summarizePhotoDescriptions(images);
     expect(step?.attemptMs).toBe(4_000);
     expect(step?.waitingMs).toBe(23_931_500);
-    expect(formatWorkDuration(step!.durationMs!)).toBe("6h 39m");
+    expect(formatDuration(step!.durationMs!)).toBe("6h 39m");
   });
 
   it("does not charge a new run for descriptions completed before it started", () => {

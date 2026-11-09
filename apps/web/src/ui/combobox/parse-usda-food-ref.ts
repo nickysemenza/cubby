@@ -4,9 +4,6 @@
 //   - a worker URL:      "https://usda.example.com/api/foods/384417"
 //   - the FDC detail URL: "https://fdc.nal.usda.gov/food-details/384417/nutrients"
 // Returns the id, or null for ordinary text searches (which flow to FTS as before).
-//
-// Pure + dependency-free on purpose (no `~` aliases): keeps it unit-testable in
-// the alias-free "unit" vitest project.
 export function parseUsdaFoodRef(input: string): number | null {
   const s = input.trim();
   if (!s) return null;
