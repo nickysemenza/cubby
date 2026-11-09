@@ -5,8 +5,10 @@ SET LOCAL lock_timeout = '5s';
 -- Serialization boundary: every admission, transfer and roster append writes
 -- "Run", so this lock (held to commit) freezes the rosters the attempt
 -- counts are aggregated from. Run reads continue; Run writers wait for the
--- seconds the aggregation and the Email rewrite take. Taken before Email, in
--- the household Run-then-Email order.
+-- seconds the aggregation and the Email rewrite take. Admission locks Email
+-- rows before inserting its Run, so a concurrent admission can deadlock with
+-- the later Email lock; Postgres aborts one side, the whole migration rolls
+-- back, and the runner retries deadlock and lock-timeout failures.
 LOCK TABLE "Run" IN SHARE ROW EXCLUSIVE MODE;
 --> statement-breakpoint
 -- The revision fence now reads the frozen input, which a release never

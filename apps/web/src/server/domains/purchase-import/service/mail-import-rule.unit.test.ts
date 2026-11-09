@@ -167,6 +167,17 @@ describe("mail import rule", () => {
       [],
       true,
     ],
+    // The order exemption covers only the order number, not what follows.
+    [
+      "Tracking: 1Z999AA10123456784. Second package tracking: order 123456; AB-1234567",
+      [],
+      true,
+    ],
+    [
+      "Tracking: 1Z999AA10123456784. Second package tracking: order 123456\nAB-1234567",
+      [],
+      true,
+    ],
     // Two labelled references, one recognised key: a second package.
     [
       "Tracking: 1Z999AA10123456784. Return parcel 1Z999AA10123456784",

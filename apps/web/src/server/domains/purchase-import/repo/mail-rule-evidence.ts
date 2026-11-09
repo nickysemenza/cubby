@@ -194,20 +194,27 @@ function labelledReferences(text: string) {
     let runAfter = "";
     let previousWord = "";
     const flush = () => {
-      const reference = run.join("").toUpperCase();
-      if (
-        reference.length >= MIN_REFERENCE &&
-        /\d/u.test(reference) &&
-        !ORDER_WORD.test(runAfter)
-      )
+      // Only the first number after an order word is the order reference; a
+      // package reference that follows it in the same run still counts.
+      const tokens = ORDER_WORD.test(runAfter) ? run.slice(1) : run;
+      const reference = tokens.join("").toUpperCase();
+      if (reference.length >= MIN_REFERENCE && /\d/u.test(reference))
         references.push(reference);
       run = [];
     };
-    for (const raw of text.slice(start, end).split(/[^A-Za-z0-9-]+/u)) {
-      const token = raw.replaceAll("-", "");
+    // Space-grouped digits join (`9400 1000 …`); any other separator, including
+    // a line break, ends the run.
+    for (const [, separator, raw] of text
+      .slice(start, end)
+      .matchAll(/([^A-Za-z0-9-]*)([A-Za-z0-9-]+)/gu)) {
+      if (/[^ ]/u.test(separator!)) flush();
+      const token = raw!.replaceAll("-", "");
       if (!token) continue;
       if (/\d/u.test(token)) {
-        if (!run.length) runAfter = previousWord;
+        if (!run.length) {
+          runAfter = previousWord;
+          previousWord = "";
+        }
         run.push(token);
       } else {
         flush();
