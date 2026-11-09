@@ -255,7 +255,6 @@ export async function getAuditLog(
     },
   });
 
-  // Determine if there are more entries
   const hasMore = entries.length > params.limit;
   const returnEntries: AuditLogRow[] = (
     hasMore ? entries.slice(0, params.limit) : entries

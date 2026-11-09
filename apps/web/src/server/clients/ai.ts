@@ -72,7 +72,6 @@ class AiClient {
   }
 }
 
-// Singleton instance - lazy initialized
 let aiClient: AiClient | null = null;
 
 export function getAiClient(): AiClient {

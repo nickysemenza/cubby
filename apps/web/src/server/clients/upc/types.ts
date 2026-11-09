@@ -2,7 +2,6 @@ import { z } from "zod";
 
 import type { UpcProductSource } from "~/contracts/upc.contract";
 
-// Common product data extracted from external APIs
 interface ExternalProductData {
   name: string;
   manufacturer: string | null;

@@ -1284,7 +1284,6 @@ const loadLocationTree = async (
     if (row.parentId) childCountMap[row.parentId] = row.count;
   }
 
-  // Attach counts to children
   const enrichedChildren: LocationWithParentChild[] = (res.children ?? []).map(
     (child) => ({
       ...child,

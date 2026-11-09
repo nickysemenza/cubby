@@ -63,7 +63,6 @@ export function rollupLocationValuations(
     productPrice?: number | null;
   }[],
 ): Map<LocationId, LocationValuation> {
-  // Direct aggregates per location.
   const direct = new Map<LocationId, DirectAgg>();
   for (const e of entries) {
     let agg = direct.get(e.locationId);

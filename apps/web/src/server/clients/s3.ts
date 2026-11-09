@@ -291,7 +291,6 @@ export const fetchAndStoreImage = async (
       return null;
     }
 
-    // Generate key and upload to R2
     const extension = contentTypeToExtension(contentType);
     const filename = `${filenamePrefix}.${extension}`;
     const key = generateImageKey(filename);

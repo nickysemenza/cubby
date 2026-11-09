@@ -7,7 +7,6 @@
  * check-server-closure.ts enforces that entry's size budget.
  */
 
-// Core database access
 export {
   databaseForTransaction,
   getDb,
@@ -22,7 +21,6 @@ export {
   withSnapshotWriteDatabase,
   withTransactionOn,
 } from "./core";
-// CRUD operations
 export {
   applyImageOrder,
   associatePendingImages,
@@ -37,7 +35,6 @@ export {
 export type { ImageJoinBinding } from "~/server/db/helpers/crud";
 export type { ImageJoinTable } from "~/server/db/helpers/crud";
 export type { ListReadIntent } from "~/server/db/helpers/query";
-// Query helpers
 export {
   arrayOverlapOrPresence,
   assertNoDependents,
@@ -63,10 +60,8 @@ export {
   textArrayMatches,
   uuidArrayParam,
 } from "~/server/db/helpers/query";
-// Relation loaders
 export { relations } from "./relations";
 export type { MappableImageRecord } from "~/server/db/helpers/transform";
-// Transform helpers
 export {
   amountFromColumns,
   amountJsonSql,

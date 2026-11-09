@@ -15,7 +15,6 @@ import type {
 import { conversionCoverage, gradedKinds } from "~/lib/conversion-coverage";
 import { classifyIngredientFix } from "~/lib/recipe-totals-gaps";
 import { getIngredientMappings } from "~/lib/unit-mapping-utils";
-// Extended schemas that include food data
 import type { Database } from "~/server/db";
 import { foodLookupParamFromProduct } from "~/server/domains/product/repo/helpers";
 import { recipeTreeLeafIngredientIds } from "~/server/domains/recipe/repo/totals";

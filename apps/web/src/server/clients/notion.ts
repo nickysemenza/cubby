@@ -361,7 +361,6 @@ export class NotionClient {
             if (!isBlockObjectResponse(block)) continue;
             const typed = block;
 
-            // Handle column lists by flattening
             if (typed.type === "column_list" && typed.has_children) {
               const columns = await this.client.blocks.children.list({
                 block_id: typed.id,
