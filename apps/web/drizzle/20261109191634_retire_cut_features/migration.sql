@@ -28,9 +28,11 @@ WHERE "evaluationId" IN (
 --> statement-breakpoint
 -- A Sweep's step of a removed family can never run again. Production has none open; settle any
 -- so a mixed Sweep resumes only its surviving statement and field steps. RunStep has no
--- `skipped` state, so the step ends `done` with nothing counted.
+-- `skipped` state, so the step ends `done` marked `meta.retired`, which Run detail
+-- shows as Retired and completion summaries leave out.
 UPDATE "RunStep" st
 SET "state" = 'done', "pausedReason" = NULL, "pausedUntil" = NULL,
+    "meta" = coalesce(st."meta", '{}'::jsonb) || '{"retired": true}'::jsonb,
     "endedAt" = COALESCE(st."endedAt", now()), "updatedAt" = now()
 FROM "Run" r
 WHERE st."runId" = r.id

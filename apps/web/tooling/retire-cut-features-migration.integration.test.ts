@@ -175,14 +175,14 @@ it("retires cut features' undecided output and keeps decided work, Runs and cost
     expect(
       (
         await client.query(
-          `SELECT key, state FROM "RunStep" WHERE "runId" = $1 ORDER BY key`,
+          `SELECT key, state, meta->'retired' AS retired FROM "RunStep" WHERE "runId" = $1 ORDER BY key`,
           [id(3)],
         )
       ).rows,
     ).toEqual([
-      { key: "connection_evaluate", state: "done" },
-      { key: "statement_generate", state: "running" },
-      { key: "transfer_pair_scan", state: "done" },
+      { key: "connection_evaluate", state: "done", retired: true },
+      { key: "statement_generate", state: "running", retired: null },
+      { key: "transfer_pair_scan", state: "done", retired: true },
     ]);
     expect(await ids(`SELECT id FROM "AiEvaluation" ORDER BY id`)).toEqual([
       id(21),

@@ -84,6 +84,8 @@ export type RunStepPageSample = z.infer<typeof runStepPageSample>;
 
 export const runStepMeta = z.object({
   input: runStepInput.optional(),
+  /** A removed family's step settled without running; never counted as work. */
+  retired: z.literal(true).optional(),
   /**
    * Running counts without a denominator: candidates, decisions, and
    * `removed` (inputs that left eligibility after the count froze).

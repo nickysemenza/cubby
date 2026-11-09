@@ -44,6 +44,11 @@ type InputListHref = (
 type PlanTableRow = Extract<ReportBlock, { kind: "table" }>["rows"][number];
 
 function stepState(step: PlanStep | undefined) {
+  if (step && runStepMeta.safeParse(step.meta).data?.retired)
+    return {
+      label: "Retired",
+      state: "not_reached",
+    } satisfies { label: string; state: ReportRowState };
   if (!step || step.state === "queued")
     return {
       label: step && step.pages > 0 ? "Queued to resume" : "Not started",
