@@ -64,6 +64,7 @@ describe("settlementReport", () => {
     ["stale", undefined, "agent_transient"],
     ["reset", undefined, "agent_transient"],
     ["restart_limit", undefined, "agent_transient"],
+    ["interrupted", undefined, "agent_transient"],
     ["model_error", undefined, "agent_failed"],
     [
       "faulted",
