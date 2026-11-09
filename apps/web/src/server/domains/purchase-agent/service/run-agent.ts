@@ -308,6 +308,8 @@ export class PurchaseImportRunAgent
     for (const provider of cubbyAgentProviders({
       fundingFallback: true,
       fixedModel: this.agentEnv.fixedModel,
+      // A harness override measures its named models, never tier substitutes.
+      pinnedModel: this.agentEnv.coordinatorModels !== undefined,
       cacheKey: () => this.identity()?.runId,
       onFundingRefusal: async (message, { local }) => {
         // The usage row records the refusal text in `failure`; Cubby's own

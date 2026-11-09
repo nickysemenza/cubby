@@ -217,6 +217,13 @@ export function gatewayFetch(
       ).assertWorkflowCurrent();
       return (await opts.beforePlanRequest?.(request)) ?? null;
     },
+    // Credits have no budget, but a workflow that lost its Job still must not
+    // transmit on them.
+    beforeCreditRequest: async () => {
+      await (
+        await import("~/server/workflows/runs/execution")
+      ).assertWorkflowCurrent();
+    },
     testPeer: () => {
       const testGateway = getTestAiGateway();
       if (!testGateway) return undefined;

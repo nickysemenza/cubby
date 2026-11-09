@@ -213,6 +213,31 @@ describe("inference funding", () => {
     },
   );
 
+  // A workflow that lost its Job must not transmit on a credit key either.
+  it.each(["subscriber_credit", "openai_credit"] as const)(
+    "stops a %s attempt whose execution admission throws, before transmitting",
+    async (funding) => {
+      const sent: string[] = [];
+      await expect(
+        gatewayFetchThrough({
+          provider: funding === "openai_credit" ? "openai" : "anthropic",
+          funding,
+          beforeCreditRequest: async () => {
+            throw new Error("Synthetic workflow no longer current");
+          },
+          gateway: async () => {
+            sent.push("credit");
+            return Response.json({});
+          },
+        })(
+          `https://ai-gateway.invalid/${funding === "openai_credit" ? "openai/responses" : "anthropic/v1/messages"}`,
+          { method: "POST", body: '{"model":"claude-sonnet-5-5"}' },
+        ),
+      ).rejects.toThrow("Synthetic workflow no longer current");
+      expect(sent).toEqual([]);
+    },
+  );
+
   // The ChatGPT plan's quota is shared with the members' own use: a spent
   // plan budget must leave the plan untouched and advance the ladder, and an
   // unladdered call must take its paid path instead.

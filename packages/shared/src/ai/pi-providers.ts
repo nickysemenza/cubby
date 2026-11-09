@@ -320,15 +320,28 @@ export function cubbyPiProviders(fetchFor: GatewayFetchFor): Provider[] {
  * The household's one funding order for frontier chat (ADR 0027): the Claude
  * subscriber credit, then OpenAI credits, then the ChatGPT plan, then paid only
  * where the caller allows it. Each source answers with its route's model of the
- * requested tier, and a step advances only on a funding refusal.
+ * requested tier, and a step advances only on a funding refusal. A pinned
+ * `model` (an explicit override or comparison) is never substituted: it runs
+ * on its own route's sources only.
  */
-export function fundedChatAttempts(policy: {
-  tier: ChatTier;
-  paid: boolean;
-}): readonly {
+export function fundedChatAttempts(
+  policy: { paid: boolean } & (
+    | { tier: ChatTier }
+    | { model: SupportedChatModel }
+  ),
+): readonly {
   model: SupportedChatModel;
   funding: InferenceFunding;
 }[] {
+  if ("model" in policy) {
+    const sources: InferenceFunding[] =
+      getChatModelConfig(policy.model).gatewayProvider === "anthropic"
+        ? ["subscriber_credit"]
+        : ["openai_credit", "subscription"];
+    return [...sources, ...(policy.paid ? ["paid" as const] : [])].map(
+      (funding) => ({ model: policy.model, funding }),
+    );
+  }
   const { openai, anthropic } = CHAT_TIER_MODELS[policy.tier];
   return [
     { model: anthropic, funding: "subscriber_credit" },
@@ -351,7 +364,8 @@ export interface RefusedAttempt {
  * Funding retries restart one generation from its input transcript. Hold every
  * event until that attempt settles, so a refused partial tool call never runs.
  * Completed prior turns and their writes remain in pi's durable transcript.
- * The requested model names the tier (`chatTierOf`).
+ * The requested model names the tier (`chatTierOf`), unless `pinned` keeps
+ * that exact model.
  */
 export function fundedCubbyPiProviders(
   fetchFor: GatewayFetchFor,
@@ -359,7 +373,7 @@ export function fundedCubbyPiProviders(
     message: AssistantMessage,
     attempt: RefusedAttempt,
   ) => Promise<void>,
-  policy: { paid: boolean } = { paid: true },
+  policy: { paid: boolean; pinned?: boolean } = { paid: true },
 ): Provider[] {
   const base = cubbyPiProviders(fetchFor);
   return base.map((provider): Provider => {
@@ -373,8 +387,13 @@ export function fundedCubbyPiProviders(
       void (async () => {
         const requested = supportedChatModelSchema.parse(model.id);
         const tier = chatTierOf(requested);
-        if (!tier) throw new Error(`${requested} names no chat tier`);
-        const attempts = fundedChatAttempts({ tier, paid: policy.paid });
+        if (!tier && !policy.pinned)
+          throw new Error(`${requested} names no chat tier`);
+        const attempts = fundedChatAttempts(
+          tier && !policy.pinned
+            ? { tier, paid: policy.paid }
+            : { model: requested, paid: policy.paid },
+        );
         for (const [index, attempt] of attempts.entries()) {
           let refused = false;
           let local = false;

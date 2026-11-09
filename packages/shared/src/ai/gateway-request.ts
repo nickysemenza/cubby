@@ -1008,6 +1008,12 @@ export interface GatewayFetchRoutes extends GatewayResponseObservers {
    * budget (ADR 0027).
    */
   beforePlanRequest?: (request: GatewayFetchRequest) => Promise<string | null>;
+  /**
+   * Execution admission before a provider credit attempt, such as the
+   * workflow's ownership fence. Credits have no window budget, so it only
+   * throws: a thrown error is an admission failure.
+   */
+  beforeCreditRequest?: (request: GatewayFetchRequest) => Promise<void>;
   requestTimeoutMs?: number;
   /** Rewrites the provider body on every route that decodes it. */
   rewriteQuery?: (query: GatewayQuery) => GatewayQuery;
@@ -1120,6 +1126,12 @@ export function gatewayFetchThrough(routes: GatewayFetchRoutes): typeof fetch {
     };
     const observe = async (response: Response) =>
       observeGatewayResponse(response, routes, await streamRequested());
+
+    if (
+      routes.funding === "subscriber_credit" ||
+      routes.funding === "openai_credit"
+    )
+      await routes.beforeCreditRequest?.(request);
 
     const testPeer = routes.testPeer?.();
     if (testPeer) {

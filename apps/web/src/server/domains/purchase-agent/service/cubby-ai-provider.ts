@@ -174,6 +174,12 @@ interface AgentFetchOptions extends Pick<
   funding?: InferenceFunding;
   fundingFallback?: boolean;
   fixedModel?: PurchaseAgentEnvironment["fixedModel"];
+  /**
+   * An explicit coordinator model override (a harness or replay comparison):
+   * funding still ladders, but only on that model's own route, never through
+   * tier substitution.
+   */
+  pinnedModel?: boolean;
   onFundingRefusal?: FundingRefusal;
   /** Pi may open before dispatch binds a Run; resolve its policy per request. */
   transportPolicy?: () => Pick<
@@ -353,7 +359,10 @@ export function cubbyAgentProviders(
   const providers =
     input.fundingFallback && !input.fixedModel
       ? (fetchFor: GatewayFetchFor, onRefused?: FundingRefusal) =>
-          fundedCubbyPiProviders(fetchFor, onRefused, { paid: true })
+          fundedCubbyPiProviders(fetchFor, onRefused, {
+            paid: true,
+            pinned: input.pinnedModel,
+          })
       : cubbyPiProviders;
   return providers((route, onUnbilledResponse, funding) => {
     let finalTransport: AgentTransport | undefined;

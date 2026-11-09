@@ -150,6 +150,36 @@ describe("a ladder that keeps the requested tier on every source", () => {
     // Cubby's own recorded refusal made no provider call; OpenAI's did.
     expect(local).toEqual([true, false]);
   });
+
+  // A harness override measures the model it names: never a tier substitute,
+  // and an Anthropic model outside the tier table still runs.
+  it.each([
+    ["gpt-6-luna", ["openai:openai_credit:gpt-6-luna"]],
+    ["claude-sonnet-5-5", ["anthropic:subscriber_credit:claude-sonnet-5-5"]],
+  ] as const)("keeps a pinned %s on its own route", async (pinned, sent) => {
+    const attempts: string[] = [];
+    const models = createModels();
+    for (const provider of fundedCubbyPiProviders(
+      (route, _unbilled, funding) => async (_input, init) => {
+        const body = z
+          .object({ model: z.string() })
+          .parse(JSON.parse(String(init?.body)));
+        attempts.push(`${route}:${funding}:${body.model}`);
+        return route === "anthropic"
+          ? anthropicStream(anthropicDone)
+          : openAiCompleted();
+      },
+      undefined,
+      { paid: false, pinned: true },
+    ))
+      models.setProvider(provider);
+    const route = pinned.startsWith("claude") ? "anthropic" : "openai";
+    const model = models.getModel(route, pinned);
+    if (!model) throw new Error(`Missing ${pinned}`);
+    const response = await models.completeSimple(model, { messages: [] });
+    expect(response.errorMessage).toBeUndefined();
+    expect(attempts).toEqual(sent);
+  });
 });
 
 /** The paid step answers on the plan's model through the gateway. */

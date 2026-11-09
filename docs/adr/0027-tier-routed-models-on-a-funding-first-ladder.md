@@ -84,8 +84,13 @@ dropped when the settings row is read and rewritten.
 - **Accounting.** Credit usage records `chargedCost = 0` with its standard
   comparison cost under billing reason `subscriber_credit`; usage rows name the
   model that answered.
-- **Fixed models.** Explicit model overrides and fixed-model evaluations bypass
-  the ladder so comparisons measure the requested model.
+- **Fixed models.** Fixed-model evaluations bypass the ladder, and explicit
+  coordinator overrides (`coordinatorModels`) are pinned: they ladder only
+  over their own route's funding sources, never through tier substitution, so
+  comparisons measure the requested model.
+- **Execution fences.** A workflow's ownership check runs before every credit,
+  plan and paid transmission (`beforeCreditRequest`, `beforePlanRequest`,
+  `beforePaidRequest`), although credits carry no budget.
 
 ## Consequences
 
