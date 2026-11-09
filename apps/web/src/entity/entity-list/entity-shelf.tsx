@@ -11,7 +11,7 @@ import { Link } from "@tanstack/react-router";
 import { useState, type ReactNode } from "react";
 import { z } from "zod";
 
-import { entities, entityDetailParams } from "~/entity/entities";
+import { entities, browserEntityDetailParams } from "~/entity/entities";
 import type { InfiniteScrollControls } from "~/entity/hooks/use-infinite-table-list";
 import { useEntityMetadata } from "~/entity/metadata";
 import { rowDisplayCover } from "~/entity/model/row-display-cover";
@@ -149,10 +149,7 @@ export function EntityShelf<TRow extends { id: string }>({
           const row = shelfRowSchema.parse(record);
           const images = shelfImages(entity, row);
           const title = shelfTitle(entity, row);
-          const params =
-            entity === "usda-food"
-              ? { id: row.id }
-              : entityDetailParams(row.id);
+          const params = browserEntityDetailParams(entity, row.id);
           if (contactSheet) {
             const image = images[0];
             if (!image) return null;

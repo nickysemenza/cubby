@@ -8,8 +8,7 @@ import { match } from "ts-pattern";
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import {
   type EntityDetailRoute,
-  entities,
-  entityDetailParams,
+  browserEntityDetailLink,
   isBrowserRoutedEntity,
 } from "~/entity/entities";
 import { DetailSpecPlateLoading } from "~/ui/feedback/loading-skeletons";
@@ -117,19 +116,9 @@ export function ManifestCard({
                 {name}
               </span>
               <Row align="center" gap="sm" className="mt-px shrink-0">
-                {showOpenAction && entity === "usda-food" ? (
+                {showOpenAction && isBrowserRoutedEntity(entity) ? (
                   <Link
-                    to="/usda/$id"
-                    params={{ id: routeParam }}
-                    aria-label="Open"
-                    className={openIcon}
-                  >
-                    <ArrowUpRightIcon className="size-3.5" />
-                  </Link>
-                ) : showOpenAction && isBrowserRoutedEntity(entity) ? (
-                  <Link
-                    to={entities[entity].routes.detail}
-                    params={entityDetailParams(routeParam)}
+                    {...browserEntityDetailLink(entity, routeParam)}
                     aria-label="Open"
                     className={openIcon}
                   >

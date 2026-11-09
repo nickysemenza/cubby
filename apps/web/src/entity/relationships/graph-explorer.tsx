@@ -12,8 +12,7 @@ import {
 } from "react";
 
 import {
-  entities,
-  entityDetailParams,
+  browserEntityDetailLink,
   entityLabel,
   isBrowserRoutedEntity,
 } from "~/entity/entities";
@@ -519,15 +518,9 @@ function GraphRecordInspector({
   );
   const recordLink = (node: EntityGraphNode) =>
     isBrowserRoutedEntity(node.entityKind)
-      ? node.entityKind === "usda-food"
-        ? router.buildLocation({
-            to: "/usda/$id",
-            params: { id: node.entityId },
-          }).href
-        : router.buildLocation({
-            to: entities[node.entityKind].routes.detail,
-            params: entityDetailParams(node.entityId),
-          }).href
+      ? router.buildLocation(
+          browserEntityDetailLink(node.entityKind, node.entityId),
+        ).href
       : undefined;
   return (
     <Stack gap="md">

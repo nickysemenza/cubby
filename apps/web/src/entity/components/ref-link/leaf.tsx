@@ -14,6 +14,7 @@ import { EntityPill } from "~/entity/components/entity-pill";
 import type { EntityPreviewContent as EntityPreviewContentComponent } from "~/entity/components/entity-preview-content";
 import {
   entities,
+  browserEntityDetailLink,
   entityDetailParams,
   entityLabel,
   isBrowserRoutedEntity,
@@ -116,29 +117,14 @@ function PreviewRefLink({
         delay={300}
         closeDelay={150}
         render={
-          // usda-food is the one HoverPreviewEntity that isn't shortcode-keyed
-          // (its route stays `/usda/$id`, keyed on `String(fdc_id)`).
-          entity === "usda-food" ? (
-            <Link
-              to="/usda/$id"
-              params={{ id }}
-              className={linkClass}
-              aria-label={ariaLabel}
-              onClick={(event) => event.stopPropagation()}
-              onKeyDown={(event) => event.stopPropagation()}
-              {...newTab}
-            />
-          ) : (
-            <Link
-              to={entities[entity].routes.detail}
-              params={entityDetailParams(id)}
-              className={linkClass}
-              aria-label={ariaLabel}
-              onClick={(event) => event.stopPropagation()}
-              onKeyDown={(event) => event.stopPropagation()}
-              {...newTab}
-            />
-          )
+          <Link
+            {...browserEntityDetailLink(entity, id)}
+            className={linkClass}
+            aria-label={ariaLabel}
+            onClick={(event) => event.stopPropagation()}
+            onKeyDown={(event) => event.stopPropagation()}
+            {...newTab}
+          />
         }
       >
         {showIdentityMark && (

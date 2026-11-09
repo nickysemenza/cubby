@@ -34,7 +34,7 @@ import { RecordEmoji } from "~/entity/components/record-emoji";
 import { ListRefLink } from "~/entity/components/ref-link/list";
 import type { EntityDetailParams, EntityDetailRoute } from "~/entity/entities";
 import {
-  entities,
+  browserEntityDetailLink,
   entityLabel,
   entityPluralLabel,
   isBrowserRoutedEntity,
@@ -127,10 +127,6 @@ interface BaseRow {
   updatedAt?: string | Date;
 }
 
-function nameColumnParams(row: BaseRow) {
-  return { shortcode: String(row.id) };
-}
-
 type EntityRowLink = {
   to: EntityDetailRoute;
   params: EntityDetailParams | { id: string };
@@ -153,12 +149,7 @@ const defaultRowLink = <T extends BaseRow>(
   entity: Entity,
 ): RowLinkResolver<T> => {
   if (!isBrowserRoutedEntity(entity)) return () => null;
-  const to = entities[entity].routes.detail;
-  return (row) => ({
-    to,
-    params:
-      entity === "usda-food" ? { id: String(row.id) } : nameColumnParams(row),
-  });
+  return (row) => browserEntityDetailLink(entity, String(row.id));
 };
 
 /** A row that genuinely carries its own images. `images` is REQUIRED: when it

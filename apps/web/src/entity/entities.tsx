@@ -334,6 +334,7 @@ const entityDefinitions = {
   },
   "usda-food": {
     ...defaultDefinitions["usda-food"],
+    detailParam: "id",
     color: INK.primary,
     // USDA foods are read-only, no detail conventions needed. Default sort
     // ("fdc_id") comes from `model.sort` in `17-usda-food.entity.ts`.
@@ -438,15 +439,8 @@ export const entityPluralLabel = (entity: Entity): string =>
 /**
  * Path params for an entity's detail route.
  *
- * Every shortcode-bearing entity is keyed `$shortcode`, so this is now uniform —
- * the cookbook `$cookbookId` special case died with the uuid routes. It stays a
- * function rather than an inline `{ shortcode }` because it is the single place
- * a generic "link to this entity" surface (search results, hovercards, the
- * manifest card, table name columns) goes through, and keeping the indirection
- * is what would make a future per-entity divergence a one-line change.
- *
- * `usda` is NOT routed through here — it legitimately keys on an external USDA
- * `fdc_id` rather than a shortcode.
+ * Shortcode-bearing entities use `$shortcode`. Generic surfaces that may also
+ * link external catalogs use `browserEntityDetailParams` instead.
  */
 export const entityDetailParams = (shortcode: string) => ({
   shortcode,
@@ -469,6 +463,25 @@ export const entityDetailLink = (
     to: entities[entity].routes.detail,
     params: entityDetailParams(shortcode),
   }) as const;
+
+/** Route parameters for both shortcode and external catalog details. */
+export const browserEntityDetailParams = (
+  entity: BrowserRoutedEntity,
+  id: string,
+) => {
+  const definition = entities[entity];
+  return "detailParam" in definition && definition.detailParam === "id"
+    ? { id }
+    : entityDetailParams(id);
+};
+
+export const browserEntityDetailLink = (
+  entity: BrowserRoutedEntity,
+  id: string,
+) => ({
+  to: entities[entity].routes.detail,
+  params: browserEntityDetailParams(entity, id),
+});
 
 /** Path-params shape accepted by any entity detail `<Link>`. */
 export type EntityDetailParams = ReturnType<typeof entityDetailParams>;

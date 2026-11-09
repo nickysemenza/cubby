@@ -5,8 +5,7 @@ import { useId, useEffect, useState, type ReactNode } from "react";
 
 import {
   EntityIcon,
-  entities,
-  entityDetailParams,
+  browserEntityDetailLink,
   entityLabel,
   isBrowserRoutedEntity,
 } from "~/entity/entities";
@@ -31,16 +30,7 @@ function OpenEntityLink({ entity, id }: { entity: Entity; id: string }) {
       mobileSize="compact"
       nativeButton={false}
       aria-label={`Open full ${label.toLowerCase()} details`}
-      render={
-        entity === "usda-food" ? (
-          <Link to="/usda/$id" params={{ id }} />
-        ) : (
-          <Link
-            to={entities[entity].routes.detail}
-            params={entityDetailParams(id)}
-          />
-        )
-      }
+      render={<Link {...browserEntityDetailLink(entity, id)} />}
     >
       Open <ArrowSquareOutIcon />
     </Button>

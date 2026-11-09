@@ -456,6 +456,9 @@ replace this fresh decision read or the receiving command's current-stock checks
 
 ## List loading and enrichment
 
+Generic browser detail links use the entity definition’s detail parameter policy:
+catalog records use their external route id and other records use their shortcode.
+
 Inventory cells reuse the Location slice admitted by their Product or Location
 page. They must not subscribe to a separate Location metadata bundle per cell:
 that admits unrelated dependencies and can suspend the populated table. The

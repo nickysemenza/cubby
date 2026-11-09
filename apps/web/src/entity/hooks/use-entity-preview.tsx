@@ -15,7 +15,7 @@ import {
 import { z } from "zod";
 
 import {
-  entityDetailLink,
+  browserEntityDetailLink,
   entityLabel,
   isBrowserRoutedEntity,
 } from "~/entity/entities";
@@ -263,11 +263,8 @@ export function useEntityPreview(
   const productionBrowserOperations = useMemo<EntityPreviewBrowserOperations>(
     () => ({
       navigateToDetail: (entity, id) => {
-        if (entity === "usda-food") {
-          return navigate({ to: "/usda/$id", params: { id } });
-        }
         if (!isBrowserRoutedEntity(entity)) return;
-        return navigate(entityDetailLink(entity, id));
+        return navigate(browserEntityDetailLink(entity, id));
       },
       prefetchDetail: (entity, id) =>
         prefetchEntityPreview(queryClient, entity, id),
