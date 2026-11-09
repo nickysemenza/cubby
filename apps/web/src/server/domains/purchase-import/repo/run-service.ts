@@ -133,7 +133,9 @@ import {
 import { finalizeImportedImages } from "~/server/domains/photo-import/repo/photo-import-finalize";
 import { waitForMailImportPermission } from "~/server/domains/purchase-import/repo/controlled-mail-import";
 import {
+  importAttemptsExhausted,
   readMailRunRoster,
+  holdCancelledMailRunSources,
   releaseUnsettledMailRunSources,
   transferMailRunSources,
 } from "~/server/domains/purchase-import/repo/mail-run-membership";
@@ -1204,42 +1206,12 @@ export async function claimPhotoInventoryWork(db: Database, runId: RunId) {
     : { kind: "none" as const };
 }
 
-/** A transient coordinator failure retries until this many attempts in total. */
-const MAIL_IMPORT_TRANSIENT_ATTEMPTS = 3;
-
-/**
- * Which attempt this Run is: automatic transient-failure successors
- * (`cause: retry`) count back through their transiently failed predecessors.
- */
-async function transientAttempt(tx: DrizzleTransaction, runId: RunId) {
-  let attempt = 1;
-  let current = runId;
-  while (attempt < MAIL_IMPORT_TRANSIENT_ATTEMPTS) {
-    const [row] = await tx
-      .select({
-        cause: runTable.cause,
-        predecessorRunId: runTable.predecessorRunId,
-      })
-      .from(runTable)
-      .where(eq(runTable.id, current));
-    if (row?.cause !== runCause.enum.retry || !row.predecessorRunId) break;
-    const [predecessor] = await tx
-      .select({ failureCode: runTable.failureCode })
-      .from(runTable)
-      .where(eq(runTable.id, row.predecessorRunId));
-    if (predecessor?.failureCode !== agentFailureCode.enum.agent_transient)
-      break;
-    attempt += 1;
-    current = row.predecessorRunId;
-  }
-  return attempt;
-}
-
 /**
  * A transiently failed Mail import retries its unsettled Emails as one
  * successor on the escalation coordinator model. Only Emails this Run still
- * owns with unchanged evidence move; settled ones stay. Null when nothing is
- * left to retry.
+ * owns with unchanged evidence and an admission attempt left at that checksum
+ * move (`MAIL_IMPORT_ATTEMPTS_PER_REVISION`, three in total); settled ones
+ * stay. Null when nothing is left to retry.
  */
 async function retryTransientMailImport(tx: DrizzleTransaction, runId: RunId) {
   const [locked] = await tx
@@ -1251,6 +1223,7 @@ async function retryTransientMailImport(tx: DrizzleTransaction, runId: RunId) {
     (source) =>
       source.owned &&
       source.unchanged &&
+      !importAttemptsExhausted(source.email) &&
       (source.email.status === "researching" ||
         source.email.status === "unsettled"),
   );
@@ -1357,8 +1330,7 @@ export async function markRunFailed(
       });
     if (failed?.purpose !== "mail_import") return failed;
     const retried =
-      input.failureCode === agentFailureCode.enum.agent_transient &&
-      (await transientAttempt(tx, runId)) < MAIL_IMPORT_TRANSIENT_ATTEMPTS
+      input.failureCode === agentFailureCode.enum.agent_transient
         ? await retryTransientMailImport(tx, runId)
         : null;
     if (
@@ -2135,6 +2107,9 @@ export async function controlRun(
         vendorAccountId: locked.vendorAccountId,
         vendorId: locked.vendorId,
         predecessorRunId: scope.runId,
+        // Earlier-attempt detection orders Runs by startedAt; admission stamps
+        // it from this clock too, never the database default.
+        startedAt: new Date(),
         parentRunId:
           locked.purpose === "mail_import" ? locked.parentRunId : null,
         purpose: locked.purpose,
@@ -2323,6 +2298,7 @@ export async function controlRun(
         vendorAccountId: successorVendorAccountId,
         vendorId: locked.vendorId,
         predecessorRunId: scope.runId,
+        startedAt: new Date(),
         parentRunId:
           locked.purpose === "mail_import" ? locked.parentRunId : null,
         purpose: locked.purpose,
@@ -2404,10 +2380,10 @@ export async function controlRun(
           : "Run cancelled by its owner",
       );
       // A cancelled Run must not keep Emails `researching` with nothing
-      // working them: unreached ones return to discovery, claimed ones stay
-      // `unsettled` with this Run, as any other ending Run releases them.
+      // working them, and discovery must not readmit what the member stopped:
+      // they stay with this Run as `unsettled` for its retry or restart.
       if (locked.purpose === "mail_import" && locked.input !== null)
-        await releaseUnsettledMailRunSources(tx, scope.runId);
+        await holdCancelledMailRunSources(tx, scope.runId);
       return { publicId: input.runPublicId, status: "failed" as const };
     }
     if (input.action === "pause") {

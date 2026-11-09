@@ -162,6 +162,36 @@ function trackingKeys(text: string, links: readonly string[]) {
   return [...found].map(([number, carrier]) => ({ carrier, number }));
 }
 
+const TRACKING_WORD = /\btrack(?:ing)?\b/giu;
+const TRACKING_WINDOW = 48;
+
+/**
+ * Whether tracking wording precedes a reference (8+ letters and digits, with
+ * a digit) that is none of the recognised keys: a carrier format Cubby does
+ * not know, so a rule cannot record that package.
+ */
+export function hasUnrecognisedTracking(text: string, keys: EmailTrackingKeys) {
+  const known = keys.map((key) => key.number);
+  for (const match of text.matchAll(TRACKING_WORD)) {
+    const after = text.slice(
+      match.index + match[0].length,
+      match.index + match[0].length + TRACKING_WINDOW,
+    );
+    for (const token of after.split(/[^A-Za-z0-9]+/u)) {
+      const reference = token.toUpperCase();
+      if (
+        reference.length >= 8 &&
+        /\d/u.test(reference) &&
+        !known.some(
+          (number) => number.includes(reference) || reference.includes(number),
+        )
+      )
+        return true;
+    }
+  }
+  return false;
+}
+
 /**
  * The one extractor every caller shares. Order keys are the identifiers
  * `purchase_cues` reads (order, invoice, receipt, confirmation and similar

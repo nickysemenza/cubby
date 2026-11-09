@@ -467,9 +467,10 @@ per-Purchase packets atomically. The claim prepass settles confident unrelated m
 notices, and links a related lifecycle notice model-free only when exact evidence names one Purchase on the
 owner's account: a Shipment the Email already sourced, a tracking key equal to exactly one Shipment, or the
 sender-proven Vendor's normalized order key (Email `orderKeys` and `trackingKeys` stay separate). Conflicting
-evidence reaches the agent. Such a link records the Email's carrier tracking as shipment evidence in the same
-resolution; a shipping or delivery notice without recognised tracking, and a confirmation of a Purchase no
-import has sourced, still reach the agent for extraction (ADR 0011). Historical retained-Email replay is a
+evidence, including an order-key Purchase on another member's account, reaches the agent. Such a link records
+the Email's one recognised package as shipment evidence in the same resolution; a shipping or delivery notice
+without recognised tracking, with several packages, an unknown carrier or an unrecognised tracking reference,
+and a confirmation of a Purchase no import has sourced, still reach the agent for extraction (ADR 0011). Historical retained-Email replay is a
 separately requested `purchase_import.email_import` operation, not an implicit deployment job.
 
 `finance.converge` also retains its verified financial-mail convergence path.

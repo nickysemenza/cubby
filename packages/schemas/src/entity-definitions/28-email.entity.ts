@@ -774,6 +774,15 @@ export const { definition, readSchemas } = defineEntityModel({
         },
       },
       { key: "mailKeysChecksum", kind: "text" },
+      // Admissions of the current checksum; bounds automatic re-admission.
+      {
+        key: "importAttempts",
+        kind: "json",
+        type: {
+          module: "@cubby/schemas/email-fields",
+          export: "EmailImportAttempts",
+        },
+      },
     ],
     relations: {
       content: { one: "orderMail", field: "orderMailId", references: "id" },

@@ -37,6 +37,15 @@ export const emailTrackingKeys = z.array(
   }),
 );
 export type EmailTrackingKeys = z.infer<typeof emailTrackingKeys>;
+/**
+ * How many Mail import Runs admitted this Email at `checksum`. Automatic
+ * admission stops at the bound until a new evidence revision (`mail-run-membership.ts`).
+ */
+export const emailImportAttempts = z.object({
+  checksum: z.string().min(1),
+  count: z.number().int().nonnegative(),
+});
+export type EmailImportAttempts = z.infer<typeof emailImportAttempts>;
 
 /**
  * How one Email relates to one Purchase, derived from stored evidence (ADR

@@ -370,6 +370,105 @@ describe("Mail import claim", () => {
     });
   });
 
+  // A rule link must never pick a side of contradicting evidence or record
+  // package states it cannot prove.
+  it("leaves contradicting accounts, several packages and unrecognised tracking to the coordinator", async () => {
+    const { party, seller, order, retain } = await world();
+    const own = await order("SYN-5001");
+    // The member's own exact notice links first and records its package.
+    const seed = await retain(
+      "rule-seed",
+      "Your order SYN-5001 has shipped",
+      "Order #SYN-5001 is on its way via UPS. Tracking number: 1Z999AA10123456784",
+    );
+    const neighbour = await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Synthetic neighbouring member",
+      kind: "member",
+    });
+    const neighbourAccount = await insertWithShortcode(
+      ctx.db,
+      "vendorAccount",
+      {
+        vendorId: seller.id,
+        ledgerPartyId: neighbour.id,
+      },
+    );
+    await createRepoIdentity(ctx, "purchase", {
+      vendorId: seller.shortcode,
+      vendorAccountId: neighbourAccount.shortcode,
+      orderId: "SYN-5002",
+    });
+    // Tracking names this member's Purchase, the order number another member's.
+    const contradicting = await retain(
+      "rule-contradicting",
+      "Your order SYN-5002 has shipped",
+      "Order #SYN-5002 is on its way via UPS. Tracking number: 1Z999AA10123456784",
+    );
+    const twoPackages = await retain(
+      "rule-two-packages",
+      "Your order SYN-5001 has shipped",
+      "Order #SYN-5001 ships in two boxes via UPS. Tracking numbers: 1Z999AA10123456784 and 1Z999AA10123456791",
+    );
+    const unknownCarrier = await retain(
+      "rule-unknown-carrier",
+      "Your order SYN-5001 has shipped",
+      "Order #SYN-5001 is on its way via UPS. Tracking number: 1Z999AA10123456784. Customs tracking: LX1234567890CN",
+    );
+    const { owner, pi } = await admit(party, [
+      seed,
+      contradicting,
+      twoPackages,
+      unknownCarrier,
+    ]);
+
+    const sources = new Map(
+      [contradicting, twoPackages, unknownCarrier].map((source) => [
+        source.messageId,
+        source,
+      ]),
+    );
+    const claimed: string[] = [];
+    for (;;) {
+      const work = await claimMailImportWork(ctx.db, owner.id);
+      if (work.kind === "none") break;
+      claimed.push(work.email.messageId);
+      // Each one reached the coordinator unlinked.
+      expect(
+        (await linkRows(sources.get(work.email.messageId)!)).links,
+      ).toEqual([]);
+      await resolveMail(
+        ctx.db,
+        {
+          mailboxId,
+          messageId: work.email.messageId,
+          checksum: work.email.checksum,
+          disposition: {
+            kind: "unresolved",
+            category: "identity_ambiguity",
+            reason: "Synthetic contradicting package evidence.",
+          },
+        },
+        pi,
+      );
+    }
+    expect(claimed).toEqual([
+      contradicting.messageId,
+      twoPackages.messageId,
+      unknownCarrier.messageId,
+    ]);
+    expect(await linkRows(seed)).toMatchObject({
+      email: { status: "completed" },
+    });
+    expect(
+      await getDb(ctx.db)
+        .select({
+          tracking: shipment.trackingNumber,
+          purchase: shipment.purchaseId,
+        })
+        .from(shipment),
+    ).toEqual([{ tracking: "1Z999AA10123456784", purchase: own.id }]);
+  });
+
   it("claims an incomplete lifecycle read instead of settling its first-page match", async () => {
     const { party, seller, order, retain } = await world();
     const target = await order("SYN-3001");

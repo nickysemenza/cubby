@@ -183,8 +183,10 @@ Claude or Codex session researches it later through the Research queue.
    finding on the Run.
    Lifecycle notices whose exact evidence (a Shipment the Email already
    sourced, a tracking number, or the proven sender's order number) names one
-   Purchase are linked at claim time with their tracking recorded, and never
-   reach you; conflicting evidence still does.
+   Purchase are linked at claim time with their single package recorded, and
+   never reach you. Conflicting evidence, several packages, an unknown carrier
+   or an unrecognised tracking reference still reach you: extract every package
+   through `shipments.record`.
 
 Reuse an existing Product before creating one: compare Brand identity, model,
 size, color, bundle contents and other distinguishing attributes. A related

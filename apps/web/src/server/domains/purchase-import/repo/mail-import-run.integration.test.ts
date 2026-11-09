@@ -311,6 +311,12 @@ describe("mail research admission", () => {
         { orderMailId: mail.id, checksum: mail.rawChecksum },
       ]);
       await block(successor);
+      // Releasing part of a roster clears the replay key; the revision fence
+      // lives in the frozen input and still refuses the same revision.
+      await getDb(ctx.db)
+        .update(run)
+        .set({ clientKey: null })
+        .where(eq(run.id, successor));
       expect((await importPendingEmails(ctx.db)).errors).toEqual([]);
       expect(await owner()).toBe(successor);
       // A Purchase edit is not new source evidence and cannot reset reasoning.
@@ -1612,6 +1618,50 @@ describe("mail research admission", () => {
       .from(emailTable)
       .where(eq(emailTable.orderMailId, settled.id));
     expect(held).toEqual({ runId: first, status: "completed" });
+  });
+
+  // A coordinator failing before its first claim attempted nothing per Email;
+  // without a per-revision bound, discovery readmitted the same evidence into
+  // a new paid Run after every such failure.
+  it("bounds automatic readmission of unchanged evidence after failures before any claim", async () => {
+    const { mail } = await source();
+    await getDb(ctx.db).insert(account).values({
+      id: crypto.randomUUID(),
+      accountId: "synthetic-mailbox",
+      providerId: "google",
+      userId: ctx.actor.userId,
+      updatedAt: new Date(),
+    });
+    await setMailImport(ctx.db, { mailboxId: mail.mailboxId, enabled: true });
+    const holder = async () =>
+      (
+        await getDb(ctx.db)
+          .select({ runId: emailTable.runId, status: emailTable.status })
+          .from(emailTable)
+          .where(eq(emailTable.orderMailId, mail.id))
+      )[0];
+    const attempts: string[] = [];
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      expect((await importPendingEmails(ctx.db)).errors).toEqual([]);
+      const current = await holder();
+      expect(current?.status).toBe("researching");
+      expect(attempts).not.toContain(current?.runId);
+      attempts.push(current!.runId!);
+      await markRunFailed(ctx.db, {
+        runId: parseEntityId("run", current!.runId!),
+        failureCode: "agent_failed",
+      });
+    }
+    // Out of attempts, it stays with its last Run until new evidence.
+    expect(await holder()).toEqual({ runId: attempts[2], status: "unsettled" });
+    expect((await importPendingEmails(ctx.db)).errors).toEqual([]);
+    expect(await holder()).toEqual({ runId: attempts[2], status: "unsettled" });
+    expect(
+      await getDb(ctx.db)
+        .select({ id: run.id })
+        .from(run)
+        .where(eq(run.purpose, "mail_import")),
+    ).toHaveLength(3);
   });
 
   it("readmits a released Email under a new Run when its failed Run admitted only it", async () => {

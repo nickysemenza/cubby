@@ -242,8 +242,10 @@ settlement, every import batch is audited, and open
 commit or audit findings require review alongside any unresolved Emails.
 
 A Mail import Run that ends before settling every Email (its coordinator fails
-or aborts, a member cancels it, or it stops for review) returns the Emails no
-coordinator reached to catch-up as `pending`. An Email this Run claimed, or an
+or aborts, or it stops for review) returns the Emails no coordinator reached to
+catch-up as `pending`. A member's cancel instead keeps every researching Email
+with the Run as `unsettled`, so catch-up never undoes the member's stop; the
+Run's retry or restart transfers them. An Email this Run claimed, or an
 earlier review or self-failed Run attempted, stays with it as `unsettled`: its
 `target_outcome` or Email claim in the RunOperation ledger proves the attempt;
 roster admission alone does not. A later completed outcome in that Run clears
@@ -255,16 +257,19 @@ An `unsettled` Email is readmitted from any ended holder, failed and retired
 ones included, only when a new evidence revision appears: a newly verified
 sender mapping, new accepted Purchase evidence for an order it prints, or new
 retained bytes. Each revision admits at most one attempt, so repeatedly
-unsettled messages never spend a coordinator every pass. Retrying a failed Run
-transfers only the Emails it still holds.
+unsettled messages never spend a coordinator every pass. Without a new revision,
+automatic import admits one Email at one checksum into at most three Runs in
+all, counting transient retries and Runs that failed before claiming it; then it
+stays `unsettled` with its last Run. Retrying a failed Run transfers only the
+Emails it still holds.
 
 A failed coordinator is classified from its last model or tool error. A funding
 stop pauses the Run. A transient fault (provider or gateway 408/409/425/429/5xx,
 deadline, egress, overload, harness reset, database connection) retries
-automatically as one successor Run with that Run's unsettled Emails on the
-escalation coordinator model, at most three attempts in total, and holds back
-new automatic admission for an hour. A deterministic failure, such as a
-tool-validation loop, never retries. Either way the last failed Run carries one
+automatically as one successor Run with that Run's unsettled Emails that have
+an attempt left, on the escalation coordinator model, and holds back new
+automatic admission for an hour. A deterministic failure, such as a
+tool-validation loop or an explicit 401/403, never retries. Either way the last failed Run carries one
 finding naming the class and the raw error, and its claimed Emails stay
 `unsettled`.
 
@@ -272,9 +277,11 @@ Before the coordinator, the claim links a lifecycle notice without a model call
 when exact evidence names exactly one Purchase on the owner's account: a
 Shipment the Email already sourced, a tracking number equal to exactly one
 Shipment, or the sender-proven Vendor's normalized order number. Conflicting
-evidence goes to the coordinator, and so does a shipping or delivery notice
-without recognised tracking, because the link would not record its package. A
-tracking or order-number link records the Email's carrier tracking as shipment
+evidence, including an order number on another member's account, goes to the
+coordinator. So does a shipping or delivery notice whose packages the link
+could not fully record: no recognised tracking, more than one package, an
+unknown carrier, or a tracking reference no carrier format recognises. A
+tracking or order-number link records the Email's one package as shipment
 evidence; a confirmation links only to a Purchase an import already sourced.
 Run targets retain that Run's recorded Email outcomes. An unsettled target
 now held elsewhere names the owning Run; it never inherits that Run's live

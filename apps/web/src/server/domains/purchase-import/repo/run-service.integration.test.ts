@@ -294,14 +294,15 @@ describe("purchase import run admission", () => {
         action: "cancel",
       }),
     ).toMatchObject({ status: "failed" });
-    // A cancelled Run leaves no Email researching with nothing working it.
+    // A cancelled Run leaves no Email researching with nothing working it,
+    // and keeps it from discovery, which would undo the member's stop.
     const { email } = await import("~/server/db/schema");
     expect(
       await getDb(ctx.db)
         .select({ runId: email.runId, status: email.status })
         .from(email)
         .where(eq(email.ledgerPartyId, party.id)),
-    ).toEqual([{ runId: null, status: "pending" }]);
+    ).toEqual([{ runId: run.id, status: "unsettled" }]);
   });
 
   const startFileRun = async () => {

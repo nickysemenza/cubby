@@ -48,6 +48,7 @@ import { mailReadContent } from "../repo/gmail/read-content";
 import { senderProofVendor } from "../repo/import-vendor";
 import {
   countRetainedMailAttachments,
+  hasUnrecognisedTracking,
   readEmailMailKeys,
   readMailRuleCandidates,
   readMailProductCandidates,
@@ -185,11 +186,13 @@ const OBSERVED_KIND = {
  * key equal to exactly one Shipment, (c) the sender-proven Vendor's order key
  * equal to exactly one live Purchase. Every rule that applies must name the
  * same Purchase, on the Email owner's own account; anything else is the
- * coordinator's. Association alone cannot establish that package evidence was
- * extracted (#3013), so (b)/(c) record the Email's carrier tracking through
- * the linked disposition's shipment evidence, and a shipping or delivery
- * notice without recognised tracking goes to the coordinator. A confirmation
- * links only to a Purchase an import already sourced, so no lines are lost.
+ * coordinator's, including any candidate on another account. Association
+ * alone cannot establish that package evidence was extracted (#3013), so
+ * (b)/(c) record the Email's one recognised package through the linked
+ * disposition's shipment evidence; a shipping or delivery notice without
+ * recognised tracking, with several packages or with any unrecognised
+ * tracking reference goes to the coordinator. A confirmation links only to a
+ * Purchase an import already sourced, so no lines are lost.
  */
 async function linkByExactEvidence(
   db: Database,
@@ -207,6 +210,17 @@ async function linkByExactEvidence(
 ) {
   const event = mailLifecycleEvent(input.subject, input.text);
   if (!event) return false;
+  // The link records package evidence only for references Cubby recognised.
+  // An unknown carrier, an unrecognised tracking reference, or more than one
+  // package (whose individual states the subject cannot prove) needs the
+  // coordinator's extraction.
+  const tracking = input.keys.trackingKeys;
+  if (
+    tracking.length > 1 ||
+    tracking.some((key) => key.carrier === null) ||
+    hasUnrecognisedTracking(`${input.subject ?? ""}\n${input.text}`, tracking)
+  )
+    return false;
   const { email } = input.source;
   const ownPurchase = and(
     notDeleted(purchaseTable),
@@ -293,20 +307,23 @@ async function linkByExactEvidence(
   const trackedHeld = tracked.filter((row) => row.purchaseId !== null);
   if (tracked.length > 1 && trackedHeld.length > 0) return false;
   if (trackedHeld[0]) proposals.push({ ...trackedHeld[0], rule: "tracked" });
-  if (input.senderVendorId) {
-    const ordered = input.candidates.filter(
-      (candidate) =>
-        candidate.ownAccount && candidate.vendorId === input.senderVendorId,
-    );
-    if (ordered.length > 1) return false;
-    const [only] = ordered;
-    if (only && (event !== "confirmation" || only.importedSource))
-      proposals.push({
-        purchaseId: only.purchaseId,
-        vendorId: only.vendorId,
-        rule: "ordered",
-      });
-    else if (only) return false;
+  // (c) Every Purchase the order key names counts, on any account: another
+  // member's equal order is a contradiction, never a filtered-out candidate.
+  if (input.candidates.length) {
+    const [only, ...others] = input.candidates;
+    if (
+      !only ||
+      others.length ||
+      !only.ownAccount ||
+      only.vendorId !== input.senderVendorId ||
+      (event === "confirmation" && !only.importedSource)
+    )
+      return false;
+    proposals.push({
+      purchaseId: only.purchaseId,
+      vendorId: only.vendorId,
+      rule: "ordered",
+    });
   }
   const purchaseIds = new Set(proposals.map((item) => item.purchaseId));
   const [purchaseCode] = purchaseIds;

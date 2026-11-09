@@ -291,18 +291,30 @@ There is no `blocked` Email status. A related Email an import attempt left
 without accepted or linked evidence is `unsettled` and keeps its holder Run
 (`Email.runId`), outcomes and evidence. An attempt is a `claim_next_work` or
 `target_outcome` receipt in this or an earlier self-failed or reviewed Run;
-roster admission alone is not one. A Run that ends (fails, is cancelled, or
-stops for review) returns the Emails no coordinator reached to discovery as
-`pending` with no holder, and keeps the attempted ones `unsettled`. A related
-or uncertain Email retained without import content is `pending` with no
+roster admission alone is not one. A Run that fails or stops for review
+returns the Emails no coordinator reached to discovery as `pending` with no
+holder, and keeps the attempted ones `unsettled`. A member's cancel keeps every
+researching Email with the Run as `unsettled`: discovery must not readmit what
+the member stopped, and the Run's retry or restart still transfers them. A
+related or uncertain Email retained without import content is `pending` with no
 holder; automatic admission requires retained content, so it waits for a member.
+
+Every admission of an Email into a Mail import Run (fresh, transient retry,
+transfer or supporting original) counts against its current checksum
+(`Email.importAttempts`). Unattended admission of unchanged evidence stops at
+three, however the earlier Runs ended, including failures before any claim; an
+Email out of attempts stays `unsettled` with its last Run instead of returning
+to discovery. A new checksum resets the count, and a new sender mapping or
+accepted order evidence readmits it as a new revision. Member-selected and
+member-controlled imports are not bounded.
 
 An `unsettled` Email is readmitted from any ended holder (completed, reviewed,
 failed or retired) only when a new evidence revision appears: a newly verified
 sender mapping, new accepted Purchase evidence for an order it prints, or new
-retained bytes. Each revision is fingerprinted (`sender-proof:<revision>` in the
-admitting Run's client key, checked against every frozen roster including
-disposed Runs), so one revision pays for at most one attempt; nothing readmits
+retained bytes. Each revision is fingerprinted into the admitting Run's frozen
+input (`evidenceRevision`, which a release clearing the replay key never
+touches) and checked against every frozen roster including disposed Runs, so
+one revision pays for at most one attempt; nothing readmits
 an unchanged Email on a clock. A retired holder has nothing to transfer, so the
 Email is admitted afresh; any other holder records a source-transfer receipt.
 
@@ -312,8 +324,9 @@ funding stops pause the Run without spending an attempt; transient faults
 (retryable provider or gateway status, deadlines, egress, overload, harness
 `stale`/`reset`, database connection faults) fail as `agent_transient` and retry
 automatically as one successor Run that takes only the Run's still-held
-unsettled Emails, on the escalation coordinator model, until three attempts in
-total; everything else is deterministic (`agent_failed`) and never retries. A
+unsettled Emails with an attempt left, on the escalation coordinator model;
+everything else is deterministic (`agent_failed`) and never retries. An explicit
+401/403 is deterministic whatever transient wording it carries. A
 deterministic failure, or a transient one out of attempts, leaves exactly one
 Run finding naming the class and the raw error. Only a recent transient failure
 holds back automatic admission (one hour). No Run completes or is retired while
@@ -323,12 +336,15 @@ Before handing a claimed lifecycle notice to the coordinator, the claim links it
 model-free when exact evidence names exactly one Purchase on the Email owner's
 account: a Shipment this Email already sourced, a tracking key equal to exactly
 one Shipment, or the sender-proven Vendor's normalized order key. Any
-disagreement goes to the coordinator. Order and tracking keys are stored
+disagreement goes to the coordinator, including an order-key match on another
+member's account. Order and tracking keys are stored
 separately on the Email (`orderKeys`, `trackingKeys`, bound to
 `mailKeysChecksum`) and recomputed lazily when missing or stale. Because a link
 alone does not extract package evidence, a tracking or order-key link records
-the Email's carrier tracking as shipment evidence, and a shipping or delivery
-notice without recognised tracking still goes to the coordinator.
+the Email's one recognised package as shipment evidence. A shipping or delivery
+notice without recognised tracking, with more than one package, with an
+unknown carrier, or with a tracking reference no carrier format recognises
+still goes to the coordinator.
 
 ### Complete original capture
 

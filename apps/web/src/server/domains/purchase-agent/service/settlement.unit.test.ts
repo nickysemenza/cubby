@@ -64,6 +64,8 @@ describe("settlementReport", () => {
       "agent_failed",
     ],
     ["model_error", "403 Forbidden: invalid API key", "agent_failed"],
+    ["model_error", "HTTP 403: network access denied", "agent_failed"],
+    ["stale", "401 Unauthorized: gateway timeout", "agent_failed"],
   ] as const)("classifies %s with %j as %s", (reason, lastError, code) => {
     expect(
       settlementReport(

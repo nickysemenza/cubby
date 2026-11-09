@@ -1,3 +1,4 @@
+import { emailImportAttempts } from "@cubby/schemas/email-fields";
 import { runEntityId, type RunId } from "@cubby/schemas/identifiers";
 import { agentFailureCode } from "@cubby/schemas/purchase-agent-services";
 import {
@@ -20,6 +21,32 @@ import { email as emailTable, run } from "~/server/db/retained-tables";
 import type { RetainedMail } from "~/server/domains/mail/repo/retained-mail";
 import { createAppError } from "~/server/errors/app-error";
 import { recordChange } from "~/server/generic/changes/repo/change";
+
+/**
+ * Mail import Runs one Email may enter at one checksum without a new evidence
+ * revision. Every admission counts (fresh, transient retry, transfer), so a
+ * coordinator failing before it claims anything cannot readmit the same
+ * evidence forever; a new checksum, sender mapping or accepted order evidence
+ * is a new revision.
+ */
+const MAIL_IMPORT_ATTEMPTS_PER_REVISION = 3;
+
+const ATTEMPT = emailImportAttempts.keyof().enum;
+
+/** One more admission of the Email at its current checksum. */
+export const countImportAttempt = sql`CASE WHEN ${emailTable.importAttempts}->>${ATTEMPT.checksum}::text = ${emailTable.checksum}
+  THEN jsonb_build_object(${ATTEMPT.checksum}::text, ${emailTable.checksum}, ${ATTEMPT.count}::text, coalesce((${emailTable.importAttempts}->>${ATTEMPT.count}::text)::int, 0) + 1)
+  ELSE jsonb_build_object(${ATTEMPT.checksum}::text, ${emailTable.checksum}, ${ATTEMPT.count}::text, 1) END`;
+
+/** The Email's current checksum has used every attempt its revision allows. */
+export const importAttemptsExhaustedSql = sql`coalesce(${emailTable.importAttempts}->>${ATTEMPT.checksum}::text = ${emailTable.checksum}
+  AND (${emailTable.importAttempts}->>${ATTEMPT.count}::text)::int >= ${MAIL_IMPORT_ATTEMPTS_PER_REVISION}, false)`;
+
+export const importAttemptsExhausted = (
+  email: Pick<typeof emailTable.$inferSelect, "checksum" | "importAttempts">,
+) =>
+  email.importAttempts?.checksum === email.checksum &&
+  email.importAttempts.count >= MAIL_IMPORT_ATTEMPTS_PER_REVISION;
 
 export const MAIL_SOURCE_TRANSFER_OPERATION = "mail_source_transfer";
 export const mailSourceTransferReceipt = z.strictObject({
@@ -259,7 +286,12 @@ export async function admitSupportingMailSource(
     .where(eq(run.id, runId));
   await tx
     .update(emailTable)
-    .set({ runId, status: "researching", updatedAt: new Date() })
+    .set({
+      runId,
+      status: "researching",
+      importAttempts: countImportAttempt,
+      updatedAt: new Date(),
+    })
     .where(eq(emailTable.id, message.id));
   await recordChange(db, { kind: "source", categories: ["email"] });
 }
@@ -299,7 +331,12 @@ export async function transferMailRunSources(
     );
   const assigned = await tx
     .update(emailTable)
-    .set({ runId: toRunId, status: "researching", updatedAt: new Date() })
+    .set({
+      runId: toRunId,
+      status: "researching",
+      importAttempts: countImportAttempt,
+      updatedAt: new Date(),
+    })
     .where(
       and(
         eq(emailTable.runId, fromRunId),
@@ -333,10 +370,32 @@ export async function transferMailRunSources(
 }
 
 /**
- * A Mail import Run that ends (fails, is cancelled, or stops for review) before
+ * A member's cancel stops the Run's work without handing it back to
+ * discovery, which would readmit what the member stopped: its researching
+ * Emails stay with it as `unsettled`, for its retry or restart, or a new
+ * evidence revision.
+ */
+export async function holdCancelledMailRunSources(
+  tx: DrizzleTransaction,
+  runId: RunId,
+) {
+  const held = await tx
+    .update(emailTable)
+    .set({ status: "unsettled", updatedAt: new Date() })
+    .where(
+      and(eq(emailTable.runId, runId), eq(emailTable.status, "researching")),
+    )
+    .returning({ id: emailTable.id });
+  if (held.length)
+    await recordChange(tx, { kind: "source", categories: ["email"] });
+}
+
+/**
+ * A Mail import Run that fails or stops for review before
  * settling every Email returns the Emails no coordinator reached to Mail
  * discovery; nothing else would ever admit them again. An Email this Run or an
- * earlier failed Run already claimed stays with this Run as `unsettled`: a
+ * earlier failed Run already claimed, or whose checksum used every admission
+ * attempt, stays with this Run as `unsettled`: a
  * message that keeps ending its import unsettled must not spend a coordinator
  * every discovery pass, and must not claim research nothing is doing. Only a
  * new evidence revision (`mail-import-run.ts`), a transient-failure retry or a
@@ -451,6 +510,14 @@ export async function releaseUnsettledMailRunSources(
       .filter((attempt) => attempt.unsettled)
       .map((attempt) => attempt.orderMailId),
   );
+  // An Email whose checksum used every attempt also stays: returning it would
+  // let discovery admit identical evidence again.
+  const exhausted = new Set(
+    held
+      .filter((source) => importAttemptsExhausted(source.email))
+      .map((source) => source.orderMailId),
+  );
+  for (const orderMailId of exhausted) failedBefore.add(orderMailId);
   const kept = held.filter((source) => failedBefore.has(source.orderMailId));
   if (kept.length)
     await tx
@@ -472,6 +539,7 @@ export async function releaseUnsettledMailRunSources(
   if (!released.length) return [];
   // The admission replay key names this Run's source set; readmitting the same
   // released Emails would otherwise replay this ended Run instead of starting one.
+  // The revision fence reads `input.evidenceRevision`, which stays.
   await tx.update(run).set({ clientKey: null }).where(eq(run.id, runId));
   return tx
     .update(emailTable)

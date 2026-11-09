@@ -24,16 +24,27 @@ const TRANSIENT_HARNESS_REASONS = new Set(["stale", "reset"]);
 const TRANSIENT_ERROR =
   /^\s*(?:error:?\s*)?(?:408|409|425|429|5\d\d)\b|\b(?:status|HTTP)(?: code)?\s*[:=]?\s*(?:408|409|425|429|5\d\d)\b|\b(?:408|409|425|429|5\d\d) status\b|\b(?:deadline|time(?:d)? ?out|timeout|egress|overload(?:ed)?|(?:temporarily|service) unavailable|bad gateway|ECONNRESET|ECONNREFUSED|ETIMEDOUT|EPIPE|socket hang up|network|connection (?:reset|refused|closed|terminated|error)|terminating connection|too many connections|deadlock|could not serialize|SQLSTATE (?:08|40|53|57))/iu;
 
+/**
+ * An explicit authentication or authorization refusal (401/403) recurs until
+ * someone changes a credential or grant, whatever transient wording it carries
+ * ("HTTP 403: network access denied"), as a gateway configuration stop does.
+ */
+const AUTHORIZATION_ERROR =
+  /^\s*(?:error:?\s*)?(?:401|403)\b|\b(?:status|HTTP)(?: code)?\s*[:=]?\s*(?:401|403)\b|\b(?:401|403) (?:status|unauthori[sz]ed|forbidden)\b|\bunauthori[sz]ed\b|\bforbidden\b/iu;
+
 const DETAIL_ERROR_MAX = 2_000;
 
 /**
  * Which retry policy a failed coordinator gets. A funding stop is classified
- * before this (`fundingUnavailable`) and pauses instead.
+ * before this (`fundingUnavailable`) and pauses instead; an authorization
+ * refusal wins over every transient signal.
  */
 function coordinatorFailureCode(
   reason: string | undefined,
   lastError: string | undefined,
 ): Exclude<AgentFailureCode, "agent_aborted"> {
+  if (lastError !== undefined && AUTHORIZATION_ERROR.test(lastError))
+    return "agent_failed";
   return (reason && TRANSIENT_HARNESS_REASONS.has(reason)) ||
     (lastError !== undefined && TRANSIENT_ERROR.test(lastError))
     ? "agent_transient"

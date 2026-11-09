@@ -83,6 +83,9 @@ import {
 } from "~/server/domains/purchase-import/repo/email-review-intent";
 import { mailImportEnabled } from "~/server/domains/purchase-import/repo/mail-import-settings";
 import {
+  countImportAttempt,
+  importAttemptsExhausted,
+  importAttemptsExhaustedSql,
   transferMailRunSources,
   mailSourceTransferReceipt,
   MAIL_SOURCE_TRANSFER_OPERATION,
@@ -331,12 +334,15 @@ const untouchedAutomaticUnresolved = (
     AND reviewed."emailId" = ${emailTable.id} AND reviewed.authority = ${feedbackAuthority.enum.member}
 ) AND NOT ${emailHasProtectingIntentSql(sql`${emailTable.id}`, sql`${emailTable.orderMailId}`)}`;
 
-/** Frozen inputs retain attempted source/mapping pairs even after ownership moves. */
+/**
+ * Frozen inputs retain attempted source/revision pairs even after ownership
+ * moves or a release clears the Run's replay key.
+ */
 // includes-deleted: disposed Run inputs still prove that this source/mapping was attempted.
 const unattemptedSenderMapping = (revision: SQL) => sql`NOT EXISTS (
  SELECT 1 FROM "Run" attempted, jsonb_array_elements(coalesce(attempted.input->'sources', '[]'::jsonb)) source
  WHERE attempted."ledgerPartyId" = ${emailTable.ledgerPartyId}
- AND attempted."clientKey" LIKE ('%sender-proof:' || ${revision} || ':%')
+ AND attempted.input->>'evidenceRevision' = ${revision}
  AND source->>'orderMailId' = ${emailTable.orderMailId}::text
  AND source->>'checksum' = ${emailTable.checksum}
 )`;
@@ -353,6 +359,8 @@ async function partitionOwnership(
   senderRevision?: string,
   sourceChanged = false,
   newEvidenceAt?: Date,
+  /** Unattended admission of unchanged evidence honours the attempt bound. */
+  bounded = false,
 ) {
   const messages = await tx
     .select()
@@ -419,7 +427,8 @@ async function partitionOwnership(
       owner?.purpose === "mail_import" &&
       (owner.retiredAt || ENDED_MAIL_IMPORT_STATUSES.includes(owner.status)) &&
       message?.status === (sourceChanged ? "pending" : "unsettled") &&
-      !owner.clientKey?.includes(`sender-proof:${senderRevision}:`)
+      mailResearchRunInput.safeParse(owner.input).data?.evidenceRevision !==
+        senderRevision
     ) {
       const [eligible] = await tx
         .select({ id: emailTable.id })
@@ -475,7 +484,8 @@ async function partitionOwnership(
           );
         transfers.set(owner.id, [...(transfers.get(owner.id) ?? []), source]);
       } else owners.set(owner.id, owner);
-    } else fresh.push(source);
+    } else if (!(bounded && message && importAttemptsExhausted(message)))
+      fresh.push(source);
   }
   return { owners, fresh, transfers };
 }
@@ -652,6 +662,7 @@ export async function admitMailImport(
         senderRevision,
         input.sourceRecheck,
         newEvidenceAt,
+        Boolean(input.automatic && !controlled && !senderRevision),
       );
       const existing = [...owners.values()].map((row) => ({
         created: false,
@@ -696,7 +707,9 @@ export async function admitMailImport(
           vendorId: controlled ? (parent?.vendorId ?? null) : null,
           cause: memberSelected ? "member_request" : "source_discovered",
           coordinatorModel: coordinatorModelFor("mail_import"),
-          input: sourceSet,
+          input: senderRevision
+            ? { ...sourceSet, evidenceRevision: senderRevision }
+            : sourceSet,
           clientKey,
           startedAt: new Date(),
           dispatchEventId: crypto.randomUUID(),
@@ -734,7 +747,11 @@ export async function admitMailImport(
         } else {
           const assigned = await tx
             .update(emailTable)
-            .set({ status: "researching", runId: id })
+            .set({
+              status: "researching",
+              runId: id,
+              importAttempts: countImportAttempt,
+            })
             .where(
               or(
                 ...admittedSources.map((source) =>
@@ -887,6 +904,7 @@ export async function importPendingEmails(db: Database) {
             ),
           ),
           notInArray(emailTable.status, ["excluded", "deleted"]),
+          sql`NOT ${importAttemptsExhaustedSql}`,
           notDeleted(emailTable),
         ),
       )
@@ -1004,7 +1022,7 @@ export async function importPendingEmails(db: Database) {
           sender: sql<string>`sender_identity.sender`,
           vendorId: sql<string>`sender_identity."vendorId"`,
           revision: sql<string>`sender_identity.revision`,
-          senderEligible: sql<boolean>`${unattemptedSenderMapping(sql`sender_identity.revision`)} AND coalesce(${run.clientKey}, '') NOT LIKE ('%sender-proof:' || sender_identity.revision || ':%')`,
+          senderEligible: sql<boolean>`${unattemptedSenderMapping(sql`sender_identity.revision`)} AND coalesce(${run.input}->>'evidenceRevision', '') <> sender_identity.revision`,
           // An outcome-free attempt dates from its holder's end.
           outcomeAt:
             sql<Date | null>`coalesce((SELECT max(prior."completedAt") FROM "RunOperation" prior

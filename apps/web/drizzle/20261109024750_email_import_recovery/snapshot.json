@@ -2,7 +2,7 @@
   "type": "diff",
   "version": "9",
   "dialect": "postgres",
-  "id": "76cca729-296e-4f74-a218-44bda1abc2f7",
+  "id": "01bd2e45-6168-4d64-8107-63cc7d0ca531",
   "prevIds": [
     "3a57bf3e-6886-488d-b2ba-c03a6247bac1"
   ],
@@ -55,6 +55,24 @@
         "s|col|public.Email.mailKeysChecksum",
         "n|col|public.Email.mailKeysChecksum",
         "e|col|public.Email.mailKeysChecksum"
+      ],
+      "reads": [
+        "n|tbl|public.Email",
+        "n|sch|public"
+      ]
+    },
+    {
+      "statementType": "add_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "Email",
+        "importAttempts"
+      ],
+      "writes": [
+        "s|col|public.Email.importAttempts",
+        "n|col|public.Email.importAttempts",
+        "e|col|public.Email.importAttempts"
       ],
       "reads": [
         "n|tbl|public.Email",
@@ -120,6 +138,22 @@
         "table": "Email",
         "name": "mailKeysChecksum",
         "type": "text",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "Email",
+        "name": "importAttempts",
+        "type": "jsonb",
         "typeSchema": null,
         "notNull": false,
         "dimensions": 0,

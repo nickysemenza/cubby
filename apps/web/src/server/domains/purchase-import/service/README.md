@@ -202,13 +202,15 @@ pending: nothing here starts Product research.
    tracking key (`Email.trackingKeys`) equal to exactly one Shipment, (c) a
    normalized order key (`Email.orderKeys`) equal to exactly one live Purchase
    of the sender-proof Vendor (`senderProofVendor`). A disagreement, another
-   member's Shipment, or a sender proven to be another Vendor goes to the
-   coordinator. A (b)/(c) link records the Email's carrier tracking in the same
-   resolution as dated notification observations; a shipping or delivery
-   notice without recognised tracking, and a confirmation of a Purchase no
-   import has sourced, go to the coordinator. Keys come from one extractor
+   member's Shipment or order-key Purchase, or a sender proven to be another
+   Vendor goes to the coordinator. A (b)/(c) link records the Email's one
+   package in the same resolution as a dated notification observation; a
+   shipping or delivery notice without recognised tracking, more than one
+   package, an unknown carrier or an unrecognised tracking reference
+   (`hasUnrecognisedTracking`), and a confirmation of a Purchase no import has
+   sourced, go to the coordinator. Keys come from one extractor
    (`extractMailKeys`: `purchase_cues` identifiers minus carrier tracking;
-   UPS/USPS/FedEx formats and tracking-link parameters) and are stored at ingest
+   UPS/USPS/FedEx/OnTrac formats and tracking-link parameters) and are stored at ingest
    or recomputed when missing or stale (`readEmailMailKeys`). An
    exact USPS or FedEx carrier notice classified related records its package,
    then links only the Purchase that Shipment already holds or settles
@@ -288,11 +290,16 @@ pending: nothing here starts Product research.
    failed tool result the coordinator recorded (`run-agent.ts` `recordFailure`):
    a funding stop pauses; `agent_transient` retries in `markRunFailed` as one
    successor (`cause: retry`, escalation coordinator model) taking only the
-   Run's held unsettled Emails, at most three attempts; `agent_failed` never
-   retries. The last failed attempt carries one Run finding with the class and
-   raw error. Ending Runs, including member cancels, release unreached Emails
-   and keep claimed ones `unsettled`; retirement skips a Run still holding a
-   `researching` Email.
+   Run's held unsettled Emails with an attempt left; `agent_failed` (including
+   any explicit 401/403) never retries. The last failed attempt carries one Run
+   finding with the class and raw error. Every admission counts against the
+   Email's checksum (`Email.importAttempts`, `MAIL_IMPORT_ATTEMPTS_PER_REVISION`
+   in `mail-run-membership.ts`); unattended admission of unchanged evidence
+   stops at three. Failed and reviewed Runs release unreached Emails below the
+   bound and keep claimed or exhausted ones `unsettled`; a member's cancel keeps
+   them all; recheck admissions record their revision in the frozen input
+   (`evidenceRevision`). Retirement skips a Run still holding a `researching`
+   Email.
    Transcripts are preserved until explicit member-authorized retirement, as
    [Background work](../../../../../../../docs/jobs.md) documents. Authorized
    disposal destroys settled Runs' transcripts (`run-retirement.ts`), oldest
