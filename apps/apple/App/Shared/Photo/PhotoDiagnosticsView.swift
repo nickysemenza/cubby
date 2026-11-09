@@ -572,7 +572,9 @@ private struct CompareRow: View {
                 valueText(server.flatMap { $0.isEmpty ? nil : $0 } ?? "None")
                 copyButton(server.flatMap { $0.isEmpty ? nil : $0 })
             } label: {
-                LabeledContent(label) {
+                HStack {
+                    Text(label)
+                    Spacer(minLength: FieldGuideTokens.Space.sm)
                     Label("Same", systemImage: "equal.circle").foregroundStyle(.secondary)
                 }
             }

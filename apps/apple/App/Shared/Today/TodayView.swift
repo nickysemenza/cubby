@@ -395,18 +395,16 @@ struct TodayContent: View {
 
     #if os(iOS)
         private var iOSList: some View {
+            // Explicit section identity avoids SwiftUI's collection-cell cast crash when these
+            // heterogeneous section bodies are generated through a ForEach in iOS 27 previews.
             List {
-                ForEach(TodaySection.allCases.filter { $0 != .views || !pinned.isEmpty }) { section in
-                    Section(section.rawValue) {
-                        switch section {
-                        case .tasks: taskContent
-                        case .meals: mealContent
-                        case .nutrition: nutritionContent
-                        case .views: pinnedViewLinks
-                        case .work: workLinks
-                        }
-                    }
+                Section(TodaySection.tasks.rawValue) { taskContent }
+                Section(TodaySection.meals.rawValue) { mealContent }
+                Section(TodaySection.nutrition.rawValue) { nutritionContent }
+                if !pinned.isEmpty {
+                    Section(TodaySection.views.rawValue) { pinnedViewLinks }
                 }
+                Section(TodaySection.work.rawValue) { workLinks }
             }
             .fieldGuideSectionStyle()
             .environment(\.defaultMinListRowHeight, FieldGuideTokens.touchTarget)
