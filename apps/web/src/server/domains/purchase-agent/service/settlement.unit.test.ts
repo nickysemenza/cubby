@@ -63,6 +63,7 @@ describe("settlementReport", () => {
     ["faulted", "Connection terminated unexpectedly", "agent_transient"],
     ["stale", undefined, "agent_transient"],
     ["reset", undefined, "agent_transient"],
+    ["restart_limit", undefined, "agent_transient"],
     ["model_error", undefined, "agent_failed"],
     [
       "faulted",
