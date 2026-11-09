@@ -288,8 +288,8 @@ pending: nothing here starts Product research.
    An unanswered submission is classified (`purchase-agent/service/settlement.ts`
    `coordinatorFailureCode`) from Pi's reason and the last model error or
    failed tool result the coordinator recorded (`run-agent.ts` `recordFailure`):
-   a funding stop pauses; `agent_transient` (including Pi's `stale`, `reset`
-   and `restart_limit` stops) retries in `markRunFailed` as one
+   a funding stop pauses; `agent_transient` (including Pi's `stale`, `reset`,
+   `restart_limit` and `interrupted` stops) retries in `markRunFailed` as one
    successor (`cause: retry`, escalation coordinator model) taking only the
    Run's held unsettled Emails with an attempt left; `agent_failed` (including
    any explicit 401/403) never retries. A database fault in paid or free

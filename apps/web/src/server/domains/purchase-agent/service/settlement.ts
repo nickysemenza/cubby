@@ -16,10 +16,16 @@ export type SettlementReport =
 /**
  * Harness stops that a fresh conversation outlives. `restart_limit` is pi
  * parking a task that crashes, evictions or resets cut off five times in a
- * row; a deploy did this to six Runs at once (2026-11-09). The per-revision
- * attempt bound still caps a task that crashes every time.
+ * row; a deploy did this to six Runs at once (2026-11-09). `interrupted` is a
+ * restart cutting off a turn or tool call mid-run. The per-revision attempt
+ * bound still caps a task that crashes every time.
  */
-const TRANSIENT_HARNESS_REASONS = new Set(["stale", "reset", "restart_limit"]);
+const TRANSIENT_HARNESS_REASONS = new Set([
+  "stale",
+  "reset",
+  "restart_limit",
+  "interrupted",
+]);
 /**
  * Provider, gateway and database faults a later attempt can outlive: retryable
  * HTTP statuses (as `classifyJobFailure` treats provider capacity), deadlines,
