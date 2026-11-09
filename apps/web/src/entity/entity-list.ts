@@ -6,6 +6,7 @@ import {
 } from "@tanstack/react-query";
 
 import { entityList } from "~/integrations/tanstack-query/generated/domains/entityList.gen";
+import type { OperationCallOptions } from "~/integrations/tanstack-query/operation-call";
 import {
   infiniteOperationQueryKey,
   type OperationQueryKey,
@@ -124,24 +125,22 @@ export function entityListFor<E extends ListEntity>(
   ];
   const call = async (
     input: EntityListInputByEntity[E],
-    signal?: AbortSignal,
-    consistency?: "strong",
+    options?: OperationCallOptions,
   ): Promise<EntityListResultByEntity[E]> => {
     if (input.fields !== undefined)
       throw new Error(
         "Selected list fields require the selected list query plan",
       );
-    const result = await operation.call(input, { signal, consistency });
+    const result = await operation.call(input, options);
     if ("selectedFields" in result)
       throw new Error("A complete list returned a selected projection");
     return correlateEntityList(entity, result);
   };
   const selectedCall = async (
     input: EntityListInputByEntity[E],
-    signal?: AbortSignal,
-    consistency?: "strong",
+    options?: OperationCallOptions,
   ): Promise<EntitySelectedListResultByEntity[ListEntity]> => {
-    const result = await operation.call(input, { signal, consistency });
+    const result = await operation.call(input, options);
     if (!("selectedFields" in result))
       throw new Error("A selected list returned no projection witness");
     if (
@@ -182,14 +181,14 @@ export function entityListFor<E extends ListEntity>(
       return queryOptions({
         queryKey: queryKeyFor(keyInput),
         queryFn: async ({ signal, client, queryKey }) =>
-          call(
-            parseEntityListInput(entity, wireInput),
+          call(parseEntityListInput(entity, wireInput), {
             signal,
-            readOptions?.consistency ??
+            consistency:
+              readOptions?.consistency ??
               (client.getQueryState(queryKey)?.isInvalidated
                 ? "strong"
                 : undefined),
-          ),
+          }),
         meta: policy.meta,
         ...policy.freshness,
       });
@@ -208,7 +207,10 @@ export function entityListFor<E extends ListEntity>(
         meta: policy.meta,
         execute: (signal: AbortSignal, consistency?: "strong") =>
           Promise.resolve(
-            call(parseEntityListInput(entity, wireInput), signal, consistency),
+            call(parseEntityListInput(entity, wireInput), {
+              signal,
+              consistency,
+            }),
           ),
       };
     },
@@ -221,10 +223,13 @@ export function entityListFor<E extends ListEntity>(
         queryKey: queryKeyFor(parsed),
         meta: policy.meta,
         execute: (signal: AbortSignal, consistency?: "strong") =>
-          selectedCall(parsed, signal, consistency),
+          selectedCall(parsed, { signal, consistency }),
       };
     },
-    browserInfiniteQueryOptions: (input: EntityListParams<E>) => {
+    browserInfiniteQueryOptions: (
+      input: EntityListParams<E>,
+      initialRead?: Pick<OperationCallOptions, "batch">,
+    ) => {
       const firstPage = firstPageOf(input);
       const parsed = parseEntityListInput(entity, wireInputFor(firstPage));
       const policy = operation.policy(parsed);
@@ -244,10 +249,13 @@ export function entityListFor<E extends ListEntity>(
               ...parsed,
               pagination: { ...firstPage.pagination, pageIndex: pageParam },
             }),
-            signal,
-            client.getQueryState(queryKey)?.isInvalidated
-              ? "strong"
-              : undefined,
+            {
+              ...(pageParam === 0 ? initialRead : undefined),
+              signal,
+              consistency: client.getQueryState(queryKey)?.isInvalidated
+                ? "strong"
+                : undefined,
+            },
           ),
         initialPageParam: 0,
         getNextPageParam: (lastPage) =>
@@ -269,10 +277,12 @@ export function entityListFor<E extends ListEntity>(
               ...wireInputFor(firstPage),
               pagination: { ...firstPage.pagination, pageIndex: pageParam },
             }),
-            signal,
-            client.getQueryState(queryKey)?.isInvalidated
-              ? "strong"
-              : undefined,
+            {
+              signal,
+              consistency: client.getQueryState(queryKey)?.isInvalidated
+                ? "strong"
+                : undefined,
+            },
           ),
         initialPageParam: 0,
         getNextPageParam: (lastPage) => {

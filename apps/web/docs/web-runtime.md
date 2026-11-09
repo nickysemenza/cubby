@@ -30,7 +30,7 @@ stops queued requests. The transport does not retry a settled failure; an item
 a batch could not answer (HTTP failure, broken or truncated stream) is resent
 alone, and answered siblings are not replayed. Keep passive
 mount/focus/reconnect defaults separate from recovery of an active read.
-Pass the optional per-call `{ batch: false }` for reads partitioned to fit a Worker invocation budget; all other calls keep batching, and opted-out reads retain shared admission and cancellation.
+Pass the optional per-call `{ batch: false }` for reads partitioned to fit a Worker invocation budget. Route-primary list preloads also opt their first page out: initial rendering must not delay that read's batch-flush timer. The preload keeps the mounted list's canonical query key, so navigation and mounted observers join the same request. Relation sections and later pages keep their existing batching. Opted-out reads retain shared admission and cancellation; this does not give them queue priority or preempt active requests.
 
 This bounds HTTP requests, not origin database connections: each server batch
 can run several operations using its request-scoped pool. It does not reserve
