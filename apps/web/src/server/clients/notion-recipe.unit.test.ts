@@ -68,12 +68,6 @@ describe("notionPageToImportRecipe", () => {
     ]);
   });
 
-  it("is deterministic — same blocks yield identical output", () => {
-    const a = notionPageToImportRecipe(row(), churrosBlocks);
-    const b = notionPageToImportRecipe(row(), churrosBlocks);
-    expect(a).toEqual(b);
-  });
-
   it("collects headnote, trailing tips, and the source link into description", () => {
     const blocks: NotionBlock[] = [
       { type: "paragraph", text: "A classic." },

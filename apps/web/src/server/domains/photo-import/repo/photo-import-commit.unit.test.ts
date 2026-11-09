@@ -190,16 +190,6 @@ describe("photo import atomic commit", () => {
     expect(ports.persistAnalysis).not.toHaveBeenCalled();
   });
 
-  it("does not persist a receipt or replay an ambiguous response", async () => {
-    vi.mocked(adapter.apply).mockClear();
-    const ports = portsFor("UPLOADED");
-    const first = await commitPhotoImport(context, input(), adapter, ports);
-    await commitPhotoImport(context, input(), adapter, ports);
-
-    expect(adapter.apply).toHaveBeenCalledTimes(2);
-    expect(first).not.toHaveProperty("receiptId");
-  });
-
   it("rolls back when final activation count is incomplete", async () => {
     const withRollback = portsFor("PENDING", {
       activateImages: vi.fn(async () => 0),

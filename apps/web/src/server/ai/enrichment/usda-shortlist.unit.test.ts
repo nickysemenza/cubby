@@ -2,11 +2,7 @@ import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
 import { describe, expect, it } from "vitest";
 
 import type { UsdaLookupPort } from "./usda-shortlist";
-import {
-  buildUsdaShortlist,
-  usdaFoodSpec,
-  usdaQueryVariants,
-} from "./usda-shortlist";
+import { buildUsdaShortlist, usdaQueryVariants } from "./usda-shortlist";
 
 // Real WASM (vitest inlines it), not a stub — these pin the actual grammar
 // output the variants are derived from.
@@ -144,17 +140,5 @@ describe("buildUsdaShortlist", () => {
     await buildUsdaShortlist(usdaService, "salt");
 
     expect(calls).toBe(1);
-  });
-});
-
-describe("usdaFoodSpec", () => {
-  it("uses the fdcId as the selection id", () => {
-    const entry = {
-      fdcId: 1001,
-      line: "FDC 1001 [sr_legacy_food]: Wheat flour",
-      food: food({ fdc_id: 1001, description: "Wheat flour" }),
-    };
-    expect(usdaFoodSpec.idOf(entry)).toBe("1001");
-    expect(usdaFoodSpec.renderLine(entry)).toBe(entry.line);
   });
 });

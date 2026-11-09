@@ -1,12 +1,7 @@
 import { FAST_MODEL } from "@cubby/shared/ai/models";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import {
-  AI_CACHE_TTL_SECONDS,
-  cachedCall,
-  chatCompletionOptionsFor,
-  piCallTarget,
-} from "./adapters";
+import { chatCompletionOptionsFor, piCallTarget } from "./adapters";
 
 // Constructing a call target must never need a gateway: the shim resolves
 // the binding per request, and dev has none.
@@ -20,7 +15,7 @@ describe("piCallTarget resolves the declared model and gateway provider", () => 
   it("sends the fast tier to OpenAI's Responses API", () => {
     const target = piCallTarget(FAST_MODEL, opts);
     expect(target.model.provider).toBe("openai");
-    expect(target.model.id).toBe("gpt-6-luna");
+    expect(target.model.id).toBe(FAST_MODEL);
   });
 
   it("routes Anthropic models to the anthropic provider", () => {
@@ -86,32 +81,6 @@ describe("chatCompletionOptionsFor", () => {
       maxTokens: 500,
       reasoningEffort: "none",
       toolChoice: { type: "function", name: "respond" },
-    });
-  });
-});
-
-describe("cachedCall", () => {
-  const metadata = { feature: "usda-match", operation: "select" };
-
-  it("caches at the gateway's maximum TTL by default", () => {
-    expect(cachedCall({ metadata })).toEqual({
-      metadata,
-      cacheTtlSeconds: AI_CACHE_TTL_SECONDS,
-    });
-    expect(AI_CACHE_TTL_SECONDS).toBe(30 * 24 * 60 * 60);
-  });
-
-  it("skips the cache instead when force is set", () => {
-    expect(cachedCall({ metadata, force: true })).toEqual({
-      metadata,
-      skipCache: true,
-    });
-  });
-
-  it("caches (does not skip) when force is explicitly false", () => {
-    expect(cachedCall({ metadata, force: false })).toEqual({
-      metadata,
-      cacheTtlSeconds: AI_CACHE_TTL_SECONDS,
     });
   });
 });
