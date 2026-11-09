@@ -984,7 +984,7 @@ async function finalizeReviewRun(
  * finalizes the Run on replay (absent on the oldest rows, which read false).
  */
 const recordedCommit = commitPurchaseImportOut.extend({
-  requiresReview: z.boolean().catch(false),
+  requiresReview: z.boolean().default(false),
 });
 
 // The transaction deliberately keeps replay, evidence, resolution, and write

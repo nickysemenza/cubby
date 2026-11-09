@@ -1560,3 +1560,6 @@ FinancialTransactionAllocation stores signed nonzero bigint `amountMinor`; alloc
 Raw SQL dollar fields entering retained JavaScript fingerprints must use the PostgreSQL float8 driver boundary or an explicit decoder. An `execute<T>` annotation does not decode numeric strings. Retained float-sum fingerprints preserve their original per-row float8 accumulation; authoritative conservation and writes use minor units. SQL-hashed JSON/text boundaries also require the original float8 representation rather than numeric scale.
 
 FinancialTransaction amounts are stored as signed exact minor units. Native, MCP and audit receipts keep dollar numbers. Raw PostgreSQL reads that enter retained spending snapshots decode to float8 dollars, including embedded transaction JSON; TypeScript `execute<T>` does not decode PostgreSQL numeric strings. Exact storage arithmetic and preservation guards do not depend on these compatibility projections.
+
+Recorded purchase-import commit results default a missing legacy `requiresReview`
+flag to false; malformed values fail validation.
