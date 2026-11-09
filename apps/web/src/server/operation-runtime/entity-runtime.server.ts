@@ -1,10 +1,5 @@
-import { searchableEntitySchema } from "@cubby/schemas/search";
-import * as drizzle from "drizzle-orm";
-import { z } from "zod";
-
 import { entityFilterOptionsContract } from "~/contracts/entity-filter-options.contract";
 import { entityGraphContract } from "~/contracts/entity-graph.contract";
-import { entityInspectorHealthContract } from "~/contracts/entity-inspector-health.contract";
 import { entityIntegrityContract } from "~/contracts/entity-integrity.contract";
 import { entityMutationContract } from "~/contracts/entity-mutation.contract";
 import { entityTimelineContract } from "~/contracts/entity-timeline.contract";
@@ -13,7 +8,6 @@ import {
   entityTimelineInputSchema,
   getEntityTimelineOutputSchema,
 } from "~/entity/generated/entity-timelines.gen";
-import { getEntityCounts } from "~/server/domains/dashboard/repo/dashboard";
 import {
   entityMergeBlockers,
   executeEntity,
@@ -42,16 +36,7 @@ import { runEntityTimeline } from "~/server/generic/entity-timeline/service/enti
 import { buildIntegrityCatalog } from "~/server/generic/integrity/repo/entity-integrity";
 import { getFilterOptions } from "~/server/generic/list/repo/filter-options";
 import { previewEntityMerge } from "~/server/generic/merge/repo/merge-preview";
-import { executeSearchDocumentSql } from "~/server/generic/search/repo/search-document";
-import { liveAliasSql } from "~/server/lib/live-row";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
-import { throwIfOperationAborted } from "~/server/operation-runtime/operation.server";
-
-const searchDocumentCountRowSchema = z.object({
-  entityKind: searchableEntitySchema,
-  documents: z.number().int().nonnegative(),
-  embeddings: z.number().int().nonnegative(),
-});
 
 export const entityTimelineHandlers = implementOperationDomain(
   entityTimelineContract,
@@ -146,46 +131,6 @@ export const entityMutationHandlers = implementOperationDomain(
         return entityBrowserMutationResultSchema.parse(
           await executeEntity(context, command),
         );
-      },
-    },
-  },
-);
-
-export const entityInspectorHealthHandlers = implementOperationDomain(
-  entityInspectorHealthContract,
-  {
-    inspectorHealth: {
-      run: async (context) => {
-        const [counts, rows] = await Promise.all([
-          getEntityCounts(context.db),
-          executeSearchDocumentSql(
-            context.db,
-            searchDocumentCountRowSchema,
-            drizzle.sql`
-              SELECT
-                sd."entityKind" AS "entityKind",
-                count(DISTINCT sd."entityId")::int AS documents,
-                count(DISTINCT ee."entityId")::int AS embeddings
-              FROM "SearchDocument" sd
-              LEFT JOIN "EntityEmbedding" ee
-                ON ee."entityKind" = sd."entityKind"
-                AND ee."entityId" = sd."entityId"
-                AND ${liveAliasSql("ee")}
-              WHERE ${liveAliasSql("sd")}
-              GROUP BY sd."entityKind"
-            `,
-          ),
-        ]);
-        throwIfOperationAborted(context.signal);
-        return {
-          counts,
-          search: Object.fromEntries(
-            rows.map((row) => [
-              row.entityKind,
-              { documents: row.documents, embeddings: row.embeddings },
-            ]),
-          ),
-        };
       },
     },
   },

@@ -30,6 +30,7 @@ import {
   type SearchableEntityText,
 } from "~/server/generic/embedding/repo/entity-embedding";
 import type { SemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
+import { liveAliasSql } from "~/server/lib/live-row";
 
 interface SearchDocumentSource {
   entityKind: SearchableEntity;
@@ -101,6 +102,39 @@ async function loadDirectImageSearchText(
     values.set(key, [values.get(key), text].filter(Boolean).join("\n"));
   }
   return values;
+}
+
+const searchCoverageRowSchema = z.object({
+  entityKind: searchableEntitySchema,
+  documents: z.number().int().nonnegative(),
+  embeddings: z.number().int().nonnegative(),
+});
+
+/** Live search documents and embeddings per searchable entity. */
+export async function countSearchCoverage(db: Database) {
+  const rows = await executeSearchDocumentSql(
+    db,
+    searchCoverageRowSchema,
+    sql`
+      SELECT
+        sd."entityKind" AS "entityKind",
+        count(DISTINCT sd."entityId")::int AS documents,
+        count(DISTINCT ee."entityId")::int AS embeddings
+      FROM "SearchDocument" sd
+      LEFT JOIN "EntityEmbedding" ee
+        ON ee."entityKind" = sd."entityKind"
+        AND ee."entityId" = sd."entityId"
+        AND ${liveAliasSql("ee")}
+      WHERE ${liveAliasSql("sd")}
+      GROUP BY sd."entityKind"
+    `,
+  );
+  return Object.fromEntries(
+    rows.map((row) => [
+      row.entityKind,
+      { documents: row.documents, embeddings: row.embeddings },
+    ]),
+  );
 }
 
 /** Internal query boundary for the search service's indexed retrieval SQL. */
