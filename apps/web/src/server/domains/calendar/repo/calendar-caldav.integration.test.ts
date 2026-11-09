@@ -325,47 +325,7 @@ describe("durable calendar dirty-mark fallback", () => {
     setCfEnv(undefined);
     vi.useRealTimers();
   });
-  it("logs once and stops after every retry fails", async () =>
-    withInvocationDb(ctx.databaseUrl, async () => {
-      vi.useFakeTimers();
-      const consoleError = vi.spyOn(console, "error").mockImplementation(() => {
-        // SILENT: assertion target only, not the code under test.
-      });
-      const markDirty = vi
-        .fn()
-        .mockRejectedValue(new Error("stub RPC failure"));
-      setCfEnv(
-        fromPartial<Env>({
-          CALENDAR_FEED: { getByName: () => ({ markDirty }) },
-          BACKGROUND_QUEUE: { sendBatch: vi.fn().mockResolvedValue(undefined) },
-        }),
-      );
-
-      const tasks: Promise<unknown>[] = [];
-      await runWithExecutionCtx(
-        { waitUntil: (task) => tasks.push(task) },
-        async () => {
-          scheduleCalendarFeedDirty("test.write");
-        },
-        "https://cubby.example",
-      );
-      await vi.advanceTimersByTimeAsync(250);
-      await vi.advanceTimersByTimeAsync(750);
-      await tasks[0];
-
-      expect(markDirty).toHaveBeenCalledTimes(3);
-      expect(consoleError).toHaveBeenCalledTimes(1);
-      expect(consoleError).toHaveBeenCalledWith(
-        expect.objectContaining({
-          message: "[calendar-feed] failed to mark snapshot dirty",
-          reason: "test.write",
-          attempt: 2,
-          error: expect.objectContaining({ message: "stub RPC failure" }),
-        }),
-      );
-      consoleError.mockRestore();
-    }));
-  it("retains the dirty-mark Job when its queue wake fails", async () =>
+  it("hands one failed mark to a durable Job that survives a failed queue wake", async () =>
     withInvocationDb(ctx.databaseUrl, async () => {
       vi.useFakeTimers();
       const consoleError = vi.spyOn(console, "error").mockImplementation(() => {
@@ -390,10 +350,8 @@ describe("durable calendar dirty-mark fallback", () => {
         },
         "https://cubby.example",
       );
-      await vi.advanceTimersByTimeAsync(250);
-      await vi.advanceTimersByTimeAsync(750);
-
       await expect(tasks[0]).resolves.toBeUndefined();
+      expect(markDirty).toHaveBeenCalledTimes(1);
       // The fallback's wake is its own retained task, with its own bounded retries.
       await vi.advanceTimersByTimeAsync(5_250);
       await Promise.all(tasks);
