@@ -40,14 +40,12 @@ export const calendarContract = defineContract(
     }),
     getFeed: query({
       note: "Subscribable calendar feed URL",
-      readPolicy: "strong",
       input: z.undefined(),
       output: calendarFeedOut,
       cache: { tags: [["calendar", "feed"]] },
     }),
     // Credentials and live operational state.
     getCredential: query({
-      readPolicy: "strong",
       input: z.undefined(),
       output: calendarCredentialOut,
       cache: { tags: [["calendar", "credential"]], profile: "live-status" },
@@ -57,7 +55,6 @@ export const calendarContract = defineContract(
       note: "Feed delivery diagnostics",
       description:
         "Inspect one calendar feed’s delivery diagnostics, including the last uncertain write. Use this before clearing uncertainty; it does not retry or change the feed.",
-      readPolicy: "strong",
       input: z.undefined(),
       output: calendarFeedInspectionOut,
       cache: { tags: [["calendar", "feed"]], profile: "live-status" },

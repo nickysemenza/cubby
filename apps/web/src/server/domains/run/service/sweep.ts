@@ -1,5 +1,5 @@
 import { aiExecutionKind } from "@cubby/schemas/ai-evaluation";
-import { buildActorContext } from "@cubby/schemas/context";
+import { buildActorContext, systemActor } from "@cubby/schemas/context";
 import { suggestFieldKeys } from "@cubby/schemas/entity-fields";
 import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
 import {
@@ -23,14 +23,6 @@ import {
 import { readAiRefreshActivation } from "~/server/ai/repo/ai-refresh";
 import type { Database } from "~/server/db";
 import {
-  countTransferPairSeeds,
-  countTransferPairStates,
-  countTransferPairsNeedingLabels,
-  generateTransferPairSuggestionsPage,
-  retryTransferPairRefs,
-  transferPairGenerationCursor,
-} from "~/server/domains/financial-transaction/repo/transfer-pair-suggestions";
-import {
   countStatementPendingHolds,
   countSuggestionsNeedingLabels,
   countUnmatchedCharges,
@@ -39,6 +31,14 @@ import {
   retryStatementGenerationRefs,
   statementChargeFromWorkRef,
 } from "~/server/domains/transaction-import/repo/statement-suggestions";
+import {
+  countTransferPairSeeds,
+  countTransferPairStates,
+  countTransferPairsNeedingLabels,
+  generateTransferPairSuggestionsPage,
+  retryTransferPairRefs,
+  transferPairGenerationCursor,
+} from "~/server/domains/transaction-import/repo/transfer-pair-suggestions";
 import { buildCrudServices } from "~/server/http/request-context";
 import { launchWorkflowRun } from "~/server/workflows/runs/lifecycle";
 
@@ -47,7 +47,7 @@ import {
   countConnectionSweepSources,
   prepareConnectionSweepPage,
 } from "../repo/connection-refresh";
-import { ensureRun, systemActor } from "../repo/ensure-run";
+import { ensureRun } from "../repo/ensure-run";
 import { activeSweepFor, type StepRunOwner } from "../repo/run-step";
 import type { StepDriversFor } from "./run-step-registry";
 import {
@@ -305,7 +305,7 @@ const transferPairLabel: StepDriversFor<"sweep">["transfer_pair_label"] = {
   }),
   page: async ({ db, run, step, retrying }) => {
     const { labelTransferPairSuggestions } =
-      await import("~/server/domains/financial-transaction/service/transfer-pair-labels");
+      await import("~/server/domains/transaction-import/service/transfer-pair-labels");
     let outcome: Awaited<ReturnType<typeof labelTransferPairSuggestions>>;
     try {
       outcome = await labelTransferPairSuggestions(db, {

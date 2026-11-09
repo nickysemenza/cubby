@@ -192,7 +192,7 @@ public final class EntityRelationshipsModel {
     public private(set) var connectionError: String?
     public private(set) var isFindingConnections = false
     public private(set) var discoveryRunID: RunShortcode?
-    public private(set) var discoveryRunStatus: String?
+    public private(set) var discoveryRunStatus: RunStatus?
     public private(set) var reviewingConnectionID: String?
     public private(set) var phase: Phase = .idle
     public private(set) var activity: Activity = .idle
@@ -336,7 +336,7 @@ public final class EntityRelationshipsModel {
                     throw CancellationError()
                 }
                 guard snapshot.runID == runID else { throw ConnectionReviewError.discoveryRunMismatch }
-                discoveryRunStatus = snapshot.status.rawValue
+                discoveryRunStatus = snapshot.status
                 if snapshot.status != .running {
                     let document = try await client.storedConnections(source.graphRootInput)
                     try Task.checkCancellation()
@@ -564,7 +564,7 @@ public final class EntityRelationshipsModel {
         } else {
             phase = .loaded
         }
-        if discoveryRunStatus == "running", discoveryRunID != nil {
+        if discoveryRunStatus == .running, discoveryRunID != nil {
             await retryConnectionDiscoveryObservation()
         }
     }

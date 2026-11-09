@@ -18,7 +18,7 @@ import type { Database } from "~/server/db";
 import {
   planRunPreflight,
   paidRunPreflight,
-} from "~/server/domains/run/service/execution-transport";
+} from "~/server/domains/purchase-import/service/execution-transport";
 
 import { gmailRelevanceAllowed } from "../../repo/gmail/execution-policy";
 import type { MailRelevance } from "./relevance";

@@ -12,10 +12,11 @@ import { ProblemItem } from "@cubby/schemas/problems-raw-read";
 import { sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
+import { minorToDollarsSql } from "~/server/db/computed/money";
 import { getDb } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
+import { transactionImportRecord } from "~/server/db/retained-tables";
 import { allocationIntegrityDefectSql } from "~/server/domains/financial-transaction/repo/financial-allocation-integrity";
-import { transactionImportMembers } from "~/server/domains/transaction-import/repo/transaction-import-membership";
 
 /** Finance JSON is evidence received from imports/MCP; one malformed legacy row
  * must produce a defect, never make the complete Problems scan unavailable. */
@@ -177,9 +178,9 @@ async function queryAllocationDefects(
       ft."rawDescription" AS "rawDescription",
       ft."postedDate" AS "postedDate",
       ft.kind AS kind,
-      (ft."amountMinor"::numeric / 100)::float8 AS amount,
+      (${minorToDollarsSql(sql`ft."amountMinor"`, "numeric")})::float8 AS amount,
       ${allocationCount}::int AS "allocationCount",
-      COALESCE(sum((a."amountMinor"::numeric / 100)), 0)::double precision AS "allocatedTotal",
+      COALESCE(sum((${minorToDollarsSql(sql`a."amountMinor"`, "numeric")})), 0)::double precision AS "allocatedTotal",
       array_remove(array_agg(p.shortcode), NULL) AS "purchaseIds",
       ${sumMismatch} AS "sumMismatch",
       ${nonSettlementKind} AS "nonSettlementKind",
@@ -265,7 +266,7 @@ export async function findIncompleteTransactionImports(
            si."rowCountDeclared" AS "rowCountDeclared",
            count(sr.id)::int AS "rowCountStored"
     FROM "TransactionImport" si
-    LEFT JOIN ${transactionImportMembers} member ON member."importId" = si.id
+    LEFT JOIN ${transactionImportRecord} member ON member."importId" = si.id
     LEFT JOIN "SourceTransactionRecord" sr
       ON sr.id = member."statementRowId" AND ${notDeleted("sr")}
     WHERE ${notDeleted("si")} AND si."rowCountDeclared" IS NOT NULL

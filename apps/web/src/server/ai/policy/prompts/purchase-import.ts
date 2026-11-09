@@ -63,9 +63,6 @@ export const purchaseAuditPrompt = (
   ],
 });
 
-export const SUM_MISMATCH_ISSUE =
-  "Lines do not equal the printed grand total; retain the candidate and return needs_review with sum_mismatch.";
-
 function purchaseRepairMessages(
   originalMessages: readonly AiMessage[],
   issues: readonly string[],

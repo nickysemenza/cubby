@@ -7,12 +7,12 @@ import {
   purchaseAgentAuthorizeURL,
   purchaseAgentOAuthCookie,
   purchaseAgentConnectionRedirect,
-} from "~/server/domains/purchase-import/repo/agent-auth";
-import { getAuthSecret } from "~/server/http/auth-configuration";
+} from "~/server/domains/run/repo/agent-auth";
 import {
   createRequestContext,
   requireActor,
 } from "~/server/http/request-context";
+import { getAuthSecret } from "~/server/lib/auth-configuration";
 
 export const handlers: HttpRouteHandlers<Record<never, never>, "GET"> = {
   GET: async ({ request }) => {

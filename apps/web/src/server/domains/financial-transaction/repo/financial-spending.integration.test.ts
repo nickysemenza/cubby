@@ -32,7 +32,7 @@ import {
   vendor as vendorTable,
 } from "~/server/db/schema";
 import { updateExpense } from "~/server/domains/expense/repo/crud";
-import { updateFinancialAccount } from "~/server/domains/financial-account/repo";
+import { updateFinancialAccount } from "~/server/domains/financial-account/repo/financial-account";
 import { readPurchaseById } from "~/server/domains/purchase/repo/purchase";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 

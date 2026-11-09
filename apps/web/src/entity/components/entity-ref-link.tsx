@@ -15,7 +15,6 @@ export {
   OrderRefLink as VendorOrderLink,
   TableRefLink as EntityRouteLink,
 } from "./ref-link/leaf";
-export { ListRefLink as EntityRefList } from "./ref-link/list";
 
 type RecordLinkProps = {
   entity: Entity;
@@ -35,7 +34,7 @@ export function EntityRefLink(props: RecordLinkProps): React.ReactElement;
 export function EntityRefLink(props: InlineRefLinkProps | RecordLinkProps) {
   if ("data" in props) return <InlineRefLink {...props} />;
   if (
-    (isBrowserRoutedEntity(props.entity) || props.entity === "usda-food") &&
+    isBrowserRoutedEntity(props.entity) &&
     props.name &&
     props.name !== props.id
   )

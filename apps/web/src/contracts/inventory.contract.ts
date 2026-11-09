@@ -47,6 +47,7 @@ export const inventoryContract = defineContract(
       invalidates: ["inventory", "product", "purchase", "problems"],
     }),
     receivingContext: query({
+      readPolicy: "strong",
       description:
         "Read the purchase and inventory context for a proposed receipt, including existing matching stock. This is a preview; use receive_expense only for items the member confirms arrived.",
       input: inventoryReceivingContextInput,
@@ -125,7 +126,6 @@ export const inventoryContract = defineContract(
     // Interactive inventory work and integrity/repair diagnostics.
     findDuplicates: query({
       exposure: "view",
-      readPolicy: "strong",
       input: inventoryFindDuplicatesInput,
       output: inventoryDuplicateUniqueProductsOut,
     }),

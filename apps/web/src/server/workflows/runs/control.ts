@@ -2,11 +2,13 @@ import {
   aiEvaluationState,
   MEMBER_CANCELLED_AI_WORK,
 } from "@cubby/schemas/ai-evaluation";
+import { systemActor } from "@cubby/schemas/context";
 import type { ActorContext } from "@cubby/schemas/context";
 import { runShortcode, type RunId } from "@cubby/schemas/identifiers";
 import {
   OWNED_AI_WORK_PURPOSES,
   type RunControlAction,
+  type ExecutedRunPurpose,
 } from "@cubby/schemas/run-fields";
 import { runStepState } from "@cubby/schemas/run-step";
 import { and, eq, gt, inArray, isNull, or, sql } from "drizzle-orm";
@@ -18,15 +20,19 @@ import {
 import { runEvaluationRosterExists } from "~/server/ai/evaluation/repo/evaluation-tally";
 import type { Database } from "~/server/db";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
-import { ledgerParty, runStep, run as runTable } from "~/server/db/schema";
-import { systemActor } from "~/server/domains/run/repo/ensure-run";
+import {
+  aiEvaluation,
+  aiEvaluationRequest,
+  ledgerParty,
+  runStep,
+  run as runTable,
+} from "~/server/db/schema";
 import { recordPaidGrant } from "~/server/domains/run/repo/paid-grant";
 import { reopenRunStep } from "~/server/domains/run/repo/run-step";
 import { createAppError } from "~/server/errors/app-error";
 import { readJob } from "~/server/generic/jobs/repo/job-reads";
 import { cancelRunJobs, pauseJob } from "~/server/generic/jobs/repo/operator";
 
-import type { ExecutedRunPurpose } from "./contract";
 import { launchWorkflowRun, recordRunProgress } from "./lifecycle";
 
 /** Kinds whose evaluations name the Run as owner; a Sweep owns its connection evaluations. */
@@ -281,7 +287,6 @@ export async function cancelRunAiWork(
   return withTransactionDatabase(db, async (tx) => {
     const database = getDb(tx);
     if (scope.owned) {
-      const { aiEvaluation } = await import("~/server/db/schema");
       await database
         .update(aiEvaluation)
         .set({ state: "cancelled", error: reason, updatedAt: new Date() })
@@ -333,8 +338,6 @@ export async function readmitFailedAiWork(
   const database = getDb(db);
   let admitted = 0;
   if (owned) {
-    const { aiEvaluation, aiEvaluationRequest } =
-      await import("~/server/db/schema");
     const failed = await database
       .select()
       .from(aiEvaluation)
@@ -418,7 +421,6 @@ export async function readmitFailedAiWork(
     });
   }
   if (!requested) return admitted;
-  const { aiEvaluationRequest } = await import("~/server/db/schema");
   const { enqueueAiEvaluation, requestedAiEvaluations } =
     await import("~/server/ai/evaluation/repo/ai-evaluation-requests");
   for (const item of await requestedAiEvaluations(db, runId, {

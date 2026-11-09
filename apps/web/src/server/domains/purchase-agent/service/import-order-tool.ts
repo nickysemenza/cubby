@@ -19,6 +19,7 @@ import { z } from "zod";
 
 import { hasWriterVerdict, mailWriterOutcome } from "./cubby-mcp";
 import type { MailAttemptEvidence } from "./mail-attempts";
+import { CLAIM_IMPORT_WORK_TOOL } from "./tool-protocol";
 
 const orderFields = preparePurchaseImportInput.shape.orders.element.shape;
 export const extractedOrderInput = z
@@ -360,12 +361,9 @@ export function importExtractedOrderTool(
       // that continuation durable without another coordination model turn.
       if (committed.data.items.some((item) => item.outcome === "conflict"))
         return finish({ kind: "commit_result", result: committed.data });
-      const next = await api.executeTool(
-        "claim_next_import_work",
-        {},
-        context,
-        { key: "next-work" },
-      );
+      const next = await api.executeTool(CLAIM_IMPORT_WORK_TOOL, {}, context, {
+        key: "next-work",
+      });
       const nextWork = nestedValue(next, z.json());
       return finish({
         kind: "commit_result",

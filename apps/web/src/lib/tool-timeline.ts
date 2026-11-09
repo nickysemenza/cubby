@@ -33,7 +33,7 @@ import { shiftPlainDate } from "~/lib/household-date";
  * live edge (M12 Force Logic Press on Kitchen Remodel) is still a conflict —
  * and that one is an explicit boundary anyway, so it gets no slack at all.
  */
-export const TOOL_TIMELINE_GRACE_DAYS = 30;
+const TOOL_TIMELINE_GRACE_DAYS = 30;
 
 /**
  * When a tool was provably owned, derived from quantified ledger movements.

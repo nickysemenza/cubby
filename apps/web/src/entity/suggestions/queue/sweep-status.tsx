@@ -8,7 +8,7 @@ import { compileEntityListInput, entityListFor } from "~/entity/entity-list";
 import { useEntityMetadata } from "~/entity/metadata";
 import { entityReport } from "~/integrations/tanstack-query/generated/domains/entityReport.gen";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
-import { Panel } from "~/ui/layout/panel";
+import { Panel } from "~/ui/layout";
 
 const POLL_MS = 3000;
 

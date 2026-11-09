@@ -33,5 +33,5 @@ export const entityMutationContract = defineContract(
       },
     }),
   },
-  { exposure: "view" },
+  { exposure: "view", readPolicy: "financialEntity" },
 );

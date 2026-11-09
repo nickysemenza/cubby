@@ -26,11 +26,11 @@ import { z } from "zod";
 
 import type { McpToolDefinition, RunServices } from "./environment";
 import type { MailAttemptEvidence } from "./mail-attempts";
+import { CUBBY_MCP_TOOL_PREFIX } from "./tool-protocol";
 
 // The transport needs a URL. No request leaves the Worker: `mcpFetch` hands
 // it to Cubby's MCP handler in process with the run's bearer.
 const MCP_PLACEHOLDER_URL = "https://cubby-mcp.invalid/mcp";
-const MCP_TOOL_PREFIX = "mcp__cubby__";
 // Cubby's MCP handler serves only the modern era. A pin fails loudly instead
 // of falling back to the `initialize` handshake the handler rejects.
 const MCP_PROTOCOL_VERSION = "2026-07-28";
@@ -314,7 +314,7 @@ export function cubbyMcpExtension(
     name: "cubby.mcp",
     tools: tools.map((tool) =>
       defineTool({
-        name: `${MCP_TOOL_PREFIX}${tool.name}`,
+        name: `${CUBBY_MCP_TOOL_PREFIX}${tool.name}`,
         description: tool.description,
         // MCP tool input schemas are always JSON-Schema objects.
         parameters: tool.inputSchema,

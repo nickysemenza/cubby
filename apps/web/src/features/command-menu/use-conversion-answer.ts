@@ -59,60 +59,56 @@ export function useConversionAnswer(search: string): ConversionAnswer | null {
     staleTime: Number.POSITIVE_INFINITY,
     queryFn: async ({ signal }): Promise<ConversionAnswer | null> => {
       if (!parsed || !ingredient) return null;
+      const [{ getIngredientMappings }, { wasm }] = await Promise.all([
+        import("~/lib/unit-mapping-utils"),
+        import("~/lib/wasm"),
+      ]);
+      if (signal.aborted) return null;
+      const mappings = getIngredientMappings({
+        product: ingredient.product.map((product) => ({
+          ...product,
+          food: fieldValueOf(product.fields.food) ?? null,
+          price: fieldValueOf(product.fields.price) ?? null,
+        })),
+      });
+      if (mappings.length === 0) return null;
+
+      const amount = { value: parsed.value, unit: parsed.unit };
       try {
-        const [{ getIngredientMappings }, { wasm }] = await Promise.all([
-          import("~/lib/unit-mapping-utils"),
-          import("~/lib/wasm"),
-        ]);
-        if (signal.aborted) return null;
-        const mappings = getIngredientMappings({
-          product: ingredient.product.map((product) => ({
-            ...product,
-            food: fieldValueOf(product.fields.food) ?? null,
-            price: fieldValueOf(product.fields.price) ?? null,
-          })),
+        // Both sides canonicalize to grams (standard units natively, custom
+        // units like "cup" via the mapping graph); the ratio is the answer.
+        const grams = wasm.conv_amount_to_kind(mappings, "weight", amount);
+        const gramsPerTarget = wasm.conv_amount_to_kind(mappings, "weight", {
+          value: 1,
+          unit: parsed.target,
         });
-        if (mappings.length === 0) return null;
-
-        const amount = { value: parsed.value, unit: parsed.unit };
-        try {
-          // Both sides canonicalize to grams (standard units natively, custom
-          // units like "cup" via the mapping graph); the ratio is the answer.
-          const grams = wasm.conv_amount_to_kind(mappings, "weight", amount);
-          const gramsPerTarget = wasm.conv_amount_to_kind(mappings, "weight", {
-            value: 1,
-            unit: parsed.target,
-          });
-          if (!grams || !gramsPerTarget || gramsPerTarget.value <= 0) {
-            return null;
-          }
-          const converted = {
-            value: grams.value / gramsPerTarget.value,
-            unit: parsed.target,
-          };
-
-          let cost: string | null = null;
-          try {
-            const money = wasm.conv_amount_to_kind(mappings, "money", amount);
-            cost = money ? wasm.format_amount(money) : null;
-          } catch {
-            // SILENT: WASM probe — pricing is optional on this inline answer;
-            // no money-unit path just means the result renders without a cost.
-            cost = null;
-          }
-
-          return {
-            input: wasm.format_amount(amount),
-            ingredientName: ingredient.name,
-            ingredientShortcode: ingredient.id,
-            result: wasm.format_amount(converted),
-            cost,
-          };
-        } catch {
-          // No weight path between these units for this ingredient.
+        if (!grams || !gramsPerTarget || gramsPerTarget.value <= 0) {
           return null;
         }
+        const converted = {
+          value: grams.value / gramsPerTarget.value,
+          unit: parsed.target,
+        };
+
+        let cost: string | null = null;
+        try {
+          const money = wasm.conv_amount_to_kind(mappings, "money", amount);
+          cost = money ? wasm.format_amount(money) : null;
+        } catch {
+          // SILENT: WASM probe — pricing is optional on this inline answer;
+          // no money-unit path just means the result renders without a cost.
+          cost = null;
+        }
+
+        return {
+          input: wasm.format_amount(amount),
+          ingredientName: ingredient.name,
+          ingredientShortcode: ingredient.id,
+          result: wasm.format_amount(converted),
+          cost,
+        };
       } catch {
+        // No weight path between these units for this ingredient.
         return null;
       }
     },

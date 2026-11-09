@@ -34,6 +34,7 @@ import {
   effectiveFieldSql,
   inheritedFieldOfColumn,
 } from "~/server/db/computed/effective-field";
+import { minorToDollarsSql } from "~/server/db/computed/money";
 import {
   trimTextSql,
   nonEmptyTextValuesSql,
@@ -596,7 +597,7 @@ export const storedFieldValueSql = (
       ? sql`${sql.raw(leaf)}.${sql.identifier(column)}`
       : effectiveFieldSql(target, inherited, leaf);
   return storage?.specialized === "minor-unit-money" && units === "display"
-    ? sql`(${value}::numeric / 100)`
+    ? sql`(${minorToDollarsSql(value, "numeric")})`
     : value;
 };
 
@@ -923,22 +924,6 @@ export const rowSetSql = (
         : raw;
     },
   };
-};
-
-/**
- * The id subquery of the requested public shortcodes of live `target` rows,
- * resolved inside the list query (#2333): an unknown or soft-deleted code
- * matches nothing.
- */
-export const shortcodeIdsSql = (
-  target: Entity,
-  condition: (shortcode: SQL) => SQL | undefined,
-): SQL => {
-  const { dbTable, softDelete } = entityManifest[target];
-  if (dbTable === null) throw new Error(`${target} has no table to filter by`);
-  return sql`(SELECT ref."id" FROM ${sql.identifier(dbTable)} ref WHERE ${
-    condition(sql`ref."shortcode"`) ?? sql`false`
-  }${softDelete ? sql` AND ${notDeleted("ref")}` : sql``})`;
 };
 
 /**

@@ -262,6 +262,7 @@ export function FormWrapper<TFieldValues extends FieldValues = FieldValues>({
           void form
             .handleSubmit(onSubmit, () => {
               toast.error("Some fields need attention before you can save.");
+              // aria-invalid lands with the next render.
               requestAnimationFrame(() => {
                 formElement
                   .querySelector('[aria-invalid="true"]')

@@ -15,7 +15,7 @@ import {
 } from "~/lib/error-diagnostics";
 import { OperationError } from "~/lib/operation-error";
 
-import { errorToastId, showErrorToast } from "./error-details";
+import { showErrorToast } from "./error-details";
 import { ErrorDetailsDialogHost } from "./error-details-dialog";
 import {
   closeErrorDetailsDialog,
@@ -138,12 +138,5 @@ describe("showErrorToast", () => {
     expect(getErrorDetailsDialogSnapshot().open).toBe(false);
     action?.onClick();
     expect(getErrorDetailsDialogSnapshot().open).toBe(true);
-  });
-
-  it("keys the toast id on message/code, not requestId", () => {
-    const error = makeError();
-    const id = errorToastId(error);
-    expect(id).toContain("INTERNAL_SERVER_ERROR");
-    expect(id).not.toContain("sample-ray");
   });
 });

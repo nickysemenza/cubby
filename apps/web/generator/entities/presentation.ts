@@ -17,13 +17,13 @@ import type {
   EntityDeclarationMetadata,
   EntityPresentation,
 } from "@cubby/schemas/entity-definitions/definition";
-import { EntityDeclarationError } from "./declarations.ts";
+import { EntityDeclarationError } from "./declaration-types.ts";
 import type {
   CompiledEntity,
   CompiledPresentation,
   EntityField,
   EntityFieldModel,
-} from "./declarations.ts";
+} from "./declaration-types.ts";
 
 /** Section ids the renderers derive from capabilities, never declared. */
 const RESERVED_SECTION_IDS = new Set(["history", "relationships", "images"]);

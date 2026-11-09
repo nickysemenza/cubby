@@ -157,9 +157,7 @@ struct RunConsoleView: View {
         await refresh()
         let batch = reportBatches.batch(service: appModel.client, id: runID, shownStatus: nil)
         self.batch = batch
-        batch.retain()
-        while !Task.isCancelled { try? await Task.sleep(for: .seconds(3600)) }
-        batch.release()
+        await batch.hold()
     }
 
     private func refresh() async {

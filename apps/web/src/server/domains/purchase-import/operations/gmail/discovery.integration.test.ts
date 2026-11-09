@@ -827,15 +827,11 @@ describe("scheduled Gmail discovery", () => {
       triage: async () => "uncertain",
       relevance,
     };
-    const realList = discovery.listMailDiscovery;
-    const realSave = discovery.saveMailDiscoveryBatch;
-    const list = vi
-      .spyOn(discovery, "listMailDiscovery")
-      .mockImplementation((db, params) => realList(db, params, seam));
-    const save = vi
-      .spyOn(discovery, "saveMailDiscoveryBatch")
-      .mockImplementation((db, params, index) =>
-        realSave(db, params, index, seam),
+    const realAdvance = discovery.advanceMailDiscoveryPage;
+    const page = vi
+      .spyOn(discovery, "advanceMailDiscoveryPage")
+      .mockImplementation((db, params, cursor) =>
+        realAdvance(db, params, cursor, seam),
       );
     const realPrepare = runJobHandler.prepare;
     const prepare = vi
@@ -1072,8 +1068,7 @@ describe("scheduled Gmail discovery", () => {
       expect((await readRun(state.params.runId)).input).toEqual(retained.input);
       expect(await getDb(ctx.db).select().from(emailTable)).toHaveLength(1);
     } finally {
-      list.mockRestore();
-      save.mockRestore();
+      page.mockRestore();
       prepare.mockRestore();
     }
   });

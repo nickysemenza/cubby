@@ -19,10 +19,10 @@ import { notDeleted, unwrapDb, withTransaction } from "~/server/db/helpers";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { device, image, imageSighting } from "~/server/db/schema";
 import { deriveAndStoreImageCapture } from "~/server/domains/image/repo/image-capture-derivation";
+import { currentMemberLedgerParty } from "~/server/domains/ledger-party/repo/current-member-party";
 import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
 import { resolveAllOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { currentMemberLedgerParty } from "~/server/http/member-login";
 
 /**
  * `ImageSighting` is a child of its Image, not an entity (ADR 0005): rows

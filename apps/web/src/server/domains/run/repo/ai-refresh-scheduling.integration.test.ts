@@ -3,6 +3,7 @@ import {
   aiProvenance,
   aiRefreshRunInput,
 } from "@cubby/schemas/ai-evaluation";
+import { systemActor } from "@cubby/schemas/context";
 import { and, eq } from "drizzle-orm";
 import { createEntity } from "tooling/factories/create";
 import { buildKernelContext } from "tooling/scenarios/context";
@@ -28,7 +29,7 @@ import {
   insertEvaluationTargets,
   scheduleEvaluationRun,
 } from "./ai-refresh-state";
-import { ensureRun, systemActor } from "./ensure-run";
+import { ensureRun } from "./ensure-run";
 
 // Real transactions expose races between shared Jobs and their requesters.
 describe("AI refresh scheduling admission", () => {

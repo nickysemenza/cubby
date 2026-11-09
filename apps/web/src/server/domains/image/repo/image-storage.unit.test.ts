@@ -1,6 +1,5 @@
 import { createHash } from "node:crypto";
 
-import { imageShortcode } from "@cubby/schemas/identifiers";
 import {
   createFileUploadResponse,
   type McpAttachFileInput,
@@ -259,7 +258,7 @@ describe("image storage ports", () => {
     expect(storage.deletedKeys).toEqual(["imports/recipe.jpg"]);
   });
 
-  it("returns an IMG shortcode from an imported image", async () => {
+  it("marks an image imported from another host as created", async () => {
     const { service } = setup();
 
     const result = await service.importImageFromUrl(database, {
@@ -267,8 +266,6 @@ describe("image storage ports", () => {
       filenamePrefix: "recipe",
     });
 
-    expect(imageShortcode.safeParse(result?.imageId).success).toBe(true);
-    expect(result?.imageId).toBe("IMG-7QRS");
     expect(result?.created).toBe(true);
   });
 

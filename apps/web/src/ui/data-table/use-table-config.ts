@@ -29,16 +29,13 @@ interface UseTableConfigOptions<TData extends RowData> {
   manualFiltering?: boolean;
   /** Disable column sorting entirely (hides header arrows + click). Default: enabled. */
   enableSorting?: boolean;
-  /** Custom row ID function for row selection */
   getRowId?: (row: TData) => string;
   /**
    * `true`/`false` for the whole table, or a predicate for a heterogeneous
    * tree where only some rows belong to the entity the bulk actions target.
    */
   enableRowSelection?: boolean | ((row: CubbyRow<TData>) => boolean);
-  /** Current row selection state */
   rowSelection?: RowSelectionState;
-  /** Callback when row selection changes */
   onRowSelectionChange?: OnChangeFn<RowSelectionState>;
   /** Columns hidden by default (user can toggle via View menu) */
   initialColumnVisibility?: Record<string, boolean>;

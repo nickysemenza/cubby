@@ -23,7 +23,7 @@ import {
   formatEstimate,
 } from "~/lib/nutrition-format";
 import { Row, Stack } from "~/ui/layout";
-import { Disclosure } from "~/ui/layout/disclosure";
+import { Disclosure } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/text/description";
 

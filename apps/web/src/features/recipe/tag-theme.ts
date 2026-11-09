@@ -30,12 +30,10 @@ export function parseTag(tag: string): ParsedTag {
   const prefix = tag.slice(0, colonIndex).toLowerCase();
   const value = tag.slice(colonIndex + 1);
 
-  // Check if it's a known prefix
   if (isKnownPrefix(prefix)) {
     return { prefix, value };
   }
 
-  // Unknown prefix, treat as plain tag
   return { prefix: "none", value: tag };
 }
 

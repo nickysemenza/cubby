@@ -19,7 +19,7 @@ import { StaticTable } from "~/ui/data-table/static-table";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { SimpleLoading } from "~/ui/feedback/loading-skeletons";
 import { Row, Section, Stack } from "~/ui/layout";
-import { Disclosure } from "~/ui/layout/disclosure";
+import { Disclosure } from "~/ui/layout";
 import { Badge } from "~/ui/reui/badge";
 import { Description } from "~/ui/text/description";
 import { DateDisplay } from "~/ui/values/date-display";

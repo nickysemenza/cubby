@@ -22,9 +22,12 @@ import { task } from "~/server/db/schema";
 import { projectScaffold } from "~/server/domains/project/repo/lookup";
 import { effectiveTaskDueDateSql } from "~/server/domains/task/repo/helpers";
 import { taskSearch } from "~/server/domains/task/repo/search-read-task";
+import {
+  taskDependencyIds,
+  taskSubtaskCounts,
+} from "~/server/domains/task/repo/task-relations";
 import { listScaffold } from "~/server/generic/list/repo/list";
 
-import { taskDependencyIds, taskSubtaskCounts } from "./crud";
 import { hydrateTaskInheritanceRows } from "./task-project-inheritance";
 
 // The inheritance and edge readers take a Database; a record read inside a

@@ -6,12 +6,12 @@ import { describe, expect, it } from "vitest";
 
 import { withCfEnv } from "~/server/cf-env";
 import { createDatabase } from "~/server/db/database-runtime";
-import { readPolicyFor } from "~/server/db/read-policy";
-import { getAuthSecret } from "~/server/http/auth-configuration";
+import { inputReadPolicy } from "~/server/db/read-policy";
 import {
   requireActor,
   selectOperationContext,
 } from "~/server/http/request-context";
+import { getAuthSecret } from "~/server/lib/auth-configuration";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 import { notifyDatabaseChanges } from "./client";
@@ -94,20 +94,14 @@ describe("member read routing", () => {
       (
         await selectOperationContext(
           browser,
-          readPolicyFor("entity.detail", "query", "expense"),
+          inputReadPolicy("expense", []),
           routing,
         )
       ).db,
     ).toBe(db);
-    expect(
-      (
-        await selectOperationContext(
-          browser,
-          readPolicyFor("entity.mutate", "mutation"),
-          routing,
-        )
-      ).db,
-    ).toBe(db);
+    expect((await selectOperationContext(browser, "strong", routing)).db).toBe(
+      db,
+    );
     browser.headers.set("x-cubby-read-consistency", "strong");
     expect(
       (await selectOperationContext(browser, "context", routing))

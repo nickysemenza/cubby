@@ -1,7 +1,7 @@
 import { cn } from "cn";
 import type * as React from "react";
 
-import { type RowVariants, rowVariants } from "~/styles/layouts";
+import { type RowVariants, rowVariants } from "~/ui/layout/layouts";
 
 interface RowProps extends React.HTMLAttributes<HTMLElement>, RowVariants {
   /** Render as a different element (e.g. "ul", "nav", "label", "button"). */

@@ -5,16 +5,16 @@ import {
   type OperationId,
 } from "~/lib/operation-observability";
 import {
-  acceptMemberWriteCookie,
-  beginMemberWrite,
-  STRONG_READ_HEADER,
-} from "~/lib/read-consistency";
-import {
   type PublicOperationError,
   type OperationResult,
   type OperationWireValue,
   operationWireValueSchema,
-} from "~/server/operation-runtime/operation.contract";
+} from "~/lib/operation-result";
+import {
+  acceptMemberWriteCookie,
+  beginMemberWrite,
+  STRONG_READ_HEADER,
+} from "~/lib/read-consistency";
 
 import {
   dispatchBrowserOperation,

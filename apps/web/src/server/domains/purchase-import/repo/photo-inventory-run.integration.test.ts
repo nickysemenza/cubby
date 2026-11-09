@@ -20,7 +20,17 @@ import {
   photoRunImage,
 } from "~/server/db/schema";
 import { productionPhotoImportCommitPorts } from "~/server/domains/photo-import/repo/photo-import-commit";
+import {
+  finalizePhotoRun,
+  startPhotoInventoryCoordinator,
+  startPhotoInventoryRun,
+} from "~/server/domains/photo-import/repo/run/photo-run";
 import { readRun } from "~/server/domains/run/repo/run";
+import {
+  controlRun,
+  loadRunScope,
+} from "~/server/domains/run/repo/run-control";
+import { loadRunDetail } from "~/server/domains/run/repo/run-detail";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { createMcpServer } from "~/server/mcp/server";
@@ -34,14 +44,6 @@ import { createTestRequestContext } from "~/server/testing/request-context";
 import { seedRunFinding } from "~/server/testing/run-finding.fixtures";
 
 import { coordinatorRetired } from "./run-retirement";
-import {
-  controlRun,
-  finalizePhotoRun,
-  loadRunDetail,
-  loadRunScope,
-  startPhotoInventoryCoordinator,
-  startPhotoInventoryRun,
-} from "./run-service";
 
 describe("photo import finalize", () => {
   const ctx = withTestDb();

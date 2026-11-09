@@ -31,6 +31,7 @@ import {
   formatSmallCurrency,
 } from "~/lib/number-format";
 import type { Database } from "~/server/db";
+import { minorToDollarsSql } from "~/server/db/computed/money";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import {
   aiUsage,
@@ -744,7 +745,9 @@ async function purchaseLinksBlock(
           date: purchase.date,
           statedTotal: sql<
             number | null
-          >`${purchase.statedTotal}::numeric / 100`.mapWith(Number),
+          >`${minorToDollarsSql(purchase.statedTotal, "numeric")}`.mapWith(
+            Number,
+          ),
         })
         .from(purchase)
         .where(

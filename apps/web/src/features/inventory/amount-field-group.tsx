@@ -46,7 +46,6 @@ export function AmountFieldGroup<
   step = "1",
   compact = false,
 }: AmountFieldGroupProps<TFieldValues, TValuePath, TUnitPath>): ReactNode {
-  // Function to get unit icon if enabled
   const getIcon = (x: string | null): ReactNode | undefined => {
     if (!x) return undefined;
     return getHoverableMeasureUnitIcon(x);

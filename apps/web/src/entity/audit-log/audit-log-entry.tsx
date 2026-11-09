@@ -14,10 +14,9 @@ import {
 import { categoryReference } from "~/entity/presentation/category-reference";
 import { dateSpanParts } from "~/lib/date-span";
 import { formatCount } from "~/lib/number-format";
-import { getStatusBadgeProps } from "~/lib/status-colors";
 import { wasm } from "~/lib/wasm";
 import { Row, Stack } from "~/ui/layout";
-import { Panel } from "~/ui/layout/panel";
+import { Panel } from "~/ui/layout";
 import { Avatar, AvatarFallback, AvatarImage } from "~/ui/primitives/avatar";
 import type { Fact } from "~/ui/records/facts";
 import {
@@ -28,6 +27,7 @@ import {
 } from "~/ui/records/record-list";
 import { InlineTextDiff } from "~/ui/text/inline-text-diff";
 import { DateDisplay } from "~/ui/values/date-display";
+import { getStatusBadgeProps } from "~/ui/values/status-colors";
 
 import { foldedFields } from "./audit-log-fold";
 

@@ -186,11 +186,17 @@ export async function setSenderAttribution(
   await recordChange(db, { kind: "source", categories: ["vendor", "email"] });
 }
 
-/** Bootstrap existing accepted receipts without a parallel mapping registry or source rewrite. */
+/** Senders one bootstrap page learns; a full page asks for another. */
+const LEARN_PAGE = 50;
+
+/**
+ * Bootstrap existing accepted receipts without a parallel mapping registry or
+ * source rewrite, one page at a time. `more` is set when the page filled.
+ */
 export async function learnAcceptedSenders(
   db: Db,
   actor: ActorContext,
-): Promise<number> {
+): Promise<{ more: boolean }> {
   const proofs = await readSenderAttributions(db);
   const client = unwrapDb(db);
   const vendors = await client
@@ -217,7 +223,7 @@ export async function learnAcceptedSenders(
       return true;
     })
     .sort((a, b) => a.sender.localeCompare(b.sender))
-    .slice(0, 50);
+    .slice(0, LEARN_PAGE);
   for (const proof of eligible)
     await lockSenderAttributionAddress(db, proof.sender);
   let learned = 0;
@@ -228,5 +234,5 @@ export async function learnAcceptedSenders(
     if (seller && (await learnFromProof(db, proof, seller.id, actor)))
       learned++;
   }
-  return learned;
+  return { more: learned === LEARN_PAGE };
 }

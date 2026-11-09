@@ -16,15 +16,17 @@ import {
 } from "./isometric-geometry";
 import {
   buildRooms,
-  drawTitle,
-  drawTooltip,
   type HoverTarget,
   hitTestRooms,
   type InventoryData,
   type RoomData,
+} from "./isometric-layout";
+import {
+  drawTitle,
+  drawTooltip,
   renderScene,
   resolveCssColor,
-} from "./isometric-scene";
+} from "./isometric-renderer";
 
 export function useIsometricPantry() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -104,7 +106,6 @@ export function useIsometricPantry() {
     }
   }, [rooms, size, camera]);
 
-  // Resize observer
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;

@@ -135,6 +135,7 @@ None is committed; edit the generator or its inputs, never the output. A missing
 | Generated/{OperationCatalog,NativeOperations}.swift                                                                      | apps/web/generator/http-api/native-artifacts.ts, native-operations.ts                                        |
 | `Generated/entity-kernel.json`                                                                                           | `apps/web/generator/http-api/entity-kernel.ts`                                                               |
 | `Generated/SharedConstants.swift`                                                                                        | `packages/shared/src/client-constants.ts`, `apps/web/cloudflare.config.ts`, `WAYFINDING_DOMAIN_PRESENTATION` |
+| `Generated/AppleAppIdentity.swift`, `apps/apple/Generated/*.xcconfig` (team, bundle, BGTask ids)                         | `packages/shared/src/apple-app-identity.ts`, `apple-client-version.ts`                                       |
 | `CubbyAPI/Models/*.gen.swift`                                                                                            | `apps/web/generator/http-api/native-contract.ts`, `swift-models.ts`                                          |
 | `CubbyKit/Sources/CubbyFFI/cubby_ffi.swift`                                                                              | `uniffi-bindgen` via `scripts/ensure.ts apple-ffi`                                                           |
 | `Generated/PreviewFixtures/*.json`                                                                                       | `apps/web/tooling/checks/apple-preview-fixtures.ts` (edit its overrides)                                     |
@@ -166,26 +167,30 @@ None is committed; edit the generator or its inputs, never the output. A missing
   values, conformances, and initializer defaults. Change it, run `pnpm generate`, preserve
   Codable envelopes and decode defaults, and verify `EntityManifestTests` and the structured
   round-trip vectors. Native conveniences live in extensions in `Manifest/EntityManifest.swift`.
+- **Typed vocabulary.** Swift matches generated cases (`EntityHeroActionID`, `EntityListActionID`,
+  renderer ids, generated wire enums), never `rawValue == "…"`; `apple:lint` rejects that
+  pattern outside tests. Filter parameters are `EntityFilterParameter.<Entity>.<columnId>` with
+  `PresenceFilterValue` or the generated wire enum (`RunStatus`) for values.
 - **Client methods.** A `CubbyClient` method that is exactly one call with its JSON body (or a
   GET's generated `Input.Query`) is a `CLIENT_PASSTHROUGH_METHODS` entry in
   `swift-operations.ts`, not hand-written Swift; anything that maps or branches stays in
   `API/CubbyClient.swift`.
 - Rules that exist on both platforms but are not shared code are pinned by JSON vectors in
-  `packages/shared/golden-vectors/` (`gtin.json`, `image-url.json`, `bin-plan.json`,
+  `packages/shared/golden-vectors/` (`gtin.json`, `image-url.json`,
   `display-format.json`, `household-day.json`). The Swift tests and the
   web/Rust tests read the same files; change a rule by editing the vector first, then both
   implementations.
 - Value formatting is single-sourced in Rust (`recipebridge/src/display_format.rs` plus
   `format_amount_labeled`): `currency`, `signedCurrency`, bare numbers, `{value, unit}` amounts, and
-  nutrition/cost estimates (the compact cell and the long `DisplayFormat.estimate` form) run the
+  nutrition/cost estimates (the compact cell and the long `ValueFormat.estimate` form) run the
   same code as web (WASM) and native (UniFFI `format_*` in `cubby-ffi`, wrapped by `CubbyKit`
-  `ValueFormat`). Declared list totals arrive worded by the server (`ListPageMeta.totalLabels`);
+  `ValueFormat` in `FFI/ValueFormat.swift`). Declared list totals arrive worded by the server (`ListPageMeta.totalLabels`);
   `ListTotalsSummary` only prints them. The Rust tests read `display-format.json`
-  directly; Swift `DisplayFormatTests` / `ValueFormatTests` and web
+  directly; Swift `ValueFormatTests` and web
   `display-format.unit.test.ts` / `format-amount.unit.test.ts` check the bindings. Plain dates,
-  grouped counts and empty text also use Rust through `DisplayFormat` / `ValueFormat` and the web
+  grouped counts and empty text also use Rust through `ValueFormat` and the web
   formatting helpers; plain dates need no timezone conversion. Timestamps stay locale-aware
-  platform code. Never format a catalog value
+  platform code. Never format a catalog value, amount or count
   with `.formatted()` in a view, and never re-implement a rule in Swift or TypeScript: edit the
   vector, then Rust.
 - Recipe scaling is single-sourced in Rust too (`recipebridge/src/scaling.rs` plus `scale_amount`):

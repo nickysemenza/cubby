@@ -2,7 +2,8 @@ import { parseEntityId } from "@cubby/schemas/identifiers";
 import { createPostgresPool } from "./postgres-pool";
 import { execFileSync, spawn } from "node:child_process";
 import { pollUntil } from "@cubby/shared/retry";
-import { digestFiles, walkFiles } from "cubby/tooling/tree-digest";
+import { localTestEnvironment } from "./e2e-process-env.ts";
+import { nativeSourceFingerprint } from "./native-source-fingerprint.ts";
 import { spawnToExit } from "cubby/tooling/run";
 import { holdLock, NATIVE_DEVICE_LOCK } from "./dev-services/harness-lock.ts";
 import { sharedDeviceCommand } from "../../apple/tooling/lib/shared-device-command.ts";
@@ -177,15 +178,13 @@ const lane = qa
                 : "sim-e2e";
 // Database bootstrap validates the caller's environment before simulation-only overrides.
 const bootstrapEnvironment = { ...process.env };
-for (const [key, value] of Object.entries({
-  R2_ACCESS_KEY_ID: "cubby-sim",
-  R2_SECRET_ACCESS_KEY: "cubby-sim",
-  R2_ENDPOINT: "http://127.0.0.1:9",
-  R2_BUCKET_NAME: "cubby-sim",
-  R2_PUBLIC_URL: "http://127.0.0.1:9",
-  UPC_UPSTREAM_DISABLED: "true",
-  BETTER_AUTH_SECRET: "cubby-sim-local-secret",
-}))
+for (const [key, value] of Object.entries(
+  localTestEnvironment({
+    R2_ENDPOINT: "http://127.0.0.1:9",
+    R2_PUBLIC_URL: "http://127.0.0.1:9",
+    BETTER_AUTH_SECRET: "cubby-sim-local-secret",
+  }),
+))
   process.env[key] ??= value;
 
 const adminURL = "postgresql://postgres:password@localhost:55432/postgres";
@@ -213,22 +212,6 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
     interrupted = signal;
     activeChild?.kill("SIGTERM");
   });
-}
-
-function nativeSourceFingerprint(includeApp: boolean): string {
-  const swift = (directory: string) =>
-    walkFiles(directory).filter((file) => file.endsWith(".swift"));
-  const files = [
-    ...swift(path.join(kitRoot, "Sources")),
-    path.join(kitRoot, "Package.swift"),
-  ];
-  if (includeApp)
-    files.push(
-      ...swift(path.join(appleRoot, "App")),
-      path.join(appleRoot, "project.yml"),
-      path.join(appleRoot, "packages.yml"),
-    );
-  return digestFiles(repoRoot, files.sort());
 }
 
 async function assertNativeEdit(
@@ -673,7 +656,7 @@ async function runHeadlessPhotoScenario(
     path.join(webRoot, "tests/e2e/fixtures", `synthetic-wardrobe-${label}.png`),
   );
   const nativeOutput = path.join(artifacts, "native-photo-output.txt");
-  const sourceFingerprint = nativeSourceFingerprint(false);
+  const sourceFingerprint = nativeSourceFingerprint({ includeApp: false });
   await run(
     "pnpm",
     [
@@ -689,7 +672,8 @@ async function runHeadlessPhotoScenario(
   );
   nativeBuildBinary = path.join(kitRoot, ".build/debug/cubby");
   nativeBuildSourceVersion = sourceFingerprint;
-  currentNativeSourceVersion = () => nativeSourceFingerprint(false);
+  currentNativeSourceVersion = () =>
+    nativeSourceFingerprint({ includeApp: false });
   nativeBuildReady = true;
   const match = readFileSync(nativeOutput, "utf8").match(
     /Headless native photo import verified: (RUN-[A-Z0-9]+)/u,
@@ -836,10 +820,11 @@ async function runHeadlessProductScenario(
     "--updated-name",
     SIM_PRODUCT_UPDATED_NAME,
   ];
-  nativeBuildSourceVersion = nativeSourceFingerprint(false);
+  nativeBuildSourceVersion = nativeSourceFingerprint({ includeApp: false });
   await run("pnpm", ["apple", "cli", ...args]);
   nativeBuildBinary = path.join(kitRoot, ".build/debug/cubby");
-  currentNativeSourceVersion = () => nativeSourceFingerprint(false);
+  currentNativeSourceVersion = () =>
+    nativeSourceFingerprint({ includeApp: false });
   nativeBuildReady = true;
   await assertNativeEdit(productId, SIM_PRODUCT_UPDATED_NAME);
   console.log(
@@ -1573,8 +1558,11 @@ async function main(): Promise<void> {
       const install = async () => {
         const buildStarted = performance.now();
         await run("pnpm", ["apple", "gen"]);
-        nativeBuildSourceVersion = nativeSourceFingerprint(true);
-        currentNativeSourceVersion = () => nativeSourceFingerprint(true);
+        nativeBuildSourceVersion = nativeSourceFingerprint({
+          includeApp: true,
+        });
+        currentNativeSourceVersion = () =>
+          nativeSourceFingerprint({ includeApp: true });
         // The cached Nx target restores the app when its inputs are unchanged.
         await run("pnpm", ["exec", "nx", "run", "apple:simulator-build"]);
         nativeBuildBinary = path.join(appPath, "Cubby");

@@ -139,7 +139,7 @@ struct DetailActivitySection: View {
 
     @ViewBuilder
     private func activityRow(_ event: DetailActivityEvent) -> some View {
-        let isRecord = event.kind.rawValue == "record"
+        let isRecord = event.kind == .record
         if isRecord, let shortcode = event.shortcode {
             NavigationLink(value: Route.entityDetail(event.entity, id: shortcode)) { activityContent(event) }
                 .buttonStyle(.plain)
@@ -149,7 +149,7 @@ struct DetailActivitySection: View {
     }
 
     private func activityContent(_ event: DetailActivityEvent) -> some View {
-        let isRecord = event.kind.rawValue == "record"
+        let isRecord = event.kind == .record
         let entity = EntityCatalog[event.entity]
         let title = isRecord ? event.title : changeVerb(event.title)
         let subtitle = isRecord ? event.subtitle : changedFieldLabels(event)

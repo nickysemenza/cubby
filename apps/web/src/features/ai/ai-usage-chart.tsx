@@ -7,11 +7,11 @@ import { useMemo } from "react";
 
 import { householdLocalDate, shiftPlainDate } from "~/lib/household-date";
 import { nivoBarChrome, nivoChartTheme } from "~/lib/nivo-theme";
+import { formatAiCost } from "~/lib/number-format";
 import { ChartTooltip } from "~/ui/charts/chart-tooltip";
 import { ResponsiveBar } from "~/ui/charts/nivo-responsive";
 import { Row } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
-import { formatAiCost } from "~/ui/values/ai-cost";
 import { Visualization } from "~/ui/visualizations/visualization";
 
 export const usageChartDimensions = {

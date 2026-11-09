@@ -23,6 +23,7 @@ import {
   withFieldSuggestionBatch,
   type SuggestFieldsPorts,
 } from "~/server/ai/field-suggest/suggest-fields";
+import { AUTOMATIC_AI_CALL } from "~/server/ai/policy/call-owner";
 import {
   dependencyStamps,
   fieldDependencyKeys,
@@ -32,7 +33,6 @@ import type { Database } from "~/server/db";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { aiAnalysis, suggestionTable } from "~/server/db/schema";
-import { AUTOMATIC_AI_CALL } from "~/server/domains/run/repo/ai-call-owner";
 import { memberRejectedSql } from "~/server/generic/suggestions/repo/suggestion-decisions";
 import { canonicalJson } from "~/server/lib/canonical-json";
 import { settleBatch } from "~/server/workflows/settle-batch";

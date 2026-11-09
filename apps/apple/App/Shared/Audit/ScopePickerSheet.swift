@@ -16,6 +16,10 @@ struct ScopePickerSheet: View {
 
     var body: some View {
         List {
+            if let error = session.duplicatesError {
+                Label("Duplicate products are not marked: \(error)", systemImage: "exclamationmark.triangle")
+                    .font(.callout).foregroundStyle(.secondary).textSelection(.enabled)
+            }
             codeRow
             ForEach(Array(candidates.enumerated()), id: \.element.node.id) { _, entry in
                 scopeRow(entry.node, depth: entry.depth)

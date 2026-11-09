@@ -20,7 +20,6 @@ import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-o
 import { auditLog } from "~/integrations/tanstack-query/generated/domains/auditLog.gen";
 import { formatCalendarDay } from "~/lib/date-format";
 import { householdLocalDate } from "~/lib/household-date";
-import { getStatusBadgeProps } from "~/lib/status-colors";
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { QuerySection } from "~/ui/feedback/query-section";
@@ -28,6 +27,7 @@ import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Section } from "~/ui/layout";
 import { Skeleton } from "~/ui/primitives/skeleton";
 import { DateDisplay } from "~/ui/values/date-display";
+import { getStatusBadgeProps } from "~/ui/values/status-colors";
 
 type AuditEntry = AuditLogListOut["entries"][number];
 

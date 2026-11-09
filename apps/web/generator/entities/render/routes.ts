@@ -18,24 +18,14 @@ export const lowerCamelCase = (value: string): string =>
     ? value
     : `${value[0]?.toLowerCase() ?? ""}${value.slice(1)}`;
 
-const browserRouteExtension = new Map<
-  string,
-  Readonly<{ basePath: string; detailParam?: string }>
->([
-  ["inventory", { basePath: "inventory" }],
-  ["usda-food", { basePath: "usda", detailParam: "id" }],
-]);
-
-const browserBasePath = (entity: string): string =>
-  browserRouteExtension.get(entity)?.basePath ??
-  (() => {
-    const singular = entity.replace(/([a-z])([A-Z])/g, "$1-$2").toLowerCase();
-    return singular.endsWith("y")
-      ? `${singular.slice(0, -1)}ies`
-      : /(?:s|x|z|ch|sh)$/.test(singular)
-        ? `${singular}es`
-        : `${singular}s`;
-  })();
+const browserBasePath = (entity: string): string => {
+  const singular = entity.replace(/([a-z])([A-Z])/g, "$1-$2").toLowerCase();
+  return singular.endsWith("y")
+    ? `${singular.slice(0, -1)}ies`
+    : /(?:s|x|z|ch|sh)$/.test(singular)
+      ? `${singular}es`
+      : `${singular}s`;
+};
 
 interface BrowserRouteSet {
   detail: string;
@@ -46,10 +36,7 @@ interface BrowserRouteSet {
 
 export const browserRoutes = (entity: CompiledEntity) => {
   const basePath = entity.route?.basePath ?? browserBasePath(entity.key);
-  const detailParam =
-    entity.route?.detailParam ??
-    browserRouteExtension.get(entity.key)?.detailParam ??
-    "shortcode";
+  const detailParam = entity.route?.detailParam ?? "shortcode";
   const detail = `/${basePath}/$${detailParam}`;
   const list = `/${basePath}`;
   // `routes.new` exists exactly when a hand-written `<basePath>.new.tsx`

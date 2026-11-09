@@ -1,3 +1,4 @@
+import type { CompiledEntityListFields } from "./list-field-types.ts";
 import type {
   GeneratedListField,
   GeneratedRowSet,
@@ -7,7 +8,6 @@ import type {
   GeneratedListFieldPresentation,
   GeneratedListOperation,
 } from "@cubby/schemas/entity-projection-types";
-import type { EntityDeclarationMetadata } from "@cubby/schemas/entity-definitions/definition";
 import {
   excludableFilterKind,
   filterExcludeField,
@@ -25,7 +25,7 @@ import {
   dateRangeBounds,
   EntityDeclarationError,
   type FilterDescriptor,
-} from "./declarations.ts";
+} from "./declaration-types.ts";
 
 type RelationshipPathStep = z.infer<typeof relationshipPathStepSchema>;
 // List planning needs only local traversal steps; validation belongs to the source owner.
@@ -97,35 +97,6 @@ type InheritSource = GeneratedInherit<string>["from"][number];
  * non-nullable list reads when nothing decides.
  */
 type CompiledInherit = GeneratedInherit<string>;
-
-export type CompiledEntityListFields = Readonly<{
-  /** One semantic vocabulary for column, group, sort and filter renderers. */
-  presentation: Readonly<
-    Record<string, GeneratedListFieldPresentation<string>>
-  >;
-  derived: Readonly<Record<string, CompiledListField>>;
-  /** `model.rows`, the row sets a `via` may start at. */
-  rows: Readonly<Record<string, CompiledRowSet>>;
-  /** Text filter key → its declared `listTermExpanders` entry. */
-  terms: Readonly<Record<string, string>>;
-  /** Field key → its compiled `resolution.inherit`. */
-  inherit: Readonly<Record<string, CompiledInherit>>;
-  hierarchy: Readonly<{
-    parentField: string;
-    column: string;
-    maxDepth: number;
-  }> | null;
-  /** Filter key → its generated "Include sub-…" toggle's filter key. */
-  subtree: Readonly<Record<string, { key: string; default: boolean }>>;
-  /** `model.grouping`, in menu order. */
-  grouping: readonly CompiledGroupChoice[];
-  metrics: readonly { key: string; label: string; format: string | null }[];
-  evidenceMetrics: EntityDeclarationMetadata["presentation"]["list"]["evidenceMetrics"];
-  /** `presentation.list.scope`: columns pinned to NULL on every list read. */
-  scope: readonly string[];
-  /** `presentation.list.scopes`, by request key. */
-  scopes: Readonly<Record<string, CompiledListScope>>;
-}>;
 
 /**
  * A related scope: the entity whose list filter record the request key

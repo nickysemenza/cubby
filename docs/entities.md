@@ -166,6 +166,8 @@ model. "Beyond the declaration" lists the code an adoption still needs, and why.
 | Derived values           | `model.derived`, `model.stored`                                         | Rollups and `via` paths need nothing. `compute` functions and snapshots are domain code; [Background derived data](#background-derived-data) owns them.                                       |
 | List and detail sections | `presentation.list`, `presentation.detail`                              | None for `fields`, `relation` and `timeline` sections or `fields`, `records` and `chart` summary cells. A `slot` needs its renderer on each platform, and a `report` cell its server builder. |
 
+A route can declare `nativeRead` when native list reads use a dedicated external catalog instead of the entity kernel.
+
 ### Search result facts
 
 `presentation.searchFacts` declares zero to two ordered existing list-field keys
@@ -219,6 +221,9 @@ assignments, controls, results or other record data. Repeated nested reads must
 not rebuild the same validation graph for every list, detail and MCP occurrence. Stored-result path
 projection and scored-entity checks reuse fixed validators. Path projection still
 validates and clones each segment.
+
+Suggestion previews use the shared suggestion context keys and draft inheritance
+policy, which also owns expense line classification for suggestion preparation.
 
 Reset previews use the field's declared `resolution.resetSource` or inheritance
 chain and apply its ordinary reset patch without writing. Expense Project uses
@@ -3675,7 +3680,7 @@ Audit change fields can name a declared relationship when recording reference li
 
 ## Child storage
 
-Child bigint columns can declare `bigintMode: "bigint"` for exact money; existing number-shaped child values keep the default number decoder. The checked money owner converts only at public dollar boundaries. Raw verification sets retain bigint values as integer strings.
+Child bigint columns can declare `bigintMode: "bigint"` for exact money; existing number-shaped child values keep the default number decoder. The checked money owner converts only at public dollar boundaries. Raw verification sets retain bigint values as integer strings. SQL dollar reads use `minorToDollarsSql` and retain the existing PostgreSQL result type.
 
 An entity's `children` declares its physical child tables using
 `defineChildTable` (`entity-definitions/child-definition.ts`). Family modules

@@ -141,6 +141,7 @@ const wireSchema = (type: string): z.ZodType =>
         "DetailRendererID",
         "EntityFilterKind",
         "EntityHeroActionID",
+        "EntityListActionID",
         "WayfindingDomain",
       ].includes(type)
     )

@@ -4,9 +4,9 @@ import { useState } from "react";
 import { IngredientUsagePanel } from "~/features/ingredient/ingredient-usage-panel";
 import { HierarchySunburst } from "~/features/product-category/hierarchy-view";
 import { CookbookSelect } from "~/features/recipe/cookbook-select";
+import IngredientNetwork from "~/features/recipe/ingredient-network";
 import { Grid, Stack } from "~/ui/layout";
 import { Section } from "~/ui/layout";
-import IngredientNetwork from "~/ui/visualizations/ingredient-network";
 
 /** Exploration-only visualizations, requested only when Insights opens. */
 export function HomeInsights() {

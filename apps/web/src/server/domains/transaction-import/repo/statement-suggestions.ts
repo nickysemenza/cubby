@@ -47,6 +47,7 @@ import { z } from "zod";
 import { forEachConcurrently } from "~/lib/concurrency-limiter";
 import { plainDateDaysBetween } from "~/lib/household-date";
 import { type Database } from "~/server/db";
+import { minorToDollarsSql } from "~/server/db/computed/money";
 import {
   getDb,
   runAfterCommit,
@@ -55,6 +56,7 @@ import {
   withSnapshotWriteDatabase,
 } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
+import { transactionImportRecord } from "~/server/db/retained-tables";
 import { suggestionTable } from "~/server/db/schema";
 import { sqlEnumConstant } from "~/server/db/sql-enum";
 import { financialSourceReferenceRows } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
@@ -63,10 +65,6 @@ import {
   prepareFinancialStatementPreview,
 } from "~/server/domains/financial-transaction/repo/financial-statement-preview";
 import { type FinancialTransactionDollars } from "~/server/domains/financial-transaction/repo/transaction-money";
-import {
-  findTransferPairsForCharges,
-  transferPairSourceCharges,
-} from "~/server/domains/financial-transaction/repo/transfer-pair-suggestions";
 import {
   sourceObservations,
   sourceObservationIdentities,
@@ -95,8 +93,10 @@ import {
 import {
   readStatementSuggestions,
   statementSuggestionFacts,
+  isClean,
   statementSuggestionKeys,
 } from "~/server/domains/transaction-import/repo/statement-suggestion-read";
+import { STATEMENT_SUGGESTION_REVISION } from "~/server/domains/transaction-import/repo/statement-suggestion-revision";
 import {
   kindAgreed,
   decideStatementKind,
@@ -104,7 +104,10 @@ import {
   ownAccountNamed,
   statementTransactionKind,
 } from "~/server/domains/transaction-import/repo/statement-transaction-kind";
-import { transactionImportMembers } from "~/server/domains/transaction-import/repo/transaction-import-membership";
+import {
+  findTransferPairsForCharges,
+  transferPairSourceCharges,
+} from "~/server/domains/transaction-import/repo/transfer-pair-suggestions";
 import { createAppError } from "~/server/errors/app-error";
 import { type PageWork, peakWorkers } from "~/server/generic/jobs/page-work";
 import {
@@ -173,8 +176,6 @@ const STATE = "Suggestion";
 const log = createLogger("statement-suggestions");
 const pendingStatementState = sql`${suggestionTable.family} = ${suggestionFamily.enum.statement_transaction} AND ${suggestionTable.active} AND ${suggestionTable.status} = ${suggestionStatus.enum.pending}`;
 
-/** Matching revision and Automatic attach rule revision; clean-only changes use the policy below. */
-export const STATEMENT_SUGGESTION_REVISION = "2026-10-21.1";
 /**
  * Bump when only bulk-acceptability changes. Labels ride on top of the
  * evidence fingerprint, so a stricter clean rule would otherwise leave
@@ -471,7 +472,7 @@ async function siblingsFor(
       sql`(r.source, ${chargeKeyOf("r")}) IN (SELECT source, "chargeKey" FROM o)`,
     )},
     members AS MATERIALIZED (
-      SELECT m."importId", m."statementRowId" FROM ${transactionImportMembers} m
+      SELECT m."importId", m."statementRowId" FROM ${transactionImportRecord} m
       WHERE m."statementRowId" IN (SELECT id FROM o UNION SELECT unnest("rowIds") FROM p)
     )
     SELECT o.key, array_agg(DISTINCT o."chargeKey" ORDER BY o."chargeKey") AS siblings
@@ -633,7 +634,7 @@ async function merchantHistory(
       AND ${notDeleted("ft")} AND ft.status <> ${financialTransactionStatus.enum.void}
       AND ft.merchant IS NOT NULL AND ${merchantKey(sql`ft.merchant`)} = p.merchant
       AND COALESCE(ft."postedDate", ft."transactionDate") < p.day
-      AND sign((ft."amountMinor"::numeric / 100))::int = p.direction
+      AND sign((${minorToDollarsSql(sql`ft."amountMinor"`, "numeric")}))::int = p.direction
     WHERE ft.id NOT IN (SELECT id FROM ruled)
     GROUP BY p.key
   `,
@@ -773,7 +774,7 @@ async function prepareChargePreviews(
         transactionDate: string | null;
         postedDate: string | null;
       }>(sql`
-    SELECT ft.shortcode, ft."accountId", (ft."amountMinor"::numeric / 100)::float8 AS amount, ft.status, ft."transactionDate"::text AS "transactionDate", ft."postedDate"::text AS "postedDate" FROM "FinancialTransaction" ft
+    SELECT ft.shortcode, ft."accountId", (${minorToDollarsSql(sql`ft."amountMinor"`, "numeric")})::float8 AS amount, ft.status, ft."transactionDate"::text AS "transactionDate", ft."postedDate"::text AS "postedDate" FROM "FinancialTransaction" ft
     WHERE ${notDeleted("ft")} AND ft.shortcode IN (${sql.join(
       [...matchedByCharge.values()].map((code) => sql`${code}`),
       sql`,`,
@@ -1303,43 +1304,6 @@ export async function buildChargeProposals(
     );
   }
   return proposals;
-}
-
-/** Bulk acceptance never changes an amount or relies on a kind sources dispute. */
-export function isClean(
-  judgment: StatementTransactionJudgment,
-  statementAmount: number,
-): boolean {
-  if (judgment.reviewReason || judgment.siblings.length) return false;
-  if (
-    judgment.create !== null &&
-    ["purchase", "refund", "fee"].includes(judgment.create.kind) &&
-    judgment.spending?.status !== "ready" &&
-    judgment.spending?.status !== "already_booked"
-  )
-    return false;
-  if (judgment.recommended === "book")
-    return (
-      judgment.spending?.status === "ready" &&
-      judgment.create !== null &&
-      kindAgreed(judgment.create, judgment.transfer, judgment.transferPair)
-    );
-  if (judgment.recommended === "create")
-    return (
-      judgment.candidates.length === 0 &&
-      judgment.create !== null &&
-      kindAgreed(judgment.create, judgment.transfer, judgment.transferPair)
-    );
-  if (judgment.candidates.length !== 1) return false;
-  const [only] = judgment.candidates;
-  if (cents(only!.amount) !== cents(statementAmount)) return false;
-  if (judgment.recommended === "supersede") return true;
-  return (
-    judgment.recommended === "attach" &&
-    !only!.claimed &&
-    only!.label?.same === "same" &&
-    only!.label.confidence === "high"
-  );
 }
 
 async function finishProposal(
@@ -2262,7 +2226,7 @@ export const statementSuggestions: SuggestionFamilyDeclaration<"statement_transa
       prediction.subject,
     );
     const { lockTransferPairLegs } =
-      await import("~/server/domains/financial-transaction/repo/transfer-pair-suggestions");
+      await import("~/server/domains/transaction-import/repo/transfer-pair-suggestions");
     // Even a prediction made before pair discovery shares its charge's leg
     // lock with a later pair apply, before either can hold its projection.
     await lockTransferPairLegs(
@@ -2822,7 +2786,7 @@ async function admitRetriedCharge(
       SELECT 1 FROM ${sourceObservations} r WHERE ${notDeleted("r")}
         AND r.source = ${charge.source} AND r."chargeKey" = ${charge.chargeKey}
         ${scope.since ? sql`AND r."statementDate" >= ${scope.since}::date` : sql``}
-        ${scope.importId ? sql`AND (r.id IN (SELECT m."statementRowId" FROM ${transactionImportMembers} m WHERE m."importId" = ${scope.importId}::uuid) OR r."withdrawalImportId" = ${scope.importId}::uuid)` : sql``}
+        ${scope.importId ? sql`AND (r.id IN (SELECT m."statementRowId" FROM ${transactionImportRecord} m WHERE m."importId" = ${scope.importId}::uuid) OR r."withdrawalImportId" = ${scope.importId}::uuid)` : sql``}
       LIMIT 1
     `,
       "objects",

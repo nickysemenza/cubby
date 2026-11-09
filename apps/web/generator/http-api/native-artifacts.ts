@@ -2,7 +2,10 @@ import { fileURLToPath } from "node:url";
 import { z } from "zod";
 
 import { generatedHeader } from "../artifacts.ts";
-import type { EntityArtifacts } from "../entities/declarations.ts";
+import type {
+  CompiledEntity,
+  EntityArtifacts,
+} from "../entities/declarations.ts";
 import type { KernelActions } from "../entities/render/index.ts";
 import { renderEntityKernelArtifacts } from "./entity-kernel.ts";
 import { loadContracts } from "../operations/collect.ts";
@@ -29,6 +32,7 @@ export async function renderDirectNativeArtifacts(
   actions: KernelActions,
   operationIds: readonly string[],
   _entityOutputs: EntityOutputs,
+  entities: readonly CompiledEntity[],
 ): Promise<EntityArtifacts[]> {
   const named = await registerSchemaNames(
     new URL("../../src/", import.meta.url),
@@ -129,7 +133,7 @@ export async function renderDirectNativeArtifacts(
       models,
     ),
     renderNativeCommands(contract),
-    ...renderEntityKernelArtifacts(actions, operationIds),
+    ...renderEntityKernelArtifacts(actions, operationIds, entities),
     {
       relativePath:
         "apps/apple/CubbyKit/Sources/CubbyAPI/Models/native-identifiable.gen.swift",

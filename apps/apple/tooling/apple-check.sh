@@ -34,6 +34,13 @@ done
 targets+=(apps/apple/App apps/apple/CubbyKit/Sources/cubby apps/apple/CubbyKit/Sources/CubbyAPISupport apps/apple/CubbyKit/Tests)
 swift format lint --parallel --strict --configuration apps/apple/.swift-format --recursive "${targets[@]}"
 
+# Generated id enums carry every manifest and wire vocabulary; a string compare on
+# their raw value compiles after a rename and silently stops matching.
+if grep -rnE --include='*.swift' 'rawValue [!=]= "' "${targets[@]}" | grep -v '/Tests/'; then
+  echo "Match the generated enum case instead of comparing rawValue to a string literal." >&2
+  exit 1
+fi
+
 exit 0
 fi
 

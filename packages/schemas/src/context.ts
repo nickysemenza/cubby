@@ -1,6 +1,7 @@
 import { z } from "zod";
+import { SYSTEM_USER_ID } from "./identifier-fields";
 import type { DeviceId, RunId, UserId } from "./identifiers";
-export { SYSTEM_USER_ID } from "./identifier-fields";
+export { SYSTEM_USER_ID };
 
 /**
  * How a write entered the app. Who and what did it are separate columns:
@@ -43,6 +44,14 @@ export function buildActorContext(
     runId: attribution.runId ?? null,
   };
 }
+
+/**
+ * The actor for work with nobody behind it: crons, retries, scheduled
+ * refreshes. Work a member starts (a backfill button) stays attributed to
+ * that member. The reserved user exists in the production database.
+ */
+export const systemActor = (): ActorContext =>
+  buildActorContext(SYSTEM_USER_ID, "system");
 
 /** The actor with `runId` set, unless an enclosing run already owns the work. */
 export function actorInRun(actor: ActorContext, runId: RunId): ActorContext {

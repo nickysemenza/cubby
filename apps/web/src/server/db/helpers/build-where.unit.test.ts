@@ -23,7 +23,7 @@ import type { WishFilters } from "@cubby/schemas/wish";
 import { describe, expect, it } from "vitest";
 
 import { expenseScaffold } from "~/server/domains/expense/repo/lookup";
-import { financialAccountScaffold } from "~/server/domains/financial-account/repo";
+import { financialAccountScaffold } from "~/server/domains/financial-account/repo/financial-account";
 import { financialTransactionScaffold } from "~/server/domains/financial-transaction/repo/financial-transaction";
 import { imageScaffold } from "~/server/domains/image/repo/image";
 import { ingredientScaffold } from "~/server/domains/ingredient/repo/search";

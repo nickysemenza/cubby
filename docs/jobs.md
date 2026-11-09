@@ -799,6 +799,13 @@ still awaits the send. Queue failures receive bounded delivery retries; daily/ap
 wakes; transaction rollback schedules no wake. Producers use this same sender
 rather than implementing their own request-lifetime branch.
 
+A background task kind is its schema in `backgroundTaskSchema`
+(`@cubby/schemas/background-tasks`), its member-facing `JOB_KIND_POLICY`
+entry, and one declaration in `server/workflows/background-tasks/kinds.ts`
+carrying the Job key, the handler and provider fencing. Publishing and the
+drain both read that declaration; a handler parses only its own kind. The key
+is the queued Job's identity, so changing one orphans queued rows.
+
 A producer must not enqueue faster than the drain can serve. One unbounded
 connection-discovery pass once enqueued an evaluation for every household
 record (~55k), which starved every other kind for days.

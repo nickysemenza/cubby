@@ -56,7 +56,6 @@ export const TagInput: FC<TagInputProps> = ({
       if (prefix.startsWith(input)) suggestions.push(`${prefix}:`);
     }
 
-    // Add matching existing tags
     if (existingTags) {
       for (const t of existingTags) {
         if (

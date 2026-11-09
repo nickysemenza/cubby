@@ -1,8 +1,8 @@
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 import { ClipboardIcon } from "@phosphor-icons/react/dist/csr/Clipboard";
-import { useState } from "react";
 
 import { copyTextWithToast } from "~/lib/clipboard";
+import { useCopiedFlag } from "~/ui/hooks/use-copied-flag";
 import { Button } from "~/ui/primitives/button";
 
 /**
@@ -24,7 +24,7 @@ export function CopyDebugButton({
   toastLabel: string;
   title: string;
 }) {
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useCopiedFlag();
 
   return (
     <Button
@@ -37,7 +37,6 @@ export function CopyDebugButton({
         e.stopPropagation();
         if (!(await copyTextWithToast(getText(), toastLabel))) return;
         setCopied(true);
-        setTimeout(() => setCopied(false), 1500);
       }}
     >
       {copied ? (

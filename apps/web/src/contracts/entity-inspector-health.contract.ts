@@ -20,10 +20,13 @@ export const entityInspectorHealthContract = defineContract(
     inspectorHealth: query({
       description:
         "Read entity inspector and search-index health counts. Use the result to diagnose stale or missing derived records; this does not repair them.",
-      readPolicy: "strong",
       input: z.null(),
       output: entityInspectorHealthSchema,
     }),
   },
-  { exposure: "capability", mcpToolGroup: "maintenance" },
+  {
+    exposure: "capability",
+    mcpToolGroup: "maintenance",
+    readPolicy: "financialEntity",
+  },
 );

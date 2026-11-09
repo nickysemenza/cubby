@@ -12,6 +12,15 @@ public struct DetailDisplayRow: Decodable, Sendable, Hashable {
 
     private enum CodingKeys: String, CodingKey { case entity, id, title, subtitle, trailing }
 
+    /// A row the server sent in a shape native cannot read, kept visible with its raw value.
+    init(unsupported raw: JSONValue) {
+        entity = nil
+        id = nil
+        title = UnsupportedNativeResponse(context: "detail row", raw: raw).localizedDescription
+        subtitle = nil
+        trailing = nil
+    }
+
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         entity = try container.decodeIfPresent(String.self, forKey: .entity).flatMap(
@@ -51,7 +60,7 @@ extension FieldDescriptor {
     /// The display rows the detail record carries for this field (`display.itemsPath`).
     public func detailItems(in raw: JSONValue) -> [DetailDisplayRow] {
         guard let itemsPath, let items = raw.pathValue(itemsPath)?.arrayValue else { return [] }
-        return items.compactMap { try? $0.decoded(DetailDisplayRow.self) }
+        return items.map { (try? $0.decoded(DetailDisplayRow.self)) ?? DetailDisplayRow(unsupported: $0) }
     }
 
     /// The value a detail row reads: the one at its declared `readPath` (`identity.kind`,

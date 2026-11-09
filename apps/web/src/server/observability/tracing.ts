@@ -50,20 +50,15 @@ export const TraceNames = {
   // HTTP routes
   route: (method: string, path: string) => `${method} ${path}`,
 
-  // MCP tool dispatch
   mcp: (tool: string) => `mcp.tool.${tool}`,
 
-  // External API calls
   api: (service: string, operation: string) => `api.${service}.${operation}`,
 
-  // WASM operations
   wasm: (operation: string) => `wasm.${operation}`,
 
-  // Service layer operations
   service: (service: string, operation: string) =>
     `service.${service}.${operation}`,
 
-  // Database operations
   db: (operation: string) => `db.${operation}`,
 
   // Background jobs (queue delivery, inline dispatch, and the dev drain all

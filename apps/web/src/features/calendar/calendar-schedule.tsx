@@ -1,4 +1,5 @@
 import type { EntityRef } from "@cubby/schemas/entity";
+import { TASK_STATUS_LABELS } from "@cubby/schemas/task-fields";
 import { useNavigate } from "@tanstack/react-router";
 import { useMemo } from "react";
 
@@ -8,7 +9,6 @@ import {
   entityDisplayImageKey,
   useEntityDisplayImages,
 } from "~/entity/entity-media/entity-display-images";
-import { TASK_STATUS_LABELS } from "~/entity/presentation/task-options";
 import {
   ScheduleGrid,
   type ScheduleRow,

@@ -9,7 +9,7 @@ import { z } from "zod";
 import { user } from "~/server/db/auth.schema";
 import { getDb } from "~/server/db/helpers";
 import { run, runFinding } from "~/server/db/schema";
-import { publishRunFinding } from "~/server/domains/purchase-import/repo/run-finding";
+import { publishRunFinding } from "~/server/domains/run/repo/run-finding";
 import { readRecordWorkQueue } from "~/server/domains/work/service/work-queue-read";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { insertEntityFixtures } from "~/server/testing/repo.fixtures";

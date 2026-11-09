@@ -161,9 +161,10 @@ export class CalendarFeedDurableObject
     return this.serializePublication(async () => {
       try {
         await this.refresh(origin, "rotate");
-      } catch {
+      } catch (error) {
         throw new Error(
           "Calendar could not refresh. Try again shortly; existing connections are unchanged.",
+          { cause: error },
         );
       }
       const token = createCalendarFeedToken();
@@ -261,7 +262,7 @@ export class CalendarFeedDurableObject
             { buildCalendarSnapshot },
             { renderCalDavResource },
           ] = await Promise.all([
-            import("~/server/domains/calendar/repo/calendar-caldav"),
+            import("~/server/domains/calendar/operations/calendar-caldav"),
             import("../service/snapshot"),
             import("../service/caldav-ics"),
           ]);
@@ -329,7 +330,7 @@ export class CalendarFeedDurableObject
   private async execute(write: CalDavWrite, origin: string) {
     return this.withDatabase(async (db) => {
       const { executeCalDavWrite } =
-        await import("~/server/domains/calendar/repo/calendar-caldav");
+        await import("~/server/domains/calendar/operations/calendar-caldav");
       return executeCalDavWrite(db, write, async (receipt) => {
         this.store.prepareWriteReceipt(
           write.collection,

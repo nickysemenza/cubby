@@ -3,7 +3,6 @@ import type { ReactNode } from "react";
 
 import type { CubbyRow as Row } from "./table-features";
 
-/** Result of a bulk action execution */
 export interface BulkActionResult {
   success: boolean;
 }
@@ -14,13 +13,9 @@ export type BulkActionAvailability =
   | { status: "disabled"; reason: string }
   | { status: "hidden" };
 
-/** Configuration for a single bulk action */
 export interface BulkAction<TData extends RowData> {
-  /** Unique identifier for this action */
   id: string;
-  /** Display label */
   label: string;
-  /** Icon component to display */
   icon?: ReactNode;
   /**
    * Renders destructive. Replaces the old `id === "delete"` convention in
@@ -47,7 +42,6 @@ export interface BulkAction<TData extends RowData> {
    * the rows to an eligible subset before execution.
    */
   availability?: (selectedRows: Row<TData>[]) => BulkActionAvailability;
-  /** Execute the action on selected rows */
   onExecute: (selectedRows: Row<TData>[]) => Promise<BulkActionResult>;
 }
 
@@ -70,9 +64,7 @@ export const bulkActionPreview = <TData extends RowData>(
 ): BulkActionPreview[] | undefined =>
   config?.actions.map(({ id, label, icon }) => ({ id, label, icon }));
 
-/** Configuration for bulk actions on an entity list */
 export interface BulkActionsConfig<TData extends RowData> {
-  /** Available actions */
   actions: BulkAction<TData>[];
   /** Clear acted-on rows after success; newer selections survive (default: true). */
   clearSelectionOnComplete?: boolean;

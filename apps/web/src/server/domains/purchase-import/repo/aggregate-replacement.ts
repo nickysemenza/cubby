@@ -11,6 +11,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { DrizzleTransaction } from "~/server/db";
+import { minorToDollarsSql } from "~/server/db/computed/money";
 import { notDeleted } from "~/server/db/helpers";
 import {
   expense,
@@ -141,7 +142,7 @@ export async function loadAggregateReplacementSnapshot(
       itemizationExpectation: purchase.itemizationExpectation,
       statedTotal: sql<
         number | null
-      >`${purchase.statedTotal}::numeric / 100`.mapWith(Number),
+      >`${minorToDollarsSql(purchase.statedTotal, "numeric")}`.mapWith(Number),
     })
     .from(purchase)
     .where(

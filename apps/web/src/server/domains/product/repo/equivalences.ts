@@ -9,7 +9,7 @@ import {
   recipeSection,
   recipeSectionIngredient,
 } from "~/server/db/schema";
-import type { HarvestRow } from "~/server/lib/harvest-equivalences";
+import type { HarvestRow } from "~/server/domains/product/repo/harvest-equivalences";
 
 /**
  * Every recipe-ingredient occurrence carrying ≥2 parsed measures — the raw

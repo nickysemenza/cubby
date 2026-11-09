@@ -10,6 +10,7 @@ import { task } from "~/server/db/schema";
 import {
   entityKernelContextSchema,
   executeEntity,
+  executeEntityAs,
 } from "~/server/entity-kernel";
 import { insertEntityFixtures } from "~/server/testing/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
@@ -52,6 +53,7 @@ describe("default entity timeline", () => {
         window,
         pagination,
       }),
+      executeEntityAs,
     );
 
   it("retains every committed identifier effect and primary change in native timeline detail", async () => {
@@ -118,6 +120,7 @@ describe("default entity timeline", () => {
         window: { order: "desc" },
         pagination: { pageIndex: 0, pageSize: 200 },
       }),
+      executeEntityAs,
     );
     const detail = result.groups
       .flatMap((group) => group.events)

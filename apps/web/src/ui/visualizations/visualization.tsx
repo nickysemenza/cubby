@@ -3,7 +3,7 @@ import { Suspense, type ReactNode } from "react";
 
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
-import { Section } from "~/ui/layout/section";
+import { Section } from "~/ui/layout";
 
 type RefreshState =
   | { refreshError?: never; onRetry?: never }

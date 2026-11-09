@@ -12,8 +12,8 @@ import {
 import { type AnyColumn, eq, type SQL } from "drizzle-orm";
 
 import { ENTITY_EDGE_OVERRIDES } from "./entity-edge-overrides";
-import type { EdgeScope, EntityEdge } from "./entity-edges";
-import { ENTITY_EDGES } from "./entity-edges";
+import type { EdgeScope, EntityEdge } from "./entity-edge-overrides";
+import { ENTITY_EDGES } from "./generated/entity-edges.gen";
 
 export interface IncomingEdge {
   /** The FK column, on the referencing table, that points at this entity's `id`. */

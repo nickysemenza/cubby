@@ -31,7 +31,6 @@ type MinimalEntityData = {
   fields?: Record<string, ReadableFieldEnvelope>;
 };
 
-// Discriminated union for entity-specific data shapes
 export type InlineRefLinkProps = {
   openInNewTab?: boolean;
   /** Optional sizing/layout classes applied to the actual anchor. */

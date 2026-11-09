@@ -1,7 +1,7 @@
 import type { JSX } from "react";
 import { z } from "zod";
 
-import { Disclosure } from "~/ui/layout/disclosure";
+import { Disclosure } from "~/ui/layout";
 
 const jsonValue = z.json();
 type JsonValue = z.infer<typeof jsonValue>;

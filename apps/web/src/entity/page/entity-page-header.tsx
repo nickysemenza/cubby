@@ -17,10 +17,10 @@ import {
   entityDetailParams,
   isBrowserRoutedEntity,
 } from "~/entity/entities";
+import { ImageChainPopover } from "~/entity/fields/explanation/image-chain";
 import { useEntityMetadata } from "~/entity/metadata";
 import { getEntityNavGroup } from "~/entity/navigation/nav-items";
 import { formatCount } from "~/lib/number-format";
-import { ImageChainPopover } from "~/ui/derived/image-chain";
 import { PageHeader } from "~/ui/layout/page-header";
 import {
   domainForEntity,

@@ -46,7 +46,7 @@ import { readRunStepWorkProgress, usesStepWorkProgress } from "./work-progress";
 
 /**
  * The manifest read side of an import run. Writes stay in
- * `purchase-import/run-service.ts`; this file only projects the row.
+ * `run/repo/run-control.ts`; this file only projects the row.
  */
 type RunRow = typeof runTable.$inferSelect;
 // includes-deleted: immutable Run history retains account, actor and lineage identities.

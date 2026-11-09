@@ -7,7 +7,7 @@ import { formatCurrencyRange } from "~/lib/number-format";
 import { formatCurrency } from "~/lib/number-format";
 import { blockReasonText } from "~/lib/sub-recipe-reason";
 import { Panel, Row, Stack } from "~/ui/layout";
-import { Disclosure } from "~/ui/layout/disclosure";
+import { Disclosure } from "~/ui/layout";
 
 import {
   formatMakes,

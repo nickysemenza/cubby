@@ -219,6 +219,8 @@ establish a historical event date. Label creation and vendor-shipped
 reports do not establish carrier possession. Repeated source observations use
 the shared writer's idempotent path; conflicts remain evidence.
 
+Mail and Shipment share tracking-number normalization and mail carrier recognition;
+carrier evidence still requires a bounded source claim or tracking link.
 Carrier resolution uses ordinary Vendor identities through unambiguous names and
 aliases. Service wording stays in the source evidence rather than creating another
 Vendor. Never create a Vendor from a tracking-number
@@ -1251,7 +1253,7 @@ The composite `import-order-convergence.spec.ts` browser journey is removed.
 booking and receipt reconciliation, Product conflict review, and Vendor-to-Purchase
 and original Email navigation. Photo review and photo-first journeys retain signed
 upload, review approval and persisted image roles. The crowded Problems sample
-regression belongs to `run-service.integration.test.ts`; the Gmail journey still
+regression belongs to `run-control.integration.test.ts`; the Gmail journey still
 applies the reviewed fix from the Run page.
 The PostgreSQL matrix owns the six sampled source orders and exact final Product,
 inventory ownership, Expense, Purchase allocation and original source edges.
@@ -1557,6 +1559,9 @@ Identity-only collection references and retained retries read physical observati
 Purchase paperwork totals store nullable signed bigint `statedTotalMinor`. Native and existing entity wires retain dollar-number `statedTotal`; server reconciliation compares exact minor units. The preserving cutover archives complete original Purchase rows and refuses any original that cannot independently round-trip through cents, including IEEE noise. Booking fingerprints retain their original dollar shape. Expense costs remain unchanged while their three noisy originals lack exact source proof.
 FinancialTransactionAllocation stores signed nonzero bigint `amountMinor`; allocation inputs, native/entity reads, retained fingerprints and audit receipts stay in dollar numbers. Allocation-set conservation and merging use exact minor units. The preserving migration keeps every original allocation edge, confirmation and tombstone in archive and refuses unproven cent values. Expense cost conversion remains blocked by three noisy originals.
 
-Raw SQL dollar fields entering retained JavaScript fingerprints must use the PostgreSQL float8 driver boundary or an explicit decoder. An `execute<T>` annotation does not decode numeric strings. Retained float-sum fingerprints preserve their original per-row float8 accumulation; authoritative conservation and writes use minor units. SQL-hashed JSON/text boundaries also require the original float8 representation rather than numeric scale.
+SQL money projections share `server/db/computed/money.ts`, with explicit numeric or float8 result types. Raw SQL dollar fields entering retained JavaScript fingerprints must use the PostgreSQL float8 driver boundary or an explicit decoder. An `execute<T>` annotation does not decode numeric strings. Retained float-sum fingerprints preserve their original per-row float8 accumulation; authoritative conservation and writes use minor units. SQL-hashed JSON/text boundaries also require the original float8 representation rather than numeric scale.
 
 FinancialTransaction amounts are stored as signed exact minor units. Native, MCP and audit receipts keep dollar numbers. Raw PostgreSQL reads that enter retained spending snapshots decode to float8 dollars, including embedded transaction JSON; TypeScript `execute<T>` does not decode PostgreSQL numeric strings. Exact storage arithmetic and preservation guards do not depend on these compatibility projections.
+
+Recorded purchase-import commit results default a missing legacy `requiresReview`
+flag to false; malformed values fail validation.

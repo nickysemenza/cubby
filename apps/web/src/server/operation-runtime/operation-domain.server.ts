@@ -1,11 +1,12 @@
 import { z } from "zod";
 
-import type {
-  OperationContract,
-  OperationMemberName,
+import {
+  declaredReadPolicy,
+  type OperationContract,
+  type OperationMemberName,
+  type QueryReadPolicy,
 } from "~/contracts/define";
 import type { OperationId } from "~/lib/operation-observability";
-import { readPolicyFor } from "~/server/db/read-policy";
 import { resolveFilterTokens } from "~/server/entity-kernel/filter-tokens";
 import type { OperationHandler } from "~/server/operation-runtime/operation-handlers.server";
 import {
@@ -22,6 +23,8 @@ type OperationDomainDescriptor = {
     readonly kind: UnaryOperationKind;
     readonly input: z.ZodType;
     readonly output: z.ZodType;
+    readonly readPolicy?: QueryReadPolicy;
+    readonly changesHouseholdData?: false;
   };
 };
 
@@ -150,7 +153,8 @@ function operationHandlerFor<Descriptor extends OperationDomainDescriptor>(
       inputSchema,
       outputSchema,
       request: options.request,
-      readPolicy: readPolicyFor(descriptor.id, descriptor.definition.kind),
+      readPolicy: descriptor.definition.readPolicy,
+      changesHouseholdData: descriptor.definition.changesHouseholdData,
       run: (context, parsed, signal) => run({ ...context, signal }, parsed),
     });
 }
@@ -188,7 +192,13 @@ export function implementOperationDomain(
     const entry = handlers[member];
     if (!entry) throw new Error(`Missing handler for ${operation.id}`);
     operations[member] = operationHandlerFor(
-      { id: operation.id, definition },
+      {
+        id: operation.id,
+        definition: {
+          ...definition,
+          readPolicy: declaredReadPolicy(contract, definition),
+        },
+      },
       entry,
     );
   }

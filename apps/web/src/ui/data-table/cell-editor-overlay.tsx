@@ -143,6 +143,7 @@ export function CellEditorOverlay({
       if (tabMove.current === null) return;
       const pane = anchorEl?.closest<HTMLElement>("section[tabindex]");
       const shiftKey = tabMove.current;
+      // Cleanup runs before the overlay leaves the DOM; replay Tab from the pane once it has.
       requestAnimationFrame(() => {
         pane?.focus();
         pane?.dispatchEvent(

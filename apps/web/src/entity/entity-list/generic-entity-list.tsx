@@ -495,6 +495,10 @@ function ServerListBody({
   useEntityMetadata(entity);
   const { density } = useEntityListCardDensity();
   const parts = override.use(context);
+  const previewOriginal = <T extends { id: string }>(record: T) =>
+    entity === "wish"
+      ? { ...record, entityKind: entity, previewId: record.id }
+      : record;
   // A module's hand-written tree (heterogeneous rows, like wish candidates)
   // wins; otherwise the table nests under the declared `list.tree`, read
   // from the server root by root. Cards and the timeline stay flat.
@@ -715,27 +719,13 @@ function ServerListBody({
                     onInspect={(record) =>
                       inspectRow({
                         id: record.id,
-                        original:
-                          entity === "wish"
-                            ? {
-                                ...record,
-                                entityKind: entity,
-                                previewId: record.id,
-                              }
-                            : record,
+                        original: previewOriginal(record),
                       })
                     }
                     onRowHover={(record) =>
                       onRowHover({
                         id: record.id,
-                        original:
-                          entity === "wish"
-                            ? {
-                                ...record,
-                                entityKind: entity,
-                                previewId: record.id,
-                              }
-                            : record,
+                        original: previewOriginal(record),
                       })
                     }
                     onRowHoverEnd={(record) =>

@@ -6,7 +6,6 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import type { UPCLookupResponse } from "~/contracts/upc.contract";
-import type { UpcLookupService, UpcLookupPort } from "~/server/clients/upc";
 import type { UsdaFoodLookupPort } from "~/server/clients/usda";
 import { findOrCreateIngredient } from "~/server/domains/ingredient/repo/crud";
 import { resolveProductCategory } from "~/server/domains/product-category/repo/product-category";
@@ -17,6 +16,10 @@ import {
   createProductReadActions,
   readProductMutationFields,
 } from "~/server/domains/product/repo/write/product-writes";
+import type {
+  UpcLookupService,
+  UpcLookupPort,
+} from "~/server/domains/product/service/upc-lookup";
 import { RecipeCostingService } from "~/server/domains/recipe/repo/recipe-costing";
 import type { UsdaFoodBatchPort } from "~/server/domains/usda-food/repo/usda-helpers";
 import {

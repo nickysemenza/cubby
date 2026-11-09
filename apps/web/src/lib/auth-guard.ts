@@ -19,7 +19,7 @@ import { readGuardSession } from "~/server/http/guard-session.boundary";
  * share an in-flight promise with the providers' hook-based `useSession()`, so
  * a cold start fanned out into several redundant `/api/auth/get-session` fetches.
  *
- * Reads only the signed session cookie (cookieCache is enabled in `lib/auth.ts`),
+ * Reads only the signed session cookie (cookieCache is enabled in `server/http/auth.ts`),
  * so this is cheap on CF Workers — no DB round-trip on the hot path.
  *
  * The root `beforeLoad` only invokes this on the SERVER (`import.meta.env.SSR`);

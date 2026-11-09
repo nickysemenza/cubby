@@ -3,18 +3,10 @@ import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { round2 } from "@cubby/shared";
 
 import { convertAmountsToPrice } from "~/lib/recipe-costing";
-import { wasm } from "~/lib/wasm";
+import { unitKindOrNull } from "~/lib/wasm";
 
-/**
- * Checks if a unit represents money/currency using WASM.
- */
-export const isMoneyUnit = (unit: string): boolean => {
-  try {
-    return wasm.amount_kind({ value: 1, unit }) === "money";
-  } catch {
-    return false;
-  }
-};
+export const isMoneyUnit = (unit: string): boolean =>
+  unitKindOrNull(unit) === "money";
 
 const isSingleEach = (a: Amount): boolean => a.value === 1 && a.unit === "each";
 

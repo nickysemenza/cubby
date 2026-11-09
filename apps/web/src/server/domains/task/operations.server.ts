@@ -16,7 +16,8 @@ import { recordChange } from "~/server/generic/changes/repo/change";
 import { readPublicEntityRows } from "~/server/generic/derived/service/public-read";
 import { listAll } from "~/server/generic/list/repo/list-all";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
-import { bindWorkflow, workflow } from "~/server/workflows/runtime";
+import { workflow } from "~/server/workflows/runtime/builder";
+import { bindWorkflow } from "~/server/workflows/runtime/operation";
 
 /**
  * `task.bulkReorder` stays bespoke — it is positional, not a field patch, so

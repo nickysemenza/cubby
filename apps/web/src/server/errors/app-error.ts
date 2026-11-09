@@ -34,6 +34,10 @@ export class AppError extends Error {
   }
 }
 
+export function constraintViolation(message: string): never {
+  throw createAppError("CONSTRAINT_VIOLATION", message);
+}
+
 // Expected 4xx errors that shouldn't be logged as failures
 const EXPECTED_ERROR_CODES: Set<string> = new Set([
   "NOT_FOUND",

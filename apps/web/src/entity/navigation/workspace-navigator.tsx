@@ -9,8 +9,6 @@ import { Overlay } from "~/ui/overlays/overlay";
 import { Input } from "~/ui/primitives/input";
 
 import { domainChipClass } from "../../ui/navigation/domain-wayfinding";
-import { NavigationCountBadge } from "../../ui/navigation/navigation-count-badge";
-import { WorkNavStatus } from "../../ui/navigation/work-nav-status";
 import {
   sidebarSections,
   settingsNavItem,
@@ -18,6 +16,8 @@ import {
   navIconClass,
   navActiveClass,
 } from "./nav-items";
+import { NavigationCountBadge } from "./navigation-count-badge";
+import { WorkNavStatus } from "./work-nav-status";
 
 type SearchItem = { item: NavItem; section: string; keywords: string[] };
 const searchableItems: SearchItem[] = sidebarSections.flatMap((section) =>

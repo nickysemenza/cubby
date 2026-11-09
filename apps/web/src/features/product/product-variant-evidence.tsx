@@ -1,6 +1,6 @@
 import type { ProductVariantComparison } from "@cubby/schemas/product-variant-comparison";
 
-import { Disclosure } from "~/ui/layout/disclosure";
+import { Disclosure } from "~/ui/layout";
 import { Facts } from "~/ui/records/facts";
 
 /** Closed-choice relations plus the original source text, for human review. */

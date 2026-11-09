@@ -656,7 +656,7 @@ no false completion mark and does not block approval.
 
 ### Derived values
 
-`ui/derived` owns the ADR 0021 envelope presentation. Own values carry no mark.
+`ui/derived` and `entity/fields/explanation` own the ADR 0021 envelope presentation. Own values carry no mark.
 Inherited values have a muted leading ↳ in a 12px slot. An automatically set value
 is a neutral chip with a small ochre sparkle; “Set automatically” is its tooltip
 and accessible name. Refresh marks remain
@@ -694,8 +694,9 @@ observed execution start and known retry deadline: Next retry while it is ahead,
 Retry was due once it has passed, and no claim when it is unknown. Unknown invalidation causes or finish times
 remain unknown. Progress here is the phase and observed start time; no value has
 a percentage, remaining count, ETA or queue position.
-`ui/derived` is the app-aware generic composition boundary:
-it may reuse entity links, evidence and existing mutation actions.
+`ui/derived` holds the entity-independent marks and stacks; the explanation
+popover that reuses entity links, evidence and existing mutation actions lives
+in `entity/fields/explanation`.
 
 Display image sources are read-only strips in precedence order, with a linked
 source header and the chosen cover outlined. Header and table thumbnails open

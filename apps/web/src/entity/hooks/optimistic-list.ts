@@ -1,21 +1,5 @@
 import { z } from "zod";
 
-/** Patch one row in a known list projection; never walks unrelated cache data. */
-export function patchListItem<
-  TItem extends { id: string },
-  TPage extends { items: TItem[] },
->(
-  current: TPage | undefined,
-  id: string,
-  patch: (item: TItem) => TItem,
-): TPage | undefined {
-  if (!current) return current;
-  return {
-    ...current,
-    items: current.items.map((item) => (item.id === id ? patch(item) : item)),
-  };
-}
-
 type ListIdentity = { id: string };
 
 const cachedEnvelopeSchema = z
@@ -136,11 +120,8 @@ function walkCachedListEnvelope<
 /**
  * Patch one row across whatever shape a cache entry actually holds.
  *
- * `patchListItem` above assumes a `{ items }` page and is right to, because its
- * caller addresses one exact query key. A tag predicate does not have that
- * luxury: `[["wish"]]` matches every wish-tagged entry at once — plain list
- * pages, `InfiniteData` (`{ pages, pageParams }`) from an SSR loader, and the
- * detail query, since `descriptorMeta` stamps the entity root on all three. So
+ * A tag predicate can match plain pages, infinite pages and detail queries.
+ * Rather than guessing at unrelated cache entries,
  * the shared envelope walker recurses into pages, patches `items` or `data`
  * when either is really an array, and hands anything else back untouched
  * rather than guessing.

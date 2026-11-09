@@ -208,9 +208,9 @@ struct EntityRowPresentation: Sendable, Hashable {
 
     /// Empty and placeholder values add no information to the compact context line.
     static func isVisibleListFactValue(_ value: String) -> Bool {
-        let normalized = DisplayFormat.text(value.trimmingCharacters(in: .whitespacesAndNewlines))
+        let normalized = ValueFormat.text(value.trimmingCharacters(in: .whitespacesAndNewlines))
             .lowercased()
-        return !["unknown", "not recorded", "unavailable", "not assessed", DisplayFormat.text(nil), "-"]
+        return !["unknown", "not recorded", "unavailable", "not assessed", ValueFormat.text(nil), "-"]
             .contains(normalized)
     }
 
@@ -236,10 +236,10 @@ struct EntityRowPresentation: Sendable, Hashable {
             }
             return Fact(id: key, label: field.label, value: text)
         }
-        if field.listRenderer == .spendingCategorySummary,
-            let value = row.raw.recordValue(key),
-            let summary = try? value.decoded(SpendingCategorySummary.self)
-        {
+        if field.listRenderer == .spendingCategorySummary, let value = row.raw.recordValue(key) {
+            guard let summary = try? value.decoded(SpendingCategorySummary.self) else {
+                return Fact(id: key, label: field.label, value: "Unsupported value")
+            }
             let names = summary.categories.map(\.name).joined(separator: ", ")
             let text =
                 names.isEmpty ? summary.classificationLabel : "\(summary.classificationLabel): \(names)"

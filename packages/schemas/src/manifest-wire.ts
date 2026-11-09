@@ -347,7 +347,7 @@ export const manifestWire = {
     listTotals: "[ListTotalDescriptor]",
     shelfSubtitle: "[string]",
     titleSubtitle: "boolean",
-    listActions: "[string]",
+    listActions: "[EntityListActionID]",
     listQuickActions: "[string]?",
     listRail: "[ListRail]?",
     listRowCommand: "string?",
@@ -544,6 +544,7 @@ export type WireValue<T extends string> = T extends `${infer V}~`
                 | "DetailRendererID"
                 | "EntityFilterKind"
                 | "EntityHeroActionID"
+                | "EntityListActionID"
                 | "WayfindingDomain"
             ? string
             : T extends "integer"

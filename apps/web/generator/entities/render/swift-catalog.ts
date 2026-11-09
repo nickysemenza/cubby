@@ -41,6 +41,7 @@ import {
 } from "@cubby/schemas/compiler/native-coverage";
 import { onDetailSurface } from "@cubby/schemas/entity-detail-summary";
 import { SECTION_ACTION_IDS } from "@cubby/schemas/entity-section-actions";
+import { presenceFilter } from "@cubby/schemas/pagination";
 import { generatedHeader } from "../../artifacts.ts";
 import { parseRangeBounds } from "@cubby/shared/filter";
 import {
@@ -179,6 +180,51 @@ type VocabularyEnum = Readonly<{
 
 const vocabularyCases = (rawValues: readonly string[]) =>
   rawValues.map((raw) => ({ name: swiftCaseName(raw), raw }));
+
+/** Each entity's declared parameter filters, keyed by `columnId`, as the wire names
+ * `EntityFilterState` takes, so a renamed filter fails to compile in Swift. */
+const renderFilterParameters = (
+  descriptors: readonly ManifestWire<"EntityDescriptor">[],
+) => {
+  const memberName = (raw: string) =>
+    swiftCaseName(
+      raw
+        .split(/[^A-Za-z0-9]+/)
+        .filter(Boolean)
+        .map((part, index) => (index === 0 ? part : capitalize(part)))
+        .join(""),
+    );
+  const lines = [
+    "/// Each entity's declared parameter filters by `FilterDescriptor.columnId`, spelled as the",
+    "/// wire names `EntityFilterState` takes.",
+    "public enum EntityFilterParameter {",
+  ];
+  for (const descriptor of descriptors) {
+    const params = descriptor.filters.flatMap((filter) =>
+      "param" in filter.wire
+        ? [{ name: memberName(filter.columnId), wire: filter.wire.param.name }]
+        : [],
+    );
+    if (params.length === 0) continue;
+    const seen = new Set<string>();
+    lines.push(
+      `    public enum ${capitalize(swiftIdentifier(descriptor.key))} {`,
+    );
+    for (const param of params) {
+      if (seen.has(param.name))
+        throw new Error(
+          `${descriptor.key} has two filters named ${param.name} in Swift.`,
+        );
+      seen.add(param.name);
+      lines.push(
+        `        public static let ${param.name} = ${swiftString(param.wire)}`,
+      );
+    }
+    lines.push("    }");
+  }
+  lines.push("}", "");
+  return lines.join("\n");
+};
 
 const renderVocabularyEnum = ({ name, doc, cases }: VocabularyEnum) => {
   const lines = [
@@ -955,6 +1001,9 @@ export const renderSwiftEntityCatalog = (
     heroAction: used(
       entities.flatMap((entity) => entity.inspector.detail.hero.actions),
     ),
+    listAction: used(
+      entities.flatMap((entity) => entity.inspector.list.actions),
+    ),
     detailSlot: used(
       entities.flatMap((entity) =>
         entity.inspector.detail.sections.flatMap((section) =>
@@ -1110,6 +1159,11 @@ export const renderSwiftEntityCatalog = (
     },
     { name: "EntityFilterKind", cases: vocabularyCases(FILTER_KINDS) },
     {
+      name: "PresenceFilterValue",
+      doc: "The values of a presence filter parameter (`presenceFilter` in `packages/schemas/src/pagination.ts`).",
+      cases: vocabularyCases(presenceFilter.unwrap().options),
+    },
+    {
       name: "ControlRendererID",
       cases: vocabularyCases(coverageVocabulary.control),
     },
@@ -1135,6 +1189,11 @@ export const renderSwiftEntityCatalog = (
     {
       name: "EntityHeroActionID",
       cases: vocabularyCases(coverageVocabulary.heroAction),
+    },
+    {
+      name: "EntityListActionID",
+      doc: "The verbs a list row or selection may offer: declared `list.extraActions` and the kernel ones.",
+      cases: vocabularyCases(coverageVocabulary.listAction),
     },
     {
       name: "EntityDetailSlotID",
@@ -1217,7 +1276,9 @@ export const renderSwiftEntityCatalog = (
       source:
         generatedHeader +
         "// swift-format-ignore-file\n\n" +
-        vocabularyEnums.map(renderVocabularyEnum).join("\n"),
+        vocabularyEnums.map(renderVocabularyEnum).join("\n") +
+        "\n" +
+        renderFilterParameters(descriptors),
     },
     {
       relativePath:

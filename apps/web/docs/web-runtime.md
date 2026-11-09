@@ -11,6 +11,10 @@ Router subscriptions select the scalar or derived value a component consumes;
 components that genuinely consume the full dynamic search state retain it.
 Do not enable global structural sharing merely to narrow scalar subscriptions.
 Pass the displayed selection as mutation variables at the action boundary.
+Entity list and detail cache profiles are declared together in `cache-tags.ts`;
+mutation invalidation includes input-dependent ripples, all owned by `cache-tags.ts`.
+Ingredient mapping preview errors surface through the normal error boundary; they
+are not treated as an empty mapping graph.
 Queries stay passive on ordinary remount, but invalidated queries refetch when
 reactivated. Detail loaders fetch invalidated records before returning them.
 Ordinary saves finish at the validated server receipt. The root mutation cache
@@ -74,6 +78,8 @@ normalized diagnostics; domain input/events remain schema-validated inside the
 authenticated runtime. Producers observe the request signal, and early iterator
 return cancels the request. The authenticator owns the cookie same-origin rule
 for every operation request.
+Run detail owns the shared agent controls, transcript, and progress presentation.
+
 Cookbook import stays busy until its recipe stream and photo phase finish.
 The stream's done event precedes iterator completion; hand off recipe progress
 to photo progress atomically, with the outer import cleanup owning completion.
@@ -328,9 +334,11 @@ Ordinary browser display operations use `HYPERDRIVE_CACHED`: at most 60 seconds
 of cached data plus 15 seconds of stale-while-revalidate. Authentication and
 identity resolution remain authoritative. Mutations, money entry, financial
 record reads/reports, settlement/reconciliation previews and receiving decisions
-always use `HYPERDRIVE` with caching disabled. The shared operation runner makes
-the policy decision after validating input, including the generic entity or
-report slot, so an operation's explicit context policy cannot downgrade money.
+always use `HYPERDRIVE` with caching disabled. Each query contract member (or
+its contract default) declares `readPolicy`; the shared operation runner applies
+it after validating input. Generic entity and report contracts declare
+`financialEntity`, so a read of a financial entity or report slot cannot
+downgrade money.
 
 Read-your-writes belongs to the member's browser session. Attempted writes return
 a signed `cubby.last_write` cookie carrying the member, session and write time;
@@ -447,6 +455,9 @@ every open with zero stale/garbage-collection time. Presentation labels must not
 replace this fresh decision read or the receiving command's current-stock checks.
 
 ## List loading and enrichment
+
+Generic browser detail links use the entity definition’s detail parameter policy:
+catalog records use their external route id and other records use their shortcode.
 
 Inventory cells reuse the Location slice admitted by their Product or Location
 page. They must not subscribe to a separate Location metadata bundle per cell:

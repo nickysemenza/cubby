@@ -5,10 +5,13 @@ import { describe, expect, it } from "vitest";
 import { getDb } from "~/server/db/helpers";
 import { run } from "~/server/db/schema";
 import { reconcileSettledRun } from "~/server/domains/purchase-import/operations/run-review";
+import {
+  resumeAuthorizedRuns,
+  updateAgentProgress,
+} from "~/server/domains/run/repo/run-control";
 import { getRunWorkProgress } from "~/server/domains/run/repo/work-progress";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
-import { resumeAuthorizedRuns, updateAgentProgress } from "../repo/run-service";
 import { startAgentRunFixture } from "./import-run.fixtures";
 
 // Persisted delivery failures: a resumed generation can receive old messages;

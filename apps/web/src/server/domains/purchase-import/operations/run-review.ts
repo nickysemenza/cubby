@@ -16,6 +16,7 @@ import {
   runProgressEvent,
   runProgressStamp,
   runTargetOutcomeReceipt,
+  EXECUTED_RUN_PURPOSES,
 } from "@cubby/schemas/run-fields";
 import { ACTIVE_RUN_STATUSES } from "@cubby/shared/client-constants";
 import { countLabel } from "@cubby/shared/pluralize";
@@ -61,23 +62,22 @@ import {
   releaseUnsettledMailRunSources,
 } from "~/server/domains/purchase-import/repo/mail-run-membership";
 import { pauseForFunding } from "~/server/domains/run/repo/execution-context";
-import { failOperationsForRun } from "~/server/domains/run/repo/run-operation";
-import { recordChange } from "~/server/generic/changes/repo/change";
-import { EXECUTED_RUN_PURPOSES } from "~/server/workflows/runs/contract";
-
-import { loadPurchaseAuditBatch } from "../repo/audit-batch";
-import { resolveRunFinding } from "../repo/findings";
-import {
-  publishRunFinding,
-  runFindingColumns,
-  updateRunFinding,
-} from "../repo/run-finding";
 import {
   loadRunScope,
   STALE_RUN_MS,
   assertRunActive,
   markRunFailed,
-} from "../repo/run-service";
+} from "~/server/domains/run/repo/run-control";
+import {
+  publishRunFinding,
+  runFindingColumns,
+  updateRunFinding,
+} from "~/server/domains/run/repo/run-finding";
+import { failOperationsForRun } from "~/server/domains/run/repo/run-operation";
+import { recordChange } from "~/server/generic/changes/repo/change";
+
+import { loadPurchaseAuditBatch } from "../repo/audit-batch";
+import { resolveRunFinding } from "../repo/findings";
 
 /**
  * Whether the server issued a wake the reporting agent has not received: the

@@ -413,7 +413,7 @@ export const { definition, readSchemas } = defineEntityModel({
   extensions: {
     ports: {
       repository: {
-        module: "~/server/domains/ledger-transfer/repo",
+        module: "~/server/domains/ledger-transfer/repo/ledger-transfer",
         export: "ledgerTransferRepository",
       },
     },

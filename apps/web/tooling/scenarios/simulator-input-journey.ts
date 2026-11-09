@@ -109,7 +109,7 @@ export async function createSimulatorInputJourney(input: {
       createHash("sha256").update(readFileSync(filename)).digest("hex"),
     ),
   );
-  const replay = async (script: string, extension: "ad" | "yaml" = "ad") => {
+  const replay = async (script: string) => {
     const report = path.join(input.artifacts, `${script}.json`);
     // Suite test creates a new runner owner; these phases share the prepared session.
     await input.run(
@@ -117,8 +117,7 @@ export async function createSimulatorInputJourney(input: {
       [
         ...(input.agentDeviceCommand ? [] : ["exec", "agent-device"]),
         "replay",
-        `apps/apple/e2e/${script}.${extension}`,
-        ...(extension === "yaml" ? ["--maestro"] : []),
+        `apps/apple/e2e/${script}.ad`,
         ...input.common,
         "--timeout",
         "600000",

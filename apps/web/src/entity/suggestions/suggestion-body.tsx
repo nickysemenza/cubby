@@ -7,7 +7,7 @@ import { entityMetadata } from "~/entity/metadata";
 import { getAppErrorDetails } from "~/lib/error-utils";
 import { DecisionLevels } from "~/ui/derived/decision-levels";
 import { Row, Stack } from "~/ui/layout";
-import { Disclosure } from "~/ui/layout/disclosure";
+import { Disclosure } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import {
   Popover,

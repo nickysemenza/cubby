@@ -605,7 +605,7 @@ struct FieldsSectionView: View {
                 field: field, row: row, subject: EntityRef(entity: descriptor.key, id: row.id))
         } else if field.itemsPath != nil {
             DetailDisplayRows(label: field.label, rows: field.detailItems(in: row.raw))
-        } else if field.detailRenderer?.rawValue == "product-external-ids" {
+        } else if field.detailRenderer == .productExternalIds {
             let identifiers = IdentifierPresentation.grouped(
                 field.surfaceValue(in: row.raw, surface: "detail") ?? .null)
             ForEach(Array(identifiers.enumerated()), id: \.offset) { _, identifier in
@@ -619,11 +619,19 @@ struct FieldsSectionView: View {
                 }
             }
         } else if field.detailRenderer == .spendingCategorySummary {
-            if let value = FieldEnvelope.of(row.raw, field: field)?.effectiveValue,
-                let summary = try? value.decoded(SpendingCategorySummary.self)
-            {
-                SpendingCategorySummaryView(
-                    summary: summary, contextOnly: descriptor.key == .financialTransaction)
+            if let value = FieldEnvelope.of(row.raw, field: field)?.effectiveValue {
+                if let summary = try? value.decoded(SpendingCategorySummary.self) {
+                    SpendingCategorySummaryView(
+                        summary: summary, contextOnly: descriptor.key == .financialTransaction)
+                } else {
+                    LabeledContent(field.label) {
+                        Text(
+                            UnsupportedNativeResponse(context: "spending category summary", raw: value)
+                                .localizedDescription
+                        )
+                        .font(.caption).textSelection(.enabled)
+                    }
+                }
             }
         } else if field.detailRenderer == .expenseSpendingCategory {
             ExpenseSpendingCategoryView(row: row)
@@ -789,7 +797,7 @@ struct ExplanationEvidenceValue: View {
         case .bool(let value): return AnyView(Text(value ? "Yes" : "No"))
         case .number(let value):
             return AnyView(
-                Text(property == "amount" ? value.usd : value.formatted())
+                Text(property == "amount" ? value.usd : ValueFormat.number(value))
                     .monospacedDigit())
         case .string(let value):
             if let entity = EntityCatalog.descriptor(forShortcode: value) {
@@ -1029,7 +1037,7 @@ struct RelationSectionView: View {
             }
             if list.hasMore {
                 NavigationLink(value: Route.entityList(model.target.key, filters: list.filters)) {
-                    Text(list.meta?.totalCount.map { "Open all · \($0.formatted())" } ?? "Open all")
+                    Text(list.meta?.totalCount.map { "Open all · \(ValueFormat.count($0))" } ?? "Open all")
                         .frame(minHeight: FieldGuideTokens.touchTarget)
                 }
                 .accessibilityIdentifier("relation.openAll.\(model.id)")
@@ -1042,7 +1050,7 @@ extension RelationSectionModel {
     var title: String { section.title ?? target.plural }
     /// "Photos · 12" once the first page reports the relation's total.
     var countedTitle: String {
-        list.meta?.totalCount.map { "\(title) · \($0.formatted())" } ?? title
+        list.meta?.totalCount.map { "\(title) · \(ValueFormat.count($0))" } ?? title
     }
     var isLoadedEmpty: Bool { list.phase == .loaded && list.rows.isEmpty }
 }

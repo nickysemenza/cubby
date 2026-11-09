@@ -49,8 +49,10 @@ public actor CubbyClient {
         pageSize: Int = 50,
         at location: LocationCode? = nil
     ) async throws -> ListPage<EntityRow> {
-        var filters = EntityFilterState(["imagePresenceFilter": ["none"]])
-        if let location { filters.set([location.rawValue], for: "locationIdFilter") }
+        var filters = EntityFilterState([
+            EntityFilterParameter.Product.image: [PresenceFilterValue.none.rawValue]
+        ])
+        if let location { filters.set([location.rawValue], for: EntityFilterParameter.Product.location) }
         return try await list(
             EntityCatalog[.product], page: page, pageSize: pageSize, sort: "-createdAt", filters: filters)
     }
@@ -59,7 +61,11 @@ public actor CubbyClient {
     public func stockedProducts(page: Int = 1, pageSize: Int = 200) async throws -> ListPage<EntityRow> {
         try await list(
             EntityCatalog[.product], page: page, pageSize: pageSize,
-            filters: EntityFilterState(["relatedInventoryPresenceFilter": ["has"]]))
+            filters: EntityFilterState([
+                EntityFilterParameter.Product.relatedInventoryPresenceFilter: [
+                    PresenceFilterValue.has.rawValue
+                ]
+            ]))
     }
 
     /// The ids of products that have at least one image, newest first. List rows carry image ids
@@ -68,7 +74,9 @@ public actor CubbyClient {
     {
         let rows = try await list(
             EntityCatalog[.product], page: page, pageSize: pageSize, sort: "-createdAt",
-            filters: EntityFilterState(["imagePresenceFilter": ["has"]]))
+            filters: EntityFilterState([
+                EntityFilterParameter.Product.image: [PresenceFilterValue.has.rawValue]
+            ]))
         return ListPage(items: rows.items.map { ProductCode($0.id) }, meta: rows.meta)
     }
 
@@ -77,7 +85,7 @@ public actor CubbyClient {
     public func products(matchingBarcode gtin: String) async throws -> [EntityRow] {
         try await list(
             EntityCatalog[.product], page: 1, pageSize: 5, sort: "name",
-            filters: EntityFilterState(["upcFilter": [gtin]])
+            filters: EntityFilterState([EntityFilterParameter.Product.primaryGtin: [gtin]])
         ).items
     }
 

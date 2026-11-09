@@ -9,7 +9,7 @@ import { describe, expect, it } from "vitest";
 import {
   expenseAnalyzeTraceAttributes,
   expenseFacetTraceAttributes,
-} from "./operations.server";
+} from "./operations/expense.server";
 
 const input: ExpenseAnalyzeInput = {
   filters: { search: "private household search" },

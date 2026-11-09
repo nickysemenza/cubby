@@ -1,4 +1,4 @@
-import { getAuth } from "~/lib/auth";
+import { getAuth } from "~/server/http/auth";
 
 /** SSR authentication projects only the identity used by the route guard. */
 export async function readGuardSession(

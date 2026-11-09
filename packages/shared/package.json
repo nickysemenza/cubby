@@ -19,6 +19,7 @@
     "./golden-vectors/*": "./golden-vectors/*",
     "./image-types": "./src/image-types.ts",
     "./location-type-theme": "./src/location-type-theme.ts",
+    "./parse-json-as": "./src/parse-json-as.ts",
     "./pluralize": "./src/pluralize.ts",
     "./redundant-tokens": "./src/redundant-tokens.ts",
     "./retry": "./src/retry.ts",

@@ -1,12 +1,12 @@
 import type { AuditChannel } from "@cubby/schemas/context";
 import { runEntityId, userId } from "@cubby/schemas/identifiers";
 
-// Static on purpose, like request-context: a lazy auth import inside a Worker
-// request left the purchase agent's MCP tool calls unanswered (#2536).
-import { getAuth } from "~/lib/auth";
 import { DECISION_DEADLINE_MS } from "~/server/ai/policy/decision-deadline";
 import { AppError } from "~/server/errors/app-error";
 import { appleClientUpdateRequired } from "~/server/http/apple-client-gate";
+// Static on purpose, like request-context: a lazy auth import inside a Worker
+// request left the purchase agent's MCP tool calls unanswered (#2536).
+import { getAuth } from "~/server/http/auth";
 import {
   authenticateHttpSession,
   type HttpSessionReader,
@@ -455,7 +455,7 @@ export const principalWithContext = (
 /**
  * A delegated Run must be the actor's own and the actor a member whose party
  * owns it, except a photo Run: it records belongings for either member
- * (`run-service.ts`), so it may be owned by the other member's party.
+ * (`run/repo/run-control.ts`), so it may be owned by the other member's party.
  * Requiring the actor's party there 401'd every MCP call of such a Run's
  * coordinator (RUN-DFBE2).
  */
@@ -483,8 +483,8 @@ export const authenticate = createAuthenticator({
   delegationHolds: async (context, delegation) => {
     const [{ findActivePurchaseAgentGrant }, { loadRunScope }] =
       await Promise.all([
-        import("~/server/domains/purchase-import/repo/agent-auth"),
-        import("~/server/domains/purchase-import/repo/run-service"),
+        import("~/server/domains/run/repo/agent-auth"),
+        import("~/server/domains/run/repo/run-control"),
       ]);
     const actorUserId = context.actorContext.userId;
     const grant = await findActivePurchaseAgentGrant(

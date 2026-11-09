@@ -1,22 +1,12 @@
 import type { entityDetailContract } from "~/contracts/entity-detail.contract";
-import { type DetailEntity } from "~/entity/model/detail-contracts";
 import { loadEntityDetailSchemas } from "~/entity/model/read-schemas/loaders";
 
+import { entityReadCacheProfile } from "../cache-tags";
 import type { OperationPolicies } from "../operation-catalog";
-const persistedDetailEntities = new Set<DetailEntity>([
-  "product",
-  "location",
-  "recipe",
-  "ingredient",
-  "inventory",
-]);
 
 export const entityDetailOverrides = {
   detail: {
-    cache: (input) =>
-      persistedDetailEntities.has(input.entity)
-        ? "persisted-detail"
-        : undefined,
+    cache: (input) => entityReadCacheProfile(input.entity)?.detail,
     // The wire is JSON; the entity's own read schema restores its Dates.
     parse: async (value, input) =>
       value === null

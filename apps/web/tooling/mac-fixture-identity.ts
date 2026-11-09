@@ -10,10 +10,14 @@ import {
 import { homedir } from "node:os";
 import path from "node:path";
 import { z } from "zod";
+import {
+  APPLE_DEVELOPMENT_TEAM,
+  APPLE_E2E_BUNDLE_IDENTIFIER,
+} from "@cubby/shared/apple-app-identity";
 
 import { digestTree } from "cubby/tooling/tree-digest";
 
-export const macFixtureBundleID = "com.nickysemenza.cubby.e2e";
+export const macFixtureBundleID = APPLE_E2E_BUNDLE_IDENTIFIER;
 export function macFixturePaths() {
   const root = path.join(homedir(), "Library/Caches/CubbyMacImportFixture");
   return {
@@ -44,18 +48,8 @@ export function selectMacFixtureSigningIdentity(
     );
   return { selector: available[0]![1]!, team };
 }
-export function macFixtureSigningIdentity(repoRoot: string): SigningIdentity {
-  const project = readFileSync(
-    path.join(repoRoot, "apps/apple/project.yml"),
-    "utf8",
-  );
-  const team = project.match(
-    /^\s*DEVELOPMENT_TEAM:\s*([A-Z\d]{10})\s*$/mu,
-  )?.[1];
-  if (!team)
-    throw new Error(
-      "Mac fixture signing requires the project's development team",
-    );
+export function macFixtureSigningIdentity(): SigningIdentity {
+  const team = APPLE_DEVELOPMENT_TEAM;
   return selectMacFixtureSigningIdentity(
     execFileSync("security", ["find-identity", "-v", "-p", "codesigning"], {
       encoding: "utf8",

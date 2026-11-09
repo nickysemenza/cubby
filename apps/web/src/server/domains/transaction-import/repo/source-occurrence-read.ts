@@ -14,10 +14,11 @@ import {
   unwrapDb,
   withTransaction,
 } from "~/server/db/helpers";
+import { transactionImportRecord } from "~/server/db/retained-tables";
 import { sourceOccurrence } from "~/server/db/schema";
 import { expenseScaffold } from "~/server/domains/expense/repo/lookup";
 import { defineRepository } from "~/server/entity-kernel/repo/repository";
-import { createAppError } from "~/server/errors/app-error";
+import { constraintViolation } from "~/server/errors/app-error";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import type { ListReadOptions } from "~/server/generic/list/repo/list-projection";
 import { jsonSnapshot } from "~/server/lib/canonical-json";
@@ -27,9 +28,6 @@ const rawSets = sourceOccurrenceClosure.shape.sets.omit({
 });
 const resultSchema = z.object({ snapshot: z.string(), sets: rawSets });
 const rowIdentity = z.object({ id: z.string() });
-const refuse = (message: string): never => {
-  throw createAppError("CONSTRAINT_VIOLATION", message);
-};
 
 /** One snapshot and one shared graph load per requested owner page. Never authorizes a write. */
 async function loadOccurrenceClosures(
@@ -37,7 +35,9 @@ async function loadOccurrenceClosures(
   rows: readonly (typeof sourceOccurrence.$inferSelect)[],
 ) {
   if (rows.length > 10)
-    return refuse("Read occurrence closure in groups of at most ten owners.");
+    return constraintViolation(
+      "Read occurrence closure in groups of at most ten owners.",
+    );
   if (!rows.length)
     return new Map<string, z.infer<typeof sourceOccurrenceClosure>>();
   const database = isTransaction(db) ? databaseForTransaction(db) : db;
@@ -53,7 +53,7 @@ async function loadOccurrenceClosures(
         isolation[0]?.level !== "repeatable read" &&
         isolation[0]?.level !== "serializable"
       )
-        return refuse(
+        return constraintViolation(
           "Occurrence closure needs a snapshot read outside a read-committed write transaction.",
         );
       const ids = sql.join(
@@ -76,7 +76,7 @@ async function loadOccurrenceClosures(
       allocations AS MATERIALIZED (SELECT * FROM "FinancialTransactionAllocation" WHERE "transactionId" IN (SELECT id FROM transactions)),
       purchases AS MATERIALIZED (SELECT * FROM "Purchase" WHERE id IN (SELECT "purchaseId" FROM allocations)),
       expenses AS MATERIALIZED (SELECT * FROM "Expense" WHERE "purchaseId" IN (SELECT id FROM purchases)),
-      memberships AS MATERIALIZED (SELECT * FROM "TransactionImportRecord" WHERE "statementRowId" IN (SELECT id FROM observations)),
+      memberships AS MATERIALIZED (SELECT * FROM ${transactionImportRecord} WHERE "statementRowId" IN (SELECT id FROM observations)),
       aliases AS MATERIALIZED (SELECT * FROM observation_aliases UNION SELECT * FROM bindings),
       judgments AS MATERIALIZED (SELECT * FROM "SourceObservationAnnotation" WHERE "observationId" IN (SELECT id FROM observations)),
       collections AS MATERIALIZED (SELECT * FROM "TransactionImport" WHERE id IN (SELECT "importId" FROM memberships)),
@@ -149,12 +149,12 @@ async function loadOccurrenceClosures(
         "objects",
       );
       if (loaded[0]?.sets === null)
-        return refuse(
+        return constraintViolation(
           "Occurrence closure exceeds one MiB; narrow the owner scope.",
         );
       const captured = resultSchema.parse(loaded[0]);
       if (Object.values(captured.sets).some((set) => set.length > 1000))
-        return refuse(
+        return constraintViolation(
           "Occurrence closure exceeds one thousand rows in a named set; narrow the owner scope.",
         );
       const expenseIds = captured.sets.expenses.map(
@@ -182,7 +182,7 @@ async function loadOccurrenceClosures(
         },
       };
       if (new TextEncoder().encode(JSON.stringify(shared)).byteLength > 1048576)
-        return refuse(
+        return constraintViolation(
           "Occurrence closure exceeds one MiB; narrow the owner scope.",
         );
       // The complete page bundle belongs to the first result only; copying it per root multiplies Worker memory.

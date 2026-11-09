@@ -10,10 +10,10 @@ import {
   photoRunImage,
   run as runTable,
 } from "~/server/db/schema";
-import { loadRunDetail } from "~/server/domains/purchase-import/repo/run-service";
 import { writeOutcomeReceipts } from "~/server/domains/purchase-import/service/run-outcome.fixtures";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { runScaffold } from "~/server/domains/run/repo/run";
+import { loadRunDetail } from "~/server/domains/run/repo/run-detail";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { publishQualityFixtures } from "~/server/testing/quality.fixtures";

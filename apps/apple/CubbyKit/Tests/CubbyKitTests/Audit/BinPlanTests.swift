@@ -3,7 +3,7 @@ import Testing
 
 @testable import CubbyKit
 
-/// Port of `sweep-bin-plan.unit.test.ts` over the fixture tree:
+/// Over the fixture tree:
 /// Home > Garage > Shelf A > Bin 1 > Bin 2; Home > Kitchen > Bin 9; Unknown (a second root).
 @Suite("BinPlan")
 struct BinPlanTests {
@@ -72,9 +72,8 @@ struct BinPlanTests {
         }
     }
 
-    /// Shared with `sweep-bin-plan.unit.test.ts` (`packages/shared/golden-vectors/bin-plan.json`):
-    /// the verdict, reason and copy must agree with the web module this file ports.
-    @Test func matchesTheSharedGoldenVectors() throws {
+    /// The verdict, reason and copy for every case in `Fixtures/bin-plan.json`.
+    @Test func matchesTheVerdictVectors() throws {
         struct Node: Decodable {
             let code: String
             let name: String
@@ -93,7 +92,7 @@ struct BinPlanTests {
             let nodes: [Node]
             let cases: [Case]
         }
-        let file = try GoldenVectors.decode(File.self, named: "bin-plan")
+        let file = try JSONDecoder().decode(File.self, from: Fixtures.data(named: "bin-plan.json"))
 
         typealias F = FieldEnvelopeFixture
         func json(_ node: Node) -> JSONValue {

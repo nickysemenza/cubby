@@ -6,6 +6,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
+import { advisoryLockKey } from "~/server/db/advisory-lock";
 import { getDb, withTransaction } from "~/server/db/helpers";
 import {
   entityExternalId,
@@ -415,12 +416,14 @@ describe("purchase import identifier collisions", () => {
       await withTransaction(ctx.db, async (tx) => {
         await lockPartySettlement(tx, f.party.id);
         commits = Promise.allSettled([first.commit(), second.commit()]);
+        const key = sql`hashtextextended(${advisoryLockKey("purchase-settlement", f.party.id)}, 0)`;
         await expect
           .poll(
             () =>
               waiting(sql`SELECT count(*)::int AS count FROM pg_locks
                 WHERE locktype = 'advisory' AND NOT granted
-                  AND objid::bigint = (hashtext(${`purchase-settlement:${f.party.id}`})::bigint & 4294967295)`),
+                  AND classid::bigint = ((${key} >> 32) & 4294967295)
+                  AND objid::bigint = (${key} & 4294967295)`),
             { timeout: 5_000, interval: 20 },
           )
           .toBe(2);

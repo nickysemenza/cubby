@@ -6,7 +6,7 @@ import {
   acceptDoorbell,
   refuseDoorbellMessage,
   ringDoorbell,
-} from "~/server/http/doorbell-socket";
+} from "~/server/lib/doorbell-socket";
 
 import type { DatabaseFreshnessRpc } from "./rpc";
 

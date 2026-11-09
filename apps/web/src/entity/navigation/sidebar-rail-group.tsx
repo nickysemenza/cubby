@@ -15,8 +15,6 @@ import {
   TooltipTrigger,
 } from "~/ui/primitives/tooltip";
 
-import { NavigationCountBadge } from "../../ui/navigation/navigation-count-badge";
-import { WorkNavDot } from "../../ui/navigation/work-nav-status";
 import {
   type NavGroup,
   type NavItem,
@@ -24,6 +22,8 @@ import {
   navIconClass,
   navActiveClass,
 } from "./nav-items";
+import { NavigationCountBadge } from "./navigation-count-badge";
+import { WorkNavDot } from "./work-nav-status";
 
 export function SidebarRailGroup({
   group,

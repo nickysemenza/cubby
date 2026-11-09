@@ -11,7 +11,7 @@ import type { MemberReadMarker } from "~/server/db/read-consistency";
 import {
   getAuthConfiguration,
   getAuthSecret,
-} from "~/server/http/auth-configuration";
+} from "~/server/lib/auth-configuration";
 
 import { HYPERDRIVE_CACHE_POLICY } from "./hyperdrive-cache-policy";
 

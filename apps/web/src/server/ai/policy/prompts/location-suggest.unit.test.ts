@@ -82,13 +82,4 @@ describe("locationSuggestionSpec", () => {
 
     expect(line).toBe("LOC-4444 | Red Crate - 0 items");
   });
-
-  it("extracts the candidate's own shortcode as the selection id", () => {
-    const packoutWall = candidate({ id: "LOC-2222", name: "PACKOUT Wall" });
-    expect(locationSuggestionSpec.idOf(packoutWall)).toBe("LOC-2222");
-  });
-
-  it("caps the shortlist at 400 locations", () => {
-    expect(locationSuggestionSpec.maxCandidates).toBe(400);
-  });
 });

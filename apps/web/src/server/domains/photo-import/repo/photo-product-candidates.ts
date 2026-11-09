@@ -21,6 +21,7 @@ import type { ProductVariantComparison } from "@cubby/schemas/product-variant-co
 import { importExtractionOutcome } from "@cubby/schemas/purchase-import";
 import { and, count, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
 
+import { aiCallOwner } from "~/server/ai/policy/call-owner";
 import type { AiRunContext } from "~/server/ai/run-feature";
 import type { Database } from "~/server/db";
 import {
@@ -54,7 +55,6 @@ import {
 import { unknownProductVariantComparison } from "~/server/domains/product/repo/product-variant-comparison";
 import { loadProductQuantitySummaries } from "~/server/domains/product/repo/quantity-ledger";
 import { sourceObservationIdentitySql } from "~/server/domains/purchase-import/repo/reconciliation-observations";
-import { aiCallOwner } from "~/server/domains/run/repo/ai-call-owner";
 import { publicFieldEnvelopeRows } from "~/server/generic/derived/repo/public-read";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { liveAliasSqlText } from "~/server/lib/live-row";

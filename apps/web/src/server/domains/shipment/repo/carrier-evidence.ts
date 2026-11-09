@@ -19,11 +19,9 @@ import {
   shipmentObservation,
   shipmentObservationCapture,
 } from "~/server/db/retained-tables";
+import { normalizeTrackingNumber } from "~/server/domains/shipment/repo/carrier-recognition";
 import { vendorNamedSql } from "~/server/domains/vendor/repo/vendor-name-match";
 import { wasm } from "~/server/wasm";
-
-const normalizeCarrierReference = (value: string) =>
-  value.replaceAll(/\s/g, "").toUpperCase();
 
 const intermediaryName =
   /^(?:mail boxes etc|mbe|shippo|shipstation|aftership)(?:\b|[.,])/i;
@@ -55,7 +53,7 @@ const readsAsCarrierName = (name: string) =>
 const escapePattern = (value: string) =>
   value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const referencePattern = (value: string) =>
-  `(?<![a-z0-9_-])${[...normalizeCarrierReference(value)].map(escapePattern).join("\\s*")}(?![a-z0-9_-])`;
+  `(?<![a-z0-9_-])${[...normalizeTrackingNumber(value)].map(escapePattern).join("\\s*")}(?![a-z0-9_-])`;
 
 /** Verify positive package attribution, not just a brand and number in the same excerpt. */
 export function retainedCarrierClaim(
@@ -200,7 +198,7 @@ export async function assessCarrierPacket(
       ...packet.extraTrackingNumbers.map((ref) => ref.trackingNumber),
     ]
       .filter((number) => number !== null)
-      .map(normalizeCarrierReference),
+      .map(normalizeTrackingNumber),
   );
   const hints = packet.carrierClaims ?? [];
   const deliveryCodes = deliveryFieldCodes(source);
@@ -222,7 +220,7 @@ export async function assessCarrierPacket(
   for (const claim of claims) {
     if (
       claim.role !== "carrier" ||
-      !references.has(normalizeCarrierReference(claim.trackingNumber)) ||
+      !references.has(normalizeTrackingNumber(claim.trackingNumber)) ||
       (claim.evidence.kind !== "link" &&
         deliveryCodes.has(claim.carrierName.trim().toUpperCase()))
     )
@@ -245,8 +243,8 @@ export async function assessCarrierPacket(
           claim.evidence.kind === "label") &&
         [...references].some(
           (number) =>
-            number !== normalizeCarrierReference(claim.trackingNumber) &&
-            normalizeCarrierReference(
+            number !== normalizeTrackingNumber(claim.trackingNumber) &&
+            normalizeTrackingNumber(
               claim.evidence.kind === "statement" ||
                 claim.evidence.kind === "label"
                 ? claim.evidence.quote
@@ -262,8 +260,8 @@ export async function assessCarrierPacket(
     const matches = explicit.filter(
       ({ claim }) =>
         number !== null &&
-        normalizeCarrierReference(claim.trackingNumber) ===
-          normalizeCarrierReference(number),
+        normalizeTrackingNumber(claim.trackingNumber) ===
+          normalizeTrackingNumber(number),
     );
     const conflict = carrierClaimsConflict(matches);
     return {
@@ -309,7 +307,7 @@ export function carrierFormatEvidence(
       )
     : carrierFormatRules;
   const matched = applicable.filter((rule) =>
-    rule.matches(normalizeCarrierReference(number)),
+    rule.matches(normalizeTrackingNumber(number)),
   );
   return {
     outcome:
@@ -329,14 +327,14 @@ export function carrierClaimsConflict(
 ) {
   const byReference = new Map<string, Set<string>>();
   for (const { claim, carrier } of claims) {
-    const number = normalizeCarrierReference(claim.trackingNumber);
+    const number = normalizeTrackingNumber(claim.trackingNumber);
     const identities = byReference.get(number) ?? new Set<string>();
     const serviceClaim = !carrier
       ? claims.find(
           (other) =>
             other.carrier &&
             other.claim.service &&
-            normalizeCarrierReference(other.claim.trackingNumber) === number &&
+            normalizeTrackingNumber(other.claim.trackingNumber) === number &&
             `${other.claim.carrierName} ${other.claim.service}`
               .trim()
               .toLowerCase() === claim.carrierName.trim().toLowerCase(),
@@ -410,8 +408,7 @@ function carrierTrackingLink(
   const values = keys.flatMap((key) => url.searchParams.getAll(key));
   if (
     values.length !== 1 ||
-    normalizeCarrierReference(values[0] ?? "") !==
-      normalizeCarrierReference(number)
+    normalizeTrackingNumber(values[0] ?? "") !== normalizeTrackingNumber(number)
   )
     return null;
   return host === "ups.com" ? "UPS" : host === "fedex.com" ? "FedEx" : null;
@@ -506,7 +503,7 @@ export async function loadCarrierHistory(
   const captureText = sql`upper(regexp_replace(coalesce(${shipmentSourceCapture.originalContent}->>'bodyText', '') || ' ' || coalesce(${shipmentSourceCapture.originalContent}->>'bodyHtml', '') || ' ' || coalesce(${shipmentSourceCapture.source}->>'content', '') || ' ' || coalesce(${shipmentSourceCapture.source}->>'url', ''), '[[:space:]]', '', 'g'))`;
   const mentions = scope.references.map(
     (number) =>
-      sql`${captureText} LIKE ${`%${escapeLike(normalizeCarrierReference(number))}%`}`,
+      sql`${captureText} LIKE ${`%${escapeLike(normalizeTrackingNumber(number))}%`}`,
   );
   const candidates = sql.join(
     [
@@ -542,7 +539,7 @@ export async function loadCarrierHistory(
       selected.flatMap((row) =>
         scope.references.map((reference) => ({
           id: row.id,
-          reference: normalizeCarrierReference(reference),
+          reference: normalizeTrackingNumber(reference),
           events: row.events,
         })),
       ),
@@ -561,7 +558,7 @@ export async function loadCarrierHistory(
       const period = periods.find(
         (period) =>
           period.id === row.id &&
-          period.reference === normalizeCarrierReference(reference),
+          period.reference === normalizeTrackingNumber(reference),
       );
       if (
         !row.bound &&

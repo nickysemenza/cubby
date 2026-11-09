@@ -18,9 +18,10 @@ import {
 } from "~/server/ai/policy/features";
 import type { AiRunContext } from "~/server/ai/run-feature";
 import type { RetainedMail } from "~/server/domains/mail/repo/retained-mail";
+import type { MailOwnerContext } from "~/server/domains/purchase-import/repo/mail-owner-types";
 import { wasm } from "~/server/wasm";
 
-import { isOwnMail, type MailOwnerContext } from "./mail-owner";
+import { isOwnMail } from "./mail-owner";
 
 export type MailAttribution = (typeof MAIL_ATTRIBUTION_FEATURE.choices)[number];
 

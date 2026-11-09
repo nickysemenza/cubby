@@ -32,14 +32,14 @@ import {
   unitWeighted,
 } from "~/server/domains/product/repo/kit-projection";
 import {
+  deriveProductQuantitySummary,
+  hasComparableQuantityHistory,
+} from "~/server/domains/product/repo/quantity-summary";
+import {
   serviceProductIdSql,
   serviceProductSqlText,
 } from "~/server/domains/product/repo/service-category";
 import { liveAliasSqlText } from "~/server/lib/live-row";
-import {
-  deriveProductQuantitySummary,
-  hasComparableQuantityHistory,
-} from "~/server/lib/product-quantity-summary";
 
 export type QuantityLedger = ProductQuantityLedgerOut;
 

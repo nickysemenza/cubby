@@ -9,6 +9,7 @@ import { sourceTransactionRecordRepositoryReadSchema } from "~/entity/generated/
 import type { Database } from "~/server/db";
 import { unwrapDb } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
+import { transactionImportRecord } from "~/server/db/retained-tables";
 import { financialTransactionBookingSql } from "~/server/domains/purchase/repo/purchase-evidence-policy";
 import { sourceTransactionRecordScaffold } from "~/server/domains/transaction-import/repo/entity-repositories";
 import { sourceObservations } from "~/server/domains/transaction-import/repo/source-observation-state";
@@ -50,7 +51,7 @@ export async function importReconciliationSummary(
       FROM "FinancialTransaction" ft
       WHERE ${notDeleted("ft")} AND ft.shortcode IN (
         SELECT cs.shortcode
-        FROM "TransactionImportRecord" member
+        FROM ${transactionImportRecord} member
         JOIN ${sourceObservations} r ON r.id = member."statementRowId" AND ${notDeleted("r")}
         JOIN ${CHARGE_STATE} cs ON cs.source = r.source AND cs."chargeKey" = ${chargeKeyOf("r")}
         WHERE member."importId" = ${storedImportId}::uuid
@@ -76,7 +77,7 @@ export async function importReconciliationSummary(
     sql`
     SELECT count(*) FILTER (WHERE cardinality(r."historicalTransactionIds") > 0)::int AS historical,
       count(*) FILTER (WHERE cardinality(r."historicalTransactionIds") = 0)::int AS "neverMatched"
-    FROM "TransactionImportRecord" member JOIN ${sourceObservations} r ON r.id=member."statementRowId"
+    FROM ${transactionImportRecord} member JOIN ${sourceObservations} r ON r.id=member."statementRowId"
     WHERE member."importId"=${storedImportId}::uuid AND ${notDeleted("r")} AND r."matchState"=${sourceTransactionRecordMatchState.enum.held}`,
     "objects",
   );

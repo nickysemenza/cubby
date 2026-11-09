@@ -4,6 +4,7 @@ import {
   IMAGE_CLOUD_DESCRIPTION_RESULT_SCHEMA_REVISION,
 } from "@cubby/schemas/image-processing";
 import { providerFor } from "@cubby/shared/ai/models";
+import { parseJsonAs } from "@cubby/shared/parse-json-as";
 import { sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 
@@ -113,14 +114,7 @@ export type ImageDescriptionInputFingerprint = z.infer<
 export function parseImageDescriptionInputFingerprint(
   value: string,
 ): ImageDescriptionInputFingerprint | null {
-  try {
-    const parsed = imageDescriptionInputFingerprintSchema.safeParse(
-      JSON.parse(value),
-    );
-    return parsed.success ? parsed.data : null;
-  } catch {
-    return null;
-  }
+  return parseJsonAs(imageDescriptionInputFingerprintSchema, value) ?? null;
 }
 
 export function isCurrentPreferredImageDescription(

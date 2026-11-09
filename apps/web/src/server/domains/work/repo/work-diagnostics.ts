@@ -4,14 +4,11 @@ import {
   type WorkDiagnosticFacts,
 } from "@cubby/schemas/work-diagnostic-facts";
 import { sql, type SQL } from "drizzle-orm";
-import { alias } from "drizzle-orm/pg-core";
 
 import type { Database } from "~/server/db";
 import { declaredStoredSourceSql } from "~/server/db/derived-source-sql";
 import { notDeleted } from "~/server/db/helpers/predicates";
-import { financialAccount } from "~/server/db/schema";
-import { workExpenseOwners } from "~/server/domains/expense/repo/work-owners";
-import { workPurchaseOwners } from "~/server/domains/purchase/repo/work-owners";
+import { workTenderOwners } from "~/server/domains/work/repo/record-owners";
 import { SHORTCODE_TABLE } from "~/server/generic/shortcode/repo/shortcode-tables";
 import {
   selectWorkCandidates,
@@ -26,21 +23,7 @@ const privateOwnerRelation = (ref: {
   const table = SHORTCODE_TABLE[ref.type];
   const id = sql`${table.id}`;
   const scope = sql`${table.shortcode} = ${ref.shortcode} AND ${table.deletedAt} IS NULL`;
-  let owners: SQL;
-  switch (ref.type) {
-    case "purchase":
-      owners = workPurchaseOwners(id);
-      break;
-    case "expense":
-      owners = workExpenseOwners(id);
-      break;
-    case "financialAccount":
-      owners = sql`ARRAY["FinancialAccount"."ledgerPartyId"]`;
-      break;
-    case "financialTransaction":
-      owners = sql`ARRAY(SELECT account."ledgerPartyId" FROM "FinancialAccount" account WHERE account.id = "FinancialTransaction"."accountId" AND ${notDeleted(alias(financialAccount, "account"))})`;
-      break;
-  }
+  const owners = workTenderOwners(ref.type, id);
   // A missing private record or owner poisons the group, rather than making it shared.
   return sql`coalesce((SELECT CASE WHEN cardinality(authority.owners) > 0 THEN authority.owners ELSE ARRAY[NULL::uuid] END FROM ${table} CROSS JOIN LATERAL (SELECT ${owners} AS owners) authority WHERE ${scope}), ARRAY[NULL::uuid])`;
 };

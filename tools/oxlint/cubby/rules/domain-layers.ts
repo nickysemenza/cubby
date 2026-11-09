@@ -18,7 +18,7 @@ import type { ESTree } from "@oxlint/plugins";
  * schema or `db/helpers`; other platform code and `generic/*` never import a
  * domain's `service` or `operations`.
  *
- * Client: `ui/` imports neither `features/` nor `entity/`; `entity/` does not
+ * Client: `ui/` imports none of `features/`, `entity/` or `integrations/`; `entity/` does not
  * import `features/`.
  *
  * Tests, fixtures, and live evals are exempt.
@@ -124,9 +124,7 @@ export function violation(
   if (typeOnly) return;
   if (
     from.startsWith(`${SRC}ui/`) &&
-    // ADR 0021's derived UI composes entity links and existing decision actions.
-    !(from.startsWith(`${SRC}ui/derived/`) && to.startsWith(`${SRC}entity/`)) &&
-    /^apps\/web\/src\/(?:features|entity)\//u.test(to)
+    /^apps\/web\/src\/(?:features|entity|integrations)\//u.test(to)
   )
     return "uiUpward";
   if (from.startsWith(`${SRC}entity/`) && to.startsWith(`${SRC}features/`))
@@ -152,7 +150,7 @@ export const domainLayersRule = defineRule({
       platformUpward:
         'Platform and generic code may not import a domain\'s service or operations ("{{source}}"); depend on its repo or invert the call. See docs/adr/0019-domain-first-server-layout.md.',
       uiUpward:
-        'ui/ may not import "{{source}}": shared UI stays independent of entity and feature code.',
+        'ui/ may not import "{{source}}": shared UI stays independent of entity, feature and query code.',
       entityUpward:
         'entity/ may not import "{{source}}": the entity platform stays independent of feature folders.',
       workerWasm:

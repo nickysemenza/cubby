@@ -1328,29 +1328,6 @@ export const sectionSize = (
   totals: SectionTotals | undefined,
 ): number => (key ? (totals?.[key] ?? items.length) : items.length);
 
-export type ProblemArrays = { [K in ProblemKey]: AllProblems[K] };
-
-const problemArraysSchema = z.object(allProblemArrayFields);
-
-/**
- * Every detector key at empty. The Problems page merges four separately-loaded
- * cost groups into one `AllProblems`, and a group that hasn't resolved yet has
- * to render as empty sections rather than as missing keys — spreading the
- * loaded groups over this derives every default from the group shapes, so a
- * new detector needs no edit at the merge site.
- *
- * The empty arrays are shared rather than rebuilt per merge: problem sections
- * are only ever read, and a stable identity keeps a not-yet-loaded group from
- * churning the memos downstream of the merge on every recompute.
- */
-export const EMPTY_PROBLEM_ARRAYS: ProblemArrays = Object.freeze(
-  problemArraysSchema.parse(
-    Object.fromEntries(
-      Object.keys(allProblemArrayFields).map((key) => [key, []]),
-    ),
-  ),
-);
-
 // SAFETY: every detector keyed by name with its own declared class.
 const problemClasses = mapDetectors(
   () => true,
@@ -1371,11 +1348,8 @@ const isDefectKey = (key: string): boolean =>
   );
 
 /**
- * Sum only the `defect` sections. The single definition of "how many problems
- * are there", shared by `assembleAllProblems` (MCP) and the Problems page's
- * client-side merge (`useProblemsData`, which is the navbar badge's real
- * source) — those two summed independently before this existed, so a change to
- * one silently diverged from the other.
+ * Sum only the `defect` sections: the single definition of "how many problems
+ * are there".
  */
 export const sumProblemSections = (
   sections: Record<string, readonly unknown[]>,
@@ -1480,56 +1454,6 @@ export type ProblemsFast = z.infer<typeof problemsFastSchema>;
 export type ProblemsCoverage = z.infer<typeof problemsCoverageSchema>;
 export type ProblemsUpc = z.infer<typeof problemsUpcSchema>;
 export type ProblemsCount = z.infer<typeof problemsCountSchema>;
-
-// Assemble the cost-grouped detector results into the combined AllProblems
-// shape (with derived total). Shared so the merge + total live in one place —
-// the MCP activity_read.report tool calls this directly over its own per-group
-// scans. (The Problems page merges client-side in useProblemsData, which is
-// loading-aware and defaults not-yet-loaded groups to empty.)
-export const assembleAllProblems = (groups: {
-  fast: ProblemsFast;
-  coverage: ProblemsCoverage;
-  upc: ProblemsUpc;
-  tracker: ProblemsTracker;
-  /** View-backed sections: sampled rows plus the totals that describe them.
-   *  Required, so a caller can't silently drop a converted section. */
-  views: ProblemsViewsOut;
-}): AllProblems => {
-  const { sectionTotals: fastTotals, ...fastSections } = groups.fast;
-  const {
-    sectionTotals: coverageTotals,
-    freshness: conversionCoverageFreshness,
-    ...coverageSections
-  } = groups.coverage;
-  const {
-    sectionTotals: upcTotals,
-    freshness: _upcFreshness,
-    ...upcSections
-  } = groups.upc;
-  const { sectionTotals: trackerTotals, ...trackerSections } = groups.tracker;
-  const { sectionTotals: viewTotals, ...viewSections } = groups.views;
-  const sectionTotals = {
-    ...fastTotals,
-    ...coverageTotals,
-    ...upcTotals,
-    ...trackerTotals,
-    ...viewTotals,
-  };
-  const sections = {
-    ...fastSections,
-    ...coverageSections,
-    ...upcSections,
-    ...trackerSections,
-    ...viewSections,
-  };
-  return {
-    ...sections,
-    sectionTotals,
-    upcFreshness: groups.upc.freshness,
-    conversionCoverageFreshness,
-    totalProblems: sumProblemSections(sections, "defect", sectionTotals),
-  };
-};
 
 // Per-detector item types — the canonical shapes the problems repo's find*
 // functions return, inferred from the schemas above so the repo never restates

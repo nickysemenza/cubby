@@ -16,7 +16,7 @@ import {
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 
-import { getDashboardCounts } from "./dashboard";
+import { getDashboardCounts } from "./dashboard.server";
 
 describe("dashboard count workflow", () => {
   const ctx = withTestDb();

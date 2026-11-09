@@ -16,7 +16,6 @@ export const spendingClassificationContract = defineContract(
         "Nonmutating historical impact preview. Supply one complete Product Category mapping, Vendor spending policy, selected Expense category assignment/reset, or Spending Category merge (`spendingCategoryMerge` with keepId and mergeIds; entity.merge refuses one that moves Expense history). Returns signed exact-cent category totals and deltas including shared adjustments, unknown coverage, and a fingerprint. Review before applying; stored source evidence and Expense amounts remain unchanged.",
       input: z.object({ request: spendingClassificationReviewInput }),
       output: spendingClassificationReviewPreview,
-      readPolicy: "strong",
       cache: {
         tags: [
           ["expense"],

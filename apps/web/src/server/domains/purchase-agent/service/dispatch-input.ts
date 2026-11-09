@@ -1,7 +1,8 @@
 import {
-  purchaseAgentEventIdempotencyKey,
+  purchaseAgentEventKeys,
   type PurchaseAgentEvent,
-} from "./contracts";
+} from "@cubby/schemas/purchase-import";
+
 import type { DispatchInput } from "./environment";
 
 /**
@@ -18,8 +19,7 @@ export function dispatchInputForEvent(
   return {
     identity: { runId: event.runId, purpose, ...(model ? { model } : {}) },
     generation: event.generation,
-    // Job retries converges on exactly one submission.
-    operationId: purchaseAgentEventIdempotencyKey(event),
+    operationId: purchaseAgentEventKeys(event).operation,
     signal: {
       type: `purchase-import.${event.type}`,
       attributes: { eventId: event.eventId },

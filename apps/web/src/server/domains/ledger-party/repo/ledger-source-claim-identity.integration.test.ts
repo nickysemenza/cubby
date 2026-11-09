@@ -16,12 +16,12 @@ import {
 import {
   createFinancialAccount,
   updateFinancialAccount,
-} from "~/server/domains/financial-account/repo";
+} from "~/server/domains/financial-account/repo/financial-account";
 import { createLedgerParty } from "~/server/domains/ledger-party/repo/ledger-party";
 import {
   createLedgerTransfer,
   updateLedgerTransfer,
-} from "~/server/domains/ledger-transfer/repo";
+} from "~/server/domains/ledger-transfer/repo/ledger-transfer";
 import { makeExpenseInput } from "~/server/testing/repo.fixtures";
 
 const evidence = {

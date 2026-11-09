@@ -18,8 +18,8 @@ import {
 import type { ProjectAttentionReport } from "@cubby/schemas/project";
 
 import { isUnknownBrandName } from "~/lib/brand-name-utils";
-import type { UpcLookupService } from "~/server/clients/upc";
 import type { Database } from "~/server/db";
+import type { UpcLookupService } from "~/server/domains/product/service/upc-lookup";
 import type { loadProjectDateWindows } from "~/server/domains/project/repo/subtree";
 
 // Selecting a diagnostic must not initialize every other detector or provider.

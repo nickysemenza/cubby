@@ -24,7 +24,7 @@ import { insertEntityFixtures } from "~/server/testing/repo.fixtures";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { requireActor } from "~/server/http/request-context";
 import { createTestRequestContext } from "~/server/testing/request-context";
-import { startPhotoInventoryRun } from "~/server/domains/purchase-import/repo/run-service";
+import { startPhotoInventoryRun } from "~/server/domains/photo-import/repo/run/photo-run";
 import {
   createFixtureGraph,
   getFixtureDb,

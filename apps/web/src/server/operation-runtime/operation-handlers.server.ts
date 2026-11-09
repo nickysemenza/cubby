@@ -1,12 +1,12 @@
 import type { OperationIdOfKind } from "~/lib/generated/operation-registry.gen";
+import type {
+  OperationResult,
+  OperationWireValue,
+} from "~/lib/operation-result";
 import {
   OPERATION_HANDLERS,
   WORKFLOW_STREAM_HANDLERS,
 } from "~/server/generated/operation-handler-data.gen";
-import type {
-  OperationResult,
-  OperationWireValue,
-} from "~/server/operation-runtime/operation.contract";
 import type { OperationRequest } from "~/server/operation-runtime/operation.server";
 import type { WorkflowStreamHandler } from "~/server/operation-runtime/subscription-domain.server";
 
@@ -36,11 +36,8 @@ type HandlerModule = Record<
 const modules = import.meta.glob<HandlerModule>([
   "../domains/*/operations/*.server.ts",
   "../domains/*/operations.server.ts",
-  "../domains/dashboard/operations/dashboard.ts",
   "../generic/*/operations/*.server.ts",
-  "../generic/audit-log/operations/audit-log.ts",
   "../ai/chatgpt/chatgpt.server.ts",
-  "../http/maintenance.server.ts",
   "../http/oauth/oauth.server.ts",
   "../mcp/mcp.server.ts",
   "../mcp/playbooks.server.ts",

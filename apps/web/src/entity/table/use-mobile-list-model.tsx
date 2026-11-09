@@ -12,6 +12,7 @@ import { isValidElement, type ReactNode, useMemo } from "react";
 import { z } from "zod";
 
 import { entities, isBrowserRoutedEntity } from "~/entity/entities";
+import { WhyValue } from "~/entity/fields/explanation/why-value";
 import {
   FieldProvenance,
   isInspectableFieldProvenance,
@@ -22,7 +23,6 @@ import { extractEntityTitle } from "~/ui/data-table/entity-utils";
 import type { MobileMetaValue } from "~/ui/data-table/mobile-card";
 import type { MobileColumnMeta, MobileSlot } from "~/ui/data-table/table-meta";
 import { FieldRecordValue } from "~/ui/derived/record-value";
-import { WhyValue } from "~/ui/derived/why-value";
 import { NoneValue } from "~/ui/text/none-value";
 
 import type {

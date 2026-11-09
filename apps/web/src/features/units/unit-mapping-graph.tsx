@@ -1,7 +1,7 @@
 import type { UnitMapping } from "@cubby/schemas/unitmapping";
 import { useMemo } from "react";
 
-import { wasm } from "~/lib/wasm";
+import { unitKindOrNull, wasm } from "~/lib/wasm";
 import {
   NetworkChart,
   type NetworkChartNode,
@@ -55,13 +55,7 @@ const isDisplayUnit = (unit: string): boolean => !NUTRIENT_UNIT_RE.test(unit);
 export const isDisplayMapping = (m: UnitMapping): boolean =>
   isDisplayUnit(m.a.unit) && isDisplayUnit(m.b.unit);
 
-const amountKind = (unit: string): string => {
-  try {
-    return wasm.amount_kind({ value: 1, unit });
-  } catch {
-    return "other";
-  }
-};
+const amountKind = (unit: string): string => unitKindOrNull(unit) ?? "other";
 
 export function UnitMappingGraph({
   mappings,

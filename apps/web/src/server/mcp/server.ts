@@ -9,7 +9,7 @@ import {
 import { type JSONType, z } from "zod";
 
 import { getSourceRelease } from "~/server/cf-env";
-import { purchaseAgentRunActions } from "~/server/domains/purchase-import/repo/capabilities";
+import { purchaseAgentRunActions } from "~/server/domains/run/repo/agent-capabilities";
 import { ENTITY_KERNEL_ENTITIES } from "~/server/entity-kernel/contracts";
 import {
   PLAYBOOK_FILES,

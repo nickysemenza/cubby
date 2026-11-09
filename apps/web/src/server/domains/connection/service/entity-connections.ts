@@ -11,6 +11,7 @@ import { parseShortcodeFor, type ProductId } from "@cubby/schemas/identifiers";
 import { fieldEnvelopeAtPath, readPathValue } from "~/entity/read-path";
 import { withAiInputs } from "~/server/ai/evaluation-inputs";
 import { suggestFields } from "~/server/ai/field-suggest/suggest-fields";
+import { aiCallOwner } from "~/server/ai/policy/call-owner";
 import {
   dependencyStamps,
   fieldDependencyKeys,
@@ -41,7 +42,6 @@ import {
   productPairKey,
   type PreparedProductPairPublication,
 } from "~/server/domains/product/repo/match/product-match-candidate";
-import { aiCallOwner } from "~/server/domains/run/repo/ai-call-owner";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { jsonValue } from "~/server/domains/run/repo/suggestion-sweep-state";
 import { makeSweepSuggestion } from "~/server/domains/run/service/suggestion-sweep";

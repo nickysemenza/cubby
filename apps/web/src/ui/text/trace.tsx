@@ -6,7 +6,7 @@ import {
   DisclosureRoot,
   type DisclosureState,
   DisclosureTrigger,
-} from "~/ui/layout/disclosure";
+} from "~/ui/layout";
 
 // Adapted from the shadcn base-mira `trace` registry item (AI Elements):
 // running lines show a spinner icon instead of the registry's shimmer utility.

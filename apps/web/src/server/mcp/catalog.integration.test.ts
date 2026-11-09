@@ -17,7 +17,7 @@ import { z } from "zod";
 import { mock } from "~/lib/test/mock-schema";
 import { getDb } from "~/server/db/helpers";
 import { aiAnalysis, photoRunImage } from "~/server/db/schema";
-import { startPhotoInventoryRun } from "~/server/domains/purchase-import/repo/run-service";
+import { startPhotoInventoryRun } from "~/server/domains/photo-import/repo/run/photo-run";
 import { syntheticMailImportRun } from "~/server/domains/purchase-import/service/gmail/execution.fixtures";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { recordSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";

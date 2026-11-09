@@ -37,8 +37,8 @@ import {
 import { wasm } from "~/lib/wasm";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { useNavigationGuard } from "~/ui/hooks/use-navigation-guard";
-import { Row } from "~/ui/layout/row";
-import { Stack } from "~/ui/layout/stack";
+import { Row } from "~/ui/layout";
+import { Stack } from "~/ui/layout";
 import {
   AlertDialog,
   AlertDialogAction,

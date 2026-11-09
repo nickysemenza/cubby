@@ -40,7 +40,7 @@ import { ChipsInput } from "~/ui/forms/chips-input";
 import { FormFieldGroup } from "~/ui/forms/form-field-group";
 import { NullableNumericField, UnifiedTextField } from "~/ui/forms/form-utils";
 import { Row, Stack } from "~/ui/layout";
-import { Disclosure } from "~/ui/layout/disclosure";
+import { Disclosure } from "~/ui/layout";
 import { Image } from "~/ui/media/image";
 import { Button } from "~/ui/primitives/button";
 import { Checkbox } from "~/ui/primitives/checkbox";

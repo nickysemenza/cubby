@@ -19,10 +19,10 @@ import {
 import { expense, inventoryEntry, location, product } from "~/server/db/schema";
 import { loadPrimaryGtins } from "~/server/domains/product/repo/gtin";
 import { foodLookupParamFromProduct } from "~/server/domains/product/repo/helpers";
+import { deriveProductQuantitySummary } from "~/server/domains/product/repo/quantity-summary";
 import type { UsdaFoodBatchPort } from "~/server/domains/usda-food/repo/usda-helpers";
 import { batchEnrichWithFood } from "~/server/domains/usda-food/repo/usda-helpers";
 import type { DerivedCompute } from "~/server/generic/derived/repo/compute";
-import { deriveProductQuantitySummary } from "~/server/lib/product-quantity-summary";
 
 import { productFieldResolutions } from "./mappers";
 import { ownershipExitExpensePredicate } from "./ownership";

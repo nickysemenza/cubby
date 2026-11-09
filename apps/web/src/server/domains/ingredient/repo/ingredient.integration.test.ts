@@ -25,7 +25,7 @@ import { deleteRecipes } from "~/server/domains/recipe/repo/crud";
 import { precomputeEnrichmentProposalsWorkflow } from "~/server/domains/run/operations/ai.server";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
 import { patchEntityRows } from "~/server/entity-kernel/repo/entity-patch";
-import { getAuditLog } from "~/server/generic/audit-log/repo/audit-log";
+import { getAuditLog } from "~/server/generic/audit-log/repo/audit-log-read";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { requireActor } from "~/server/http/request-context";
 import { bulkUpdateFor } from "~/server/testing/entity-kernel";
@@ -38,7 +38,8 @@ import {
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
-import { executeWorkflow, workflow } from "~/server/workflows/runtime";
+import { workflow } from "~/server/workflows/runtime/builder";
+import { executeWorkflow } from "~/server/workflows/runtime/execute";
 
 import {
   createIngredient,

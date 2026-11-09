@@ -3,8 +3,8 @@ import { relationshipSources } from "@cubby/schemas/connected-view-definitions";
 import type { CompiledEntityPresentation } from "@cubby/schemas/entity-definitions/definition";
 import { onDetailSurface } from "@cubby/schemas/entity-detail-summary";
 import { type EntityFieldModel } from "@cubby/schemas/entity-fields";
+import { isGalleryEntity } from "@cubby/schemas/entity-manifest";
 import { entityAttachmentRead } from "@cubby/schemas/entity-read-media";
-import { isGalleryEntity } from "@cubby/schemas/entity-roster";
 import { fieldEnvelopeFor } from "@cubby/schemas/field-envelope";
 import { imageOut, partitionEntityFiles } from "@cubby/schemas/image";
 import { publicImageUrl } from "@cubby/schemas/image-summary";
@@ -42,6 +42,11 @@ import {
 } from "~/entity/entity-media/entity-display-images";
 import { readRecordField } from "~/entity/entity-references";
 import { featureRegistry } from "~/entity/feature-registry";
+import {
+  RecordImageChain,
+  type ImageChainQueryOptions,
+} from "~/entity/fields/explanation/image-chain";
+import { WhyValue } from "~/entity/fields/explanation/why-value";
 import { entityMetadata, useEntityMetadata } from "~/entity/metadata";
 import type { DetailHeroActions } from "~/entity/page/entity-page-header";
 import { Page } from "~/entity/page/page";
@@ -49,11 +54,6 @@ import { RecordSuggestionsProvider } from "~/entity/suggestions/record-suggestio
 import { RecordWorkQueue } from "~/entity/work-queue/record-work-queue";
 import { entityGraph } from "~/integrations/tanstack-query/generated/domains/entityGraph.gen";
 import { useNativeRunEvidence } from "~/lib/native-workspace";
-import {
-  RecordImageChain,
-  type ImageChainQueryOptions,
-} from "~/ui/derived/image-chain";
-import { WhyValue } from "~/ui/derived/why-value";
 import { DetailEditAction } from "~/ui/forms/detail-edit-action";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { VisibleContent } from "~/ui/hooks/visible-content";

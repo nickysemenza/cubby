@@ -17,6 +17,7 @@ import type { PgTable } from "drizzle-orm/pg-core";
 import { groupBy } from "es-toolkit";
 
 import type { Database } from "~/server/db";
+import { minorToDollarsSql } from "~/server/db/computed/money";
 import {
   getDb,
   notDeleted,
@@ -54,7 +55,7 @@ import { lockLedgerPartiesForReference } from "~/server/domains/ledger-party/rep
 import { createPurchase } from "~/server/domains/purchase/repo/purchase";
 import { merchantVendorInferenceFor } from "~/server/domains/vendor/repo/merchant-vendor-inference";
 import { resolveNames } from "~/server/entity-kernel/resolve";
-import { createAppError } from "~/server/errors/app-error";
+import { constraintViolation } from "~/server/errors/app-error";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
@@ -87,9 +88,7 @@ export const digestCanonicalEvidenceStream = (
   hash.update('"}');
   return Promise.resolve(hash.digest("hex"));
 };
-const fail = (message: string): never => {
-  throw createAppError("CONSTRAINT_VIOLATION", message);
-};
+
 type BookingProjection = Partial<
   Pick<FinancialTransactionDollars, "amount" | "status" | "postedDate">
 >;
@@ -117,7 +116,8 @@ async function transactionForBooking(
       },
     })
     .then((row) => (row ? transactionDollars(row) : row));
-  if (!stored) return fail("The financial transaction is no longer live.");
+  if (!stored)
+    return constraintViolation("The financial transaction is no longer live.");
   const row = { ...stored, ...projection };
   if (
     row.status === "void" ||
@@ -125,15 +125,15 @@ async function transactionForBooking(
     row.ledgerTransferId ||
     !purchaseSettlementKinds.some((kind) => kind === row.kind)
   )
-    return fail(
+    return constraintViolation(
       "Only observed spending can be booked. Transfer evidence is not spending.",
     );
   if (row.kind === "income" && input.economicRole !== "reimbursement")
-    return fail(
+    return constraintViolation(
       "Classify this incoming credit explicitly as a reimbursement before booking it.",
     );
   if (input.economicRole === "reimbursement" && row.amount >= 0)
-    return fail("A reimbursement must be an incoming credit.");
+    return constraintViolation("A reimbursement must be an incoming credit.");
   return row;
 }
 export async function bookingGraph(
@@ -142,7 +142,8 @@ export async function bookingGraph(
 ) {
   if (!purchaseId) return { target: null, lines: [], attributions: [] };
   const graph = (await bookingGraphs(db, [purchaseId])).get(purchaseId);
-  if (!graph) return fail("The selected Purchase is no longer live.");
+  if (!graph)
+    return constraintViolation("The selected Purchase is no longer live.");
   return graph;
 }
 
@@ -225,7 +226,7 @@ async function bookingCategory(
     },
   });
   if (!category && input.spendingCategoryId)
-    return fail("The spending category is no longer live.");
+    return constraintViolation("The spending category is no longer live.");
   // Retired inherited defaults leave display unclassified; only explicit intent refuses.
   return category ?? null;
 }
@@ -242,14 +243,14 @@ async function bookingAction(
     input.economicRole === "vendor" &&
     vendorLines.some((line) => line.cost === null)
   )
-    return fail(
+    return constraintViolation(
       "Finish pricing the existing Expense lines before linking settlement.",
     );
   if (
     input.economicRole === "vendor" &&
     vendorLines.some((line) => line.lineKind === "unclassified")
   )
-    return fail(
+    return constraintViolation(
       "Classify the unresolved receipt roles before linking settlement; their amounts may already cover this transaction.",
     );
   const negative = row.amount < 0;
@@ -266,7 +267,7 @@ async function bookingAction(
     ? await getDb(db)
         .select({
           amount:
-            sql<number>`COALESCE(SUM((a."amountMinor"::numeric / 100)), 0)`.mapWith(
+            sql<number>`COALESCE(SUM((${minorToDollarsSql(sql`a."amountMinor"`, "numeric")})), 0)`.mapWith(
               Number,
             ),
         })
@@ -274,7 +275,7 @@ async function bookingAction(
           sql`"FinancialTransactionAllocation" a JOIN "FinancialTransaction" f ON f.id = a."transactionId"`,
         )
         .where(
-          sql`a."purchaseId" = ${graph.target.id} AND ${notDeleted("a")} AND ${notDeleted("f")} AND f.status <> 'void' AND f."ledgerTransferId" IS NULL AND f.kind <> 'income' AND f.id <> ${row.id} AND SIGN((a."amountMinor"::numeric / 100)) = SIGN(${row.amount}::numeric) AND NOT EXISTS (SELECT 1 FROM "Expense" e WHERE e."bookingTransactionCode" = f.shortcode AND ${notDeleted("e")} AND e."economicRole" = 'reimbursement')`,
+          sql`a."purchaseId" = ${graph.target.id} AND ${notDeleted("a")} AND ${notDeleted("f")} AND f.status <> 'void' AND f."ledgerTransferId" IS NULL AND f.kind <> 'income' AND f.id <> ${row.id} AND SIGN((${minorToDollarsSql(sql`a."amountMinor"`, "numeric")})) = SIGN(${row.amount}::numeric) AND NOT EXISTS (SELECT 1 FROM "Expense" e WHERE e."bookingTransactionCode" = f.shortcode AND ${notDeleted("e")} AND e."economicRole" = 'reimbursement')`,
         )
     : [];
   const settledCents = cents(previous[0]?.amount ?? 0);
@@ -284,7 +285,7 @@ async function bookingAction(
   const remaining = Math.abs(remainingCents);
   const amount = Math.abs(cents(row.amount));
   if (input.economicRole === "vendor" && remaining > 0 && remaining < amount)
-    return fail(
+    return constraintViolation(
       "Existing Expenses cover only part of this transaction. Review the remaining amount and individual lines before booking.",
     );
   const action =
@@ -321,7 +322,7 @@ async function resolveBookingVendor(
     !input.vendorId &&
     merchantHistory?.status === "ambiguous"
   )
-    return fail(
+    return constraintViolation(
       "This statement label identifies several Vendors; choose the Vendor or an existing Purchase before booking.",
     );
   if (
@@ -331,7 +332,7 @@ async function resolveBookingVendor(
   ) {
     const merchantLabel = merchant?.trim();
     if (!merchantLabel)
-      return fail(
+      return constraintViolation(
         "This transaction names no merchant; pass vendorId or purchaseId to book it.",
       );
     const [named] = await resolveNames(
@@ -343,18 +344,20 @@ async function resolveBookingVendor(
       },
     );
     if (!named?.row)
-      return fail(
+      return constraintViolation(
         `No Vendor is named "${merchantLabel}" by name or alias; pass vendorId or purchaseId to book it.`,
       );
     if (named.candidates.length > 0)
-      return fail(
+      return constraintViolation(
         `Merchant "${merchantLabel}" matches ${[named.row, ...named.candidates].map(({ shortcode }) => shortcode).join(", ")}; pass the intended vendorId.`,
       );
     input.vendorId = parseShortcodeFor("vendor", named.row.shortcode);
     input.confirmsMerchant = false;
   }
   if (!input.purchaseId && !input.vendorId)
-    return fail("Choose the vendor or an existing Purchase before booking.");
+    return constraintViolation(
+      "Choose the vendor or an existing Purchase before booking.",
+    );
   return merchantHistory;
 }
 
@@ -392,7 +395,9 @@ export async function previewFinancialBooking(
       },
     });
     if (member?.kind !== "member")
-      return fail("A purchaser override must name a live member LedgerParty.");
+      return constraintViolation(
+        "A purchaser override must name a live member LedgerParty.",
+      );
   }
   const allocations = await getDb(db)
     .query.financialTransactionAllocation.findMany({
@@ -410,7 +415,7 @@ export async function previewFinancialBooking(
     allocations.length &&
     !allocations.every((allocation) => allocation.purchaseId === purchaseId)
   )
-    return fail(
+    return constraintViolation(
       "This transaction already settles another Purchase. Review that allocation before booking.",
     );
   if (
@@ -419,13 +424,13 @@ export async function previewFinancialBooking(
       allocations.reduce((sum, allocation) => sum + allocation.amount, 0),
     ) !== cents(row.amount)
   )
-    return fail(
+    return constraintViolation(
       "Existing partial allocations require reconciliation before booking.",
     );
   const capacity = await bookingAction(db, input, row, graph);
   const { action } = capacity;
   if (input.beneficiaries !== undefined && action !== "create_aggregate")
-    return fail(
+    return constraintViolation(
       "Beneficiaries apply only to a new aggregate Expense; preserve existing spending attribution.",
     );
   const beneficiaries = await readExpenseAttributionParties(
@@ -482,7 +487,7 @@ export async function previewFinancialBooking(
     const purchaser =
       account && financialAccountPurchaser(account, purchaserProof);
     if (!purchaser && !(account && liveHouseholdCard(account)))
-      return fail(
+      return constraintViolation(
         "Choose a live member purchaser or confirm a household credit card before creating a bare Purchase.",
       );
     input.purchaserId = purchaser
@@ -535,7 +540,7 @@ async function replayBooking(db: Database, review: FinancialBookingPreview) {
       (await digestValue(financialBookingPreview.parse(review))) ||
     row.amount !== review.amount
   )
-    return fail(
+    return constraintViolation(
       "This transaction already has a different reviewed booking. Review its existing Expenses.",
     );
   const account = await getDb(db).query.financialAccount.findFirst({
@@ -559,7 +564,9 @@ async function replayBooking(db: Database, review: FinancialBookingPreview) {
     review.purchaserSnapshot !==
     (await digestValue({ account, purchaserProof }))
   )
-    return fail("The approved account or purchaser evidence changed.");
+    return constraintViolation(
+      "The approved account or purchaser evidence changed.",
+    );
   const allocations = await getDb(db)
     .query.financialTransactionAllocation.findMany({
       where: {
@@ -577,22 +584,22 @@ async function replayBooking(db: Database, review: FinancialBookingPreview) {
     !allocation ||
     cents(allocation.amount) !== cents(row.amount)
   )
-    return fail("The approved booking allocation changed.");
+    return constraintViolation("The approved booking allocation changed.");
   const graph = await bookingGraph(db, allocation.purchaseId);
   if (review.action === "link_existing") {
     const capacity = await bookingAction(db, review, row, graph);
     if (capacity.action !== "link_existing")
-      return fail(
+      return constraintViolation(
         "Existing itemized spending no longer covers the approved settlement.",
       );
   }
   if (!review.purchaseId && review.vendorId) {
     const vendorId = await resolveOrThrow(db, "vendor", review.vendorId);
     if (graph.target?.vendorId !== vendorId)
-      return fail("The approved vendor changed.");
+      return constraintViolation("The approved vendor changed.");
   }
   if (review.purchaseId && graph.target?.shortcode !== review.purchaseId)
-    return fail("The approved Purchase changed.");
+    return constraintViolation("The approved Purchase changed.");
   const lineage = graph.lines.filter(
     (line) => line.bookingTransactionCode === review.transactionId,
   );
@@ -606,7 +613,7 @@ async function replayBooking(db: Database, review: FinancialBookingPreview) {
       lineage.reduce((sum, line) => sum + cents(line.cost ?? 0), 0) !==
         cents(row.amount))
   )
-    return fail("The approved booking lineage changed.");
+    return constraintViolation("The approved booking lineage changed.");
   return {
     purchaseId: parseShortcodeFor("purchase", graph.target!.shortcode),
     expenseId: lineage[0]
@@ -641,7 +648,7 @@ export async function commitFinancialBooking(
         JSON.stringify(fresh) !==
         JSON.stringify(financialBookingPreview.parse(review))
       )
-        return fail(
+        return constraintViolation(
           "Spending changed after this review. Preview the booking again.",
         );
       const target =

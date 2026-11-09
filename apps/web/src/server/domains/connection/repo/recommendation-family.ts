@@ -20,7 +20,6 @@ import {
   recommendationScopes,
 } from "~/server/generic/suggestions/repo/pending-admission";
 import { type SuggestionFamilyDeclaration } from "~/server/generic/suggestions/repo/suggestion-family-declaration";
-import { suggestionFamilies as reviewFamilyDeclarations } from "~/server/generic/suggestions/repo/suggestion-family-declarations";
 import { outcomes } from "~/server/generic/suggestions/repo/suggestion-outcomes";
 import {
   suggestionIdScope,
@@ -104,7 +103,7 @@ export const recommendationFamily: SuggestionFamilyDeclaration<"recommendation">
       WHERE s.family = ${suggestionFamily.enum.recommendation} AND s.active
         AND ${suggestionIdScope(query.suggestionIds, sql`s.id`)}
         AND s.status = ${suggestionStatus.enum.pending}
-        AND ${reviewFamilyDeclarations.recommendation.scopes.connection}
+        AND ${recommendationScopes.connection}
         AND ${pendingRecommendationEligibility()}
         ${run ? sql`AND s."runId" = (SELECT id FROM "Run" WHERE shortcode = ${run})` : sql``}
     `,

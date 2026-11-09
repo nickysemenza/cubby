@@ -334,7 +334,6 @@ export const runContract = defineContract(
       output: agentConversationSchema.extend({
         nextCursor: z.number().int().nonnegative().nullable(),
       }),
-      readPolicy: "strong",
     }),
     workSnapshot: query({
       description:

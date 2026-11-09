@@ -11,7 +11,7 @@ import { formatSmallCurrency } from "~/lib/number-format";
 import { Picker } from "~/ui/combobox/picker";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
-import { Disclosure } from "~/ui/layout/disclosure";
+import { Disclosure } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Facts, FactsDensityProvider } from "~/ui/records/facts";
 import { Description } from "~/ui/text/description";

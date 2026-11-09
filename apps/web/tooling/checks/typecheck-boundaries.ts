@@ -11,7 +11,6 @@ import {
 } from "../typecheck-repositories.ts";
 
 const sharedServerModules = new Set([
-  "operation-runtime/operation.contract.ts",
   "generated/entity-bindings.gen.ts",
   "generated/entity-kernel-entities.gen.ts",
   "generated/entity-relation-contracts.gen.ts",

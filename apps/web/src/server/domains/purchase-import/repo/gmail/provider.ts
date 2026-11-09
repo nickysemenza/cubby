@@ -1,7 +1,6 @@
 import type { UserId } from "@cubby/schemas/identifiers";
 
 import { env } from "~/env";
-import { localGoogleProviderOrigin } from "~/lib/e2e-google-provider";
 import { getGmailOAuthCredentials } from "~/server/cf-env";
 import type { Database } from "~/server/db";
 import {
@@ -10,6 +9,7 @@ import {
 } from "~/server/domains/purchase-import/repo/gmail/types";
 import { inJobExecution } from "~/server/generic/jobs/context";
 import { JobDeferredError } from "~/server/generic/jobs/errors";
+import { localGoogleProviderOrigin } from "~/server/lib/local-google-provider-origin";
 
 import {
   createBetterAuthGmailAccountStore,

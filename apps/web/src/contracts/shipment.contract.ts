@@ -58,7 +58,6 @@ export const shipmentContract = defineContract(
       nativeModels: { output: "json" },
       input: shipmentTimelineInput,
       output: shipmentTimelineOut,
-      readPolicy: "strong",
       cache: { tags: [["shipment.timeline"]] },
     }),
   },

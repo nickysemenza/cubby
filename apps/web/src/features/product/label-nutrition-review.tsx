@@ -15,7 +15,7 @@ import { imageProcessing } from "~/integrations/tanstack-query/generated/domains
 import { StaticTable } from "~/ui/data-table/static-table";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Stack } from "~/ui/layout";
-import { Disclosure } from "~/ui/layout/disclosure";
+import { Disclosure } from "~/ui/layout";
 import { Image } from "~/ui/media/image";
 import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/text/description";

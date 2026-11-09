@@ -278,7 +278,7 @@ export async function projectContentDatesExcluding(
  * rows are directed edges (projectId is blocked by blockedByProjectId);
  * "blocking" is the reverse read of the same table — which projects does THIS
  * project block. Thin wrapper over the generic `dependencyIdsFor` (mirrored by
- * task/crud.ts's `taskDependencyIds`) — kept as a named export since it's
+ * task-relations.ts's `taskDependencyIds`) — kept as a named export since it's
  * consumed by name elsewhere (crud.ts's reader).
  */
 export async function projectDependencyIds(

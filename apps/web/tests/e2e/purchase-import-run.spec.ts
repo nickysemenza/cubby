@@ -1,5 +1,5 @@
 import { readRetainedMail } from "~/server/domains/mail/repo/retained-mail";
-import { loadRunDetail } from "~/server/domains/purchase-import/repo/run-service";
+import { loadRunDetail } from "~/server/domains/run/repo/run-detail";
 import { emailImportOut } from "@cubby/schemas/email-actions";
 import { importRunAgentManifest } from "@cubby/schemas/import-run-agent";
 import { CHAT_TIER_MODELS } from "@cubby/shared/ai/models";

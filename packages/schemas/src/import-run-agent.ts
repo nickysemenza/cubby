@@ -120,6 +120,11 @@ export type ImportRunAgentConfig = {
    */
   mcpActions: readonly CubbyMcpToolAction[];
   mcpTools: readonly CubbyMcpToolName[];
+  /**
+   * The host supplies the delegated Run identity (`_runExecution` run, runId
+   * and generation), so the model-facing schemas omit it.
+   */
+  delegatedRunIdentity?: true;
   /** Compact capability actions whose complete inputs the agent uses routinely. */
   mcpInputActions?: readonly CubbyMcpToolAction[];
   /**
@@ -203,6 +208,7 @@ export const importRunAgentManifest = {
     mcpInputActions: ["purchase_import.mail_resolve", "shipments.record"],
     workItemContext: "current",
     entityRead: MAIL_IMPORT_ENTITY_READ,
+    delegatedRunIdentity: true,
   },
 } as const satisfies Record<AgentImportRunPurpose, ImportRunAgentConfig>;
 

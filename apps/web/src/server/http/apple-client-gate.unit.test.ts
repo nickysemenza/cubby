@@ -1,10 +1,9 @@
 import { APPLE_CLIENT_MINIMUM_VERSION } from "@cubby/shared/apple-client-version";
 import { describe, expect, it } from "vitest";
 
-import {
-  appleAppVersionTooOld,
-  appleClientUpdateRequired,
-} from "./apple-client-gate";
+import { appleAppVersionTooOld } from "~/server/lib/apple-app-version";
+
+import { appleClientUpdateRequired } from "./apple-client-gate";
 
 const headers = (userAgent?: string) =>
   new Headers(userAgent === undefined ? {} : { "user-agent": userAgent });

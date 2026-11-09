@@ -31,6 +31,7 @@ import {
   suggestFields,
   type SuggestFieldsPorts,
 } from "~/server/ai/field-suggest/suggest-fields";
+import { aiRunOwner } from "~/server/ai/policy/call-owner";
 import {
   dependencyStamps,
   fieldDependencyKeys,
@@ -40,7 +41,6 @@ import { producingAiManifest } from "~/server/ai/repo/ai-refresh";
 import type { Database } from "~/server/db";
 import { spendingClassificationRevision } from "~/server/domains/expense/repo/expense-category-resolution";
 import { settleArrivedFindingsForProduct } from "~/server/domains/purchase-import/repo/findings";
-import { aiRunOwner } from "~/server/domains/run/repo/ai-call-owner";
 import { executeEntity } from "~/server/entity-kernel";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";

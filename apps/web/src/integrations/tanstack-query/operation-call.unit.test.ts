@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
 import { OperationError } from "~/lib/operation-error";
+import type { OperationResult } from "~/lib/operation-result";
 import { reset, snapshot } from "~/lib/perf/perf-store";
-import type { OperationResult } from "~/server/operation-runtime/operation.contract";
 
 import {
   overrideOperationDispatch,

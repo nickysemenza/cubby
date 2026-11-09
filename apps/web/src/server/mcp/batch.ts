@@ -9,7 +9,7 @@ import {
   describeToolError,
   type ToolErrorDetail,
   toolErrorDetailSchema,
-} from "./tools/tool-registration";
+} from "./tools/tool-error";
 
 /**
  * The batch form of an MCP action: up to `maxItems` independent items in

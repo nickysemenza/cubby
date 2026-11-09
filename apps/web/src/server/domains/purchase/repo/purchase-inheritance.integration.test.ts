@@ -9,7 +9,7 @@ import { describe, expect, it } from "vitest";
 import { getDb } from "~/server/db/helpers";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { getEntityRecommendations } from "~/server/domains/connection/service/connection-recommendations";
-import { expenseHandlers } from "~/server/domains/expense/operations.server";
+import { expenseHandlers } from "~/server/domains/expense/operations/expense.server";
 import { readExpense, updateExpense } from "~/server/domains/expense/repo/crud";
 import { resolveDraftExpenseFields } from "~/server/domains/expense/repo/expense-inheritance";
 import { expenseScaffold } from "~/server/domains/expense/repo/lookup";

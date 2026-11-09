@@ -1,4 +1,4 @@
-import type { CompiledEntity } from "./declarations.ts";
+import type { CompiledEntity } from "./declaration-types.ts";
 
 /** Explicit read paths name their inputs; this never discovers or schedules work. */
 export const entityReadDependents = (entities: readonly CompiledEntity[]) => {

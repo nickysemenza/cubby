@@ -4,7 +4,7 @@ import {
   mailboxDiscoveryProgress,
   MAIL_DISCOVERY_ADMISSION_WAIT,
 } from "@cubby/schemas/mailbox-research";
-import { RUN_KINDS } from "@cubby/schemas/run-fields";
+import { RUN_KINDS, EXECUTED_RUN_PURPOSES } from "@cubby/schemas/run-fields";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
@@ -22,7 +22,6 @@ import { JobPausedError, JobDeferredError } from "~/server/generic/jobs/errors";
 import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 import { defineJobHandler } from "~/server/generic/jobs/service/jobs";
 import type { PreparedJobPage } from "~/server/generic/jobs/types";
-import { EXECUTED_RUN_PURPOSES } from "~/server/workflows/runs/contract";
 import { withWorkflowExecution } from "~/server/workflows/runs/execution";
 import {
   mailDiscoveryBackpressure,
@@ -33,11 +32,6 @@ import {
 const runJobInput = z.object({
   runId: runEntityId,
   purpose: z.enum(EXECUTED_RUN_PURPOSES),
-});
-const mailCursor = z.object({
-  phase: z.enum(["list", "save"]),
-  index: z.number().int().nonnegative(),
-  more: z.boolean().optional(),
 });
 const fundingRelease = mailboxDiscoveryProgress.pick({
   fundingReleasedAt: true,
@@ -86,8 +80,9 @@ function fundingWait(
  */
 export const runJobHandler = defineJobHandler(
   runJobInput,
-  async (db, claim, input, context): Promise<PreparedJobPage> =>
-    withWorkflowExecution(
+  async (db, claim, input, context): Promise<PreparedJobPage> => {
+    const execution = RUN_KINDS[input.purpose].execution;
+    return withWorkflowExecution(
       {
         runId: input.runId,
         attempt: claim.generation,
@@ -97,11 +92,13 @@ export const runJobHandler = defineJobHandler(
       async (): Promise<PreparedJobPage> => {
         const params = { runId: input.runId, attempt: claim.generation };
         const before = await readRun(db, input.runId);
+        const discovery =
+          before?.purpose === input.purpose && execution === "mail_discovery";
         // A restored owner gets one durable quantum before renewing admission.
-        if (before?.purpose === "mail_discovery" && before.status === "running")
+        if (discovery && before.status === "running")
           await yieldClaimedMailDiscovery(db, params);
         if (
-          before?.purpose === "mail_discovery" &&
+          discovery &&
           before.status === "paused" &&
           before.failureCode === MAIL_DISCOVERY_ADMISSION_WAIT
         )
@@ -139,7 +136,6 @@ export const runJobHandler = defineJobHandler(
             );
           await resumeClaimedWorkflowRun(db, params, "funding_ready");
         }
-        const execution = RUN_KINDS[input.purpose].execution;
         if (execution === "steps") {
           const next = await (
             await import("~/server/domains/run/service/step-run")
@@ -176,52 +172,12 @@ export const runJobHandler = defineJobHandler(
             },
           };
         }
-        if (execution === "mail_discovery") {
-          const mail =
-            await import("~/server/domains/purchase-import/operations/gmail/discovery");
-          const resumed = await mail.beginMailDiscovery(db, params);
-          if (resumed.kind === "stopped") {
-            await assertNotPaused(db, input.runId);
-            return { page: { done: true } };
-          }
-          const cursor = mailCursor.parse(
-            claim.cursor ?? { phase: "list", index: resumed.index },
-          );
-          if (cursor.phase === "list") {
-            const page = await mail.listMailDiscovery(db, params);
-            if (page.kind === "stopped") {
-              await assertNotPaused(db, input.runId);
-              return { page: { done: true } };
-            }
-            return {
-              page: {
-                done: false,
-                cursor: { phase: "save", index: cursor.index, more: page.more },
-              },
-            };
-          }
-          const saved = await mail.saveMailDiscoveryBatch(
-            db,
-            params,
-            cursor.index,
-          );
-          if (saved.kind === "stopped") {
-            await assertNotPaused(db, input.runId);
-            return { page: { done: true } };
-          }
-          if (saved.kind === "more") return { page: { done: false, cursor } };
-          if (!cursor.more) {
-            await mail.finishMailDiscovery(db, params);
-            await mail.continueMailDiscovery(db, params);
-            return { page: { done: true } };
-          }
+        if (execution === "mail_discovery")
           return {
-            page: {
-              done: false,
-              cursor: { phase: "list", index: cursor.index + 1 },
-            },
+            page: await (
+              await import("~/server/domains/purchase-import/operations/gmail/discovery")
+            ).advanceMailDiscoveryPage(db, params, claim.cursor),
           };
-        }
         const pending = await (
           await import("~/server/domains/run/service/ai-work")
         ).advanceAiWorkRun(db, params);
@@ -245,7 +201,7 @@ export const runJobHandler = defineJobHandler(
         (cause): cause is GatewayProviderStopError =>
           cause instanceof GatewayProviderStopError,
       );
-      if (budget && input.purpose === "mail_discovery")
+      if (budget && execution === "mail_discovery")
         return fundingWait(
           input.runId,
           claim.cursor,
@@ -265,7 +221,7 @@ export const runJobHandler = defineJobHandler(
               new Date(provider.retryAt),
               "provider_capacity",
             )
-          : input.purpose === "mail_discovery"
+          : execution === "mail_discovery"
             ? mailDiscoveryBackpressure(error)
             : undefined;
       if (!deferred) throw error;
@@ -279,16 +235,6 @@ export const runJobHandler = defineJobHandler(
       // Keep the typed provider cause and raw gateway diagnostic at this seam.
       deferred.cause = error;
       throw deferred;
-    }),
+    });
+  },
 );
-
-async function assertNotPaused(
-  db: import("~/server/db").Database,
-  runId: string,
-) {
-  const owner = await readRun(db, runEntityId.parse(runId));
-  if (owner?.status === "paused_auth")
-    throw new JobPausedError(
-      owner.dispatchError ?? "Mailbox requires authorization",
-    );
-}

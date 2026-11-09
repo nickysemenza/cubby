@@ -1,6 +1,6 @@
 import { displayImagesField } from "@cubby/schemas/display-images";
 import type { Entity } from "@cubby/schemas/entity";
-import { isAuditableEntity } from "@cubby/schemas/entity-roster";
+import { isAuditableEntity } from "@cubby/schemas/entity-manifest";
 import { fieldEnvelopeFor, fieldValueOf } from "@cubby/schemas/field-envelope";
 import { type ReactNode, useCallback, useEffect, useState } from "react";
 

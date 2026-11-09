@@ -119,6 +119,7 @@ export interface EntityDefinition {
   phosphorIcon: Icon;
   color: EntityColor;
   routes: EntityRoutes;
+  detailParam?: "id";
   list?: EntityListConfig;
   mergeable?: MergeableConfig;
 }

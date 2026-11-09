@@ -30,7 +30,7 @@ import { attachCubbyColumnMeta } from "~/ui/data-table/table-meta";
 import { useLocalTable } from "~/ui/data-table/use-local-table";
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { useHydratedLoading } from "~/ui/hooks/use-hydrated";
-import { Disclosure } from "~/ui/layout/disclosure";
+import { Disclosure } from "~/ui/layout";
 import { SidePanel, useTableRowStep } from "~/ui/overlays/side-panel";
 import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/text/description";

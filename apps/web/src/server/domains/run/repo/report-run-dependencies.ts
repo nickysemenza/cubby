@@ -8,18 +8,13 @@ import {
   isExecutedRunPurpose,
   runPurpose,
   runStatus,
+  isStepRunPurpose,
 } from "@cubby/schemas/run-fields";
 import { and, eq } from "drizzle-orm";
 
 import { listAiUsageForRun } from "~/server/ai/repo/ai-usage";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { run as runTable } from "~/server/db/schema";
-import { loadRunFindings } from "~/server/domains/purchase-import/repo/run-finding";
-import {
-  loadRunDetail,
-  loadRunLog,
-  loadRunTimeline,
-} from "~/server/domains/purchase-import/repo/run-service";
 import {
   aiUsageBlocks,
   changesBlocks,
@@ -36,11 +31,17 @@ import {
   type RunReportSlot,
 } from "~/server/domains/run/repo/report-run";
 import { runResultsBlocks } from "~/server/domains/run/repo/report-run-results";
+import {
+  loadRunDetail,
+  loadRunLog,
+  loadRunTimeline,
+} from "~/server/domains/run/repo/run-detail";
+import { loadRunFindings } from "~/server/domains/run/repo/run-finding";
 import { getRunLiveProgress } from "~/server/domains/run/repo/run-progress";
 import { readRunSteps } from "~/server/domains/run/repo/run-step";
 import { identityShortcodes } from "~/server/entity-kernel/repo/entity-identity";
 import { createEntityReader } from "~/server/entity-kernel/repo/repository";
-import { getAuditLog } from "~/server/generic/audit-log/repo/audit-log";
+import { getAuditLog } from "~/server/generic/audit-log/repo/audit-log-read";
 import {
   reportDependency,
   type ReportExecution,
@@ -49,7 +50,6 @@ import { runId } from "~/server/generic/entity-report/repo/record-dependencies";
 import { listRunJobs } from "~/server/generic/jobs/repo/job-diagnostics";
 import { lookupEntityLabels } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { suggestionCountsByFamily } from "~/server/generic/suggestions/repo/suggestion-list";
-import { isStepRunPurpose } from "~/server/workflows/runs/contract";
 
 const PAGE_SIZE = 25;
 

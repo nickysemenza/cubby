@@ -16,7 +16,7 @@ import {
 } from "~/server/ai/evaluation/repo/evaluation-tally";
 import { related } from "~/server/db/helpers/related";
 import { imageProcessingJob } from "~/server/db/retained-tables";
-import { activeFindingSql } from "~/server/domains/purchase-import/repo/finding-expiry";
+import { activeFindingSql } from "~/server/domains/run/repo/finding-expiry";
 import {
   runHasLiveJobs,
   runHasLiveExecution,

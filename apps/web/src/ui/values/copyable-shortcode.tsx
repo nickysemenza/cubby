@@ -1,9 +1,9 @@
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 import { ClipboardIcon } from "@phosphor-icons/react/dist/csr/Clipboard";
 import { cn } from "cn";
-import { useState } from "react";
 
 import { copyShortcodes } from "~/lib/clipboard";
+import { useCopiedFlag } from "~/ui/hooks/use-copied-flag";
 
 /**
  * A shortcode, click-to-copy.
@@ -21,7 +21,7 @@ export function CopyableShortcode({
   code: string;
   className?: string;
 }) {
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useCopiedFlag();
 
   return (
     <button
@@ -34,7 +34,6 @@ export function CopyableShortcode({
       onClick={async () => {
         if (!(await copyShortcodes([code]))) return;
         setCopied(true);
-        setTimeout(() => setCopied(false), 1500);
       }}
     >
       {code}

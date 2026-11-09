@@ -184,5 +184,5 @@ export const financialTransactionContract = defineContract(
       cache: { tags: [["financialTransaction"], ["purchase"], ["vendor"]] },
     }),
   },
-  { exposure: "capability", mcpToolGroup: "finance" },
+  { exposure: "capability", mcpToolGroup: "finance", readPolicy: "strong" },
 );

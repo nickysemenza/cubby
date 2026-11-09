@@ -1,15 +1,22 @@
 import { HIGH_CONFIDENCE_PROBABILITY } from "@cubby/schemas/ai-evaluation";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
-import { resolveExpenseLineKind } from "@cubby/schemas/expense-line-kind";
 import type { FieldResolutions } from "@cubby/schemas/field-resolution";
-import { basisValueOf } from "@cubby/schemas/field-suggestion";
+import {
+  basisValueOf,
+  fieldSuggestionContextKeys,
+} from "@cubby/schemas/field-suggestion";
 import { requiresSuggestionReview } from "@cubby/schemas/field-suggestion-policy";
 import { z } from "zod";
 
+import {
+  allowsPreviewSuggestionTarget,
+  type DraftSuggestionResolvers,
+  draftSuggestionResolvers,
+  normalizeSuggestionDraft,
+  resolveSuggestionDraft,
+} from "~/server/ai/field-suggest/draft-policy";
 import { suggestFields } from "~/server/ai/field-suggest/suggest-fields";
-import { resolveDraftExpenseFields } from "~/server/domains/expense/repo/expense-inheritance";
-import { aiCallOwner } from "~/server/domains/run/repo/ai-call-owner";
-import { resolveDraftTaskFields } from "~/server/domains/task/repo/task-project-inheritance";
+import { aiCallOwner } from "~/server/ai/policy/call-owner";
 import { ENTITY_SCHEMA_BINDINGS } from "~/server/generated/entity-bindings.gen";
 import { generatedMcpEntityActionEntities } from "~/server/generated/entity-kernel-entities.gen";
 
@@ -75,18 +82,13 @@ const issueOutput = (issue: z.ZodIssue) => ({
 
 type PreviewSuggestion = z.infer<typeof previewSuggestionSchema>;
 
-export interface PreviewEntityPorts {
+export interface PreviewEntityPorts extends DraftSuggestionResolvers {
   suggest: typeof suggestFields;
-  resolveExpense: typeof resolveDraftExpenseFields;
-  resolveTask: typeof resolveDraftTaskFields;
-  /** Ported so a unit test's fake `EntityKernelContext` (no real db/actor)
-   * never exercises the real run-lookup query. */
 }
 
 const productionPreviewPorts: PreviewEntityPorts = {
   suggest: suggestFields,
-  resolveExpense: resolveDraftExpenseFields,
-  resolveTask: resolveDraftTaskFields,
+  ...draftSuggestionResolvers,
 };
 
 async function applyPreviewSuggestions(args: {
@@ -121,28 +123,11 @@ async function applyPreviewSuggestions(args: {
           : suggest.basis;
       }),
   );
-  if (args.entity === "expense") {
-    for (const key of [
-      "lineKind",
-      "purchaseId",
-      "productId",
-      "projectId",
-      "trade",
-    ]) {
-      dependencyKeys.add(key);
-    }
-  }
-  if (args.entity === "task") {
-    for (const key of [
-      "parentTaskId",
-      "projectId",
-      "projectMode",
-      "subjectProductId",
-      "subjectProductMode",
-      "assigneeId",
-      "assigneeMode",
-      "trade",
-    ]) {
+  // Preview also carries task assignee intent; other entities retain their
+  // existing dependency set rather than adding saved finance context here.
+  if (args.entity === "expense" || args.entity === "task") {
+    const extra = args.entity === "task" ? ["assigneeId", "assigneeMode"] : [];
+    for (const key of fieldSuggestionContextKeys(args.entity, extra)) {
       dependencyKeys.add(key);
     }
   }
@@ -255,23 +240,7 @@ async function resolveDraftInheritance(
   ports: PreviewEntityPorts,
 ): Promise<FieldResolutions> {
   const draft = inheritanceDraftSchema.parse(merged);
-  if (entity === "expense") {
-    // SAFETY: inheritanceDraftSchema validates the complete Expense draft
-    // subset consumed by the authoritative resolver.
-    return ports.resolveExpense(
-      context.db,
-      draft as Parameters<typeof resolveDraftExpenseFields>[1],
-    );
-  }
-  if (entity === "task") {
-    // SAFETY: inheritanceDraftSchema validates the complete Task draft subset
-    // consumed by the authoritative resolver.
-    return ports.resolveTask(
-      context.db,
-      draft as Parameters<typeof resolveDraftTaskFields>[1],
-    );
-  }
-  return {};
+  return resolveSuggestionDraft(context.db, entity, draft, ports) ?? {};
 }
 
 /**
@@ -290,8 +259,12 @@ export async function previewEntity(
   const explicit = input.data;
   const merged = { ...seeds, ...explicit };
   if (input.entity === "expense") {
-    merged.lineKind = resolveExpenseLineKind(
-      inheritanceDraftSchema.parse(merged),
+    Object.assign(
+      merged,
+      normalizeSuggestionDraft(
+        input.entity,
+        inheritanceDraftSchema.parse(merged),
+      ),
     );
   }
   const errors: z.infer<typeof previewIssueSchema>[] = [];
@@ -316,14 +289,8 @@ export async function previewEntity(
   const targets = (
     input.context.targets ??
     model.fields.flatMap((field) => (field.control?.suggest ? [field.key] : []))
-  ).filter(
-    (field) =>
-      !(
-        input.entity === "expense" &&
-        field === "projectId" &&
-        merged.lineKind !== undefined &&
-        merged.lineKind !== "principal"
-      ),
+  ).filter((field) =>
+    allowsPreviewSuggestionTarget(input.entity, field, merged),
   );
   const suggestionResult = input.context.suggest
     ? await applyPreviewSuggestions({

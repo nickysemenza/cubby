@@ -7,8 +7,8 @@ import {
 } from "~/integrations/tanstack-query/operation-call";
 import type { OperationIdOfKind } from "~/lib/generated/operation-registry.gen";
 import { parseOperationOutput, OperationError } from "~/lib/operation-error";
+import { operationWireValueSchema } from "~/lib/operation-result";
 import { acceptMemberWriteCookie } from "~/lib/read-consistency";
-import { operationWireValueSchema } from "~/server/operation-runtime/operation.contract";
 
 /**
  * Open a workflow stream over `POST /api/operations/<id>`. The server ends a

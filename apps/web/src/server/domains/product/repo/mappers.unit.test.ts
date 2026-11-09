@@ -3,7 +3,7 @@ import { testCompleteDataQuality, testEntityId } from "@cubby/schemas/testing";
 import { productRowFixture } from "tooling/product-category-fixtures";
 import { describe, expect, it } from "vitest";
 
-import { deriveProductQuantitySummary } from "~/server/lib/product-quantity-summary";
+import { deriveProductQuantitySummary } from "~/server/domains/product/repo/quantity-summary";
 
 import { mapProductListInventoryEntries } from "./mappers";
 import { EMPTY_QUANTITY_LEDGER } from "./quantity-ledger";

@@ -3,7 +3,7 @@ import {
   ReportDetailActions,
   RunSentryAction,
 } from "~/entity/entity-detail/report-slot";
-import { RunAgentActions } from "~/features/purchase/purchase-import-run-detail";
+import { RunAgentActions } from "~/features/run/purchase-import-run-detail";
 
 /** The Run header: live-progress commands, the import agent's controls and its Sentry link. */
 export const RunDetailActions: DetailSlotComponent<"run"> = ({ record }) => (

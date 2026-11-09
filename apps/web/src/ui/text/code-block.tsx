@@ -1,9 +1,10 @@
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 import { CopyIcon } from "@phosphor-icons/react/dist/csr/Copy";
 import { cn } from "cn";
-import { useEffect, useState, type ComponentProps } from "react";
+import type { ComponentProps } from "react";
 
 import { copyText } from "~/lib/clipboard";
+import { useCopiedFlag } from "~/ui/hooks/use-copied-flag";
 import { Button } from "~/ui/primitives/button";
 
 // Adapted from the shadcn base-mira `code-block` registry item (AI Elements),
@@ -55,12 +56,7 @@ function CodeBlockCopyButton({
   value: string;
   label: string;
 }) {
-  const [copied, setCopied] = useState(false);
-  useEffect(() => {
-    if (!copied) return;
-    const timeout = setTimeout(() => setCopied(false), 2000);
-    return () => clearTimeout(timeout);
-  }, [copied]);
+  const [copied, setCopied] = useCopiedFlag(2000);
   return (
     <>
       <Button

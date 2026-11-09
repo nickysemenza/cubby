@@ -12,7 +12,7 @@ import {
 import { entityGraph } from "~/integrations/tanstack-query/generated/domains/entityGraph.gen";
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { Row, Stack } from "~/ui/layout";
-import { Section } from "~/ui/layout/section";
+import { Section } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 
 import { TableCellWorkbench } from "../../ui/data-table/table-cell-workbench";

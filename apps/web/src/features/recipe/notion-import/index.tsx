@@ -18,10 +18,10 @@ import { invalidateOperationTags } from "~/integrations/tanstack-query/operation
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import { BulkProgressBar } from "~/ui/feedback/bulk-progress-bar";
-import { Panel } from "~/ui/layout/panel";
-import { Row } from "~/ui/layout/row";
-import { Stack } from "~/ui/layout/stack";
-import { Toolbar } from "~/ui/layout/toolbar";
+import { Panel } from "~/ui/layout";
+import { Row } from "~/ui/layout";
+import { Stack } from "~/ui/layout";
+import { Toolbar } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Checkbox } from "~/ui/primitives/checkbox";
 import { Input } from "~/ui/primitives/input";

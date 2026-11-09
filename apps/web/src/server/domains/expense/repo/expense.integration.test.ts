@@ -30,7 +30,7 @@ import {
   expenseAnalyzeWorkflow,
   expenseChartDataWorkflow,
   expenseFacetCountsWorkflow,
-} from "~/server/domains/expense/operations.server";
+} from "~/server/domains/expense/operations/expense.server";
 import {
   expenseAnalytics,
   expenseMonthlySummary,
@@ -54,7 +54,7 @@ import {
 import { vendorOptions } from "~/server/domains/vendor/repo/vendor";
 import { executeEntity } from "~/server/entity-kernel";
 import type { EntityMutationCommand } from "~/server/entity-kernel/contracts";
-import { getAuditLog } from "~/server/generic/audit-log/repo/audit-log";
+import { getAuditLog } from "~/server/generic/audit-log/repo/audit-log-read";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import { resolveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";

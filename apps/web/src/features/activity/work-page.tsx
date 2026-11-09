@@ -19,7 +19,7 @@ import { formatCount } from "~/lib/number-format";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { useDisplayNow } from "~/ui/hooks/use-display-now";
 import { Section, Stack } from "~/ui/layout";
-import { Disclosure } from "~/ui/layout/disclosure";
+import { Disclosure } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 
 /** Past this the list only counts the rest; a page of warnings stops being read. */

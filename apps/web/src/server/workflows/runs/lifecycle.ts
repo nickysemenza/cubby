@@ -5,6 +5,7 @@ import {
   mailboxDiscoveryProgress,
   MAIL_DISCOVERY_ADMISSION_WAIT,
 } from "@cubby/schemas/mailbox-research";
+import { type ExecutedRunPurpose } from "@cubby/schemas/run-fields";
 import { runStepState } from "@cubby/schemas/run-step";
 import { createLogger } from "@cubby/worker-tracing";
 import { and, or, not, eq, getTableColumns, isNull, sql } from "drizzle-orm";
@@ -49,7 +50,7 @@ import {
 import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 import { assertWorkflowEffect } from "~/server/workflows/runs/execution";
 
-import { type WorkflowRunParams, type ExecutedRunPurpose } from "./contract";
+import { type WorkflowRunParams } from "./contract";
 
 const log = createLogger("workflow");
 

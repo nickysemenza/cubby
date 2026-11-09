@@ -28,7 +28,7 @@ import { updateExpense } from "~/server/domains/expense/repo/crud";
 import {
   createFinancialAccount,
   updateFinancialAccount,
-} from "~/server/domains/financial-account/repo";
+} from "~/server/domains/financial-account/repo/financial-account";
 import { loadExpenseAllocations } from "~/server/domains/household-contribution/repo/allocation";
 import {
   deleteLedgerParties,

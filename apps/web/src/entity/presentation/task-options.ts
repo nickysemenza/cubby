@@ -2,15 +2,6 @@ import { addDays, endOfWeek, format, startOfWeek } from "date-fns";
 import { match } from "ts-pattern";
 
 /**
- * Human-facing labels for the raw DB enum values — single source of truth for
- * task status display text everywhere (lists, badges, charts, command menu).
- * Lives here (not projects/shared.tsx) so shared.tsx can import the options
- * below without a circular import; shared.tsx re-exports it for
- * its existing consumers.
- */
-export { TASK_STATUS_LABELS } from "@cubby/schemas/task-fields";
-
-/**
  * Resolves a due-date preset (as read off the "due" column filter) into
  * inclusive "YYYY-MM-DD" bounds on `dueFrom`/`dueTo`, anchored on today's local
  * date (task `dueDate` is timezone-free, so bounds are computed from local

@@ -11,14 +11,17 @@ import { type JSONType, z } from "zod";
 
 import type { McpActionSpec } from "~/contracts/mcp-define";
 import type { OperationIdOfKind } from "~/lib/generated/operation-registry.gen";
+import {
+  type OperationResult,
+  operationWireValueSchema,
+} from "~/lib/operation-result";
 import { roundTo } from "~/lib/round-to";
 import { getDb } from "~/server/db/helpers";
 import { run as runTable } from "~/server/db/schema";
 import {
   assertPurchaseAgentAction,
   purchaseAgentRunActions,
-} from "~/server/domains/purchase-import/repo/capabilities";
-import { toPublicErrorPayload } from "~/server/errors/app-error";
+} from "~/server/domains/run/repo/agent-capabilities";
 import {
   errorReportingHeaders,
   withErrorReporting,
@@ -37,17 +40,8 @@ import {
   executePurchaseAgentMutation,
   purchaseAgentSelfGoverned,
 } from "~/server/mcp/purchase-agent-protocol";
-import { getRequestId } from "~/server/observability/tracing";
 import { dispatchOperation } from "~/server/operation-runtime/operation-dispatch.server";
 import {
-  type PublicOperationError,
-  publicOperationErrorSchema,
-  type OperationResult,
-  operationWireValueSchema,
-} from "~/server/operation-runtime/operation.contract";
-import {
-  normalizeOperationError,
-  type OperationFailureContext,
   type OperationStage,
   executeOperation,
   withinCompositeBudget,
@@ -66,6 +60,11 @@ import {
   declareToolInputJsonSchema,
   declareToolOutputSchema,
 } from "./tool-catalog";
+import {
+  describeToolError,
+  SettledToolFailure,
+  type ToolErrorDetail,
+} from "./tool-error";
 import { safeToJsonSchema, sdkOutputSchema } from "./tool-json-schema";
 
 /**
@@ -152,18 +151,6 @@ const principalFields = z.looseObject({
 const isPrincipal = (value: unknown): value is Principal =>
   principalFields.safeParse(value).success;
 
-/**
- * A failure the runner already normalized, reported and described. It is
- * thrown to roll back a delegated transaction or to fail one batch item, and
- * rendered as is: normalizing it again would replace its raw cause.
- */
-class SettledToolFailure extends Error {
-  constructor(readonly detail: PublicOperationError) {
-    super(detail.message);
-    this.name = "SettledToolFailure";
-  }
-}
-
 const toolEntityExtractors = new WeakMap<
   McpServer,
   Map<string, ToolEntityExtractor>
@@ -241,50 +228,6 @@ function renderToolError(
     isError: true,
     _meta: { "cubby/error": detail },
   };
-}
-
-export const toolErrorDetailSchema = publicOperationErrorSchema.partial({
-  code: true,
-});
-export type ToolErrorDetail = z.infer<typeof toolErrorDetailSchema>;
-
-export function describeToolError<T>(
-  error: T,
-  context?: OperationFailureContext,
-  stage: OperationStage = "run",
-): ToolErrorDetail {
-  if (error instanceof SettledToolFailure) {
-    const detail: ToolErrorDetail = structuredClone(error.detail);
-    if (context?.batchIndex !== undefined && detail.diagnostics)
-      detail.diagnostics.batchIndex = context.batchIndex;
-    return detail;
-  }
-  if (context) {
-    const headers = context.headers ?? errorReportingHeaders();
-    const detail = normalizeOperationError(
-      error,
-      stage,
-      getRequestId(headers),
-      {
-        ...context,
-        headers,
-      },
-    ).publicError;
-    const payload = toPublicErrorPayload(error);
-    if (payload.code) {
-      detail.code = payload.code;
-      detail.reason = payload.reason;
-      if (payload.blockers && context.authenticated)
-        detail.blockers = payload.blockers;
-    }
-    return detail;
-  }
-  const { code, reason } = toPublicErrorPayload(error);
-  const message = error instanceof Error ? error.message : String(error);
-  const detail: ToolErrorDetail = { message };
-  if (code) detail.code = code;
-  if (reason) detail.reason = reason;
-  return detail;
 }
 
 /**

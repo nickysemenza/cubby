@@ -95,7 +95,7 @@ pending: nothing here starts Product research.
    `Email.runId`, and dispatches `start_or_resume` to
    a `purchase.dispatch` Job in the admission transaction (`dispatch.ts`). Each paid call checks
    the Run is still executable and draws from the household AI budget
-   (`run/service/execution-transport.ts`, `server/ai/budget.ts`).
+   (`purchase-import/service/execution-transport.ts`, `server/ai/budget.ts`).
    Existing discovery wakes also recover untouched automatic unresolved work
    when its retained original changes, its sender becomes verified, or accepted
    source evidence now establishes its exact order on the member's own Vendor
@@ -313,8 +313,8 @@ pending: nothing here starts Product research.
    disposal destroys settled Runs' transcripts (`run-retirement.ts`), oldest
    first in bounded batches; the destroying call and an immediate follow-up
    that reaches a fresh, empty coordinator let one pass stamp
-   `Run.retiredAt`, and a failing coordinator does not block the Runs behind
-   it. Runs of retired purposes are destroyed by their stored
+   `Run.retiredAt`. A failing coordinator is reported and does not block the
+   Runs behind it. Runs of retired purposes are destroyed by their stored
    coordinator identity without loading the current agent. Once disposal is
    authorized the coordinator writes a durable fence table, refuses every
    entry point (also after a restart) and drains admitted ones before

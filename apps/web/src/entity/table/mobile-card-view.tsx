@@ -803,7 +803,6 @@ export function MobileCardView<TItem extends RowData>({
     [headerIndexes],
   );
 
-  // Determine virtualizer item count and estimate sizes
   const itemCount = groupedItems ? groupedItems.length : mobileRows.length;
   // Estimated per row, not as one constant: rows now range from ~55px (no spec
   // values) to ~152px (a fully-populated expense), and a flat guess that far

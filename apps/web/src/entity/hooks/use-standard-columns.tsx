@@ -58,7 +58,6 @@ interface BaseListRow {
 const titleValueSchema = z.string().nullish().catch(null);
 
 interface UseStandardColumnsOptions<TData extends BaseListRow> {
-  /** The entity type */
   entity: BrowserRoutedEntity;
   /** Column helper instance (must be memoized) */
   columnHelper: ColumnHelper<TData>;
@@ -77,13 +76,11 @@ interface UseStandardColumnsOptions<TData extends BaseListRow> {
    * page) or the columns memo churns every render.
    */
   filterOptions?: RuntimeFilterOptions;
-  /** Whether row selection is enabled */
   enableRowSelection: boolean;
   /** Combined extra actions renderer for row actions */
   combinedExtraActions?: (row: TData) => ReactNode;
   /** Unit mappings map (id -> mappings), null if not used */
   mappingsMap: Record<string, UnitMapping[]> | null;
-  /** Whether unit mappings should be shown */
   hasUnitMappings: boolean;
   /**
    * Width class for the standard name column. Defaults to auto (`min-w-0`).
@@ -130,6 +127,9 @@ interface UseStandardColumnsOptions<TData extends BaseListRow> {
    */
   hiddenFilterColumns?: string[];
 }
+
+const mappingsColumnId = (entity: string) =>
+  entity === "product" ? "unitMappingQuality" : "unitMappings";
 
 function columnIdentifier<TData extends BaseListRow, TValue extends CellData>(
   column: CubbyColumnDef<TData, TValue>,
@@ -263,8 +263,7 @@ export function useStandardColumns<TData extends BaseListRow>({
     const imageField = standardColumns.find(
       (field) => field.display.standard === "image",
     );
-    const mappingsId =
-      entity === "product" ? "unitMappingQuality" : "unitMappings";
+    const mappingsId = mappingsColumnId(entity);
     return {
       image: createImageColumn(columnHelper, {
         entity,
@@ -381,7 +380,6 @@ export function useStandardColumns<TData extends BaseListRow>({
           add(buildSelectColumn<TData>());
         }
 
-        // Prepend standard columns
         const hasExplicitImageColumn = customColumns
           .visit((column) => isImageColumnId(columnIdentifier(column)))
           .some(Boolean);
@@ -437,7 +435,6 @@ export function useStandardColumns<TData extends BaseListRow>({
             add(colId ? withManifestFilter(withSorting, colId) : withSorting);
           });
 
-        // Append unit mappings column if configured
         if (standardDefinitions.mappings) {
           // The product id stays "unitMappingQuality" — it's what the manifest's
           // presence filter hangs on. NOT sortable: the cell grades conversion
@@ -445,8 +442,7 @@ export function useStandardColumns<TData extends BaseListRow>({
           // USDA-derived edges the server never loads), which no SQL ORDER BY can
           // reproduce. The old sort ordered by an edge-count proxy instead, i.e.
           // by a quantity that isn't on screen.
-          const mappingsColId =
-            entity === "product" ? "unitMappingQuality" : "unitMappings";
+          const mappingsColId = mappingsColumnId(entity);
           add(withManifestFilter(standardDefinitions.mappings, mappingsColId));
         }
 
@@ -455,7 +451,6 @@ export function useStandardColumns<TData extends BaseListRow>({
         add(standardDefinitions.createdAt);
         add(standardDefinitions.updatedAt);
 
-        // Append actions column (always last)
         add(standardDefinitions.actions);
       }),
     [

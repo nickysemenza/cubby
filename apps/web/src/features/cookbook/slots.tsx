@@ -17,7 +17,7 @@ import { recipeStreams } from "~/integrations/tanstack-query/generated/domains/r
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { BulkProgressBar } from "~/ui/feedback/bulk-progress-bar";
 import { Row, Stack } from "~/ui/layout";
-import { Disclosure } from "~/ui/layout/disclosure";
+import { Disclosure } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/text/description";
 

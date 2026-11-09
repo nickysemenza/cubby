@@ -402,15 +402,8 @@ const validateUpdatedOwnership = async (
       "Inherited ownership cannot retain an owner.",
     );
   }
-  if (!ownership.ownerLedgerPartyId) return;
-  try {
+  if (ownership.ownerLedgerPartyId)
     await assertIndividualOwner(getDb(db), ownership.ownerLedgerPartyId);
-  } catch {
-    throw createAppError(
-      "CONSTRAINT_VIOLATION",
-      "Inventory can only be assigned to a live member or guest.",
-    );
-  }
 };
 
 const changesInventorySlot = (data: UpdateInventoryEntryData) =>
@@ -607,16 +600,8 @@ export const insertInventoryEntry = async (
       "Inherited ownership cannot retain an owner.",
     );
   }
-  if (ownerLedgerPartyId) {
-    try {
-      await assertIndividualOwner(getDb(db), ownerLedgerPartyId);
-    } catch {
-      throw createAppError(
-        "CONSTRAINT_VIOLATION",
-        "Inventory can only be assigned to a live member or guest.",
-      );
-    }
-  }
+  if (ownerLedgerPartyId)
+    await assertIndividualOwner(getDb(db), ownerLedgerPartyId);
 
   const placement = data.placement ?? "stock";
   const occupant = await getDb(db).query.inventoryEntry.findFirst({

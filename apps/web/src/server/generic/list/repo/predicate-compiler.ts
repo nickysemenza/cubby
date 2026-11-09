@@ -57,6 +57,7 @@ import {
   rangeBound,
   rangeOrPresence,
   requestedIdsSql,
+  shortcodeIdsSql,
   textPredicate,
 } from "./declared-filters";
 import {
@@ -73,7 +74,6 @@ import {
   relatedExistsSql,
   type AnyRowsSql,
   rowSetSql,
-  shortcodeIdsSql,
 } from "./field-compiler";
 
 const suggestionKinds = z

@@ -46,7 +46,7 @@ import {
   executeEntity,
   type EntityKernelContext,
 } from "~/server/entity-kernel";
-import { createAppError } from "~/server/errors/app-error";
+import { constraintViolation } from "~/server/errors/app-error";
 import { validateProductPolicy } from "~/server/generic/inheritance/repo/inheritance-validation";
 import {
   resolveAllOrThrow,
@@ -55,9 +55,6 @@ import {
 
 import { lockLiveSpendingCategories } from "./spending-category";
 
-const fail = (message: string): never => {
-  throw createAppError("CONSTRAINT_VIOLATION", message);
-};
 const digest = (serialized: string) =>
   createHash("sha256").update(serialized).digest("hex");
 
@@ -79,12 +76,12 @@ async function draftFor(
         .select()
         .from(product)
         .where(and(eq(product.id, id), notDeleted(product)));
-      if (!current) return fail("Product is no longer live.");
+      if (!current) return constraintViolation("Product is no longer live.");
       if (
         ((await getCategoryFeature(db, current.categoryId)) === "food") !==
         (targetFeature === "food")
       )
-        fail(
+        constraintViolation(
           "A reviewed spending reassignment cannot change the Food feature; Project and Trade impact require a separate review.",
         );
       const externalIds = await unwrapDb(db)
@@ -106,7 +103,7 @@ async function draftFor(
         (await resolveProductCategory(db, categoryId, requiredFeature)) !==
         categoryId
       )
-        fail(
+        constraintViolation(
           "The reviewed category conflicts with the Product identity feature.",
         );
       products.push({ id, categoryId });
@@ -134,7 +131,8 @@ async function draftFor(
         })
         .from(productCategory)
         .where(and(eq(productCategory.id, id), notDeleted(productCategory)));
-      if (!current) return fail("Product category is no longer live.");
+      if (!current)
+        return constraintViolation("Product category is no longer live.");
       if (
         current.parentId !== parentId &&
         current.feature === null &&
@@ -158,7 +156,7 @@ async function draftFor(
           "objects",
         );
         if (affected.length)
-          fail(
+          constraintViolation(
             "A reviewed spending reassignment cannot change the Food feature; Project and Trade impact require a separate review.",
           );
       }
@@ -532,7 +530,9 @@ export async function applyReviewedSpendingClassificationPolicy(
         .from(product)
         .where(eq(product.id, selected.id));
       if (persisted?.categoryId !== selected.categoryId)
-        fail("The applied Product category differs from the reviewed target.");
+        constraintViolation(
+          "The applied Product category differs from the reviewed target.",
+        );
     }
   } else if (request.action === "productCategory") {
     await executeEntity(ctx, {
@@ -594,7 +594,7 @@ export async function applySpendingClassificationReview(
         await lockLiveSpendingCategories(db, mergedCategories);
       const impact = await buildPreview(db, input.request);
       if (impact.fingerprint !== input.fingerprint)
-        fail(
+        constraintViolation(
           "Spending classification or history changed after preview; review a fresh preview before applying.",
         );
       const context = { ...ctx, db };

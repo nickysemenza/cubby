@@ -19,7 +19,7 @@ import type { IncomingEdgeKey } from "~/server/db/entity-incoming-edges";
 import { INCOMING_EDGES } from "~/server/db/entity-incoming-edges";
 import { notDeleted } from "~/server/db/helpers";
 import { repointEmailDecisionTargetsTx } from "~/server/domains/email/repo/email-link-decision";
-import { repointRunFindingTargetsTx } from "~/server/domains/purchase-import/repo/run-finding";
+import { repointRunFindingTargetsTx } from "~/server/domains/run/repo/run-finding";
 import { recordMergeRedirects } from "~/server/entity-kernel/repo/entity-identity";
 import { createAppError } from "~/server/errors/app-error";
 import type { AuditEntryInput } from "~/server/generic/audit-log/repo/audit-log";

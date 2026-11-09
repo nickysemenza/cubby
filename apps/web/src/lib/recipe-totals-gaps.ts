@@ -3,7 +3,7 @@ import { match } from "ts-pattern";
 import type { BaseKind, ConversionCoverage } from "~/lib/conversion-coverage";
 import type { RecipeCostingIngredient } from "~/lib/recipe-costing";
 import type { RecipeCosting } from "~/lib/recipe-costing";
-import { wasm } from "~/lib/wasm";
+import { unitKindOrNull } from "~/lib/wasm";
 
 /**
  * The single highest-leverage fix we suggest for an ingredient whose totals are
@@ -98,14 +98,9 @@ const KIND_RANK = {
  */
 const classifyLine = (unit: string | null): LineKind => {
   if (!unit) return "count";
-  try {
-    const k = wasm.amount_kind({ value: 1, unit });
-    if (k === "weight") return "weight";
-    if (k === "volume") return "volume";
-  } catch {
-    // SILENT: unknown unit -> treat as a count (the common "2 eggs" /
-    // "1 zucchini" case); the "count" return below already covers this.
-  }
+  const kind = unitKindOrNull(unit);
+  if (kind === "weight") return "weight";
+  if (kind === "volume") return "volume";
   return "count";
 };
 

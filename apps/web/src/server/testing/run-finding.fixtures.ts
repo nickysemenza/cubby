@@ -12,7 +12,7 @@ import {
   runFindingColumns,
   updateRunFinding,
   type RunFindingPublication,
-} from "~/server/domains/purchase-import/repo/run-finding";
+} from "~/server/domains/run/repo/run-finding";
 
 const resolution = (key: "createdAt" | "actorUserId") =>
   sql`(SELECT r.value->>${key} FROM jsonb_array_elements(${runFindingTable.resolutions}) r(value) WHERE r.value->>'authority' = ${feedbackAuthority.enum.member} ORDER BY r.value->>'createdAt' DESC LIMIT 1)`;

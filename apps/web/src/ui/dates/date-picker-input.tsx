@@ -13,12 +13,12 @@ import {
   useState,
 } from "react";
 
-import { browserOnlyLazy } from "~/lib/browser-only-lazy";
 import { formatCalendarDay } from "~/lib/date-format";
 import { formatPlainDate, parsePlainDate } from "~/lib/plain-date";
 import { parsePlainDateInput } from "~/lib/plain-date-input";
 import type { Calendar as CalendarComponent } from "~/ui/dates/calendar";
 import { RemoveButton } from "~/ui/forms/remove-button";
+import { browserOnlyLazy } from "~/ui/primitives/browser-only-lazy";
 import {
   Popover,
   PopoverContent,
@@ -217,6 +217,7 @@ export function DatePickerInput({
   const handleOpenChange = (nextOpen: boolean) => {
     setOpen(nextOpen);
     if (nextOpen) return;
+    // The picker closes before focus moves; read the new focus once the close settles.
     queueMicrotask(() => {
       if (isPickerElement(document.activeElement)) return;
       commitDraft();

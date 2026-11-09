@@ -5,10 +5,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import {
-  EntityRefLink,
-  EntityRefList,
-} from "~/entity/components/entity-ref-link";
+import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import { ListRefLink } from "~/entity/components/ref-link/list";
 import { EntityIcon } from "~/entity/entities";
 import {
   EntityDisplayImagesProvider,
@@ -120,7 +118,7 @@ function RecipeUsageCell({ ingredient }: { ingredient: IngredientListItem }) {
           <TooltipContent>Appears in {recipes.length} recipes</TooltipContent>
         </Tooltip>
       )}
-      <EntityRefList
+      <ListRefLink
         entity="recipe"
         items={recipes.slice(0, 1)}
         maxItems={1}

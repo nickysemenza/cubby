@@ -27,13 +27,13 @@ import {
   unwrapDb,
   withTransaction,
 } from "~/server/db/helpers";
+import { transactionImportRecord } from "~/server/db/retained-tables";
 import { financialAccount, sourceTransactionRecord } from "~/server/db/schema";
 import {
   sourceObservationColumns,
   sourceObservationFrom,
 } from "~/server/domains/transaction-import/repo/source-observation-state";
 import { chargeKeyOf } from "~/server/domains/transaction-import/repo/statement-charge";
-import { transactionImportMembers } from "~/server/domains/transaction-import/repo/transaction-import-membership";
 import { createAppError } from "~/server/errors/app-error";
 
 import { updateSourceObservationJudgments } from "./source-occurrence";
@@ -64,7 +64,7 @@ const asPlainDate = (value: SourceTransactionRecordSqlValue): string => {
 };
 
 const observedInImport = (fingerprint: string) => sql`EXISTS (
-  SELECT 1 FROM ${transactionImportMembers} member
+  SELECT 1 FROM ${transactionImportRecord} member
   JOIN "TransactionImport" si ON si.id = member."importId"
   WHERE member."statementRowId" = "SourceTransactionRecord".id
     AND si.fingerprint = ${fingerprint}
@@ -218,8 +218,8 @@ export async function findSourceTransactionRecordDrift(
   const where = and(...conditions)!;
   // Exclude shared membership by default; this is not proof of historical identity.
   const unsharedPair = sql`NOT EXISTS (
-    SELECT 1 FROM ${transactionImportMembers} left_member
-    JOIN ${transactionImportMembers} right_member ON right_member."importId" = left_member."importId"
+    SELECT 1 FROM ${transactionImportRecord} left_member
+    JOIN ${transactionImportRecord} right_member ON right_member."importId" = left_member."importId"
     WHERE left_member."statementRowId" = a.id AND right_member."statementRowId" = b.id
   )`;
   const sameBatchGate = input.includeSameBatch

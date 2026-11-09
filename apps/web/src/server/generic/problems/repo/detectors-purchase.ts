@@ -25,6 +25,7 @@ import {
 } from "@cubby/schemas/problems-raw-read";
 import { type SQL, sql } from "drizzle-orm";
 
+import { minorToDollarsSql } from "~/server/db/computed/money";
 import { type Database } from "~/server/db/database";
 import { notDeleted, actualExpenseSql } from "~/server/db/helpers/predicates";
 import { repositoryQueries as getDb } from "~/server/db/repository-access.boundary";
@@ -126,6 +127,7 @@ export const findDuplicateSpendCandidates = async (
 ): Promise<ProblemItem<"duplicateSpendCandidates">[]> => {
   const cents = (value: SQL) => sql`round(${value}::numeric, 2)`;
   const expenseTotal = sql`COALESCE(sum(le."cost"), 0)`;
+  const statedTotal = minorToDollarsSql(sql`p."statedTotalMinor"`, "numeric");
 
   const res = await getDb(db).execute<DuplicateSpendRow>(sql`
     WITH orphan AS (
@@ -142,7 +144,7 @@ export const findDuplicateSpendCandidates = async (
         p."id",
         p."shortcode",
         p."date",
-        (p."statedTotalMinor"::numeric / 100) AS "statedTotal",
+        (${statedTotal}) AS "statedTotal",
         v."name" AS "vendorName",
         v."shortcode" AS "vendorId",
         ${expenseTotal}::double precision AS "expenseTotal",
@@ -154,7 +156,7 @@ export const findDuplicateSpendCandidates = async (
         ON le."purchaseId" = p."id" AND ${notDeleted("le")}
       WHERE ${notDeleted("p")}
       GROUP BY
-        p."id", p."shortcode", p."date", (p."statedTotalMinor"::numeric / 100), v."name", v."shortcode"
+        p."id", p."shortcode", p."date", (${statedTotal}), v."name", v."shortcode"
     ),
     pair AS (
       SELECT

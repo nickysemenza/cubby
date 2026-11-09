@@ -488,14 +488,12 @@ export function buildRooms(
 
     if (zones.length === 0) continue;
 
-    // Calculate zone widths and room dimensions
     const zoneWidths = zones.map((z) => calculateZoneWidth(z.pieces));
     const totalZoneWidth = sum(zoneWidths);
     const gapCount = Math.max(0, zones.length - 1);
     const zoneGap = 0.6;
     const roomW = Math.max(6, totalZoneWidth + gapCount * zoneGap + 1);
 
-    // Assign zone X ranges
     let currentX = 0.5;
     // zoneWidths is built via zones.map, so indices align and are in-bounds
     for (let i = 0; i < zones.length; i++) {
@@ -504,7 +502,6 @@ export function buildRooms(
       currentX += zoneWidths[i]! + zoneGap;
     }
 
-    // Calculate room depth
     let maxDepth = 5;
     for (const zone of zones) {
       const floorPieces = zone.pieces.filter(
@@ -515,7 +512,6 @@ export function buildRooms(
     }
     const roomD = maxDepth;
 
-    // Layout furniture within each zone
     for (const zone of zones) {
       layoutFurnitureInZone(zone.pieces, zone.startGx, zone.endGx, roomD);
     }
@@ -631,7 +627,6 @@ function layoutRoomsGrid(rooms: RoomData[]) {
   const cols = Math.min(maxCols, rooms.length);
   const numRows = Math.ceil(rooms.length / cols);
 
-  // Calculate max dimensions per row/col for alignment
   const rowMaxD = Array.from<number>({ length: numRows }).fill(0);
   const colMaxW = Array.from<number>({ length: cols }).fill(0);
 
@@ -711,7 +706,6 @@ function hitTestPieces(
       if (itemIdx >= piece.items.length) break;
     }
 
-    // Furniture body hit test
     const ftl = toScreen(piece.gx, piece.gy, piece.gz + piece.h, cx, cy);
     const ftr = toScreen(
       piece.gx + piece.w,

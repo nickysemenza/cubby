@@ -46,11 +46,9 @@ import {
   withChildCounts,
   withDisplayImages,
 } from "~/server/generic/list/repo/list-read-adapters";
-import {
-  bindWorkflow,
-  workflow,
-  mapWorkflowValue,
-} from "~/server/workflows/runtime";
+import { workflow } from "~/server/workflows/runtime/builder";
+import { mapWorkflowValue } from "~/server/workflows/runtime/definition";
+import { bindWorkflow } from "~/server/workflows/runtime/operation";
 
 import type {
   EntityBindingSchemas,

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { APPLE_APP_IDENTITIES } from "@cubby/shared/apple-app-identity";
 
 const sharedDriver = z.object({
   command: z.string().min(1),
@@ -43,7 +44,11 @@ export function sharedDeviceCommand(
         throw new Error("Shared driver targets a different device");
       const body =
         action === "install"
-          ? ["install", "com.nickysemenza.cubby", args[3]!]
+          ? [
+              "install",
+              APPLE_APP_IDENTITIES.production.bundleIdentifier,
+              args[3]!,
+            ]
           : ["uninstall", args[3]!];
       return { command: driver.command, args: [...body, ...driver.targetArgs] };
     }

@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useLocation, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 
-import { entityDetailLink, isBrowserRoutedEntity } from "~/entity/entities";
+import { entityDetailLink, isShortcodeRoutedEntity } from "~/entity/entities";
 import { suggestions } from "~/integrations/tanstack-query/generated/domains/suggestions.gen";
 import { useSectionEmpty } from "~/ui/data-table/detail-section-state";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
@@ -72,8 +72,7 @@ export function RecordProposals({ id }: { id: string }) {
               source.entityId === id &&
               destination.entityId !== id &&
               pathname.endsWith(`/${id}`) &&
-              destination.entityKind !== "usda-food" &&
-              isBrowserRoutedEntity(destination.entityKind)
+              isShortcodeRoutedEntity(destination.entityKind)
             )
               await navigate({
                 ...entityDetailLink(

@@ -16,10 +16,10 @@ import { z } from "zod";
 
 import { uuidArrayParam } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
+import { transactionImportRecord } from "~/server/db/retained-tables";
 import { suggestionTable } from "~/server/db/schema";
 import { financialSourceReferenceRows } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
-import { transactionImportMembers } from "~/server/domains/transaction-import/repo/transaction-import-membership";
-import { SuggestionRecordScope } from "~/server/generic/suggestions/repo/suggestion-touching";
+import type { SuggestionRecordScope } from "~/server/generic/suggestions/repo/suggestion-touching";
 
 export const reviewSuggestion = alias(suggestionTable, "s");
 
@@ -195,7 +195,7 @@ function statementRecordParts(
     parts.push(sql`COALESCE((SELECT jsonb_agg(DISTINCT ${ref(sql`${entities.transactionImport}`, sql`member."importId"::text`)})
       FROM "SourceTransactionRecord" anchor
       JOIN "SourceTransactionRecord" observed ON observed."occurrenceId" = anchor."occurrenceId"
-      JOIN ${transactionImportMembers} member ON member."statementRowId" = observed.id
+      JOIN ${transactionImportRecord} member ON member."statementRowId" = observed.id
       WHERE anchor.id = s."recordId" AND ${notDeleted("observed")}), '[]'::jsonb)`);
   add(entities.financialAccount, sql`s.data->>'accountId'`);
   add(
@@ -288,7 +288,7 @@ function statementSourceMatch(scope: SuggestionRecordScope) {
       : sql`${id} IS NOT NULL`;
     return [
       sql`s."recordId" IN (
-      SELECT sibling.id FROM ${entity === entities.transactionImport ? sql`${transactionImportMembers} member JOIN "SourceTransactionRecord" seed ON seed.id = member."statementRowId"` : sql`"SourceTransactionRecord" seed`}
+      SELECT sibling.id FROM ${entity === entities.transactionImport ? sql`${transactionImportRecord} member JOIN "SourceTransactionRecord" seed ON seed.id = member."statementRowId"` : sql`"SourceTransactionRecord" seed`}
       JOIN "SourceTransactionRecord" sibling ON sibling."occurrenceId" = seed."occurrenceId"
       WHERE ${match} AND ${notDeleted("seed")})`,
     ];

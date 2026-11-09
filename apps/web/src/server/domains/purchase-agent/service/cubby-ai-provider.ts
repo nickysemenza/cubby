@@ -32,6 +32,7 @@ import { z } from "zod";
 
 import { type ContextRecorder, withContextCapture } from "./context-breakdown";
 import type { AgentGateway, PurchaseAgentEnvironment } from "./environment";
+import { CLAIM_IMPORT_WORK_TOOL } from "./tool-protocol";
 
 type TestModel = NonNullable<PurchaseAgentEnvironment["testModel"]>;
 type FundingRefusal = (
@@ -66,7 +67,7 @@ export function withSequentialToolCalls(
   return { ...body, parallel_tool_calls: false };
 }
 
-const CLAIM_TOOL = "claim_next_import_work";
+const CLAIM_TOOL = CLAIM_IMPORT_WORK_TOOL;
 // Anthropic allows at most four cache breakpoints per request; pi-ai already
 // marks the system prompt, the last tool and the latest user message.
 const ANTHROPIC_MAX_BREAKPOINTS = 4;

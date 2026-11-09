@@ -10,10 +10,10 @@ import { fieldClearing } from "~/entity/editing/field-clearing";
 import type { EntityMutationPort } from "~/entity/editing/types";
 import { useEntityEditSession } from "~/entity/editing/use-entity-edit-session";
 import { entityDetailLink } from "~/entity/entities";
+import { WhyValue } from "~/entity/fields/explanation/why-value";
 import { PickerField } from "~/entity/forms/picker-field";
 import { FieldSuggestionProvider } from "~/entity/suggestions/field-suggestion-provider";
 import { formatCurrency } from "~/lib/number-format";
-import { WhyValue } from "~/ui/derived/why-value";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { DateRangeField } from "~/ui/forms/date-span-field";
 import {

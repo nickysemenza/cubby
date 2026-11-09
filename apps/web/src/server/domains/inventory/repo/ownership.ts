@@ -31,6 +31,7 @@ import {
   expenseAcquisitionSql,
   actualExpense,
 } from "~/server/db/computed/expense-aggregate-sql";
+import { minorToDollarsSql } from "~/server/db/computed/money";
 import { declaredStoredSourceSql } from "~/server/db/derived-source-sql";
 import { notDeleted, unwrapDb } from "~/server/db/helpers";
 import { quotedTable } from "~/server/db/helpers/related";
@@ -52,6 +53,7 @@ import {
   resolveBeneficiaryEvidence,
   resolvePaymentEvidence,
 } from "~/server/domains/inventory/repo/ownership-evidence";
+import { createAppError } from "~/server/errors/app-error";
 import { loadStoredDerived } from "~/server/generic/derived/repo/read";
 import { liveLinks } from "~/server/generic/entity-links/repo/entity-links";
 
@@ -421,10 +423,10 @@ const loadPaymentDefaults = async (
       accountShortcode: financialAccount.shortcode,
       transactionId: financialTransaction.id,
       transactionShortcode: financialTransaction.shortcode,
-      allocationAmount:
-        sql<number>`${financialTransactionAllocation.amountMinor}::numeric / 100`.mapWith(
-          Number,
-        ),
+      allocationAmount: minorToDollarsSql(
+        financialTransactionAllocation.amountMinor,
+        "numeric",
+      ).mapWith(Number),
     })
     .from(financialTransactionAllocation)
     .innerJoin(
@@ -1065,7 +1067,10 @@ export async function assertIndividualOwner(
     columns: { kind: true },
   });
   if (!row || !isIndividual(row)) {
-    throw new Error("Inventory owners must be live member or guest parties");
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      "Inventory can only be assigned to a live member or guest.",
+    );
   }
 }
 

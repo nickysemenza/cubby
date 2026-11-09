@@ -95,6 +95,7 @@ import {
   IMAGE_DESCRIPTION_PROCESSOR_REVISION,
 } from "~/server/domains/image-processing/repo/processor-policy";
 import { loadImageAnalysisEvidence } from "~/server/domains/image/repo/image-analysis-summary";
+import { currentMemberLedgerParty } from "~/server/domains/ledger-party/repo/current-member-party";
 import { loadLocationAncestors } from "~/server/domains/location/repo/tree";
 import { photoFieldCrossCheck } from "~/server/domains/photo-import/repo/photo-correctness";
 import { photoRunImageOrder } from "~/server/domains/photo-import/repo/photo-import";
@@ -108,11 +109,10 @@ import {
   photoProductSuggestions,
 } from "~/server/domains/photo-import/repo/run/product-suggestions";
 import { getProductCoverImageUrlsByProductIds } from "~/server/domains/product/repo/crud";
-import { assertRunCapability } from "~/server/domains/purchase-import/repo/capabilities";
+import { assertRunCapability } from "~/server/domains/run/repo/purpose-policy";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
-import { currentMemberLedgerParty } from "~/server/http/member-login";
 import { buildCrudServices } from "~/server/http/request-context";
 import { canonicalJson } from "~/server/lib/canonical-json";
 

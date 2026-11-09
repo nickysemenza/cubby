@@ -1,17 +1,15 @@
-import type { CompiledEntity } from "./declarations.ts";
+import type { CompiledEntity } from "./declaration-types.ts";
 
 /**
  * The kernel serves `get` (and so the generic detail page) for every entity
  * with a contract and stored table or a custom repository.
  */
 export const servesKernelGet = ({
-  key,
   contract,
   ports,
   table,
-}: Pick<CompiledEntity, "key" | "contract" | "ports" | "table">): boolean =>
-  contract !== null &&
-  (table !== null || ports.repository !== null || key === "image");
+}: Pick<CompiledEntity, "contract" | "ports" | "table">): boolean =>
+  contract !== null && (table !== null || ports.repository !== null);
 
 /** A routed list page may use either a generated or a hand-written index. */
 export const hasBrowserListPage = (entity: CompiledEntity): boolean =>

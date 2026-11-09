@@ -33,16 +33,24 @@ import {
   vendorAccount,
 } from "~/server/db/schema";
 import type { RetainedMail } from "~/server/domains/mail/repo/retained-mail";
+import { amazonAsin } from "~/server/domains/product/repo/amazon-asin";
 import {
   externalIdKey,
   findProductsByExternalIds,
   type ProductHit,
 } from "~/server/domains/product/repo/find-by-external-ids";
 import { lookupProductIdentifierSources } from "~/server/domains/product/repo/product-identifier-source";
+import {
+  carrierFromHost,
+  carrierFromNumber,
+  normalizeTrackingNumber,
+  TRACKING_PARAMS,
+  USPS_NUMBER,
+} from "~/server/domains/shipment/repo/carrier-recognition";
 import { wasm } from "~/server/wasm";
 
 import { mailReadContent } from "./gmail/read-content";
-import { amazonAsin, lineIdentifierRequests } from "./writer";
+import { lineIdentifierRequests } from "./writer";
 
 const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9_/-]{2,39}$/u;
 
@@ -64,16 +72,6 @@ export const normalizeOrderKey = (value: string) =>
 export const normalizedOrderIdSql = (column: SQLWrapper) =>
   sql<string>`upper(btrim(regexp_replace(btrim(${column}), '^#+', '')))`;
 
-/** Shipment matching compares numbers this way (`shipment/repo/evidence.ts`). */
-const normalizeTracking = (value: string) =>
-  value.replaceAll(/\s/gu, "").toUpperCase();
-
-const UPS_NUMBER = /^1Z[0-9A-Z]{16}$/u;
-// USPS IMpb: 20–22 or 26 digits from 91–95, optionally behind a 420+ZIP prefix.
-const USPS_NUMBER = /^(?:420\d{5}(?:\d{4})?)?(9[1-5](?:\d{18,20}|\d{24}))$/u;
-const USPS_INTERNATIONAL = /^[A-Z]{2}\d{9}US$/u;
-// OnTrac prints C or D followed by 14 digits.
-const ONTRAC_NUMBER = /^[CD]\d{14}$/u;
 const ONTRAC_IN_TEXT = /\b[CD]\d{14}\b/gu;
 const FEDEX_LENGTHS = new Set([12, 15, 20, 22]);
 const UPS_IN_TEXT = /\b1Z[0-9A-Z]{16}\b/giu;
@@ -82,38 +80,6 @@ const USPS_INTERNATIONAL_IN_TEXT = /\b[A-Z]{2}\d{9}US\b/gu;
 const DIGITS_IN_TEXT =
   /(?<![\dA-Za-z])(?:\d{4}(?: \d{4}){2,6}(?: \d{1,4})?|\d{12,34})(?![\dA-Za-z])/gu;
 const FEDEX_CONTEXT = /fedex|track|shipment|package/iu;
-const TRACKING_PARAMS = new Set([
-  "trknbr",
-  "tracknum",
-  "tracknums",
-  "tracking_number",
-  "trackingnumber",
-  "tracknumbers",
-  "tlabels",
-]);
-
-function carrierFromHost(href: string): Carrier {
-  try {
-    const host = new URL(href).hostname.toLowerCase();
-    if (/(?:^|\.)ups\.com$/u.test(host)) return "UPS";
-    if (/(?:^|\.)fedex\.com$/u.test(host)) return "FedEx";
-    if (/(?:^|\.)usps\.(?:com|gov)$/u.test(host)) return "USPS";
-    if (/(?:^|\.)ontrac\.com$/u.test(host)) return "OnTrac";
-  } catch {
-    // SILENT: an unparseable link names no carrier.
-  }
-  return null;
-}
-
-/** A carrier the number's own format proves, else null. */
-function carrierFromNumber(number: string): Carrier {
-  if (UPS_NUMBER.test(number)) return "UPS";
-  if (USPS_NUMBER.test(number) || USPS_INTERNATIONAL.test(number))
-    return "USPS";
-  if (ONTRAC_NUMBER.test(number)) return "OnTrac";
-  return null;
-}
-
 /**
  * Carrier tracking numbers an Email prints: UPS `1Z…`, USPS IMpb and
  * international formats, FedEx 12/15/20/22 digits only beside FedEx or
@@ -122,8 +88,8 @@ function carrierFromNumber(number: string): Carrier {
 function trackingKeys(text: string, links: readonly string[]) {
   const found = new Map<string, Carrier>();
   const add = (raw: string, carrier: Carrier) => {
-    const usps = USPS_NUMBER.exec(normalizeTracking(raw));
-    const number = usps?.[1] ?? normalizeTracking(raw);
+    const usps = USPS_NUMBER.exec(normalizeTrackingNumber(raw));
+    const number = usps?.[1] ?? normalizeTrackingNumber(raw);
     if (!found.get(number)) found.set(number, carrier);
   };
   for (const match of text.matchAll(UPS_IN_TEXT)) add(match[0], "UPS");
@@ -134,7 +100,7 @@ function trackingKeys(text: string, links: readonly string[]) {
     /fedex/iu.test(text) ||
     links.some((href) => carrierFromHost(href) === "FedEx");
   for (const match of text.matchAll(DIGITS_IN_TEXT)) {
-    const number = normalizeTracking(match[0]);
+    const number = normalizeTrackingNumber(match[0]);
     if (USPS_NUMBER.test(number)) add(number, "USPS");
     else if (
       fedexEmail &&
@@ -154,7 +120,7 @@ function trackingKeys(text: string, links: readonly string[]) {
     for (const [name, value] of params)
       if (TRACKING_PARAMS.has(name.toLowerCase()))
         for (const part of value.split(/[,\s]+/u)) {
-          const number = normalizeTracking(part);
+          const number = normalizeTrackingNumber(part);
           if (/^[A-Z0-9]{8,40}$/u.test(number) && /\d/u.test(number))
             add(number, carrierFromHost(href) ?? carrierFromNumber(number));
         }
@@ -301,8 +267,8 @@ export function extractMailKeys(input: {
         .filter(
           (key) =>
             key.length > 0 &&
-            !numbers.has(normalizeTracking(key)) &&
-            carrierFromNumber(normalizeTracking(key)) === null,
+            !numbers.has(normalizeTrackingNumber(key)) &&
+            carrierFromNumber(normalizeTrackingNumber(key)) === null,
         ),
     ),
   ];

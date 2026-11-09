@@ -4,6 +4,12 @@ import { z } from "zod";
 
 import { browserOperationPath } from "~/lib/browser-operation-path";
 import type { OperationKind } from "~/lib/operation-observability";
+import {
+  type PublicOperationError,
+  type OperationResult,
+  type OperationWireValue,
+  operationWireValueSchema,
+} from "~/lib/operation-result";
 import { createAppError } from "~/server/errors/app-error";
 import {
   API_AUTH,
@@ -20,12 +26,6 @@ import {
   loadOperationHandler,
   loadWorkflowStreamHandler,
 } from "~/server/operation-runtime/operation-handlers.server";
-import {
-  type PublicOperationError,
-  type OperationResult,
-  type OperationWireValue,
-  operationWireValueSchema,
-} from "~/server/operation-runtime/operation.contract";
 import {
   isOperationOfKind,
   normalizeOperationError,

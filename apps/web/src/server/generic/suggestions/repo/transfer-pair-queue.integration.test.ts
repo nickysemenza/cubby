@@ -18,12 +18,7 @@ import {
   run,
   sourceTransactionRecord,
 } from "~/server/db/schema";
-import { updateFinancialAccount } from "~/server/domains/financial-account/repo";
-import {
-  generateTransferPairSuggestions,
-  lockTransferPairLegs,
-} from "~/server/domains/financial-transaction/repo/transfer-pair-suggestions";
-import { labelTransferPairSuggestions } from "~/server/domains/financial-transaction/service/transfer-pair-labels";
+import { updateFinancialAccount } from "~/server/domains/financial-account/repo/financial-account";
 import { readRunSteps } from "~/server/domains/run/repo/run-step";
 import { advanceStepRun } from "~/server/domains/run/service/step-run";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
@@ -36,7 +31,12 @@ import { updateSourceTransactionRecords } from "~/server/domains/transaction-imp
 import { recordSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
 import { answering } from "~/server/domains/transaction-import/repo/statement-decision-port.fixtures";
 import { generateStatementSuggestionPage } from "~/server/domains/transaction-import/repo/statement-suggestions";
+import {
+  generateTransferPairSuggestions,
+  lockTransferPairLegs,
+} from "~/server/domains/transaction-import/repo/transfer-pair-suggestions";
 import { labelStatementSuggestions } from "~/server/domains/transaction-import/service/statement-suggestion-labels";
+import { labelTransferPairSuggestions } from "~/server/domains/transaction-import/service/transfer-pair-labels";
 import { readSuggestionRecordRefs } from "~/server/generic/suggestions/repo/suggestion-reference-resolution";
 import {
   drainStoredDerived,

@@ -11,7 +11,8 @@ import { getEmbeddingReadiness } from "~/server/generic/embedding/service/embedd
 import { productionVectorStore } from "~/server/generic/embedding/service/semantic/vector-store";
 import { hydrateSearchHitRefs } from "~/server/generic/search/service/search.service";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { bindWorkflow, workflow } from "~/server/workflows/runtime";
+import { workflow } from "~/server/workflows/runtime/builder";
+import { bindWorkflow } from "~/server/workflows/runtime/operation";
 
 import { getSemanticEmbeddingConfig } from "./semantic/config";
 

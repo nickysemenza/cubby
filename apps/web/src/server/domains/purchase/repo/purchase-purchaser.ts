@@ -3,6 +3,7 @@ import { ledgerPartyKind } from "@cubby/schemas/ledger-party";
 import { type SQL, sql } from "drizzle-orm";
 
 import { effectiveFieldSql } from "~/server/db/computed/effective-field";
+import { minorToDollarsSql } from "~/server/db/computed/money";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { soleCardAccessSql } from "~/server/domains/financial-account/repo/purchaser";
 import {
@@ -31,7 +32,7 @@ export const purchasePurchasersSql = (purchases: SQL) => sql`
   WITH purchase AS MATERIALIZED (${purchases}),
   mail AS MATERIALIZED (${purchaseMailMembersSql(sql`SELECT * FROM purchase`)}),
   settled AS (
-    SELECT allocation."purchaseId", (allocation."amountMinor"::numeric / 100) AS amount, purchase.date,
+    SELECT allocation."purchaseId", (${minorToDollarsSql(sql`allocation."amountMinor"`, "numeric")}) AS amount, purchase.date,
       coalesce(ft."transactionDate", ft."postedDate") AS charge_date,
       account."deletedAt" AS account_deleted_at,
       account."authorizedUsers",

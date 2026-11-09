@@ -21,5 +21,5 @@ export const entityTimelineContract = defineContract(
       observability: { entities: timelineEntities },
     }),
   },
-  { exposure: "view" },
+  { exposure: "view", readPolicy: "financialEntity" },
 );

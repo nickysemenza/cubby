@@ -22,7 +22,7 @@ const estimateMeasure = z.enum(["cost", "kcal", "macro", "share"]);
 // Currency, number, kcal, and estimates are formatted by one Rust
 // implementation (recipebridge `display_format`, which also reads this file);
 // these cases check the web bindings. Native reads the file too (CubbyKit
-// DisplayFormatTests). Plain dates and empty text use that same Rust owner.
+// ValueFormatTests). Plain dates and empty text use that same Rust owner.
 describe("display-format golden vectors", () => {
   it.each(vectors.currency)("currency $value -> $out", ({ value, out }) => {
     expect(formatCurrency(value)).toBe(out);

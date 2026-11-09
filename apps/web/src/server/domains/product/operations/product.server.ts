@@ -100,13 +100,13 @@ import {
 import type { requireActor } from "~/server/http/request-context";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
 import { implementSubscriptionDomain } from "~/server/operation-runtime/subscription-domain.server";
+import { workflow } from "~/server/workflows/runtime/builder";
 import {
-  bindWorkflow,
   bindBulkWorkflow,
   defineBulkWorkflow,
   type BulkWorkflowSummary,
-  workflow,
-} from "~/server/workflows/runtime";
+} from "~/server/workflows/runtime/bulk";
+import { bindWorkflow } from "~/server/workflows/runtime/operation";
 
 export type ProductWorkflowContext = ReturnType<typeof requireActor>;
 

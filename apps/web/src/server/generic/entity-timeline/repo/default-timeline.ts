@@ -21,9 +21,9 @@ import type {
 import { readPathValue } from "~/entity/read-path";
 import { householdDateTime, householdLocalDate } from "~/lib/household-date";
 import { wasm } from "~/lib/wasm";
-import { executeEntityAs } from "~/server/entity-kernel";
+import type { executeEntityAs } from "~/server/entity-kernel";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
-import { getAuditLog } from "~/server/generic/audit-log/repo/audit-log";
+import { getAuditLog } from "~/server/generic/audit-log/repo/audit-log-read";
 import { resolveLiveShortcodes } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 /** Audit entries read for the page's records, newest first. */
@@ -111,6 +111,7 @@ const recordLink = (entity: TimelineEntity, record: TimelineRecord) => ({
 async function loadRecords(
   context: EntityKernelContext,
   input: ParsedEntityTimelineInputByEntity[TimelineEntity],
+  read: typeof executeEntityAs,
 ): Promise<{ records: TimelineRecord[]; totalCount: number }> {
   const { entity, filters, window, pagination } = input;
   if (window.ids) {
@@ -122,7 +123,7 @@ async function loadRecords(
     for (let at = 0; at < pageIds.length; at += ID_GET_CONCURRENCY) {
       const results = await Promise.all(
         pageIds.slice(at, at + ID_GET_CONCURRENCY).map((id) =>
-          executeEntityAs(context, "get", {
+          read(context, "get", {
             entity,
             id,
             missing: "null",
@@ -136,7 +137,7 @@ async function loadRecords(
     }
     return { records, totalCount: window.ids.length };
   }
-  const result = await executeEntityAs(context, "list", {
+  const result = await read(context, "list", {
     entity,
     filters,
     sort: [{ orderBy: "createdAt", direction: window.order }],
@@ -361,8 +362,9 @@ const extentOf = (
 export async function defaultTimeline(
   context: EntityKernelContext,
   input: ParsedEntityTimelineInputByEntity[TimelineEntity],
+  read: typeof executeEntityAs,
 ): Promise<EntityTimelineOut> {
-  return (await defaultTimelinePage(context, input)).out;
+  return (await defaultTimelinePage(context, input, read)).out;
 }
 
 /** {@link defaultTimeline} plus the live ids of the page's records, for a
@@ -370,6 +372,7 @@ export async function defaultTimeline(
 export async function defaultTimelinePage(
   context: EntityKernelContext,
   input: ParsedEntityTimelineInputByEntity[TimelineEntity],
+  read: typeof executeEntityAs,
 ): Promise<{ out: EntityTimelineOut; recordIds: string[] }> {
   const { entity, window, pagination } = input;
   const declared = entitySummary[entity].list.timeline;
@@ -381,7 +384,7 @@ export async function defaultTimelinePage(
         ? lifecycleKeysOf(lifecycle)
         : [];
 
-  const { records, totalCount } = await loadRecords(context, input);
+  const { records, totalCount } = await loadRecords(context, input, read);
   const recordById = new Map(records.map((record) => [record.id, record]));
   const paged = totalCount > records.length;
   const notes: string[] = [];

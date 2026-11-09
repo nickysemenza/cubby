@@ -17,7 +17,6 @@ import {
   nivoCurrencyAxis,
 } from "~/lib/nivo-theme";
 import { formatCurrency } from "~/lib/number-format";
-import { getCostTypeColor } from "~/lib/status-colors";
 import { ChartTooltip } from "~/ui/charts/chart-tooltip";
 import { HorizontalBarChart } from "~/ui/charts/kit";
 import { CrossTabTable } from "~/ui/matrix/cross-tab-table";
@@ -29,6 +28,7 @@ import {
   emptyCell,
   totalCell,
 } from "~/ui/matrix/matrix-chrome";
+import { getCostTypeColor } from "~/ui/values/status-colors";
 import { Visualization } from "~/ui/visualizations/visualization";
 
 import { pivotTradeCostContributions } from "./trade-cost-pivot";

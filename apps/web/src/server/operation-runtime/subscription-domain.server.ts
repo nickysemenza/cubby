@@ -5,7 +5,7 @@ import type {
   SubscriptionMemberName,
 } from "~/contracts/define";
 import type { OperationIdOfKind } from "~/lib/generated/operation-registry.gen";
-import type { OperationWireValue } from "~/server/operation-runtime/operation.contract";
+import type { OperationWireValue } from "~/lib/operation-result";
 import {
   type AuthenticatedOperationContext,
   resolveOperation,

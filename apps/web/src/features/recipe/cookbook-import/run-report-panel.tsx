@@ -5,9 +5,10 @@ import { WarningCircleIcon } from "@phosphor-icons/react/dist/csr/WarningCircle"
 import { useMemo } from "react";
 
 import { formatMinutesSeconds } from "~/lib/format-duration";
+import { formatAiCostSubtotal } from "~/lib/number-format";
 import { StaticTable } from "~/ui/data-table/static-table";
 import { Row, Stack } from "~/ui/layout";
-import { Disclosure } from "~/ui/layout/disclosure";
+import { Disclosure } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import type { Fact } from "~/ui/records/facts";
 import {
@@ -18,7 +19,7 @@ import {
   RecordRow,
 } from "~/ui/records/record-list";
 import { Description } from "~/ui/text/description";
-import { AiCost, formatAiCostSubtotal } from "~/ui/values/ai-cost";
+import { AiCost } from "~/ui/values/ai-cost";
 
 import {
   type ChunkRow,

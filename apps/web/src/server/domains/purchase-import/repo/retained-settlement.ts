@@ -35,6 +35,8 @@ import {
 } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
+import { advisoryXactLock } from "~/server/db/advisory-lock";
+import { minorToDollarsSql } from "~/server/db/computed/money";
 import { getDb, notDeleted, withTransaction } from "~/server/db/helpers";
 import { outer } from "~/server/db/helpers/related";
 import { quotedTable } from "~/server/db/helpers/related";
@@ -89,9 +91,7 @@ export async function lockPartySettlement(
   tx: SettlementReader,
   ledgerPartyId: LedgerPartyId,
 ): Promise<void> {
-  await tx.execute(
-    sql`SELECT pg_advisory_xact_lock(hashtext(${`purchase-settlement:${ledgerPartyId}`}))`,
-  );
+  await advisoryXactLock(tx, "purchase-settlement", ledgerPartyId);
 }
 
 type RetainedPayment = Readonly<
@@ -226,14 +226,16 @@ export async function prepareRetainedSettlementDiscovery(
         vendorId: purchase.vendorId,
         statedTotal: sql<
           number | null
-        >`${purchase.statedTotal}::numeric / 100`.mapWith(Number),
+        >`${minorToDollarsSql(purchase.statedTotal, "numeric")}`.mapWith(
+          Number,
+        ),
       })
       .from(purchase)
       .where(and(inArray(purchase.id, batch), notDeleted(purchase)));
     const allocations = await tx
       .select({
         purchaseId: financialTransactionAllocation.purchaseId,
-        hasNegative: sql<boolean>`bool_or(${sql`(${financialTransactionAllocation.amountMinor}::numeric / 100)`} < 0)`,
+        hasNegative: sql<boolean>`bool_or(${minorToDollarsSql(financialTransactionAllocation.amountMinor, "numeric")} < 0)`,
       })
       .from(financialTransactionAllocation)
       .where(
@@ -317,10 +319,9 @@ async function settleableCharges(
     .select({
       id: financialTransaction.id,
       accountId: financialTransaction.accountId,
-      amount:
-        sql<number>`${financialTransaction.amount}::numeric / 100`.mapWith(
-          Number,
-        ),
+      amount: minorToDollarsSql(financialTransaction.amount, "numeric").mapWith(
+        Number,
+      ),
       kind: financialTransaction.kind,
       transactionDate: financialTransaction.transactionDate,
       postedDate: financialTransaction.postedDate,
@@ -494,12 +495,12 @@ async function competingClaimants(
         // A Purchase whose allocations already cover its payment lines makes
         // no further claim; a partly settled one still does.
         sql`abs(coalesce((
-          SELECT sum((fta."amountMinor"::numeric / 100)) FROM "FinancialTransactionAllocation" fta
+          SELECT sum((${minorToDollarsSql(sql`fta."amountMinor"`, "numeric")})) FROM "FinancialTransactionAllocation" fta
           WHERE fta."purchaseId" = "PurchasePaymentEvidence"."purchaseId"
             AND ${notDeleted("fta")}
-            AND sign((fta."amountMinor"::numeric / 100)) = sign(${charge.amount}::numeric)
+            AND sign((${minorToDollarsSql(sql`fta."amountMinor"`, "numeric")})) = sign(${charge.amount}::numeric)
         ), 0)) < abs((
-          SELECT sum(ppe."amountMinor")::numeric / 100 FROM "PurchasePaymentEvidence" ppe
+          SELECT ${minorToDollarsSql(sql`sum(ppe."amountMinor")`, "numeric")} FROM "PurchasePaymentEvidence" ppe
           WHERE ppe."purchaseId" = "PurchasePaymentEvidence"."purchaseId"
             AND sign(ppe."amountMinor") = sign(${charge.amount}::numeric)
         ))`,
@@ -536,7 +537,7 @@ async function evidencedChargeGroup(
       vendorId: purchase.vendorId,
       statedTotal: sql<
         number | null
-      >`${purchase.statedTotal}::numeric / 100`.mapWith(Number),
+      >`${minorToDollarsSql(purchase.statedTotal, "numeric")}`.mapWith(Number),
     })
     .from(purchase)
     .where(and(inArray(purchase.id, members), notDeleted(purchase)))
@@ -695,7 +696,7 @@ export async function planPurchaseRetainedSettlement(
       vendorId: purchase.vendorId,
       statedTotal: sql<
         number | null
-      >`${purchase.statedTotal}::numeric / 100`.mapWith(Number),
+      >`${minorToDollarsSql(purchase.statedTotal, "numeric")}`.mapWith(Number),
     })
     .from(purchase)
     .where(and(eq(purchase.id, input.purchaseId), notDeleted(purchase)))
@@ -719,7 +720,7 @@ export async function planPurchaseRetainedSettlement(
               eq(financialTransactionAllocation.purchaseId, input.purchaseId),
               notDeleted(financialTransactionAllocation),
               refund
-                ? sql`${sql`(${financialTransactionAllocation.amountMinor}::numeric / 100)`} < 0`
+                ? sql`${minorToDollarsSql(financialTransactionAllocation.amountMinor, "numeric")} < 0`
                 : undefined,
             ),
           )
@@ -789,10 +790,10 @@ export async function planPurchaseRetainedSettlement(
       const allocated = await tx
         .select({
           purchaseId: financialTransactionAllocation.purchaseId,
-          amount:
-            sql<number>`${financialTransactionAllocation.amountMinor}::numeric / 100`.mapWith(
-              Number,
-            ),
+          amount: minorToDollarsSql(
+            financialTransactionAllocation.amountMinor,
+            "numeric",
+          ).mapWith(Number),
         })
         .from(financialTransactionAllocation)
         .where(
@@ -957,7 +958,7 @@ export async function settleRetainedPaymentEvidence(
           WHERE fa."ledgerPartyId" = ${importSourceClaim.ledgerPartyId}
             AND ${notDeleted("ft")}
             AND ft."status" IN (${financialTransactionStatus.enum.observed}, ${financialTransactionStatus.enum.pending}, ${financialTransactionStatus.enum.posted})
-            AND round((ft."amountMinor"::numeric / 100) * 100) = ${purchasePaymentEvidence.amountMinor}
+            AND round((${minorToDollarsSql(sql`ft."amountMinor"`, "numeric")}) * 100) = ${purchasePaymentEvidence.amountMinor}
             AND abs(coalesce(ft."transactionDate", ft."postedDate") - (${purchasePaymentEvidence.chargedAt})::date) <= ${POSTING_WINDOW_DAYS}
             AND NOT EXISTS (
               SELECT 1 FROM "FinancialTransactionAllocation" ofta

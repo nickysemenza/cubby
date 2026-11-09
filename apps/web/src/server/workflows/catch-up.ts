@@ -1,3 +1,4 @@
+import { systemActor } from "@cubby/schemas/context";
 import { createLogger } from "@cubby/worker-tracing";
 
 import {
@@ -116,15 +117,14 @@ export async function discoverPurchases(db: Database) {
   await reconcileWorkflowRuns(db);
   const { learnAcceptedSenders } =
     await import("~/server/domains/purchase-import/repo/sender-attribution");
-  const { systemActor } = await import("~/server/domains/run/repo/ensure-run");
   const { withTransactionDatabase } = await import("~/server/db/helpers");
-  const learned = await withTransactionDatabase(db, (tx) =>
+  const senders = await withTransactionDatabase(db, (tx) =>
     learnAcceptedSenders(tx, systemActor()),
   );
   const pending = await (
     await import("~/server/domains/purchase-import/repo/mail-import-run")
   ).importPendingEmails(db);
-  if (learned === 50)
+  if (senders.more)
     await (
       await import("~/server/workflows/background-tasks/publish")
     ).publishBackgroundTasks(

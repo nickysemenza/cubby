@@ -19,6 +19,7 @@ import { and, eq, inArray, or, sql } from "drizzle-orm";
 import { chunk, uniq, uniqBy } from "es-toolkit";
 
 import { shiftPlainDate } from "~/lib/household-date";
+import { minorToDollarsSql } from "~/server/db/computed/money";
 import { type Database } from "~/server/db/database";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { repositoryQueries as unwrapDb } from "~/server/db/repository-access.boundary";
@@ -281,7 +282,7 @@ export async function previewFinancialTransactionImport(
     )}) value(key, source, fingerprint, position, provider, account))
     SELECT requested.key, owner.shortcode FROM requested
     JOIN "TransactionImport" collection ON collection.source = requested.source AND collection.fingerprint = requested.fingerprint
-    JOIN "TransactionImportRecord" membership ON membership."importId"=collection.id AND membership."rowPosition"=requested.position
+    JOIN ${transactionImportRecord} membership ON membership."importId"=collection.id AND membership."rowPosition"=requested.position
     JOIN "SourceTransactionRecord" observation ON observation.id=membership."statementRowId"
     JOIN "SourceOccurrence" owner ON owner.id = observation."occurrenceId"
     WHERE ${notDeleted("owner")} AND ${notDeleted("observation")} AND owner."reviewState" = ${sqlEnumConstant(sourceOccurrenceReviewState, sourceOccurrenceReviewState.enum.ready)}
@@ -395,10 +396,10 @@ export async function previewFinancialTransactionImport(
         id: financialTransaction.id,
         shortcode: financialTransaction.shortcode,
         accountId: financialTransaction.accountId,
-        amount:
-          sql<number>`${financialTransaction.amount}::numeric / 100`.mapWith(
-            Number,
-          ),
+        amount: minorToDollarsSql(
+          financialTransaction.amount,
+          "numeric",
+        ).mapWith(Number),
         postedDate: financialTransaction.postedDate,
         transactionDate: financialTransaction.transactionDate,
         status: financialTransaction.status,

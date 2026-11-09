@@ -3,6 +3,7 @@ import { and, asc, eq, inArray, sql } from "drizzle-orm";
 
 import type { PurchaseAuditRenderedBatch } from "~/server/ai/policy/prompts/purchase-import";
 import type { Database } from "~/server/db";
+import { minorToDollarsSql } from "~/server/db/computed/money";
 import { productBrandNameSql } from "~/server/db/computed/product-brand-sql";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import {
@@ -29,7 +30,7 @@ export async function loadPurchaseAuditBatch(
       orderId: purchase.orderId,
       statedTotal: sql<
         number | null
-      >`${purchase.statedTotal}::numeric / 100`.mapWith(Number),
+      >`${minorToDollarsSql(purchase.statedTotal, "numeric")}`.mapWith(Number),
       displayLabel: purchase.displayLabel,
     })
     .from(auditLog)
@@ -92,10 +93,10 @@ export async function loadPurchaseAuditBatch(
     getDb(db)
       .select({
         purchaseId: purchasePaymentEvidence.purchaseId,
-        amount:
-          sql<string>`${purchasePaymentEvidence.amountMinor}::numeric / 100`.mapWith(
-            Number,
-          ),
+        amount: minorToDollarsSql(
+          purchasePaymentEvidence.amountMinor,
+          "numeric",
+        ).mapWith(Number),
         chargedAt: purchasePaymentEvidence.chargedAt,
         cardLastFour: purchasePaymentEvidence.cardLastFour,
         tender: purchasePaymentEvidence.tender,

@@ -110,7 +110,7 @@ struct EntitySelectionBar: View {
         VStack(spacing: FieldGuideTokens.Space.xs) {
             Text(
                 rows.isEmpty
-                    ? "Select \(descriptor.plural.lowercased())" : "\(rows.count.formatted()) selected"
+                    ? "Select \(descriptor.plural.lowercased())" : "\(ValueFormat.count(rows.count)) selected"
             )
             .font(.caption)
             .monospacedDigit()

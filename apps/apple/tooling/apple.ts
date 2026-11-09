@@ -27,7 +27,10 @@
 // "Debugging on device"). This covers the "just put it on the phone" case the
 // `-NoDebugger` schemes exist for.
 import { APPLE_MARKETING_VERSION } from "@cubby/shared/apple-client-version";
-import { APPLE_APP_IDENTITIES } from "@cubby/shared/apple-app-identity";
+import {
+  APPLE_APP_IDENTITIES,
+  APPLE_DEVELOPMENT_TEAM,
+} from "@cubby/shared/apple-app-identity";
 import { installedApprovalVerifier } from "./lib/mac-app-approval.ts";
 import { installMacApp, stopMacAppProcesses } from "./lib/mac-app-install.ts";
 import { spawnSync } from "node:child_process";
@@ -326,11 +329,7 @@ const cli = (options: Options) => {
 // cdhash requirement, so launching it replaces every grant and the next signed
 // build prompts again.
 const assertTeamSigned = (app: string) => {
-  const team = readFileSync(join(APPLE, "project.yml"), "utf8").match(
-    /^\s*DEVELOPMENT_TEAM:\s*([A-Z\d]{10})\s*$/mu,
-  )?.[1];
-  if (!team) throw new Error("apps/apple/project.yml has no DEVELOPMENT_TEAM");
-  const signer = `certificate leaf[subject.OU] = "${team}"`;
+  const signer = `certificate leaf[subject.OU] = "${APPLE_DEVELOPMENT_TEAM}"`;
   const verified = spawnSync(
     "codesign",
     [
@@ -343,7 +342,7 @@ const assertTeamSigned = (app: string) => {
   );
   if (verified.status !== 0)
     throw new Error(
-      `${app} is not signed by team ${team}; launching it would reset macOS privacy approvals. ` +
+      `${app} is not signed by team ${APPLE_DEVELOPMENT_TEAM}; launching it would reset macOS privacy approvals. ` +
         `Remove apps/apple/DerivedData/Build/Products/Debug/${MAC_IDENTITY.productName}.app and rerun.\n${verified.stderr.trim()}`,
     );
 };

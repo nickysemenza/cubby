@@ -51,8 +51,8 @@ import {
 import { product as productOperations } from "~/integrations/tanstack-query/generated/domains/product.gen";
 import { isOperationQueryKey } from "~/integrations/tanstack-query/operation-catalog";
 import { formatCurrency } from "~/lib/number-format";
-import { booleanCellOptions } from "~/lib/select-options";
 import type { PickerOption } from "~/ui/combobox/picker-option";
+import { booleanCellOptions } from "~/ui/combobox/select-options";
 import { treePickerItems } from "~/ui/combobox/tree-items";
 import {
   createCubbyColumnCollection,

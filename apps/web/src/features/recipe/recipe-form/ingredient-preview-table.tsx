@@ -108,7 +108,6 @@ export function IngredientPreviewTable({
     isLoading: isLoadingIngredients,
   } = useParsedIngredientMatches(ingredientLines);
 
-  // Combine parsed ingredients with match data
   const ingredientsWithMatch: ParsedIngredientWithMatch[] = useMemo(() => {
     const occurrences = new Map<string, number>();
     return parsedIngredients.map((p) => {
@@ -134,7 +133,6 @@ export function IngredientPreviewTable({
   );
   const displayImages = useEntityDisplayImages(imageRefs);
 
-  // State for ingredient creation dialog
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [selectedIngredientName, setSelectedIngredientName] = useState("");
   // Whether the optional "Raw" carve column is shown (off by default).

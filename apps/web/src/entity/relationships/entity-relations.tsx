@@ -17,9 +17,8 @@ import { Link, useRouter } from "@tanstack/react-router";
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 
 import {
-  entities,
   EntityIcon,
-  entityDetailParams,
+  browserEntityDetailLink,
   entityLabel,
   isBrowserRoutedEntity,
 } from "~/entity/entities";
@@ -840,13 +839,9 @@ function RelationshipBranches({
 
 function hrefFor(node: EntityRef, router: ReturnType<typeof useRouter>) {
   if (!isBrowserRoutedEntity(node.entityKind)) return undefined;
-  return node.entityKind === "usda-food"
-    ? router.buildLocation({ to: "/usda/$id", params: { id: node.entityId } })
-        .href
-    : router.buildLocation({
-        to: entities[node.entityKind].routes.detail,
-        params: entityDetailParams(node.entityId),
-      }).href;
+  return router.buildLocation(
+    browserEntityDetailLink(node.entityKind, node.entityId),
+  ).href;
 }
 function GraphRecordLink({
   node,

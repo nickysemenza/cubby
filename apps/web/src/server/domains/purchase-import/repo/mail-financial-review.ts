@@ -7,10 +7,11 @@ import type {
   PurchaseId,
 } from "@cubby/schemas/identifiers";
 import type { MailSettlementReview } from "@cubby/schemas/mailbox-research";
-import { sql, and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import type { z } from "zod";
 
 import type { Database } from "~/server/db";
+import { minorToDollarsSql } from "~/server/db/computed/money";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import {
   emailFinancialAssociation,
@@ -129,10 +130,9 @@ export async function reconcileMailRefundReview(
   const transactions = await getDb(db)
     .select({
       id: financialTransaction.id,
-      amount:
-        sql<number>`${financialTransaction.amount}::numeric / 100`.mapWith(
-          Number,
-        ),
+      amount: minorToDollarsSql(financialTransaction.amount, "numeric").mapWith(
+        Number,
+      ),
     })
     .from(financialTransaction)
     .where(

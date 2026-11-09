@@ -14,6 +14,7 @@ import {
   notDeleted,
   unwrapDb,
 } from "~/server/db/helpers";
+import { transactionImportRecord } from "~/server/db/retained-tables";
 import {
   financialAccount,
   financialEvidenceAlias,
@@ -29,16 +30,13 @@ import {
 } from "~/server/domains/financial-transaction/repo/financial-evidence";
 import { transactionDollars } from "~/server/domains/financial-transaction/repo/transaction-money";
 import { providerIdentityClaims } from "~/server/domains/transaction-import/repo/source-transaction-record-identity";
-import { createAppError } from "~/server/errors/app-error";
+import { constraintViolation } from "~/server/errors/app-error";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { transitionSuggestionStates } from "~/server/generic/suggestions/repo/suggestion-state";
 import { jsonSnapshot } from "~/server/lib/canonical-json";
 
 import { auditEvidenceRows } from "./intake-audit";
 
-const refuse = (message: string): never => {
-  throw createAppError("CONSTRAINT_VIOLATION", message);
-};
 const sameSet = (left: readonly string[], right: readonly string[]) =>
   JSON.stringify([...new Set(left)].sort()) ===
   JSON.stringify([...new Set(right)].sort());
@@ -58,7 +56,9 @@ export async function resolveSourceIdentity(
     .from(sourceTransactionRecord)
     .where(eq(sourceTransactionRecord.id, observationId));
   if (!initial || initial.deletedAt)
-    return refuse("The reviewed source observation is no longer live.");
+    return constraintViolation(
+      "The reviewed source observation is no longer live.",
+    );
   await lockFinancialEvidenceKeys(tx, "source", [initial.source]);
   const initialOwners = await db
     .select()
@@ -111,14 +111,14 @@ export async function resolveSourceIdentity(
     observation.occurrenceId !== initial.occurrenceId ||
     observation.factFingerprint !== input.expectedFactFingerprint
   )
-    return refuse(
+    return constraintViolation(
       "Source evidence changed after review. Read the current evidence before resolving identity.",
     );
   const originalOwner = owners.find(
     (owner) => owner.id === observation.occurrenceId,
   );
   if (!originalOwner)
-    return refuse("Every bank record must have a judgment owner.");
+    return constraintViolation("Every bank record must have a judgment owner.");
   if (
     originalOwner.version !== input.expectedOccurrenceVersion ||
     owners.some(
@@ -128,7 +128,7 @@ export async function resolveSourceIdentity(
           ?.acceptedTransactionId,
     )
   )
-    return refuse("Source ownership changed after review.");
+    return constraintViolation("Source ownership changed after review.");
   const [priorAccepted] = originalOwner.acceptedTransactionId
     ? await db
         .select({ code: financialTransaction.shortcode })
@@ -136,9 +136,11 @@ export async function resolveSourceIdentity(
         .where(eq(financialTransaction.id, originalOwner.acceptedTransactionId))
     : [];
   if ((priorAccepted?.code ?? null) !== input.expectedAcceptedTransactionId)
-    return refuse("The accepted transaction changed after review.");
+    return constraintViolation(
+      "The accepted transaction changed after review.",
+    );
   if (originalOwner.deletedAt || originalOwner.supersededByOccurrenceId)
-    return refuse(
+    return constraintViolation(
       "Retired or replaced source identity must retain its reservation.",
     );
   const owner =
@@ -167,7 +169,7 @@ export async function resolveSourceIdentity(
       owner.withdrawnAt ||
       owner.supersededByOccurrenceId)
   )
-    return refuse(
+    return constraintViolation(
       "Consolidate only an unproven, positioned or reviewed owner into a current provider occurrence from the same source.",
     );
   const [account] = await db
@@ -180,7 +182,10 @@ export async function resolveSourceIdentity(
       ),
     )
     .for("key share");
-  if (!account) return refuse("The reviewed source account is no longer live.");
+  if (!account)
+    return constraintViolation(
+      "The reviewed source account is no longer live.",
+    );
   const financialJudgment =
     input.judgment.disposition === "open"
       ? {
@@ -191,19 +196,20 @@ export async function resolveSourceIdentity(
       : input.judgment;
   if (originalOwner.withdrawnAt && input.decision !== "assign") {
     const positive = await db.execute(
-      sql`SELECT 1 FROM "TransactionImportRecord" member
+      sql`SELECT 1 FROM ${transactionImportRecord} member
       JOIN "TransactionImport" collection ON collection.id=member."importId" AND ${notDeleted("collection")}
       WHERE member."statementRowId"=${observation.id}::uuid AND collection."observedAt">${originalOwner.withdrawnAt} LIMIT 1`,
       "objects",
     );
     if (!positive.length)
-      return refuse(
+      return constraintViolation(
         "A confirmed withdrawal needs retained positive source evidence from after its proof before reappearance can be confirmed.",
       );
   }
-  if (!owner) return refuse("The reviewed target owner is missing.");
+  if (!owner)
+    return constraintViolation("The reviewed target owner is missing.");
   if (originalOwner.disposition !== input.expectedDisposition)
-    return refuse("The source disposition changed after review.");
+    return constraintViolation("The source disposition changed after review.");
   if (
     input.decision === "assign" &&
     (originalOwner.accountId !== owner.accountId ||
@@ -220,7 +226,7 @@ export async function resolveSourceIdentity(
         owner.acceptedTransactionId &&
         originalOwner.acceptedTransactionId !== owner.acceptedTransactionId))
   )
-    return refuse(
+    return constraintViolation(
       "Resolve conflicting account, ignore, lifecycle or accepted transaction judgments before consolidation.",
     );
   // Ordered owner locks and versions fence the complete closure against serializable intake.
@@ -258,7 +264,7 @@ export async function resolveSourceIdentity(
         );
       })
     )
-      return refuse(
+      return constraintViolation(
         "Consolidation needs equal amounts, compatible provider identity and live evidence across the complete closure.",
       );
     const replacements = await db
@@ -271,7 +277,7 @@ export async function resolveSourceIdentity(
         ),
       );
     if (replacements.length)
-      return refuse(
+      return constraintViolation(
         "Another owner names an exact replacement in this closure; resolve that replacement before consolidation.",
       );
   }
@@ -292,7 +298,7 @@ export async function resolveSourceIdentity(
       input.historicalTransactionIds,
     )
   )
-    return refuse(
+    return constraintViolation(
       "Historical transaction evidence changed. Review every retained live binding before resolving source identity.",
     );
   const targetId =
@@ -319,11 +325,11 @@ export async function resolveSourceIdentity(
       (input.decision === "assign" &&
         (!head || head.amount !== financialEvidenceAmountMinor(target.amount))))
   )
-    return refuse(
+    return constraintViolation(
       "The chosen transaction must be live and match the exact reviewed source account and amount.",
     );
   if (input.decision === "accept_existing" && !target)
-    return refuse("The chosen transaction is no longer live.");
+    return constraintViolation("The chosen transaction is no longer live.");
   if (input.decision === "assign") {
     const conflicts = await db.execute(
       sql`
@@ -335,7 +341,7 @@ export async function resolveSourceIdentity(
       "objects",
     );
     if (conflicts.length)
-      return refuse(
+      return constraintViolation(
         "A direct historical binding names different live money; consolidation cannot resolve it implicitly.",
       );
   }
@@ -425,7 +431,7 @@ export async function resolveSourceIdentity(
       })
       .where(eq(sourceOccurrence.id, originalOwner.id))
       .returning();
-    if (!released) return refuse("The retired owner disappeared.");
+    if (!released) return constraintViolation("The retired owner disappeared.");
     retired = released;
     await db
       .update(sourceTransactionRecord)
@@ -521,7 +527,9 @@ export async function resolveSourceIdentity(
       ),
     );
   if (!updatedOwner || updatedObservations.length !== closure.length)
-    return refuse("Source resolution did not retain its evidence rows.");
+    return constraintViolation(
+      "Source resolution did not retain its evidence rows.",
+    );
   const ownerSnapshot = (
     item: typeof sourceOccurrence.$inferSelect,
     aliases: typeof beforeAliases,

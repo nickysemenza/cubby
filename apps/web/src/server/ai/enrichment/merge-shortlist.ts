@@ -1,12 +1,6 @@
 import type { IngredientId } from "@cubby/schemas/identifiers";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 
-import { INGREDIENT_MERGE_FEATURE } from "~/server/ai/policy/features";
-import type { Database } from "~/server/db";
-import {
-  getIngredientMergeCandidatesByIds,
-  searchIngredientsForMerge,
-} from "~/server/domains/ingredient/repo/search";
 /**
  * Ingredient-merge shortlist assembly for the AI merge suggester.
  *
@@ -16,7 +10,13 @@ import {
  * semantic nearest-neighbour search (when embeddings are configured) into one
  * shortlist for the model to pick from.
  */
-import { type AiCallOwner } from "~/server/domains/run/repo/ai-call-owner";
+import { type AiCallOwner } from "~/server/ai/policy/call-owner";
+import { INGREDIENT_MERGE_FEATURE } from "~/server/ai/policy/features";
+import type { Database } from "~/server/db";
+import {
+  getIngredientMergeCandidatesByIds,
+  searchIngredientsForMerge,
+} from "~/server/domains/ingredient/repo/search";
 import { findSemanticEntityCandidates } from "~/server/generic/embedding/repo/entity-embedding-search";
 import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
 import {

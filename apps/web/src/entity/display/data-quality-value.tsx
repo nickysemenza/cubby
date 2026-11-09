@@ -8,9 +8,9 @@ import {
 import { cn } from "cn";
 import { z } from "zod";
 
+import { WhyValue } from "~/entity/fields/explanation/why-value";
 import { dataQualityStatusLabel } from "~/lib/data-quality-options";
 import { FieldValueMark } from "~/ui/derived/value-mark";
-import { WhyValue } from "~/ui/derived/why-value";
 import { useDenseCell } from "~/ui/values/stacked-value";
 
 /**

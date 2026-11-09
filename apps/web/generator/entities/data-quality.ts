@@ -8,7 +8,7 @@ import {
   type EntityField,
   type EntityFieldModel,
   type FilterDescriptor,
-} from "./declarations.ts";
+} from "./declaration-types.ts";
 
 type CompiledDataQuality = NonNullable<CompiledEntity["dataQuality"]>;
 /** What one declaration's block compiles to, beside the field model it extends. */

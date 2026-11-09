@@ -29,24 +29,24 @@ import {
 import {
   EntityRefLink,
   EntityRouteLink,
-  EntityRefList,
 } from "~/entity/components/entity-ref-link";
 import { RecordEmoji } from "~/entity/components/record-emoji";
+import { ListRefLink } from "~/entity/components/ref-link/list";
 import type { EntityDetailParams, EntityDetailRoute } from "~/entity/entities";
 import {
-  entities,
+  browserEntityDetailLink,
   entityLabel,
   entityPluralLabel,
   isBrowserRoutedEntity,
 } from "~/entity/entities";
 import { readRecordField } from "~/entity/entity-references";
+import { ImageChainPopover } from "~/entity/fields/explanation/image-chain";
 import { fieldResolutionFor } from "~/entity/fields/field-resolution";
 import { multiSelectFilterFn } from "~/entity/filters";
 import { rowDisplayCover } from "~/entity/model/row-display-cover";
 import { readPathValue } from "~/entity/read-path";
 import { fieldSuggestionBasisFromRecord } from "~/entity/suggestions/field-suggestion";
 import { suggestTargetsFor } from "~/entity/suggestions/suggestion-targets";
-import { ImageChainPopover } from "~/ui/derived/image-chain";
 import { Row } from "~/ui/layout";
 import { MoreMenuTrigger } from "~/ui/navigation/more-menu-trigger";
 import { Button } from "~/ui/primitives/button";
@@ -127,10 +127,6 @@ interface BaseRow {
   updatedAt?: string | Date;
 }
 
-function nameColumnParams(row: BaseRow) {
-  return { shortcode: String(row.id) };
-}
-
 type EntityRowLink = {
   to: EntityDetailRoute;
   params: EntityDetailParams | { id: string };
@@ -153,12 +149,7 @@ const defaultRowLink = <T extends BaseRow>(
   entity: Entity,
 ): RowLinkResolver<T> => {
   if (!isBrowserRoutedEntity(entity)) return () => null;
-  const to = entities[entity].routes.detail;
-  return (row) => ({
-    to,
-    params:
-      entity === "usda-food" ? { id: String(row.id) } : nameColumnParams(row),
-  });
+  return (row) => browserEntityDetailLink(entity, String(row.id));
 };
 
 /** A row that genuinely carries its own images. `images` is REQUIRED: when it
@@ -1288,7 +1279,7 @@ const singleEntityAdapters = {
       <CanonicalSingleEntityLink entity="ingredient" data={data} />
     ),
     renderCollection: (items) => (
-      <EntityRefList
+      <ListRefLink
         entity="ingredient"
         items={items}
         maxItems={1}
@@ -1306,7 +1297,7 @@ const singleEntityAdapters = {
       <CanonicalSingleEntityLink entity="product" data={data} />
     ),
     renderCollection: (items) => (
-      <EntityRefList
+      <ListRefLink
         entity="product"
         items={items}
         maxItems={1}
@@ -1324,7 +1315,7 @@ const singleEntityAdapters = {
       <CanonicalSingleEntityLink entity="recipe" data={data} />
     ),
     renderCollection: (items) => (
-      <EntityRefList
+      <ListRefLink
         entity="recipe"
         items={items}
         maxItems={1}
@@ -1342,7 +1333,7 @@ const singleEntityAdapters = {
       <CanonicalSingleEntityLink entity="location" data={data} />
     ),
     renderCollection: (items) => (
-      <EntityRefList
+      <ListRefLink
         entity="location"
         items={items}
         maxItems={1}
@@ -1619,7 +1610,7 @@ export function createBooleanColumn<K extends PropertyKey, T extends object>(
     placeholder?: string;
     /**
      * The two decided states, as a `{value: "true"|"false", label, color}` roster
-     * — build it with `booleanCellOptions` (~/lib/select-options).
+     * — build it with `booleanCellOptions` (~/ui/combobox/select-options).
      *
      * A roster rather than a `labels` pair plus built-in tones, because "true" is
      * not always the good outcome: a planned Expense is amber rather than
@@ -1891,7 +1882,6 @@ export function createPlainDateColumn<K extends PropertyKey, T extends object>(
     className?: string;
     mobile?: MobileColumnMeta;
     filterConfig?: FilterConfig;
-    /** Enable inline editing */
     editable?: {
       onSave: (newValue: string | null, row: T) => Promise<void>;
       clearable?: (row: T) => boolean;

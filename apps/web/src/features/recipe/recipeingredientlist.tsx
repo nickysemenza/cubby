@@ -214,7 +214,6 @@ export const RecipeIngredientList: React.FC<{
     [totals, nutritionFactor],
   );
 
-  // Load unit mappings
   const mappingsMap = useMemo(() => {
     if (!ingMap) return {};
     return mapValues(ingMap, (entry) =>
@@ -321,7 +320,6 @@ export const RecipeIngredientList: React.FC<{
             );
           }
 
-          // Format each amount using tryFormatAmount
           return (
             <Stack gap="xs" className="text-sm">
               {amounts.map((amount, index) => (

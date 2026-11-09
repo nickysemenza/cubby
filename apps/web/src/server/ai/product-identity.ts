@@ -15,6 +15,7 @@ import {
   settleDecisionWorkItems,
   type DecisionPort,
 } from "~/server/ai/decision-model";
+import { type AiCallOwner } from "~/server/ai/policy/call-owner";
 import {
   PRODUCT_IDENTITY_FEATURE,
   PRODUCT_IDENTITY_RULE_REVISION,
@@ -44,7 +45,6 @@ import {
   loadProductIdentifierClaims,
   type DroppedProductIdentifierClaim,
 } from "~/server/domains/product/repo/product-identity-claims";
-import { type AiCallOwner } from "~/server/domains/run/repo/ai-call-owner";
 import { findSimilarEntitiesPage } from "~/server/generic/embedding/repo/entity-embedding";
 import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
 import { semanticEmbeddingsConfigured } from "~/server/generic/embedding/service/semantic/embeddings";

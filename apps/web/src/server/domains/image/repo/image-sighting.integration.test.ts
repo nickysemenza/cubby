@@ -24,11 +24,11 @@ import {
   createLedgerParty,
   mergeLedgerParties,
 } from "~/server/domains/ledger-party/repo/ledger-party";
+import { setMemberLoginParty } from "~/server/domains/ledger-party/repo/member-login";
 import { resolveEntityIdentity } from "~/server/entity-kernel/repo/entity-identity";
-import { getAuditLog } from "~/server/generic/audit-log/repo/audit-log";
+import { getAuditLog } from "~/server/generic/audit-log/repo/audit-log-read";
 import { getConnectedRecords } from "~/server/generic/entity-links/repo/connected-records";
 import { resolveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { setMemberLoginParty } from "~/server/http/member-login";
 import { deleteThroughKernel } from "~/server/testing/entity-kernel";
 import { createImageFixture } from "~/server/testing/repo.fixtures";
 

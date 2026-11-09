@@ -6,7 +6,7 @@ import Foundation
 @MainActor
 final class ImageQueueBackgroundProcessing {
     static let shared = ImageQueueBackgroundProcessing()
-    static let overnightIdentifier = "com.nickysemenza.cubby.image-queue"
+    static let overnightIdentifier = AppleBackgroundTask.imageQueue
     private var isRunning = false
 
     static func register() {

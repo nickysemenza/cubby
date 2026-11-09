@@ -9,7 +9,8 @@ import type { Database } from "~/server/db";
 import { readInventory } from "~/server/domains/inventory/repo/crud";
 import { getProductStockRows } from "~/server/domains/inventory/repo/scan";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { bindWorkflow, workflow } from "~/server/workflows/runtime";
+import { workflow } from "~/server/workflows/runtime/builder";
+import { bindWorkflow } from "~/server/workflows/runtime/operation";
 
 type PlacementRecommendation = z.infer<typeof placementRecommendationOut>;
 

@@ -52,7 +52,6 @@ function normalizedDeleteMutationOptions<TData extends DeleteMutationResult>(
 /** The delete affordance a list hook needs: how to call it, what to call it,
  * and which caches it moves. */
 export interface DeletableConfig {
-  /** Delete mutation options factory. */
   mutationOptions: () => DeleteMutationOptions;
   entityLabel: string;
   /** Entity slug the delete acts on. */
@@ -78,7 +77,6 @@ export function useDeletableConfig<TData extends DeleteMutationResult>({
   ) => UseMutationOptions<TData, Error, DeleteMutationVariables>;
   /** Dialog noun. Defaults to the entity's registry label. */
   entityLabel?: string;
-  /** Entity slug the delete acts on. */
   entity: DeletableEntity;
 }) {
   const label = entityLabel ?? labelFor(entity);

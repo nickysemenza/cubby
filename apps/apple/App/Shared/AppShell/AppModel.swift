@@ -28,7 +28,7 @@ final class AppModel {
             ProcessInfo.processInfo.hostName
         #endif
     }
-    static let productionBaseURL = URL(string: "https://cubby.nickysemenza.com")!
+    static let productionBaseURL = URL(string: SharedConstants.appOrigin)!
     static let localBaseURL = URL(string: "http://localhost:3000")!
     static let defaultBaseURL = productionBaseURL
 

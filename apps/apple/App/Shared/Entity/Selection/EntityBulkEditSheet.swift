@@ -44,7 +44,7 @@ struct EntityBulkEditSheet: View {
                     }
                 } footer: {
                     Text(
-                        "Changes \(model.ids.count.formatted()) \(noun) together. If any can't take the value, none change."
+                        "Changes \(ValueFormat.count(model.ids.count)) \(noun) together. If any can't take the value, none change."
                     )
                 }
                 if let field = model.field {
@@ -103,7 +103,7 @@ struct EntityBulkEditSheet: View {
                         .disabled(model.isSaving)
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Update \(model.ids.count.formatted())") {
+                    Button("Update \(ValueFormat.count(model.ids.count))") {
                         Task {
                             if await model.save() != nil {
                                 onFinished()

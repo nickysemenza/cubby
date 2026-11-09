@@ -1,7 +1,7 @@
 import type { Entity } from "@cubby/schemas/entity";
 import type { DetailActivityEvent } from "@cubby/schemas/entity-detail-data";
 import type { AuditableEntity } from "@cubby/schemas/entity-manifest";
-import { isAuditableEntity } from "@cubby/schemas/entity-roster";
+import { isAuditableEntity } from "@cubby/schemas/entity-manifest";
 import { useState } from "react";
 
 import { EntityAuditLink } from "~/entity/components/entity-ref-link";

@@ -7,7 +7,7 @@ import {
   entities,
   EntityIcon,
   entityDetailParams,
-  isBrowserRoutedEntity,
+  isShortcodeRoutedEntity,
 } from "~/entity/entities";
 import { entityGraph } from "~/integrations/tanstack-query/generated/domains/entityGraph.gen";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
@@ -105,13 +105,12 @@ function ConnectionItemLink({
 }) {
   const router = useRouter();
   const label = name ?? id;
-  const href =
-    isBrowserRoutedEntity(kind) && kind !== "usda-food"
-      ? router.buildLocation({
-          to: entities[kind].routes.detail,
-          params: entityDetailParams(id),
-        }).href
-      : undefined;
+  const href = isShortcodeRoutedEntity(kind)
+    ? router.buildLocation({
+        to: entities[kind].routes.detail,
+        params: entityDetailParams(id),
+      }).href
+    : undefined;
   return href ? (
     <a
       href={href}

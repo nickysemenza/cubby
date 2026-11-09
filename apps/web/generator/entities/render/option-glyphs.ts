@@ -5,7 +5,7 @@ import { generatedHeader } from "../../artifacts.ts";
 import {
   booleanCellOptions,
   expenseLineAutoOption,
-} from "#web/src/lib/select-options.ts";
+} from "#web/src/ui/combobox/select-options.ts";
 
 /** Static paths keep browser chunks bounded; declarations own the inventory. */
 export function renderOptionGlyphs(

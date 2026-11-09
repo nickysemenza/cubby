@@ -1,7 +1,7 @@
 import { entityIdSchema, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { useCallback, useRef, useState } from "react";
 
-import { precomputeEnrichmentProposalsStream } from "~/lib/ai-streams";
+import { aiStreams } from "~/integrations/tanstack-query/generated/domains/aiStreams.gen";
 import type { EnrichmentProposal } from "~/server/ai/enrichment/proposals";
 import { showErrorToast } from "~/ui/feedback/error-details";
 
@@ -16,7 +16,7 @@ interface ProposalRequest {
 
 function parseEnrichmentProposal(
   item: Awaited<
-    ReturnType<typeof precomputeEnrichmentProposalsStream>
+    ReturnType<typeof aiStreams.precomputeEnrichmentProposals.open>
   > extends AsyncIterable<infer Event>
     ? Event extends { type: "progress"; item?: infer Item }
       ? NonNullable<Item>
@@ -78,7 +78,7 @@ export function useProposalCache() {
     runningRef.current = true;
     setRunning(true);
     try {
-      const iterable = await precomputeEnrichmentProposalsStream({
+      const iterable = await aiStreams.precomputeEnrichmentProposals.open({
         items: page,
       });
       for await (const ev of iterable) {

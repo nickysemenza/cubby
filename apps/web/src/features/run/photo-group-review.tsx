@@ -94,7 +94,7 @@ import { EmptyState } from "~/ui/feedback/empty-state";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { useIsMobile } from "~/ui/hooks/use-mobile";
 import { Panel, Row, Section, Stack } from "~/ui/layout";
-import { Disclosure } from "~/ui/layout/disclosure";
+import { Disclosure } from "~/ui/layout";
 import { Image } from "~/ui/media/image";
 import { MoreMenuTrigger } from "~/ui/navigation/more-menu-trigger";
 import { Button } from "~/ui/primitives/button";
@@ -3190,6 +3190,7 @@ function ProposalCard({
                 step="identity"
                 onShowEvidence={() => {
                   setEvidenceOpen(true);
+                  // The evidence panel mounts with the next commit.
                   requestAnimationFrame(() =>
                     document
                       .getElementById(`photo-evidence-${proposal.groupKey}`)
@@ -4066,6 +4067,7 @@ function PhotoItemList({
               }}
               onClick={() => {
                 setActiveGroupKey(item.groupKey);
+                // The newly active group renders with the next commit.
                 if (isMobile)
                   requestAnimationFrame(() =>
                     document
@@ -4436,6 +4438,7 @@ export function PhotoGroupReview({
                       const target = document.getElementById(
                         `photo-group-${unresolved.groupKey}`,
                       );
+                      // The newly active group renders with the next commit.
                       requestAnimationFrame(() => {
                         target?.scrollIntoView({ block: "start" });
                         target?.focus({ preventScroll: true });

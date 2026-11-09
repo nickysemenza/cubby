@@ -12,11 +12,7 @@ import {
   useSyncExternalStore,
 } from "react";
 
-import {
-  DisclosureBody,
-  DisclosureRoot,
-  DisclosureTrigger,
-} from "~/ui/layout/disclosure";
+import { DisclosureBody, DisclosureRoot, DisclosureTrigger } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Kbd } from "~/ui/primitives/kbd";
 import { Sheet, SheetContent, SheetTitle } from "~/ui/primitives/sheet";

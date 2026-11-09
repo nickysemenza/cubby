@@ -8,6 +8,7 @@ import { getTableColumns, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
+import { minorToDollarsSql } from "~/server/db/computed/money";
 import { getDb } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { SHORTCODE_TABLE } from "~/server/generated/shortcode-tables.gen";
@@ -49,7 +50,10 @@ export async function readMutationReceiptFields(
       adapted ??
       (column
         ? stored?.specialized === "minor-unit-money"
-          ? sql`${sql.identifier("saved")}.${sql.identifier(column.name)}::numeric / 100`
+          ? minorToDollarsSql(
+              sql`${sql.identifier("saved")}.${sql.identifier(column.name)}`,
+              "numeric",
+            )
           : sql`${sql.identifier("saved")}.${sql.identifier(column.name)}`
         : undefined);
     if (!own) continue;

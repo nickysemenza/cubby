@@ -15,7 +15,6 @@ import { entityManifest } from "@cubby/schemas/entity-manifest";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { ExpenseFilters } from "@cubby/schemas/project";
-import { decodeBase64UrlText, encodeBase64Url } from "@cubby/shared/base64";
 import {
   endOfMonth,
   format,
@@ -33,10 +32,12 @@ import { notDeleted, actualExpenseSql } from "~/server/db/helpers/predicates";
 import { expenseMonthlySummary } from "~/server/domains/expense/repo/analytics";
 import { labelSql } from "~/server/generic/entity-graph/repo/record-label";
 import { compiledConnectedRoutes } from "~/server/generic/entity-links/repo/connected-records";
+import { jsonCursor } from "~/server/lib/json-cursor";
 
-const cursorSchema = z
-  .object({ date: z.string().datetime(), id: z.string() })
-  .strict();
+const activityCursor = jsonCursor(
+  z.object({ date: z.iso.datetime(), id: z.string() }).strict(),
+  { invalid: "Invalid activity cursor" },
+);
 const activityRowSchema = z.object({
   id: z.string(),
   kind: z.enum(["record", "change"]),
@@ -192,9 +193,7 @@ export async function getDetailActivity(
     `);
   }
   if (!queries.length) return { items: [], nextCursor: null };
-  const cursor = input.cursor
-    ? cursorSchema.parse(JSON.parse(decodeBase64UrlText(input.cursor)))
-    : null;
+  const cursor = input.cursor ? activityCursor.decode(input.cursor) : null;
   const result = await unwrapDb(db).execute(
     sql`
     WITH events AS (${sql.join(queries, sql` UNION `)})
@@ -217,7 +216,7 @@ export async function getDetailActivity(
     items,
     nextCursor:
       rows.length > input.limit && last
-        ? encodeBase64Url(JSON.stringify({ date: last.date, id: last.id }))
+        ? activityCursor.encode({ date: last.date, id: last.id })
         : null,
   });
 }

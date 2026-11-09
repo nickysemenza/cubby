@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import { createDatabase } from "~/server/db/database-runtime";
-import { PURCHASE_AGENT_OAUTH_COOKIE } from "~/server/domains/purchase-import/repo/agent-auth";
+import { PURCHASE_AGENT_OAUTH_COOKIE } from "~/server/domains/run/repo/agent-auth";
 
 import {
   type CallbackDependencies,

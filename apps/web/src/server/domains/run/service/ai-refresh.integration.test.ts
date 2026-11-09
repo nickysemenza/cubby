@@ -4,6 +4,7 @@ import {
   aiProvenance,
   suggestionAcceptanceReceipt,
 } from "@cubby/schemas/ai-evaluation";
+import { systemActor } from "@cubby/schemas/context";
 import { suggestionFamily } from "@cubby/schemas/suggestion";
 import { generateShortcode } from "@cubby/shared";
 import { and, eq, inArray, sql } from "drizzle-orm";
@@ -56,7 +57,7 @@ import {
   resumeAutomaticAi,
   stopAutomaticAi,
 } from "~/server/domains/run/repo/automatic-ai-stop";
-import { ensureRun, systemActor } from "~/server/domains/run/repo/ensure-run";
+import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import {
   discoverAiRefreshNow,
   fillAutomaticBacklog,

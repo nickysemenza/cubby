@@ -27,8 +27,7 @@ public enum BinVerdict: Sendable, Hashable {
     }
 }
 
-/// What a scanned location label means from the bin being counted. Port of
-/// `sweep-bin-plan.ts`: pure, direct-membership only (a grandchild is offered for promotion,
+/// What a scanned location label means from the bin being counted: pure, direct-membership only (a grandchild is offered for promotion,
 /// not confirmed), and the check order is load-bearing — a root is refused as a root before the
 /// ancestor check would catch it, because "it holds the whole house" is the sentence that
 /// explains the refusal.

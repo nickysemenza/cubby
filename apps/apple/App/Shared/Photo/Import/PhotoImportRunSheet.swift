@@ -223,11 +223,16 @@ final class PhotoImportRunFlow {
         loadingRuns = true
         defer { loadingRuns = false }
         var filters = EntityFilterState()
-        filters.set(["running", "needs_review", "completed"], for: "status")
-        filters.set(["photo_inventory"], for: "purpose")
-        openRuns =
-            (try? await client.list(EntityCatalog[.run], pageSize: 50, filters: filters))?
-            .items ?? []
+        filters.set(
+            [RunStatus.running, .needsReview, .completed].map(\.rawValue),
+            for: EntityFilterParameter.Run.status)
+        filters.set([RunPurpose.photoInventory.rawValue], for: EntityFilterParameter.Run.purpose)
+        do {
+            openRuns = try await client.list(EntityCatalog[.run], pageSize: 50, filters: filters).items
+        } catch {
+            openRuns = []
+            Diagnostics.report(error, context: "photos.import.openRuns")
+        }
     }
 
     func startNewRun(items: [PhotoSelectionItem], client: CubbyClient) {

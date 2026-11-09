@@ -7,6 +7,7 @@ import { and, eq, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
+import { minorToDollarsSql } from "~/server/db/computed/money";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { email, orderMail, orderMailEvent, purchase } from "~/server/db/schema";
 import {
@@ -114,9 +115,9 @@ export async function captureEmailConnectionBasis(
       vendorId: purchase.vendorId,
       vendorAccountId: purchase.vendorAccountId,
       date: purchase.date,
-      statedTotal: sql<
-        number | null
-      >`${purchase.statedTotal}::numeric / 100`.mapWith(Number),
+      statedTotal: minorToDollarsSql(purchase.statedTotal, "numeric").mapWith(
+        Number,
+      ),
     })
     .from(purchase)
     .where(and(eq(purchase.id, purchaseId), notDeleted(purchase)))

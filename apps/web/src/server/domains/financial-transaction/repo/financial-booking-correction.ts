@@ -31,16 +31,13 @@ import { transactionDollars } from "~/server/domains/financial-transaction/repo/
 import {
   readLedgerTransfer,
   updateLedgerTransfer,
-} from "~/server/domains/ledger-transfer/repo";
-import { createAppError } from "~/server/errors/app-error";
+} from "~/server/domains/ledger-transfer/repo/ledger-transfer";
+import { constraintViolation } from "~/server/errors/app-error";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import { digestValue, loadFinancialBookingLineage } from "./financial-booking";
 import { updateFinancialTransaction } from "./financial-transaction";
 
-const fail = (message: string): never => {
-  throw createAppError("CONSTRAINT_VIOLATION", message);
-};
 async function reimbursementDestination(
   db: Database,
   purchaseCode: Extract<
@@ -55,7 +52,7 @@ async function reimbursementDestination(
     amount >= 0 ||
     lineage.lines.some((line) => line.economicRole !== "reimbursement")
   )
-    return fail(
+    return constraintViolation(
       "Only reimbursement credits can move to the original Purchase.",
     );
   const purchaseId = await resolveOrThrow(db, "purchase", purchaseCode);
@@ -68,7 +65,8 @@ async function reimbursementDestination(
         ),
     },
   });
-  if (!target) return fail("The original Purchase is no longer live.");
+  if (!target)
+    return constraintViolation("The original Purchase is no longer live.");
   const spendingCategoryId = target.spendingCategoryId;
   const category = spendingCategoryId
     ? await getDb(db).query.spendingCategory.findFirst({
@@ -136,10 +134,12 @@ export async function previewFinancialBookingCorrection(
     })
     .then((row) => (row ? transactionDollars(row) : row));
   if (!row || row.status !== "posted" || row.ledgerTransferId)
-    return fail("Choose a live posted booking before correcting it.");
+    return constraintViolation(
+      "Choose a live posted booking before correcting it.",
+    );
   const lineage = await loadFinancialBookingLineage(db, input.transactionId);
   if (lineage.sourceClaims.length > 0)
-    return fail(
+    return constraintViolation(
       "This Expense has source claims that require individual review.",
     );
   if (
@@ -152,20 +152,22 @@ export async function previewFinancialBookingCorrection(
         line.productId !== null,
     )
   )
-    return fail(
+    return constraintViolation(
       "Only reviewed aggregate bookings can be corrected here. Review edited or itemized Expenses individually.",
     );
   if (
     lineage.lines.reduce((sum, line) => sum + cents(line.cost ?? 0), 0) !==
     cents(row.amount)
   )
-    return fail("The booked Expense amount no longer matches its transaction.");
+    return constraintViolation(
+      "The booked Expense amount no longer matches its transaction.",
+    );
   const originalFingerprint = await digestValue(lineage);
   if (
     !row.bookingExpenseFingerprint ||
     row.bookingExpenseFingerprint !== originalFingerprint
   )
-    return fail(
+    return constraintViolation(
       "The original booking was edited. Review its Expense changes before correcting settlement.",
     );
   const allocations = await getDb(db)
@@ -183,7 +185,7 @@ export async function previewFinancialBookingCorrection(
     allocations.length !== 1 ||
     lineage.lines.some((line) => line.purchaseId !== allocations[0]?.purchaseId)
   )
-    return fail("The original booking allocation changed.");
+    return constraintViolation("The original booking allocation changed.");
   let targetName: string;
   let categoryId: FinancialBookingCorrectionPreview["categoryId"] = null;
   let categoryName: string | null = null;
@@ -209,9 +211,12 @@ export async function previewFinancialBookingCorrection(
     } = destination);
   } else {
     target = await readLedgerTransfer(db, input.action.transferId);
-    if (!target) return fail("The selected transfer is no longer live.");
+    if (!target)
+      return constraintViolation("The selected transfer is no longer live.");
     if (cents(target.amount) !== cents(Math.abs(row.amount)))
-      return fail("The transfer amount must match the transaction.");
+      return constraintViolation(
+        "The transfer amount must match the transaction.",
+      );
     targetName = `${target.fromPartyName} → ${target.toPartyName}`;
   }
   const snapshot = await digestValue({
@@ -278,7 +283,7 @@ export async function commitFinancialBookingCorrection(
           })
           .parse(current.bookingCorrectionReceipt);
         if (receipt.digest === decisionDigest) return receipt.result;
-        return fail(
+        return constraintViolation(
           "This booking already has a different reviewed correction. Refresh its financial record.",
         );
       }
@@ -288,7 +293,9 @@ export async function commitFinancialBookingCorrection(
         JSON.stringify(fresh) !==
         JSON.stringify(financialBookingCorrectionPreview.parse(review))
       )
-        return fail("The correction changed after review. Preview it again.");
+        return constraintViolation(
+          "The correction changed after review. Preview it again.",
+        );
       const id = await resolveOrThrow(
         txDb,
         "financialTransaction",
@@ -336,7 +343,8 @@ export async function commitFinancialBookingCorrection(
         return result;
       }
       const target = await readLedgerTransfer(txDb, review.action.transferId);
-      if (!target) return fail("The selected transfer is no longer live.");
+      if (!target)
+        return constraintViolation("The selected transfer is no longer live.");
       await deleteExpenses(
         txDb,
         review.lines.map((line) => line.expenseId),

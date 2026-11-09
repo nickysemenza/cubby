@@ -6,7 +6,7 @@ import {
   aiRefreshActivation,
   type AiEvaluationTarget,
 } from "@cubby/schemas/ai-evaluation";
-import { buildActorContext } from "@cubby/schemas/context";
+import { buildActorContext, systemActor } from "@cubby/schemas/context";
 import { entityRefKey, type EntityRef } from "@cubby/schemas/entity";
 import { entityFieldEnvelopeFields } from "@cubby/schemas/entity-field-envelopes";
 import { fieldEnvelopeFor, fieldValueOf } from "@cubby/schemas/field-envelope";
@@ -52,6 +52,7 @@ import {
   suggestFields,
   type SuggestFieldsPorts,
 } from "~/server/ai/field-suggest/suggest-fields";
+import { aiRunOwner } from "~/server/ai/policy/call-owner";
 import {
   compiledRefreshManifest,
   dependencyStamps,
@@ -82,7 +83,6 @@ import {
 } from "~/server/domains/product/repo/match/product-identity-snapshot";
 import type { PreparedProductPairPublication } from "~/server/domains/product/repo/match/product-match-candidate";
 import { publishProductPairPublications } from "~/server/domains/product/repo/match/product-match-candidate";
-import { aiRunOwner } from "~/server/domains/run/repo/ai-call-owner";
 import { scheduleAutomaticEvaluations } from "~/server/domains/run/repo/ai-refresh-state";
 import { readAutomaticAiStop } from "~/server/domains/run/repo/automatic-ai-stop";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
@@ -128,7 +128,6 @@ import {
 } from "../repo/ai-refresh-state";
 import { guardAiEvaluationAttempt } from "../repo/ai-work-state";
 import { connectionSourceFingerprintsOrMissing } from "../repo/connection-refresh";
-import { systemActor } from "../repo/ensure-run";
 import {
   makeSweepSuggestion,
   publishSweepSuggestions,

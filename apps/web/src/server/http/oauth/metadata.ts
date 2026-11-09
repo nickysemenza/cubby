@@ -1,5 +1,5 @@
-import { getAuth } from "~/lib/auth";
 import { MCP_RESOURCE, OAUTH_ISSUER, OAUTH_SCOPES } from "~/lib/auth-constants";
+import { getAuth } from "~/server/http/auth";
 
 /**
  * Discovery documents for the OAuth 2.1 authorization server and the MCP

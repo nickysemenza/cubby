@@ -53,6 +53,7 @@ import {
 } from "~/server/db/schema";
 import { readEmailPurchaseAssociations } from "~/server/domains/email/repo/email-purchase-associations";
 import { decideExpenseLineRole } from "~/server/domains/expense/service/expense-line-role";
+import { amazonAsin } from "~/server/domains/product/repo/amazon-asin";
 import {
   externalIdKey,
   findProductsByExternalIds,
@@ -68,7 +69,6 @@ import {
   PRODUCT_IDENTITY_REVIEW_REASON,
 } from "~/server/domains/product/repo/resolve-names";
 import { auditAllImportBatches } from "~/server/domains/purchase-import/operations/run-review";
-import { assertRunCapability } from "~/server/domains/purchase-import/repo/capabilities";
 import {
   type ImportScope,
   loadImportScope,
@@ -88,6 +88,7 @@ import { resolveImportSourceOrder } from "~/server/domains/purchase-import/repo/
 import { sourceOrderKey } from "~/server/domains/purchase-import/repo/source-order-key";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { executeAtomicOperation } from "~/server/domains/run/repo/operation";
+import { assertRunCapability } from "~/server/domains/run/repo/purpose-policy";
 import { readOperation } from "~/server/domains/run/repo/run-operation";
 import { createAppError } from "~/server/errors/app-error";
 import { recordChange } from "~/server/generic/changes/repo/change";
@@ -98,11 +99,7 @@ import {
   importVendorCandidates,
   resolveImportVendor,
 } from "../repo/import-vendor";
-import {
-  amazonAsin,
-  importVendorOrder,
-  lineIdentifierRequests,
-} from "../repo/writer";
+import { importVendorOrder, lineIdentifierRequests } from "../repo/writer";
 import { chooseLineStage } from "../service/line-stage";
 import { attachOrderLineThumbnails } from "./line-thumbnails";
 import {
@@ -987,7 +984,7 @@ async function finalizeReviewRun(
  * finalizes the Run on replay (absent on the oldest rows, which read false).
  */
 const recordedCommit = commitPurchaseImportOut.extend({
-  requiresReview: z.boolean().catch(false),
+  requiresReview: z.boolean().default(false),
 });
 
 // The transaction deliberately keeps replay, evidence, resolution, and write

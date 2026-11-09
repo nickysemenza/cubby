@@ -6,12 +6,12 @@ import { and, eq, isNotNull, isNull } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
 import { run as runTable } from "~/server/db/schema";
+import { startPhotoInventoryCoordinator } from "~/server/domains/photo-import/repo/run/photo-run";
 import {
   assertPhotoRunReviewer,
   listPhotoRunImages,
 } from "~/server/domains/photo-import/repo/run/proposals";
-import { findActivePurchaseAgentGrant } from "~/server/domains/purchase-import/repo/agent-auth";
-import { startPhotoInventoryCoordinator } from "~/server/domains/purchase-import/repo/run-service";
+import { findActivePurchaseAgentGrant } from "~/server/domains/run/repo/agent-auth";
 
 import { advancePhotoRun } from "./lifecycle";
 

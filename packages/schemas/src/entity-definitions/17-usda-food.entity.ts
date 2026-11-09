@@ -21,6 +21,7 @@ export const { definition, readSchemas } = defineEntityModel(
     route: {
       basePath: "usda",
       detailParamOverride: "id",
+      nativeRead: "usdaFood",
       list: null,
       detail: null,
     },

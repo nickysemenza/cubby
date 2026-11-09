@@ -873,7 +873,7 @@ export const { definition, readSchemas } = defineEntityModel({
         export: "reportBindings",
       },
       repository: {
-        module: "~/server/domains/financial-account/repo",
+        module: "~/server/domains/financial-account/repo/financial-account",
         export: "financialAccountRepository",
       },
       search: "document",

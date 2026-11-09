@@ -85,7 +85,7 @@ export async function applyStatementTransactionSuggestion(
     isMoneyMoveKind(published.create.kind)
   ) {
     const { lockTransferPairLegs } =
-      await import("~/server/domains/financial-transaction/repo/transfer-pair-suggestions");
+      await import("~/server/domains/transaction-import/repo/transfer-pair-suggestions");
     await lockTransferPairLegs(db, published.transferPair.key);
   }
   await withTransaction(db, async (tx) => {
@@ -147,7 +147,7 @@ export async function applyStatementTransactionSuggestion(
     isMoneyMoveKind(published.create.kind)
   ) {
     const { applyTransferPair } =
-      await import("~/server/domains/financial-transaction/repo/transfer-pair-suggestions");
+      await import("~/server/domains/transaction-import/repo/transfer-pair-suggestions");
     await applyTransferPair(db, context, {
       key: judgment.transferPair.key,
       expectedFingerprint: judgment.transferPair.fingerprint,

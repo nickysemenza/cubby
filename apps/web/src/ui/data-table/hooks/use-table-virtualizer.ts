@@ -199,7 +199,6 @@ interface UseTableVirtualizerResult {
   scrollOffset: number;
   /** Size of the index space: rows plus any interleaved group headers. */
   virtualRowCount: number;
-  /** Currently virtualized rows. */
   virtualRows: VirtualItem[];
   /** End of the normal rendered range, excluding manually retained items. */
   lastRangeIndex: number;
@@ -241,7 +240,6 @@ export function useTableVirtualizer({
   initialOffset = 0,
   retainedItemKey = null,
 }: UseTableVirtualizerArgs): UseTableVirtualizerResult {
-  // Ref for virtualization scroll container
   const tableContainerRef = useRef<HTMLDivElement>(null);
 
   // The pane is bounded to whatever is left of the viewport beneath it, so the

@@ -9,6 +9,7 @@ import { sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
+import { minorToDollarsSql } from "~/server/db/computed/money";
 import { unwrapDb, withSnapshotWriteDatabase } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import {
@@ -184,7 +185,7 @@ export async function loadFinanceSuggestionContext(
       ? rowsSchema.parse(
           await database.execute(
             sql`
-    SELECT p.shortcode AS purchase, (a."amountMinor"::float8 / 100) AS amount FROM "FinancialTransactionAllocation" a JOIN "Purchase" p ON p.id = a."purchaseId"
+    SELECT p.shortcode AS purchase, (${minorToDollarsSql(sql`a."amountMinor"`, "float8")}) AS amount FROM "FinancialTransactionAllocation" a JOIN "Purchase" p ON p.id = a."purchaseId"
     WHERE a."transactionId" = ${id} AND ${notDeleted("a")} AND ${notDeleted("p")}
     ORDER BY p.shortcode LIMIT 101
   `,

@@ -29,9 +29,11 @@ import {
 import { scaleTotals } from "~/lib/nutrition-estimates";
 import { getIngredientMappings } from "~/lib/unit-mapping-utils";
 import { wasm } from "~/lib/wasm";
+import { aiCallOwner } from "~/server/ai/policy/call-owner";
 import type { Database } from "~/server/db";
 import { getIngredientsByIDs } from "~/server/domains/ingredient/repo/ingredient-with-food";
 import { getMultiMeasureRecipeIngredients } from "~/server/domains/product/repo/equivalences";
+import { harvestEquivalences } from "~/server/domains/product/repo/harvest-equivalences";
 import {
   duplicateRecipe,
   getRecipesByIDs,
@@ -45,7 +47,6 @@ import {
 } from "~/server/domains/recipe/repo/queries";
 import { getRecipeFlowState } from "~/server/domains/recipe/repo/recipe-flow-state";
 import { generateRecipeFlow } from "~/server/domains/recipe/service/recipe-flow/recipe-flow.service";
-import { aiCallOwner } from "~/server/domains/run/repo/ai-call-owner";
 import {
   type EntityKernelContext,
   executeEntityAs,
@@ -56,16 +57,15 @@ import {
   bindShortcodeResolver,
   resolveLiveShortcodes,
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { harvestEquivalences } from "~/server/lib/harvest-equivalences";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
 import type { AuthenticatedOperationContext } from "~/server/operation-runtime/operation.server";
 import { implementSubscriptionDomain } from "~/server/operation-runtime/subscription-domain.server";
+import { workflow } from "~/server/workflows/runtime/builder";
+import { bindWorkflow } from "~/server/workflows/runtime/operation";
 import {
-  bindWorkflow,
   bindCoordinatorStream,
   defineCoordinatorStream,
-  workflow,
-} from "~/server/workflows/runtime";
+} from "~/server/workflows/runtime/stream";
 
 import * as imports from "./recipe-import.server";
 import { patchRecipeLine } from "./recipe-line-patch";

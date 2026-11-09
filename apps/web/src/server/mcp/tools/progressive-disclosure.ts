@@ -1,13 +1,13 @@
 import type { CallToolResult } from "@modelcontextprotocol/server";
 import { z } from "zod";
 
+import { publicOperationErrorSchema } from "~/lib/operation-result";
 import { safeToJsonSchema } from "~/server/mcp/tools/tool-json-schema";
 import type {
   CompiledTool,
   ToolArguments,
   ToolExtra,
 } from "~/server/mcp/tools/tool-registration";
-import { publicOperationErrorSchema } from "~/server/operation-runtime/operation.contract";
 
 const describeInputSchema = z.object({ actions: z.array(z.string()).min(1) });
 

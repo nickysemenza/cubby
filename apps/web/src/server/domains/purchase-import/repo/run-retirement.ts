@@ -18,7 +18,6 @@ import {
 } from "~/server/db/helpers";
 import { quotedTable } from "~/server/db/helpers/related";
 import { email, run as runTable, runFinding } from "~/server/db/schema";
-import type { PurchaseImportRunAgentRpc } from "~/server/domains/purchase-agent/service/environment";
 import { recordChange } from "~/server/generic/changes/repo/change";
 
 // includes-deleted: retirement closes obsolete execution alerts even on retained deleted Run identities.
@@ -136,7 +135,9 @@ export async function assertRetirableLegacySession(
  */
 export async function retireSettledCoordinators(
   db: Database,
-  coordinator: (agentId: string) => Pick<PurchaseImportRunAgentRpc, "retire">,
+  coordinator: (agentId: string) => {
+    retire(): Promise<{ disposed: boolean }>;
+  },
   before: Date,
   limit = 200,
 ) {
@@ -165,10 +166,18 @@ export async function retireSettledCoordinators(
   const failures: string[] = [];
   for (const { id, agentId, status, observedAt } of rows) {
     if (!agentId) continue;
-    const retire = async () => (await coordinator(agentId).retire()).disposed;
     try {
-      // A real failure repeats on the follow-up, which reports it.
-      if (!((await retire().catch(() => false)) || (await retire()))) continue;
+      // Disposal and its empty-storage receipt are separate coordinator phases.
+      // Disposal aborts the isolate, so the first call may reject after it
+      // took effect; a real failure repeats on the follow-up, which reports it.
+      const disposed = await coordinator(agentId)
+        .retire()
+        .then(
+          (result) => result.disposed,
+          () => false,
+        );
+      if (!disposed && !(await coordinator(agentId).retire()).disposed)
+        continue;
       // Reopened Runs must neither be stamped retired nor lose their findings.
       const stamped = await withTransaction(db, async (tx) => {
         const now = new Date();

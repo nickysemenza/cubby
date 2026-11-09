@@ -69,6 +69,7 @@ export const purchaseContract = defineContract(
   "purchase",
   {
     settlementCandidates: query({
+      readPolicy: "strong",
       exposure: "capability",
       description:
         "Rank possible Purchase matches for the supplied settlement evidence. This is read-only; confirm the paperwork and transaction before allocating settlement.",
@@ -92,6 +93,7 @@ export const purchaseContract = defineContract(
      * so no client restates it; the write still validates on its own.
      */
     checkSettlementAllocation: query({
+      readPolicy: "strong",
       note: "Allocation form check; the write validates on its own",
       input: purchaseSettlementAllocationCheckInput,
       output: purchaseSettlementAllocationCheckOut,
@@ -118,23 +120,27 @@ export const purchaseContract = defineContract(
      * an attribution choice). Both clients consult it; `split` re-checks on write.
      */
     splitStart: query({
+      readPolicy: "strong",
       input: purchaseSplitStartInput,
       output: purchaseSplitStartOut,
       cache: { tags: [["expense"]] },
     }),
     checkSplit: query({
+      readPolicy: "strong",
       input: purchaseSplitCheckInput,
       output: purchaseSplitCheckOut,
       cache: { tags: [] },
     }),
     /** Expenses worth attaching to a Purchase for a scope and search, already worded. */
     linkExpenseCandidates: query({
+      readPolicy: "strong",
       input: purchaseLinkExpensesCandidatesInput,
       output: purchaseLinkExpensesCandidatesOut,
       cache: { tags: [["expense"], ["purchase"]] },
     }),
     /** Whether a selection can be attached and what it does to the Purchase's expense total. */
     checkLinkExpenses: query({
+      readPolicy: "strong",
       input: purchaseLinkExpensesCheckInput,
       output: purchaseLinkExpensesCheckOut,
       cache: { tags: [] },

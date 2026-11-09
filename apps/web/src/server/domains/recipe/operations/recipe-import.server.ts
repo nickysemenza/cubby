@@ -35,6 +35,7 @@ import {
   recipeOutSignature,
 } from "~/lib/recipe-signature";
 import { forwardGatewayRequest } from "~/server/ai/gateway-forward";
+import { aiCallOwner } from "~/server/ai/policy/call-owner";
 import {
   lintImportRecipe,
   notionPageToImportRecipe,
@@ -87,7 +88,6 @@ import {
   upsertImportRecipe,
   upsertNotionRecipeFromImport,
 } from "~/server/domains/recipe/repo/import-recipe-convert";
-import { aiCallOwner } from "~/server/domains/run/repo/ai-call-owner";
 import {
   actorWithRun,
   cookbookRunInput,
@@ -96,15 +96,15 @@ import { appErrorFromUnknown, createAppError } from "~/server/errors/app-error";
 import { readPublicEntityRow } from "~/server/generic/derived/service/public-read";
 import { bindShortcodeResolver } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import type { AuthenticatedOperationContext } from "~/server/operation-runtime/operation.server";
+import { workflow } from "~/server/workflows/runtime/builder";
 import {
   bindBulkWorkflow,
-  bindWorkflow,
   defineBulkWorkflow,
   executeBulkWorkflow,
-  executeWorkflow,
   type BulkWorkflowSummary,
-  workflow,
-} from "~/server/workflows/runtime";
+} from "~/server/workflows/runtime/bulk";
+import { executeWorkflow } from "~/server/workflows/runtime/execute";
+import { bindWorkflow } from "~/server/workflows/runtime/operation";
 
 const log = createLogger("cookbook.upsert");
 
@@ -872,6 +872,5 @@ export async function forwardGatewayRequestWorkflow(
   return forwardGatewayRequest(input, {
     db: context.db,
     ...aiCallOwner(context.actorContext),
-    feature: "cookbook-epub-parsing",
   });
 }

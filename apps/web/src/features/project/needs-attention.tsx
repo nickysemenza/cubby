@@ -16,7 +16,7 @@ import { Link } from "@tanstack/react-router";
 import { AttentionInputStatus } from "~/features/project/attention-input-status";
 import { formatCurrency } from "~/lib/number-format";
 import { Row, Stack } from "~/ui/layout";
-import { Disclosure } from "~/ui/layout/disclosure";
+import { Disclosure } from "~/ui/layout";
 import { DateDisplay } from "~/ui/values/date-display";
 
 import { attentionEvidence } from "./attention-presentation";

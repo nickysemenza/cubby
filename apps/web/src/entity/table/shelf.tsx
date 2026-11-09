@@ -6,7 +6,7 @@ import type { ReactNode } from "react";
 
 import { RecordEmoji } from "~/entity/components/record-emoji";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
-import { Panel } from "~/ui/layout/panel";
+import { Panel } from "~/ui/layout";
 import { Image } from "~/ui/media/image";
 import { TileOverlay } from "~/ui/media/tile-overlay";
 import { Button } from "~/ui/primitives/button";

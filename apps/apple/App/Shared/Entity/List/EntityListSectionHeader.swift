@@ -56,7 +56,7 @@ struct EntityListSectionHeader: View {
             Text(section.label)
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.primary)
-            Text(section.count.formatted())
+            Text(ValueFormat.count(section.count))
                 .font(.caption)
                 .monospacedDigit()
                 .foregroundStyle(.secondary)

@@ -15,13 +15,13 @@ import {
   type OperationId,
   operationDefinitionFor,
 } from "~/lib/operation-observability";
-import { recordResponse } from "~/lib/request-id";
 import {
   publicOperationErrorSchema,
   type OperationResult,
   type OperationWireValue,
   operationResultSchema,
-} from "~/server/operation-runtime/operation.contract";
+} from "~/lib/operation-result";
+import { recordResponse } from "~/lib/request-id";
 
 type DispatchItem = {
   operation: OperationId;

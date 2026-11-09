@@ -102,7 +102,9 @@ export function useReportCommands() {
               offset = done.nextOffset;
             }
           } catch {
-            // SILENT: useActionMutation already showed the error; the loop just stops.
+            // SILENT: useActionMutation already displays the error.
+            if (total > 0)
+              toast.info(`Reprocessed ${total} recipes before the error`);
             return;
           }
           toast.success(`Reprocessed ${total} recipes`);
@@ -124,7 +126,9 @@ export function useReportCommands() {
               }
             }
           } catch {
-            // SILENT: useActionMutation already showed the error; the loop just stops.
+            // SILENT: useActionMutation already displays the error.
+            if (imported > 0)
+              toast.info(`Added ${imported} recipes before the error`);
             return;
           }
           toast.success(`Added ${imported} recipes`);

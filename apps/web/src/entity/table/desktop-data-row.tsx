@@ -14,12 +14,12 @@ import {
 } from "react";
 import { z } from "zod";
 
+import { WhyValue } from "~/entity/fields/explanation/why-value";
 import { isInspectableFieldProvenance } from "~/entity/fields/field-provenance";
 import { fieldResolutionFor } from "~/entity/fields/field-resolution";
 import { ProposalCount } from "~/entity/suggestions/proposal-counts";
 import { RecordFieldSuggestion } from "~/entity/suggestions/record-suggestions";
 import { FieldRecordValue } from "~/ui/derived/record-value";
-import { WhyValue } from "~/ui/derived/why-value";
 import { Button } from "~/ui/primitives/button";
 import { TableCell, TableRow } from "~/ui/primitives/table";
 import { DenseCellContext } from "~/ui/values/stacked-value";

@@ -12,21 +12,20 @@ import {
 } from "react";
 
 import {
-  entities,
-  entityDetailParams,
+  browserEntityDetailLink,
   entityLabel,
   isBrowserRoutedEntity,
 } from "~/entity/entities";
 import { entityGraph } from "~/integrations/tanstack-query/generated/domains/entityGraph.gen";
-import { browserOnlyLazy } from "~/lib/browser-only-lazy";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useIsMobile } from "~/ui/hooks/use-mobile";
 import { Row, Stack } from "~/ui/layout";
-import { Disclosure } from "~/ui/layout/disclosure";
-import { Panel } from "~/ui/layout/panel";
+import { Disclosure } from "~/ui/layout";
+import { Panel } from "~/ui/layout";
 import { PrevNextButtons } from "~/ui/navigation/prev-next-buttons";
+import { browserOnlyLazy } from "~/ui/primitives/browser-only-lazy";
 import { Button } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";
 import {
@@ -519,15 +518,9 @@ function GraphRecordInspector({
   );
   const recordLink = (node: EntityGraphNode) =>
     isBrowserRoutedEntity(node.entityKind)
-      ? node.entityKind === "usda-food"
-        ? router.buildLocation({
-            to: "/usda/$id",
-            params: { id: node.entityId },
-          }).href
-        : router.buildLocation({
-            to: entities[node.entityKind].routes.detail,
-            params: entityDetailParams(node.entityId),
-          }).href
+      ? router.buildLocation(
+          browserEntityDetailLink(node.entityKind, node.entityId),
+        ).href
       : undefined;
   return (
     <Stack gap="md">

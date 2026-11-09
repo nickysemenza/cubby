@@ -6,7 +6,7 @@ import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 
 import * as schema from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/db/helpers";
-import { setMemberLoginParty } from "~/server/http/member-login";
+import { setMemberLoginParty } from "~/server/domains/ledger-party/repo/member-login";
 import { account as googleAccount } from "~/server/db/auth.schema";
 import { GMAIL_READONLY_SCOPE } from "~/lib/google-auth-constants";
 import { resolveDateRange } from "~/lib/date-range-presets";

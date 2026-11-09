@@ -1,4 +1,4 @@
-import { getAuth } from "~/lib/auth";
+import { getAuth } from "~/server/http/auth";
 import {
   authenticate,
   isChallenge,

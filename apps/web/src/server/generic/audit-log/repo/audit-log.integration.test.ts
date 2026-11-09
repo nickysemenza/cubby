@@ -11,8 +11,8 @@ import { insertAndReturn, withTransaction } from "~/server/db/helpers";
 import { auditLog, product } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
-import { listAuditLog } from "~/server/generic/audit-log/operations/audit-log";
-import { getAuditLog } from "~/server/generic/audit-log/repo/audit-log";
+import { listAuditLog } from "~/server/generic/audit-log/operations/audit-log.server";
+import { getAuditLog } from "~/server/generic/audit-log/repo/audit-log-read";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   createInventoryFixture as createInventoryEntry,

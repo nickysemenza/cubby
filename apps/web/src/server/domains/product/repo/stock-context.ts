@@ -8,7 +8,7 @@ import type { RawProductList } from "@cubby/schemas/product-raw-read";
 import {
   deriveProductQuantitySummary,
   hasComparableQuantityHistory,
-} from "~/server/lib/product-quantity-summary";
+} from "~/server/domains/product/repo/quantity-summary";
 
 type StockContextInput = Pick<RawProductList, "quantityLedger"> & {
   inventoryEntry: readonly Pick<

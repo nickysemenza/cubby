@@ -63,7 +63,7 @@ import { inArray } from "drizzle-orm";
 import type { DrizzleTransaction } from "~/server/db";
 import { dataExceptionRecord } from "~/server/db/schema";
 import { retireEmailDecisionTargetsTx } from "~/server/domains/email/repo/email-link-decision";
-import { retireRunFindingTargetsTx } from "~/server/domains/purchase-import/repo/run-finding";
+import { retireRunFindingTargetsTx } from "~/server/domains/run/repo/run-finding";
 import { tombstoneEntityIdentities } from "~/server/entity-kernel/repo/entity-identity-writer";
 import type { AuditEntryInput } from "~/server/generic/audit-log/repo/audit-log";
 import { logAuditEntries } from "~/server/generic/audit-log/repo/audit-log";

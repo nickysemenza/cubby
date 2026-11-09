@@ -3,7 +3,10 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
 
-import { type CompiledEntity, EntityDeclarationError } from "./declarations.ts";
+import {
+  type CompiledEntity,
+  EntityDeclarationError,
+} from "./declaration-types.ts";
 
 const BASELINE_PATH = resolve(
   dirname(fileURLToPath(import.meta.url)),

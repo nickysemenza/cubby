@@ -8,7 +8,9 @@ import {
 import type { ToolExecutionResult } from "@earendil-works/pi-durable";
 import { z } from "zod";
 
-const CLAIM_TOOL = "claim_next_import_work";
+import { CLAIM_IMPORT_WORK_TOOL } from "./tool-protocol";
+
+const CLAIM_TOOL = CLAIM_IMPORT_WORK_TOOL;
 
 /** A purpose's models: the harness override when present, else its manifest. */
 export function coordinatorModelsFor(

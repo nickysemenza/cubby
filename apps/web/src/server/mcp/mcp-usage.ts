@@ -8,7 +8,6 @@ import {
   type McpUsageActivityOut,
   type McpUsageWindow,
 } from "@cubby/schemas/telemetry";
-import { encodeBase64Url, decodeBase64UrlText } from "@cubby/shared/base64";
 import {
   and,
   asc,
@@ -26,6 +25,7 @@ import { z } from "zod";
 import type { Database } from "~/server/db";
 import { getDb, householdDaySql } from "~/server/db/helpers";
 import { mcpToolCall, oauthClient, user } from "~/server/db/schema";
+import { jsonCursor } from "~/server/lib/json-cursor";
 
 export function mcpUsageSince(window: McpUsageWindow): Date | null {
   if (window === "lifetime") return null;
@@ -186,29 +186,20 @@ interface McpUsageCursor {
   id: string;
 }
 
-const mcpUsageCursorPayload = z.object({
-  occurredAt: z.string(),
-  id: z.string(),
-});
+const mcpUsageCursor = jsonCursor(
+  z.object({ occurredAt: z.iso.datetime(), id: z.string() }),
+  { prefix: CURSOR_PREFIX, invalid: "Invalid MCP usage cursor" },
+);
 
-function encodeCursor(row: McpUsageCursor): string {
-  return `${CURSOR_PREFIX}${encodeBase64Url(
-    JSON.stringify({ occurredAt: row.occurredAt.toISOString(), id: row.id }),
-  )}`;
-}
+const encodeCursor = (row: McpUsageCursor) =>
+  mcpUsageCursor.encode({
+    occurredAt: row.occurredAt.toISOString(),
+    id: row.id,
+  });
 
 function decodeCursor(cursor: string): McpUsageCursor {
-  try {
-    if (!cursor.startsWith(CURSOR_PREFIX)) throw new Error("bad prefix");
-    const parsed = mcpUsageCursorPayload.parse(
-      JSON.parse(decodeBase64UrlText(cursor.slice(CURSOR_PREFIX.length))),
-    );
-    const occurredAt = new Date(parsed.occurredAt);
-    if (Number.isNaN(occurredAt.getTime())) throw new Error("bad date");
-    return { occurredAt, id: parsed.id };
-  } catch {
-    throw new Error("Invalid MCP usage cursor");
-  }
+  const parsed = mcpUsageCursor.decode(cursor);
+  return { occurredAt: new Date(parsed.occurredAt), id: parsed.id };
 }
 
 export async function listMcpUsageActivity(

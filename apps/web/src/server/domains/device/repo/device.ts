@@ -17,6 +17,7 @@ import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import { buildPartialUpdateValues, withTransaction } from "~/server/db/helpers";
 import { device, imageSighting, runPushRegistration } from "~/server/db/schema";
 import { deriveAndStoreImageCapture } from "~/server/domains/image/repo/image-capture-derivation";
+import { currentMemberLedgerParty } from "~/server/domains/ledger-party/repo/current-member-party";
 import {
   type MutationReceipt,
   defineMutationWriter,
@@ -31,8 +32,7 @@ import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
-import { appleAppVersionTooOld } from "~/server/http/apple-client-gate";
-import { currentMemberLedgerParty } from "~/server/http/member-login";
+import { appleAppVersionTooOld } from "~/server/lib/apple-app-version";
 
 /** `ImageSighting.deviceId` cascades: a sighting reported by a device is
  * meaningless once that device is gone. `AuditLog.deviceId` is cleared. */

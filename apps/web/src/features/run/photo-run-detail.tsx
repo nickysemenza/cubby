@@ -17,7 +17,7 @@ import { ShortcodeProse } from "~/entity/prose/shortcode-prose";
 import { photoImport } from "~/integrations/tanstack-query/generated/domains/photoImport.gen";
 import { run as runOperations } from "~/integrations/tanstack-query/generated/domains/run.gen";
 import { Row, Section, Stack } from "~/ui/layout";
-import { Disclosure } from "~/ui/layout/disclosure";
+import { Disclosure } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Progress } from "~/ui/primitives/progress";
 import { Description } from "~/ui/text/description";

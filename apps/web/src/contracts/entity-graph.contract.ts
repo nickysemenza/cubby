@@ -111,7 +111,11 @@ export const entityGraphContract = defineContract(
       cache: { tags: [["relatedData"], ...ENTITY_ROOT_TAGS] },
     }),
   },
-  { exposure: "view", mcpToolGroup: "entity_graph" },
+  {
+    exposure: "view",
+    mcpToolGroup: "entity_graph",
+    readPolicy: "financialEntity",
+  },
 );
 
 export const connectionContract = defineContract(

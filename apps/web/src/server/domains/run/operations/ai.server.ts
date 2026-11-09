@@ -55,6 +55,7 @@ import {
   suggestFields,
   withFieldSuggestionBatch,
 } from "~/server/ai/field-suggest/suggest-fields";
+import { aiCallOwner, type AiCallOwner } from "~/server/ai/policy/call-owner";
 import {
   dependencyStamps,
   fieldDependencyKeys,
@@ -73,10 +74,6 @@ import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import { suggestionTable } from "~/server/db/schema";
 import { applyFinanceCategorySuggestion } from "~/server/domains/financial-transaction/repo/finance-suggestion-context";
 import {
-  aiCallOwner,
-  type AiCallOwner,
-} from "~/server/domains/run/repo/ai-call-owner";
-import {
   readAutomaticAiStop,
   resumeAutomaticAi,
   stopAutomaticAi,
@@ -94,14 +91,16 @@ import { memberRejectedSql } from "~/server/generic/suggestions/repo/suggestion-
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
 import type { AuthenticatedOperationContext } from "~/server/operation-runtime/operation.server";
 import { implementSubscriptionDomain } from "~/server/operation-runtime/subscription-domain.server";
+import { workflow } from "~/server/workflows/runtime/builder";
 import {
   bindBulkWorkflow,
-  bindCoordinatorStream,
   defineBulkWorkflow,
-  defineCoordinatorStream,
   type BulkWorkflowSummary,
-  workflow,
-} from "~/server/workflows/runtime";
+} from "~/server/workflows/runtime/bulk";
+import {
+  bindCoordinatorStream,
+  defineCoordinatorStream,
+} from "~/server/workflows/runtime/stream";
 
 const log = createLogger("precomputeEnrichmentProposals");
 const suggestionLog = createLogger("suggestFields");

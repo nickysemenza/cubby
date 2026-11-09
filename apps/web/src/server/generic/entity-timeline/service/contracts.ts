@@ -4,6 +4,7 @@ import type {
   ParsedEntityTimelineInputByEntity,
   TimelineEntity,
 } from "~/entity/generated/entity-timelines.gen";
+import type { executeEntityAs } from "~/server/entity-kernel";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 
 /**
@@ -16,4 +17,5 @@ export type EntityTimelineImplementation<
 > = (
   context: EntityKernelContext,
   input: ParsedEntityTimelineInputByEntity[E],
+  read: typeof executeEntityAs,
 ) => Promise<EntityTimelineOut>;

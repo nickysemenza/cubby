@@ -1,86 +1,14 @@
 import { fromPartial } from "@total-typescript/shoehorn";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { runWithExecutionCtx, setCfEnv } from "~/server/cf-env";
+import { setCfEnv } from "~/server/cf-env";
 
 import { createCalDavHandler } from "../service/caldav-http";
 import type { CalDavBackend } from "./caldav-types";
-import { handleCalDavRequest, scheduleCalendarFeedDirty } from "./client";
+import { handleCalDavRequest } from "./client";
 
 afterEach(() => {
   setCfEnv(undefined);
-  vi.useRealTimers();
-});
-
-/**
- * `markDirty` only sets a flag on the target Durable Object, so retrying it
- * inside the same `waitUntil` task is safe. Transient RPC failures must not
- * leave the feed stale after the first failure.
- */
-describe("scheduleCalendarFeedDirty", () => {
-  it("retries a failed dirty-mark before giving up", async () => {
-    vi.useFakeTimers();
-    const markDirty = vi
-      .fn()
-      .mockRejectedValueOnce(new Error("stub RPC failure"))
-      .mockRejectedValueOnce(new Error("stub RPC failure"))
-      .mockResolvedValueOnce(undefined);
-    setCfEnv(
-      fromPartial<Env>({
-        CALENDAR_FEED: { getByName: () => ({ markDirty }) },
-      }),
-    );
-
-    const tasks: Promise<unknown>[] = [];
-    await runWithExecutionCtx(
-      { waitUntil: (task) => tasks.push(task) },
-      async () => {
-        scheduleCalendarFeedDirty("test.write");
-      },
-      "https://cubby.example",
-    );
-    expect(tasks).toHaveLength(1);
-
-    // Let the two backoff `setTimeout`s elapse without a real wall-clock wait.
-    await vi.advanceTimersByTimeAsync(250);
-    await vi.advanceTimersByTimeAsync(750);
-    await tasks[0];
-
-    expect(markDirty).toHaveBeenCalledTimes(3);
-    expect(markDirty).toHaveBeenCalledWith(
-      "test.write",
-      "https://cubby.example",
-    );
-  });
-
-  it("does not enqueue when a retry succeeds", async () => {
-    vi.useFakeTimers();
-    const markDirty = vi
-      .fn()
-      .mockRejectedValueOnce(new Error("stub RPC failure"))
-      .mockResolvedValueOnce(undefined);
-    const sendBatch = vi.fn().mockResolvedValue(undefined);
-    setCfEnv(
-      fromPartial<Env>({
-        CALENDAR_FEED: { getByName: () => ({ markDirty }) },
-        BACKGROUND_QUEUE: { sendBatch },
-      }),
-    );
-
-    const tasks: Promise<unknown>[] = [];
-    await runWithExecutionCtx(
-      { waitUntil: (task) => tasks.push(task) },
-      async () => {
-        scheduleCalendarFeedDirty("test.write");
-      },
-      "https://cubby.example",
-    );
-    await vi.advanceTimersByTimeAsync(250);
-    await tasks[0];
-
-    expect(markDirty).toHaveBeenCalledTimes(2);
-    expect(sendBatch).not.toHaveBeenCalled();
-  });
 });
 
 // Failures: valid OPTIONS/redirects can unnecessarily wake a DO; moving them

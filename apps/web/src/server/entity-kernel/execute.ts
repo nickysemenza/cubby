@@ -23,7 +23,8 @@ import {
   findRelatedSearchHits,
   findSearchHits,
 } from "~/server/generic/search/service/search.service";
-import { bindWorkflow, workflow } from "~/server/workflows/runtime";
+import { workflow } from "~/server/workflows/runtime/builder";
+import { bindWorkflow } from "~/server/workflows/runtime/operation";
 
 import type { EntityKernelContext } from "./adapter";
 import {

@@ -12,10 +12,10 @@ import {
   runOperation,
 } from "~/server/db/schema";
 import { deleteProducts } from "~/server/domains/product/repo/crud";
+import { loadRunDetail } from "~/server/domains/run/repo/run-detail";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
-import { loadRunDetail } from "../repo/run-service";
 import { startImportRunFixture } from "./import-run.fixtures";
 import { writeOutcomeReceipts } from "./run-outcome.fixtures";
 

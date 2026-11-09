@@ -37,7 +37,6 @@ export function locationToSegments(
 ): LocationSegment[] {
   const segments: LocationSegment[] = [];
 
-  // Walk up the parent chain
   let current: LocationTreeNode | null | undefined = location;
   while (current) {
     segments.unshift({
@@ -70,7 +69,6 @@ interface LocationBreadcrumbProps {
   compact?: boolean;
   /** Add bg-primary/10 tint to active (last) segment */
   activeHighlight?: boolean;
-  /** Additional class name */
   className?: string;
 }
 

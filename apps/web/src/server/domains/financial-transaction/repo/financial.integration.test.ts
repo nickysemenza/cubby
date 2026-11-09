@@ -14,7 +14,7 @@ import {
   createFinancialAccount,
   financialAccountScaffold,
   updateFinancialAccount,
-} from "~/server/domains/financial-account/repo";
+} from "~/server/domains/financial-account/repo/financial-account";
 import { createLedgerParty } from "~/server/domains/ledger-party/repo/ledger-party";
 import {
   deletePurchases,

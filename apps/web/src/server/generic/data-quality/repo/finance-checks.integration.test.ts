@@ -12,7 +12,7 @@ import {
   createPlanting,
 } from "~/server/domains/garden/repo/garden";
 import { createLedgerParty } from "~/server/domains/ledger-party/repo/ledger-party";
-import { createLedgerTransfer } from "~/server/domains/ledger-transfer/repo";
+import { createLedgerTransfer } from "~/server/domains/ledger-transfer/repo/ledger-transfer";
 import { createLocation } from "~/server/domains/location/repo/crud";
 import {
   findOrCreateVendor,

@@ -54,10 +54,8 @@ import {
   type MemberImportOrder,
 } from "../operations/order-import.fixtures";
 import { resolveRunFinding } from "./findings";
-import {
-  commitAcceptedSourceOrderReconciliation,
-  prepareSourceOrderReconciliation,
-} from "./reconciliation";
+import { prepareSourceOrderReconciliation } from "./reconciliation";
+import { commitAcceptedSourceOrderReconciliation } from "./reconciliation-accepted";
 import { importVendorOrder } from "./writer";
 
 // Missing money/date must not suppress supported Product identity or manufacture

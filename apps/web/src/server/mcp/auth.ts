@@ -2,13 +2,13 @@ import { userId } from "@cubby/schemas/identifiers";
 import { createLogger } from "@cubby/worker-tracing";
 import { verifyJwsAccessToken } from "better-auth/oauth2";
 
-import { getAuth } from "~/lib/auth";
 import { MCP_RESOURCE, OAUTH_ISSUER } from "~/lib/auth-constants";
 import {
   PURCHASE_AGENT_OAUTH_CLIENT_ID,
   verifyPurchaseAgentDelegation,
-} from "~/server/domains/purchase-import/repo/agent-auth";
-import { getAuthSecret } from "~/server/http/auth-configuration";
+} from "~/server/domains/run/repo/agent-auth";
+import { getAuth } from "~/server/http/auth";
+import { getAuthSecret } from "~/server/lib/auth-configuration";
 
 import {
   createMcpTokenVerifier,

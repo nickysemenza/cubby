@@ -6,6 +6,7 @@ import {
   mergeDatabaseChanges,
   type DatabaseChanges,
 } from "~/lib/doorbell";
+import { reconnectDelay } from "~/lib/reconnect-backoff";
 import { showErrorToast } from "~/ui/feedback/error-details";
 
 import {
@@ -111,11 +112,7 @@ export function subscribeDatabaseChanges(client: QueryClient): () => void {
     });
     current.addEventListener("close", () => {
       if (socket === current) socket = undefined;
-      if (!stopped)
-        retry = setTimeout(
-          connect,
-          Math.min(30_000, 1_000 * 2 ** Math.min(attempt++, 5)),
-        );
+      if (!stopped) retry = setTimeout(connect, reconnectDelay(attempt++));
     });
     current.addEventListener("error", () => current.close());
   }

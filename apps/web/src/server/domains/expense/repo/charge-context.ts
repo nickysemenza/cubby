@@ -17,7 +17,8 @@ import {
   resolveLiveShortcode,
   resolveOrThrow,
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { bindWorkflow, workflow } from "~/server/workflows/runtime";
+import { workflow } from "~/server/workflows/runtime/builder";
+import { bindWorkflow } from "~/server/workflows/runtime/operation";
 
 type ChargeContextInput = z.output<typeof expenseShortcode>;
 const requirePurchase = (id: PurchaseId | null): PurchaseId => {

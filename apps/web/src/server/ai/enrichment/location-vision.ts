@@ -31,6 +31,7 @@ import { createLogger } from "@cubby/worker-tracing";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import type { z } from "zod";
 
+import { type AiCallOwner } from "~/server/ai/policy/call-owner";
 import {
   buildLocationAnalysisFingerprint,
   LOCATION_DESCRIPTION_FEATURE,
@@ -63,7 +64,6 @@ import {
   quickCreateProductRecord,
 } from "~/server/domains/product/repo/crud";
 import { findProductByNameWithBrandClaim } from "~/server/domains/product/repo/lookup";
-import { type AiCallOwner } from "~/server/domains/run/repo/ai-call-owner";
 import { resolveProductBrandName } from "~/server/domains/vendor/repo/product-brand";
 import { createAppError } from "~/server/errors/app-error";
 import { recordChange } from "~/server/generic/changes/repo/change";

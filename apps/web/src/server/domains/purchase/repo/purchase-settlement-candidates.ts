@@ -9,6 +9,7 @@ import { uniq } from "es-toolkit";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
+import { minorToDollarsSql } from "~/server/db/computed/money";
 import { getDb, notDeleted, unwrapDb } from "~/server/db/helpers";
 import { purchase as purchaseTable } from "~/server/db/schema";
 import {
@@ -102,8 +103,8 @@ export async function listPurchasesSettlementCandidates(
   );
   const effectiveDate = sql`coalesce("FinancialTransaction"."postedDate", "FinancialTransaction"."transactionDate")::date`;
   const days = sql`abs(${effectiveDate} - subject.date)`;
-  const residual = sql`(("FinancialTransaction"."amountMinor"::numeric / 100) - (
-    SELECT coalesce(sum((a."amountMinor"::numeric / 100)), 0) FROM "FinancialTransactionAllocation" a
+  const residual = sql`((${minorToDollarsSql(sql`"FinancialTransaction"."amountMinor"`, "numeric")}) - (
+    SELECT coalesce(sum((${minorToDollarsSql(sql`a."amountMinor"`, "numeric")})), 0) FROM "FinancialTransactionAllocation" a
     WHERE a."transactionId" = "FinancialTransaction".id AND ${notDeleted("a")}
   ))`;
   const targetAllocation = sql`EXISTS (
@@ -122,7 +123,7 @@ export async function listPurchasesSettlementCandidates(
   const amountWithin = (centsAllowed: number) => sql`(
     "FinancialTransaction".kind = ${financialTransactionKind.enum.purchase}
     AND subject.stated_cents IS NOT NULL
-    AND (${centsOff(sql`("FinancialTransaction"."amountMinor"::numeric / 100)`)} <= ${centsAllowed}
+    AND (${centsOff(sql`(${minorToDollarsSql(sql`"FinancialTransaction"."amountMinor"`, "numeric")})`)} <= ${centsAllowed}
       OR ${centsOff(residual)} <= ${centsAllowed})
   )`;
   const exactAmount = amountWithin(0);
@@ -163,7 +164,7 @@ export async function listPurchasesSettlementCandidates(
           AND "FinancialTransaction"."ledgerTransferId" IS NULL
           AND "FinancialTransaction".kind IN ('purchase', 'refund')
           AND ${days} <= ${SETTLEMENT_CANDIDATE_WINDOW_DAYS}
-          AND ((${residual} <> 0 AND sign(${residual}) = sign(("FinancialTransaction"."amountMinor"::numeric / 100))) OR ${targetAllocation})
+          AND ((${residual} <> 0 AND sign(${residual}) = sign((${minorToDollarsSql(sql`"FinancialTransaction"."amountMinor"`, "numeric")}))) OR ${targetAllocation})
       ) scored
       ORDER BY rank
       LIMIT ${SETTLEMENT_CANDIDATE_LIMIT}

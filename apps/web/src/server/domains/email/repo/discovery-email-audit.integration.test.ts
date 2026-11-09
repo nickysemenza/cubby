@@ -16,12 +16,12 @@ import {
 } from "~/server/db/schema";
 import { recordDeletedHistoryEvent } from "~/server/domains/purchase-import/operations/gmail/discovery";
 import { originalChecksum } from "~/server/domains/purchase-import/repo/gmail/checksum";
+import { loadMailDiscoveryRead } from "~/server/domains/purchase-import/repo/gmail/discovery-run-read";
 import { normalizeMessage } from "~/server/domains/purchase-import/repo/gmail/normalize";
 import { prepareReclassification } from "~/server/domains/purchase-import/repo/gmail/reclassification-work";
 import { HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION } from "~/server/domains/purchase-import/repo/mail-source-identity";
 import { ingestGmailMessages } from "~/server/domains/purchase-import/service/gmail/ingest";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
-import { loadMailDiscoveryRead } from "~/server/domains/run/repo/run-discovery-read";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 // Reused verdicts need membership in every handling Run; later Email writes cannot rewrite those outcomes.

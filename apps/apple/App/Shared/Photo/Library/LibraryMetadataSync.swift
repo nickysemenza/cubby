@@ -52,7 +52,7 @@ final class LibraryMetadataSync {
     /// Resolved fresh at the start of every run: this device's own `Device` shortcode may not
     /// exist yet the first time a run starts (`DeviceRegistration.sync` races this on sign-in), so
     /// a run with no shortcode yet simply does nothing rather than failing every candidate.
-    @ObservationIgnored private let deviceShortcodeProvider: @MainActor () async -> DeviceShortcode?
+    @ObservationIgnored private let deviceShortcodeProvider: @MainActor () async throws -> DeviceShortcode?
     @ObservationIgnored private let sendPage: @MainActor ([ImageSightingRecordItem]) async throws -> Void
 
     @ObservationIgnored private var isSignedIn: Bool
@@ -88,7 +88,7 @@ final class LibraryMetadataSync {
         candidateProvider: @escaping @MainActor () -> [Candidate],
         factsProvider: @escaping @MainActor (String) -> (any LibraryAssetFacts)?,
         cloudIdentifierProvider: @escaping @MainActor (String) async -> String? = { _ in nil },
-        deviceShortcodeProvider: @escaping @MainActor () async -> DeviceShortcode?,
+        deviceShortcodeProvider: @escaping @MainActor () async throws -> DeviceShortcode?,
         sendPage: @escaping @MainActor ([ImageSightingRecordItem]) async throws -> Void
     ) {
         self.analysisStore = analysisStore
@@ -253,9 +253,14 @@ final class LibraryMetadataSync {
         }
         totalCount = pending.count
         guard !pending.isEmpty, !Task.isCancelled else { return }
-        guard let deviceShortcode = await deviceShortcodeProvider(), runGeneration == token,
-            !Task.isCancelled
-        else { return }
+        let device: DeviceShortcode?
+        do {
+            device = try await deviceShortcodeProvider()
+        } catch {
+            Diagnostics.report(error, context: "photos.librarySightingSync.device")
+            return
+        }
+        guard let deviceShortcode = device, runGeneration == token, !Task.isCancelled else { return }
         let pageSize = 50
         for offset in stride(from: 0, to: pending.count, by: pageSize) {
             guard !Task.isCancelled, runGeneration == token else { return }
@@ -372,9 +377,11 @@ extension LibraryMetadataSync {
             deviceShortcodeProvider: { [weak client] in
                 guard let client else { return nil }
                 let descriptor = EntityCatalog[.device]
-                let filters = EntityFilterState(["installationId": [installationID]])
-                let page = try? await client.list(descriptor, page: 1, pageSize: 1, filters: filters)
-                return page?.items.first?.id
+                let filters = EntityFilterState([
+                    EntityFilterParameter.Device.installationId: [installationID]
+                ])
+                return try await client.list(descriptor, page: 1, pageSize: 1, filters: filters).items.first?
+                    .id
             },
             sendPage: { [weak client] inputs in
                 guard let client else { throw LibraryMetadataSyncError.clientUnavailable }

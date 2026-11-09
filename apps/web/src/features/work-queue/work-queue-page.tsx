@@ -740,6 +740,7 @@ export function WorkQueue({
           state.rows[index === -1 ? 0 : index + (key === "j" ? 1 : -1)];
         if (!next) return;
         setCursor(next.id);
+        // The current-row marker lands with the next commit.
         requestAnimationFrame(() =>
           document
             .querySelector("tr.table-record-row[data-current='true']")

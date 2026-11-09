@@ -6,7 +6,7 @@ import { type ReactNode, useState } from "react";
 import { formatInstant } from "~/lib/date-format";
 import { formatDuration } from "~/lib/format-duration";
 import { formatCount } from "~/lib/number-format";
-import { Disclosure } from "~/ui/layout/disclosure";
+import { Disclosure } from "~/ui/layout";
 import { Progress } from "~/ui/primitives/progress";
 import { type KeyNumber, KeyNumbers } from "~/ui/records/key-numbers";
 import {

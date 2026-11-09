@@ -195,11 +195,11 @@ private struct MacroGrid: View {
 private extension MeasureEstimate {
     /// The cell text pinned by `golden-vectors/display-format.json`, shared with the web.
     func formatted(calories: Bool) -> String {
-        DisplayFormat.compactEstimate(self, unit: calories ? .kcal : .macro)
+        ValueFormat.compactEstimate(self, unit: calories ? .kcal : .macro)
     }
 
     func accessibilityValue(calories: Bool, unit: String) -> String {
-        DisplayFormat.estimate(self, measure: calories ? .kcal : .macro, unit: unit)
+        ValueFormat.estimate(self, measure: calories ? .kcal : .macro, unit: unit)
     }
 }
 

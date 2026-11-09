@@ -5,8 +5,8 @@ import { ShoppingBagIcon } from "@phosphor-icons/react/dist/csr/ShoppingBag";
 import { sumBy } from "es-toolkit";
 import { useMemo } from "react";
 
-import { getCostTypeColor } from "~/lib/status-colors";
 import { CategoryDonut } from "~/ui/charts/kit";
+import { getCostTypeColor } from "~/ui/values/status-colors";
 
 /**
  * Cost-type breakdown donut sourced from `expense.analytics`'s `byCostType`

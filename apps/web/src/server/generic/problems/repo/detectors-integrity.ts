@@ -112,7 +112,7 @@ function buildEdgeAuditSpecs(): EdgeAuditSpec[] {
 
     for (const [edgeKey, edge] of Object.entries(edgeMap)) {
       // SAFETY: INCOMING_EDGES and ENTITY_EDGE_SEMANTICS are both real typed
-      // projections of the same ENTITY_EDGES source (entity-edges.ts), so
+      // projections of the same ENTITY_EDGES source (entity-edges.gen.ts), so
       // their key sets are identical by construction — no runtime parity
       // check needed here, unlike when they were two independently
       // hand-kept maps.

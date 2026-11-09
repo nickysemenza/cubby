@@ -1,10 +1,10 @@
+import { systemActor } from "@cubby/schemas/context";
 import { runEntityId } from "@cubby/schemas/identifiers";
 import { testShortcode, testEntityId } from "@cubby/schemas/testing";
 import { describe, expect, it, vi } from "vitest";
 
 import type { Database } from "~/server/db";
 import type { ImageProvenanceCandidateRow } from "~/server/domains/image/repo/image";
-import { systemActor } from "~/server/domains/run/repo/ensure-run";
 
 import {
   classifyImageProvenance,

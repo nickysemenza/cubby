@@ -55,7 +55,6 @@ export const searchContract = defineContract(
     debug: query({
       description:
         "Inspect search-index coverage and query diagnostics for the supplied entity or search term. This is read-only; use request_embedding_refresh only after identifying stale embeddings.",
-      readPolicy: "strong",
       input: searchQueryInputSchema,
       output: searchDebugOutSchema,
     }),

@@ -12,8 +12,10 @@ import { suggestionFamily } from "@cubby/schemas/suggestion";
 import { sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
+import { minorToDollarsSql } from "~/server/db/computed/money";
 import { unwrapDb } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
+import { transactionImportRecord } from "~/server/db/retained-tables";
 import { sqlEnumConstant } from "~/server/db/sql-enum";
 import { sourceObservations } from "~/server/domains/transaction-import/repo/source-observation-state";
 import {
@@ -21,7 +23,6 @@ import {
   chargeKeyOf,
   chargeStateOf,
 } from "~/server/domains/transaction-import/repo/statement-charge";
-import { transactionImportMembers } from "~/server/domains/transaction-import/repo/transaction-import-membership";
 
 /** Which charge identities a generation or label pass covers; empty covers the ledger. */
 export type StatementSuggestionScope = {
@@ -43,7 +44,7 @@ export const scopedStatementChargeKeys = (scope: StatementSuggestionScope) => {
   const filters = [
     ...(importId
       ? [
-          sql`(seen.id IN (SELECT m."statementRowId" FROM ${transactionImportMembers} m WHERE m."importId" = ${importId}::uuid) OR seen."withdrawalImportId" = ${importId}::uuid)`,
+          sql`(seen.id IN (SELECT m."statementRowId" FROM ${transactionImportRecord} m WHERE m."importId" = ${importId}::uuid) OR seen."withdrawalImportId" = ${importId}::uuid)`,
         ]
       : []),
     ...(since ? [sql`seen."statementDate" >= ${since}::date`] : []),
@@ -102,7 +103,7 @@ export const statementInputCharges = (
           WHERE changed.shortcode=cs.shortcode AND ${notDeleted("changed")}
             AND head.current AND ${notDeleted("head")}
             AND ((head."withdrawnAt" IS NOT NULL AND changed.status <> ${financialTransactionStatus.enum.void}) OR
-              (head."withdrawnAt" IS NULL AND (changed.status = ${financialTransactionStatus.enum.void} OR round((changed."amountMinor"::numeric / 100)::numeric,2) <> round(head.amount::numeric,2)
+              (head."withdrawnAt" IS NULL AND (changed.status = ${financialTransactionStatus.enum.void} OR round((${minorToDollarsSql(sql`changed."amountMinor"`, "numeric")})::numeric,2) <> round(head.amount::numeric,2)
                 OR (head."providerStatus" = ${sourceTransactionRecordProviderStatus.enum.posted} AND (changed.status <> ${financialTransactionStatus.enum.posted} OR changed."postedDate" IS DISTINCT FROM head."statementDate"))
                 OR (head."providerStatus" = ${sourceTransactionRecordProviderStatus.enum.pending} AND changed.status <> ${financialTransactionStatus.enum.posted} AND (changed.status <> ${financialTransactionStatus.enum.pending} OR changed."transactionDate" IS DISTINCT FROM head."statementDate"))))))
         OR EXISTS (SELECT 1 FROM "FinancialTransaction" ft
@@ -131,7 +132,7 @@ export const statementPendingInputTransactions = (
   // Admit whole holds after aggregation so scoped membership never discards
   // their pending evidence from other collections or settlement references.
   return sql`
-    SELECT ft.id, ft."accountId", (ft."amountMinor"::numeric / 100)::float8 AS amount, ft.status, ft."postedDate",
+    SELECT ft.id, ft."accountId", (${minorToDollarsSql(sql`ft."amountMinor"`, "numeric")})::float8 AS amount, ft.status, ft."postedDate",
       ft."transactionDate", ft.merchant, ft."rawDescription",
       array_agg(DISTINCT sr.id) AS "pendingRowIds"
     FROM "FinancialTransaction" ft

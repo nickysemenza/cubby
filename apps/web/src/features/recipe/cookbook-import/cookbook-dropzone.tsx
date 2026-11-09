@@ -1,7 +1,7 @@
 import { useId } from "react";
 
 import { FileDropField } from "~/ui/file-upload/file-drop-field";
-import { Row } from "~/ui/layout/row";
+import { Row } from "~/ui/layout";
 import { Input } from "~/ui/primitives/input";
 import { Label } from "~/ui/primitives/label";
 

@@ -129,5 +129,5 @@ export const entityListContract = defineContract(
       observability: { entities: listEntities },
     }),
   },
-  { exposure: "view" },
+  { exposure: "view", readPolicy: "financialEntity" },
 );

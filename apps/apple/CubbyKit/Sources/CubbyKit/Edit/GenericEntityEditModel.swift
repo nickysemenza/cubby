@@ -131,7 +131,7 @@ public final class GenericEntityEditModel {
         }
         let hasCollectionControl = fields.contains { $0.collection?.primary != nil }
         return fields.filter {
-            isCreate || !hasCollectionControl || $0.controlRenderer?.rawValue != "upc-lookup"
+            isCreate || !hasCollectionControl || $0.controlRenderer != .upcLookup
         }
     }
 
@@ -333,7 +333,7 @@ public final class GenericEntityEditModel {
         let projected =
             StructuredValue.wireValue(StructuredValue.project(.object(row), to: item), schema: item)
             .objectValue ?? row
-        return field.controlRenderer?.rawValue == "external-ids"
+        return field.controlRenderer == .externalIds
             ? try IdentifierPresentation.storedRow(projected) : projected
     }
 

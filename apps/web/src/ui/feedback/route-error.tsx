@@ -21,7 +21,7 @@ import {
 import { OperationError } from "~/lib/operation-error";
 import { ErrorDetails } from "~/ui/feedback/error-details";
 import { Row, Stack } from "~/ui/layout";
-import { Disclosure } from "~/ui/layout/disclosure";
+import { Disclosure } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 
 type ErrorCategory =
@@ -50,12 +50,10 @@ const categorizeError = (
   message: string,
   error: UnparsedError,
 ): ErrorCategory => {
-  // Auth errors
   if (code === "UNAUTHORIZED" || reason === "UNAUTHORIZED") {
     return "auth";
   }
 
-  // Not found errors
   if (
     code === "NOT_FOUND" ||
     reason?.includes("NOT_FOUND") ||
@@ -64,7 +62,6 @@ const categorizeError = (
     return "notFound";
   }
 
-  // Validation errors
   if (code === "BAD_REQUEST" || code === "PARSE_ERROR") {
     return "validation";
   }
@@ -72,7 +69,6 @@ const categorizeError = (
   if (isDynamicImportError(error)) return "staleBuild";
   if (isSupersededViewTransitionError(error)) return "navigation";
 
-  // Network errors
   if (
     message.toLowerCase().includes("network") ||
     message.toLowerCase().includes("fetch") ||

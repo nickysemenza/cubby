@@ -38,20 +38,6 @@ import {
   loadEffectiveInventoryOwnership,
 } from "./ownership";
 
-const assertValidIndividualOwner = async (
-  tx: DrizzleTransaction,
-  ownerId: NonNullable<InventoryRawOwnership["ownerLedgerPartyId"]>,
-): Promise<void> => {
-  try {
-    await assertIndividualOwner(tx, ownerId);
-  } catch {
-    throw createAppError(
-      "CONSTRAINT_VIOLATION",
-      "Inventory can only be assigned to a live member or guest.",
-    );
-  }
-};
-
 const withSerializableConfirmation = async <Result>(
   db: Database,
   confirm: (tx: DrizzleTransaction) => Promise<Result>,
@@ -86,7 +72,7 @@ const resolveRawOwnership = async (
   };
   assertValidRawInventoryOwnership(ownership);
   if (ownerLedgerPartyId) {
-    await assertValidIndividualOwner(tx, ownerLedgerPartyId);
+    await assertIndividualOwner(tx, ownerLedgerPartyId);
   }
   return ownership;
 };
@@ -320,7 +306,7 @@ export const confirmInventoryOwnership = async (
       "ledgerParty",
       effective.effectiveOwner.id,
     );
-    await assertValidIndividualOwner(tx, ownerId);
+    await assertIndividualOwner(tx, ownerId);
     return await applyInventoryOwnershipInTransaction(
       tx,
       id,
@@ -395,7 +381,7 @@ export const confirmInventoryExpenseBeneficiary = async (
       "ledgerParty",
       effective.effectiveOwner.id,
     );
-    await assertValidIndividualOwner(tx, ownerId);
+    await assertIndividualOwner(tx, ownerId);
 
     const before = await readExpenseById(tx, expenseId);
     const beneficiaries = [

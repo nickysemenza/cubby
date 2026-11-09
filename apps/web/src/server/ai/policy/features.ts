@@ -451,7 +451,7 @@ export const LOCATION_INVENTORY_DETECTION_FEATURE = defineFeature({
 }) satisfies AiStructuredFeature<DetectedInventoryAiResult> &
   AiAnalysisFeature<DetectedInventoryAiResult>;
 
-export const PURCHASE_IMPORT_EXTRACTION_FEATURE = defineFeature({
+const PURCHASE_IMPORT_EXTRACTION_FEATURE = defineFeature({
   request: purchaseExtractionPrompt,
   feature: "purchase-import-extraction",
   tier: "standard",
@@ -462,7 +462,7 @@ export const PURCHASE_IMPORT_EXTRACTION_FEATURE = defineFeature({
   schema: importExtractionModelOutput,
 }) satisfies AiStructuredFeature<ImportExtractionModelOutput>;
 
-export const PURCHASE_IMPORT_RECEIPT_FEATURE = defineFeature({
+const PURCHASE_IMPORT_RECEIPT_FEATURE = defineFeature({
   request: purchaseReceiptRequest,
   feature: "purchase-import-receipt-extraction",
   tier: "standard",

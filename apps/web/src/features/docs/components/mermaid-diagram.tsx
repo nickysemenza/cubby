@@ -1,7 +1,7 @@
 import { getErrorMessage } from "@cubby/shared";
 import { useEffect, useState } from "react";
 
-import { Panel } from "~/ui/layout/panel";
+import { Panel } from "~/ui/layout";
 
 let nextDiagramId = 0;
 

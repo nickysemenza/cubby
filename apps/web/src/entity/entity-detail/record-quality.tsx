@@ -20,10 +20,10 @@ import { cn } from "cn";
 import { createContext, useContext, useId, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
+import { WhyValue } from "~/entity/fields/explanation/why-value";
 import { fieldExplanation } from "~/integrations/tanstack-query/generated/domains/fieldExplanation.gen";
 import { suggestions } from "~/integrations/tanstack-query/generated/domains/suggestions.gen";
 import { workQueue } from "~/integrations/tanstack-query/generated/domains/workQueue.gen";
-import { WhyValue } from "~/ui/derived/why-value";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Section, Stack } from "~/ui/layout";

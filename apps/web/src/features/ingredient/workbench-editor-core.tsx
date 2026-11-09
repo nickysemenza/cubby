@@ -96,6 +96,9 @@ export const buildPreviewMappings = (
     convRows?: PreviewConvRow[];
   },
 ): UnitMapping[] => {
+  // SILENT: this is a live preview built from in-progress form input; data
+  // that can't synthesize a mapping contributes nothing rather than blocking
+  // the rest of the editor.
   const base: UnitMapping[] = (() => {
     try {
       return getIngredientMappings({
@@ -112,11 +115,9 @@ export const buildPreviewMappings = (
   if (food) {
     try {
       base.push(...unitMappingsFromFood(food));
+    } catch {
+      // SILENT: see above; an unsynthesizable food adds no mapping.
     }
-    // SILENT: this is a live preview built from in-progress form input; a
-    // food whose data can't synthesize a mapping just contributes nothing
-    // to the preview rather than blocking the rest of the editor.
-    catch {}
   }
   const d = dollars;
   if (d != null && d > 0) {
@@ -226,6 +227,8 @@ export const analyzeGaps = (row: IngredientEnrichmentRead): GapAnalysis => {
         })),
       }).filter(isDisplayMapping);
     } catch {
+      // SILENT: the review card's mapping preview, like the editor's, shows
+      // nothing for data that can't synthesize a mapping.
       return [];
     }
   })();

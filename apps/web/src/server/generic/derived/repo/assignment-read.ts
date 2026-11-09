@@ -8,6 +8,7 @@ import { getTableColumns, sql, type AnyColumn } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
+import { minorToDollarsSql } from "~/server/db/computed/money";
 import { entityIdentity } from "~/server/db/entity-identity-schema";
 import { uuidArrayParam } from "~/server/db/helpers/query";
 import { amountJsonSql } from "~/server/db/helpers/transform";
@@ -66,7 +67,7 @@ export async function loadCurrentAssignmentFacts(
               key,
               value:
                 storage?.specialized === "minor-unit-money"
-                  ? sql`${column}::numeric / 100`
+                  ? minorToDollarsSql(column, "numeric")
                   : sql`${column}`,
             },
           ]

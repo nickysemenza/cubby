@@ -21,6 +21,7 @@ import {
   stopForReviewInput,
 } from "@cubby/schemas/purchase-agent-services";
 import { supportedChatModelSchema } from "@cubby/shared/ai/models";
+import { retryWithBackoff } from "@cubby/shared/retry";
 import { sha256Uuid } from "@cubby/shared/sha256";
 import { z } from "zod";
 
@@ -29,8 +30,8 @@ import type {
   PurchaseDispatchEnvironment,
   RunServices,
 } from "~/server/domains/purchase-agent/service/environment";
-import { getAuthSecret } from "~/server/http/auth-configuration";
 import { assertNotInMaintenance } from "~/server/http/maintenance";
+import { getAuthSecret } from "~/server/lib/auth-configuration";
 
 /** The MCP endpoint the delegation bearer's audience names. */
 const MCP_URL = "https://cubby.internal/api/mcp";
@@ -43,7 +44,7 @@ function withHostDatabase<T>(
   ctx: HostContext,
   fn: (
     database: typeof import("~/server/db").db,
-    service: typeof import("../repo/run-service"),
+    service: typeof import("~/server/domains/run/repo/run-control"),
     operation: typeof import("~/server/domains/run/repo/operation"),
   ) => Promise<T>,
 ): Promise<T> {
@@ -54,7 +55,7 @@ function withHostDatabase<T>(
       return withInvocationDb(env.HYPERDRIVE.connectionString, async () =>
         fn(
           db,
-          await import("../repo/run-service"),
+          await import("~/server/domains/run/repo/run-control"),
           await import("~/server/domains/run/repo/operation"),
         ),
       );
@@ -81,32 +82,36 @@ export async function admissionRead<T>(
       import("~/server/errors/db-errors"),
       import("drizzle-orm"),
     ]);
-  for (let attempt = 1; ; attempt++) {
-    try {
-      return await read();
-    } catch (error: unknown) {
-      if (attempt < ADMISSION_ATTEMPTS && isTransientConnectionError(error)) {
-        await wait(250 * attempt * attempt);
-        continue;
-      }
-      const pg = findPgError(error);
-      if (!(error instanceof Error)) throw error;
-      // A budget or executability refusal is a plain Error and stays final.
-      if (!pg && !(error instanceof DrizzleQueryError)) throw error;
-      const root = pg
-        ? `${pg.code} ${pg.message ?? ""}`.trim()
-        : error.cause instanceof Error
-          ? error.cause.message
-          : "";
-      // A bare Postgres error already carries its own message.
-      const cause =
-        root && !error.message.includes(pg?.message ?? root)
-          ? `\ncause: ${root}`
-          : "";
-      throw new Error(`${ADMISSION_DATABASE_FAULT} ${error.message}${cause}`, {
-        cause: error,
-      });
-    }
+  try {
+    return await retryWithBackoff(read, {
+      delayFor: (outcome, attempt) =>
+        !outcome.ok &&
+        attempt + 1 < ADMISSION_ATTEMPTS &&
+        isTransientConnectionError(outcome.error)
+          ? 250 * (attempt + 1) ** 2
+          : null,
+      sleep: async (ms) => {
+        await wait(ms);
+      },
+    });
+  } catch (error: unknown) {
+    const pg = findPgError(error);
+    if (!(error instanceof Error)) throw error;
+    // A budget or executability refusal is a plain Error and stays final.
+    if (!pg && !(error instanceof DrizzleQueryError)) throw error;
+    const root = pg
+      ? `${pg.code} ${pg.message ?? ""}`.trim()
+      : error.cause instanceof Error
+        ? error.cause.message
+        : "";
+    // A bare Postgres error already carries its own message.
+    const cause =
+      root && !error.message.includes(pg?.message ?? root)
+        ? `\ncause: ${root}`
+        : "";
+    throw new Error(`${ADMISSION_DATABASE_FAULT} ${error.message}${cause}`, {
+      cause: error,
+    });
   }
 }
 
@@ -151,13 +156,10 @@ export function runServicesFor(
 
   const requireAgentScope = async (
     db: typeof import("~/server/db").db,
-    service: typeof import("../repo/run-service"),
+    service: typeof import("~/server/domains/run/repo/run-control"),
   ) => {
     const scope = await service.loadRunScope(db, runId);
-    if (
-      scope.public.purpose !== "photo_inventory" &&
-      scope.public.purpose !== "mail_import"
-    )
+    if (!agentImportRunPurpose.safeParse(scope.public.purpose).success)
       throw new Error(
         "This host service is available only to Mail import and photo inventory Runs",
       );
@@ -173,7 +175,7 @@ export function runServicesFor(
       admissionRead(() =>
         withDatabase(async (db) => {
           const [{ paidRunPreflight }, { runEntityId }] = await Promise.all([
-            import("~/server/domains/run/service/execution-transport"),
+            import("~/server/domains/purchase-import/service/execution-transport"),
             import("@cubby/schemas/identifiers"),
           ]);
           await paidRunPreflight(db, runEntityId.parse(runId))(request);
@@ -183,7 +185,7 @@ export function runServicesFor(
       admissionRead(() =>
         withDatabase(async (db) => {
           const [{ planRunPreflight }, { runEntityId }] = await Promise.all([
-            import("~/server/domains/run/service/execution-transport"),
+            import("~/server/domains/purchase-import/service/execution-transport"),
             import("@cubby/schemas/identifiers"),
           ]);
           return planRunPreflight(db, runEntityId.parse(runId))(request);
@@ -244,7 +246,7 @@ export function runServicesFor(
       withDatabase(async (db, service) => {
         const scope = await service.loadRunScope(db, runId);
         const { findActivePurchaseAgentGrant } =
-          await import("~/server/domains/purchase-import/repo/agent-auth");
+          await import("~/server/domains/run/repo/agent-auth");
         if (await findActivePurchaseAgentGrant(db, scope.actorUserId)) return;
         await service.pauseRunForAuthorization(db, runId);
         throw new Error("Purchase Agent authorization is required");
@@ -266,7 +268,7 @@ export function runServicesFor(
           { findActivePurchaseAgentGrant, issuePurchaseAgentDelegation },
           { handleMcpHttpRequest },
         ] = await Promise.all([
-          import("~/server/domains/purchase-import/repo/agent-auth"),
+          import("~/server/domains/run/repo/agent-auth"),
           import("~/server/mcp/http-handler"),
         ]);
         const grant = await findActivePurchaseAgentGrant(db, scope.actorUserId);
@@ -320,7 +322,9 @@ export function runServicesFor(
                   db,
                   runId,
                 )
-              : service.claimPhotoInventoryWork(db, runId),
+              : (
+                  await import("~/server/domains/photo-import/repo/run/photo-run")
+                ).claimPhotoInventoryWork(db, runId),
         );
       });
     },

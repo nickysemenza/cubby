@@ -10,9 +10,9 @@ import {
   deleteLedgerParties,
   mergeLedgerParties,
 } from "~/server/domains/ledger-party/repo/ledger-party";
+import { setMemberLoginParty } from "~/server/domains/ledger-party/repo/member-login";
 import { deleteProducts } from "~/server/domains/product/repo/crud";
 import { mergeProducts } from "~/server/domains/product/repo/merge";
-import { setMemberLoginParty } from "~/server/http/member-login";
 import { deleteThroughKernel } from "~/server/testing/entity-kernel";
 import {
   createProductIdentityFixture,

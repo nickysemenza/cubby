@@ -57,6 +57,7 @@ import {
 } from "~/server/domains/expense/repo/expense-inheritance";
 import { financialEvidenceAmountMinor } from "~/server/domains/financial-transaction/repo/financial-evidence";
 import { readRetainedMail } from "~/server/domains/mail/repo/retained-mail";
+import { amazonAsin } from "~/server/domains/product/repo/amazon-asin";
 import {
   externalIdKey,
   findProductsByExternalIds,
@@ -69,7 +70,6 @@ import {
   findExactProductNameMatches,
   findProductIdentityReviewCandidates,
 } from "~/server/domains/product/repo/resolve-names";
-import { assertRunCapabilityById } from "~/server/domains/purchase-import/repo/capabilities";
 import { linkExactOrderEmails } from "~/server/domains/purchase-import/repo/email-purchase-decision";
 import { manufacturerPartRequests } from "~/server/domains/purchase-import/repo/manufacturer-identity";
 import {
@@ -87,6 +87,8 @@ import {
   type ExistingExpenseSnapshot,
 } from "~/server/domains/purchase-import/repo/writer-policy";
 import { attachPurchaseProducts } from "~/server/domains/purchase/repo/purchase-products";
+import { assertRunCapabilityById } from "~/server/domains/run/repo/purpose-policy";
+import { publishRunFinding } from "~/server/domains/run/repo/run-finding";
 import { classificationAllowsField } from "~/server/domains/spending-category/repo/classification-field-policy";
 import { createAppError } from "~/server/errors/app-error";
 import { recordChange } from "~/server/generic/changes/repo/change";
@@ -113,7 +115,6 @@ import {
   settlePurchaseFromRetainedPayments,
 } from "./retained-settlement";
 import { recordRunWrites } from "./run-audit";
-import { publishRunFinding } from "./run-finding";
 import { recordImportedShipmentEvidence } from "./shipment-intake";
 
 const PURCHASE_EXTERNAL_ID_KIND = "retailer_sku" as const;
@@ -377,17 +378,6 @@ async function attachEvidence(
       .onConflictDoNothing();
   }
 }
-
-export const amazonAsin = (url: string | undefined): string | null => {
-  if (!url) return null;
-  const parsed = new URL(url);
-  if (!/(^|\.)amazon\./u.test(parsed.hostname.toLowerCase())) return null;
-  return (
-    /\/(?:dp|gp\/product)\/([A-Z0-9]{10})(?:[/?]|$)/iu
-      .exec(parsed.pathname)?.[1]
-      ?.toUpperCase() ?? null
-  );
-};
 
 const lineIdentifiers = (
   line: Pick<ExtractedPurchaseLine, "productUrl" | "sku">,

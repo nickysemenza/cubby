@@ -31,6 +31,15 @@ interface OperationObservability {
   readonly productPhases?: readonly string[];
 }
 
+/**
+ * `strong` keeps a query on the authoritative adapter: money entry, settlement
+ * and receiving decisions need current evidence. `financialEntity` is strong
+ * only when the input's generic entity or report slot is financial
+ * (`server/db/read-policy.ts`). Absent, the query uses the caller's
+ * bounded-stale context.
+ */
+export type QueryReadPolicy = "strong" | "financialEntity";
+
 /** Which clients may invoke a query or mutation. Contracts own this decision. */
 type OperationExposure = "capability" | "view" | "internal";
 
@@ -39,6 +48,8 @@ export interface OperationContractDefaults {
   readonly exposure?: OperationExposure;
   /** MCP action group; defaults to the contract's domain converted to snake_case. */
   readonly mcpToolGroup?: string;
+  /** Default read policy for this contract's queries. */
+  readonly readPolicy?: QueryReadPolicy;
 }
 
 /** A client-facing wire projection for a type-only carrier operation. */
@@ -59,8 +70,8 @@ export interface OperationWire {
  * `exposure` determines which clients can invoke the operation. Capability
  * descriptions and behavior hints are consumed by the generated MCP catalog.
  *
- * Ordinary interactive queries and mutations use the authoritative adapter.
- * `readPolicy` remains declaration metadata for specialized read workflows.
+ * `readPolicy` (member, else contract default) selects the query's adapter;
+ * mutations are always strong. See `QueryReadPolicy`.
  */
 export interface QueryContract<
   Input extends z.ZodTypeAny = z.ZodTypeAny,
@@ -79,7 +90,7 @@ export interface QueryContract<
   readonly destructive?: true;
   readonly openWorld?: true;
   readonly modelBacked?: true;
-  readonly readPolicy?: "strong";
+  readonly readPolicy?: QueryReadPolicy;
   /** Browser cache tags and freshness profile; see `QueryCachePolicy`. */
   readonly cache?: QueryCachePolicy;
 }
@@ -108,6 +119,8 @@ export interface MutationContract<
    * effect a readiness poll observes).
    */
   readonly invalidates?: readonly RippleKey[];
+  /** False for bookkeeping-only writes that must not mark household data changed. */
+  readonly changesHouseholdData?: false;
 }
 
 /**
@@ -141,6 +154,7 @@ export interface OperationContract<
   readonly ops: Ops;
   readonly exposure?: OperationExposure;
   readonly mcpToolGroup?: string;
+  readonly readPolicy?: QueryReadPolicy;
 }
 
 /** Member names whose kind is `query` or `mutation`. */
@@ -161,6 +175,15 @@ export const defineContract = <
   ops: Ops,
   defaults: OperationContractDefaults = {},
 ): OperationContract<Domain, Ops> => ({ domain, ops, ...defaults });
+
+/** A member's own read policy, else its contract's default; mutations have none. */
+export const declaredReadPolicy = (
+  contract: Pick<OperationContract, "readPolicy">,
+  member: OperationContractMember,
+): QueryReadPolicy | undefined =>
+  member.kind === "query"
+    ? (member.readPolicy ?? contract.readPolicy)
+    : undefined;
 
 export const query = <Input extends z.ZodTypeAny, Output extends z.ZodTypeAny>(
   member: Omit<QueryContract<Input, Output>, "kind">,

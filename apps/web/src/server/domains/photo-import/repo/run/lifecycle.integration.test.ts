@@ -26,14 +26,14 @@ import {
   IMAGE_DESCRIPTION_PROCESSOR_REVISION,
 } from "~/server/domains/image-processing/repo/processor-policy";
 import { productionPhotoImportCommitPorts } from "~/server/domains/photo-import/repo/photo-import-commit";
-import { retireSettledCoordinators } from "~/server/domains/purchase-import/repo/run-retirement";
 import {
-  controlRun,
   finalizePhotoRun,
   startGuardedPhotoCoordinator,
   startPhotoInventoryRun,
-} from "~/server/domains/purchase-import/repo/run-service";
+} from "~/server/domains/photo-import/repo/run/photo-run";
+import { retireSettledCoordinators } from "~/server/domains/purchase-import/repo/run-retirement";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
+import { controlRun } from "~/server/domains/run/repo/run-control";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
 import {

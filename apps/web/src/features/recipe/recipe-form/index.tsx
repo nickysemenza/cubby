@@ -83,13 +83,11 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
   const toggleTool = (tool: "scrape" | "text" | "html") =>
     setOpenTool((current) => (current === tool ? null : tool));
 
-  // Import section state
   const [textImportIngredients, setTextImportIngredients] = useState("");
   const [textImportInstructions, setTextImportInstructions] = useState("");
   // Pasted page HTML, for the parse-only fallback when a URL scrape is blocked.
   const [htmlInput, setHtmlInput] = useState("");
 
-  // Debounced ingredient lines for live preview
   const [debouncedIngredients] = useDebouncedValue(textImportIngredients, {
     wait: 200,
   });
@@ -102,7 +100,6 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
     [debouncedIngredients],
   );
 
-  // Instruction lines for preview
   const [debouncedInstructions] = useDebouncedValue(textImportInstructions, {
     wait: 200,
   });
@@ -115,7 +112,6 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
     [debouncedInstructions],
   );
 
-  // Hook for importing ingredients with auto-create
   const ingredientImport = useIngredientImport(ingredientLines);
 
   // Parse instructions with rich text highlighting
@@ -134,7 +130,6 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
     recipeOperations.parseHtml.mutationOptions(),
   );
 
-  // Get the recipe entity in edit mode
   const recipe = mode === "edit" ? props.entity : undefined;
   const initialName = mode === "create" ? props.initialName : undefined;
   const initialUrl = mode === "create" ? props.initialUrl : undefined;
@@ -146,7 +141,6 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
     defaultValues: recipeToFormValues(recipe, initialName, initialUrl),
   });
 
-  // Set up field arrays for sections
   const {
     fields: sectionFields,
     append: appendSection,
@@ -167,7 +161,6 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
   // non-null while the confirm dialog is open. Running it replaces form contents.
   const [pendingImport, setPendingImport] = useState<(() => void) | null>(null);
 
-  // Watch URL field for scrape button
   const urlValue = useWatch({ control: form.control, name: "meta.url" });
 
   // Does the form already hold user-entered content a scrape would clobber?
@@ -193,7 +186,6 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
       result.sections.map((section) => section.ingredients),
     );
 
-    // Set recipe name if empty
     if (!form.getValues("name")) {
       form.setValue("name", result.meta.title);
     }
@@ -208,7 +200,6 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
       })),
     );
 
-    // Set servings if available from scraper
     if (result.servings) {
       form.setValue("servings", result.servings);
     }
@@ -260,7 +251,6 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
     });
   };
 
-  // Scrape the URL and populate the form.
   const doScrape = async () => {
     if (!urlValue) return;
     try {
@@ -333,15 +323,12 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
   // Handle import - auto-creates missing ingredients and populates form
   const handleImportAll = async () => {
     try {
-      // Import all ingredients (auto-creates missing ones)
       const structuredIngredients = await ingredientImport.importAll();
 
-      // Build structured instructions
       const structuredInstructions = instructionLines.map((inst) => ({
         instruction: inst,
       }));
 
-      // Populate form
       const currentSections = form.getValues("sections");
       if (currentSections.length > 0) {
         form.setValue("sections.0.ingredients", structuredIngredients);
@@ -356,7 +343,6 @@ export const RecipeForm: FC<RecipeFormProps> = (props) => {
         ]);
       }
 
-      // Clear and close import section
       setTextImportIngredients("");
       setTextImportInstructions("");
       setOpenTool(null);

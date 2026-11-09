@@ -46,24 +46,24 @@ struct RunPhotoProgressSection: View {
     }
 
     @ViewBuilder private func lifecycleStatus(_ review: PhotoRunReviewResponse) -> some View {
-        switch review.lifecycle.phase.rawValue {
-        case "waiting_for_upload":
+        switch review.lifecycle.phase {
+        case .waitingForUpload:
             Text("Waiting for the remaining photos to upload.").foregroundStyle(.secondary)
-        case "describing":
+        case .describing:
             Text(
                 "Describing photos · \(review.lifecycle.describedImageCount)/\(review.lifecycle.finalizedImageCount)"
             )
             .foregroundStyle(.secondary)
-        case "grouping":
+        case .grouping:
             Label("Grouping photos", systemImage: "sparkles")
-        case "ready_for_handoff":
+        case .readyForHandoff:
             Text("Photo descriptions are ready for Claude or Codex.")
             Button("Copy agent prompt", systemImage: "doc.on.doc") {
                 Clipboard.copy(
                     "Use Cubby MCP to inspect photo import \(runID). Read its photos and descriptions, propose item groups, and leave the groups for member review. Do not create or approve products. Optional device analysis must not delay grouping."
                 )
             }
-        case "needs_attention":
+        case .needsAttention:
             Label("Some photos need attention", systemImage: "exclamationmark.triangle")
             if let error = review.lifecycle.dispatchError {
                 Text(error).textSelection(.enabled)
@@ -90,11 +90,11 @@ struct RunPhotoProgressSection: View {
                 }
                 continueWithoutButton(review.lifecycle.failedImageIds)
             }
-        case "ready_for_review":
+        case .readyForReview:
             Text("Item groups are ready for review.")
-        case "completed":
+        case .completed:
             Label("Import completed", systemImage: "checkmark.circle")
-        default:
+        case .unrecognized:
             EmptyView()
         }
     }

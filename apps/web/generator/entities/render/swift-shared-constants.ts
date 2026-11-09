@@ -12,14 +12,22 @@ import {
   TASK_BOARD_UNTITLED_PROJECT_LABEL,
 } from "@cubby/shared/client-constants";
 import { APPLE_MARKETING_VERSION } from "@cubby/shared/apple-client-version";
-import { APPLE_APP_IDENTITIES } from "@cubby/shared/apple-app-identity";
+import {
+  APPLE_APP_IDENTITIES,
+  APPLE_BACKGROUND_TASK_IDENTIFIERS,
+  APPLE_DEVELOPMENT_TEAM,
+  APPLE_E2E_BUNDLE_IDENTIFIER,
+} from "@cubby/shared/apple-app-identity";
 import { IMPORT_REPORT_RUN_PURPOSES } from "@cubby/schemas/compiler/activity-fields";
 import { identifierKindPresentation } from "@cubby/schemas/external-id";
 import {
   WAYFINDING_DOMAINS,
   WAYFINDING_DOMAIN_PRESENTATION,
 } from "@cubby/schemas/entity-definitions/definition";
-import { readR2PublicUrl } from "#web/tooling/cloudflare-public-config.ts";
+import {
+  readAppOrigin,
+  readR2PublicUrl,
+} from "#web/tooling/cloudflare-public-config.ts";
 import { generatedHeader } from "../../artifacts.ts";
 import type { EntityArtifacts } from "../declarations.ts";
 
@@ -134,6 +142,15 @@ ${Object.entries(APPLE_APP_IDENTITIES)
   )
   .join("\n")}
     public static let current = Bundle.main.bundleIdentifier == development.bundleIdentifier ? development : production
+    /// The Mac import fixture's isolated bundle (\`APPLE_E2E_BUNDLE_IDENTIFIER\`).
+    public static let e2eBundleIdentifier = ${swiftString(APPLE_E2E_BUNDLE_IDENTIFIER)}
+}
+
+/// BGTaskScheduler identifiers (\`APPLE_BACKGROUND_TASK_IDENTIFIERS\`); project.yml permits them.
+public enum AppleBackgroundTask {
+${Object.entries(APPLE_BACKGROUND_TASK_IDENTIFIERS)
+  .map(([name, id]) => `    public static let ${name} = ${swiftString(id)}`)
+  .join("\n")}
 }
 `,
     },
@@ -146,7 +163,14 @@ ${Object.entries(APPLE_APP_IDENTITIES)
         `MARKETING_VERSION = ${APPLE_MARKETING_VERSION}\n` +
         `CUBBY_APP_BUNDLE_IDENTIFIER = ${APPLE_APP_IDENTITIES.production.bundleIdentifier}\n` +
         `CUBBY_APP_PRODUCT_NAME = ${APPLE_APP_IDENTITIES.production.productName}\n` +
-        `CUBBY_CALLBACK_SCHEME = ${APPLE_APP_IDENTITIES.production.callbackScheme}\n`,
+        `CUBBY_CALLBACK_SCHEME = ${APPLE_APP_IDENTITIES.production.callbackScheme}\n` +
+        `DEVELOPMENT_TEAM = ${APPLE_DEVELOPMENT_TEAM}\n` +
+        Object.entries(APPLE_BACKGROUND_TASK_IDENTIFIERS)
+          .map(
+            ([name, id]) =>
+              `CUBBY_BACKGROUND_TASK_${name.replace(/[A-Z]/gu, (c) => `_${c}`).toUpperCase()} = ${id}\n`,
+          )
+          .join(""),
     },
     {
       relativePath:
@@ -161,6 +185,8 @@ ${Object.entries(APPLE_APP_IDENTITIES)
         `    public static let imageWidths: [Int] = [${IMAGE_WIDTHS.join(", ")}]\n` +
         "    /// The R2 bucket's public origin (`R2_PUBLIC_URL` in cloudflare.config.ts).\n" +
         `    public static let mediaOrigin = ${swiftString(readR2PublicUrl())}\n` +
+        "    /// The production app origin (`APP_ORIGIN` in cloudflare.config.ts).\n" +
+        `    public static let appOrigin = ${swiftString(readAppOrigin())}\n` +
         "    /// The household's IANA time zone (`HOUSEHOLD_TIMEZONE`).\n" +
         `    public static let householdTimeZoneIdentifier = ${swiftString(HOUSEHOLD_TIMEZONE)}\n` +
         "    /// The task board lane for tasks with no project (`TASK_BOARD_INBOX_LABEL`).\n" +

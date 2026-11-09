@@ -126,6 +126,8 @@ async function readCandidate(
     const inspected = await ports.inspect(bytes, contentType);
     return { bytes, inspected, source };
   } catch {
+    // SILENT: each well-known icon URL is a probe; one that is unreachable,
+    // oversized, the wrong type or undecodable is simply not a candidate.
     return null;
   }
 }

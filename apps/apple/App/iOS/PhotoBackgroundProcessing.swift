@@ -6,7 +6,7 @@ import Foundation
 /// expiration or process death loses at most the current 32-photo batch.
 @MainActor
 enum PhotoBackgroundProcessing {
-    static let identifier = "com.nickysemenza.cubby.photo-matching"
+    static let identifier = AppleBackgroundTask.photoMatching
 
     static func register() {
         // The launch closure inherits MainActor; nil would deliver it on a background queue.
@@ -74,7 +74,7 @@ enum PhotoBackgroundProcessing {
 /// sent-sighting ledger are the checkpoints, so expiration loses at most one page.
 @MainActor
 enum LibrarySyncBackgroundProcessing {
-    static let identifier = "com.nickysemenza.cubby.library-sync"
+    static let identifier = AppleBackgroundTask.librarySync
 
     static func register() {
         // The launch closure inherits MainActor; nil would deliver it on a background queue.

@@ -45,8 +45,8 @@
  * in `entity-edges.ts`.
  */
 
-import type { EntityEdge } from "./entity-edges";
-import { ENTITY_EDGES } from "./entity-edges";
+import type { EntityEdge } from "./entity-edge-overrides";
+import { ENTITY_EDGES } from "./generated/entity-edges.gen";
 
 /** Project one entity's edge map down to its stable-semantics fields only. */
 function projectSemantics<T extends Record<string, EntityEdge>>(

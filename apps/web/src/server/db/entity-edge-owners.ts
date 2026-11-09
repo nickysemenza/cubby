@@ -20,7 +20,7 @@
 import type { EntityManifest } from "@cubby/schemas/entity-manifest";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 
-import type { ENTITY_EDGES } from "./entity-edges";
+import type { ENTITY_EDGES } from "./generated/entity-edges.gen";
 import {
   emailFinancialAssociation,
   entityAttachment,

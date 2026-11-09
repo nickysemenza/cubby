@@ -7,6 +7,7 @@ import type {
 import { sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
+import { minorToDollarsSql } from "~/server/db/computed/money";
 import { getDb } from "~/server/db/helpers";
 import { notDeleted, actualExpenseSql } from "~/server/db/helpers/predicates";
 /**
@@ -165,7 +166,7 @@ export const matchExpenses = async (
         p."orderId"     AS "orderId",
         p."id"          AS "purchaseId",
         p."shortcode"   AS "purchaseShortcode",
-        (p."statedTotalMinor"::numeric / 100)::double precision AS "purchaseStatedTotal",
+        (${minorToDollarsSql(sql`p."statedTotalMinor"`, "numeric")})::double precision AS "purchaseStatedTotal",
         -- ⚠️ The partition key p."id" is NULLABLE here — the Purchase join is a
         -- LEFT JOIN and most of the interesting population is unlinked
         -- expenses. SQL puts every NULL key in ONE partition, so on an unlinked

@@ -1,156 +1,67 @@
-import { generatedBrowserRoutes } from "~/entity/generated/entity-routes.gen";
+import { ROUTER_PATHS } from "~/lib/generated/router-paths.gen";
 
 import { isBrowserOperationPath } from "./browser-operation-path";
 
 export const UNMATCHED_TRACE_ROUTE = "/:unmatched";
 export const SERVER_FUNCTION_TRACE_ROUTE = "/_serverFn/:functionId";
 
-// This is an observability allowlist, not a router. Non-entity static paths
-// are named explicitly so an identifier introduced by a future route can never
-// become a span name or attribute by default; entity list and detail routes
-// come from the generated entity routes so a new entity's `/things` and
-// `/things/:shortcode` templates exist without a line here. Either way the
-// generated-route guard in the sibling unit test makes catalog drift fail
-// closed and visible in CI.
-const ENTITY_ROUTES = Object.values(generatedBrowserRoutes);
-
-const STATIC_TRACE_ROUTES = new Set([
-  ...ENTITY_ROUTES.map(({ routes }) => routes.list),
-  ...ENTITY_ROUTES.filter(
-    ({ routes }) => "create" in routes && routes.create === "dialog",
-  ).map(({ routes }) => `${routes.list}/new`),
-  "/",
-  "/.well-known/apple-app-site-association",
+// This is an observability allowlist, not a router: only a declared path
+// pattern can become a span name or attribute, and every parameter segment is
+// replaced by its name. Router paths are generated; Worker paths outside the
+// router are listed here in the same `$param` / trailing `$` splat syntax.
+const WORKER_PATHS = [
   "/.well-known/caldav",
   "/api/caldav",
-  "/.well-known/oauth-authorization-server",
-  "/.well-known/oauth-authorization-server/api/auth",
-  "/.well-known/oauth-protected-resource",
-  "/.well-known/oauth-protected-resource/api/mcp",
-  "/.well-known/openid-configuration",
-  "/account/connected-apps",
-  "/activities",
-  "/activity",
-  "/ai",
-  "/api/ai/chatgpt",
-  "/api/debug/timing",
-  "/api/debug/usda-release",
-  "/api/import/agent/oauth/callback",
-  "/api/import/agent/oauth/start",
   "/api/doorbell",
-  "/api/mcp",
-  "/api/native-workspace/session",
-  "/auth/native",
-  "/automatic-decisions",
-  "/calendar",
-  "/cash-flow",
-  "/connections",
-  "/docs",
-  "/emails/coverage",
-  "/history",
-  "/entities",
-  "/graph",
-  "/garden-workbench",
-  "/household-contribution",
-  "/ingredients/equivalences",
-  "/ingredients/workbench",
-  "/inventory/triage",
-  "/jobs",
-  "/labels",
-  "/locations/arrange",
-  "/meals/shopping-list",
-  "/meals/suggestions",
-  "/oauth/consent",
-  "/pantry-view",
-  "/privacy",
-  "/recipes/compare",
-  "/recipes/graph",
-  "/recipes/import",
-  "/recipes/new",
-  "/recommendations/workbench",
-  "/records",
-  "/search",
-  "/settings",
-  "/source-transaction-records",
-  "/suggestions",
-  "/terms",
-  "/tools",
-  "/work-queue",
-]);
-
-// Every entity whose detail route is keyed by shortcode; `usda-food` (`/usda/:id`)
-// keeps its own dynamic entries below.
-const DETAIL_COLLECTIONS = ENTITY_ROUTES.filter(({ routes }) =>
-  routes.detail.endsWith("/$shortcode"),
-)
-  .map(({ basePath }) => basePath)
-  .join("|");
-
-const DYNAMIC_TRACE_ROUTES: ReadonlyArray<{
-  pattern: RegExp;
-  template: string;
-}> = [
-  {
-    pattern: /^\/api\/caldav\/principals\/[^/]+$/u,
-    template: "/api/caldav/principals/:principal",
-  },
-  {
-    pattern: /^\/api\/caldav\/calendars\/[^/]+$/u,
-    template: "/api/caldav/calendars/:principal",
-  },
-  {
-    pattern: /^\/api\/caldav\/calendars\/[^/]+\/[^/]+$/u,
-    template: "/api/caldav/calendars/:principal/:collection",
-  },
-  {
-    pattern: /^\/api\/caldav\/calendars\/[^/]+\/[^/]+\/[^/]+$/u,
-    template: "/api/caldav/calendars/:principal/:collection/:resource",
-  },
-  {
-    pattern: /^\/runs\/[^/]+$/u,
-    template: "/runs/:shortcode",
-  },
-  { pattern: /^\/jobs\/[^/]+$/u, template: "/jobs/:shortcode" },
-  {
-    pattern: /^\/api\/import\/runs\/[^/]+\/agent$/u,
-    template: "/api/import/runs/:publicId/agent",
-  },
-  {
-    pattern: /^\/api\/import\/runs\/[^/]+\/agent\/.*$/u,
-    template: "/api/import/runs/:publicId/agent/:splat",
-  },
-  {
-    pattern: /^\/api\/calendar\/[^/]+\/[^/]+$/u,
-    template: "/api/calendar/:token/:feed",
-  },
-  { pattern: /^\/api\/auth(?:\/.*)?$/u, template: "/api/auth/:splat" },
-  {
-    pattern: /^\/recipes\/[^/]+\/export$/u,
-    template: "/recipes/:shortcode/export",
-  },
-  { pattern: /^\/usda\/ndb\/[^/]+$/u, template: "/usda/ndb/:code" },
-  { pattern: /^\/usda\/upc\/[^/]+$/u, template: "/usda/upc/:code" },
-  { pattern: /^\/usda\/[^/]+$/u, template: "/usda/:id" },
-  { pattern: /^\/auth\/[^/]+$/u, template: "/auth/:authView" },
-  { pattern: /^\/account\/[^/]+$/u, template: "/account/:accountView" },
-  { pattern: /^\/docs\/[^/]+$/u, template: "/docs/:section" },
-  {
-    pattern: /^\/entities\/schema\/[^/]+$/u,
-    template: "/entities/schema/:entity",
-  },
-  {
-    pattern: new RegExp(`^/(${DETAIL_COLLECTIONS})/[^/]+$`, "u"),
-    template: "/$1/:shortcode",
-  },
-  { pattern: /^\/[^/]+$/u, template: "/:shortcode" },
+  "/api/caldav/principals/$principal",
+  "/api/caldav/calendars/$principal",
+  "/api/caldav/calendars/$principal/$collection",
+  "/api/caldav/calendars/$principal/$collection/$resource",
 ];
 
-const normalizePathname = (pathname: string): string => {
-  if (!pathname.startsWith("/")) return UNMATCHED_TRACE_ROUTE;
-  if (pathname.length > 1 && pathname.endsWith("/"))
-    return pathname.slice(0, -1);
-  return pathname;
-};
+type DynamicRoute = { pattern: RegExp; template: string; rank: number[] };
+
+const trimSlash = (path: string): string =>
+  path.length > 1 && path.endsWith("/") ? path.slice(0, -1) : path;
+
+const templateOf = (path: string): string =>
+  path.replace(/\$([A-Za-z][A-Za-z0-9_]*)/gu, ":$1").replace(/\$$/u, ":splat");
+
+const STATIC_TRACE_ROUTES = new Set<string>();
+const dynamicRoutes: DynamicRoute[] = [];
+for (const raw of [...ROUTER_PATHS, ...WORKER_PATHS]) {
+  const path = trimSlash(raw);
+  if (!path.includes("$")) {
+    STATIC_TRACE_ROUTES.add(path);
+    continue;
+  }
+  const segments = path.split("/").slice(1);
+  const splat = segments.at(-1) === "$";
+  const body = (splat ? segments.slice(0, -1) : segments)
+    .map((segment) => (segment.startsWith("$") ? "/[^/]+" : `/${segment}`))
+    .join("");
+  dynamicRoutes.push({
+    pattern: new RegExp(`^${body}${splat ? "(?:/.*)?" : ""}$`, "u"),
+    template: templateOf(path),
+    // Literal segments win over parameters, longer paths over shorter, and a
+    // splat matches last.
+    rank: [
+      splat ? 1 : 0,
+      -segments.filter((segment) => !segment.startsWith("$")).length,
+      -segments.length,
+    ],
+  });
+}
+const DYNAMIC_TRACE_ROUTES = dynamicRoutes.sort((a, b) => {
+  for (let index = 0; index < a.rank.length; index++) {
+    const difference = a.rank[index]! - b.rank[index]!;
+    if (difference !== 0) return difference;
+  }
+  return 0;
+});
+
+const normalizePathname = (pathname: string): string =>
+  pathname.startsWith("/") ? trimSlash(pathname) : UNMATCHED_TRACE_ROUTE;
 
 /** Return a low-cardinality route template without exporting raw path values. */
 export const httpRouteTemplate = (
@@ -164,12 +75,8 @@ export const httpRouteTemplate = (
   const normalized = normalizePathname(pathname);
   if (isBrowserOperationPath(normalized)) return "/api/operations/:operations";
   if (STATIC_TRACE_ROUTES.has(normalized)) return normalized;
-
-  for (const route of DYNAMIC_TRACE_ROUTES) {
-    const match = route.pattern.exec(normalized);
-    if (!match) continue;
-    return match[1] ? route.template.replace("$1", match[1]) : route.template;
-  }
-
-  return UNMATCHED_TRACE_ROUTE;
+  return (
+    DYNAMIC_TRACE_ROUTES.find((route) => route.pattern.test(normalized))
+      ?.template ?? UNMATCHED_TRACE_ROUTE
+  );
 };

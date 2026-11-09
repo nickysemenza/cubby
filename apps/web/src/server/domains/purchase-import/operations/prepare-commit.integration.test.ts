@@ -53,6 +53,7 @@ import {
 } from "~/server/db/schema";
 import { effectiveExpenseTradeSql } from "~/server/domains/expense/repo/expense-inheritance";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
+import { controlRun } from "~/server/domains/run/repo/run-control";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import { ensureExternalSources } from "~/server/generic/entity-links/repo/entity-external-ids";
@@ -72,7 +73,6 @@ import {
 
 import { resolveRunFinding } from "../repo/findings";
 import { prepareSourceOrderReconciliation } from "../repo/reconciliation";
-import { controlRun } from "../repo/run-service";
 import { startImportRunFixture } from "../service/import-run.fixtures";
 import { commitPurchaseImport, preparePurchaseImport } from "./import-orders";
 import { resolveMail } from "./mail-tool";

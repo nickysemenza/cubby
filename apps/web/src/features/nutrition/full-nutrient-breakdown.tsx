@@ -1,6 +1,6 @@
 import type { NutritionInfo } from "@cubby/usda";
 
-import { Disclosure } from "~/ui/layout/disclosure";
+import { Disclosure } from "~/ui/layout";
 
 import { NutritionInfoTable } from "../usda-food/nutrition";
 
