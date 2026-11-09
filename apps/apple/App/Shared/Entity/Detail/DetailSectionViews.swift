@@ -619,11 +619,19 @@ struct FieldsSectionView: View {
                 }
             }
         } else if field.detailRenderer == .spendingCategorySummary {
-            if let value = FieldEnvelope.of(row.raw, field: field)?.effectiveValue,
-                let summary = try? value.decoded(SpendingCategorySummary.self)
-            {
-                SpendingCategorySummaryView(
-                    summary: summary, contextOnly: descriptor.key == .financialTransaction)
+            if let value = FieldEnvelope.of(row.raw, field: field)?.effectiveValue {
+                if let summary = try? value.decoded(SpendingCategorySummary.self) {
+                    SpendingCategorySummaryView(
+                        summary: summary, contextOnly: descriptor.key == .financialTransaction)
+                } else {
+                    LabeledContent(field.label) {
+                        Text(
+                            UnsupportedNativeResponse(context: "spending category summary", raw: value)
+                                .localizedDescription
+                        )
+                        .font(.caption).textSelection(.enabled)
+                    }
+                }
             }
         } else if field.detailRenderer == .expenseSpendingCategory {
             ExpenseSpendingCategoryView(row: row)

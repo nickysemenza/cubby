@@ -101,22 +101,32 @@ final class IdentifyModel {
                 try await client.productIDsWithImages(page: page, pageSize: size)
             }
 
-            let products = await withTaskGroup(of: ProductDetail?.self, returning: [ProductDetail].self) {
-                group in
+            let (products, failures) = await withTaskGroup(
+                of: Result<ProductDetail, any Error>.self,
+                returning: ([ProductDetail], [any Error]).self
+            ) { group in
                 var iterator = targetIDs.makeIterator()
                 func enqueue() {
                     guard let id = iterator.next() else { return }
                     group.addTask {
-                        try? await client.product(id)
+                        do { return .success(try await client.product(id)) } catch { return .failure(error) }
                     }
                 }
                 for _ in 0..<6 { enqueue() }
                 var collected: [ProductDetail] = []
+                var failures: [any Error] = []
                 for await result in group {
-                    if let result { collected.append(result) }
+                    switch result {
+                    case .success(let product): collected.append(product)
+                    case .failure(let error): failures.append(error)
+                    }
                     enqueue()
                 }
-                return collected
+                return (collected, failures)
+            }
+            // A product that failed to load is missing from the index; report once per build.
+            if let first = failures.first {
+                Diagnostics.report(first, context: "identify.index.product (\(failures.count) failed)")
             }
 
             // Await the MainActor update so queued progress cannot overwrite the final ready state.

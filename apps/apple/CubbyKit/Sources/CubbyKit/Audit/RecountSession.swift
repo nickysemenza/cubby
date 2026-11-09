@@ -88,6 +88,8 @@ public final class RecountSession {
     private let persistenceNamespace: String?
     let drain: ScanDrain<Event>
     private var duplicates: Set<ProductCode> = []
+    /// Why duplicate products could not be read; rows then carry no duplicate badge.
+    public private(set) var duplicatesError: String?
     private var snapshotToken: String?
     private var consecutiveStale = 0
     private var unknownLocation: LocationCode?
@@ -117,7 +119,13 @@ public final class RecountSession {
         phase = .loading
         do {
             tree = try await service.locationTree()
-            duplicates = (try? await service.duplicateProductIDs()) ?? []
+            do {
+                duplicates = try await service.duplicateProductIDs()
+                duplicatesError = nil
+            } catch {
+                duplicates = []
+                duplicatesError = error.userMessage
+            }
             phase = .choosingScope
         } catch {
             phase = .failed(error.userMessage)
