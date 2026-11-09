@@ -158,6 +158,18 @@ Only a recovery with available recovery capacity and an unoccupied resource
 reserves a vacancy; blocked recovery cannot strand the normal lane.
 Normal history demand coalesces into one queued Run; its older exclusive request
 also drains query owners instead of waiting behind endless recovery callbacks.
+Running owners renew admission at the next Job claim, without interrupting an
+in-flight request. A targeted page can park between five-message batches while
+retaining its position against same-query demand; ambiguous or same-query
+waiters keep that page exclusive until it checkpoints. Ordinary mailbox owners
+execute history only, even if the shared cursor would otherwise select a scan.
+Their internal scope pins that mode; initialization and unscoped retained work
+keep conservative mailbox ownership without changing their frozen pages.
+History pages yield only after their entire provider page checkpoints, and
+controlled scans retain exclusive ownership. An owner restored from the queue
+performs one Job quantum before renewing again, preventing pause/resume livelock.
+Yielding preserves the frozen page, cursor, generation, attempts and funding
+deadline; its new FIFO request allows already queued owners to proceed.
 Creation, generation and wake intent commit together. A manual paid-start action
 grants one Run's allowance and never duplicates it across parallel lanes.
 Cancellation removes demand, and a missing or terminal Job leaves the Run

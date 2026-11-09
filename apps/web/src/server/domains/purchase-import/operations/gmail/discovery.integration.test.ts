@@ -45,6 +45,7 @@ import { controlWorkflowRun } from "~/server/workflows/runs/control";
 import {
   launchWorkflowRun,
   reconcileWorkflowRuns,
+  yieldClaimedMailDiscovery,
 } from "~/server/workflows/runs/lifecycle";
 
 import { GmailAuthorizationError } from "../../repo/gmail/tokens";
@@ -601,23 +602,23 @@ describe("scheduled Gmail discovery", () => {
       await saveMailDiscoveryBatch(ctx.db, state.params, 0, seam);
       expect(research).toHaveBeenCalledOnce();
       await finishMailDiscovery(ctx.db, state.params);
+      const [mailbox] = await getDb(ctx.db).select().from(mailboxCursor);
+      if (!mailbox?.coverage)
+        throw new Error("Synthetic mailbox coverage missing");
+      // Select a targeted continuation before admission; history owners never
+      // switch into another search because the shared lane changed later.
+      await getDb(ctx.db)
+        .update(mailboxCursor)
+        .set({ coverage: { ...mailbox.coverage, nextLane: "scan" } })
+        .where(eq(mailboxCursor.id, mailbox.id));
       await continueMailDiscovery(ctx.db, state.params);
       const successor = (await created())[1];
       if (!successor) throw new Error("Synthetic continuation missing");
       expect((await readRun(successor.runId)).input).toMatchObject({
         executionPolicy: "import",
       });
-      const [mailbox] = await getDb(ctx.db).select().from(mailboxCursor);
-      if (!mailbox?.coverage)
-        throw new Error("Synthetic mailbox coverage missing");
       // Freeze another targeted page; a separate pass can move its opaque cursor
       // while this retained page waits for funding or admission.
-      await getDb(ctx.db)
-        .update(mailboxCursor)
-        .set({
-          coverage: { ...mailbox.coverage, nextLane: "scan" },
-        })
-        .where(eq(mailboxCursor.id, mailbox.id));
       await listMailDiscovery(ctx.db, successor, seam);
       const frozenRun = await readRun(successor.runId);
       const frozen = mailboxDiscoveryProgress.parse(frozenRun.progress).page;
@@ -1911,6 +1912,329 @@ describe("scheduled Gmail discovery", () => {
       expect(
         await getDb(ctx.db).select().from(run).where(eq(run.status, "running")),
       ).toHaveLength(1);
+      expect(await getDb(ctx.db).select().from(aiUsage)).toEqual([]);
+      // Independent history must not hold a partial query across every Job
+      // quantum, or switch into that parked query when the cursor changes lane.
+      const grantsBeforeYield = await getDb(ctx.db)
+        .select()
+        .from(runControlEvent);
+      for (const owner of await getDb(ctx.db)
+        .select()
+        .from(run)
+        .where(eq(run.status, "running")))
+        await controlWorkflowRun(
+          ctx.db,
+          ctx.actor,
+          {
+            runPublicId: owner.shortcode,
+            action: "cancel",
+          },
+          "mail_discovery",
+        );
+      const partialQuery = target.scopedQueries.at(-1);
+      if (!partialQuery) throw new Error("Synthetic partial query missing");
+      const partial = await listGmailPage(
+        gmail({
+          listMessages: async () => ({
+            messages: Array.from({ length: 6 }, (_, index) => ({
+              id: `synthetic-yield-${index}`,
+            })),
+          }),
+        }),
+        target.mailboxId,
+        baseline,
+        "targeted",
+        [partialQuery.key],
+      );
+      partial.messageOffset = 1;
+      const queryOwner = await ensureRun(ctx.db, ctx.actor, {
+        purpose: "mail_discovery",
+        trigger: "scheduled",
+        status: "running",
+        execution: false,
+        input: retainedInput,
+        progress: mailboxDiscoveryProgress.parse({
+          attempt: 1,
+          phase: "fetching",
+          page: partial,
+          discoveryScope: { kind: "query", key: partialQuery.key },
+          admissionClass: "automatic",
+        }),
+      });
+      const queryJob = await enqueueJob(ctx.db, {
+        key: `run:${queryOwner}`,
+        kind: "run.execute",
+        runId: queryOwner,
+        input: { runId: queryOwner, purpose: "mail_discovery" },
+      });
+      const queueOwner = async (
+        scope: { kind: "mailbox" } | { kind: "query"; key: string },
+        requestedAt: string,
+      ) => {
+        const id = await ensureRun(ctx.db, ctx.actor, {
+          purpose: "mail_discovery",
+          trigger: "scheduled",
+          status: "completed",
+          execution: false,
+          input: retainedInput,
+          progress: mailboxDiscoveryProgress.parse({
+            attempt: 1,
+            phase: "paused",
+            discoveryScope: scope,
+            admissionClass: scope.kind === "mailbox" ? "automatic" : "recovery",
+            admissionRequestedAt: requestedAt,
+          }),
+        });
+        await getDb(ctx.db)
+          .update(run)
+          .set({ status: "paused", failureCode: "mail_discovery_queued" })
+          .where(eq(run.id, id));
+        const saved = await enqueueJob(ctx.db, {
+          key: `run:${id}`,
+          kind: "run.execute",
+          runId: id,
+          input: { runId: id, purpose: "mail_discovery" },
+        });
+        return { id, job: saved };
+      };
+      const historyOwner = await queueOwner(
+        { kind: "mailbox" },
+        new Date(Date.now() - 2_000).toISOString(),
+      );
+      const beforeYield = await readRun(queryOwner);
+      expect(
+        await advanceJob(ctx.db, queryJob.id, { "run.execute": runJobHandler }),
+      ).toBe("deferred");
+      const parked = await readRun(queryOwner);
+      expect(parked).toMatchObject({
+        status: "paused",
+        input: beforeYield.input,
+        progress: {
+          page: partial,
+          attempt: 1,
+          discoveryScope: { kind: "query", key: partialQuery.key },
+        },
+      });
+      expect((await readJobs(ctx.db, { key: queryJob.key }))[0]).toMatchObject({
+        state: "queued",
+        attempts: 0,
+        generation: 1,
+        cursor: null,
+      });
+      const duplicate = await queueOwner(
+        { kind: "query", key: partialQuery.key },
+        new Date(Date.now() + 1_000).toISOString(),
+      );
+      const scan = vi.fn(async () => {
+        throw new Error("History owner touched parked query");
+      });
+      const history = vi.fn(async () => ({ historyId: "160" }));
+      factory.mockReturnValue(async () =>
+        gmail({ listMessages: scan, listHistory: history }),
+      );
+      // The history waiter was created before a preceding history pass selected scan.
+      const [latestCursor] = await getDb(ctx.db).select().from(mailboxCursor);
+      if (!latestCursor?.coverage)
+        throw new Error("Synthetic current coverage missing");
+      await getDb(ctx.db)
+        .update(mailboxCursor)
+        .set({
+          // The preceding throttle scenario is settled before fresh admission.
+          providerRetryAt: null,
+          coverage: { ...latestCursor.coverage, nextLane: "scan" },
+        });
+      expect(
+        await advanceJob(ctx.db, historyOwner.job.id, {
+          "run.execute": runJobHandler,
+        }),
+      ).toBe("succeeded");
+      expect(history).toHaveBeenCalledOnce();
+      expect(scan).not.toHaveBeenCalled();
+      // Even an empty frozen history page keeps its event proof until checkpoint.
+      const historyBefore = await readRun(historyOwner.id);
+      const yieldUnderClaim = (id: typeof queryOwner) =>
+        withJobFixtureExecution(
+          ctx.db,
+          {
+            key: `run:${id}`,
+            kind: "run.execute",
+            runId: id,
+            input: { runId: id, purpose: "mail_discovery" },
+          },
+          () => yieldClaimedMailDiscovery(ctx.db, { runId: id, attempt: 1 }),
+          { releaseClaim: true },
+        );
+      await yieldUnderClaim(historyOwner.id);
+      expect(await readRun(historyOwner.id)).toEqual(historyBefore);
+      await saveMailDiscoveryBatch(
+        ctx.db,
+        { runId: historyOwner.id, attempt: 1 },
+        0,
+        ports(gmail()),
+      );
+      // A completed history page can relinquish ownership before listing again.
+      await expect(yieldUnderClaim(historyOwner.id)).rejects.toMatchObject({
+        reason: "provider_capacity",
+      });
+      await finishMailDiscovery(ctx.db, { runId: historyOwner.id, attempt: 1 });
+      // The synthetic page is settled; close this fixture without launching continuations.
+      await getDb(ctx.db)
+        .update(run)
+        .set({ status: "completed" })
+        .where(eq(run.id, historyOwner.id));
+      await updateJobs(
+        ctx.db,
+        { key: historyOwner.job.key },
+        { state: "completed" },
+      );
+      expect(
+        await advanceJob(ctx.db, duplicate.job.id, {
+          "run.execute": runJobHandler,
+        }),
+      ).toBe("deferred");
+      expect(await readRun(queryOwner)).toEqual(parked);
+      await updateJobs(
+        ctx.db,
+        { key: queryJob.key },
+        { availableAt: new Date() },
+      );
+      expect(
+        await advanceJob(ctx.db, queryJob.id, { "run.execute": runJobHandler }),
+      ).toBe("succeeded");
+      expect(await readRun(queryOwner)).toMatchObject({
+        status: "running",
+        progress: { page: partial },
+      });
+      expect((await readJobs(ctx.db, { key: queryJob.key }))[0]).toMatchObject({
+        cursor: { phase: "save", index: 0, more: false },
+        attempts: 0,
+        generation: 1,
+      });
+      // Existing same-query demand must not advance this frozen position.
+      const resumed = await readRun(queryOwner);
+      await yieldUnderClaim(queryOwner);
+      expect(await readRun(queryOwner)).toEqual(resumed);
+      await controlWorkflowRun(
+        ctx.db,
+        ctx.actor,
+        {
+          runPublicId: (await readRun(duplicate.id)).shortcode,
+          action: "cancel",
+        },
+        "mail_discovery",
+      );
+      await queueOwner({ kind: "mailbox" }, new Date().toISOString());
+      expect(
+        await advanceJob(ctx.db, queryJob.id, { "run.execute": runJobHandler }),
+      ).toBe("deferred");
+      expect(await readRun(queryOwner)).toMatchObject({
+        status: "paused",
+        progress: { page: partial },
+      });
+      expect((await readJobs(ctx.db, { key: queryJob.key }))[0]).toMatchObject({
+        cursor: { phase: "save", index: 0, more: false },
+        attempts: 0,
+        generation: 1,
+      });
+      // Corrupt only the synthetic claim after acquisition: neither stale
+      // generation nor lease may commit the otherwise eligible Run yield.
+      for (const stale of ["generation", "lease"]) {
+        await getDb(ctx.db)
+          .update(run)
+          .set({ status: "running" })
+          .where(eq(run.id, queryOwner));
+        await updateJobs(
+          ctx.db,
+          { key: queryJob.key },
+          {
+            state: "queued",
+            generation: 1,
+            availableAt: new Date(),
+          },
+        );
+        const fencedOwner = await readRun(queryOwner);
+        await expect(
+          withJobFixtureExecution(
+            ctx.db,
+            {
+              key: queryJob.key,
+              kind: "run.execute",
+              runId: queryOwner,
+              input: { runId: queryOwner, purpose: "mail_discovery" },
+            },
+            async () => {
+              await updateJobs(
+                ctx.db,
+                { key: queryJob.key },
+                stale === "generation"
+                  ? { generation: 2 }
+                  : { leaseToken: crypto.randomUUID() },
+              );
+              await yieldClaimedMailDiscovery(ctx.db, {
+                runId: queryOwner,
+                attempt: 1,
+              });
+            },
+            { releaseClaim: true },
+          ),
+        ).rejects.toThrow(/obsolete/);
+        expect(await readRun(queryOwner)).toEqual(fencedOwner);
+      }
+      await updateJobs(
+        ctx.db,
+        { key: queryJob.key },
+        { state: "queued", generation: 1, availableAt: new Date() },
+      );
+      const successorOwner = await ensureRun(ctx.db, ctx.actor, {
+        purpose: "mail_discovery",
+        trigger: "scheduled",
+        status: "completed",
+        execution: false,
+        input: retainedInput,
+      });
+      await getDb(ctx.db)
+        .update(run)
+        .set({ predecessorRunId: queryOwner })
+        .where(eq(run.id, successorOwner));
+      const supersededOwner = await readRun(queryOwner);
+      await yieldUnderClaim(queryOwner);
+      expect(await readRun(queryOwner)).toEqual(supersededOwner);
+      // Remove the synthetic successor so cancellation exercises its own guard.
+      await getDb(ctx.db)
+        .update(run)
+        .set({ deletedAt: new Date() })
+        .where(eq(run.id, successorOwner));
+      await withJobFixtureExecution(
+        ctx.db,
+        {
+          key: queryJob.key,
+          kind: "run.execute",
+          runId: queryOwner,
+          input: { runId: queryOwner, purpose: "mail_discovery" },
+        },
+        async () => {
+          // A member control arrives outside the executing Job's async context.
+          await getDb(ctx.db)
+            .update(run)
+            .set({ status: "failed", failureCode: "user_cancelled" })
+            .where(eq(run.id, queryOwner));
+          await updateJobs(
+            ctx.db,
+            { key: queryJob.key },
+            { state: "cancelled" },
+          );
+          const stoppedOwner = await readRun(queryOwner);
+          await yieldClaimedMailDiscovery(ctx.db, {
+            runId: queryOwner,
+            attempt: 1,
+          });
+          expect(await readRun(queryOwner)).toEqual(stoppedOwner);
+        },
+        { releaseClaim: true },
+      );
+      expect(await getDb(ctx.db).select().from(runControlEvent)).toEqual(
+        grantsBeforeYield,
+      );
       expect(await getDb(ctx.db).select().from(aiUsage)).toEqual([]);
     } finally {
       credentials.mockRestore();
