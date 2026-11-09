@@ -380,7 +380,7 @@ it("preserves populated Calendar SQLite state while adding commit evidence", () 
     ])
       sqlite.exec(
         readFileSync(
-          new URL(`./migrations/${name}/migration.sql`, import.meta.url),
+          new URL(`../repo/migrations/${name}/migration.sql`, import.meta.url),
           "utf8",
         ),
       );
@@ -403,7 +403,7 @@ it("preserves populated Calendar SQLite state while adding commit evidence", () 
     sqlite.exec(
       readFileSync(
         new URL(
-          "./migrations/20261107171347_flashy_lester/migration.sql",
+          "../repo/migrations/20261107171347_flashy_lester/migration.sql",
           import.meta.url,
         ),
         "utf8",
