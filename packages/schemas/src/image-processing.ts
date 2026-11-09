@@ -33,6 +33,7 @@ export const imageDerivativeStatus = z.enum([
 export type ImageDerivativeStatus = z.infer<typeof imageDerivativeStatus>;
 
 export {
+  imageJobDisplayState,
   imageProcessingJobState,
   type ImageProcessingJobState,
 } from "./activity-fields";

@@ -476,7 +476,7 @@ On-device descriptions use a fresh session, a full-frame image bounded to 1024 p
 and an initial explicit response budget of at most 512 tokens, reserved from the runtime
 model context size. A context overflow retries once with 512 pixels and half the
 response budget. Persistent failures retain the reported context/token counts and
-remain visibly failed until explicit retry or changed source/processor inputs.
+retain their failed outcome until explicit retry or changed source/processor inputs.
 A stored terminal Apple `guardrail_violation: ` or `structured_output_invalid: `
 failure at the current processor revision leaves automatic Work failure attention
 and the image's processing issue when a retained, undeleted current preferred cloud description covers the same
@@ -484,8 +484,14 @@ source hash. Both views use the same evidence predicate, including provider,
 model, prompt, schema and normalization revisions. This satisfies the productive
 description need with the retained cloud answer; it
 does not make the Apple evaluation successful or establish that those inputs are
-impossible to describe. The failed image-job diagnostic check, reason,
-attempts and explicit retry remain available. Without that exact cloud evidence,
+impossible to describe. The image-job list and detail project `cloud_satisfied` ("Satisfied by cloud")
+using this same predicate. Their Needs attention filter and counts exclude covered
+failures, and the processing quality check passes. This is a read-only status,
+never a stored execution outcome: the Apple job and attempts remain failed, with
+their raw reason, history and explicit image retry available. Source or preferred
+cloud evidence changes remove satisfaction immediately from status and filtering.
+Quality uses the same live projection for detail and the ordinary hourly quality
+publication for list quality, with rule version 2; no read repairs a snapshot. Without that exact cloud evidence,
 parsing failures remain actionable. Model
 `refusal`, other errors, pending retrying work and failed subject lifts remain
 actionable even with cloud evidence. No additional
@@ -525,8 +531,8 @@ with both retained inputs, including one that refused plain-text descriptions.
 These comparisons establish request/output-shape dependence on that runtime,
 not a general image-input prohibition. No experimental prompt or schema is
 shipped without a complete description, eligibility and claims on both retained
-inputs and synthetic controls. See [#3791](https://github.com/nickysemenza/cubby/issues/3791) for the remaining
-recovery investigation.
+inputs and synthetic controls. [#3791](https://github.com/nickysemenza/cubby/issues/3791) was closed as not
+planned: retained current cloud descriptions satisfy these productive needs.
 
 Recurring image-execution repair also settles retained negative cutout failures in
 bounded batches. This negative-outcome pass requires the current source/revision and the matching settled
