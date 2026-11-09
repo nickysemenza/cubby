@@ -103,7 +103,7 @@ export const recordRunProgress = (
  * A member's launch, resume or retry outranks unattended Run execution:
  * priority orders Jobs within one kind, never across kinds.
  */
-export const MANUAL_RUN_PRIORITY = 10;
+const MANUAL_RUN_PRIORITY = 10;
 
 /** An aborted Mail snapshot waits on its canonical Job without spending attempts. */
 export function mailDiscoveryBackpressure(
