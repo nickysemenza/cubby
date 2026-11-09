@@ -125,10 +125,17 @@ function StuckRow({
   );
 }
 
-function StuckSection({
+/**
+ * The one list of background work that stopped or keeps failing, each row with
+ * its retry, under the page's health verdict. Every stuck or failed kind,
+ * device wait and stopped Run reads from `workQueue.status`.
+ */
+function BackgroundWork({
+  sentence,
   items,
   onRetried,
 }: {
+  sentence: string;
   items: readonly WorkStuckItem[];
   onRetried: () => void;
 }) {
@@ -136,10 +143,13 @@ function StuckSection({
   return (
     <Section
       headingAs="h2"
-      title="Stuck"
-      count={formatCount(items.length)}
+      title="Background work"
+      count={items.length ? formatCount(items.length) : undefined}
       ruled
     >
+      <p className="min-h-5.5 text-muted-foreground" data-testid="work-health">
+        {sentence}
+      </p>
       <ul>
         {(expanded ? items : items.slice(0, STUCK_ROW_CAP)).map((item) => (
           <StuckRow key={item.key} item={item} onRetried={onRetried} />
@@ -262,8 +272,8 @@ function AutomaticWorkStopped({
       data-testid="automatic-work-stopped"
     >
       <p className="max-w-prose text-foreground-strong">
-        Automatic AI work stopped {formatRelative(stoppedAt, now)}. Refresh and
-        connection discovery wait until you resume.
+        Automatic AI work stopped {formatRelative(stoppedAt, now)}. Refresh
+        waits until you resume.
       </p>
       <Button
         variant="outline"
@@ -290,17 +300,21 @@ export function WorkPage({ fromRetiredJobs }: { fromRetiredJobs: boolean }) {
   const automatic = useAutomaticWork();
   return (
     <Stack gap="lg">
-      <p className="min-h-5.5 text-muted-foreground" data-testid="work-health">
-        {data
-          ? healthSentence(data, now)
-          : status.isError
-            ? "Couldn't read background status, so this page can't say whether anything is stuck."
-            : "Checking…"}
-      </p>
+      <BackgroundWork
+        sentence={
+          data
+            ? healthSentence(data, now)
+            : status.isError
+              ? "Couldn't read background status, so this page can't say whether anything is stuck."
+              : "Checking…"
+        }
+        items={data?.stuck ?? []}
+        onRetried={onRetried}
+      />
       {fromRetiredJobs ? (
         <p className="max-w-prose text-muted-foreground">
-          The Jobs page is gone. Stuck background work shows here, and a Run's
-          Jobs show on that Run.
+          The Jobs page is gone. Stuck and failed background work shows under
+          Background work, and a Run's Jobs show on that Run.
         </p>
       ) : null}
       {status.isError && !data ? (
@@ -308,9 +322,6 @@ export function WorkPage({ fromRetiredJobs }: { fromRetiredJobs: boolean }) {
           error={status.error}
           onRetry={() => void status.refetch()}
         />
-      ) : null}
-      {data?.stuck.length ? (
-        <StuckSection items={data.stuck} onRetried={onRetried} />
       ) : null}
       {automatic.stoppedAt ? (
         <AutomaticWorkStopped

@@ -1,8 +1,9 @@
 # One view of the work
 
 Work is the household's operational entry point at `/activity`: one screen with
-an always-present background health line, a Stuck section only when something is
-stuck, and one Needs you queue summarized by reason. Needs you is the queue's
+a Background work list (the health verdict, then every stuck or failed kind,
+device wait and stopped Run, each with its retry) and one Needs you queue
+summarized by reason. Needs you is the queue's
 member-executed work (`executor: human`) that is mine or shared: decisions,
 required proposals and concrete Problems. Home's preview, the sidebar count and
 Work read that one `NEEDS_YOU_FILTERS` population from the household's published
@@ -19,7 +20,8 @@ strip evaluate the sources live.
 Footer links open Suggestions, Missing facts (the research view of `/work-queue`),
 All work (`/work-queue` with its executor, family, owner and reason facets) and
 History (`/history`: Run outcomes and recorded changes). Maintenance lives at Settings
-→ Maintenance. Stuck background work shows on Work, and a Run's Jobs show on that Run.
+→ Maintenance. Stuck and failed background work shows under Background work on
+Work, and a Run's Jobs show on that Run.
 Old `/activity?tab=…` links redirect to those owners; a `refresh=` locator opens the
 value's record and a `runId=` filter opens that Run. Old `/jobs` links and `JOB-` codes
 open Work, or the Run when the link named one. List
@@ -268,7 +270,7 @@ second completed-task ledger.
 Work's Needs you queue embeds the existing decision, proposal and Problems
 sources with their canonical group actions and affected-record navigation.
 Automatic recovery and ordinary waits stay out of it; what stopped appears under
-Stuck ([the rule](../jobs.md#member-facing-work-explanations)).
+Background work ([the rule](../jobs.md#member-facing-work-explanations)).
 All Work queue executor views remain available at `/work-queue`.
 History opens retained Runs and audit changes; it is not a second completed-task
 ledger. Settings → Maintenance holds the nightly pass and one-off repairs.

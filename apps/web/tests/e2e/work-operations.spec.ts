@@ -144,7 +144,7 @@ test("understand maintenance, preview a manual recipe repair, and verify its sto
   // Automatic AI work has no Run to stop, so a member stops and resumes it here.
   await more.getByRole("button", { name: "Stop automatic AI work" }).click();
   const stopped = page.getByTestId("automatic-work-stopped");
-  await expect(stopped).toContainText("wait until you resume");
+  await expect(stopped).toContainText("waits until you resume");
   await page.screenshot({
     path: testInfo.outputPath("work-automatic-stopped.png"),
     fullPage: true,

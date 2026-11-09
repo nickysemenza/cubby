@@ -413,6 +413,15 @@ export async function readRebuildObservation(db: Database) {
   };
 }
 
+/**
+ * A failing Job's streak start comes from its execution record; rows written
+ * before `failingSince` existed fall back to their last update. Its diagnostic
+ * names the last execution's error class beside the stored error.
+ */
+const jobFailingSince = sql`coalesce(j."failingSince", j."updatedAt")`;
+const jobLatestDiagnostic = sql`CASE WHEN j."lastExecution"->>'errorClass' IS NULL THEN j.error
+  ELSE (j."lastExecution"->>'errorClass') || ': ' || coalesce(j.error, '') END`;
+
 async function readFailedWork(db: Database, now: Date) {
   const since = new Date(now.getTime() - 7 * 24 * 60 * 60_000).toISOString();
   const rows = await getDb(db).execute<{
@@ -422,11 +431,11 @@ async function readFailedWork(db: Database, now: Date) {
     diagnostic: string | null;
   }>(sql`
     WITH failed AS (
-      SELECT kind, "updatedAt" AS at, error FROM "Job" j
+      SELECT kind, j."updatedAt" AS at, ${jobFailingSince} AS failing_since, ${jobLatestDiagnostic} AS error FROM "Job" j
       WHERE (state = ${jobState.enum.failed} AND "updatedAt" > ${since}::timestamp
         AND NOT EXISTS (SELECT 1 FROM "Job" done WHERE done.kind = j.kind AND done.state = ${jobState.enum.completed} AND done."updatedAt" > j."updatedAt"))
         OR (state IN (${jobState.enum.queued}, ${jobState.enum.retry_wait}) AND attempts >= ${JOB_NEEDS_ATTENTION_ATTEMPTS})
-      UNION ALL SELECT 'ai.evaluation:' || feature, "updatedAt", error FROM "AiEvaluation" evaluation
+      UNION ALL SELECT 'ai.evaluation:' || feature, "updatedAt", "updatedAt", error FROM "AiEvaluation" evaluation
         WHERE ((state = ${aiEvaluationState.enum.failed} AND "updatedAt" > ${since}::timestamp)
           OR (state IN (${aiEvaluationState.enum.queued}, ${aiEvaluationState.enum.result_ready})
             AND "runAt" IS NOT NULL AND attempts >= ${JOB_NEEDS_ATTENTION_ATTEMPTS}))
@@ -436,21 +445,21 @@ async function readFailedWork(db: Database, now: Date) {
             OR EXISTS (SELECT 1 FROM "AiEvaluationRequest" request
               WHERE request."evaluationId" = evaluation.id AND request."cancelledAt" IS NULL
                 AND NOT ${retried(sql`request.receipt`)}))
-      UNION ALL SELECT 'image.' || lane, "updatedAt", "lastError" FROM "ImageProcessingJob" image_job
+      UNION ALL SELECT 'image.' || lane, "updatedAt", "updatedAt", "lastError" FROM "ImageProcessingJob" image_job
         WHERE (state = ${imageProcessingJobState.enum.failed}
           OR (state = ${imageProcessingJobState.enum.pending} AND failures >= ${JOB_NEEDS_ATTENTION_ATTEMPTS}))
           AND ${notDeleted("image_job")} AND EXISTS (SELECT 1 FROM "Image" source
             WHERE source.id = image_job."imageId" AND ${notDeleted("source")}
               AND source.sha256 = image_job."sourceContentHash"
               AND NOT ${appleFailureCoveredByCloudDescriptionSql({ jobAlias: "image_job", imageId: sql`source.id`, sourceContentHash: sql`source.sha256` })})
-      UNION ALL SELECT 'embedding.refresh', "updatedAt", "embeddingError" FROM "SearchDocument"
+      UNION ALL SELECT 'embedding.refresh', "updatedAt", "updatedAt", "embeddingError" FROM "SearchDocument"
         WHERE "embeddingAttempts" >= ${JOB_NEEDS_ATTENTION_ATTEMPTS}
           AND ("embeddingDueAt" IS NOT NULL OR ("embeddingError" IS NOT NULL AND "updatedAt" > ${since}::timestamp))
           AND ${notDeleted("SearchDocument")}
       -- includes-deleted: a deleted artifact still owes its vector deletion.
-      UNION ALL SELECT 'embedding.cleanup', "updatedAt", "deletionError" FROM "EntityEmbedding"
+      UNION ALL SELECT 'embedding.cleanup', "updatedAt", "updatedAt", "deletionError" FROM "EntityEmbedding"
         WHERE "deletionId" IS NULL AND "deletionAttempts" >= ${JOB_NEEDS_ATTENTION_ATTEMPTS}
-    ) SELECT kind, count(*)::int AS count, max(at) AS since,
+    ) SELECT kind, count(*)::int AS count, min(failing_since) AS since,
       (array_agg(error ORDER BY at DESC))[1] AS diagnostic FROM failed GROUP BY kind`);
   return rows.rows.map((row): WorkStuckItem => ({
     key: `${row.kind}:failing`,
