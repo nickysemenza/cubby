@@ -18,6 +18,7 @@ import type {
   VendorId,
 } from "@cubby/schemas/identifiers";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { ledgerPartyKind } from "@cubby/schemas/ledger-party";
 import { sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { z } from "zod";
@@ -54,6 +55,18 @@ const PROPOSER = emailLinkProposer.enum;
 
 /** A suggestion must fall within this many household days of the Email. */
 const SUGGESTION_WINDOW_DAYS = 45;
+
+/**
+ * The Purchases (live or not; callers filter) whose order id equals the
+ * correlated `event`'s: the correlated `original`'s Vendor's when the original
+ * has one, any Vendor's otherwise. The one owner of event-to-Purchase exact
+ * order matching: suggestions and automatic exact links both read it.
+ */
+const exactOrderPurchasesSql = (purchaseIds?: SQL): SQL => sql`
+    SELECT p."id", p."vendorAccountId", p."deletedAt" FROM "Purchase" p
+    WHERE p."orderId" = event."orderId"
+      ${purchaseIds ? sql`AND p."id" IN (${purchaseIds})` : sql``}
+      AND (original."vendorId" IS NULL OR p."vendorId" = original."vendorId")`;
 
 /**
  * Every piece of stored evidence relating the correlated `"Email"` row to a
@@ -93,10 +106,7 @@ export const emailPurchaseEvidenceSql = (
   INNER JOIN "OrderMail" original ON original."id" = event."orderMailId"
   -- Exact-order and amount/date candidates are disjoint; each gets its own lookup.
   INNER JOIN LATERAL (
-    SELECT p."id", p."vendorAccountId", p."deletedAt" FROM "Purchase" p
-    WHERE p."orderId" = event."orderId"
-      ${purchaseIds ? sql`AND p."id" IN (${purchaseIds})` : sql``}
-      AND (original."vendorId" IS NULL OR p."vendorId" = original."vendorId")
+    ${exactOrderPurchasesSql(purchaseIds)}
     UNION ALL
     SELECT p."id", p."vendorAccountId", p."deletedAt" FROM "Purchase" p
     WHERE p."vendorId" = original."vendorId"
@@ -119,6 +129,78 @@ export const emailPurchaseEvidenceSql = (
       WHERE decided."eventId" = event."id" AND decided."purchaseId" = p."id" AND decided.active
     )
 `;
+
+const exactOrderLinkCandidate = z.object({
+  emailId: z.uuid(),
+  originalId: z.uuid(),
+  eventId: z.uuid(),
+  purchaseId: z.uuid(),
+  checksum: z.string(),
+  ownerUserId: z.string(),
+});
+export type ExactOrderLinkCandidate = z.infer<typeof exactOrderLinkCandidate>;
+
+/**
+ * Current, undecided order events whose order id names exactly one Purchase,
+ * on the Email's unchanged original, for an Email with no accepted import
+ * source. That one Purchase must be live and unowned or on the Email owner's
+ * account. Every live equal-order Purchase counts toward "exactly one", on any
+ * account, so another member's equal order or a dismissed Purchase is
+ * ambiguity, never a filtered-out candidate. Amount/date matches never
+ * qualify. A Purchase scope reads the events naming those Purchases' order ids.
+ */
+export async function readExactOrderLinkCandidates(
+  db: Database | DrizzleTransaction,
+  scope: { emailIds: readonly string[] } | { purchaseIds: readonly string[] },
+): Promise<ExactOrderLinkCandidate[]> {
+  const scoped =
+    "emailIds" in scope
+      ? scope.emailIds.length
+        ? sql`"Email"."id" = ANY(${uuidArrayParam(scope.emailIds)})`
+        : null
+      : scope.purchaseIds.length
+        ? sql`event."orderId" IN (SELECT scoped."orderId" FROM "Purchase" scoped
+            WHERE scoped."id" = ANY(${uuidArrayParam(scope.purchaseIds)}) AND scoped."orderId" IS NOT NULL)`
+        : null;
+  if (!scoped) return [];
+  const result = await unwrapDb(db).execute(
+    sql`
+    SELECT "Email"."id" AS "emailId", original."id" AS "originalId", event."id" AS "eventId",
+      (array_agg(p."id"))[1] AS "purchaseId", original."rawChecksum" AS "checksum",
+      party."userId" AS "ownerUserId"
+    FROM "Email"
+    INNER JOIN "LedgerParty" party ON party."id" = "Email"."ledgerPartyId"
+      AND party."kind" = ${ledgerPartyKind.enum.member} AND party."userId" IS NOT NULL AND ${notDeleted("party")}
+    INNER JOIN "OrderMail" original ON original."id" = "Email"."orderMailId"
+      AND original."ledgerPartyId" = "Email"."ledgerPartyId"
+      AND original."rawChecksum" = "Email"."checksum"
+    INNER JOIN "OrderMailEvent" event ON event."orderMailId" = original."id"
+      AND event."supersededAt" IS NULL AND event."orderId" IS NOT NULL
+    INNER JOIN LATERAL (${exactOrderPurchasesSql()}) p ON ${notDeleted(livePurchase)}
+    LEFT JOIN "VendorAccount" account ON account."id" = p."vendorAccountId" AND ${notDeleted(liveAccount)}
+    -- A member's dismissal of this Email for the Purchase, on any of its events, wins.
+    LEFT JOIN LATERAL (
+      SELECT 1 AS "found" FROM "EmailPurchaseDecision" decided
+      INNER JOIN "OrderMailEvent" decided_event ON decided_event."id" = decided."eventId"
+      WHERE decided_event."orderMailId" = original."id" AND decided."purchaseId" = p."id"
+        AND decided."decision" = ${KIND.dismissed} AND decided.active
+      LIMIT 1
+    ) dismissed ON true
+    WHERE ${notDeleted("Email")} AND ${scoped}
+      AND NOT EXISTS (
+        SELECT 1 FROM "EmailPurchaseDecision" decided
+        WHERE decided."eventId" = event."id" AND decided.active
+      )
+      AND NOT EXISTS (${emailAcceptedEvidenceSql()})
+    GROUP BY "Email"."id", original."id", event."id", party."userId"
+    HAVING count(*) = 1 AND count(dismissed."found") = 0
+      AND bool_and(account."ledgerPartyId" IS NULL OR account."ledgerPartyId" = "Email"."ledgerPartyId")
+    ORDER BY "Email"."id", event."id"
+  `,
+    "objects",
+  );
+  return z.array(exactOrderLinkCandidate).parse(result);
+}
 
 const inScope = (scope: EmailPurchaseScope, purchaseId: SQL): SQL => {
   switch (scope.kind) {

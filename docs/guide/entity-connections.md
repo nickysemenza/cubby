@@ -158,8 +158,12 @@ excluded from connection fingerprints.
 - Email→Purchase discovery starts from either endpoint and reuses bounded
   retained-event matching: order identity, or sender-proof Vendor plus amount
   and date when an order ID is missing. Subject text alone never matches.
-  It publishes pending `connection.email-purchase` recommendations before any
-  authority write, retaining original/event/checksum dependencies privately.
+  An order id naming exactly one eligible Purchase is linked automatically
+  instead ([Emails sections](../entities.md#one-declaration-several-consumers));
+  an amount match or an order id shared by several Purchases stays a
+  recommendation. It publishes pending `connection.email-purchase`
+  recommendations before any authority write, retaining original/event/checksum
+  dependencies privately.
   Acceptance calls `decideEmailPurchase` with that exact retained event under
   Purchase→original→Email locks; only the owning member can accept, and agents
   use `purchase_import.mail_resolve`. Accepted import sources require reconciliation and are

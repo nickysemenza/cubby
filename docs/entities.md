@@ -949,8 +949,17 @@ scope with its state) and the scope-relative `linkState`: accepted import
 sources and reviewed links are Linked, then live suggestions (an exact order
 id, or a matching total within 45 household days when either side lacks an
 order id — never a nearby date alone), then Dismissed; a Vendor's sender-proof
-mail with no Purchase reads "No Purchase match". The section sorts by that
-state, newest first. Inside a Purchase's section, the row menu's Link and
+mail with no Purchase reads "No Purchase match". An undecided current order
+event whose order id names exactly one live Purchase on the owner's account
+links automatically (`linkExactOrderEmails`: proposer `heuristic`, authority
+`automatic`, producer rule `EXACT_ORDER_LINK_REVISION`) and appears in the
+automatic decision history, whose "Dismiss link" correction records a member
+dismissal it never overrides. Any active decision on the event, a member
+dismissal of that Purchase on another of the Email's events, an accepted import
+source, a second equal-order Purchase on any account, or an amount match keeps
+the pair a suggestion. Purchase create, order id or Vendor edits and import
+writes link inline; the hourly pass catches up everything else. The section
+sorts by that state, newest first. Inside a Purchase's section, the row menu's Link and
 Dismiss review the pair; only the Email's owner (`ownedByViewer`) may, and an
 import-accepted source cannot be dismissed. A Link that replaces another
 Purchase's link on the same order events asks first. Each decision keeps who
@@ -3290,6 +3299,11 @@ changed, embeddable documents, preserving unchanged documents' failure backoff.
 A member's Email link or dismissal republishes that Email's relationship snapshot
 inside the decision transaction, using the hourly pass's compute and publisher.
 Scoped list values and SQL predicates then agree with the saved decision immediately.
+An automatic exact order-number link does the same. Before a page of Emails
+publishes `email.relationshipFacts`, the pass links their undecided exact order
+events, each in its own transaction, so rows from before the rule and Purchase
+writers that do not link inline (removal, merge, reconciliation) converge within
+the hour.
 
 Quality's 28 declared evaluators publish `QualitySnapshot` check states, rules
 version and publication time. Browse, gap-count ordering, filters and Work use
