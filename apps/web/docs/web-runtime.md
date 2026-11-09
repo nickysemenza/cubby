@@ -453,6 +453,12 @@ page. They must not subscribe to a separate Location metadata bundle per cell:
 that admits unrelated dependencies and can suspend the populated table. The
 opened location picker and quick-edit dialog still own their metadata admission.
 
+Spending Category labels read their shared, unfiltered hierarchy with a fixed
+typed list input, like the Product Category vocabulary. Do not compile empty route
+search or admit category metadata from these labels: that suspends the populated
+parent list. Known names and emoji remain visible while hierarchy enrichment loads;
+the existing tree query keys, invalidation and category-link identity stay intact.
+
 The generic `useInfiniteTableList` query keys own filter, ordering, grouping and
 projection scope. A new scope shows its own cached rows or initial skeletons,
 never the preceding scope's rows or totals. Same-key refreshes retain data and block further offset paging

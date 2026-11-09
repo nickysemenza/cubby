@@ -1,23 +1,22 @@
-import { type QueryClient, useQueryClient } from "@tanstack/react-query";
 import { useMemo } from "react";
 
 import { EntityPill } from "~/entity/components/entity-pill";
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
-import { compileEntityListInput } from "~/entity/entity-list";
+import type { EntityListParams } from "~/entity/entity-list";
 import { useServerTree } from "~/entity/hooks/use-server-tree";
-import { useEntityMetadata } from "~/entity/metadata";
+import { defaultPagination } from "~/ui/data-table/table-utils";
 import { NoneValue } from "~/ui/text/none-value";
 
 import { categoryLeafParts } from "./category-text";
 
-// One cached hierarchy read shared by every pill on the page.
-const spendingCategoryTreeInput = (queryClient: QueryClient) =>
-  compileEntityListInput(
-    queryClient,
-    "spendingCategory",
-    {},
-    { defaultSort: { orderBy: "name", direction: "asc" } },
-  );
+// This shared vocabulary has no route filters. Compiling empty route search
+// admitted category metadata from each label and suspended populated lists.
+const spendingCategoryTreeInput = {
+  filters: {},
+  pagination: defaultPagination,
+  includeCount: false,
+  sort: [{ orderBy: "name", direction: "asc" }],
+} satisfies EntityListParams<"spendingCategory">;
 
 type SpendingCategoryTreeRow = {
   id: string;
@@ -63,13 +62,7 @@ export function SpendingCategoryLabel({
   name?: string | null;
   emoji?: string | null;
 }) {
-  const queryClient = useQueryClient();
-  useEntityMetadata("spendingCategory");
-  const input = useMemo(
-    () => spendingCategoryTreeInput(queryClient),
-    [queryClient],
-  );
-  const { tree } = useServerTree("spendingCategory", input);
+  const { tree } = useServerTree("spendingCategory", spendingCategoryTreeInput);
   const resolved = useMemo(
     () => (id && tree ? findSpendingCategory(tree, id) : null),
     [tree, id],
