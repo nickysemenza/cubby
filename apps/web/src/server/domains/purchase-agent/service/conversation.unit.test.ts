@@ -46,7 +46,7 @@ const entries: EntryRecord[] = [
         role: "assistant",
         api: "openai-responses",
         provider: "openai",
-        model: "gpt-6-sol",
+        model: "gpt-6.1-sol",
         responseId: "resp-1",
         usage,
         stopReason: "toolUse",
@@ -107,7 +107,7 @@ describe("projectConversation", () => {
         role: "assistant",
         api: "openai-responses",
         provider: "openai",
-        model: "gpt-6-sol",
+        model: "gpt-6.1-sol",
         usage,
         stopReason: "error",
         errorMessage:

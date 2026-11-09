@@ -247,7 +247,7 @@ describe("ChatGPT credential ownership", () => {
         { get: async () => record, put: vi.fn(), delete: vi.fn() },
         async () => new Response(refusal, { status: 400 }),
       );
-      const response = await session.infer({ input: [] }, "gpt-6-sol");
+      const response = await session.infer({ input: [] }, "gpt-6.1-sol");
       expect(response.status).toBe(400);
       expect(await response.text()).toBe(refusal);
       const logged = JSON.stringify(warn.mock.calls);
@@ -313,13 +313,13 @@ describe("ChatGPT credential ownership", () => {
             message: "Synthetic: prompt_cache_breakpoint is not supported",
           }),
         ]);
-        const response = await session.infer(body, "gpt-6-sol");
+        const response = await session.infer(body, "gpt-6.1-sol");
         expect(response.status).toBe(200);
         expect([marked(0), marked(1)]).toEqual([true, false]);
         expect(JSON.stringify(warn.mock.calls)).toContain(
           "prompt_cache_breakpoint is not supported",
         );
-        await session.infer(body, "gpt-6-sol");
+        await session.infer(body, "gpt-6.1-sol");
         expect(sent).toHaveLength(3);
         expect(marked(2)).toBe(false);
       } finally {
@@ -357,7 +357,7 @@ describe("ChatGPT credential ownership", () => {
       const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
       try {
         const { session, sent } = harness([answer]);
-        const response = await session.infer(body, "gpt-6-sol");
+        const response = await session.infer(body, "gpt-6.1-sol");
         expect(response.ok).toBe(false);
         expect(sent).toHaveLength(1);
       } finally {

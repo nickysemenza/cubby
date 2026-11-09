@@ -24,16 +24,16 @@ describe("piCallTarget resolves the declared model and gateway provider", () => 
   });
 
   it("routes Anthropic models to the anthropic provider", () => {
-    expect(piCallTarget("claude-haiku-4-5", opts).model.provider).toBe(
+    expect(piCallTarget("claude-haiku-5-5", opts).model.provider).toBe(
       "anthropic",
     );
   });
 });
 
 describe("chatCompletionOptionsFor", () => {
-  it("never emits sampling parameters for Anthropic (Sonnet 5 rejects them)", () => {
+  it("never emits sampling parameters for Anthropic (Sonnet rejects them)", () => {
     const options = chatCompletionOptionsFor(
-      "claude-sonnet-5",
+      "claude-sonnet-5-5",
       { maxTokens: 4000, effort: "low" },
       "respond",
     );
@@ -48,15 +48,15 @@ describe("chatCompletionOptionsFor", () => {
     expect(options).not.toHaveProperty("top_k");
     expect(
       chatCompletionOptionsFor(
-        "claude-sonnet-5",
+        "claude-sonnet-5-5",
         { maxTokens: 300 },
         "respond",
       ),
     ).not.toHaveProperty("effort");
   });
 
-  // Haiku 5.5 is not Haiku 4.5: it 400s on a forced tool or a thinking
-  // budget, and only adaptive thinking with effort is accepted.
+  // Haiku 5.5 400s on a forced tool or a thinking budget; only adaptive
+  // thinking with effort is accepted.
   it.each(["claude-haiku-5-5", "claude-sonnet-5-5"] as const)(
     "sends %s adaptive thinking with effort and an unforced tool",
     (model) => {
@@ -74,18 +74,6 @@ describe("chatCompletionOptionsFor", () => {
       });
     },
   );
-
-  it("drops thinking and effort for models that reject them", () => {
-    const options = chatCompletionOptionsFor(
-      "claude-haiku-4-5",
-      { maxTokens: 300, effort: "low" },
-      "respond",
-    );
-    expect(options).toEqual({
-      maxTokens: 300,
-      toolChoice: { type: "tool", name: "respond" },
-    });
-  });
 
   it("caps Luna's visible plus reasoning output and forces the named function tool", () => {
     expect(

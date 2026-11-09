@@ -813,7 +813,7 @@ describe("scheduled Gmail discovery", () => {
             budget,
           );
         throw wrapAiGatewayError(stop, {
-          model: "gpt-6-sol",
+          model: "gpt-6.1-sol",
           provider: "synthetic",
           route: "structured-chat",
           feature: "mailbox-relevance",

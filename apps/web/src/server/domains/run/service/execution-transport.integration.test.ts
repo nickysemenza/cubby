@@ -34,7 +34,7 @@ import { ensureRun } from "../repo/ensure-run";
 import { resumeFundingPausedRuns } from "./ai-work";
 import { freeRunPreflight, paidRunPreflight } from "./execution-transport";
 
-const chatRequest = (model = "gpt-6-sol"): GatewayFetchRequest => ({
+const chatRequest = (model = "gpt-6.1-sol"): GatewayFetchRequest => ({
   // pi-ai's Anthropic SDK sends the beta query; budget checks must see past it.
   endpoint: model.startsWith("claude") ? "v1/messages?beta=true" : "responses",
   headers: new Headers(),
@@ -146,7 +146,7 @@ describe("household AI funding at the paid transport boundary", () => {
         feature: options.feature ?? "purchase_import_agent",
         provider: options.credit ? "anthropic" : "openai",
         model:
-          options.model ?? (options.credit ? "claude-opus-5-5" : "gpt-6-sol"),
+          options.model ?? (options.credit ? "claude-opus-5-5" : "gpt-6.1-sol"),
         operation: "agent.generation",
         durationMs: 1,
         transport: options.transport ?? (options.plan ? "chatgpt" : "gateway"),
@@ -236,12 +236,12 @@ describe("household AI funding at the paid transport boundary", () => {
     );
     const automaticPaid = withAiBudget(
       ctx.db,
-      { model: "gpt-6-sol", runId: automatic },
+      { model: "gpt-6.1-sol", runId: automatic },
       undefined,
     );
     const interactivePaid = withAiBudget(
       ctx.db,
-      { model: "gpt-6-sol", runId: interactive },
+      { model: "gpt-6.1-sol", runId: interactive },
       undefined,
     );
     if (
@@ -308,7 +308,7 @@ describe("household AI funding at the paid transport boundary", () => {
     const runId = await setup("mail_discovery");
     const preflight = withAiBudget(
       ctx.db,
-      { model: "gpt-6-sol", runId },
+      { model: "gpt-6.1-sol", runId },
       undefined,
     );
     if (!preflight) throw new Error("Synthetic frontier call has no preflight");
@@ -429,7 +429,7 @@ describe("household AI funding at the paid transport boundary", () => {
     );
     expect(sent).toEqual(["gateway:openai_credit:responses", "chatgpt"]);
     expect(response.stopReason).not.toBe("error");
-    expect(response.model).toBe("gpt-6-sol");
+    expect(response.model).toBe("gpt-6.1-sol");
   });
 
   it("pays for background work within the paid budget once both free budgets are spent, then pauses it", async () => {
@@ -527,7 +527,7 @@ describe("household AI funding at the paid transport boundary", () => {
     await spend(runId, AI_BUDGET_LIMIT_USD);
     const admit = withAiBudget<GatewayFetchRequest>(
       ctx.db,
-      { model: "gpt-6-sol", runId },
+      { model: "gpt-6.1-sol", runId },
       undefined,
     );
     await expect(admit?.(chatRequest())).rejects.toBeInstanceOf(

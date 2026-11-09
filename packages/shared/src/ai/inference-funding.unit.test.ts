@@ -56,7 +56,7 @@ describe("inference funding", () => {
       const query: GatewayQuery =
         provider === "openai"
           ? {
-              model: "gpt-6-sol",
+              model: "gpt-6.1-sol",
               input: [],
               stream: true,
               reasoning: { effort: "high" },
@@ -115,7 +115,7 @@ describe("inference funding", () => {
         funding === "paid" ? "cubby" : null,
       );
       expect(query.model).toBe(
-        provider === "openai" ? "gpt-6-sol" : "claude-opus-5-5",
+        provider === "openai" ? "gpt-6.1-sol" : "claude-opus-5-5",
       );
       expect(await sent?.json()).toEqual(
         funding === "paid"
@@ -123,7 +123,7 @@ describe("inference funding", () => {
               ...query,
               model:
                 provider === "openai"
-                  ? "openai/gpt-6-sol"
+                  ? "openai/gpt-6.1-sol"
                   : "anthropic/claude-opus-5.5",
             }
           : query,

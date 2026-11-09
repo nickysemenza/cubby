@@ -53,12 +53,6 @@ interface ChatModelDeclaration extends ModelDeclaration {
   /** Explicit Cloudflare catalog id for the dedicated paid REST API. */
   unifiedModelId: string;
   vision: boolean;
-  /**
-   * Anthropic only: whether the model takes `thinking: {type: "adaptive"}` and
-   * `output_config.effort`. Haiku 4.5 rejects both with a 400, so its options
-   * carry only the token cap.
-   */
-  adaptiveThinking?: boolean;
 }
 
 interface EmbeddingModelDeclaration extends ModelDeclaration {
@@ -82,11 +76,12 @@ interface DecisionModelDeclaration extends ModelDeclaration {
 
 /**
  * A model only cookbook's pinned extraction ladder calls; declared so its
- * usage rows are priced. Not an app chat model, so it takes no chat adapter.
+ * usage rows are priced. The upstream `cookbook` crate builds the request and
+ * its catalog names these ids, so they are not app chat models.
  */
 interface CookbookModelDeclaration extends ModelDeclaration {
   role: "cookbook";
-  provider: "google-ai-studio";
+  provider: "anthropic";
 }
 
 type AiModelDeclaration =
@@ -105,22 +100,13 @@ export const AI_MODELS = {
     gatewayProvider: "openai",
     vision: true,
   },
-  "gpt-6-sol": {
+  "gpt-6.1-sol": {
     role: "chat",
-    unifiedModelId: "openai/gpt-6-sol",
+    unifiedModelId: "openai/gpt-6.1-sol",
     provider: "openai",
     catalogProvider: "openai",
     gatewayProvider: "openai",
     vision: true,
-  },
-  "claude-sonnet-5": {
-    role: "chat",
-    unifiedModelId: "anthropic/claude-sonnet-5",
-    provider: "anthropic",
-    catalogProvider: "anthropic",
-    gatewayProvider: "anthropic",
-    vision: true,
-    adaptiveThinking: true,
   },
   "claude-opus-5-5": {
     role: "chat",
@@ -129,7 +115,6 @@ export const AI_MODELS = {
     catalogProvider: "anthropic",
     gatewayProvider: "anthropic",
     vision: true,
-    adaptiveThinking: true,
   },
   "claude-sonnet-5-5": {
     role: "chat",
@@ -138,10 +123,8 @@ export const AI_MODELS = {
     catalogProvider: "anthropic",
     gatewayProvider: "anthropic",
     vision: true,
-    adaptiveThinking: true,
   },
-  // Unlike Haiku 4.5, Haiku 5.5 takes adaptive thinking and effort and
-  // rejects a thinking budget or a forced tool (400).
+  // Haiku 5.5 rejects a thinking budget or a forced tool (400).
   "claude-haiku-5-5": {
     role: "chat",
     unifiedModelId: "anthropic/claude-haiku-5.5",
@@ -149,16 +132,6 @@ export const AI_MODELS = {
     catalogProvider: "anthropic",
     gatewayProvider: "anthropic",
     vision: true,
-    adaptiveThinking: true,
-  },
-  "claude-haiku-4-5": {
-    role: "chat",
-    unifiedModelId: "anthropic/claude-haiku-4.5",
-    provider: "anthropic",
-    catalogProvider: "anthropic",
-    gatewayProvider: "anthropic",
-    vision: true,
-    adaptiveThinking: false,
   },
   "text-embedding-3-small": {
     role: "embedding",
@@ -180,15 +153,15 @@ export const AI_MODELS = {
     selector: "clef",
     vision: true,
   },
-  "gemini-2.5-flash": {
+  "claude-sonnet-5": {
     role: "cookbook",
-    provider: "google-ai-studio",
-    catalogProvider: "google",
+    provider: "anthropic",
+    catalogProvider: "anthropic",
   },
-  "gemini-2.5-flash-lite": {
+  "claude-haiku-4-5": {
     role: "cookbook",
-    provider: "google-ai-studio",
-    catalogProvider: "google",
+    provider: "anthropic",
+    catalogProvider: "anthropic",
   },
 } as const satisfies Record<string, AiModelDeclaration>;
 
@@ -252,11 +225,9 @@ export type AiModel = SupportedChatModel | SupportedDecisionModel;
 export const FAST_MODEL = "gpt-6-luna" satisfies OpenAiChatModel;
 /**
  * The quality chat tier: calls whose accuracy outweighs latency (purchase
- * evidence, recipe flow, photo identity). Production reaches OpenAI through
- * the household's ChatGPT plan, so Sol's marginal cost there is ~$0; the
- * routing eval (`feature-routing-eval.live-eval.ts`) compares tiers.
+ * evidence, recipe flow, photo identity).
  */
-export const QUALITY_MODEL = "gpt-6-sol" satisfies OpenAiChatModel;
+export const QUALITY_MODEL = "gpt-6.1-sol" satisfies OpenAiChatModel;
 export const AUDIT_RECOVERY_MODEL =
   "claude-opus-5-5" satisfies AnthropicChatModel;
 /**
@@ -335,13 +306,4 @@ export function getDecisionModelConfig(
   model: SupportedDecisionModel,
 ): DecisionModelDeclaration {
   return AI_MODELS[model];
-}
-
-/**
- * Whether `model` accepts adaptive thinking + effort. Read through the wide
- * row type on purpose: the literal row types only carry the flag where it is
- * declared, and every non-Anthropic row simply never sees Anthropic options.
- */
-export function adaptiveThinkingFor(model: SupportedChatModel): boolean {
-  return getChatModelConfig(model).adaptiveThinking ?? true;
 }

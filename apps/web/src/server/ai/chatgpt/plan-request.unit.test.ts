@@ -34,7 +34,7 @@ const completed = () =>
 
 // Regression: pi-ai carried reasoning effort as a `configuration_update` input
 // item, which the plan refuses with subscription_sharing_unsupported_capability.
-it.each(["gpt-6-sol", "gpt-6-luna"] as const)(
+it.each(["gpt-6.1-sol", "gpt-6-luna"] as const)(
   "sends %s a plan request with only input items subscription sharing accepts",
   async (id) => {
     const sent: unknown[] = [];

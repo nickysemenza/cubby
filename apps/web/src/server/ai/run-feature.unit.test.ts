@@ -862,7 +862,7 @@ describe("modelOptionsFor", () => {
       reasoningEffort: "low",
       toolChoice: { type: "function", name: RESPOND_TOOL_NAME },
     });
-    expect(modelOptionsFor("claude-sonnet-5", { maxTokens: 100 })).toEqual({
+    expect(modelOptionsFor("claude-sonnet-5-5", { maxTokens: 100 })).toEqual({
       maxTokens: 100,
       thinkingEnabled: true,
       effort: "low",

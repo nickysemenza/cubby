@@ -34,7 +34,7 @@ beforeEach(() => {
     String(input).includes("models.dev")
       ? Response.json({
           openai: {
-            models: { "gpt-6-sol": { cost: { input: 2, output: 10 } } },
+            models: { "gpt-6.1-sol": { cost: { input: 2, output: 10 } } },
           },
         })
       : realFetch(input, init),
@@ -122,7 +122,7 @@ describe("non-agent host service authority", () => {
       },
     ))
       models.setProvider(provider);
-    const model = models.getModel("openai", "gpt-6-sol");
+    const model = models.getModel("openai", "gpt-6.1-sol");
     if (!model) throw new Error("The fixture model must be declared");
     const message = await models.complete(model, { messages: [] });
     const accounting = piTokenUsage(message);

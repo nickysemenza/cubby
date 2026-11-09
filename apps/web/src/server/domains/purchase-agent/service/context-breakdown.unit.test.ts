@@ -27,7 +27,7 @@ describe("measureRequestContext", () => {
   it("splits an OpenAI Responses body into sections and attributes tool results by name", () => {
     const sections = measureRequestContext(
       JSON.stringify({
-        model: "gpt-6-sol",
+        model: "gpt-6.1-sol",
         input: [
           { role: "developer", content: "x".repeat(500) },
           {
@@ -107,7 +107,7 @@ describe("measureRequestContext", () => {
   it("splits an Anthropic Messages body into sections and attributes tool results by name", () => {
     const sections = measureRequestContext(
       JSON.stringify({
-        model: "claude-sonnet-5",
+        model: "claude-sonnet-5-5",
         system: [{ type: "text", text: "s".repeat(700) }],
         tools: [
           {
@@ -214,7 +214,7 @@ const sse = (events: unknown[]) =>
 
 describe("withContextCapture", () => {
   const openAiBody = JSON.stringify({
-    model: "gpt-6-sol",
+    model: "gpt-6.1-sol",
     input: [
       { role: "developer", content: "x".repeat(600) },
       {
@@ -260,7 +260,7 @@ describe("withContextCapture", () => {
     expect(breakdown?.calls).toHaveLength(1);
     const [call] = breakdown!.calls;
     expect(call).toMatchObject({
-      model: "gpt-6-sol",
+      model: "gpt-6.1-sol",
       inputTokens: 1_000,
       cachedTokens: 600,
       estimated: false,
@@ -295,7 +295,7 @@ describe("withContextCapture", () => {
     const response = await captured("https://example.invalid/v1/messages", {
       method: "POST",
       body: JSON.stringify({
-        model: "claude-sonnet-5",
+        model: "claude-sonnet-5-5",
         system: "s",
         messages: [],
       }),

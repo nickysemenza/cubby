@@ -43,7 +43,7 @@ vi.hoisted(() => {
       ? Response.json({
           openai: {
             models: {
-              "gpt-6-sol": {
+              "gpt-6.1-sol": {
                 cost: { input: 2, output: 10, cache_read: 0.2 },
               },
             },
@@ -67,7 +67,7 @@ beforeEach(() =>
   stubPricingCatalog({
     openai: {
       models: {
-        "gpt-6-sol": { cost: { input: 2, output: 10, cache_read: 0.2 } },
+        "gpt-6.1-sol": { cost: { input: 2, output: 10, cache_read: 0.2 } },
       },
     },
   }),
@@ -539,7 +539,7 @@ describe("AiUsage transport", () => {
         calls.map(({ minute, ...call }) => ({
           feature: "field-suggestion",
           provider: "openai",
-          model: "gpt-6-sol",
+          model: "gpt-6.1-sol",
           operation: "suggestFields.product.categoryId",
           runId,
           status: "succeeded" as const,
@@ -667,7 +667,7 @@ describe("AiUsage transport", () => {
     stubPricingCatalog({
       openai: {
         models: {
-          "gpt-6-sol": { cost: { input: 2, output: 10, cache_read: 0.2 } },
+          "gpt-6.1-sol": { cost: { input: 2, output: 10, cache_read: 0.2 } },
         },
       },
     });
@@ -726,7 +726,7 @@ describe("daily context tier pricing", () => {
           feature: "synthetic-mixed",
           operation: "price",
           provider: "openai",
-          model: "gpt-6-sol",
+          model: "gpt-6.1-sol",
           transport: "gateway" as const,
           durationMs: 1,
           chargedCost,
@@ -746,7 +746,7 @@ describe("daily context tier pricing", () => {
     stubPricingCatalog({
       openai: {
         models: {
-          "gpt-6-sol": {
+          "gpt-6.1-sol": {
             cost: {
               input: 2,
               output: 10,
@@ -773,7 +773,7 @@ describe("daily context tier pricing", () => {
           feature: "synthetic-tier",
           operation: "price",
           provider: "openai",
-          model: "gpt-6-sol",
+          model: "gpt-6.1-sol",
           transport: "gateway" as const,
           inputTokens: 150_000,
           outputTokens: 0,

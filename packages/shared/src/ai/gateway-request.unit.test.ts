@@ -191,7 +191,7 @@ describe("gateway required subscription", () => {
   const url = `${gatewayBaseURL("openai")}/responses`;
   const init = {
     method: "POST",
-    body: JSON.stringify({ model: "gpt-6-sol", input: [] }),
+    body: JSON.stringify({ model: "gpt-6.1-sol", input: [] }),
   };
 
   // A disconnected research plan may spend only after explicit opt-in and
@@ -1106,7 +1106,7 @@ describe("budgeted pre-output stream quota fallback", () => {
   const url = `${gatewayBaseURL("openai")}/responses`;
   const init = {
     method: "POST",
-    body: JSON.stringify({ model: "gpt-6-sol", input: [], stream: true }),
+    body: JSON.stringify({ model: "gpt-6.1-sol", input: [], stream: true }),
   };
   const quota = {
     type: "invalid_request_error",
@@ -1681,7 +1681,7 @@ describe("budgeted pre-output stream quota fallback", () => {
     const r = routes(() => new Response(refusal()));
     const response = await gatewayFetchThrough(r.fetchRoutes)(url, {
       ...init,
-      body: JSON.stringify({ model: "gpt-6-sol", input: [] }),
+      body: JSON.stringify({ model: "gpt-6.1-sol", input: [] }),
     });
     expect(await response.text()).toBe(refusal());
     expect(r.gateway).not.toHaveBeenCalled();

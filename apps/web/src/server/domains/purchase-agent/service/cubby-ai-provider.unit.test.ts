@@ -86,7 +86,7 @@ describe("createCubbyGatewayFetch", () => {
       expect(requests).toEqual([
         {
           path: "/openai/responses",
-          body: expect.objectContaining({ model: "gpt-6-sol", input: [] }),
+          body: expect.objectContaining({ model: "gpt-6.1-sol", input: [] }),
           credit: null,
         },
       ]);
@@ -179,7 +179,7 @@ describe("createCubbyGatewayFetch", () => {
       subscription: async () => null,
       beforePaidRequest: async (request) => {
         expect(await request.query()).toEqual({
-          model: "gpt-6-sol",
+          model: "gpt-6.1-sol",
           input: [],
         });
         events.push("admitted");
@@ -190,7 +190,7 @@ describe("createCubbyGatewayFetch", () => {
       (
         await send("https://ai-gateway.invalid/openai/responses", {
           method: "POST",
-          body: JSON.stringify({ model: "gpt-6-sol", input: [] }),
+          body: JSON.stringify({ model: "gpt-6.1-sol", input: [] }),
         })
       ).ok,
     ).toBe(true);
@@ -213,7 +213,7 @@ describe("createCubbyGatewayFetch", () => {
       },
     }))
       models.setProvider(provider);
-    const selected = cubbyAgentModel("gpt-6-sol");
+    const selected = cubbyAgentModel("gpt-6.1-sol");
     const model = models.getModel(selected.provider, selected.modelId);
     if (!model) throw new Error("Missing test model");
     const result = await models.complete(
@@ -261,7 +261,7 @@ describe("createCubbyGatewayFetch", () => {
       "https://api.openai.com/v1/responses",
       {
         method: "POST",
-        body: JSON.stringify({ model: "gpt-6-sol", input: [] }),
+        body: JSON.stringify({ model: "gpt-6.1-sol", input: [] }),
       },
     );
     // The cause reaches the transcript instead of the SDK's "Connection error.",
@@ -299,7 +299,7 @@ describe("createCubbyGatewayFetch", () => {
       },
     }))
       models.setProvider(provider);
-    const model = models.getModel("openai", "gpt-6-sol");
+    const model = models.getModel("openai", "gpt-6.1-sol");
     if (!model) throw new Error("Missing test model");
     const stream = models.stream(model, { messages: [] });
     let terminalCost: number | undefined;
@@ -373,7 +373,7 @@ describe("createCubbyGatewayFetch", () => {
         onTransport: (transport) => transports.push(transport),
       }))
         models.setProvider(provider);
-      const model = models.getModel("openai", "gpt-6-sol");
+      const model = models.getModel("openai", "gpt-6.1-sol");
       if (!model) throw new Error("Missing test model");
       const stream = models.stream(model, { messages: [] });
       let terminalCost: number | undefined;
@@ -406,7 +406,7 @@ describe("createCubbyGatewayFetch", () => {
       onResponse: (info) => observed.push(info),
     }))
       models.setProvider(provider);
-    const model = models.getModel("openai", "gpt-6-sol");
+    const model = models.getModel("openai", "gpt-6.1-sol");
     if (!model) throw new Error("Missing test model");
     const message = await models.complete(model, { messages: [] });
     expect(message.usage.cost.total).toBe(0);
@@ -430,7 +430,7 @@ describe("createCubbyGatewayFetch", () => {
     });
     const response = await gatewayFetch(
       "https://ai-gateway.invalid/openai/responses",
-      { method: "POST", body: JSON.stringify({ model: "gpt-6-sol" }) },
+      { method: "POST", body: JSON.stringify({ model: "gpt-6.1-sol" }) },
     );
     expect(response.status).toBe(502);
     expect(await response.text()).toMatch(/connection reset/);
@@ -448,7 +448,7 @@ describe("createCubbyGatewayFetch", () => {
     });
     await gatewayFetch("https://ai-gateway.invalid/openai/responses", {
       method: "POST",
-      body: JSON.stringify({ model: "gpt-6-sol" }),
+      body: JSON.stringify({ model: "gpt-6.1-sol" }),
     });
     expect(transports).toEqual(["gateway"]);
     expect(run).toHaveBeenCalledOnce();
@@ -458,13 +458,13 @@ describe("createCubbyGatewayFetch", () => {
     {
       route: "openai" as const,
       url: "https://ai-gateway.invalid/openai/responses?beta=true",
-      model: "gpt-6-sol",
+      model: "gpt-6.1-sol",
       endpoint: "responses?beta=true",
     },
     {
       route: "anthropic" as const,
       url: "https://ai-gateway.invalid/anthropic/v1/messages",
-      model: "claude-sonnet-5",
+      model: "claude-sonnet-5-5",
       endpoint: "v1/messages",
     },
   ])("routes $route through the Cubby Universal Gateway", async (test) => {
@@ -615,14 +615,18 @@ describe("withWorkItemCaching", () => {
 
   it("keys OpenAI prompt caching to the Run", () => {
     expect(
-      withWorkItemCaching("openai", { model: "gpt-6-sol", input: [] }, "run-a"),
-    ).toEqual({ model: "gpt-6-sol", input: [], prompt_cache_key: "run-a" });
+      withWorkItemCaching(
+        "openai",
+        { model: "gpt-6.1-sol", input: [] },
+        "run-a",
+      ),
+    ).toEqual({ model: "gpt-6.1-sol", input: [], prompt_cache_key: "run-a" });
     expect(
       withWorkItemCaching(
         "openai",
-        { model: "gpt-6-sol", input: [] },
+        { model: "gpt-6.1-sol", input: [] },
         undefined,
       ),
-    ).toEqual({ model: "gpt-6-sol", input: [] });
+    ).toEqual({ model: "gpt-6.1-sol", input: [] });
   });
 });
