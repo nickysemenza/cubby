@@ -1,10 +1,17 @@
 import { eq, inArray, asc } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { getDb, withTransaction } from "~/server/db/helpers";
 import { job, run } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
+import {
+  admittedDrain,
+  type BackgroundDrain,
+} from "~/server/generic/background/drains";
+import { runBackgroundRound } from "~/server/generic/background/work-round";
+import type { JobHandlers } from "~/server/generic/jobs/types";
+import { drainProductionJobs } from "~/server/workflows/jobs";
 import { reconcileWorkflowRuns } from "~/server/workflows/runs/lifecycle";
 
 import { drainDueJobs } from "../service/jobs";
@@ -65,7 +72,7 @@ describe("durable Job selection", () => {
     }
   }, 60_000);
 
-  it("publishes a previously busy uncapped Job after another page makes progress", async () => {
+  it("revisits refused work and shares preparation fairly without claiming held pages", async () => {
     const busy = await enqueueJob(ctx.db, {
       key: "synthetic.reconsider.busy",
       kind: "synthetic.a-busy",
@@ -116,6 +123,167 @@ describe("durable Job selection", () => {
     } finally {
       release.resolve();
       await holding;
+    }
+
+    const queued = await enqueueJobs(
+      ctx.db,
+      [3, 2, 1].map((priority) => ({
+        key: `synthetic.shared-page.${priority}`,
+        kind: "synthetic.shared-page",
+        input: {},
+        priority,
+      })),
+    );
+    const slow = queued.find((row) => row.priority === 3);
+    if (!slow) throw new Error("Synthetic slow Job missing");
+    const waitingIds = queued
+      .filter((row) => row.id !== slow.id)
+      .map((row) => row.id);
+    const waitingBefore = await getDb(ctx.db)
+      .select()
+      .from(job)
+      .where(inArray(job.id, waitingIds));
+    const jobReady = Promise.withResolvers<void>();
+    const featureReady = Promise.withResolvers<void>();
+    const releaseJob = Promise.withResolvers<void>();
+    const releaseFeature = Promise.withResolvers<void>();
+    const payloadBytes = 12 * 1024 * 1024;
+    let retainedBytes = 0;
+    let peakBytes = 0;
+    const withPayload = async <T>(work: (bytes: Uint8Array) => Promise<T>) => {
+      const bytes = new Uint8Array(payloadBytes);
+      bytes[0] = 7;
+      retainedBytes += bytes.byteLength;
+      peakBytes = Math.max(peakBytes, retainedBytes);
+      try {
+        return await work(bytes);
+      } finally {
+        retainedBytes -= bytes.byteLength;
+      }
+    };
+    const handlers: JobHandlers = {
+      "synthetic.shared-page": {
+        prepare: async (_db, claim) => ({
+          page: { done: true },
+          publish: () =>
+            withPayload(async (bytes) => {
+              if (claim.id === slow.id) {
+                jobReady.resolve();
+                await releaseJob.promise;
+              }
+              expect(bytes[0]).toBe(7);
+              return { retainedBytes: bytes.byteLength };
+            }),
+        }),
+      },
+    };
+    const startedFeatures: string[] = [];
+    let failLate = false;
+    const drains: BackgroundDrain[] = [
+      admittedDrain({
+        name: "synthetic.early",
+        page: async () =>
+          withPayload(async () => {
+            startedFeatures.push("early");
+            featureReady.resolve();
+            await releaseFeature.promise;
+            return { more: false, nextAt: null, settled: 1 };
+          }),
+      }),
+      admittedDrain({
+        name: "synthetic.late",
+        page: async () =>
+          withPayload(async () => {
+            startedFeatures.push("late");
+            if (failLate)
+              throw new Error("Synthetic feature preparation failure");
+            return { more: false, nextAt: null, settled: 1 };
+          }),
+      }),
+    ];
+    const startedAt = Date.now();
+    const firstRound = runBackgroundRound(ctx.db, handlers, drains, {
+      timeBudgetMs: 30_000,
+    });
+    try {
+      await Promise.all([jobReady.promise, featureReady.promise]);
+      expect(retainedBytes).toBe(2 * payloadBytes);
+      // A second invocation cannot claim work while the isolate's slots are held.
+      const overlap = await runBackgroundRound(ctx.db, handlers, drains, {
+        afterDrain: "synthetic.early",
+      });
+      expect(overlap.statistics.started).toBe(0);
+      expect(overlap.more).toBe(false);
+      expect(overlap.nextAt?.getTime()).toBeGreaterThan(Date.now() + 10_000);
+      expect(
+        await drainProductionJobs(ctx.db, { afterDrain: "derived-rebuild" }),
+      ).toEqual([]);
+      expect(
+        await getDb(ctx.db)
+          .select()
+          .from(job)
+          .where(inArray(job.id, waitingIds)),
+      ).toEqual(waitingBefore);
+
+      const clock = vi.spyOn(Date, "now").mockReturnValue(startedAt + 60_000);
+      let afterDrain: string | undefined;
+      try {
+        releaseFeature.resolve();
+        expect(
+          await getDb(ctx.db)
+            .select()
+            .from(job)
+            .where(inArray(job.id, waitingIds)),
+        ).toEqual(waitingBefore);
+        releaseJob.resolve();
+        const first = await firstRound;
+        expect(first.failures).toEqual([]);
+        expect(first.statistics.peakLocalPages).toBe(2);
+        expect(first.afterDrain).toBe("synthetic.early");
+        expect(startedFeatures).toEqual(["early"]);
+        afterDrain = first.afterDrain;
+      } finally {
+        releaseJob.resolve();
+        releaseFeature.resolve();
+        await firstRound;
+        clock.mockRestore();
+      }
+      failLate = true;
+      const resumed = await runBackgroundRound(ctx.db, handlers, drains, {
+        afterDrain,
+      });
+      expect(resumed.failures).toHaveLength(1);
+      expect(startedFeatures.slice(1)).toEqual(["late", "early"]);
+      const completed = await getDb(ctx.db)
+        .select()
+        .from(job)
+        .where(
+          inArray(
+            job.id,
+            queued.map((row) => row.id),
+          ),
+        );
+      expect(completed).toHaveLength(3);
+      expect(
+        completed.every(
+          (row) =>
+            row.state === "completed" &&
+            row.generation === 1 &&
+            row.attempts === 0,
+        ),
+      ).toBe(true);
+      failLate = false;
+      const recovered = await runBackgroundRound(ctx.db, handlers, drains, {
+        afterDrain: resumed.afterDrain,
+      });
+      expect(recovered.failures).toEqual([]);
+      expect(recovered.statistics.peakLocalPages).toBe(2);
+      expect(peakBytes).toBeLessThanOrEqual(2 * payloadBytes);
+      expect(retainedBytes).toBe(0);
+    } finally {
+      releaseJob.resolve();
+      releaseFeature.resolve();
+      await firstRound;
     }
   });
 

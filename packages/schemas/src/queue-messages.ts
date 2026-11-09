@@ -15,6 +15,8 @@ export const backgroundTaskMessageSchema = z.strictObject({
   version: z.literal(BACKGROUND_TASK_MESSAGE_VERSION),
   queueType: z.literal("background"),
   ring: z.literal(true).optional(),
+  /** Scheduling hint only; unfinished domain work remains in Postgres. */
+  afterDrain: z.string().min(1).max(128).optional(),
 });
 export type BackgroundTaskMessage = z.infer<typeof backgroundTaskMessageSchema>;
 export type BackgroundTaskMessageInput = z.input<

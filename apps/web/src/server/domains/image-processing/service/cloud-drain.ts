@@ -3,6 +3,7 @@ import {
   nextCloudImageDue,
 } from "~/server/domains/image-processing/repo/image-processing";
 import type { BackgroundDrain } from "~/server/generic/background/drains";
+import { runBackgroundPage } from "~/server/generic/background/page-budget";
 import { wakeAt } from "~/server/workflows/background-tasks/publish";
 
 import {
@@ -20,14 +21,12 @@ const PAGE_CONCURRENCY = 2;
  */
 export const cloudImageDrain: BackgroundDrain = {
   name: "image.cloud",
-  async page(db, { deadline }) {
+  async page(db, round) {
+    const { deadline } = round;
     let progressed = false;
+    let leaseRecovery: Promise<void> | undefined;
     let due = await dueCloudImageJobs(db, PAGE_ROWS);
     if (due.length) {
-      // A killed invocation leaves its leases behind; this wake covers them.
-      await wakeAt(new Date(Date.now() + CLOUD_IMAGE_LEASE_MS + 5_000), {
-        source: "image-cloud-lease",
-      });
       while (due.length && Date.now() < deadline) {
         const page = due;
         let pageProgress = false;
@@ -35,11 +34,30 @@ export const cloudImageDrain: BackgroundDrain = {
           for (;;) {
             const id = page.shift();
             if (!id || Date.now() >= deadline) return;
-            const outcome = await dispatchImageProcessingWakeup(db, id);
-            pageProgress ||= outcome !== "skipped";
+            const admitted = await runBackgroundPage({
+              admit: round.runPage,
+              work: async () => {
+                // Arm recovery after admission, before any payload or durable claim.
+                leaseRecovery ??= wakeAt(
+                  new Date(Date.now() + CLOUD_IMAGE_LEASE_MS + 5_000),
+                  {
+                    source: "image-cloud-lease",
+                  },
+                );
+                await leaseRecovery;
+                if (Date.now() >= deadline) return "skipped";
+                return dispatchImageProcessingWakeup(db, id);
+              },
+            });
+            if (admitted.kind === "held") return;
+            pageProgress ||= admitted.value !== "skipped";
           }
         };
-        await Promise.all(Array.from({ length: PAGE_CONCURRENCY }, lane));
+        const settled = await Promise.allSettled(
+          Array.from({ length: PAGE_CONCURRENCY }, lane),
+        );
+        const failure = settled.find((result) => result.status === "rejected");
+        if (failure?.status === "rejected") throw failure.reason;
         progressed = pageProgress;
         // Rows a sibling consumer holds show no progress; never spin on them.
         due = pageProgress ? await dueCloudImageJobs(db, PAGE_ROWS) : [];

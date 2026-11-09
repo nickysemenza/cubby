@@ -20,6 +20,7 @@ import type { BackgroundQueueProducer } from "../background-queue-types";
 const logger = createLogger("jobs");
 export interface PublishOptions {
   readonly source: string;
+  readonly afterDrain?: string;
 }
 
 type WakeMessage =
@@ -71,6 +72,9 @@ export async function wakeJobs(
         body: {
           version: BACKGROUND_TASK_MESSAGE_VERSION,
           queueType: "background",
+          ...(options.afterDrain === undefined
+            ? {}
+            : { afterDrain: options.afterDrain }),
         },
       }),
       {
@@ -107,6 +111,9 @@ export async function wakeAt(
           version: BACKGROUND_TASK_MESSAGE_VERSION,
           queueType: "background",
           ...(options.ring ? { ring: true as const } : {}),
+          ...(options.afterDrain === undefined
+            ? {}
+            : { afterDrain: options.afterDrain }),
         },
         // A retry still lands when the work is due.
         delaySeconds: delayFromNow(),
