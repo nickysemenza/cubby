@@ -8,6 +8,7 @@ import { runShortcode, type RunId } from "@cubby/schemas/identifiers";
 import {
   OWNED_AI_WORK_PURPOSES,
   type RunControlAction,
+  type ExecutedRunPurpose,
 } from "@cubby/schemas/run-fields";
 import { runStepState } from "@cubby/schemas/run-step";
 import { and, eq, gt, inArray, isNull, or, sql } from "drizzle-orm";
@@ -32,7 +33,6 @@ import { createAppError } from "~/server/errors/app-error";
 import { readJob } from "~/server/generic/jobs/repo/job-reads";
 import { cancelRunJobs, pauseJob } from "~/server/generic/jobs/repo/operator";
 
-import type { ExecutedRunPurpose } from "./contract";
 import { launchWorkflowRun, recordRunProgress } from "./lifecycle";
 
 /** Kinds whose evaluations name the Run as owner; a Sweep owns its connection evaluations. */

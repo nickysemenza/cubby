@@ -12,6 +12,7 @@ import {
   type RunProgress,
   type RunPurpose,
   runStatus,
+  isExecutedRunPurpose,
 } from "@cubby/schemas/run-fields";
 import { and, eq, sql } from "drizzle-orm";
 
@@ -29,7 +30,6 @@ import {
   insertWithShortcode,
   type ShortcodeGeneratorPort,
 } from "~/server/generic/shortcode/repo/shortcode-utils";
-import { isExecutedRunPurpose } from "~/server/workflows/runs/contract";
 
 export type EnsureRunInput = {
   purpose: RunPurpose;

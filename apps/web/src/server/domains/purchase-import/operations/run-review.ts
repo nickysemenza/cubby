@@ -16,6 +16,7 @@ import {
   runProgressEvent,
   runProgressStamp,
   runTargetOutcomeReceipt,
+  EXECUTED_RUN_PURPOSES,
 } from "@cubby/schemas/run-fields";
 import { ACTIVE_RUN_STATUSES } from "@cubby/shared/client-constants";
 import { countLabel } from "@cubby/shared/pluralize";
@@ -74,7 +75,6 @@ import {
 } from "~/server/domains/run/repo/run-finding";
 import { failOperationsForRun } from "~/server/domains/run/repo/run-operation";
 import { recordChange } from "~/server/generic/changes/repo/change";
-import { EXECUTED_RUN_PURPOSES } from "~/server/workflows/runs/contract";
 
 import { loadPurchaseAuditBatch } from "../repo/audit-batch";
 import { resolveRunFinding } from "../repo/findings";

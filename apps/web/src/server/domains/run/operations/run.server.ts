@@ -3,7 +3,11 @@ import type {
   MailImportStatus,
   SetMailImportInput,
 } from "@cubby/schemas/mail-import-settings";
-import { runPurpose, runStatus } from "@cubby/schemas/run-fields";
+import {
+  runPurpose,
+  runStatus,
+  isExecutedRunPurpose,
+} from "@cubby/schemas/run-fields";
 import type { SweepFamilyScope } from "@cubby/schemas/run-fields";
 import type { SweepStartInput } from "@cubby/schemas/sweep";
 import { and, eq, isNull } from "drizzle-orm";
@@ -59,7 +63,6 @@ import { createAppError } from "~/server/errors/app-error";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import type { AuthenticatedRequestContext } from "~/server/http/request-context";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
-import { isExecutedRunPurpose } from "~/server/workflows/runs/contract";
 
 /** Import runs belong to a household member's ledger party. */
 async function memberParty(context: AuthenticatedRequestContext) {

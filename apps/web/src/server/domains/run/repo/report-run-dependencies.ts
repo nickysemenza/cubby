@@ -8,6 +8,7 @@ import {
   isExecutedRunPurpose,
   runPurpose,
   runStatus,
+  isStepRunPurpose,
 } from "@cubby/schemas/run-fields";
 import { and, eq } from "drizzle-orm";
 
@@ -49,7 +50,6 @@ import { runId } from "~/server/generic/entity-report/repo/record-dependencies";
 import { listRunJobs } from "~/server/generic/jobs/repo/job-diagnostics";
 import { lookupEntityLabels } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { suggestionCountsByFamily } from "~/server/generic/suggestions/repo/suggestion-list";
-import { isStepRunPurpose } from "~/server/workflows/runs/contract";
 
 const PAGE_SIZE = 25;
 

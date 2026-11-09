@@ -4,7 +4,7 @@ import {
   mailboxDiscoveryProgress,
   MAIL_DISCOVERY_ADMISSION_WAIT,
 } from "@cubby/schemas/mailbox-research";
-import { RUN_KINDS } from "@cubby/schemas/run-fields";
+import { RUN_KINDS, EXECUTED_RUN_PURPOSES } from "@cubby/schemas/run-fields";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
@@ -22,7 +22,6 @@ import { JobPausedError, JobDeferredError } from "~/server/generic/jobs/errors";
 import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 import { defineJobHandler } from "~/server/generic/jobs/service/jobs";
 import type { PreparedJobPage } from "~/server/generic/jobs/types";
-import { EXECUTED_RUN_PURPOSES } from "~/server/workflows/runs/contract";
 import { withWorkflowExecution } from "~/server/workflows/runs/execution";
 import {
   mailDiscoveryBackpressure,
