@@ -99,7 +99,7 @@ describe("historical Gmail prediction preservation", () => {
     expect(rows[1]).toMatchObject({
       classification: "unrelated",
       stage: "decision",
-      model: "@cf/cloudflare/clef",
+      model: "typesafe/jev",
       operation: "mailbox-triage",
     });
     const [prior, fresh] = rows;
