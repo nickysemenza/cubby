@@ -564,7 +564,7 @@ test("Find suggestions estimates a Sweep before it starts, then follows its Step
   await gotoAuthenticatedPage(page, "/suggestions");
   await page.getByRole("button", { name: "Find suggestions…" }).click();
   const dialog = page.getByRole("dialog", { name: "Find suggestions" });
-  for (const family of ["Connections", "Fields"])
+  for (const family of ["Fields"])
     await dialog.getByRole("checkbox", { name: family }).click();
   const estimate = dialog.getByRole("list", { name: "Sweep estimate" });
   await expect(estimate).toContainText("Statements");
