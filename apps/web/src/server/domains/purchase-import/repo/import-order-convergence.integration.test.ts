@@ -36,10 +36,8 @@ import {
   commitFinancialBooking,
   previewFinancialBooking,
 } from "~/server/domains/financial-transaction/repo/financial-booking";
-import {
-  currentMemberLedgerParty,
-  setMemberLoginParty,
-} from "~/server/domains/ledger-party/repo/member-login";
+import { currentMemberLedgerParty } from "~/server/domains/ledger-party/repo/current-member-party";
+import { setMemberLoginParty } from "~/server/domains/ledger-party/repo/member-login";
 import { productionPhotoImportCommitPorts } from "~/server/domains/photo-import/repo/photo-import-commit";
 import {
   finalizePhotoRun,

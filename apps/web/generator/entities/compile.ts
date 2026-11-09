@@ -2656,7 +2656,7 @@ export const compileEntity = (
     declaration.key,
     route,
     contract,
-    servesKernelGet({ key: declaration.key, contract, ports, table }),
+    servesKernelGet({ contract, ports, table }),
     declaration.capabilities.timeline,
     context,
   );
