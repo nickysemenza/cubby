@@ -11,6 +11,7 @@ import {
   PopoverTrigger,
 } from "~/ui/primitives/popover";
 
+import { DecisionLevels } from "./decision-levels";
 import type { WhyValueContents as LoadedWhyValueContents } from "./why-value-content";
 
 type WhyValueProps = ComponentProps<typeof LoadedWhyValueContents>;
@@ -32,12 +33,21 @@ const DeferredPopoverContents = browserOnlyLazy<WhyValueProps>(
         })),
 );
 
-function ExplanationLoading({ label }: Pick<WhyValueProps, "label">) {
+function ExplanationLoading({
+  label,
+  pendingSuggestion,
+}: Pick<WhyValueProps, "label" | "pendingSuggestion">) {
   return (
     <div className="grid grid-cols-[minmax(0,1fr)] gap-3 p-3">
       <PopoverTitle className="text-sm font-semibold">
         Why this value · {label}
       </PopoverTitle>
+      {/* Suggestion actions stay available while the reader's code loads. */}
+      {pendingSuggestion ? (
+        <DecisionLevels>
+          {(level) => (level === "pending" ? pendingSuggestion : null)}
+        </DecisionLevels>
+      ) : null}
       <p className="text-muted-foreground">Loading…</p>
     </div>
   );
@@ -96,7 +106,14 @@ export function WhyValue({
 /** Direct detail and suggestion callers share the same interaction-only import. */
 export function WhyValueContents(props: WhyValueProps) {
   return (
-    <Suspense fallback={<ExplanationLoading label={props.label} />}>
+    <Suspense
+      fallback={
+        <ExplanationLoading
+          label={props.label}
+          pendingSuggestion={props.pendingSuggestion}
+        />
+      }
+    >
       <DeferredContents {...props} />
     </Suspense>
   );
