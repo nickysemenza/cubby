@@ -24,6 +24,12 @@ failures without paying a fresh install for every static check. One status
 context, `CI passed`, owns the merge gate. [Journeys](#journeys) live in their
 own workflow.
 
+The offline relative Markdown link check downloads lychee through the GitHub
+release API with the job's read-only token. Its Linux archive version and SHA-256
+are pinned together in `ci.yaml`; update both when changing the checker. The
+checksum must pass before extraction or execution. Download failures remain
+check failures rather than skipping link validation.
+
 The required test matrix runs entirely on GitHub-hosted runners: four browser
 shards and four Vitest shards use `ubuntu-latest`. Browser shards use two workers
 each. Every shard restores or builds its own web output through Nx before
