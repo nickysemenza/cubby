@@ -28,5 +28,5 @@ export { AiResponseCacheDurableObject } from "~/server/ai/response-cache-durable
 export { ChatGptPlanDurableObject } from "~/server/ai/chatgpt/durable-object";
 export { UsdaReleaseDurableObject } from "~/server/domains/usda-release/operations/durable-object";
 
-export { AiGatewayEgressDurableObject } from "~/server/domains/run/operations/gateway-egress-durable-object";
+export { AiGatewayEgressDurableObject } from "~/server/ai/gateway-egress-durable-object";
 export { PurchaseImportRunAgent } from "~/server/domains/purchase-import/operations/agent-host";

@@ -25,14 +25,14 @@ import {
 } from "~/server/ai/gateway-egress-contract";
 import { reportServerError } from "~/server/errors/report-error";
 
-import { initializeGatewayEgress } from "../repo/gateway-egress-initialization";
+import { initializeGatewayEgress } from "./repo/gateway-egress-initialization";
 import {
   cooldowns,
   creditEpochs,
   creditRefusals,
   permits,
   starts,
-} from "../repo/gateway-egress-sql-schema";
+} from "./repo/gateway-egress-sql-schema";
 
 const {
   windowMs: WINDOW_MS,

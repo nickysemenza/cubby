@@ -505,7 +505,6 @@ export default defineConfig({
               "src/server/generic/jobs/**/*.workers.test.ts",
               "src/server/domains/purchase-import/**/*.workers.test.ts",
               "src/server/ai/**/*.workers.test.ts",
-              "src/server/domains/run/**/*.workers.test.ts",
               "src/server/domains/usda-release/**/*.workers.test.ts",
             ],
             testTimeout: 30_000,
