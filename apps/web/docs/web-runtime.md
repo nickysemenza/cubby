@@ -278,6 +278,10 @@ Specialist operation contracts reference their selected per-entity envelope
 schemas directly, so one operation never imports the aggregate schema catalog.
 Keep those schemas and the whole metadata catalogs outside the browser and hot
 Worker ingress. A dynamic import in source is not emitted-bundle evidence.
+Detail relation folding reads relationships from its admitted entity descriptor.
+Import pure relationship helpers from `connected-view-definitions`, not the
+`connected-views` catalog owner: constructing that catalog loads every entity's
+manifest and inspector metadata even when the page only needs one helper.
 
 ## Confirmed edit state
 
