@@ -82,6 +82,9 @@ interface WorkQueueRead {
 /** A publication's rows are `WorkItem`; its coverage was captured with them. */
 interface PublishedWork {
   readonly meta: WorkPublicationMeta | null;
+  readonly publishedAt: Date;
+  /** The latest republish's raw failure; a success clears it. */
+  readonly error: string | null;
 }
 
 type RecordRead = {
@@ -683,6 +686,14 @@ async function queryWorkQueue(
         label: sourceById.get(input.source)?.inputLabel ?? input.source,
       })),
       totalCount: row.total,
+      ...(published
+        ? {
+            publication: {
+              publishedAt: published.publishedAt.toISOString(),
+              error: published.error,
+            },
+          }
+        : {}),
       ...(row.summary ? { summary: row.summary } : {}),
       viewCounts: row.viewCounts,
       reasons,

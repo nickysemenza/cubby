@@ -4062,7 +4062,9 @@ error, which hold off the next attempt for a minute. Publishers take a
 transaction try-lock, so one runs at a time and the others return at once;
 readers never wait and keep the previous rows until the publication commits.
 The insert runs in a savepoint, so the attempt that holds the lock records its
-own failure. A missing publication is written before the first read. A first
+own failure. A published read returns `meta.publication`: its `publishedAt`
+and, when the latest attempt failed, that attempt's raw error; the last good
+rows keep serving. A missing publication is written before the first read. A first
 read that cannot publish (the attempt failed, is backing off, or another
 publisher is running) fails with the raw publication error (SQLSTATE and
 Postgres message first) rather than serving rows no publication completed as

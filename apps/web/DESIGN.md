@@ -765,10 +765,16 @@ notice instead, because an unknown source cannot be claimed empty. Work, the ful
 queue and Home share that notice: one quiet line naming how many checks are
 updating, with each check's declared label and extent behind its disclosure.
 Source and Problem keys never reach the member.
+The household reads a published queue. When its latest republish failed, or
+its rows are more than ten minutes old, Home, Work and the full queue add one
+quiet line under that notice: “Needs you last updated <relative time>”, “; the
+latest update failed” when it did, then a closed Technical details disclosure
+holding the raw error with Copy, and Retry. Each separator wraps with the item
+after it. The rows stay; the line never replaces them with an error.
 
 The sidebar's Work row shows the needs-you count and, only when something is
-stuck, a static warning glyph; the collapsed rail shows one dot with the same
-label. Citron is never a warning. Healthy work shows nothing at any backlog size,
+stuck or that published count is behind (the line above), a static warning
+glyph; the collapsed rail shows one dot with the same label. Citron is never a warning. Healthy work shows nothing at any backlog size,
 and a failed read stays silent because the page itself reports it. The read never
 polls. History is a thin `/history` route of Run history and recorded Changes.
 

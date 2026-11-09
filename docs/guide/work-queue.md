@@ -15,7 +15,10 @@ per request. A member's own write marks it stale; the next read returns the
 previous rows and republishes after the response, and the commit rings open
 pages, so a decided item leaves within seconds. Background-only changes (imports,
 Runs) appear within two minutes of a read. Agents (MCP) and a record's own Work
-strip evaluate the sources live.
+strip evaluate the sources live. If republishing fails, or the rows are more
+than ten minutes old, Home, Work and the queue keep the rows and add a quiet
+"Needs you last updated …" line with the raw error under Technical details and
+Retry; the sidebar's Work row shows its warning glyph.
 
 Footer links open Suggestions, Missing facts (the research view of `/work-queue`),
 All work (`/work-queue` with its executor, family, owner and reason facets) and

@@ -671,18 +671,40 @@ describe("composed Work queue engine", () => {
   });
 
   // Regression: a failed first publication left WorkItem empty and the read
-  // served it as a complete zero.
-  it("fails a cold read with the raw publication error until a publication succeeds", async () => {
+  // served it as a complete zero; a failing republish served old rows silently.
+  it("fails a cold read, then keeps the last good rows with a failed republish's raw error", async () => {
     const execute = (statement: ReturnType<typeof sql>) =>
       getDb(ctx.db).execute(statement);
+    const lamp = await createProductIdentityFixture(
+      ctx.db,
+      makeProductInput({ name: "Synthetic publication failure lamp" }),
+      ctx.actor,
+    );
+    await seedFieldSuggestion(ctx.db, {
+      entity: "product",
+      recordId: lamp.entityId,
+      field: "model",
+      currentValue: null,
+      suggestedValue: "Synthetic model",
+      confidence: 0.9,
+      model: "typesafe/jev",
+      kind: "addition",
+      status: "pending",
+      createdAt: new Date(),
+    });
     await execute(sql`
       CREATE FUNCTION synthetic_work_item_failure() RETURNS trigger LANGUAGE plpgsql AS $$
       BEGIN RAISE EXCEPTION 'synthetic publication failure'; END $$`);
-    await execute(sql`
-      CREATE TRIGGER synthetic_work_item_failure BEFORE INSERT ON "WorkItem"
-      FOR EACH STATEMENT EXECUTE FUNCTION synthetic_work_item_failure()`);
+    const failInserts = () =>
+      execute(sql`
+        CREATE TRIGGER synthetic_work_item_failure BEFORE INSERT ON "WorkItem"
+        FOR EACH STATEMENT EXECUTE FUNCTION synthetic_work_item_failure()`);
+    await failInserts();
     const read = {
-      input: NEEDS_YOU_FILTERS,
+      input: {
+        reason: "suggestions:field",
+        query: "Synthetic publication failure lamp",
+      },
       memberPartyId: null,
       memberOnly: false,
     } as const;
@@ -707,11 +729,33 @@ describe("composed Work queue engine", () => {
       await execute(
         sql`UPDATE "WorkPublication" SET "attemptedAt" = "attemptedAt" - interval '2 minutes'`,
       );
-      await readPublishedWorkQueue(ctx.db, read);
+      const good = await readPublishedWorkQueue(ctx.db, read);
+      expect(good.items.map((row) => row.id)).toEqual([lamp.id]);
+      expect(good.meta.publication).toEqual({
+        publishedAt: expect.any(String),
+        error: null,
+      });
       expect(await readWorkPublication(ctx.db)).toMatchObject({
         error: null,
         attemptedAt: null,
-        publishedAt: expect.any(Date),
+      });
+
+      // Republishing keeps failing: reads serve the last good rows and say so.
+      await failInserts();
+      await getDb(ctx.db)
+        .update(productTable)
+        .set({ deletedAt: new Date() })
+        .where(eq(productTable.shortcode, lamp.id));
+      await markWorkPublicationDirty(ctx.db);
+      await readPublishedWorkQueue(ctx.db, read);
+      const stale = await readPublishedWorkQueue(ctx.db, read);
+      expect(stale.items.map((row) => row.key)).toEqual(
+        good.items.map((row) => row.key),
+      );
+      expect(stale.meta.totalCount).toBe(1);
+      expect(stale.meta.publication).toEqual({
+        publishedAt: good.meta.publication?.publishedAt,
+        error: expect.stringMatching(/synthetic publication failure/),
       });
     } finally {
       // The file shares one database; later cases start from no publication.

@@ -3,6 +3,7 @@ import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 
 import { EntityDisplayImagesProvider } from "~/entity/entity-media/entity-display-images";
+import { WorkPublicationStatus } from "~/entity/work-queue/work-publication-status";
 import {
   hasIncompleteWorkInputs,
   WorkInputStatus,
@@ -90,6 +91,10 @@ function NeedsYouContent() {
       ) : (
         <>
           <WorkInputStatus meta={needsYou.data?.meta} />
+          <WorkPublicationStatus
+            publication={needsYou.data.meta.publication}
+            onRetry={() => void needsYou.refetch()}
+          />
           {rows.length === 0 && (
             <EmptyState size="inline" className="mt-2">
               {incomplete
