@@ -2,7 +2,7 @@ import { resolveDatabaseRuntime } from "~/server/db/database-runtime";
 import { createImageProcessingJob } from "~/server/domains/image-processing/repo/image-processing";
 import { IMAGE_DESCRIPTION_PROCESSOR_REVISION } from "~/server/domains/image-processing/repo/processor-policy";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
-import { markRunFailed } from "~/server/domains/purchase-import/repo/run-service";
+import { markRunFailed } from "~/server/domains/run/repo/run-control";
 import { startPhotoInventoryRun } from "~/server/domains/photo-import/repo/run/photo-run";
 import { drizzleSchema as schema } from "~/server/db/drizzle-schema";
 import { eq } from "drizzle-orm";

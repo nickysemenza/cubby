@@ -266,7 +266,7 @@ export async function resumeFundingPausedRuns(
   }: { now?: Date; anyWindow?: boolean } = {},
 ) {
   const imports = await (
-    await import("~/server/domains/purchase-import/repo/run-service")
+    await import("~/server/domains/run/repo/run-control")
   ).redispatchBudgetPausedImports(
     db,
     now,

@@ -86,6 +86,7 @@ import {
 } from "~/server/domains/purchase-import/repo/writer-policy";
 import { attachPurchaseProducts } from "~/server/domains/purchase/repo/purchase-products";
 import { assertRunCapabilityById } from "~/server/domains/run/repo/purpose-policy";
+import { publishRunFinding } from "~/server/domains/run/repo/run-finding";
 import { classificationAllowsField } from "~/server/domains/spending-category/repo/classification-field-policy";
 import { createAppError } from "~/server/errors/app-error";
 import { recordChange } from "~/server/generic/changes/repo/change";
@@ -112,7 +113,6 @@ import {
   settlePurchaseFromRetainedPayments,
 } from "./retained-settlement";
 import { recordRunWrites } from "./run-audit";
-import { publishRunFinding } from "./run-finding";
 import { recordImportedShipmentEvidence } from "./shipment-intake";
 
 const PURCHASE_EXTERNAL_ID_KIND = "retailer_sku" as const;

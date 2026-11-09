@@ -66,8 +66,8 @@ import {
 import { loadImportScope } from "~/server/domains/purchase-import/repo/import-scope";
 import { assertMailRunMembership } from "~/server/domains/purchase-import/repo/mail-run-membership";
 import { assertMailSourceIdentityReady } from "~/server/domains/purchase-import/repo/mail-source-identity";
-import { publishRunFinding } from "~/server/domains/purchase-import/repo/run-finding";
 import { runPurposePolicy } from "~/server/domains/run/repo/purpose-policy";
+import { publishRunFinding } from "~/server/domains/run/repo/run-finding";
 import {
   assessCarrierPacket,
   carrierCaptureEvidence,

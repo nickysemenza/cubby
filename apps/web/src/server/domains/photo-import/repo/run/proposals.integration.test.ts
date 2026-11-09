@@ -37,8 +37,8 @@ import {
   reconcileSettledRun,
   stopRunForReview,
 } from "~/server/domains/purchase-import/operations/run-review";
-import { loadRunDetail } from "~/server/domains/purchase-import/repo/run-service";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
+import { loadRunDetail } from "~/server/domains/run/repo/run-detail";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { mergeVendors } from "~/server/domains/vendor/repo/vendor";
 import { executeEntityAs } from "~/server/entity-kernel";

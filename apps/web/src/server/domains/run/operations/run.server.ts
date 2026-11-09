@@ -19,6 +19,10 @@ import {
 } from "~/server/domains/purchase-import/operations/gmail/controlled-import";
 import { startMailDiscovery } from "~/server/domains/purchase-import/operations/gmail/discovery";
 import { commitPurchaseImport } from "~/server/domains/purchase-import/operations/import-orders";
+import {
+  findOwnedMailDiscovery,
+  loadMailDiscoveryRead,
+} from "~/server/domains/purchase-import/repo/gmail/discovery-run-read";
 import { readMailCoverage } from "~/server/domains/purchase-import/repo/gmail/mail-coverage";
 import { withMailSearchProgress } from "~/server/domains/purchase-import/repo/gmail/search-progress";
 import { listMemberMailboxes } from "~/server/domains/purchase-import/repo/gmail/targets";
@@ -27,30 +31,28 @@ import {
   resumeControlledMailImport,
   setMailImport,
 } from "~/server/domains/purchase-import/repo/mail-import-settings";
-import {
-  controlRun,
-  loadRunDetail,
-  loadRunLog,
-  pauseAuthorizedRuns,
-} from "~/server/domains/purchase-import/repo/run-service";
-import {
-  listRuns,
-  listProductRuns,
-  reportRunTargetDeviceWork,
-  resolveProductImportTarget,
-  resolvePurchaseImportTarget,
-} from "~/server/domains/purchase-import/repo/run-target";
 import { readPurchaseAgentConversation } from "~/server/domains/purchase-import/service/agent-proxy";
 import {
   findActivePurchaseAgentGrant,
   PURCHASE_AGENT_OAUTH_CLIENT_ID,
 } from "~/server/domains/run/repo/agent-auth";
 import {
-  findOwnedMailDiscovery,
-  loadMailDiscoveryRead,
-} from "~/server/domains/run/repo/run-discovery-read";
+  controlRun,
+  pauseAuthorizedRuns,
+} from "~/server/domains/run/repo/run-control";
+import {
+  loadRunDetail,
+  loadRunLog,
+} from "~/server/domains/run/repo/run-detail";
 import { loadMailReclassificationRead } from "~/server/domains/run/repo/run-reclassification-read";
 import { readRunSteps } from "~/server/domains/run/repo/run-step";
+import {
+  listRuns,
+  listProductRuns,
+  reportRunTargetDeviceWork,
+  resolveProductImportTarget,
+  resolvePurchaseImportTarget,
+} from "~/server/domains/run/repo/run-target";
 import { getRunWorkProgress } from "~/server/domains/run/repo/work-progress";
 import { assertPaidOverride } from "~/server/domains/run/service/paid-override";
 import { createAppError } from "~/server/errors/app-error";

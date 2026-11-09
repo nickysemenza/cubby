@@ -16,6 +16,8 @@ import { aiBudgetWindow } from "~/server/ai/budget-window";
 import { setCfEnv } from "~/server/cf-env";
 import { getDb } from "~/server/db/helpers";
 import { aiUsage, run, runControlEvent } from "~/server/db/schema";
+import { ensureRun } from "~/server/domains/run/repo/ensure-run";
+import { resumeFundingPausedRuns } from "~/server/domains/run/service/ai-work";
 import { updateJobs } from "~/server/generic/jobs/jobs.fixtures";
 import { claimJob } from "~/server/generic/jobs/jobs.fixtures";
 import { readJobs } from "~/server/generic/jobs/repo/job-reads";
@@ -24,8 +26,6 @@ import { advanceJob } from "~/server/generic/jobs/service/jobs";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { productionJobHandlers } from "~/server/workflows/jobs";
 
-import { ensureRun } from "../repo/ensure-run";
-import { resumeFundingPausedRuns } from "./ai-work";
 import { planRunPreflight, paidRunPreflight } from "./execution-transport";
 
 const chatRequest = (model = "gpt-6.1-sol"): GatewayFetchRequest => ({

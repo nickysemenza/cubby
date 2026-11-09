@@ -8,7 +8,7 @@ import { notDeleted } from "~/server/db/helpers/predicates";
 import { householdDaySql } from "~/server/db/helpers/query";
 import { related, outer } from "~/server/db/helpers/related";
 import { run, run as runTable } from "~/server/db/schema";
-import { activeFindingSql } from "~/server/domains/purchase-import/repo/finding-expiry";
+import { activeFindingSql } from "~/server/domains/run/repo/finding-expiry";
 import {
   attentionStatePredicate,
   settledAiRunPredicate,

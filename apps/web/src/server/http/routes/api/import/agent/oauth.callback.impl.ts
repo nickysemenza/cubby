@@ -3,7 +3,6 @@ import { z } from "zod";
 import { APP_ORIGIN, MCP_RESOURCE } from "~/lib/auth-constants";
 import { getAuthSecret } from "~/server/auth-configuration";
 import type { Database } from "~/server/db";
-import type { resumeAuthorizedRuns } from "~/server/domains/purchase-import/repo/run-service";
 import {
   clearPurchaseAgentOAuthCookie,
   findActivePurchaseAgentGrant,
@@ -15,6 +14,7 @@ import {
   readCookie,
   verifyPurchaseAgentOAuthState,
 } from "~/server/domains/run/repo/agent-auth";
+import type { resumeAuthorizedRuns } from "~/server/domains/run/repo/run-control";
 import { getAuth } from "~/server/http/auth";
 import {
   createRequestContext,
@@ -74,10 +74,10 @@ const callbackDependencies: CallbackDependencies = {
     );
   },
   findGrant: findActivePurchaseAgentGrant,
-  // Loaded on request: run-service reaches the AI SDK stack.
+  // Loaded on request: run-control reaches the AI SDK stack.
   resumeRuns: async (db, userId) =>
     (
-      await import("~/server/domains/purchase-import/repo/run-service")
+      await import("~/server/domains/run/repo/run-control")
     ).resumeAuthorizedRuns(db, userId),
   verifyState(token) {
     return verifyPurchaseAgentOAuthState(token, getAuthSecret());

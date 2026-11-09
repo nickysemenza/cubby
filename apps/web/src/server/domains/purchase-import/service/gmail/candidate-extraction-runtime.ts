@@ -12,7 +12,7 @@ import {
 } from "~/server/ai/policy/features";
 import type { Database } from "~/server/db";
 import { readCandidateOwnerEmail } from "~/server/domains/purchase-import/repo/gmail/candidate-source";
-import { paidRunPreflight } from "~/server/domains/run/service/execution-transport";
+import { paidRunPreflight } from "~/server/domains/purchase-import/service/execution-transport";
 
 import { gmailExecutionPolicy } from "../../repo/gmail/execution-policy";
 import type { EmailCandidateChoice } from "./candidate-extraction";

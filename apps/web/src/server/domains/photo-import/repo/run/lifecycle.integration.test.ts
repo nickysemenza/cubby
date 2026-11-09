@@ -32,8 +32,8 @@ import {
   startPhotoInventoryRun,
 } from "~/server/domains/photo-import/repo/run/photo-run";
 import { retireSettledCoordinators } from "~/server/domains/purchase-import/repo/run-retirement";
-import { controlRun } from "~/server/domains/purchase-import/repo/run-service";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
+import { controlRun } from "~/server/domains/run/repo/run-control";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
 import {

@@ -237,7 +237,7 @@ export const repositoryOwners = [
   "src/server/domains/recipe/repo/meta.ts",
   "src/server/domains/recipe/repo/servings.ts",
   "src/server/domains/recipe/repo/source.ts",
-  "src/server/domains/run/repo/execution-lineage.ts",
+  "src/server/domains/purchase-import/repo/execution-lineage.ts",
   "src/server/domains/run/repo/run-reclassification-read.ts",
   "src/server/domains/run/repo/run-target-merge.ts",
   "src/server/domains/transaction-import/repo/transaction-import-membership.ts",

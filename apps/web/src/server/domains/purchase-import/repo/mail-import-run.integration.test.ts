@@ -33,10 +33,16 @@ import {
   purchase,
 } from "~/server/db/schema";
 import { recordEmailClassificationObservation } from "~/server/domains/purchase-import/repo/gmail/observations";
+import { paidRunPreflight } from "~/server/domains/purchase-import/service/execution-transport";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
+import {
+  canDispatchRunCoordinator,
+  controlRun,
+  markRunFailed,
+} from "~/server/domains/run/repo/run-control";
+import { loadRunDetail } from "~/server/domains/run/repo/run-detail";
 import { insertOperation } from "~/server/domains/run/repo/run-operation";
 import { getRunWorkProgress } from "~/server/domains/run/repo/work-progress";
-import { paidRunPreflight } from "~/server/domains/run/service/execution-transport";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
 import { readJobs } from "~/server/generic/jobs/repo/job-reads";
@@ -91,12 +97,6 @@ import {
   transferMailRunSources,
 } from "./mail-run-membership";
 import * as sourceIdentity from "./mail-source-identity";
-import {
-  canDispatchRunCoordinator,
-  controlRun,
-  loadRunDetail,
-  markRunFailed,
-} from "./run-service";
 import { setSenderAttribution } from "./sender-attribution";
 
 // Admission must bind original sources without a known Vendor, order, or Mac;

@@ -64,16 +64,16 @@ import {
   type PhotoImportCommitPorts,
 } from "~/server/domains/photo-import/repo/photo-import-commit";
 import { finalizeImportedImages } from "~/server/domains/photo-import/repo/photo-import-finalize";
-import {
-  assertRunActive,
-  loadRunScope,
-  loadRunScopeByShortcode,
-} from "~/server/domains/purchase-import/repo/run-service";
 import { dispatchStartedRun } from "~/server/domains/run/repo/coordinator-dispatch";
 import type {
   RunPurposeLifecycle,
   RunTargetRow,
 } from "~/server/domains/run/repo/purpose-lifecycle";
+import {
+  assertRunActive,
+  loadRunScope,
+  loadRunScopeByShortcode,
+} from "~/server/domains/run/repo/run-control";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 export type StartPhotoInventoryRunInput = {

@@ -51,6 +51,7 @@ import {
   proposePhotoGroups,
 } from "~/server/domains/photo-import/repo/run/proposals";
 import { stagePhotoImport } from "~/server/domains/photo-import/service/photo-import-stage.service";
+import { loadRunDetail } from "~/server/domains/run/repo/run-detail";
 import {
   sourceObservationColumns,
   sourceObservationFrom,
@@ -70,7 +71,6 @@ import {
   prepareSourceOrderReconciliation,
   commitAcceptedSourceOrderReconciliation,
 } from "./reconciliation";
-import { loadRunDetail } from "./run-service";
 
 /**
  * Every arrival order of the four evidence sources must converge on one

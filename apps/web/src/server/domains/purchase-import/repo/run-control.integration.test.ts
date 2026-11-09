@@ -23,6 +23,15 @@ import {
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { executeLeasedOperation } from "~/server/domains/run/repo/operation";
 import { importReportBlocks } from "~/server/domains/run/repo/report-run";
+import {
+  controlRun,
+  canDispatchRunCoordinator,
+  acknowledgeRunCoordinator,
+  loadRunScope,
+  resumeAuthorizedRuns,
+  updateAgentProgress,
+} from "~/server/domains/run/repo/run-control";
+import { loadRunDetail } from "~/server/domains/run/repo/run-detail";
 import { insertOperation } from "~/server/domains/run/repo/run-operation";
 import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 import { findOpenRunFindings } from "~/server/generic/problems/repo/detectors-import";
@@ -41,15 +50,6 @@ import {
   setMailImport,
 } from "./mail-import-settings";
 import { coordinatorRetired } from "./run-retirement";
-import {
-  controlRun,
-  canDispatchRunCoordinator,
-  acknowledgeRunCoordinator,
-  loadRunDetail,
-  loadRunScope,
-  resumeAuthorizedRuns,
-  updateAgentProgress,
-} from "./run-service";
 
 describe("purchase import run admission", () => {
   const ctx = withTestDb();
@@ -1087,7 +1087,8 @@ describe("purchase import run admission", () => {
       failureCode: "execution_limit",
       updatedAt: new Date(Date.now() - 60_000),
     });
-    const { redispatchBudgetPausedImports } = await import("./run-service");
+    const { redispatchBudgetPausedImports } =
+      await import("~/server/domains/run/repo/run-control");
     expect(await redispatchBudgetPausedImports(ctx.db)).toBe(1);
     expect((await status())?.status).toBe("running");
 
@@ -1135,7 +1136,8 @@ describe("purchase import run admission", () => {
     // The successor itself later stops for funding too.
     await fundingStop(retried.successorRunId);
 
-    const { redispatchBudgetPausedImports } = await import("./run-service");
+    const { redispatchBudgetPausedImports } =
+      await import("~/server/domains/run/repo/run-control");
     expect(await redispatchBudgetPausedImports(ctx.db)).toBe(1);
     expect(await statusOf(retried.successorRunId)).toBe("running");
     expect(await statusOf(predecessor.id)).toBe("needs_review");

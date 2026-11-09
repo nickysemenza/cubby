@@ -19,13 +19,13 @@ import {
   releaseUnsettledMailRunSources,
   transferMailRunSources,
 } from "~/server/domains/purchase-import/repo/mail-run-membership";
-import { publishRunFinding } from "~/server/domains/purchase-import/repo/run-finding";
-import { listRunTargetOutcomes } from "~/server/domains/purchase-import/repo/run-target";
 import { dispatchStartedRun } from "~/server/domains/run/repo/coordinator-dispatch";
 import type {
   RunPurposeLifecycle,
   RunTargetRow,
 } from "~/server/domains/run/repo/purpose-lifecycle";
+import { publishRunFinding } from "~/server/domains/run/repo/run-finding";
+import { listRunTargetOutcomes } from "~/server/domains/run/repo/run-target";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 /**

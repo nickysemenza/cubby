@@ -10,7 +10,7 @@ import { seedPerformanceCorpus } from "./performance";
 import { shipmentScaffold } from "~/server/domains/shipment/repo/entity-repository";
 import { drainStoredDerived } from "~/server/testing/background-queue";
 import { run } from "~/server/db/schema";
-import { loadRunDetail } from "~/server/domains/purchase-import/repo/run-service";
+import { loadRunDetail } from "~/server/domains/run/repo/run-detail";
 
 // Failure modes: scale adds disconnected filler instead of kit/ledger fanout;
 // historical Email work lacks retained evidence or a frozen Run roster; future

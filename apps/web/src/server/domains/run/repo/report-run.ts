@@ -39,7 +39,7 @@ import {
 } from "~/lib/number-format";
 import { runPlanBlocks } from "~/lib/run-plan";
 import { PRODUCT_IDENTITY_REVIEW_REASON } from "~/server/domains/product/repo/resolve-names";
-import { findingHasExpired } from "~/server/domains/purchase-import/repo/finding-expiry";
+import { findingHasExpired } from "~/server/domains/run/repo/finding-expiry";
 import { runHasCapability } from "~/server/domains/run/repo/purpose-policy";
 import type { getRunLiveProgress } from "~/server/domains/run/repo/run-progress";
 import type { RunStepRead } from "~/server/domains/run/repo/run-step";

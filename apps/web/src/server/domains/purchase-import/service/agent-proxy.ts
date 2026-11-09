@@ -11,7 +11,7 @@ import { getPurchaseImportRunAgentNamespace } from "~/server/cf-env";
 import {
   loadRunScopeByShortcode,
   recordRunControlEvent,
-} from "~/server/domains/purchase-import/repo/run-service";
+} from "~/server/domains/run/repo/run-control";
 import { delegatedRunHolds } from "~/server/http/authenticate";
 import type {
   AuthenticatedRequestContext,

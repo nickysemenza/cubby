@@ -5,9 +5,9 @@ import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
 import { quotedTable } from "~/server/db/helpers/related";
 import { entityIdentity, runFinding } from "~/server/db/schema";
-import { activeFindingSql } from "~/server/domains/purchase-import/repo/finding-expiry";
-import { runFindingColumns } from "~/server/domains/purchase-import/repo/run-finding";
 import { obsoleteExecutionFindingSql } from "~/server/domains/purchase-import/repo/run-retirement";
+import { activeFindingSql } from "~/server/domains/run/repo/finding-expiry";
+import { runFindingColumns } from "~/server/domains/run/repo/run-finding";
 
 const openFindingWhere = (now: Date) =>
   and(

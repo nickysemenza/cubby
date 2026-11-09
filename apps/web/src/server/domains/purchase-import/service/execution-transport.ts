@@ -22,12 +22,11 @@ import {
   assertSelectedMailSources,
   readMailImportLineage,
   type RunExecutionIdentity,
-} from "~/server/domains/run/repo/execution-lineage";
-
+} from "~/server/domains/purchase-import/repo/execution-lineage";
 import {
   assertRunExecutable,
   pauseForFunding,
-} from "../repo/execution-context";
+} from "~/server/domains/run/repo/execution-context";
 
 function runningOwnerMatches(
   live: RunExecutionIdentity | undefined,

@@ -43,7 +43,7 @@ function withHostDatabase<T>(
   ctx: HostContext,
   fn: (
     database: typeof import("~/server/db").db,
-    service: typeof import("../repo/run-service"),
+    service: typeof import("~/server/domains/run/repo/run-control"),
     operation: typeof import("~/server/domains/run/repo/operation"),
   ) => Promise<T>,
 ): Promise<T> {
@@ -54,7 +54,7 @@ function withHostDatabase<T>(
       return withInvocationDb(env.HYPERDRIVE.connectionString, async () =>
         fn(
           db,
-          await import("../repo/run-service"),
+          await import("~/server/domains/run/repo/run-control"),
           await import("~/server/domains/run/repo/operation"),
         ),
       );
@@ -151,7 +151,7 @@ export function runServicesFor(
 
   const requireAgentScope = async (
     db: typeof import("~/server/db").db,
-    service: typeof import("../repo/run-service"),
+    service: typeof import("~/server/domains/run/repo/run-control"),
   ) => {
     const scope = await service.loadRunScope(db, runId);
     if (!agentImportRunPurpose.safeParse(scope.public.purpose).success)
@@ -170,7 +170,7 @@ export function runServicesFor(
       admissionRead(() =>
         withDatabase(async (db) => {
           const [{ paidRunPreflight }, { runEntityId }] = await Promise.all([
-            import("~/server/domains/run/service/execution-transport"),
+            import("~/server/domains/purchase-import/service/execution-transport"),
             import("@cubby/schemas/identifiers"),
           ]);
           await paidRunPreflight(db, runEntityId.parse(runId))(request);
@@ -180,7 +180,7 @@ export function runServicesFor(
       admissionRead(() =>
         withDatabase(async (db) => {
           const [{ planRunPreflight }, { runEntityId }] = await Promise.all([
-            import("~/server/domains/run/service/execution-transport"),
+            import("~/server/domains/purchase-import/service/execution-transport"),
             import("@cubby/schemas/identifiers"),
           ]);
           return planRunPreflight(db, runEntityId.parse(runId))(request);

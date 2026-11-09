@@ -14,12 +14,6 @@ import { and, eq } from "drizzle-orm";
 import { listAiUsageForRun } from "~/server/ai/repo/ai-usage";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { run as runTable } from "~/server/db/schema";
-import { loadRunFindings } from "~/server/domains/purchase-import/repo/run-finding";
-import {
-  loadRunDetail,
-  loadRunLog,
-  loadRunTimeline,
-} from "~/server/domains/purchase-import/repo/run-service";
 import {
   aiUsageBlocks,
   changesBlocks,
@@ -36,6 +30,12 @@ import {
   type RunReportSlot,
 } from "~/server/domains/run/repo/report-run";
 import { runResultsBlocks } from "~/server/domains/run/repo/report-run-results";
+import {
+  loadRunDetail,
+  loadRunLog,
+  loadRunTimeline,
+} from "~/server/domains/run/repo/run-detail";
+import { loadRunFindings } from "~/server/domains/run/repo/run-finding";
 import { getRunLiveProgress } from "~/server/domains/run/repo/run-progress";
 import { readRunSteps } from "~/server/domains/run/repo/run-step";
 import { identityShortcodes } from "~/server/entity-kernel/repo/entity-identity";

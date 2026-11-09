@@ -17,7 +17,7 @@ async function handler(input: {
       { error: "Member identity is required" },
       { status: 403 },
     );
-  // Loaded on request: the proxy reaches run-service and the AI SDK stack.
+  // Loaded on request: the proxy reaches run-control and the AI SDK stack.
   const { proxyPurchaseAgentRequest } =
     await import("~/server/domains/purchase-import/service/agent-proxy");
   return await proxyPurchaseAgentRequest({

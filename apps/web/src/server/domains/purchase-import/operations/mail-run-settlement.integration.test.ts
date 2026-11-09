@@ -17,10 +17,10 @@ import { getDb } from "~/server/db/helpers";
 import { email as emailTable, run } from "~/server/db/schema";
 import type { RetainedMail } from "~/server/domains/mail/repo/retained-mail";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
+import { publishRunFinding } from "~/server/domains/run/repo/run-finding";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { runFinding } from "~/server/testing/run-finding.fixtures";
 
-import { publishRunFinding } from "../repo/run-finding";
 import * as extraction from "./agents/extract";
 import { claimMailImportWork } from "./mail-import-claim";
 import { resolveMail } from "./mail-tool";

@@ -30,7 +30,7 @@ import {
 } from "~/server/db/schema";
 import { appendEmailReview } from "~/server/domains/email/repo/email-review-store";
 import { readRetainedMail } from "~/server/domains/mail/repo/retained-mail";
-import { publishRunFinding } from "~/server/domains/purchase-import/repo/run-finding";
+import { publishRunFinding } from "~/server/domains/run/repo/run-finding";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { findOrCreateWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 

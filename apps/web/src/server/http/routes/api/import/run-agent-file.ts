@@ -11,9 +11,8 @@ async function handler(input: {
   const context = requireActor(
     await createRequestContext({ headers: input.request.headers }),
   );
-  // Loaded on request: run-service reaches the AI SDK stack.
-  const { controlRun } =
-    await import("~/server/domains/purchase-import/repo/run-service");
+  // Loaded on request: run-control reaches the AI SDK stack.
+  const { controlRun } = await import("~/server/domains/run/repo/run-control");
   const party = await context.currentParty();
   if (!party)
     return Response.json(
@@ -26,7 +25,7 @@ async function handler(input: {
       runPublicId: input.params.publicId,
       action: "cancel",
     });
-  // Loaded on request: the proxy reaches run-service and the AI SDK stack.
+  // Loaded on request: the proxy reaches run-control and the AI SDK stack.
   const { proxyPurchaseAgentRequest } =
     await import("~/server/domains/purchase-import/service/agent-proxy");
   return await proxyPurchaseAgentRequest({

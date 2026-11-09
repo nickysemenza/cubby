@@ -1251,7 +1251,7 @@ The composite `import-order-convergence.spec.ts` browser journey is removed.
 booking and receipt reconciliation, Product conflict review, and Vendor-to-Purchase
 and original Email navigation. Photo review and photo-first journeys retain signed
 upload, review approval and persisted image roles. The crowded Problems sample
-regression belongs to `run-service.integration.test.ts`; the Gmail journey still
+regression belongs to `run-control.integration.test.ts`; the Gmail journey still
 applies the reviewed fix from the Run page.
 The PostgreSQL matrix owns the six sampled source orders and exact final Product,
 inventory ownership, Expense, Purchase allocation and original source edges.

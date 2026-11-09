@@ -3,10 +3,10 @@ import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
 import { runOperation } from "~/server/db/schema";
+import { listProductRuns } from "~/server/domains/run/repo/run-target";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
-import { listProductRuns } from "../repo/run-target";
 import { startAgentRunFixture } from "./import-run.fixtures";
 
 // A successful no-op has no AuditLog or finding. Retiring its mutable target

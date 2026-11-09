@@ -8,6 +8,7 @@ import {
   withTransaction,
 } from "~/server/db/helpers";
 import { auditLog, expense } from "~/server/db/schema";
+import { resolveRunFinding } from "~/server/domains/purchase-import/repo/findings";
 import { findOpenRunFindings } from "~/server/generic/problems/repo/detectors-import";
 import { runDiagnostic } from "~/server/generic/problems/service/problem-diagnostics.service";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
@@ -21,7 +22,6 @@ import {
   seedRunFindings,
 } from "~/server/testing/run-finding.fixtures";
 
-import { resolveRunFinding } from "./findings";
 import { publishRunFinding } from "./run-finding";
 
 const now = new Date("2026-09-20T12:00:00.000Z");

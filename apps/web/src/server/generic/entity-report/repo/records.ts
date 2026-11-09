@@ -44,7 +44,7 @@ import {
   listRuns,
   listProductRuns,
   listRunTargetOutcomes,
-} from "~/server/domains/purchase-import/repo/run-target";
+} from "~/server/domains/run/repo/run-target";
 import {
   aiDescriptionItems,
   cookbookItems,

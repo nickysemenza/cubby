@@ -9,9 +9,9 @@ import {
   workExpenseSourceOwners,
   workExpenseOwners,
 } from "~/server/domains/expense/repo/work-owners";
-import { activeFindingSql } from "~/server/domains/purchase-import/repo/finding-expiry";
 import { obsoleteExecutionFindingSql } from "~/server/domains/purchase-import/repo/run-retirement";
 import { workPurchaseOwners } from "~/server/domains/purchase/repo/work-owners";
+import { activeFindingSql } from "~/server/domains/run/repo/finding-expiry";
 import { workRunReviewOwners } from "~/server/domains/run/repo/work-owners";
 import { workRecordFacts } from "~/server/domains/work/repo/record-facts";
 import {

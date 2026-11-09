@@ -95,7 +95,7 @@ pending: nothing here starts Product research.
    `Email.runId`, and dispatches `start_or_resume` to
    a `purchase.dispatch` Job in the admission transaction (`dispatch.ts`). Each paid call checks
    the Run is still executable and draws from the household AI budget
-   (`run/service/execution-transport.ts`, `server/ai/budget.ts`).
+   (`purchase-import/service/execution-transport.ts`, `server/ai/budget.ts`).
    Existing discovery wakes also recover untouched automatic unresolved work
    when its retained original changes, its sender becomes verified, or accepted
    source evidence now establishes its exact order on the member's own Vendor

@@ -37,7 +37,7 @@ import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { run } from "~/server/db/schema";
-import type { readRunProgressTargets } from "~/server/domains/purchase-import/repo/run-service";
+import type { readRunProgressTargets } from "~/server/domains/run/repo/run-detail";
 
 import { listRunSteps, isTerminalStep, type RunStepRow } from "./run-step";
 
@@ -404,7 +404,7 @@ export async function getRunWorkProgress(
   const targetRows =
     source === "targets" && purpose !== "photo_inventory" && !missingMailRoster
       ? await (
-          await import("~/server/domains/purchase-import/repo/run-service")
+          await import("~/server/domains/run/repo/run-detail")
         ).readRunProgressTargets(db, { id: owner.id, purpose })
       : [];
   const targets =
