@@ -23,7 +23,6 @@ import {
   parseEntityRef,
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
-import { encodeBase64Url, decodeBase64UrlText } from "@cubby/shared/base64";
 import {
   and,
   desc,
@@ -53,6 +52,7 @@ import {
   type EntityRef,
   lookupEntityLabels,
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { jsonCursor } from "~/server/lib/json-cursor";
 
 type AuditAction = "create" | "update" | "delete";
 const auditActionSchema = z.enum(["create", "update", "delete"]);
@@ -100,10 +100,10 @@ function readStoredChanges(stored: unknown) {
   );
 }
 
-const auditCursorPayloadSchema = z.object({
-  createdAt: z.string(),
-  id: z.string().min(1),
-});
+const auditCursor = jsonCursor(
+  z.object({ createdAt: z.iso.datetime(), id: z.string().min(1) }),
+  { prefix: "v1.", invalid: "Invalid audit log cursor" },
+);
 
 function isNonEmptyString(value: unknown): value is string {
   return typeof value === "string" && value.length > 0;
@@ -163,8 +163,6 @@ type AuditLogRow = Omit<
   run: { shortcode: string } | null;
 };
 
-const AUDIT_CURSOR_PREFIX = "v1.";
-
 type DecodedAuditCursor = {
   createdAt: Date;
   id: string;
@@ -175,30 +173,15 @@ export function encodeAuditCursor(entry: {
   createdAt: Date;
   id: string;
 }): string {
-  const payload = JSON.stringify({
+  return auditCursor.encode({
     createdAt: entry.createdAt.toISOString(),
     id: entry.id,
   });
-  return `${AUDIT_CURSOR_PREFIX}${encodeBase64Url(payload)}`;
 }
 
 export function decodeAuditCursor(cursor: string): DecodedAuditCursor {
-  if (!cursor.startsWith(AUDIT_CURSOR_PREFIX)) {
-    throw new Error("Invalid audit log cursor");
-  }
-
-  try {
-    const payload = auditCursorPayloadSchema.parse(
-      JSON.parse(decodeBase64UrlText(cursor.slice(AUDIT_CURSOR_PREFIX.length))),
-    );
-    const createdAt = new Date(payload.createdAt);
-    if (Number.isNaN(createdAt.getTime())) {
-      throw new Error("Malformed audit log cursor");
-    }
-    return { createdAt, id: payload.id };
-  } catch {
-    throw new Error("Invalid audit log cursor");
-  }
+  const payload = auditCursor.decode(cursor);
+  return { createdAt: new Date(payload.createdAt), id: payload.id };
 }
 
 /**

@@ -1,3 +1,4 @@
+import { parseJsonAs } from "@cubby/shared/parse-json-as";
 import { createLogger } from "@cubby/worker-tracing";
 import {
   DEFAULT_MAX_REQUEST_BODY_SIZE,
@@ -87,12 +88,8 @@ export async function handleMcpHttpRequest(
 }
 
 function parseJson(body: string): JSONType | undefined {
-  try {
-    return z.json().safeParse(JSON.parse(body)).data;
-  } catch {
-    // SILENT: the SDK answers an unparseable body with its own parse error.
-    return undefined;
-  }
+  // The SDK answers an unparseable body with its own parse error.
+  return parseJsonAs(z.json(), body);
 }
 
 // Each field parses on its own, so a malformed tool hint never costs the id.

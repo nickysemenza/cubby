@@ -7,7 +7,6 @@ import type { RunId } from "@cubby/schemas/identifiers";
 import { imageProcessingAttemptState } from "@cubby/schemas/image-processing";
 import { photoRunProcessor } from "@cubby/schemas/photo-run-input";
 import type { AiCostEvidence } from "@cubby/shared/ai/pricing";
-import { encodeBase64Url, decodeBase64UrlText } from "@cubby/shared/base64";
 import {
   type AnyColumn,
   and,
@@ -30,6 +29,7 @@ import {
   uuidArrayParam,
 } from "~/server/db/helpers";
 import { aiUsage } from "~/server/db/schema";
+import { jsonCursor } from "~/server/lib/json-cursor";
 
 /**
  * A failed call that reported no tokens had nothing to price: it is counted
@@ -201,16 +201,10 @@ export async function summarizeAiUsage(db: Database, days: number) {
   );
 }
 
-const runUsageCursor = z.object({
-  createdAt: z.iso.datetime(),
-  id: z.uuid(),
-});
-
-const encodeRunUsageCursor = (value: z.infer<typeof runUsageCursor>) =>
-  encodeBase64Url(JSON.stringify(value));
-
-const decodeRunUsageCursor = (value: string) =>
-  runUsageCursor.parse(JSON.parse(decodeBase64UrlText(value)));
+const runUsageCursor = jsonCursor(
+  z.object({ createdAt: z.iso.datetime(), id: z.uuid() }),
+  { invalid: "Invalid AI usage cursor" },
+);
 
 /**
  * Recorded calls attributed to a Run, its descendants and their image jobs.
@@ -227,7 +221,7 @@ export async function listAiUsageForRun(
     .min(1)
     .max(100)
     .parse(options.limit ?? 25);
-  const cursor = options.cursor ? decodeRunUsageCursor(options.cursor) : null;
+  const cursor = options.cursor ? runUsageCursor.decode(options.cursor) : null;
   const database = getDb(db);
   const scope = sql`WITH RECURSIVE run_scope(id) AS (
     SELECT id FROM "Run" WHERE id = ${runId} AND ${notDeleted("Run")}
@@ -367,7 +361,7 @@ export async function listAiUsageForRun(
     tokensByModel,
     nextCursor:
       rows.length > limit && last
-        ? encodeRunUsageCursor({
+        ? runUsageCursor.encode({
             createdAt: last.createdAt.toISOString(),
             id: last.id,
           })

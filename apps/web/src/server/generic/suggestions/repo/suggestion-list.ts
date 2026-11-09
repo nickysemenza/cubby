@@ -49,6 +49,7 @@ import {
 } from "~/server/generic/suggestions/repo/suggestion-presentation";
 import { readSuggestionRecordRefs } from "~/server/generic/suggestions/repo/suggestion-reference-resolution";
 import { touchingSuggestionFamilies } from "~/server/generic/suggestions/repo/suggestion-touching";
+import { jsonCursor } from "~/server/lib/json-cursor";
 
 const STRENGTH_RANK = { strong: 2, medium: 1, weak: 0 } as const;
 const ARRAY_COLUMNS = new Set(["account", "owner", "entityKind", "merchant"]);
@@ -59,11 +60,14 @@ const NUMBER_COLUMNS = new Set([
   "impact",
 ]);
 
-const cursorSchema = z.object({
-  order: z.string(),
-  vector: z.array(z.union([z.string(), z.number(), z.boolean(), z.null()])),
-  id: z.string(),
-});
+const suggestionCursor = jsonCursor(
+  z.object({
+    order: z.string(),
+    vector: z.array(z.union([z.string(), z.number(), z.boolean(), z.null()])),
+    id: z.string(),
+  }),
+  { invalid: "Invalid suggestion list cursor" },
+);
 
 type SortTerm = { by: string; direction: "asc" | "desc" };
 
@@ -288,7 +292,7 @@ async function selectFacts(
   paging: {
     limit: number;
     offset: number;
-    cursor?: z.infer<typeof cursorSchema>;
+    cursor?: ReturnType<typeof suggestionCursor.decode>;
   },
   extra: readonly (SQL | undefined)[] = [],
 ) {
@@ -547,9 +551,7 @@ export async function listSuggestionPage(
   ];
   const orderKey = JSON.stringify(order);
   const cursor = input.cursor
-    ? cursorSchema.parse(
-        JSON.parse(Buffer.from(input.cursor, "base64url").toString("utf8")),
-      )
+    ? suggestionCursor.decode(input.cursor)
     : undefined;
   if (cursor && cursor.order !== orderKey)
     throw new Error(
@@ -595,13 +597,11 @@ export async function listSuggestionPage(
     },
     next:
       more && last
-        ? Buffer.from(
-            JSON.stringify({
-              order: orderKey,
-              vector: last.vector,
-              id: last.id,
-            }),
-          ).toString("base64url")
+        ? suggestionCursor.encode({
+            order: orderKey,
+            vector: last.vector,
+            id: last.id,
+          })
         : null,
   });
 }

@@ -1,14 +1,3 @@
-/**
- * One entry per `GeneratedSuggestFieldKey` (`packages/schemas`'s
- * `control.suggest`-declared fields): what kind of decision call the field runs
- * as, its vocabulary/roster, and how to render the subject the model sees.
- * The declarative half lives in `ai/policy/field-suggest.ts`; each entry here
- * spreads it and adds the database-backed roster or candidates.
- * `suggest-fields.ts` is the only reader; it resolves basis values and walks
- * this table, so adding a field is one manifest line (step 1) plus one entry
- * in each file — the `satisfies Record<Exclude<GeneratedSuggestFieldKey, `${string}.emoji`>, FieldSuggestSpec>`
- * below makes a missing entry a typecheck failure in both directions.
- */
 import { AsyncLocalStorage } from "node:async_hooks";
 
 import {
@@ -25,6 +14,18 @@ import {
   type Trade,
   type ProjectOptionsOut,
 } from "@cubby/schemas/project";
+/**
+ * One entry per `GeneratedSuggestFieldKey` (`packages/schemas`'s
+ * `control.suggest`-declared fields): what kind of decision call the field runs
+ * as, its vocabulary/roster, and how to render the subject the model sees.
+ * The declarative half lives in `ai/policy/field-suggest.ts`; each entry here
+ * spreads it and adds the database-backed roster or candidates.
+ * `suggest-fields.ts` is the only reader; it resolves basis values and walks
+ * this table, so adding a field is one manifest line (step 1) plus one entry
+ * in each file — the `satisfies Record<Exclude<GeneratedSuggestFieldKey, `${string}.emoji`>, FieldSuggestSpec>`
+ * below makes a missing entry a typecheck failure in both directions.
+ */
+import { parseJsonAs } from "@cubby/shared/parse-json-as";
 import {
   redundantTokens,
   type RedundantTokenMatch,
@@ -325,13 +326,7 @@ function parseJsonStringArray(
   raw: string | null | undefined,
 ): readonly string[] | null {
   if (!raw) return null;
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    const result = jsonStringArraySchema.safeParse(parsed);
-    return result.success ? result.data : null;
-  } catch {
-    return null;
-  }
+  return parseJsonAs(jsonStringArraySchema, raw) ?? null;
 }
 
 /** Current entries for an array prune suggestion. */

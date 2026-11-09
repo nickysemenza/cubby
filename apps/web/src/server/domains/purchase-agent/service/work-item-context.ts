@@ -1,5 +1,6 @@
 import type { ImportRunAgentToolName } from "@cubby/schemas/import-run-agent";
 import { EXTRACT_ORDER_TOOL } from "@cubby/schemas/import-run-agent";
+import { parseJsonAs } from "@cubby/shared/parse-json-as";
 import type { Message } from "@earendil-works/pi-ai";
 import { z } from "zod";
 
@@ -27,16 +28,12 @@ export function currentWorkItemMessages(
         message.toolName !== EXTRACT_ORDER_TOOL
       )
         return [];
-      try {
-        const text = message.content.find((part) => part.type === "text");
-        return text?.type === "text" &&
-          continuation.safeParse(JSON.parse(text.text)).success
-          ? [message.toolCallId]
-          : [];
-      } catch {
-        // SILENT: an unreadable continuation cannot discard earlier evidence.
-        return [];
-      }
+      // An unreadable continuation cannot discard earlier evidence.
+      const text = message.content.find((part) => part.type === "text");
+      return text?.type === "text" &&
+        parseJsonAs(continuation, text.text) !== undefined
+        ? [message.toolCallId]
+        : [];
     }),
   );
   const claims = (message: Message) =>
@@ -76,14 +73,8 @@ const photoAcknowledgement = z.object({
 function toolValue<T>(message: Message, schema: z.ZodType<T>): T | undefined {
   if (message.role !== "toolResult" || message.isError) return undefined;
   const text = message.content.find((part) => part.type === "text");
-  try {
-    return text?.type === "text"
-      ? schema.safeParse(JSON.parse(text.text)).data
-      : undefined;
-  } catch {
-    // SILENT: truncated or legacy output cannot establish a durable checkpoint.
-    return undefined;
-  }
+  // Truncated or legacy output cannot establish a durable checkpoint.
+  return text?.type === "text" ? parseJsonAs(schema, text.text) : undefined;
 }
 
 /**
