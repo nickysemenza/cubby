@@ -18,17 +18,30 @@ import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
+import { afterExecutionTasks, runWithExecutionCtx } from "~/server/cf-env";
 import { user } from "~/server/db/auth.schema";
 import { getDb } from "~/server/db/helpers";
-import { project, financialAccount } from "~/server/db/schema";
+import {
+  project,
+  financialAccount,
+  product as productTable,
+} from "~/server/db/schema";
 import { loadWorkDiagnosticFacts } from "~/server/domains/work/repo/work-diagnostic-facts";
 import {
   diagnosticWorkSources,
   computeWorkDiagnosticFacts,
 } from "~/server/domains/work/service/work-diagnostics";
-import { readWorkQueue as readComposedQueue } from "~/server/domains/work/service/work-queue-read";
+import {
+  readPublishedWorkQueue,
+  readWorkQueue as readComposedQueue,
+} from "~/server/domains/work/service/work-queue-read";
 import { resolveFilterTokens } from "~/server/entity-kernel/filter-tokens";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import {
+  markWorkPublicationDirty,
+  readWorkPublication,
+  workPublicationStale,
+} from "~/server/generic/work-queue/repo/work-publication";
 import { drainStoredDerived } from "~/server/testing/background-queue";
 import { publishAllQualityFixtures } from "~/server/testing/quality.fixtures";
 import {
@@ -724,6 +737,54 @@ describe("composed Work queue engine", () => {
       "product_category",
     );
     expect(queue.meta.incompleteSources).toEqual([]);
+    // The household web's publication reads the same rows, counts and gaps.
+    const published = await readPublishedWorkQueue(ctx.db, {
+      input: {
+        reason: "product_category",
+        query: "Synthetic source gap widget",
+      },
+      memberPartyId: null,
+      memberOnly: false,
+    });
+    expect(published.items).toEqual(queue.items);
+    expect(published.meta.totalCount).toBe(queue.meta.totalCount);
+
+    // A member write leaves the rows readable and republishes after the
+    // response as a tracked waitUntil task: withRequestDb's pool close
+    // (afterExecutionTasks) runs only once the new rows are published.
+    await getDb(ctx.db)
+      .update(productTable)
+      .set({ deletedAt: new Date() })
+      .where(eq(productTable.shortcode, product.id));
+    await markWorkPublicationDirty(ctx.db);
+    const read = {
+      input: {
+        reason: "product_category",
+        query: "Synthetic source gap widget",
+      },
+      memberPartyId: null,
+      memberOnly: false,
+    } as const;
+    const tasks: Promise<unknown>[] = [];
+    let freshAtPoolClose: boolean | undefined;
+    const stale = await runWithExecutionCtx(
+      { waitUntil: (task) => void tasks.push(task) },
+      async () => {
+        const result = await readPublishedWorkQueue(ctx.db, read);
+        afterExecutionTasks(Promise.resolve(), async () => {
+          freshAtPoolClose = !workPublicationStale(
+            await readWorkPublication(ctx.db),
+          );
+        });
+        return result;
+      },
+    );
+    expect(stale.items.map((row) => row.id)).toEqual([product.id]);
+    await Promise.all(tasks);
+    expect(freshAtPoolClose).toBe(true);
+    expect((await readPublishedWorkQueue(ctx.db, read)).meta.totalCount).toBe(
+      0,
+    );
     const excluded = await readComposedQueue(ctx.db, {
       input: { reason: "product_category", reasonExclude: "product_category" },
       memberPartyId: null,

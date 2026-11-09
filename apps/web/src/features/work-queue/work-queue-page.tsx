@@ -553,10 +553,11 @@ export function WorkQueue({
                 fixedScope?.view === "problems") &&
                 column.id === "family") ||
                 (fixedScope?.reason !== undefined && column.id === "reason") ||
-                (fixedScope?.view !== undefined &&
-                  ["human", "agent", "automatic", "external"].includes(
-                    fixedScope.view,
-                  ) &&
+                ((fixedScope?.executor !== undefined ||
+                  (fixedScope?.view !== undefined &&
+                    ["human", "agent", "automatic", "external"].includes(
+                      fixedScope.view,
+                    ))) &&
                   column.id === "executor"))
                 ? false
                 : column.enableColumnFilter,

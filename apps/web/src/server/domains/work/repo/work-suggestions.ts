@@ -19,6 +19,7 @@ import {
 } from "~/server/generic/suggestions/repo/suggestion-work-tokens";
 import { recordScope } from "~/server/generic/work-queue/repo/work-declarations";
 import {
+  admittedReasons,
   selectWorkCandidates,
   type WorkSource,
 } from "~/server/generic/work-queue/repo/work-source";
@@ -103,7 +104,14 @@ const source: WorkSource = {
           name: "work_suggestion_refs",
           sql: sql`SELECT family, entity, token,
             CASE WHEN token ~ ${UUID_PATTERN} THEN token::uuid END AS record_uuid
-            FROM (${pendingSuggestionRecordsSql(ids ? [...ids] : undefined)}) refs`,
+            FROM (${pendingSuggestionRecordsSql(
+              ids ? [...ids] : undefined,
+              new Set(
+                admittedReasons(scope, source.reasons).map((reason) =>
+                  reason.key.slice("suggestions:".length),
+                ),
+              ),
+            )}) refs`,
         },
         {
           name: "work_pending_records",

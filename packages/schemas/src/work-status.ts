@@ -26,16 +26,11 @@ const workStuckItem = z.object({
 export type WorkStuckItem = z.infer<typeof workStuckItem>;
 
 /**
- * The one background verdict: whether work is moving and what needs a member.
- * It carries no queue sizes, because none of them tells a member what to do.
+ * The one background verdict: whether work is moving and what stopped. The
+ * Needs-you count is the Work queue's own total, never a copy kept here.
  */
 export const workStatus = z.object({
   readAt: z.iso.datetime(),
-  needsYou: z.object({
-    count: z.int().nonnegative(),
-    /** False while a queue source is unavailable: the count is known work only. */
-    complete: z.boolean(),
-  }),
   lastFinishedAt: z.iso.datetime().nullable(),
   /** Work has waited a while but is still finishing. */
   behind: z.boolean(),

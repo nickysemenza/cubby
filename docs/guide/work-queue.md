@@ -2,10 +2,19 @@
 
 Work is the household's operational entry point at `/activity`: one screen with
 an always-present background health line, a Stuck section only when something is
-stuck, and one Needs you queue summarized by reason. Needs you holds decisions,
-required proposals and concrete Problems that are mine or shared; the sidebar
-count and Home's preview read the same `NEEDS_YOU_FILTERS` population. Waiting
-never implies failure.
+stuck, and one Needs you queue summarized by reason. Needs you is the queue's
+member-executed work (`executor: human`) that is mine or shared: decisions,
+required proposals and concrete Problems. Home's preview, the sidebar count and
+Work read that one `NEEDS_YOU_FILTERS` population from the household's published
+Work items, so the count is the queue's own total, never a copy. Waiting never
+implies failure.
+
+The household web reads the last publication instead of evaluating every source
+per request. A member's own write marks it stale; the next read returns the
+previous rows and republishes after the response, and the commit rings open
+pages, so a decided item leaves within seconds. Background-only changes (imports,
+Runs) appear within two minutes of a read. Agents (MCP) and a record's own Work
+strip evaluate the sources live.
 
 Footer links open Suggestions, Missing facts (the research view of `/work-queue`),
 All work (`/work-queue` with its executor, family, owner and reason facets) and
@@ -104,10 +113,9 @@ attention read, and displays that limitation beside its results.
 Pending reviewable suggestions produce one row per live record, combining their
 family reason keys and opening that record's Suggestions. Statement proposals
 belong to their financial account. There are no family-only suggestion rows.
-Home's Needs you preview excludes the pending-suggestion family and links to
-the same scoped queue, avoiding the population-wide statement eligibility read
-on every Home visit. Suggestions remain available in the full Work queue,
-Suggestions, and record work sections. Unrelated record reads skip statement
+Needs you excludes optional field and connection proposals; a reason filter
+prunes those families before any suggestion evidence is read. Suggestions remain
+available in the full Work queue, Suggestions, and record work sections. Unrelated record reads skip statement
 evidence entirely; account reads scope evidence before materialization.
 Purchase amounts are the sum of live Expense costs, including credits; other
 records carry their own amount and calendar date. Planned purchases are deferred

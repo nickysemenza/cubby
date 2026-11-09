@@ -1,9 +1,9 @@
 import { NEEDS_YOU_FILTERS } from "@cubby/schemas/work-queue";
 import type { WorkStatus, WorkStuckItem } from "@cubby/schemas/work-status";
 import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 
 import { RetryJobsButton } from "~/features/job/retry-jobs";
 import { hasIncompleteWorkInputs } from "~/features/work-queue/work-input-status";
@@ -195,33 +195,16 @@ function UnknownStatus({
 
 /**
  * One queue, grouped by reason. It stays mounted while empty so a new item
- * appears without a reload, and it settles the sidebar's count: both read the
- * same population, so they can never disagree on this page.
+ * appears without a reload. Its total and the sidebar's are the same
+ * published population, so they agree once both have read it.
  */
-function NeedsYouQueue({
-  status,
-}: {
-  status: { count: number; complete: boolean } | undefined;
-}) {
-  const queryClient = useQueryClient();
+function NeedsYouQueue() {
   const [total, setTotal] = useState<number>();
   const [incomplete, setIncomplete] = useState(false);
-  const statusKey = workQueue.status.queryKey(STATUS_INPUT);
-  const onMeta = (meta: WorkQueueMeta) => {
+  const onMeta = useCallback((meta: WorkQueueMeta) => {
     setTotal(meta.totalCount);
     setIncomplete(hasIncompleteWorkInputs(meta));
-  };
-  useEffect(() => {
-    if (total === undefined || status?.count === total) return;
-    queryClient.setQueryData<WorkStatus>(statusKey, (current) =>
-      current
-        ? {
-            ...current,
-            needsYou: { count: total, complete: !incomplete },
-          }
-        : current,
-    );
-  }, [total, incomplete, status?.count, queryClient, statusKey]);
+  }, []);
   const empty = total === 0 && !incomplete;
   return (
     <>
@@ -336,7 +319,7 @@ export function WorkPage({ fromRetiredJobs }: { fromRetiredJobs: boolean }) {
           resume={automatic.resume}
         />
       ) : null}
-      <NeedsYouQueue status={data?.needsYou} />
+      <NeedsYouQueue />
       <nav
         aria-label="More work"
         className="flex flex-wrap items-center gap-x-3.5 gap-y-1 border-t border-border pt-2 [&>a]:text-link [&>a]:hover:underline [&>a]:max-md:inline-flex [&>a]:max-md:min-h-11 [&>a]:max-md:items-center"

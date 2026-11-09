@@ -4049,6 +4049,21 @@ projection, not a new entity or assignment ledger. An MCP read fences to
 shared work and work owned only by the connected member before counts and
 paging; the household UI's Owner filter grants no private access.
 
+Household web queue reads (`workQueue.queue`) read the published `WorkItem`
+rows: the full source union with deferrals applied and owners routed (member
+codes, section key and label), replaced in one transaction by
+`publishWorkItems`. Filters, search, sorts, Group by, view counts, summaries and
+page hydration run unchanged over that relation, so a count or first page is
+one scan of a few thousand rows instead of planning every source.
+`WorkPublication` records the snapshot instant, the last member write it has not
+read (`dirtyAt`, set after commit by `recordChange` in a request or a
+member-awaited background write), the last attempt and its error. A missing
+publication is written before the first read; a stale one (dirty, or older than
+two minutes) is replaced after the response, one attempt at a time, and its
+commit rings `workQueue` readers. MCP reads and `workQueue.forRecord` stay live,
+since agents act and reread and a record strip is already scoped. Publication
+captures coverage messages and incomplete Project/diagnostic inputs with the rows.
+
 Every research gap source uses `gapPublicationRead` to join its retained quality
 publication once by entity id, kind and key for admission and reason columns.
 The shared owner preserves missing-publication and fresh record-read semantics,

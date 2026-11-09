@@ -1,3 +1,4 @@
+import { NEEDS_YOU_INPUT } from "@cubby/schemas/work-queue";
 import {
   useSuspenseQuery,
   useSuspenseInfiniteQuery,
@@ -18,7 +19,7 @@ import type { HomeAsOfWindow } from "./home-as-of-window";
 import { useRecordedSpend } from "./home-money";
 import { usePantryValue } from "./home-pantry";
 import { taskBriefingReportInput, useTaskBriefing } from "./house-card";
-import { NEEDS_YOU_INPUT, useNeedsYou } from "./needs-you";
+import { useNeedsYou } from "./needs-you";
 
 /** A figure still loading shows a placeholder; a failed read shows a dash
  * (its section below carries the raw error and Retry). */
