@@ -15,14 +15,14 @@ import {
   isGoogleIdTokenOnlyRequest,
 } from "~/lib/google-auth";
 import { GMAIL_READONLY_SCOPE } from "~/lib/google-auth-constants";
+import { drizzle } from "~/server/db";
+import * as schema from "~/server/db/auth.schema";
+import { localGoogleProviderPlugin } from "~/server/http/e2e-google-provider";
 import {
   getAuthConfiguration,
   sameAuthConfiguration,
   type AuthConfiguration,
-} from "~/server/auth-configuration";
-import { drizzle } from "~/server/db";
-import * as schema from "~/server/db/auth.schema";
-import { localGoogleProviderPlugin } from "~/server/http/e2e-google-provider";
+} from "~/server/lib/auth-configuration";
 import { localGoogleProviderOrigin } from "~/server/lib/local-google-provider-origin";
 
 const betterAuthLog = createLogger("Better Auth");

@@ -8,15 +8,15 @@ import {
 import { requiresSuggestionReview } from "@cubby/schemas/field-suggestion-policy";
 import { z } from "zod";
 
-import { suggestFields } from "~/server/ai/field-suggest/suggest-fields";
-import { aiCallOwner } from "~/server/ai/policy/call-owner";
 import {
   allowsPreviewSuggestionTarget,
   type DraftSuggestionResolvers,
   draftSuggestionResolvers,
   normalizeSuggestionDraft,
   resolveSuggestionDraft,
-} from "~/server/field-suggestion/draft-policy";
+} from "~/server/ai/field-suggest/draft-policy";
+import { suggestFields } from "~/server/ai/field-suggest/suggest-fields";
+import { aiCallOwner } from "~/server/ai/policy/call-owner";
 import { ENTITY_SCHEMA_BINDINGS } from "~/server/generated/entity-bindings.gen";
 import { generatedMcpEntityActionEntities } from "~/server/generated/entity-kernel-entities.gen";
 

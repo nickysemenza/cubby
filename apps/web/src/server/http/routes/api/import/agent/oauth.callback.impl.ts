@@ -1,7 +1,6 @@
 import { z } from "zod";
 
 import { APP_ORIGIN, MCP_RESOURCE } from "~/lib/auth-constants";
-import { getAuthSecret } from "~/server/auth-configuration";
 import type { Database } from "~/server/db";
 import {
   clearPurchaseAgentOAuthCookie,
@@ -20,6 +19,7 @@ import {
   createRequestContext,
   requireActor,
 } from "~/server/http/request-context";
+import { getAuthSecret } from "~/server/lib/auth-configuration";
 
 const tokenResponse = z.object({
   access_token: z.string().min(1),

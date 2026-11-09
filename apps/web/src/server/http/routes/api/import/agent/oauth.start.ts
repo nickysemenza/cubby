@@ -1,6 +1,5 @@
 import { APP_ORIGIN } from "~/lib/auth-constants";
 import type { HttpRouteHandlers } from "~/lib/http/route-handler";
-import { getAuthSecret } from "~/server/auth-configuration";
 import {
   createPkcePair,
   createPurchaseAgentOAuthState,
@@ -13,6 +12,7 @@ import {
   createRequestContext,
   requireActor,
 } from "~/server/http/request-context";
+import { getAuthSecret } from "~/server/lib/auth-configuration";
 
 export const handlers: HttpRouteHandlers<Record<never, never>, "GET"> = {
   GET: async ({ request }) => {

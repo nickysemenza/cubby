@@ -25,13 +25,13 @@ import { retryWithBackoff } from "@cubby/shared/retry";
 import { sha256Uuid } from "@cubby/shared/sha256";
 import { z } from "zod";
 
-import { getAuthSecret } from "~/server/auth-configuration";
 import { runWithExecutionCtx, withCfEnv } from "~/server/cf-env";
 import type {
   PurchaseDispatchEnvironment,
   RunServices,
 } from "~/server/domains/purchase-agent/service/environment";
 import { assertNotInMaintenance } from "~/server/http/maintenance";
+import { getAuthSecret } from "~/server/lib/auth-configuration";
 
 /** The MCP endpoint the delegation bearer's audience names. */
 const MCP_URL = "https://cubby.internal/api/mcp";

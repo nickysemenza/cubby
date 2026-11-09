@@ -50,6 +50,10 @@ import {
   type DecisionPort,
 } from "~/server/ai/decision-model";
 import {
+  normalizeSuggestionDraft,
+  resolveSuggestionDraft,
+} from "~/server/ai/field-suggest/draft-policy";
+import {
   fieldSuggestSpecFor,
   withFieldSuggestionPreparation,
   type FieldSuggestSpec,
@@ -73,10 +77,6 @@ import { classificationAllowsField } from "~/server/domains/spending-category/re
 import { classificationRefusesField } from "~/server/domains/spending-category/repo/classification-field-policy";
 import { loadVendorSuggestionContext } from "~/server/domains/vendor/repo/vendor-suggestion-context";
 import { createAppError } from "~/server/errors/app-error";
-import {
-  normalizeSuggestionDraft,
-  resolveSuggestionDraft,
-} from "~/server/field-suggestion/draft-policy";
 import { buildFieldEnvelopeRow } from "~/server/generic/derived/repo/envelope";
 import { currentReadFacts } from "~/server/generic/derived/repo/read-context";
 import {
