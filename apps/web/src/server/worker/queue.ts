@@ -55,7 +55,7 @@ export async function handleQueueInvocation(
                   Sentry.captureException(error);
                 },
                 // The calendar projection reads only meal/task rows
-                // (`repo/calendar-caldav`), which no background task kind
+                // (`operations/calendar-caldav`), which no background task kind
                 // writes — marking it dirty here scheduled a full re-projection
                 // after every batch (~1,000 during one backfill).
                 afterSuccess: async () => {

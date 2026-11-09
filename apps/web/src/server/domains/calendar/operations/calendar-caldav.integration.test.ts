@@ -23,13 +23,13 @@ import { createMealWithEntityId } from "~/server/domains/meal/repo/crud";
 import { updateTask } from "~/server/domains/task/repo/crud";
 import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 
+import { scheduleCalendarFeedDirty } from "../repo/client";
 import {
   executeCalDavWrite,
   hasCalDavCommitReceipt,
   visitCalDavProjection,
   type CalDavCommitReceipt,
 } from "./calendar-caldav";
-import { scheduleCalendarFeedDirty } from "./client";
 
 const loadCalDavProjection = async (
   db: Parameters<typeof visitCalDavProjection>[0],
