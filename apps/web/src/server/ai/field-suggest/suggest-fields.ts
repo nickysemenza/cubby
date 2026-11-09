@@ -27,7 +27,6 @@ import type {
 import { entityRefKey } from "@cubby/schemas/entity";
 import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
-import { resolveExpenseLineKind } from "@cubby/schemas/expense-line-kind";
 import { fieldEnvelope } from "@cubby/schemas/field-envelope";
 import {
   type FieldResolution,
@@ -62,7 +61,6 @@ import {
 } from "~/server/ai/policy/field-suggest";
 import { type AiSelectionUsage, runAiSelection } from "~/server/ai/selection";
 import type { Database } from "~/server/db";
-import { resolveDraftExpenseFields } from "~/server/domains/expense/repo/expense-inheritance";
 import {
   isFinanceCategoryEntity,
   loadFinanceSuggestionContext,
@@ -70,9 +68,12 @@ import {
 import { resolveDraftEvidenceFields } from "~/server/domains/purchase/repo/purchase-evidence-policy";
 import { classificationAllowsField } from "~/server/domains/spending-category/repo/classification-field-policy";
 import { classificationRefusesField } from "~/server/domains/spending-category/repo/classification-field-policy";
-import { resolveDraftTaskFields } from "~/server/domains/task/repo/task-project-inheritance";
 import { loadVendorSuggestionContext } from "~/server/domains/vendor/repo/vendor-suggestion-context";
 import { createAppError } from "~/server/errors/app-error";
+import {
+  normalizeSuggestionDraft,
+  resolveSuggestionDraft,
+} from "~/server/field-suggestion/draft-policy";
 import { buildFieldEnvelopeRow } from "~/server/generic/derived/repo/envelope";
 import { currentReadFacts } from "~/server/generic/derived/repo/read-context";
 import {
@@ -174,22 +175,8 @@ async function resolveSuggestionInheritance(
         assignment?.kind === "inherit" ? "inherit" : "explicit";
     }
   }
-  if (input.entity === "expense") {
-    // SAFETY: the expense branch narrows the entity, and draft contains only
-    // schema-validated suggestion basis values plus reconstructed raw intent.
-    return resolveDraftExpenseFields(
-      db,
-      draft as Parameters<typeof resolveDraftExpenseFields>[1],
-    );
-  }
-  if (input.entity === "task") {
-    // SAFETY: the task branch narrows the entity, and draft contains only
-    // schema-validated suggestion basis values plus reconstructed raw intent.
-    return resolveDraftTaskFields(
-      db,
-      draft as Parameters<typeof resolveDraftTaskFields>[1],
-    );
-  }
+  const inheritance = resolveSuggestionDraft(db, input.entity, draft);
+  if (inheritance) return inheritance;
   if (input.entity === "purchase" || input.entity === "financialTransaction")
     return resolveDraftEvidenceFields(db, {
       entity: input.entity,
@@ -1023,16 +1010,10 @@ export async function suggestFields(
   ports?: SuggestFieldsPorts,
 ): Promise<FieldSuggestionsOut> {
   const financeContext = await savedSuggestionContext(db, rawInput);
-  const classifiedInput =
-    rawInput.entity === "expense"
-      ? {
-          ...rawInput,
-          basis: {
-            ...rawInput.basis,
-            lineKind: resolveExpenseLineKind(rawInput.basis),
-          },
-        }
-      : rawInput;
+  const classifiedInput = {
+    ...rawInput,
+    basis: normalizeSuggestionDraft(rawInput.entity, rawInput.basis),
+  };
   // A record panel asks for every suggest target at once; a target its own
   // classification refuses (a tax line's product) is dropped, and only a
   // request left with nothing to suggest is refused.

@@ -220,6 +220,9 @@ not rebuild the same validation graph for every list, detail and MCP occurrence.
 projection and scored-entity checks reuse fixed validators. Path projection still
 validates and clones each segment.
 
+Suggestion previews use the shared suggestion context keys and draft inheritance
+policy, which also owns expense line classification for suggestion preparation.
+
 Reset previews use the field's declared `resolution.resetSource` or inheritance
 chain and apply its ordinary reset patch without writing. Expense Project uses
 the same draft resolver as an edit, preserving stored intent in other fields.
