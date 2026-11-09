@@ -10,7 +10,7 @@ import {
 } from "@cubby/schemas/photo-import-run";
 import { sha256Hex } from "@cubby/shared/sha256";
 import type { Context } from "@earendil-works/chord";
-import { Type, type JsonObject } from "@earendil-works/pi-ai";
+import type { JsonObject } from "@earendil-works/pi-ai";
 import {
   defineExtension,
   defineTool,
@@ -317,13 +317,17 @@ export function cubbyMcpExtension(
         name: `${MCP_TOOL_PREFIX}${tool.name}`,
         description: tool.description,
         // MCP tool input schemas are always JSON-Schema objects.
-        parameters: Type.Unsafe<JsonObject>(tool.inputSchema),
+        parameters: tool.inputSchema,
         replay: "safe",
         ...(tool.name === "purchase_import_read"
           ? { outputLimits: EMAIL_READ_OUTPUT_LIMITS }
           : {}),
-        execute: async (args, api, context) =>
-          photoCoordinatorToolResult(
+        execute: async (raw, api, context) => {
+          // pi validated `raw` against the object schema above.
+          if (!isJsonObject(raw))
+            throw new Error(`${tool.name} arguments must be an object`);
+          const args = raw;
+          return photoCoordinatorToolResult(
             tool.name,
             args,
             callResult.parse(
@@ -341,7 +345,8 @@ export function cubbyMcpExtension(
                 { signal: context.abortSignal, timeout: TOOL_CALL_TIMEOUT_MS },
               ),
             ),
-          ),
+          );
+        },
       }),
     ),
   });

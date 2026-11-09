@@ -11,8 +11,6 @@ import {
   preparedProductResolution,
 } from "@cubby/schemas/purchase-import";
 import { sha256Hex } from "@cubby/shared/sha256";
-import type { JsonObject } from "@earendil-works/pi-ai";
-import { Type } from "@earendil-works/pi-ai";
 import {
   defineTool,
   type NestedToolExecutionResult,
@@ -107,8 +105,8 @@ export function importExtractedOrderTool(
     name: EXTRACT_ORDER_TOOL,
     description:
       "Import one ordinary itemized Email in one call: provide the exact extraction, candidate.sourceReferences with literal Email excerpts, and Product decisions. Cubby generates stable operation/line IDs and uses its normal prepare/commit writers. Incomplete evidence stays incomplete. A needs_resolution result returns the prepared receipt for targeted Product resolution; never re-prepare it. On writer_refusal, change the refused extraction or Product decision; do not resubmit identical input. A commit refusal can reuse its preparation with a repaired Product decision. On operation_error at prepare, no money was written: retry identical input. At commit the outcome is unknown: replay identical input to recover its durable result before changing it.",
-    parameters: Type.Unsafe<JsonObject>(parameters),
-    structuredOutputSchema: Type.Unsafe<JsonObject>(resultSchema),
+    parameters,
+    structuredOutputSchema: resultSchema,
     replay: "safe",
     outputLimits: {
       maxBytes: MAIL_READ_RESPONSE_MAX_BYTES * 2,

@@ -264,7 +264,7 @@ and retain their behavior checks; passing the helper's own tests proves only tha
 - Purchase-agent typed tools: each tool's parameters are the JSON Schema of
   its entry in `purchaseAgentToolInputs` (`@cubby/schemas/purchase-agent-services`),
   a projection of the host service contract with explicit narrowing; never
-  restate a tool input in TypeBox.
+  restate a tool input as a hand-written schema.
 - GTIN and barcodes: recipebridge `scan_code_gtin14` and `@cubby/shared/upc`.
 
 ## AI

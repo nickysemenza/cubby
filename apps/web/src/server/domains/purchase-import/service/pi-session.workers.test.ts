@@ -4,10 +4,11 @@ import {
   createRegistry,
   Harness,
   ProviderDoc,
+  type ConversationId,
 } from "@earendil-works/pi-durable";
 import { MemoryStorage } from "@earendil-works/pi-durable/storage/memory";
 import { SqliteStorage } from "@earendil-works/pi-durable/storage/sqlite";
-import { fromPartial } from "@total-typescript/shoehorn";
+import { fromAny, fromPartial } from "@total-typescript/shoehorn";
 import { PiHarness } from "agents/harness/pi";
 import type { LifecycleServices } from "agents/lifecycle";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -59,6 +60,11 @@ function host(storage: DurableMemoryStorage, opened = (_pi: Harness) => {}) {
   return harness;
 }
 
+// pi-durable ≥1.5 serves an opened conversation from memory, so the failed
+// read must name one it has not loaded.
+const uncached = (id: ConversationId) =>
+  fromAny<ConversationId, number>(id + 1);
+
 afterEach(() => vi.restoreAllMocks());
 
 describe("pi session recovery", () => {
@@ -70,9 +76,9 @@ describe("pi session recovery", () => {
     const provider = await first.snapshot(ProviderDoc, root.id, context);
     expect(provider?.sessionId).toBeTruthy();
     storage.failReads = true;
-    await expect(first.conversation(root.id, context)).rejects.toThrow(
-      "Synthetic storage read failure",
-    );
+    await expect(
+      first.conversation(uncached(root.id), context),
+    ).rejects.toThrow("Synthetic storage read failure");
     await first.closed;
     storage.failReads = false;
     await harness.dispose();
@@ -124,9 +130,9 @@ describe("pi session recovery", () => {
     const close = Promise.withResolvers<void>();
     storage.closeGate = close.promise;
     storage.failReads = true;
-    await expect(first.conversation(root.id, context)).rejects.toThrow(
-      "Synthetic storage read failure",
-    );
+    await expect(
+      first.conversation(uncached(root.id), context),
+    ).rejects.toThrow("Synthetic storage read failure");
     storage.failReads = false;
     const disposing = harness.dispose();
     // Reopen waits on the gated close; unblock it before awaiting pi().

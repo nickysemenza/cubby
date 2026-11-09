@@ -1,15 +1,19 @@
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import { validateToolArguments } from "@earendil-works/pi-ai";
-import { ToolTask, type ToolExecutionApi } from "@earendil-works/pi-durable";
+import {
+  ToolTask,
+  type HookApi,
+  type ToolExecutionApi,
+} from "@earendil-works/pi-durable";
 import { fromAny, fromPartial } from "@total-typescript/shoehorn";
 import { describe, expect, it } from "vitest";
 
 import type { RunServices } from "./environment";
 import { continueMailImportOnYield, runAgentTools } from "./tools";
 
-function fakeApi(): ToolExecutionApi {
+function fakeApi(): ToolExecutionApi & HookApi {
   const memos = new Map<string, unknown>();
-  return fromPartial<ToolExecutionApi>({
+  return fromPartial<ToolExecutionApi & HookApi>({
     taskId: fromAny(1),
     memo: async (name: string, ...rest: unknown[]) => {
       if (rest.length === 2 && !memos.has(name)) memos.set(name, rest[0]);
@@ -221,7 +225,7 @@ describe("run agent tool behavior", () => {
     expect(stopped).toHaveProperty("control", { terminate: true });
   });
 
-  it("converts loosely typed scalars as TypeBox always has", () => {
+  it("converts loosely typed scalars", () => {
     const tool = tools(fromPartial<RunServices>({})).find(
       (candidate) => candidate.name === "report_agent_progress",
     );
