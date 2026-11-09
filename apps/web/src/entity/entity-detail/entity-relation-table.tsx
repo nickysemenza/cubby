@@ -1,6 +1,7 @@
 import type { ConnectedRecordsOutput } from "@cubby/schemas/connected-records";
 import type { CompiledEntityPresentation } from "@cubby/schemas/entity-definitions/definition";
 import { type BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
+import { entityRoster } from "@cubby/schemas/entity-roster";
 import { ArrowUpRightIcon } from "@phosphor-icons/react/dist/csr/ArrowUpRight";
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
 import { useQueryClient, type QueryClient } from "@tanstack/react-query";
@@ -202,9 +203,8 @@ export function RelationSectionActions({
   title: string;
   createLabel?: string;
 }) {
-  const {
-    summary: { singular },
-  } = useEntityMetadata(plan.target);
+  // Header labels must not admit the target's full metadata before its table.
+  const { singular } = entityRoster[plan.target];
   const { setCreating, dialog } = useRelationCreateDialog(plan, recordId);
 
   return (
