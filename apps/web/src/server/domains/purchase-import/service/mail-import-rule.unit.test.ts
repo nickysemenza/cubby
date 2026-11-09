@@ -127,6 +127,16 @@ describe("mail import rule", () => {
       ]),
     );
     expect(keys.orderKeys).not.toContain("1Z999AA10123456784");
+    // OnTrac's tracking number is never an order key.
+    const ontrac = extractMailKeys({
+      subject: "Your package was delivered",
+      text: "Tracking Number: D10000000000042",
+      links: [],
+    });
+    expect(ontrac.trackingKeys).toEqual([
+      { carrier: "OnTrac", number: "D10000000000042" },
+    ]);
+    expect(ontrac.orderKeys).not.toContain("D10000000000042");
     expect(
       extractMailKeys({
         subject: "Synthetic newsletter",

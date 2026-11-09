@@ -72,6 +72,9 @@ const UPS_NUMBER = /^1Z[0-9A-Z]{16}$/u;
 // USPS IMpb: 20–22 or 26 digits from 91–95, optionally behind a 420+ZIP prefix.
 const USPS_NUMBER = /^(?:420\d{5}(?:\d{4})?)?(9[1-5](?:\d{18,20}|\d{24}))$/u;
 const USPS_INTERNATIONAL = /^[A-Z]{2}\d{9}US$/u;
+// OnTrac prints C or D followed by 14 digits.
+const ONTRAC_NUMBER = /^[CD]\d{14}$/u;
+const ONTRAC_IN_TEXT = /\b[CD]\d{14}\b/gu;
 const FEDEX_LENGTHS = new Set([12, 15, 20, 22]);
 const UPS_IN_TEXT = /\b1Z[0-9A-Z]{16}\b/giu;
 const USPS_INTERNATIONAL_IN_TEXT = /\b[A-Z]{2}\d{9}US\b/gu;
@@ -95,6 +98,7 @@ function carrierFromHost(href: string): Carrier {
     if (/(?:^|\.)ups\.com$/u.test(host)) return "UPS";
     if (/(?:^|\.)fedex\.com$/u.test(host)) return "FedEx";
     if (/(?:^|\.)usps\.(?:com|gov)$/u.test(host)) return "USPS";
+    if (/(?:^|\.)ontrac\.com$/u.test(host)) return "OnTrac";
   } catch {
     // SILENT: an unparseable link names no carrier.
   }
@@ -106,6 +110,7 @@ function carrierFromNumber(number: string): Carrier {
   if (UPS_NUMBER.test(number)) return "UPS";
   if (USPS_NUMBER.test(number) || USPS_INTERNATIONAL.test(number))
     return "USPS";
+  if (ONTRAC_NUMBER.test(number)) return "OnTrac";
   return null;
 }
 
@@ -124,6 +129,7 @@ function trackingKeys(text: string, links: readonly string[]) {
   for (const match of text.matchAll(UPS_IN_TEXT)) add(match[0], "UPS");
   for (const match of text.matchAll(USPS_INTERNATIONAL_IN_TEXT))
     add(match[0], "USPS");
+  for (const match of text.matchAll(ONTRAC_IN_TEXT)) add(match[0], "OnTrac");
   const fedexEmail =
     /fedex/iu.test(text) ||
     links.some((href) => carrierFromHost(href) === "FedEx");

@@ -32,7 +32,7 @@ export type EmailOrderKeys = z.infer<typeof emailOrderKeys>;
 /** Carrier tracking numbers an Email prints, upper-cased without whitespace. */
 export const emailTrackingKeys = z.array(
   z.object({
-    carrier: z.enum(["UPS", "FedEx", "USPS"]).nullable(),
+    carrier: z.enum(["UPS", "FedEx", "USPS", "OnTrac"]).nullable(),
     number: z.string().min(1),
   }),
 );
