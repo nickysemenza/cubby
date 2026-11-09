@@ -12,30 +12,28 @@ import type { SortingState } from "@tanstack/react-table";
  */
 export const buildSortParams = (
   sorting: SortingState,
-  initialSort?: string,
+  initialSort: string,
 ): SortParams => {
   const sortParams: SortParams = {
     direction: sorting[0]?.desc ? "desc" : "asc",
-    orderBy: sorting[0]?.id ?? initialSort ?? "createdAt",
+    orderBy: sorting[0]?.id ?? initialSort,
   };
   return sortParams;
 };
 
 /**
- * Full sort stack for the list operation input. Cleared sort falls back to the
- * table's default state — desc, matching `defaultSortState` (the old
- * single-sort fallback said asc, a latent mismatch that became reachable once
- * enableSortingRemoval lets a third click clear the sort).
+ * Full sort stack for the list operation input. A cleared sort (a third click
+ * with enableSortingRemoval) falls back to the table's opening sort.
  */
 export const buildSortsParams = (
   sorting: SortingState,
-  initialSort?: string,
-  initialSortDesc = true,
+  initialSort: string,
+  initialSortDesc: boolean,
 ): SortParams[] => {
   if (sorting.length === 0) {
     return [
       {
-        orderBy: initialSort ?? "createdAt",
+        orderBy: initialSort,
         direction: initialSortDesc ? "desc" : "asc",
       },
     ];
@@ -51,11 +49,11 @@ export const defaultPagination: PaginationParams = {
   pageSize: Math.min(50, MAX_PAGE_SIZE),
 };
 /**
- * The table's opening sort. `initialSortDesc` defaults to true because that is
- * right for the date/amount columns most lists open on; a roster whose default
- * sort is a NAME passes false, or it opens Z-to-A.
+ * The table's opening sort. Callers name it from the entity's declared sort
+ * roster: a hardcoded field is not sortable on every entity (Run has no
+ * `createdAt` sort) and a blanket direction opens name rosters Z-to-A.
  */
 export const defaultSortState = (
-  initialSort?: string,
-  initialSortDesc = true,
-): SortingState => [{ id: initialSort ?? "createdAt", desc: initialSortDesc }];
+  initialSort: string,
+  initialSortDesc: boolean,
+): SortingState => [{ id: initialSort, desc: initialSortDesc }];

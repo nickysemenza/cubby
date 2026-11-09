@@ -193,7 +193,11 @@ describe("child workbench selection scopes", () => {
     });
     const hook = renderHook(
       ({ scope }) => {
-        const tableState = useTableState({ readUrlState: false });
+        const tableState = useTableState({
+          initialSort: "name",
+          initialSortDesc: false,
+          readUrlState: false,
+        });
         return useChildListWorkbench({
           read,
           filters: scope,

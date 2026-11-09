@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, type ReactNode } from "react";
 import { useEntityMetadata } from "~/entity/metadata";
 import { TableEmptyState } from "~/entity/table/entity-empty-states";
 import type { ListWorkbenchModel } from "~/entity/table/list-workbench";
+import { overlayTableStateOptions } from "~/entity/table/use-table-state";
 import {
   bulkActionPreview,
   type BulkActionsConfig,
@@ -162,10 +163,16 @@ export function useClientEntityList<TData extends BaseListRow>({
   const effectiveOnInspectRow =
     onInspectRow ?? (preview ? inspection.inspectRow : undefined);
   const clientTableStateOptions = useMemo(
-    () => ({
-      initialPagination: { pageIndex: 0, pageSize: DEFAULT_CLIENT_PAGE_SIZE },
-      ...tableStateOptions,
-    }),
+    () =>
+      overlayTableStateOptions(
+        {
+          initialPagination: {
+            pageIndex: 0,
+            pageSize: DEFAULT_CLIENT_PAGE_SIZE,
+          },
+        },
+        tableStateOptions,
+      ),
     [tableStateOptions],
   );
   const resolvedDeletable = useContractDeletable(entity, deletable);

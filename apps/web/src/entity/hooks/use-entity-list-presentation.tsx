@@ -14,6 +14,8 @@ import {
 } from "~/entity/sortable-fields";
 import type { RowLinkResolver } from "~/entity/table/column-helpers";
 import {
+  overlayTableStateOptions,
+  type TableStateOptions,
   type TableStateReturn,
   useTableState,
 } from "~/entity/table/use-table-state";
@@ -58,7 +60,7 @@ export function useEntityListPresentationState<TData extends BaseListRow>({
   selectionScope,
 }: {
   entity: BrowserRoutedEntity;
-  tableStateOptions?: Parameters<typeof useTableState>[0];
+  tableStateOptions?: Partial<TableStateOptions>;
   deletable?: DeletableConfig;
   bulkActions?: BulkActionsConfig<TData>;
   onInspectRow?: (row: { id?: string; original: TData }) => void;
@@ -97,14 +99,16 @@ export function useEntityListPresentationState<TData extends BaseListRow>({
   const defaultSortDesc =
     defaultSortDirectionFor(queryClient, entity) !== "asc";
   const mergedTableStateOptions = useMemo(() => {
-    const options = {
-      initialSort: defaultSort,
-      initialSortDesc: defaultSortDesc,
-      urlSync: true,
-      filterSpecs: getEntityFilters(queryClient, entity),
-      primarySearch: metadata.summary.primarySearch,
-      ...tableStateOptions,
-    };
+    const options = overlayTableStateOptions(
+      {
+        initialSort: defaultSort,
+        initialSortDesc: defaultSortDesc,
+        urlSync: true,
+        filterSpecs: getEntityFilters(queryClient, entity),
+        primarySearch: metadata.summary.primarySearch,
+      },
+      tableStateOptions,
+    );
     // The declared default filter belongs to the route's own list; a table
     // embedded beside it (no URL sync) shows what its scope names.
     return options.urlSync

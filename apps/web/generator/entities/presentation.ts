@@ -1289,6 +1289,24 @@ const validateRelationFilter = (
     );
 };
 
+/** A relation table without its own sort opens on the target's declared default. */
+const relationDefaultSort = (
+  target: {
+    key: string;
+    fieldModel: {
+      sort: Readonly<{ default: string; direction: "asc" | "desc" }> | null;
+    };
+  },
+  context: string,
+) => {
+  const sort = target.fieldModel.sort;
+  if (sort === null)
+    throw new EntityDeclarationError(
+      `${context}: ${target.key} declares no sort roster; declare the relation section's sort.`,
+    );
+  return { field: sort.default, direction: sort.direction };
+};
+
 const validateRelationPresentation = (
   target: CompiledEntity,
   section: RelationSection,
@@ -1513,10 +1531,7 @@ export function resolveRelationSectionPlans(
                   : null,
               seedMultiple: seedField?.reference?.multiple === true,
               columns: section.columns,
-              sort: section.sort ?? {
-                field: target.fieldModel.sort?.default ?? "createdAt",
-                direction: target.fieldModel.sort?.direction ?? "desc",
-              },
+              sort: section.sort ?? relationDefaultSort(target, context),
               limit: section.limit,
               pageSize: section.limit ?? 50,
               groupBy: section.groupBy,
