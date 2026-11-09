@@ -148,7 +148,11 @@ Interaction-only registry dialogs stay lazy with a local Suspense boundary
 inside their open/selected state. Loading a dialog must not suspend the action
 host or page. Feature installation stays synchronous and idempotent so child
 lookups see registered components before rendering.
-The default row inspector loads behind its own closeable panel boundary. Row
+The default row inspector loads inside its own closeable panel. Its
+code loads from an effect, reusing the resolved component on remount. Keep its
+loading panel outside Suspense: a code-only fallback can delay the independent
+record and summary reveals by React's retry throttle. Import failures rethrow
+to the host page's error boundary. Row
 intent warms its code with the existing detail prefetch; opening starts both
 together so the lazy module does not delay the record read. Custom inspectors
 and phone detail navigation do not preload the default inspector. Exception
