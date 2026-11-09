@@ -11,7 +11,7 @@ const log = createLogger("job-maintenance");
 export async function maintainJobs(db: Database) {
   const repair = await repairImageProcessingExecution(db, 500);
   const pruned = await pruneFinishedJobs(db, { limit: 2_000, now: new Date() });
-  const expired = await expireUnreviewedSuggestions(db, { limit: 500 });
+  const expired = await expireUnreviewedSuggestions(db, { limit: 5_000 });
   log.info("job maintenance", { repair, pruned, expired });
   return { repair, pruned, expired };
 }

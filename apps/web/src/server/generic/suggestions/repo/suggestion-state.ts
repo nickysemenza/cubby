@@ -298,6 +298,9 @@ export async function repointSuggestionTargetsTx(
   );
 }
 
+/** Rows per locked transition inside one expiry batch. */
+const EXPIRY_CHUNK = 500;
+
 /** A pending field opinion nobody reviewed stops being offered after this long. */
 const UNREVIEWED_SUGGESTION_TTL_MS = 14 * 24 * 60 * 60_000;
 
@@ -340,17 +343,21 @@ export async function expireUnreviewedSuggestions(
     )
     .orderBy(suggestionTable.createdAt)
     .limit(limit);
-  if (!stale.length) return 0;
-  const expired = await transitionSuggestionStates(
-    db,
-    and(
-      inArray(
-        suggestionTable.id,
-        stale.map((row) => row.id),
+  let expired = 0;
+  // Small transitions keep each locked set and update statement bounded.
+  for (let offset = 0; offset < stale.length; offset += EXPIRY_CHUNK) {
+    const rows = await transitionSuggestionStates(
+      db,
+      and(
+        inArray(
+          suggestionTable.id,
+          stale.slice(offset, offset + EXPIRY_CHUNK).map((row) => row.id),
+        ),
+        eq(suggestionTable.status, "pending"),
       ),
-      eq(suggestionTable.status, "pending"),
-    ),
-    { active: false, status: "superseded" },
-  );
-  return expired.length;
+      { active: false, status: "superseded" },
+    );
+    expired += rows.length;
+  }
+  return expired;
 }
