@@ -10,10 +10,9 @@ import { z } from "zod";
 
 import { suggestFields } from "~/server/ai/field-suggest/suggest-fields";
 import { aiCallOwner } from "~/server/ai/policy/call-owner";
-import { resolveDraftExpenseFields } from "~/server/domains/expense/repo/expense-inheritance";
-import { resolveDraftTaskFields } from "~/server/domains/task/repo/task-project-inheritance";
 import {
   allowsPreviewSuggestionTarget,
+  type DraftSuggestionResolvers,
   draftSuggestionResolvers,
   normalizeSuggestionDraft,
   resolveSuggestionDraft,
@@ -83,12 +82,8 @@ const issueOutput = (issue: z.ZodIssue) => ({
 
 type PreviewSuggestion = z.infer<typeof previewSuggestionSchema>;
 
-export interface PreviewEntityPorts {
+export interface PreviewEntityPorts extends DraftSuggestionResolvers {
   suggest: typeof suggestFields;
-  resolveExpense: typeof resolveDraftExpenseFields;
-  resolveTask: typeof resolveDraftTaskFields;
-  /** Ported so a unit test's fake `EntityKernelContext` (no real db/actor)
-   * never exercises the real run-lookup query. */
 }
 
 const productionPreviewPorts: PreviewEntityPorts = {
