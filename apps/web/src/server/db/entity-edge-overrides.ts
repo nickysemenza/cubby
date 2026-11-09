@@ -1518,10 +1518,6 @@ export const ENTITY_EDGE_OVERRIDES = {
     }),
     ...externalIdEdgesFor("financialTransaction"),
   },
-  wish: {
-    ...edges({}),
-    ...linkEdgesFor("wish"),
-  },
   expense: {
     ...edges({
       "ImportSourceProduct.expenseId": {

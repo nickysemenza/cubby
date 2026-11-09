@@ -63,7 +63,6 @@ const fixtureOverrides = {
     attachments: [],
   },
   // Candidate rows hydrate product images over the transport; none here.
-  wish: { candidates: [], attachments: [] },
 };
 const NO_ATTACHMENTS = { attachments: [] };
 

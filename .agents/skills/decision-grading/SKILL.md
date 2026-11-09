@@ -1,13 +1,13 @@
 ---
 name: decision-grading
-description: Measure Cubby's Jev/Clef decisions and Email relevance/import outcomes from a Claude/Codex session over Cubby MCP — grade samples, replay records through each decision model, compare before/after a prompt or option change. Use when calibrating field suggestions, Email triage, the Jev/Clef traffic split, or option sets.
+description: Measure Cubby's Jev decisions and Email relevance/import outcomes from a Claude/Codex session over Cubby MCP — grade samples, replay records through the decision model, compare before/after a prompt or option change. Use when calibrating field suggestions, Email triage, or option sets.
 ---
 
 # Decision grading
 
 Use Cubby MCP for retained originals and deployed pipeline measurement. For
 prompt iteration before deployment, the local live evaluator calls the same
-Jev/Clef runner and API Gateway; it requires `AI_GATEWAY_API_KEY` through the
+decision runner and API Gateway; it requires `AI_GATEWAY_API_KEY` through the
 existing local-secret loader. Keep calls sequential and show sample sizes first.
 
 ## Rules
@@ -31,7 +31,7 @@ existing local-secret loader. Keep calls sequential and show sample sizes first.
   `purchase_import.email_reclassify` and member review/apply through `suggestions.review_batch` change
   operational authority rather than record an independent evaluation.
 
-## Field decisions (Jev vs Clef, prompts, options)
+## Field decisions (prompts, options)
 
 1. Sample `suggestions_read.list` across pending, applied, rejected
    and superseded statuses with `family: "field"`. Field rows are the one family
@@ -49,11 +49,11 @@ existing local-secret loader. Keep calls sequential and show sample sizes first.
    `entityId`, `targets: [field]`, `basisMode: "provided"`, captured declared
    basis fields (excluding the target value for set suggestions, preserving
    captured target entries for prune suggestions because they are the candidates), and
-   `decisionModel` `typesafe/jev`, then `@cf/cloudflare/clef`.
+   `decisionModel` `typesafe/jev` (text decisions run on Jev; Clef serves only image questions).
    `suggested` skips already-resolved fields; an empty basis gives `no_signal`.
    Report allocated/ineligible targets separately rather than treating a skip
    as a model abstention.
-3. Score per field × model: accuracy against independent grades and member
+3. Score per field: accuracy against independent grades and member
    labels separately, repeat misses (same
    wrong value as the stored rejection), mean confidence when right vs wrong,
    and how often confidence ≥ 0.85 was wrong.
@@ -79,7 +79,7 @@ existing local-secret loader. Keep calls sequential and show sample sizes first.
    contract after scoring, preserve the original blind grades and report the
    policy-adjusted scores separately.
 3. `purchase_import_read.mail_triage_preview` runs the deployed full classification on one
-   Email: Jev/Clef followed by Luna only after uncertainty (optionally pin
+   Email: Jev followed by Luna only after uncertainty (optionally pin
    `decisionModel`). It publishes no Email changes; its diagnostic Run records
    model usage. Read `triage` separately from the final classification, and inspect
    `imageEvidence` and `usage` for image refusals, readability, bytes and costs.
@@ -183,11 +183,11 @@ Without a draft it checks only the checked-out prompt. Edit the prompt locally
 and rerun to iterate without deploying. Synthetic
 originals pass through the real normalizer and compactor, including the request
 budget. CI sets `MAIL_PROMPT_BASELINE_ONLY=1` and checks the production prompt
-through both models on manual CI dispatch only. The informational job is outside
+through Jev on manual CI dispatch only. The informational job is outside
 the required merge gate; fork PRs never receive the gateway credential.
 
 `MAIL_PROMPT_EVAL_STAGE=relevance` selects real Luna fallback calls;
-`both` also runs Jev/Clef, and the default `decision` keeps the CI suite small.
+`both` also runs the decision stage, and the default `decision` keeps the CI suite small.
 Fallback reports distinguish raw model choices from completeness-guarded results.
 Calls use the production feature/schema with no database usage context; this is
 prompt measurement, not production execution-authorization or accounting parity.

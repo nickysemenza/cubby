@@ -85,7 +85,6 @@ export type RippleKey =
   | "ledgerParty"
   | "ledgerTransfer"
   | "financialTransaction"
-  | "wish"
   | "sourceTransactionRecord"
   | "shipment"
   | "problems";

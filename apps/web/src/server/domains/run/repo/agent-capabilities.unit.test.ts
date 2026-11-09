@@ -41,7 +41,7 @@ describe("import run capabilities", () => {
     expect(() =>
       assertRunCapability(
         "photo_inventory",
-        capabilityForPurchaseAgentAction("photo_run.commit_group"),
+        capabilityForPurchaseAgentAction("run.commit_group"),
       ),
     ).not.toThrow();
     expect(() =>

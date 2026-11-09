@@ -160,7 +160,7 @@ describe("import run agent manifest", () => {
       const readers =
         purpose === "mail_import"
           ? ["purchase_import", "finance", "shipments"]
-          : ["entity", "photo_run"];
+          : ["entity", "run"];
       for (const tool of catalog)
         expect(envelope.has(tool.name), `${purpose} ${tool.name}`).toBe(
           readers.includes(tool.name),

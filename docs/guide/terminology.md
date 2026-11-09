@@ -456,7 +456,7 @@ Three verbs that all _bring data in_ but mean different things:
 - **Import** — pulling a _recipe_ in from an external source and converting it
   into Cubby's shape (`ImportRecipe → RecipeCreateInput`, then upsert). Sources
   are tagged via `Recipe.sourceType` — see below.
-  Code: `import-recipe-convert.ts`, `upsertImportRecipe`, the `recipe_insights.import_from_url`
+  Code: `import-recipe-convert.ts`, `upsertImportRecipe`, the `nutrition.import_from_url`
   MCP tool.
 - **Enrich** — the optional **service layer** augmenting an entity with derived
   / external data _after_ it exists (the architecture's
@@ -648,7 +648,7 @@ One registered native app instance on a phone or Mac, identified independently o
 _Avoid_: session, connection, install id
 
 **Entity Link**:
-A named pairing of two entities with no meaning beyond the pairing: a wish's candidate Product, the Products a purchase bought, a kit's component with a count, a task blocked by another. Removing a link removes neither entity, and a link is never a place to keep money.
+A named pairing of two entities with no meaning beyond the pairing: the Products a purchase bought, a kit's component with a count, a task blocked by another. Removing a link removes neither entity, and a link is never a place to keep money.
 _Avoid_: join row, edge table
 
 **External Identifier**:
@@ -825,11 +825,11 @@ dismissal anywhere in its history keeps later publications out of it.
 _Avoid_: bucket, key (alone)
 
 **Decision model**:
-The closed-set classifier behind every Suggestion and Mail triage: Jev or
-Clef, chosen by the trial split (unpinned field decisions hash their input, so a
-repeated question reuses one model). Stored stages and user-facing text
+The closed-set classifier behind every Suggestion and Mail triage: Jev for
+text, Clef only for questions with images. The model is a constant
+(`DECISION_MODEL`), not a traffic split. Stored stages and user-facing text
 say "decision"; the record's `model` names which one answered.
-_Avoid_: Jev (when either model may have answered)
+_Avoid_: Jev (when Clef may have answered an image question)
 
 **Correction**:
 A Suggestion whose value differs from the record's current value.

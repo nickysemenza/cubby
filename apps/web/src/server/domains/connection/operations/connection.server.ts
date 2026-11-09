@@ -1,12 +1,7 @@
-import { parseEntityRef, runShortcode } from "@cubby/schemas/identifiers";
-
 import { connectionContract } from "~/contracts/entity-graph.contract";
-import { readAiRefreshActivation } from "~/server/ai/repo/ai-refresh";
 import { readEntityConnections } from "~/server/domains/connection/repo/entity-connections";
-import { scheduleConnectionRefresh } from "~/server/domains/run/repo/connection-refresh";
-import { lookupShortcodes } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { discoverEmailPurchaseConnections } from "~/server/domains/connection/service/email-purchase-discovery";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
-import { launchWorkflowRun } from "~/server/workflows/runs/lifecycle";
 
 export const connectionHandlers = implementOperationDomain(connectionContract, {
   read: async (context, source) => ({
@@ -14,42 +9,14 @@ export const connectionHandlers = implementOperationDomain(connectionContract, {
     proposals: await readEntityConnections(context.db, source),
   }),
   discover: async (context, source) => {
-    const activation = await readAiRefreshActivation(context.db);
-    if (!activation?.enabled)
-      throw new Error(
-        "Connection discovery requires an active AI refresh generation",
-      );
-    const scheduled = await scheduleConnectionRefresh(
-      context.db,
-      source,
-      context.actorContext,
-    );
-    if (scheduled.kind === "deferred")
-      throw new Error(
-        scheduled.reason === "scheduling_busy"
-          ? "AI refresh scheduling is busy; retry connection discovery shortly."
-          : "AI refresh execution capacity is busy; retry connection discovery after active refresh work finishes.",
-      );
-    if (scheduled.kind === "stopped") throw new Error(scheduled.diagnostic);
-    const runId = scheduled.runId;
-    // Nothing else starts a member's discovery Run promptly; a shared Run
-    // already in flight makes this a no-op.
-    if (runId)
-      await launchWorkflowRun(context.db, {
-        runId,
-        purpose: "ai_refresh",
-        automatic: true,
-      });
-    const codes = runId
-      ? await lookupShortcodes(context.db, [parseEntityRef("run", runId)])
-      : new Map<string, string>();
-    const discoveryRunId = runId
-      ? runShortcode.parse(codes.get(`run:${runId}`))
-      : null;
+    // Only Email and Purchase records have a discoverable relation (the Email
+    // purchase link); other sources return their stored proposals unchanged.
+    if (source.entityKind === "email" || source.entityKind === "purchase")
+      await discoverEmailPurchaseConnections(context.db, source);
     return {
       source,
       proposals: await readEntityConnections(context.db, source),
-      discoveryRunId,
+      discoveryRunId: null,
     };
   },
 });

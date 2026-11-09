@@ -13,7 +13,7 @@ revised retroactively, name the Product for that particular meal/date and use
 explicit `labelNutrition`. Nutrient-free items need a serving mass and all-zero
 macros, rather than `usdaUnavailable`, to clear recipe coverage.
 
-`recipe_insights_read.costing_explanation` identifies missing price, weight, and nutrients. A
+`nutrition_read.costing_explanation` identifies missing price, weight, and nutrients. A
 price per `each` needs mappings all the way from the recipe unit: `1 scoop = 5
 g` is insufficient without the package mapping such as `1 each = 500 g`.
 Volume units likewise need a path to grams. Persisted totals recompute on the

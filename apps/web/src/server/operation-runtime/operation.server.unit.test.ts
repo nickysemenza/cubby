@@ -321,7 +321,7 @@ describe("executeOperation", () => {
       headers: new Headers({
         "x-cubby-operation": "entity.detail",
         "x-cubby-operation-kind": "query",
-        "x-cubby-operation-entity": "wish",
+        "x-cubby-operation-entity": "location",
       }),
     };
 

@@ -61,8 +61,8 @@ export function currentWorkItemMessages(
   ];
 }
 
-const PHOTO_READ = "mcp__cubby__photo_run_read";
-const PHOTO_WRITE = "mcp__cubby__photo_run";
+const PHOTO_READ = "mcp__cubby__run_read";
+const PHOTO_WRITE = "mcp__cubby__run";
 const photoPage = z.object({
   remaining: z.literal(true),
   images: z.array(z.object({ id: z.string() })),
@@ -122,7 +122,7 @@ export function currentPhotoWorkItemMessages(
         role: "user",
         timestamp: 0,
         content:
-          "Reload durable photo grouping progress before further work: call photo_run_read run_context with remaining: true and no cursor. It returns only uncovered photos and the saved mutable boundary group. Keep member and settled decisions unchanged. Earlier tool evidence remains in the Run transcript.",
+          "Reload durable photo grouping progress before further work: call run_read run_context with remaining: true and no cursor. It returns only uncovered photos and the saved mutable boundary group. Keep member and settled decisions unchanged. Earlier tool evidence remains in the Run transcript.",
       },
     ];
   }

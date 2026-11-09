@@ -533,7 +533,7 @@ export const RUN_KINDS = {
       exclusions:
         "Unselected families and candidates rejected by their owning eligibility rules are excluded.",
       effects:
-        "Checks transfer pairs, statement matches, connections and fields, and publishes Suggestions under each family’s policy.",
+        "Checks statement matches and fields, and publishes Suggestions under each family’s policy.",
       dependencies:
         "Current financial and record evidence, declared family rules and configured decision models.",
       cost: "AI labeling and evaluation steps use the configured funding policy.",
@@ -545,39 +545,7 @@ export const RUN_KINDS = {
     trigger: "member",
     execution: "steps",
     progress: "steps",
-    // Statement evidence consumes the transfer family's descriptor labels, so
-    // transfer steps come first.
     steps: [
-      {
-        key: "transfer_pair_scan",
-        label: "Transfer pairs: scan",
-        purpose:
-          "Scans each candidate movement for matching legs and publishes pairs.",
-        action: "Scanning movements",
-        unit: "movements",
-        input: counted,
-        family: "transfer_pair",
-        results: { family: "transfer_pair" },
-      },
-      {
-        key: "transfer_pair_retire",
-        label: "Transfer pairs: retire",
-        purpose: "Retires pending pairs that are no longer candidates.",
-        action: "Rechecking pending pairs",
-        unit: "pairs",
-        input: counted,
-        family: "transfer_pair",
-      },
-      {
-        key: "transfer_pair_label",
-        label: "Transfer pairs: label",
-        purpose: "Asks the decision model to label each pair's movement.",
-        action: "Labelling pairs",
-        unit: "pairs",
-        input: counted,
-        family: "transfer_pair",
-        results: { family: "transfer_pair" },
-      },
       {
         key: "statement_generate",
         label: "Statements: match",
@@ -606,26 +574,6 @@ export const RUN_KINDS = {
         input: counted,
         family: "statement_transaction",
         results: { family: "statement_transaction" },
-      },
-      {
-        key: "connection_roster",
-        label: "Connections: roster",
-        purpose:
-          "Queues an evaluation for each record whose connection inputs changed.",
-        action: "Queueing records",
-        unit: "records",
-        input: counted,
-        family: "recommendation",
-      },
-      {
-        key: "connection_evaluate",
-        label: "Connections: evaluate",
-        purpose: "Evaluates each queued record for connections.",
-        action: "Waiting for evaluations",
-        unit: "evaluations",
-        input: counted,
-        family: "recommendation",
-        results: { family: "recommendation" },
       },
       {
         key: "field_roster",

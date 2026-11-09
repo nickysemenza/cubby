@@ -40,7 +40,7 @@ export const ingredientContract = defineContract(
     recipeUsages: query({
       exposure: "capability",
       description:
-        "Reverse lookup: every recipe that uses an ingredient, with each line's `lineId` for recipe_insights.patch_line.",
+        "Reverse lookup: every recipe that uses an ingredient, with each line's `lineId` for nutrition.patch_line.",
       input: schemas.ingredientIdInput,
       output: schemas.ingredientRecipeUsagesOut,
       cache: { tags: [["ingredient", "recipeUsages"], ["recipe"]] },
@@ -62,5 +62,5 @@ export const ingredientContract = defineContract(
       invalidates: ["ingredientMerge"],
     }),
   },
-  { exposure: "view", mcpToolGroup: "recipe_insights" },
+  { exposure: "view", mcpToolGroup: "nutrition" },
 );

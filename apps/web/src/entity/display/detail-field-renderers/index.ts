@@ -22,7 +22,6 @@ import { productDetailFields } from "./product";
 import { recipeDetailFields } from "./recipe";
 import { runDetailFields } from "./run";
 import { renderSpendingCategorySummary } from "./spending-category-summary";
-import { wishDetailFields } from "./wish";
 
 export type EntityDetailFieldRenderers<E extends GenericDetailEntity> =
   Readonly<Record<DetailRendererId<E>, DetailFieldRenderer<DetailRecordOf<E>>>>;
@@ -119,9 +118,6 @@ const buildDetailRendererCoverage = () => {
         ledgerTransferDetailFields["ledger-transfer-classification"],
       ),
     },
-    wish: {
-      "wish-candidates": implemented(wishDetailFields["wish-candidates"]),
-    },
     image: {
       "image-capture-location": implemented(
         imageDetailFields["image-capture-location"],
@@ -166,8 +162,6 @@ const detailCoverageFor = (
       return coverage.financialTransaction;
     case "ledgerTransfer":
       return coverage.ledgerTransfer;
-    case "wish":
-      return coverage.wish;
     case "image":
       return coverage.image;
     default:

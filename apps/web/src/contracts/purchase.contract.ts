@@ -179,5 +179,5 @@ export const purchaseContract = defineContract(
       invalidates: ["purchase"],
     }),
   },
-  { exposure: "view", mcpToolGroup: "expenses" },
+  { exposure: "view", mcpToolGroup: "finance" },
 );

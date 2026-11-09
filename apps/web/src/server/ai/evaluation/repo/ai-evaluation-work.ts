@@ -234,35 +234,6 @@ export async function aiEvaluationPageHeld(db: Database, token: string) {
   return Boolean(row);
 }
 
-/** Hold items waiting on upstream coverage, without spending an attempt. */
-export async function waitAiEvaluations(
-  tx: Database,
-  items: readonly DrainItem[],
-  token: string,
-  cause: string,
-  delayMs: number,
-) {
-  if (!items.length) return;
-  await getDb(tx)
-    .update(aiEvaluation)
-    .set({
-      runAt: new Date(Date.now() + delayMs),
-      waitCause: cause,
-      leaseToken: null,
-      leaseUntil: null,
-    })
-    .where(
-      and(
-        inArray(
-          aiEvaluation.id,
-          items.map((item) => item.ref),
-        ),
-        sql`${aiEvaluation.leaseToken} = ${token}::uuid`,
-        sql`NOT ${aiEvaluation.leaseStale}`,
-      ),
-    );
-}
-
 /** One page's view of a feature's owed evaluations, claimed under `token`. */
 export const aiEvaluationStore = (
   feature: string,

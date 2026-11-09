@@ -8,7 +8,9 @@ import {
   sweepRunInput,
   SWEEP_FAMILY_LABEL,
   runWorkLabel,
-  type SweepFamilyScope,
+  type StoredSweepFamilyScope,
+  RETIRED_SWEEP_FAMILY_LABEL,
+  isExecutableSweepFamily,
 } from "@cubby/schemas/run-fields";
 import { runStepMeta } from "@cubby/schemas/run-step";
 import {
@@ -42,6 +44,11 @@ type InputListHref = (
 type PlanTableRow = Extract<ReportBlock, { kind: "table" }>["rows"][number];
 
 function stepState(step: PlanStep | undefined) {
+  if (step && runStepMeta.safeParse(step.meta).data?.retired)
+    return {
+      label: "Retired",
+      state: "not_reached",
+    } satisfies { label: string; state: ReportRowState };
   if (!step || step.state === "queued")
     return {
       label: step && step.pages > 0 ? "Queued to resume" : "Not started",
@@ -112,8 +119,14 @@ export function declaredRunSteps(
   );
 }
 
+const sweepFamilyLabel = (entry: StoredSweepFamilyScope) =>
+  isExecutableSweepFamily(entry)
+    ? SWEEP_FAMILY_LABEL[entry.family]
+    : `${RETIRED_SWEEP_FAMILY_LABEL[entry.family]} (retired)`;
+
 /** Scope summaries expose the extent of a selection, never private source identifiers. */
-function scopeLabel(entry: SweepFamilyScope) {
+function scopeLabel(entry: StoredSweepFamilyScope) {
+  if (!isExecutableSweepFamily(entry)) return "Retired, not run";
   const scope = entry.scope;
   const parts: string[] = [];
   if ("accountIds" in scope && scope.accountIds)
@@ -121,8 +134,6 @@ function scopeLabel(entry: SweepFamilyScope) {
   if ("importId" in scope && scope.importId) parts.push("Selected import");
   if ("since" in scope && scope.since)
     parts.push(`Since ${formatCalendarDay(scope.since, "dateShort")}`);
-  if ("entityKinds" in scope && scope.entityKinds)
-    parts.push(scope.entityKinds.join(", "));
   if ("targets" in scope && scope.targets)
     parts.push(
       ...scope.targets.map(
@@ -247,7 +258,7 @@ export function runPlanBlocks(
   return [
     {
       kind: "note",
-      text: `${runWorkLabel(run)}${run.purpose === "sweep" ? " · Purpose: Sweep" : ""}${families ? ` · Selected families: ${families.map((entry) => SWEEP_FAMILY_LABEL[entry.family]).join(", ")}` : run.purpose === "sweep" ? " · Selected families unavailable in historical input" : ""}`,
+      text: `${runWorkLabel(run)}${run.purpose === "sweep" ? " · Purpose: Sweep" : ""}${families ? ` · Selected families: ${families.map((entry) => sweepFamilyLabel(entry)).join(", ")}` : run.purpose === "sweep" ? " · Selected families unavailable in historical input" : ""}`,
     },
     {
       kind: "table",

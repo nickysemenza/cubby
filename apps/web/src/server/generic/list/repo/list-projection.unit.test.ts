@@ -14,7 +14,6 @@ import { ingredientListReadProjection } from "~/features/ingredient/list-read";
 import { inventoryListReadProjection } from "~/features/inventory/list-read";
 import { locationListReadProjection } from "~/features/location/list-read";
 import { mealListReadProjection } from "~/features/meal/list-read";
-import { wishListReadProjection } from "~/features/wish/list-read";
 import { db } from "~/server/db";
 import { ENTITY_REPOSITORY_READ_SCHEMAS } from "~/server/generated/entity-bindings.gen";
 import {
@@ -224,7 +223,6 @@ describe("list projection group execution", () => {
       ["meal", mealListReadProjection],
       ["expense", expenseListReadProjection],
       ["inventory", inventoryListReadProjection],
-      ["wish", wishListReadProjection],
     ]);
     for (const entity of listEntities) {
       const visibility = Object.fromEntries(

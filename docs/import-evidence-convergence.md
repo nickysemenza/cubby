@@ -1409,9 +1409,9 @@ filtering a group with `where {account: {in: [FAC-…]}, month: {in: [YYYY-MM]}}
    `finance.book_transaction` as `economicRole: "reimbursement"`.
 5. A `transfer` names the member's own balance account a cash-out or funding
    descriptor points at (Venmo-style and payout balances are `stored_value`;
-   PayPal is read like a card). Review the `transfer_pair` family on the global
-   Suggestions page or through `suggestions_read.list`; find pairs with
-   `run.sweep {families: [{family: "transfer_pair"}]}`. Accept using verdict
+   PayPal is read like a card). Existing `transfer_pair` Suggestions stay reviewable on the global
+   Suggestions page or through `suggestions_read.list`; Sweeps no longer generate
+   new ones (#3899). Accept using verdict
    `correct`, intent `apply`, `expectedFingerprint` and `application {kind:
    "transfer_pair"}`. It creates missing statement-backed legs and accepts the
    pair atomically. The family and statement creates share the

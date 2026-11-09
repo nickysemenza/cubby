@@ -688,7 +688,7 @@ struct GenericEntityEditModelTests {
         #expect(model.visibleFields.allSatisfy { $0.inCreate && $0.controlKind != nil })
     }
 
-    @Test(arguments: [EntityKey.ingredient, .wish, .meal])
+    @Test(arguments: [EntityKey.ingredient, .meal])
     func smallEditorsUseOneMainSection(key: EntityKey) throws {
         let model = GenericEntityEditModel(
             descriptor: EntityCatalog[key], mode: .create(prefill: [:]), client: try makeClient())

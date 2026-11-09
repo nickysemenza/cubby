@@ -781,3 +781,45 @@ data, verify text/hash/time/provenance and full archived JSON, exercise refusal,
 and roll back. After the matching deployment, verify the four Image columns,
 archive parity, absence of live family rows, selected description reads and
 `image.confirm_description`. Old Suggestion review requests for images are unsupported.
+
+## Retiring cut features (`20261109191634_retire_cut_features`, #3899)
+
+One staged, non-graceful cutover. The migration deletes undecided machinery
+output, retires Wish and drops the archived review ledgers. It keeps every
+decided or applied Suggestion, every `Run` (AiUsage cost evidence), every failed
+Job of a mail or member-requested Run, and every `archive` money preimage. It
+deletes, and cannot undo:
+
+- undecided, unapplied `Suggestion` rows of `product_pair`, `transfer_pair`,
+  `product.tag-propagation` and `connection.*` except `connection.email-purchase`;
+- `AiEvaluation` rows (and their requests) with `connection`, `product` or
+  `product_pair` targets; queued or blocked Email evaluations of `ai_refresh`
+  Runs become `obsolete`;
+- failed `run.execute` Jobs of scheduled, failed `ai_refresh` Runs;
+- every Wish `Entity`, its `Wish` row, links, audit rows, search documents and
+  embeddings (AiUsage keeps its row with the attribution cleared);
+- `archive."Feedback"`, `"AssessmentState"` and `"Assessment"`;
+- the retired connection-discovery cursor in `AppSettings`.
+
+Sequence:
+
+1. Set the `cloudflare` Environment variable `PRODUCTION_MIGRATION_THROUGH` to
+   `20261109072002_run_finding_conflict_payload`, then merge. Actions applies
+   nothing newer and deploys the Worker that no longer reads or writes the cut
+   features. Admit no other `main` merge or Deploy retry until the cutover ends.
+2. Snapshot Neon: `neon snapshots create --name retire-cut-features-<date>`.
+   The archive drop and Wish deletion are not reversible otherwise.
+3. Apply through the new tag from the matching checkout with the production
+   migration runner, `through: "20261109191634_retire_cut_features"`.
+4. Read back: no `Entity` row of kind `wish` and no `Wish` table; no `Suggestion`
+   of `product_pair`/`transfer_pair` with an empty `decisions` and a status other
+   than `applied`; no `recommendation` scope except `connection.email-purchase`
+   without a decision or application; no `AiEvaluation` with a `connection`,
+   `product` or `product_pair` target; the `Run` and `AiUsage` counts equal the
+   pre-migration counts; `archive` holds no `Feedback`, `Assessment` or
+   `AssessmentState` and still holds every `*_preimage` table.
+5. Delete `PRODUCTION_MIGRATION_THROUGH` before the next release and confirm one
+   `email-purchase-discovery` drain pass completes.
+
+`apps/web/tooling/retire-cut-features-migration.integration.test.ts` pins the
+keep/delete rules on synthetic rows.

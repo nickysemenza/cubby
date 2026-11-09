@@ -57,18 +57,6 @@ describe("declared value rosters (display.valueOptions)", () => {
     );
   });
 
-  it("tones a derived status from the declaration", () => {
-    render(
-      renderOptionCell(
-        "acquired",
-        fieldEnumOptions(queryClient, "wish", "acquiredAt"),
-      ),
-    );
-
-    expect(pillFor("Acquired")).toHaveAttribute("data-enum-role", "status");
-    expect(pillFor("Acquired")).toHaveClass("bg-positive-surface");
-  });
-
   // Capture attribution is server-derived; reproducing ambiguous attribution needs an image
   // provenance workflow, so this guards its generic renderer independently of that workflow.
   it("renders image attribution with a schema-derived label and warning color", () => {

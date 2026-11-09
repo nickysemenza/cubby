@@ -28,15 +28,6 @@ import {
 } from "~/server/domains/product/repo/product-variant-evidence";
 import { canonicalJson } from "~/server/lib/canonical-json";
 
-/**
- * Product identity evidence: the frozen per-Product snapshot, the prepared
- * pair a decision compares, and the queued pair work. No model calls; the
- * decision itself is `ai/product-identity.ts`.
- */
-export async function productIdentitySnapshot(db: Database, id: ProductId) {
-  return (await productIdentitySnapshots(db, [id])).get(id) ?? null;
-}
-
 export type ProductIdentitySnapshot = {
   snapshot: z.infer<ReturnType<typeof z.json>>;
   fingerprint: string;
@@ -221,7 +212,7 @@ async function productIdentityPairFromSnapshots(
 }
 
 /** One bounded history load for every canonical pair in the snapshot union. */
-export async function productIdentityPairsFromSnapshots(
+async function productIdentityPairsFromSnapshots(
   db: Database,
   ids: readonly ProductIdentityPairIds[],
   snapshots: ReadonlyMap<ProductId, ProductIdentitySnapshot>,

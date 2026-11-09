@@ -196,7 +196,7 @@ describe("stampGeneration", () => {
 
 it("acknowledges photo publication without replaying the whole pending roster", () => {
   const output = photoCoordinatorToolResult(
-    "photo_run",
+    "run",
     {
       action: "propose_groups",
       groups: [{ groupKey: "boundary" }],

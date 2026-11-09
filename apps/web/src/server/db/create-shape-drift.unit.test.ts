@@ -111,7 +111,6 @@ const VIRTUAL_CREATE_INPUTS: EntityFieldNotes = {
   planting: {
     season: "stored as the sowedOn + finishedOn column pair",
   },
-  wish: { candidateProductIds: "writes wishCandidate EntityLink rows" },
 };
 
 /**

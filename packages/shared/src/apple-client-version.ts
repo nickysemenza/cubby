@@ -4,7 +4,7 @@
  * be unsafe; a changed read or wire shape alone does not require it. Raising
  * it publishes TestFlight promptly so a compatible build exists.
  */
-export const APPLE_CLIENT_MINIMUM_VERSION = "2.71.0";
+export const APPLE_CLIENT_MINIMUM_VERSION = "2.72.0";
 
 /**
  * The marketing version TestFlight builds carry; each upload gets a new build
@@ -12,4 +12,4 @@ export const APPLE_CLIENT_MINIMUM_VERSION = "2.71.0";
  * {@link APPLE_CLIENT_MINIMUM_VERSION}. Publish promptly with a workflow
  * dispatch, not a bump.
  */
-export const APPLE_MARKETING_VERSION = "2.71.0";
+export const APPLE_MARKETING_VERSION = "2.72.0";

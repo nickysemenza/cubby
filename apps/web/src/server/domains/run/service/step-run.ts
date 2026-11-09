@@ -8,6 +8,7 @@ import {
   sweepRunInput,
   type RunStepDeclaration,
 } from "@cubby/schemas/run-fields";
+import { runStepMeta } from "@cubby/schemas/run-step";
 import type {
   RunStepCounts,
   RunStepError,
@@ -514,8 +515,12 @@ async function finishStepRun(
   steps: readonly RunStepRow[],
   attempt: number,
 ) {
-  const failed = steps.filter((step) => step.state === "failed");
-  const worked = steps.some((step) => step.done + step.failed > 0);
+  // A retired step (removed family) never ran, so it is neither work nor a counted step.
+  const live = steps.filter(
+    (step) => !runStepMeta.safeParse(step.meta).data?.retired,
+  );
+  const failed = live.filter((step) => step.state === "failed");
+  const worked = live.some((step) => step.done + step.failed > 0);
   const finished = await finishStepRunRow(db, owner.id, attempt, {
     failedLabels: failed.map((step) => step.label),
     routine: owner.trigger === "scheduled" && !worked,
@@ -526,8 +531,8 @@ async function finishStepRun(
     owner.id,
     "finished",
     failed.length
-      ? `Finished · ${failed.length} of ${steps.length} steps with failures`
-      : `Finished · ${steps.length} steps`,
+      ? `Finished · ${failed.length} of ${live.length} steps with failures`
+      : `Finished · ${live.length} steps`,
     { attempt, sequence: Number.MAX_SAFE_INTEGER },
   );
 }

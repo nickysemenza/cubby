@@ -97,7 +97,7 @@ export const aiContract = defineContract(
       invalidates: [],
     }),
     suggestUsdaFood: mutation({
-      note: "Agents rank with usda_food.suggest_for_product",
+      note: "Agents rank with product_enrichment_read.suggest_for_product",
       input: usdaFoodSuggestionInput,
       output: usdaFoodSuggestionOut,
       invalidates: [],

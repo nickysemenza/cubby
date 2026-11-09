@@ -137,12 +137,15 @@ describe("Run decision outcomes", () => {
       { purpose: "sweep", status: "running", steps: [] },
       undefined,
       Date.now(),
-      { kind: "sweep", families: [{ family: "transfer_pair", scope: {} }] },
+      {
+        kind: "sweep",
+        families: [{ family: "statement_transaction", scope: {} }],
+      },
     );
     expect(overview.steps.map((step) => step.key)).toEqual([
-      "transfer_pair_scan",
-      "transfer_pair_retire",
-      "transfer_pair_label",
+      "statement_generate",
+      "statement_holds",
+      "statement_label",
     ]);
     expect(overview.current?.phase).toBe("not_started");
     expect(overview.current?.total).toBeNull();

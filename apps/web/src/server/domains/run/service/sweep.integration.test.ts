@@ -35,10 +35,7 @@ import {
 import { labelStatementSuggestions } from "~/server/domains/transaction-import/service/statement-suggestion-labels";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { systemPrincipal } from "~/server/http/authenticate";
-import {
-  drainDerivedRefreshFrontier,
-  withJobFixtureExecution,
-} from "~/server/testing/background-queue";
+import { withJobFixtureExecution } from "~/server/testing/background-queue";
 
 import { ensureRun } from "../repo/ensure-run";
 import { readRunSteps, recordRunStepPage } from "../repo/run-step";
@@ -801,71 +798,39 @@ describe("Sweeps", () => {
       .from(run)
       .where(eq(run.parentRunId, runId as never));
 
-  // Failure modes: a connection Sweep re-evaluates sources whose evidence has
-  // not changed since they were last scanned, or parks its evaluations on a
-  // child Run that holds AI refresh capacity (#2873).
-  it("queues connection evaluations on the Sweep once and skips them on a repeat Sweep", async () => {
-    await activateAiRefresh(ctx.db, "synthetic-sweep-connections", {
-      enabled: true,
-    });
-    await createRepoEntity(ctx, "project", { name: "Synthetic shed repair" });
-    await createRepoEntity(ctx, "project", { name: "Synthetic fence repair" });
-    await drainDerivedRefreshFrontier(ctx.db);
-    const families = [
-      {
-        family: "recommendation" as const,
-        scope: { entityKinds: ["project"] },
-      },
+  // Retired families stay readable in stored inputs but never plan or run.
+  it("plans only the surviving steps of a Sweep that stored retired families", async () => {
+    // Start a real Sweep, then store the historical input over its own.
+    const stored = async (families: unknown[]) => {
+      const runId = await startSweep(ctx.db, ctx.actor, {
+        trigger: "manual",
+        families: [{ family: "statement_transaction", scope: {} }],
+      });
+      await getDb(ctx.db)
+        .update(run)
+        .set({ input: sweepRunInput.parse({ kind: "sweep", families }) })
+        .where(eq(run.id, runId));
+      return runId;
+    };
+    const retired = [
+      { family: "transfer_pair", scope: { since: "2026-01-01" } },
+      { family: "recommendation", scope: { entityKinds: ["product"] } },
     ];
-    const first = await startSweep(ctx.db, ctx.actor, {
-      trigger: "manual",
-      families,
-    });
-    expect(await drive(first)).toBe("wait");
-    const [roster, evaluate] = await readRunSteps(ctx.db, first);
-    expect(roster).toMatchObject({ state: "done", found: 2, done: 2 });
-    expect(evaluate).toMatchObject({
-      state: "running",
-      found: 2,
-      meta: { action: "Waiting for 2 of 2 evaluations" },
-    });
-    expect(await childRuns(first)).toEqual([]);
-    expect(await evaluationsOf(first)).toEqual([
-      { state: "queued", item: true },
-      { state: "queued", item: true },
+    const mixed = await stored([
+      { family: "statement_transaction", scope: {} },
+      ...retired,
     ]);
-    const second = await startSweep(ctx.db, ctx.actor, {
-      trigger: "manual",
-      families,
-    });
-    expect(await drive(second)).toBe("finished");
-    const [repeat] = await readRunSteps(ctx.db, second);
-    expect(repeat).toMatchObject({
-      state: "done",
-      found: 2,
-      skipped: 2,
-      left: 0,
-      meta: { reasons: { already_evaluated: 2 } },
-    });
-  });
-
-  // Failure mode (#2722 review): a scheduled Sweep's connection work was
-  // created manual, so its evaluations paid instead of waiting for credit.
-  it("makes a scheduled Sweep's connection evaluations background work", async () => {
-    await activateAiRefresh(ctx.db, "synthetic-sweep-background", {
-      enabled: true,
-    });
-    await createRepoEntity(ctx, "project", { name: "Synthetic gutter repair" });
-    await drainDerivedRefreshFrontier(ctx.db);
-    const runId = await startSweep(ctx.db, ctx.actor, {
-      trigger: "scheduled",
-      families: [
-        { family: "recommendation", scope: { entityKinds: ["project"] } },
-      ],
-    });
-    expect(await drive(runId)).toBe("wait");
-    const { isBackgroundRun } = await import("~/server/ai/funding");
-    expect(await isBackgroundRun(ctx.db, runId)).toBe(true);
+    expect(await drive(mixed)).toBe("finished");
+    const keys = (await readRunSteps(ctx.db, mixed)).map((step) => step.key);
+    expect(keys).toEqual(
+      expect.arrayContaining(["statement_generate", "statement_holds"]),
+    );
+    expect(keys.some((key) => /^(transfer_pair|connection)_/.test(key))).toBe(
+      false,
+    );
+    const onlyRetired = await stored(retired);
+    expect(await drive(onlyRetired)).toBe("finished");
+    expect(await readRunSteps(ctx.db, onlyRetired)).toEqual([]);
   });
 
   const fieldSweep = () =>
@@ -881,8 +846,6 @@ describe("Sweeps", () => {
       ],
     });
 
-  // Review finding: the evaluate step counted a completed evaluation as both
-  // done and skipped, so a finished step overstated its inputs.
   it("counts each settled field evaluation once", async () => {
     await createRepoEntity(ctx, "project", { name: "Synthetic porch repair" });
     const runId = await fieldSweep();

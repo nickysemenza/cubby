@@ -118,7 +118,6 @@ const productBase = rippleTags([
   ["calendar"],
   ["householdContribution"],
   ["dashboard"],
-  ["wish"],
   // DEPARTURE from the legacy row, deliberate: the Problems page's own fix
   // cards (unit coverage, missing price, duplicate identity) write products
   // through the generic entity kernel, and the always-`problems` invalidation
@@ -507,8 +506,6 @@ export const ripple = {
     ["problems"],
     ["dashboard"],
   ]),
-
-  wish: rippleTags([["wish"], ["search"], ["dashboard"]]),
 
   /** Intake changes source records, collection coverage, and dashboard counts. */
   sourceTransactionRecord: rippleTags([

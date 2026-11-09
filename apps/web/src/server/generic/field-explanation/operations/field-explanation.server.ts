@@ -223,7 +223,6 @@ const entityReferenceFromValue = (value: Json): Source["entity"] => {
     "cookbookId",
     "vendorId",
     "financialAccountId",
-    "wishId",
     "plantingId",
     "imageId",
     "projectId",

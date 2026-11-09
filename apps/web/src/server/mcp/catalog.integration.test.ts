@@ -108,7 +108,7 @@ describe("MCP catalog", () => {
     expect(analysis).toBeDefined();
     const result = await callMcpTool(
       createMcpServer(),
-      "photo_run_read",
+      "run_read",
       { action: "run_context", runId: run.publicId },
       kernelRequestContext(kernel),
       { entityKernel: kernel },
@@ -233,20 +233,20 @@ describe("MCP catalog", () => {
     // USDA is an external source; the lookup is stubbed at its service port.
     expect(
       await call(
-        "usda_food",
+        "product_enrichment_read",
         { action: "by_fdc_id", fdcId: 1_234_567 },
         {
           usdaService: fromPartial({ getFoodSummaryByID: async () => null }),
         },
       ),
     ).toEqual({ food: null });
-    expect(
-      await call("project_overview_read", { action: "budget" }),
-    ).toHaveProperty("totals");
-    expect(await call("tasks_overview", { action: "summary" })).toHaveProperty(
+    expect(await call("entity_read", { action: "budget" })).toHaveProperty(
+      "totals",
+    );
+    expect(await call("entity_read", { action: "summary" })).toHaveProperty(
       "totalOpen",
     );
-    expect(await call("recipe_insights_read", { action: "tags" })).toEqual({
+    expect(await call("nutrition_read", { action: "tags" })).toEqual({
       items: [],
     });
     expect(
@@ -308,7 +308,7 @@ describe("MCP catalog", () => {
       }),
     );
     expect(
-      await call("expenses", {
+      await call("finance", {
         action: "split_with_delta",
         expenseId: expense.id,
         parts: [
@@ -421,7 +421,7 @@ describe("MCP catalog", () => {
     ).toHaveProperty("status");
 
     const recipeId = z.object({ id: z.string() }).parse(
-      await call("recipe_insights", {
+      await call("nutrition", {
         action: "create_from_text",
         name: "Catalog toast",
         sections: [
@@ -467,7 +467,7 @@ describe("MCP catalog", () => {
         targetFingerprint: "a".repeat(64),
       });
     expect(
-      await call("photo_run", {
+      await call("run", {
         action: "propose_groups",
         runId: run.publicId,
         groups: [
@@ -721,18 +721,15 @@ describe("MCP catalog", () => {
       "entity",
       "entity_read",
       "image_read",
-      "photo_run",
-      "photo_run_read",
+      "run",
+      "run_read",
       "search_read",
     ]);
     expect(actionsOf("entity")).toEqual(["update"]);
     expect(actionsOf("entity_read")).toEqual(["resolve"]);
-    expect(actionsOf("photo_run").sort()).toEqual([
-      "describe",
-      "propose_groups",
-    ]);
+    expect(actionsOf("run").sort()).toEqual(["describe", "propose_groups"]);
     expect(actionsOf("image_read").sort()).toEqual(["describe", "status"]);
-    expect(actionsOf("photo_run_read").sort()).toEqual([
+    expect(actionsOf("run_read").sort()).toEqual([
       "describe",
       "product_candidates",
       "proposals",

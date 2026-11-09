@@ -78,13 +78,13 @@ const MAIL_IMPORT_MCP_ACTIONS = [
 ] as const satisfies readonly CubbyMcpToolAction[];
 
 const PHOTO_MCP_ACTIONS = [
-  "photo_run_read.run_context",
+  "run_read.run_context",
   "image_read.status",
-  "photo_run_read.product_candidates",
-  "photo_run_read.proposals",
+  "run_read.product_candidates",
+  "run_read.proposals",
   "entity_read.resolve",
   "search_read.similar",
-  "photo_run.propose_groups",
+  "run.propose_groups",
   "entity.update",
 ] as const satisfies readonly CubbyMcpToolAction[];
 

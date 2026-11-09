@@ -4,9 +4,9 @@ import {
   transferPairJudgment,
 } from "@cubby/schemas/transfer-pair-suggestion";
 import { onlineManager } from "@tanstack/react-query";
-import { act, render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { page, userEvent } from "vitest/browser";
+import { page } from "vitest/browser";
 import type { z } from "zod";
 
 import type { JobListOut, JobLogsOut } from "~/contracts/job.contract";
@@ -61,10 +61,7 @@ const step = (
 const steps: RunDetailStepsOut = {
   input: {
     kind: "sweep",
-    families: [
-      { family: "transfer_pair", scope: {} },
-      { family: "statement_transaction", scope: {} },
-    ],
+    families: [{ family: "statement_transaction", scope: {} }],
   },
   purpose: "sweep",
   status: "running",
@@ -78,8 +75,8 @@ const steps: RunDetailStepsOut = {
       startedAt: ago(30),
       endedAt: ago(28),
     }),
-    step("transfer_pair_scan", 2, {
-      label: "Transfer pairs: scan",
+    step("statement_holds", 2, {
+      label: "Statements: vanished holds",
       state: "running",
       found: 1_200,
       done: 300,
@@ -284,12 +281,12 @@ afterEach(() => {
 it("shows each step's own count and steps not yet counted", async () => {
   renderRun();
   const strip = await screen.findByTestId("run-step-strip");
-  expect(strip).toHaveTextContent("Step 1 of 6");
+  expect(strip).toHaveTextContent("Step 2 of 3");
   expect(strip).toHaveTextContent("no overall percentage");
   expect(strip).toHaveTextContent("Overall ETA: Unknown");
   expect(screen.getByText("Historical steps")).toBeVisible();
 
-  const current = screen.getByTestId("run-step-transfer_pair_scan");
+  const current = screen.getByTestId("run-step-statement_holds");
   // 300 done + 60 skipped + 12 removed of the frozen 1,200.
   expect(within(current).getByText("31%")).toBeVisible();
   expect(within(current).getByRole("progressbar")).toHaveAttribute(
@@ -310,87 +307,6 @@ it("shows each step's own count and steps not yet counted", async () => {
   await expect
     .element(page.getByText("Inline logs aren't configured"))
     .toBeVisible();
-});
-
-it.each([1440, 402])(
-  "filters the shared ledger and opens evidence at width %s",
-  async (width) => {
-    await page.viewport(width, 1200);
-    renderRun();
-    const ledger = await screen.findByTestId("decision-ledger");
-    expect(await within(ledger).findByText("2 of 2 decisions")).toBeVisible();
-    expect(
-      screen.queryByRole("complementary", { name: "Decision evidence" }),
-    ).toBeNull();
-
-    await userEvent.click(
-      await within(screen.getByTestId("run-step-strip")).findByRole("button", {
-        name: /needs review/i,
-      }),
-    );
-    expect(await within(ledger).findByText("1 of 2 decisions")).toBeVisible();
-    const row =
-      width >= 768
-        ? within(ledger).getByRole("row", { name: /Brokerage/ })
-        : within(ledger).getByRole("button", { name: /Brokerage/ });
-    if (width >= 768) await userEvent.click(row);
-    else {
-      row.focus();
-      await userEvent.keyboard("{Enter}");
-    }
-    const drawer = await screen.findByRole("complementary", {
-      name: "Decision evidence",
-    });
-    await waitFor(() =>
-      expect(
-        within(drawer).getByText("Transfers create no Expenses."),
-      ).toBeVisible(),
-    );
-    expect(
-      within(drawer).getAllByText(/The account owners differ/)[0],
-    ).toBeVisible();
-    await userEvent.click(
-      within(drawer).getByRole("button", { name: "Raw diagnostics" }),
-    );
-    expect(within(drawer).getByText(/"owners_differ"/)).toBeVisible();
-    await userEvent.keyboard("{Escape}");
-    await waitFor(() =>
-      expect(
-        screen.queryByRole("complementary", { name: "Decision evidence" }),
-      ).toBeNull(),
-    );
-    await userEvent.click(
-      within(ledger).getByRole("button", { name: "Clear Status filter" }),
-    );
-    expect(await within(ledger).findByText("2 of 2 decisions")).toBeVisible();
-  },
-);
-
-it("keeps earlier decision families available inside the Run", async () => {
-  renderRun();
-  const picker = await screen.findByRole("combobox", {
-    name: "Decision family",
-  });
-  await userEvent.click(picker);
-  await userEvent.click(
-    await screen.findByRole("option", {
-      name: /statement.*transaction.*suggestions/i,
-    }),
-  );
-  await waitFor(() =>
-    expect(
-      harness.queryClient.getQueryData(
-        runDetail.decisions.queryKey({
-          runId: run.id,
-          family: "statement_transaction",
-        }),
-      ),
-    ).toBeDefined(),
-  );
-  await userEvent.click(picker);
-  await userEvent.click(
-    await screen.findByRole("option", { name: /transfer candidates/i }),
-  );
 });
 
 it.each(["paused", "failed"] as const)(

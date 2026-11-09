@@ -1,11 +1,6 @@
-import { fieldValueOf } from "@cubby/schemas/field-envelope";
-import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
-import { entityApi } from "./support/entity-api";
-
 import { relationshipDiscoveryContract } from "./support/relationship-discovery-contract";
 import {
   seedPlantPrerequisite,
-  seedPlacementReviewPrerequisite,
   seedTaskPrerequisite,
 } from "./fixtures/catalog";
 import { createEntityFixtures } from "./fixtures/core";
@@ -13,68 +8,6 @@ import { escapeRegExp, gotoAuthenticatedPage } from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
 
 relationshipDiscoveryContract();
-
-test("placement acceptance follows the surviving stock row after merging", async ({
-  page,
-}) => {
-  const name = `e2e placement ${Date.now()}`;
-  const fixture = await seedPlacementReviewPrerequisite(page, name);
-  await gotoAuthenticatedPage(page, `/inventory/${fixture.source.id}`);
-  const proposals = page.getByRole("region", {
-    name: "Pending suggestions",
-    exact: true,
-  });
-  await expect(proposals).toContainText(`${name} workshop`);
-  expect(
-    (
-      await entityApi(page.request).get("inventory", fixture.source.id, {})
-    ).ok(),
-  ).toBe(true);
-  await proposals.getByRole("button", { name: "Confirm", exact: true }).click();
-  await expect(page).toHaveURL(new RegExp(fixture.destination.id));
-  const survivor = entityFieldEnvelopeSchemas.inventory.detail.pick({}).extend({
-    location: entityFieldEnvelopeSchemas.inventory.detail.shape.location.pick({
-      id: true,
-    }),
-    fields: entityFieldEnvelopeSchemas.inventory.detail.shape.fields.pick({
-      amount: true,
-    }),
-  });
-  await expect
-    .poll(
-      async () =>
-        fieldValueOf(
-          survivor.parse(
-            await (
-              await entityApi(page.request).get(
-                "inventory",
-                fixture.destination.id,
-                {},
-              )
-            ).json(),
-          ).fields.amount,
-        )?.value,
-    )
-    .toBe(2);
-  expect(
-    survivor.parse(
-      await (
-        await entityApi(page.request).get(
-          "inventory",
-          fixture.destination.id,
-          {},
-        )
-      ).json(),
-    ).location.id,
-  ).toBe(fixture.target.id);
-  expect(
-    (await entityApi(page.request).get("inventory", fixture.source.id, {}))
-      .parsedBody,
-  ).toBeNull();
-  await expect(
-    page.getByText(`${name} workshop`, { exact: true }).first(),
-  ).toBeVisible();
-});
 
 test("a large planting branch stays collapsed until requested", async ({
   page,

@@ -199,16 +199,13 @@ describe("entity list smoke — shared selection/count FROM context", () => {
       execution: false,
       input: {
         kind: "sweep",
-        families: [
-          { family: "transfer_pair", scope: {} },
-          { family: "statement_transaction", scope: {} },
-        ],
+        families: [{ family: "statement_transaction", scope: {} }],
       },
     });
     const countedAt = new Date().toISOString();
     const inputSteps = [
-      { key: "transfer_pair_scan", label: "Synthetic transfer inputs" },
       { key: "statement_generate", label: "Synthetic statement inputs" },
+      { key: "statement_holds", label: "Synthetic hold inputs" },
     ];
     await ensureRunSteps(ctx.db, inspectionRun, inputSteps);
     for (const step of inputSteps)
@@ -218,7 +215,7 @@ describe("entity list smoke — shared selection/count FROM context", () => {
           mode: "count",
           total: 0,
           countedAt,
-          boundary: step.key === "transfer_pair_scan" ? countedAt : null,
+          boundary: null,
         },
       });
     const [inspection] = await getDb(ctx.db)
@@ -293,7 +290,7 @@ describe("entity list smoke — shared selection/count FROM context", () => {
             ? {
                 ok: true as const,
                 value: fieldSchema.parse(
-                  `${inspection.code}:${entity === "financialTransaction" ? "transfer_pair_scan" : "statement_generate"}`,
+                  `${inspection.code}:${entity === "financialTransaction" ? "statement_holds" : "statement_generate"}`,
                 ),
               }
             : buildFilterSample(fieldSchema, seed, universe.shortcodeByPrefix);

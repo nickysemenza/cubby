@@ -22,8 +22,6 @@
  *    `EntityLink[projectTool].to` (a reusable tool's project-use history).
  *    `ImportSourceProduct.productId` preserves an exact original ordered line,
  *    including historical source rows; it implies no stock or financial value.
- *  - association: `EntityLink[wishCandidate].to` (a candidate alternative remains
- *    meaningful until removed from its Wishlist entries).
  *  - reference: `Location.productId` (a Location that IS this product — the
  *    bin itself) and `Cookbook.productId` (a Cookbook whose physical copy
  *    this product is — the book on the shelf behind the imported EPUB).
@@ -193,14 +191,6 @@ export const PRODUCT_DELETE_EDGE_POLICY = {
       "A product used by a live meal food entry can't be deleted because the recorded grams depend on that product's nutrition source.",
     reason: "CONSTRAINT_VIOLATION",
     label: "meal food entries",
-  },
-  "EntityLink[wishCandidate].to": {
-    code: "block-live-wishlist-candidate",
-    effect: "block",
-    description:
-      "A product on the Wishlist remains a live alternative until it is removed from every Wish.",
-    reason: "PRODUCT_HAS_WISH_CANDIDATES",
-    label: "wishlist candidates",
   },
   "EntityExternalId.entityId": {
     code: "soft-delete-metadata",

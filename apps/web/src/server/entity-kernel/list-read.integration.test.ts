@@ -20,7 +20,6 @@ import { inventoryListReadProjection } from "~/features/inventory/list-read";
 import { locationListReadProjection } from "~/features/location/list-read";
 import { mealListReadProjection } from "~/features/meal/list-read";
 import { productListReadProjection } from "~/features/product/list-read";
-import { wishListReadProjection } from "~/features/wish/list-read";
 import { getDb } from "~/server/db/helpers";
 import { upsertCookbook } from "~/server/domains/cookbook/repo/cookbook";
 import { createInventoryEntry } from "~/server/domains/inventory/repo/crud";
@@ -375,7 +374,6 @@ describe("complete list composition", () => {
       ["meal", mealListReadProjection],
       ["expense", expenseListReadProjection],
       ["inventory", inventoryListReadProjection],
-      ["wish", wishListReadProjection],
     ]);
 
     const context = buildKernelContext(ctx.db);
@@ -394,7 +392,6 @@ describe("complete list composition", () => {
       "meal",
       "task",
       "inventory",
-      "wish",
     ] as const) {
       const full = await executeEntity(context, {
         action: "list",

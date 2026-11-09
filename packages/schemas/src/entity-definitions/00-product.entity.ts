@@ -234,7 +234,6 @@ export const { definition, readSchemas } = defineEntityModel(
           vendors: { descriptor: "productId" },
           "project-uses": { descriptor: "usedToolId" },
           "purchased-projects": { descriptor: "purchasedProductId" },
-          wishes: { descriptor: "related:wish.candidates" },
           components: { descriptor: "kitId" },
           "containing-kits": { descriptor: "componentId" },
         },
@@ -3619,24 +3618,6 @@ Rules:
           placeholder: "Filter related inventory presence...",
         },
         {
-          columnId: "related:product.wishes",
-          field: "wishSearch",
-          urlKey: "related-wish",
-          kind: "text",
-          placeholder: "Search related wishlist candidates...",
-        },
-        {
-          columnId: "wishId",
-          kind: "idMulti",
-          placeholder: "Filter by related wishlist candidates id...",
-          brandRef: { entity: "wish" },
-        },
-        {
-          columnId: "wishPresenceFilter",
-          kind: "presence",
-          placeholder: "Filter related wishlist candidates presence...",
-        },
-        {
           columnId: "related:product.tasks",
           derived: "taskDue",
           kind: "range",
@@ -3810,11 +3791,6 @@ Rules:
             table: "EntityLink",
             match: { toEntityId: "id" },
             where: { kind: "projectTool" },
-          },
-          {
-            table: "EntityLink",
-            match: { toEntityId: "id" },
-            where: { kind: "wishCandidate" },
           },
           {
             table: "Purchase",
@@ -4150,9 +4126,6 @@ export default defineEntity(
       .named("eaters", "Eaten by", {
         view: { columnGroup: "Food", filterPrefix: "eater" },
       }),
-    r.link("wishCandidate", "incoming").named("wishes", "Wishlist candidates", {
-      view: { columnGroup: "Wish list" },
-    }),
     r
       .path("location", "many", [
         { edge: "Location.productId", direction: "incoming" },

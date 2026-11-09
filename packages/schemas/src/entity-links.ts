@@ -11,7 +11,7 @@ import type { EdgeLiveness, EdgeRole } from "./entity-integrity";
  * repoint behavior from this map; nothing else hand-lists link kinds.
  *
  * Direction: `from` is the owning side (the row that used to own the join row
- * in `ENTITY_EDGE_OWNERS`) — the kit, the blocked task, the wish, the order.
+ * in `ENTITY_EDGE_OWNERS`) — the kit, the blocked task, the order.
  */
 
 /**
@@ -54,29 +54,6 @@ export interface EntityLinkKindDeclaration {
 const MUST_TARGET_LIVE = { kind: "must-target-live" } as const;
 
 export const ENTITY_LINK_KINDS = {
-  wishCandidate: {
-    from: "wish",
-    to: "product",
-    quantity: false,
-    forbidSelfLink: false,
-    acyclic: false,
-    fromEnd: {
-      role: "owned-child",
-      label: "tool candidates",
-      description:
-        "An alternative tool Product belonging to this Wishlist entry; the pairing has no independent meaning once the Wish is removed.",
-      liveness: MUST_TARGET_LIVE,
-      onMergeCollision: "dropLoser",
-    },
-    toEnd: {
-      role: "association",
-      label: "wishlist candidates",
-      description:
-        "A tool Product considered as an alternative for a household Wishlist entry; it is planning data, not inventory or spend.",
-      liveness: MUST_TARGET_LIVE,
-      onMergeCollision: "dropLoser",
-    },
-  },
   purchaseProduct: {
     from: "purchase",
     to: "product",

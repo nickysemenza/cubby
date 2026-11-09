@@ -24,7 +24,6 @@ import { mealListReadProjection } from "~/features/meal/list-read";
 import { productCategoryListReadProjection } from "~/features/product-category/list-read";
 import { productListReadProjection } from "~/features/product/list-read";
 import { spendingCategoryListReadProjection } from "~/features/spending-category/list-read";
-import { wishListReadProjection } from "~/features/wish/list-read";
 import { infiniteOperationQueryKey } from "~/integrations/tanstack-query/operation-catalog";
 import { loadEntityMetadata } from "~/server/entity-kernel/metadata/loader.server";
 
@@ -266,12 +265,6 @@ describe("ensureEntityListSsr", () => {
     ).toEqual(
       expect.arrayContaining(["amount", "locationId", "product", "location"]),
     );
-    expect(
-      wishListReadProjection(metadataClient, "wish", {
-        candidateCount: false,
-        priceRange: false,
-      }),
-    ).toEqual(expect.arrayContaining(["candidates", "acquiredAt"]));
     const imageFields = declaredListReadProjection(metadataClient, "image");
     expect(imageFields).toEqual(
       expect.arrayContaining(["url", "status", "filename"]),

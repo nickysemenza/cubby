@@ -747,7 +747,7 @@ also carries the resolved `primarySearch` (the declared one, else
 `searchQuery` for a searchable entity with a contract) and the `bulkUpdate`
 field roster, from the same generator helpers the inspector uses
 (`apps/web/generator/entities/render/shared.ts`). `bulkUpdate` and `entityFieldModels[entity].bulk` share the compiler-derived
-normal-update roster and the exclusions in the bulk edit contract below. Identity marks and empty states read this metadata. Plants, Plantings and GardenEntries belong to Garden; Purchases, Wishes, Shipments, Emails, Vendors and VendorAccounts belong to Purchases. `packages/schemas/src/sidebar-manifest.ts` owns `SIDEBAR_SECTIONS`, the single ordered navigation roster for desktop web, the mobile More sheet and generated Swift `SidebarManifest.sections`. Each section declares its id, label (empty for top), nullable domain, default fold state and ordered destinations; each destination declares its nav label, web route and either its browser-routed entity or a specialist SF Symbol. Page titles retain their full names.
+normal-update roster and the exclusions in the bulk edit contract below. Identity marks and empty states read this metadata. Plants, Plantings and GardenEntries belong to Garden; Purchases, Shipments, Emails, Vendors and VendorAccounts belong to Purchases. `packages/schemas/src/sidebar-manifest.ts` owns `SIDEBAR_SECTIONS`, the single ordered navigation roster for desktop web, the mobile More sheet and generated Swift `SidebarManifest.sections`. Each section declares its id, label (empty for top), nullable domain, default fold state and ordered destinations; each destination declares its nav label, web route and either its browser-routed entity or a specialist SF Symbol. Page titles retain their full names.
 
 `presentation.detail`, `.list` and `.edit` are the one declaration both the
 web and the native renderers draw from. A differing presentation value declares a
@@ -1222,7 +1222,7 @@ record identity, the complete item value identifies it; generated UUIDs and
 opaque read identities are excluded from that comparison. Structured reads project
 through the normal input description, including nested `readFrom` references.
 `collection.readPath` declares an authoritative projection when the detail uses a
-different shape, such as Wish candidates. An unavailable collection read refuses
+different shape. An unavailable collection read refuses
 the batch instead of treating it as empty.
 
 Every exposed field has a usable normal editor control. Only assignment mode
@@ -1480,7 +1480,7 @@ and a form-mode `FieldSuggestionProvider` skips prune targets by default
 
 A Suggestion stores immutable typed subjects, judgments, evidence and nullable original producer metadata. Suggestion and decision child handles accept the full PostgreSQL GUID shape, including retained hash-derived identifiers with arbitrary UUID version/variant bits; readers, review commands and receipts preserve them exactly. Entity, Run and observation identifiers keep their own stricter contracts. Successful applications commit an immutable command-bound receipt in `decisions` with the domain write. Explicit single and batch finance Apply acknowledge each Assessment only after the finance writer saves; recording the saved default preserves any newer draft. An identical command replays its receipt before current status checks; conflicting operation reuse is rejected and another command cannot inherit a resolved application. Public operation IDs reserve internal receipt namespaces; replay validates the immutable receipt kind, exact command decision binding and recorded outcome. A decision records correct, wrong, uncertain and presentation-only dismissal separately, with an explicit correction-presence discriminator so corrected JSON null survives. The row's mutable columns hold current targets, field supersession and exactly scoped suppression. Merges and deletes change those columns, never subjects. Live field inference shares one immutable publication per subject, full evidence, exact proposal and served model/prompt policy, preserving the first actual producer and proposal across requesting Runs. Live and stored inference also share an internal review identity over the actual captured feature, prompt, model, policy dependencies, field subject, exact proposed value and operation kind. An exact wrong review remains resolved across either entry point until evidence, policy or candidate changes; unknown legacy evidence receives no invented identity. It stays inactive; only stored sweep advice enters the queue. A wrong review resolves that exact evidence and served policy without declaring universal value suppression; revised evidence or policy can be assessed again. Runs are nullable provenance references rather than history owners. The family registry validates current targets. Mail decisions live with their domain owners, never on a Suggestion.
 
-Statement and transfer-pair proposals share the canonical charge preview mapping.
+Statement and transfer-pair proposals (the latter no longer generated by Sweeps) share the canonical charge preview mapping.
 Stored-family outcome counts use one status query scoped by family and optional Run.
 Suggestion lists resolve record scope once through family discovery and pass matched
 Suggestion IDs to family readers. Review uses family subject and projection schemas,
@@ -1502,7 +1502,7 @@ A new bare wrong verdict is a Miss, without suppressing future evidence. It reso
 
 Confirmed image descriptions remain authoritative in display, classification and search even without generated analysis. Image-analysis retries publish the first retained result for that exact analysis identity; a later response cannot replace retained analysis evidence or confirmed text. Confirmed text, content hash, confirmation time and owner provenance live on the Image row. `image.confirm_description` fences writes against that content hash under the Image row lock; a retry of the same operation returns its committed effect, and a write whose `expectedEffectId` no longer matches the current confirmation is refused. Inference retains its first result in `AiAnalysis` and never replaces confirmed text. The retired image-description Suggestion rows, including evidence and decisions, remain exact in `archive.Suggestion_image_description`; they have no live readers. Live description authority disappears with the Image. No trigger or revision ledger invalidates pending advice. Suggestion context fingerprints retain assignment, outcome and provenance kind, excluding refresh timing, work status and presentation controls. A pending field Assessment stores the snapshot of its target, declared basis, direct reference rows and latest audited write of that field; reads hide it and apply refuses it once the snapshot differs. A save that changes no value keeps it pending, while a restore after an intermediate write does not. Pending detector Product pairs are hidden the same way once either Product's identity snapshot changes, and their Assessment history remains. Historical byte hashes, model versions, provenance and actor intent are never reconstructed.
 
-Product identity retrieval and triage run through existing Run-backed AiEvaluation work, gated by AI refresh activation. A resumable cursor covers every live Product, with explicit miscellaneous exclusions counted as coverage. Exact identifier retrieval is independent of name/model gates; semantic similarity and model verdicts are candidate evidence. Reads use stored pair Assessments. Current nonnull model disagreements and retained historical identity conflicts block pair application, including weak recommendations. Equal current model strings or research notes do not verify identity or clear historical conflicts; uncertain variant matches remain pending review. An explicit merge can supersede historical advice only after identity inputs differ from every retained conflicting comparison, with current conflicts rechecked transactionally. Automatic matching remains blocked; notes do not unlock it. With exact identifier admission they become identity-conflict Problems. Raw receipt SKUs retain unknown variant granularity and remain ranking evidence even with matching size, color and pack; explicit ASINs can establish exact identity. Uncorroborated title text and partial selected variants remain ranking evidence. Connected pairs may share one Problem presentation, but each merge names exactly one independently assessed pair and rechecks its evidence. Merging and survivor image ordering commit together. Stock combines; duplicate receiving is a separate reviewed inventory correction.
+Product identity retrieval no longer runs a model pass over the catalog (removed in #3899); pairs come from deterministic import-time matching and the `product_enrichment` propose action. Exact identifier retrieval is independent of name/model gates; semantic similarity is candidate evidence. Reads use stored pair Assessments. Current nonnull model disagreements and retained historical identity conflicts block pair application, including weak recommendations. Equal current model strings or research notes do not verify identity or clear historical conflicts; uncertain variant matches remain pending review. An explicit merge can supersede historical advice only after identity inputs differ from every retained conflicting comparison, with current conflicts rechecked transactionally. Automatic matching remains blocked; notes do not unlock it. With exact identifier admission they become identity-conflict Problems. Raw receipt SKUs retain unknown variant granularity and remain ranking evidence even with matching size, color and pack; explicit ASINs can establish exact identity. Uncorroborated title text and partial selected variants remain ranking evidence. Connected pairs may share one Problem presentation, but each merge names exactly one independently assessed pair and rechecks its evidence. Merging and survivor image ordering commit together. Stock combines; duplicate receiving is a separate reviewed inventory correction.
 
 The deployed AI refresh manifest compares exact per-feature prompt/policy
 versions, including rollbacks. Its Run-backed AiEvaluation ledger admits one
@@ -1590,9 +1590,7 @@ catalog completes afterward. Catalog and connection evaluation share Product
 snapshots, retained identifier claims and variant history within each preparation
 batch. Retained-claim reads return each accepted receipt once with its current
 live bindings in the same SQL statement, validate the complete receipt, and
-preserve binding order when deriving claims. Connection pages use the same
-Product identity page preparation as catalog evaluations, sharing whole-catalog
-claims across their Product sources. Semantic relatedness and identity reuse
+preserve binding order when deriving claims. Semantic relatedness and identity reuse
 one page resolver that validates only selected seeds and returned physical hits,
 with canonical text hydration bounded to 100 artifacts at a time. Its compact
 page-local artifact cache retains current metadata, never corpus text. Every
@@ -2101,7 +2099,7 @@ selection never grants permission to mutate a record.
 
 Declare object-valued outputs as `json`, and render relations and structured
 values through explicit overrides. A logo object is not a text field. Fields
-already owned by a dedicated section, such as Wish candidates, stay outside
+already owned by a dedicated section stay outside
 the basic-information roster. Mobile title slots use the column accessor value,
 so linked identity columns must return the readable name and retain the entity
 shortcode separately for navigation.
@@ -2162,7 +2160,7 @@ null values alone do not establish that a contract is unnecessary.
 - **Always-null columns.** `Plant.daysFrom*` and `Plant.breeding`,
   `Planting.outcome`, `Vendor.returnWindowDays`,
   `Task.sortOrder`,
-  `Meal.sortOrder`, `Wish.acquiredAt`, `Device.productId`, `Cookbook.report`.
+  `Meal.sortOrder`, `Device.productId`, `Cookbook.report`.
   Image `captureDeviceLabel`, `capturePlaceName`, and
   `capturedAtOffsetMinutes` fill once the library path sends them (Images &
   photos).
@@ -2738,11 +2736,6 @@ Grouped search loads Inventory's canonical field context explicitly for stock
 placements before serializing their public fields. A search-first request must
 not depend on another route having initialized the Inventory scaffold.
 
-Wish ranges are owned by `apps/web/src/server/domains/wish/price-range.ts`.
-Hydration, sorting and totals use its SQL aggregate over the effective Product
-price; null prices are omitted, zero is priced, and no priced candidates means
-no range. Candidate hydration computes this only for the requested Wish IDs.
-
 `apps/web/src/lib/search-normalization.ts` owns the search normalization recipe:
 trim, collapse whitespace, then lowercase. Query input, document writers and
 embedding freshness SQL interpret that same recipe and whitespace set. Purchase
@@ -3003,7 +2996,7 @@ and `declaredFilterPredicates` ORs a case-insensitive substring match across
 them. A member is a stored `text` or `text[]` field (matched by element, and
 read as its effective value when it declares `resolution.inherit`, so project
 search finds an inherited location) or a `model.derived` key: a `via` path to
-a text field or a titled record (to-many as `EXISTS`, so wish search matches
+a text field or a titled record (to-many as `EXISTS`, so a related-record search matches
 any live candidate's name, joined Brand name or model, and task search the
 effective subject product's name) or a `type: "text"` value. A multi-field
 search is that declared list, never a predicate. `anyOf` does not sort or
@@ -4645,7 +4638,7 @@ Two generic tables carry the relationships and identifiers that used to have a
 table each (ADR 0007):
 
 - `EntityLink(kind, fromEntityId/fromKind, toEntityId/toKind, quantity)` holds
-  every pure pairing of two entities: `wishCandidate`, `purchaseProduct`,
+  every pure pairing of two entities: `purchaseProduct`,
   `projectTool`, `gardenEntryPlanting`, `productComponent`, `taskDependency`,
   `projectDependency`. Link kinds are declared in
   `packages/schemas/src/entity-links.ts` (endpoint kinds, quantity, self-link and
@@ -5209,10 +5202,7 @@ Pause and resume use Run status; transient failures retry within a bound and
 terminal failures remain visible. Paired trials and finance acceptance rules
 remain part of the workload. Identical pending targets can share execution while
 each requesting Run can inspect the published Suggestions and keeps its own receipt.
-Product identity scans enumerate the full live catalog under AI-refresh activation.
-Canonical pair work shares frozen evidence and the actual served producer through
-existing durable evaluations; a completed catalog enumeration does not claim that
-queued model comparisons have completed. Exact retained source claims publish rule
+Exact retained source claims publish rule
 Problems independently of model availability. Registered identifiers retain their
 single owner: only accepted originals with actual Product bindings establish
 additional claims. Shared model/style names, URLs and partial variant text remain
@@ -5465,7 +5455,7 @@ work dependency graphs, and cross-record exploration. Graph path search finds
 connections across records. Every entity that declares relatedness signals shows
 the related-records rail on its detail page.
 Ordinary record relations retain `connectedRecords`, `connectedRecordsPreview` and `connections`.
-Connection discovery still proposes inventory placement and expense/project links.
+Connection discovery proposes only the Email purchase link.
 Product-match review commands belong to the `productMatch` contract.
 
 `extensions.ports.reports` binds a domain's report dependencies. Generation emits

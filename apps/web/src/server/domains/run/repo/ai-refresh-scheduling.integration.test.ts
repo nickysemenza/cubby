@@ -10,14 +10,8 @@ import { buildKernelContext } from "tooling/scenarios/context";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import {
-  enqueueAiEvaluation,
-  evaluationSlotKey,
-} from "~/server/ai/evaluation/repo/ai-evaluation-requests";
-import {
-  aiEvaluationItem,
-  owedAiEvaluations,
-} from "~/server/ai/evaluation/service/ai-evaluation-drain.fixtures";
+import { evaluationSlotKey } from "~/server/ai/evaluation/repo/ai-evaluation-requests";
+import { aiEvaluationItem } from "~/server/ai/evaluation/service/ai-evaluation-drain.fixtures";
 import { activateAiRefresh } from "~/server/ai/repo/ai-refresh";
 import { getDb } from "~/server/db/helpers";
 import { aiEvaluation, product, run } from "~/server/db/schema";
@@ -34,7 +28,6 @@ import { ensureRun } from "./ensure-run";
 // Real transactions expose races between shared Jobs and their requesters.
 describe("AI refresh scheduling admission", () => {
   const ctx = withTestDb();
-  const evaluationItems = () => owedAiEvaluations(ctx.db);
   /** The mark a re-mark would replace: its due time. */
   const aiEvaluationTicket = async (id: string) =>
     (await aiEvaluationItem(ctx.db, id))?.readyAt?.getTime();
@@ -251,161 +244,6 @@ describe("AI refresh scheduling admission", () => {
   });
 
   // Repeated enrichment must leave one durable row and one Job, not a backlog.
-  it("updates one Product slot and Job across three successive input changes", async () => {
-    const recordId = crypto.randomUUID();
-    const productTarget = (inputFingerprint: string) => ({
-      target: aiEvaluationTarget.parse({
-        kind: "product",
-        entity: "product",
-        recordId,
-        field: null,
-        suggestionIds: [],
-      }),
-      provenance: aiProvenance.parse({
-        dependencies: [],
-        inputFingerprint,
-        optionFingerprint: "",
-        model: null,
-      }),
-      snapshot: {},
-    });
-    const request = {
-      ...input("product-identity"),
-      input: aiRefreshRunInput.parse({
-        ...input("product-identity").input,
-        mailboxId: undefined,
-      }),
-    };
-    for (const fingerprint of ["synthetic-a", "synthetic-b", "synthetic-c"])
-      await scheduleEvaluationRun(ctx.db, systemActor(), request, [
-        productTarget(fingerprint),
-      ]);
-    const rows = await getDb(ctx.db)
-      .select({
-        state: aiEvaluation.state,
-        provenance: aiEvaluation.provenance,
-      })
-      .from(aiEvaluation)
-      .where(eq(aiEvaluation.feature, "product-identity"));
-    expect(rows.filter((row) => row.state === "queued")).toEqual([
-      expect.objectContaining({
-        provenance: expect.objectContaining({
-          inputFingerprint: "synthetic-c",
-        }),
-      }),
-    ]);
-    expect(rows).toHaveLength(1);
-    expect(await evaluationItems()).toBe(1);
-  });
-
-  // Catalog and pair targets have distinct slots, even for the same Product.
-  it("never replaces a shared pair evaluation with a catalog one", async () => {
-    const recordId = crypto.randomUUID();
-    const request = {
-      ...input("product-pair"),
-      input: aiRefreshRunInput.parse({
-        ...input("product-pair").input,
-        mailboxId: undefined,
-      }),
-    };
-    const provenance = aiProvenance.parse({
-      dependencies: [],
-      inputFingerprint: "synthetic-pair",
-      optionFingerprint: "",
-      model: null,
-    });
-    // Pairs are shared work, enqueued as production does (pair snapshot).
-    const owner = await ensureRun(ctx.db, systemActor(), input("pair-owner"));
-    await enqueueAiEvaluation(ctx.db, {
-      runId: owner,
-      executionKind: "ai_refresh",
-      feature: "product-identity",
-      workKey: "product-identity:synthetic-pair",
-      shareKey: "product-identity:synthetic-pair",
-      target: aiEvaluationTarget.parse({
-        kind: "product_pair",
-        entity: "product",
-        recordId,
-        otherId: crypto.randomUUID(),
-        field: null,
-        suggestionIds: [],
-      }),
-      provenance,
-      snapshot: {},
-    });
-    await scheduleEvaluationRun(ctx.db, systemActor(), request, [
-      {
-        target: aiEvaluationTarget.parse({
-          kind: "product",
-          entity: "product",
-          recordId,
-          field: null,
-          suggestionIds: [],
-        }),
-        provenance: { ...provenance, inputFingerprint: "synthetic-catalog" },
-        snapshot: {},
-      },
-    ]);
-    const states = await getDb(ctx.db)
-      .select({ state: aiEvaluation.state, target: aiEvaluation.target })
-      .from(aiEvaluation)
-      .where(eq(aiEvaluation.feature, "product-identity"));
-    expect(states.map((row) => row.state).sort()).toEqual(["queued", "queued"]);
-  });
-
-  // Queued input changes spend no declined-attempt budget.
-  it("keeps re-admitting a Product whose input keeps changing back", async () => {
-    const recordId = crypto.randomUUID();
-    const productTarget = (inputFingerprint: string) => ({
-      target: aiEvaluationTarget.parse({
-        kind: "product",
-        entity: "product",
-        recordId,
-        field: null,
-        suggestionIds: [],
-      }),
-      provenance: aiProvenance.parse({
-        dependencies: [],
-        inputFingerprint,
-        optionFingerprint: "",
-        model: null,
-      }),
-      snapshot: {},
-    });
-    const request = {
-      ...input("product-alternating"),
-      input: aiRefreshRunInput.parse({
-        ...input("product-alternating").input,
-        mailboxId: undefined,
-      }),
-    };
-    for (let round = 0; round < 5; round++)
-      for (const fingerprint of ["synthetic-a", "synthetic-b"])
-        await scheduleEvaluationRun(ctx.db, systemActor(), request, [
-          productTarget(fingerprint),
-        ]);
-    await scheduleEvaluationRun(ctx.db, systemActor(), request, [
-      productTarget("synthetic-a"),
-    ]);
-    const queued = await getDb(ctx.db)
-      .select({ provenance: aiEvaluation.provenance })
-      .from(aiEvaluation)
-      .where(
-        and(
-          eq(aiEvaluation.feature, "product-identity"),
-          eq(aiEvaluation.state, "queued"),
-        ),
-      );
-    expect(queued).toEqual([
-      {
-        provenance: expect.objectContaining({
-          inputFingerprint: "synthetic-a",
-        }),
-      },
-    ]);
-    expect(await evaluationItems()).toBe(1);
-  });
-
   it("bounds declined attempts of the same input without linking receipts", async () => {
     const owner = await ensureRun(
       ctx.db,
@@ -550,84 +388,5 @@ describe("AI refresh scheduling admission", () => {
         .from(aiEvaluation)
         .where(eq(aiEvaluation.state, "queued")),
     ).toHaveLength(1);
-  });
-
-  it("does not join a new activation's work to an older policy Run", async () => {
-    const request = (revision: number) => ({
-      ...input(`policy-${revision}`),
-      input: aiRefreshRunInput.parse({
-        ...input("policy").input,
-        mailboxId: undefined,
-        activation: { ...input("policy").input.activation, revision },
-      }),
-    });
-    const productTarget = () => ({
-      ...target(),
-      target: aiEvaluationTarget.parse({
-        kind: "product",
-        entity: "product",
-        recordId: crypto.randomUUID(),
-        field: null,
-        suggestionIds: [],
-      }),
-    });
-    const prior = await scheduleEvaluationRun(
-      ctx.db,
-      systemActor(),
-      request(1),
-      [productTarget()],
-    );
-    const current = await scheduleEvaluationRun(
-      ctx.db,
-      systemActor(),
-      request(2),
-      [productTarget()],
-    );
-    expect(prior.kind).toBe("scheduled");
-    expect(current.kind).toBe("scheduled");
-    if (prior.kind !== "scheduled" || current.kind !== "scheduled") return;
-    expect(current.runId).not.toBe(prior.runId);
-  });
-
-  it("checks the policy revision when an obsolete target reuses the same client key", async () => {
-    const request = (revision: number) => ({
-      ...input("same-policy-key"),
-      input: aiRefreshRunInput.parse({
-        ...input("policy").input,
-        mailboxId: undefined,
-        activation: { ...input("policy").input.activation, revision },
-      }),
-    });
-    const item = {
-      ...target(),
-      target: aiEvaluationTarget.parse({
-        kind: "product",
-        entity: "product",
-        recordId: crypto.randomUUID(),
-        field: null,
-        suggestionIds: [],
-      }),
-    };
-    const prior = await scheduleEvaluationRun(
-      ctx.db,
-      systemActor(),
-      request(1),
-      [item],
-    );
-    expect(prior.kind).toBe("scheduled");
-    if (prior.kind !== "scheduled") return;
-    await getDb(ctx.db)
-      .update(aiEvaluation)
-      .set({ state: "obsolete" })
-      .where(eq(aiEvaluation.runId, prior.runId));
-    const current = await scheduleEvaluationRun(
-      ctx.db,
-      systemActor(),
-      request(2),
-      [item],
-    );
-    expect(current.kind).toBe("scheduled");
-    if (current.kind !== "scheduled") return;
-    expect(current.runId).not.toBe(prior.runId);
   });
 });

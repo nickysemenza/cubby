@@ -4,27 +4,21 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { effectiveFieldSql } from "~/server/db/computed/effective-field";
-import { productBrandNameSql } from "~/server/db/computed/product-brand-sql";
 import { getDb } from "~/server/db/helpers";
 import { formatSearchTerm, textArrayMatches } from "~/server/db/helpers/query";
 import {
-  entityLink,
   ingredient,
   location,
   product,
   project,
   recipe,
   task,
-  wish,
 } from "~/server/db/schema";
 import { ingredientScaffold } from "~/server/domains/ingredient/repo/search";
 import { locationScaffold } from "~/server/domains/location/repo/crud";
 import { projectScaffold } from "~/server/domains/project/repo/lookup";
 import { recipeScaffold } from "~/server/domains/recipe/repo/crud";
 import { taskScaffold } from "~/server/domains/task/repo/lookup";
-import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
-import { wishScaffold } from "~/server/domains/wish/repo";
-import { linkValues } from "~/server/generic/entity-links/repo/entity-links";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 /**
@@ -216,86 +210,6 @@ describe("anyOf text filters", () => {
       rows,
     );
     expect(taskMatches.actual).toEqual(taskMatches.expected);
-  });
-
-  it("matches a wish by name, notes, or any live candidate's name, brandName or model", async () => {
-    const knownBrandId = await findOrCreateVendor(db(), "Zqmaker");
-    const candidate = (
-      name: string,
-      brandId: typeof knownBrandId | null = null,
-      model = "",
-    ) =>
-      insertWithShortcode(db(), "product", {
-        name,
-        brandId,
-        model,
-      });
-    const byName = await candidate("Zqcandidate kettle");
-    const byMaker = await candidate("Kettle", knownBrandId);
-    const byModel = await candidate("Kettle", null, "ZQ-900");
-    const unlinked = await candidate("Zqunlinked kettle");
-    const deleted = await candidate("Zqdeleted kettle");
-    const insert = (name: string, notes: string | null = null) =>
-      insertWithShortcode(db(), "wish", { name, notes });
-    const link = async (
-      target: { id: string },
-      ...candidates: { id: string }[]
-    ) =>
-      getDb(db())
-        .insert(entityLink)
-        .values(
-          candidates.map((item) =>
-            linkValues("wishCandidate", target.id, item.id),
-          ),
-        );
-    const named = await insert("AnyOf zqwish name");
-    const noted = await insert("AnyOf noted", "Compare zqnotes");
-    const several = await insert("AnyOf several");
-    await link(several, byName, byMaker);
-    const modelled = await insert("AnyOf modelled");
-    await link(modelled, byModel);
-    const removedLink = await insert("AnyOf removed link");
-    await link(removedLink, unlinked);
-    await getDb(db())
-      .update(entityLink)
-      .set({ deletedAt: new Date() })
-      .where(eq(entityLink.fromEntityId, removedLink.id));
-    const removedProduct = await insert("AnyOf removed product");
-    await link(removedProduct, deleted);
-    // A link to a since-deleted candidate stays; the record no longer counts.
-    await getDb(db())
-      .update(product)
-      .set({ deletedAt: new Date() })
-      .where(eq(product.id, deleted.id));
-    const rows = [named, noted, several, modelled, removedLink, removedProduct];
-    const old = (term: string) =>
-      or(
-        formatSearchTerm(wish.name, term),
-        formatSearchTerm(wish.notes, term),
-        sql`EXISTS (
-          SELECT 1 FROM "EntityLink" wc
-          JOIN "Product" p ON p."id" = wc."toEntityId" AND p."deletedAt" IS NULL
-          WHERE wc."fromEntityId" = ${wish.id}
-            AND wc."deletedAt" IS NULL AND wc."kind" = 'wishCandidate'
-            AND (p."name" ILIKE ${`%${term}%`} OR ${productBrandNameSql(sql.raw('p."brandId"'))} ILIKE ${`%${term}%`} OR p."model" ILIKE ${`%${term}%`})
-        )`,
-      );
-    const wishMatches = await equivalence(
-      [
-        ["zqwish", codes(named), old("zqwish")],
-        ["ZQNOTES", codes(noted), old("ZQNOTES")],
-        ["zqcandidate", codes(several), old("zqcandidate")],
-        ["zqmaker", codes(several), old("zqmaker")],
-        ["zq-900", codes(modelled), old("zq-900")],
-        ["zqunlinked", [], old("zqunlinked")],
-        ["zqdeleted", [], old("zqdeleted")],
-        ["zq", codes(named, noted, several, modelled), old("zq")],
-      ],
-      (term) => wishScaffold.where({ search: term }),
-      wish,
-      rows,
-    );
-    expect(wishMatches.actual).toEqual(wishMatches.expected);
   });
 
   it("keeps the folded column searches of ingredient, recipe and location", async () => {

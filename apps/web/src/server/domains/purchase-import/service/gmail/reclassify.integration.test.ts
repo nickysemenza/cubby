@@ -9,7 +9,6 @@ import { type EmailId } from "@cubby/schemas/identifiers";
  * Relevance, history or retained content.
  */
 import { mailReclassifyRunInput } from "@cubby/schemas/run-fields";
-import * as models from "@cubby/shared/ai/models";
 import { desc, eq } from "drizzle-orm";
 import {
   driveAiWork,
@@ -649,9 +648,6 @@ describe("member Reclassify", () => {
   });
 
   it("cancels a requested batch while retaining other live demand", async () => {
-    vi.spyOn(models, "selectDecisionModel").mockReturnValue(
-      models.DECISION_MODEL,
-    );
     const f = await fixture();
     const emails = [];
     for (let index = 0; index < 6; index++)
@@ -689,9 +685,6 @@ describe("member Reclassify", () => {
 
   // Shared demand must survive one cancellation, without giving the cancelled request another Run's receipt.
   it("shares pending inference and preserves independent cancellation and receipts", async () => {
-    vi.spyOn(models, "selectDecisionModel").mockReturnValue(
-      models.DECISION_MODEL,
-    );
     const f = await fixture();
     const selected = await f.seed("synthetic-shared", "Synthetic order", {});
     const submit = () =>
@@ -765,9 +758,6 @@ describe("member Reclassify", () => {
 
   // Cancellation during a paid call cannot revoke another request's publication fence.
   it("finishes shared execution when its driver is cancelled during inference", async () => {
-    vi.spyOn(models, "selectDecisionModel").mockReturnValue(
-      models.DECISION_MODEL,
-    );
     const f = await fixture();
     const selected = await f.seed(
       "synthetic-inflight-shared",

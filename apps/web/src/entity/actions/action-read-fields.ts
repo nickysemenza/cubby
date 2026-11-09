@@ -14,7 +14,6 @@ export const INVENTORY_DIALOG_READ_FIELDS = [
   "amount",
   "locationId",
 ] as const;
-export const WISH_PURCHASED_READ_FIELDS = ["acquiredAt"] as const;
 
 export const EXPENSE_RECEIVE_READ_FIELDS = [
   "name",

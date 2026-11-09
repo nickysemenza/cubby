@@ -203,5 +203,5 @@ export const projectContract = defineContract(
       invalidates: ["projectResource"],
     }),
   },
-  { exposure: "view", mcpToolGroup: "project_overview" },
+  { exposure: "view", mcpToolGroup: "entity" },
 );

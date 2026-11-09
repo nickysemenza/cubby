@@ -133,6 +133,10 @@ the destination group's Product and stock decision survive. Product duplicate
 reconciliation remains a separate reviewed operation in the
 [product identity journey](product-identity-journey.md).
 
+Existing-Product duplicate candidates for a photo group are computed when the
+member opens that group in the review, never refreshed in the background as the
+Run's proposals change.
+
 Choose a stock decision: catalog evidence, already counted, and historical or
 sold all attach without changing Inventory. **Receive newly counted stock**
 requires a real location, positive whole-number quantity and owner; create a

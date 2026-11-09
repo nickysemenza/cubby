@@ -17,7 +17,6 @@ export const hoverPreviewEntities = [
   "vendor",
   "financialAccount",
   "financialTransaction",
-  "wish",
   "image",
   "planting",
   "gardenEntry",

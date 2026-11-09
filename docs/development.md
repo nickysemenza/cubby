@@ -161,7 +161,7 @@ Start streams   →  cancellable workflow streams
   admission retry deadline (minimum one second), without a 15-second floor or
   polling inside the invocation. Provider cooldowns and request deadlines remain
   enforced; increasing throughput does not change household funding budgets.
-  Text decisions use a stable 90% Jev / 10% Clef split; vision stays on Clef.
+  Text decisions always use Jev (`DECISION_MODEL`); only questions with images use Clef.
   Existing response caching, paid admission, usage accounting, Gateway
   observability and Run checkpoints remain shared. Install the Gateway BYOK
   key before activating this revision. No TypeSafe key is needed in the Worker.

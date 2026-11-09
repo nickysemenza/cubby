@@ -1,6 +1,5 @@
 import { productCreateInput } from "@cubby/schemas/entities/product";
 import { vendorCreateInput } from "@cubby/schemas/entities/vendor";
-import { wishCreateInput } from "@cubby/schemas/entities/wish";
 import {
   recordSourceTransactionRecordsInput,
   sourceTransactionRecordFilters,
@@ -61,7 +60,7 @@ const callKernel = (
 
 // A scored entity's write summary carries its data-quality coverage beside
 // the identity; a get summary does not (`contracts/mcp-projections.ts`).
-const wishSummaryResultSchema = z.object({
+const vendorSummaryResultSchema = z.object({
   item: z
     .object({
       id: z.string(),
@@ -336,14 +335,14 @@ describe("MCP entity kernel boundary", () => {
   it("annotates read-only tools from the registry", async () => {
     // The registry's own annotations are the invariant, in both directions:
     // no tool that writes (`product_enrichment.find_or_create_by_upc` mints a Product) and no
-    // read-only tool left out (`recipe_insights_read`, whose costing reads).
+    // read-only tool left out (`nutrition_read`, whose costing reads).
     const catalog = await listMcpToolCatalog();
     const readOnlyNames = catalog.tools
       .filter((tool) => tool.annotations?.readOnlyHint === true)
       .map((tool) => tool.name)
       .sort();
     expect(readOnlyNames).toContain("entity_read");
-    expect(readOnlyNames).toContain("recipe_insights_read");
+    expect(readOnlyNames).toContain("nutrition_read");
     expect(readOnlyNames).not.toContain("entity");
     expect(readOnlyNames).not.toContain("upc");
   });
@@ -560,13 +559,13 @@ describe("MCP entity kernel boundary", () => {
 
     const created = await callEntity({
       action: "create",
-      entity: "wish",
-      data: mock(wishCreateInput, {
-        overrides: { name: "MCP kernel boundary wish" },
+      entity: "vendor",
+      data: mock(vendorCreateInput, {
+        overrides: { name: "MCP kernel boundary vendor" },
       }),
     });
     expect(created.isError).not.toBe(true);
-    const createdWish = idResultSchema.parse(created.structuredContent).item;
+    const createdVendor = idResultSchema.parse(created.structuredContent).item;
     const other = await callEntity({
       action: "create",
       entity: "vendor",
@@ -578,13 +577,13 @@ describe("MCP entity kernel boundary", () => {
 
     const fetched = await callEntity({
       action: "get",
-      entity: "wish",
-      id: createdWish.id,
+      entity: "vendor",
+      id: createdVendor.id,
     });
     expect(fetched.isError).not.toBe(true);
     expect(
-      wishSummaryResultSchema.parse(fetched.structuredContent).item.name,
-    ).toBe("MCP kernel boundary wish");
+      vendorSummaryResultSchema.parse(fetched.structuredContent).item.name,
+    ).toBe("MCP kernel boundary vendor");
 
     const filtered = await callEntity({
       action: "list",
@@ -599,7 +598,7 @@ describe("MCP entity kernel boundary", () => {
 
     const wrongPrefix = await callEntity({
       action: "get",
-      entity: "wish",
+      entity: "product",
       id: "VND-ABC123",
     });
     expect(wrongPrefix.isError).toBe(true);

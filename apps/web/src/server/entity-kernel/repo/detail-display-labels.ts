@@ -14,7 +14,6 @@ import type {
 } from "@cubby/schemas/financial-transaction";
 import type { ImageProvenanceEvidence } from "@cubby/schemas/image-capture-fields";
 import type { NutritionTotals } from "@cubby/schemas/nutrition";
-import type { WishCandidateOut } from "@cubby/schemas/wish";
 import { countLabel } from "@cubby/shared/pluralize";
 
 import { formatCurrency } from "~/lib/number-format";
@@ -185,23 +184,3 @@ export const possibleVendorLabel = (
         ", ",
       )
     : null;
-
-/** A wish's candidate products, one row each opening the product. */
-export const wishCandidateItems = (
-  candidates: readonly WishCandidateOut[],
-): DisplayItem[] =>
-  candidates.map((candidate) => ({
-    entity: "product",
-    id: candidate.id,
-    title: candidate.name,
-    subtitle: [candidate.brandName, candidate.model]
-      .filter(Boolean)
-      .join(" · "),
-    trailing:
-      [
-        candidate.price !== null ? formatCurrency(candidate.price) : null,
-        candidate.inventoried ? "In inventory" : null,
-      ]
-        .filter(Boolean)
-        .join(" · ") || null,
-  }));

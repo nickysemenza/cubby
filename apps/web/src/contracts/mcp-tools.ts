@@ -71,7 +71,7 @@ export const MCP_TOOL_DESCRIPTIONS = {
   },
   entity: {
     description:
-      "Write household entities: create, update, delete, merge, bulk-update, link/unlink an attachable relation, run up to 50 creates/updates at once, resolve-or-create ingredient and plant names, move inventory, and repoint project uses. Reads are entity_read. A field's own description in the schema (e.g. product.tags) states its contract — follow it rather than a pattern seen on other records.",
+      "Write household entities: create, update, delete, merge, bulk-update, link/unlink an attachable relation, run up to 50 creates/updates at once, resolve-or-create ingredient and plant names, receive, add, discard and move household inventory (these change recorded stock; ordinary household use does not), and repoint a Product's project-use history. Reads are entity_read. A field's own description in the schema (e.g. product.tags) states its contract — follow it rather than a pattern seen on other records.",
   },
   entity_graph: {
     description:
@@ -79,11 +79,7 @@ export const MCP_TOOL_DESCRIPTIONS = {
   },
   entity_read: {
     description:
-      "Read household entities: get one, list or search a kind, preview a create or a link change without writing, read an attachable relation or one-hop connections, and resolve Product names or external ids and Vendor names or aliases. Every action is read-only. Ingredient usuallyOnHand means assumed planning availability; recorded inventory remains separate. Recipe availability includes planning coverage and incomplete-quantity warnings. Consult entities://catalog only when the schema leaves a supported entity/action unclear.",
-  },
-  expenses: {
-    description:
-      "Re-attribute existing Expense money within purchases. No action creates money or moves it to another vendor.",
+      "Read household entities: get one, list or search a kind, preview a create or a link change without writing, read an attachable relation or one-hop connections, and resolve Product names or external ids and Vendor names or aliases. Project, budget, tool and spend rollups, the task backlog (actionable tasks, summary, maintenance history) and the inventory receiving context are read here too. Every action is read-only. Ingredient usuallyOnHand means assumed planning availability; recorded inventory remains separate. Recipe availability includes planning coverage and incomplete-quantity warnings. Consult entities://catalog only when the schema leaves a supported entity/action unclear.",
   },
   field_explanation: {
     description:
@@ -91,7 +87,7 @@ export const MCP_TOOL_DESCRIPTIONS = {
   },
   finance: {
     description:
-      "Apply uniquely supported financial evidence, or a member's explicit booking of one posted transaction, through server checks. Ambiguous or changed accepted facts remain review work.",
+      "Apply uniquely supported financial evidence, or a member's explicit booking of one posted transaction, through server checks. Ambiguous or changed accepted facts remain review work. Also re-attributes existing Expense money within purchases (link, split with delta, reclassify a document, confirm an inventory beneficiary) and reads expense analytics and settlement candidates; no action creates money or moves it to another vendor.",
   },
   image: {
     description:
@@ -101,20 +97,13 @@ export const MCP_TOOL_DESCRIPTIONS = {
     description:
       "Fetch a representative logo from a Vendor's public website after reviewing the resolved site.",
   },
-  inventory: {
-    description:
-      "Receive, add, and discard household inventory. These actions change recorded stock; ordinary household use does not.",
-  },
   maintenance: {
     description:
       "Inspect and repair operational state when the member asks. These actions can read diagnostics, retry work, or change retained support data.",
   },
   nutrition: {
-    description: "Daily intake, meal preparations, and shopping needs.",
-  },
-  photo_run: {
     description:
-      "A photo-inventory run's item grouping: propose groups for human review, or commit one when the user asks to skip review.",
+      "Daily intake, meal preparations, and shopping needs, plus recipe nutrition, costing, availability, imports from text or URLs, line patches and reverse lookups.",
   },
   playbook: {
     description:
@@ -122,23 +111,15 @@ export const MCP_TOOL_DESCRIPTIONS = {
   },
   product_enrichment: {
     description:
-      "Product identity upkeep: image integrity and match proposals. Product facts and identifier slots are written with entity.update; preserve research in `notes` inside `data`.",
-  },
-  project_overview: {
-    description:
-      "Household project, budget, tool, and spend rollups, plus repointing a Product's project-use history.",
+      "Product identity upkeep: image integrity and match proposals. USDA FoodData Central records (the external nutrition source a Product maps to by `fdc_id`) are read here. Product facts and identifier slots are written with entity.update; preserve research in `notes` inside `data`.",
   },
   purchase_import: {
     description:
       "Import a purchase from its source: prepare then commit one immutable import plan; confirm a merchant's Vendor; reclassify a Purchase document. A member's Claude/Codex session and Pi's Mail import use the same writers.",
   },
-  recipe_insights: {
-    description:
-      "Recipe nutrition, costing, availability, cookbook upkeep, imports from text or URLs, and reverse lookups.",
-  },
   run: {
     description:
-      "Control Runs (Mail import, photo inventory, or a member's import); read one with run_read.work_snapshot. set_mail_import, discover_mail, commit_prepared and approve/reject spend money or settle evidence: call them only on the member's explicit instruction.",
+      "Control Runs (Mail import, photo inventory, or a member's import); read one with run_read.work_snapshot. A photo-inventory Run's item grouping is proposed for human review (propose_groups) or committed when the user asks to skip review (commit_group). set_mail_import, discover_mail, commit_prepared and approve/reject spend money or settle evidence: call them only on the member's explicit instruction.",
   },
   search: {
     description:
@@ -155,13 +136,6 @@ export const MCP_TOOL_DESCRIPTIONS = {
   suggestions: {
     description:
       "Read and review proposed household changes. Review decisions remain explicit member actions.",
-  },
-  tasks_overview: {
-    description: "Task backlog reads across the whole tracker.",
-  },
-  usda_food: {
-    description:
-      "USDA FoodData Central records, the external nutrition source a Product maps to by `fdc_id`.",
   },
 } as const;
 
@@ -392,7 +366,7 @@ export const MCP_TOOLS = defineMcpTools({
       unlink: mcpAction({
         op: kernelAction("unlink", "mutation"),
         description:
-          "Detach items from one record's relation. To move a Product's project-use history, use project_overview.repoint_uses instead.",
+          "Detach items from one record's relation. To move a Product's project-use history, use entity.repoint_uses instead.",
       }),
       commands: mcpAction({
         op: kernelAction("commands", "mutation"),

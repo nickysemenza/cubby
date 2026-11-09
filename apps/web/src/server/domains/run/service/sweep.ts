@@ -20,7 +20,6 @@ import {
   type EvaluationScope,
   type EvaluationTally,
 } from "~/server/ai/evaluation/repo/evaluation-tally";
-import { readAiRefreshActivation } from "~/server/ai/repo/ai-refresh";
 import type { Database } from "~/server/db";
 import {
   countStatementPendingHolds,
@@ -31,31 +30,13 @@ import {
   retryStatementGenerationRefs,
   statementChargeFromWorkRef,
 } from "~/server/domains/transaction-import/repo/statement-suggestions";
-import {
-  countTransferPairSeeds,
-  countTransferPairStates,
-  countTransferPairsNeedingLabels,
-  generateTransferPairSuggestionsPage,
-  retryTransferPairRefs,
-  transferPairGenerationCursor,
-} from "~/server/domains/transaction-import/repo/transfer-pair-suggestions";
 import { buildCrudServices } from "~/server/http/request-context";
 import { launchWorkflowRun } from "~/server/workflows/runs/lifecycle";
 
-import {
-  CONNECTION_ROSTER_PAGE,
-  countConnectionSweepSources,
-  prepareConnectionSweepPage,
-} from "../repo/connection-refresh";
 import { ensureRun } from "../repo/ensure-run";
 import { activeSweepFor, type StepRunOwner } from "../repo/run-step";
 import type { StepDriversFor } from "./run-step-registry";
-import {
-  pageRetryRefs,
-  type StepContext,
-  type StepCounter,
-  type StepPage,
-} from "./step-run";
+import { pageRetryRefs, type StepContext, type StepPage } from "./step-run";
 
 /**
  * Starts a Sweep: the declared steps of each family in scope, run by the
@@ -131,16 +112,9 @@ function scopeOf<F extends SweepFamily>(
 
 /** Each family's first counted step: its frozen COUNT and the Sweep estimate. */
 const familyInputCount = {
-  transfer_pair: (db, scope, boundary) =>
-    countTransferPairSeeds(db, {
-      since: scope.since ?? null,
-      createdBefore: boundary,
-    }),
   // Charges are derived from current statement rows, so no cutoff bounds
   // them: a charge that stops qualifying mid-step is tallied `removed`.
   statement_transaction: (db, scope) => countUnmatchedCharges(db, scope),
-  recommendation: (db, scope, boundary) =>
-    countConnectionSweepSources(db, scope.entityKinds, new Date(boundary)),
   // Targets come from the Sweep's own input, a closed population.
   field: async (_db, scope) => fieldTargets(scope.targets).length,
 } satisfies {
@@ -165,16 +139,6 @@ const countFamilyInput = (
     ) => Promise<number>
   )(db, entry.scope, boundary);
 
-/** A frozen boundary is the instant the step counted its population. */
-const cutoff = (context: StepContext) =>
-  z.iso.datetime().nullable().parse(context.boundary);
-const countedNow: (
-  count: (context: StepContext, boundary: string) => Promise<number>,
-) => StepCounter = (count) => async (context) => {
-  const boundary = new Date().toISOString();
-  return { total: await count(context, boundary), boundary };
-};
-
 /** A label pass keeps its model-funding pause on the step. */
 const budgetPause = (error: unknown): StepPage | null =>
   error instanceof AiBudgetExhaustedError
@@ -193,145 +157,6 @@ const waitFor = (until: number | null) =>
 
 const labelsOff = {
   meta: { detail: { labels: "off: automatic AI work is disabled" } },
-};
-
-// ---- Transfer pairs: scan movements, retire stale pairs, label pairs. ----
-
-const scanCursor = transferPairGenerationCursor.nullable();
-const labelCursor = z
-  .object({ createdAt: z.string(), id: z.string() })
-  .nullable();
-
-const transferPairScan: StepDriversFor<"sweep">["transfer_pair_scan"] = {
-  count: countedNow((context, boundary) =>
-    familyInputCount.transfer_pair(
-      context.db,
-      scopeOf(context.run, "transfer_pair"),
-      boundary,
-    ),
-  ),
-  page: async (context) => {
-    const { db, run, step } = context;
-    const scope = scopeOf(run, "transfer_pair");
-    const retried = await pageRetryRefs(
-      context,
-      JOB_PAGE_LIMITS.suggestionsPerPage,
-      async (refs) => {
-        const outcome = await retryTransferPairRefs(db, {
-          runId: run.id,
-          scope,
-          refs,
-        });
-        return {
-          delta: { done: outcome.done, failed: outcome.failed.length },
-          errors: outcome.failed,
-        };
-      },
-    );
-    if (retried) return retried;
-    const page = await generateTransferPairSuggestionsPage(db, {
-      runId: run.id,
-      scope,
-      after: scanCursor.parse(step.cursor ?? null),
-      createdBefore: cutoff(context),
-      work: context.work,
-    });
-    const seedFailures = page.failed.filter((failure) =>
-      failure.ref?.startsWith("transfer_pair_seed:"),
-    ).length;
-    // A scan ends where the retire step's population begins.
-    const done = page.next === null || page.next.kind === "retire";
-    // Counts are movements; a pair that failed to publish is not a failed
-    // movement, so it is a tally beside the published ones.
-    return {
-      kind: "progress",
-      delta: {
-        done: page.seeds - seedFailures,
-        failed: seedFailures,
-      },
-      errors: page.failed,
-      tallies: {
-        pairs: page.found,
-        published: page.published,
-        publishFailed: page.failed.length - seedFailures,
-      },
-      reasons: page.reasons,
-      cursor: done ? null : page.next,
-      done,
-    };
-  },
-};
-
-const transferPairRetire: StepDriversFor<"sweep">["transfer_pair_retire"] = {
-  count: countedNow((context, boundary) =>
-    countTransferPairStates(context.db, {
-      scope: scopeOf(context.run, "transfer_pair"),
-      createdBefore: boundary,
-    }),
-  ),
-  page: async (context) => {
-    const { db, run, step } = context;
-    const after = z
-      .object({ createdAt: z.string(), id: z.string() })
-      .nullable()
-      .parse(step.cursor ?? null);
-    const page = await generateTransferPairSuggestionsPage(db, {
-      runId: run.id,
-      scope: scopeOf(run, "transfer_pair"),
-      after: { kind: "retire", after },
-      createdBefore: cutoff(context),
-      work: context.work,
-    });
-    return {
-      kind: "progress",
-      delta: {
-        done: page.processed - page.failed.length,
-        failed: page.failed.length,
-      },
-      errors: page.failed,
-      tallies: { retired: page.retired },
-      reasons: page.reasons,
-      cursor: page.next?.kind === "retire" ? page.next.after : null,
-      done: page.next === null,
-    };
-  },
-};
-
-const transferPairLabel: StepDriversFor<"sweep">["transfer_pair_label"] = {
-  count: async ({ db, run }) => ({
-    total: await countTransferPairsNeedingLabels(db, { runId: run.id }),
-    // The scan already finished; this Run's pairs are its whole population.
-    boundary: null,
-  }),
-  page: async ({ db, run, step, retrying }) => {
-    const { labelTransferPairSuggestions } =
-      await import("~/server/domains/transaction-import/service/transfer-pair-labels");
-    let outcome: Awaited<ReturnType<typeof labelTransferPairSuggestions>>;
-    try {
-      outcome = await labelTransferPairSuggestions(db, {
-        runId: run.id,
-        after: retrying ? null : labelCursor.parse(step.cursor ?? null),
-        cooperative: true,
-      });
-    } catch (error) {
-      const paused = budgetPause(error);
-      if (paused) return paused;
-      throw error;
-    }
-    return {
-      kind: "progress",
-      delta: {
-        done: outcome.completed,
-        skipped: outcome.stale,
-        failed: outcome.failed.length,
-      },
-      errors: outcome.failed,
-      ...(!outcome.active && labelsOff),
-      cursor: outcome.next,
-      done: outcome.next === null && outcome.waitingUntil === null,
-      ...waitFor(outcome.waitingUntil),
-    };
-  },
 };
 
 // ---- Statements: match charges, recheck vanished holds, then label. ----
@@ -603,11 +428,6 @@ const statementLabel: StepDriversFor<"sweep">["statement_label"] = {
 
 const EVALUATION_WAIT_SECONDS = 30;
 
-const connectionEvaluations = (run: StepRunOwner): EvaluationScope => ({
-  runId: run.id,
-  source: "owned",
-  connectionsOnly: true,
-});
 const fieldEvaluations = (run: StepRunOwner): EvaluationScope => ({
   runId: run.id,
   source: "requested",
@@ -665,76 +485,6 @@ async function readmitFailures(context: StepContext, owned: boolean) {
     attempt: context.attempt,
   });
 }
-
-// ---- Connections: roster records as owned evaluations, then wait. ----
-
-const connectionRoster: StepDriversFor<"sweep">["connection_roster"] = {
-  count: countedNow((context, boundary) =>
-    familyInputCount.recommendation(
-      context.db,
-      scopeOf(context.run, "recommendation"),
-      boundary,
-    ),
-  ),
-  page: async (context): Promise<StepPage> => {
-    const { db, run, step } = context;
-    const activation = await readAiRefreshActivation(db);
-    if (!activation?.enabled || !activation.manifest["entity-connections"]) {
-      // An unattended pass with AI refresh off has nothing to evaluate; a
-      // member's Sweep reports why instead of finishing quietly.
-      if (run.trigger === "scheduled") {
-        const remaining = Math.max(
-          0,
-          step.found - step.done - step.skipped - step.failed,
-        );
-        return {
-          kind: "progress",
-          delta: { skipped: remaining },
-          reasons: { ai_refresh_inactive: remaining },
-          meta: { detail: { skipped: "AI refresh is not active" } },
-          done: true,
-        };
-      }
-      throw new Error(
-        "Connection discovery requires an active AI refresh generation",
-      );
-    }
-    const boundary = cutoff(context);
-    const page = await prepareConnectionSweepPage(db, {
-      runId: run.id,
-      after: z
-        .string()
-        .nullable()
-        .parse(step.cursor ?? null),
-      limit: CONNECTION_ROSTER_PAGE,
-      entityKinds: scopeOf(run, "recommendation").entityKinds,
-      createdBefore: boundary ? new Date(boundary) : null,
-    });
-    return {
-      kind: "progress",
-      delta: { done: page.inserted, skipped: page.scanned - page.inserted },
-      reasons: { already_evaluated: page.scanned - page.inserted },
-      cursor: page.next,
-      done: page.next === null,
-    };
-  },
-};
-
-const connectionEvaluate: StepDriversFor<"sweep">["connection_evaluate"] = {
-  count: async ({ db, run }) => ({
-    total: (await readEvaluationTally(db, connectionEvaluations(run))).total,
-    boundary: null,
-  }),
-  page: async (context) => {
-    await readmitFailures(context, true);
-    const scope = connectionEvaluations(context.run);
-    const tally = await readEvaluationTally(context.db, scope);
-    const { blocked, obsolete, cancelled } = tally;
-    return evaluationPage(context, scope, tally, {
-      reasons: { blocked, obsolete, cancelled },
-    });
-  },
-};
 
 // ---- Fields: roster each entity's decision fields, then wait. ----
 
@@ -817,14 +567,9 @@ const fieldEvaluate: StepDriversFor<"sweep">["field_evaluate"] = {
 };
 
 export const sweepStepDrivers = {
-  transfer_pair_scan: transferPairScan,
-  transfer_pair_retire: transferPairRetire,
-  transfer_pair_label: transferPairLabel,
   statement_generate: statementGenerate,
   statement_holds: statementHolds,
   statement_label: statementLabel,
-  connection_roster: connectionRoster,
-  connection_evaluate: connectionEvaluate,
   field_roster: fieldRoster,
   field_evaluate: fieldEvaluate,
 } satisfies StepDriversFor<"sweep">;

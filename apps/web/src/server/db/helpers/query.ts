@@ -354,7 +354,6 @@ const LOCK_ENTITY_BY_NAME = {
   Recipe: "recipe",
   Task: "task",
   Vendor: "vendor",
-  Wish: "wish",
 } as const satisfies Record<string, ShortcodeEntity>;
 
 type LockEntityName = keyof typeof LOCK_ENTITY_BY_NAME;

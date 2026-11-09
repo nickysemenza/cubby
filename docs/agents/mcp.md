@@ -69,7 +69,7 @@ activity prevents expiry and late writes cannot revive terminal Runs. Review and
 decisions are reachable on MCP too
 (`run.set_mail_import`, `run.discover_mail`, `run.commit_prepared`,
 `ai_funding.set_budget`, `ai_funding.reset_funding_refusal`,
-`activity.resolve_run_finding`, `photo_run.approve_groups`,
+`activity.resolve_run_finding`, `run.approve_groups`,
 `product_enrichment.merge_product_match`, suggestion review: `suggestions.review`,
 `suggestions.review_batch`, each batch returning a per-id `ok`/`error`
 result). An agent calls one only
@@ -106,13 +106,13 @@ Record "searched, not available" with `data_exception.set_exception`.
 
 Photo MCP identifiers follow the same entity boundary: `runId`, `productId`
 and photo `id` values are canonical shortcodes. The one
-`photo_run.reject_candidate` `operationId` is a caller-generated retry key, not
+`run.reject_candidate` `operationId` is a caller-generated retry key, not
 an entity reference. Its owning `rejectCandidate` declaration in
 `apps/web/src/contracts/photo-import.contract.ts` describes that protocol;
 `rejectPhotoProductCandidate` scopes it to each photo's Assessment review.
 Reuse the key only for the identical rejection, not a different decision.
 
-`photo_run_read.run_context` serves the bounded per-photo text assembled by
+`run_read.run_context` serves the bounded per-photo text assembled by
 `photo-import/operations/photo-import.server.ts:runContext`. Its
 `photoRunContextImage` schema must match that summary: it does not expose the
 richer web/native `photoRunImage.descriptionEvidence`. The Image shortcode

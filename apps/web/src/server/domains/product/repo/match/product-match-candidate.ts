@@ -50,9 +50,7 @@ import { productIdentityEvidenceFences } from "./product-identity-fence";
 import {
   pairFingerprint,
   prepareProductIdentityPair,
-  prepareProductIdentityPairs,
   preparedProductIdentityPair,
-  productIdentityPairKey,
   productIdentitySnapshots,
 } from "./product-identity-snapshot";
 
@@ -109,13 +107,13 @@ export type ProductPairPublicationInput = {
   fingerprint?: string | null;
   producer?: SuggestionProducer;
 };
-export type PreparedProductPairPublication = {
+type PreparedProductPairPublication = {
   key: string;
   input: ProductPairPublicationInput;
   pair: z.infer<typeof preparedProductIdentityPair>;
   fence: string;
 };
-export type ProductPairPublicationResult =
+type ProductPairPublicationResult =
   | { key: string; valid: false; row: null }
   | {
       key: string;
@@ -123,42 +121,11 @@ export type ProductPairPublicationResult =
       row: ProductMatchCandidateRow & { created: boolean };
     };
 
-/** Pure preparation on a root handle; one set of snapshots/history/fences. */
-export async function prepareProductPairPublications(
-  db: Database,
-  inputs: readonly { key: string; input: ProductPairPublicationInput }[],
-): Promise<PreparedProductPairPublication[]> {
-  if (isTransaction(getDb(db)))
-    throw new Error(
-      "Product pair preparation requires a database outside a transaction",
-    );
-  const targets = inputs.map(({ key, input }) => ({
-    key,
-    productIds: input.productIds,
-  }));
-  const before = await productIdentityEvidenceFences(db, targets);
-  const pairs = await prepareProductIdentityPairs(
-    db,
-    inputs.map(({ input }) => input.productIds),
-  );
-  const after = await productIdentityEvidenceFences(db, targets);
-  return inputs.flatMap(({ key, input }) => {
-    const pair = pairs.get(productIdentityPairKey(input.productIds)),
-      fence = before.get(key);
-    return pair &&
-      fence &&
-      fence === after.get(key) &&
-      (!input.fingerprint || input.fingerprint === pair.fingerprint)
-      ? [{ key, input, pair, fence }]
-      : [];
-  });
-}
-
 /** Caller owns the short SERIALIZABLE transaction and its Job/request guards.
  * One pair lock order, immutable publication and locked state read serve the
  * whole chunk. Duplicate source requests retain separate keyed results.
  */
-export async function publishProductPairPublications(
+async function publishProductPairPublications(
   tx: Database,
   outcomes: readonly PreparedProductPairPublication[],
 ): Promise<ProductPairPublicationResult[]> {

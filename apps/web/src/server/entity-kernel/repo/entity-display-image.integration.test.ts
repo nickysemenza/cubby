@@ -5,7 +5,6 @@ import { rawLocationList } from "@cubby/schemas/location-raw-read";
 import { recordSourceTransactionRecordsInput } from "@cubby/schemas/source-transaction-record";
 import { eq, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
-import { taxonomyShortcode } from "tooling/product-category-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -55,11 +54,6 @@ import {
 import { listSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record.fixtures";
 import { createFinancialEvidenceFixture } from "~/server/domains/transaction-import/repo/source-transaction-record.fixtures";
 import { createVendor } from "~/server/domains/vendor/repo/vendor";
-import {
-  createWish,
-  updateWish,
-  wishScaffold,
-} from "~/server/domains/wish/repo";
 import {
   entityKernelContextSchema,
   executeEntity,
@@ -1312,79 +1306,6 @@ describe("entity display image resolver", () => {
     });
   });
 
-  describe("wish (borrowed)", () => {
-    it("orders candidates' product images in candidate link order", async () => {
-      const pA = await createProductIdentityFixture(
-        ctx.db,
-        makeProductInput({
-          name: "Candidate A",
-          categoryId: taxonomyShortcode("tools"),
-        }),
-        ctx.actor,
-      );
-      const imgA = await makeImage();
-      await insertEntityAttachments(ctx.db, {
-        entityId: pA.entityId,
-        imageId: imgA.id,
-        sortOrder: 0,
-      });
-
-      const pB = await createProductIdentityFixture(
-        ctx.db,
-        makeProductInput({
-          name: "Candidate B",
-          categoryId: taxonomyShortcode("tools"),
-        }),
-        ctx.actor,
-      );
-      const imgB = await makeImage();
-      await insertEntityAttachments(ctx.db, {
-        entityId: pB.entityId,
-        imageId: imgB.id,
-        sortOrder: 0,
-      });
-
-      const wish = await createWish(
-        ctx.db,
-        { name: "Wishlist item", notes: null, candidateProductIds: [pA.id] },
-        ctx.actor,
-      );
-      await updateWish(
-        ctx.db,
-        wish.output.id,
-        { candidateProductIds: [pA.id, pB.id] },
-        ctx.actor,
-      );
-
-      const rows = await withDisplayImages(
-        ctx.db,
-        "wish",
-        [{ id: wish.entityId }],
-        (row) => ({ id: row.id }),
-      );
-
-      expect(rows[0]?.displayImages).toEqual([
-        expectedDisplayImage(imgA),
-        expectedDisplayImage(imgB),
-      ]);
-
-      // Regression: the wish list handed hydrated rows (shortcode `id`) to the
-      // uuid-keyed resolver, so /wishes failed with "invalid input syntax for
-      // type uuid" whenever any wish existed.
-      const listed = await wishScaffold.read(ctx.db, {
-        filters: {},
-        sorts: [],
-        pagination: {
-          pageIndex: 0,
-          pageSize: 10,
-        },
-      });
-      expect(
-        listed.data.find((row) => row.id === wish.output.id)?.displayImages,
-      ).toEqual([expectedDisplayImage(imgA), expectedDisplayImage(imgB)]);
-    });
-  });
-
   describe("inventory and expense (borrowed)", () => {
     it("an inventory entry shows its product's images", async () => {
       const product = await createProductIdentityFixture(
@@ -2131,30 +2052,6 @@ describe("entity display image resolver", () => {
         sortOrder: 0,
       });
 
-      const wishProduct = await createProductIdentityFixture(
-        ctx.db,
-        makeProductInput({
-          name: "Mixed Wish Product",
-          categoryId: taxonomyShortcode("tools"),
-        }),
-        ctx.actor,
-      );
-      const wishImg = await makeImage();
-      await insertEntityAttachments(ctx.db, {
-        entityId: wishProduct.entityId,
-        imageId: wishImg.id,
-        sortOrder: 0,
-      });
-      const wish = await createWish(
-        ctx.db,
-        {
-          name: "Mixed Wish",
-          notes: null,
-          candidateProductIds: [wishProduct.id],
-        },
-        ctx.actor,
-      );
-
       const invProduct = await createProductIdentityFixture(
         ctx.db,
         makeProductInput({ name: "Mixed Inventory Product" }),
@@ -2231,7 +2128,6 @@ describe("entity display image resolver", () => {
         { entityKind: "location", entityId: location.entityId },
         { entityKind: "cookbook", entityId: cookbook.entityId },
         { entityKind: "ingredient", entityId: ingredient.entityId },
-        { entityKind: "wish", entityId: wish.entityId },
         { entityKind: "inventory", entityId: inventoryEntry.entityId },
         { entityKind: "expense", entityId: expense.entityId },
         { entityKind: "gardenEntry", entityId: gardenEntryRow.id },
@@ -2262,7 +2158,6 @@ describe("entity display image resolver", () => {
         { entityKind: "location", entityId: location.entityId },
         { entityKind: "cookbook", entityId: cookbook.entityId },
         { entityKind: "ingredient", entityId: ingredient.entityId },
-        { entityKind: "wish", entityId: wish.entityId },
         { entityKind: "inventory", entityId: inventoryEntry.entityId },
         { entityKind: "expense", entityId: expense.entityId },
         { entityKind: "gardenEntry", entityId: gardenEntryRow.id },
@@ -2280,9 +2175,6 @@ describe("entity display image resolver", () => {
       expect(
         result.get(entityRefKey("ingredient", ingredient.entityId)),
       ).toEqual(expectedImageUrl(ingredientImg));
-      expect(result.get(entityRefKey("wish", wish.entityId))).toEqual(
-        expectedImageUrl(wishImg),
-      );
       expect(
         result.get(entityRefKey("inventory", inventoryEntry.entityId)),
       ).toEqual(expectedImageUrl(invImg));

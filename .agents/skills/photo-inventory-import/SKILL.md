@@ -23,7 +23,7 @@ party. Free-text `notes` gives context such as a location by time window
 
 ## Read the run
 
-Call `photo_run_read.run_context { runId }` for `ledgerPartyId`, `notes`, and the
+Call `run_read.run_context { runId }` for `ledgerPartyId`, `notes`, and the
 run's photos, one page at a time: pass `nextCursor` back as `cursor` until it
 is null. Filter its images to `targetState: "pending"`; the pages are in
 capture order (`capturedAt`, undated photos last), even across batches
@@ -64,7 +64,7 @@ one as imported.
 Name and match per [product identity](../product-enrichment/references/product-identity.md)
 — its either-side-first contract governs every photo Product: `Brand Model —
 Color, Size`, one Product per exact variant. Before creating, check for an
-existing match — call `photo_run_read.product_candidates` once per distinct
+existing match — call `run_read.product_candidates` once per distinct
 item with its observed name and brand text (`brandName`). Its results include purchase,
 own-photo, earlier photo-import, and inventory evidence. Compare exact variant
 facts yourself; rank and absence of an own photo are useful leads, not proof.
@@ -90,13 +90,13 @@ it lists the current root/group/type choices and the tag-transcription rules.
 
 ## Propose the groups
 
-Send groups with `photo_run.propose_groups` `{ runId, groups }` — the same group
-shape `photo_run.commit_group` takes, minus `runId`, plus optional `evidence`
+Send groups with `run.propose_groups` `{ runId, groups }` — the same group
+shape `run.commit_group` takes, minus `runId`, plus optional `evidence`
 (why these photos are one item and why this Product). Nothing is written to
 Products or Inventory yet: the user reviews and edits groups on the run page,
-then approves one or a selected batch. Approval runs `photo_run.commit_group` for
+then approves one or a selected batch. Approval runs `run.commit_group` for
 each selected group with its reviewed payload. Call
-`photo_run.commit_group` directly, or approve with `photo_run.approve_groups`,
+`run.commit_group` directly, or approve with `run.approve_groups`,
 only when the user explicitly asks to skip or finish review. Direct Product or
 Inventory writes require `review` with `observedName`, `stockIntent` and a null
 `unresolvedReason`; skip-only groups complete without review. Member approval
@@ -114,10 +114,10 @@ when there is no concern), and `stockIntent`: `evidence`, `counted`, `historical
 alone does not block approval. Choosing a catalog Product must not replace the
 observed identity. Unknown brand/model alone need not block a distinct new item.
 Resolve an existing concern only on the member's answer with
-`photo_run.resolve_concern` `{ runId, groupKey, reply? }`: the original concern
+`run.resolve_concern` `{ runId, groupKey, reply? }`: the original concern
 and resolution provenance remain in `review.resolvedConcerns`. Product/draft
 edits preserve concerns. To record a member's rejected candidate, use
-`photo_run.reject_candidate` `{ runId, groupKey, productId, operationId }`;
+`run.reject_candidate` `{ runId, groupKey, productId, operationId }`;
 that Wrong Feedback suppresses the candidate for those photos through regrouping.
 Read the server's `steps` and `blockedReason`; inference failure is retryable
 and never blocks apply.
@@ -157,7 +157,7 @@ protected group or image fails with the conflicting group named; regroup only
 the remaining photos. `committed`/`discarded` groups are frozen and come back
 in `frozenGroupKeys`.
 Then stop and tell the user the groups are ready to review on the run page.
-Read the outcome with `photo_run_read.proposals`: a group left `proposed`
+Read the outcome with `run_read.proposals`: a group left `proposed`
 with `conflict` hit an exact case-insensitive name/alias collision (re-propose
 with that `existingId` or a distinctly different name); `lastError` is a
 failed approval to fix and re-propose.
@@ -170,7 +170,7 @@ group with only its own photos needs no reordering.
 
 ## Finish
 
-The run is done once `photo_run_read.run_context` has no pending images — the
+The run is done once `run_read.run_context` has no pending images — the
 approval (or discard) that settles the last pending image marks the run
 `completed` automatically. Report items
 committed, images skipped (with reasons), Products matched vs. created,

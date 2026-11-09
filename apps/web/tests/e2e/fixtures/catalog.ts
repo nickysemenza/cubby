@@ -1,15 +1,11 @@
-import type { PgTable } from "drizzle-orm/pg-core";
-import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { resolveProductBrandName } from "~/server/domains/vendor/repo/product-brand";
-import { publishEntityConnection } from "~/server/domains/connection/repo/entity-connections";
+
 import type { EntityOverrides } from "#web/tooling/factories/build.ts";
 import { taxonomyShortcode } from "#web/tooling/product-category-fixtures.ts";
 import { type TaskStatus } from "@cubby/schemas/project";
 import type { Page } from "@playwright/test";
-import { and, eq, isNull } from "drizzle-orm";
-import * as schema from "~/server/db/schema";
-import { getDb } from "~/server/db/helpers";
-import { getFixtureDb, createFixtureGraph, createEntityFixture } from "./core";
+
+import { createFixtureGraph, createEntityFixture } from "./core";
 
 /** Seed a synthetic taxonomy node when a browser flow needs a stable route. */
 export const seedProductCategoryPrerequisite = (
@@ -173,52 +169,6 @@ export const seedIngredientPrerequisite = (page: Page, name: string) =>
 
 export const seedPlantPrerequisite = (page: Page, name: string) =>
   createEntityFixture(page, "plant", { name });
-
-export async function seedPlacementReviewPrerequisite(
-  page: Page,
-  name: string,
-) {
-  const existingUnknown = await getDb(getFixtureDb()).query.location.findFirst({
-    where: {
-      RAW: (table: PgTable) =>
-        relationalSql(
-          table,
-          and(
-            eq(schema.location.name, "Unknown"),
-            isNull(schema.location.deletedAt),
-          ),
-        ),
-    },
-  });
-  const unknown = existingUnknown
-    ? { id: existingUnknown.shortcode }
-    : await seedLocationPrerequisite(page, "Unknown");
-  const target = await seedLocationPrerequisite(page, `${name} workshop`);
-  const product = await seedProductPrerequisite(page, { name });
-  const destination = await createEntityFixture(page, "inventory", {
-    productId: product.id,
-    locationId: target.id,
-    amount: { value: 1, unit: "each" },
-  });
-  const source = await createEntityFixture(page, "inventory", {
-    productId: product.id,
-    locationId: unknown.id,
-    amount: { value: 1, unit: "each" },
-  });
-  // Passive record reads expose only proposals already published by a Sweep.
-  await publishEntityConnection(getFixtureDb(), {
-    relation: "inventory-location",
-    source: { entityKind: "inventory", entityId: source.id },
-    target: { entityKind: "location", entityId: target.id },
-    label: "Review inventory placement",
-    evidence: {
-      reasons: ["Synthetic exact Product stock at one known destination"],
-      contradictions: [],
-      unknowns: ["Confirm the physical location"],
-    },
-  });
-  return { source, destination, target };
-}
 
 /** One catalog garment, two independently owned quantities in different places. */
 export async function seedWardrobePrerequisites(page: Page, name: string) {

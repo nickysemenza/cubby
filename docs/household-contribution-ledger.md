@@ -47,7 +47,7 @@ A Source Claim accepts a provider row ID only as write-time key material. The se
   pools, so batching does not weaken ambiguity checks or change page cursors.
   Statement classification and transfer discovery share provider-category folding
   and the same money-move kinds.
-- Accept a suggested transfer pair (`finance.accept_transfer_pair`, or Accept on
+- Accept a transfer pair (`finance.accept_transfer_pair`, or Accept on
   the transaction's Work queue row): one transaction creates the Ledger Transfer
   from the outflow account's owner to the inflow account's owner, for the
   absolute amount, dated the earlier leg, and links both legs as evidence. It

@@ -58,7 +58,6 @@ const PRODUCT_RETAINING_NOT_EXISTS = {
     WHERE dq_orphan_food."productId" = ${t.id}
       AND ${notDeleted("dq_orphan_food")}
   )`,
-  "EntityLink[wishCandidate].to": (t) => noLiveProductLink(t, "wishCandidate"),
   "Location.productId": (t) => sql`NOT EXISTS (
     SELECT 1 FROM "Location" dq_orphan_location
     WHERE dq_orphan_location."productId" = ${t.id}

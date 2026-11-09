@@ -64,8 +64,6 @@ struct HeroActionRunnerTests {
     nonisolated private static let deleted = Data(
         #"{"action":"delete","entity":"task","deletedReferences":[],"affectedEdges":[],"sideEffects":{}}"#
             .utf8)
-    nonisolated private static let wishUpdated = Data(
-        #"{"action":"update","entity":"wish","item":{"id":"WSH-4K7M"},"sideEffects":{}}"#.utf8)
     nonisolated private static let discarded = Data(
         #"{"expenseId":"EXP-4K7M","storedQuantity":-2,"inventory":null,"sideEffects":{}}"#.utf8)
 
@@ -105,7 +103,6 @@ struct HeroActionRunnerTests {
         #expect(HeroActionRunner.plan(for: .discard, on: .product) != nil)
         #expect(HeroActionRunner.plan(for: .discard, on: .task) == nil)
         #expect(HeroActionRunner.plan(for: .setStatus, on: .project) != nil)
-        #expect(HeroActionRunner.plan(for: .markPurchased, on: .wish) != nil)
         #expect(HeroActionRunner.plan(for: .recordSale, on: .product) != nil)
         #expect(HeroActionRunner.plan(for: .addToInventory, on: .product) != nil)
         #expect(HeroActionRunner.plan(for: .delete, on: .task) != nil)
@@ -123,7 +120,7 @@ struct HeroActionRunnerTests {
         #expect(discard.confirmation == .destructive)
         for (verb, entity) in [
             (EntityHeroActionID.addToInventory, EntityKey.product), (.recordSale, .product),
-            (.setStatus, .project), (.markPurchased, .wish),
+            (.setStatus, .project),
         ] {
             #expect(HeroActionRunner.plan(for: verb, on: entity)?.confirmation == HeroActionConfirmation.none)
         }
@@ -306,26 +303,6 @@ struct HeroActionRunnerTests {
         await model.submission?.waitUnlessCancelled()
         #expect(recorder.requests.filter { $0.path == "/api/operations/product.discard" }.count == 1)
         #expect(finished.withLock { $0 } == 1)
-    }
-
-    @Test func markPurchasedFlipsTheAcquiredFlagFromItsState() async throws {
-        let recorder = capture { _ in (200, Self.wishUpdated) }
-        let runner = try makeRunner()
-        let plan = try #require(HeroActionRunner.plan(for: .markPurchased, on: .wish))
-        _ = try? await runner.perform(
-            plan, on: .wish, row: Self.row("WSH-4K7M", raw: ["acquiredAt": .null]), values: [:],
-            confirmed: false)
-        let unacquired = try #require(recorder.requests.first)
-        #expect(unacquired.method == "POST")
-        #expect(unacquired.path == "/api/operations/entity.mutate")
-        #expect(unacquired.body["action"] == "update")
-        #expect(unacquired.body["entity"] == "wish")
-        #expect(unacquired.body["id"] == "WSH-4K7M")
-        #expect(unacquired.body["data"]?["acquired"] == true)
-        _ = try? await runner.perform(
-            plan, on: .wish, row: Self.row("WSH-4K7M", raw: ["acquiredAt": "2026-06-03T00:00:00.000Z"]),
-            values: [:], confirmed: false)
-        #expect(recorder.requests.last?.body["data"]?["acquired"] == false)
     }
 
     /// A preset write (a task's Done) runs on the tap: no form, exactly the plan's value, and it is

@@ -12,11 +12,7 @@ import {
   recipeTotalsLabel,
   sourceAliasesLabel,
   sourceRefsLabel,
-  wishCandidateItems,
 } from "./detail-display-labels";
-
-const skilletId = testShortcode("product", "skillet");
-const panId = testShortcode("product", "pan");
 
 describe("categoryPathLabel", () => {
   it("reads root to leaf with slashes, and says nothing for no ancestry", () => {
@@ -195,49 +191,5 @@ describe("possibleVendorLabel", () => {
   it("says nothing for absent evidence", () => {
     expect(possibleVendorLabel({ status: "none", candidates: [] })).toBeNull();
     expect(possibleVendorLabel(null)).toBeNull();
-  });
-});
-
-describe("wishCandidateItems", () => {
-  it("words each candidate for a row that opens its product", () => {
-    expect(
-      wishCandidateItems([
-        {
-          id: skilletId,
-          name: "Cast Iron Skillet",
-          brandName: "Acme",
-          model: "CI-12",
-          price: 34.5,
-          inventoried: true,
-          createdAt: new Date("2026-01-01"),
-          updatedAt: new Date("2026-01-01"),
-        },
-        {
-          id: panId,
-          name: "Steel Pan",
-          brandName: "Acme",
-          model: null,
-          price: null,
-          inventoried: false,
-          createdAt: new Date("2026-01-01"),
-          updatedAt: new Date("2026-01-01"),
-        },
-      ]),
-    ).toEqual([
-      {
-        entity: "product",
-        id: skilletId,
-        title: "Cast Iron Skillet",
-        subtitle: "Acme · CI-12",
-        trailing: "$34.50 · In inventory",
-      },
-      {
-        entity: "product",
-        id: panId,
-        title: "Steel Pan",
-        subtitle: "Acme",
-        trailing: null,
-      },
-    ]);
   });
 });

@@ -537,8 +537,7 @@ Name and Recipes columns.
 All generic rosters now default to declared demand; an override no longer opts
 into a complete read. Inventory dialogs retain canonical amount, Product, Location
 and editable-location evidence. A missing canonical quantity never falls back to
-a retained physical amount. Wish tree rows retain acquisition state for the same
-purchased toggle as canonical rows. Expense admission reads only its line kind and
+a retained physical amount. Expense admission reads only its line kind and
 planned status; the editor owns its fresh complete baseline. Unfiltered action
 subjects do not force exact counts, keeping the loader and mounted query aligned.
 Column and subject `readFields` annotations that had no reader are removed;

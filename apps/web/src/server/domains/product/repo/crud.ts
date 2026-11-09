@@ -2509,7 +2509,6 @@ const PRODUCT_RETAINING_DEPENDENTS = {
       },
       columns: { productId: true },
     }),
-  "EntityLink[wishCandidate].to": liveLinksToProducts("wishCandidate"),
   "Location.productId": (tx, ids) =>
     tx.query.location.findMany({
       where: {

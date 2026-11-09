@@ -28,10 +28,10 @@ describe("evaluation page admission cutover", () => {
           state,
           workKey: `synthetic-request-backfill:${state}`,
           target: {
-            kind: "product" as const,
+            kind: "field" as const,
             entity: "product" as const,
             recordId: crypto.randomUUID(),
-            field: null,
+            field: "name",
             suggestionIds: [],
           },
           provenance: {

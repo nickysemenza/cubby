@@ -1,7 +1,6 @@
 /** Failures: selected Jev/Clef or relevance identity is lost, metadata leaks
  * between concurrent messages, rules claim a paid model, or known telemetry
  * is deduplicated against a historical unknown prediction. */
-import * as models from "@cubby/shared/ai/models";
 import { and, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -86,7 +85,7 @@ describe("persisted production Gmail decision telemetry", () => {
     "persists actual selected %s and prompt/operation through production ingestion",
     async (model) => {
       const f = await fixture();
-      vi.spyOn(models, "selectDecisionModel").mockReturnValue(model);
+      vi.spyOn(choices, "decisionModelFor").mockReturnValue(model);
       const runner = vi
         .spyOn(choices, "runDecisionChoice")
         .mockResolvedValue(result(1));
@@ -121,7 +120,7 @@ describe("persisted production Gmail decision telemetry", () => {
     "persists relevance fallback with import policy %s",
     async (importPolicy) => {
       const f = await fixture(importPolicy);
-      vi.spyOn(models, "selectDecisionModel").mockReturnValue(
+      vi.spyOn(choices, "decisionModelFor").mockReturnValue(
         "@cf/cloudflare/clef",
       );
       vi.spyOn(choices, "runDecisionChoice").mockResolvedValue(result(2));
@@ -175,8 +174,8 @@ describe("persisted production Gmail decision telemetry", () => {
   });
   it("isolates actual model metadata while concurrent message decisions complete in reverse order", async () => {
     const f = await fixture();
-    vi.spyOn(models, "selectDecisionModel").mockImplementation((options) =>
-      options.key?.includes("first-message")
+    vi.spyOn(choices, "decisionModelFor").mockImplementation((args) =>
+      JSON.stringify(args).includes("first-message")
         ? "typesafe/jev"
         : "@cf/cloudflare/clef",
     );

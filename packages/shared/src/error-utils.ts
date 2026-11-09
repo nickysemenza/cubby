@@ -84,7 +84,6 @@ export const AppErrors = {
   // dates are ledger-derived, so the fix is usually a missing acquisition
   // Expense rather than the edge being wrong.
   TOOL_TIMELINE_CONFLICT: "PRECONDITION_FAILED",
-  PRODUCT_HAS_WISH_CANDIDATES: "PRECONDITION_FAILED",
   PRODUCT_HAS_LOCATIONS: "PRECONDITION_FAILED",
   // A book product that a Cookbook claims as its physical copy. Unlink from
   // the cookbook page first; the cookbook and its recipes outlive the copy.

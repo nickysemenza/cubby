@@ -285,7 +285,7 @@ export const recipeContract = defineContract(
     scrapeUrl: query({
       exposure: "capability",
       description:
-        "Parse a recipe from a URL into structured form WITHOUT saving it; recipe_insights.import_from_url saves.",
+        "Parse a recipe from a URL into structured form WITHOUT saving it; nutrition.import_from_url saves.",
       openWorld: true,
       input: z.object({ url: scrapeRecipeInput }),
       output: scrapeRecipeMcpOut,
@@ -294,7 +294,7 @@ export const recipeContract = defineContract(
     importFromUrl: mutation({
       exposure: "capability",
       description:
-        "Scrape a recipe from a URL and save it in one step; returns the new recipe's shortcode and `lineCoverage` (per line, which of price/weight/nutrients are still missing). recipe_insights_read.scrape_url parses without saving.",
+        "Scrape a recipe from a URL and save it in one step; returns the new recipe's shortcode and `lineCoverage` (per line, which of price/weight/nutrients are still missing). nutrition_read.scrape_url parses without saving.",
       openWorld: true,
       input: z.object({ url: scrapeRecipeInput }),
       output: recipeImportWriteOut,
@@ -312,7 +312,7 @@ export const recipeContract = defineContract(
     patchLine: mutation({
       exposure: "capability",
       description:
-        "Change one recipe ingredient line — its amounts, the ingredient or sub-recipe it points at, or its source text/modifier — without resending the recipe's sections. The line keeps its position and every other line and instruction is left as-is. `lineId` comes from recipe_insights_read.costing_explanation's per-line diagnostics or recipe_insights_read.recipe_usages's usages. Also returns the recipe's refreshed `lineCoverage`.",
+        "Change one recipe ingredient line — its amounts, the ingredient or sub-recipe it points at, or its source text/modifier — without resending the recipe's sections. The line keeps its position and every other line and instruction is left as-is. `lineId` comes from nutrition_read.costing_explanation's per-line diagnostics or nutrition_read.recipe_usages's usages. Also returns the recipe's refreshed `lineCoverage`.",
       input: recipeLinePatchInput,
       output: recipeLinePatchOut,
       invalidates: ["recipe"],
@@ -339,7 +339,7 @@ export const recipeContract = defineContract(
     /** Re-parse one stored line with the current parser and write what changed. */
     reparseLine: mutation({
       exposure: "capability",
-      note: "Parser-upgrade repair; agents edit lines through recipe_insights.patch_line",
+      note: "Parser-upgrade repair; agents edit lines through nutrition.patch_line",
       description:
         "Reparse one recipe ingredient line after a parser upgrade or source correction. This changes the saved line; use recipe.patch_line for ordinary member edits.",
       command: { label: "Reparse line", confirmation: null },
@@ -408,7 +408,7 @@ export const recipeContract = defineContract(
       invalidates: ["recipe"],
     }),
   },
-  { exposure: "view", mcpToolGroup: "recipe_insights" },
+  { exposure: "view", mcpToolGroup: "nutrition" },
 );
 
 export const recipeAvailabilityContract = defineContract(
@@ -416,7 +416,7 @@ export const recipeAvailabilityContract = defineContract(
   {
     getRecipeAvailability: query({
       exposure: "view",
-      note: "Agents read cookable recipes through recipe_insights_read.get_makeable",
+      note: "Agents read cookable recipes through nutrition_read.get_makeable",
       input: recipeAvailabilityInput,
       output: recipeAvailabilityOut,
       cache: { tags: [["recipe", "availability"]] },
@@ -429,7 +429,7 @@ export const recipeAvailabilityContract = defineContract(
       cache: { tags: [["recipe", "makeable"]] },
     }),
   },
-  { exposure: "capability", mcpToolGroup: "recipe_insights" },
+  { exposure: "capability", mcpToolGroup: "nutrition" },
 );
 
 const recomputeEventSchema = z.discriminatedUnion("type", [

@@ -15,7 +15,6 @@ import {
   type DecisionChoicePrompt,
   selectionPrompt,
 } from "~/server/ai/policy/decision-choice";
-import { PRODUCT_IDENTITY_FEATURE } from "~/server/ai/policy/feature-identity";
 import {
   PURCHASE_LINE_DECISIONS,
   type AiDecisionFeature,
@@ -28,7 +27,6 @@ import {
   PRODUCT_VARIANT_RELATION_FEATURE,
   SETTLEMENT_CANDIDATE_RANK_FEATURE,
   USDA_FOOD_SUGGEST_FEATURE,
-  TRANSFER_PAIR_MOVEMENT_FEATURE,
 } from "~/server/ai/policy/features";
 import {
   type CatalogRow,
@@ -46,8 +44,6 @@ import {
 } from "~/server/ai/vocabularies";
 import type { Database } from "~/server/db";
 import { suggestionCountsByFamily } from "~/server/generic/suggestions/repo/suggestion-list";
-
-import { productIdentityPrompt } from "./product-identity";
 
 type Option = DecisionCatalogRow["options"][number];
 
@@ -108,25 +104,6 @@ function featureRows(): CatalogRow[] {
   );
   return [
     featureRow(
-      TRANSFER_PAIR_MOVEMENT_FEATURE.feature,
-      "Transfer-pair movement",
-      "Read explicit account-movement evidence in one candidate leg",
-      TRANSFER_PAIR_MOVEMENT_FEATURE,
-      TRANSFER_PAIR_MOVEMENT_FEATURE.prompt(
-        JSON.stringify({
-          account: { kind: "bank_account", name: "Synthetic checking" },
-          oppositeAccountKind: "bank_account",
-          amount: 180,
-          date: "2026-05-04",
-          descriptor: "ONLINE TRANSFER TO SAVINGS",
-          merchant: null,
-          providerCategory: "Transfer",
-          recordedKind: null,
-        }),
-      ),
-      { options: plainOptions(TRANSFER_PAIR_MOVEMENT_FEATURE.choices) },
-    ),
-    featureRow(
       UPC_OFFER_COMPARABILITY_FEATURE.feature,
       "UPC offer comparability",
       "Compare one offer with the identified sellable package",
@@ -168,13 +145,6 @@ function featureRows(): CatalogRow[] {
         secondTitle: "Example trail shirt, navy, large",
       }),
       { options: plainOptions(PRODUCT_VARIANT_RELATION_FEATURE.choices) },
-    ),
-    featureRow(
-      PRODUCT_IDENTITY_FEATURE.feature,
-      "Product identity",
-      "Compare one pair against exact identifiers and verified variant evidence",
-      PRODUCT_IDENTITY_FEATURE,
-      productIdentityPrompt("Two synthetic Product records"),
     ),
     featureRow(
       MAILBOX_TRIAGE_FEATURE.feature,

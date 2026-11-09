@@ -227,63 +227,6 @@ describe("mutation side effects integration", () => {
     expect(deletedAt).toBeInstanceOf(Date);
   });
 
-  it("a product rename rewrites its inherited Task, Inventory, and Wish projections", async () => {
-    const seed = kernelSeeder(ctx.db);
-    const place = await seed("location", { name: "Fanout shed" });
-    const tarp = await seed("product", { name: "Fanout tarp" });
-    const stock = await seed("inventory", {
-      productId: tarp.code,
-      locationId: place.code,
-      amount: { value: 1, unit: "each" },
-    });
-    const parent = await seed("task", {
-      name: "Fanout parent chore",
-      trade: "other",
-      subjectProductId: tarp.code,
-    });
-    // No subject of its own: it inherits the parent's subject Product.
-    const child = await seed("task", {
-      name: "Fanout child chore",
-      trade: "other",
-      parentTaskId: parent.code,
-    });
-    const wish = await seed("wish", {
-      name: "Fanout shade wish",
-      candidateProductIds: [tarp.code],
-    });
-    for (const [kind, id] of [
-      ["inventory", stock.id],
-      ["task", child.id],
-      ["wish", wish.id],
-    ] as const) {
-      expect(await semanticText(ctx.db, kind, id)).toContain("Fanout tarp");
-    }
-
-    await renameFixtureRaw(ctx.db, "product", tarp.id, "Fanout awning");
-    const ports = capturingPorts();
-    await runMutationSideEffects(
-      ctx.db,
-      {
-        action: "updated",
-        entity: { entity: "product", id: tarp.id },
-        source: "test.product.rename",
-      },
-      ports,
-    );
-
-    for (const [kind, id] of [
-      ["product", tarp.id],
-      ["inventory", stock.id],
-      ["task", parent.id],
-      ["task", child.id],
-      ["wish", wish.id],
-    ] as const) {
-      const text = await semanticText(ctx.db, kind, id);
-      expect(text).toContain("Fanout awning");
-      expect(text).not.toContain("Fanout tarp");
-    }
-  });
-
   it("a task change reaches the search projection of every inheriting descendant", async () => {
     const seed = kernelSeeder(ctx.db);
     const tarp = await seed("product", { name: "Lineage tarp" });

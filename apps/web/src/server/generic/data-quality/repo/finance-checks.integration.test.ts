@@ -2,7 +2,6 @@ import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { moneyToMinor } from "@cubby/shared";
 import { sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
-import { taxonomyShortcode } from "tooling/product-category-fixtures";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -19,7 +18,6 @@ import {
   readVendorById,
   updateVendor,
 } from "~/server/domains/vendor/repo/vendor";
-import { createWish } from "~/server/domains/wish/repo";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { drainStoredDerived } from "~/server/testing/background-queue";
@@ -27,9 +25,7 @@ import { publishQualityFixtures } from "~/server/testing/quality.fixtures";
 import {
   createImageFixture,
   createPlantFixture,
-  createProductIdentityFixture,
   makeLocationInput,
-  makeProductInput,
   insertEntityAttachments,
 } from "~/server/testing/repo.fixtures";
 
@@ -432,44 +428,6 @@ describe("data quality: finance and project entities", () => {
         }),
       ]),
     );
-  });
-
-  it("wish: candidate (only while not yet acquired)", async () => {
-    const tool = await createProductIdentityFixture(
-      ctx.db,
-      makeProductInput({
-        name: "DQ wish tool",
-        categoryId: taxonomyShortcode("tools"),
-      }),
-      ctx.actor,
-    );
-    const gap = await createWish(
-      ctx.db,
-      { name: "DQ wish gap", notes: null, candidateProductIds: [] },
-      ctx.actor,
-    );
-    const complete = await createWish(
-      ctx.db,
-      {
-        name: "DQ wish complete",
-        notes: null,
-        candidateProductIds: [tool.id],
-      },
-      ctx.actor,
-    );
-
-    const hydrated = await loadDataQualities(
-      ctx.db,
-      "wish",
-      [gap.entityId, complete.entityId],
-      "live",
-    );
-    const gapChecks = hydrated.get(gap.entityId)?.gaps.map((g) => g.check);
-    expect(gapChecks).toContain("wish_candidate");
-    expect(hydrated.get(complete.entityId)).toMatchObject({
-      status: "needs_data",
-      gaps: [{ check: "wish_display_image" }],
-    });
   });
 
   it("planting: location (only once no longer planned)", async () => {

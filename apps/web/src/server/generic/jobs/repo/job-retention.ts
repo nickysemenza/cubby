@@ -1,9 +1,21 @@
 import { jobState } from "@cubby/schemas/job";
-import { and, eq, inArray, lt, or } from "drizzle-orm";
+import { runCause, runStatus, runTrigger } from "@cubby/schemas/run-fields";
+import {
+  and,
+  eq,
+  exists,
+  inArray,
+  isNull,
+  lt,
+  ne,
+  notInArray,
+  or,
+  sql,
+} from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import { withTransaction } from "~/server/db/helpers";
-import { job } from "~/server/db/retained-tables";
+import { job, run } from "~/server/db/retained-tables";
 
 const DAY_MS = 24 * 60 * 60_000;
 /**
@@ -14,7 +26,23 @@ const DAY_MS = 24 * 60 * 60_000;
 const JOB_RETENTION_MS = 8 * DAY_MS;
 /** A cancelled row records a member's stop. */
 const CANCELLED_RETENTION_MS = 14 * DAY_MS;
+/** A failed row that belongs to no Run keeps the longer window. */
 const FAILED_RETENTION_MS = 30 * DAY_MS;
+/**
+ * A failed row is pruned only when its Run is settled, scheduled work no member
+ * asked for and not mail or financial import work, at any age. A protected Run's
+ * failed Jobs are never pruned. Rows are the only thing deleted: the Run stays
+ * as AiUsage cost evidence.
+ */
+const FAILED_RUN_JOB_RETENTION_MS = 14 * DAY_MS;
+const KEPT_FAILURE_PURPOSES = [
+  "mail_import",
+  "mail_discovery",
+  "mail_search",
+  "mail_reclassify",
+  "purchase_validation",
+  "account_sync",
+] as const;
 
 /**
  * Delete one bounded batch of finished execution rows. Domain evidence lives
@@ -43,7 +71,31 @@ export async function pruneFinishedJobs(
             ),
             and(
               eq(job.state, jobState.enum.failed),
-              olderThan(FAILED_RETENTION_MS),
+              or(
+                and(isNull(job.runId), olderThan(FAILED_RETENTION_MS)),
+                and(
+                  olderThan(FAILED_RUN_JOB_RETENTION_MS),
+                  // includes-deleted: a soft-deleted Run's failed Jobs are still prunable.
+                  exists(
+                    tx
+                      .select({ one: sql`1` })
+                      .from(run)
+                      .where(
+                        and(
+                          eq(run.id, job.runId),
+                          inArray(run.status, [
+                            runStatus.enum.completed,
+                            runStatus.enum.failed,
+                            runStatus.enum.dispatch_failed,
+                          ]),
+                          ne(run.trigger, runTrigger.enum.manual),
+                          sql`${run.cause} IS DISTINCT FROM ${runCause.enum.member_request}`,
+                          notInArray(run.purpose, [...KEPT_FAILURE_PURPOSES]),
+                        ),
+                      ),
+                  ),
+                ),
+              ),
             ),
           ),
         ),

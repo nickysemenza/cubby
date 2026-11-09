@@ -27,11 +27,7 @@ import {
 } from "~/server/domains/inventory/operations.server";
 import { addInventoryEntries } from "~/server/domains/inventory/repo/bulk";
 import { createInventoryEntry } from "~/server/domains/inventory/repo/crud";
-import { getPlacementRecommendation } from "~/server/domains/inventory/service/placement-recommendation.service";
-import {
-  createLocation,
-  ensureGlobalUnknownLocation,
-} from "~/server/domains/location/repo/crud";
+import { createLocation } from "~/server/domains/location/repo/crud";
 import {
   quickCreateProductWorkflow,
   createManyProductsWorkflow,
@@ -399,44 +395,5 @@ describe("addInventoryEntries", () => {
     ).rejects.toThrow(new RegExp(bolt));
 
     expect(await rowsAt(shelf)).toEqual([]);
-  });
-});
-
-describe("placement recommendation workflow", () => {
-  const ctx = withTestDb();
-
-  it("recommends the sole known stock destination for a parked row", async () => {
-    const productOutput = await createProduct(
-      ctx.db,
-      makeProductInput({ name: "Placement recommendation product" }),
-      TEST_ACTOR,
-    );
-    const unknown = await ensureGlobalUnknownLocation(ctx.db, TEST_ACTOR);
-    const shelf = await createLocation(
-      ctx.db,
-      makeLocationInput({ name: "Placement recommendation shelf" }),
-      TEST_ACTOR,
-    );
-    const parked = await bulkAddInventoryWorkflow(ctx.db, TEST_ACTOR, {
-      locationId: unknown.id,
-      items: [
-        { productId: productOutput.id, amount: { value: 1, unit: "each" } },
-      ],
-    });
-    await bulkAddInventoryWorkflow(ctx.db, TEST_ACTOR, {
-      locationId: shelf.id,
-      items: [
-        { productId: productOutput.id, amount: { value: 1, unit: "each" } },
-      ],
-    });
-    const parkedId = parked.items[0]?.id;
-    if (!parkedId) throw new Error("Parked fixture missing");
-    await expect(
-      getPlacementRecommendation(ctx.db, parkedId),
-    ).resolves.toMatchObject({
-      inventoryId: parkedId,
-      sourceLocation: { name: "Unknown" },
-      destination: { name: "Placement recommendation shelf" },
-    });
   });
 });

@@ -22,10 +22,6 @@ export const textArraySomeSql = (
 ): SQL =>
   sql`EXISTS (SELECT 1 FROM unnest(${values}) AS matched_name(value) WHERE ${predicate(sql`matched_name.value`)})`;
 
-/** Set-based identity joins enumerate the same stored name and alias keys. */
-export const nameAliasKeysSql = (name: SQLWrapper, aliases: SQLWrapper): SQL =>
-  sql`SELECT lower(matched_name.value) AS name FROM unnest(ARRAY[${name}] || ${aliases}) AS matched_name(value)`;
-
 /** Keep lower(column) intact so declared exact-name indexes remain usable. */
 export const nameMatchesAnySql = (
   column: SQLWrapper,

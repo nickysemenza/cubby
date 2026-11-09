@@ -85,15 +85,14 @@ describe("agent work summary", () => {
         parts: [
           {
             type: "tool",
-            toolName: "mcp__cubby__get_entities",
+            toolName: "mcp__cubby__entity_read",
             toolCallId: "check-1",
             state: "output-available",
-            input: {},
+            input: { action: "get", entity: "product" },
             output: {},
             durationMs: 450,
           },
-          // Current tools name their action in the input; the retired
-          // per-action names above still read the same way.
+          // Tools name their action in the input.
           {
             type: "tool",
             toolName: "mcp__cubby__entity_read",
@@ -105,7 +104,7 @@ describe("agent work summary", () => {
           },
           {
             type: "tool",
-            toolName: "mcp__cubby__photo_run",
+            toolName: "mcp__cubby__run",
             toolCallId: "proposal-1",
             state: "output-available",
             input: { action: "propose_groups" },

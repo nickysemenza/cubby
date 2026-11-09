@@ -2,7 +2,7 @@ import type { PgTable } from "drizzle-orm/pg-core";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { moneyToMinor } from "@cubby/shared";
 import { resolveProductBrandName } from "~/server/domains/vendor/repo/product-brand";
-import { publishEntityConnection } from "~/server/domains/connection/repo/entity-connections";
+
 import type { Page } from "@playwright/test";
 import { count, eq } from "drizzle-orm";
 import * as schema from "~/server/db/schema";
@@ -155,18 +155,6 @@ export async function seedRelationshipReviewPrerequisite(
       return { current, target, product, expense };
     },
   );
-  // Passive record reads expose only proposals already published by a Sweep.
-  await publishEntityConnection(getFixtureDb(), {
-    relation: "expense-project",
-    source: { entityKind: "expense", entityId: expense.id },
-    target: { entityKind: "project", entityId: target.id },
-    label: "Review Project assignment",
-    evidence: {
-      reasons: ["Synthetic matching trade and date window"],
-      contradictions: [],
-      unknowns: ["Confirm the intended Project"],
-    },
-  });
   return { current, target, product, expense };
 }
 

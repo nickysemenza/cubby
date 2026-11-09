@@ -245,7 +245,7 @@ async function evaluateDecisions() {
   const pricing = await createAiModelPricing({
     onError: (error) => console.error(scrubErrorMessage(error.message)),
   }).current();
-  for (const model of ["typesafe/jev", "@cf/cloudflare/clef"] as const) {
+  for (const model of ["typesafe/jev"] as const) {
     for (const variant of process.env.MAIL_PROMPT_BASELINE_ONLY === "1" ||
     !candidateRules
       ? (["production"] as const)

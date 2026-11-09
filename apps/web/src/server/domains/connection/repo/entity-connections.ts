@@ -9,7 +9,6 @@ import {
 } from "@cubby/schemas/entity-connections";
 import { entityGraphRootSchema } from "@cubby/schemas/entity-graph";
 import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
-import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import {
   suggestionReviewInput,
   suggestionSubjects,
@@ -23,16 +22,7 @@ import {
   uuidArrayParam,
   withTransactionDatabase,
 } from "~/server/db/helpers";
-import {
-  suggestionTable,
-  entityIdentity,
-  financialTransactionAllocation,
-} from "~/server/db/schema";
-import { updateExpense } from "~/server/domains/expense/repo/crud";
-import { updateFinancialTransaction } from "~/server/domains/financial-transaction/repo/financial-transaction";
-import { moveInventoryEntries } from "~/server/domains/inventory/repo/bulk";
-import { setProjectToolUsage } from "~/server/domains/project/repo/tools";
-import { confirmPurchaseAcquisition } from "~/server/domains/purchase/repo/purchase-products";
+import { suggestionTable, entityIdentity } from "~/server/db/schema";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { JobEvidenceObsoleteError } from "~/server/generic/jobs/errors";
 import {
@@ -53,11 +43,6 @@ import {
   sha256CanonicalJson,
 } from "~/server/lib/canonical-json";
 
-import {
-  acquisitionPairKey,
-  eligibleAcquisitionPairs,
-  eligibleConnectionExpenses,
-} from "./connection-candidates";
 import {
   captureConnectionBasis,
   captureConnectionEvidence,
@@ -102,7 +87,6 @@ export async function prepareEntityConnectionEvidence(
     },
     expenseProjects,
   );
-  await assertAcquisitionConnectionsEligible(db, candidates);
   return prepared;
 }
 
@@ -131,7 +115,6 @@ export async function publishPreparedEntityConnections(
       undefined,
       true,
     );
-    await assertAcquisitionConnectionsEligible(db, candidates);
     const entries = [];
     for (const original of prepared) {
       const { candidate } = original;
@@ -566,162 +549,15 @@ export async function applyEntityConnection(
       throw new Error(
         "Connection evidence changed; discover again before applying",
       );
-    await assertAcquisitionConnectionEligible(db, candidate);
     const actor = context.actorContext;
     switch (candidate.relation) {
       case "email-purchase":
         await applyEmailConnection(db, candidate, basis, actor);
         break;
-      case "product-purchase":
-        await confirmPurchaseAcquisition(db, {
-          purchaseId: parseShortcodeFor("purchase", candidate.target.entityId),
-          productId: parseShortcodeFor("product", candidate.source.entityId),
-        });
-        break;
-      case "product-expense":
-        await updateExpense(
-          db,
-          parseShortcodeFor("expense", candidate.target.entityId),
-          {
-            productId: parseShortcodeFor("product", candidate.source.entityId),
-          },
-          actor,
-        );
-        break;
-      case "expense-project":
-        await updateExpense(
-          db,
-          parseShortcodeFor("expense", candidate.source.entityId),
-          {
-            projectId: parseShortcodeFor("project", candidate.target.entityId),
-          },
-          actor,
-        );
-        break;
-      case "project-tool":
-        await setProjectToolUsage(
-          db,
-          await resolveOrThrow(db, "project", candidate.source.entityId),
-          await resolveOrThrow(db, "product", candidate.target.entityId),
-          true,
-          actor,
-        );
-        break;
-      case "transaction-purchase":
-      case "transaction-refund": {
-        const transactionId = await resolveOrThrow(
-          db,
-          "financialTransaction",
-          candidate.source.entityId,
-        );
-        const [allocation] = await getDb(db)
-          .select({ id: financialTransactionAllocation.id })
-          .from(financialTransactionAllocation)
-          .where(
-            and(
-              eq(financialTransactionAllocation.transactionId, transactionId),
-              isNull(financialTransactionAllocation.deletedAt),
-            ),
-          )
-          .limit(1);
-        if (allocation)
-          throw new Error(
-            "Connection confirmation cannot replace existing financial allocations; use the allocation editor",
-          );
-        await updateFinancialTransaction(
-          db,
-          parseShortcodeFor("financialTransaction", candidate.source.entityId),
-          {
-            purchaseId: parseShortcodeFor(
-              "purchase",
-              candidate.target.entityId,
-            ),
-          },
-          actor,
-        );
-        break;
-      }
-      case "inventory-location": {
-        const moved = await moveInventoryEntries(
-          db,
-          {
-            items: [
-              {
-                inventoryEntryId: await resolveOrThrow(
-                  db,
-                  "inventory",
-                  candidate.source.entityId,
-                ),
-                targetLocationId: await resolveOrThrow(
-                  db,
-                  "location",
-                  candidate.target.entityId,
-                ),
-              },
-            ],
-          },
-          actor,
-        );
-        const survivor = moved[0];
-        if (!survivor)
-          throw new Error(
-            "Inventory connection move returned no surviving destination",
-          );
-        return {
-          source: candidate.source,
-          destination: { entityKind: "inventory", entityId: survivor.id },
-        };
-      }
       default:
         throw new Error(
           `Connection ${candidate.relation} requires its existing family Suggestion action`,
         );
     }
   });
-}
-
-/** A matching snapshot never authorizes replacing an existing acquisition decision. */
-async function assertAcquisitionConnectionEligible(
-  db: Database,
-  candidate: ConnectionCandidate,
-): Promise<void> {
-  await assertAcquisitionConnectionsEligible(db, [candidate]);
-}
-
-async function assertAcquisitionConnectionsEligible(
-  db: Database,
-  candidates: readonly ConnectionCandidate[],
-): Promise<void> {
-  const expenses = candidates.flatMap((candidate) =>
-    candidate.relation === "product-expense" ? [candidate.target.entityId] : [],
-  );
-  const pairs = candidates.flatMap((candidate) =>
-    candidate.relation === "product-purchase"
-      ? [
-          {
-            productCode: candidate.source.entityId,
-            purchaseCode: candidate.target.entityId,
-          },
-        ]
-      : [],
-  );
-  const [eligibleExpenses, eligiblePairs] = await Promise.all([
-    eligibleConnectionExpenses(db, expenses),
-    eligibleAcquisitionPairs(db, pairs),
-  ]);
-  if (expenses.some((code) => !eligibleExpenses.has(code)))
-    throw new JobEvidenceObsoleteError(
-      "Connection Expense is no longer eligible for acquisition or is already assigned to a Product",
-    );
-  if (
-    pairs.some(
-      (pair) =>
-        !eligiblePairs.has(
-          acquisitionPairKey(pair.productCode, pair.purchaseCode),
-        ),
-    )
-  )
-    throw new JobEvidenceObsoleteError(
-      "Connection Product/Purchase pair is no longer eligible because acquisition is already recorded",
-    );
 }

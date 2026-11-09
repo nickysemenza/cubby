@@ -4167,20 +4167,23 @@ export function PhotoGroupReview({
     session.getSnapshot,
   );
   const queryClient = useQueryClient();
+  const [activeGroupKey, setActiveGroupKey] = useState<string | null>(null);
+  const activeKey = activePhotoKey(visibleProposals, activeGroupKey);
+  // Duplicate candidates are computed on demand for the group the member has
+  // open; nothing refreshes them in the background (#3438).
   const candidateProposals = useMemo(
     () =>
       (proposals ?? NO_PROPOSALS).filter(
-        (proposal) => proposal.state === "proposed",
+        (proposal) =>
+          proposal.state === "proposed" && proposal.groupKey === activeKey,
       ),
-    [proposals],
+    [proposals, activeKey],
   );
   const candidates = usePhotoRunCandidates(
     runId,
     candidateProposals,
     query.data?.images,
   );
-  const [activeGroupKey, setActiveGroupKey] = useState<string | null>(null);
-  const activeKey = activePhotoKey(visibleProposals, activeGroupKey);
   const action = useReviewAction(runId);
   const defaultsCommand = useWorkflowCommand({
     onResult: ({ result }) => {

@@ -291,7 +291,7 @@ export type CommitPhotoGroupOutput = z.infer<typeof commitPhotoGroupOutput>;
 
 /**
  * A proposed group waits for human review on the run page; approving it runs
- * `photo_run.commit_group` with the same payload. `committed` and `discarded`
+ * `run.commit_group` with the same payload. `committed` and `discarded`
  * rows are frozen — their groupKey and image roster never change again.
  */
 export const photoGroupProposalState = z.enum([
@@ -589,7 +589,7 @@ export const photoRunImage = z.object({
 export type PhotoRunImage = z.infer<typeof photoRunImage>;
 
 /**
- * The agent's per-photo summary in `photo_run_read.run_context`. Every field is
+ * The agent's per-photo summary in `run_read.run_context`. Every field is
  * carried in each later model call, so timings and cutout state are left out
  * and image URLs are opt-in.
  */

@@ -1,5 +1,5 @@
 /**
- * The decision-tier runner: closed-set questions placed with Jev or Clef
+ * The decision-tier runner: closed-set questions placed with Jev (text) or Clef (images)
  * through shared egress. The chat-tier counterpart is `run-feature.ts`.
  */
 import { AsyncLocalStorage } from "node:async_hooks";
@@ -13,7 +13,8 @@ import {
 import {
   getDecisionModelConfig,
   providerFor,
-  selectDecisionModel,
+  DECISION_MODEL,
+  VISION_DECISION_MODEL,
   type SupportedDecisionModel,
 } from "@cubby/shared/ai/models";
 import { retryWithBackoff } from "@cubby/shared/retry";
@@ -473,18 +474,9 @@ export function decisionModelFor(
 ): SupportedDecisionModel {
   // Media requires vision even with a text override. An injected port keeps
   // the declared feature model unless its caller explicitly overrides it.
-  if (input.images?.length) return selectDecisionModel({ vision: true });
+  if (input.images?.length) return VISION_DECISION_MODEL;
   return (
-    args.decisionModel ??
-    (args.port
-      ? args.feature.model
-      : selectDecisionModel({
-          key: JSON.stringify([
-            args.feature.feature,
-            args.feature.promptVersion,
-            input,
-          ]),
-        }))
+    args.decisionModel ?? (args.port ? args.feature.model : DECISION_MODEL)
   );
 }
 

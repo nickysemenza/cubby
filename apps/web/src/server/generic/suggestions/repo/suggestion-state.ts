@@ -1,3 +1,4 @@
+import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { SearchableEntity } from "@cubby/schemas/search";
 import { sha256Hex } from "@cubby/shared/sha256";
 import {
@@ -6,6 +7,7 @@ import {
   getTableColumns,
   inArray,
   isNull,
+  lt,
   ne,
   or,
   is,
@@ -294,4 +296,68 @@ export async function repointSuggestionTargetsTx(
     ),
     { recordId: keepId, status: "superseded", confirmedValue: null },
   );
+}
+
+/** Rows per locked transition inside one expiry batch. */
+const EXPIRY_CHUNK = 500;
+
+/** A pending field opinion nobody reviewed stops being offered after this long. */
+const UNREVIEWED_SUGGESTION_TTL_MS = 14 * 24 * 60 * 60_000;
+
+/** Fields whose Suggestions only a member may apply never expire on their own. */
+const reviewRequiredFields = Object.entries(entityFieldModels).flatMap(
+  ([entity, model]) =>
+    model.fields.flatMap((field) =>
+      field.control?.suggest?.reviewRequired
+        ? [sql`(${entity}, ${field.key})`]
+        : [],
+    ),
+);
+
+/**
+ * Retire one bounded batch of pending field Suggestions older than the TTL in
+ * fields that are not review-required and carry no member decision. Review-only
+ * families (statements, recommendations) wait for a member and never expire here.
+ */
+export async function expireUnreviewedSuggestions(
+  db: RepositoryQueryInput,
+  { limit, now = new Date() }: { limit: number; now?: Date },
+): Promise<number> {
+  const stale = await getDb(db)
+    .select({ id: suggestionTable.id })
+    .from(suggestionTable)
+    .where(
+      and(
+        eq(suggestionTable.family, "field"),
+        eq(suggestionTable.status, "pending"),
+        eq(suggestionTable.active, true),
+        sql`${suggestionTable.decisions} = '[]'::jsonb`,
+        lt(
+          suggestionTable.createdAt,
+          new Date(now.getTime() - UNREVIEWED_SUGGESTION_TTL_MS),
+        ),
+        reviewRequiredFields.length
+          ? sql`(${suggestionTable.entity}, ${suggestionTable.field}) NOT IN (${sql.join(reviewRequiredFields, sql`, `)})`
+          : undefined,
+      ),
+    )
+    .orderBy(suggestionTable.createdAt)
+    .limit(limit);
+  let expired = 0;
+  // Small transitions keep each locked set and update statement bounded.
+  for (let offset = 0; offset < stale.length; offset += EXPIRY_CHUNK) {
+    const rows = await transitionSuggestionStates(
+      db,
+      and(
+        inArray(
+          suggestionTable.id,
+          stale.slice(offset, offset + EXPIRY_CHUNK).map((row) => row.id),
+        ),
+        eq(suggestionTable.status, "pending"),
+      ),
+      { active: false, status: "superseded" },
+    );
+    expired += rows.length;
+  }
+  return expired;
 }

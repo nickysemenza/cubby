@@ -267,9 +267,6 @@ const mkFinancialTransaction = async (db: Database) => {
   });
 };
 
-const mkWish = (db: Database) =>
-  insertWithShortcode(db, "wish", { name: uniq("Wish") });
-
 const mkExpense = (db: Database) =>
   insertWithShortcode(db, "expense", {
     lineKind: "principal",
@@ -601,7 +598,6 @@ const TARGET_FACTORIES = {
   purchase: mkPurchase,
   financialAccount: mkFinancialAccount,
   financialTransaction: mkFinancialTransaction,
-  wish: mkWish,
   run: mkRun,
   device: mkDevice,
 } satisfies Partial<Record<Entity, (db: Database) => Promise<{ id: string }>>>;
@@ -1051,24 +1047,6 @@ const SOURCE_FACTORIES = {
       amount: 100n,
       date: "2024-01-15",
     });
-  },
-
-  "EntityLink[wishCandidate].from": async (db, targetId) => {
-    const p = await mkProduct(db);
-    return insertAndReturn(
-      db,
-      entityLink,
-      linkValues("wishCandidate", parseEntityId("wish", targetId), p.id),
-    );
-  },
-
-  "EntityLink[wishCandidate].to": async (db, targetId) => {
-    const w = await mkWish(db);
-    return insertAndReturn(
-      db,
-      entityLink,
-      linkValues("wishCandidate", w.id, parseEntityId("product", targetId)),
-    );
   },
 
   "Recipe.cookbookId": (db, targetId) =>

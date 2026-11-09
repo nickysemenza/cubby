@@ -116,7 +116,6 @@ export type InlineRefLinkProps = {
       entity: "financialTransaction";
       data: { id: string; displayName: string };
     }
-  | { entity: "wish"; data: MinimalEntityData }
   | { entity: "image"; data: { id: string; filename: string } }
 );
 
@@ -137,7 +136,6 @@ const inlineSpec = (props: InlineRefLinkProps): InlineSpec =>
       { entity: "gardenEntry" },
       { entity: "vendor" },
       { entity: "financialAccount" },
-      { entity: "wish" },
       ({ data }) => ({ id: data.id, name: data.name }),
     )
     .with({ entity: "cookbook" }, ({ data }) => ({

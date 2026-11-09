@@ -8,7 +8,7 @@ import { compactFieldText } from "./field-text";
 const queryClient = createEditorTestQueryClient();
 
 const field = (
-  entity: "project" | "financialAccount" | "wish" | "task",
+  entity: "project" | "financialAccount" | "task",
   key: string,
 ) => {
   const found = entityFieldModels[entity].fields.find(
@@ -52,17 +52,5 @@ describe("compactFieldText", () => {
         field("financialAccount", "identity"),
       ),
     ).toBe("Gift card or store credit");
-  });
-
-  it("reads a timestamp as a date even when it declares value options", () => {
-    const at = "2026-03-14T12:00:00.000Z";
-    expect(
-      compactFieldText(
-        queryClient,
-        "wish",
-        { id: "WSH-4K7M", acquiredAt: at },
-        field("wish", "acquiredAt"),
-      ),
-    ).toBe(new Date(at).toLocaleDateString());
   });
 });

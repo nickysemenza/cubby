@@ -138,7 +138,7 @@ function connectionRelevantFields(kind: string): readonly string[] {
   return relevantFields.get(kind) ?? ["name"];
 }
 
-export function connectionRelevantRow(kind: string, value: unknown) {
+function connectionRelevantRow(kind: string, value: unknown) {
   const row = z.record(z.string(), z.json()).parse(value);
   return Object.fromEntries(
     connectionRelevantFields(kind)
@@ -148,7 +148,7 @@ export function connectionRelevantRow(kind: string, value: unknown) {
 }
 
 /** Project the same fingerprint fields before transfer, including only keys the table owns. */
-export function connectionRelevantRowSql(kind: string, table: ShortcodeTable) {
+function connectionRelevantRowSql(kind: string, table: ShortcodeTable) {
   const fields = connectionRelevantFields(kind);
   const pairs = Object.entries(getTableColumns(table))
     .filter(([name]) => fields.includes(name))
@@ -171,7 +171,7 @@ const snapshotSchema = z
   .unknown()
   .transform((value) => JSON.parse(JSON.stringify(value)))
   .pipe(jsonEvidence);
-export const snapshotJson = (value: unknown) => snapshotSchema.parse(value);
+const snapshotJson = (value: unknown) => snapshotSchema.parse(value);
 
 /** Shared capture children are immutable; no caller can change a sibling's evidence. */
 function freezeSnapshot(value: ConnectionJson): ConnectionJson {
@@ -331,11 +331,7 @@ export async function forEachConnectionBasis<
 }
 
 /** The actual payload row is locked, rather than its independent identity tombstone. */
-export async function connectionRecord(
-  db: Database,
-  ref: EntityRef,
-  lock = false,
-) {
+async function connectionRecord(db: Database, ref: EntityRef, lock = false) {
   const kind = z.enum(shortcodeEntities).parse(ref.entityKind);
   const parsed = parseShortcode(ref.entityId);
   if (parsed?.type !== kind) {
@@ -378,12 +374,12 @@ export type PreparedConnectionBases = {
 const pairKey = (purchaseId: string, productId: string) =>
   `${purchaseId}:${productId}`;
 
-export const connectionRecordKey = (ref: EntityRef) =>
+const connectionRecordKey = (ref: EntityRef) =>
   `${ref.entityKind}:${ref.entityId}`;
 
 /** `connectionRecord`'s unlocked rows, one statement per entity kind. Codes
  * that do not resolve are left out, so their capture still raises. */
-export async function connectionRecords(
+async function connectionRecords(
   db: Database,
   refs: readonly EntityRef[],
   lock = false,

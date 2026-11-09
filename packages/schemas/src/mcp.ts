@@ -96,7 +96,7 @@ export type McpUsdaFoodOut = z.infer<typeof mcpUsdaFoodOut>;
  * `nutrientsPer100` that carries the same macros keyed by nutrient code in
  * ~260B. Nothing reads it from a search result — the picker renders
  * `nutrientsPer100`, and an agent choosing between foods needs a name and macros,
- * not tocopherol beta. `usda_food.by_fdc_id` still returns it for the one food you
+ * not tocopherol beta. `product_enrichment_read.by_fdc_id` still returns it for the one food you
  * settled on.
  */
 export const mcpUsdaFoodListItemOut = z.object(usdaFoodSharedFields);
@@ -150,7 +150,7 @@ export type RecipeCostingExplainDetail = z.infer<
 >;
 
 /**
- * `recipe_insights_read.costing_explanation` with `detail: "lines"`: the per-line diagnostics
+ * `nutrition_read.costing_explanation` with `detail: "lines"`: the per-line diagnostics
  * without the two 22-nutrient totals blocks and the drift record. The totals
  * are what `entity get recipe` already returns; an agent chasing "which line
  * is uncovered" only needs the diagnostics plus a coverage headline.

@@ -80,19 +80,17 @@ async function sweepScopes(
   return Promise.all(
     input.families.map(async (entry): Promise<SweepFamilyScope> => {
       switch (entry.family) {
-        case "transfer_pair":
         case "statement_transaction":
           return {
             family: entry.family,
             scope: {
-              ...(entry.family === "statement_transaction" &&
-                entry.importId && {
-                  importId: await resolveOrThrow(
-                    db,
-                    "transactionImport",
-                    entry.importId,
-                  ),
-                }),
+              ...(entry.importId && {
+                importId: await resolveOrThrow(
+                  db,
+                  "transactionImport",
+                  entry.importId,
+                ),
+              }),
               ...(entry.accountIds?.length && {
                 accountIds: await Promise.all(
                   entry.accountIds.map((code) =>
@@ -102,13 +100,6 @@ async function sweepScopes(
               }),
               ...(entry.since && { since: entry.since }),
             },
-          };
-        case "recommendation":
-          return {
-            family: entry.family,
-            scope: entry.entityKinds?.length
-              ? { entityKinds: entry.entityKinds }
-              : {},
           };
         case "field":
           return {
