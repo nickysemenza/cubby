@@ -64,12 +64,11 @@ import {
 import { createFinancialTransaction } from "~/server/domains/financial-transaction/repo/financial-transaction";
 import { acceptFinancialTransferPair } from "~/server/domains/financial-transaction/repo/financial-transfer-accept";
 import {
-  transferPairMoneyMoveKinds,
   transferPairSeedKeys,
   transferPairSeedPage,
   transferPoolAmountSql,
 } from "~/server/domains/financial-transaction/repo/transfer-pair-input";
-import { transferEvidenceStatuses } from "~/server/domains/ledger-transfer/repo";
+import { transferEvidenceStatuses } from "~/server/domains/ledger-transfer/repo/ledger-transfer";
 import {
   sourceObservations,
   sourceObservationFrom,
@@ -87,7 +86,11 @@ import {
   type ChargeRef,
 } from "~/server/domains/transaction-import/repo/statement-input";
 import { STATEMENT_SUGGESTION_REVISION } from "~/server/domains/transaction-import/repo/statement-suggestion-revision";
-import { statementTransactionKind } from "~/server/domains/transaction-import/repo/statement-transaction-kind";
+import {
+  foldProviderCategory,
+  MONEY_MOVE_KINDS,
+  statementTransactionKind,
+} from "~/server/domains/transaction-import/repo/statement-transaction-kind";
 import { transactionImportMembers } from "~/server/domains/transaction-import/repo/transaction-import-membership";
 import { type EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { createAppError } from "~/server/errors/app-error";
@@ -150,9 +153,7 @@ const TRANSFER_PAIR_PUBLICATION_CONCURRENCY = 4;
 export const TRANSFER_PAIR_PUBLISH_CONCURRENCY = 4;
 
 /** Kinds that move money between accounts; they retrieve a leg, never prove it. */
-const MONEY_MOVES = new Set<FinancialTransactionKind>(
-  transferPairMoneyMoveKinds,
-);
+const MONEY_MOVES = new Set<FinancialTransactionKind>(MONEY_MOVE_KINDS);
 /**
  * Exact provider category values for a cash withdrawal, folded as
  * `statementTransactionKind` folds categories. Provider metadata, not a
@@ -165,14 +166,6 @@ const CASH_WITHDRAWAL_CATEGORIES = new Set([
   "cash withdrawal",
   "atm withdrawal",
 ]);
-const foldCategory = (category: string) =>
-  category
-    .normalize("NFKC")
-    .toLowerCase()
-    .replace(/&|\band\b/g, " ")
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim();
-
 const refused = (message: string) =>
   createAppError("CONSTRAINT_VIOLATION", message);
 
@@ -233,7 +226,7 @@ const categorySignals = (sourceCategory: string | null, amount: number) => {
     cashWithdrawal:
       amount > 0 &&
       sourceCategory !== null &&
-      CASH_WITHDRAWAL_CATEGORIES.has(foldCategory(sourceCategory)),
+      CASH_WITHDRAWAL_CATEGORIES.has(foldProviderCategory(sourceCategory)),
   };
 };
 

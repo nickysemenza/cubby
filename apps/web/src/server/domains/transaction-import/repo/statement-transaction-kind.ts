@@ -50,7 +50,7 @@ const CATEGORY_RULES = new Map<string, KindRule>(
   } satisfies Record<string, KindRule>),
 );
 
-const normalizeCategory = (category: string) =>
+export const foldProviderCategory = (category: string) =>
   category
     .normalize("NFKC")
     .toLowerCase()
@@ -72,7 +72,7 @@ export function statementTransactionKind(input: {
   const signKind: FinancialTransactionKind =
     direction === "outflow" ? "purchase" : "refund";
   if (!input.sourceCategory) return { kind: signKind, kindSource: "sign" };
-  const rule = CATEGORY_RULES.get(normalizeCategory(input.sourceCategory));
+  const rule = CATEGORY_RULES.get(foldProviderCategory(input.sourceCategory));
   if (rule && (!rule.direction || rule.direction === direction)) {
     const kind =
       direction === "inflow" && rule.inflow ? rule.inflow : rule.kind;
@@ -148,10 +148,11 @@ export function decideStatementKind(input: {
 }
 
 /** Kinds that move money between accounts rather than spend it. */
-const MONEY_MOVES = new Set<KindDecision["kind"]>([
+export const MONEY_MOVE_KINDS = [
   "account_transfer",
   "credit_card_payment",
-]);
+] as const;
+const MONEY_MOVES = new Set<KindDecision["kind"]>(MONEY_MOVE_KINDS);
 
 export const isMoneyMoveKind = (kind: KindDecision["kind"]) =>
   MONEY_MOVES.has(kind);

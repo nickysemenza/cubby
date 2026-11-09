@@ -1,18 +1,10 @@
-import {
-  financialTransactionKind,
-  financialTransactionStatus,
-} from "@cubby/schemas/financial-transaction";
+import { financialTransactionStatus } from "@cubby/schemas/financial-transaction";
 import { sql, type SQL } from "drizzle-orm";
 
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { sourceObservations } from "~/server/domains/transaction-import/repo/source-observation-state";
 import { chargeKeyOf } from "~/server/domains/transaction-import/repo/statement-charge";
-
-/** Kinds that retrieve transfer evidence, without proving a transfer. */
-export const transferPairMoneyMoveKinds = [
-  financialTransactionKind.enum.account_transfer,
-  financialTransactionKind.enum.credit_card_payment,
-];
+import { MONEY_MOVE_KINDS } from "~/server/domains/transaction-import/repo/statement-transaction-kind";
 
 /** Discovery and invalidation use the same rounded absolute money pool. */
 export const transferPoolAmountSql = (amount: SQL): SQL =>
@@ -42,7 +34,7 @@ const seedQueries = (input: SeedBoundary) => ({
         AND ft."ledgerTransferId" IS NULL
         AND COALESCE(ft."postedDate", ft."transactionDate") IS NOT NULL
         AND (ft.kind IN (${sql.join(
-          transferPairMoneyMoveKinds.map((kind) => sql`${kind}`),
+          MONEY_MOVE_KINDS.map((kind) => sql`${kind}`),
           sql`, `,
         )}) OR ft."sourceCategory" IS NOT NULL)
         ${input.since ? sql`AND COALESCE(ft."postedDate", ft."transactionDate") >= ${input.since}::date` : sql``}
