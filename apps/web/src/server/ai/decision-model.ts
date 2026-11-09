@@ -283,7 +283,10 @@ async function sendDecisionRequest(
     throw wrapAiGatewayError(error, {
       model: feature.model,
       provider: providerFor(feature.model),
-      route: feature.model === "typesafe/jev" ? "typesafe-byok" : "workers-ai",
+      route:
+        providerFor(feature.model) === "typesafe"
+          ? "typesafe-byok"
+          : "workers-ai",
       feature: feature.feature,
       operation: ctx.operation,
       gatewayLogId: gateway?.gatewayLogId,
