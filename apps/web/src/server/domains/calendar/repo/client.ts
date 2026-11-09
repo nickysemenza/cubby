@@ -123,7 +123,7 @@ async function enqueueMarkDirtyFallback(
       { source: "calendar-feed.mark-dirty-fallback" },
     );
   } catch (error) {
-    // SILENT: the last resort — the in-request retries and the queue both
+    // SILENT: the last resort — the dirty mark and the queue both
     // failed inside a committed `waitUntil`, so there is no caller left to
     // report to. The feed stays stale until the next write re-marks it.
     log.error("failed to enqueue mark-dirty fallback", { reason, error });

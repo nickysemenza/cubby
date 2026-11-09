@@ -34,7 +34,7 @@ export function EntityRefLink(props: RecordLinkProps): React.ReactElement;
 export function EntityRefLink(props: InlineRefLinkProps | RecordLinkProps) {
   if ("data" in props) return <InlineRefLink {...props} />;
   if (
-    (isBrowserRoutedEntity(props.entity) || props.entity === "usda-food") &&
+    isBrowserRoutedEntity(props.entity) &&
     props.name &&
     props.name !== props.id
   )

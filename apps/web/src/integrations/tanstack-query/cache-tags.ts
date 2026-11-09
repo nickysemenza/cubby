@@ -676,6 +676,12 @@ function productWriteTags(
     : ripple.ingredientProduct;
 }
 
+/**
+ * Keyed on `entity` alone. `["entity"]` must NEVER appear here: `entity.list`
+ * is tagged `[["entity","list"]]` and `entity.detail` `[["entity","detail"]]`,
+ * both entity-agnostic, so the bare root would refetch every list and detail
+ * query for every entity on every write.
+ */
 export const entityMutationRipple = (
   input: EntityBrowserMutationInput,
 ): InvalidationTagSet => {
