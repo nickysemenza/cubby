@@ -37,10 +37,10 @@ context or claim generation stands in for that ownership.
 Published and failed counts record committed settlements, once each even
 when a serializable transaction replays. Retained items stay owed. Empty pages
 report their next due time; they have no idle publication or recurring Job.
-Connection discovery holds one AppSettings cursor and returns a two-minute
-continuation. Its retained legacy `runId` launches once after its pass finishes;
-retained member stops and terminal errors remain stopped. AI refresh no longer
-starts a separate automatic Sweep for connections.
+Email purchase discovery holds one AppSettings cursor, publishes the
+`connection.email-purchase` recommendation Suggestions for Emails whose retained
+evidence suggests a purchase link, and repeats hourly. It runs deterministic SQL:
+no model, no Run and no evaluation.
 
 One-record work stays a Job: Run execution, Location AI, image metadata,
 calendar invalidation and purchase dispatch. Image processing owns its own row.
@@ -465,7 +465,7 @@ A Job is due when it is queued or in backoff and its time has come, or when its 
 expired. A wake is only a Queue message that makes the drain look sooner (`wakeJobs`, `wakeAt`);
 it carries no durable state, and the hourly cron recovers a lost one. `enqueueJob({ invalidate:
 true })` is the only restart: it bumps the generation and clears the lease, so the old pass
-fails its fence. Connection discovery repeats through its cursor; automatic work has no recurring Job.
+fails its fence. Email purchase discovery repeats through its cursor; automatic work has no recurring Job.
 
 ## Retries
 
@@ -813,23 +813,15 @@ carrying the Job key, the handler and provider fencing. Publishing and the
 drain both read that declaration; a handler parses only its own kind. The key
 is the queued Job's identity, so changing one orphans queued rows.
 
-A producer must not enqueue faster than the drain can serve. One unbounded
-connection-discovery pass once enqueued an evaluation for every household
-record (~55k), which starved every other kind for days.
+A producer must not enqueue faster than the drain can serve; the retired
+connection-discovery pass once enqueued an evaluation for every household record
+(~55k), which starved every other kind for days. No producer fans out per record
+now.
 
-- Routine connection discovery (`discovery.connections`) queues one
-  evaluation page (`CONNECTION_ROSTER_PAGE`, 100 records) per pass and holds
-  its cursor while `CONNECTION_DISCOVERY_PENDING_CAP` (1,000)
-  connection evaluations wait (`rate_limit`). Evaluation settlements make the
-  existing discovery Job due; a one-hour deadline repairs a missed release.
-  There is no 30-second idle polling. It walks the newest records first. Its work has no Run, so a
-  member's Stop for automatic AI work holds its cursor. A changed record updates its queued slot in
-  place, retaining its Job.
 - `run.funding-resume` is one Job per funding window; its handler resumes every
   paused Run.
 
-Each AI evaluation slot identifies feature, entity, record, field and (for a
-Product pair) the other Product. A generated text key uses UTF-8 length prefixes;
+Each AI evaluation slot identifies feature, entity, record and field. A generated text key uses UTF-8 length prefixes;
 input and option fingerprints remain execution evidence, outside the slot key.
 A partial unique index permits one `queued` row per slot and execution kind;
 retry and lease state live on the evaluation's work item, never in
@@ -931,10 +923,9 @@ evaluation) comes in through the `AiEvaluationExecution` port that
 knows no Run tables. Automatic refresh work has no Run: its `runId` is null and its activation is the
 authority. A member stops it from the Work page or `ai.stopAutomaticWork`: discovery
 admits nothing, owed rows are parked, and `leaseStale` fails any attempt in flight.
-It holds until a member resumes. Email refresh, Sweeps and
-member-started discovery keep their Run. `ai-refresh.discovery` is a drain whose
-state is its cursor; a finished pass starts again after an hour. Nothing queues an
-evaluation: `AiEvaluation.runAt` is set while
+It holds until a member resumes. Sweeps keep their Run. Saved-record
+questions and Sweeps are the only producers of field evaluations; no discovery
+drain walks the household. Nothing queues an evaluation: `AiEvaluation.runAt` is set while
 the drain owes it (`priority` 0 when the owner or an uncancelled requester is a
 running, member-visible Run nobody scheduled; otherwise 1) and null once it settled
 or parked. Each round pages up to two features, most urgent first. A page claims
@@ -966,8 +957,7 @@ authorize a proposal.
 Failures map at the drain seam: invalidated evidence settles the evaluation
 `obsolete` as a publication outcome; AI budget, provider capacity and AI
 Gateway admission throw `JobDeferredError`, which stops the page without
-spending attempts; [pending semantic coverage](#semantic-coverage-waits) postpones
-only its item; anything else is the item's failure, and its third
+spending attempts; anything else is the item's failure, and its third
 consecutive failure settles the evaluation `failed` with the raw error and
 settles its requesters. A Run cancel withdraws its requests and stops owing
 evaluations no other requester still wants. Paid concurrency is bounded by the
@@ -979,156 +969,15 @@ publication its chunk rolls back and splits, so siblings commit without new
 inference; the target stays owed and spends item attempts as above.
 
 Each page observes up to 8 items; the rest stay owed and the drain rejoins fair
-selection after the page's checkpoint. Product identity and connection features
-prepare and evaluate those items as one wave and publish admitted evidence in
-fenced chunks; other features run them two at a time, each in its own guarded
-transactions under the drain lease.
-Paged evaluations annotate the existing Job heartbeat and completion logs with
-`evaluation.prepare`, `evaluation.stage` and `evaluation.infer` phase timing.
-These labels distinguish evidence preparation from decision work without logging
-prompts or household evidence; concurrent decisions share one inference phase.
-Connection stages add `connections.*` timings within inference, and drains add
-`drain.claim`, `drain.prepare` and `drain.publish`. Heartbeats list all active
-phases when work overlaps; completed durations sum per phase, so nested and
-concurrent phase totals are not additive wall time or allocation evidence.
-A drain publishes its chunks during prepare, so the Job `page` log's timing
-contains `drain.publish` and the `publish` log's `publicationDurationMs` mostly
-covers settling the outer Job. Both logs carry `pageResult`, limited to the
-numeric `processed`, `published`, `failed` and `covered` counts.
-
-`EvaluationPageAdapter` in `ai/evaluation/repo/evaluation-page.ts` owns finite feature
-preparation, decision evaluation and publication results. Every target carries
-its own evidence digest. Each preparation/provider continuation runs in the
-drain Job's execution context. The executor interns one usage context
-per compatible Run/feature/operation/force/funding group; each adapter names
-its operation (`product-identity`, `entity-connections`) and uses default
-force/funding policy. The shared context carries
-no target Job/entity id. Distinct Runs remain separate usage groups.
-`settleDecisionWorkItems` supplies finite waves; `DecisionRequestBatch` packs
-up to 64 questions/32,000 text bytes, with four request chunks in flight.
-Routing, response-cache keys and per-question avoided usage stay unchanged.
-An oversized question fails visibly. Page evidence is limited to 4 MiB. Admission
-runs after the page's preparation wave and keeps the ordered evidence prefix.
-Failures and individually oversized evidence retain their own handling.
-Unadmitted items keep their original ticket, priority, attempts and
-readiness rather than completing their enumeration receipts or being reticketed.
-Staging runs once after admission. Retained evaluation snapshots still load for
-the observed page before preparation; neither the serialized evidence bound nor
-the target count is a total Worker heap bound.
-
-Connection pages evaluate 8 sources at once. A Worker invocation holds three
-strong connections, a ceiling shared with everything else in that invocation
-rather than reserved for the page. Expense Project recommendation inputs and
-FinancialTransaction settlement/transfer retrieval load for the page before
-provider work. Evidence capture shares each preparation wave's reads and the validated frozen
-JSON of repeated recommendation contexts within that capture pass, instead of
-copying the same context into every candidate tree.
-All evidence fields and serialized fingerprints remain unchanged. Locked
-publication capture always obtains a fresh snapshot; unlocked caches cannot
-satisfy its authority checks. If one candidate becomes unreadable, capture retries
-per source and returns that
-source's failure without rejecting healthy sources. Nearby purchases retain their per-transaction top ten and each
-Purchase retains its original ranked settlement limit before allocation and
-conflict filtering. Acquisition search still captures each newly retrieved
-candidate before subsequent provider waits. Its semantic scan resolves ranked
-refs through the live search-document projection and reads only candidate
-identity and similarity, so it issues no emoji, image, path or placement reads.
-Compatible Product identity and
-field questions share operation-specific usage objects and the page's decision
-wave; nested pair evaluation joins that wave instead of dispatching per source.
-Distinct Runs, features, models and operations remain separate accounting groups.
-Duplicate questions inside one wave await its own cache claim's completion;
-Jobs still defer when another invocation owns the claim.
-
-One batched fingerprint read fences the page before evaluation and each chunk
-before writes; a changed or deleted source is obsolete without writes.
-Incomplete candidate coverage [retries or waits](#semantic-coverage-waits) before
-any of the source's candidates publish. Candidate publication locks live endpoints in the shared
-`orderedEntityLockKinds` order (parents before dependent kinds, then alphabetical),
-which embedding publication also uses. Connection chunks prelock the union of
-candidate endpoints, Product pairs and field callback endpoints before any
-callback runs. Retained Email evidence keeps its Purchase → original → Email
-order after the chunk's Purchase locks. Candidate publication
-recomputes dependency bases and acquisition eligibility in sets, and compares
-each locked basis against its original retrieval evidence. Invalidated connection
-or retained Email evidence raises `ConnectionEvidenceInvalidatedError` and
-settles that source obsolete, including on its final allowed attempt. It then uses one
-immutable Assessment batch and one supersession transition for the chunk.
-Supersession first scopes indexed live subjects, then joins the chunk's slots
-to immutable Assessment evidence once, rather than scanning history per slot.
-Repeated edges retain the last publication's active fingerprint, preserving
-sequential publication semantics; member suppression and review are unchanged.
-Canonical Product pairs retrieved by multiple source owners publish once per
-chunk through the existing pair batch writer, before those owners settle.
-The single-target path shares the candidate publisher in batches of 16 while
-retaining its existing publication authority and incomplete-coverage behavior.
-
-Publication commits at most 25 weighted outcomes per SERIALIZABLE transaction
-(a connection with many candidates fills its chunk sooner). Locks follow Run,
-slot, item, then the Job row at commit, compatible with cancellation. The
-feature adapter revalidates each evidence digest and member decision before
-business writes. Evaluation state and uncancelled requester receipts settle in
-sets in the same commit; explicit `retryEvaluationId` receipts survive.
-Requester coordinators wake through one deduplicated after-commit signal, and
-an `ai_refresh` Run rechecks every 60 s at most. A failed chunk splits only
-after its transaction rolls back; committed siblings never replay.
-Source-to-pair enrollment finishes before the source receipt; Run completion
-still includes its requested pair work. Refresh coordinators read state counts,
-error summaries and bounded pending identities; they never reload frozen
-inference payloads just to update progress.
-
-Product discovery reads snapshots for the scan page and schedules one roster
-transaction, reusing the activation's shared refresh owner. Slot admission,
-evaluation/request insertion and work-item marks use set writes. The Product adapter uses `prepareProductIdentityPage` and
-`publishProductIdentityChunk` for shared preparation and publication. Source
-edges enroll in guarded chunks of at most 25 sources, 25 business
-publications and 100 enrollment edges before enumeration receipts, and
-canonical pairs share decision waves. Standalone catalog evaluation reuses the
-candidate read's source eligibility instead of repeating its snapshot; pair
-evaluation and publication retain their current-input fences. Semantic coverage
-uses the shared direct/fanout dirty-mark probe once per page. [#3320](https://github.com/nickysemenza/cubby/issues/3320)
-owns full synthetic throughput acceptance.
-Full re-check scheduling remains gated on that acceptance; no production
-throughput improvement is established by the page lifecycle alone.
-
-### Semantic coverage waits
-
-An incomplete semantic scan names its gap on the typed coverage result, and
-`SemanticCoverageIncomplete` carries it to the drain without message matching:
-
-- `pending`: search-document marks or missing embeddings are owed for a
-  candidate kind. Owed work can invalidate the artifacts that filled the ANN
-  budget, so pending wins within one scan.
-- `budget_exceeded`: the settled corpus left the fixed ANN budget short of valid
-  matches. Waiting cannot change that, so it wins across a source's searches.
-- No gap: a provider or configuration failure, or a failed search-document read.
-  A display read cannot cause one, because the acquisition scan issues none.
-
-A connection source stops immediately after its acquisition scan on either typed
-gap, before the tag, Product identity and field stages. Its candidates do not
-publish. When every incomplete search is `pending`, the item keeps its ticket,
-priority, attempts, `reason` and `lastError` and stores the `search_coverage` wait.
-Healthy siblings on the page continue, and an empty page keeps the item's deadline.
-
-Nothing wakes the evaluation when upstream settles, except a new mark, which clears
-the wait with a fresh attempt budget. It retries once a minute. Pending has no attempt
-ceiling: the evaluation stays queued and owed for as long as upstream owes the work.
-Run detail counts it under Waiting. Each
-retry repeats page preparation, rechecking source and requester authority before any
-paid stage, and may embed its queries again. A paused or cancelled requester
-therefore settles at the next retry or through Run control, not at wait publication,
-which writes only the evaluation's work columns. A `budget_exceeded` gap or a provider failure spends
-attempts, clears any wait, and settles `failed` as above.
-
-The `evaluation page prepared` log names a page's slots, prepared bytes and overflow before
-inference starts, so an invocation killed mid-page still identifies it. The `evaluation page`
-log describes one attempt before the drain maps it, with `waiting` and `failed` apart. The
-Job page result owns committed outcomes.
-
-Wait pages and AI work Runs read their rosters through `evaluation-tally.ts`, so a page costs
-one aggregate rather than the roster, which can reach tens of thousands of rows. Failed ids and
-the joined error text are read only when the work settles. A Mail reclassify Run still reads
-its rows, because its checkpoint records a result per Email.
+selection after the page's checkpoint. Items run two at a time, each in its own
+guarded transactions under the drain lease. Heartbeat and completion logs
+annotate `drain.claim`, `drain.prepare` and `drain.publish` phase timing without
+logging prompts or household evidence; the Job `page` log carries `pageResult`,
+limited to the numeric `processed`, `published`, `failed` and `covered` counts.
+Publication commits one SERIALIZABLE transaction per item chunk; a failed chunk
+splits only after its transaction rolls back, and committed siblings never
+replay. Product identity, connection and Email refresh evaluation no longer
+exist; the drain evaluates field and statement work only.
 
 ## Apple version gate
 

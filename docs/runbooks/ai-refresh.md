@@ -53,45 +53,24 @@ outcome receipt and scrubbed error. Run progress reports completed, blocked and
 failed counts. AiUsage/EmailClassificationObservation and Suggestion receipts
 retain inference and actual business-write provenance.
 
-Discovery advances durable cursors through at most 200 field targets and 400
-eligible Emails per invocation; Email execution rosters still cap at 200.
+There is no discovery pass for AI refresh. Field evaluations come from
+saved-record questions and Sweeps; connection, product-identity and Email refresh
+discovery were removed ([#3899](https://github.com/nickysemenza/cubby/issues/3899)).
 Ordinary refresh execution has two active Run slots across the household,
-including funding/auth pauses. Discovery is a separate activation Run, and
-routine connection discovery is its own `connection_discovery` Run. A Sweep
-owns its connection evaluations directly and takes no Run slot. Product, field and on-demand connection targets share a running
-non-Email Run for their actor and activation revision. New policy work waits
-for capacity rather than joining an older policy owner. Frozen Email rosters retain their mailbox and
-200-item boundary. A short scheduling transaction uses a nonblocking advisory
-lock to serialize slot checks, new Run creation and failed-Run readmission;
-contention defers rather than holding another origin connection in a lock wait.
-The two-target inference cap remains independent of these Run slots.
-Cancelling a shared Run stops every Product, field and connection target joined
-to that owner. Inspect its roster before cancelling; same-fingerprint work stays
-stopped until explicit member retry.
-If both slots are paused for authentication, ordinary refresh work waits until
-the member resolves authentication, resumes or cancels an owner. Cancelling a
-Sweep stops the evaluations it owns or requested.
-
-When slots are full, discovery retains the affected stream's cursor and waits
-30 seconds through its existing Job before trying again. Capacity waits do not
-consume deployment-policy waits or inference retries. Unchanged, already queued,
-failed or cancelled work creates no empty Run. An on-demand connection request
-that cannot obtain capacity reports the capacity diagnostic; scheduling-lock
-contention reports a separate short-retry diagnostic. Rediscovery returns an
-existing recoverable failed or dispatch-failed owner for relaunch, reporting
-admission refusal while preserving its automatic recovery budget. Cancelled, exhausted or paused
-owners report their retained status and diagnostic instead of silently returning
-no work.
-Ordinary entity writes capture dirty roots and wake the generic background
-refresh framework. Connection discovery and admission happen in the resulting
-background Sweep; see the [derived-data contract](../entities.md#background-derived-data).
+including funding/auth pauses. A short scheduling transaction uses a nonblocking
+advisory lock to serialize slot checks, new Run creation and failed-Run
+readmission; contention defers rather than holding another origin connection in
+a lock wait. The two-target inference cap remains independent of these Run
+slots. Cancelling a shared Run stops every target joined to that owner; inspect
+its roster before cancelling, since same-fingerprint work stays stopped until
+explicit member retry. If both slots are paused for authentication, ordinary
+refresh work waits until the member resolves authentication, resumes or cancels
+an owner. Cancelling a Sweep stops the evaluations it owns or requested.
 Scheduling requires an actor without an inherited Run: a Run-scoped actor cannot
 create an independent owner or advance its successor key through `ensureRun`.
-A new policy resets the scan cursor and its discovery Job checkpoints
-bounded pages until both independent streams finish. Cursor writes are fenced
-by activation revision, so an old page cannot overwrite a newer reset. During
-deploy overlap a discovery page whose Worker policy differs from the activation
-sleeps and retries (up to 30 minutes) instead of failing the Run.
+A new policy obsoletes work stamped with the old one. During deploy overlap a
+page whose Worker policy differs from the activation sleeps and retries (up to
+30 minutes) instead of failing the Run.
 The hourly cron and app-open catch-up inspect durable Jobs. Failed startup
 activation uses Job retries; exhausted failures remain stopped for explicit
 retry. Activation does not block interactive Gateway admission.
