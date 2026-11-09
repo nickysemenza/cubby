@@ -4,9 +4,10 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
-import { image, imageProcessingJob } from "~/server/db/schema";
+import { image, imageProcessingJob, run as runTable } from "~/server/db/schema";
 import { createTransparentDerivativeAndJob } from "~/server/domains/image-processing/repo/image-processing";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
+import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { updateJobs } from "~/server/generic/jobs/jobs.fixtures";
 import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 import { enqueueJob } from "~/server/generic/jobs/repo/producer";
@@ -86,5 +87,55 @@ describe("Job maintenance", () => {
       ),
     ).toEqual([{ id: retained[1] }]);
     expect(await readJobs(ctx.db, { id: retained[2]! })).toHaveLength(1);
+  });
+
+  it("prunes old failed Jobs only for settled automatic Runs and keeps the Run", async () => {
+    const old = new Date(Date.now() - 15 * 24 * 60 * 60_000);
+    const seed = async (
+      key: string,
+      run: {
+        purpose: "maintenance" | "mail_search";
+        trigger: "manual" | "scheduled";
+      },
+    ) => {
+      const runId = await ensureRun(ctx.db, ctx.actor, {
+        ...run,
+        status: "completed",
+        execution: false,
+      });
+      const saved = await enqueueJob(ctx.db, {
+        key,
+        kind: "synthetic.retention",
+        input: {},
+        runId,
+      });
+      await updateJobs(
+        ctx.db,
+        { id: saved.id },
+        { state: "failed", updatedAt: old },
+      );
+      return { jobId: saved.id, runId };
+    };
+    const automatic = await seed("synthetic.failed.automatic", {
+      purpose: "maintenance",
+      trigger: "scheduled",
+    });
+    const manual = await seed("synthetic.failed.manual", {
+      purpose: "maintenance",
+      trigger: "manual",
+    });
+    const mail = await seed("synthetic.failed.mail", {
+      purpose: "mail_search",
+      trigger: "scheduled",
+    });
+    await maintainJobs(ctx.db);
+    expect(await readJobs(ctx.db, { id: automatic.jobId })).toEqual([]);
+    expect(await readJobs(ctx.db, { id: manual.jobId })).toHaveLength(1);
+    expect(await readJobs(ctx.db, { id: mail.jobId })).toHaveLength(1);
+    const [run] = await getDb(ctx.db)
+      .select({ id: runTable.id })
+      .from(runTable)
+      .where(eq(runTable.id, automatic.runId));
+    expect(run?.id).toBe(automatic.runId);
   });
 });
