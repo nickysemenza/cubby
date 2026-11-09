@@ -27,17 +27,6 @@ export type GmailApiClientOptions = {
   sleep?: (ms: number) => Promise<void>;
 };
 
-const retryDelay = (response: Response, attempt: number): number => {
-  const header = response.headers.get("Retry-After");
-  const seconds = header ? Number(header) : Number.NaN;
-  if (Number.isFinite(seconds) && seconds >= 0)
-    return Math.min(seconds * 1_000, 10_000);
-  const date = header ? Date.parse(header) : Number.NaN;
-  if (Number.isFinite(date))
-    return Math.min(Math.max(date - Date.now(), 0), 10_000);
-  return 500 * 2 ** attempt;
-};
-
 const gmailErrorBody = z
   .object({
     error: z
@@ -64,7 +53,26 @@ const parseError = async (response: Response): Promise<GmailApiError> => {
   } catch {
     // SILENT: non-JSON provider diagnostics are retained verbatim above.
   }
-  return new GmailApiError({ status: response.status, message, reason });
+  const transient =
+    response.status === 429 ||
+    response.status >= 500 ||
+    (response.status === 403 &&
+      (reason === "rateLimitExceeded" || reason === "userRateLimitExceeded"));
+  const header = response.headers.get("retry-after");
+  const seconds = header ? Number(header) : Number.NaN;
+  const date = header ? Date.parse(header) : Number.NaN;
+  const retryAt =
+    Number.isFinite(seconds) && seconds >= 0
+      ? Date.now() + seconds * 1_000
+      : Number.isFinite(date)
+        ? date
+        : Date.now() + 30_000;
+  return new GmailApiError({
+    status: response.status,
+    message,
+    reason,
+    ...(transient ? { retryAt: Math.max(retryAt, Date.now() + 1_000) } : {}),
+  });
 };
 
 const pathFor = (baseUrl: string, path: string, params?: URLSearchParams) => {
@@ -88,22 +96,29 @@ export const createGmailApiClient = ({
     path: string,
     params?: URLSearchParams,
   ): Promise<T> => {
+    let previous: Response | undefined;
     const response = await retryWithBackoff(
-      () =>
-        fetcher(pathFor(baseUrl, path, params), {
+      async () => {
+        // A retry releases the preceding body before taking another connection.
+        await previous?.body?.cancel();
+        previous = await fetcher(pathFor(baseUrl, path, params), {
           headers: {
             accept: "application/json",
             authorization: `Bearer ${accessToken}`,
           },
-        }),
+        });
+        return previous;
+      },
       {
         sleep,
-        // Three attempts; only throttling and server errors are transient.
+        // Throttling and provider deadlines reach the shared cooldown owner
+        // before another request; server failures without a deadline retry here.
         delayFor: (outcome, attempt) =>
           outcome.ok &&
-          (outcome.value.status === 429 || outcome.value.status >= 500) &&
+          outcome.value.status >= 500 &&
+          !outcome.value.headers.has("retry-after") &&
           attempt < 2
-            ? retryDelay(outcome.value, attempt)
+            ? 500 * 2 ** attempt
             : null,
       },
     );

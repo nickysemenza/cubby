@@ -1,5 +1,5 @@
 import type { EmailExecutionPolicy } from "@cubby/schemas/email-fields";
-import { parseEntityId } from "@cubby/schemas/identifiers";
+import { parseEntityId, userId } from "@cubby/schemas/identifiers";
 import {
   mailboxCoverage,
   retainedMailContent,
@@ -14,7 +14,9 @@ import {
   and,
   arrayContains,
   asc,
+  desc,
   eq,
+  gt,
   inArray,
   isNotNull,
   isNull,
@@ -37,6 +39,7 @@ import {
 import { getDb, runAfterCommit } from "~/server/db/helpers/core";
 import {
   mailboxCursor,
+  ledgerParty,
   email as emailTable,
   orderMail,
   orderMailAttachment,
@@ -82,11 +85,74 @@ import type {
   GmailAccountTokenStore,
 } from "./tokens";
 
+/** Share provider backpressure across the member's independent search clients. */
+export async function readGmailProviderRetryAt(
+  db: Database,
+  input: { userId: string; mailboxId?: string },
+): Promise<Date | null> {
+  const [row] = await getDb(db)
+    .select({ until: mailboxCursor.providerRetryAt })
+    .from(mailboxCursor)
+    .innerJoin(ledgerParty, eq(ledgerParty.id, mailboxCursor.ledgerPartyId))
+    .where(
+      and(
+        eq(ledgerParty.userId, userId.parse(input.userId)),
+        notDeleted(ledgerParty),
+        eq(mailboxCursor.provider, "gmail"),
+        input.mailboxId
+          ? eq(mailboxCursor.mailboxId, input.mailboxId)
+          : undefined,
+        gt(mailboxCursor.providerRetryAt, new Date()),
+      ),
+    )
+    .orderBy(desc(mailboxCursor.providerRetryAt))
+    .limit(1);
+  return row?.until ?? null;
+}
+
+export async function recordGmailProviderRetryAt(
+  db: Database,
+  input: { userId: string; mailboxId?: string; until: Date },
+): Promise<void> {
+  await getDb(db)
+    .update(mailboxCursor)
+    .set({
+      // Raw parameters bypass the timezone-less column's UTC Date encoder.
+      providerRetryAt: sql`greatest(${mailboxCursor.providerRetryAt}, ${input.until.toISOString()}::timestamp)`,
+    })
+    .where(
+      and(
+        eq(mailboxCursor.provider, "gmail"),
+        input.mailboxId
+          ? eq(mailboxCursor.mailboxId, input.mailboxId)
+          : undefined,
+        inArray(
+          mailboxCursor.ledgerPartyId,
+          getDb(db)
+            .select({ id: ledgerParty.id })
+            .from(ledgerParty)
+            .where(
+              and(
+                eq(ledgerParty.userId, userId.parse(input.userId)),
+                notDeleted(ledgerParty),
+              ),
+            ),
+        ),
+      ),
+    );
+}
+
 export const loadGmailCursor = async (
   db: Database,
-  input: { ledgerPartyId: string; mailboxId: string; provider?: string },
+  input: {
+    ledgerPartyId: string;
+    mailboxId: string;
+    provider?: string;
+    /** Hold through the caller's checkpoint transaction before merging coverage. */
+    lock?: true;
+  },
 ): Promise<{ historyId: string | null; coverage: MailboxCoverage | null }> => {
-  const [row] = await getDb(db)
+  const query = getDb(db)
     .select({
       historyId: mailboxCursor.historyId,
       coverage: mailboxCursor.coverage,
@@ -94,6 +160,7 @@ export const loadGmailCursor = async (
     .from(mailboxCursor)
     .where(mailboxWhere(input))
     .limit(1);
+  const [row] = await (input.lock ? query.for("update") : query);
   return {
     historyId: row?.historyId ?? null,
     coverage: row?.coverage ? mailboxCoverage.parse(row.coverage) : null,

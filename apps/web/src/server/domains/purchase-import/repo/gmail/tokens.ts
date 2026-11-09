@@ -1,6 +1,10 @@
 import { z } from "zod";
 
-import type { GmailProvider } from "~/server/domains/purchase-import/repo/gmail/types";
+import type { UnparsedError } from "~/lib/error-utils";
+import {
+  GmailApiError,
+  type GmailProvider,
+} from "~/server/domains/purchase-import/repo/gmail/types";
 
 import { createGmailApiClient, type GmailFetcher } from "./client";
 
@@ -42,6 +46,14 @@ export class GmailAuthorizationError extends Error {
     this.name = "GmailAuthorizationError";
   }
 }
+
+export const isGmailAuthorizationFailure = (
+  error: UnparsedError,
+): error is GmailAuthorizationError | GmailApiError =>
+  error instanceof GmailAuthorizationError ||
+  (error instanceof GmailApiError &&
+    (error.status === 401 ||
+      (error.status === 403 && error.reason === "insufficientPermissions")));
 
 export type GmailTokenResolverOptions = {
   store: GmailAccountTokenStore;

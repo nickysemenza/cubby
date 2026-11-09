@@ -4,9 +4,18 @@ import { env } from "~/env";
 import { localGoogleProviderOrigin } from "~/lib/e2e-google-provider";
 import { getGmailOAuthCredentials } from "~/server/cf-env";
 import type { Database } from "~/server/db";
-import type { GmailProvider } from "~/server/domains/purchase-import/repo/gmail/types";
+import {
+  GmailApiError,
+  type GmailProvider,
+} from "~/server/domains/purchase-import/repo/gmail/types";
+import { inJobExecution } from "~/server/generic/jobs/context";
+import { JobDeferredError } from "~/server/generic/jobs/errors";
 
-import { createBetterAuthGmailAccountStore } from "./persistence";
+import {
+  createBetterAuthGmailAccountStore,
+  readGmailProviderRetryAt,
+  recordGmailProviderRetryAt,
+} from "./persistence";
 import { createGmailProviderFactory } from "./tokens";
 
 /** The local Google provider's Gmail and token endpoints during E2E. */
@@ -41,10 +50,45 @@ export async function gmailProviderForUser(
   const clientSecret = worker?.clientSecret ?? env.GOOGLE_CLIENT_SECRET;
   if (!clientId || !clientSecret)
     throw new Error("Google OAuth is not configured for Gmail.");
-  return createGmailProviderFactory({
+  const provider = await createGmailProviderFactory({
     store: createBetterAuthGmailAccountStore(db, expectedMailboxId),
     clientId,
     clientSecret,
     ...localGmailEndpoints(),
   })(userId);
+  const identity = { userId, mailboxId: expectedMailboxId };
+  const guarded = async <T>(request: () => Promise<T>): Promise<T> => {
+    const until = await readGmailProviderRetryAt(db, identity);
+    if (until) {
+      const error = new GmailApiError({
+        status: 429,
+        message: "Gmail provider is waiting for shared capacity",
+        retryAt: until.getTime(),
+      });
+      if (!inJobExecution()) throw error;
+      const deferred = new JobDeferredError(error.message, until, "rate_limit");
+      deferred.cause = error;
+      throw deferred;
+    }
+    try {
+      return await request();
+    } catch (error) {
+      if (!(error instanceof GmailApiError) || error.retryAt === undefined)
+        throw error;
+      const next = new Date(error.retryAt);
+      await recordGmailProviderRetryAt(db, { ...identity, until: next });
+      if (!inJobExecution()) throw error;
+      const deferred = new JobDeferredError(error.message, next, "rate_limit");
+      deferred.cause = error;
+      throw deferred;
+    }
+  };
+  return {
+    getProfile: () => guarded(() => provider.getProfile()),
+    listMessages: (options) => guarded(() => provider.listMessages(options)),
+    listHistory: (options) => guarded(() => provider.listHistory(options)),
+    getMessage: (id) => guarded(() => provider.getMessage(id)),
+    getAttachment: (id, attachmentId) =>
+      guarded(() => provider.getAttachment(id, attachmentId)),
+  };
 }

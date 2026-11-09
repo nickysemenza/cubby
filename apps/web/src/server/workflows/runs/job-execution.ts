@@ -1,6 +1,9 @@
 import { runEntityId, type RunId } from "@cubby/schemas/identifiers";
 import { jobWaitReason } from "@cubby/schemas/job";
-import { mailboxDiscoveryProgress } from "@cubby/schemas/mailbox-research";
+import {
+  mailboxDiscoveryProgress,
+  MAIL_DISCOVERY_ADMISSION_WAIT,
+} from "@cubby/schemas/mailbox-research";
 import { RUN_KINDS } from "@cubby/schemas/run-fields";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
@@ -90,6 +93,12 @@ export const runJobHandler = defineJobHandler(
       async (): Promise<PreparedJobPage> => {
         const params = { runId: input.runId, attempt: claim.generation };
         const before = await readRun(db, input.runId);
+        if (
+          before?.purpose === "mail_discovery" &&
+          before.status === "paused" &&
+          before.failureCode === MAIL_DISCOVERY_ADMISSION_WAIT
+        )
+          await resumeClaimedWorkflowRun(db, params, "mail_admission");
         if (before?.status === "failed" && before.failureCode === "job_failed")
           await resumeClaimedWorkflowRun(db, params);
         if (

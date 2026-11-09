@@ -76,12 +76,19 @@ export type GmailAttachmentPayload = {
 export class GmailApiError extends Error {
   readonly status: number;
   readonly reason?: string;
+  readonly retryAt?: number;
 
-  constructor(options: { status: number; message: string; reason?: string }) {
+  constructor(options: {
+    status: number;
+    message: string;
+    reason?: string;
+    retryAt?: number;
+  }) {
     super(options.message);
     this.name = "GmailApiError";
     this.status = options.status;
     this.reason = options.reason;
+    this.retryAt = options.retryAt;
   }
 }
 

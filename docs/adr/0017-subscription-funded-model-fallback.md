@@ -169,6 +169,13 @@ Each budget admission reads current settings and window usage in one SQL
 statement. Empty ledgers still load configured limits; absent settings retain
 the defaults. Budget values and paid grants are never cached.
 
+Window admission is a recorded-spend soft cap, not an outstanding-cost
+reservation. Usage arrives through telemetry, and calls already in flight can
+overshoot a window by their actual cost. Gateway permits bound requests rather
+than reserving money. Mail concurrency preserves this policy and every per-call
+funding check; it creates no overage grant or increase to a configured limit.
+Its bounded rollout must measure costs and funding stops alongside throughput.
+
 Amended 2026-10-19: both free sources are capped resources the household
 shares with its own use. The Claude credit is a $200 monthly allowance; $5
 per window allowed about $600 a month. The ChatGPT plan's quota is shared

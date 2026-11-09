@@ -233,6 +233,11 @@ describe("step-ledger Runs", () => {
       purpose: "mail_discovery",
       trigger: "manual",
       status: "running",
+      input: {
+        mailboxId: "synthetic-phase-mailbox",
+        scopedQueries: [],
+        executionPolicy: "classification_only",
+      },
       progress: mailboxDiscoveryProgress.parse({
         attempt: 1,
         phase: "listing",
@@ -326,6 +331,11 @@ describe("step-ledger Runs", () => {
       purpose: "mail_discovery",
       trigger: "manual",
       status: "running",
+      input: {
+        mailboxId: "synthetic-sampling-mailbox",
+        scopedQueries: [],
+        executionPolicy: "classification_only",
+      },
       progress: mailboxDiscoveryProgress.parse({
         attempt: 1,
         phase: "listing",

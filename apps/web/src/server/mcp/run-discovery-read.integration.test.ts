@@ -1,3 +1,4 @@
+import { userId } from "@cubby/schemas/identifiers";
 import {
   mailboxCoverage,
   mailboxDiscoveryInput,
@@ -7,7 +8,7 @@ import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { account } from "~/server/db/auth.schema";
+import { account, user } from "~/server/db/auth.schema";
 import { getDb } from "~/server/db/helpers";
 import { aiUsage, mailboxCursor, run, runOperation } from "~/server/db/schema";
 import { startMailDiscovery } from "~/server/domains/purchase-import/operations/gmail/discovery";
@@ -199,8 +200,8 @@ describe("member discovery readiness through MCP", () => {
     const read = (
       action: "work_snapshot" | "transcript",
       runId = discovery.shortcode,
-    ) =>
-      callMcpTool(createMcpServer(), "run_read", { action, runId }, mcpContext);
+      context = mcpContext,
+    ) => callMcpTool(createMcpServer(), "run_read", { action, runId }, context);
     const status = await read("work_snapshot");
     expect(status.isError).not.toBe(true);
     expect(status.structuredContent).toMatchObject({
@@ -256,27 +257,29 @@ describe("member discovery readiness through MCP", () => {
         nextCursor: null,
       },
     });
-    const foreignParty = await insertWithShortcode(ctx.db, "ledgerParty", {
+    const foreignUserId = userId.parse("synthetic-foreign-discovery-user");
+    await getDb(ctx.db).insert(user).values({
+      id: foreignUserId,
+      name: "Synthetic other discovery member",
+      email: "foreign-discovery@example.test",
+    });
+    await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Synthetic other discovery member",
       kind: "member",
+      userId: foreignUserId,
     });
-    await getDb(ctx.db)
-      .update(run)
-      .set({ ledgerPartyId: foreignParty.id })
-      .where(eq(run.id, id));
-    expect((await read("work_snapshot")).isError).toBe(true);
-    expect((await read("transcript")).isError).toBe(true);
-    await getDb(ctx.db)
-      .update(run)
-      .set({ ledgerPartyId: party.id })
-      .where(eq(run.id, id));
-    expect(await readJobs(ctx.db, {})).toEqual(beforeJobs);
-    // The ownership probe changes only its fixture's ownership and update time.
+    const foreignContext = requireActor(
+      createTestRequestContext(ctx.db, { auth: { userId: foreignUserId } }),
+    );
     expect(
-      (await getDb(ctx.db).select().from(run)).map(
-        ({ updatedAt: _updatedAt, ...row }) => row,
-      ),
-    ).toEqual(beforeRuns.map(({ updatedAt: _updatedAt, ...row }) => row));
+      (await read("work_snapshot", discovery.shortcode, foreignContext))
+        .isError,
+    ).toBe(true);
+    expect(
+      (await read("transcript", discovery.shortcode, foreignContext)).isError,
+    ).toBe(true);
+    expect(await readJobs(ctx.db, {})).toEqual(beforeJobs);
+    expect(await getDb(ctx.db).select().from(run)).toEqual(beforeRuns);
     expect(await getDb(ctx.db).select().from(runOperation)).toEqual(
       beforeReceipts,
     );

@@ -1159,10 +1159,16 @@ export const { definition, readSchemas } = defineEntityModel({
           "{vendorAccountId} IS NOT NULL AND {status} IN ('running', 'paused', 'paused_auth', 'paused_offline')",
       },
       {
-        // One scheduled pass per mailbox at a time: an overlapping cron and
-        // app-open trigger lose the insert instead of both walking the cursor.
+        // The admission owner enforces capacity and exclusive scopes. The index
+        // independently refuses two running owners of the same query resource.
         name: "Run_one_active_mail_discovery",
-        on: ["ledgerPartyId", { sql: "COALESCE({input}->>'mailboxId', '')" }],
+        on: [
+          "ledgerPartyId",
+          { sql: "COALESCE({input}->>'mailboxId', '')" },
+          {
+            sql: "md5(COALESCE(CASE WHEN {progress}->'discoveryScope'->>'kind' = 'query' THEN {progress}->'discoveryScope'->>'key' END, ''))",
+          },
+        ],
         unique: true,
         where: "{purpose} = 'mail_discovery' AND {status} = 'running'",
       },

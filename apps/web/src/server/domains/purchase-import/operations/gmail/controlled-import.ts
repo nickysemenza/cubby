@@ -21,6 +21,7 @@ import {
   findControlledMailImport,
   type ControlledMailRequest,
 } from "~/server/domains/purchase-import/repo/controlled-mail-import";
+import { lockMailDiscoveryAdmission } from "~/server/domains/purchase-import/repo/gmail/discovery-admission";
 import { gmailProviderForUser } from "~/server/domains/purchase-import/repo/gmail/provider";
 import { listMemberMailboxes } from "~/server/domains/purchase-import/repo/gmail/targets";
 import { vendorSearchTerms } from "~/server/domains/purchase-import/repo/gmail/vendor-identity";
@@ -41,7 +42,19 @@ export async function launchQueuedControlledMailImport(
   mailboxId: string,
 ): Promise<ControlledMailRequest | null> {
   return withTransactionDatabase(db, async (tx) => {
-    const control = await findControlledMailImport(tx, mailboxId);
+    let control = await findControlledMailImport(tx, mailboxId);
+    if (
+      !control ||
+      !control.ledgerPartyId ||
+      control.status !== "paused" ||
+      control.failureCode !== "controlled_mail_queued"
+    )
+      return control;
+    await lockMailDiscoveryAdmission(tx, {
+      ledgerPartyId: control.ledgerPartyId,
+      mailboxId,
+    });
+    control = await findControlledMailImport(tx, mailboxId);
     if (
       !control ||
       !control.ledgerPartyId ||
@@ -126,7 +139,11 @@ export async function startControlledMailImport(
       "This Vendor has no verified sender or website domain to search.",
     );
   await withTransactionDatabase(db, async (tx) => {
-    // Match automatic admission's lock order: member, then mailbox settings.
+    await lockMailDiscoveryAdmission(tx, {
+      ledgerPartyId: mailbox.ledgerPartyId,
+      mailboxId: input.mailboxId,
+    });
+    // Mailbox admission precedes member, settings, Run and Job locks.
     await getDb(tx)
       .select({ id: ledgerParty.id })
       .from(ledgerParty)

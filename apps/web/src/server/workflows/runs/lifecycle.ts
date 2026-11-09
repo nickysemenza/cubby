@@ -1,6 +1,10 @@
 import { aiEvaluationState } from "@cubby/schemas/ai-evaluation";
 import { runEntityId, type RunId } from "@cubby/schemas/identifiers";
-import { mailboxDiscoveryProgress } from "@cubby/schemas/mailbox-research";
+import {
+  mailboxDiscoveryInput,
+  mailboxDiscoveryProgress,
+  MAIL_DISCOVERY_ADMISSION_WAIT,
+} from "@cubby/schemas/mailbox-research";
 import { runStepState } from "@cubby/schemas/run-step";
 import { and, or, not, eq, getTableColumns, isNull, sql } from "drizzle-orm";
 
@@ -8,6 +12,7 @@ import {
   describeErrorCauses,
   scrubErrorMessage,
 } from "~/lib/error-diagnostics";
+import type { UnparsedError } from "~/lib/error-utils";
 import type { Database } from "~/server/db";
 import {
   getDb,
@@ -16,11 +21,19 @@ import {
 } from "~/server/db/helpers/core";
 import { related, outer } from "~/server/db/helpers/related";
 import { run as runTable } from "~/server/db/retained-tables";
+import {
+  lockMailDiscoveryRunAdmission,
+  mailDiscoveryAdmission,
+  retainedMailDiscoveryScope,
+} from "~/server/domains/purchase-import/repo/gmail/discovery-admission";
 import { recordRunProgress as recordProgress } from "~/server/domains/run/repo/run-progress";
 import { createAppError } from "~/server/errors/app-error";
 import { findPgError } from "~/server/errors/db-errors";
 import { currentJobExecution } from "~/server/generic/jobs/context";
-import { JobRetryableError } from "~/server/generic/jobs/errors";
+import {
+  JobDeferredError,
+  JobRetryableError,
+} from "~/server/generic/jobs/errors";
 import {
   lockUnchangedJob,
   stoppedRunExecutions,
@@ -85,6 +98,32 @@ export const recordRunProgress = (
  */
 export const MANUAL_RUN_PRIORITY = 10;
 
+/** A refused admission rolled back; a live Job waits without spending attempts. */
+export function mailDiscoveryAdmissionBackpressure(
+  error: UnparsedError,
+): Error | undefined {
+  const pg = findPgError(error);
+  if (
+    !pg ||
+    (!["40001", "40P01", "55P03", "53300"].includes(pg.code ?? "") &&
+      !(
+        pg.code === "23505" && pg.constraint === "Run_one_active_mail_discovery"
+      ))
+  )
+    return undefined;
+  const message =
+    "Mail discovery is waiting for shared database or search capacity";
+  if (!currentJobExecution())
+    return createAppError("RUN_CONTROL_REFUSED", message, error);
+  const deferred = new JobDeferredError(
+    message,
+    new Date(Date.now() + 15_000),
+    "provider_capacity",
+  );
+  deferred.cause = error;
+  return deferred;
+}
+
 type LaunchWorkflowRunInput = {
   runId: RunId;
   purpose: ExecutedRunPurpose;
@@ -106,12 +145,62 @@ export async function launchWorkflowRun(
   input: LaunchWorkflowRunInput,
 ): Promise<LaunchedWorkflowRun | null> {
   return withTransactionDatabase(db, async (tx) => {
+    const mailbox = await lockMailDiscoveryRunAdmission(tx, input.runId);
     const [owner] = await getDb(tx)
       .select()
       .from(runTable)
       .where(eq(runTable.id, input.runId))
       .for("update");
     if (!owner) throw new Error("Run no longer exists");
+    if (
+      input.automatic &&
+      owner.purpose === "mail_discovery" &&
+      owner.status !== "running" &&
+      !(
+        owner.status === "paused" &&
+        owner.failureCode === MAIL_DISCOVERY_ADMISSION_WAIT
+      )
+    )
+      return null;
+    if (
+      mailbox &&
+      (owner.ledgerPartyId !== mailbox.ledgerPartyId ||
+        mailboxDiscoveryInput.parse(owner.input).mailboxId !==
+          mailbox.mailboxId)
+    )
+      throw new Error("Mail discovery admission identity changed");
+    const scope = mailbox ? retainedMailDiscoveryScope(owner) : undefined;
+    const admissionClass = mailboxDiscoveryProgress.safeParse(owner.progress)
+      .data?.admissionClass;
+    const recovery =
+      mailbox &&
+      (owner.status === "running" ||
+        owner.failureCode === MAIL_DISCOVERY_ADMISSION_WAIT)
+        ? admissionClass === "recovery"
+        : !input.automatic;
+    const admitted =
+      !mailbox ||
+      !scope ||
+      owner.status === "running" ||
+      (await mailDiscoveryAdmission(tx, {
+        ...mailbox,
+        scope,
+        runId: owner.id,
+        recovery,
+      })) === "available";
+    const admissionProgress = scope
+      ? {
+          discoveryScope: scope,
+          admissionClass: recovery ? "recovery" : "automatic",
+          ...(!admitted
+            ? {
+                admissionRequestedAt:
+                  mailboxDiscoveryProgress.parse(owner.progress)
+                    .admissionRequestedAt ?? new Date().toISOString(),
+              }
+            : {}),
+        }
+      : {};
     const priority = input.automatic ? 0 : MANUAL_RUN_PRIORITY;
     // Retention prunes the finished Job, so the Run's status has to refuse automatic
     // work as the row would.
@@ -170,11 +259,13 @@ export async function launchWorkflowRun(
     await getDb(tx)
       .update(runTable)
       .set({
-        status: "running",
+        status: admitted ? "running" : "paused",
         endedAt: null,
-        failureCode: null,
-        dispatchError: null,
-        progress: sql`(coalesce(${runTable.progress}, '{}'::jsonb) - 'fundingReleasedAt') || jsonb_build_object('attempt', ${execution.generation}::int)`,
+        failureCode: admitted ? null : MAIL_DISCOVERY_ADMISSION_WAIT,
+        dispatchError: admitted
+          ? null
+          : "Mail discovery is queued for shared search capacity",
+        progress: sql`(coalesce(${runTable.progress}, '{}'::jsonb) - 'fundingReleasedAt' - 'admissionRequestedAt') || ${JSON.stringify(admissionProgress)}::jsonb || jsonb_build_object('attempt', ${execution.generation}::int)`,
       })
       .where(eq(runTable.id, input.runId));
     if (!input.automatic) {
@@ -202,6 +293,10 @@ export async function launchWorkflowRun(
     });
     return { attempt: execution.generation, instanceId: execution.id };
   }).catch((error: unknown) => {
+    if (input.purpose === "mail_discovery") {
+      const deferred = mailDiscoveryAdmissionBackpressure(error);
+      if (deferred) throw deferred;
+    }
     const pg = findPgError(error);
     if (
       !input.automatic &&
@@ -237,7 +332,7 @@ function currentRunClaim(params: WorkflowRunParams) {
 export async function resumeClaimedWorkflowRun(
   db: Database,
   params: WorkflowRunParams,
-  reason: "job_failed" | "funding_ready" = "job_failed",
+  reason: "job_failed" | "funding_ready" | "mail_admission" = "job_failed",
 ): Promise<void> {
   const current = currentRunClaim(params);
   if (
@@ -247,11 +342,88 @@ export async function resumeClaimedWorkflowRun(
       current.claim.attempts === 0)
   )
     return;
+  const runId = runEntityId.parse(params.runId);
   try {
-    await withTransactionDatabase(db, async (tx) => {
+    const waiting = await withTransactionDatabase(db, async (tx) => {
+      const mailbox = await lockMailDiscoveryRunAdmission(tx, runId);
+      const [mailOwner] = mailbox
+        ? await getDb(tx)
+            .select()
+            .from(runTable)
+            .where(eq(runTable.id, runId))
+            .for("update")
+        : [];
+      if (
+        mailOwner &&
+        mailbox &&
+        (mailOwner.ledgerPartyId !== mailbox.ledgerPartyId ||
+          mailboxDiscoveryInput.parse(mailOwner.input).mailboxId !==
+            mailbox.mailboxId)
+      )
+        throw new Error("Mail discovery admission identity changed");
+      const scope = mailOwner
+        ? retainedMailDiscoveryScope(mailOwner)
+        : undefined;
+      const recovery =
+        reason !== "mail_admission" ||
+        mailboxDiscoveryProgress.safeParse(mailOwner?.progress).data
+          ?.admissionClass !== "automatic";
       const successor = related(runTable, (next) =>
         eq(next.predecessorRunId, outer(runTable.id)),
       ).exists();
+      const eligible =
+        mailOwner &&
+        !mailOwner.deletedAt &&
+        !mailOwner.retiredAt &&
+        (reason === "mail_admission"
+          ? mailOwner.status === "paused" &&
+            mailOwner.failureCode === MAIL_DISCOVERY_ADMISSION_WAIT
+          : reason === "funding_ready"
+            ? mailOwner.status === "paused_auth" &&
+              mailOwner.failureCode === "execution_limit"
+            : mailOwner.status === "failed" &&
+              mailOwner.failureCode === "job_failed");
+      if (
+        eligible &&
+        mailbox &&
+        scope &&
+        (await mailDiscoveryAdmission(tx, {
+          ...mailbox,
+          scope,
+          runId: runId,
+          recovery,
+        })) !== "available"
+      ) {
+        const [queued] = await getDb(tx)
+          .update(runTable)
+          .set({
+            status: "paused",
+            failureCode: MAIL_DISCOVERY_ADMISSION_WAIT,
+            dispatchError:
+              "Mail discovery is queued for shared search capacity",
+            progress: sql`coalesce(${runTable.progress}, '{}'::jsonb) || ${JSON.stringify(
+              {
+                discoveryScope: scope,
+                admissionClass: recovery ? "recovery" : "automatic",
+                admissionRequestedAt:
+                  mailboxDiscoveryProgress.parse(mailOwner.progress)
+                    .admissionRequestedAt ?? new Date().toISOString(),
+              },
+            )}::jsonb`,
+          })
+          .where(
+            and(
+              eq(runTable.id, runId),
+              isNull(runTable.deletedAt),
+              isNull(runTable.retiredAt),
+              not(successor),
+            ),
+          )
+          .returning({ id: runTable.id });
+        if (queued) await assertWorkflowEffect(tx);
+        return Boolean(queued);
+      }
+
       const [resumed] = await getDb(tx)
         .update(runTable)
         .set({
@@ -259,18 +431,26 @@ export async function resumeClaimedWorkflowRun(
           endedAt: null,
           failureCode: null,
           dispatchError: null,
-          progress: sql`(coalesce(${runTable.progress}, '{}'::jsonb) - 'fundingReleasedAt') || jsonb_build_object('attempt', ${current.claim.generation}::int)`,
+          progress: sql`(coalesce(${runTable.progress}, '{}'::jsonb) - 'fundingReleasedAt' - 'admissionRequestedAt') || ${JSON.stringify(scope ? { discoveryScope: scope, admissionClass: recovery ? "recovery" : "automatic" } : {})}::jsonb || jsonb_build_object('attempt', ${current.claim.generation}::int)`,
         })
         .where(
           and(
-            eq(runTable.id, runEntityId.parse(params.runId)),
+            eq(runTable.id, runId),
             eq(
               runTable.status,
-              reason === "funding_ready" ? "paused_auth" : "failed",
+              reason === "funding_ready"
+                ? "paused_auth"
+                : reason === "mail_admission"
+                  ? "paused"
+                  : "failed",
             ),
             eq(
               runTable.failureCode,
-              reason === "funding_ready" ? "execution_limit" : "job_failed",
+              reason === "funding_ready"
+                ? "execution_limit"
+                : reason === "mail_admission"
+                  ? MAIL_DISCOVERY_ADMISSION_WAIT
+                  : "job_failed",
             ),
             isNull(runTable.deletedAt),
             isNull(runTable.retiredAt),
@@ -281,8 +461,25 @@ export async function resumeClaimedWorkflowRun(
       // Run-before-Job ordering matches launch/control. A member stop or stale
       // generation rolls the restoration back before any domain work can run.
       if (resumed) await assertWorkflowEffect(tx);
+      return false;
     });
+    if (waiting)
+      throw new JobDeferredError(
+        "Mail discovery is queued for shared search capacity",
+        new Date(Date.now() + 15_000),
+        "provider_capacity",
+      );
   } catch (error) {
+    const claimInput = current.claim.input;
+    if (
+      claimInput !== null &&
+      typeof claimInput === "object" &&
+      "purpose" in claimInput &&
+      claimInput.purpose === "mail_discovery"
+    ) {
+      const deferred = mailDiscoveryAdmissionBackpressure(error);
+      if (deferred) throw deferred;
+    }
     const pg = findPgError(error);
     if (pg?.code === "23505" && pg.constraint?.startsWith("Run_one_active_"))
       throw new JobRetryableError(
