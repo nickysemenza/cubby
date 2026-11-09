@@ -87,6 +87,7 @@ import { mailAttempts, isMailExtractionCall } from "./mail-attempts";
 import { readPiModelUsage } from "./model-usage";
 import { RunSettlement, SETTLEMENT_POLL_MS } from "./run-settlement";
 import { renderSignal } from "./signals";
+import { CLAIM_IMPORT_WORK_TOOL } from "./tool-protocol";
 import { continueMailImportOnYield, runAgentTools } from "./tools";
 import {
   currentPhotoWorkItemMessages,
@@ -603,7 +604,7 @@ export class PurchaseImportRunAgent
                         });
                       }
                     }
-                    if (attempts && call.name === "claim_next_import_work") {
+                    if (attempts && call.name === CLAIM_IMPORT_WORK_TOOL) {
                       const text = result.output?.find(
                         (part) => part.type === "text",
                       );

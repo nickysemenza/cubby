@@ -14,6 +14,7 @@ import {
 import { z } from "zod";
 
 import type { RunServices } from "./environment";
+import { CLAIM_IMPORT_WORK_TOOL } from "./tool-protocol";
 
 const toolInputs = photoInventoryToolInputs;
 type ToolInputs = typeof toolInputs;
@@ -124,7 +125,7 @@ function tool<N extends ToolName>(
     replay: "safe",
     // A complete mail read may be 200 KB. Pi's default 50 KB cap must not
     // silently cut its item lines while the claim still says complete.
-    ...(name === "claim_next_import_work"
+    ...(name === CLAIM_IMPORT_WORK_TOOL
       ? {
           outputLimits: {
             maxBytes: MAIL_READ_RESPONSE_MAX_BYTES * 2,
@@ -175,7 +176,7 @@ export function runAgentTools(
         );
       },
     }),
-    tool("claim_next_import_work", {
+    tool(CLAIM_IMPORT_WORK_TOOL, {
       description:
         "Claim and describe the run's next admitted work item (an Email for Mail import, with its compact read; a photo group for photo inventory). Call it again after resolving each item; continue until it returns done.",
       execute: async (_args, api, context) => {

@@ -11,10 +11,11 @@ import type {
 } from "@cubby/schemas/context-breakdown";
 import { z } from "zod";
 
+import { MCP_TOOL_PREFIX } from "./tool-protocol";
+
 /** Character weight for one image; base64 length says nothing about tokens. */
 export const IMAGE_CHAR_WEIGHT = 4_000;
 /** MCP tools reach the model as `mcp__<server>__<tool>`. */
-const MCP_TOOL_PREFIX = "mcp__";
 const UNKNOWN_TOOL = "unknown";
 const MAX_CALLS_PER_SCOPE = 256;
 const MAX_SCOPES = 64;

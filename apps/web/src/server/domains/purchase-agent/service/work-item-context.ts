@@ -4,7 +4,9 @@ import { parseJsonAs } from "@cubby/shared/parse-json-as";
 import type { Message } from "@earendil-works/pi-ai";
 import { z } from "zod";
 
-const CLAIM: ImportRunAgentToolName = "claim_next_import_work";
+import { CLAIM_IMPORT_WORK_TOOL } from "./tool-protocol";
+
+const CLAIM: ImportRunAgentToolName = CLAIM_IMPORT_WORK_TOOL;
 
 const continuation = z.object({
   kind: z.literal("commit_result"),
