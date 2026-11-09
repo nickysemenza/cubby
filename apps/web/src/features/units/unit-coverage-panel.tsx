@@ -3,7 +3,7 @@ import type { UnitMapping, UnitMappingInput } from "@cubby/schemas/unitmapping";
 import { lazy, Suspense, useId, useMemo, useState } from "react";
 
 import type { BaseKind } from "~/lib/conversion-coverage";
-import { wasm } from "~/lib/wasm";
+import { unitKindOrNull } from "~/lib/wasm";
 import { Row, Stack } from "~/ui/layout";
 import { Disclosure } from "~/ui/layout/disclosure";
 import { Checkbox } from "~/ui/primitives/checkbox";
@@ -25,13 +25,8 @@ const UnitMappingGraph = lazy(() =>
 // Detected by unit (the graph's own filter is unit-based), NOT source string, so
 // the toggle matches exactly what the graph hides — and stays lazy (no import of
 // the d3 module just to count). `amount_kind` is a cheap, cached WASM probe.
-const isNutrientUnit = (unit: string): boolean => {
-  try {
-    return wasm.amount_kind({ value: 1, unit }).startsWith("nutrient:");
-  } catch {
-    return false;
-  }
-};
+const isNutrientUnit = (unit: string): boolean =>
+  unitKindOrNull(unit)?.startsWith("nutrient:") ?? false;
 
 /**
  * The one rich unit-mapping surface: coverage chips (big-4 + macros) over a

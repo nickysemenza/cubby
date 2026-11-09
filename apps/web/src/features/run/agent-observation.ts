@@ -13,6 +13,7 @@ import { useEffect, useSyncExternalStore } from "react";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import type { UnparsedError } from "~/lib/error-utils";
+import { reconnectDelay } from "~/lib/reconnect-backoff";
 
 /** The Cubby agent conversation route for a run's agent (`GET`/`POST`/`stream`/`abort`). */
 export const agentUrl = (publicId: string) =>
@@ -115,7 +116,7 @@ export function openAgentObservation(
   const scheduleReconnect = () => {
     if (closed) return;
     attempt += 1;
-    const delayMs = Math.min(30_000, 1_000 * 2 ** (attempt - 1));
+    const delayMs = reconnectDelay(attempt - 1);
     reconnectTimer = setTimeout(connect, delayMs);
   };
 

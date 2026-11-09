@@ -11,23 +11,16 @@ import {
   type BaseKind,
   conversionCoverage,
 } from "~/lib/conversion-coverage";
-import { wasm } from "~/lib/wasm";
+import { unitKindOrNull, wasm } from "~/lib/wasm";
 import { StaticTable } from "~/ui/data-table/static-table";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Row } from "~/ui/layout";
 
 import { KindIcon } from "./kind-icon";
 
-// The base measurement kind a unit belongs to, or null for nutrient:* / other:*
-// units (which `kindIconMap` has no icon for). `amount_kind` is a cheap, cached
-// WASM probe; it never throws today, but guard defensively.
 const baseKindForUnit = (unit: string): BaseKind | null => {
-  try {
-    const k = wasm.amount_kind({ value: 1, unit });
-    return BASE_KINDS.find((kind) => kind === k) ?? null;
-  } catch {
-    return null;
-  }
+  const classified = unitKindOrNull(unit);
+  return BASE_KINDS.find((kind) => kind === classified) ?? null;
 };
 
 // Leading per-row marker: the target amount's kind icon, lit when that big-4

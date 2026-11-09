@@ -5,6 +5,15 @@ import { instrumentWasm, type ImmutableWasm } from "~/lib/wasm-runtime";
 /** Common capabilities available in both browser and Worker builds. */
 export const wasm: ImmutableWasm<typeof instance> = instrumentWasm(instance);
 
+/** Unknown units are not classified by the engine. */
+export function unitKindOrNull(unit: string): string | null {
+  try {
+    return wasm.amount_kind({ value: 1, unit });
+  } catch {
+    return null;
+  }
+}
+
 /** Cheap formatters bypass tracing and JSON-keyed memoization. */
 export const wasmFormat = {
   format_currency: instance.format_currency,
