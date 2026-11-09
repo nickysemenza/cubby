@@ -96,8 +96,7 @@ extension AppModel {
             guard flow.session.phase == .complete, flow.session.progress.failedIDs.isEmpty else { return }
             guard let runID = flow.session.runID else { return }
             do {
-                let phase = try await client.photoRunReview(.init(runId: runID)).lifecycle.phase.rawValue
-                if ["ready_for_review", "ready_for_handoff", "completed"].contains(phase) {
+                if try await client.photoRunReview(.init(runId: runID)).lifecycle.phase.isReady {
                     photoImportFlows.removeAll { $0 === flow }
                 }
             } catch { Diagnostics.report(error, context: "photos.import.retire") }

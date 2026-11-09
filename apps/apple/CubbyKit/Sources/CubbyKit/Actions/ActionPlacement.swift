@@ -122,16 +122,16 @@ public struct ActionPlacement: Sendable {
     public init(entity: EntityDescriptor, raw: JSONValue, availability: [ActionAvailability]? = nil) {
         let resolver = Resolver(entity: entity, raw: raw, availability: availability)
         let presentation = entity.presentation
-        let listVerbs = resolver.verbs(presentation.listActions)
+        let listVerbs = resolver.verbs(presentation.listActions.map(\.rawValue))
         let detailVerbs = resolver.verbs(presentation.heroActions.map(\.rawValue))
         let records = HeroActionRunner.recordActions(on: entity.key, raw: raw).map {
             resolver.placed(id: $0.0, plan: $0.1)
         }
         let flows = records.filter { if case .plan(let plan) = $0.kind { plan.isFlow } else { false } }
         let handoffs = records.filter { !flows.contains($0) }
-        let listDelete = presentation.listActions.contains("delete") ? resolver.delete : nil
+        let listDelete = presentation.listActions.contains(.delete) ? resolver.delete : nil
         let detailDelete =
-            presentation.heroActions.contains { $0.rawValue == "delete" } ? resolver.delete : nil
+            presentation.heroActions.contains(.delete) ? resolver.delete : nil
 
         // List row.
         let swipeOverride = presentation.listSwipe
@@ -214,29 +214,29 @@ public struct ActionPlacement: Sendable {
             return blocked.map { base.disabled($0.reason) } ?? base
         }
         var items: [PlacedAction] = []
-        if presentation.listActions.contains("bulkEdit"), native.contains(.bulkUpdate),
+        if presentation.listActions.contains(.bulkEdit), native.contains(.bulkUpdate),
             let bulkEdit = combined({ $0.kernel("bulkEdit", .bulkEdit, "Bulk edit", "square.and.pencil") })
         {
             items.append(bulkEdit)
         }
         // Native runs only the merge web runs through its generic kernel dialog. A specialized
         // web flow (a reviewed preview, a domain merge operation) is handed to web instead.
-        if presentation.listActions.contains("merge"), presentation.listMergeOnWeb == true {
+        if presentation.listActions.contains(.merge), presentation.listMergeOnWeb == true {
             items.append(
                 PlacedAction(
                     id: "merge", kind: .openOnWeb, label: "Merge on web", symbol: "arrow.triangle.merge"))
-        } else if presentation.listActions.contains("merge"), native.contains(.merge),
+        } else if presentation.listActions.contains(.merge), native.contains(.merge),
             let merge = combined({ $0.kernel("merge", .merge, "Merge", "arrow.triangle.merge") })
         {
             items.append(rows.count < 2 ? merge.disabled("Select at least two records to merge.") : merge)
         }
-        for id in unique(presentation.listActions) {
+        for id in unique(presentation.listActions.map(\.rawValue)) {
             guard let verb = template.verb(id), case .plan(let plan) = verb.kind, plan.bulk,
                 let item = combined({ $0.verb(id) })
             else { continue }
             items.append(item)
         }
-        if presentation.listActions.contains("delete"), let delete = combined({ $0.delete }) {
+        if presentation.listActions.contains(.delete), let delete = combined({ $0.delete }) {
             items.append(delete)
         }
         return items
@@ -296,7 +296,7 @@ private struct Resolver {
     }
 
     var edit: PlacedAction? {
-        guard entity.presentation.heroActions.contains(where: { $0.rawValue == "edit" }),
+        guard entity.presentation.heroActions.contains(.edit),
             entity.key.nativeActions.contains(.update)
         else { return nil }
         return kernel("edit", .edit, "Edit", "pencil")

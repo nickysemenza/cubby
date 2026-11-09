@@ -106,7 +106,7 @@ private struct CollectionValueControl: View {
             }
             Button("Add identifier", systemImage: "plus") {
                 var blank = StructuredValue.blank(item, populated: true).objectValue ?? [:]
-                if field.controlRenderer?.rawValue == "external-ids" { blank["kind"] = "" }
+                if field.controlRenderer == .externalIds { blank["kind"] = "" }
                 change(state) { $0.rows.append(CollectionEdit.Row(baseline: nil, value: blank)) }
             }
             .accessibilityIdentifier(context.identifier(["add"]))
@@ -116,7 +116,7 @@ private struct CollectionValueControl: View {
     }
 
     private func summary(_ row: [String: JSONValue], collection: FieldCollection) -> String {
-        if field.controlRenderer?.rawValue == "external-ids",
+        if field.controlRenderer == .externalIds,
             let presentation = IdentifierPresentation(.object(row))
         {
             return presentation.text
@@ -280,7 +280,7 @@ private struct StructuredSchemaView: View {
             }
             ForEach(options, id: \.value) { option in
                 Text(
-                    context.field.controlRenderer?.rawValue == "external-ids" && path.last == "kind"
+                    context.field.controlRenderer == .externalIds && path.last == "kind"
                         ? IdentifierKind(rawValue: option.value)?.label ?? option.label : option.label
                 ).tag(option.value)
             }

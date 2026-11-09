@@ -286,6 +286,16 @@ extension ImageAssociation: Identifiable {
     public var id: String { "\(entityKind.rawValue):\(entityId):\(role.rawValue)" }
 }
 
+extension PhotoRunLifecyclePhase {
+    /// Photo processing has finished: groups await review or an agent, or the import completed.
+    public var isReady: Bool {
+        switch self {
+        case .readyForReview, .readyForHandoff, .completed: true
+        case .waitingForUpload, .describing, .needsAttention, .grouping, .unrecognized: false
+        }
+    }
+}
+
 extension PhotoLocalAnalysis {
     /// Reconstructs the analysis from the wire payload the server persisted at import time
     /// (`image.analysis`), so the R2 image detail's "server (at import)" Diagnostics column can be

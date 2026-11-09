@@ -329,7 +329,7 @@ struct WhyThisValueView: View {
                 .foregroundStyle(FieldGuideTokens.graphiteSecondary)
         }
         ForEach(Array(explanation.actions.enumerated()), id: \.offset) { _, action in
-            if action.kind.rawValue == "editSource" {
+            if action.kind == .editSource {
                 NavigationLink(
                     action.label,
                     value: Route.entityDetail(action.target.entityKind, id: action.target.entityId))
@@ -619,12 +619,12 @@ struct WhyThisValueView: View {
                 Text(check.label).font(.callout.weight(.semibold))
                 Text("\(check.stateLabel) · \(check.weightLabel)")
                     .font(.caption).foregroundStyle(.secondary)
-                if check.state.rawValue == "gap" { Text(check.description).font(.callout) }
+                if check.state == .gap { Text(check.description).font(.callout) }
                 DataExceptionControl(
                     draft: .init(entityID: subject.id, check: DataCheck(rawValue: check.check)),
-                    isGap: check.state.rawValue == "gap",
+                    isGap: check.state == .gap,
                     options: check.exceptionReasons.map { .init(reason: $0.reason, label: $0.label) },
-                    recorded: check.exception.map { ($0.reason, $0.note, $0.state.rawValue == "stale") },
+                    recorded: check.exception.map { ($0.reason, $0.note, $0.state == .stale) },
                     onChanged: reload
                 )
                 Text("\(check.facet) · \(check.check)").font(.caption.monospaced())

@@ -45,13 +45,13 @@ nonisolated enum EntityFieldValue {
     }
 
     static func text(in raw: JSONValue, field: FieldDescriptor, surface: String) -> String? {
-        if field.detailRenderer?.rawValue == "product-external-ids",
+        if field.detailRenderer == .productExternalIds,
             let value = field.surfaceValue(in: raw, surface: surface)
         {
             let identifiers = IdentifierPresentation.grouped(value).map(\.text)
             return identifiers.isEmpty ? nil : identifiers.joined(separator: "\n")
         }
-        if field.detailRenderer?.rawValue == "product-primary-gtin",
+        if field.detailRenderer == .productPrimaryGtin,
             let value = field.surfaceValue(in: raw, surface: surface)?.stringValue
         {
             let isbn = ScanCodes.isbnFromGtin(value)

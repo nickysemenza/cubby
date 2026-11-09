@@ -605,7 +605,7 @@ struct FieldsSectionView: View {
                 field: field, row: row, subject: EntityRef(entity: descriptor.key, id: row.id))
         } else if field.itemsPath != nil {
             DetailDisplayRows(label: field.label, rows: field.detailItems(in: row.raw))
-        } else if field.detailRenderer?.rawValue == "product-external-ids" {
+        } else if field.detailRenderer == .productExternalIds {
             let identifiers = IdentifierPresentation.grouped(
                 field.surfaceValue(in: row.raw, surface: "detail") ?? .null)
             ForEach(Array(identifiers.enumerated()), id: \.offset) { _, identifier in

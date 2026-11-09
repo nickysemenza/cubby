@@ -955,6 +955,9 @@ export const renderSwiftEntityCatalog = (
     heroAction: used(
       entities.flatMap((entity) => entity.inspector.detail.hero.actions),
     ),
+    listAction: used(
+      entities.flatMap((entity) => entity.inspector.list.actions),
+    ),
     detailSlot: used(
       entities.flatMap((entity) =>
         entity.inspector.detail.sections.flatMap((section) =>
@@ -1135,6 +1138,11 @@ export const renderSwiftEntityCatalog = (
     {
       name: "EntityHeroActionID",
       cases: vocabularyCases(coverageVocabulary.heroAction),
+    },
+    {
+      name: "EntityListActionID",
+      doc: "The verbs a list row or selection may offer: declared `list.extraActions` and the kernel ones.",
+      cases: vocabularyCases(coverageVocabulary.listAction),
     },
     {
       name: "EntityDetailSlotID",

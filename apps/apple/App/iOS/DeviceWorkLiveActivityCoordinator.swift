@@ -189,19 +189,21 @@ final class DeviceWorkLiveActivityCoordinator {
                 else { continue }
                 do {
                     let lifecycle = try await model.client.photoRunReview(.init(runId: runID)).lifecycle
-                    let phase = lifecycle.phase.rawValue
+                    let phase = lifecycle.phase
+                    let title =
+                        switch phase {
+                        case .completed: "Photo import complete"
+                        case .needsAttention: "Photo import needs attention"
+                        case .readyForReview, .readyForHandoff: "Photo import ready"
+                        case .waitingForUpload, .describing, .grouping, .unrecognized: "Processing photos"
+                        }
                     let state = PhotoRunActivityAttributes.ContentState(
-                        phase: phase,
-                        title: phase == "completed"
-                            ? "Photo import complete"
-                            : (phase == "needs_attention"
-                                ? "Photo import needs attention"
-                                : (["ready_for_review", "ready_for_handoff"].contains(phase)
-                                    ? "Photo import ready" : "Processing photos")),
+                        phase: phase.rawValue,
+                        title: title,
                         detail: lifecycle.dispatchError
                             ?? "Described \(lifecycle.describedImageCount) of \(lifecycle.finalizedImageCount)",
                         completed: lifecycle.describedImageCount, total: lifecycle.finalizedImageCount,
-                        needsAttention: phase == "needs_attention")
+                        needsAttention: phase == .needsAttention)
                     if state.shouldEnd {
                         await end(activity, state: state, client: model.client)
                     } else if lastStates[runID] != state {
