@@ -98,6 +98,10 @@ const currentEnv = (): Env | undefined =>
 export const withCfEnv = <T>(env: Env, run: () => Promise<T>): Promise<T> =>
   environmentStore.run(env, run);
 
+/** The deployed Worker version, recorded on each background execution. */
+export const getWorkerVersion = (): string | null =>
+  currentEnv()?.CF_VERSION_METADATA?.id ?? null;
+
 /** Authentication reads binding values before constructing its cached instance. */
 export const getAuthBindings = () => currentEnv();
 

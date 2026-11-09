@@ -7,17 +7,22 @@
  * nothing exits after that one query and sends nothing, so wake chains end
  * when the household goes idle.
  */
+import type { JobExecution } from "@cubby/schemas/job";
 import { createLogger } from "@cubby/worker-tracing";
 import type { SQL } from "drizzle-orm";
 
 import type { UnparsedError } from "~/lib/error-utils";
+import { getWorkerVersion } from "~/server/cf-env";
 import type { Database } from "~/server/db";
 import type { BackgroundDrain } from "~/server/generic/background/drains";
+import { classifyJobFailure } from "~/server/generic/jobs/failure";
+import { withExecutionMetrics } from "~/server/generic/jobs/page-work";
 import {
   claimDrainUnit,
   dueUnits,
   JOB_LEASE_MS,
   nextDueAt,
+  recordJobExecution,
   type DueUnit,
 } from "~/server/generic/jobs/repo/queue";
 import { advanceJob } from "~/server/generic/jobs/service/jobs";
@@ -65,21 +70,53 @@ async function runUnit(
       new Date(Date.now() + JOB_LEASE_MS + 5_000),
       "job.lease-recovery",
     );
-    return (await advanceJob(db, candidate.id, handlers)) !== "skipped";
+    const outcome = await advanceJob(db, candidate.id, handlers, (error) =>
+      ports.captureException(error, candidate.unit),
+    );
+    return outcome !== "skipped";
   }
   const drain = drainFor(drains, candidate.unit);
   if (!drain) return false;
   await claimDrainUnit(db, candidate.unit);
-  try {
-    return (await drain.page(db, candidate.unit)).claimed > 0;
-  } catch (error) {
-    // Item state, backoff and waits live on the drain's rows. A failed page
-    // sends no successor: a persistent failure must not loop; the unit's
-    // record row moves it back in rotation for other permits and the cron.
-    log.error("drain page failed", { unit: candidate.unit, error });
-    ports.captureException(error, candidate.unit);
-    return false;
-  }
+  return withExecutionMetrics(async (sample) => {
+    const record = (
+      outcome: JobExecution["outcome"],
+      errorClass: string | null,
+      items?: JobExecution["items"],
+    ) =>
+      recordJobExecution(
+        db,
+        { unit: candidate.unit },
+        {
+          outcome,
+          errorClass,
+          ...sample(),
+          aiCostUsd: null,
+          workerVersion: getWorkerVersion(),
+          ...(items && { items }),
+          finishedAt: new Date().toISOString(),
+        },
+      ).catch((error: unknown) =>
+        log.error("execution record failed", { unit: candidate.unit, error }),
+      );
+    try {
+      const page = await drain.page(db, candidate.unit);
+      await record(page.claimed ? "succeeded" : "skipped", null, {
+        claimed: page.claimed,
+        published: page.published ?? 0,
+        failed: page.failed ?? 0,
+      });
+      return page.claimed > 0;
+    } catch (error) {
+      // Item state, backoff and waits live on the drain's rows. A failed page
+      // sends no successor: a persistent failure must not loop; the unit's
+      // record row moves it back in rotation for other permits and the cron.
+      log.error("drain page failed", { unit: candidate.unit, error });
+      ports.captureException(error, candidate.unit);
+      await record("failed", classifyJobFailure(error).kind);
+      return false;
+    }
+  });
 }
 
 /** Run the first claimable candidate; null when nothing was claimable. */

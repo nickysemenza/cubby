@@ -4,7 +4,13 @@
  * through `producer.ts` and `operator.ts`; the drain executor
  * (`service/jobs.ts`) is its one internal caller.
  */
-import { jobPage, type JobPage, type JobWaitReason } from "@cubby/schemas/job";
+import {
+  JOB_FAILING_LIMIT_MS,
+  jobPage,
+  type JobExecution,
+  type JobPage,
+  type JobWaitReason,
+} from "@cubby/schemas/job";
 import { runStatus, VISIBLE_RUN_PURPOSES } from "@cubby/schemas/run-fields";
 import { and, eq, inArray, or, sql, type SQL } from "drizzle-orm";
 
@@ -36,6 +42,10 @@ export type JobClaim = JobRow & {
   leaseToken: string;
   leaseExpiresAt: Date;
 };
+
+/** Rows written before every kind had a bound keep a null column; the policy bounds them. */
+const attemptLimit = (row: Pick<JobRow, "kind" | "maxAttempts">) =>
+  row.maxAttempts ?? jobKindPolicy(row.kind).maxAttempts;
 
 /** Whether `row` is still owned by `claim`: same token and generation, live. */
 const ownsLease = (
@@ -151,7 +161,24 @@ export async function nextDueAt(
     )})) * 1000)::float8 AS at`,
   );
   const at = result.rows[0]?.at;
-  return at == null ? null : new Date(at);
+  // A parked row (`infinity`) is never due.
+  return at == null || !Number.isFinite(at) ? null : new Date(at);
+}
+
+/** Record one execution on its Job row (a Job, or a drain unit's record row). */
+export async function recordJobExecution(
+  db: RepositoryQueryInput,
+  target: { id: string } | { unit: string },
+  execution: JobExecution,
+) {
+  await repositoryQueries(db)
+    .update(job)
+    .set({ lastExecution: execution })
+    .where(
+      "id" in target
+        ? eq(job.id, target.id)
+        : eq(job.key, drainRecordKey(target.unit)),
+    );
 }
 
 /** Stamp a drain unit's service before its page: rotation counts the attempt. */
@@ -197,7 +224,7 @@ export async function claimJob(
     if (!candidate) return null;
     const { row } = candidate;
     const attempts = row.attempts + (row.state === "running" ? 1 : 0);
-    if (row.maxAttempts !== null && attempts >= row.maxAttempts) {
+    if (attempts >= attemptLimit(row)) {
       await repositoryQueries(tx)
         .update(job)
         .set({
@@ -394,6 +421,8 @@ export async function publishJobPage(
             leaseExpiresAt: null,
             attempts: 0,
             error: null,
+            // A successful or deferred page ends any failing streak.
+            failingSince: null,
             updatedAt: new Date(),
           })
           .where(eq(job.id, claim.id));
@@ -412,6 +441,12 @@ const ownedBy = (claim: Pick<JobClaim, "id" | "leaseToken" | "generation">) =>
     eq(job.generation, claim.generation),
   );
 
+/**
+ * A failure backs off by kind policy. Ordinary failures count toward
+ * `maxAttempts`; transient ones (a pool-slot timeout, a snapshot conflict) do
+ * not, but nothing keeps failing past `JOB_FAILING_LIMIT_MS` without failing
+ * visibly. Deferrals never reach here.
+ */
 export async function failJob(
   db: RepositoryQueryInput,
   claim: JobClaim,
@@ -420,18 +455,28 @@ export async function failJob(
   const { backoff } = jobKindPolicy(claim.kind);
   const transient = classifyJobFailure(error).kind === "transient";
   const failures = claim.attempts + 1;
+  const now = Date.now();
+  const failingSince = claim.failingSince ?? new Date(now);
   const exhausted =
-    !transient && claim.maxAttempts !== null && failures >= claim.maxAttempts;
+    (!transient && failures >= attemptLimit(claim)) ||
+    now - failingSince.getTime() >= JOB_FAILING_LIMIT_MS;
   await repositoryQueries(db)
     .update(job)
     .set({
       state: exhausted ? "failed" : "retry_wait",
-      attempts: failures,
-      // A transient failure reserves its next attempt.
-      ...(transient && claim.maxAttempts !== null
-        ? { maxAttempts: Math.max(claim.maxAttempts, failures + 1) }
-        : {}),
-      availableAt: new Date(Date.now() + jobRetryDelayMs(backoff, failures)),
+      // A transient failure is retried without spending the attempt budget.
+      attempts: transient ? claim.attempts : failures,
+      failingSince,
+      // Transient backoff grows with the streak's age instead of its attempts.
+      availableAt: new Date(
+        now +
+          (transient
+            ? Math.min(
+                backoff.maxMs,
+                Math.max(backoff.baseMs, now - failingSince.getTime()),
+              )
+            : jobRetryDelayMs(backoff, failures)),
+      ),
       waitReason: null,
       leaseToken: null,
       leaseExpiresAt: null,

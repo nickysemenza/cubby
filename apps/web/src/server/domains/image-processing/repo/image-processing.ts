@@ -1412,20 +1412,29 @@ function canAdoptCompletion(
   );
 }
 
+/** Consecutive failures before retryable work stops for explicit retry (docs/jobs.md#retries). */
+// With 30 s doubling backoff the twelfth failure lands about a day and a half in.
+const IMAGE_PROCESSING_MAX_FAILURES = 12;
+
 /**
- * Transient failures back off. A deterministic refusal retains its evidence
- * for explicit retry rather than repeating the same unsupported operation.
+ * Transient failures back off, up to `IMAGE_PROCESSING_MAX_FAILURES`. A
+ * deterministic refusal, or work that kept failing, retains its evidence for
+ * explicit retry rather than repeating the same operation.
  */
 async function settleImageProcessingFailure(
   tx: DrizzleTransaction,
   job: CompletionJob,
-  input: {
+  submitted: {
     reason: string;
     retryable: boolean;
     set: Partial<typeof imageProcessingJob.$inferInsert>;
   },
 ): Promise<void> {
   const failures = job.failures + 1;
+  const input = {
+    ...submitted,
+    retryable: submitted.retryable && failures < IMAGE_PROCESSING_MAX_FAILURES,
+  };
   const runAt = new Date(Date.now() + imageRetryDelayMs(failures));
   // The backoff ends while devices may idle; the ring covers it.
   if (input.retryable && job.lane === "device")

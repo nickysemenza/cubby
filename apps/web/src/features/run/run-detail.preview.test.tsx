@@ -189,6 +189,7 @@ const jobs: JobListOut = {
     attempts: 1,
     maxAttempts: 3,
     priority: 0,
+    lastExecution: null,
     waitReason: null,
     waitUntil: null,
     availableAt: ago(20),

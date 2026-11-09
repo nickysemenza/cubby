@@ -230,9 +230,10 @@ function aiEvaluationPage(
   publicationTransaction: JobContext["fenced"],
 ) {
   let deferred: JobDeferredError | undefined;
+  const store = aiEvaluationStore(feature, token);
   const drain = rowDrain<Prepared>({
     transaction: publicationTransaction,
-    store: aiEvaluationStore(feature, token),
+    store,
     backoff: AI_EVALUATION_BACKOFF,
     limit: PAGE_LIMIT,
     isolationLevel: "serializable",
@@ -414,6 +415,7 @@ function aiEvaluationPage(
         items.map((item) => item.ref),
         error,
       );
+      await store.clear(tx, items);
     },
   });
   return { drain, deferral: () => deferred };

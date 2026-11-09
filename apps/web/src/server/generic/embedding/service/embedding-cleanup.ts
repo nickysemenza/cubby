@@ -11,6 +11,7 @@ import {
   embeddingCleanupDue,
   embeddingCleanupNext,
   embeddingCleanupStore,
+  exhaustEmbeddingCleanup,
 } from "~/server/generic/embedding/repo/embedding-work";
 import {
   productionVectorStore,
@@ -20,6 +21,8 @@ import type { DrainItem } from "~/server/generic/jobs/drain-store";
 import type { JobContext } from "~/server/generic/jobs/types";
 
 const PAGE_LIMIT = 100;
+/** Deletions retry every five minutes: about 24 hours before one stops. */
+const CLEANUP_MAX_ATTEMPTS = 288;
 const EMBEDDING_BACKOFF = { baseMs: 60_000, maxMs: 15 * 60_000 };
 
 type CleanupPage = {
@@ -93,6 +96,8 @@ export function embeddingCleanupDrain(
     store: embeddingCleanupStore,
     backoff: EMBEDDING_BACKOFF,
     limit: PAGE_LIMIT,
+    maxAttempts: CLEANUP_MAX_ATTEMPTS,
+    exhaust: exhaustEmbeddingCleanup,
     prepare: (db, items, context) =>
       prepareCleanupPage(store, db, items, context),
     publish: async (tx, items, prepared) => {

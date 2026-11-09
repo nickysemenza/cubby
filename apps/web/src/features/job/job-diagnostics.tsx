@@ -57,7 +57,7 @@ function JobFactsList({ facts }: { facts: JobFacts }) {
     {
       id: "attempt",
       label: "Attempt",
-      value: `${formatCount(facts.attempts)} of ${facts.maxAttempts === null ? "unbounded" : formatCount(facts.maxAttempts)}`,
+      value: `${formatCount(facts.attempts)} of ${formatCount(facts.maxAttempts)}`,
     },
     {
       id: "wait",

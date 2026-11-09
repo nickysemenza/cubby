@@ -52,7 +52,7 @@ only stored wait deadline. Completed Jobs remain until retention prunes them.
 ## Kinds and lanes
 
 `apps/web/src/server/generic/jobs/kind-policy.ts` is the one registry of
-per-kind policy: lane, internal flag, `maxAttempts` (null never exhausts) and
+per-kind policy: lane, internal flag, `maxAttempts` (every kind has one) and
 failure backoff. A kind absent there is a server kind with three attempts and
 1 s doubling to 60 s backoff. Each lane names the executor that runs it:
 
@@ -450,33 +450,54 @@ fails its fence. Email purchase discovery repeats through its cursor; automatic 
 Claiming is not an attempt; a failure is, and so is reclaiming an expired
 lease (the previous executor vanished mid-pass, and a crash loop must still
 exhaust). A failed Job backs off by its policy, `baseMs · 2^(failures - 1)` up
-to `maxMs`, and fails after `maxAttempts`; `maxAttempts: null` never exhausts. `releaseJobClaim` hands a claim back without an
-attempt, and deferrals never count. Drain items keep their own attempts and
-backoff.
+to `maxMs`, and fails after `maxAttempts`; every kind has a bound, and a row
+stored with a null column uses its kind's. `releaseJobClaim` hands a claim back
+without an attempt, and deferrals never count.
+
+Transient failures — a Hyperdrive pool-slot timeout (SQLSTATE 58000, "Timed out
+while waiting for an open slot in the pool"), a dropped connection, a
+`JobRetryableError` or an exhausted snapshot replay — back off without spending
+attempts; their delay grows with the failing streak's age. `failingSince` records
+the streak's first failure and any successful or deferred page clears it.
+Whatever the class, a Job still failing `JOB_FAILING_LIMIT_MS` (24 hours) after
+its streak began fails visibly. Funding and provider waits stay `JobDeferredError`
+/ `waiting_on` and never start a streak.
+
+Drain items are bounded too: AI evaluations settle `failed` after three
+non-transient failures; an embedding refresh stops owing after 100 failures
+(about a day at its 15-minute cap) and a vector deletion after 288 five-minute
+retries, each keeping its error for Work's failed list; image processing stops
+retrying after twelve failures (about a day and a half of doubling backoff) and
+waits for explicit retry. Transient failures defer an item without exhausting it.
 
 Serialization recovery is bounded inside a DB-only snapshot transaction. If all
 attempts roll back, its owner emits `SnapshotWriteConflictError`; the durable Job
-then backs off without exhausting its attempt budget. A raw SQLSTATE on an
-after-commit effect is not this signal and cannot request unbounded replay.
-Location description and inventory-analysis Jobs also never exhaust and use a
-one-minute base with a fifteen-minute backoff cap: unchanged
-failures keep diagnostics and backoff until corrected code or input heals them.
-The model-input recovery migration reopens their retained failures and proven
-failed outer Email gates, preserving checkpoints, attempts and errors. Reopened
-location work is staggered over fifteen minutes without advancing an existing
-future deadline. When the recovered universal Job executes, its matching Run reconciled to
-`job_failed` returns to running under the Job fence. Another active Run owning
-the admission slot causes retry backoff until it finishes. Admission waits
-reserve exactly one further attempt, rather than conserving the ordinary failure
-budget;
-member-controlled, retired and superseded Runs are excluded. Member
-pauses/cancellations and running leases keep their states.
+then backs off as a transient failure. A raw SQLSTATE on an after-commit effect
+is not this signal and cannot request unbounded replay.
+Location description and inventory-analysis Jobs use a one-minute base with a
+fifteen-minute backoff cap and ten attempts. When a recovered universal Job
+executes, its matching Run reconciled to `job_failed` returns to running under
+the Job fence. Another active Run owning the admission slot causes retry backoff
+until it finishes. Admission waits reserve exactly one further attempt, rather
+than conserving the ordinary failure budget; member-controlled, retired and
+superseded Runs are excluded. Member pauses/cancellations and running leases
+keep their states.
+
+### Execution records
+
+Every execution writes `Job.lastExecution` (`jobExecution` in
+`packages/schemas/src/job.ts`): outcome, error class, wall milliseconds, database
+query count and time, the charged AI cost recorded during it, the Worker version
+and its finish time. A drain unit records the same on its `background.drain`
+row, with its claimed, published and failed item counts. Failed Job executions
+and failed drain pages reach Sentry tagged `cubby.background.unit` with the Job
+kind or drain unit.
 
 Retry now (`job.retryNow`, `retryJobsNow`) makes a filtered set due at once:
 backoff and provider waits clear, prior errors stay, failed and cancelled Jobs
 reopen with a fresh budget and generation, and running or member-paused Jobs
 are left alone. A Run cancel is one set-based statement (`cancelRunJobs`);
-never-exhausting work belongs to its subject and survives a Run cancel.
+subject-owned work (Location AI) belongs to its subject and survives a Run cancel.
 
 `run.funding-resume` is keyed by funding window, not Run: its one handler
 resumes every funding-paused Run. A funding-paused import stays `paused_auth`

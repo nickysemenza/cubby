@@ -11,6 +11,7 @@ import { scrubErrorMessage } from "@cubby/worker-tracing/scrub-error-message";
 
 import { afterResponse, getSourceRelease } from "~/server/cf-env";
 import type { Database } from "~/server/db";
+import { addJobAiCost } from "~/server/generic/jobs/context";
 import { emitTelemetry } from "~/server/observability/telemetry";
 
 import { snapshotAiUsagePrice } from "./pricing";
@@ -163,6 +164,7 @@ export async function recordAiUsage(
   input: RecordAiUsageInput,
   port: AiUsagePort = productionAiUsagePort,
 ): Promise<void> {
+  addJobAiCost(input.chargedCost ?? input.standardCost);
   await afterResponse(emitAiUsage(db, input, port));
 }
 

@@ -1,12 +1,15 @@
 import { createLogger } from "@cubby/worker-tracing";
 import { z } from "zod";
 
+import type { UnparsedError } from "~/lib/error-utils";
+import { getWorkerVersion } from "~/server/cf-env";
 import type { Database } from "~/server/db";
 import {
   withJobExecution,
   type JobExecutionDetails,
 } from "~/server/generic/jobs/context";
 import { classifyJobFailure } from "~/server/generic/jobs/failure";
+import { withExecutionMetrics } from "~/server/generic/jobs/page-work";
 import {
   assertJobClaim,
   claimJob,
@@ -15,6 +18,7 @@ import {
   fencedJobTransaction,
   pauseClaimedJob,
   publishJobPage,
+  recordJobExecution,
   type JobClaim,
 } from "~/server/generic/jobs/repo/queue";
 
@@ -77,29 +81,75 @@ export function claimContext(
   };
 }
 
+/** Receives a failed execution's error and its Job kind (Sentry, in production). */
+export type JobFailureReport = (error: UnparsedError, kind: string) => void;
+
 /** Queue and cron call this same path; neither owns a second retry budget. */
 export async function advanceJob(
   db: Database,
   id: string,
   handlers: JobHandlers,
+  report?: JobFailureReport,
 ): Promise<JobOutcome> {
   const claimed = await claimJob(db, id);
   if (!claimed) return "skipped";
   const handler = handlers[claimed.kind];
-  return executeClaim(db, claimed, (context) => {
-    if (!handler)
-      throw new Error(`No job handler registered for ${claimed.kind}`);
-    return handler.prepare(db, claimed, context);
-  });
+  return executeClaim(
+    db,
+    claimed,
+    (context) => {
+      if (!handler)
+        throw new Error(`No job handler registered for ${claimed.kind}`);
+      return handler.prepare(db, claimed, context);
+    },
+    report,
+  );
 }
 
-/** Fixed lease, fences, publication and the one failure classification for every page. */
+/** One execution, recorded on its Job row whatever its outcome. */
 async function executeClaim(
   db: Database,
   claimed: JobClaim,
   prepare: (context: JobContext) => Promise<PreparedJobPage>,
+  report?: JobFailureReport,
 ): Promise<JobOutcome> {
   const details: JobExecutionDetails = { stepKey: null };
+  return withExecutionMetrics(async (sample) => {
+    const { outcome, failure } = await settleClaim(
+      db,
+      claimed,
+      prepare,
+      details,
+    );
+    if (failure && outcome === "failed") report?.(failure.error, claimed.kind);
+    await recordJobExecution(
+      db,
+      { id: claimed.id },
+      {
+        outcome,
+        errorClass: failure?.kind ?? null,
+        ...sample(),
+        aiCostUsd: details.aiCostUsd ?? null,
+        workerVersion: getWorkerVersion(),
+        finishedAt: new Date().toISOString(),
+      },
+    ).catch((error: unknown) =>
+      log.error("execution record failed", { jobId: claimed.id, error }),
+    );
+    return outcome;
+  });
+}
+
+/** Fixed lease, fences, publication and the one failure classification for every page. */
+async function settleClaim(
+  db: Database,
+  claimed: JobClaim,
+  prepare: (context: JobContext) => Promise<PreparedJobPage>,
+  details: JobExecutionDetails,
+): Promise<{
+  outcome: JobOutcome;
+  failure?: { kind: string; error: UnparsedError };
+}> {
   let publicationStartedAt: number | undefined;
   let publicationDurationMs: number | undefined;
   const entry = () =>
@@ -169,13 +219,14 @@ async function executeClaim(
         : (prepared.page.waitReason ?? null),
       pageResult,
     });
-    return published ? "succeeded" : "superseded";
+    return { outcome: published ? "succeeded" : "superseded" };
   } catch (error) {
     const failure = classifyJobFailure(error);
+    const failed = { kind: failure.kind, error };
     switch (failure.kind) {
       case "paused":
         await pauseClaimedJob(db, claimed, failure.error);
-        return "paused";
+        return { outcome: "paused", failure: failed };
       case "deferred":
         // A cooperative wait keeps the checkpoint and spends no attempt.
         await publishJobPage(db, claimed, {
@@ -188,16 +239,16 @@ async function executeClaim(
           waitReason: failure.reason,
           waitUntil: failure.until,
         });
-        return "deferred";
+        return { outcome: "deferred", failure: failed };
       case "interrupted":
         // The token fence makes this a no-op once another claim owns the Job.
         await failJob(db, claimed, error);
         entry().warn("superseded", { error });
-        return "superseded";
+        return { outcome: "superseded", failure: failed };
       default:
         await failJob(db, claimed, error);
         entry().error("fail", { error });
-        return "failed";
+        return { outcome: "failed", failure: failed };
     }
   }
 }

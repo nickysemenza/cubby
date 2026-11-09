@@ -69,6 +69,7 @@ export async function enqueueJob(
           state: jobState.enum.queued,
           cursor: null,
           attempts: 0,
+          failingSince: null,
           error: null,
           waitReason: null,
           leaseToken: null,

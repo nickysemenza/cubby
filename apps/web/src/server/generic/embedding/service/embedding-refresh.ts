@@ -18,6 +18,7 @@ import {
   embeddingRefreshDue,
   embeddingRefreshNext,
   embeddingRefreshStore,
+  exhaustEmbeddingRefresh,
   postponeEmbeddingRefresh,
   type EmbeddingRefreshStore,
 } from "~/server/generic/embedding/repo/embedding-work";
@@ -33,6 +34,8 @@ import {
 } from "~/server/workflows/background-tasks/embedding";
 
 const PAGE_LIMIT = 100;
+/** With the 15-minute backoff cap, about 24 hours of failing before it stops. */
+const EMBEDDING_MAX_ATTEMPTS = 100;
 const REQUEST_ITEM_LIMIT = 2048;
 const REQUEST_BYTES_LIMIT = 300_000;
 const INPUT_BYTES_LIMIT = 8_192;
@@ -231,6 +234,8 @@ export function embeddingRefreshDrain(
         store,
         backoff: EMBEDDING_BACKOFF,
         limit: PAGE_LIMIT,
+        maxAttempts: EMBEDDING_MAX_ATTEMPTS,
+        exhaust: exhaustEmbeddingRefresh,
         prepare: (pageDb, items, context) =>
           prepareRefreshPage(port, store, pageDb, items, context),
         lock: async (tx, items, prepared) => {

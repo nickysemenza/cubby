@@ -444,8 +444,12 @@ async function readFailedWork(db: Database, now: Date) {
               AND source.sha256 = image_job."sourceContentHash"
               AND NOT ${appleFailureCoveredByCloudDescriptionSql({ jobAlias: "image_job", imageId: sql`source.id`, sourceContentHash: sql`source.sha256` })})
       UNION ALL SELECT 'embedding.refresh', "updatedAt", "embeddingError" FROM "SearchDocument"
-        WHERE "embeddingDueAt" IS NOT NULL AND "embeddingAttempts" >= ${JOB_NEEDS_ATTENTION_ATTEMPTS}
+        WHERE "embeddingAttempts" >= ${JOB_NEEDS_ATTENTION_ATTEMPTS}
+          AND ("embeddingDueAt" IS NOT NULL OR ("embeddingError" IS NOT NULL AND "updatedAt" > ${since}::timestamp))
           AND ${notDeleted("SearchDocument")}
+      -- includes-deleted: a deleted artifact still owes its vector deletion.
+      UNION ALL SELECT 'embedding.cleanup', "updatedAt", "deletionError" FROM "EntityEmbedding"
+        WHERE "deletionId" IS NULL AND "deletionAttempts" >= ${JOB_NEEDS_ATTENTION_ATTEMPTS}
     ) SELECT kind, count(*)::int AS count, max(at) AS since,
       (array_agg(error ORDER BY at DESC))[1] AS diagnostic FROM failed GROUP BY kind`);
   return rows.rows.map((row): WorkStuckItem => ({

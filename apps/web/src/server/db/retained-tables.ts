@@ -188,6 +188,9 @@ export const entityEmbedding = pgTable(
     deletionId: text("deletionId"),
     /** A failed vector deletion waits until then (`embeddingCleanupStore`). */
     deletionRetryAt: timestamp("deletionRetryAt", { mode: "date" }),
+    /** Consecutive failed deletions; the drain stops at its bound and keeps the error. */
+    deletionAttempts: integer("deletionAttempts").notNull().default(0),
+    deletionError: text("deletionError"),
     ...baseTimestamps(),
     ...softDeletedAt(),
   },

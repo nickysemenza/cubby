@@ -74,8 +74,11 @@ type RowDrainSpec<P> = {
   /** Publication weight of an item (default 1); each chunk holds at most 25. */
   weight?: (item: DrainItem, prepared: P) => number;
   isolationLevel?: "serializable";
-  /** Consecutive failures before `exhaust` settles an item; omitted retries forever. */
-  maxAttempts?: number;
+  /**
+   * Consecutive non-transient failures before `exhaust` settles an item.
+   * Every drain bounds its items (docs/jobs.md#retries).
+   */
+  maxAttempts: number;
   prepare(
     db: Database,
     items: readonly DrainItem[],
@@ -99,8 +102,11 @@ type RowDrainSpec<P> = {
     items: readonly DrainItem[],
     prepared: P,
   ): Promise<void | DrainPublication>;
-  /** Record the terminal outcome of items that ran out of attempts. */
-  exhaust?(
+  /**
+   * Settle items that ran out of attempts: record their terminal outcome
+   * visibly and stop owing them. It replaces `clear` for those items.
+   */
+  exhaust(
     tx: Database,
     items: readonly DrainItem[],
     error: string,
@@ -181,14 +187,13 @@ export function rowDrain<P>(
           const held = await store.lock(tx, narrowed);
           if (!held.length) continue;
           settled++;
+          // Capacity failures (a pool-slot timeout) back off without exhausting.
           if (
-            spec.exhaust &&
-            spec.maxAttempts !== undefined &&
+            classifyJobFailure(error).kind !== "transient" &&
             item.attempts + 1 >= spec.maxAttempts
-          ) {
+          )
             await spec.exhaust(tx, held, message(error));
-            await store.clear(tx, held);
-          } else await store.defer(tx, held, message(error), backoff);
+          else await store.defer(tx, held, message(error), backoff);
         }
         return settled;
       };

@@ -90,6 +90,27 @@ export async function measurePage<T>(
   });
 }
 
+/** Wall time and database work an execution has spent so far. */
+export type ExecutionSample = () => {
+  wallMs: number;
+  queryCount: number;
+  queryMs: number;
+};
+
+/** Run one Job or drain execution while counting its queries for its record. */
+export function withExecutionMetrics<T>(
+  work: (sample: ExecutionSample) => Promise<T>,
+): Promise<T> {
+  const startedAt = performance.now();
+  return withDatabaseOperationMetrics((metrics) =>
+    work(() => ({
+      wallMs: Math.round(performance.now() - startedAt),
+      queryCount: metrics.queryCount,
+      queryMs: Math.round(metrics.queryDurationSumMs),
+    })),
+  );
+}
+
 /** `forEachConcurrently` starts `min(limit, items)` workers at once. */
 export const peakWorkers = (limit: number, items: number) =>
   Math.min(limit, items);
