@@ -117,6 +117,8 @@ export async function ensureEntityListSsr<E extends ListEntity>(options: {
       // preload a grouped query the mounted renderer never consumes.
       groupBy: view === "timeline" ? [] : undefined,
     }),
+    // Initial rendering must not hold the primary read behind the batch timer.
+    { batch: false },
   );
   const cancelUnobserved = () => {
     const cached = options.queryClient
