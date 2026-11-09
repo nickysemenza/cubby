@@ -30,6 +30,7 @@ import {
   retainedMailProjection,
   type RetainedMail,
 } from "~/server/domains/mail/repo/retained-mail";
+import { runPurposePolicy } from "~/server/domains/run/repo/purpose-policy";
 
 import { assertMailRunMembership } from "./mail-run-membership";
 import { assertMailSourceIdentityReady } from "./mail-source-identity";
@@ -202,7 +203,10 @@ export async function readUnchangedMailSource(
   evidenceChecksum: string,
 ): Promise<RetainedMailSource | null> {
   if (source.kind !== "mail_message" && source.kind !== "mail_attachment") {
-    if (scope.purpose === "mail_import")
+    if (
+      scope.purpose &&
+      runPurposePolicy(scope.purpose).mailSources === "admitted"
+    )
       throw new Error("A Mail import Run imports only the Emails it admitted.");
     return null;
   }
@@ -272,7 +276,11 @@ export async function retainedMailSource(
     source,
     evidenceChecksum,
   );
-  if (retained && scope.purpose === "mail_import")
+  if (
+    retained &&
+    scope.purpose &&
+    runPurposePolicy(scope.purpose).mailSources === "admitted"
+  )
     await assertMailRunMembership(getDb(db), scope.runId, retained.id);
   return retained;
 }

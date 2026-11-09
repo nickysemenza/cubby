@@ -1,4 +1,3 @@
-import { runEntityId } from "@cubby/schemas/identifiers";
 import {
   agentImportRunPurpose,
   entityReadKinds,
@@ -6,70 +5,14 @@ import {
   type ImportRunAgentConfig,
 } from "@cubby/schemas/import-run-agent";
 import type { CubbyMcpMutationAction } from "@cubby/schemas/mcp-tools";
-import { runPurpose, type RunPurpose } from "@cubby/schemas/purchase-import";
-import { eq } from "drizzle-orm";
 
 import { type Database } from "~/server/db/database";
-import { repositoryQueries as getDb } from "~/server/db/repository-access.boundary";
-import { run as runTable } from "~/server/db/retained-tables";
 
-type Capability =
-  | "prepare"
-  | "commit_purchase_import"
-  | "generic_mutation"
-  | "attachment"
-  | "business_writer"
-  | "finalize"
-  | "photo_commit"
-  /** Review-queue metadata only: never changes household records. */
-  | "match_proposal"
-  /** Member Run lifecycle controls; no purpose may start or retry another Run. */
-  | "start_run"
-  /**
-   * A member's own review, approval or paid grant; no Run purpose holds it,
-   * so only a member session acting on the member's instruction calls these.
-   */
-  | "member_decision";
-
-const capabilityMatrix = {
-  mail_import: new Set([
-    "prepare",
-    "commit_purchase_import",
-    "business_writer",
-    "finalize",
-    "match_proposal",
-  ]),
-  photo_inventory: new Set([
-    "photo_commit",
-    "attachment",
-    "generic_mutation",
-    "finalize",
-    "match_proposal",
-  ]),
-  // Retired purposes (ADR 0010) keep readable history and authorize nothing.
-  account_sync: new Set(),
-  purchase_validation: new Set(),
-  product_enrichment: new Set(),
-  // Runs that only group AI work never authorize purchase-agent writes.
-  ai_refresh: new Set(),
-  ai_suggest: new Set(),
-  background: new Set(),
-  // A member's own import (a receipt, an order Email, a vendor export).
-  file_import: new Set([
-    "prepare",
-    "commit_purchase_import",
-    "business_writer",
-    "attachment",
-    "finalize",
-  ]),
-  mail_search: new Set(),
-  mail_discovery: new Set(),
-  mail_reclassify: new Set(),
-  connection_discovery: new Set(),
-  maintenance: new Set(),
-  derived_refresh: new Set(),
-  sweep: new Set(),
-} satisfies Record<RunPurpose, ReadonlySet<Capability>>;
+import {
+  assertRunCapability,
+  readRunPurpose,
+  type RunCapability,
+} from "./purpose-policy";
 
 /**
  * The capability each MCP write action needs, keyed on `${tool}.${action}` so
@@ -192,26 +135,20 @@ const actionCapability = {
   "spending_classification_write.apply": "generic_mutation",
   "ai.apply_finance_category_suggestion": "member_decision",
   "entity_graph.discover": "member_decision",
-} as const satisfies Record<CubbyMcpMutationAction, Capability>;
+} as const satisfies Record<CubbyMcpMutationAction, RunCapability>;
 
 const isMutationAction = (action: string): action is CubbyMcpMutationAction =>
   Object.hasOwn(actionCapability, action);
 
 export function capabilityForPurchaseAgentAction(
   action: CubbyMcpMutationAction,
-): Capability {
+): RunCapability {
   return actionCapability[action];
 }
 
 /** The MCP actions a run's purpose mounts; none for a purpose without an agent. */
 export async function purchaseAgentRunActions(db: Database, runId: string) {
-  const [run] = await getDb(db)
-    .select({ purpose: runTable.purpose })
-    .from(runTable)
-    .where(eq(runTable.id, runEntityId.parse(runId)))
-    .limit(1);
-  if (!run) throw new Error("Import run was not found");
-  const purpose = runPurpose.parse(run.purpose);
+  const purpose = await readRunPurpose(db, runId);
   const agentPurpose = agentImportRunPurpose.safeParse(purpose);
   const config: ImportRunAgentConfig | undefined = agentPurpose.success
     ? importRunAgentManifest[agentPurpose.data]
@@ -260,38 +197,4 @@ export async function assertPurchaseAgentAction(
   if (!isMutationAction(action))
     throw new Error(`${action} is not a registered MCP write action`);
   assertRunCapability(purpose, capabilityForPurchaseAgentAction(action));
-}
-
-export function runHasCapability(
-  purpose: RunPurpose,
-  capability: Capability,
-): boolean {
-  const allowed: ReadonlySet<Capability> = capabilityMatrix[purpose];
-  return allowed.has(capability);
-}
-
-export function assertRunCapability(
-  purpose: RunPurpose,
-  capability: Capability,
-): void {
-  if (runHasCapability(purpose, capability)) return;
-  throw new Error(
-    `Import run purpose ${purpose} forbids ${capability}; this cannot be overridden by approval`,
-  );
-}
-
-export async function assertRunCapabilityById(
-  db: Database,
-  runId: string,
-  capability: Capability,
-) {
-  const [run] = await getDb(db)
-    .select({ purpose: runTable.purpose })
-    .from(runTable)
-    .where(eq(runTable.id, runEntityId.parse(runId)))
-    .limit(1);
-  if (!run) throw new Error("Import run was not found");
-  const purpose = runPurpose.parse(run.purpose);
-  assertRunCapability(purpose, capability);
-  return purpose;
 }

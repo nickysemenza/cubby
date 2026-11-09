@@ -11,7 +11,7 @@ import {
   runOperation,
   runStep,
 } from "~/server/db/schema";
-import { startPhotoInventoryRun } from "~/server/domains/purchase-import/repo/run-service";
+import { startPhotoInventoryRun } from "~/server/domains/photo-import/repo/run/photo-run";
 import { startImportRunFixture } from "~/server/domains/purchase-import/service/import-run.fixtures";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { publishSuggestion } from "~/server/generic/suggestions/repo/suggestion";

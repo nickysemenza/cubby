@@ -19,10 +19,6 @@ import {
 } from "~/server/domains/purchase-import/operations/gmail/controlled-import";
 import { startMailDiscovery } from "~/server/domains/purchase-import/operations/gmail/discovery";
 import { commitPurchaseImport } from "~/server/domains/purchase-import/operations/import-orders";
-import {
-  findActivePurchaseAgentGrant,
-  PURCHASE_AGENT_OAUTH_CLIENT_ID,
-} from "~/server/domains/purchase-import/repo/agent-auth";
 import { readMailCoverage } from "~/server/domains/purchase-import/repo/gmail/mail-coverage";
 import { withMailSearchProgress } from "~/server/domains/purchase-import/repo/gmail/search-progress";
 import { listMemberMailboxes } from "~/server/domains/purchase-import/repo/gmail/targets";
@@ -45,6 +41,10 @@ import {
   resolvePurchaseImportTarget,
 } from "~/server/domains/purchase-import/repo/run-target";
 import { readPurchaseAgentConversation } from "~/server/domains/purchase-import/service/agent-proxy";
+import {
+  findActivePurchaseAgentGrant,
+  PURCHASE_AGENT_OAUTH_CLIENT_ID,
+} from "~/server/domains/run/repo/agent-auth";
 import {
   findOwnedMailDiscovery,
   loadMailDiscoveryRead,

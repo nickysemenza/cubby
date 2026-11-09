@@ -68,7 +68,6 @@ import {
   PRODUCT_IDENTITY_REVIEW_REASON,
 } from "~/server/domains/product/repo/resolve-names";
 import { auditAllImportBatches } from "~/server/domains/purchase-import/operations/run-review";
-import { assertRunCapability } from "~/server/domains/purchase-import/repo/capabilities";
 import {
   type ImportScope,
   loadImportScope,
@@ -88,6 +87,7 @@ import { resolveImportSourceOrder } from "~/server/domains/purchase-import/repo/
 import { sourceOrderKey } from "~/server/domains/purchase-import/repo/source-order-key";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { executeAtomicOperation } from "~/server/domains/run/repo/operation";
+import { assertRunCapability } from "~/server/domains/run/repo/purpose-policy";
 import { readOperation } from "~/server/domains/run/repo/run-operation";
 import { createAppError } from "~/server/errors/app-error";
 import { recordChange } from "~/server/generic/changes/repo/change";

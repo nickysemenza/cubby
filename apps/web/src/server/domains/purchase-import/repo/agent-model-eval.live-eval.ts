@@ -28,9 +28,13 @@ import {
   session,
 } from "~/server/db/schema";
 import {
+  startPhotoInventoryCoordinator,
+  startPhotoInventoryRun,
+} from "~/server/domains/photo-import/repo/run/photo-run";
+import {
   ensurePurchaseAgentOAuthClient,
   PURCHASE_AGENT_OAUTH_CLIENT_ID,
-} from "~/server/domains/purchase-import/repo/agent-auth";
+} from "~/server/domains/run/repo/agent-auth";
 import { resolveProductBrandName } from "~/server/domains/vendor/repo/product-brand";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
@@ -44,10 +48,6 @@ import {
   agentModelEvalCases,
 } from "../service/agent-model-eval.fixtures";
 import { scoreProposals } from "../service/agent-model-eval.score";
-import {
-  startPhotoInventoryCoordinator,
-  startPhotoInventoryRun,
-} from "./run-service";
 
 /**
  * Live photo-coordinator model comparison. Opt-in and billed: it runs the real

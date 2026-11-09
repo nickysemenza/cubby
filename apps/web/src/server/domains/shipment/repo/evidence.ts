@@ -67,6 +67,7 @@ import { loadImportScope } from "~/server/domains/purchase-import/repo/import-sc
 import { assertMailRunMembership } from "~/server/domains/purchase-import/repo/mail-run-membership";
 import { assertMailSourceIdentityReady } from "~/server/domains/purchase-import/repo/mail-source-identity";
 import { publishRunFinding } from "~/server/domains/purchase-import/repo/run-finding";
+import { runPurposePolicy } from "~/server/domains/run/repo/purpose-policy";
 import {
   assessCarrierPacket,
   carrierCaptureEvidence,
@@ -756,9 +757,10 @@ async function sourceCapture(
         return refuse(
           "The active import Run does not own this Email or is not running.",
         );
-      if (scope.purpose === "mail_import")
+      const mailSources = runPurposePolicy(scope.purpose).mailSources;
+      if (mailSources === "admitted")
         await assertMailRunMembership(getDb(db), actor.runId, original.id);
-      else if (scope.purpose !== "file_import")
+      else if (mailSources !== "owner")
         return refuse("This Run cannot record shipment evidence.");
     }
     ownerId = original.ledgerPartyId;

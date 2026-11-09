@@ -1,10 +1,8 @@
 import { runPurpose } from "@cubby/schemas/purchase-import";
 import { describe, expect, it } from "vitest";
 
-import {
-  assertRunCapability,
-  capabilityForPurchaseAgentAction,
-} from "./capabilities";
+import { capabilityForPurchaseAgentAction } from "./agent-capabilities";
+import { assertRunCapability } from "./purpose-policy";
 
 describe("import run capabilities", () => {
   // Retrying Runs must not let a coordinator chain paid work.

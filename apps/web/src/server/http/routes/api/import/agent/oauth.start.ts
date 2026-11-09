@@ -8,7 +8,7 @@ import {
   purchaseAgentAuthorizeURL,
   purchaseAgentOAuthCookie,
   purchaseAgentConnectionRedirect,
-} from "~/server/domains/purchase-import/repo/agent-auth";
+} from "~/server/domains/run/repo/agent-auth";
 import {
   createRequestContext,
   requireActor,

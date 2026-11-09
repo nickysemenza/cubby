@@ -3,6 +3,7 @@ import { z } from "zod";
 import { APP_ORIGIN, MCP_RESOURCE } from "~/lib/auth-constants";
 import { getAuthSecret } from "~/server/auth-configuration";
 import type { Database } from "~/server/db";
+import type { resumeAuthorizedRuns } from "~/server/domains/purchase-import/repo/run-service";
 import {
   clearPurchaseAgentOAuthCookie,
   findActivePurchaseAgentGrant,
@@ -13,8 +14,7 @@ import {
   type PurchaseAgentConnectionStatus,
   readCookie,
   verifyPurchaseAgentOAuthState,
-} from "~/server/domains/purchase-import/repo/agent-auth";
-import type { resumeAuthorizedRuns } from "~/server/domains/purchase-import/repo/run-service";
+} from "~/server/domains/run/repo/agent-auth";
 import { getAuth } from "~/server/http/auth";
 import {
   createRequestContext,

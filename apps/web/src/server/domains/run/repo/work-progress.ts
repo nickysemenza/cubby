@@ -405,7 +405,7 @@ export async function getRunWorkProgress(
     source === "targets" && purpose !== "photo_inventory" && !missingMailRoster
       ? await (
           await import("~/server/domains/purchase-import/repo/run-service")
-        ).readRunProgressTargets(db, owner.id)
+        ).readRunProgressTargets(db, { id: owner.id, purpose })
       : [];
   const targets =
     purpose === "photo_inventory" ? photos : targetWorkCounts(targetRows);

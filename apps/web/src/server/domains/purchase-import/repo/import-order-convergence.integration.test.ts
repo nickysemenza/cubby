@@ -42,6 +42,10 @@ import {
 } from "~/server/domains/ledger-party/repo/member-login";
 import { productionPhotoImportCommitPorts } from "~/server/domains/photo-import/repo/photo-import-commit";
 import {
+  finalizePhotoRun,
+  startPhotoInventoryRun,
+} from "~/server/domains/photo-import/repo/run/photo-run";
+import {
   approvePhotoGroupProposals,
   listPhotoGroupProposals,
   proposePhotoGroups,
@@ -66,11 +70,7 @@ import {
   prepareSourceOrderReconciliation,
   commitAcceptedSourceOrderReconciliation,
 } from "./reconciliation";
-import {
-  finalizePhotoRun,
-  loadRunDetail,
-  startPhotoInventoryRun,
-} from "./run-service";
+import { loadRunDetail } from "./run-service";
 
 /**
  * Every arrival order of the four evidence sources must converge on one

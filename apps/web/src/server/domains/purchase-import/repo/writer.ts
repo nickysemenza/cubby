@@ -69,7 +69,6 @@ import {
   findExactProductNameMatches,
   findProductIdentityReviewCandidates,
 } from "~/server/domains/product/repo/resolve-names";
-import { assertRunCapabilityById } from "~/server/domains/purchase-import/repo/capabilities";
 import { manufacturerPartRequests } from "~/server/domains/purchase-import/repo/manufacturer-identity";
 import {
   type LiveSourceOrder,
@@ -86,6 +85,7 @@ import {
   type ExistingExpenseSnapshot,
 } from "~/server/domains/purchase-import/repo/writer-policy";
 import { attachPurchaseProducts } from "~/server/domains/purchase/repo/purchase-products";
+import { assertRunCapabilityById } from "~/server/domains/run/repo/purpose-policy";
 import { classificationAllowsField } from "~/server/domains/spending-category/repo/classification-field-policy";
 import { createAppError } from "~/server/errors/app-error";
 import { recordChange } from "~/server/generic/changes/repo/change";

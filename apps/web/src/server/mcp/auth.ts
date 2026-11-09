@@ -7,7 +7,7 @@ import { getAuthSecret } from "~/server/auth-configuration";
 import {
   PURCHASE_AGENT_OAUTH_CLIENT_ID,
   verifyPurchaseAgentDelegation,
-} from "~/server/domains/purchase-import/repo/agent-auth";
+} from "~/server/domains/run/repo/agent-auth";
 import { getAuth } from "~/server/http/auth";
 
 import {

@@ -26,15 +26,15 @@ import {
   runPushRegistration,
 } from "~/server/db/schema";
 import {
+  schedulePhotoRunImageProcessing,
+  startGuardedPhotoCoordinator,
+} from "~/server/domains/photo-import/repo/run/photo-run";
+import {
   listPhotoGroupProposals,
   listPhotoRunImages,
   readPhotoRunReview,
 } from "~/server/domains/photo-import/repo/run/proposals";
-import { findActivePurchaseAgentGrant } from "~/server/domains/purchase-import/repo/agent-auth";
-import {
-  schedulePhotoRunImageProcessing,
-  startGuardedPhotoCoordinator,
-} from "~/server/domains/purchase-import/repo/run-service";
+import { findActivePurchaseAgentGrant } from "~/server/domains/run/repo/agent-auth";
 import { recordChange } from "~/server/generic/changes/repo/change";
 
 /**

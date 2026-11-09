@@ -80,7 +80,7 @@ order Emails use the same policy within the existing selection limit. Other
 frontier chat-model calls draw from the household AI budget, a stopgap safety
 net ([import journey](../guide/import-journey.md)).
 No run purpose holds the `start_run` or `member_decision` capability
-(`server/domains/purchase-import/repo/capabilities.ts`), so a coordinator never starts
+(`server/domains/run/repo/purpose-policy.ts`), so a coordinator never starts
 another run or makes a member's decision. That gate applies only to
 Run-delegated tokens: a member OAuth session, including an automated routine
 holding a member token, can call every `member_decision` write.

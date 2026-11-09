@@ -23,12 +23,12 @@ import {
   runOperation,
   session,
 } from "~/server/db/schema";
+import { setMailImport } from "~/server/domains/purchase-import/repo/mail-import-settings";
+import { runFindingColumns } from "~/server/domains/purchase-import/repo/run-finding";
 import {
   ensurePurchaseAgentOAuthClient,
   PURCHASE_AGENT_OAUTH_CLIENT_ID,
-} from "~/server/domains/purchase-import/repo/agent-auth";
-import { setMailImport } from "~/server/domains/purchase-import/repo/mail-import-settings";
-import { runFindingColumns } from "~/server/domains/purchase-import/repo/run-finding";
+} from "~/server/domains/run/repo/agent-auth";
 
 type Db = TestDbContext["db"];
 

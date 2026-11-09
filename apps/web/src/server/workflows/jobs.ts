@@ -142,8 +142,8 @@ export async function drainProductionJobs(
   if (round.failures.length)
     throw new AggregateError(round.failures, "Background pages failed");
   await (
-    await import("~/server/domains/purchase-import/repo/dispatch")
-  ).reconcilePurchaseDispatches(db);
+    await import("~/server/domains/run/repo/coordinator-dispatch")
+  ).reconcileCoordinatorDispatches(db);
   await (
     await import("~/server/workflows/runs/lifecycle")
   ).reconcileWorkflowRuns(db);

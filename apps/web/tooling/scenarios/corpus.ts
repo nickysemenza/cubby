@@ -29,10 +29,8 @@ import {
   attachExistingImageToEntity,
   createUploadedImageRecord,
 } from "~/server/domains/image/repo/image";
-import {
-  startPhotoInventoryRun,
-  markRunFailed,
-} from "~/server/domains/purchase-import/repo/run-service";
+import { markRunFailed } from "~/server/domains/purchase-import/repo/run-service";
+import { startPhotoInventoryRun } from "~/server/domains/photo-import/repo/run/photo-run";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { seedBaseWorld, BASE_HOME_SHORTCODE } from "../factories/base-world";
 import {

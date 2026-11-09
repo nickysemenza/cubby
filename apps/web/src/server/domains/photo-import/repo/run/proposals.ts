@@ -109,7 +109,7 @@ import {
   photoProductSuggestions,
 } from "~/server/domains/photo-import/repo/run/product-suggestions";
 import { getProductCoverImageUrlsByProductIds } from "~/server/domains/product/repo/crud";
-import { assertRunCapability } from "~/server/domains/purchase-import/repo/capabilities";
+import { assertRunCapability } from "~/server/domains/run/repo/purpose-policy";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";

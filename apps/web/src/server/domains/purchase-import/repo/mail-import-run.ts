@@ -95,6 +95,7 @@ import {
   HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION,
 } from "~/server/domains/purchase-import/repo/mail-source-identity";
 import { readSenderAttributions } from "~/server/domains/purchase-import/repo/sender-attribution-read";
+import { dispatchStartedRun } from "~/server/domains/run/repo/coordinator-dispatch";
 import {
   actorSnapshot,
   assertRunParent,
@@ -105,7 +106,6 @@ import { JobDeferredError } from "~/server/generic/jobs/errors";
 import { hasLiveRunJobLease } from "~/server/generic/jobs/repo/job-reads";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
-import { dispatchStartedRun } from "./dispatch";
 import { mailReadContent } from "./gmail/read-content";
 import {
   normalizedOrderIdSql,

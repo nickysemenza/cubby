@@ -32,6 +32,10 @@ import {
   setPhotoRunProcessor,
 } from "~/server/domains/photo-import/repo/run/lifecycle";
 import {
+  finalizePhotoRun,
+  startPhotoInventoryRun,
+} from "~/server/domains/photo-import/repo/run/photo-run";
+import {
   readPhotoRunDefaults,
   readRemainingPhotoRunContext,
   setPhotoRunDefaults,
@@ -56,10 +60,6 @@ import { commitPhotoGroup } from "~/server/domains/photo-import/repo/run/writer"
 import { reconcilePhotoImport } from "~/server/domains/photo-import/service/photo-import-reconcile.service";
 import { manifestPhotoImportRouteAdapter } from "~/server/domains/photo-import/service/photo-import-route.adapter";
 import { stagePhotoImport } from "~/server/domains/photo-import/service/photo-import-stage.service";
-import {
-  finalizePhotoRun,
-  startPhotoInventoryRun,
-} from "~/server/domains/purchase-import/repo/run-service";
 import { readRun } from "~/server/domains/run/repo/run";
 import { publicFieldEnvelopeRows } from "~/server/generic/derived/repo/public-read";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";

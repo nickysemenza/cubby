@@ -55,9 +55,9 @@ import {
 } from "~/server/domains/photo-import/repo/run/product-suggestions";
 import { createProductWithSideEffects } from "~/server/domains/product/repo/write/product-orchestration";
 import { createProductWriteActions } from "~/server/domains/product/repo/write/product-writes";
-import { assertRunCapability } from "~/server/domains/purchase-import/repo/capabilities";
 import { loadRunScopeByShortcode } from "~/server/domains/purchase-import/repo/run-service";
 import { executeLeasedOperation } from "~/server/domains/run/repo/operation";
+import { assertRunCapability } from "~/server/domains/run/repo/purpose-policy";
 import { resolveProductBrandName } from "~/server/domains/vendor/repo/product-brand";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";

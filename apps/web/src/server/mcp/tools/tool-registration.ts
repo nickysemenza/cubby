@@ -23,7 +23,7 @@ import { run as runTable } from "~/server/db/schema";
 import {
   assertPurchaseAgentAction,
   purchaseAgentRunActions,
-} from "~/server/domains/purchase-import/repo/capabilities";
+} from "~/server/domains/run/repo/agent-capabilities";
 import { toPublicErrorPayload } from "~/server/errors/app-error";
 import {
   errorReportingHeaders,

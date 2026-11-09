@@ -483,7 +483,7 @@ export const authenticate = createAuthenticator({
   delegationHolds: async (context, delegation) => {
     const [{ findActivePurchaseAgentGrant }, { loadRunScope }] =
       await Promise.all([
-        import("~/server/domains/purchase-import/repo/agent-auth"),
+        import("~/server/domains/run/repo/agent-auth"),
         import("~/server/domains/purchase-import/repo/run-service"),
       ]);
     const actorUserId = context.actorContext.userId;

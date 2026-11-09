@@ -10,6 +10,7 @@ import { describe, expect, it } from "vitest";
 import { getDb } from "~/server/db/helpers";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { aiUsage, auditLog, photoRunImage } from "~/server/db/schema";
+import { startPhotoInventoryRun } from "~/server/domains/photo-import/repo/run/photo-run";
 import { runHandlers } from "~/server/domains/run/operations/run.server";
 import { getRunWorkProgress } from "~/server/domains/run/repo/work-progress";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
@@ -18,7 +19,6 @@ import { requireActor } from "~/server/http/request-context";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 import { startImportRunFixture } from "../service/import-run.fixtures";
-import { startPhotoInventoryRun } from "./run-service";
 import {
   listRuns,
   reportRunTargetDeviceWork,

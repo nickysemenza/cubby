@@ -154,10 +154,7 @@ export function runServicesFor(
     service: typeof import("../repo/run-service"),
   ) => {
     const scope = await service.loadRunScope(db, runId);
-    if (
-      scope.public.purpose !== "photo_inventory" &&
-      scope.public.purpose !== "mail_import"
-    )
+    if (!agentImportRunPurpose.safeParse(scope.public.purpose).success)
       throw new Error(
         "This host service is available only to Mail import and photo inventory Runs",
       );
@@ -244,7 +241,7 @@ export function runServicesFor(
       withDatabase(async (db, service) => {
         const scope = await service.loadRunScope(db, runId);
         const { findActivePurchaseAgentGrant } =
-          await import("~/server/domains/purchase-import/repo/agent-auth");
+          await import("~/server/domains/run/repo/agent-auth");
         if (await findActivePurchaseAgentGrant(db, scope.actorUserId)) return;
         await service.pauseRunForAuthorization(db, runId);
         throw new Error("Purchase Agent authorization is required");
@@ -266,7 +263,7 @@ export function runServicesFor(
           { findActivePurchaseAgentGrant, issuePurchaseAgentDelegation },
           { handleMcpHttpRequest },
         ] = await Promise.all([
-          import("~/server/domains/purchase-import/repo/agent-auth"),
+          import("~/server/domains/run/repo/agent-auth"),
           import("~/server/mcp/http-handler"),
         ]);
         const grant = await findActivePurchaseAgentGrant(db, scope.actorUserId);
@@ -320,7 +317,9 @@ export function runServicesFor(
                   db,
                   runId,
                 )
-              : service.claimPhotoInventoryWork(db, runId),
+              : (
+                  await import("~/server/domains/photo-import/repo/run/photo-run")
+                ).claimPhotoInventoryWork(db, runId),
         );
       });
     },
