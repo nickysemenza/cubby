@@ -18,7 +18,7 @@ import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import { Fragment, useLayoutEffect, useRef, useState } from "react";
 
 import { MarkdownText } from "~/entity/prose/markdown";
-import { displayToolAction } from "~/features/purchase/agent-tool-names";
+import { displayToolAction } from "~/features/run/agent-tool-names";
 import { formatCompactCount, formatCount } from "~/lib/number-format";
 import { Button } from "~/ui/primitives/button";
 import { Spinner } from "~/ui/primitives/spinner";

@@ -312,7 +312,7 @@ const detailSlots = {
     "import-controls": slot(
       () =>
         named(
-          import("~/features/purchase/purchase-import-run-detail"),
+          import("~/features/run/purchase-import-run-detail"),
           "RunImportControls",
         ),
       isImportRun,
@@ -326,7 +326,7 @@ const detailSlots = {
     "import-agent-live": slot(
       () =>
         named(
-          import("~/features/purchase/purchase-import-run-detail"),
+          import("~/features/run/purchase-import-run-detail"),
           "RunImportAgentActive",
         ),
       isImportRun,
@@ -349,7 +349,7 @@ const detailSlots = {
     "import-agent-stopped": slot(
       () =>
         named(
-          import("~/features/purchase/purchase-import-run-detail"),
+          import("~/features/run/purchase-import-run-detail"),
           "RunImportAgentStopped",
         ),
       isImportRun,
@@ -364,7 +364,7 @@ const detailSlots = {
     "photo-batch": slot(
       () =>
         named(
-          import("~/features/purchase/purchase-import-run-detail"),
+          import("~/features/run/purchase-import-run-detail"),
           "RunPhotoBatch",
         ),
       (run) => run.purpose === "photo_inventory",

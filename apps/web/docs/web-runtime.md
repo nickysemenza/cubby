@@ -74,6 +74,8 @@ normalized diagnostics; domain input/events remain schema-validated inside the
 authenticated runtime. Producers observe the request signal, and early iterator
 return cancels the request. The authenticator owns the cookie same-origin rule
 for every operation request.
+Run detail owns the shared agent controls, transcript, and progress presentation.
+
 Cookbook import stays busy until its recipe stream and photo phase finish.
 The stream's done event precedes iterator completion; hand off recipe progress
 to photo progress atomically, with the outer import cleanup owning completion.
