@@ -50,6 +50,9 @@ only widths used by sticky offsets inherit from the table into rows. Changing an
 unrelated fitted column must not invalidate inherited variables across every
 cell. Group totals resolve the same width values directly, and deliberate
 resizing and pinning retain their existing layout owner.
+If another start-pinned column follows the identity, its offset inherits the
+identity's width. Fitting an unrelated column can change the identity's share of
+pane slack and still trigger a broad inherited-width update in that layout.
 Within a query scope, unchanged rendered cells retain their measured contribution;
 content changes invalidate only the affected cell. New cells and font readiness
 receive fresh measurements, and a new query scope resets the fit.

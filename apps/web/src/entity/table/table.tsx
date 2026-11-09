@@ -1128,6 +1128,8 @@ function DesktopTableView<TItem extends RowData>({
                 columnSizeVars,
               )}
             >
+              {/* Match painted header, record and footer cells: start/center,
+                  spacer, end, debug, with unpainted columns omitted. */}
               <colgroup style={columnSizeVars}>
                 {table.getStartVisibleLeafColumns().map(renderColumn)}
                 {table.getCenterVisibleLeafColumns().map(renderColumn)}
