@@ -1,6 +1,5 @@
 import { type inventoryDetailOut as inventoryWithLocationAndProductOut } from "@cubby/schemas/entities/inventory";
 import { type LocationDetailOut as InfLocation } from "@cubby/schemas/entities/location";
-import { type WishOut } from "@cubby/schemas/entities/wish";
 import { EXPENSE_DISPOSITION_COST_TYPE } from "@cubby/schemas/expense-fields";
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import type {
@@ -206,22 +205,6 @@ export const financialTransactionEditRequest = (
   };
 };
 
-const wishEditRequest = (
-  wish: WishOut,
-): Omit<EntityEditRequest<"wish", "update", "full">, "surface"> & {
-  intent: "full";
-} => ({
-  entity: "wish",
-  operation: "update",
-  intent: "full",
-  record: wish,
-  seed: {
-    name: wish.name,
-    notes: wish.notes,
-    candidateProductIds: wish.candidates.map(({ id }) => id),
-  },
-});
-
 const inventoryEditRequest = (
   item: z.infer<typeof inventoryWithLocationAndProductOut>,
 ): Omit<EntityEditRequest<"inventory", "update", "full">, "surface"> & {
@@ -270,7 +253,6 @@ type UpdateRequest<E extends EditableEntity> = Omit<
 const bespokeEditRequests = {
   financialAccount: financialAccountEditRequest,
   financialTransaction: financialTransactionEditRequest,
-  wish: wishEditRequest,
   inventory: inventoryEditRequest,
   location: locationEditRequest,
 } as const;

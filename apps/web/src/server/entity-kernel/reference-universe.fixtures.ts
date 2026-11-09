@@ -353,7 +353,6 @@ export async function seedReferenceUniverse(
       : {},
   );
   await seed("meal");
-  await seed("wish");
   // Financial and vendor accounts may map only to member/household parties; a
   // random sample can draw "guest", which their creates reject.
   const ledgerPartyA = await seed("ledgerParty", { kind: "member" });

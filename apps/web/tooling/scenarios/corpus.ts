@@ -856,12 +856,6 @@ async function seedConnectedHousehold(
     projectId: projects[2]!.id,
     trade: "other",
   });
-  for (let index = 0; index < 10; index += 1)
-    await create("wish", {
-      name: `Cedar Future Supply ${index + 1}`,
-      candidateProductIds: [products[index]!.id, products[index + 1]!.id],
-      notes: "Compare two invented candidates before buying.",
-    });
 
   const memberId = (
     await pool.query<{ id: string }>(

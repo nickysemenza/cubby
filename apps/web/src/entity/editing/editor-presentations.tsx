@@ -1,5 +1,4 @@
 import { EXPENSE_DISPOSITION_EDITOR } from "@cubby/schemas/expense-fields";
-import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { useDebouncedValue } from "@tanstack/react-pacer";
 import {
   type QueryClient,
@@ -10,10 +9,8 @@ import {
   type ComponentProps,
   type ComponentType,
   type ReactNode,
-  useEffect,
   useId,
   useMemo,
-  useState,
 } from "react";
 import { type FieldValues, type UseFormReturn } from "react-hook-form";
 import { z } from "zod";
@@ -31,9 +28,6 @@ import type { FinancialTransactionFormValues } from "~/features/finance/financia
 import { formatDateSpan } from "~/lib/date-span";
 import { Row, Stack } from "~/ui/layout";
 import type { Overlay } from "~/ui/overlays/overlay";
-import { Checkbox } from "~/ui/primitives/checkbox";
-import { Input } from "~/ui/primitives/input";
-import { Label } from "~/ui/primitives/label";
 import { Description } from "~/ui/text/description";
 
 import {
@@ -320,164 +314,6 @@ function FinancialTransactionFields({ form, record }: EntityEditorFieldsProps) {
   );
 }
 
-type CandidateOption = {
-  id: string;
-  name: string;
-  brandName: string | null;
-};
-const candidateOptions = z.array(
-  z.object({
-    id: z.string(),
-    name: z.string(),
-    brandName: z.string().nullable(),
-  }),
-);
-
-function WishFields({ form, record }: EntityEditorFieldsProps) {
-  const [productSearch, setProductSearch] = useState("");
-  const [selectedProducts, setSelectedProducts] = useState<CandidateOption[]>(
-    [],
-  );
-  const [debouncedProductSearch] = useDebouncedValue(productSearch, {
-    wait: 300,
-  });
-  const idPrefix = useId();
-  const candidateIds = z
-    .array(z.string())
-    .catch([])
-    .parse(form.watch("candidateProductIds"));
-  const recordCandidates =
-    record && "candidates" in record ? record.candidates : undefined;
-  const candidates = useMemo(
-    () => candidateOptions.catch([]).parse(recordCandidates),
-    [recordCandidates],
-  );
-
-  useEffect(() => {
-    setSelectedProducts(candidates);
-  }, [candidates]);
-
-  const productsQuery = useQuery(
-    entityListFor("product").queryOptions({
-      filters: {
-        nameFilter: debouncedProductSearch.trim() || undefined,
-      },
-      sort: [{ orderBy: "name", direction: "asc" }],
-      pagination: { pageIndex: 0, pageSize: 50 },
-    }),
-  );
-  const productOptions = [
-    ...selectedProducts,
-    ...(productsQuery.data?.items ?? []).filter(
-      (product) => !candidateIds.includes(product.id),
-    ),
-  ];
-  const toggleCandidate = (product: CandidateOption, checked: boolean) => {
-    form.setValue(
-      "candidateProductIds",
-      checked
-        ? [...candidateIds, product.id]
-        : candidateIds.filter((id) => id !== product.id),
-      { shouldDirty: true },
-    );
-    setSelectedProducts((current) =>
-      checked
-        ? current.some(({ id }) => id === product.id)
-          ? current
-          : [...current, product]
-        : current.filter(({ id }) => id !== product.id),
-    );
-  };
-
-  return (
-    <>
-      <EntityPrimitiveFields
-        entity="wish"
-        mode={record ? "edit" : "create"}
-        section="main"
-        options={{
-          name: {
-            placeholder: "e.g. Metal milling machine",
-            focusOnMount: true,
-          },
-          notes: {
-            placeholder:
-              "Why it would be useful or fun, constraints, future project ideas…",
-          },
-        }}
-      />
-      <div className="grid gap-2">
-        <Label htmlFor={`${idPrefix}-product-search`}>
-          Candidate alternatives
-        </Label>
-        <Input
-          id={`${idPrefix}-product-search`}
-          value={productSearch}
-          onChange={(event) => setProductSearch(event.target.value)}
-          placeholder="Filter your products…"
-        />
-        <div className="grid max-h-48 gap-1 overflow-y-auto border p-2">
-          {productOptions.map((product) => {
-            const effectiveProductBrandName =
-              "fields" in product
-                ? fieldValueOf(product.fields.brandName)
-                : product.brandName;
-
-            const checked = candidateIds.includes(product.id);
-            const inputId = `${idPrefix}-${product.id}`;
-            return (
-              <Row
-                key={product.id}
-                align="center"
-                gap="sm"
-                className="p-1 hover:bg-muted"
-              >
-                <Checkbox
-                  id={inputId}
-                  checked={checked}
-                  onCheckedChange={(value) =>
-                    toggleCandidate(
-                      {
-                        id: product.id,
-                        name: product.name,
-                        brandName:
-                          "fields" in product
-                            ? effectiveProductBrandName
-                            : product.brandName,
-                      },
-                      value === true,
-                    )
-                  }
-                />
-                <Label
-                  htmlFor={inputId}
-                  className="min-w-0 cursor-pointer tracking-normal normal-case"
-                >
-                  <span className="block truncate font-medium">
-                    {product.name}
-                  </span>
-                  <span className="block truncate text-muted-foreground">
-                    {"fields" in product
-                      ? effectiveProductBrandName
-                      : product.brandName}
-                  </span>
-                </Label>
-              </Row>
-            );
-          })}
-          {!productsQuery.isLoading && productOptions.length === 0 ? (
-            <Description className="p-1">No matching products yet.</Description>
-          ) : null}
-        </div>
-        <p className="text-muted-foreground">
-          Choose any number of alternatives. They mean “pick one,” not a
-          shopping cart.
-        </p>
-      </div>
-    </>
-  );
-}
-
 type EntityEditorPresentationKey =
   | "meal:create:capture"
   | "task:create:capture"
@@ -492,8 +328,6 @@ type EntityEditorPresentationKey =
   | "financialAccount:update:full"
   | "financialTransaction:create:capture"
   | "financialTransaction:update:full"
-  | "wish:create:full"
-  | "wish:update:full"
   | "ingredient:create:capture"
   | "ingredient:update:full"
   | "inventory:create:capture"
@@ -515,8 +349,6 @@ interface PresentationEntityByKey {
   "financialAccount:update:full": "financialAccount";
   "financialTransaction:create:capture": "financialTransaction";
   "financialTransaction:update:full": "financialTransaction";
-  "wish:create:full": "wish";
-  "wish:update:full": "wish";
   "ingredient:create:capture": "ingredient";
   "ingredient:update:full": "ingredient";
   "inventory:create:capture": "inventory";
@@ -638,23 +470,6 @@ const presentations = {
     submitLabel: "Save transaction",
     Fields: FinancialTransactionFields,
     successMessage: () => "Transaction updated",
-  },
-  "wish:create:full": {
-    title: () => "New wishlist item",
-    description: () =>
-      "Add one desired outcome, then optionally list the products you would consider.",
-    size: "lg",
-    Fields: WishFields,
-    successMessage: (result) => `Created “${resultName(result, "wish")}”`,
-  },
-  "wish:update:full": {
-    title: () => "Edit wishlist item",
-    description: () =>
-      "Add one desired outcome, then optionally list the products you would consider.",
-    submitLabel: "Save changes",
-    size: "lg",
-    Fields: WishFields,
-    successMessage: () => "Wishlist updated",
   },
   "ingredient:create:capture": {
     title: () => "New Ingredient",

@@ -15,7 +15,6 @@ export const localRelationshipEntities = [
   "purchase",
   "financialAccount",
   "financialTransaction",
-  "wish",
   "expense",
   "image",
   "planting",

@@ -92,7 +92,6 @@ const SQL_RELATED_VIEWS = {
   // includes-installed: this is a related-records view keyed off product
   // identity — a fixture must stay listed among "this product's inventory".
   "product.inventory": dated(`t."shortcode"`, `t."createdAt"`),
-  "product.wishes": named(),
   "product.tasks": named(
     `format('%s|%s|%s', CASE WHEN t."status" = 'done' THEN 1 ELSE 0 END, COALESCE(t."dueDate"::text, '9999-12-31'), lower(t."name"))`,
   ),
@@ -195,7 +194,6 @@ const SQL_RELATED_VIEWS = {
     `COALESCE(t."date"::timestamp, t."createdAt")`,
   ),
   "financialTransaction.products": named(),
-  "wish.candidates": named(),
   "ledgerParty.meals": dated(
     `COALESCE(NULLIF(t."name", ''), t."date"::text, t."shortcode")`,
     `t."date"`,

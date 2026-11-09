@@ -157,10 +157,10 @@ describe("root MutationCache invalidation", () => {
     expect(
       await invalidatedTagsFor(
         { operation: "entity.mutate", invalidates: ripple.none },
-        { entity: "wish", action: "update", id: "WSH-1", data: {} },
-        [["wish"], ["product", "search"]],
+        { entity: "location", action: "update", id: "LOC-1", data: {} },
+        [["location"], ["product", "search"]],
       ),
-    ).toEqual([["wish"]]);
+    ).toEqual([["location"], ["product", "search"]]);
   });
 
   it("lets a non-empty meta.invalidates beat the registered policy", async () => {

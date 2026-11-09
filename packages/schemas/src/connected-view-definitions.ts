@@ -441,26 +441,6 @@ export const curatedConnectionViews = {
       ],
     },
   ],
-  wish: [
-    {
-      key: "purchases",
-      title: "Candidate purchases",
-      target: "purchase",
-      routes: [["candidates", "purchases"]],
-    },
-    {
-      key: "inventory",
-      title: "Candidate stock",
-      target: "inventory",
-      routes: [["candidates", "inventory"]],
-    },
-    {
-      key: "vendors",
-      title: "Candidate vendors",
-      target: "vendor",
-      routes: [["candidates", "vendors"]],
-    },
-  ],
   expense: [
     {
       key: "inventory",

@@ -377,8 +377,7 @@ Product image summaries, nested identity-product photos, and direct logo/cover
 joins must not select a second identity image. URL-only picker projections remain
 serializers of canonical results. Location trees carry canonical media for the
 whole loaded tree; child photo contact sheets remain explicit compartment evidence
-and never become a parent identity fallback. Recipe heroes and comparisons, Wish
-candidates, Arrange, tools, and Location contents use the same image context.
+and never become a parent identity fallback. Recipe heroes and comparisons, Arrange, tools, and Location contents use the same image context.
 `useEntityDisplayImage` accepts a known canonical seed so a projected image or
 explicit no-image result does not register another request with the shell batch.
 

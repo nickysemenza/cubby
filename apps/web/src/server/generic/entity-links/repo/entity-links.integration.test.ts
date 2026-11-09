@@ -13,7 +13,7 @@
  * - a merge repoint resolves collisions by each end's declared rule and
  *   drops the links it would turn into self-links.
  */
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -26,7 +26,6 @@ import {
   updateProject,
 } from "~/server/domains/project/repo/crud";
 import { readTask, updateTask } from "~/server/domains/task/repo/crud";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   createProductFixture as createProduct,
   makeProductInput,
@@ -58,8 +57,6 @@ describe("EntityLink constraints", () => {
   const mkProduct = async (name: string) =>
     (await createProduct(ctx.db, makeProductInput({ name }), ctx.actor))
       .entityId;
-  const mkWish = async (name: string) =>
-    (await insertWithShortcode(ctx.db, "wish", { name })).id;
 
   it("refuses a link whose kind and endpoint kinds do not match the declaration", async () => {
     const [kit, part] = [await mkProduct("Kit A"), await mkProduct("Part A")];
@@ -71,30 +68,14 @@ describe("EntityLink constraints", () => {
       pgCause(
         insert({
           ...linkValues("productComponent", kit, part, 1),
-          kind: "wishCandidate",
+          kind: "projectTool",
         }),
       ),
     ).resolves.toMatchObject({
       code: "23514",
       constraint: "EntityLink_kind_check",
     });
-    // Kinds agree with each other but not with the Entity rows they name.
-    const wish = await mkWish("Wish A");
-    await expect(
-      pgCause(insert(linkValues("wishCandidate", kit, part))),
-    ).resolves.toMatchObject({
-      code: "23503",
-      constraint: "EntityLink_from_fk",
-    });
-    // Quantity only where the kind declares one, and required there.
-    await expect(
-      pgCause(
-        insert({ ...linkValues("wishCandidate", wish, part), quantity: 2 }),
-      ),
-    ).resolves.toMatchObject({
-      code: "23514",
-      constraint: "EntityLink_quantity_check",
-    });
+    // Quantity is required where the kind declares one.
     await expect(
       pgCause(
         insert({
@@ -115,7 +96,6 @@ describe("EntityLink constraints", () => {
     });
 
     await insert(linkValues("productComponent", kit, part, 3));
-    await insert(linkValues("wishCandidate", wish, part));
   });
 
   it("refuses a live link to a deleted entity but still lets that link be soft-deleted", async () => {
@@ -337,35 +317,5 @@ describe("repointLinkEnd", () => {
     ).rejects.toMatchObject({
       reason: "PRODUCT_MERGE_COMPONENT_QUANTITY_MISMATCH",
     });
-  });
-
-  it("drops the loser's duplicate for a dropLoser kind", async () => {
-    const [keep, loser] = [
-      await mkProduct("Keep W"),
-      await mkProduct("Loser W"),
-    ];
-    const wish = (await insertWithShortcode(ctx.db, "wish", { name: "Wish W" }))
-      .id;
-    await getDb(ctx.db)
-      .insert(entityLink)
-      .values([
-        linkValues("wishCandidate", wish, keep),
-        linkValues("wishCandidate", wish, loser),
-      ]);
-    await withTransaction(ctx.db, (tx) =>
-      repointLinkEnd(tx, {
-        kind: "wishCandidate",
-        end: "to",
-        keepId: keep,
-        loserIds: [loser],
-      }),
-    );
-    const live = await getDb(ctx.db)
-      .select({ to: entityLink.toEntityId })
-      .from(entityLink)
-      .where(
-        and(liveLinks("wishCandidate"), eq(entityLink.fromEntityId, wish)),
-      );
-    expect(live).toEqual([{ to: keep }]);
   });
 });

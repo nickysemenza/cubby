@@ -32,12 +32,6 @@ export const relatednessPairRegistry = {
     active: false,
     capabilities: ["semantic", "rail"] as const,
   },
-  wish_to_product: {
-    source: "wish",
-    target: "product",
-    active: false,
-    capabilities: ["semantic", "wish-ownership"] as const,
-  },
   vendor_to_vendor: {
     source: "vendor",
     target: "vendor",

@@ -32,7 +32,6 @@ import {
   drainRecipeRefreshJobs,
 } from "~/server/testing/background-queue";
 import {
-  createProductFixture,
   createProductIdentityFixture,
   createRecipeFixture,
   ingredientRef,
@@ -71,51 +70,6 @@ describe("generic bulk updates", () => {
   const read = async (entity: EntityKernelEntity, id: string) =>
     (await executeEntityAs(context(), "get", { entity, id, missing: "error" }))
       .item;
-
-  it("preserves existing Wish candidates while adding and removing shared candidates", async () => {
-    const products = await Promise.all(
-      ["A", "B", "C"].map((name) =>
-        createProductFixture(
-          ctx.db,
-          makeProductInput({ name: `Synthetic candidate ${name}` }),
-          ctx.actor,
-        ),
-      ),
-    );
-    const wish = (
-      await executeEntityAs(context(), "create", {
-        entity: "wish",
-        data: {
-          name: "Synthetic candidate selection",
-          notes: null,
-          candidateProductIds: [products[0]!.id, products[1]!.id],
-        },
-      })
-    ).item;
-    await bulk("wish", [wish.id], {
-      candidateProductIds: [{ op: "add", key: products[2]!.id }],
-    });
-    expect(await read("wish", wish.id)).toMatchObject({
-      candidates: expect.arrayContaining(
-        products.map((product) => expect.objectContaining({ id: product.id })),
-      ),
-    });
-    await bulk("wish", [wish.id], {
-      candidateProductIds: [{ op: "remove", key: products[1]!.id }],
-    });
-    expect(await read("wish", wish.id)).toMatchObject({
-      candidates: expect.arrayContaining(
-        [products[0], products[2]].map((product) =>
-          expect.objectContaining({ id: product!.id }),
-        ),
-      ),
-    });
-    expect(await read("wish", wish.id)).toMatchObject({
-      candidates: expect.not.arrayContaining([
-        expect.objectContaining({ id: products[1]!.id }),
-      ]),
-    });
-  });
 
   it("patches structured allocations without replacing each transaction's other purchase", async () => {
     const vendor = await createRepoEntity(ctx, "vendor", {

@@ -747,7 +747,7 @@ also carries the resolved `primarySearch` (the declared one, else
 `searchQuery` for a searchable entity with a contract) and the `bulkUpdate`
 field roster, from the same generator helpers the inspector uses
 (`apps/web/generator/entities/render/shared.ts`). `bulkUpdate` and `entityFieldModels[entity].bulk` share the compiler-derived
-normal-update roster and the exclusions in the bulk edit contract below. Identity marks and empty states read this metadata. Plants, Plantings and GardenEntries belong to Garden; Purchases, Wishes, Shipments, Emails, Vendors and VendorAccounts belong to Purchases. `packages/schemas/src/sidebar-manifest.ts` owns `SIDEBAR_SECTIONS`, the single ordered navigation roster for desktop web, the mobile More sheet and generated Swift `SidebarManifest.sections`. Each section declares its id, label (empty for top), nullable domain, default fold state and ordered destinations; each destination declares its nav label, web route and either its browser-routed entity or a specialist SF Symbol. Page titles retain their full names.
+normal-update roster and the exclusions in the bulk edit contract below. Identity marks and empty states read this metadata. Plants, Plantings and GardenEntries belong to Garden; Purchases, Shipments, Emails, Vendors and VendorAccounts belong to Purchases. `packages/schemas/src/sidebar-manifest.ts` owns `SIDEBAR_SECTIONS`, the single ordered navigation roster for desktop web, the mobile More sheet and generated Swift `SidebarManifest.sections`. Each section declares its id, label (empty for top), nullable domain, default fold state and ordered destinations; each destination declares its nav label, web route and either its browser-routed entity or a specialist SF Symbol. Page titles retain their full names.
 
 `presentation.detail`, `.list` and `.edit` are the one declaration both the
 web and the native renderers draw from. A differing presentation value declares a
@@ -1222,7 +1222,7 @@ record identity, the complete item value identifies it; generated UUIDs and
 opaque read identities are excluded from that comparison. Structured reads project
 through the normal input description, including nested `readFrom` references.
 `collection.readPath` declares an authoritative projection when the detail uses a
-different shape, such as Wish candidates. An unavailable collection read refuses
+different shape. An unavailable collection read refuses
 the batch instead of treating it as empty.
 
 Every exposed field has a usable normal editor control. Only assignment mode
@@ -2101,7 +2101,7 @@ selection never grants permission to mutate a record.
 
 Declare object-valued outputs as `json`, and render relations and structured
 values through explicit overrides. A logo object is not a text field. Fields
-already owned by a dedicated section, such as Wish candidates, stay outside
+already owned by a dedicated section stay outside
 the basic-information roster. Mobile title slots use the column accessor value,
 so linked identity columns must return the readable name and retain the entity
 shortcode separately for navigation.
@@ -2162,7 +2162,7 @@ null values alone do not establish that a contract is unnecessary.
 - **Always-null columns.** `Plant.daysFrom*` and `Plant.breeding`,
   `Planting.outcome`, `Vendor.returnWindowDays`,
   `Task.sortOrder`,
-  `Meal.sortOrder`, `Wish.acquiredAt`, `Device.productId`, `Cookbook.report`.
+  `Meal.sortOrder`, `Device.productId`, `Cookbook.report`.
   Image `captureDeviceLabel`, `capturePlaceName`, and
   `capturedAtOffsetMinutes` fill once the library path sends them (Images &
   photos).
@@ -2738,11 +2738,6 @@ Grouped search loads Inventory's canonical field context explicitly for stock
 placements before serializing their public fields. A search-first request must
 not depend on another route having initialized the Inventory scaffold.
 
-Wish ranges are owned by `apps/web/src/server/domains/wish/price-range.ts`.
-Hydration, sorting and totals use its SQL aggregate over the effective Product
-price; null prices are omitted, zero is priced, and no priced candidates means
-no range. Candidate hydration computes this only for the requested Wish IDs.
-
 `apps/web/src/lib/search-normalization.ts` owns the search normalization recipe:
 trim, collapse whitespace, then lowercase. Query input, document writers and
 embedding freshness SQL interpret that same recipe and whitespace set. Purchase
@@ -3003,7 +2998,7 @@ and `declaredFilterPredicates` ORs a case-insensitive substring match across
 them. A member is a stored `text` or `text[]` field (matched by element, and
 read as its effective value when it declares `resolution.inherit`, so project
 search finds an inherited location) or a `model.derived` key: a `via` path to
-a text field or a titled record (to-many as `EXISTS`, so wish search matches
+a text field or a titled record (to-many as `EXISTS`, so a related-record search matches
 any live candidate's name, joined Brand name or model, and task search the
 effective subject product's name) or a `type: "text"` value. A multi-field
 search is that declared list, never a predicate. `anyOf` does not sort or

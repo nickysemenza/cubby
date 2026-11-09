@@ -40,7 +40,6 @@ agent sessions over MCP.
   ([finance analytics](docs/household-finance-analytics.md)).
 - **What will we spend?** A cash-flow projection carries recent monthly spend
   forward and adds project estimates, planned expenses and what-if scenarios.
-- **Wishlist.** Things we want, each with candidate products and a price range.
 - **Calendar.** Meals, task due dates, expenses and project spans in one
   planner, plus `webcal://` feeds for Apple Calendar.
 
@@ -92,7 +91,6 @@ flowchart TB
   Inventory -- "how much we have of" --> Product
   Inventory -- "kept at" --> Location
   Location -- "nested inside" --> Location
-  Wish -- "options we might buy" --> Product
   Image -- "photos of (and most others)" --> Product
   Recipe -- "calls for" --> Ingredient
   Cookbook -- "where it came from" --> Recipe
@@ -134,7 +132,7 @@ flowchart TB
   classDef work fill:#bfdbfe,stroke:#1d4ed8,color:#000
   classDef money fill:#fecaca,stroke:#b91c1c,color:#000
   classDef people fill:#e9d5ff,stroke:#7e22ce,color:#000
-  class Product,ProductCategory,Inventory,Location,Wish,Image core
+  class Product,ProductCategory,Inventory,Location,Image core
   class Ingredient,Recipe,Cookbook,Meal,USDA food
   class Plant,Planting,GardenEntry garden
   class Project,Task work
@@ -151,7 +149,6 @@ flowchart TB
 | **Location** `LOC-`        | A place in the house or garden: Home → room → shelf → bin, bed, planter                                                                                   | Self tree (one Home root, an "Unknown" holding spot); 1:N Inventory, Planting, GardenEntry                                                                                                                                                                                 | QR labels, arranging, "where is it?"                               |
 | **Inventory** `INV-`       | How much of one Product is at one Location                                                                                                                | N:1 Product, N:1 Location (unique pair); optional owner LedgerParty                                                                                                                                                                                                        | Stock estimate, valued on read through unit mappings               |
 | **Image** `IMG-`           | A stored photo or document                                                                                                                                | N:M to almost every entity via attachments; sightings per member device                                                                                                                                                                                                    | Product photos, receipts, invoices, garden photos                  |
-| **Wish** `WSH-`            | Something we want but don't own yet                                                                                                                       | N:M Product candidates                                                                                                                                                                                                                                                     | Price comparison before buying                                     |
 
 ### Food
 

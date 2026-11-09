@@ -291,7 +291,7 @@ export const nativeCoverage = {
     // Drawn by the one generic detail row from what the declaration says to read: a reference,
     // `valueOptions` labels (`financial-account-identity` via `readPath`, `ledger-transfer-
     // classification`), the server-composed `detailLabelPath` text (`financial-transaction-
-    // vendor-inference`), or the `itemsPath` rows (`wish-candidates`). The richer web cell
+    // vendor-inference`). The richer web cell
     // (filter link, pill, thumbnails) stays web-only; the fact it carries does not.
     ...generic([
       "expense-project",
@@ -310,7 +310,6 @@ export const nativeCoverage = {
       "financial-account-identity",
       "financial-transaction-vendor-inference",
       "ledger-transfer-classification",
-      "wish-candidates",
     ]),
     ...implemented([
       "recipe-source",
@@ -333,7 +332,6 @@ export const nativeCoverage = {
       "complete",
       "delete",
       "discard",
-      "markPurchased",
       "fetchLogo",
       "moveTo",
       "receive",
@@ -344,7 +342,7 @@ export const nativeCoverage = {
     // hero it is the same field editor over one row, which the toolbar `edit` already is, and a
     // selection-wide edit has no row to anchor to on a detail screen.
     // Native uses one Fetch or refresh logo operation for both states.
-    ...ownedElsewhere(["edit", "bulkEdit", "refreshLogo"]),
+    ...ownedElsewhere(["edit", "bulkEdit", "refreshLogo", "markPurchased"]),
   },
   /**
    * `implemented` slots are the generated `ImplementedDetailSlotID`, which `DetailSlotRegistry`
@@ -897,14 +895,6 @@ export const nativeHeroActionPlans = {
     entities: ["project"],
     field: "status",
     bulk: true,
-  },
-  markPurchased: {
-    label: "Mark purchased",
-    symbol: "checkmark.circle",
-    kind: "toggleField",
-    entities: ["wish"],
-    field: "acquired",
-    stateField: "acquiredAt",
   },
 } as const satisfies Partial<Record<HeroActionId, NativeHeroActionPlan>>;
 

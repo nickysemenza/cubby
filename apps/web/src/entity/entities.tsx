@@ -329,10 +329,6 @@ const entityDefinitions = {
     ...defaultDefinitions.financialTransaction,
     color: INK.primary,
   },
-  wish: {
-    ...defaultDefinitions.wish,
-    color: INK.plum,
-  },
   "usda-food": {
     ...defaultDefinitions["usda-food"],
     detailParam: "id",

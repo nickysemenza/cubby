@@ -225,11 +225,6 @@ export const SIDEBAR_SECTIONS = [
         entity: "purchase",
       },
       {
-        label: "Wishes",
-        route: "/wishes",
-        entity: "wish",
-      },
-      {
         label: "Shipments",
         route: "/shipments",
         entity: "shipment",

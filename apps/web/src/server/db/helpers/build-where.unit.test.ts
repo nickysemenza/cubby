@@ -19,7 +19,6 @@ import type {
 } from "@cubby/schemas/project";
 import type { PurchaseFilters } from "@cubby/schemas/purchase";
 import type { VendorFilters } from "@cubby/schemas/vendor";
-import type { WishFilters } from "@cubby/schemas/wish";
 import { describe, expect, it } from "vitest";
 
 import { expenseScaffold } from "~/server/domains/expense/repo/lookup";
@@ -38,7 +37,6 @@ import { recipeScaffold } from "~/server/domains/recipe/repo/crud";
 import type { RecipeFilters } from "~/server/domains/recipe/repo/internal-types";
 import { taskScaffold } from "~/server/domains/task/repo/lookup";
 import { vendorScaffold } from "~/server/domains/vendor/repo/vendor";
-import { wishScaffold } from "~/server/domains/wish/repo";
 import { mockWhereDatabase, renderWhereSql } from "~/server/testing/mock-db";
 
 /**
@@ -48,35 +46,6 @@ import { mockWhereDatabase, renderWhereSql } from "~/server/testing/mock-db";
  * already loops every stored entity with `{}` and asserts every predicate is
  * `undefined`, which is exactly what that case guarded.
  */
-
-describe("wishScaffold.where", () => {
-  const where = (filters: WishFilters) =>
-    Promise.resolve(renderWhereSql(wishScaffold.where(filters)));
-
-  it("filters candidates through the related view's productId", async () => {
-    expect(
-      await where({ productId: [parseShortcodeFor("product", "PRD-2345")] }),
-    ).toContain('JOIN "Product" t ON (related1."toEntityId" = t."id"');
-  });
-
-  it.each([
-    {
-      name: "acquired=true",
-      filters: { acquired: true },
-      contains: '"acquiredAt" is not null',
-    },
-    {
-      name: "acquired=false",
-      filters: { acquired: false },
-      contains: '"acquiredAt" is null',
-    },
-  ])(
-    "reads acquired as presence of acquiredAt ($name, declared stored boolean)",
-    async ({ filters, contains }) => {
-      expect(await where(filters)).toContain(contains);
-    },
-  );
-});
 
 describe("financialAccountScaffold.where", () => {
   const where = (filters: FinancialAccountFilters) =>

@@ -648,7 +648,7 @@ One registered native app instance on a phone or Mac, identified independently o
 _Avoid_: session, connection, install id
 
 **Entity Link**:
-A named pairing of two entities with no meaning beyond the pairing: a wish's candidate Product, the Products a purchase bought, a kit's component with a count, a task blocked by another. Removing a link removes neither entity, and a link is never a place to keep money.
+A named pairing of two entities with no meaning beyond the pairing: the Products a purchase bought, a kit's component with a count, a task blocked by another. Removing a link removes neither entity, and a link is never a place to keep money.
 _Avoid_: join row, edge table
 
 **External Identifier**:

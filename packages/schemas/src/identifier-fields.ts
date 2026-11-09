@@ -92,7 +92,6 @@ export const vendorAccountId = ENTITY_ID_SCHEMA.vendorAccount;
 export const runEntityId = ENTITY_ID_SCHEMA.run;
 export const purchaseId = ENTITY_ID_SCHEMA.purchase;
 export const shipmentId = ENTITY_ID_SCHEMA.shipment;
-export const wishId = ENTITY_ID_SCHEMA.wish;
 export const plantingId = ENTITY_ID_SCHEMA.planting;
 export const gardenEntryId = ENTITY_ID_SCHEMA.gardenEntry;
 export const deviceId = ENTITY_ID_SCHEMA.device;
@@ -124,7 +123,6 @@ export type VendorAccountId = EntityId<"vendorAccount">;
 export type RunId = EntityId<"run">;
 export type PurchaseId = EntityId<"purchase">;
 export type ShipmentId = EntityId<"shipment">;
-export type WishId = EntityId<"wish">;
 export type PlantingId = EntityId<"planting">;
 export type GardenEntryId = EntityId<"gardenEntry">;
 export type DeviceId = EntityId<"device">;
@@ -227,7 +225,6 @@ export {
   vendorShortcode,
   vendorAccountShortcode,
   runShortcode,
-  wishShortcode,
   plantingShortcode,
   gardenEntryShortcode,
   deviceShortcode,
@@ -261,7 +258,6 @@ export type {
   VendorShortcode,
   VendorAccountShortcode,
   RunShortcode,
-  WishShortcode,
   DeviceShortcode,
   PlantShortcode,
   EmailShortcode,

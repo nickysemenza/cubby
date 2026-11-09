@@ -144,31 +144,4 @@ struct FieldDetailDisplayTests {
         #expect(try field(.recipe, "yield").format == "amount")
     }
 
-    // MARK: - Display rows
-
-    @Test func wishCandidatesAreDisplayRowsThatOpenTheirProduct() throws {
-        let candidates = try field(.wish, "candidates")
-        #expect(candidates.itemsPath == "candidateItems")
-        let raw: JSONValue = [
-            "candidateItems": [
-                [
-                    "entity": "product", "id": "PRD-4K7M", "title": "Cast Iron Skillet",
-                    "subtitle": "Acme · CI-12", "trailing": "$34.50 · In inventory",
-                ],
-                [
-                    "entity": .null, "id": .null, "title": "Open-ended idea", "subtitle": .null,
-                    "trailing": .null,
-                ],
-            ]
-        ]
-        let items = candidates.detailItems(in: raw)
-        #expect(items.count == 2)
-        #expect(items[0].entity == .product)
-        #expect(items[0].id == "PRD-4K7M")
-        #expect(items[0].subtitle == "Acme · CI-12")
-        #expect(items[0].trailing == "$34.50 · In inventory")
-        #expect(items[1].entity == nil)
-        #expect(candidates.detailItems(in: ["candidateItems": .null]).isEmpty)
-        #expect(candidates.detailItems(in: [:]).isEmpty)
-    }
 }

@@ -172,12 +172,6 @@ export const PRODUCT_MERGE_EDGE_POLICY = {
     description:
       "Recorded meal food entries move onto the surviving product while their gram amounts remain fixed.",
   },
-  "EntityLink[wishCandidate].to": {
-    code: "repoint-or-drop-same-wish",
-    effect: "move-dedupe",
-    description:
-      "A merged product's Wishlist candidacies move onto the survivor, skipping wishes the survivor is already a candidate for.",
-  },
   "Location.productId": {
     code: "repoint-to-survivor",
     effect: "repoint",
@@ -342,7 +336,6 @@ interface ProductMergeSummary {
   devicesMoved: number;
   projectUsesMoved: number;
   purchaseLinksMoved: number;
-  wishCandidatesMoved: number;
   /** Rows on a merged-away KIT's component list, re-pointed onto the survivor. */
   componentsMoved: number;
   /** Component rows dropped because the survivor already listed that part at the same quantity. */
@@ -708,7 +701,6 @@ type ProductImageAssociationRow = ProductAssociationRow & {
 
 type ProjectUseAssociationRow = ProductAssociationRow & { projectId: string };
 type PurchaseAssociationRow = ProductAssociationRow & { purchaseId: string };
-type WishAssociationRow = ProductAssociationRow & { wishId: string };
 
 interface PlannedAssociation<Row extends ProductAssociationRow> {
   rows: Row[];
@@ -729,7 +721,6 @@ interface ProductMergePlan {
   images: PlannedAssociation<ProductImageAssociationRow>;
   projectUses: PlannedAssociation<ProjectUseAssociationRow>;
   purchases: PlannedAssociation<PurchaseAssociationRow>;
-  wishes: PlannedAssociation<WishAssociationRow>;
   expenses: ProductAssociationRow[];
   originalOrderLines: ProductAssociationRow[];
   tasks: ProductAssociationRow[];
@@ -999,13 +990,6 @@ async function buildProductMergePlan(
       purchaseId: parseEntityId("purchase", row.ownerId),
     }),
   );
-  const wishRows = (await linkRowsOf("wishCandidate")).map(
-    (row): WishAssociationRow => ({
-      id: row.id,
-      productId: parseEntityId("product", row.productId),
-      wishId: parseEntityId("wish", row.ownerId),
-    }),
-  );
   const expenses = (
     await db
       .select({ id: expense.id, productId: expense.productId })
@@ -1187,11 +1171,6 @@ async function buildProductMergePlan(
       rows: purchaseRows,
       keepId: input.keepId,
       slotKey: (row) => row.purchaseId,
-    }),
-    wishes: planAssociation({
-      rows: wishRows,
-      keepId: input.keepId,
-      slotKey: (row) => row.wishId,
     }),
     expenses,
     originalOrderLines,
@@ -1533,7 +1512,6 @@ export const mergeProducts = async (
         "EntityAttachment.entityId",
         "EntityLink[projectTool].to",
         "EntityLink[purchaseProduct].to",
-        "EntityLink[wishCandidate].to",
         "EntityLink[productComponent].from",
         "EntityLink[productComponent].to",
         "ProductUnitMapping.productId",
@@ -1685,19 +1663,6 @@ export const mergeProducts = async (
             now,
           });
           summary.purchaseLinksMoved = result.moved;
-        },
-        "EntityLink[wishCandidate].to": async () => {
-          summary.wishCandidatesMoved = await foldAssociation(tx, {
-            column: "productId",
-            table: entityLink,
-            repointValues: (productId) => ({ toEntityId: productId }),
-            softDeleteValues: (deletedAt) => ({ deletedAt }),
-            rows: plan.wishes.rows,
-            keepId,
-            slotKey: (row) => row.wishId,
-            now,
-            plan: plan.wishes.collision,
-          });
         },
         // Composition, both directions. Nothing here needs its own audit
         // entry: a dedupe drops a row identical to one that survives, and a
@@ -1934,7 +1899,6 @@ const emptySummary = (
   devicesMoved: 0,
   projectUsesMoved: 0,
   purchaseLinksMoved: 0,
-  wishCandidatesMoved: 0,
   componentsMoved: 0,
   componentsDeduped: 0,
   kitLinksMoved: 0,
@@ -2318,25 +2282,6 @@ const previewMergeProductsFromPlan = async (
       label: "duplicate purchase links dropped",
       byTargetId: byProduct(
         plan.purchases.collision.absorb.flatMap(({ rows }) => rows),
-      ),
-    }),
-    impact({
-      disposition: PRODUCT_MERGE_EDGE_POLICY["EntityLink[wishCandidate].to"],
-      edgeKey: "EntityLink[wishCandidate].to",
-      label: "wishlist candidacies moved",
-      byTargetId: byProduct(plan.wishes.collision.repoint),
-    }),
-    impact({
-      disposition: {
-        code: "drop-duplicate-wish-candidate",
-        effect: "move-dedupe",
-        description:
-          "The Wish already names the survivor as a candidate, so the duplicate candidacy is soft-deleted.",
-      },
-      edgeKey: "EntityLink[wishCandidate].to",
-      label: "duplicate wishlist candidacies dropped",
-      byTargetId: byProduct(
-        plan.wishes.collision.absorb.flatMap(({ rows }) => rows),
       ),
     }),
     impact({

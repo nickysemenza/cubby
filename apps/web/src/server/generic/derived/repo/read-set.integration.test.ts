@@ -107,7 +107,7 @@ describe("deterministic cache rebuild", () => {
       ),
       toPartyId: other.id,
     });
-    for (const entity of ["recipe", "ingredient", "meal", "wish"] as const)
+    for (const entity of ["recipe", "ingredient", "meal"] as const)
       await seedEntity(ctx.db, entity);
     await seedEntity(ctx.db, "project");
     await seedEntity(ctx.db, "task", { trade: "other" });
