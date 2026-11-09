@@ -4,8 +4,12 @@ import { describe, expect, it } from "vitest";
 
 import { mailRelevanceRule } from "./mail-relevance-rules";
 
-const rule = (from: string, subject: string, bodyText = "") =>
-  mailRelevanceRule({ headers: { from, subject }, bodyText, bodyHtml: null });
+const rule = (from: string, subject: string, body = "") =>
+  mailRelevanceRule({
+    headers: { from, subject },
+    bodyText: body.startsWith("<") ? null : body,
+    bodyHtml: body.startsWith("<") ? body : null,
+  });
 
 describe("mail relevance rules", () => {
   it.each([
@@ -63,6 +67,21 @@ describe("mail relevance rules", () => {
       "Landscaper <info@landscape.example>",
       "Re: Estimate #42",
       "Payment received. Thank you!",
+    ],
+    [
+      "Landscaper <info@landscape.example>",
+      "Re: Estimate #42",
+      "Payment\nreceived.",
+    ],
+    [
+      "Landscaper <info@landscape.example>",
+      "Re: Estimate #42",
+      "<p>Payment&nbsp;<strong>received</strong>. Thank you!</p>",
+    ],
+    [
+      "Landscaper <info@landscape.example>",
+      "Re: Estimate #42",
+      "We received your payment of $200",
     ],
     ['"Venmo <venmo@venmo.com>" <orders@store.example>', "Your order", ""],
   ])("leaves %s / %s to the models", (from, subject, body) => {

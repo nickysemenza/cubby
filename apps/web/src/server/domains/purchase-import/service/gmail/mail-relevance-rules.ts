@@ -1,3 +1,5 @@
+import { wasm } from "~/server/wasm";
+
 /**
  * Deterministic relevance verdicts for mail that is never household purchase
  * evidence. They run before any model call and only ever decide `unrelated`.
@@ -24,9 +26,10 @@ const ABANDONED_CART =
 // A subject saying a quote or bid became a purchase keeps the model in charge.
 const PURCHASE_OUTCOME =
   /\b(?:order(?:ed)?|receipt|invoice|paid|payment|purchased?|confirm(?:ed|ation)?|shipped|shipping|deliver(?:y|ed)?|won)\b/iu;
-// Phrases confirming that money or an order changed hands, in subject or body.
+// Phrases confirming that money or an order changed hands, matched against
+// whitespace-collapsed readable text. Deliberately broad: a miss drops evidence.
 const OUTCOME_EVIDENCE =
-  /\b(?:refund(?:ed|s)?|receipt|invoice|order (?:confirmed|placed|number)|paid in full|payment (?:received|confirmed|completed?)|deposit (?:received|paid)|thank you for your (?:order|purchase|payment))\b/iu;
+  /\b(?:refund(?:ed|s)?|receipt|invoice|paid in full|amount paid|total paid|(?:order|payment|deposit|purchase) (?:confirmed|placed|received|processed|completed?|number|paid)|(?:received|processed|confirmed|accepted) your (?:order|payment|deposit|purchase)|thank you for your (?:order|purchase|payment|deposit)|(?:has|have) been (?:paid|charged)|you(?:'|\u2019)ve been charged)\b/iu;
 const PAYOUT =
   /\b(?:payouts?|you(?:'|’)ve been paid|funds (?:are )?(?:now )?available)\b/iu;
 
@@ -97,12 +100,18 @@ export function mailRelevanceRule(mail: {
     .trim()
     .toLowerCase();
   const subject = mail.headers.subject ?? "";
-  const body = `${mail.bodyText ?? ""}\n${(mail.bodyHtml ?? "").replace(/<[^>]*>/gu, " ")}`;
+  // The compactor decodes entities and flattens markup; collapsing whitespace
+  // lets phrases split by tags or line breaks still match.
+  const readable = (text: string) => text.replace(/\s+/gu, " ");
+  const body = readable(
+    `${mail.bodyText ?? ""} ${mail.bodyHtml ? wasm.compact_email_html(mail.bodyHtml).text : ""}`,
+  );
   const sender = {
     address,
     domain: address.split("@")[1] ?? "",
     subject,
-    outcome: OUTCOME_EVIDENCE.test(subject) || OUTCOME_EVIDENCE.test(body),
+    outcome:
+      OUTCOME_EVIDENCE.test(readable(subject)) || OUTCOME_EVIDENCE.test(body),
   };
   return RULES.find((rule) => rule.matches(sender))?.reason ?? null;
 }
