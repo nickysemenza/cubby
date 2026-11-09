@@ -1,4 +1,3 @@
-import type { VirtualItem } from "@tanstack/react-virtual";
 import { useEffect } from "react";
 
 import type { InfiniteScrollControls } from "../../entity/hooks/use-infinite-table-list";
@@ -43,14 +42,14 @@ export function shouldPrefetchNextPage({
 export function useInfinitePrefetch({
   infiniteScroll,
   isMobile,
-  virtualRows,
+  lastRenderedIndex,
   rowCount,
   visibleRows,
   scrollOffset,
 }: {
   infiniteScroll?: InfiniteScrollControls;
   isMobile: boolean;
-  virtualRows: readonly VirtualItem[];
+  lastRenderedIndex: number;
   /** Size of the virtualizer's index space (rows plus group headers). */
   rowCount: number;
   visibleRows: number;
@@ -60,7 +59,7 @@ export function useInfinitePrefetch({
     !isMobile &&
     infiniteScroll != null &&
     shouldPrefetchNextPage({
-      lastRenderedIndex: virtualRows.at(-1)?.index ?? -1,
+      lastRenderedIndex,
       rowCount,
       visibleRows,
       scrollOffset,

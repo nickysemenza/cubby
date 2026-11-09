@@ -69,6 +69,7 @@ export function useDataTableController<TItem extends RowData>({
   infiniteScroll,
   groupConfig,
   detailRowIds,
+  retainedItemKey,
   verticalAlign,
   onRowClick,
 }: {
@@ -79,6 +80,7 @@ export function useDataTableController<TItem extends RowData>({
   groupConfig?: GroupConfig;
   /** Rows whose full-width detail is open beneath them. */
   detailRowIds?: ReadonlySet<string>;
+  retainedItemKey?: string | null;
   verticalAlign: "top" | "middle";
   /** Row-open handler — used by cell selection's Cmd/Ctrl+Enter. */
   onRowClick?: (row: Row<TItem>) => void;
@@ -194,6 +196,7 @@ export function useDataTableController<TItem extends RowData>({
     virtualRowCount,
     scrollOffset,
     virtualRows,
+    lastRangeIndex,
     totalSize,
     resolveIndex,
     flatRowToVirtualIndex,
@@ -208,12 +211,13 @@ export function useDataTableController<TItem extends RowData>({
     isMobile,
     trailingSentinel: hasDesktopInfiniteSentinel,
     initialOffset: restorationEntry?.scrollY,
+    retainedItemKey,
   });
 
   useInfinitePrefetch({
     infiniteScroll: hasOpenContent ? infiniteScroll : undefined,
     isMobile,
-    virtualRows,
+    lastRenderedIndex: lastRangeIndex,
     rowCount: virtualRowCount,
     visibleRows: paneRows,
     scrollOffset,
@@ -349,6 +353,7 @@ export function useDataTableController<TItem extends RowData>({
     rows,
     rowContentVersion,
     scrollRestorationId,
+    scrollOffset,
     stickyIndex,
     styles,
     tableContainerRef,
