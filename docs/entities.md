@@ -2341,6 +2341,11 @@ data: a query's `cache: { tags?, profile? }` and a mutation's
 declares them only when they differ (`tags: []` opts out of tagging).
 `invalidates` names rows of the fan-out table in
 `integrations/tanstack-query/cache-tags.ts`; an empty list is a deliberate no-op.
+`profile` is `browse` (default) or `live-status`
+([change notifications](../apps/web/docs/web-runtime.md#change-notifications)).
+The fan-out table stays until notifications carry rollup consumers: generated
+read dependents do not yet name the Vendor, Purchase, Project or calendar
+rollups that an Expense write moves.
 The vocabulary types live in `contracts/cache-policy.ts`, which contracts may
 import; no contract holds React, query-client, or input-dependent code.
 
@@ -2413,6 +2418,12 @@ the envelope constructor applies declared entity projectors before its final
 public-schema parse, and compact leaves keep their validation. Projectors receive
 assembled fields rather than a separately parsed public root; their output never
 bypasses the constructor's final validation.
+The `entity.list` and `entity.detail` operation runtimes add only server-computed
+action states to those validated envelopes; they do not re-parse the page or
+record. Selected list responses therefore omit schema defaults for unrequested
+keys; the browser's selected-list parse restores them. Build request-path
+schemas once at module scope (selected envelope schemas are memoized per
+selection); constructing Zod schemas per request or row is measurable Worker CPU.
 
 Domain envelope projectors use their own canonical per-entity schemas. Product's
 price-only projection does not import the aggregate envelope-schema roster; both
@@ -2435,6 +2446,8 @@ possible matches with missing publications contribute completeness warnings and
 never actionable rows. Preparation is shared only inside that request.
 The base admits records matching at least one certain or possible Problem before
 selecting labels and routing, so non-candidates do not pay those per-record costs.
+Routed label and owner expressions are deduplicated base columns; they never
+enter the materialized facts relation, which covers every record.
 
 Each repository supplies `listScaffold` as its read port to
 `defineRepository`. Both constructors receive their canonical per-entity schema

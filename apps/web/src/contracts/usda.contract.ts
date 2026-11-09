@@ -48,7 +48,7 @@ export const usdaFoodContract = defineContract(
       exposure: "view",
       input: usdaFoodIdInput,
       output: foodSummaryWithLinkedProducts.nullable(),
-      cache: { tags: [["usda-food"]], profile: "stable" },
+      cache: { tags: [["usda-food"]] },
     }),
     // AI and externally hydrated food reads own authoritative database helpers.
     alternateId: query({

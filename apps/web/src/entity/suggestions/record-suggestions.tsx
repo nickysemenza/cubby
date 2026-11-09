@@ -994,7 +994,7 @@ function settledQuestionTags(
   return [SETTLED_QUESTION_TAG, ...[...kinds].map((kind): CacheTag => [kind])];
 }
 const SETTLED_QUESTION_TAG: CacheTag = ["ai", "settledSuggestionQuestion"];
-const SETTLED_FRESHNESS = operationCachePolicy("stable").freshness;
+const SETTLED_FRESHNESS = operationCachePolicy("browse").freshness;
 /**
  * Only a question's first ask is "checking". Rereading an answer or a failure on
  * a change notification stays quiet: it would otherwise swap the status line and

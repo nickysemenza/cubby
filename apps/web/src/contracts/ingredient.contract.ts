@@ -25,7 +25,6 @@ export const ingredientContract = defineContract(
       note: "entity_read.resolve reports ingredientHits by name or alias; entity_read.search on ingredients",
       input: schemas.ingredientNameFilterInput,
       output: ingredientFieldEnvelopeSchemas.detail.nullable(),
-      cache: { profile: "stable" },
     }),
     matchNames: query({
       note: "entity_read.resolve reports ingredientHits by name or alias; entity_read.search on ingredients",

@@ -854,17 +854,18 @@ export async function claimImageProcessingJob(
             : {}),
         })
         .where(eq(imageProcessingJob.id, candidate.id));
-      if (candidate.kind === "subject_lift" && derivativeId)
-        await recordChange(tx, {
-          kind: "projection",
-          categories: ["image", "imageJob"],
-          ringFromBackground: true,
-          changes: await imageProcessingRecordChanges(
-            tx,
-            [candidate.id],
-            [parseEntityId("image", candidate.imageId)],
-          ),
-        });
+      // Every claim changes the displayed job status (Pending → Leased), and
+      // open image screens rely on this ring instead of polling.
+      await recordChange(tx, {
+        kind: "projection",
+        categories: ["image", "imageJob"],
+        ringFromBackground: true,
+        changes: await imageProcessingRecordChanges(
+          tx,
+          [candidate.id],
+          [parseEntityId("image", candidate.imageId)],
+        ),
+      });
       const {
         previousAttemptId: _previousAttemptId,
         previousLease: _previousLease,
@@ -1018,6 +1019,7 @@ export async function releaseImageProcessingLease(
       .select({
         derivativeId: imageProcessingJob.derivativeId,
         lane: imageProcessingJob.lane,
+        imageId: imageProcessingJob.imageId,
       })
       .from(imageProcessingJob)
       .where(
@@ -1059,6 +1061,17 @@ export async function releaseImageProcessingLease(
       .update(imageProcessingJob)
       .set({ leaseUntil: null, waitReason: null, runAt })
       .where(eq(imageProcessingJob.id, input.jobId));
+    // The displayed status returns from Leased to Pending; rings replace polling.
+    await recordChange(tx, {
+      kind: "projection",
+      categories: ["image", "imageJob"],
+      ringFromBackground: true,
+      changes: await imageProcessingRecordChanges(
+        tx,
+        [input.jobId],
+        [parseEntityId("image", job.imageId)],
+      ),
+    });
     // Released device work goes to another companion: ring at once, or once
     // a delayed release comes due.
     if (job.lane === "device") {

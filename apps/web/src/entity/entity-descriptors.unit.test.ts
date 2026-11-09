@@ -122,77 +122,12 @@ const KEYS = {
   ],
 } as const;
 
-const DETAIL_POLICY = {
-  persisted: {
-    meta: {
-      transport: "start",
-      operation: "entity.detail",
-      entity: "product",
-      observedByTransport: true,
-      cacheTags: [["entity", "detail"], ["product"]],
-      cacheProfile: "persisted-detail",
-      freshness: {
-        staleTime: 300000,
-        gcTime: 86400000,
-      },
-    },
-    staleTime: 300000,
-    gcTime: 86400000,
-  },
-  memory: {
-    meta: {
-      transport: "start",
-      operation: "entity.detail",
-      entity: "task",
-      observedByTransport: true,
-      cacheTags: [["entity", "detail"], ["task"]],
-      cacheProfile: "interactive",
-    },
-  },
-} as const;
-
-const LIST_POLICY = {
-  meta: {
-    transport: "start",
-    operation: "entity.list",
-    entity: "product",
-    observedByTransport: true,
-    cacheTags: [["entity", "list"], ["product"]],
-    cacheProfile: "browse",
-    freshness: {
-      staleTime: 120000,
-    },
-  },
-  staleTime: 120000,
-} as const;
-
 /** The row type a set of query options resolves to. */
 type QueryData<Options> = Options extends { queryFn?: infer Fn }
   ? Fn extends (...args: never[]) => infer Result
     ? Awaited<Result>
     : never
   : never;
-
-const withoutFunctions = <
-  TQueryFn,
-  TQueryKey,
-  TNextPageParam,
-  TOptions extends {
-    queryFn?: TQueryFn;
-    queryKey?: TQueryKey;
-    getNextPageParam?: TNextPageParam;
-  },
->(
-  options: TOptions,
-): Omit<TOptions, "queryFn" | "queryKey" | "getNextPageParam"> => {
-  const {
-    queryFn: _queryFn,
-    queryKey: _queryKey,
-    getNextPageParam: _getNextPageParam,
-    ...rest
-  } = options;
-  return rest;
-};
 
 const runQueryFn = <
   TData,
@@ -240,23 +175,6 @@ describe("entity detail query keys", () => {
       ),
       // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
     ).rejects.toThrow();
-  });
-
-  it("carries the cache-profile and freshness policy of the entity", () => {
-    expect(
-      withoutFunctions(entityDetailFor("product").queryOptions("PRD-4K7M")),
-    ).toEqual(DETAIL_POLICY.persisted);
-    expect(
-      withoutFunctions(entityDetailFor("task").queryOptions("TSK-4K7M")),
-    ).toEqual(DETAIL_POLICY.memory);
-    expect(
-      withoutFunctions(
-        entityDetailFor("task").queryOptions("TSK-4K7M", {
-          enabled: false,
-          staleTime: 1234,
-        }),
-      ),
-    ).toEqual({ ...DETAIL_POLICY.memory, enabled: false, staleTime: 1234 });
   });
 });
 
@@ -319,19 +237,6 @@ describe("entity list query keys", () => {
     expect(options.getNextPageParam(page(2, false), [], 2, [])).toBeUndefined();
     expect(options.getNextPageParam(page(0, false), [], 0, [])).toBeUndefined();
   });
-
-  it("carries the freshness policy of the entity", () => {
-    expect(
-      withoutFunctions(
-        entityListFor("product").queryOptions(PRODUCT_LIST_INPUT),
-      ),
-    ).toEqual(LIST_POLICY);
-    expect(
-      withoutFunctions(
-        entityListFor("product").infiniteQueryOptions(PRODUCT_LIST_INPUT),
-      ),
-    ).toEqual({ ...LIST_POLICY, initialPageParam: 0 });
-  });
 });
 
 describe("scoped entity descriptors", () => {
@@ -350,9 +255,6 @@ describe("scoped entity descriptors", () => {
       entityDetailFor("ingredient").queryOptions("ING-2222", { enabled: false })
         .queryKey,
     ).toEqual(KEYS.detailPlaceholder);
-    expect(
-      withoutFunctions(entityDetailFor("product").queryOptions("PRD-4K7M")),
-    ).toEqual(DETAIL_POLICY.persisted);
   });
 
   it("produces the same list keys as the helpers they replace", () => {
@@ -372,9 +274,6 @@ describe("scoped entity descriptors", () => {
         pagination: { pageIndex: 3, pageSize: 25 },
       }).queryKey,
     ).toEqual(KEYS.listInfinite);
-    expect(withoutFunctions(products.queryOptions(PRODUCT_LIST_INPUT))).toEqual(
-      LIST_POLICY,
-    );
   });
 
   it("rejects an entity the operation is not registered for", () => {

@@ -811,6 +811,17 @@ export const { definition, readSchemas } = defineEntityModel({
         where: "{orderMailId} IS NOT NULL",
       },
       { on: ["ledgerPartyId", { column: "receivedAt", desc: true }] },
+      {
+        // Page-scoped sender attribution (`readSenderAttributions`) filters on
+        // this exact normalized address; keep the expression textually equal.
+        name: "Email_sender_address_idx",
+        on: [
+          {
+            sql: "lower(trim(coalesce(substring({sender} from '<([^>]+)>'), {sender})))",
+          },
+        ],
+        where: "{deletedAt} IS NULL",
+      },
     ],
     checks: [
       {

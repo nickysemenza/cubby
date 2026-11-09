@@ -282,26 +282,51 @@ const candidatesFor = async <E extends ResolvableEntity>(
 ): Promise<Map<string, ResolvedName<E>["candidates"]>> => {
   // A resolvable entity that declares `candidates` must be indexed for search.
   const entityKind = searchableEntitySchema.parse(plan.entity);
-  const qualified = (column: PgColumn) =>
-    sql.raw(`t.${JSON.stringify(column.name)}`);
-  const name = qualified(plan.name.column);
-  const contains = or(
-    ...plan.match.map(({ column, array }) =>
-      array
-        ? textArraySomeSql(
-            qualified(column),
-            (value) => sql`${value} ILIKE m.pattern`,
-          )
-        : sql`${qualified(column)} ILIKE m.pattern`,
-    ),
-  );
-  const contained = sql`(char_length(${name}) >= 3 AND strpos(m.key, lower(${name})) > 0)`;
+  const column = (alias: string, column: PgColumn) =>
+    sql.raw(`${alias}.${JSON.stringify(column.name)}`);
+  const storedMatch = (alias: string) => {
+    const name = column(alias, plan.name.column);
+    return {
+      name,
+      contains: or(
+        ...plan.match.map(({ column: match, array }) =>
+          array
+            ? textArraySomeSql(
+                column(alias, match),
+                (value) => sql`${value} ILIKE m.pattern`,
+              )
+            : sql`${column(alias, match)} ILIKE m.pattern`,
+        ),
+      ),
+      contained: sql`(char_length(${name}) >= 3 AND strpos(m.key, lower(${name})) > 0)`,
+      scoped: sql.join(
+        plan.scope.map((scope) => sql` AND ${column(alias, scope)} IS NULL`),
+        sql``,
+      ),
+    };
+  };
+  const { name, contains, contained, scoped } = storedMatch("t");
+  const stored = storedMatch("c");
   const tokenQuery = sql`to_tsquery('simple', NULLIF(m.tsq, ''))`;
   const tokenMatch = sql`sd."searchVector" @@ ${tokenQuery}`;
-  const scoped = sql.join(
-    plan.scope.map((column) => sql` AND ${qualified(column)} IS NULL`),
-    sql``,
-  );
+  const table = sql.identifier(getTableName(plan.table));
+  // One OR across the record and its joined search document defeats every
+  // index, so each name scanned the table and computed similarity per row.
+  // The page starts from candidate ids instead: each arm uses its own index
+  // (search-vector GIN, trigram GiST) or scans only stored names, and the
+  // outer predicate and ranking are unchanged.
+  const candidateIds = sql`
+          SELECT c."id" FROM ${table} c
+          WHERE ${notDeleted("c")}${stored.scoped}
+            AND (${stored.contains} OR ${stored.contained})
+          UNION
+          SELECT ts."entityId" FROM "SearchDocument" ts
+          WHERE ts."entityKind" = ${entityKind} AND ${notDeleted("ts")}
+            AND ts."searchVector" @@ ${tokenQuery}
+          UNION
+          SELECT tg."entityId" FROM "SearchDocument" tg
+          WHERE tg."entityKind" = ${entityKind} AND ${notDeleted("tg")}
+            AND char_length(m.key) >= 3 AND tg."normalizedText" % m.key`;
   const result = await unwrapDb(db).execute(
     sql`
     SELECT m.key AS key, cand.id AS id, cand.shortcode AS shortcode, cand.name AS name
@@ -312,7 +337,8 @@ const candidatesFor = async <E extends ResolvableEntity>(
     ) AS m(key, tsq, pattern)
     CROSS JOIN LATERAL (
       SELECT t."id" AS id, t."shortcode" AS shortcode, ${name} AS name
-      FROM ${sql.identifier(getTableName(plan.table))} t
+      FROM (${candidateIds}) ids(id)
+      JOIN ${table} t ON t."id" = ids.id
       LEFT JOIN "SearchDocument" sd
         ON sd."entityId" = t."id"
         AND sd."entityKind" = ${entityKind}

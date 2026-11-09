@@ -74,7 +74,6 @@ export const imageContract = defineContract(
     projectSummaries: query({
       input: projectImageSummariesInput,
       output: projectImageSummariesOut,
-      cache: { profile: "stable" },
     }),
     hashIndex: query({
       exposure: "view",

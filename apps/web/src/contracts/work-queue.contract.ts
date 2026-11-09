@@ -32,7 +32,7 @@ export const workQueueContract = defineContract(
       input: z.strictObject({}),
       output: workStatus,
       // Not entity roots: a status mounted in the shell must not refetch on every write.
-      cache: { tags: [["run"], ["workQueue"]], profile: "stable" },
+      cache: { tags: [["run"], ["workQueue"]] },
     }),
     queue: query({
       exposure: "capability",

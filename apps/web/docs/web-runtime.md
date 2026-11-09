@@ -427,8 +427,14 @@ A quiet socket outlives that lease, and the next ring closes it instead of
 delivering. The tab reconnects within seconds and resynchronizes, so the first ring
 after five idle minutes costs one full reread rather than a scoped one.
 
+Operation queries choose one of two cache profiles: `browse` (the default,
+five-minute staleness, 30-minute retention) relies on these notifications for
+freshness, and `live-status` rereads on every mount. Do not add per-entity or
+per-input profiles; a stale view is a missing ring or ripple, not a timer.
 Workflow progress polling stays local to its workflow and runs only while that
 work is active; query defaults pause intervals while the browser tab is hidden.
+Do not poll a state the socket already rings: image processing outcomes ring
+`image`, so image-status reads do not poll while processing is pending.
 Idle shell, dashboard, list and detail views make no requests. The one
 unconditional poll is AI funding on Settings, every 60 seconds.
 

@@ -105,7 +105,6 @@ test("image results compare descriptions and require explicit attachment confirm
     processorRevision: IMAGE_IDENTIFICATION_PROCESSOR_REVISION,
   });
   if (!jobId) throw new Error("Synthetic image job missing");
-  await page.clock.install();
   await gotoAuthenticatedPage(page, `/images/${source.id}`);
   const description = page.getByRole("region", {
     name: "Selected image description",
@@ -194,7 +193,9 @@ test("image results compare descriptions and require explicit attachment confirm
     .update(imageProcessingJob)
     .set({ state: "ready", lastError: null, completedAt: new Date() })
     .where(eq(imageProcessingJob.id, jobId));
-  await page.clock.fastForward(15_000);
+  // Real completion rings `image` from the Worker and the open page rereads its
+  // status; these fixture writes run outside the Worker and cannot ring.
+  await page.reload();
   await expect(
     identification.getByRole("button", {
       name: "Confirm and attach",

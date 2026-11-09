@@ -109,7 +109,6 @@ export const projectContract = defineContract(
       nativeModels: { output: "json" },
       input: schemas.projectDashboardFiltersSchema,
       output: projectDashboardRead,
-      cache: { profile: "stable" },
     }),
     tree: query({
       input: schemas.projectTreeInput,

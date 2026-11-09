@@ -29,6 +29,9 @@ import type { ShortcodeTable } from "~/server/generic/shortcode/repo/shortcode-t
 
 export type { EntityRef } from "@cubby/schemas/identifiers";
 
+const nameSchema = z.string();
+const emojiSchema = z.string().nullable();
+
 /** Accepts legacy codes; `parseShortcode` normalizes them before lookup. */
 export async function resolveShortcode(
   db: RepositoryQueryInput,
@@ -267,7 +270,7 @@ export async function lookupEntityLabels(
         .from(table)
         .where(inArray(table.id, [...ids]));
       for (const row of rows) {
-        const parsedName = z.string().safeParse(row.name);
+        const parsedName = nameSchema.safeParse(row.name);
         if (parsedName.success) {
           names.set(
             entityRefKey(entity, parseEntityId(entity, row.id)),
@@ -321,11 +324,11 @@ export async function lookupEntityReferences<E extends ShortcodeEntity>(
       ),
     );
   for (const row of rows) {
-    const name = z.string().safeParse(row.name);
+    const name = nameSchema.safeParse(row.name);
     result.set(String(row.id), {
       id: parseShortcodeFor(entity, String(row.shortcode)),
       name: name.success ? name.data : null,
-      emoji: z.string().nullable().parse(row.emoji),
+      emoji: emojiSchema.parse(row.emoji),
     });
   }
   return result;

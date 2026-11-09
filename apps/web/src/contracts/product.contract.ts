@@ -52,7 +52,6 @@ export const productContract = defineContract(
     summaries: query({
       note: "entity_read.get per id, or entity_read.list with an ids filter on products",
       ...productWorkflowSchemas.summaries,
-      cache: { profile: "derived-summary" },
     }),
     quantitySummaries: query({
       ...productWorkflowSchemas.quantitySummaries,

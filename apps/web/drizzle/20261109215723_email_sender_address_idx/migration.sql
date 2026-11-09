@@ -1,0 +1,1 @@
+CREATE INDEX "Email_sender_address_idx" ON "Email" (lower(trim(coalesce(substring("sender" from '<([^>]+)>'), "sender")))) WHERE "deletedAt" IS NULL;

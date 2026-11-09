@@ -305,7 +305,34 @@ export function publicFieldEnvelopeRow(
 }
 
 /** Selected reads retain only the requested semantic fields, nested when governed. */
+// Selections repeat per page request; constructing the schema is measurable
+// Worker CPU. Bounded per entity schema: callers may request arbitrary subsets.
+const selectedSchemas = new WeakMap<
+  z.ZodType,
+  Map<string, ReturnType<typeof buildSelectedFieldEnvelopeSchema>>
+>();
+const SELECTED_SCHEMA_LIMIT = 64;
+
 export function selectedFieldEnvelopeSchema(
+  schema: z.ZodType,
+  requested: readonly string[],
+) {
+  let bySelection = selectedSchemas.get(schema);
+  if (!bySelection) {
+    bySelection = new Map();
+    selectedSchemas.set(schema, bySelection);
+  }
+  const key = [...new Set(requested)].sort().join("\u0000");
+  let selected = bySelection.get(key);
+  if (!selected) {
+    if (bySelection.size >= SELECTED_SCHEMA_LIMIT) bySelection.clear();
+    selected = buildSelectedFieldEnvelopeSchema(schema, requested);
+    bySelection.set(key, selected);
+  }
+  return selected;
+}
+
+function buildSelectedFieldEnvelopeSchema(
   schema: z.ZodType,
   requested: readonly string[],
 ) {
