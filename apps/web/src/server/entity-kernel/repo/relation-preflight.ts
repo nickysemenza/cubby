@@ -28,7 +28,10 @@
  * Share the predicate, not the call site.
  */
 
-import type { ImpactItem } from "@cubby/schemas/entity-integrity";
+import type {
+  ImpactItem,
+  PublicImpactItem,
+} from "@cubby/schemas/entity-integrity";
 import { toPublicImpact } from "@cubby/schemas/entity-integrity";
 import type { ProductId } from "@cubby/schemas/identifiers";
 import { projectResourceFeatures } from "@cubby/schemas/product-category-relations";
@@ -336,10 +339,10 @@ export function planRelationDetach<Id extends string>(
  * Throw a refusal that NAMES the offending shortcodes, both in the sentence a
  * human reads and as structured blockers a client can branch on.
  *
- * Structured blockers drop a target without a public id rather than throw:
- * this is already an error path, and swapping a typed
+ * Translation is best-effort for the same reason `deleteFinancialAccounts`
+ * gives: this is already an error path, and swapping a typed
  * `PRODUCT_CATEGORY_INELIGIBLE` for a raw "no public id for target" would hide
- * the real answer behind a bookkeeping detail. The sentence still names it.
+ * the real answer behind a bookkeeping detail.
  */
 export function throwRelationRefusal(opts: {
   reason: AppErrorReason;
@@ -350,9 +353,17 @@ export function throwRelationRefusal(opts: {
   codeById: ReadonlyMap<string, string>;
 }): never {
   const codes = opts.ids.map((id) => opts.codeById.get(id) ?? "?");
-  const blockers = presentImpacts(opts.items).map((item) =>
-    toPublicImpact(item, opts.codeById, "drop"),
-  );
+  let blockers: PublicImpactItem[] = [];
+  try {
+    blockers = presentImpacts(opts.items).map((item) =>
+      toPublicImpact(item, opts.codeById, "throw"),
+    );
+  } catch {
+    // SILENT: see the docstring above — the typed `createBlockedError` thrown
+    // below is the refusal itself; losing the structured `blockers[]` extra
+    // must not replace it with a bookkeeping-detail error instead.
+    blockers = [];
+  }
   throw createBlockedError(
     opts.reason,
     opts.message(codes.join(", ")),

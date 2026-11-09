@@ -215,9 +215,14 @@ const assertNotBlocked = async <E extends RemovableEntity>(
       label,
       byTargetId,
     });
-    // The refusal below carries every target as prose; a missing public id
-    // must not replace it with a bookkeeping error.
-    if (item) items.push(toPublicImpact(item, publicIds, "drop"));
+    if (item) {
+      try {
+        items.push(toPublicImpact(item, publicIds, "throw"));
+      } catch {
+        // SILENT: the refusal below carries the same facts as prose; a
+        // missing public id must not replace it with a bookkeeping error.
+      }
+    }
     const detail = Object.entries(byTargetId)
       .map(([id, n]) => `${publicIds.get(id) ?? id} (${n})`)
       .join(", ");

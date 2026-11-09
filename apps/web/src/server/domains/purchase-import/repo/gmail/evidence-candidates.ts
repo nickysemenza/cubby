@@ -15,8 +15,6 @@ import { z } from "zod";
 
 import { sourceFinancialFacts } from "../writer-policy";
 
-class IncompleteEvidenceError extends Error {}
-
 const amount = z.union([
   wholeCentAmount,
   z
@@ -63,13 +61,9 @@ function orderLines(
       product.offers.priceCurrency &&
       product.offers.priceCurrency !== order.priceCurrency
     )
-      throw new IncompleteEvidenceError(
-        "Line currency does not match order currency",
-      );
+      throw new Error("Line currency does not match order currency");
     if (product.offers.price < 0)
-      throw new IncompleteEvidenceError(
-        "Purchase principal unit price is negative",
-      );
+      throw new Error("Purchase principal unit price is negative");
     const line: ExtractedPurchaseLine = {
       title: product.name,
       quantity: entry.orderQuantity,
@@ -82,9 +76,7 @@ function orderLines(
   });
   for (const entry of order.priceSpecification) {
     if (entry.priceCurrency && entry.priceCurrency !== order.priceCurrency)
-      throw new IncompleteEvidenceError(
-        "Adjustment currency does not match order currency",
-      );
+      throw new Error("Adjustment currency does not match order currency");
     lines.push({
       title: entry.name,
       amount: entry.price,
@@ -110,8 +102,7 @@ function readyOrder(value: StructuredEvidence) {
       shipments: [],
     },
   });
-  if (extraction.status !== "ready")
-    throw new IncompleteEvidenceError("Candidate is not ready");
+  if (extraction.status !== "ready") throw new Error("Candidate is not ready");
   const facts = sourceFinancialFacts(extraction.candidate);
   const total = extraction.candidate.lines.reduce(
     (sum, line) => sum + cents(wholeCentAmount.parse(line.amount)),
@@ -125,14 +116,10 @@ function readyOrder(value: StructuredEvidence) {
     total !== facts.total ||
     order.price < 0
   )
-    throw new IncompleteEvidenceError(
-      "Whole order lines do not conserve the printed total",
-    );
+    throw new Error("Whole order lines do not conserve the printed total");
   // Reuse the cent-domain projection; reject unsafe values rather than rounding evidence.
   if (dollars(total) !== order.price)
-    throw new IncompleteEvidenceError(
-      "Printed total is outside exact cent accounting",
-    );
+    throw new Error("Printed total is outside exact cent accounting");
   return extraction;
 }
 
@@ -141,15 +128,11 @@ function orderNodes(
   depth = 0,
 ): StructuredEvidence[] {
   if (depth > 4)
-    throw new IncompleteEvidenceError(
-      "Structured evidence nesting exceeds its bound",
-    );
+    throw new Error("Structured evidence nesting exceeds its bound");
   const array = z.array(structuredJson).safeParse(value);
   if (array.success) {
     if (array.data.length > 32)
-      throw new IncompleteEvidenceError(
-        "Structured evidence roster exceeds its bound",
-      );
+      throw new Error("Structured evidence roster exceeds its bound");
     return array.data.flatMap((entry) => orderNodes(entry, depth + 1));
   }
   const object = z.record(z.string(), structuredJson).safeParse(value);
@@ -195,9 +178,7 @@ export async function prepareEmailEvidenceCandidates(
   try {
     for (const script of scripts) {
       if (++scriptsSeen > 8)
-        throw new IncompleteEvidenceError(
-          "Structured evidence script count exceeds its bound",
-        );
+        throw new Error("Structured evidence script count exceeds its bound");
       const json = script[1];
       if (!json) continue;
       const start =
@@ -209,9 +190,7 @@ export async function prepareEmailEvidenceCandidates(
       for (const node of orderNodes(structuredJson.parse(JSON.parse(json)))) {
         const extraction = readyOrder(node);
         if (candidates.length >= 8)
-          throw new IncompleteEvidenceError(
-            "Order candidate count exceeds its bound",
-          );
+          throw new Error("Order candidate count exceeds its bound");
         if (
           candidates.some(
             (entry) =>
@@ -219,7 +198,7 @@ export async function prepareEmailEvidenceCandidates(
               extraction.candidate.orderId,
           )
         )
-          throw new IncompleteEvidenceError(
+          throw new Error(
             "Order identity has ambiguous duplicate totals or details",
           );
         const id = await sha256Hex(
@@ -228,16 +207,8 @@ export async function prepareEmailEvidenceCandidates(
         candidates.push({ ...base, id, span, extraction });
       }
     }
-  } catch (error) {
-    if (
-      !(
-        error instanceof IncompleteEvidenceError ||
-        error instanceof z.ZodError ||
-        error instanceof SyntaxError
-      )
-    )
-      throw error;
-    // Malformed or incomplete structured evidence is an explicit abstention.
+  } catch {
+    // SILENT: malformed or incomplete structured evidence is an explicit abstention, never a guessed order.
     return preparedEmailCandidates.parse({
       ...base,
       candidates: [],
