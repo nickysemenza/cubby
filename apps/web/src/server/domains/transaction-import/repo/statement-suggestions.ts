@@ -66,10 +66,6 @@ import {
 } from "~/server/domains/financial-transaction/repo/financial-statement-preview";
 import { type FinancialTransactionDollars } from "~/server/domains/financial-transaction/repo/transaction-money";
 import {
-  findTransferPairsForCharges,
-  transferPairSourceCharges,
-} from "~/server/domains/financial-transaction/repo/transfer-pair-suggestions";
-import {
   sourceObservations,
   sourceObservationIdentities,
 } from "~/server/domains/transaction-import/repo/source-observation-state";
@@ -108,6 +104,10 @@ import {
   ownAccountNamed,
   statementTransactionKind,
 } from "~/server/domains/transaction-import/repo/statement-transaction-kind";
+import {
+  findTransferPairsForCharges,
+  transferPairSourceCharges,
+} from "~/server/domains/transaction-import/repo/transfer-pair-suggestions";
 import { createAppError } from "~/server/errors/app-error";
 import { type PageWork, peakWorkers } from "~/server/generic/jobs/page-work";
 import {
@@ -2226,7 +2226,7 @@ export const statementSuggestions: SuggestionFamilyDeclaration<"statement_transa
       prediction.subject,
     );
     const { lockTransferPairLegs } =
-      await import("~/server/domains/financial-transaction/repo/transfer-pair-suggestions");
+      await import("~/server/domains/transaction-import/repo/transfer-pair-suggestions");
     // Even a prediction made before pair discovery shares its charge's leg
     // lock with a later pair apply, before either can hold its projection.
     await lockTransferPairLegs(

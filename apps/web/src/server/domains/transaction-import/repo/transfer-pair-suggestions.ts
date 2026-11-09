@@ -66,11 +66,6 @@ import {
 } from "~/server/domains/financial-transaction/repo/financial-statement-preview";
 import { createFinancialTransaction } from "~/server/domains/financial-transaction/repo/financial-transaction";
 import { acceptFinancialTransferPair } from "~/server/domains/financial-transaction/repo/financial-transfer-accept";
-import {
-  transferPairSeedKeys,
-  transferPairSeedPage,
-  transferPoolAmountSql,
-} from "~/server/domains/financial-transaction/repo/transfer-pair-input";
 import { transferEvidenceStatuses } from "~/server/domains/ledger-transfer/repo/ledger-transfer";
 import {
   sourceObservations,
@@ -94,6 +89,11 @@ import {
   MONEY_MOVE_KINDS,
   statementTransactionKind,
 } from "~/server/domains/transaction-import/repo/statement-transaction-kind";
+import {
+  transferPairSeedKeys,
+  transferPairSeedPage,
+  transferPoolAmountSql,
+} from "~/server/domains/transaction-import/repo/transfer-pair-input";
 import { type EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { createAppError } from "~/server/errors/app-error";
 import { type PageWork, peakWorkers } from "~/server/generic/jobs/page-work";

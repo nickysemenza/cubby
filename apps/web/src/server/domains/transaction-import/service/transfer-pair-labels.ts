@@ -28,7 +28,7 @@ import {
   transferPairsNeedingLabels,
   type TransferPairLabelCursor,
   TRANSFER_PAIR_PUBLISH_CONCURRENCY,
-} from "~/server/domains/financial-transaction/repo/transfer-pair-suggestions";
+} from "~/server/domains/transaction-import/repo/transfer-pair-suggestions";
 import { isWorkflowInterrupted } from "~/server/workflows/runs/execution";
 import { runFailureText } from "~/server/workflows/runs/lifecycle";
 

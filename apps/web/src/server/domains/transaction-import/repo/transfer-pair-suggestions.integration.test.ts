@@ -35,11 +35,6 @@ import {
 } from "~/server/db/schema";
 import { financialSourceRefsFor } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
 import { transactionDollars } from "~/server/domains/financial-transaction/repo/transaction-money";
-import {
-  transferPairSeedKeys,
-  transferPairSeedPage,
-} from "~/server/domains/financial-transaction/repo/transfer-pair-input";
-import { labelTransferPairSuggestions } from "~/server/domains/financial-transaction/service/transfer-pair-labels";
 import { readLedgerTransfer } from "~/server/domains/ledger-transfer/repo/ledger-transfer";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
@@ -52,6 +47,11 @@ import { recordSourceTransactionRecords } from "~/server/domains/transaction-imp
 import { previewStatementSuggestion } from "~/server/domains/transaction-import/repo/statement-suggestion-preview";
 import { readStatementSuggestions } from "~/server/domains/transaction-import/repo/statement-suggestion-read";
 import { generateStatementSuggestionPage } from "~/server/domains/transaction-import/repo/statement-suggestions";
+import {
+  transferPairSeedKeys,
+  transferPairSeedPage,
+} from "~/server/domains/transaction-import/repo/transfer-pair-input";
+import { labelTransferPairSuggestions } from "~/server/domains/transaction-import/service/transfer-pair-labels";
 import { currentJobExecution } from "~/server/generic/jobs/context";
 import { cancelJob } from "~/server/generic/jobs/repo/operator";
 import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
