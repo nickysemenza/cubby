@@ -7,8 +7,14 @@ import { ProductCostValue } from "~/entity/display/product-cost-value";
 import { useEntityMetadata } from "~/entity/metadata";
 
 type ProductListItem = EntityFieldEnvelopeRead<"product", "list">;
+import { ID_CHUNK_SIZE } from "@cubby/schemas/entity-media";
 import type { KitComponentRowOut } from "@cubby/schemas/product-components";
-import { useQuery } from "@tanstack/react-query";
+import {
+  type UseQueryResult,
+  useQueries,
+  useQuery,
+} from "@tanstack/react-query";
+import { chunk, uniq } from "es-toolkit";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -43,6 +49,7 @@ import {
   productTreeSubRows,
 } from "~/features/product/product-kit-rows";
 import { product as productOperations } from "~/integrations/tanstack-query/generated/domains/product.gen";
+import { isOperationQueryKey } from "~/integrations/tanstack-query/operation-catalog";
 import { formatCurrency } from "~/lib/number-format";
 import { booleanCellOptions } from "~/lib/select-options";
 import type { PickerOption } from "~/ui/combobox/picker-option";
@@ -54,7 +61,6 @@ import {
 } from "~/ui/data-table/table-features";
 import { NoneValue } from "~/ui/text/none-value";
 
-import { useStableIds } from "../../entity/list-columns/stable-ids";
 import {
   defineListOverride,
   interleaveDeclared,
@@ -64,8 +70,34 @@ import { createInventoryEntriesColumn } from "../inventory/list-columns";
 // Module-level fallbacks keep the runtime options reference stable while a
 // roster query is loading.
 const NO_FILTER_OPTIONS: PickerOption[] = [];
-/** Stable empty default so `nest` keeps its identity while kits load. */
+/** Reuse an empty per-batch fallback while components load. */
 const EMPTY_KIT_ROWS: KitComponentRowOut[] = [];
+
+const combineKitRows = (results: UseQueryResult<KitComponentRowOut[]>[]) =>
+  results.flatMap((result) => result.data ?? EMPTY_KIT_ROWS);
+
+/** Reattach cached memberships; operation options still own data freshness. */
+const cachedKitBatches = (queryClient: QueryClient) =>
+  queryClient
+    .getQueryCache()
+    .findAll({
+      queryKey: ["operation", productOperations.kitComponentRows.id],
+    })
+    .flatMap((query) => {
+      if (
+        query.state.data === undefined ||
+        !isOperationQueryKey(query.queryKey)
+      )
+        return [];
+      const parsed =
+        productOperations.kitComponentRows.definition.input.safeParse(
+          query.queryKey[2].input,
+        );
+      if (!parsed.success) return [];
+      const ids = parsed.data.parentProductIds;
+      return ids.length > 0 && ids.length <= ID_CHUNK_SIZE ? [ids] : [];
+    })
+    .sort((a, b) => b.length - a.length);
 
 // The generic tones fit here: tracked really is the resolved/good outcome.
 const STOCK_TRACKED_OPTIONS = booleanCellOptions({
@@ -474,16 +506,46 @@ export const productListOverride = defineListOverride<
     // than per expanded row: fetching on expand would deliver children AFTER
     // render, where `DesktopDataRow`'s memo (which compares `row.original`)
     // cannot see them. Nesting before rows are built sidesteps that.
-    const [kitIds, setKitIds] = useState<string[]>([]);
-    const kitComponentsQuery = useQuery({
-      ...productOperations.kitComponentRows.queryOptions({
-        parentProductIds: kitIds,
-      }),
-      enabled: kitIds.length > 0,
+    const [kitBatches, setKitBatches] = useState<string[][]>([]);
+    const publishKitIds = useCallback(
+      (ids: string[]) => {
+        const cached = cachedKitBatches(queryClient);
+        setKitBatches((current) => {
+          const wanted = new Set(ids);
+          const retained = current.filter((batch) =>
+            batch.every((id) => wanted.has(id)),
+          );
+          const covered = new Set(retained.flat());
+          // A route remount loses local batch state, not its operation cache.
+          for (const batch of cached) {
+            if (!batch.every((id) => wanted.has(id) && !covered.has(id)))
+              continue;
+            retained.push(batch);
+            for (const id of batch) covered.add(id);
+          }
+          const added = ids.filter((id) => !covered.has(id));
+          if (
+            added.length === 0 &&
+            retained.length === current.length &&
+            retained.every((batch, index) => batch === current[index])
+          )
+            return current;
+          // Growing an existing key drops its children while the replacement
+          // query loads, unmounting open child editors. Keep admitted batches.
+          return [...retained, ...chunk(added, ID_CHUNK_SIZE)];
+        });
+      },
+      [queryClient],
+    );
+    const kitRows = useQueries({
+      queries: kitBatches.map((parentProductIds) =>
+        productOperations.kitComponentRows.queryOptions({ parentProductIds }),
+      ),
+      combine: combineKitRows,
     });
     const componentsByParent = useMemo(
-      () => groupComponentsByParent(kitComponentsQuery.data ?? EMPTY_KIT_ROWS),
-      [kitComponentsQuery.data],
+      () => groupComponentsByParent(kitRows),
+      [kitRows],
     );
     const tree = useMemo(
       () => ({
@@ -533,7 +595,7 @@ export const productListOverride = defineListOverride<
         ) : null;
       },
       wrap: (children, { data }) => (
-        <ProductListHydration data={data} onKitIds={setKitIds}>
+        <ProductListHydration data={data} onKitIds={publishKitIds}>
           {children}
         </ProductListHydration>
       ),
@@ -542,8 +604,8 @@ export const productListOverride = defineListOverride<
 });
 
 /**
- * Derives the kit id set from the loaded rows as a stable array, so the query
- * key does not churn while the table rerenders.
+ * Publish a stable de-duplicated roster in loaded order. The query owner
+ * reconciles membership without replacing batches on page appends.
  */
 function ProductListHydration({
   data,
@@ -554,16 +616,21 @@ function ProductListHydration({
   onKitIds: (ids: string[]) => void;
   children: ReactNode;
 }) {
-  const kitCandidates = useMemo(
+  const kitIdsKey = useMemo(
     () =>
-      data
-        .filter(
-          (product) => (fieldValueOf(product.fields.componentCount) ?? 0) > 0,
-        )
-        .map((p) => p.id),
+      uniq(
+        data
+          .filter(
+            (product) => (fieldValueOf(product.fields.componentCount) ?? 0) > 0,
+          )
+          .map((product) => product.id),
+      ).join(","),
     [data],
   );
-  const stableKitIds = useStableIds(kitCandidates);
-  useEffect(() => onKitIds([...stableKitIds]), [onKitIds, stableKitIds]);
+  const stableKitIds = useMemo(
+    () => (kitIdsKey ? kitIdsKey.split(",") : []),
+    [kitIdsKey],
+  );
+  useEffect(() => onKitIds(stableKitIds), [onKitIds, stableKitIds]);
   return children;
 }
