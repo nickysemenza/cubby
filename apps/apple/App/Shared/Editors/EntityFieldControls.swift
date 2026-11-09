@@ -14,6 +14,8 @@ struct EntityFieldControl: View {
     @State private var picking = false
     @State private var newToken = ""
     @State private var explaining = false
+    @State private var selectionResolution = RecordSelectionResolver()
+    @Environment(AppModel.self) private var appModel
 
     private var key: String { field.key }
     private var value: JSONValue { model.draft[key] ?? .null }
@@ -191,10 +193,12 @@ struct EntityFieldControl: View {
     }
 
     private func valueText(_ value: JSONValue) -> String? {
-        if field.reference != nil, let id = value.stringValue {
+        if let reference = field.reference, let id = value.stringValue {
             return model.original.flatMap {
                 FieldEnvelopePresentation.referenceName(in: $0, field: field, effectiveID: id)
-            } ?? pickedTitles[id] ?? id
+            } ?? pickedTitles[id] ?? selectionResolution.rows[id].map { _ in
+                selectionResolution.title(id, descriptor: EntityCatalog[reference.entity])
+            } ?? "Selection unavailable"
         }
         return EntityFieldValue.text(value, field: field)
     }
@@ -439,33 +443,44 @@ struct EntityFieldControl: View {
     }
 
     private func singleReference(_ reference: FieldReference) -> some View {
-        HStack {
-            Button {
-                picking = true
-            } label: {
-                LabeledContent(label) {
-                    if let id = value.stringValue, !id.isEmpty {
-                        Text(pickedTitles[id] ?? id)
-                            .foregroundStyle(FieldGuideTokens.graphite)
-                            .lineLimit(1)
-                    } else {
-                        Text("None").foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
+            HStack {
+                Button {
+                    picking = true
+                } label: {
+                    LabeledContent(label) {
+                        if let id = value.stringValue, !id.isEmpty {
+                            referenceIdentity(id, reference: reference)
+                                .foregroundStyle(FieldGuideTokens.graphite)
+                        } else {
+                            Text("None").foregroundStyle(.secondary)
+                        }
                     }
+                    .frame(minHeight: FieldGuideTokens.touchTarget)
+                    .contentShape(Rectangle())
                 }
-                .frame(minHeight: FieldGuideTokens.touchTarget)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            if let id = value.stringValue, !id.isEmpty, field.nullable {
-                Button("Clear", systemImage: "xmark.circle.fill") {
-                    model.stageReferenceSelection(key, value: .null)
+                .buttonStyle(.plain)
+                .disabled(pickerScope?.ready == false)
+                if let id = value.stringValue, !id.isEmpty, field.nullable {
+                    Button("Clear", systemImage: "xmark.circle.fill") {
+                        model.stageReferenceSelection(key, value: .null)
+                    }
+                    .labelStyle(.iconOnly)
+                    .foregroundStyle(.secondary)
+                    .buttonStyle(.borderless)
+                    .accessibilityLabel("Clear \(field.label)")
+                    .accessibilityHidden(id.isEmpty)
                 }
-                .labelStyle(.iconOnly)
-                .foregroundStyle(.secondary)
-                .buttonStyle(.borderless)
-                .accessibilityLabel("Clear \(field.label)")
-                .accessibilityHidden(id.isEmpty)
             }
+            if let id = value.stringValue, let message = selectionResolution.errors[id] {
+                InlineLoadFailure(message: message) {
+                    await resolveReference([id], reference: reference, retry: true)
+                }
+            }
+            referenceScopeNotice(reference)
+        }
+        .task(id: value) {
+            await resolveReference([value.stringValue].compactMap { $0 }, reference: reference)
         }
         .sheet(isPresented: $picking) {
             EntityPickerSheet(
@@ -494,20 +509,34 @@ struct EntityFieldControl: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .disabled(pickerScope?.ready == false)
             ForEach(ids, id: \.self) { id in
                 HStack {
-                    Text(pickedTitles[id] ?? id).font(.fieldGuideLabel)
-                    Spacer()
-                    Button("Remove", systemImage: "xmark.circle.fill") {
-                        model.draft[key] = .array(ids.filter { $0 != id }.map(JSONValue.string))
+                    if let message = selectionResolution.errors[id] {
+                        InlineLoadFailure(message: message) {
+                            await resolveReference([id], reference: reference, retry: true)
+                        }
+                    } else {
+                        referenceIdentity(id, reference: reference).font(.fieldGuideLabel)
                     }
-                    .labelStyle(.iconOnly)
+                    Spacer()
+                    Button {
+                        model.draft[key] = .array(ids.filter { $0 != id }.map(JSONValue.string))
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .frame(minWidth: referenceActionTarget, minHeight: referenceActionTarget)
+                            .contentShape(Rectangle())
+                    }
                     .foregroundStyle(.secondary)
                     .buttonStyle(.borderless)
-                    .accessibilityLabel("Remove \(pickedTitles[id] ?? id)")
+                    .accessibilityLabel(
+                        "Remove \(selectionResolution.title(id, descriptor: EntityCatalog[reference.entity]))"
+                    )
                 }
             }
+            referenceScopeNotice(reference)
         }
+        .task(id: ids) { await resolveReference(ids, reference: reference) }
         .sheet(isPresented: $picking) {
             EntityPickerSheet(
                 target: reference.entity,
@@ -518,6 +547,47 @@ struct EntityFieldControl: View {
                 model.draft[key] = .array(picks.map { .string($0.id) })
                 for pick in picks { pickedTitles[pick.id] = pick.title }
             }
+        }
+    }
+
+    private var referenceActionTarget: CGFloat {
+        #if os(iOS)
+            FieldGuideTokens.touchTarget
+        #else
+            24
+        #endif
+    }
+
+    @ViewBuilder
+    private func referenceScopeNotice(_ reference: FieldReference) -> some View {
+        if pickerScope?.ready == false {
+            let labels = reference.scope.compactMap { binding in
+                model.descriptor.field(binding.sourceField)?.label
+            }
+            Text("Choose \(labels.joined(separator: ", ")) first")
+                .font(.caption).foregroundStyle(.secondary)
+        }
+    }
+
+    @ViewBuilder
+    private func referenceIdentity(_ id: String, reference: FieldReference) -> some View {
+        if selectionResolution.errors[id] != nil {
+            Label("Selection unavailable", systemImage: "exclamationmark.triangle")
+        } else {
+            RecordSelectionIdentity(
+                id: id, descriptor: EntityCatalog[reference.entity], resolver: selectionResolution
+            ) {
+                await resolveReference([id], reference: reference, retry: true)
+            }
+        }
+    }
+
+    private func resolveReference(_ ids: [String], reference: FieldReference, retry: Bool = false) async {
+        let descriptor = EntityCatalog[reference.entity]
+        await selectionResolution.resolve(ids, descriptor: descriptor, client: appModel.client, retry: retry)
+        guard !Task.isCancelled else { return }
+        for id in ids where selectionResolution.rows[id] != nil {
+            pickedTitles[id] = selectionResolution.title(id, descriptor: descriptor)
         }
     }
 

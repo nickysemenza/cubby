@@ -624,13 +624,14 @@ public actor CubbyClient {
     // MARK: - Search, dashboards, and the assistant
 
     /// `kinds` narrows to those entity types; `nil` searches every intent-exposed entity.
-    public func search(_ text: String, kinds: [EntityKey]? = nil, limit: Int = 10) async throws -> [SearchHit]
+    public func search(_ text: String, kinds: [EntityKey]? = nil, limit: Int = 10, offset: Int = 0)
+        async throws -> [SearchHit]
     {
         let trimmed = String(
             text.trimmingCharacters(in: .whitespacesAndNewlines).prefix(SearchHit.maxQueryLength))
         guard !trimmed.isEmpty else { return [] }
         var query = SearchFindInput(
-            query: trimmed, limit: min(max(limit, 1), SearchHit.maxLimit)
+            query: trimmed, limit: min(max(limit, 1), SearchHit.maxLimit), offset: max(0, offset)
         )
         // `search.find`'s body declares its own searchable-entity enum, so catalog keys are
         // matched into it by raw value; a key it has not heard of is dropped rather than sent. Hits
