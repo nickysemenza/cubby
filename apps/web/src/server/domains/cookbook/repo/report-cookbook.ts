@@ -9,8 +9,15 @@ import type { Database } from "~/server/db";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { cookbook } from "~/server/db/schema";
 
-const RETIRED_FORMAT_TEXT =
-  "Extracted with a retired format — re-extract from the EPUB to restore the source, its run report, and sub-recipe links.";
+const RETIRED_FORMAT_NOTE: ReportBlock = {
+  kind: "note",
+  strong: true,
+  tone: "warning",
+  text: "Extracted with a retired format — re-extract from the EPUB to restore the source, its run report, and sub-recipe links.",
+};
+
+// Rows from before the book-tree format hold a flat array and no readable source or report.
+const retiredFormat = sql<boolean>`jsonb_typeof(${cookbook.rawJson}) = 'array'`;
 
 /**
  * What one extraction of a book cost and how complete it was: the handful of facts worth reading
@@ -25,20 +32,11 @@ export async function cookbookExtractionReport(
   const [row] = await getDb(db)
     .select({
       report: cookbook.report,
-      // Rows from before the book-tree format hold a flat array and no readable report.
-      retired: sql<boolean>`jsonb_typeof(${cookbook.rawJson}) = 'array'`,
+      retired: retiredFormat,
     })
     .from(cookbook)
     .where(and(eq(cookbook.id, id), notDeleted(cookbook)));
-  if (row?.retired)
-    return [
-      {
-        kind: "note",
-        strong: true,
-        tone: "warning",
-        text: RETIRED_FORMAT_TEXT,
-      },
-    ];
+  if (row?.retired) return [RETIRED_FORMAT_NOTE];
   const report = row?.report ? cookbookRunReportSchema.parse(row.report) : null;
   if (!report)
     return [
@@ -155,21 +153,12 @@ export async function cookbookImportProgressReport(
       import("~/server/domains/cookbook/repo/cookbook"),
       import("@cubby/schemas/import-recipe"),
     ]);
-  let coverage;
-  try {
-    coverage = await getCookbookSourceCoverage(db, id);
-  } catch {
-    // A flat pre-tree array has no readable source; the extraction report says so too.
-    return [
-      {
-        kind: "note",
-        strong: true,
-        tone: "warning",
-        text: RETIRED_FORMAT_TEXT,
-      },
-    ];
-  }
-  const { total, missing } = coverage;
+  const [row] = await getDb(db)
+    .select({ retired: retiredFormat })
+    .from(cookbook)
+    .where(and(eq(cookbook.id, id), notDeleted(cookbook)));
+  if (row?.retired) return [RETIRED_FORMAT_NOTE];
+  const { total, missing } = await getCookbookSourceCoverage(db, id);
   const all = { length: total };
   const importedCount = all.length - missing.length;
   const importCommand = (

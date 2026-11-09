@@ -161,9 +161,10 @@ export class CalendarFeedDurableObject
     return this.serializePublication(async () => {
       try {
         await this.refresh(origin, "rotate");
-      } catch {
+      } catch (error) {
         throw new Error(
           "Calendar could not refresh. Try again shortly; existing connections are unchanged.",
+          { cause: error },
         );
       }
       const token = createCalendarFeedToken();

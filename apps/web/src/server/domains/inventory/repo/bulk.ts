@@ -139,16 +139,7 @@ const assertInventoryOwnersLive = async (
   tx: DrizzleTransaction,
   ownerIds: LedgerPartyId[],
 ) => {
-  for (const ownerId of ownerIds) {
-    try {
-      await assertIndividualOwner(tx, ownerId);
-    } catch {
-      throw createAppError(
-        "CONSTRAINT_VIOLATION",
-        "Inventory can only be assigned to a live member or guest.",
-      );
-    }
-  }
+  for (const ownerId of ownerIds) await assertIndividualOwner(tx, ownerId);
 };
 
 export type ResolvedMoveInventoryEntriesPayload = {

@@ -52,6 +52,7 @@ import {
   resolveBeneficiaryEvidence,
   resolvePaymentEvidence,
 } from "~/server/domains/inventory/repo/ownership-evidence";
+import { createAppError } from "~/server/errors/app-error";
 import { loadStoredDerived } from "~/server/generic/derived/repo/read";
 import { liveLinks } from "~/server/generic/entity-links/repo/entity-links";
 
@@ -1065,7 +1066,10 @@ export async function assertIndividualOwner(
     columns: { kind: true },
   });
   if (!row || !isIndividual(row)) {
-    throw new Error("Inventory owners must be live member or guest parties");
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      "Inventory can only be assigned to a live member or guest.",
+    );
   }
 }
 
