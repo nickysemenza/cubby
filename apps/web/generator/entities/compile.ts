@@ -1676,8 +1676,7 @@ const compileMcpActions = (
     declaration.extensions.ports.repository !== null ||
     (declaration.table !== null &&
       declaration.fields !== null &&
-      declaration.identifiers.shortcode !== null) ||
-    declaration.key === "image";
+      declaration.identifiers.shortcode !== null);
   if (!kernel) {
     if (capabilities.mcp === undefined)
       throw new EntityDeclarationError(
@@ -2332,8 +2331,7 @@ export const compileEntity = (
         ? withEntityListMedia(rawReadSchemas.list)
         : rawReadSchemas.list,
     detail:
-      declaration.fields !== null &&
-      (declaration.table !== null || key === "image")
+      declaration.fields !== null && declaration.table !== null
         ? withEntityDetailMedia(rawReadSchemas.detail)
         : rawReadSchemas.detail,
   };

@@ -22,10 +22,7 @@ import type {
   EntityTableRelation,
   EntityStorageField,
 } from "../declarations.ts";
-import {
-  TABLE_SQL_PLACEHOLDER,
-  validateEntityTables,
-} from "../table-storage.ts";
+import { sqlTemplate, validateEntityTables } from "../table-storage.ts";
 import {
   renderStorageColumn,
   referencedImports,
@@ -92,20 +89,6 @@ export const tableDependencyClosure = (
     (entity): entity is TabledEntity =>
       owned.has(entity.key) && entity.table !== null,
   );
-};
-
-const escapeTemplate = (text: string) =>
-  text.replaceAll("\\", "\\\\").replaceAll("`", "\\`").replaceAll("${", "\\${");
-
-/** Declared table SQL as a Drizzle `sql` template bound to `table` columns. */
-const sqlTemplate = (text: string) => {
-  let rendered = "";
-  let cursor = 0;
-  for (const match of text.matchAll(TABLE_SQL_PLACEHOLDER)) {
-    rendered += `${escapeTemplate(text.slice(cursor, match.index))}\${table.${match[1]}}`;
-    cursor = match.index + match[0].length;
-  }
-  return `sql\`${rendered}${escapeTemplate(text.slice(cursor))}\``;
 };
 
 const columnBuilders = {

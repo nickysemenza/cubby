@@ -329,3 +329,17 @@ export const validateEntityTables = (
         );
   }
 };
+
+const escapeTemplate = (text: string) =>
+  text.replaceAll("\\", "\\\\").replaceAll("`", "\\`").replaceAll("${", "\\${");
+
+/** Declared table SQL as a Drizzle `sql` template bound to `table` columns. */
+export const sqlTemplate = (text: string) => {
+  let rendered = "";
+  let cursor = 0;
+  for (const match of text.matchAll(TABLE_SQL_PLACEHOLDER)) {
+    rendered += `${escapeTemplate(text.slice(cursor, match.index))}\${table.${match[1]}}`;
+    cursor = match.index + match[0].length;
+  }
+  return `sql\`${rendered}${escapeTemplate(text.slice(cursor))}\``;
+};

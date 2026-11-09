@@ -1,20 +1,6 @@
 import type { ChildTableMetadata } from "@cubby/schemas/compiler/entity-definitions/child-definition";
-import { TABLE_SQL_PLACEHOLDER } from "../table-storage.ts";
+import { sqlTemplate, TABLE_SQL_PLACEHOLDER } from "../table-storage.ts";
 
-const escapeTemplate = (value: string) =>
-  value
-    .replaceAll("\\", "\\\\")
-    .replaceAll("`", "\\`")
-    .replaceAll("${", "\\${");
-const sqlTemplate = (value: string) => {
-  let rendered = "";
-  let cursor = 0;
-  for (const match of value.matchAll(TABLE_SQL_PLACEHOLDER)) {
-    rendered += `${escapeTemplate(value.slice(cursor, match.index))}\${table.${match[1]}}`;
-    cursor = match.index + match[0].length;
-  }
-  return `sql\`${rendered}${escapeTemplate(value.slice(cursor))}\``;
-};
 export const childTableDependencies = (
   tables: readonly ChildTableMetadata[],
 ) => [
