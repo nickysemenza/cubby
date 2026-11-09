@@ -374,8 +374,9 @@ role or `statement_timeout` and preserves Neon's compute bounds.
 
 Each HTTP invocation lazily opens at most two strong and two cached database
 sockets, so ordinary browser reads can overlap page enrichment. Its pools close
-once the response body finishes and every `waitUntil` task it registered has
-settled (`withRequestDb`); an upgraded socket keeps pg's idle timeout. Four
+once the response body finishes (or the handler throws, without delaying the
+error) and every `waitUntil` task it registered has settled (`withRequestDb`);
+an upgraded socket keeps pg's idle timeout. Four
 database sockets leave two of the Worker's six outbound connection slots for
 provider/DO/storage/telemetry calls. One Worker continues to serve all events.
 
