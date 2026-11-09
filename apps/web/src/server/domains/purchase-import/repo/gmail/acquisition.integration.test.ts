@@ -398,7 +398,7 @@ describe("Gmail acquisition retention and replay", () => {
         .update(emailTable)
         .set({
           classificationVersion: "legacy-source-identity-unresolved/v1",
-          status: "blocked",
+          status: "unsettled",
         })
         .where(eq(emailTable.messageId, input.messageIds[0]!));
       const [disposition] = await getDb(ctx.db).select().from(emailTable);
@@ -862,7 +862,7 @@ describe("Gmail acquisition retention and replay", () => {
       }),
       input,
     );
-    expect(result.blocked).toEqual([]);
+    expect(result.unretained).toEqual([]);
     expect(await getDb(ctx.db).select().from(orderMail)).toMatchObject([
       { content: { bodyText: null, bodyHtml: null } },
     ]);

@@ -92,7 +92,7 @@ describe("durable member reclassification recovery", () => {
         classificationStage: "rule",
         classificationReason: "Synthetic previous rule",
         classificationVersion: "synthetic-history",
-        status: "blocked",
+        status: "unsettled",
         executionPolicy: "classification_only",
       });
     }

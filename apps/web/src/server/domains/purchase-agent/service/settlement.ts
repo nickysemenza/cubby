@@ -1,5 +1,8 @@
 import type { AgentConversationSettlement } from "@cubby/schemas/agent-conversation";
-import type { reconcileSettledRunInput } from "@cubby/schemas/purchase-agent-services";
+import type {
+  AgentFailureCode,
+  reconcileSettledRunInput,
+} from "@cubby/schemas/purchase-agent-services";
 import type { RunProgressStamp } from "@cubby/schemas/run-fields";
 import type { PiHarness, PiOperationResult } from "agents/harness/pi";
 import type { z } from "zod";
@@ -8,18 +11,57 @@ import type { RunServices } from "./environment";
 
 export type SettlementReport =
   | { kind: "reconcile" }
-  | {
-      kind: "fail";
-      failureCode: "agent_failed" | "agent_aborted";
-      detail: string;
-    };
+  | { kind: "fail"; failureCode: AgentFailureCode; detail: string };
+
+/** Harness stops that a fresh conversation outlives. */
+const TRANSIENT_HARNESS_REASONS = new Set(["stale", "reset"]);
+/**
+ * Provider, gateway and database faults a later attempt can outlive: retryable
+ * HTTP statuses (as `classifyJobFailure` treats provider capacity), deadlines,
+ * egress and overload, and connection or serialization faults. Anything else,
+ * such as a tool-validation loop or a refused tool call, recurs on retry.
+ */
+const TRANSIENT_ERROR =
+  /^\s*(?:error:?\s*)?(?:408|409|425|429|5\d\d)\b|\b(?:status|HTTP)(?: code)?\s*[:=]?\s*(?:408|409|425|429|5\d\d)\b|\b(?:408|409|425|429|5\d\d) status\b|\b(?:deadline|time(?:d)? ?out|timeout|egress|overload(?:ed)?|(?:temporarily|service) unavailable|bad gateway|ECONNRESET|ECONNREFUSED|ETIMEDOUT|EPIPE|socket hang up|network|connection (?:reset|refused|closed|terminated|error)|terminating connection|too many connections|deadlock|could not serialize|SQLSTATE (?:08|40|53|57))/iu;
+
+/**
+ * An explicit authentication or authorization refusal (401/403) recurs until
+ * someone changes a credential or grant, whatever transient wording it carries
+ * ("HTTP 403: network access denied"), as a gateway configuration stop does.
+ */
+const AUTHORIZATION_ERROR =
+  /^\s*(?:error:?\s*)?(?:401|403)\b|\b(?:status|HTTP)(?: code)?\s*[:=]?\s*(?:401|403)\b|\b(?:401|403) (?:status|unauthori[sz]ed|forbidden)\b|\bunauthori[sz]ed\b|\bforbidden\b/iu;
+
+const DETAIL_ERROR_MAX = 2_000;
+
+/**
+ * Which retry policy a failed coordinator gets. A funding stop is classified
+ * before this (`fundingUnavailable`) and pauses instead; an authorization
+ * refusal wins over every transient signal.
+ */
+function coordinatorFailureCode(
+  reason: string | undefined,
+  lastError: string | undefined,
+): Exclude<AgentFailureCode, "agent_aborted"> {
+  if (lastError !== undefined && AUTHORIZATION_ERROR.test(lastError))
+    return "agent_failed";
+  return (reason && TRANSIENT_HARNESS_REASONS.has(reason)) ||
+    (lastError !== undefined && TRANSIENT_ERROR.test(lastError))
+    ? "agent_transient"
+    : "agent_failed";
+}
 
 /**
  * Research's yield hook continues runnable work before a normal answer settles.
  * A finished submission still passes the server's browser/wake fences; failures,
  * aborts and exhausted execution bounds retain this reconciliation backstop.
+ * A failure names its class, Pi's reason and the last model or tool error the
+ * submission recorded, verbatim (raw diagnostics).
  */
-export function settlementReport(result: PiOperationResult): SettlementReport {
+export function settlementReport(
+  result: PiOperationResult,
+  lastError?: string,
+): SettlementReport {
   if (result.status === "done") return { kind: "reconcile" };
   if (result.reason === "aborted")
     return {
@@ -27,10 +69,14 @@ export function settlementReport(result: PiOperationResult): SettlementReport {
       failureCode: "agent_aborted",
       detail: "Coordinator aborted",
     };
+  const failureCode = coordinatorFailureCode(result.reason, lastError);
+  const error = lastError?.trim()
+    ? lastError.trim().slice(0, DETAIL_ERROR_MAX)
+    : "no model or tool error recorded";
   return {
     kind: "fail",
-    failureCode: "agent_failed",
-    detail: `Coordinator unanswered: ${result.reason ?? "unknown"}`,
+    failureCode,
+    detail: `Coordinator ${failureCode === "agent_transient" ? "transient" : "deterministic"} failure (${result.reason ?? "unknown"}): ${error}`,
   };
 }
 
@@ -45,6 +91,8 @@ export type SubmissionLedger = {
   reviewDetail?(): string | undefined;
   /** This submission's own last model turn found no paid funding. */
   fundingUnavailable?(operationId: string): boolean;
+  /** The last model error or failed tool result this submission recorded. */
+  lastFailure?(operationId: string): string | undefined;
 };
 
 /**
@@ -82,7 +130,10 @@ export async function reportSettlement(
   deps.onSettled(settled);
   if (deps.submissions.latest() !== operationId) return "done";
   if (pending.length > 0) return "retry";
-  const outcome = settlementReport(result);
+  const outcome = settlementReport(
+    result,
+    deps.submissions.lastFailure?.(operationId),
+  );
   const settledId = `submission-settled:${operationId}`;
   // Both outcomes pass the server's wake fence: a run with a wake still
   // queued for this agent is neither reviewed nor failed by this report.
@@ -100,7 +151,7 @@ export async function reportSettlement(
         detail: outcome.detail,
       };
       if (
-        outcome.failureCode === "agent_failed" &&
+        outcome.failureCode !== "agent_aborted" &&
         deps.submissions.fundingUnavailable?.(operationId)
       )
         input.fundingUnavailable = true;

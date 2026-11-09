@@ -10,6 +10,7 @@ import {
   runEntityId,
   type RunId,
 } from "@cubby/schemas/identifiers";
+import type { AgentFailureCode } from "@cubby/schemas/purchase-agent-services";
 import { runPurpose } from "@cubby/schemas/purchase-import";
 import {
   runProgressEvent,
@@ -115,9 +116,13 @@ async function reconcileSettledRunOnce(
      * stale-run sweep, which reconciles regardless.
      */
     receivedEventIds?: ReadonlySet<string>;
-    /** The settled submission went unanswered: fail the run instead. */
+    /**
+     * The settled submission went unanswered: fail the run instead. Its class
+     * (`agentFailureCode`) decides retry: a transient Mail import failure
+     * retries as a successor Run (`markRunFailed`).
+     */
     failure?: {
-      failureCode: "agent_failed" | "agent_aborted";
+      failureCode: AgentFailureCode;
       detail?: string;
     };
     /** That submission's own last turn found no paid funding: wait instead of failing. */
@@ -300,7 +305,7 @@ async function reconcileSettledRunOnce(
       )
         return null;
       const unresolved = remaining.filter(
-        (source) => source.email.status === "blocked",
+        (source) => source.email.status === "unsettled",
       );
       const findings = await tx
         .select({
@@ -638,7 +643,7 @@ export async function auditAllImportBatches(
 }
 
 /** Admitted Email outcomes a settled Mail import accepts as final. */
-const SETTLED_MAIL_STATUSES = new Set(["completed", "excluded", "blocked"]);
+const SETTLED_MAIL_STATUSES = new Set(["completed", "excluded", "unsettled"]);
 
 /** Pi's latest recorded reason for each unresolved Email, by Email id. */
 async function unresolvedMailReasons(

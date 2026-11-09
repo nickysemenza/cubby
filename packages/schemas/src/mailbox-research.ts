@@ -71,11 +71,16 @@ export const mailboxDiscoveryStartOutput = z.object({
 export type MailboxDiscoveryStartOutput = z.infer<
   typeof mailboxDiscoveryStartOutput
 >;
+/**
+ * `unsettled`: a related Email an import attempt left without accepted or
+ * linked evidence. It keeps its holder Run, and only a new evidence revision
+ * readmits it (`mail-import-run.ts`).
+ */
 export const emailStatus = z.enum([
   "pending",
   "researching",
   "completed",
-  "blocked",
+  "unsettled",
   "deleted",
   "excluded",
 ]);

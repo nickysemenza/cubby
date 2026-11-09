@@ -294,7 +294,7 @@ describe("explicit member-search cache expiry", () => {
       .set({
         searchExpiresAt: new Date("2026-10-09T12:00:00Z"),
         updatedAt: now,
-        status: "blocked",
+        status: "unsettled",
         classificationReason: "Synthetic unresolved disposition",
       })
       .where(eq(emailTable.messageId, "expired-search"));
@@ -337,7 +337,7 @@ describe("explicit member-search cache expiry", () => {
       )[0],
     ).toMatchObject({
       subject: "Synthetic search candidate",
-      status: "blocked",
+      status: "unsettled",
       classificationReason: "Synthetic unresolved disposition",
       searchOrigin: "member_search",
       contentClearedAt: now,

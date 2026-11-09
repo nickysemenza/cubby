@@ -1489,7 +1489,7 @@ describe("Email Purchase links", () => {
     const f = await retainedReviewFixture();
     await getDb(ctx.db)
       .update(emailTable)
-      .set({ classification: "uncertain", status: "blocked", runId: f.runId })
+      .set({ classification: "uncertain", status: "unsettled", runId: f.runId })
       .where(eq(emailTable.orderMailId, f.source.id));
     // The same message in another mailbox is a different Email.
     await syntheticRetainedMail(ctx.db, {
@@ -1533,7 +1533,7 @@ describe("Email Purchase links", () => {
       expect.objectContaining({
         id: f.email,
         classification: "uncertain",
-        status: "blocked",
+        status: "unsettled",
         importOutcome: "imported",
         purchaseLinks: [
           expect.objectContaining({ state: "linked", accepted: true }),

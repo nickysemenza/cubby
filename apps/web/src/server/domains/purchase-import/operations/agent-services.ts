@@ -19,6 +19,7 @@ import {
   reconcileSettledRunInput,
   stopForReviewInput,
 } from "@cubby/schemas/purchase-agent-services";
+import { supportedChatModelSchema } from "@cubby/shared/ai/models";
 import { sha256Uuid } from "@cubby/shared/sha256";
 import { z } from "zod";
 
@@ -205,6 +206,10 @@ export function runServicesFor(
         const scope = await service.loadRunScope(db, runId);
         return {
           purpose: agentImportRunPurpose.parse(scope.public.purpose),
+          // A retired historical model name keeps the purpose's manifest model.
+          coordinatorModel: supportedChatModelSchema.safeParse(
+            scope.public.coordinatorModel,
+          ).data,
           agentId: scope.public.agentId,
           generation: scope.public.dispatchEventId,
         };

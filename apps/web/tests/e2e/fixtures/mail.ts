@@ -69,7 +69,7 @@ export async function seedVendorMailReviewPrerequisite(
     checksum,
     classification: "uncertain",
     classificationVersion: "synthetic-review/v1",
-    status: "blocked",
+    status: "pending",
   });
   return { vendor, purchase, mail: { ...mail, ...metadata } };
 }

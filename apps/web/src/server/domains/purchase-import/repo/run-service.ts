@@ -21,6 +21,7 @@ import {
   agentImportRunPurpose,
   coordinatorModelFor,
   importRunAgentIdentity,
+  importRunAgentManifest,
 } from "@cubby/schemas/import-run-agent";
 import { paidOverBudgetUsd } from "@cubby/schemas/mail-import-settings";
 import {
@@ -30,7 +31,9 @@ import {
   type PhotoRunDefaults,
 } from "@cubby/schemas/photo-import-run";
 import {
+  type AgentFailureCode,
   type AgentProgressEvent,
+  agentFailureCode,
   agentProgressEvent,
 } from "@cubby/schemas/purchase-agent-services";
 import {
@@ -56,6 +59,7 @@ import {
   isMemberStartedRun,
   type RunRestartInput,
   runInputsErased,
+  runCause,
   runRetirementReason,
   runTargetEntityKind,
 } from "@cubby/schemas/run-fields";
@@ -64,6 +68,7 @@ import {
   ACTIVE_RUN_STATUSES,
   PHOTO_RUN_IMAGE_LIMIT,
 } from "@cubby/shared/client-constants";
+import { sha256Hex } from "@cubby/shared/sha256";
 import {
   and,
   asc,
@@ -128,7 +133,9 @@ import {
 import { finalizeImportedImages } from "~/server/domains/photo-import/repo/photo-import-finalize";
 import { waitForMailImportPermission } from "~/server/domains/purchase-import/repo/controlled-mail-import";
 import {
+  importAttemptsExhausted,
   readMailRunRoster,
+  holdCancelledMailRunSources,
   releaseUnsettledMailRunSources,
   transferMailRunSources,
 } from "~/server/domains/purchase-import/repo/mail-run-membership";
@@ -147,7 +154,7 @@ import { recordChange } from "~/server/generic/changes/repo/change";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { dispatchStartedRun } from "./dispatch";
-import { loadRunFindings } from "./run-finding";
+import { loadRunFindings, publishRunFinding } from "./run-finding";
 import { listRunTargetOutcomes } from "./run-target";
 
 /**
@@ -1199,12 +1206,91 @@ export async function claimPhotoInventoryWork(db: Database, runId: RunId) {
     : { kind: "none" as const };
 }
 
-/**  Called through the `PurchaseImportService` RPC namespace in cf-server.ts. */
+/**
+ * A transiently failed Mail import retries its unsettled Emails as one
+ * successor on the escalation coordinator model. Only Emails this Run still
+ * owns with unchanged evidence and an admission attempt left at that checksum
+ * move (`MAIL_IMPORT_ATTEMPTS_PER_REVISION`, three in total); settled ones
+ * stay. Null when nothing is left to retry.
+ */
+async function retryTransientMailImport(tx: DrizzleTransaction, runId: RunId) {
+  const [locked] = await tx
+    .select()
+    .from(runTable)
+    .where(eq(runTable.id, runId));
+  if (!locked?.input) return null;
+  const roster = mailResearchRunInput.parse(locked.input);
+  const unsettled = (await readMailRunRoster(tx, runId))?.filter(
+    (source) =>
+      source.owned &&
+      source.unchanged &&
+      // The successor attempts this Run's revision again.
+      !importAttemptsExhausted(source.email, roster.evidenceRevision) &&
+      (source.email.status === "researching" ||
+        source.email.status === "unsettled"),
+  );
+  if (!unsettled?.length) return null;
+  const successorId = runEntityId.parse(crypto.randomUUID());
+  const dispatchEventId = crypto.randomUUID();
+  const manifest = importRunAgentManifest.mail_import;
+  await insertWithShortcode(tx, "run", {
+    id: successorId,
+    ledgerPartyId: locked.ledgerPartyId,
+    actorUserId: locked.actorUserId,
+    actorName: locked.actorName,
+    actorEmail: locked.actorEmail,
+    actorLedgerPartyShortcode: locked.actorLedgerPartyShortcode,
+    actorLedgerPartyName: locked.actorLedgerPartyName,
+    actorLedgerPartyKind: locked.actorLedgerPartyKind,
+    vendorAccountId: locked.vendorAccountId,
+    vendorId: locked.vendorId,
+    predecessorRunId: runId,
+    parentRunId: locked.parentRunId,
+    purpose: locked.purpose,
+    trigger: locked.trigger,
+    channel: locked.channel,
+    cause: runCause.enum.retry,
+    status: "running",
+    startedAt: new Date(),
+    input: mailResearchRunInput.parse({
+      ...roster,
+      sources: roster.sources.filter((source) =>
+        unsettled.some((held) => held.orderMailId === source.orderMailId),
+      ),
+    }),
+    dispatchEventId,
+    coordinatorModel: manifest.escalationModel ?? manifest.model,
+    skillRevision: locked.skillRevision,
+    runtimeRevision: locked.runtimeRevision,
+    decisionRevision: locked.decisionRevision + 1,
+    agentSessionId: importRunAgentIdentity(successorId, "mail_import"),
+  });
+  await transferMailRunSources(
+    tx,
+    runId,
+    successorId,
+    unsettled.map((source) => source.orderMailId),
+  );
+  await dispatchStartedRun(tx, {
+    id: successorId,
+    eventId: dispatchEventId,
+    purpose: locked.purpose,
+  });
+  return successorId;
+}
+
+/**
+ * Called through the `PurchaseImportService` RPC namespace in cf-server.ts.
+ * A Mail import's failure class decides what follows (ADR 0011): a transient
+ * failure retries as a successor Run until its third attempt; a deterministic
+ * one, or a transient one out of attempts, leaves exactly one Run finding and
+ * keeps its claimed Emails `unsettled`.
+ */
 export async function markRunFailed(
   db: Database,
   input: {
     runId: RunId;
-    failureCode: "agent_failed" | "agent_aborted";
+    failureCode: AgentFailureCode;
     detail?: string;
     dispatchEventId?: string | null;
   },
@@ -1232,15 +1318,45 @@ export async function markRunFailed(
               : eq(runTable.dispatchEventId, input.dispatchEventId),
         ),
       )
-      .returning({ purpose: runTable.purpose, trigger: runTable.trigger });
+      .returning({
+        purpose: runTable.purpose,
+        trigger: runTable.trigger,
+        ledgerPartyId: runTable.ledgerPartyId,
+      });
     if (failed)
       await recordChange(tx, {
         kind: "source",
         categories: ["run"],
         ringFromBackground: isMemberStartedRun(failed),
       });
-    if (failed?.purpose === "mail_import")
-      await releaseUnsettledMailRunSources(tx, runId);
+    if (failed?.purpose !== "mail_import") return failed;
+    const retried =
+      input.failureCode === agentFailureCode.enum.agent_transient
+        ? await retryTransientMailImport(tx, runId)
+        : null;
+    if (
+      !retried &&
+      input.failureCode !== agentFailureCode.enum.agent_aborted &&
+      failed.ledgerPartyId
+    ) {
+      const summary = (
+        input.detail ?? `Coordinator failed (${input.failureCode})`
+      ).slice(0, 1_000);
+      await publishRunFinding(tx, {
+        runId,
+        ledgerPartyId: failed.ledgerPartyId,
+        entityKind: "run",
+        entityId: runId,
+        kind: "other",
+        summary,
+        proposedFix: null,
+        evidenceFingerprint: await sha256Hex(
+          `coordinator-failure:${runId}:${input.failureCode}`,
+        ),
+      });
+    }
+    // Changed sources the retry could not carry return through release.
+    await releaseUnsettledMailRunSources(tx, runId);
     return failed;
   });
   return { failed: Boolean(run), detail: input.detail ?? null };
@@ -1992,6 +2108,9 @@ export async function controlRun(
         vendorAccountId: locked.vendorAccountId,
         vendorId: locked.vendorId,
         predecessorRunId: scope.runId,
+        // Earlier-attempt detection orders Runs by startedAt; admission stamps
+        // it from this clock too, never the database default.
+        startedAt: new Date(),
         parentRunId:
           locked.purpose === "mail_import" ? locked.parentRunId : null,
         purpose: locked.purpose,
@@ -2180,6 +2299,7 @@ export async function controlRun(
         vendorAccountId: successorVendorAccountId,
         vendorId: locked.vendorId,
         predecessorRunId: scope.runId,
+        startedAt: new Date(),
         parentRunId:
           locked.purpose === "mail_import" ? locked.parentRunId : null,
         purpose: locked.purpose,
@@ -2260,6 +2380,11 @@ export async function controlRun(
           ? "Dispatch aborted by its owner"
           : "Run cancelled by its owner",
       );
+      // A cancelled Run must not keep Emails `researching` with nothing
+      // working them, and discovery must not readmit what the member stopped:
+      // they stay with this Run as `unsettled` for its retry or restart.
+      if (locked.purpose === "mail_import" && locked.input !== null)
+        await holdCancelledMailRunSources(tx, scope.runId);
       return { publicId: input.runPublicId, status: "failed" as const };
     }
     if (input.action === "pause") {

@@ -80,15 +80,18 @@ it("preserves populated predecessor decisions and queued work while initially pu
         role: "beneficiary",
         weight: 1,
       });
-      const email = await insertWithShortcode(db, "email", {
-        ledgerPartyId: party.id,
-        mailboxId: "synthetic@example.test",
-        messageId: "synthetic-retained-message",
-        checksum: "synthetic-retained-checksum",
-        subject: "Synthetic retained source evidence",
-        status: "completed",
-        classification: "related",
-      });
+      // Written at the predecessor shape: the current Email writer selects
+      // columns later migrations add.
+      const email = { id: crypto.randomUUID() };
+      await client.query(
+        `INSERT INTO "Entity" (id, kind, shortcode) VALUES ($1, 'email', 'EML-SYNDERIVED')`,
+        [email.id],
+      );
+      await client.query(
+        `INSERT INTO "Email" (id, shortcode, "ledgerPartyId", provider, "mailboxId", "messageId", checksum, subject, status, classification)
+         VALUES ($1, 'EML-SYNDERIVED', $2, 'gmail', 'synthetic@example.test', 'synthetic-retained-message', 'synthetic-retained-checksum', 'Synthetic retained source evidence', 'completed', 'related')`,
+        [email.id, party.id],
+      );
       const shipment = await insertWithShortcode(db, "shipment", {
         name: "Synthetic retained Shipment",
       });

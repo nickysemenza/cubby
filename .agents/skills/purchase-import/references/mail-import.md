@@ -109,7 +109,7 @@ Claude or Codex session researches it later through the Research queue.
      false), still link the notice; itemizing is the order confirmation's
      work. Import from the confirmation in this Run only when it is already
      yours (`boundToRun`) or a `purchase_import` `mail_search` shows it `pending` or
-     `blocked`. When no Purchase exists yet and the confirmation is yours or
+     `unsettled`. When no Purchase exists yet and the confirmation is yours or
      admissible, import it first, then link the notice; a full batch still
      admits it, so never resolve the notice unresolved just to wait for it. When another Run holds it, `prepare` refuses with
      `MAIL_SOURCE_HELD_BY_RUN`: link the notice and claim the next Email;
@@ -174,7 +174,19 @@ Claude or Codex session researches it later through the Research queue.
    row; Cubby refuses any other stop for a Mail import. Once every admitted Email is
    imported, linked, excluded or resolved, the Run completes; any `unresolved`
    Email instead puts it in review under one `unresolved_targets` finding that
-   lists each Email with your reason.
+   lists each Email with your reason. An unresolved Email stays `unsettled` with
+   this Run; only new evidence (a verified sender, new accepted order evidence,
+   or changed retained bytes) admits it again, so restating the same gap never
+   helps. If the coordinator itself fails, Cubby retries a provider, gateway or
+   database fault automatically (escalated, at most three attempts); a
+   deterministic failure such as a validation loop is not retried and leaves one
+   finding on the Run.
+   Lifecycle notices whose exact evidence (a Shipment the Email already
+   sourced, a tracking number, or the proven sender's order number) names one
+   Purchase are linked at claim time with their single package recorded, and
+   never reach you. Conflicting evidence, several packages, an unknown carrier
+   or an unrecognised tracking reference still reach you: extract every package
+   through `shipments.record`.
 
 Reuse an existing Product before creating one: compare Brand identity, model,
 size, color, bundle contents and other distinguishing attributes. A related

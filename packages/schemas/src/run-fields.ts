@@ -158,6 +158,15 @@ export const mailResearchRunInput = z.object({
     )
     .min(1)
     .max(MAIL_RUN_ROSTER_LIMIT),
+  /**
+   * The evidence revision (sender mapping, accepted order evidence or new
+   * retained bytes) this Run attempts. The revision fence reads it from every
+   * frozen roster, independently of the replay `clientKey` a release clears.
+   */
+  evidenceRevision: z
+    .string()
+    .regex(/^[a-f0-9]{64}$/)
+    .optional(),
 });
 export type MailResearchRunInput = z.infer<typeof mailResearchRunInput>;
 export const productResearchRunInput = z.object({

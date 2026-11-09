@@ -236,7 +236,7 @@ describe("Mail import settlement", () => {
   async function settledRun(
     statuses: Record<
       string,
-      "completed" | "excluded" | "blocked" | "researching"
+      "completed" | "excluded" | "unsettled" | "researching"
     >,
     openFinding = false,
   ) {
@@ -284,7 +284,7 @@ describe("Mail import settlement", () => {
         .set({ runId, status: "researching" })
         .where(eq(emailTable.orderMailId, mail.id));
       const status = statuses[mail.messageId];
-      if (status === "blocked")
+      if (status === "unsettled")
         await resolveMail(
           ctx.db,
           {
@@ -336,7 +336,7 @@ describe("Mail import settlement", () => {
     });
   });
 
-  it.each(["completed", "blocked"] as const)(
+  it.each(["completed", "unsettled"] as const)(
     "reviews open commit findings alongside %s Emails",
     async (status) => {
       const settled = await settledRun(
@@ -348,7 +348,7 @@ describe("Mail import settlement", () => {
         expect.objectContaining({
           kind: "unresolved_targets",
           summary: expect.stringMatching(
-            status === "blocked"
+            status === "unsettled"
               ? /product_unresolved.*synthetic-with-finding/su
               : /product_unresolved/u,
           ),
@@ -360,7 +360,7 @@ describe("Mail import settlement", () => {
   it("reviews a settled Run with an unresolved Email under a finding naming it and its reason", async () => {
     const settled = await settledRun({
       "settled-imported": "completed",
-      "payment-notice": "blocked",
+      "payment-notice": "unsettled",
     });
     expect(settled.status).toBe("needs_review");
     expect(settled.findings).toEqual([

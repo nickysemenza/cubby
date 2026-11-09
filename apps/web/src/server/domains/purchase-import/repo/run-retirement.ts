@@ -7,6 +7,7 @@
 import { suggestionStatus } from "@cubby/schemas/ai";
 import { runEntityId } from "@cubby/schemas/identifiers";
 import { agentImportRunPurpose } from "@cubby/schemas/import-run-agent";
+import { emailStatus } from "@cubby/schemas/mailbox-research";
 import { and, asc, eq, inArray, isNotNull, isNull, lt, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
@@ -16,7 +17,7 @@ import {
   withTransaction,
 } from "~/server/db/helpers";
 import { quotedTable } from "~/server/db/helpers/related";
-import { run as runTable, runFinding } from "~/server/db/schema";
+import { email, run as runTable, runFinding } from "~/server/db/schema";
 import type { PurchaseImportRunAgentRpc } from "~/server/domains/purchase-agent/service/environment";
 import { recordChange } from "~/server/generic/changes/repo/change";
 
@@ -62,6 +63,14 @@ async function closeExecutionFindings(
 }
 
 const TERMINAL = ["completed", "failed", "needs_review"] as const;
+
+/**
+ * A Run still holding a `researching` Email is not settled: retiring it would
+ * leave that Email researching with no coordinator, forever.
+ */
+// includes-deleted: any Email still marked researching keeps its holder unsettled.
+// Literal qualification keeps the outer correlation in single-table statements.
+const noResearchingEmail = sql`NOT EXISTS (SELECT 1 FROM ${email} held WHERE held."runId" = "Run"."id" AND held.status = ${emailStatus.enum.researching})`;
 
 export async function coordinatorRetired(db: Database, runId: string) {
   const [row] = await getDb(db)
@@ -147,6 +156,7 @@ export async function retireSettledCoordinators(
         inArray(runTable.status, [...TERMINAL]),
         isNull(runTable.retiredAt),
         lt(runTable.updatedAt, before),
+        noResearchingEmail,
       ),
     )
     .orderBy(asc(runTable.updatedAt), asc(runTable.id))
@@ -171,6 +181,7 @@ export async function retireSettledCoordinators(
               eq(runTable.status, status),
               sql`${runTable.updatedAt}::text = ${observedAt}`,
               isNull(runTable.retiredAt),
+              noResearchingEmail,
             ),
           )
           .returning({ id: runTable.id });

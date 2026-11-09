@@ -133,7 +133,7 @@ describe("member Reclassify", () => {
         classificationStage: "rule",
         classificationReason: "Synthetic earlier rule",
         classificationVersion: "synthetic-history",
-        status: "blocked",
+        status: "unsettled",
         executionPolicy: "classification_only",
         ...fields,
       });

@@ -12,10 +12,11 @@ import type { DispatchInput } from "./environment";
 export function dispatchInputForEvent(
   event: PurchaseAgentEvent,
   purpose: DispatchInput["identity"]["purpose"],
+  model?: DispatchInput["identity"]["model"],
 ): DispatchInput {
   const { runId: _privateRunId, ...observableEvent } = event;
   return {
-    identity: { runId: event.runId, purpose },
+    identity: { runId: event.runId, purpose, ...(model ? { model } : {}) },
     generation: event.generation,
     // Job retries converges on exactly one submission.
     operationId: purchaseAgentEventIdempotencyKey(event),

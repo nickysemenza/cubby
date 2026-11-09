@@ -277,7 +277,7 @@ function DiscoveryCoverage({
         add(discoveryHelper.accessor("classified", { header: "Classified" }));
         add(discoveryHelper.accessor("retained", { header: "Content saved" }));
         add(discoveryHelper.accessor("pending", { header: "Pending Emails" }));
-        add(discoveryHelper.accessor("blocked", { header: "Blocked" }));
+        add(discoveryHelper.accessor("unsettled", { header: "Unsettled" }));
         add(
           discoveryHelper.accessor("imported", { header: "Imported Emails" }),
         );
@@ -344,7 +344,7 @@ function DiscoveryCoverage({
                   ["Classified", row.original.classified],
                   ["Content saved", row.original.retained],
                   ["Pending Emails", row.original.pending],
-                  ["Blocked", row.original.blocked],
+                  ["Unsettled", row.original.unsettled],
                   ["Imported Emails", row.original.imported],
                   [
                     "Discovery Run",

@@ -215,7 +215,7 @@ describe("Gmail final publication concurrency", () => {
           orderMailIds: [],
           candidatePreviews: [],
           unrelated: [],
-          blocked: [],
+          unretained: [],
         });
         expect(
           await getDb(ctx.db).select().from(emailCandidateObservation),
@@ -309,7 +309,7 @@ describe("Gmail final publication concurrency", () => {
         orderMailIds: [],
         candidatePreviews: [],
         unrelated: [],
-        blocked: [],
+        unretained: [],
       });
       expect(await state()).toEqual(before);
       expect(preview).not.toHaveBeenCalled();

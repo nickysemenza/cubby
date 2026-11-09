@@ -687,7 +687,7 @@ export async function settleMail(
     > &
       Partial<Pick<RetainedMail, "id">>;
     importRunId: RunId | null;
-    status: "completed" | "blocked";
+    status: "completed" | "unsettled";
     classification?: "unrelated";
     /** What settled the Email: an import, a link, or the member-facing gap. */
     detail: string;
@@ -739,7 +739,7 @@ export async function settleMail(
     // Exhaustion must never replace a committed result or a member decision.
     if (
       input.importRunId &&
-      input.status === "blocked" &&
+      input.status === "unsettled" &&
       (originalEmail.status !== "researching" ||
         originalEmail.checksum !== input.mail.rawChecksum)
     )
@@ -806,7 +806,7 @@ export async function settleMail(
       const judgment =
         input.judgment ??
         mailImportOutcome.parse(
-          input.status === "blocked"
+          input.status === "unsettled"
             ? { kind: "unresolved", reason: input.detail }
             : input.classification === "unrelated"
               ? {
@@ -861,7 +861,7 @@ export async function settleMail(
                   input.status === "completed" ? "completed" : "unresolved",
                 outcome:
                   input.status === "completed" ? "verified" : "ambiguous",
-                warning: input.status === "blocked" ? input.detail : null,
+                warning: input.status === "unsettled" ? input.detail : null,
                 diff: null,
                 completedAt: now.toISOString(),
                 targetFingerprint: input.mail.rawChecksum,
@@ -1241,13 +1241,13 @@ export async function resolveMail(
         {
           mail,
           importRunId,
-          status: "blocked",
+          status: "unsettled",
           detail: disposition.reason,
           judgment: disposition,
         },
         actor,
       );
-      return { mail, purchaseIds: [], status: "blocked" as const };
+      return { mail, purchaseIds: [], status: "unsettled" as const };
     }
     await settleMail(
       tdb,

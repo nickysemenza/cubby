@@ -13,7 +13,11 @@
  * settled and the next claim continues from the roster.
  */
 import { buildActorContext, type ActorContext } from "@cubby/schemas/context";
-import { parseShortcodeFor, runEntityId } from "@cubby/schemas/identifiers";
+import {
+  parseShortcodeFor,
+  runEntityId,
+  type VendorId,
+} from "@cubby/schemas/identifiers";
 import {
   mailboxClassification,
   mailboxClassificationStage,
@@ -21,15 +25,18 @@ import {
   mailReadOut,
 } from "@cubby/schemas/mailbox-research";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { eq } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 
 import { householdLocalDate } from "~/lib/household-date";
 import type { Database } from "~/server/db";
-import { getDb } from "~/server/db/helpers";
+import { getDb, notDeleted } from "~/server/db/helpers";
 import {
   purchase as purchaseTable,
   run as runTable,
   shipment as shipmentTable,
+  shipmentObservation,
+  shipmentSourceCapture,
+  vendorAccount,
 } from "~/server/db/schema";
 import { readRetainedMail } from "~/server/domains/mail/repo/retained-mail";
 import { readMailAttemptRecovery } from "~/server/domains/purchase-import/repo/mail-attempts";
@@ -41,14 +48,18 @@ import { mailReadContent } from "../repo/gmail/read-content";
 import { senderProofVendor } from "../repo/import-vendor";
 import {
   countRetainedMailAttachments,
+  hasUnrecognisedTracking,
+  readEmailMailKeys,
   readMailRuleCandidates,
   readMailProductCandidates,
+  type MailKeys,
   type MailProductEvidence,
-  orderIdentifiers,
+  type MailRuleCandidate,
 } from "../repo/mail-rule-evidence";
 import {
   carrierNotice,
   decideMailByRule,
+  mailLifecycleEvent,
   MAIL_IMPORT_RULE_REVISION,
   type CarrierNotice,
 } from "../service/mail-import-rule";
@@ -163,6 +174,232 @@ async function settleCarrierNotice(
   return true;
 }
 
+const OBSERVED_KIND = {
+  confirmation: "unknown",
+  shipped: "vendor_shipped",
+  delivered: "delivered",
+} as const;
+
+/**
+ * Model-free exact linking of a lifecycle notice to the one Purchase its
+ * evidence names: (a) a Shipment this Email already sourced, (b) a tracking
+ * key equal to exactly one Shipment, (c) the sender-proven Vendor's order key
+ * equal to exactly one live Purchase. Every rule that applies must name the
+ * same Purchase, on the Email owner's own account; anything else is the
+ * coordinator's, including any candidate on another account. Association
+ * alone cannot establish that package evidence was extracted (#3013), so
+ * (b)/(c) record the Email's one recognised package through the linked
+ * disposition's shipment evidence; a shipping or delivery notice without
+ * recognised tracking, with several packages or with any unrecognised
+ * tracking reference goes to the coordinator. A confirmation links only to a
+ * Purchase an import already sourced, so no lines are lost.
+ */
+async function linkByExactEvidence(
+  db: Database,
+  input: {
+    source: MailRunSource;
+    ref: { mailboxId: string; messageId: string; checksum: string };
+    subject: string | null;
+    text: string;
+    receivedAt: Date | null;
+    links: readonly string[];
+    keys: MailKeys;
+    senderVendorId: VendorId | null;
+    candidates: readonly MailRuleCandidate[];
+    actor: ActorContext;
+  },
+) {
+  const event = mailLifecycleEvent(input.subject, input.text);
+  if (!event) return false;
+  // The link records package evidence only for references Cubby recognised.
+  // An unknown carrier, an unrecognised tracking reference, or more than one
+  // package (whose individual states the subject cannot prove) needs the
+  // coordinator's extraction.
+  const tracking = input.keys.trackingKeys;
+  if (
+    tracking.length > 1 ||
+    tracking.some((key) => key.carrier === null) ||
+    hasUnrecognisedTracking({
+      text: `${input.subject ?? ""}\n${input.text}`,
+      links: input.links,
+      keys: tracking,
+    })
+  )
+    return false;
+  const { email } = input.source;
+  const ownPurchase = and(
+    notDeleted(purchaseTable),
+    eq(vendorAccount.vendorId, purchaseTable.vendorId),
+    eq(vendorAccount.ledgerPartyId, email.ledgerPartyId),
+    notDeleted(vendorAccount),
+  );
+  const shipmentPurchase = {
+    shipmentId: shipmentTable.id,
+    purchaseId: purchaseTable.shortcode,
+    vendorId: purchaseTable.vendorId,
+    own: sql<boolean>`${vendorAccount.id} IS NOT NULL`,
+  };
+  const sourced = await getDb(db)
+    .selectDistinct(shipmentPurchase)
+    .from(shipmentObservation)
+    .innerJoin(
+      shipmentSourceCapture,
+      eq(shipmentSourceCapture.id, shipmentObservation.sourceCaptureId),
+    )
+    .innerJoin(
+      shipmentTable,
+      eq(shipmentTable.id, shipmentObservation.shipmentId),
+    )
+    .leftJoin(purchaseTable, eq(purchaseTable.id, shipmentTable.purchaseId))
+    .leftJoin(
+      vendorAccount,
+      and(eq(vendorAccount.id, purchaseTable.vendorAccountId), ownPurchase),
+    )
+    .where(
+      and(
+        eq(shipmentSourceCapture.emailId, email.id),
+        eq(shipmentSourceCapture.checksum, input.ref.checksum),
+        isNull(shipmentObservation.supersededById),
+        notDeleted(shipmentTable),
+      ),
+    );
+  const numbers = input.keys.trackingKeys.map((key) => key.number);
+  const tracked = numbers.length
+    ? await getDb(db)
+        .selectDistinct(shipmentPurchase)
+        .from(shipmentTable)
+        .leftJoin(purchaseTable, eq(purchaseTable.id, shipmentTable.purchaseId))
+        .leftJoin(
+          vendorAccount,
+          and(eq(vendorAccount.id, purchaseTable.vendorAccountId), ownPurchase),
+        )
+        .where(
+          and(
+            notDeleted(shipmentTable),
+            sql`(upper(regexp_replace(${shipmentTable.trackingNumber}, '[[:space:]]', '', 'g')) IN (${sql.join(
+              numbers.map((number) => sql`${number}`),
+              sql`, `,
+            )}) OR EXISTS (SELECT 1 FROM jsonb_array_elements(${shipmentTable.extraTrackingNumbers}) ref
+              WHERE upper(regexp_replace(ref->>'trackingNumber', '[[:space:]]', '', 'g')) IN (${sql.join(
+                numbers.map((number) => sql`${number}`),
+                sql`, `,
+              )})))`,
+          ),
+        )
+    : [];
+  const proposals: {
+    purchaseId: string | null;
+    vendorId: VendorId | null;
+    rule: "sourced" | "tracked" | "ordered";
+  }[] = [];
+  // A Shipment held by another member's or a deleted Purchase contradicts any
+  // link; a Shipment no Purchase holds yet names nothing.
+  if (
+    [...sourced, ...tracked].some((row) => row.purchaseId !== null && !row.own)
+  )
+    return false;
+  // (a) names one Purchase; (b) names one Shipment.
+  const sourcedPurchases = [
+    ...new Map(
+      sourced.flatMap((row) =>
+        row.purchaseId ? [[row.purchaseId, row] as const] : [],
+      ),
+    ).values(),
+  ];
+  if (sourcedPurchases.length > 1) return false;
+  if (sourcedPurchases[0])
+    proposals.push({ ...sourcedPurchases[0], rule: "sourced" });
+  const trackedHeld = tracked.filter((row) => row.purchaseId !== null);
+  if (tracked.length > 1 && trackedHeld.length > 0) return false;
+  if (trackedHeld[0]) proposals.push({ ...trackedHeld[0], rule: "tracked" });
+  // (c) Every Purchase the order key names counts, on any account: another
+  // member's equal order is a contradiction, never a filtered-out candidate.
+  if (input.candidates.length) {
+    const [only, ...others] = input.candidates;
+    if (
+      !only ||
+      others.length ||
+      !only.ownAccount ||
+      only.vendorId !== input.senderVendorId ||
+      (event === "confirmation" && !only.importedSource)
+    )
+      return false;
+    proposals.push({
+      purchaseId: only.purchaseId,
+      vendorId: only.vendorId,
+      rule: "ordered",
+    });
+  }
+  const purchaseIds = new Set(proposals.map((item) => item.purchaseId));
+  const [purchaseCode] = purchaseIds;
+  if (purchaseIds.size !== 1 || !purchaseCode) return false;
+  // A sender proven to be another Vendor contradicts the Shipment's Purchase.
+  if (
+    input.senderVendorId &&
+    proposals.some((item) => item.vendorId !== input.senderVendorId)
+  )
+    return false;
+  const sourcedOnly = proposals.every((item) => item.rule === "sourced");
+  const day = input.receivedAt ? householdLocalDate(input.receivedAt) : null;
+  if (!sourcedOnly && event !== "confirmation" && !numbers.length) return false;
+  if (!sourcedOnly && numbers.length && !day) return false;
+  const purchaseId = parseShortcodeFor("purchase", purchaseCode);
+  const shipments =
+    !sourcedOnly && numbers.length && day
+      ? [
+          {
+            purchaseId,
+            shipments: input.keys.trackingKeys.map((key) => ({
+              shipmentId: null,
+              sourceShipmentKey: null,
+              distinctPackageEvidence: null,
+              carrierId: null,
+              carrierName: key.carrier,
+              trackingNumber: key.number,
+              extraTrackingNumbers: [],
+              purpose: "unknown" as const,
+              observations: [
+                {
+                  sourceEventKey: null,
+                  kind: OBSERVED_KIND[event],
+                  time: { kind: "date" as const, value: day },
+                  timeBasis: "notification_received" as const,
+                  rawStatus: input.subject ?? event,
+                  location: null,
+                  carrierId: null,
+                  carrierName: key.carrier,
+                  trackingNumber: key.number,
+                },
+              ],
+            })),
+          },
+        ]
+      : undefined;
+  try {
+    await resolveMail(
+      db,
+      {
+        ...input.ref,
+        disposition: {
+          kind: "linked",
+          purchaseIds: [purchaseId],
+          event,
+          ...(shipments ? { shipments } : {}),
+        },
+      },
+      input.actor,
+      undefined,
+      undefined,
+      { revision: MAIL_IMPORT_RULE_REVISION },
+    );
+  } catch (error) {
+    // SILENT: a refusal (a member's dismissal, a controlled Vendor, changed evidence) leaves the Email to the coordinator.
+    if (error instanceof AppError) return false;
+    throw error;
+  }
+  return true;
+}
+
 /**
  * `settled` when a rule settled the Email; otherwise it goes to the
  * coordinator with what the rule's evidence established (null when the
@@ -184,16 +421,20 @@ async function settleByRule(
   const content = mailReadContent(mail.content, {});
   const text = [content.preheader, content.bodyText].filter(Boolean).join("\n");
   const proof = await senderProofVendor(db, mail.sender);
-  const orderIds = orderIdentifiers(mail.subject, text);
-  const candidates = await readMailRuleCandidates(db, {
-    ledgerPartyId: mail.ledgerPartyId,
-    orderIds,
-  });
+  const keys = await readEmailMailKeys(db, mail);
+  // Order numbers repeat across Vendors; only the sender-proven Vendor's count.
+  const candidates = proof
+    ? await readMailRuleCandidates(db, {
+        ledgerPartyId: mail.ledgerPartyId,
+        vendorId: proof.vendor.id,
+        orderKeys: keys.orderKeys,
+      })
+    : [];
   const known: Omit<KnownForEmail, "products"> = {
     senderVendor: proof
       ? { id: proof.vendor.shortcode, name: proof.vendor.name }
       : null,
-    orderIds,
+    orderIds: keys.orderKeys,
     purchases: candidates.slice(0, KNOWN_PURCHASES_MAX).map((candidate) => ({
       id: candidate.purchaseId,
       orderId: candidate.orderId,
@@ -232,6 +473,12 @@ async function settleByRule(
       known: await knownForCoordinator(),
       attemptContext,
     };
+  const retainedAttachments = await countRetainedMailAttachments(db, mail.id);
+  const ref = {
+    mailboxId: mail.mailboxId,
+    messageId: mail.messageId,
+    checksum: mail.rawChecksum,
+  };
   const decision = decideMailByRule({
     subject: mail.subject,
     text,
@@ -242,8 +489,9 @@ async function settleByRule(
         .data ?? null,
     memberSelected,
     senderVendorId: proof?.vendor.id ?? null,
-    retainedAttachments: await countRetainedMailAttachments(db, mail.id),
+    retainedAttachments,
     candidates,
+    orderKeys: keys.orderKeys,
     carrierNotice: carrierNotice({
       sender: mail.sender,
       subject: mail.subject,
@@ -253,16 +501,31 @@ async function settleByRule(
         : null,
     }),
   });
-  if (decision.kind === "coordinator")
+  if (decision.kind === "coordinator") {
+    // Before spending a coordinator, an exact and unambiguous link settles a
+    // lifecycle notice of a Purchase Cubby already holds.
+    if (
+      retainedAttachments === 0 &&
+      source.email.classification === "related" &&
+      (await linkByExactEvidence(db, {
+        source,
+        ref,
+        subject: mail.subject,
+        text,
+        receivedAt: mail.receivedAt,
+        links: content.links.map((link) => link.href),
+        keys,
+        senderVendorId: proof?.vendor.id ?? null,
+        candidates,
+        actor,
+      }))
+    )
+      return "settled";
     return {
       known: await knownForCoordinator(),
       attemptContext,
     };
-  const ref = {
-    mailboxId: mail.mailboxId,
-    messageId: mail.messageId,
-    checksum: mail.rawChecksum,
-  };
+  }
   try {
     if (decision.kind === "package_notice")
       return (await settleCarrierNotice(

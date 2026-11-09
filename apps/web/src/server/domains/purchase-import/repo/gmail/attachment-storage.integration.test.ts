@@ -574,7 +574,7 @@ describe("Gmail ingestion and attachment storage", () => {
       saved: ["msg-1"],
       deleted: ["msg-gone"],
       excluded: [],
-      blocked: [],
+      unretained: [],
       unrelated: [],
     });
     expect(outcome.orderMailIds).toHaveLength(1);

@@ -12,7 +12,10 @@
 import { testEntityId, testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 
-import { orderIdentifiers } from "../repo/mail-rule-evidence";
+import {
+  extractMailKeys,
+  hasUnrecognisedTracking,
+} from "../repo/mail-rule-evidence";
 import {
   carrierNotice,
   decideMailByRule,
@@ -104,17 +107,115 @@ describe("mail import rule", () => {
     ).toBe("coordinator");
   });
 
-  it("finds printed order identifiers, not amounts or phrases", () => {
+  // Exact linking compares these keys: a tracking number read as an order
+  // number (or the reverse) links the wrong Purchase.
+  it("keeps normalized order numbers and carrier tracking apart, not amounts or phrases", () => {
+    const keys = extractMailKeys({
+      subject: "Your order #syn-1001 has shipped",
+      text: "Order number: 112-3344556-7788990. Order total $24.00. Tracking number: 1Z999AA10123456784. USPS 9400 1000 0000 0000 0000 00",
+      links: [
+        "https://www.fedex.com/fedextrack/?trknbr=123456789012",
+        "https://example.test/track?tracking_number=SYNTRACK0042",
+      ],
+    });
+    expect(keys.orderKeys).toEqual(
+      expect.arrayContaining(["SYN-1001", "112-3344556-7788990"]),
+    );
+    expect(keys.trackingKeys).toEqual(
+      expect.arrayContaining([
+        { carrier: "UPS", number: "1Z999AA10123456784" },
+        { carrier: "USPS", number: "9400100000000000000000" },
+        { carrier: "FedEx", number: "123456789012" },
+        { carrier: null, number: "SYNTRACK0042" },
+      ]),
+    );
+    expect(keys.orderKeys).not.toContain("1Z999AA10123456784");
+    // OnTrac's tracking number is never an order key.
+    const ontrac = extractMailKeys({
+      subject: "Your package was delivered",
+      text: "Tracking Number: D10000000000042",
+      links: [],
+    });
+    expect(ontrac.trackingKeys).toEqual([
+      { carrier: "OnTrac", number: "D10000000000042" },
+    ]);
+    expect(ontrac.orderKeys).not.toContain("D10000000000042");
     expect(
-      orderIdentifiers(
-        "Your order #SYN-1001 has shipped",
-        "Order number: 112-3344556-7788990. Order total $24.00.",
-      ),
-    ).toEqual(expect.arrayContaining(["SYN-1001", "112-3344556-7788990"]));
-    expect(
-      orderIdentifiers("Synthetic newsletter", "Save $24.00 today"),
-    ).toEqual([]);
+      extractMailKeys({
+        subject: "Synthetic newsletter",
+        text: "Save $24.00 today",
+        links: [],
+      }),
+    ).toEqual({ orderKeys: [], trackingKeys: [] });
   });
+
+  // A rule link records only recognised packages; any other labelled or
+  // linked package reference must send the Email to the coordinator.
+  it.each([
+    [
+      "Tracking: 1Z999AA10123456784. Second package tracking: AB12-3456-7890",
+      [],
+      true,
+    ],
+    [
+      "Tracking: 1Z999AA10123456784. Second package tracking:\nAB12-3456-7890",
+      [],
+      true,
+    ],
+    [
+      "Tracking: 1Z999AA10123456784. Second package tracking: AB-1234567",
+      [],
+      true,
+    ],
+    // The order exemption covers only the order number, not what follows.
+    [
+      "Tracking: 1Z999AA10123456784. Second package tracking: order 123456; AB-1234567",
+      [],
+      true,
+    ],
+    [
+      "Tracking: 1Z999AA10123456784. Second package tracking: order 123456\nAB-1234567",
+      [],
+      true,
+    ],
+    // Fragmented references still count.
+    [
+      "Tracking: 1Z999AA10123456784. Second package tracking: AB\t1234\t5678",
+      [],
+      true,
+    ],
+    [
+      "Tracking: 1Z999AA10123456784. Second package tracking: AB 1234\n5678",
+      [],
+      true,
+    ],
+    // Two labelled references, one recognised key: a second package.
+    [
+      "Tracking: 1Z999AA10123456784. Return parcel 1Z999AA10123456784",
+      [],
+      true,
+    ],
+    ["Tracking number: 1Z999AA10123456784. Thanks for shopping.", [], false],
+    [
+      "Your shipment for order 112-3344556-7788990 left. Tracking number: 1Z999AA10123456784",
+      [],
+      false,
+    ],
+    ["USPS tracking: 420 94110 9400 1000 0000 0000 0000 00", [], false],
+    [
+      "Tracking number: 1Z999AA10123456784",
+      ["https://carrier.example.test/track?ref=SYN99887766"],
+      true,
+    ],
+  ] as const)(
+    "flags %j (links %j) as unrecognised: %s",
+    (text, links, flagged) => {
+      const { trackingKeys } = extractMailKeys({ subject: null, text, links });
+      expect(hasUnrecognisedTracking({ text, links, keys: trackingKeys })).toBe(
+        flagged,
+      );
+    },
+  );
 
   it.each([
     "Your order SYN-1001 has shipped",

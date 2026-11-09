@@ -135,7 +135,7 @@ export const mailCoverage = z.strictObject({
       classified: count,
       retained: count,
       pending: count,
-      blocked: count,
+      unsettled: count,
       imported: count,
       sellerUnresolved: count,
     }),

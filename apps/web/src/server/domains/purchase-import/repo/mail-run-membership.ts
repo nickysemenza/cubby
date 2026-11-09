@@ -1,4 +1,6 @@
+import { emailImportAttempts } from "@cubby/schemas/email-fields";
 import { runEntityId, type RunId } from "@cubby/schemas/identifiers";
+import { agentFailureCode } from "@cubby/schemas/purchase-agent-services";
 import {
   MAIL_RUN_ROSTER_LIMIT,
   mailResearchRunInput,
@@ -19,6 +21,48 @@ import { email as emailTable, run } from "~/server/db/retained-tables";
 import type { RetainedMail } from "~/server/domains/mail/repo/retained-mail";
 import { createAppError } from "~/server/errors/app-error";
 import { recordChange } from "~/server/generic/changes/repo/change";
+
+/**
+ * Mail import Runs one Email may enter at one evidence revision. Every
+ * admission counts (fresh, transient retry, transfer), so a coordinator
+ * failing before it claims anything cannot readmit the same evidence forever.
+ * The revision is what the readmission guard compares: the checksum, plus the
+ * Run's `evidenceRevision` (sender mapping, accepted-order fingerprint or
+ * retained-source revision) when a recheck admitted it. A new revision
+ * restarts the count.
+ */
+const MAIL_IMPORT_ATTEMPTS_PER_REVISION = 3;
+
+const ATTEMPT = emailImportAttempts.keyof().enum;
+
+/** The attempt key of an Email at its current checksum under one Run's revision. */
+const revisionKeySql = (evidenceRevision?: string) =>
+  evidenceRevision
+    ? sql`${emailTable.checksum} || ${`:${evidenceRevision}`}::text`
+    : sql`${emailTable.checksum}`;
+
+/** One more admission of the Email under the admitting Run's revision. */
+export const countImportAttempt = (evidenceRevision?: string) => {
+  const key = revisionKeySql(evidenceRevision);
+  return sql`CASE WHEN ${emailTable.importAttempts}->>${ATTEMPT.revision}::text = ${key}
+  THEN jsonb_build_object(${ATTEMPT.revision}::text, ${key}, ${ATTEMPT.count}::text, coalesce((${emailTable.importAttempts}->>${ATTEMPT.count}::text)::int, 0) + 1)
+  ELSE jsonb_build_object(${ATTEMPT.revision}::text, ${key}, ${ATTEMPT.count}::text, 1) END`;
+};
+
+/** Unattended admission of the unchanged checksum used every attempt. */
+export const importAttemptsExhaustedSql = sql`coalesce(${emailTable.importAttempts}->>${ATTEMPT.revision}::text = ${emailTable.checksum}
+  AND (${emailTable.importAttempts}->>${ATTEMPT.count}::text)::int >= ${MAIL_IMPORT_ATTEMPTS_PER_REVISION}, false)`;
+
+/** The Email used every attempt at this revision (none: plain admission). */
+export const importAttemptsExhausted = (
+  email: Pick<typeof emailTable.$inferSelect, "checksum" | "importAttempts">,
+  evidenceRevision?: string,
+) =>
+  email.importAttempts?.revision ===
+    (evidenceRevision
+      ? `${email.checksum}:${evidenceRevision}`
+      : email.checksum) &&
+  email.importAttempts.count >= MAIL_IMPORT_ATTEMPTS_PER_REVISION;
 
 export const MAIL_SOURCE_TRANSFER_OPERATION = "mail_source_transfer";
 export const mailSourceTransferReceipt = z.strictObject({
@@ -238,7 +282,7 @@ export async function admitSupportingMailSource(
         `Another Mail import Run holds ${message.shortcode} (${holder.shortcode}, ${holder.status}); it stays with that Run until that Run settles it or a member resumes or retries it. Settle the current Email without it: link a lifecycle notice to the Purchase it names, or resolve it unresolved naming ${message.shortcode}. Escalating does not change this.`,
       );
   }
-  if (!["pending", "blocked"].includes(message.status))
+  if (!["pending", "unsettled"].includes(message.status))
     throw createAppError(
       "MAIL_SOURCE_ADMISSION_REFUSED",
       `A supporting original must be an Email no import has settled; ${message.shortcode} is ${message.status}.`,
@@ -258,7 +302,12 @@ export async function admitSupportingMailSource(
     .where(eq(run.id, runId));
   await tx
     .update(emailTable)
-    .set({ runId, status: "researching", updatedAt: new Date() })
+    .set({
+      runId,
+      status: "researching",
+      importAttempts: countImportAttempt(roster.evidenceRevision),
+      updatedAt: new Date(),
+    })
     .where(eq(emailTable.id, message.id));
   await recordChange(db, { kind: "source", categories: ["email"] });
 }
@@ -296,9 +345,20 @@ export async function transferMailRunSources(
     throw new Error(
       "Mail restart evidence changed; reconcile the original Run.",
     );
+  const [successor] = await tx
+    .select({ input: run.input })
+    .from(run)
+    .where(eq(run.id, toRunId));
+  const roster = mailResearchRunInput.parse(successor?.input);
   const assigned = await tx
     .update(emailTable)
-    .set({ runId: toRunId, status: "researching", updatedAt: new Date() })
+    .set({
+      runId: toRunId,
+      status: "researching",
+      // The successor attempts the revision its own input names.
+      importAttempts: countImportAttempt(roster.evidenceRevision),
+      updatedAt: new Date(),
+    })
     .where(
       and(
         eq(emailTable.runId, fromRunId),
@@ -311,11 +371,6 @@ export async function transferMailRunSources(
     .returning({ id: emailTable.id });
   if (assigned.length !== sources.length)
     throw new Error("Mail successor ownership transfer is incomplete.");
-  const [successor] = await tx
-    .select({ input: run.input })
-    .from(run)
-    .where(eq(run.id, toRunId));
-  const roster = mailResearchRunInput.parse(successor?.input);
   await tx
     .update(run)
     .set({
@@ -332,14 +387,36 @@ export async function transferMailRunSources(
 }
 
 /**
- * A Mail import Run that fails on its own, or whose coordinator stops for
- * review before claiming every Email, returns its still-researching Emails to
- * Mail discovery; nothing else would ever admit them again. Settled and
- * `blocked` Emails (the review's subject) stay. An Email an earlier Run already
- * left unsettled stays with this Run as `blocked` instead, so a message that
- * keeps ending its import unsettled does not spend a coordinator every discovery
- * pass and does not claim research nothing is doing; a member's retry still
- * transfers it.
+ * A member's cancel stops the Run's work without handing it back to
+ * discovery, which would readmit what the member stopped: its researching
+ * Emails stay with it as `unsettled`, for its retry or restart, or a new
+ * evidence revision.
+ */
+export async function holdCancelledMailRunSources(
+  tx: DrizzleTransaction,
+  runId: RunId,
+) {
+  const held = await tx
+    .update(emailTable)
+    .set({ status: "unsettled", updatedAt: new Date() })
+    .where(
+      and(eq(emailTable.runId, runId), eq(emailTable.status, "researching")),
+    )
+    .returning({ id: emailTable.id });
+  if (held.length)
+    await recordChange(tx, { kind: "source", categories: ["email"] });
+}
+
+/**
+ * A Mail import Run that fails or stops for review before
+ * settling every Email returns the Emails no coordinator reached to Mail
+ * discovery; nothing else would ever admit them again. An Email this Run or an
+ * earlier failed Run already claimed, or whose checksum used every admission
+ * attempt, stays with this Run as `unsettled`: a
+ * message that keeps ending its import unsettled must not spend a coordinator
+ * every discovery pass, and must not claim research nothing is doing. Only a
+ * new evidence revision (`mail-import-run.ts`), a transient-failure retry or a
+ * member's retry admits it again.
  */
 export async function releaseUnsettledMailRunSources(
   tx: DrizzleTransaction,
@@ -350,10 +427,12 @@ export async function releaseUnsettledMailRunSources(
   );
   if (!held.length) return [];
   const [current] = await tx
-    .select({ startedAt: run.startedAt })
+    .select({ startedAt: run.startedAt, input: run.input })
     .from(run)
     .where(eq(run.id, runId));
   if (!current) throw new Error("Mail import Run was not found");
+  const evidenceRevision = mailResearchRunInput.safeParse(current.input).data
+    ?.evidenceRevision;
   const earlierFailures = await tx
     .select({
       runId: runOperation.runId,
@@ -368,7 +447,8 @@ export async function releaseUnsettledMailRunSources(
         or(
           and(
             eq(run.status, "failed"),
-            inArray(run.failureCode, [...SELF_FAILURE_CODES]),
+            // Failures a Run reached on its own; a member's cancel is not an attempt.
+            inArray(run.failureCode, [...agentFailureCode.options]),
           ),
           eq(run.status, "needs_review"),
         ),
@@ -419,16 +499,54 @@ export async function releaseUnsettledMailRunSources(
           });
     }
   }
+  // This Run's own claims count as attempts: its coordinator reached the
+  // Email and ended without settling it.
+  const ownClaims = await tx
+    .select({ result: runOperation.result })
+    .from(runOperation)
+    .where(
+      and(
+        eq(runOperation.runId, runId),
+        eq(runOperation.kind, "claim_next_work"),
+        eq(runOperation.state, "completed"),
+      ),
+    );
+  for (const row of ownClaims) {
+    const claim = claimedMail.safeParse(row.result);
+    if (!claim.success) continue;
+    for (const source of held)
+      if (
+        source.email.mailboxId === claim.data.email.mailboxId &&
+        source.email.messageId === claim.data.email.messageId
+      )
+        attempts.set(`${runId}:${source.orderMailId}`, {
+          orderMailId: source.orderMailId,
+          unsettled: true,
+        });
+  }
   const failedBefore = new Set(
     [...attempts.values()]
       .filter((attempt) => attempt.unsettled)
       .map((attempt) => attempt.orderMailId),
   );
+  // An Email whose revision used every attempt also stays: returning it would
+  // let discovery admit identical evidence again. A recheck Run's Emails were
+  // unsettled before it, so they all stay for its next new revision.
+  const exhausted = new Set(
+    held
+      .filter(
+        (source) =>
+          evidenceRevision !== undefined ||
+          importAttemptsExhausted(source.email),
+      )
+      .map((source) => source.orderMailId),
+  );
+  for (const orderMailId of exhausted) failedBefore.add(orderMailId);
   const kept = held.filter((source) => failedBefore.has(source.orderMailId));
   if (kept.length)
     await tx
       .update(emailTable)
-      .set({ status: "blocked", updatedAt: new Date() })
+      .set({ status: "unsettled", updatedAt: new Date() })
       .where(
         and(
           eq(emailTable.runId, runId),
@@ -445,6 +563,7 @@ export async function releaseUnsettledMailRunSources(
   if (!released.length) return [];
   // The admission replay key names this Run's source set; readmitting the same
   // released Emails would otherwise replay this ended Run instead of starting one.
+  // The revision fence reads `input.evidenceRevision`, which stays.
   await tx.update(run).set({ clientKey: null }).where(eq(run.id, runId));
   return tx
     .update(emailTable)
@@ -461,9 +580,6 @@ export async function releaseUnsettledMailRunSources(
     )
     .returning({ id: emailTable.id });
 }
-
-/** Failures the Run reached on its own; a member's cancel keeps its Emails. */
-const SELF_FAILURE_CODES = ["agent_failed", "agent_aborted"] as const;
 
 const claimedMail = z.object({
   kind: z.literal("email"),

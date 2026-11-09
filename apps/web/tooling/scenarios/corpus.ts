@@ -910,7 +910,7 @@ async function seedConnectedHousehold(
     checksum,
     classification: "uncertain",
     classificationVersion: "synthetic-household/v1",
-    status: "blocked",
+    status: "pending",
   });
 
   await seedHouseholdPhotos(db, context, userId, storage, clothing, readImage);

@@ -27,20 +27,52 @@ describe("settlementReport", () => {
   });
 
   // A model or tool fault must not leave the run `running` with no
-  // coordinator behind it; it fails with the harness's own reason.
-  it("fails the run on any other unanswered outcome, keeping pi's reason", () => {
+  // coordinator behind it; it fails with its class, the harness's own reason
+  // and the last recorded error.
+  it("fails the run on any other unanswered outcome, keeping pi's reason and error", () => {
     expect(
-      settlementReport({
-        operationId: "op-1",
-        session: "1",
-        status: "unanswered",
-        reason: "model_error",
-      }),
+      settlementReport(
+        {
+          operationId: "op-1",
+          session: "1",
+          status: "unanswered",
+          reason: "model_error",
+        },
+        "503 upstream connect error",
+      ),
     ).toEqual({
       kind: "fail",
-      failureCode: "agent_failed",
-      detail: "Coordinator unanswered: model_error",
+      failureCode: "agent_transient",
+      detail:
+        "Coordinator transient failure (model_error): 503 upstream connect error",
     });
+  });
+
+  // Only a transient class retries automatically: a deterministic failure
+  // retried at Run scope re-spends a coordinator on the same refusal.
+  it.each([
+    ["model_error", "429 Too Many Requests", "agent_transient"],
+    ["model_error", "AI gateway egress deadline exceeded", "agent_transient"],
+    ["model_error", "Request status code: 502", "agent_transient"],
+    ["faulted", "Connection terminated unexpectedly", "agent_transient"],
+    ["stale", undefined, "agent_transient"],
+    ["reset", undefined, "agent_transient"],
+    ["model_error", undefined, "agent_failed"],
+    [
+      "faulted",
+      "import_extracted_order: orders.0.lines.2.total: expected 500, got 50",
+      "agent_failed",
+    ],
+    ["model_error", "403 Forbidden: invalid API key", "agent_failed"],
+    ["model_error", "HTTP 403: network access denied", "agent_failed"],
+    ["stale", "401 Unauthorized: gateway timeout", "agent_failed"],
+  ] as const)("classifies %s with %j as %s", (reason, lastError, code) => {
+    expect(
+      settlementReport(
+        { operationId: "op-1", session: "1", status: "unanswered", reason },
+        lastError,
+      ),
+    ).toMatchObject({ kind: "fail", failureCode: code });
   });
 });
 
