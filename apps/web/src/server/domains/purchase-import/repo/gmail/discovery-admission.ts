@@ -52,15 +52,20 @@ export async function lockMailDiscoveryRunAdmission(
 
 /** Explicit readmission may narrow a frozen targeted page, never its source inputs. */
 export function retainedMailDiscoveryScope(
-  input: Pick<typeof run.$inferSelect, "input" | "progress">,
+  input: Pick<
+    typeof run.$inferSelect,
+    "input" | "progress" | "status" | "failureCode"
+  >,
 ): MailboxDiscoveryScope {
   const declared = mailboxDiscoveryInput.parse(input.input);
   const progress = mailboxDiscoveryProgress.parse(input.progress);
   if (declared.controlled) return { kind: "mailbox" };
   if (progress.discoveryScope) {
-    // Before history was pinned, only ordinary queued history was created
-    // paused without a frozen page; initialization started in listing instead.
+    // Authorization also pauses initialization before a page freezes; only
+    // the admission-wait owner establishes legacy queued history intent.
     if (
+      input.status === "paused" &&
+      input.failureCode === MAIL_DISCOVERY_ADMISSION_WAIT &&
       progress.discoveryScope.kind === "mailbox" &&
       progress.admissionClass === "automatic" &&
       progress.phase === "paused" &&
@@ -162,7 +167,10 @@ async function readMailDiscoveryOwners(
         !owner.controlled &&
         !owner.pageScopedKey &&
         (progress.discoveryScope.mode === "new_mail" ||
-          (progress.phase === "paused" && !owner.hasFrozenPage)),
+          (owner.status === "paused" &&
+            owner.failureCode === MAIL_DISCOVERY_ADMISSION_WAIT &&
+            progress.phase === "paused" &&
+            !owner.hasFrozenPage)),
     };
   });
 }

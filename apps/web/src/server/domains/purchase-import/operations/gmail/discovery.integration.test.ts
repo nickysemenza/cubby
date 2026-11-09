@@ -2435,12 +2435,54 @@ describe("scheduled Gmail discovery", () => {
   });
   it("pauses revoked authentication without moving the page or negatively classifying it, then reconnects", async () => {
     const state = await seed();
+    const initial = await readRun(state.params.runId);
+    expect(
+      await listMailDiscovery(
+        ctx.db,
+        state.params,
+        ports(
+          gmail({
+            getProfile: async () => {
+              throw new GmailAuthorizationError(
+                "Synthetic authorization expired before initialization",
+              );
+            },
+          }),
+        ),
+      ),
+    ).toEqual({ kind: "stopped" });
+    expect(await readRun(state.params.runId)).toMatchObject({
+      status: "paused_auth",
+      failureCode: "gmail_reconnect_required",
+      input: initial.input,
+      progress: { phase: "paused", discoveryScope: { kind: "mailbox" } },
+    });
+    expect(
+      mailboxDiscoveryProgress.parse(
+        (await readRun(state.params.runId)).progress,
+      ).page,
+    ).toBeUndefined();
+    const reconnected = await launchWorkflowRun(ctx.db, {
+      runId: runEntityId.parse(state.params.runId),
+      purpose: "mail_discovery",
+    });
+    state.params.attempt = reconnected.attempt;
+    expect(
+      mailboxDiscoveryProgress.parse(
+        (await readRun(state.params.runId)).progress,
+      ).discoveryScope,
+    ).toEqual({ kind: "mailbox" });
     const provider = gmail({
       getMessage: async () => {
         throw new GmailAuthorizationError("Synthetic revoked authorization");
       },
     });
     await listMailDiscovery(ctx.db, state.params, ports(provider));
+    expect(
+      mailboxDiscoveryProgress.parse(
+        (await readRun(state.params.runId)).progress,
+      ).page?.scopedKey,
+    ).toBeDefined();
     expect(
       await saveMailDiscoveryBatch(ctx.db, state.params, 0, ports(provider)),
     ).toEqual({ kind: "stopped" });

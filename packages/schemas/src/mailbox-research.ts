@@ -195,7 +195,7 @@ export const mailboxDiscoveryScope = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("query"), key: z.string().min(1) }),
   z.object({
     kind: z.literal("mailbox"),
-    /** Pins ordinary history demand; absent on initialization and legacy work. */
+    /** Pins ordinary history demand; absent on initialization and unscoped work. */
     mode: z.literal("new_mail").optional(),
   }),
 ]);
