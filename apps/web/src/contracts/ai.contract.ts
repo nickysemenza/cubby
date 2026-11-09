@@ -36,6 +36,7 @@ import {
 } from "@cubby/schemas/ai";
 import {
   aiFundingStatus,
+  fundingRefusalSource,
   aiBudgetSettings,
 } from "@cubby/schemas/mail-import-settings";
 import { z as zod } from "zod";
@@ -238,7 +239,7 @@ export const aiFundingContract = defineContract(
   {
     status: query({
       description:
-        "The current six-hour window's funding: credit (Claude subscriber credit spent at standard API cost of limitUsd, default $1.50, with state available or refused: a recorded Anthropic refusal such as a Console spend limit, skipped until `until` with one probe per window, and its raw `reason`), openaiCredit (OpenAI API credit, separate standard-cost budget and refusal state), paid (charged cost of $1) and plan (ChatGPT plan available, paused until a quota reset, disconnected or needing reauthorization, with the raw reason). Frontier calls use Claude credit, OpenAI credit, then the plan, then paid only where allowed; background work uses each source within its window budget, then waits. Change it with ai_funding.",
+        "The current six-hour window's funding per source: credit (Claude subscriber credit spent at standard API cost of limitUsd, default $1.50, with state available or refused: a recorded Anthropic refusal such as a Console spend limit, skipped until `until` with one probe per window, and its raw `reason`), openaiCredit (OpenAI API credit, separate standard-cost budget and refusal state), plan (ChatGPT plan available, paused until a quota reset, disconnected or needing reauthorization, with the raw reason) and paid (charged cost of $1, with state refused when the AI Gateway reported an empty balance, until the window ends, with its raw reason). Each source's `availability` is the server's verdict for background work: usable, or a blocker (budget_spent, provider_refused, plan_limit, disconnected, needs_reauthorization, gateway_balance_empty) with `until` when it recovers by itself. Frontier calls use Claude credit, OpenAI credit, then the plan, then paid only where allowed; background work uses each source within its window budget, then waits. Change it with ai_funding.",
       input: zod.strictObject({}),
       output: aiFundingStatus,
       // Spend and refusals move with model calls; Run writes refresh it.
@@ -246,15 +247,15 @@ export const aiFundingContract = defineContract(
     }),
     setCreditBudget: mutation({
       description:
-        "Set household AI budgets per six-hour window: creditLimitUsd (Claude standard API cost), openaiCreditLimitUsd (OpenAI API credit standard cost, default $1.50), planLimitUsd (ChatGPT standard API cost, default $2), and paidLimitUsd (charged cost, default $1). Background work moves from Claude credit to OpenAI credit to plan, then paid within these limits. Also clears recorded API credit refusals, and work paused for free capacity retries now. Returns ai_funding_read.status.",
+        "Set household AI budgets per six-hour window: creditLimitUsd (Claude standard API cost), openaiCreditLimitUsd (OpenAI API credit standard cost, default $1.50), planLimitUsd (ChatGPT standard API cost, default $2), and paidLimitUsd (charged cost, default $1). Background work moves from Claude credit to OpenAI credit to plan, then paid within these limits. Also clears recorded Claude and OpenAI credit refusals (not a paid gateway refusal), and work paused for funding retries now. Returns ai_funding_read.status.",
       input: aiBudgetSettings,
       output: aiFundingStatus,
       invalidates: ["runOnly"],
     }),
-    resetCreditRefusal: mutation({
+    resetFundingRefusal: mutation({
       description:
-        "Clear recorded Claude and OpenAI API credit refusals so the next frontier call tries those credits again, e.g. after restoring provider capacity; work paused for free capacity retries now. A still-refusing provider records the refusal again on that call. Returns ai_funding_read.status.",
-      input: zod.strictObject({}),
+        "Clear a recorded funding refusal so the next frontier call tries that source again, e.g. after adding Claude or OpenAI credit or AI Gateway balance: source credit, openaiCredit or paid, or every source when omitted. Work paused for funding retries now; a still-refusing provider records the refusal again on that call. Returns ai_funding_read.status.",
+      input: zod.strictObject({ source: fundingRefusalSource.optional() }),
       output: aiFundingStatus,
       invalidates: ["runOnly"],
     }),

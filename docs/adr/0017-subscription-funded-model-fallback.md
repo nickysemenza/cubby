@@ -191,6 +191,12 @@ credit rung until then, probing once per window. A member reset or credit
 budget change clears it. The mechanism lives in
 [Infrastructure](../infrastructure.md#claude-subscriber-credits).
 
+Amended after an empty AI Gateway balance refused every paid call while the
+funding card said Paid was "within budget" and paused Runs read "AI budget
+reached": the paid rung's gateway refusal is recorded and held like a credit
+refusal, cleared by its own reset or a paid grant but not by a budget change,
+and funding pauses name the source that refused.
+
 A member's "Run now, paid allowed" grant, available in the Run header's
 More actions menu and on the Mail import card, resumes a paused Run (its
 retries and the imports its discovery starts) now. Spending past a spent paid

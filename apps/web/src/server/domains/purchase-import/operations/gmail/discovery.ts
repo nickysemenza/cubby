@@ -430,6 +430,10 @@ export async function startMailDiscovery(
     paidGrant?: DiscoveryPaidGrant;
   } = {},
 ): Promise<MailboxDiscoveryStartOutput> {
+  // The member chose to pay now: probe the gateway instead of replaying its
+  // recorded refusal.
+  if (options.paidGrant)
+    await (await import("~/server/ai/funding")).resetFundingRefusal("paid");
   const grantPaid = async (runId: RunId) => {
     if (!options.paidGrant) return;
     await recordPaidGrant(db, options.paidGrant.actor, {

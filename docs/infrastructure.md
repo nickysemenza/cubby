@@ -643,10 +643,33 @@ six-hour window. While it holds, credit admission answers at once with a
 so every ladder moves on to OpenAI API credits; unified (paid) traffic is
 unaffected. One credit request per window passes as a probe: success clears
 the refusal, another refusal records it again. "Retry Claude credit now"
-(Settings → AI funding, MCP `ai_funding.reset_credit_refusal`) and any credit
-budget change clear it and resume funding-paused Runs. `ai_funding_read.status`
-and the AI funding card report it as `credit.state` `refused`, with `until` and
-`reason`. Refusals that arrive only inside a stream are not recorded.
+(Settings → AI funding, MCP `ai_funding.reset_funding_refusal` with `source:
+"credit"`) and any credit budget change clear it and resume funding-paused
+Runs. `ai_funding_read.status` and the AI funding card report it as
+`credit.state` `refused`, with `until` and `reason`. Refusals that arrive only
+inside a stream are not recorded.
+
+The paid rung's gateway balance is held the same way. When a paid Unified
+Billing response (400, 402 or 403; Workers AI bills separately and is never
+gated) carries an empty-balance refusal (`isGatewayBalanceEmpty`; a missing BYOK
+credential is one provider's setup failure and is never recorded),
+the egress object records it as `paid:gateway` with the raw body until the
+window end. While it holds, paid admission answers at once with a 402 replaying
+that raw body, so every paid caller pauses for funding exactly as on the
+gateway's own refusal, without an upstream call; a paid success clears it.
+"Retry paid now" (MCP `ai_funding.reset_funding_refusal` with `source:
+"paid"`) and a member's paid grant ("Run now, paid allowed") clear it; a
+budget change does not. It reads as `paid.state` `refused`.
+
+Each source in `ai_funding_read.status` carries a server-derived
+`availability` (`usable`, `blocker`, `until`) for background work: a recorded
+refusal or plan connection problem outranks a spent window budget. Settings
+shows it as one Status chip per row (green usable, amber recovers by itself,
+red needs a member), with the raw reason behind that row's Details and its
+recovery action on the same row. A funding pause names its source: a paid
+refusal pauses the Run with `Paid models unavailable: <why> (<raw>); retrying
+at <window end>`, while a spent paid budget keeps `AI budget reached: $X of
+$Y paid…`.
 
 1. Link the eligible Claude plan to the intended Anthropic Console organization.
 2. Create a dedicated Cubby workspace with a monthly spend limit no larger than

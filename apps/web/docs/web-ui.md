@@ -219,8 +219,10 @@ preserves shopping-list printing; it does not fetch unloaded server pages.
 `StaticTable` shares the table atoms with `RTable`, including accessible native
 table attributes. Use its columns, conditional visibility, row headers,
 row styling, and cell props for static reports rather than hand-writing a
-body. Spanning cells may return null cell props for covered cells. Do not add
-filtering, navigation, or inspection state to `StaticTable`.
+body. Spanning cells may return null cell props for covered cells. `rowDetail`
+renders a full-width row under its parent (a disclosed raw diagnostic); the
+caller owns its open state and toggle. Do not add filtering, navigation, or
+inspection state to `StaticTable`.
 
 Table primitives/raw tables remain for actual matrices, spanning dependency
 grids, authored document tables, and loading skeletons. Debug reports use

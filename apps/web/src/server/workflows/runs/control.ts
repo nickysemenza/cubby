@@ -119,6 +119,9 @@ export async function controlWorkflowRun(
       runId: row.id,
       paidOverBudgetUsd: input.paidOverBudgetUsd,
     });
+    // The member chose to pay now: probe the gateway instead of replaying
+    // its recorded refusal.
+    await (await import("~/server/ai/funding")).resetFundingRefusal("paid");
     await launchWorkflowRun(db, { runId: row.id, purpose });
     return;
   }

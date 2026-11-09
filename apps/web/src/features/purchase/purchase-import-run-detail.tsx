@@ -11,6 +11,7 @@ import { runInputsErased } from "@cubby/schemas/run-fields";
 import { humanize } from "@cubby/shared";
 import { ACTIVE_RUN_STATUSES } from "@cubby/shared/client-constants";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
 import {
   type ReactNode,
   useEffect,
@@ -197,7 +198,10 @@ function PaidRunControl({ run }: { run: RunDetail }) {
       />
       {run.dispatch.error ? (
         <p className="max-w-md text-right text-xs break-words text-muted-foreground">
-          {run.dispatch.error}
+          {run.dispatch.error}{" "}
+          <Link to="/settings" hash="ai-funding" className="underline">
+            AI funding
+          </Link>
         </p>
       ) : null}
       {control.isError ? (

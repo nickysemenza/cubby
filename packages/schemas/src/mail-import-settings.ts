@@ -64,25 +64,58 @@ export const chatGptPlanAvailability = z.strictObject({
 export type ChatGptPlanAvailability = z.infer<typeof chatGptPlanAvailability>;
 
 /**
- * Whether Anthropic accepts the Claude subscriber credit: `refused` after a
- * recorded provider refusal (a Console spend limit, a spent balance) until the
- * date it names or the window end (`until`), probed once per window; `reason`
- * keeps the provider's raw refusal.
+ * Whether a provider accepts this funding source: `refused` after a recorded
+ * funding refusal (a Console spend limit, a spent credit balance, an empty AI
+ * Gateway balance) until the date it names or the window end (`until`), probed
+ * once per window; `reason` keeps the provider's raw refusal.
  */
-export const claudeCreditAvailability = z.strictObject({
+export const fundingRefusalState = z.strictObject({
   state: z.enum(["available", "refused"]),
   until: z.iso.datetime().nullable(),
   reason: z.string().nullable(),
 });
 
+/** The funding sources whose recorded refusal a member can clear. */
+export const fundingRefusalSource = z.enum(["credit", "openaiCredit", "paid"]);
+export type FundingRefusalSource = z.infer<typeof fundingRefusalSource>;
+
+/**
+ * Whether background work can draw this source now, derived on the server
+ * from its window budget and recorded refusal or connection state. `blocker`
+ * names why not; `until` is when it recovers by itself, if known.
+ */
+export const fundingAvailability = z.strictObject({
+  usable: z.boolean(),
+  blocker: z
+    .enum([
+      "budget_spent",
+      "provider_refused",
+      "plan_limit",
+      "disconnected",
+      "needs_reauthorization",
+      "gateway_balance_empty",
+    ])
+    .nullable(),
+  until: z.iso.datetime().nullable(),
+});
+export type FundingAvailability = z.infer<typeof fundingAvailability>;
+
+const withAvailability = { availability: fundingAvailability };
+
 /**
  * Household-wide frontier AI funding (ADR 0017): separate provider credit
- * budgets and refusals, the plan and paid budget decide when background work waits.
+ * budgets and refusals, the plan, and the paid budget and gateway refusal
+ * decide when background work waits.
  */
 export const aiFundingStatus = aiBudgetStatus.extend({
-  credit: budgetUse.extend(claudeCreditAvailability.shape),
-  openaiCredit: budgetUse.extend(claudeCreditAvailability.shape),
-  plan: budgetUse.extend(chatGptPlanAvailability.shape),
+  credit: budgetUse.extend(fundingRefusalState.shape).extend(withAvailability),
+  openaiCredit: budgetUse
+    .extend(fundingRefusalState.shape)
+    .extend(withAvailability),
+  plan: budgetUse
+    .extend(chatGptPlanAvailability.shape)
+    .extend(withAvailability),
+  paid: budgetUse.extend(fundingRefusalState.shape).extend(withAvailability),
 });
 export type AiFundingStatus = z.infer<typeof aiFundingStatus>;
 

@@ -502,13 +502,20 @@ export function isInferenceFundingRefusal(
 }
 
 /**
+ * The gateway account itself has no balance: every paid provider fails alike,
+ * unlike a missing BYOK credential, which is one provider's setup problem.
+ */
+export const isGatewayBalanceEmpty = (failure: string) =>
+  /Insufficient unified billing balance|Insufficient balance; add money to your gateway or use BYOK/u.test(
+    failure,
+  );
+
+/**
  * The paid rung has no money or no credential: no later attempt can answer until
  * someone changes that, so the caller waits for funding rather than failing.
  */
 export const isPaidFundingUnavailable = (failure: string) =>
-  /Insufficient unified billing balance|Insufficient balance; add money to your gateway or use BYOK|has no BYOK credential/u.test(
-    failure,
-  );
+  isGatewayBalanceEmpty(failure) || /has no BYOK credential/u.test(failure);
 
 /**
  * The egress Durable Object's answer while a recorded provider credit refusal
@@ -528,11 +535,23 @@ export function creditRefusedResponse(
       type: "error",
       error: {
         type: "cubby_credit_refused",
-        message: `${provider === "openai" ? "OpenAI" : "Claude"} credit refused until ${new Date(refusal.until).toISOString()}; Cubby skips it until then, probing once per six-hour window. Reset credit refusals in Settings → AI funding or MCP ai_funding.reset_credit_refusal. Provider: ${refusal.reason}`,
+        message: `${provider === "openai" ? "OpenAI" : "Claude"} credit refused until ${new Date(refusal.until).toISOString()}; Cubby skips it until then, probing once per six-hour window. Retry it in Settings → AI funding or MCP ai_funding.reset_funding_refusal. Provider: ${refusal.reason}`,
       },
     },
     { status: 400 },
   );
+}
+
+/**
+ * The egress Durable Object's answer while a recorded paid-gateway funding
+ * refusal holds: the gateway's own raw body, so every paid caller pauses for
+ * funding exactly as it does on the gateway's refusal (`isPaidFundingUnavailable`).
+ */
+export function paidRefusedResponse(refusal: { reason: string }): Response {
+  return new Response(refusal.reason, {
+    status: 402,
+    headers: { "content-type": "application/json" },
+  });
 }
 
 /** Verified pi-ai terminal formats for structured provider SSE quota errors. */
