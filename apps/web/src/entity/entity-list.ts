@@ -86,8 +86,8 @@ export function compileEntityListInput<E extends ListEntity>(
   else if (!searching) {
     input.sort = [
       options.defaultSort ?? {
-        orderBy: metadata.sort?.default ?? "createdAt",
-        direction: metadata.sort?.direction ?? "desc",
+        orderBy: metadata.sort.default,
+        direction: metadata.sort.direction,
       },
     ];
   }

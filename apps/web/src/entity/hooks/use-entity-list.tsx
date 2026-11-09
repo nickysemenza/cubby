@@ -64,9 +64,10 @@ import type { RowLinkResolver } from "~/entity/table/column-helpers";
 import type { ServerListWorkbenchModel } from "~/entity/table/list-workbench";
 import { problemWorklistState } from "~/entity/table/problem-worklist";
 import type { ListQueryOptionsFn } from "~/entity/table/use-paginated-table-core";
-import type {
-  TableStateReturn,
-  useTableState,
+import {
+  overlayTableStateOptions,
+  type TableStateOptions,
+  type TableStateReturn,
 } from "~/entity/table/use-table-state";
 import { entityList } from "~/integrations/tanstack-query/generated/domains/entityList.gen";
 import { formatCount } from "~/lib/number-format";
@@ -200,7 +201,7 @@ export interface UseEntityListOptions<
   /** Runtime roster options; must be referentially stable. */
   filterOptions?: RuntimeFilterOptions;
   getMappings?: (item: TRow) => UnitMapping[];
-  tableStateOptions?: Parameters<typeof useTableState>[0];
+  tableStateOptions?: Partial<TableStateOptions>;
   bulkActions?: BulkActionsConfig<TData>;
   /** Presentation-only Inspect action for one checked canonical row. */
   onInspectRow?: (row: { id?: string; original: TData }) => void;
@@ -549,7 +550,11 @@ export function useEntityList<
 
   const effectiveBuildFilters = buildFilters ?? manifestBuildFilters;
   const serverTableStateOptions = useMemo(
-    () => ({ syncPaginationToUrl: false, ...tableStateOptions }),
+    () =>
+      overlayTableStateOptions(
+        { syncPaginationToUrl: false },
+        tableStateOptions,
+      ),
     [tableStateOptions],
   );
 

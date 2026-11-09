@@ -36,10 +36,14 @@ import {
   defaultSortState,
 } from "../../ui/data-table/table-utils";
 
-interface TableStateOptions {
-  initialSort?: string;
+export interface TableStateOptions {
+  /**
+   * The opening sort, named from the entity's declared roster. Required: a
+   * shared fallback field is not sortable on every entity.
+   */
+  initialSort: string;
+  initialSortDesc: boolean;
   initialSorting?: SortingState;
-  initialSortDesc?: boolean;
   initialFilter?: ColumnFiltersState;
   initialPagination?: PaginationState;
   filterSpecs?: readonly FilterSpecCore[];
@@ -63,6 +67,27 @@ interface TableStateOptions {
    */
   readUrlState?: boolean;
   syncPaginationToUrl?: boolean;
+}
+
+/**
+ * Overlays a caller's table options on a list's defaults. An explicit
+ * `undefined` keeps the default: without `exactOptionalPropertyTypes` it
+ * type-checks as "not set", but a plain spread lets it erase the default
+ * (an embedded Run roster lost its `startedAt` sort this way).
+ */
+export function overlayTableStateOptions<T extends Partial<TableStateOptions>>(
+  defaults: T,
+  overrides: Partial<TableStateOptions> | undefined,
+): T {
+  return Object.assign(
+    {},
+    defaults,
+    Object.fromEntries(
+      Object.entries(overrides ?? {}).filter(
+        ([, value]) => value !== undefined,
+      ),
+    ),
+  );
 }
 
 const NO_SPECS: readonly FilterSpecCore[] = [];
@@ -156,13 +181,11 @@ export interface TableStateReturn {
   hasPrimarySearch: boolean;
 }
 
-export function useTableState(
-  options: TableStateOptions = {},
-): TableStateReturn {
+export function useTableState(options: TableStateOptions): TableStateReturn {
   const {
-    initialSort = "createdAt",
+    initialSort,
     initialSorting,
-    initialSortDesc = true,
+    initialSortDesc,
     initialFilter = NO_INITIAL_FILTER,
     initialPagination = defaultPagination,
     filterSpecs = NO_SPECS,
