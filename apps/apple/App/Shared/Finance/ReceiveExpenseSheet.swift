@@ -78,7 +78,7 @@ struct PurchaseReceivingSlot: View {
         do {
             let page = try await appModel.client.list(
                 EntityCatalog[.expense], pageSize: 100,
-                filters: EntityFilterState(["purchaseId": [purchaseID]]))
+                filters: EntityFilterState([EntityFilterParameter.Expense.purchaseIdFilter: [purchaseID]]))
             lines = page.items
             error = nil
         } catch {

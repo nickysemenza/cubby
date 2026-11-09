@@ -166,6 +166,10 @@ None is committed; edit the generator or its inputs, never the output. A missing
   values, conformances, and initializer defaults. Change it, run `pnpm generate`, preserve
   Codable envelopes and decode defaults, and verify `EntityManifestTests` and the structured
   round-trip vectors. Native conveniences live in extensions in `Manifest/EntityManifest.swift`.
+- **Typed vocabulary.** Swift matches generated cases (`EntityHeroActionID`, `EntityListActionID`,
+  renderer ids, generated wire enums), never `rawValue == "…"`; `apple:lint` rejects that
+  pattern outside tests. Filter parameters are `EntityFilterParameter.<Entity>.<columnId>` with
+  `PresenceFilterValue` or the generated wire enum (`RunStatus`) for values.
 - **Client methods.** A `CubbyClient` method that is exactly one call with its JSON body (or a
   GET's generated `Input.Query`) is a `CLIENT_PASSTHROUGH_METHODS` entry in
   `swift-operations.ts`, not hand-written Swift; anything that maps or branches stays in

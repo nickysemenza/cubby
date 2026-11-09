@@ -29,7 +29,7 @@ struct ConnectionReviewTests {
         }
         await discovery.value
         #expect(model.connectionDocument?.proposals.count == 1)
-        #expect(model.discoveryRunStatus == "completed")
+        #expect(model.discoveryRunStatus == .completed)
         #expect(!model.isFindingConnections)
         #expect(await client.runSnapshots == 13)
         #expect(await client.reads == 2)

@@ -87,7 +87,7 @@ extension EntityDescriptor {
             guard binding.noValue, let presence = filter.presenceParam else { return nil }
             next.remove(name)
             if let subtree = filter.subtreeParam { next.remove(subtree) }
-            next.set(["none"], for: presence)
+            next.set([PresenceFilterValue.none.rawValue], for: presence)
         } else {
             next.set([section.path.last ?? section.id], for: name)
             if let presence = filter.presenceParam { next.remove(presence) }
@@ -117,7 +117,7 @@ extension EntityDescriptor {
             if state[name]?.isEmpty == false {
                 next.remove(presence)
             } else {
-                next.set(["has"], for: presence)
+                next.set([PresenceFilterValue.has.rawValue], for: presence)
             }
             return next
         }
