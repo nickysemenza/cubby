@@ -65,10 +65,8 @@ import {
 
 import { startImportRunFixture } from "../service/import-run.fixtures";
 import { resolveRunFinding } from "./findings";
-import {
-  prepareSourceOrderReconciliation,
-  commitAcceptedSourceOrderReconciliation,
-} from "./reconciliation";
+import { prepareSourceOrderReconciliation } from "./reconciliation";
+import { commitAcceptedSourceOrderReconciliation } from "./reconciliation-accepted";
 
 /**
  * Every arrival order of the four evidence sources must converge on one

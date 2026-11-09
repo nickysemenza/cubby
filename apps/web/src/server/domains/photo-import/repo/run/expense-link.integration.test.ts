@@ -12,10 +12,8 @@ import {
   purchasePaymentEvidence,
 } from "~/server/db/schema";
 import { memberImport } from "~/server/domains/purchase-import/operations/order-import.fixtures";
-import {
-  prepareSourceOrderReconciliation,
-  commitAcceptedSourceOrderReconciliation,
-} from "~/server/domains/purchase-import/repo/reconciliation";
+import { prepareSourceOrderReconciliation } from "~/server/domains/purchase-import/repo/reconciliation";
+import { commitAcceptedSourceOrderReconciliation } from "~/server/domains/purchase-import/repo/reconciliation-accepted";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {

@@ -85,7 +85,6 @@ import {
 } from "./reconciliation-state";
 import { recordImportedShipmentEvidence } from "./shipment-intake";
 import { receiptProductQuantity, resolveLineProduct } from "./writer";
-export { commitAcceptedSourceOrderReconciliation } from "./reconciliation-accepted";
 
 /**
  * Attach-only review of the current accepted observation is Product-only: its

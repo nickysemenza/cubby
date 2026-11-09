@@ -62,10 +62,8 @@ import {
   retainedMailFixture,
 } from "../operations/order-import.fixtures";
 import { HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION } from "./mail-source-identity";
-import {
-  commitAcceptedSourceOrderReconciliation,
-  prepareSourceOrderReconciliation,
-} from "./reconciliation";
+import { prepareSourceOrderReconciliation } from "./reconciliation";
+import { commitAcceptedSourceOrderReconciliation } from "./reconciliation-accepted";
 import {
   promoteHistoricalAcceptedObservation,
   recordSourceOrderObservation,
