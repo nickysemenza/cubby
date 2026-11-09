@@ -26,21 +26,9 @@ export async function withRetry<R>(
   fn: () => Promise<R>,
   attempts = 3,
 ): Promise<R> {
-  return pRetry(
-    async () => {
-      try {
-        return await fn();
-      } catch (error) {
-        if (error instanceof Error && error.name === "AbortError") {
-          throw new Error(error.message || "AbortError", { cause: error });
-        }
-        throw error;
-      }
-    },
-    {
-      retries: Math.max(0, attempts - 1),
-      factor: 2,
-      minTimeout: 500,
-    },
-  );
+  return pRetry(fn, {
+    retries: Math.max(0, attempts - 1),
+    factor: 2,
+    minTimeout: 500,
+  });
 }

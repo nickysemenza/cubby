@@ -1,11 +1,11 @@
 import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
 import { CopyIcon } from "@phosphor-icons/react/dist/csr/Copy";
-import { useState } from "react";
 import { toast } from "sonner";
 
 import { copyText } from "~/lib/clipboard";
 import { getAppErrorDetails, type UnparsedError } from "~/lib/error-utils";
-import { Disclosure } from "~/ui/layout/disclosure";
+import { useCopiedFlag } from "~/ui/hooks/use-copied-flag";
+import { Disclosure } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 
 import { openErrorDetailsDialog } from "./error-details-store";
@@ -24,7 +24,7 @@ function hasErrorDetails(error: UnparsedError): boolean {
  * inline block keeps its bordered scroll box; the dialog supplies its own).
  */
 export function ErrorDetailsBody({ error }: { error: unknown }) {
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useCopiedFlag(null);
   const detail = getAppErrorDetails(error);
   const diagnostics = detail.diagnostics;
   const occurrences = new Map<string, number>();
@@ -140,7 +140,7 @@ export function ErrorDetails({ error }: { error: unknown }) {
  * defeat the dedupe this id exists for) so repeated failures of the same kind
  * update one toast in place instead of stacking duplicates.
  */
-export function errorToastId(error: UnparsedError, message?: string): string {
+function errorToastId(error: UnparsedError, message?: string): string {
   const detail = getAppErrorDetails(error);
   return `error-toast:${detail.code ?? ""}:${message ?? detail.message}`;
 }

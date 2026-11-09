@@ -1,10 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import {
-  patchCachedListItem,
-  patchListItem,
-  removeCachedListItems,
-} from "./optimistic-list";
+import { patchCachedListItem, removeCachedListItems } from "./optimistic-list";
 
 type Row = { id: string; name: string; acquiredAt: Date | null };
 
@@ -77,14 +73,6 @@ describe("patchCachedListItem", () => {
     expect(isPageWithRows(patched)).toBe(true);
     if (!isPageWithRows(patched)) throw new Error("expected a list page");
     expect(patched.items[0]).toBe(keep);
-  });
-});
-
-describe("patchListItem", () => {
-  it("still serves its exact-key callers", () => {
-    expect(patchListItem({ items: [row("a")] }, "a", acquire)).toEqual({
-      items: [{ ...row("a"), acquiredAt: new Date(0) }],
-    });
   });
 });
 

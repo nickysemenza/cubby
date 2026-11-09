@@ -12,7 +12,9 @@ components that genuinely consume the full dynamic search state retain it.
 Do not enable global structural sharing merely to narrow scalar subscriptions.
 Pass the displayed selection as mutation variables at the action boundary.
 Entity list and detail cache profiles are declared together in `cache-tags.ts`;
-mutation invalidation includes input-dependent ripples.
+mutation invalidation includes input-dependent ripples, all owned by `cache-tags.ts`.
+Ingredient mapping preview errors surface through the normal error boundary; they
+are not treated as an empty mapping graph.
 Queries stay passive on ordinary remount, but invalidated queries refetch when
 reactivated. Detail loaders fetch invalidated records before returning them.
 Ordinary saves finish at the validated server receipt. The root mutation cache
