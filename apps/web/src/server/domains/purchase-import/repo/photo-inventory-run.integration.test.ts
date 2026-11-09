@@ -80,7 +80,7 @@ describe("photo import finalize", () => {
     );
     const response = await callMcpTool(
       server,
-      "photo_run_read",
+      "run_read",
       { action: "run_context", runId: run.publicId },
       kernelRequestContext(entityKernel),
       { entityKernel },
@@ -197,7 +197,7 @@ describe("photo import finalize", () => {
     const page = async (cursor: number) => {
       const response = await callMcpTool(
         server,
-        "photo_run_read",
+        "run_read",
         { action: "run_context", runId: run.publicId, limit: 2, cursor },
         kernelRequestContext(entityKernel),
         { entityKernel },

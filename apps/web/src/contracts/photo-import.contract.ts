@@ -571,7 +571,7 @@ export const photoImportContract = defineContract(
       input: photoImportReconcileInputSchema,
       output: photoImportReconcileOutputSchema,
     }),
-    // Agent-facing (MCP `photo_run`, `photo_run_read`): the photo agent's reads
+    // Agent-facing (MCP `run`, `run_read`): the photo agent's reads
     // and bounded writers.
     /** One bounded page of a run's photos in capture order, with owner and notes. */
     runContext: query({

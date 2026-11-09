@@ -105,7 +105,7 @@ describe("agent work summary", () => {
           },
           {
             type: "tool",
-            toolName: "mcp__cubby__photo_run",
+            toolName: "mcp__cubby__run",
             toolCallId: "proposal-1",
             state: "output-available",
             input: { action: "propose_groups" },

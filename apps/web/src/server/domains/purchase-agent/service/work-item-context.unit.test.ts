@@ -109,10 +109,10 @@ it("recovers photo pages from durable boundaries while retaining the full eviden
   expect(recovery).toContain(member);
   expect(recovery.some((message) => message.role === "toolResult")).toBe(false);
   const page = (id: string, boundaryGroup: unknown) => [
-    call(id, "mcp__cubby__photo_run_read"),
+    call(id, "mcp__cubby__run_read"),
     outcome(
       id,
-      "mcp__cubby__photo_run_read",
+      "mcp__cubby__run_read",
       JSON.stringify({
         remaining: true,
         images: [{ id: "IMG-4K7M" }],
@@ -122,10 +122,10 @@ it("recovers photo pages from durable boundaries while retaining the full eviden
   ];
   const first = [...legacy, ...page("p1", null), ...read("candidate")];
   const publication = [
-    call("save", "mcp__cubby__photo_run"),
+    call("save", "mcp__cubby__run"),
     outcome(
       "save",
-      "mcp__cubby__photo_run",
+      "mcp__cubby__run",
       JSON.stringify({ savedGroupKeys: ["boundary"] }),
     ),
   ];
@@ -147,12 +147,8 @@ it("recovers photo pages from durable boundaries while retaining the full eviden
   ]);
   expect(transcript).toContain(first[1]);
   const lookup = (id: string) => [
-    call(id, "mcp__cubby__photo_run_read"),
-    outcome(
-      id,
-      "mcp__cubby__photo_run_read",
-      "synthetic lookup ".repeat(3_000),
-    ),
+    call(id, "mcp__cubby__run_read"),
+    outcome(id, "mcp__cubby__run_read", "synthetic lookup ".repeat(3_000)),
   ];
   const bounded = currentPhotoWorkItemMessages([
     ...transcript,
