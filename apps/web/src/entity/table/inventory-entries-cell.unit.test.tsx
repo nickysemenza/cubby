@@ -31,6 +31,12 @@ let harness: ReturnType<typeof createBrowserTestHarness>;
 
 beforeEach(() => {
   harness = createBrowserTestHarness();
+  // Product admits Location as a dependency; cells must not need its own bundle.
+  harness.queryClient.removeQueries({
+    predicate: (query) =>
+      query.queryKey[0] === "entity-metadata" &&
+      query.queryKey[1] !== "product",
+  });
 });
 
 afterEach(() => {
