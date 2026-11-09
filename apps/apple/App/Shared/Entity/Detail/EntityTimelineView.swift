@@ -138,11 +138,11 @@ private struct TimelineEventRow: View {
         case .value(.none):
             Text("Amount unknown").font(.caption).foregroundStyle(.secondary)
         case .value(.some(let value)) where value < 0:
-            Text("\(DisplayFormat.currency(-value)) recovered")
+            Text("\(ValueFormat.currency(-value)) recovered")
                 .font(.fieldGuideData)
                 .foregroundStyle(FieldGuideTokens.positive)
         case .value(.some(let value)):
-            Text(DisplayFormat.currency(value))
+            Text(ValueFormat.currency(value))
                 .font(.fieldGuideData)
                 .foregroundStyle(FieldGuideTokens.graphiteSecondary)
         }
@@ -213,8 +213,8 @@ private struct LifecycleRowView: View {
     private var accessibilitySummary: String {
         row.intervals.map { interval in
             let confidence = interval.confident ? "" : ", unconfirmed"
-            let start = DisplayFormat.plainDate(interval.start.rawValue)
-            let end = (interval.end.valueIfPresent??.rawValue).map(DisplayFormat.plainDate) ?? "now"
+            let start = ValueFormat.plainDate(interval.start.rawValue)
+            let end = (interval.end.valueIfPresent??.rawValue).map(ValueFormat.plainDate) ?? "now"
             return "\(start) to \(end)\(confidence)"
         }.joined(separator: "; ")
     }

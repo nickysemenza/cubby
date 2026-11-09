@@ -58,7 +58,8 @@ private struct RecountSummaryContent: View {
 
     /// Finished and skipped bins in one line: a walk with skips is not complete.
     private var headline: String {
-        let finished = "\(ValueFormat.count(summary.binsDone)) \(summary.binsDone == 1 ? "bin" : "bins") finished"
+        let finished =
+            "\(ValueFormat.count(summary.binsDone)) \(summary.binsDone == 1 ? "bin" : "bins") finished"
         guard summary.binsSkipped > 0 else { return finished }
         return "\(finished) · \(ValueFormat.count(summary.binsSkipped)) skipped"
     }
