@@ -1018,23 +1018,23 @@ export class PurchaseImportRunAgent
         }),
       );
     const root = await (await this.harness.pi()).root(context);
-    const view = await root.viewState(context);
+    // The watch only signals change; each frame re-reads the whole snapshot,
+    // so the smallest window keeps the watch's own copy small.
+    const watch = await root.watch(context, { min: 1 });
     let timer: ReturnType<typeof setTimeout> | undefined;
     let closed = false;
-    let unsubscribe = () => {};
     const close = () => {
       if (closed) return;
       closed = true;
       if (timer) clearTimeout(timer);
-      unsubscribe();
-      view.dispose();
+      void watch.stop();
     };
     request.signal.addEventListener("abort", close);
     return eventStream(
       new ReadableStream({
         start: (controller) => {
           controller.enqueue(first);
-          unsubscribe = view.subscribe(() => {
+          watch.start(async () => {
             if (timer || closed) return;
             timer = setTimeout(() => {
               timer = undefined;

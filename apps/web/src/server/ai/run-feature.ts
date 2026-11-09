@@ -748,13 +748,9 @@ function respondToolFor(schema: z.ZodType): RespondTool {
   const tool: Tool = {
     name: RESPOND_TOOL_NAME,
     description: "Return the final structured answer.",
-    // Plain JSON Schema, not `Type.Unsafe(...)`: pi-ai `structuredClone`s
-    // strict tool parameters, and TypeBox's wrapper carries a validator
-    // function that cannot be cloned, which failed every structured call.
-    // SAFETY: providers only serialize `parameters`; the runner validates
-    // the answer with the feature's Zod schema, never with TypeBox, so a
-    // plain JSON Schema object in this TypeBox-typed slot is harmless.
-    parameters: jsonSchema as Tool["parameters"],
+    // Plain, cloneable JSON Schema: pi-ai `structuredClone`s strict tool
+    // parameters. The runner validates the answer with the feature's Zod schema.
+    parameters: jsonSchema,
     constrainedSampling: { type: "json_schema", strict: "prefer" },
   };
   const built: RespondTool = { tool, optionalPaths };
