@@ -2440,6 +2440,8 @@ possible matches with missing publications contribute completeness warnings and
 never actionable rows. Preparation is shared only inside that request.
 The base admits records matching at least one certain or possible Problem before
 selecting labels and routing, so non-candidates do not pay those per-record costs.
+Routed label and owner expressions are deduplicated base columns; they never
+enter the materialized facts relation, which covers every record.
 
 Each repository supplies `listScaffold` as its read port to
 `defineRepository`. Both constructors receive their canonical per-entity schema

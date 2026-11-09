@@ -233,6 +233,8 @@ export const entityProblemSources = (
   // The scope object belongs to one queue request. Share one preparation and
   // materialized relation across its admitted Problems, never across requests.
   const prepared = new WeakMap<WorkScope, Promise<WorkCandidates["ctes"]>>();
+  // Source column (`index:key`) to its deduplicated base routing column.
+  const routes = new Map<string, string>();
   const baseName = `work_problem_${entity}`;
   const base = (db: Database, scope: WorkScope) => {
     let pending = prepared.get(scope);
@@ -281,26 +283,30 @@ export const entityProblemSources = (
               }).where ?? sql`true`)
             : sql`false`;
         }
-        const routedColumns =
-          typeof read.columns === "function"
-            ? Object.fromEntries(
-                sources.flatMap((source, index) =>
-                  Object.entries(
-                    typeof read.columns === "function"
-                      ? read.columns(source)
-                      : {},
-                  ).map(([key, value]) => {
-                    const expression = Array.isArray(value)
-                      ? sql`ARRAY[${sql.join(
-                          value.map((item) => sql`${item}`),
-                          sql`, `,
-                        )}]::text[]`
-                      : sql`${value}`;
-                    return [`source_${index}_${key}`, project(expression)];
-                  }),
-                ),
-              )
-            : {};
+        // Labels and routing (owner subqueries) are base columns, not facts:
+        // the base evaluates them only for admitted candidates, while the
+        // materialized facts relation covers every record.
+        const routedColumns: Record<string, SQL> = {};
+        const routedNames = new Map<string, string>();
+        if (typeof read.columns === "function")
+          for (const [index, source] of sources.entries())
+            for (const [key, value] of Object.entries(read.columns(source))) {
+              const expression = Array.isArray(value)
+                ? sql`ARRAY[${sql.join(
+                    value.map((item) => sql`${item}`),
+                    sql`, `,
+                  )}]::text[]`
+                : sql`${value}`;
+              const compiled = dialect.sqlToQuery(expression);
+              const identity = JSON.stringify([compiled.sql, compiled.params]);
+              let name = routedNames.get(identity);
+              if (!name) {
+                name = `route_${routedNames.size}`;
+                routedNames.set(identity, name);
+                routedColumns[name] = expression;
+              }
+              routes.set(`${index}:${key}`, name);
+            }
         const factQuery = getDb(db)
           .select({
             code: sql`${read.table.shortcode}`.as("code"),
@@ -428,19 +434,25 @@ export const entityProblemSources = (
             ctes,
           };
         }
-        const sourceColumns = read.columns(source);
+        const sourceKeys = Object.keys(read.columns(source));
+        const routed = (key: string) => {
+          const name = routes.get(`${index}:${key}`);
+          if (!name)
+            throw new Error(`Unrouted ${entity} Problem column ${key}`);
+          return sql`base.${sql.identifier(name)}`;
+        };
         const candidates = (unresolved: boolean) =>
           selectWorkCandidates(db, source, {
             entity,
             id: sql`base.code`,
             reason: definition.title,
             reasonKeys: [definition.key],
-            name: sql`base.${sql.identifier(`source_${index}_name`)}`,
-            owners: sql`base.${sql.identifier(`source_${index}_owners`)}`,
+            name: routed("name"),
+            owners: routed("owners"),
             ...Object.fromEntries(
-              Object.keys(sourceColumns).map((key) => [
+              sourceKeys.map((key) => [
                 key,
-                sql`base.${sql.identifier(`source_${index}_${key}`)}`,
+                routed(key),
               ]),
             ),
           })
