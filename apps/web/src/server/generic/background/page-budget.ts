@@ -94,8 +94,16 @@ export function createBackgroundPageBudget(input: {
       return;
     }
     while (pending.job.length || pending.feature.length) {
-      // Async feature discovery keeps its turn without acquiring a parent permit.
-      if (featuresPending && !pending.feature.length && localJobs > 0) return;
+      // Pending feature children retain the traversal's opportunity beside its Job.
+      const selected =
+        featuresPending && localJobs > 0
+          ? "feature"
+          : pending[turn].length
+            ? turn
+            : turn === "job"
+              ? "feature"
+              : "job";
+      if (!pending[selected].length) return;
       const release = tryAcquirePage();
       if (!release) {
         if (!localPages) holdAll();
@@ -107,11 +115,6 @@ export function createBackgroundPageBudget(input: {
           );
         return;
       }
-      const selected = pending[turn].length
-        ? turn
-        : turn === "job"
-          ? "feature"
-          : "job";
       const page = pending[selected].shift();
       if (!page) {
         release();

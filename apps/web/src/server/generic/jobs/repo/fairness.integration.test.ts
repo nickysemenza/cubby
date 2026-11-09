@@ -145,6 +145,9 @@ describe("durable Job selection", () => {
       .where(inArray(job.id, waitingIds));
     const jobReady = Promise.withResolvers<void>();
     const featureReady = Promise.withResolvers<void>();
+    const secondFeatureReady = Promise.withResolvers<void>();
+    const secondJobReady = Promise.withResolvers<void>();
+    const releaseFirstFeature = Promise.withResolvers<void>();
     const discoveryReady = Promise.withResolvers<void>();
     const releaseDiscovery = Promise.withResolvers<void>();
     const releaseJob = Promise.withResolvers<void>();
@@ -171,7 +174,7 @@ describe("durable Job selection", () => {
             withPayload(async (bytes) => {
               if (claim.id === slow.id) {
                 jobReady.resolve();
-              }
+              } else secondJobReady.resolve();
               await releaseJob.promise;
               expect(bytes[0]).toBe(7);
               return { retainedBytes: bytes.byteLength };
@@ -181,14 +184,20 @@ describe("durable Job selection", () => {
     };
     const startedFeatures: string[] = [];
     let failLate = false;
+    let featureChildren = 2;
+    let earlyChild = 0;
     let expireDiscovery: (() => void) | undefined;
     const early = admittedDrain({
       name: "synthetic.early",
       page: async () =>
         withPayload(async () => {
-          startedFeatures.push("early");
-          featureReady.resolve();
-          await releaseFeature.promise;
+          const child = ++earlyChild;
+          if (child === 2) secondFeatureReady.resolve();
+          else startedFeatures.push("early");
+          if (child === 1) {
+            featureReady.resolve();
+            await releaseFirstFeature.promise;
+          } else await releaseFeature.promise;
           return { more: false, nextAt: null, settled: 1 };
         }),
     });
@@ -199,7 +208,27 @@ describe("durable Job selection", () => {
           discoveryReady.resolve();
           await releaseDiscovery.promise;
           expireDiscovery?.();
-          return early.page(db, round);
+          const count = featureChildren;
+          featureChildren = 1;
+          const children = await Promise.allSettled(
+            Array.from({ length: count }, () => early.page(db, round)),
+          );
+          const failure = children.find((child) => child.status === "rejected");
+          if (failure?.status === "rejected") throw failure.reason;
+          const pages = children.flatMap((child) =>
+            child.status === "fulfilled" ? [child.value] : [],
+          );
+          const due = pages.flatMap((page) =>
+            page.nextAt ? [page.nextAt.getTime()] : [],
+          );
+          return {
+            more: pages.some((page) => page.more),
+            nextAt: due.length ? new Date(Math.min(...due)) : null,
+            settled: pages.reduce(
+              (total, page) => total + (page.settled ?? 0),
+              0,
+            ),
+          };
         },
       },
       admittedDrain({
@@ -229,6 +258,13 @@ describe("durable Job selection", () => {
       ).toEqual(waitingBefore);
       releaseDiscovery.resolve();
       await featureReady.promise;
+      expect(retainedBytes).toBe(2 * payloadBytes);
+      releaseFirstFeature.resolve();
+      const nextOwner = await Promise.race([
+        secondFeatureReady.promise.then(() => "feature"),
+        secondJobReady.promise.then(() => "job"),
+      ]);
+      expect(nextOwner).toBe("feature");
       expect(retainedBytes).toBe(2 * payloadBytes);
       // A second invocation cannot claim work while the isolate's slots are held.
       const overlap = await runBackgroundRound(ctx.db, handlers, drains, {
@@ -331,6 +367,7 @@ describe("durable Job selection", () => {
       expect(startedFeatures.slice(featureOffset)).toEqual(["late", "early"]);
     } finally {
       releaseJob.resolve();
+      releaseFirstFeature.resolve();
       releaseFeature.resolve();
       releaseDiscovery.resolve();
       await firstRound;
