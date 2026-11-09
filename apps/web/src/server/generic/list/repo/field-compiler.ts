@@ -338,7 +338,12 @@ export class ListContext {
   }
 }
 
-type DerivedValueSql = DerivedValue | PreparedValue | ReadValue | SetValue;
+type DerivedValueSql =
+  | DerivedValue
+  | (Exclude<DerivedPart, SQL> & { readonly projection: "binding" })
+  | PreparedValue
+  | ReadValue
+  | SetValue;
 type DerivedPredicateSql<V> =
   | ((value: V, read: QualityReadContext | undefined) => SQL | undefined)
   | PreparedPredicate<V>;
@@ -415,7 +420,7 @@ export const derivedProjectedByBinding = (
   return (
     entry !== undefined &&
     (isSetValue(entry) ||
-      (isPrepared(entry) &&
+      (typeof entry === "object" &&
         "projection" in entry &&
         entry.projection === "binding"))
   );
