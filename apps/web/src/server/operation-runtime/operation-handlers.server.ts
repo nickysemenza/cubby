@@ -36,11 +36,8 @@ type HandlerModule = Record<
 const modules = import.meta.glob<HandlerModule>([
   "../domains/*/operations/*.server.ts",
   "../domains/*/operations.server.ts",
-  "../domains/dashboard/operations/dashboard.ts",
   "../generic/*/operations/*.server.ts",
-  "../generic/audit-log/operations/audit-log.ts",
   "../ai/chatgpt/chatgpt.server.ts",
-  "../http/maintenance.server.ts",
   "../http/oauth/oauth.server.ts",
   "../mcp/mcp.server.ts",
   "../mcp/playbooks.server.ts",
