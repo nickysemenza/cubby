@@ -61,25 +61,37 @@ export async function runBackgroundRound(
     const features = (async () => {
       try {
         // Preserve the rotated order across discovery I/O, without a parent permit.
-        for (const drain of ordered) {
+        for (const [index, drain] of ordered.entries()) {
           if (Date.now() >= deadline) {
             unvisited = true;
             break;
           }
+          let requested = false;
+          let started = false;
+          let needsFullTurn = false;
           try {
             pages.push(
               await drain.page(db, {
                 deadline,
-                runPage: budget.feature,
+                runPage: (work) => {
+                  requested = true;
+                  return budget.feature(() => {
+                    started = true;
+                    return work();
+                  });
+                },
               }),
             );
           } catch (error) {
             failures.push(error);
             log.error("drain page failed", { drain: drain.name, error });
           } finally {
-            // Discovery visited this registration even if its page missed the deadline.
-            afterDrain = drain.name;
+            // A late unadmitted page gets a full turn; an expired first turn yields.
+            needsFullTurn = index > 0 && requested && !started;
+            if (needsFullTurn) unvisited = true;
+            else afterDrain = drain.name;
           }
+          if (needsFullTurn) break;
         }
       } finally {
         budget.finishFeatures();

@@ -365,6 +365,62 @@ describe("durable Job selection", () => {
         afterDrain: expiredAfter,
       });
       expect(startedFeatures.slice(featureOffset)).toEqual(["late", "early"]);
+
+      const turnOrder: string[] = [];
+      let turnNow = Date.now();
+      const turnClock = vi.spyOn(Date, "now").mockImplementation(() => turnNow);
+      const prefix = admittedDrain({
+        name: "synthetic.prefix",
+        page: async () => {
+          turnOrder.push("prefix");
+          turnNow += 19_000;
+          return { more: false, nextAt: null, settled: 1 };
+        },
+      });
+      const tail = admittedDrain({
+        name: "synthetic.tail",
+        page: async () => {
+          turnOrder.push("tail");
+          return { more: false, nextAt: null, settled: 1 };
+        },
+      });
+      const fullTurnDrains: BackgroundDrain[] = [
+        prefix,
+        {
+          name: tail.name,
+          page: async (db, round) => {
+            await Promise.resolve();
+            turnNow += 2_000;
+            return tail.page(db, round);
+          },
+        },
+      ];
+      try {
+        const missed = await runBackgroundRound(
+          ctx.db,
+          handlers,
+          fullTurnDrains,
+          {
+            limit: 0,
+            timeBudgetMs: 20_000,
+          },
+        );
+        expect(turnOrder).toEqual(["prefix"]);
+        const next = await runBackgroundRound(
+          ctx.db,
+          handlers,
+          fullTurnDrains,
+          {
+            limit: 0,
+            timeBudgetMs: 20_000,
+            afterDrain: missed.afterDrain,
+          },
+        );
+        expect(next.failures).toEqual([]);
+        expect(turnOrder).toEqual(["prefix", "tail", "prefix"]);
+      } finally {
+        turnClock.mockRestore();
+      }
     } finally {
       releaseJob.resolve();
       releaseFirstFeature.resolve();
