@@ -180,10 +180,23 @@ visible for recovery instead of hiding it as an automatic wait.
 
 Mailbox discovery acquires at most five messages from its frozen provider page
 per Job claim. Each lane fetches and publishes in source order without buffering
-several full originals. Independent search Runs share the existing three-page
-Job drain and database sockets. Its durable message offset resumes the remaining
+several full originals. Independent search Runs share the background round's
+two-page isolate budget and database sockets; feature traversal leaves room
+for at most one Job from that round. Its durable message offset resumes the remaining
 messages without replaying the completed prefix; absent offsets on retained
 pages mean zero.
+
+Existing Job logs report Mail phase durations for listing, fetching, acquisition,
+classification, attachments, candidate previews, evidence publication, progress,
+import admission and checkpointing. Acquisition includes its nested classification,
+attachment and publication phases, so these durations must not be added together.
+Timings accumulate across messages handled by one claim, include awaited I/O and
+failed work, and contain only static phase names and milliseconds. They neither
+measure Worker CPU or heap nor start additional work. Job `dueLagMs` measures
+claim time minus the stored `availableAt`, clamped to zero; on an expired-lease
+reclaim it includes the previous invocation and lease wait, rather than isolating
+time queued for capacity.
+
 Gmail throttling and transient provider failures retain their raw diagnostics
 and retry time. The mailbox cursor shares that cooldown across independent
 clients; a Job defers before another provider request without spending attempts.

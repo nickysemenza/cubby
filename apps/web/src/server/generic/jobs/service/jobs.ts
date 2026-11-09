@@ -116,6 +116,12 @@ async function executeClaim(
       jobId: claimed.id,
       kind: claimed.kind,
       jobKey: claimed.key,
+      dueLagMs: claimed.lastClaimedAt
+        ? Math.max(
+            0,
+            claimed.lastClaimedAt.getTime() - claimed.availableAt.getTime(),
+          )
+        : null,
       publicationStartedAt,
       publicationDurationMs,
       stepKey: details.stepKey,
