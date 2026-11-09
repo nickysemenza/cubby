@@ -4,6 +4,7 @@ import type { EntityFieldModel } from "@cubby/schemas/entity-fields";
 import type { QueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 
+import { formatInstant } from "~/lib/date-format";
 import { dateSpanParts } from "~/lib/date-span";
 import { householdLocalDate } from "~/lib/household-date";
 import { formatCount, formatCurrency } from "~/lib/number-format";
@@ -71,7 +72,7 @@ export function compactFieldText<TRecord extends object>(
   if (typeof value === "boolean") return value ? "Yes" : "No";
   if (typeof value === "number")
     return isMoneyField(field) ? formatCurrency(value) : formatCount(value, 2);
-  if (field.kind === "timestamp") return new Date(value).toLocaleDateString();
+  if (field.kind === "timestamp") return formatInstant(value, "dateNumeric");
   if (field.kind === "date") return value;
   if (field.kind === "enum" || field.display.valueOptions)
     return enumFieldLabel(queryClient, entity, field.key, value);

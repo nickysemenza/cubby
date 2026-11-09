@@ -15,6 +15,7 @@ import { Fragment, useState, type ReactNode } from "react";
 
 import { useActionMutation } from "~/entity/hooks/use-action-mutation";
 import { aiFunding } from "~/integrations/tanstack-query/generated/domains/aiFunding.gen";
+import { formatInstant } from "~/lib/date-format";
 import { formatCurrency } from "~/lib/number-format";
 import { StaticTable } from "~/ui/data-table/static-table";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
@@ -40,19 +41,8 @@ import { Description } from "~/ui/text/description";
 import { EnumPill } from "~/ui/text/enum-pill";
 import { StatusText } from "~/ui/text/status-text";
 
-const clock = (iso: string) =>
-  new Date(iso).toLocaleTimeString(undefined, {
-    hour: "numeric",
-    minute: "2-digit",
-  });
-/** A refusal can last weeks (a Console limit names its reset date). */
-const when = (iso: string) =>
-  new Date(iso).toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
+const clock = (iso: string) => formatInstant(iso, "clock");
+const when = (iso: string) => formatInstant(iso, "monthDayTime");
 
 type SourceId = "credit" | "openaiCredit" | "plan" | "paid";
 /** The sources with a member-set window budget; credits have none (ADR 0027). */
