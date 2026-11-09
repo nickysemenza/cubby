@@ -49,6 +49,7 @@ import {
   productTreeSubRows,
 } from "~/features/product/product-kit-rows";
 import { product as productOperations } from "~/integrations/tanstack-query/generated/domains/product.gen";
+import { isOperationQueryKey } from "~/integrations/tanstack-query/operation-catalog";
 import { formatCurrency } from "~/lib/number-format";
 import { booleanCellOptions } from "~/lib/select-options";
 import type { PickerOption } from "~/ui/combobox/picker-option";
@@ -74,6 +75,29 @@ const EMPTY_KIT_ROWS: KitComponentRowOut[] = [];
 
 const combineKitRows = (results: UseQueryResult<KitComponentRowOut[]>[]) =>
   results.flatMap((result) => result.data ?? EMPTY_KIT_ROWS);
+
+/** Reattach cached memberships; operation options still own data freshness. */
+const cachedKitBatches = (queryClient: QueryClient) =>
+  queryClient
+    .getQueryCache()
+    .findAll({
+      queryKey: ["operation", productOperations.kitComponentRows.id],
+    })
+    .flatMap((query) => {
+      if (
+        query.state.data === undefined ||
+        !isOperationQueryKey(query.queryKey)
+      )
+        return [];
+      const parsed =
+        productOperations.kitComponentRows.definition.input.safeParse(
+          query.queryKey[2].input,
+        );
+      if (!parsed.success) return [];
+      const ids = parsed.data.parentProductIds;
+      return ids.length > 0 && ids.length <= ID_CHUNK_SIZE ? [ids] : [];
+    })
+    .sort((a, b) => b.length - a.length);
 
 // The generic tones fit here: tracked really is the resolved/good outcome.
 const STOCK_TRACKED_OPTIONS = booleanCellOptions({
@@ -483,21 +507,36 @@ export const productListOverride = defineListOverride<
     // render, where `DesktopDataRow`'s memo (which compares `row.original`)
     // cannot see them. Nesting before rows are built sidesteps that.
     const [kitBatches, setKitBatches] = useState<string[][]>([]);
-    const publishKitIds = useCallback((ids: string[]) => {
-      setKitBatches((current) => {
-        const wanted = new Set(ids);
-        const retained = current.filter((batch) =>
-          batch.every((id) => wanted.has(id)),
-        );
-        const covered = new Set(retained.flat());
-        const added = ids.filter((id) => !covered.has(id));
-        if (retained.length === current.length && added.length === 0)
-          return current;
-        // Growing an existing key drops its children while the replacement
-        // query loads, unmounting open child editors. Keep admitted batches.
-        return [...retained, ...chunk(added, ID_CHUNK_SIZE)];
-      });
-    }, []);
+    const publishKitIds = useCallback(
+      (ids: string[]) => {
+        const cached = cachedKitBatches(queryClient);
+        setKitBatches((current) => {
+          const wanted = new Set(ids);
+          const retained = current.filter((batch) =>
+            batch.every((id) => wanted.has(id)),
+          );
+          const covered = new Set(retained.flat());
+          // A route remount loses local batch state, not its operation cache.
+          for (const batch of cached) {
+            if (!batch.every((id) => wanted.has(id) && !covered.has(id)))
+              continue;
+            retained.push(batch);
+            for (const id of batch) covered.add(id);
+          }
+          const added = ids.filter((id) => !covered.has(id));
+          if (
+            added.length === 0 &&
+            retained.length === current.length &&
+            retained.every((batch, index) => batch === current[index])
+          )
+            return current;
+          // Growing an existing key drops its children while the replacement
+          // query loads, unmounting open child editors. Keep admitted batches.
+          return [...retained, ...chunk(added, ID_CHUNK_SIZE)];
+        });
+      },
+      [queryClient],
+    );
     const kitRows = useQueries({
       queries: kitBatches.map((parentProductIds) =>
         productOperations.kitComponentRows.queryOptions({ parentProductIds }),
