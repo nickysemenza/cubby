@@ -152,9 +152,13 @@ optimisticRepeatInstall: false
 # hook, because hosted Renovate resolves with --ignore-pnpmfile.
 addMissingPeerTypes: true
 permissions:
+  "@mongodb-js/zstd":
+    build: false
   "@tanstack/devtools-vite":
     skills: true
   "@tanstack/react-start":
     skills: true
   "@tanstack/react-table":
     skills: true
+  node-liblzma:
+    build: false
