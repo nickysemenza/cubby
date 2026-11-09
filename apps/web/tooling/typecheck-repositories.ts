@@ -64,7 +64,7 @@ export const repositoryOwners = [
   "src/server/domains/financial-transaction/repo/settlement-conflicts.ts",
   "src/server/generic/derived/repo/assignment-read.ts",
   "src/server/generic/derived/repo/read-context.ts",
-  "src/server/lib/purchase-spending.ts",
+  "src/server/domains/purchase/repo/purchase-spending-events.ts",
   "src/server/domains/purchase/repo/purchase-spending.ts",
   "src/server/domains/purchase/repo/settlement-predicates.ts",
   "src/server/domains/run/repo/report-run-results.ts",

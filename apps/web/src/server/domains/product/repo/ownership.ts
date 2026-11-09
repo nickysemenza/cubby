@@ -26,11 +26,11 @@ import type { DrizzleClient } from "~/server/db";
 import { actualExpense } from "~/server/db/computed/expense-aggregate-sql";
 import { notDeleted } from "~/server/db/helpers";
 import { expense, purchase } from "~/server/db/schema";
-import { serviceProductIdSql } from "~/server/domains/product/repo/service-category";
 import {
   buildConfidentOwnershipIntervals,
   classifyProductMovement,
-} from "~/server/lib/product-movement";
+} from "~/server/domains/product/repo/product-movement";
+import { serviceProductIdSql } from "~/server/domains/product/repo/service-category";
 
 export type { ProductOwnershipTimeline };
 

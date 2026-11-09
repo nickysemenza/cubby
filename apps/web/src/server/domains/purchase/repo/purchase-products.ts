@@ -47,6 +47,7 @@ import {
   pageProductRelationTargets,
 } from "~/server/domains/product/repo/crud";
 import { storedProductPrice } from "~/server/domains/product/repo/pricing";
+import { classifyProductMovement } from "~/server/domains/product/repo/product-movement";
 import { serviceCategorySql } from "~/server/domains/product/repo/service-category";
 import { loadStoredProductDisplay } from "~/server/domains/product/repo/stored-display";
 import { pagePurchaseRelationTargets } from "~/server/domains/purchase/repo/purchase";
@@ -69,7 +70,6 @@ import {
   liveLinks,
 } from "~/server/generic/entity-links/repo/entity-links";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { classifyProductMovement } from "~/server/lib/product-movement";
 
 /** Acquisition-only consumers must not broaden when identity relations do. */
 export const expenseAcquisitionPairPredicate = (scope: SQL) =>

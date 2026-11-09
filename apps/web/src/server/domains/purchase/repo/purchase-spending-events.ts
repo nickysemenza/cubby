@@ -1,5 +1,5 @@
 // Pure Purchase spending rollup: one original event per Purchase plus one
-// refund event per refund date. Alias-free so it runs in the unit project.
+// refund event per refund date.
 //
 // Two amounts per event, deliberately separate:
 //   - `amount` is the display amount: receipt `statedTotal`, else the original

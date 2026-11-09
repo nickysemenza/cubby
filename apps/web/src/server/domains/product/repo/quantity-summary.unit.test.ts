@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { deriveProductQuantitySummary } from "./product-quantity-summary";
+import { deriveProductQuantitySummary } from "./quantity-summary";
 
 // One non-count unit must not turn kilograms into acquired product units, and
 // incomplete history must not manufacture a precise reconciliation variance.

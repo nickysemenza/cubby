@@ -6,7 +6,7 @@ import {
   type HarvestRow,
   harvestEquivalences,
   type UnitTools,
-} from "~/server/lib/harvest-equivalences";
+} from "~/server/domains/product/repo/harvest-equivalences";
 
 const amt = (value: number, unit: string): Amount => ({ value, unit });
 

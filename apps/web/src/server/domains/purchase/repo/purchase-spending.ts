@@ -31,12 +31,12 @@ import {
   type RepositoryQueryInput,
 } from "~/server/db/repository-access.boundary";
 import { ledgerSourceClaim } from "~/server/db/retained-tables";
-import { liveSettlementAllocationWhere } from "~/server/domains/purchase/repo/settlement-predicates";
 import {
   buildPurchaseSpendingEvents,
   type PurchaseSpendingEvent,
   type PurchaseSpendingLineInput,
-} from "~/server/lib/purchase-spending";
+} from "~/server/domains/purchase/repo/purchase-spending-events";
+import { liveSettlementAllocationWhere } from "~/server/domains/purchase/repo/settlement-predicates";
 
 type PurchaseSpendingPurchase = {
   id: PurchaseShortcode;
@@ -265,7 +265,7 @@ const loadAllocations = (
 /**
  * Purchase spending events dated inside `[startDate, endDateExclusive)`:
  * one original event per Purchase and one refund event per refund date. Read
- * only; see `~/server/lib/purchase-spending` for amount and date rules.
+ * only; see `./purchase-spending-events` for amount and date rules.
  */
 export async function loadPurchaseSpending(
   db: RepositoryQueryInput,

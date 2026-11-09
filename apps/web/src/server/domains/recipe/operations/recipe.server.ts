@@ -32,6 +32,7 @@ import { wasm } from "~/lib/wasm";
 import type { Database } from "~/server/db";
 import { getIngredientsByIDs } from "~/server/domains/ingredient/repo/ingredient-with-food";
 import { getMultiMeasureRecipeIngredients } from "~/server/domains/product/repo/equivalences";
+import { harvestEquivalences } from "~/server/domains/product/repo/harvest-equivalences";
 import {
   duplicateRecipe,
   getRecipesByIDs,
@@ -56,7 +57,6 @@ import {
   bindShortcodeResolver,
   resolveLiveShortcodes,
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { harvestEquivalences } from "~/server/lib/harvest-equivalences";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
 import type { AuthenticatedOperationContext } from "~/server/operation-runtime/operation.server";
 import { implementSubscriptionDomain } from "~/server/operation-runtime/subscription-domain.server";

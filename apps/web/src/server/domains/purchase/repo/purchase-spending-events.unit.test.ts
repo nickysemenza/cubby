@@ -4,7 +4,7 @@ import {
   buildPurchaseSpendingEvents,
   type PurchaseSpendingAllocationInput,
   type PurchaseSpendingLineInput,
-} from "./purchase-spending";
+} from "./purchase-spending-events";
 
 const purchase = (
   overrides: Partial<{ date: string | null; statedTotal: number | null }> = {},
