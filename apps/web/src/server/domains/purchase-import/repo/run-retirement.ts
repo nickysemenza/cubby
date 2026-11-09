@@ -18,7 +18,6 @@ import {
 } from "~/server/db/helpers";
 import { quotedTable } from "~/server/db/helpers/related";
 import { email, run as runTable, runFinding } from "~/server/db/schema";
-import type { PurchaseImportRunAgentRpc } from "~/server/domains/purchase-agent/service/environment";
 import { recordChange } from "~/server/generic/changes/repo/change";
 
 // includes-deleted: retirement closes obsolete execution alerts even on retained deleted Run identities.
@@ -136,7 +135,9 @@ export async function assertRetirableLegacySession(
  */
 export async function retireSettledCoordinators(
   db: Database,
-  coordinator: (agentId: string) => Pick<PurchaseImportRunAgentRpc, "retire">,
+  coordinator: (agentId: string) => {
+    retire(): Promise<{ disposed: boolean }>;
+  },
   before: Date,
   limit = 200,
 ) {

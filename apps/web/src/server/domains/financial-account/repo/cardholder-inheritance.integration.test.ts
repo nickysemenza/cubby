@@ -3,7 +3,7 @@ import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { financialAccountScaffold } from "~/server/domains/financial-account/repo";
+import { financialAccountScaffold } from "~/server/domains/financial-account/repo/financial-account";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { executeEntity } from "~/server/entity-kernel";
 

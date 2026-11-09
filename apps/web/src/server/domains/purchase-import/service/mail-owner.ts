@@ -5,20 +5,10 @@
 import { isMailForwardingHeader } from "@cubby/schemas/mailbox-research";
 
 import type { RetainedMail } from "~/server/domains/mail/repo/retained-mail";
-
-type MailParty = { name: string; addresses: readonly string[] };
-
-/** The Email's owner LedgerParty and the household's other live members. */
-export type MailOwnerEvidence = {
-  owner: MailParty;
-  householdMembers: readonly MailParty[];
-};
-
-/** Owner evidence and the gaps in it, e.g. an unreadable Gmail profile. */
-export type MailOwnerContext = {
-  evidence: MailOwnerEvidence | null;
-  warnings: readonly string[];
-};
+import type {
+  MailOwnerEvidence,
+  MailParty,
+} from "~/server/domains/purchase-import/repo/mail-owner-types";
 
 const GMAIL_DOMAINS = new Set(["gmail.com", "googlemail.com"]);
 

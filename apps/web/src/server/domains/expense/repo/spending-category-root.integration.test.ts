@@ -8,7 +8,7 @@ import { describe, expect, it } from "vitest";
 
 import { unwrapDb } from "~/server/db/helpers";
 import { expense, product, productCategory } from "~/server/db/schema";
-import { expenseAnalyzeWorkflow } from "~/server/domains/expense/operations.server";
+import { expenseAnalyzeWorkflow } from "~/server/domains/expense/operations/expense.server";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   createProductIdentityFixture,

@@ -24,7 +24,7 @@ import {
 import {
   createFinancialAccount,
   updateFinancialAccount,
-} from "~/server/domains/financial-account/repo";
+} from "~/server/domains/financial-account/repo/financial-account";
 import { updateFinancialTransaction } from "~/server/domains/financial-transaction/repo/financial-transaction";
 import {
   createLedgerParty,
@@ -36,7 +36,7 @@ import {
   createLedgerTransfer,
   readLedgerTransfer,
   updateLedgerTransfer,
-} from "~/server/domains/ledger-transfer/repo";
+} from "~/server/domains/ledger-transfer/repo/ledger-transfer";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { executeEntity } from "~/server/entity-kernel";
 import { toPublicErrorPayload } from "~/server/errors/app-error";

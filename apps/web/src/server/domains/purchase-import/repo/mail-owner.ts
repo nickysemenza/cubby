@@ -12,7 +12,7 @@ import type { Database } from "~/server/db";
 import { account, user } from "~/server/db/auth.schema";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { ledgerParty } from "~/server/db/schema";
-import type { MailOwnerContext } from "~/server/domains/purchase-import/service/mail-owner";
+import type { MailOwnerContext } from "~/server/domains/purchase-import/repo/mail-owner-types";
 
 import { gmailOAuthConfigured, gmailProviderForUser } from "./gmail/provider";
 

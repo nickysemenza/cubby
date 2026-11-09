@@ -30,7 +30,7 @@ import {
   expenseAnalyzeWorkflow,
   expenseChartDataWorkflow,
   expenseFacetCountsWorkflow,
-} from "~/server/domains/expense/operations.server";
+} from "~/server/domains/expense/operations/expense.server";
 import {
   expenseAnalytics,
   expenseMonthlySummary,

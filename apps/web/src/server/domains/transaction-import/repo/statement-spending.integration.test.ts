@@ -18,7 +18,7 @@ import {
   sourceOccurrence,
   vendor as vendorTable,
 } from "~/server/db/schema";
-import { updateFinancialAccount } from "~/server/domains/financial-account/repo";
+import { updateFinancialAccount } from "~/server/domains/financial-account/repo/financial-account";
 import { bookFinancialTransaction } from "~/server/domains/financial-transaction/repo/financial-booking";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { labelStatementSuggestions } from "~/server/domains/transaction-import/service/statement-suggestion-labels";

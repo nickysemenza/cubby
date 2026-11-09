@@ -18,7 +18,7 @@ import {
   run,
   sourceTransactionRecord,
 } from "~/server/db/schema";
-import { updateFinancialAccount } from "~/server/domains/financial-account/repo";
+import { updateFinancialAccount } from "~/server/domains/financial-account/repo/financial-account";
 import {
   generateTransferPairSuggestions,
   lockTransferPairLegs,

@@ -24,7 +24,7 @@ import {
   createLedgerTransfer,
   transferEvidenceLegFields,
   transferEvidenceLegProblem,
-} from "~/server/domains/ledger-transfer/repo";
+} from "~/server/domains/ledger-transfer/repo/ledger-transfer";
 
 const refuse = (reason: string): AcceptFinancialTransferPairOut => ({
   canProceed: false,

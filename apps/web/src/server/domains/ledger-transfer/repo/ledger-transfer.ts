@@ -111,85 +111,81 @@ const toParty = transferParty(ledgerTransfer.toPartyId);
 
 const partyKind = z.enum(["member", "guest", "household"]);
 
-export const ledgerTransferScaffold = listScaffold(
-  "ledgerTransfer",
-  ledgerTransfer,
-  {
-    readSchema: ledgerTransferRepositoryReadSchema,
-    read: {
-      title: fromParty.value<string>((party) => party.name),
-      // Keys outside the read schema are helper columns the bindings read.
-      columns: {
-        // includes-deleted: `fromPartyName` is the entity's non-null titleField
-        // and `toPartyName` mirrors it; a soft-deleted party's name must not
-        // read as SQL NULL into a `z.string()` read schema. The party
-        // shortcodes resolve across a soft-deleted party for the same reason.
-        fromPartyName: fromParty.value<string>((party) => party.name),
-        toPartyName: toParty.value<string>((party) => party.name),
-        sourceClaims: transferSourceClaimsSql,
-        evidenceTransactionIds: transferEvidenceIdsSql,
-        fromPartyShortcode: fromParty.value<string>((party) => party.shortcode),
-        toPartyShortcode: toParty.value<string>((party) => party.shortcode),
-        fromPartyKind: fromParty.value<string>((party) => party.kind),
-        toPartyKind: toParty.value<string>((party) => party.kind),
-      },
-      bindings: (bind) => [
-        bind(
-          rawLedgerTransferOut.pick({ fromPartyId: true, toPartyId: true }),
-          (row) => ({
-            fromPartyId: parseShortcodeFor(
-              "ledgerParty",
-              z.string().parse(row.fromPartyShortcode),
-            ),
-            toPartyId: parseShortcodeFor(
-              "ledgerParty",
-              z.string().parse(row.toPartyShortcode),
-            ),
-          }),
-        ),
-        // The aggregate carries claim timestamps as JSON strings.
-        bind(rawLedgerTransferOut.pick({ sourceClaims: true }), (row) => ({
-          sourceClaims: rawLedgerTransferOut.shape.sourceClaims.parse(
-            z
-              .array(
-                z.looseObject({ createdAt: z.string(), updatedAt: z.string() }),
-              )
-              .parse(row.sourceClaims)
-              .map((claim) => ({
-                ...claim,
-                createdAt: new Date(claim.createdAt),
-                updatedAt: new Date(claim.updatedAt),
-              })),
-          ),
-        })),
-        bind(
-          rawLedgerTransferOut.pick({ evidenceTransactionIds: true }),
-          (row) => ({
-            evidenceTransactionIds: z
-              .array(z.string())
-              .parse(row.evidenceTransactionIds)
-              .map((id) => parseShortcodeFor("financialTransaction", id)),
-          }),
-        ),
-        bind(rawLedgerTransferOut.pick({ classification: true }), (row) => {
-          const toKind = partyKind.parse(row.toPartyKind);
-          const fromKind = partyKind.parse(row.fromPartyKind);
-          return {
-            classification: rawLedgerTransferOut.shape.classification.parse(
-              row.fromPartyId === row.toPartyId
-                ? "internal_move"
-                : toKind === "household"
-                  ? "contribution"
-                  : fromKind === "household"
-                    ? "household_distribution"
-                    : "reimbursement",
-            ),
-          };
-        }),
-      ],
+const ledgerTransferScaffold = listScaffold("ledgerTransfer", ledgerTransfer, {
+  readSchema: ledgerTransferRepositoryReadSchema,
+  read: {
+    title: fromParty.value<string>((party) => party.name),
+    // Keys outside the read schema are helper columns the bindings read.
+    columns: {
+      // includes-deleted: `fromPartyName` is the entity's non-null titleField
+      // and `toPartyName` mirrors it; a soft-deleted party's name must not
+      // read as SQL NULL into a `z.string()` read schema. The party
+      // shortcodes resolve across a soft-deleted party for the same reason.
+      fromPartyName: fromParty.value<string>((party) => party.name),
+      toPartyName: toParty.value<string>((party) => party.name),
+      sourceClaims: transferSourceClaimsSql,
+      evidenceTransactionIds: transferEvidenceIdsSql,
+      fromPartyShortcode: fromParty.value<string>((party) => party.shortcode),
+      toPartyShortcode: toParty.value<string>((party) => party.shortcode),
+      fromPartyKind: fromParty.value<string>((party) => party.kind),
+      toPartyKind: toParty.value<string>((party) => party.kind),
     },
+    bindings: (bind) => [
+      bind(
+        rawLedgerTransferOut.pick({ fromPartyId: true, toPartyId: true }),
+        (row) => ({
+          fromPartyId: parseShortcodeFor(
+            "ledgerParty",
+            z.string().parse(row.fromPartyShortcode),
+          ),
+          toPartyId: parseShortcodeFor(
+            "ledgerParty",
+            z.string().parse(row.toPartyShortcode),
+          ),
+        }),
+      ),
+      // The aggregate carries claim timestamps as JSON strings.
+      bind(rawLedgerTransferOut.pick({ sourceClaims: true }), (row) => ({
+        sourceClaims: rawLedgerTransferOut.shape.sourceClaims.parse(
+          z
+            .array(
+              z.looseObject({ createdAt: z.string(), updatedAt: z.string() }),
+            )
+            .parse(row.sourceClaims)
+            .map((claim) => ({
+              ...claim,
+              createdAt: new Date(claim.createdAt),
+              updatedAt: new Date(claim.updatedAt),
+            })),
+        ),
+      })),
+      bind(
+        rawLedgerTransferOut.pick({ evidenceTransactionIds: true }),
+        (row) => ({
+          evidenceTransactionIds: z
+            .array(z.string())
+            .parse(row.evidenceTransactionIds)
+            .map((id) => parseShortcodeFor("financialTransaction", id)),
+        }),
+      ),
+      bind(rawLedgerTransferOut.pick({ classification: true }), (row) => {
+        const toKind = partyKind.parse(row.toPartyKind);
+        const fromKind = partyKind.parse(row.fromPartyKind);
+        return {
+          classification: rawLedgerTransferOut.shape.classification.parse(
+            row.fromPartyId === row.toPartyId
+              ? "internal_move"
+              : toKind === "household"
+                ? "contribution"
+                : fromKind === "household"
+                  ? "household_distribution"
+                  : "reimbursement",
+          ),
+        };
+      }),
+    ],
   },
-);
+});
 
 /** Per-update work resolved before the audited column update: see `relations`. */
 type LedgerTransferChange = {

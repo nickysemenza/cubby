@@ -40,7 +40,7 @@ import {
   transferPairSeedPage,
 } from "~/server/domains/financial-transaction/repo/transfer-pair-input";
 import { labelTransferPairSuggestions } from "~/server/domains/financial-transaction/service/transfer-pair-labels";
-import { readLedgerTransfer } from "~/server/domains/ledger-transfer/repo";
+import { readLedgerTransfer } from "~/server/domains/ledger-transfer/repo/ledger-transfer";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import {

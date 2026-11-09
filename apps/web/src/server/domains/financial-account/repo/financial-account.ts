@@ -47,7 +47,7 @@ import {
   ledgerParty,
   vendor,
 } from "~/server/db/schema";
-import { financialAccountSearch } from "~/server/domains/financial-account/search-read-financial-account";
+import { financialAccountSearch } from "~/server/domains/financial-account/repo/search-read-financial-account";
 import { lockFinancialEvidenceKeys } from "~/server/domains/financial-transaction/repo/financial-evidence";
 import {
   resolveMemberAssignee,
@@ -73,7 +73,7 @@ import { listScaffold } from "~/server/generic/list/repo/list";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
-import { accountPartyPeriodItemsSql } from "./repo/funding-sql";
+import { accountPartyPeriodItemsSql } from "./funding-sql";
 
 export const FINANCIAL_ACCOUNT_DELETE_EDGE_POLICY = {
   "EmailFinancialAssociation.reviewedAccountId": {

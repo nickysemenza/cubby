@@ -19,7 +19,7 @@ afterEach(() => backgroundQueue.restore());
 
 import { mock } from "~/lib/test/mock-schema";
 import { createExpense } from "~/server/domains/expense/repo/crud";
-import { createFinancialAccount } from "~/server/domains/financial-account/repo";
+import { createFinancialAccount } from "~/server/domains/financial-account/repo/financial-account";
 import { createFinancialTransaction } from "~/server/domains/financial-transaction/repo/financial-transaction";
 import { executeEntity } from "~/server/entity-kernel";
 import { getSearchDocumentEmbeddingText } from "~/server/generic/search/repo/search-document";

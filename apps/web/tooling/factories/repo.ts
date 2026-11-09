@@ -4,7 +4,7 @@ import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import { createExpense } from "~/server/domains/expense/repo/crud";
-import { createFinancialAccount } from "~/server/domains/financial-account/repo";
+import { createFinancialAccount } from "~/server/domains/financial-account/repo/financial-account";
 import { createFinancialTransaction } from "~/server/domains/financial-transaction/repo/financial-transaction";
 import { createLedgerParty } from "~/server/domains/ledger-party/repo/ledger-party";
 import { createProductCategory } from "~/server/domains/product-category/repo/product-category";

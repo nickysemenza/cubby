@@ -21,7 +21,7 @@ import {
   ledgerParty,
 } from "~/server/db/schema";
 import { updateExpense } from "~/server/domains/expense/repo/crud";
-import { updateFinancialAccount } from "~/server/domains/financial-account/repo";
+import { updateFinancialAccount } from "~/server/domains/financial-account/repo/financial-account";
 import { loadStoredDerived } from "~/server/generic/derived/repo/read";
 import {
   type ShortcodeInsertValues,

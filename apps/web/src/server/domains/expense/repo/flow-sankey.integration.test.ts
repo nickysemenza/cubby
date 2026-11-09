@@ -8,7 +8,7 @@ import {
   expenseAttribution,
   ledgerParty,
 } from "~/server/db/schema";
-import { expenseAnalyzeWorkflow } from "~/server/domains/expense/operations.server";
+import { expenseAnalyzeWorkflow } from "~/server/domains/expense/operations/expense.server";
 import { loadExpenseAllocations } from "~/server/domains/household-contribution/repo/allocation";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { insertEntityFixtures } from "~/server/testing/repo.fixtures";

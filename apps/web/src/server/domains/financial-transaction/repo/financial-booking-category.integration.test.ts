@@ -15,7 +15,7 @@ import {
   purchase as purchaseTable,
 } from "~/server/db/schema";
 import { updateExpense } from "~/server/domains/expense/repo/crud";
-import { createLedgerTransfer } from "~/server/domains/ledger-transfer/repo";
+import { createLedgerTransfer } from "~/server/domains/ledger-transfer/repo/ledger-transfer";
 import { readPurchaseById } from "~/server/domains/purchase/repo/purchase";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { merchantVendorInferenceFor } from "~/server/domains/vendor/repo/merchant-vendor-inference";
