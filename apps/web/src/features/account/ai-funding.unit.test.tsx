@@ -26,15 +26,14 @@ const CONSOLE_LIMIT =
 const budget = (overrides: Partial<AiFundingStatus> = {}): AiFundingStatus => ({
   windowStart: "2026-10-01T00:00:00.000Z",
   windowEnd: "2026-10-01T06:00:00.000Z",
-  credit: { limitUsd: 5, spentUsd: 2.5, ...AVAILABLE },
-  openaiCredit: { limitUsd: 1.5, spentUsd: 0.25, ...AVAILABLE },
+  credit: { spentUsd: 2.5, ...AVAILABLE },
+  openaiCredit: { spentUsd: 0.25, ...AVAILABLE },
   paid: { limitUsd: 1, spentUsd: 0.4, ...AVAILABLE },
   plan: { limitUsd: 2, spentUsd: 0.75, ...AVAILABLE },
   ...overrides,
 });
 const refused = budget({
   credit: {
-    limitUsd: 5,
     spentUsd: 2.5,
     state: "refused",
     until: "2026-11-01T12:00:00.000Z",
@@ -95,7 +94,7 @@ describe("AI funding controls", () => {
   it("summarizes funding in one line linking to Settings", () => {
     harness = createBrowserTestHarness();
     render(<AiFundingLine budget={refused} />, { wrapper: harness.wrapper });
-    expect(screen.getByText(/Claude credit \$2\.50 of \$5\.00/u)).toBeVisible();
+    expect(screen.getByText(/Claude credit \$2\.50, Refused/u)).toBeVisible();
     expect(
       screen.getByText(/ChatGPT plan \$0\.75 of \$2\.00, Usable/u),
     ).toBeVisible();
@@ -147,17 +146,17 @@ describe("AI funding controls", () => {
     ).toBeVisible();
   });
 
-  it("saves all four edited window budgets inline", () => {
+  // Provider credits have no window budget (ADR 0027): only the plan and paid
+  // budgets are editable, and the credits show their spend.
+  it("saves the plan and paid window budgets inline", () => {
     const onSave = vi.fn();
     render(
       <FundingBudgetEditor budget={budget()} pending={false} onSave={onSave} />,
     );
-    fireEvent.change(screen.getByLabelText("Claude credit budget per window"), {
-      target: { value: "7.5" },
-    });
-    fireEvent.change(screen.getByLabelText("OpenAI credit budget per window"), {
-      target: { value: "2.5" },
-    });
+    expect(
+      screen.queryByLabelText("Claude credit budget per window"),
+    ).toBeNull();
+    expect(screen.getByText("$2.50 spent")).toBeVisible();
     fireEvent.change(screen.getByLabelText("ChatGPT plan budget per window"), {
       target: { value: "4" },
     });
@@ -166,8 +165,6 @@ describe("AI funding controls", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "Save budgets" }));
     expect(onSave).toHaveBeenCalledWith({
-      creditLimitUsd: 7.5,
-      openaiCreditLimitUsd: 2.5,
       planLimitUsd: 4,
       paidLimitUsd: 3,
     });

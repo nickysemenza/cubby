@@ -1,6 +1,6 @@
 # ADR 0017: Subscription-funded model fallback
 
-Status: Amended. The funding and gateway amendment supersedes the original design for Pi agents and Tester Army; the background-work amendment narrows it for background Runs.
+Status: Superseded by [ADR 0027](0027-tier-routed-models-on-a-funding-first-ladder.md), which carries its funding sources, windows, refusal holds and accounting forward.
 
 Production chat runs on the household's ChatGPT plan (Luna and Sol at ~$0
 marginal cost); Anthropic is nearly unused. An eligible Claude Max or Team plan

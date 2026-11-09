@@ -127,3 +127,9 @@ the next durable claim after known publication. New retained source bytes or
 accepted evidence of the exact own-account order may reopen an untouched
 automatic gap through discovery, preserving earlier rosters, outcomes and member
 intent. Unchanged source/evidence fingerprints never schedule another attempt.
+
+## Model amendment
+
+[ADR 0027](0027-tier-routed-models-on-a-funding-first-ladder.md) keeps Luna
+as the primary and makes the escalation target the `standard` tier (Sonnet on
+Claude credit, Terra elsewhere) instead of Opus.

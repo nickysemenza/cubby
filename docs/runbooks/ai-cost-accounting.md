@@ -7,14 +7,15 @@ incremental charge and the standard API comparison; its nominal comparison
 tracks credit consumption separately from paid inference.
 Subscription fees remain separate. The household AI budgets
 (`server/ai/budget.ts`) read frontier chat-model rows per fixed six-hour UTC
-window: the Claude credit budget (default $1.50) sums the standard cost of
-`subscriber_credit` rows for Anthropic; the separate OpenAI credit budget
-(default $1.50) sums those rows for OpenAI; the ChatGPT plan budget (default $2) sums the standard
-cost of `plan` rows; and the paid budget (default $1) sums every other row’s
-charged cost, falling back to the standard cost. Credit rows never count as
-paid. All four limits are editable inline in Settings → AI funding, or through
-`ai_funding.set_credit_budget` with `creditLimitUsd`, `openaiCreditLimitUsd`, `planLimitUsd`, and
-`paidLimitUsd`. These are soft limits read from the asynchronously written ledger.
+window: the ChatGPT plan budget (default $2) sums the standard cost of `plan`
+rows, and the paid budget (default $1) sums every other row’s charged cost,
+falling back to the standard cost. Provider credits have no window budget
+([ADR 0027](../adr/0027-tier-routed-models-on-a-funding-first-ladder.md)):
+the status reports the standard cost of `subscriber_credit` rows per provider,
+and a credit runs until the provider refuses. Credit rows never count as paid.
+Both limits are editable inline in Settings → AI funding, or through
+`ai_funding.set_budget` with `planLimitUsd` and `paidLimitUsd`. These are soft
+limits read from the asynchronously written ledger.
 
 Every call retains independent nullable `standardCost` and `chargedCost`, plus
 `costEvidence` identifying price provenance and the billing adjustment. Pricing
@@ -73,10 +74,8 @@ call. Kept answers are bounded (512 entries, about 32 MB, oldest dropped
 first) and dropped once written or replaced by a cached answer. The cache
 cannot remove a duplicate charge when the provider billed an answer that was
 never durably written and the retry runs in another isolate, after a restart,
-or after its kept answer was dropped: it computes the answer again. The
-purchase-import audit recovery call shares this cache under its own model,
-options and output schema. Injected test ports and live evaluation harnesses
-that set `cache: false` bypass it.
+or after its kept answer was dropped: it computes the answer again. Injected
+test ports and live evaluation harnesses that set `cache: false` bypass it.
 
 Summaries retain independent known subtotals and unpriced-call counts. A failed
 call that reported no usage had nothing to price: it is counted as failed

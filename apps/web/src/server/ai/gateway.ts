@@ -57,7 +57,7 @@ export interface GatewayCallOptions
       | "subscriptionRequired"
       | "subscriptionFallback"
       | "beforePaidRequest"
-      | "beforeFreeRequest"
+      | "beforePlanRequest"
       | "funding"
     > {
   metadata: GatewayMetadata;
@@ -211,11 +211,11 @@ export function gatewayFetch(
       ).assertWorkflowCurrent();
       await opts.beforePaidRequest?.(request);
     },
-    beforeFreeRequest: async (request, funding) => {
+    beforePlanRequest: async (request) => {
       await (
         await import("~/server/workflows/runs/execution")
       ).assertWorkflowCurrent();
-      return (await opts.beforeFreeRequest?.(request, funding)) ?? null;
+      return (await opts.beforePlanRequest?.(request)) ?? null;
     },
     testPeer: () => {
       const testGateway = getTestAiGateway();

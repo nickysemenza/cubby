@@ -307,7 +307,7 @@ export const MAIL_SOURCE_RELATION_FEATURE = defineFeature({
 export const MAIL_FINANCIAL_EVENT_FEATURE = defineFeature({
   request: mailFinancialEventRequest,
   feature: "mail-financial-event",
-  tier: "quality",
+  tier: "standard",
   maxTokens: 1_000,
   effort: "low",
   cache: true,
@@ -430,7 +430,7 @@ export const SELECTION_OVERFLOW_FEATURE = defineFeature({
 export const PRODUCT_IDENTIFICATION_FEATURE = defineFeature({
   request: buildProductIdentificationRequest,
   feature: "product-identification",
-  tier: "quality",
+  tier: "fast",
   maxTokens: 500,
   effort: "low",
   cache: true,
@@ -441,7 +441,7 @@ export const PRODUCT_IDENTIFICATION_FEATURE = defineFeature({
 export const LOCATION_INVENTORY_DETECTION_FEATURE = defineFeature({
   request: buildInventoryDetectionRequest,
   feature: "location-inventory-detection",
-  tier: "quality",
+  tier: "standard",
   maxTokens: 2000,
   effort: "low",
   cache: true,
@@ -454,7 +454,7 @@ export const LOCATION_INVENTORY_DETECTION_FEATURE = defineFeature({
 export const PURCHASE_IMPORT_EXTRACTION_FEATURE = defineFeature({
   request: purchaseExtractionPrompt,
   feature: "purchase-import-extraction",
-  tier: "quality",
+  tier: "standard",
   maxTokens: 4_000,
   effort: "low",
   cache: true,
@@ -465,7 +465,7 @@ export const PURCHASE_IMPORT_EXTRACTION_FEATURE = defineFeature({
 export const PURCHASE_IMPORT_RECEIPT_FEATURE = defineFeature({
   request: purchaseReceiptRequest,
   feature: "purchase-import-receipt-extraction",
-  tier: "quality",
+  tier: "standard",
   maxTokens: 4_000,
   effort: "low",
   cache: true,
@@ -474,12 +474,11 @@ export const PURCHASE_IMPORT_RECEIPT_FEATURE = defineFeature({
 }) satisfies AiStructuredFeature<ImportExtractionModelOutput>;
 
 /**
- * On Sol again since 2026-10-06: judged the better model, and the ChatGPT plan
- * made its cost moot.
+ * Quality tier since 2026-10-06, when Sol was judged the better model.
  * History: moved from Sol after `eval:features` (2026-10-04): Luna at high effort
  * matched Sol high 12/16 with zero unsafe answers on both, at about 1/19 of
- * the cost. Its schema still carries no array bounds: a failed call is
- * retried on the Anthropic recovery model (`extract.ts`).
+ * the cost. Its schema carries no array bounds; a failed audit surfaces
+ * instead of retrying on another model.
  */
 export const PURCHASE_IMPORT_AUDIT_FEATURE = defineFeature({
   request: purchaseAuditPrompt,
@@ -493,8 +492,7 @@ export const PURCHASE_IMPORT_AUDIT_FEATURE = defineFeature({
 }) satisfies AiStructuredFeature<ImportAuditModelOutput>;
 
 /**
- * On Sol again since 2026-10-06: judged the better model, and the ChatGPT plan
- * made its cost moot.
+ * Quality tier since 2026-10-06, when Sol was judged the better model.
  * History: moved from Sol after `eval:features` (2026-10-04): Luna at high effort
  * matched Sol high 14/14 with zero unsafe repairs (no line invented, moved,
  * or scaled to balance a total), at about 1/19 of the cost. The eval's cases
@@ -513,8 +511,7 @@ export const PURCHASE_IMPORT_REPAIR_FEATURE = defineFeature({
 }) satisfies AiStructuredFeature<ImportExtractionModelOutput>;
 
 /**
- * On Sol again since 2026-10-06: judged the better model, and the ChatGPT plan
- * made its cost moot.
+ * Quality tier since 2026-10-06, when Sol was judged the better model.
  * History: moved from Sol low after `eval:features` (2026-10-04): Luna at high effort
  * matched it 10/10 with zero unsafe plans (no number a step's own evidence
  * does not state), at about 1/13 of the cost and roughly twice the latency.

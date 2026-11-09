@@ -233,21 +233,21 @@ export const aiStreamsContract = defineContract("ai", {
   }),
 });
 
-/** Household-wide frontier AI funding (ADR 0017), shared by every feature. */
+/** Household-wide frontier AI funding (ADR 0027), shared by every feature. */
 export const aiFundingContract = defineContract(
   "aiFunding",
   {
     status: query({
       description:
-        "The current six-hour window's funding per source: credit (Claude subscriber credit spent at standard API cost of limitUsd, default $1.50, with state available or refused: a recorded Anthropic refusal such as a Console spend limit, skipped until `until` with one probe per window, and its raw `reason`), openaiCredit (OpenAI API credit, separate standard-cost budget and refusal state), plan (ChatGPT plan available, paused until a quota reset, disconnected or needing reauthorization, with the raw reason) and paid (charged cost of $1, with state refused when the AI Gateway reported an empty balance, until the window ends, with its raw reason). Each source's `availability` is the server's verdict for background work: usable, or a blocker (budget_spent, provider_refused, plan_limit, disconnected, needs_reauthorization, gateway_balance_empty) with `until` when it recovers by itself. Frontier calls use Claude credit, OpenAI credit, then the plan, then paid only where allowed; background work uses each source within its window budget, then waits. Change it with ai_funding.",
+        "The current six-hour window's funding per source: credit (Claude subscriber credit spent at standard API cost, with no window budget, and state available or refused: a recorded Anthropic refusal such as a spent balance or Console spend limit, skipped until `until` with one probe per window, and its raw `reason`), openaiCredit (OpenAI API credit, the same shape), plan (ChatGPT plan standard-cost spend of limitUsd, default $2, available, paused until a quota reset, disconnected or needing reauthorization, with the raw reason) and paid (charged cost of limitUsd, default $1, with state refused when the AI Gateway reported an empty balance, until the window ends, with its raw reason). Each source's `availability` is the server's verdict for background work: usable, or a blocker (budget_spent, provider_refused, plan_limit, disconnected, needs_reauthorization, gateway_balance_empty) with `until` when it recovers by itself. Frontier calls use Claude credit, OpenAI credit, then the plan, then paid only where allowed; credits run until their provider refuses, and background work uses the plan and paid within their window budgets, then waits. Change it with ai_funding.",
       input: zod.strictObject({}),
       output: aiFundingStatus,
       // Spend and refusals move with model calls; Run writes refresh it.
       cache: { tags: [["run"]], profile: "live-status" },
     }),
-    setCreditBudget: mutation({
+    setBudget: mutation({
       description:
-        "Set household AI budgets per six-hour window: creditLimitUsd (Claude standard API cost), openaiCreditLimitUsd (OpenAI API credit standard cost, default $1.50), planLimitUsd (ChatGPT standard API cost, default $2), and paidLimitUsd (charged cost, default $1). Background work moves from Claude credit to OpenAI credit to plan, then paid within these limits. Also clears recorded Claude and OpenAI credit refusals (not a paid gateway refusal), and work paused for funding retries now. Returns ai_funding_read.status.",
+        "Set household AI budgets per six-hour window: planLimitUsd (ChatGPT plan standard API cost, default $2; the plan's quota is shared with the members' own use) and paidLimitUsd (charged cost, default $1). Provider credits have no window budget. Work paused for funding retries now. Returns ai_funding_read.status.",
       input: aiBudgetSettings,
       output: aiFundingStatus,
       invalidates: ["runOnly"],

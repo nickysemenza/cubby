@@ -149,7 +149,7 @@ const actionCapability = {
   "run.sweep": "member_decision",
   "run.commit_prepared": "member_decision",
   "activity.resolve_run_finding": "member_decision",
-  "ai_funding.set_credit_budget": "member_decision",
+  "ai_funding.set_budget": "member_decision",
   "ai_funding.reset_funding_refusal": "member_decision",
   "nutrition.plan_recipe": "generic_mutation",
   "nutrition.update_recipe": "generic_mutation",

@@ -105,13 +105,13 @@ describe("projectAiModelPricing", () => {
   });
 
   it("leaves a model the catalog does not list unpriced, never free", () => {
-    expect(pricing["claude-opus-5-5"]).toEqual({
+    expect(pricing["claude-sonnet-5-5"]).toEqual({
       provider: "anthropic",
       cost: null,
       limit: null,
     });
     expect(
-      estimateAiUsageCost(pricing, "anthropic", "claude-opus-5-5", {
+      estimateAiUsageCost(pricing, "anthropic", "claude-sonnet-5-5", {
         inputTokens: 1000,
       }),
     ).toBeNull();

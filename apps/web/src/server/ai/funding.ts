@@ -8,10 +8,6 @@ import type {
 } from "@cubby/schemas/mail-import-settings";
 import { CUBBY_AI_GATEWAY_ID } from "@cubby/shared/ai/gateway-metadata";
 import { isInferenceStreamFundingRefusal } from "@cubby/shared/ai/gateway-request";
-import {
-  getChatModelConfig,
-  type SupportedChatModel,
-} from "@cubby/shared/ai/models";
 import { and, desc, eq, gte } from "drizzle-orm";
 
 import { getAiGatewayEgress } from "~/server/cf-env";
@@ -25,25 +21,17 @@ import { AI_BUDGET_WINDOW_MS, aiBudgetWindow } from "./budget-window";
 import type { CreditRefusal } from "./gateway-egress-contract";
 
 /*
- * What decides how background work is funded (ADR 0017): Run origin and the
- * credit and plan windows. Loaded on use by `budget.ts` admissions, so the
- * request-path bundle carries only the budget reads.
+ * What decides how background work is funded (ADR 0027): Run origin, recorded
+ * credit refusals and the plan window. Loaded on use by `budget.ts`
+ * admissions, so the request-path bundle carries only the budget reads.
  */
 
-/** The refusal a background free-rung call receives once its window budget is spent. */
-export async function freeBudgetRefusal(
-  db: Database,
-  funding: "subscriber_credit" | "openai_credit" | "subscription",
-): Promise<string | null> {
+/** The refusal a background plan call receives once the plan's window budget is spent. */
+export async function planBudgetRefusal(db: Database): Promise<string | null> {
   const status = await readAiBudget(db);
-  const [name, use] =
-    funding === "subscriber_credit"
-      ? ["Claude credit", status.credit]
-      : funding === "openai_credit"
-        ? ["OpenAI credit", status.openaiCredit]
-        : ["ChatGPT plan", status.plan];
-  return use.spentUsd >= use.limitUsd
-    ? `${name} budget reached: ${budgetUsd(use.spentUsd)} of $${use.limitUsd} standard cost since ${status.windowStart}; it resumes at ${status.windowEnd}.`
+  const { plan } = status;
+  return plan.spentUsd >= plan.limitUsd
+    ? `ChatGPT plan budget reached: ${budgetUsd(plan.spentUsd)} of $${plan.limitUsd} standard cost since ${status.windowStart}; it resumes at ${status.windowEnd}.`
     : null;
 }
 
@@ -77,7 +65,7 @@ export interface FundingStatusPorts {
   paidRefusal?: () => Promise<CreditRefusal | null>;
 }
 
-/** The household's one egress object holds the credit refusal (ADR 0017). */
+/** The household's one egress object holds the credit refusal (ADR 0027). */
 const egress = () => getAiGatewayEgress(CUBBY_AI_GATEWAY_ID);
 
 /** Retry one source's recorded refusal now, or every source without one. */
@@ -166,7 +154,7 @@ const blocked = (
  * window end.
  */
 function availability(
-  use: { spentUsd: number; limitUsd: number },
+  use: { spentUsd: number; limitUsd?: number },
   windowEnd: string,
   refused: {
     blocker: NonNullable<FundingAvailability["blocker"]>;
@@ -174,7 +162,8 @@ function availability(
   } | null,
 ): FundingAvailability {
   if (refused) return blocked(refused.blocker, refused.until);
-  return use.spentUsd >= use.limitUsd
+  // A provider credit has no window budget; only its refusal stops it.
+  return use.limitUsd !== undefined && use.spentUsd >= use.limitUsd
     ? blocked("budget_spent", windowEnd)
     : USABLE;
 }
@@ -262,27 +251,25 @@ export async function readAiFundingStatus(
 }
 
 /**
- * Why `model`'s free funding cannot answer this Run now, else null: a recorded
- * Claude credit refusal, or a background Run's spent window budget. An
- * escalation then only falls through the ladder to another model.
+ * Why a background Run's escalation cannot be funded for free now, else null.
+ * Every tier walks the same sources, so it depends only on them: both credits
+ * are refused and the plan's window budget is spent, and the escalated Email
+ * would only reach paid funding. Interactive Runs escalate through the ladder.
  */
 export async function escalationFundingRefusal(
   db: Database,
   runId: RunId,
-  model: SupportedChatModel,
 ): Promise<string | null> {
-  const credit = getChatModelConfig(model).gatewayProvider === "anthropic";
-  if (credit) {
-    const refusal = await egress()?.creditRefusal();
-    if (refusal)
-      return `Claude credit refused until ${new Date(refusal.until).toISOString()}: ${refusal.reason}`;
-  }
   if (!(await isBackgroundRun(db, runId))) return null;
-  if (credit) return freeBudgetRefusal(db, "subscriber_credit");
-  const refusal = await egress()?.creditRefusal(undefined, "openai");
-  const creditUnavailable =
-    refusal || (await freeBudgetRefusal(db, "openai_credit"));
-  return creditUnavailable ? freeBudgetRefusal(db, "subscription") : null;
+  const claude = await egress()?.creditRefusal();
+  if (!claude) return null;
+  const openai = await egress()?.creditRefusal(undefined, "openai");
+  if (!openai) return null;
+  const plan = await planBudgetRefusal(db);
+  return (
+    plan &&
+    `Claude credit refused until ${new Date(claude.until).toISOString()}; OpenAI credit refused until ${new Date(openai.until).toISOString()}; ${plan}`
+  );
 }
 
 /**

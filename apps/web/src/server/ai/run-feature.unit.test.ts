@@ -136,7 +136,7 @@ it("reports the answering model to the caller", async () => {
         ...target,
         complete: async (context, options) => ({
           ...(await target.complete(context, options)),
-          model: "claude-opus-5-5",
+          model: "claude-sonnet-5-5",
         }),
       };
     },
@@ -152,7 +152,7 @@ it("reports the answering model to the caller", async () => {
     },
     answering,
   );
-  expect(answered).toEqual(["claude-opus-5-5"]);
+  expect(answered).toEqual(["claude-sonnet-5-5"]);
 });
 
 // Regression: answers stored under one output schema replayed indefinitely
@@ -382,7 +382,7 @@ it("reports a laddered failure against its answering model, not a recovered refu
           content: [],
           api: "anthropic-messages" as const,
           provider: "anthropic",
-          model: "claude-opus-5-5",
+          model: "claude-sonnet-5-5",
           timestamp: Date.now(),
           usage: {
             input: 0,
@@ -405,7 +405,10 @@ it("reports a laddered failure against its answering model, not a recovered refu
           body: "Synthetic stale subscription quota",
           retryAfter: null,
         });
-        await funded.onRefusedAttempt({ ...answer, stopReason: "error" });
+        await funded.onRefusedAttempt(
+          { ...answer, stopReason: "error" },
+          { local: false },
+        );
         return {
           ...answer,
           stopReason: "error" as const,
@@ -421,7 +424,7 @@ it("reports a laddered failure against its answering model, not a recovered refu
     ports,
   );
   await expect(failure).rejects.toThrow(
-    /model: claude-opus-5-5, provider: anthropic.*: Synthetic invalid answer; recovered refusals: 429/u,
+    /model: claude-sonnet-5-5, provider: anthropic.*: Synthetic invalid answer; recovered refusals: 429/u,
   );
 });
 

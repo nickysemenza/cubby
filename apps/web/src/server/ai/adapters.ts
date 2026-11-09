@@ -7,6 +7,7 @@ import {
   cubbyPiProviders,
   fundedCubbyPiProviders,
   type GatewayFetchFor,
+  type RefusedAttempt,
 } from "@cubby/shared/ai/pi-providers";
 import {
   createModels,
@@ -64,7 +65,10 @@ export interface PiCallTarget {
 export interface FundedCall {
   paid: boolean;
   /** A refused attempt the ladder recovered from; it is not the answer. */
-  onRefusedAttempt?: (message: AssistantMessage) => Promise<void>;
+  onRefusedAttempt?: (
+    message: AssistantMessage,
+    attempt: RefusedAttempt,
+  ) => Promise<void>;
 }
 
 /**

@@ -1,4 +1,9 @@
-import type { SupportedChatModel } from "@cubby/shared/ai/models";
+import {
+  FAST_MODEL,
+  QUALITY_MODEL,
+  STANDARD_MODEL,
+  type SupportedChatModel,
+} from "@cubby/shared/ai/models";
 import { z } from "zod";
 
 import type {
@@ -95,8 +100,8 @@ const toolsOf = <const Actions extends readonly CubbyMcpToolAction[]>(
 
 export type ImportRunAgentConfig = {
   /**
-   * Primary model. It answers first; the runtime's funding fallback follows
-   * only when its funding refuses.
+   * Primary model, named by its tier (`CHAT_TIER_MODELS`): the funding ladder
+   * answers with each source's model of that tier.
    */
   model: SupportedChatModel;
   /**
@@ -106,8 +111,6 @@ export type ImportRunAgentConfig = {
    * escalation off: no tool is mounted and no request changes.
    */
   escalationModel?: SupportedChatModel;
-  /** Existing provider-ladder alternative, selected only with free funding. */
-  escalationAlternative?: SupportedChatModel;
   effort: "low" | "medium" | "high";
   agentTools: readonly ImportRunAgentToolName[];
   /**
@@ -179,7 +182,7 @@ const MAIL_IMPORT_ENTITY_READ = {
 /** Each purpose's model and authority: host tools plus narrowed MCP actions. */
 export const importRunAgentManifest = {
   photo_inventory: {
-    model: "claude-opus-5-5",
+    model: QUALITY_MODEL,
     effort: "medium",
     agentTools: RUN_AGENT_TOOLS,
     mcpActions: PHOTO_MCP_ACTIONS,
@@ -187,9 +190,8 @@ export const importRunAgentManifest = {
     workItemContext: "photo_page",
   },
   mail_import: {
-    model: "gpt-6-luna",
-    escalationModel: "claude-opus-5-5",
-    escalationAlternative: "gpt-6.1-sol",
+    model: FAST_MODEL,
+    escalationModel: STANDARD_MODEL,
     effort: "medium",
     agentTools: [
       ...RUN_AGENT_TOOLS.filter((tool) => tool !== "report_agent_progress"),

@@ -67,7 +67,7 @@ import {
 import {
   paidFundingStop,
   withAiBudget,
-  withFreeBudget,
+  withPlanBudget,
 } from "~/server/ai/budget";
 import type { GatewayCallOptions, GatewayMetadata } from "~/server/ai/gateway";
 import { wrapAiGatewayError } from "~/server/ai/gateway-error";
@@ -103,7 +103,7 @@ export interface AiRunContext<T = unknown> extends Pick<
   | "subscriptionRequired"
   | "subscriptionFallback"
   | "beforePaidRequest"
-  | "beforeFreeRequest"
+  | "beforePlanRequest"
 > {
   /**
    * Where the `AiUsage` row is written. Omit to run without usage accounting
@@ -309,10 +309,10 @@ export function planStructuredRun<T = unknown>(
         { model: spec.model, runId: ctx.runId },
         ctx.beforePaidRequest,
       ),
-      beforeFreeRequest: withFreeBudget(
+      beforePlanRequest: withPlanBudget(
         ctx.db,
         { model: spec.model, runId: ctx.runId, interactive: ctx.interactive },
-        ctx.beforeFreeRequest,
+        ctx.beforePlanRequest,
       ),
     },
   };
@@ -929,14 +929,15 @@ export async function runStructuredFeature<T>(
     };
     const funded: FundedCall | undefined = plan.funded && {
       ...plan.funded,
-      onRefusedAttempt: async (refused) => {
+      onRefusedAttempt: async (refused, { local }) => {
         const failure = responseFailure
           ? describeResponseFailure(responseFailure)
           : refused.errorMessage;
         if (responseFailure) recoveredFailures.push(responseFailure);
         responseFailure = undefined;
         responseWire = undefined;
-        if (callCtx.db)
+        // Cubby refused it before any provider call: nothing to record.
+        if (callCtx.db && !local)
           await recordFeatureUsage(
             { ...spec, model: answeredBy(refused) },
             callCtx,
@@ -1027,7 +1028,7 @@ export async function runStructuredFeature<T>(
         },
         responseFailure,
       );
-      // ADR 0017: a paid rung with no balance or no key waits for the next
+      // ADR 0027: a paid rung with no balance or no key waits for the next
       // window. Failing would release the Run's Emails to a pass that fails too.
       if (ctx.db && isPaidFundingUnavailable(failure.message))
         throw await paidFundingStop(ctx.db, ctx.runId, failure.message);

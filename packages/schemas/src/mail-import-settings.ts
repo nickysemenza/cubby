@@ -14,22 +14,29 @@ export const mailImportSettings = z.strictObject({
 });
 export type MailImportSettings = z.infer<typeof mailImportSettings>;
 
-/** The Claude subscriber-credit budget a member may set per six-hour window. */
-export const creditBudgetLimitUsd = z.number().nonnegative().max(100);
+/** A window budget a member may set, in dollars per six-hour window. */
+const windowBudgetLimitUsd = z.number().nonnegative().max(100);
+const budgetLimits = {
+  planLimitUsd: windowBudgetLimitUsd.default(2),
+  paidLimitUsd: windowBudgetLimitUsd.default(1),
+};
 
-/** Stored household AI budget settings; an absent row keeps the defaults. */
-export const aiBudgetSettings = z.strictObject({
-  creditLimitUsd: creditBudgetLimitUsd,
-  openaiCreditLimitUsd: creditBudgetLimitUsd.default(1.5),
-  planLimitUsd: creditBudgetLimitUsd.default(2),
-  paidLimitUsd: creditBudgetLimitUsd.default(1),
-});
+/**
+ * Household AI budgets per six-hour window: the ChatGPT plan's (shared with
+ * the members' own use) and paid models'. Provider credits have none
+ * (ADR 0027). An absent row keeps the defaults.
+ */
+export const aiBudgetSettings = z.strictObject(budgetLimits);
 export type AiBudgetSettings = z.infer<typeof aiBudgetSettings>;
+/** The stored row; keys of retired budgets (the credit limits) are dropped on read. */
+export const storedAiBudgetSettings = z.object(budgetLimits);
 
 const budgetUse = z.strictObject({
   limitUsd: z.number().nonnegative(),
   spentUsd: z.number().nonnegative(),
 });
+/** A provider credit's window spend; it has no window budget. */
+const creditUse = z.strictObject({ spentUsd: z.number().nonnegative() });
 
 /**
  * Frontier chat-model spend in the current fixed UTC window. `credit`,
@@ -39,8 +46,8 @@ const budgetUse = z.strictObject({
 export const aiBudgetStatus = z.strictObject({
   windowStart: z.iso.datetime(),
   windowEnd: z.iso.datetime(),
-  credit: budgetUse,
-  openaiCredit: budgetUse,
+  credit: creditUse,
+  openaiCredit: creditUse,
   plan: budgetUse,
   paid: budgetUse,
 });
@@ -103,13 +110,13 @@ export type FundingAvailability = z.infer<typeof fundingAvailability>;
 const withAvailability = { availability: fundingAvailability };
 
 /**
- * Household-wide frontier AI funding (ADR 0017): separate provider credit
- * budgets and refusals, the plan, and the paid budget and gateway refusal
- * decide when background work waits.
+ * Household-wide frontier AI funding (ADR 0027): provider credit refusals, the
+ * plan's budget and state, and the paid budget and gateway refusal decide
+ * when background work waits.
  */
 export const aiFundingStatus = aiBudgetStatus.extend({
-  credit: budgetUse.extend(fundingRefusalState.shape).extend(withAvailability),
-  openaiCredit: budgetUse
+  credit: creditUse.extend(fundingRefusalState.shape).extend(withAvailability),
+  openaiCredit: creditUse
     .extend(fundingRefusalState.shape)
     .extend(withAvailability),
   plan: budgetUse

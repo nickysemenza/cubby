@@ -1,5 +1,5 @@
 import { aiFundingContract } from "~/contracts/ai.contract";
-import { setCreditBudget } from "~/server/ai/budget";
+import { setAiBudget } from "~/server/ai/budget";
 import { readAiFundingStatus, resetFundingRefusal } from "~/server/ai/funding";
 import { resumeFundingPausedRuns } from "~/server/domains/run/service/ai-work";
 import type { AuthenticatedRequestContext } from "~/server/http/request-context";
@@ -22,12 +22,9 @@ async function fundingChanged(context: AuthenticatedRequestContext) {
 
 export const aiFundingHandlers = implementOperationDomain(aiFundingContract, {
   status: async (context) => readAiFundingStatus(context.db),
-  setCreditBudget: async (context, input) => {
+  setBudget: async (context, input) => {
     await assertMember(context);
-    await setCreditBudget(context.db, input);
-    // A budget says nothing about the gateway balance: paid stays refused.
-    await resetFundingRefusal("credit");
-    await resetFundingRefusal("openaiCredit");
+    await setAiBudget(context.db, input);
     return fundingChanged(context);
   },
   resetFundingRefusal: async (context, input) => {

@@ -493,13 +493,21 @@ export function isInferenceFundingRefusal(
       )
     );
   if (funding === "openai_credit")
-    return /"(?:code|type)"\s*:\s*"(?:credit_balance_exhausted|insufficient_quota|cubby_credit_budget_reached|cubby_credit_refused)"/u.test(
+    return /"(?:code|type)"\s*:\s*"(?:credit_balance_exhausted|insufficient_quota|cubby_credit_refused)"/u.test(
       body,
     );
-  return /credit balance is too low|reached your specified[^\n]*API usage limits|enforced_spend_limit_reached|cubby_credit_budget_reached|cubby_credit_refused/iu.test(
+  return /credit balance is too low|reached your specified[^\n]*API usage limits|enforced_spend_limit_reached|cubby_credit_refused/iu.test(
     body,
   );
 }
+
+/**
+ * A funding refusal Cubby answered itself, before any provider call: a
+ * recorded credit refusal (`creditRefusedResponse`) or the plan's spent window
+ * budget.
+ */
+export const isLocalFundingRefusal = (body: string) =>
+  /"type"\s*:\s*"cubby_(?:credit_refused|plan_budget_reached)"/u.test(body);
 
 /**
  * The gateway account itself has no balance: every paid provider fails alike,
@@ -993,16 +1001,13 @@ export interface GatewayFetchRoutes extends GatewayResponseObservers {
   /** Admission completes before each actual paid or synthetic-peer transmission. */
   beforePaidRequest?: (request: GatewayFetchRequest) => Promise<void>;
   /**
-   * Free-rung admission, before a provider credit or ChatGPT plan attempt: a
-   * returned reason refuses it as a funding refusal
-   * (`cubby_credit_budget_reached`, `cubby_plan_budget_reached`), so the
-   * ladder moves on; an unladdered call skips the plan for its paid or
-   * subscription-required path. A thrown error is an admission failure.
+   * ChatGPT plan admission: a returned reason refuses the plan attempt as a
+   * funding refusal (`cubby_plan_budget_reached`), so the ladder moves on; an
+   * unladdered call skips the plan for its paid or subscription-required path.
+   * A thrown error is an admission failure. Provider credits have no window
+   * budget (ADR 0027).
    */
-  beforeFreeRequest?: (
-    request: GatewayFetchRequest,
-    funding: "subscriber_credit" | "openai_credit" | "subscription",
-  ) => Promise<string | null>;
+  beforePlanRequest?: (request: GatewayFetchRequest) => Promise<string | null>;
   requestTimeoutMs?: number;
   /** Rewrites the provider body on every route that decodes it. */
   rewriteQuery?: (query: GatewayQuery) => GatewayQuery;
@@ -1116,25 +1121,6 @@ export function gatewayFetchThrough(routes: GatewayFetchRoutes): typeof fetch {
     const observe = async (response: Response) =>
       observeGatewayResponse(response, routes, await streamRequested());
 
-    if (
-      (routes.funding === "subscriber_credit" ||
-        routes.funding === "openai_credit") &&
-      routes.beforeFreeRequest
-    ) {
-      const refusal = await routes.beforeFreeRequest(request, routes.funding);
-      if (refusal) {
-        routes.onTransport?.("gateway");
-        return observe(
-          Response.json(
-            {
-              error: { type: "cubby_credit_budget_reached", message: refusal },
-            },
-            { status: 429 },
-          ),
-        );
-      }
-    }
-
     const testPeer = routes.testPeer?.();
     if (testPeer) {
       // Harness peers can be deterministic or live. The live peer must refuse
@@ -1156,7 +1142,7 @@ export function gatewayFetchThrough(routes: GatewayFetchRoutes): typeof fetch {
       routes.funding !== "openai_credit" &&
       routes.provider === "openai" &&
       endpoint === "responses"
-        ? ((await routes.beforeFreeRequest?.(request, "subscription")) ?? null)
+        ? ((await routes.beforePlanRequest?.(request)) ?? null)
         : undefined;
     if (planRefusal && routes.funding === "subscription") {
       routes.onTransport?.("chatgpt");

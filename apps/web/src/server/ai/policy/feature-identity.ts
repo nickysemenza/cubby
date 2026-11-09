@@ -6,11 +6,13 @@
  */
 import {
   type AiModel,
+  type ChatTier,
   DECISION_MODEL,
   DEFAULT_EMBEDDING_MODEL,
   FAST_MODEL,
   type OpenAiEffort,
   QUALITY_MODEL,
+  STANDARD_MODEL,
   type SupportedChatModel,
   type SupportedDecisionModel,
   type SupportedEmbeddingModel,
@@ -54,14 +56,16 @@ export interface AiChatRequest {
 }
 
 /** Embeddings share the catalog, while retaining their vector runner. */
-type AiTier = "fast" | "quality" | "decision" | "embedding";
+type AiTier = ChatTier | "decision" | "embedding";
 
 /**
- * The single place a tier's model is written down. `models.ts` owns the
- * constants; this owns which tier reaches for which.
+ * The model id each tier's features are stamped with. Chat tiers name their
+ * OpenAI model; the funding ladder substitutes each route's model
+ * (`CHAT_TIER_MODELS`).
  */
 export const MODEL_FOR_TIER = {
   fast: FAST_MODEL,
+  standard: STANDARD_MODEL,
   quality: QUALITY_MODEL,
   decision: DECISION_MODEL,
   embedding: DEFAULT_EMBEDDING_MODEL,
@@ -84,7 +88,7 @@ export interface AiFeatureShared {
 
 /** A chat tier and its reasoning dial. */
 type AiChatFeatureTier = {
-  tier: "fast" | "quality";
+  tier: ChatTier;
   effort: OpenAiEffort;
 } & {
   /** Output cap. Reasoning/thinking tokens count against it on every tier. */

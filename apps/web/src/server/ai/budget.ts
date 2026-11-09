@@ -3,6 +3,7 @@ import {
   aiBudgetSettings,
   type AiBudgetSettings,
   type AiBudgetStatus,
+  storedAiBudgetSettings,
 } from "@cubby/schemas/mail-import-settings";
 import { AI_MODELS } from "@cubby/shared/ai/models";
 import { and, gte, inArray, sql } from "drizzle-orm";
@@ -16,14 +17,14 @@ import { aiBudgetWindow } from "./budget-window";
 
 /**
  * Household caps on frontier chat-model spend per fixed six-hour UTC window
- * (ADR 0017): the paid budget sums charged cost, and the provider credit budgets
- * sum their own standard API cost of subscriber-credit calls, which charge $0.
- * Embeddings and closed-set decision models are not budgeted. Admission (`paidRunPreflight`, `withAiBudget`,
- * `withFreeBudget`) and accounting (`readAiBudget`) share `aiBudgetCovers`.
+ * (ADR 0027): the paid budget sums charged cost and the plan budget its
+ * standard API cost. Provider credits have no window budget: they run until
+ * the provider refuses, and the status reports their spend. Embeddings and
+ * closed-set decision models are not budgeted. Admission (`paidRunPreflight`,
+ * `withAiBudget`, `withPlanBudget`) and accounting (`readAiBudget`) share
+ * `aiBudgetCovers`.
  */
 export const AI_BUDGET_LIMIT_USD = 1;
-/** About $180 a month of the household's $200 monthly Claude credit. */
-export const DEFAULT_CREDIT_BUDGET_USD = 1.5;
 /**
  * Cubby's slice of the household ChatGPT plan, whose quota the members' own
  * coding shares.
@@ -51,7 +52,7 @@ export class AiBudgetExhaustedError extends Error {
   }
 }
 
-export async function setCreditBudget(
+export async function setAiBudget(
   db: Database,
   settings: AiBudgetSettings,
 ): Promise<AiBudgetSettings> {
@@ -99,22 +100,14 @@ export async function readAiBudget(
     );
   // The aggregate returns a row even without usage. Wrapping metadata keeps
   // an absent settings row distinct from malformed stored JSON null.
-  const settings = aiBudgetSettings.parse(
-    row?.settings
-      ? row.settings[0]
-      : { creditLimitUsd: DEFAULT_CREDIT_BUDGET_USD },
+  const settings = storedAiBudgetSettings.parse(
+    row?.settings ? row.settings[0] : {},
   );
   return {
     windowStart: window.start.toISOString(),
     windowEnd: window.end.toISOString(),
-    credit: {
-      limitUsd: settings.creditLimitUsd,
-      spentUsd: Math.max(0, row?.credit ?? 0),
-    },
-    openaiCredit: {
-      limitUsd: settings.openaiCreditLimitUsd,
-      spentUsd: Math.max(0, row?.openaiCredit ?? 0),
-    },
+    credit: { spentUsd: Math.max(0, row?.credit ?? 0) },
+    openaiCredit: { spentUsd: Math.max(0, row?.openaiCredit ?? 0) },
     plan: {
       limitUsd: settings.planLimitUsd,
       spentUsd: Math.max(0, row?.plan ?? 0),
@@ -195,27 +188,15 @@ export function withAiBudget<R>(
   };
 }
 
-/** Free-rung admission: background work stops drawing credit or plan once that window budget is spent. */
-export function withFreeBudget<R>(
+/** Plan admission: background work stops drawing the ChatGPT plan once its window budget is spent. */
+export function withPlanBudget<R>(
   db: Database | undefined,
   call: { model: string; runId?: RunId; interactive?: boolean },
-  preflight:
-    | ((
-        request: R,
-        funding: "subscriber_credit" | "openai_credit" | "subscription",
-      ) => Promise<string | null>)
-    | undefined,
-):
-  | ((
-      request: R,
-      funding: "subscriber_credit" | "openai_credit" | "subscription",
-    ) => Promise<string | null>)
-  | undefined {
+  preflight: ((request: R) => Promise<string | null>) | undefined,
+): ((request: R) => Promise<string | null>) | undefined {
   if (preflight || !db || !aiBudgetCovers(call.model)) return preflight;
-  return async (_request, funding) => {
-    const { isAutomaticAiCall, freeBudgetRefusal } = await import("./funding");
-    return (await isAutomaticAiCall(db, call))
-      ? freeBudgetRefusal(db, funding)
-      : null;
+  return async () => {
+    const { isAutomaticAiCall, planBudgetRefusal } = await import("./funding");
+    return (await isAutomaticAiCall(db, call)) ? planBudgetRefusal(db) : null;
   };
 }

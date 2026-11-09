@@ -21,7 +21,7 @@ export const cooldowns = sqliteTable("cooldowns", {
   untilMs: integer("until_ms").notNull(),
 });
 
-// A provider credit refusal (ADR 0017) refuses credit admission until
+// A provider credit refusal (ADR 0027) refuses credit admission until
 // `until_ms`, except one probe per six-hour window; `probe_window` is the
 // start of the window whose probe is spent.
 export const creditRefusals = sqliteTable("credit_refusals", {

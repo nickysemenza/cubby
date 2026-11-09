@@ -38,7 +38,7 @@ const escalationRecord = z.object({
   trigger: z.enum(["requested", "prepare_refused", "unresolved"]),
   detail: z.string(),
   callId: z.string().nullable(),
-  /** Retained when a funded alternative was selected before transmission. */
+  /** The model the decision selected; older decisions may name a retired one. */
   model: storedChatModelSchema.optional(),
 });
 const modelConfiguration = z.object({
@@ -69,17 +69,14 @@ const KEYS = {
  */
 export function coordinatorEscalation(input: {
   models: CoordinatorModels;
-  fundedAlternative?: SupportedChatModel;
   store: EscalationStore;
   /** Configure the conversation's model for its next request. */
   useModel: (model: SupportedChatModel) => Promise<void>;
   /**
-   * Why the escalation model's funding cannot answer now (a refused Claude
-   * credit, a spent window budget), else null. Escalating then would only
-   * fall through the funding ladder to another model, so the primary settles
-   * the Email itself.
+   * Why no free source can fund the escalation now, else null. The primary
+   * then settles the Email itself instead of escalating onto paid funding.
    */
-  unavailable?: (model: SupportedChatModel) => Promise<string | null>;
+  unavailable?: () => Promise<string | null>;
 }) {
   const { primary } = input.models;
   const target = input.models.escalation ?? primary;
@@ -91,14 +88,11 @@ export function coordinatorEscalation(input: {
     return raw ? escalationRecord.parse(JSON.parse(raw)) : undefined;
   };
   /** Decided once per work item, so a recovered call decides as it first did. */
-  async function unavailableReason(model = target): Promise<string | null> {
-    const key =
-      model === target
-        ? KEYS.unavailable(item())
-        : `${KEYS.unavailable(item())}:${model}`;
+  async function unavailableReason(): Promise<string | null> {
+    const key = KEYS.unavailable(item());
     const recorded = store.read(key);
     if (recorded !== undefined) return recorded || null;
-    const reason = (await input.unavailable?.(model)) ?? null;
+    const reason = (await input.unavailable?.()) ?? null;
     store.write(key, reason ?? "");
     return reason;
   }
@@ -159,23 +153,7 @@ export function coordinatorEscalation(input: {
       await reconcileConfiguration();
       return { escalated: false, model: desiredModel() };
     }
-    let unavailable = await unavailableReason();
-    let selected = target;
-    if (
-      unavailable &&
-      input.fundedAlternative &&
-      input.fundedAlternative !== primary
-    ) {
-      const alternativeRefusal = await unavailableReason(
-        input.fundedAlternative,
-      );
-      if (alternativeRefusal)
-        unavailable = `${unavailable}; ${alternativeRefusal}`;
-      else {
-        selected = input.fundedAlternative;
-        unavailable = null;
-      }
-    }
+    const unavailable = await unavailableReason();
     if (unavailable) return { escalated: false, model: primary, unavailable };
     store.write(
       KEYS.escalated(item()),
@@ -184,12 +162,12 @@ export function coordinatorEscalation(input: {
           trigger: "requested",
           detail: `${request.category}: ${request.reason}`,
           callId: null,
-          model: selected,
+          model: target,
         }),
       ),
     );
     await reconcileConfiguration();
-    return { escalated: true, model: selected };
+    return { escalated: true, model: target };
   }
 
   return {

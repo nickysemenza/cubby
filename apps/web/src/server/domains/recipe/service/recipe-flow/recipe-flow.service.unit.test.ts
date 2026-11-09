@@ -226,7 +226,7 @@ describe("recipe-flow service", () => {
     const missing = await getRecipeFlowState(db, RECIPE_ID, memory.ports);
     const fromOtherModel: RecipeFlowArtifact = {
       ...artifact(missing.currentFingerprint),
-      model: "claude-opus-5-5",
+      model: "claude-sonnet-5-5",
     };
     memory.analyses.push({
       inputFingerprint: missing.currentFingerprint,
@@ -246,7 +246,7 @@ describe("recipe-flow service", () => {
     const cached = artifact(missing.currentFingerprint);
     memory.analyses.push({
       inputFingerprint: missing.currentFingerprint,
-      model: "claude-opus-5-5",
+      model: "claude-sonnet-5-5",
       promptVersion: cached.promptVersion,
       result: cached,
       updatedAt: cached.generatedAt,

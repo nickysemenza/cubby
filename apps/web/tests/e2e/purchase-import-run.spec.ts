@@ -2,6 +2,7 @@ import { readRetainedMail } from "~/server/domains/mail/repo/retained-mail";
 import { loadRunDetail } from "~/server/domains/purchase-import/repo/run-service";
 import { emailImportOut } from "@cubby/schemas/email-actions";
 import { importRunAgentManifest } from "@cubby/schemas/import-run-agent";
+import { CHAT_TIER_MODELS } from "@cubby/shared/ai/models";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { eq, inArray } from "drizzle-orm";
 
@@ -229,8 +230,9 @@ test("imports saved order mail from its Email page and follows the live Run to t
   const [claimed] = await claimOrder(seed);
   if (!claimed) throw new Error("Seeded original is missing");
   await agent.configure({
+    // Claude credit answers first, with the fast tier's Anthropic model.
     expectedInference: {
-      model: importRunAgentManifest.mail_import.model,
+      model: CHAT_TIER_MODELS.fast.anthropic,
       effort: importRunAgentManifest.mail_import.effort,
     },
     steps: [

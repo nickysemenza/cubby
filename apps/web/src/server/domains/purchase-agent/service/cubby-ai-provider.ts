@@ -25,6 +25,7 @@ import {
   cubbyPiProviders,
   fundedCubbyPiProviders,
   type GatewayFetchFor,
+  type RefusedAttempt,
 } from "@cubby/shared/ai/pi-providers";
 import type { AssistantMessage, Provider } from "@earendil-works/pi-ai";
 import { z } from "zod";
@@ -33,7 +34,10 @@ import { type ContextRecorder, withContextCapture } from "./context-breakdown";
 import type { AgentGateway, PurchaseAgentEnvironment } from "./environment";
 
 type TestModel = NonNullable<PurchaseAgentEnvironment["testModel"]>;
-type FundingRefusal = (message: AssistantMessage) => Promise<void>;
+type FundingRefusal = (
+  message: AssistantMessage,
+  attempt: RefusedAttempt,
+) => Promise<void>;
 type AgentTransport = Extract<AiUsageTransport, "gateway" | "chatgpt">;
 
 /**
@@ -165,7 +169,7 @@ interface AgentFetchOptions extends Pick<
   | "subscriptionRequired"
   | "subscriptionFallback"
   | "beforePaidRequest"
-  | "beforeFreeRequest"
+  | "beforePlanRequest"
 > {
   funding?: InferenceFunding;
   fundingFallback?: boolean;
@@ -177,7 +181,7 @@ interface AgentFetchOptions extends Pick<
     | "subscriptionRequired"
     | "subscriptionFallback"
     | "beforePaidRequest"
-    | "beforeFreeRequest"
+    | "beforePlanRequest"
   >;
   gateway: () => AgentGateway;
   testModel?: TestModel;
@@ -210,7 +214,7 @@ export function createCubbyGatewayFetch(
       | "subscriptionRequired"
       | "subscriptionFallback"
       | "beforePaidRequest"
-      | "beforeFreeRequest"
+      | "beforePlanRequest"
     >,
   ) =>
     gatewayFetchThrough({
@@ -263,11 +267,11 @@ export function createCubbyGatewayFetch(
       subscriptionRequired: options.subscriptionRequired,
       subscriptionFallback: options.subscriptionFallback,
       beforePaidRequest: options.beforePaidRequest,
-      beforeFreeRequest: options.beforeFreeRequest,
+      beforePlanRequest: options.beforePlanRequest,
       ...options.transportPolicy?.(),
     };
     const admit = policy.beforePaidRequest;
-    const admitFree = policy.beforeFreeRequest;
+    const admitPlan = policy.beforePlanRequest;
     let refusal: { error: unknown } | undefined;
     try {
       return await routedFetch({
@@ -282,11 +286,11 @@ export function createCubbyGatewayFetch(
               throw error;
             }
           }),
-        beforeFreeRequest:
-          admitFree &&
-          (async (request, funding) => {
+        beforePlanRequest:
+          admitPlan &&
+          (async (request) => {
             try {
-              return await admitFree(request, funding);
+              return await admitPlan(request);
             } catch (error: unknown) {
               refusal = { error };
               throw error;
@@ -345,14 +349,11 @@ export function cubbyAgentProviders(
   input: AgentFetchOptions & { recorder: ContextRecorder },
 ): Provider[] {
   // The coordinator's configured model (its manifest primary, or the
-  // escalation model for an escalated Email) answers first.
+  // escalation model for an escalated Email) names the tier the ladder runs.
   const providers =
     input.fundingFallback && !input.fixedModel
       ? (fetchFor: GatewayFetchFor, onRefused?: FundingRefusal) =>
-          fundedCubbyPiProviders(fetchFor, onRefused, {
-            paid: true,
-            leadWithRequested: true,
-          })
+          fundedCubbyPiProviders(fetchFor, onRefused, { paid: true })
       : cubbyPiProviders;
   return providers((route, onUnbilledResponse, funding) => {
     let finalTransport: AgentTransport | undefined;

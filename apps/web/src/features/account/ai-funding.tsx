@@ -56,6 +56,10 @@ const when = (iso: string) =>
   });
 
 type SourceId = "credit" | "openaiCredit" | "plan" | "paid";
+/** The sources with a member-set window budget; credits have none (ADR 0027). */
+type BudgetedId = "plan" | "paid";
+const isBudgeted = (id: SourceId): id is BudgetedId =>
+  id === "plan" || id === "paid";
 type Blocker = NonNullable<FundingAvailability["blocker"]>;
 
 const SOURCES = [
@@ -135,7 +139,8 @@ export function AiFundingLine({ budget }: { budget: AiFundingStatus }) {
     <p className="text-xs text-muted-foreground tabular-nums">
       {SOURCES.map(({ id, source }) => (
         <Fragment key={id}>
-          {source} {usd(budget[id].spentUsd)} of {usd(budget[id].limitUsd)},{" "}
+          {source} {usd(budget[id].spentUsd)}
+          {isBudgeted(id) ? ` of ${usd(budget[id].limitUsd)}` : ""},{" "}
           {fundingVerdict(budget, id).label} ·{" "}
         </Fragment>
       ))}
@@ -158,7 +163,7 @@ export const aiFundingStatusQuery = () => ({
 });
 
 /**
- * Household-wide frontier AI funding (ADR 0017): one row per source with its
+ * Household-wide frontier AI funding (ADR 0027): one row per source with its
  * window budget, whether background work can use it now, the raw refusal
  * behind a disclosure and the row's own recovery action.
  */
@@ -168,8 +173,8 @@ export function AiFundingSettings() {
   const replace = (data: AiFundingStatus) => {
     queryClient.setQueryData(aiFunding.status.queryOptions({}).queryKey, data);
   };
-  const setCredit = useActionMutation({
-    mutationFn: () => aiFunding.setCreditBudget.mutationOptions(),
+  const setBudget = useActionMutation({
+    mutationFn: () => aiFunding.setBudget.mutationOptions(),
     success: "AI budgets updated",
     error: "Couldn't update AI budgets",
     onSuccess: replace,
@@ -236,9 +241,10 @@ export function AiFundingSettings() {
     <div className="space-y-3">
       <Description size="xs">
         Every feature’s frontier AI calls use Claude credit first, then OpenAI
-        credit, then the ChatGPT plan, then paid models. Background work stops
-        drawing each free source at its window budget (the plan’s quota is
-        shared with your own use), then pays within the paid budget.
+        credit, then the ChatGPT plan, then paid models. Credits run until the
+        provider refuses. Background work stops drawing the plan at its window
+        budget (its quota is shared with your own use), then pays within the
+        paid budget.
       </Description>
       <Stack gap="md">
         {status.isLoading ? <StatusText>Loading AI funding…</StatusText> : null}
@@ -246,10 +252,10 @@ export function AiFundingSettings() {
         {budget ? (
           <Stack gap="sm">
             <FundingBudgetEditor
-              key={`${budget.credit.limitUsd}:${budget.openaiCredit.limitUsd}:${budget.plan.limitUsd}:${budget.paid.limitUsd}`}
+              key={`${budget.plan.limitUsd}:${budget.paid.limitUsd}`}
               budget={budget}
-              pending={setCredit.isPending}
-              onSave={(settings) => setCredit.mutate(settings)}
+              pending={setBudget.isPending}
+              onSave={(settings) => setBudget.mutate(settings)}
               actions={actions(budget)}
             />
             <p className="text-xs text-muted-foreground">
@@ -279,9 +285,7 @@ export function FundingBudgetEditor({
   /** Each source's recovery action, shown on its own row. */
   actions?: Partial<Record<SourceId, ReactNode>>;
 }) {
-  const [draft, setDraft] = useState({
-    credit: String(budget.credit.limitUsd),
-    openaiCredit: String(budget.openaiCredit.limitUsd),
+  const [draft, setDraft] = useState<Record<BudgetedId, string>>({
     plan: String(budget.plan.limitUsd),
     paid: String(budget.paid.limitUsd),
   });
@@ -294,8 +298,6 @@ export function FundingBudgetEditor({
       Number(value) <= 100,
   );
   const changed =
-    draft.credit !== String(budget.credit.limitUsd) ||
-    draft.openaiCredit !== String(budget.openaiCredit.limitUsd) ||
     draft.plan !== String(budget.plan.limitUsd) ||
     draft.paid !== String(budget.paid.limitUsd);
   const rows: FundingRow[] = SOURCES.map((source) => ({
@@ -319,8 +321,6 @@ export function FundingBudgetEditor({
         event.preventDefault();
         if (valid && changed && !pending)
           onSave({
-            creditLimitUsd: Number(draft.credit),
-            openaiCreditLimitUsd: Number(draft.openaiCredit),
             planLimitUsd: Number(draft.plan),
             paidLimitUsd: Number(draft.paid),
           });
@@ -373,25 +373,31 @@ export function FundingBudgetEditor({
             id: "window",
             header: "This window",
             headClassName: "w-44",
-            cell: (row) => (
-              <Row align="center" gap="sm">
-                <span>{usd(budget[row.id].spentUsd)} of $</span>
-                <Input
-                  aria-label={`${row.source} budget per window`}
-                  type="number"
-                  inputMode="decimal"
-                  min={0}
-                  max={100}
-                  step={0.5}
-                  value={draft[row.id]}
-                  disabled={pending}
-                  onChange={(event) =>
-                    setDraft({ ...draft, [row.id]: event.target.value })
-                  }
-                  className="h-7 w-20 shrink-0 tabular-nums"
-                />
-              </Row>
-            ),
+            cell: (row) => {
+              const { id } = row;
+              // A credit has no window budget: it runs until the provider refuses.
+              if (!isBudgeted(id))
+                return <span>{usd(budget[id].spentUsd)} spent</span>;
+              return (
+                <Row align="center" gap="sm">
+                  <span>{usd(budget[id].spentUsd)} of $</span>
+                  <Input
+                    aria-label={`${row.source} budget per window`}
+                    type="number"
+                    inputMode="decimal"
+                    min={0}
+                    max={100}
+                    step={0.5}
+                    value={draft[id]}
+                    disabled={pending}
+                    onChange={(event) =>
+                      setDraft({ ...draft, [id]: event.target.value })
+                    }
+                    className="h-7 w-20 shrink-0 tabular-nums"
+                  />
+                </Row>
+              );
+            },
           },
           {
             id: "action",

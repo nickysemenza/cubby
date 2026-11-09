@@ -160,9 +160,8 @@ export class AiGatewayEgressDurableObject extends DurableObject<Env> {
   /**
    * A credit response's effect on the refusal: success clears it; a
    * recognized provider funding refusal records (or re-records) it with its
-   * raw body. Cubby's own window stop (`cubby_credit_budget_reached`) resets
-   * with its window and never records. `epoch` is the request's admission
-   * epoch; a response from before the latest reset or refusal is ignored.
+   * raw body. `epoch` is the request's admission epoch; a response from
+   * before the latest reset or refusal is ignored.
    */
   async noteCreditResponse(
     status: number,
@@ -182,7 +181,7 @@ export class AiGatewayEgressDurableObject extends DurableObject<Env> {
         status,
         body,
         provider === "openai" ? "openai_credit" : "subscriber_credit",
-      ) && !body.includes("cubby_credit_budget_reached"),
+      ),
     );
   }
 

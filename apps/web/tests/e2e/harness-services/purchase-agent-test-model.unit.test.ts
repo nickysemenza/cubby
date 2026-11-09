@@ -10,7 +10,7 @@ it("plays the script through the funded Anthropic SDK transport", async () => {
     new Request("https://fake/configure", {
       method: "POST",
       body: JSON.stringify({
-        expectedInference: { model: "claude-opus-5-5", effort: "medium" },
+        expectedInference: { model: "claude-sonnet-5-5", effort: "medium" },
         steps: [{ call: "claim", tool: "claim_next_import_work", args: {} }],
         purposeSteps: {
           mail: [
@@ -42,7 +42,7 @@ it("plays the script through the funded Anthropic SDK transport", async () => {
     return harness.fetch(request);
   }))
     models.setProvider(provider);
-  const model = models.getModel("anthropic", "claude-opus-5-5");
+  const model = models.getModel("openai", "gpt-6.1-sol");
   if (!model) throw new Error("Missing Anthropic model");
   const messages = [
     {
