@@ -32,10 +32,12 @@ it("rewrites blocked Emails and carries attempt history without moving evidence 
     const runs = [
       { n: 2, emails: [10, 12, 13, 14], startedAt: "2026-01-01", key: null },
       { n: 3, emails: [14, 15], startedAt: "2026-01-02", key: null },
+      { n: 4, emails: [14], startedAt: "2026-01-03", key: null },
+      // A sender-proof recheck: its revision starts its own count.
       {
-        n: 4,
-        emails: [14],
-        startedAt: "2026-01-03",
+        n: 5,
+        emails: [10],
+        startedAt: "2026-01-04",
         key: `mail-research:${id(1)}:sender-proof:${revision}:${"e".repeat(64)}`,
       },
     ];
@@ -100,9 +102,18 @@ it("rewrites blocked Emails and carries attempt history without moving evidence 
       through: "20261109024750_email_import_recovery",
     });
     const after = await client.query(`SELECT * FROM "Email" ORDER BY id`);
-    const attempts = (count: number) => ({ checksum, count });
+    const attempts = (count: number, key = checksum) => ({
+      revision: key,
+      count,
+    });
     const expected = new Map([
-      [id(10), { status: "unsettled", importAttempts: attempts(1) }],
+      [
+        id(10),
+        {
+          status: "unsettled",
+          importAttempts: attempts(1, `${checksum}:${revision}`),
+        },
+      ],
       [id(11), { status: "pending", importAttempts: null }],
       [id(12), { status: "researching", importAttempts: attempts(1) }],
       [id(13), { status: "completed", importAttempts: attempts(1) }],
@@ -128,7 +139,8 @@ it("rewrites blocked Emails and carries attempt history without moving evidence 
     expect(fenced.rows).toEqual([
       { id: id(2), revision: null },
       { id: id(3), revision: null },
-      { id: id(4), revision },
+      { id: id(4), revision: null },
+      { id: id(5), revision },
     ]);
     await expect(
       client.query(`UPDATE "Email" SET status = 'blocked' WHERE id = $1`, [

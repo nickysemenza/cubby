@@ -414,15 +414,22 @@ describe("Mail import claim", () => {
       "Your order SYN-5001 has shipped",
       "Order #SYN-5001 is on its way via UPS. Tracking number: 1Z999AA10123456784. Customs tracking: LX1234567890CN",
     );
+    // A separated reference no carrier format recognises is a second package.
+    const separated = await retain(
+      "rule-separated-reference",
+      "Your order SYN-5001 has shipped",
+      "Tracking: 1Z999AA10123456784. Second package tracking: AB12-3456-7890",
+    );
     const { owner, pi } = await admit(party, [
       seed,
       contradicting,
       twoPackages,
       unknownCarrier,
+      separated,
     ]);
 
     const sources = new Map(
-      [contradicting, twoPackages, unknownCarrier].map((source) => [
+      [contradicting, twoPackages, unknownCarrier, separated].map((source) => [
         source.messageId,
         source,
       ]),
@@ -455,6 +462,7 @@ describe("Mail import claim", () => {
       contradicting.messageId,
       twoPackages.messageId,
       unknownCarrier.messageId,
+      separated.messageId,
     ]);
     expect(await linkRows(seed)).toMatchObject({
       email: { status: "completed" },

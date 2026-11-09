@@ -202,6 +202,7 @@ async function linkByExactEvidence(
     subject: string | null;
     text: string;
     receivedAt: Date | null;
+    links: readonly string[];
     keys: MailKeys;
     senderVendorId: VendorId | null;
     candidates: readonly MailRuleCandidate[];
@@ -218,7 +219,11 @@ async function linkByExactEvidence(
   if (
     tracking.length > 1 ||
     tracking.some((key) => key.carrier === null) ||
-    hasUnrecognisedTracking(`${input.subject ?? ""}\n${input.text}`, tracking)
+    hasUnrecognisedTracking({
+      text: `${input.subject ?? ""}\n${input.text}`,
+      links: input.links,
+      keys: tracking,
+    })
   )
     return false;
   const { email } = input.source;
@@ -508,6 +513,7 @@ async function settleByRule(
         subject: mail.subject,
         text,
         receivedAt: mail.receivedAt,
+        links: content.links.map((link) => link.href),
         keys,
         senderVendorId: proof?.vendor.id ?? null,
         candidates,

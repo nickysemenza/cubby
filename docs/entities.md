@@ -3851,8 +3851,9 @@ and is readmitted only by a new evidence revision (ADR 0011). Storage-only
 tracking numbers its retained content prints, valid for `mailKeysChecksum`;
 ingest writes them and the import claim recomputes missing or stale keys.
 They are exact-linking inputs, not read fields. Storage-only `importAttempts`
-counts Mail import admissions at the current checksum and bounds unattended
-re-admission of unchanged evidence (three).
+counts Mail import admissions at one evidence revision (checksum, plus the
+admitting Run's recheck revision) and bounds re-admission of that revision
+(three).
 
 Email metadata, original/attachment persistence, candidate/classification
 observations, `EmailReview`, `EmailPurchaseDecision`, linked Purchase writes and Mail import

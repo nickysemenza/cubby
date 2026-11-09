@@ -1219,16 +1219,17 @@ async function retryTransientMailImport(tx: DrizzleTransaction, runId: RunId) {
     .from(runTable)
     .where(eq(runTable.id, runId));
   if (!locked?.input) return null;
+  const roster = mailResearchRunInput.parse(locked.input);
   const unsettled = (await readMailRunRoster(tx, runId))?.filter(
     (source) =>
       source.owned &&
       source.unchanged &&
-      !importAttemptsExhausted(source.email) &&
+      // The successor attempts this Run's revision again.
+      !importAttemptsExhausted(source.email, roster.evidenceRevision) &&
       (source.email.status === "researching" ||
         source.email.status === "unsettled"),
   );
   if (!unsettled?.length) return null;
-  const roster = mailResearchRunInput.parse(locked.input);
   const successorId = runEntityId.parse(crypto.randomUUID());
   const dispatchEventId = crypto.randomUUID();
   const manifest = importRunAgentManifest.mail_import;

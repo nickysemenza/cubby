@@ -12,7 +12,10 @@
 import { testEntityId, testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 
-import { extractMailKeys } from "../repo/mail-rule-evidence";
+import {
+  extractMailKeys,
+  hasUnrecognisedTracking,
+} from "../repo/mail-rule-evidence";
 import {
   carrierNotice,
   decideMailByRule,
@@ -145,6 +148,36 @@ describe("mail import rule", () => {
       }),
     ).toEqual({ orderKeys: [], trackingKeys: [] });
   });
+
+  // A rule link records only recognised packages; any other labelled or
+  // linked package reference must send the Email to the coordinator.
+  it.each([
+    [
+      "Tracking: 1Z999AA10123456784. Second package tracking: AB12-3456-7890",
+      [],
+      true,
+    ],
+    ["Tracking number: 1Z999AA10123456784. Thanks for shopping.", [], false],
+    [
+      "Your shipment for order 112-3344556-7788990 left. Tracking number: 1Z999AA10123456784",
+      [],
+      false,
+    ],
+    ["USPS tracking: 420 94110 9400 1000 0000 0000 0000 00", [], false],
+    [
+      "Tracking number: 1Z999AA10123456784",
+      ["https://carrier.example.test/track?ref=SYN99887766"],
+      true,
+    ],
+  ] as const)(
+    "flags %j (links %j) as unrecognised: %s",
+    (text, links, flagged) => {
+      const { trackingKeys } = extractMailKeys({ subject: null, text, links });
+      expect(hasUnrecognisedTracking({ text, links, keys: trackingKeys })).toBe(
+        flagged,
+      );
+    },
+  );
 
   it.each([
     "Your order SYN-1001 has shipped",

@@ -1,3 +1,63 @@
+-- Lock waits fail fast instead of queueing every Email reader behind this
+-- migration; the runner's transaction rolls back whole and Deploy stops.
+SET LOCAL lock_timeout = '5s';
+--> statement-breakpoint
+-- The revision fence now reads the frozen input, which a release never
+-- clears; carry each sender-proof revision out of its replay key. Run row
+-- locks only.
+UPDATE "Run"
+SET input = input || jsonb_build_object('evidenceRevision', substring("clientKey" from 'sender-proof:([0-9a-f]{64}):'))
+WHERE purpose = 'mail_import' AND jsonb_typeof(input) = 'object'
+  AND NOT input ? 'evidenceRevision'
+  AND substring("clientKey" from 'sender-proof:([0-9a-f]{64}):') IS NOT NULL;
+--> statement-breakpoint
+-- Roster aggregation reads Run and Email under ordinary snapshots, before any
+-- Email lock: every Mail import Run (deleted ones included) that admitted an
+-- Email at its current checksum, keyed by the evidence revision it attempted
+-- (the checksum, plus `:<evidenceRevision>` for a recheck admission).
+CREATE TEMP TABLE email_import_admission ON COMMIT DROP AS
+SELECT e.id AS email_id,
+  e.checksum || coalesce(':' || (r.input->>'evidenceRevision'), '') AS revision,
+  r.id AS run_id, r."startedAt" AS started_at, r.status AS run_status,
+  r."deletedAt" AS run_deleted_at
+FROM "Run" r
+CROSS JOIN LATERAL jsonb_array_elements(
+  CASE WHEN jsonb_typeof(r.input->'sources') = 'array' THEN r.input->'sources' ELSE '[]'::jsonb END
+) source
+JOIN "Email" e ON e."orderMailId"::text = source->>'orderMailId'
+  AND e.checksum = source->>'checksum'
+WHERE r.purpose = 'mail_import';
+--> statement-breakpoint
+-- The counter follows the revision that would admit each Email next: plain
+-- admissions of its checksum for an unheld pending Email (discovery's next
+-- attempt), otherwise its latest attempted revision.
+CREATE TEMP TABLE email_import_attempts ON COMMIT DROP AS
+SELECT latest.email_id, latest.revision, counted.attempts,
+  plain.attempts AS plain_attempts,
+  latest.run_id AS latest_run_id, latest.run_status AS latest_run_status,
+  latest.run_deleted_at AS latest_run_deleted_at
+FROM (
+  SELECT DISTINCT ON (email_id) *
+  FROM email_import_admission
+  ORDER BY email_id, started_at DESC NULLS LAST, run_id DESC
+) latest
+JOIN (
+  SELECT email_id, revision, count(DISTINCT run_id)::int AS attempts
+  FROM email_import_admission
+  GROUP BY email_id, revision
+) counted ON counted.email_id = latest.email_id AND counted.revision = latest.revision
+LEFT JOIN (
+  SELECT email_id, count(DISTINCT run_id)::int AS attempts
+  FROM email_import_admission
+  WHERE strpos(revision, ':') = 0
+  GROUP BY email_id
+) plain ON plain.email_id = latest.email_id;
+--> statement-breakpoint
+CREATE UNIQUE INDEX ON email_import_attempts (email_id);
+--> statement-breakpoint
+-- From here the Email table is ACCESS EXCLUSIVE until commit: column
+-- additions are catalog-only, and the rewrites below join precomputed rows by
+-- primary key.
 ALTER TABLE "Email" ADD COLUMN "orderKeys" jsonb;--> statement-breakpoint
 ALTER TABLE "Email" ADD COLUMN "trackingKeys" jsonb;--> statement-breakpoint
 ALTER TABLE "Email" ADD COLUMN "mailKeysChecksum" text;--> statement-breakpoint
@@ -10,48 +70,26 @@ ALTER TABLE "Email" DROP CONSTRAINT "Email_status_check";--> statement-breakpoin
 -- with the holder's unresolved outcome.
 UPDATE "Email" SET status = CASE WHEN "runId" IS NULL THEN 'pending' ELSE 'unsettled' END
 WHERE status = 'blocked';--> statement-breakpoint
-ALTER TABLE "Email" ADD CONSTRAINT "Email_status_check" CHECK ("status" IN ('pending', 'researching', 'completed', 'unsettled', 'deleted', 'excluded'));--> statement-breakpoint
--- The revision fence now reads the frozen input, which a release never
--- clears; carry each sender-proof revision out of its replay key.
-UPDATE "Run"
-SET input = input || jsonb_build_object('evidenceRevision', substring("clientKey" from 'sender-proof:([0-9a-f]{64}):'))
-WHERE purpose = 'mail_import' AND jsonb_typeof(input) = 'object'
-  AND NOT input ? 'evidenceRevision'
-  AND substring("clientKey" from 'sender-proof:([0-9a-f]{64}):') IS NOT NULL;--> statement-breakpoint
--- Every Mail import Run (deleted ones included) that admitted an Email at its
--- current checksum counts toward that revision's attempt bound.
+-- The checksum is rechecked under the lock; a row changed since aggregation
+-- keeps no count, as a never-admitted Email would.
 UPDATE "Email" e
-SET "importAttempts" = jsonb_build_object('checksum', e.checksum, 'count', admitted.attempts)
-FROM (
-  SELECT source->>'orderMailId' AS order_mail_id, source->>'checksum' AS checksum,
-    count(DISTINCT r.id)::int AS attempts
-  FROM "Run" r
-  CROSS JOIN LATERAL jsonb_array_elements(
-    CASE WHEN jsonb_typeof(r.input->'sources') = 'array' THEN r.input->'sources' ELSE '[]'::jsonb END
-  ) source
-  WHERE r.purpose = 'mail_import'
-  GROUP BY 1, 2
-) admitted
-WHERE e."orderMailId"::text = admitted.order_mail_id AND e.checksum = admitted.checksum;--> statement-breakpoint
--- A released Email that already used every attempt would otherwise sit
+SET "importAttempts" = CASE
+  WHEN e.status = 'pending' AND e."runId" IS NULL AND a.plain_attempts IS NOT NULL
+  THEN jsonb_build_object('revision', e.checksum, 'count', a.plain_attempts)
+  ELSE jsonb_build_object('revision', a.revision, 'count', a.attempts) END
+FROM email_import_attempts a
+WHERE e.id = a.email_id AND split_part(a.revision, ':', 1) = e.checksum;--> statement-breakpoint
+-- A released Email that already used every plain attempt would otherwise sit
 -- `pending` forever, out of both discovery and evidence recovery: hold it
 -- `unsettled` with the latest ended Run that attempted it, so only a new
 -- evidence revision readmits it.
 UPDATE "Email" e
-SET status = 'unsettled', "runId" = latest.run_id
-FROM (
-  SELECT DISTINCT ON (source->>'orderMailId', source->>'checksum')
-    source->>'orderMailId' AS order_mail_id, source->>'checksum' AS checksum,
-    r.id AS run_id, r.status AS run_status
-  FROM "Run" r
-  CROSS JOIN LATERAL jsonb_array_elements(
-    CASE WHEN jsonb_typeof(r.input->'sources') = 'array' THEN r.input->'sources' ELSE '[]'::jsonb END
-  ) source
-  WHERE r.purpose = 'mail_import' AND r."deletedAt" IS NULL
-  ORDER BY source->>'orderMailId', source->>'checksum', r."startedAt" DESC NULLS LAST, r.id DESC
-) latest
-WHERE e."orderMailId"::text = latest.order_mail_id AND e.checksum = latest.checksum
-  AND latest.run_status IN ('completed', 'needs_review', 'failed', 'dispatch_failed')
+SET status = 'unsettled', "runId" = a.latest_run_id
+FROM email_import_attempts a
+WHERE e.id = a.email_id AND split_part(a.revision, ':', 1) = e.checksum
+  AND a.plain_attempts >= 3
+  AND a.latest_run_deleted_at IS NULL
+  AND a.latest_run_status IN ('completed', 'needs_review', 'failed', 'dispatch_failed')
   AND e.status = 'pending' AND e."runId" IS NULL AND e.classification = 'related'
-  AND e."deletedAt" IS NULL
-  AND (e."importAttempts"->>'count')::int >= 3;
+  AND e."deletedAt" IS NULL;--> statement-breakpoint
+ALTER TABLE "Email" ADD CONSTRAINT "Email_status_check" CHECK ("status" IN ('pending', 'researching', 'completed', 'unsettled', 'deleted', 'excluded'));

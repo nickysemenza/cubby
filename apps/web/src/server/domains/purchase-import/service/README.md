@@ -293,12 +293,14 @@ pending: nothing here starts Product research.
    Run's held unsettled Emails with an attempt left; `agent_failed` (including
    any explicit 401/403) never retries. The last failed attempt carries one Run
    finding with the class and raw error. Every admission counts against the
-   Email's checksum (`Email.importAttempts`, `MAIL_IMPORT_ATTEMPTS_PER_REVISION`
-   in `mail-run-membership.ts`); unattended admission of unchanged evidence
-   stops at three. Failed and reviewed Runs release unreached Emails below the
-   bound and keep claimed or exhausted ones `unsettled`; a member's cancel keeps
-   them all; recheck admissions record their revision in the frozen input
-   (`evidenceRevision`). Retirement skips a Run still holding a `researching`
+   evidence revision that admitted it (`Email.importAttempts`: checksum plus
+   the Run's `evidenceRevision`; `MAIL_IMPORT_ATTEMPTS_PER_REVISION` in
+   `mail-run-membership.ts`); at most three Runs attempt one revision. Failed
+   and reviewed Runs release unreached Emails below the bound and keep claimed
+   or exhausted ones `unsettled`; recheck Runs and member cancels keep them all,
+   and evidence recovery skips a member-cancelled holder unless the evidence
+   postdates the cancel; recheck admissions record their revision in the
+   frozen input (`evidenceRevision`). Retirement skips a Run still holding a `researching`
    Email.
    Transcripts are preserved until explicit member-authorized retirement, as
    [Background work](../../../../../../../docs/jobs.md) documents. Authorized

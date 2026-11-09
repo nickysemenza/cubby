@@ -245,7 +245,8 @@ A Mail import Run that ends before settling every Email (its coordinator fails
 or aborts, or it stops for review) returns the Emails no coordinator reached to
 catch-up as `pending`. A member's cancel instead keeps every researching Email
 with the Run as `unsettled`, so catch-up never undoes the member's stop; the
-Run's retry or restart transfers them. An Email this Run claimed, or an
+Run's retry or restart transfers them, and evidence recovery readmits them only
+for changed bytes or accepted order evidence newer than the cancel. An Email this Run claimed, or an
 earlier review or self-failed Run attempted, stays with it as `unsettled`: its
 `target_outcome` or Email claim in the RunOperation ledger proves the attempt;
 roster admission alone does not. A later completed outcome in that Run clears
@@ -258,9 +259,10 @@ ones included, only when a new evidence revision appears: a newly verified
 sender mapping, new accepted Purchase evidence for an order it prints, or new
 retained bytes. Each revision admits at most one attempt, so repeatedly
 unsettled messages never spend a coordinator every pass. Without a new revision,
-automatic import admits one Email at one checksum into at most three Runs in
-all, counting transient retries and Runs that failed before claiming it; then it
-stays `unsettled` with its last Run. Retrying a failed Run transfers only the
+automatic import admits one Email at one evidence revision (its checksum, plus
+any sender, order or source revision that rechecked it) into at most three Runs
+in all, counting transient retries and Runs that failed before claiming it; then
+it stays `unsettled` with its last Run. A new revision starts its own count. Retrying a failed Run transfers only the
 Emails it still holds.
 
 A failed coordinator is classified from its last model or tool error. A funding
@@ -280,7 +282,8 @@ Shipment, or the sender-proven Vendor's normalized order number. Conflicting
 evidence, including an order number on another member's account, goes to the
 coordinator. So does a shipping or delivery notice whose packages the link
 could not fully record: no recognised tracking, more than one package, an
-unknown carrier, or a tracking reference no carrier format recognises. A
+unknown carrier, or any package reference after a tracking, package or
+shipment label, or in a tracking link, that is not a recognised key. A
 tracking or order-number link records the Email's one package as shipment
 evidence; a confirmation links only to a Purchase an import already sourced.
 Run targets retain that Run's recorded Email outcomes. An unsettled target

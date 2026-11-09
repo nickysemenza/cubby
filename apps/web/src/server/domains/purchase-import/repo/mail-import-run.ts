@@ -120,6 +120,9 @@ const CLASSIFICATION_RUN_PURPOSES: (typeof run.$inferSelect.purpose)[] = [
   "ai_refresh",
 ];
 
+/** A member's own stop (`controlRun` cancel or abort), not a Run failure. */
+const MEMBER_STOP_FAILURE_CODES = ["user_cancelled", "dispatch_aborted"];
+
 /** A holder no coordinator is working: evidence recovery may readmit its Emails. */
 const ENDED_MAIL_IMPORT_STATUSES: (typeof run.$inferSelect.status)[] = [
   runStatus.enum.completed,
@@ -283,6 +286,17 @@ const senderRecheckRevision = (identity: {
     ),
   );
 
+/**
+ * A member cancelled the holder. Only the member's retry or restart, or
+ * evidence that appeared after the cancel (changed bytes, accepted order
+ * evidence newer than its end), readmits its Emails; a sender mapping that
+ * already existed is not new.
+ */
+const memberStoppedHolder = sql`coalesce(${run.failureCode}, '') IN (${sql.join(
+  MEMBER_STOP_FAILURE_CODES.map((code) => sql`${code}`),
+  sql`, `,
+)})`;
+
 const outcomeFreeAttempt = (sourceChanged: boolean, newEvidenceAt?: Date) =>
   sql`(${run.endedAt} IS NOT NULL
   AND NOT EXISTS (SELECT 1 FROM "RunOperation" outcome
@@ -328,7 +342,19 @@ const unresolvedOutcome = (sourceChanged: boolean, newEvidenceAt?: Date) =>
 const untouchedAutomaticUnresolved = (
   sourceChanged = false,
   newEvidenceAt?: Date,
-) => sql`(${unresolvedOutcome(sourceChanged, newEvidenceAt)} OR ${outcomeFreeAttempt(sourceChanged, newEvidenceAt)}) AND NOT EXISTS (
+  /** Evidence recovery's page defers the member-stop check to admission. */
+  memberStop = true,
+) => sql`(${unresolvedOutcome(sourceChanged, newEvidenceAt)} OR ${outcomeFreeAttempt(sourceChanged, newEvidenceAt)}) AND ${
+  memberStop
+    ? sql`(NOT ${memberStoppedHolder} OR ${
+        sourceChanged
+          ? sql`true`
+          : newEvidenceAt
+            ? sql`${run.endedAt} < ${newEvidenceAt.toISOString()}::timestamp`
+            : sql`false`
+      })`
+    : sql`true`
+} AND NOT EXISTS (
   SELECT 1 FROM "EmailReview" reviewed
   WHERE reviewed.family = ${suggestionFamily.enum.mail_import_outcome}
     AND reviewed."emailId" = ${emailTable.id} AND reviewed.authority = ${feedbackAuthority.enum.member}
@@ -750,7 +776,7 @@ export async function admitMailImport(
             .set({
               status: "researching",
               runId: id,
-              importAttempts: countImportAttempt,
+              importAttempts: countImportAttempt(senderRevision),
             })
             .where(
               or(
@@ -1022,13 +1048,14 @@ export async function importPendingEmails(db: Database) {
           sender: sql<string>`sender_identity.sender`,
           vendorId: sql<string>`sender_identity."vendorId"`,
           revision: sql<string>`sender_identity.revision`,
-          senderEligible: sql<boolean>`${unattemptedSenderMapping(sql`sender_identity.revision`)} AND coalesce(${run.input}->>'evidenceRevision', '') <> sender_identity.revision`,
-          // An outcome-free attempt dates from its holder's end.
+          senderEligible: sql<boolean>`${unattemptedSenderMapping(sql`sender_identity.revision`)} AND coalesce(${run.input}->>'evidenceRevision', '') <> sender_identity.revision AND NOT ${memberStoppedHolder}`,
+          // An outcome-free attempt dates from its holder's end; evidence must
+          // also postdate a member's cancel.
           outcomeAt:
-            sql<Date | null>`coalesce((SELECT max(prior."completedAt") FROM "RunOperation" prior
+            sql<Date | null>`greatest(coalesce((SELECT max(prior."completedAt") FROM "RunOperation" prior
           WHERE prior."runId" = ${run.id} AND prior.kind = ${"target_outcome"} AND prior.state = ${runStatus.enum.completed}
           AND prior.result->${runTargetOutcomeReceipt.keyof().enum.target}::text->>'entityId' = ${emailTable.id}::text
-          AND prior.result->${runTargetOutcomeReceipt.keyof().enum.target}::text->>'state' = ${"unresolved"}), ${run.endedAt})`.mapWith(
+          AND prior.result->${runTargetOutcomeReceipt.keyof().enum.target}::text->>'state' = ${"unresolved"}), ${run.endedAt}), CASE WHEN ${memberStoppedHolder} THEN ${run.endedAt} END)`.mapWith(
               runOperation.completedAt,
             ),
         })
@@ -1066,7 +1093,7 @@ export async function importPendingEmails(db: Database) {
             notDeleted(run),
             notDeleted(emailTable),
             retainedEmailImportContentCondition(),
-            untouchedAutomaticUnresolved(),
+            untouchedAutomaticUnresolved(false, undefined, false),
             cursor ? gt(emailTable.id, cursor) : undefined,
             sql`NOT EXISTS (SELECT 1 FROM (${emailPurchaseEvidenceSql()}) evidence WHERE evidence.kind IN (${emailLinkEvidenceKind.enum.accepted}, ${emailLinkEvidenceKind.enum.linked}))`,
           ),

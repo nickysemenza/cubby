@@ -8,7 +8,7 @@ import { coordinatorModelFor } from "@cubby/schemas/import-run-agent";
 import { mailResearchRunInput } from "@cubby/schemas/run-fields";
 import { gatewayFetchThrough } from "@cubby/shared/ai/gateway-request";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
@@ -296,17 +296,35 @@ describe("mail research admission", () => {
             .from(emailTable)
             .where(eq(emailTable.orderMailId, mail.id))
         )[0]?.runId;
+      const attempts = async () =>
+        (
+          await getDb(ctx.db)
+            .select({ importAttempts: emailTable.importAttempts })
+            .from(emailTable)
+            .where(eq(emailTable.orderMailId, mail.id))
+        )[0]?.importAttempts;
       expect((await importPendingEmails(ctx.db)).errors).toEqual([]);
       expect(await owner()).toBe(original.row.id);
       await history("SYN-OTHER-ORDER", "b");
       expect((await importPendingEmails(ctx.db)).errors).toEqual([]);
       expect(await owner()).toBe(original.row.id);
       await history("SYN-RECOVERY-42", "c");
+      // Plain admission of this checksum already used every attempt; a new
+      // revision starts its own count.
+      await getDb(ctx.db)
+        .update(emailTable)
+        .set({
+          importAttempts: { revision: mail.rawChecksum, count: 3 },
+          // A counter is not an Email change the recheck compares.
+          updatedAt: sql`${emailTable.updatedAt}`,
+        })
+        .where(eq(emailTable.orderMailId, mail.id));
       expect((await importPendingEmails(ctx.db)).errors).toEqual([]);
       const successor = await owner();
       expect(successor).not.toBe(original.row.id);
       if (!successor)
         throw new Error("New exact evidence must admit a successor");
+      expect((await attempts())?.count).toBe(1);
       expect(await frozenSources(original.row.id)).toEqual([
         { orderMailId: mail.id, checksum: mail.rawChecksum },
       ]);
@@ -366,8 +384,78 @@ describe("mail research admission", () => {
             .where(eq(run.id, refreshedOwner))
         )[0]?.trigger,
       ).toBe("discovery");
+      expect(await attempts()).toEqual({
+        revision: expect.stringMatching(
+          new RegExp(`^${refreshedChecksum}:[0-9a-f]{64}$`, "u"),
+        ),
+        count: 1,
+      });
+      // A transient failure of that revision's first attempt retries it.
+      await markRunFailed(ctx.db, {
+        runId: refreshedOwner,
+        failureCode: "agent_transient",
+      });
+      const retried = await owner();
+      expect(retried).not.toBe(refreshedOwner);
+      expect((await attempts())?.count).toBe(2);
     },
   );
+  // A member's cancel is a decision: a sender mapping that already existed
+  // must not buy the cancelled Email another paid Run.
+  it("keeps a member-cancelled Email from evidence recovery without new evidence", async () => {
+    const { party, mail } = await source();
+    await createRepoEntity(ctx, "vendor", {
+      name: "Synthetic cancelled shop",
+      orderEmailSenders: ["receipts@shop.example"],
+    });
+    await getDb(ctx.db).insert(account).values({
+      id: crypto.randomUUID(),
+      accountId: mail.mailboxId,
+      providerId: "google",
+      userId: ctx.actor.userId,
+      updatedAt: new Date(),
+    });
+    await setMailImport(ctx.db, { mailboxId: mail.mailboxId, enabled: true });
+    const [admitted] = await startMailImport(ctx.db, {
+      ledgerPartyId: party.id,
+      userId: ctx.actor.userId,
+      mailboxId: mail.mailboxId,
+      messageIds: [mail.id],
+      automatic: true,
+    });
+    if (!admitted) throw new Error("Synthetic Run missing");
+    const [cancelled] = await getDb(ctx.db)
+      .select({ shortcode: run.shortcode })
+      .from(run)
+      .where(eq(run.id, admitted.runId));
+    await controlRun(ctx.db, ctx.actor, {
+      runPublicId: cancelled!.shortcode,
+      action: "cancel",
+    });
+    const holder = async () =>
+      (
+        await getDb(ctx.db)
+          .select({ runId: emailTable.runId, status: emailTable.status })
+          .from(emailTable)
+          .where(eq(emailTable.orderMailId, mail.id))
+      )[0];
+    expect(await holder()).toEqual({
+      runId: admitted.runId,
+      status: "unsettled",
+    });
+    expect((await importPendingEmails(ctx.db)).errors).toEqual([]);
+    expect(await holder()).toEqual({
+      runId: admitted.runId,
+      status: "unsettled",
+    });
+    expect(
+      await getDb(ctx.db)
+        .select({ id: run.id })
+        .from(run)
+        .where(eq(run.purpose, "mail_import")),
+    ).toHaveLength(1);
+  });
+
   it("rechecks the automatic switch at admission without stopping explicit or admitted work", async () => {
     const { party, mail } = await source();
     const input = {

@@ -295,17 +295,25 @@ roster admission alone is not one. A Run that fails or stops for review
 returns the Emails no coordinator reached to discovery as `pending` with no
 holder, and keeps the attempted ones `unsettled`. A member's cancel keeps every
 researching Email with the Run as `unsettled`: discovery must not readmit what
-the member stopped, and the Run's retry or restart still transfers them. A
+the member stopped, and the Run's retry or restart still transfers them.
+Evidence recovery does not readmit a member-cancelled holder's Emails for
+evidence that predates the cancel (an existing sender mapping); only the
+member's retry or restart, changed retained bytes, or accepted order evidence
+newer than the cancel does. A Run admitted for a recheck revision keeps all its
+unfinished Emails `unsettled` when it fails, since they were unsettled before
+it. A
 related or uncertain Email retained without import content is `pending` with no
 holder; automatic admission requires retained content, so it waits for a member.
 
 Every admission of an Email into a Mail import Run (fresh, transient retry,
-transfer or supporting original) counts against its current checksum
-(`Email.importAttempts`). Unattended admission of unchanged evidence stops at
-three, however the earlier Runs ended, including failures before any claim; an
-Email out of attempts stays `unsettled` with its last Run instead of returning
-to discovery. A new checksum resets the count, and a new sender mapping or
-accepted order evidence readmits it as a new revision. Member-selected and
+transfer or supporting original) counts against the evidence revision that
+admitted it (`Email.importAttempts`): the checksum, plus the admitting Run's
+`evidenceRevision` for a sender, accepted-order or retained-source recheck.
+At most three Runs attempt one revision, however the earlier ones ended,
+including failures before any claim; an Email out of plain attempts stays
+`unsettled` with its last Run instead of returning to discovery, and a
+transient retry carries only Emails with an attempt left at that Run's
+revision. A new revision starts its own count. Member-selected and
 member-controlled imports are not bounded.
 
 An `unsettled` Email is readmitted from any ended holder (completed, reviewed,
@@ -343,8 +351,9 @@ separately on the Email (`orderKeys`, `trackingKeys`, bound to
 alone does not extract package evidence, a tracking or order-key link records
 the Email's one recognised package as shipment evidence. A shipping or delivery
 notice without recognised tracking, with more than one package, with an
-unknown carrier, or with a tracking reference no carrier format recognises
-still goes to the coordinator.
+unknown carrier, or with any package reference after a tracking, package or
+shipment label (separators normalized) or in a tracking link that is not a
+recognised key still goes to the coordinator.
 
 ### Complete original capture
 

@@ -23,29 +23,45 @@ import { createAppError } from "~/server/errors/app-error";
 import { recordChange } from "~/server/generic/changes/repo/change";
 
 /**
- * Mail import Runs one Email may enter at one checksum without a new evidence
- * revision. Every admission counts (fresh, transient retry, transfer), so a
- * coordinator failing before it claims anything cannot readmit the same
- * evidence forever; a new checksum, sender mapping or accepted order evidence
- * is a new revision.
+ * Mail import Runs one Email may enter at one evidence revision. Every
+ * admission counts (fresh, transient retry, transfer), so a coordinator
+ * failing before it claims anything cannot readmit the same evidence forever.
+ * The revision is what the readmission guard compares: the checksum, plus the
+ * Run's `evidenceRevision` (sender mapping, accepted-order fingerprint or
+ * retained-source revision) when a recheck admitted it. A new revision
+ * restarts the count.
  */
 const MAIL_IMPORT_ATTEMPTS_PER_REVISION = 3;
 
 const ATTEMPT = emailImportAttempts.keyof().enum;
 
-/** One more admission of the Email at its current checksum. */
-export const countImportAttempt = sql`CASE WHEN ${emailTable.importAttempts}->>${ATTEMPT.checksum}::text = ${emailTable.checksum}
-  THEN jsonb_build_object(${ATTEMPT.checksum}::text, ${emailTable.checksum}, ${ATTEMPT.count}::text, coalesce((${emailTable.importAttempts}->>${ATTEMPT.count}::text)::int, 0) + 1)
-  ELSE jsonb_build_object(${ATTEMPT.checksum}::text, ${emailTable.checksum}, ${ATTEMPT.count}::text, 1) END`;
+/** The attempt key of an Email at its current checksum under one Run's revision. */
+const revisionKeySql = (evidenceRevision?: string) =>
+  evidenceRevision
+    ? sql`${emailTable.checksum} || ${`:${evidenceRevision}`}::text`
+    : sql`${emailTable.checksum}`;
 
-/** The Email's current checksum has used every attempt its revision allows. */
-export const importAttemptsExhaustedSql = sql`coalesce(${emailTable.importAttempts}->>${ATTEMPT.checksum}::text = ${emailTable.checksum}
+/** One more admission of the Email under the admitting Run's revision. */
+export const countImportAttempt = (evidenceRevision?: string) => {
+  const key = revisionKeySql(evidenceRevision);
+  return sql`CASE WHEN ${emailTable.importAttempts}->>${ATTEMPT.revision}::text = ${key}
+  THEN jsonb_build_object(${ATTEMPT.revision}::text, ${key}, ${ATTEMPT.count}::text, coalesce((${emailTable.importAttempts}->>${ATTEMPT.count}::text)::int, 0) + 1)
+  ELSE jsonb_build_object(${ATTEMPT.revision}::text, ${key}, ${ATTEMPT.count}::text, 1) END`;
+};
+
+/** Unattended admission of the unchanged checksum used every attempt. */
+export const importAttemptsExhaustedSql = sql`coalesce(${emailTable.importAttempts}->>${ATTEMPT.revision}::text = ${emailTable.checksum}
   AND (${emailTable.importAttempts}->>${ATTEMPT.count}::text)::int >= ${MAIL_IMPORT_ATTEMPTS_PER_REVISION}, false)`;
 
+/** The Email used every attempt at this revision (none: plain admission). */
 export const importAttemptsExhausted = (
   email: Pick<typeof emailTable.$inferSelect, "checksum" | "importAttempts">,
+  evidenceRevision?: string,
 ) =>
-  email.importAttempts?.checksum === email.checksum &&
+  email.importAttempts?.revision ===
+    (evidenceRevision
+      ? `${email.checksum}:${evidenceRevision}`
+      : email.checksum) &&
   email.importAttempts.count >= MAIL_IMPORT_ATTEMPTS_PER_REVISION;
 
 export const MAIL_SOURCE_TRANSFER_OPERATION = "mail_source_transfer";
@@ -289,7 +305,7 @@ export async function admitSupportingMailSource(
     .set({
       runId,
       status: "researching",
-      importAttempts: countImportAttempt,
+      importAttempts: countImportAttempt(roster.evidenceRevision),
       updatedAt: new Date(),
     })
     .where(eq(emailTable.id, message.id));
@@ -329,12 +345,18 @@ export async function transferMailRunSources(
     throw new Error(
       "Mail restart evidence changed; reconcile the original Run.",
     );
+  const [successor] = await tx
+    .select({ input: run.input })
+    .from(run)
+    .where(eq(run.id, toRunId));
+  const roster = mailResearchRunInput.parse(successor?.input);
   const assigned = await tx
     .update(emailTable)
     .set({
       runId: toRunId,
       status: "researching",
-      importAttempts: countImportAttempt,
+      // The successor attempts the revision its own input names.
+      importAttempts: countImportAttempt(roster.evidenceRevision),
       updatedAt: new Date(),
     })
     .where(
@@ -349,11 +371,6 @@ export async function transferMailRunSources(
     .returning({ id: emailTable.id });
   if (assigned.length !== sources.length)
     throw new Error("Mail successor ownership transfer is incomplete.");
-  const [successor] = await tx
-    .select({ input: run.input })
-    .from(run)
-    .where(eq(run.id, toRunId));
-  const roster = mailResearchRunInput.parse(successor?.input);
   await tx
     .update(run)
     .set({
@@ -410,10 +427,12 @@ export async function releaseUnsettledMailRunSources(
   );
   if (!held.length) return [];
   const [current] = await tx
-    .select({ startedAt: run.startedAt })
+    .select({ startedAt: run.startedAt, input: run.input })
     .from(run)
     .where(eq(run.id, runId));
   if (!current) throw new Error("Mail import Run was not found");
+  const evidenceRevision = mailResearchRunInput.safeParse(current.input).data
+    ?.evidenceRevision;
   const earlierFailures = await tx
     .select({
       runId: runOperation.runId,
@@ -510,11 +529,16 @@ export async function releaseUnsettledMailRunSources(
       .filter((attempt) => attempt.unsettled)
       .map((attempt) => attempt.orderMailId),
   );
-  // An Email whose checksum used every attempt also stays: returning it would
-  // let discovery admit identical evidence again.
+  // An Email whose revision used every attempt also stays: returning it would
+  // let discovery admit identical evidence again. A recheck Run's Emails were
+  // unsettled before it, so they all stay for its next new revision.
   const exhausted = new Set(
     held
-      .filter((source) => importAttemptsExhausted(source.email))
+      .filter(
+        (source) =>
+          evidenceRevision !== undefined ||
+          importAttemptsExhausted(source.email),
+      )
       .map((source) => source.orderMailId),
   );
   for (const orderMailId of exhausted) failedBefore.add(orderMailId);

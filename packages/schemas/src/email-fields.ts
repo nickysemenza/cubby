@@ -38,11 +38,13 @@ export const emailTrackingKeys = z.array(
 );
 export type EmailTrackingKeys = z.infer<typeof emailTrackingKeys>;
 /**
- * How many Mail import Runs admitted this Email at `checksum`. Automatic
- * admission stops at the bound until a new evidence revision (`mail-run-membership.ts`).
+ * How many Mail import Runs admitted this Email at one evidence revision:
+ * `revision` is its checksum, followed by `:<evidenceRevision>` when a sender,
+ * accepted-order or retained-source recheck admitted it. A new revision
+ * restarts the count; the bound applies per revision (`mail-run-membership.ts`).
  */
 export const emailImportAttempts = z.object({
-  checksum: z.string().min(1),
+  revision: z.string().min(1),
   count: z.number().int().nonnegative(),
 });
 export type EmailImportAttempts = z.infer<typeof emailImportAttempts>;
