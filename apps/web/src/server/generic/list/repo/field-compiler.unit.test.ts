@@ -14,6 +14,8 @@ import { renderWhereSql } from "~/server/testing/mock-db";
 import {
   type AnyOfValue,
   type ListPrepare,
+  type DerivedSqlArg,
+  derivedSelectSql,
   listPrepare,
   sharedListPrepare,
   ListPreparationScope,
@@ -150,18 +152,27 @@ describe("list field compiler", () => {
   });
 
   it("orders a derived value by the SQL its repository passes", () => {
+    const derived = {
+      reconciliationGap: { sql: sql`declared_gap`, projection: "binding" },
+      vendorId: sql`0`,
+      ...purchaseFilterOnly,
+    } satisfies DerivedSqlArg<"purchase">;
     const scaffold = listScaffold("purchase", purchase, {
       readSchema: purchaseRepositoryReadSchema,
-      derived: {
-        reconciliationGap: sql`declared_gap`,
-        vendorId: sql`0`,
-        ...purchaseFilterOnly,
-      },
+      derived,
     });
     const clauses = scaffold.orderBy([
       { orderBy: "reconciliationGap", direction: "desc" },
     ]);
     expect(renderWhereSql(clauses[0])).toBe("declared_gap desc nulls last");
+    expect(
+      derivedSelectSql(
+        "purchase",
+        derived,
+        "reconciliationGap",
+        ListContext.empty,
+      ),
+    ).toBeNull();
   });
 
   it("orders a declared rollup by its compiled, live, correlated aggregate", () => {

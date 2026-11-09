@@ -32,6 +32,7 @@ import {
 } from "~/server/domains/vendor/repo/vendor-logo";
 import {
   ListContext,
+  type DerivedSqlArg,
   listFilterValues,
   type ListFilterValues,
   listPrepare,
@@ -163,18 +164,19 @@ export const resolveExpenseProjectAllocationScope = async (
 
 /** The SQL of every declared filter outside the allocation shares, by derived key. */
 const rowDerived = {
-  // The allocated spending categories' names.
-  spendingCategoryId: expenseDerivedValueSql(
-    "spendingCategoryNames",
-    sql`${expense.id}`,
-  ),
+  // The page binding owns the allocated identity. Its names-only sort SQL
+  // must not aggregate the whole ledger merely to load a page's rows.
+  spendingCategoryId: {
+    sql: expenseDerivedValueSql("spendingCategoryNames", sql`${expense.id}`),
+    projection: "binding",
+  },
   projectId: related(project, (p) =>
     eq(p.id, effectiveExpenseProjectSql(quotedTable(expense))),
   ).value<string>((p) => p.name),
   costSign: sql`CASE WHEN ${expense.cost} < 0 THEN ${expenseCostSign.enum.negative}::text
     WHEN ${expense.cost} > 0 THEN ${expenseCostSign.enum.positive}::text END`,
   disposalPurchase: inArray(expense.purchaseId, disposalPurchaseIds()),
-};
+} satisfies DerivedSqlArg<"expense">;
 
 const shareKeys = new Set(rowSetFilterKeys("expense", "allocationShares"));
 const readsShare = (values: ListFilterValues, terminal: string) =>

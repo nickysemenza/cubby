@@ -119,6 +119,7 @@ type DerivedPart =
       readonly sql: SQL;
       readonly nulls?: "high";
       readonly direction?: "asc" | "desc";
+      readonly projection?: "binding";
     };
 
 /**
@@ -415,7 +416,7 @@ export const derivedProjectedByBinding = (
   return (
     entry !== undefined &&
     (isSetValue(entry) ||
-      (isPrepared(entry) &&
+      (typeof entry === "object" &&
         "projection" in entry &&
         entry.projection === "binding"))
   );

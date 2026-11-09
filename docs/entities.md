@@ -2404,6 +2404,12 @@ Only an explicit contextual `storedProjection` may replace its default stored
 path; its declaration still owns availability and provenance. Filter-only
 `fromResult` members use the same typed path SQL as visible stored fields.
 
+When a page binding supplies a derived value, mark its SQL `projection: "binding"`
+on either a plain SQL value or its preparation. Filtering and ordering retain
+that SQL; loading rows does not evaluate a value the binding replaces. Expense's
+allocated category identity uses its bounded page binding, keeping the
+whole-population category-name expression out of the ordinary page SELECT.
+
 Work Problems project filter values, readiness and related predicates into a
 materialized facts relation per entity and request, then compute membership and
 shared label/authority columns once in its base. Expression reuse includes bound
