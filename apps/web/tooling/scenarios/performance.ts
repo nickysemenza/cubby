@@ -608,7 +608,7 @@ export async function seedPerformanceCorpus(
     );
     // Immediate reads must see the new volume, rather than waiting for autoanalyze.
     await tx.execute(
-      sql`ANALYZE ${product}, ${entityLink}, ${inventoryEntry}, ${purchase}, ${expense}, ${orderMail}, ${run}, ${email}, ${entityIdentity}, ${financialTransaction}, ${financialTransactionAllocation}, ${importSourceClaim}, ${importSourceOrder}, ${shipment}, ${shipmentObservation}`,
+      sql`ANALYZE ${vendor}, ${product}, ${entityLink}, ${inventoryEntry}, ${purchase}, ${expense}, ${orderMail}, ${run}, ${email}, ${entityIdentity}, ${financialTransaction}, ${financialTransactionAllocation}, ${importSourceClaim}, ${importSourceOrder}, ${shipment}, ${shipmentObservation}`,
     );
     await batches(refs, (rows) => refreshSearchDocuments(tx, rows));
   });

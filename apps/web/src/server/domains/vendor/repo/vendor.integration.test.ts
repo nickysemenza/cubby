@@ -368,6 +368,17 @@ describe("vendor repository — spend rollup", () => {
         ?.brandedProductCount,
     ).toBe(1);
     const brandRef = (await readVendorById(ctx.db, brand)).id;
+    expect(listed.data.find((row) => row.id === brandRef)?.brandSpend).toBe(7);
+    expect(listed.data.find((row) => row.id === sellerRef)?.brandSpend).toBe(0);
+    const byBrandSpend = await vendorScaffold.read(ctx.db, {
+      filters: {},
+      sorts: [{ orderBy: "brandSpend", direction: "desc" }],
+      pagination: page,
+    });
+    expect(byBrandSpend.data[0]).toMatchObject({
+      id: brandRef,
+      brandSpend: 7,
+    });
     const previews = await loadRelatedPreviews(ctx.db, {
       source: "vendor",
       sourceIds: [sellerRef, brandRef],
