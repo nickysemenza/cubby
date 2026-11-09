@@ -18,6 +18,7 @@ import {
   sql,
 } from "drizzle-orm";
 
+import { minorToDollarsSql } from "~/server/db/computed/money";
 import {
   sourceOccurrenceHasUnresolvedHistory,
   sourceOccurrencesWithUnresolvedHistory,
@@ -35,7 +36,7 @@ export const sourceObservationFacts = sql`(
   SELECT r.id, r.shortcode, r."batchId", r.source, r."occurrenceId", r."factFingerprint",
     r."rowPosition", r."providerTransactionId", r."providerAccountId", r."providerData",
     r."accountDescriptor", r."statementDate", r."amountMinor", r."providerAmountMinor",
-    r."amountMinor"::numeric / 100 AS amount, r."providerAmountMinor"::numeric / 100 AS "providerAmount", r.merchant,
+    ${minorToDollarsSql(sql`r."amountMinor"`, "numeric")} AS amount, ${minorToDollarsSql(sql`r."providerAmountMinor"`, "numeric")} AS "providerAmount", r.merchant,
     r."rawDescription", r."sourceCategory", r."providerStatus", r."providerNotes", r."createdAt", r."deletedAt",
     own.value AS "externalId", legacy.value AS "legacyExternalId", reference.value AS "legacyReference",
     o.shortcode AS "chargeKey",

@@ -18,6 +18,7 @@ import {
 } from "drizzle-orm";
 import { groupBy } from "es-toolkit";
 
+import { minorToDollarsSql } from "~/server/db/computed/money";
 import {
   expense,
   financialTransaction,
@@ -155,7 +156,7 @@ const candidatePurchases = (
       date: purchase.date,
       statedTotal: sql<
         number | null
-      >`${purchase.statedTotal}::numeric / 100`.mapWith(Number),
+      >`${minorToDollarsSql(purchase.statedTotal, "numeric")}`.mapWith(Number),
       displayLabel: purchase.displayLabel,
       orderId: purchase.orderId,
       vendorShortcode: vendor.shortcode,
@@ -243,10 +244,10 @@ const loadAllocations = (
       purchaseId: financialTransactionAllocation.purchaseId,
       shortcode: financialTransaction.shortcode,
       kind: financialTransaction.kind,
-      amount:
-        sql<number>`${financialTransactionAllocation.amountMinor}::numeric / 100`.mapWith(
-          Number,
-        ),
+      amount: minorToDollarsSql(
+        financialTransactionAllocation.amountMinor,
+        "numeric",
+      ).mapWith(Number),
       transactionDate: financialTransaction.transactionDate,
       postedDate: financialTransaction.postedDate,
     })

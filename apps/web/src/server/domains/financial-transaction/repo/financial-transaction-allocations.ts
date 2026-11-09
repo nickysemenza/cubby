@@ -15,6 +15,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
+import { minorToDollarsSql } from "~/server/db/computed/money";
 import { notDeleted, touchUpdatedAt } from "~/server/db/helpers";
 import { financialTransactionAllocation, purchase } from "~/server/db/schema";
 import { createAppError } from "~/server/errors/app-error";
@@ -63,10 +64,10 @@ export async function readAllocations(
       transactionId: financialTransactionAllocation.transactionId,
       purchaseId: financialTransactionAllocation.purchaseId,
       purchaseShortcode: purchase.shortcode,
-      amount:
-        sql<number>`${financialTransactionAllocation.amountMinor}::numeric / 100`.mapWith(
-          Number,
-        ),
+      amount: minorToDollarsSql(
+        financialTransactionAllocation.amountMinor,
+        "numeric",
+      ).mapWith(Number),
       confirmsMerchant: financialTransactionAllocation.confirmsMerchant,
     })
     .from(financialTransactionAllocation)

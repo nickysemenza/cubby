@@ -2,6 +2,7 @@ import type { PurchaseId } from "@cubby/schemas/identifiers";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
+import { minorToDollarsSql } from "~/server/db/computed/money";
 import { unwrapDb } from "~/server/db/helpers";
 import {
   financialTransaction,
@@ -53,9 +54,9 @@ export async function loadPurchaseFinancialAggregates(
       // Totals sum the ALLOCATION, i.e. this purchase's share. Summing the whole
       // transaction amount would credit a split charge in full to every purchase
       // it touched and report a mismatch on all of them.
-      postedTotal: sql<number>`COALESCE(sum(${sql`(${financialTransactionAllocation.amountMinor}::numeric / 100)`}) FILTER (WHERE ${financialTransaction.status} = 'posted'), 0)::double precision`,
-      projectedTotal: sql<number>`COALESCE(sum(${sql`(${financialTransactionAllocation.amountMinor}::numeric / 100)`}), 0)::double precision`,
-      postedRefundTotal: sql<number>`COALESCE(sum(${sql`(${financialTransactionAllocation.amountMinor}::numeric / 100)`}) FILTER (WHERE ${sql.raw(postedRefundPredicate('"FinancialTransaction"'))}), 0)::double precision`,
+      postedTotal: sql<number>`COALESCE(sum(${minorToDollarsSql(financialTransactionAllocation.amountMinor, "numeric")}) FILTER (WHERE ${financialTransaction.status} = 'posted'), 0)::double precision`,
+      projectedTotal: sql<number>`COALESCE(sum(${minorToDollarsSql(financialTransactionAllocation.amountMinor, "numeric")}), 0)::double precision`,
+      postedRefundTotal: sql<number>`COALESCE(sum(${minorToDollarsSql(financialTransactionAllocation.amountMinor, "numeric")}) FILTER (WHERE ${sql.raw(postedRefundPredicate('"FinancialTransaction"'))}), 0)::double precision`,
     })
     .from(financialTransactionAllocation)
     .innerJoin(

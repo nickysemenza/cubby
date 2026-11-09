@@ -21,6 +21,7 @@ import type { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { effectiveFieldSql } from "~/server/db/computed/effective-field";
+import { minorToDollarsSql } from "~/server/db/computed/money";
 import {
   databaseForTransaction,
   getDb,
@@ -108,10 +109,10 @@ export async function acceptedAutomaticFacts(
   const allocations = await getDb(db)
     .select({
       purchaseId: financialTransactionAllocation.purchaseId,
-      amount:
-        sql<number>`${financialTransactionAllocation.amountMinor}::numeric / 100`.mapWith(
-          Number,
-        ),
+      amount: minorToDollarsSql(
+        financialTransactionAllocation.amountMinor,
+        "numeric",
+      ).mapWith(Number),
     })
     .from(financialTransactionAllocation)
     .where(

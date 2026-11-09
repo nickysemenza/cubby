@@ -17,6 +17,7 @@ import type { PgTable } from "drizzle-orm/pg-core";
 import { groupBy } from "es-toolkit";
 
 import type { Database } from "~/server/db";
+import { minorToDollarsSql } from "~/server/db/computed/money";
 import {
   getDb,
   notDeleted,
@@ -266,7 +267,7 @@ async function bookingAction(
     ? await getDb(db)
         .select({
           amount:
-            sql<number>`COALESCE(SUM((a."amountMinor"::numeric / 100)), 0)`.mapWith(
+            sql<number>`COALESCE(SUM((${minorToDollarsSql(sql`a."amountMinor"`, "numeric")})), 0)`.mapWith(
               Number,
             ),
         })
@@ -274,7 +275,7 @@ async function bookingAction(
           sql`"FinancialTransactionAllocation" a JOIN "FinancialTransaction" f ON f.id = a."transactionId"`,
         )
         .where(
-          sql`a."purchaseId" = ${graph.target.id} AND ${notDeleted("a")} AND ${notDeleted("f")} AND f.status <> 'void' AND f."ledgerTransferId" IS NULL AND f.kind <> 'income' AND f.id <> ${row.id} AND SIGN((a."amountMinor"::numeric / 100)) = SIGN(${row.amount}::numeric) AND NOT EXISTS (SELECT 1 FROM "Expense" e WHERE e."bookingTransactionCode" = f.shortcode AND ${notDeleted("e")} AND e."economicRole" = 'reimbursement')`,
+          sql`a."purchaseId" = ${graph.target.id} AND ${notDeleted("a")} AND ${notDeleted("f")} AND f.status <> 'void' AND f."ledgerTransferId" IS NULL AND f.kind <> 'income' AND f.id <> ${row.id} AND SIGN((${minorToDollarsSql(sql`a."amountMinor"`, "numeric")})) = SIGN(${row.amount}::numeric) AND NOT EXISTS (SELECT 1 FROM "Expense" e WHERE e."bookingTransactionCode" = f.shortcode AND ${notDeleted("e")} AND e."economicRole" = 'reimbursement')`,
         )
     : [];
   const settledCents = cents(previous[0]?.amount ?? 0);

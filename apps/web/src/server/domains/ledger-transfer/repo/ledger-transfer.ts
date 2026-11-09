@@ -22,6 +22,7 @@ import {
   ledgerTransferSchemaBindings,
 } from "~/entity/generated/entity-schema-bindings.ledgerTransfer.gen";
 import type { Database, DrizzleTransaction } from "~/server/db";
+import { minorToDollarsSql } from "~/server/db/computed/money";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
   buildPartialUpdateValues,
@@ -82,12 +83,12 @@ const transferSourceClaimsSql = sql<LedgerSourceClaimRow[]>`COALESCE((
     CASE WHEN c."reconciliationDecision" = 'amounts_match'
       THEN jsonb_build_object('decision', c."reconciliationDecision")
       ELSE jsonb_build_object('decision', c."reconciliationDecision", 'note', c."reconciliationNote") END,
-    'targetAmountAtClaim', c."targetAmountMinor"::numeric / 100, 'createdAt', c."createdAt", 'updatedAt', c."updatedAt")) ORDER BY c."createdAt", c.id)
+    'targetAmountAtClaim', ${minorToDollarsSql(sql`c."targetAmountMinor"`, "numeric")}, 'createdAt', c."createdAt", 'updatedAt', c."updatedAt")) ORDER BY c."createdAt", c.id)
   FROM "LedgerSourceClaim" c
   WHERE c."ledgerTransferId" = "LedgerTransfer".id AND ${notDeleted("c")}
 ), '[]'::jsonb)`;
 const transferEvidenceIdsSql = sql<string[]>`COALESCE((
-  SELECT jsonb_agg(ft.shortcode ORDER BY (ft."amountMinor"::numeric / 100) DESC, ft.shortcode)
+  SELECT jsonb_agg(ft.shortcode ORDER BY (${minorToDollarsSql(sql`ft."amountMinor"`, "numeric")}) DESC, ft.shortcode)
   FROM "FinancialTransaction" ft
   WHERE ft."ledgerTransferId" = "LedgerTransfer".id AND ${notDeleted("ft")}
 ), '[]'::jsonb)`;
@@ -307,10 +308,9 @@ async function assertEvidenceSet(
       id: financialTransaction.id,
       accountId: financialTransaction.accountId,
       ledgerTransferId: financialTransaction.ledgerTransferId,
-      amount:
-        sql<number>`${financialTransaction.amount}::numeric / 100`.mapWith(
-          Number,
-        ),
+      amount: minorToDollarsSql(financialTransaction.amount, "numeric").mapWith(
+        Number,
+      ),
       ledgerPartyId: financialAccount.ledgerPartyId,
       ...transferEvidenceLegFields,
     })

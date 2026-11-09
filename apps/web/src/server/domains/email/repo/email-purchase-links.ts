@@ -18,10 +18,12 @@ import type {
   VendorId,
 } from "@cubby/schemas/identifiers";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { RECONCILIATION_TOLERANCE } from "@cubby/schemas/purchase";
 import { sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
+import { minorToDollarsSql } from "~/server/db/computed/money";
 import { type Database } from "~/server/db/database";
 import { declaredStoredSourceSql } from "~/server/db/derived-source-sql";
 import {
@@ -102,8 +104,8 @@ export const emailPurchaseEvidenceSql = (
     WHERE p."vendorId" = original."vendorId"
         ${purchaseIds ? sql`AND p."id" IN (${purchaseIds})` : sql``}
         AND (event."orderId" IS NULL OR p."orderId" IS NULL)
-        AND event."amount" IS NOT NULL AND (p."statedTotalMinor"::numeric / 100) IS NOT NULL
-        AND abs(event."amount" - (p."statedTotalMinor"::numeric / 100)) < 0.01
+        AND event."amount" IS NOT NULL AND (${minorToDollarsSql(sql`p."statedTotalMinor"`, "numeric")}) IS NOT NULL
+        AND abs(event."amount"::numeric - (${minorToDollarsSql(sql`p."statedTotalMinor"`, "numeric")})) <= ${RECONCILIATION_TOLERANCE}
         AND "Email"."receivedAt" IS NOT NULL AND p."date" IS NOT NULL
         AND p."date" BETWEEN
           ${sql.raw(householdDaySqlText(`"Email"."receivedAt"`))} - ${SUGGESTION_WINDOW_DAYS}::integer

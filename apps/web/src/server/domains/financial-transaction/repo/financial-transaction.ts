@@ -29,6 +29,7 @@ import {
   financialTransactionSchemaBindings,
 } from "~/entity/generated/entity-schema-bindings.financialTransaction.gen";
 import type { Database, DrizzleTransaction } from "~/server/db";
+import { minorToDollarsSql } from "~/server/db/computed/money";
 import { sourceTransactionSettlements } from "~/server/db/computed/source-transaction-settlement-sql";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
@@ -170,7 +171,7 @@ export const financialTransactionScaffold = listScaffold(
         allocationRows: sql<
           { purchaseId: string; amount: number; confirmsMerchant: boolean }[]
         >`COALESCE((
-          SELECT jsonb_agg(jsonb_build_object('purchaseId', ap.shortcode, 'amount', (aa."amountMinor"::numeric / 100), 'confirmsMerchant', aa."confirmsMerchant") ORDER BY ap.shortcode)
+          SELECT jsonb_agg(jsonb_build_object('purchaseId', ap.shortcode, 'amount', (${minorToDollarsSql(sql`aa."amountMinor"`, "numeric")}), 'confirmsMerchant', aa."confirmsMerchant") ORDER BY ap.shortcode)
           FROM "FinancialTransactionAllocation" aa
           JOIN "Purchase" ap ON ap."id" = aa."purchaseId"
           WHERE aa."transactionId" = "FinancialTransaction"."id" AND ${notDeleted("aa")}

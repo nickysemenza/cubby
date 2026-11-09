@@ -14,6 +14,7 @@ import {
   HOUSEHOLD_PROJECT_SHORTCODE,
   type ProjectStatus,
 } from "@cubby/schemas/project";
+import { cents, dollars } from "@cubby/shared";
 import { and, inArray, isNotNull, isNull, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
@@ -48,8 +49,6 @@ const shiftMonth = (month: string, months: number): string => {
   return `${Math.floor(index / 12)}-${String((index % 12) + 1).padStart(2, "0")}`;
 };
 const monthOf = (plainDate: string) => plainDate.slice(0, 7);
-const dollars = (cents: number) => cents / 100;
-const cents = (amount: number) => Math.round(amount * 100);
 
 /** A Ledger search with only its set params. */
 const definedEntries = (

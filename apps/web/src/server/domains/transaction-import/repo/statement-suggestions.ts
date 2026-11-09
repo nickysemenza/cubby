@@ -47,6 +47,7 @@ import { z } from "zod";
 import { forEachConcurrently } from "~/lib/concurrency-limiter";
 import { plainDateDaysBetween } from "~/lib/household-date";
 import { type Database } from "~/server/db";
+import { minorToDollarsSql } from "~/server/db/computed/money";
 import {
   getDb,
   runAfterCommit,
@@ -633,7 +634,7 @@ async function merchantHistory(
       AND ${notDeleted("ft")} AND ft.status <> ${financialTransactionStatus.enum.void}
       AND ft.merchant IS NOT NULL AND ${merchantKey(sql`ft.merchant`)} = p.merchant
       AND COALESCE(ft."postedDate", ft."transactionDate") < p.day
-      AND sign((ft."amountMinor"::numeric / 100))::int = p.direction
+      AND sign((${minorToDollarsSql(sql`ft."amountMinor"`, "numeric")}))::int = p.direction
     WHERE ft.id NOT IN (SELECT id FROM ruled)
     GROUP BY p.key
   `,
@@ -773,7 +774,7 @@ async function prepareChargePreviews(
         transactionDate: string | null;
         postedDate: string | null;
       }>(sql`
-    SELECT ft.shortcode, ft."accountId", (ft."amountMinor"::numeric / 100)::float8 AS amount, ft.status, ft."transactionDate"::text AS "transactionDate", ft."postedDate"::text AS "postedDate" FROM "FinancialTransaction" ft
+    SELECT ft.shortcode, ft."accountId", (${minorToDollarsSql(sql`ft."amountMinor"`, "numeric")})::float8 AS amount, ft.status, ft."transactionDate"::text AS "transactionDate", ft."postedDate"::text AS "postedDate" FROM "FinancialTransaction" ft
     WHERE ${notDeleted("ft")} AND ft.shortcode IN (${sql.join(
       [...matchedByCharge.values()].map((code) => sql`${code}`),
       sql`,`,

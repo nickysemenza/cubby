@@ -20,6 +20,7 @@ import { groupBy } from "es-toolkit";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
+import { minorToDollarsSql } from "~/server/db/computed/money";
 import {
   databaseForTransaction,
   getDb,
@@ -616,11 +617,11 @@ async function loadSpendingGraphBatch(
           transaction: unknown;
           account: unknown;
           owner: unknown;
-        }>(sql`SELECT a."purchaseId", a."transactionId", f.shortcode AS "transactionCode", (a."amountMinor"::float8 / 100) AS amount, f.kind, f.status, f."deletedAt", f."ledgerTransferId",
-    (f."amountMinor"::float8 / 100) AS "transactionAmount", fa."deletedAt" AS "accountDeletedAt",
-    (SELECT sum(coverage."amountMinor"::float8 / 100) FROM "FinancialTransactionAllocation" coverage
+        }>(sql`SELECT a."purchaseId", a."transactionId", f.shortcode AS "transactionCode", (${minorToDollarsSql(sql`a."amountMinor"`, "float8")}) AS amount, f.kind, f.status, f."deletedAt", f."ledgerTransferId",
+    (${minorToDollarsSql(sql`f."amountMinor"`, "float8")}) AS "transactionAmount", fa."deletedAt" AS "accountDeletedAt",
+    (SELECT sum(${minorToDollarsSql(sql`coverage."amountMinor"`, "float8")}) FROM "FinancialTransactionAllocation" coverage
       WHERE coverage."transactionId" = f.id AND ${notDeleted("coverage")}) AS "allocatedAmount",
-    (to_jsonb(f)-'amountMinor')||jsonb_build_object('amount',f."amountMinor"::float8/100) AS transaction, to_jsonb(fa) AS account, to_jsonb(lp) AS owner
+    (to_jsonb(f)-'amountMinor')||jsonb_build_object('amount',${minorToDollarsSql(sql`f."amountMinor"`, "float8")}) AS transaction, to_jsonb(fa) AS account, to_jsonb(lp) AS owner
     FROM "FinancialTransactionAllocation" a JOIN "FinancialTransaction" f ON f.id = a."transactionId"
     JOIN "FinancialAccount" fa ON fa.id = f."accountId"
     LEFT JOIN "LedgerParty" lp ON lp.id = fa."ledgerPartyId"

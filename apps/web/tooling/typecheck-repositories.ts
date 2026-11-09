@@ -32,6 +32,7 @@ export const repositoryOwners = [
   "src/server/domains/product/repo/service-category.ts",
   "src/server/domains/product/repo/list-enrichment.ts",
   "src/server/db/computed/vendor-account-label.ts",
+  "src/server/db/computed/money.ts",
   "src/server/domains/usda-food/repo/usda-helpers.ts",
   "src/server/generated/entity-field-envelope-projectors.gen.ts",
   "src/server/domains/purchase/repo/purchase-evidence-policy.ts",

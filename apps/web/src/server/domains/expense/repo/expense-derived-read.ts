@@ -5,6 +5,7 @@ import type { SelectedFields } from "drizzle-orm/pg-core";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { expenseAggregateFields } from "~/server/db/computed/expense-aggregate-sql";
+import { dollarsToMinorSql } from "~/server/db/computed/money";
 import { unwrapDb } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { expense } from "~/server/db/schema";
@@ -52,7 +53,7 @@ export function expenseDerivedReadSql(
 ): SQL {
   if (read === "costs" && !scope)
     return sql`SELECT source."id" AS "expenseId", source."cost" AS cost,
-      round(source."cost"::numeric * 100)::bigint AS "costCents", source."projectId"
+      ${dollarsToMinorSql(sql`source."cost"`)} AS "costCents", source."projectId"
       FROM "Expense" source WHERE ${notDeleted("source")}
       ${expenseIds ? sql`AND ${expenseSelectionConditionSql(sql`source."id"`, expenseIds)}` : sql``}`;
   const categories =
@@ -109,7 +110,7 @@ export function expenseDerivedReadSql(
     case "costs":
       if (!condition)
         return sql`SELECT DISTINCT source."id" AS "expenseId", source.cost,
-        round(source.cost::numeric * 100)::bigint AS "costCents", source."projectId"
+        ${dollarsToMinorSql(sql`source.cost`)} AS "costCents", source."projectId"
         FROM (${allocations}) derived_share JOIN "Expense" source ON source.id = derived_share."expenseId"`;
       return sql`SELECT "expenseId", (sum("attributedCents"::bigint) / 100.0)::float8 AS cost,
         sum("attributedCents"::bigint) AS "costCents", min("projectId"::text)::uuid AS "projectId"

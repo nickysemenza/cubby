@@ -1,11 +1,12 @@
 import { sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
+import { minorToDollarsSql } from "~/server/db/computed/money";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { financialAccount, financialTransaction } from "~/server/db/schema";
 
 export const financialTransactionWorkFacts = () => ({
-  amount: sql<number>`${financialTransaction.amount}::numeric / 100`.mapWith(
+  amount: minorToDollarsSql(financialTransaction.amount, "numeric").mapWith(
     Number,
   ),
   date: sql`coalesce(${financialTransaction.postedDate}, ${financialTransaction.transactionDate})`,

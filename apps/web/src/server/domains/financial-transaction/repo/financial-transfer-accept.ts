@@ -10,6 +10,7 @@ import { moneyToMinor } from "@cubby/shared";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
+import { minorToDollarsSql } from "~/server/db/computed/money";
 import {
   databaseForTransaction,
   notDeleted,
@@ -54,10 +55,10 @@ export async function acceptFinancialTransferPair(
       const rows = await tx
         .select({
           shortcode: financialTransaction.shortcode,
-          amount:
-            sql<number>`${financialTransaction.amount}::numeric / 100`.mapWith(
-              Number,
-            ),
+          amount: minorToDollarsSql(
+            financialTransaction.amount,
+            "numeric",
+          ).mapWith(Number),
           date: sql<
             string | null
           >`COALESCE(${financialTransaction.postedDate}, ${financialTransaction.transactionDate})`,

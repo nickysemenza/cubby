@@ -19,6 +19,7 @@ import { and, eq, inArray, or, sql } from "drizzle-orm";
 import { chunk, uniq, uniqBy } from "es-toolkit";
 
 import { shiftPlainDate } from "~/lib/household-date";
+import { minorToDollarsSql } from "~/server/db/computed/money";
 import { type Database } from "~/server/db/database";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { repositoryQueries as unwrapDb } from "~/server/db/repository-access.boundary";
@@ -395,10 +396,10 @@ export async function previewFinancialTransactionImport(
         id: financialTransaction.id,
         shortcode: financialTransaction.shortcode,
         accountId: financialTransaction.accountId,
-        amount:
-          sql<number>`${financialTransaction.amount}::numeric / 100`.mapWith(
-            Number,
-          ),
+        amount: minorToDollarsSql(
+          financialTransaction.amount,
+          "numeric",
+        ).mapWith(Number),
         postedDate: financialTransaction.postedDate,
         transactionDate: financialTransaction.transactionDate,
         status: financialTransaction.status,

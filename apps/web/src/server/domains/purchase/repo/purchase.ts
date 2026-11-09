@@ -56,6 +56,7 @@ import { purchaseRepositoryReadSchema } from "~/entity/generated/entity-schema-b
 import { purchaseLabel } from "~/lib/purchase-label";
 import { getR2PublicUrl } from "~/server/clients/r2-public-url";
 import type { Database, DrizzleTransaction } from "~/server/db";
+import { minorToDollarsSql } from "~/server/db/computed/money";
 import { trimTextSql } from "~/server/db/computed/text-whitespace";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
@@ -466,7 +467,7 @@ const helperText = z.string().nullable();
 export const purchaseScaffold = listScaffold("purchase", purchase, {
   readSchema: purchaseRepositoryReadSchema,
   derived: {
-    reconciliationGap: sql`abs(${purchaseVendorExpenseTotal} - (${purchase.statedTotal}::numeric / 100))`,
+    reconciliationGap: sql`abs(${purchaseVendorExpenseTotal} - (${minorToDollarsSql(purchase.statedTotal, "numeric")}))`,
     // A purchase with no live vendor leads a descending list.
     vendorId: { sql: purchaseVendorName, nulls: "high" },
     pricedExpenseTotal: sql`CASE WHEN ${purchaseExpenseCount} > ${purchaseUnpricedExpenseCount} THEN ${purchaseExpenseTotal} END`,
@@ -1796,7 +1797,7 @@ const carryChargeMetadata = async (
 
     statedTotal: sql<
       number | null
-    >`${purchase.statedTotal}::numeric / 100`.mapWith(Number),
+    >`${minorToDollarsSql(purchase.statedTotal, "numeric")}`.mapWith(Number),
     displayLabel: purchase.displayLabel,
     notes: purchase.notes,
     date: purchase.date,

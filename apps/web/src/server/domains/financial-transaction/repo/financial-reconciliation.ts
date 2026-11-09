@@ -14,6 +14,7 @@ import { cents } from "@cubby/shared";
 import { and, eq, isNull, sql, type SQL } from "drizzle-orm";
 
 import { actualExpense } from "~/server/db/computed/expense-aggregate-sql";
+import { minorToDollarsSql } from "~/server/db/computed/money";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { related } from "~/server/db/helpers/related";
 import {
@@ -148,13 +149,13 @@ const purchaseFinancialComparisonTotal = (purchaseId: SQL) =>
       AND ${notDeleted("ft")} AND ft."kind" IN (${settlementKindList})
       AND ft."status" IN (${status.expected}, ${status.pending})
   ) THEN (
-    SELECT COALESCE(sum((a."amountMinor"::numeric / 100)), 0)::double precision FROM "FinancialTransactionAllocation" a
+    SELECT COALESCE(sum((${minorToDollarsSql(sql`a."amountMinor"`, "numeric")})), 0)::double precision FROM "FinancialTransactionAllocation" a
     JOIN "FinancialTransaction" ft ON ft."id" = a."transactionId"
     WHERE a."purchaseId" = ${purchaseId} AND ${notDeleted("a")}
       AND ${notDeleted("ft")} AND ft."kind" IN (${settlementKindList})
       AND ft."status" <> ${status.void}
   ) ELSE (
-    SELECT COALESCE(sum((a."amountMinor"::numeric / 100)), 0)::double precision FROM "FinancialTransactionAllocation" a
+    SELECT COALESCE(sum((${minorToDollarsSql(sql`a."amountMinor"`, "numeric")})), 0)::double precision FROM "FinancialTransactionAllocation" a
     JOIN "FinancialTransaction" ft ON ft."id" = a."transactionId"
     WHERE a."purchaseId" = ${purchaseId} AND ${notDeleted("a")}
       AND ${notDeleted("ft")} AND ft."kind" IN (${settlementKindList})
@@ -283,7 +284,7 @@ export const postedRefundTotal = (purchaseId: SQL) =>
         )
         .exists(),
     )
-    .sum((a) => sql`${a.amountMinor}::numeric / 100`);
+    .sum((a) => minorToDollarsSql(a.amountMinor, "numeric"));
 
 /**
  * What makes a settlement row count as *evidence* for the
