@@ -194,6 +194,15 @@ export type AiModelId = keyof Declared;
 export const supportedChatModelSchema = z.enum(idsWhere({ role: "chat" }));
 export type SupportedChatModel = z.infer<typeof supportedChatModelSchema>;
 
+/**
+ * A chat model id read back from durable state (a coordinator's identity or
+ * escalation decision). A retired id reads as absent, so its owner falls back
+ * to the current declaration instead of failing to resume.
+ */
+export const storedChatModelSchema = z
+  .string()
+  .transform((id) => supportedChatModelSchema.safeParse(id).data);
+
 const supportedEmbeddingModelSchema = z.enum(idsWhere({ role: "embedding" }));
 export type SupportedEmbeddingModel = z.infer<
   typeof supportedEmbeddingModelSchema
