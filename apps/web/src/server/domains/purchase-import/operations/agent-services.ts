@@ -24,12 +24,12 @@ import { supportedChatModelSchema } from "@cubby/shared/ai/models";
 import { sha256Uuid } from "@cubby/shared/sha256";
 import { z } from "zod";
 
+import { getAuthSecret } from "~/server/auth-configuration";
 import { runWithExecutionCtx, withCfEnv } from "~/server/cf-env";
 import type {
   PurchaseDispatchEnvironment,
   RunServices,
 } from "~/server/domains/purchase-agent/service/environment";
-import { getAuthSecret } from "~/server/http/auth-configuration";
 import { assertNotInMaintenance } from "~/server/http/maintenance";
 
 /** The MCP endpoint the delegation bearer's audience names. */

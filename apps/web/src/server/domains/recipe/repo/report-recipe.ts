@@ -10,11 +10,10 @@ import {
   suggestionFor,
   TOTALS_MISSING_MEASURES,
 } from "~/lib/recipe-totals-gaps";
+import type { ReportServices as Services } from "~/server/generic/entity-report/repo/dependency";
 import { amountFormatter } from "~/server/generic/entity-report/repo/records";
-import type { RequestServices } from "~/server/http/request-services";
 
 type Records = Extract<ReportBlock, { kind: "records" }>;
-type Services = RequestServices["services"];
 type Tone = "positive" | "warning" | "destructive" | "muted";
 
 const STATUS_TONE = {

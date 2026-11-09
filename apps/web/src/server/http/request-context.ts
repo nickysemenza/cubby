@@ -15,7 +15,6 @@ import { and, eq } from "drizzle-orm";
 import { env } from "~/env";
 import { STRONG_READ_HEADER } from "~/lib/read-consistency";
 import type { NotionClient } from "~/server/clients/notion";
-import { createUpcLookupService } from "~/server/clients/upc";
 import type { USDAClient } from "~/server/clients/usda";
 import type { Database } from "~/server/db";
 import { boundedStaleDb, db } from "~/server/db";
@@ -29,6 +28,7 @@ import {
 import { device } from "~/server/db/schema";
 import type { ExpenseLineRoleClassifier } from "~/server/domains/expense/repo/line-role-classifier";
 import { currentMemberLedgerParty } from "~/server/domains/ledger-party/repo/current-member-party";
+import { createUpcLookupService } from "~/server/domains/product/service/upc-lookup";
 import type { RecipeCostingService } from "~/server/domains/recipe/repo/recipe-costing";
 import type { AvailabilityService } from "~/server/domains/recipe/service/availability.service";
 import type { USDAService } from "~/server/domains/usda-food/service/usda.service";

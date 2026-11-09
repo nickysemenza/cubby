@@ -19,6 +19,9 @@ import type {
 } from "~/contracts/upc.contract";
 import { env } from "~/env";
 import type { AiRunContext } from "~/server/ai/run-feature";
+import type { DecideOfferComparability } from "~/server/clients/upc/price";
+import type { ExternalLookupResult } from "~/server/clients/upc/types";
+import { lookupUPCitemdb } from "~/server/clients/upc/upcitemdb";
 import type { Database } from "~/server/db";
 import {
   getCachedUpcRows,
@@ -34,10 +37,6 @@ import {
 import { aiCallOwner } from "~/server/domains/run/repo/ai-call-owner";
 import { systemActor } from "~/server/domains/run/repo/ensure-run";
 import { TraceNames, withTrace } from "~/server/observability/tracing";
-
-import type { DecideOfferComparability } from "./price";
-import type { ExternalLookupResult } from "./types";
-import { lookupUPCitemdb } from "./upcitemdb";
 
 const log = createLogger("UPC Lookup");
 

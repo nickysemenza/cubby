@@ -4,10 +4,10 @@ import { fromPartial } from "@total-typescript/shoehorn";
 import { signJWT } from "better-auth/crypto";
 import { describe, expect, it } from "vitest";
 
+import { getAuthSecret } from "~/server/auth-configuration";
 import { withCfEnv } from "~/server/cf-env";
 import { createDatabase } from "~/server/db/database-runtime";
 import { inputReadPolicy } from "~/server/db/read-policy";
-import { getAuthSecret } from "~/server/http/auth-configuration";
 import {
   requireActor,
   selectOperationContext,

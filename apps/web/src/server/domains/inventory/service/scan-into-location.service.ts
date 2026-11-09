@@ -22,7 +22,6 @@ import type {
 } from "@cubby/schemas/scan";
 import type { RawScanAtLocation } from "@cubby/schemas/scan-raw-read";
 
-import type { UpcLookupPort } from "~/server/clients/upc";
 import type { UsdaFoodLookupPort } from "~/server/clients/usda";
 import type { Database } from "~/server/db";
 import { moveInventoryEntries } from "~/server/domains/inventory/repo/bulk";
@@ -33,6 +32,7 @@ import {
   markInventoryEntryVerified,
 } from "~/server/domains/inventory/repo/scan";
 import { findOrCreateByCode } from "~/server/domains/product/repo/write/product-orchestration";
+import type { UpcLookupPort } from "~/server/domains/product/service/upc-lookup";
 import { createAppError } from "~/server/errors/app-error";
 import {
   isUniqueViolation,

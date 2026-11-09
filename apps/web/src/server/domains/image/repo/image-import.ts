@@ -5,7 +5,6 @@ import type {
 } from "@cubby/schemas/identifiers";
 import { createLogger } from "@cubby/worker-tracing";
 
-import type { UpcLookupPort } from "~/server/clients/upc";
 import type { Database } from "~/server/db";
 import {
   associateImagesWithProduct,
@@ -13,6 +12,7 @@ import {
   recipeHasImages,
 } from "~/server/domains/image/repo/image";
 import { importImageFromUrl } from "~/server/domains/image/repo/image-storage";
+import type { UpcLookupPort } from "~/server/domains/product/service/upc-lookup";
 
 const log = createLogger("importRecipeImageFromUrl");
 

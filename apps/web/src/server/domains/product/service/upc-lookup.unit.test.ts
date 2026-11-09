@@ -6,7 +6,7 @@ import {
   UpcBatchDeferredError,
 } from "~/server/domains/product/repo/upc-lookup-cache";
 
-import { UpcLookupService } from ".";
+import { UpcLookupService } from "./upc-lookup";
 
 const found = {
   status: "found" as const,

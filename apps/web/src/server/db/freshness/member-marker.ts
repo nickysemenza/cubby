@@ -7,11 +7,11 @@ import { signJWT, verifyJWT } from "better-auth/crypto";
 import { z } from "zod";
 
 import { MEMBER_WRITE_COOKIE } from "~/lib/read-consistency";
-import type { MemberReadMarker } from "~/server/db/read-consistency";
 import {
   getAuthConfiguration,
   getAuthSecret,
-} from "~/server/http/auth-configuration";
+} from "~/server/auth-configuration";
+import type { MemberReadMarker } from "~/server/db/read-consistency";
 
 import { HYPERDRIVE_CACHE_POLICY } from "./hyperdrive-cache-policy";
 

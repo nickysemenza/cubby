@@ -5,12 +5,12 @@ import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import { type output as ZodOutput, type ZodSchema, z } from "zod";
 
 import type { ListReadRow } from "~/entity/model/list-read-fields";
-import type { UpcLookupService } from "~/server/clients/upc";
 import type { USDAClient } from "~/server/clients/usda";
 import type { Database } from "~/server/db";
 import type { ListReadIntent } from "~/server/db/helpers/query";
 import type { ExpenseLineRoleClassifier } from "~/server/domains/expense/repo/line-role-classifier";
 import type { MealMutationHooks } from "~/server/domains/meal/repo/crud";
+import type { UpcLookupService } from "~/server/domains/product/service/upc-lookup";
 import type { RecipeCostingService } from "~/server/domains/recipe/repo/recipe-costing";
 import type { TaskMutationHooks } from "~/server/domains/task/repo/crud";
 import type { USDAService } from "~/server/domains/usda-food/service/usda.service";

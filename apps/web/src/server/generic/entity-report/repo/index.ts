@@ -11,17 +11,17 @@ import { ENTITY_REPORT_BINDINGS } from "~/server/generated/entity-kernel-binding
 import {
   ReportExecution,
   type ReportDependency,
+  type ReportServices,
 } from "~/server/generic/entity-report/repo/dependency";
 import { foldRepeatedRows } from "~/server/generic/entity-report/repo/fold-repeats";
 import { type ReportViewer } from "~/server/generic/entity-report/repo/records";
-import type { RequestServices } from "~/server/http/request-services";
 /** The blocks both clients draw for one detail slot of one record. */
 export async function buildEntityReport(
   db: Database,
   input: EntityReportInput,
   viewer: ReportViewer,
   actor: ActorContext,
-  services?: RequestServices["services"],
+  services?: ReportServices,
 ): Promise<EntityReportOut> {
   if (input.scope.kind !== "record") {
     const { buildCollectionReport } = await import("./collection");
@@ -47,7 +47,7 @@ export async function buildEntityReports(
   input: EntityReportManyInput,
   viewer: ReportViewer,
   actor: ActorContext,
-  services?: RequestServices["services"],
+  services?: ReportServices,
 ): Promise<EntityReportManyOut> {
   const entity = input.slots[0]?.split(".")[0];
   if (input.slots.some((slot) => slot.split(".")[0] !== entity))

@@ -15,13 +15,13 @@ import {
   isGoogleIdTokenOnlyRequest,
 } from "~/lib/google-auth";
 import { GMAIL_READONLY_SCOPE } from "~/lib/google-auth-constants";
-import { drizzle } from "~/server/db";
-import * as schema from "~/server/db/auth.schema";
 import {
   getAuthConfiguration,
   sameAuthConfiguration,
   type AuthConfiguration,
-} from "~/server/http/auth-configuration";
+} from "~/server/auth-configuration";
+import { drizzle } from "~/server/db";
+import * as schema from "~/server/db/auth.schema";
 import {
   localGoogleProviderOrigin,
   localGoogleProviderPlugin,

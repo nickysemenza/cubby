@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { APP_ORIGIN, MCP_RESOURCE } from "~/lib/auth-constants";
+import { getAuthSecret } from "~/server/auth-configuration";
 import type { Database } from "~/server/db";
 import {
   clearPurchaseAgentOAuthCookie,
@@ -15,7 +16,6 @@ import {
 } from "~/server/domains/purchase-import/repo/agent-auth";
 import type { resumeAuthorizedRuns } from "~/server/domains/purchase-import/repo/run-service";
 import { getAuth } from "~/server/http/auth";
-import { getAuthSecret } from "~/server/http/auth-configuration";
 import {
   createRequestContext,
   requireActor,

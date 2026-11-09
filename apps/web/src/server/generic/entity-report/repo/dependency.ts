@@ -6,9 +6,16 @@ import type {
 } from "@cubby/schemas/entity-report";
 
 import type { Database } from "~/server/db";
-import type { RequestServices } from "~/server/http/request-services";
+import type { RecipeCostingService } from "~/server/domains/recipe/repo/recipe-costing";
+import type { AvailabilityService } from "~/server/domains/recipe/service/availability.service";
 
 import type { ReportViewer } from "./records";
+
+/** Request-scoped services a report builder may read. */
+export interface ReportServices {
+  availability: AvailabilityService;
+  recipeCosting: RecipeCostingService;
+}
 
 export interface ReportRequest {
   db: Database;
@@ -17,7 +24,7 @@ export interface ReportRequest {
   cursor?: string;
   viewer: ReportViewer;
   actor: ActorContext;
-  services?: RequestServices["services"];
+  services?: ReportServices;
 }
 
 /** Tokens own their result type; dependencies may read other declared tokens. */
@@ -62,7 +69,7 @@ type ReportBuilder = (
   viewer: ReportViewer,
   actor: ActorContext,
   cursor?: string,
-  services?: RequestServices["services"],
+  services?: ReportServices,
 ) => Promise<EntityReportOut["blocks"] | EntityReportOut>;
 
 export const reportBuilder = (build: ReportBuilder) =>

@@ -37,7 +37,6 @@ import { barcodeForLookup } from "~/lib/barcode";
 import { isUnknownBrandName } from "~/lib/brand-name-utils";
 import { scrubErrorMessage } from "~/lib/error-diagnostics";
 import { wasm } from "~/lib/wasm";
-import type { UpcLookupPort } from "~/server/clients/upc";
 import type { UsdaFoodLookupPort } from "~/server/clients/usda";
 import type { Database } from "~/server/db";
 import { importImageFromUPC } from "~/server/domains/image/repo/image-import";
@@ -55,6 +54,7 @@ import {
   type ResolvedProductCode,
   resolveProductScan,
 } from "~/server/domains/product/repo/write/scan-code";
+import type { UpcLookupPort } from "~/server/domains/product/service/upc-lookup";
 import type { RecipeCostingService } from "~/server/domains/recipe/repo/recipe-costing";
 import { resolveProductBrandName } from "~/server/domains/vendor/repo/product-brand";
 import { AppError, createAppError } from "~/server/errors/app-error";

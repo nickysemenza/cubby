@@ -1,5 +1,6 @@
 import { APP_ORIGIN } from "~/lib/auth-constants";
 import type { HttpRouteHandlers } from "~/lib/http/route-handler";
+import { getAuthSecret } from "~/server/auth-configuration";
 import {
   createPkcePair,
   createPurchaseAgentOAuthState,
@@ -8,7 +9,6 @@ import {
   purchaseAgentOAuthCookie,
   purchaseAgentConnectionRedirect,
 } from "~/server/domains/purchase-import/repo/agent-auth";
-import { getAuthSecret } from "~/server/http/auth-configuration";
 import {
   createRequestContext,
   requireActor,

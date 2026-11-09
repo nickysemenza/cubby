@@ -3,12 +3,12 @@ import { createLogger } from "@cubby/worker-tracing";
 import { verifyJwsAccessToken } from "better-auth/oauth2";
 
 import { MCP_RESOURCE, OAUTH_ISSUER } from "~/lib/auth-constants";
+import { getAuthSecret } from "~/server/auth-configuration";
 import {
   PURCHASE_AGENT_OAUTH_CLIENT_ID,
   verifyPurchaseAgentDelegation,
 } from "~/server/domains/purchase-import/repo/agent-auth";
 import { getAuth } from "~/server/http/auth";
-import { getAuthSecret } from "~/server/http/auth-configuration";
 
 import {
   createMcpTokenVerifier,
