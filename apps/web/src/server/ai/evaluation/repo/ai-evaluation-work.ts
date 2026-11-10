@@ -9,6 +9,7 @@
  * Marking wakes nothing: repository callers cannot reach the queue. A round's end
  * wakes for what is due, a Run launch wakes for itself, and the hourly cron is behind both.
  */
+import { jobWaitReason } from "@cubby/schemas/job";
 import {
   runStatus,
   runTrigger,
@@ -200,6 +201,25 @@ export async function releaseAiEvaluationPage(db: Database, token: string) {
     .update(aiEvaluation)
     .set({ leaseToken: null, leaseUntil: null })
     .where(sql`${aiEvaluation.leaseToken} = ${token}::uuid`);
+}
+
+/**
+ * A funding change ends evaluations' funding waits now; a source still
+ * without capacity defers them again before spending.
+ */
+export async function wakeFundingWaitingEvaluations(db: Database) {
+  const woken = await getDb(db)
+    .update(aiEvaluation)
+    .set({ runAt: sql`now()`, waitCause: null })
+    .where(
+      and(
+        pendingAndOwed(),
+        eq(aiEvaluation.waitCause, jobWaitReason.enum.ai_funding_window),
+        sql`${aiEvaluation.runAt} > now()`,
+      ),
+    )
+    .returning({ id: aiEvaluation.id });
+  return woken.length;
 }
 
 /** A provider or funding wait stops the feature: its owed rows wait, spending no attempt. */

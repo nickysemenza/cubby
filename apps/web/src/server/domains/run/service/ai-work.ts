@@ -287,6 +287,11 @@ export async function resumeFundingPausedRuns(
         await import("~/server/domains/run/repo/execution-context")
       ).releaseFundingPausedDiscovery(db, now)
     : 0;
+  const evaluations = anyWindow
+    ? await (
+        await import("~/server/ai/evaluation/repo/ai-evaluation-work")
+      ).wakeFundingWaitingEvaluations(db)
+    : 0;
   const embeddings = anyWindow
     ? await (
         await import("~/server/generic/embedding/repo/embedding-work")
@@ -300,5 +305,5 @@ export async function resumeFundingPausedRuns(
   await (
     await import("~/server/workflows/background-tasks/publish")
   ).wakeJobs({ source: "funding-window" });
-  return imports + discoveries + embeddings + moved.length;
+  return imports + discoveries + evaluations + embeddings + moved.length;
 }
