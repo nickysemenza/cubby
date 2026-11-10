@@ -105,7 +105,6 @@ const examples = {
                 provenance: { kind: "allocated" },
               },
             },
-            work: { kind: "idle" },
           },
         },
       })}

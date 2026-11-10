@@ -8,7 +8,6 @@ export const mcpResultDetail = z
   );
 
 export const mcpResultDetailFields = { resultDetail: mcpResultDetail };
-export type McpResultDetail = z.output<typeof mcpResultDetail>;
 
 /** A get/list read additionally offers the compact preset and field selection. */
 export const mcpReadSelectionFields = {

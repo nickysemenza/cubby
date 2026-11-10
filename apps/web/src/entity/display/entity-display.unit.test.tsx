@@ -101,7 +101,6 @@ it("renders proposed text and None independently of the current resolved value",
             provenance: { kind: "default", source: null },
           },
         },
-        work: { kind: "idle" },
       },
     },
   };
@@ -245,7 +244,6 @@ describe("declared entity displays", () => {
             controls: { kind: "readonly", reason: "computed" },
           },
           result: { kind: "missing" },
-          work: { kind: "pending" },
         }),
       },
     };
@@ -261,7 +259,7 @@ describe("declared entity displays", () => {
       renderRowCell(column.cell, record),
     );
     const view = render(<>{cell}</>, { wrapper: harness.wrapper });
-    expect(screen.getByLabelText("Queued for refresh")).toBeInTheDocument();
+    expect(screen.getByLabelText("Not calculated yet")).toBeInTheDocument();
     view.unmount();
     harness.dispose();
   });
@@ -286,7 +284,6 @@ describe("declared entity displays", () => {
               provenance: { kind: "allocated" },
             },
           },
-          work: { kind: "idle" },
         },
       },
       spendingCategoryAllocations: [
@@ -1347,7 +1344,6 @@ it("opens an inherited scalar from stored intent and clears its explicit overrid
             provenance: { kind: "default", source: null },
           },
         },
-        work: { kind: "idle" },
       },
     },
   };
@@ -1428,7 +1424,6 @@ it("edits the effective inherited checkbox and restores the nullable override", 
             provenance: { kind: "default", source: null },
           },
         },
-        work: { kind: "idle" },
       },
     },
   };
@@ -1622,11 +1617,6 @@ it("copies and totals the amount from the selected Cost snapshot", () => {
             },
             provenance: { kind: "computed" },
           },
-        },
-        work: {
-          kind: "failed",
-          error: "Synthetic Cost refresh failure",
-          retryAt: null,
         },
       }),
     },

@@ -4,7 +4,6 @@ import {
   type RelationshipCatalog,
 } from "./relationship-paths";
 export {
-  relationshipsFor,
   relationshipSources,
   type RelationshipCatalog,
 } from "./relationship-paths";

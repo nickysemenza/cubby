@@ -12,9 +12,7 @@ import {
 import type { SpanAttr } from "@cubby/worker-tracing";
 import { and, eq } from "drizzle-orm";
 
-import { env } from "~/env";
 import { STRONG_READ_HEADER } from "~/lib/read-consistency";
-import type { NotionClient } from "~/server/clients/notion";
 import type { USDAClient } from "~/server/clients/usda";
 import type { Database } from "~/server/db";
 import { boundedStaleDb, db } from "~/server/db";
@@ -93,18 +91,8 @@ export const buildCrudServices = (
   database: Database,
   opts?: { usdaRelease?: UsdaReleaseRpc },
 ) => {
-  // Built on first use: each client's SDK would otherwise load into every
-  // request, and most requests never call Notion or USDA.
-  const notionApiKey = env.NOTION_API_KEY;
-  const notionClient = notionApiKey
-    ? deferredService<NotionClient>(
-        async () =>
-          new (await import("~/server/clients/notion")).NotionClient(
-            notionApiKey,
-          ),
-        () => ({}),
-      )
-    : null;
+  // Built on first use: the client's SDK would otherwise load into every
+  // request, and most requests never call USDA.
   const usdaClient = deferredService<USDAClient>(
     async () =>
       new (await import("~/server/clients/usda")).USDAClient(
@@ -119,7 +107,6 @@ export const buildCrudServices = (
 
   return {
     db: database,
-    notionClient,
     usdaClient,
     upcLookupClient,
     ...deferredRequestServices(database, usdaClient),

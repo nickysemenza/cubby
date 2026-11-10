@@ -15,7 +15,14 @@ import {
 } from "~/features/calendar/calendar-source.fixtures";
 import { mock } from "~/lib/test/mock-schema";
 
-import { kindsForFeed, renderIcs } from "./ics";
+import { createIcsDocument, type IcsOptions, kindsForFeed } from "./ics";
+
+/** Render one document the way the feed snapshot does. */
+const renderIcs = (items: CalendarItem[], opts: IcsOptions): string => {
+  const document = createIcsDocument(opts);
+  document.append(items);
+  return document.finish();
+};
 
 /** Mirrors mock-schema's own override type so a factory can take a subset. */
 type DeepPartial<T> = T extends (infer U)[]

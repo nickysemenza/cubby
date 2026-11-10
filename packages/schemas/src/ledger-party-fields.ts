@@ -2,7 +2,7 @@ import { z } from "zod";
 import { uniqueBy } from "./base-entity";
 import { ledgerPartyShortcode } from "./identifier-fields";
 
-export const contributionRoleValues = ["beneficiary", "funder"] as const;
+const contributionRoleValues = ["beneficiary", "funder"] as const;
 export const contributionRole = z.enum(contributionRoleValues);
 export type ContributionRole = z.infer<typeof contributionRole>;
 

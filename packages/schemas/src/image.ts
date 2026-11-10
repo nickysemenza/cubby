@@ -19,7 +19,6 @@ import {
   ALLOWED_IMAGE_TYPES,
   type AllowedImageType,
 } from "@cubby/shared/image-types";
-import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
 import { nonEmptyTuple } from "./identifiers";
 import { mutationSideEffectsSchema } from "./mutation-side-effects";
 import { entityFilterList, oneOrMany, presenceFilter } from "./pagination";
@@ -46,13 +45,9 @@ import {
 import {
   generatedImageFieldSchemas,
   generatedImageFilterFields,
-  generatedImageRenderStatusValues,
-  generatedImageStatusValues,
-  generatedImageStorageStatusValues,
 } from "./generated/entity-field-schemas.image.gen";
 
 export const ImageStatus = generatedImageFieldSchemas.read.status;
-export const imageStatusValues = generatedImageStatusValues;
 export type ImageStatus = z.infer<typeof ImageStatus>;
 
 // These values describe bytes and storage independently of the browser upload
@@ -62,26 +57,23 @@ export const ImageRenderStatus =
   generatedImageFieldSchemas.read.renderStatus.unwrap();
 export const ImageStorageStatus =
   generatedImageFieldSchemas.read.storageStatus.unwrap();
-export const imageRenderStatusValues = generatedImageRenderStatusValues;
-export const imageStorageStatusValues = generatedImageStorageStatusValues;
 export type ImageRenderStatus = z.infer<typeof ImageRenderStatus>;
 export type ImageStorageStatus = z.infer<typeof ImageStorageStatus>;
 
 /** Durable current-image processing findings exposed to list and Problems. */
 export { imageProcessingIssue } from "./image-processing";
-export type ImageProcessingIssue = z.infer<typeof imageProcessingIssue>;
-export const imageProcessingIssueFilter = oneOrMany(imageProcessingIssue)
+const imageProcessingIssueFilter = oneOrMany(imageProcessingIssue)
   .optional()
   .describe(
     "Filter to images whose current processing failed or needs eligibility review.",
   );
 
-export type ImageSortField = GeneratedEntitySortField<"image">;
-
 export { ALLOWED_IMAGE_TYPES, type AllowedImageType };
 const imageContentType = z.enum(ALLOWED_IMAGE_TYPES);
 
+/** @public Names a generated native model. */
 export const perceptualHashSchema = z.string().regex(/^[0-9a-f]{16}$/);
+/** @public Names a generated native model. */
 export const imageSourceFingerprintSchema = z.object({
   hash: perceptualHashSchema,
   aspectRatio: z.number().positive().finite(),
@@ -127,7 +119,7 @@ const ALLOWED_DOCUMENT_TYPES = [PDF_CONTENT_TYPE] as const;
 // Predicate must be PDF-equality, NOT `startsWith("image/")` — legacy
 // same-bucket re-imports created rows with `application/octet-stream` that must
 // remain displayable as images.
-export const isDocumentFile = (file: { contentType: string }): boolean =>
+const isDocumentFile = (file: { contentType: string }): boolean =>
   file.contentType === PDF_CONTENT_TYPE;
 
 /** The minimum shape the displayability predicate reads. Named so cascade
@@ -162,11 +154,7 @@ export const partitionEntityFiles = <T extends { contentType: string }>(
   documents: files.filter(isDocumentFile),
 });
 
-export const createInputImages = z.object({
-  pendingImageIds: z.array(imageShortcode).optional(),
-});
-
-export const updateInputImages = z.object({
+const updateInputImages = z.object({
   // All three are public `IMG-` codes now that `Image` mints a shortcode at
   // insert time: `pendingImageIds` comes back from `image.create_file_upload`/
   // `image.uploadImage`/`importImageFromUrl`, `removeImageIds`/`imageOrder`
@@ -346,16 +334,12 @@ export const imageAttachExistingInput = z
       });
     }
   });
-export type ImageAttachExistingInput = z.infer<typeof imageAttachExistingInput>;
 
 export const imageAttachExistingOutput = z.object({
   imageId: imageShortcode,
   targetId: attachableImageEntityId,
   reused: z.boolean(),
 });
-export type ImageAttachExistingOutput = z.infer<
-  typeof imageAttachExistingOutput
->;
 
 // Field map (not a z.object) so the MCP tool can consume `.shape` directly; the
 // cross-field "exactly one of url/data/uploadId" rule — which JSON Schema can't
@@ -553,6 +537,7 @@ export {
 export { imageOut };
 export type ImageOut = z.infer<typeof imageOut>;
 
+/** @public Names a generated native model. */
 export const imageHashIndexItemSchema = z.object({
   id: imageShortcode,
   perceptualHash: perceptualHashSchema.nullable(),
@@ -585,6 +570,7 @@ export const imageHashIndexSchema = z.object({
 });
 export type ImageHashIndex = z.infer<typeof imageHashIndexSchema>;
 
+/** @public Names a generated native model. */
 export const imagePerceptualHash = z.object({
   id: imageShortcode,
   perceptualHash: perceptualHashSchema,
@@ -609,7 +595,6 @@ export type SetPerceptualHashesOutput = z.infer<
 // `attachableImageEntity` is. Gallery, cover, and logo storage modes are all
 // authoritative association targets.
 export {
-  imageAssociationEntity,
   imageAssociationRole,
   imageAssociationSchema,
   type ImageAssociation,
@@ -626,10 +611,9 @@ export const initiateUploadWithoutEntityResponseSchema = z.object({
 });
 
 /** An Image's current row in a photo-inventory (or other) import run's picker. */
-export {
-  importTargetSummarySchema,
-  type ImportTargetSummary,
-} from "./image-processing";
+export { type ImportTargetSummary } from "./image-processing";
+/** @public Names a generated native model. */
+export { importTargetSummarySchema } from "./image-processing";
 
 export const imageBrowserUpdateInput = z.object({
   id: imageShortcode,

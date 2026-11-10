@@ -13,24 +13,25 @@ import {
  * Where a leg's money is recorded: an existing FinancialTransaction, an
  * unmatched statement charge the apply creates, or a hand-entered cash leg
  * the apply creates on the owner's one cash account.
+ * @public Names a generated native model.
  */
 export const transferPairLegOrigin = z.enum([
   "transaction",
   "statement",
   "cash",
 ]);
-export type TransferPairLegOrigin = z.infer<typeof transferPairLegOrigin>;
 
 /**
  * The declared Decision reading of one leg's descriptor in its pair: whether
  * it explicitly records money moving between accounts. Generic payment,
  * deposit, ACH, check or repayment descriptors are `insufficient_evidence`.
  */
-export const transferPairMovementChoices = [
+const transferPairMovementChoices = [
   "account_move",
   "payment",
   "insufficient_evidence",
 ] as const;
+/** @public Names a generated native model. */
 export const transferPairMovementLabel = z.object({
   choice: z.enum(transferPairMovementChoices),
   confidence: z.enum(["low", "medium", "high"]),
@@ -44,18 +45,24 @@ export type TransferPairMovementLabel = z.infer<
  * `explicit` only from a high-confidence `account_move` label. A recorded
  * transfer kind or a provider transfer category alone stays `weak`: a cashed
  * check the provider filed under Transfer must never pair clean.
+ * @public Names a generated native model.
  */
 export const transferPairMovement = z.enum(["explicit", "weak"]);
-export type TransferPairMovement = z.infer<typeof transferPairMovement>;
 
-/** Recorded and provider values that retrieved the leg; they never make it explicit. */
+/**
+ * Recorded and provider values that retrieved the leg; they never make it explicit.
+ * @public Names a generated native model.
+ */
 export const transferPairLegSignals = z.object({
   /** The recorded kind, or the provider-category rule's kind for a charge. */
   kind: financialTransactionKind.nullable(),
   providerCategory: z.string().nullable(),
 });
 
-/** One provider charge: all observations of it share this identity. */
+/**
+ * One provider charge: all observations of it share this identity.
+ * @public Names a generated native model.
+ */
 export const transferPairCharge = z.object({
   source: z.string().min(1),
   chargeKey: z.string().min(1),
@@ -66,6 +73,7 @@ export const transferPairCharge = z.object({
  * its date: possibly this money again from an overlapping export. It blocks a
  * clean pair, and on a statement leg blocks creating it, until the statement
  * suggestions resolve it.
+ * @public Names a generated native model.
  */
 export const transferPairOverlap = z.object({
   transactionId: financialTransactionShortcode.nullable(),
@@ -74,7 +82,7 @@ export const transferPairOverlap = z.object({
   description: z.string().nullable(),
 });
 
-export const transferPairOwner = ledgerPartyRefOut;
+const transferPairOwner = ledgerPartyRefOut;
 
 export const transferPairLeg = z.object({
   /** Stable identity: `ftx:<FTX code>`, `stmt:<source>:<chargeKey>` or `cash:<FAC code>:<outflow key>`. */
@@ -104,7 +112,10 @@ export const transferPairLeg = z.object({
 });
 export type TransferPairLeg = z.infer<typeof transferPairLeg>;
 
-/** Another candidate for one side, counted for uniqueness even when weak. */
+/**
+ * Another candidate for one side, counted for uniqueness even when weak.
+ * @public Names a generated native model.
+ */
 export const transferPairCompetitor = z.object({
   /** The pair's leg this candidate competes for the opposite of. */
   against: z.enum(["outflow", "inflow"]),
@@ -122,7 +133,10 @@ export const transferPairCompetitor = z.object({
   dateGapDays: z.number().int().nonnegative(),
 });
 
-/** Why a pair is not clean; every entry is something a member reviews. */
+/**
+ * Why a pair is not clean; every entry is something a member reviews.
+ * @public Names a generated native model.
+ */
 export const transferPairBlocker = z.enum([
   "competing_candidates",
   "date_gap",

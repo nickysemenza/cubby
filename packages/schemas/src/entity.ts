@@ -45,8 +45,4 @@ export const entityImageOf = (entity: ImageEntity): EntityImage =>
 export const entityRefKey = (entity: Entity, id: string): string =>
   `${entity}:${id}`;
 
-export {
-  entityRefFields,
-  entityRefSchema,
-  type EntityRef,
-} from "./entity-core";
+export { entityRefSchema, type EntityRef } from "./entity-core";

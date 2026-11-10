@@ -17,7 +17,6 @@ import type {
   cookbookImportChunkInput,
   cookbookReprocessChunkInput,
   importCookbookStreamInput,
-  importNotionSyncInput,
   importRecipeSchema,
   parseRecipeHtmlInput,
   scrapeRecipeInput,
@@ -30,16 +29,8 @@ import { createLogger } from "@cubby/worker-tracing";
 import type { z } from "zod";
 
 import { topoOrder } from "~/lib/cookbook-graph";
-import {
-  importRecipeSignature,
-  recipeOutSignature,
-} from "~/lib/recipe-signature";
 import { forwardGatewayRequest } from "~/server/ai/gateway-forward";
 import { aiCallOwner } from "~/server/ai/policy/call-owner";
-import {
-  lintImportRecipe,
-  notionPageToImportRecipe,
-} from "~/server/clients/notion-recipe";
 import { deleteStoredObjects } from "~/server/clients/s3";
 import {
   htmlToImportRecipe,
@@ -72,21 +63,16 @@ import {
 import { findOrCreateByUPC } from "~/server/domains/product/repo/write/product-orchestration";
 import {
   projectCookbookImportEvent,
-  projectNotionImportEvent,
   type CookbookImportProjection,
-  type NotionImportProjection,
 } from "~/server/domains/recipe/operations/recipe-import-projection";
 import {
   getCookbookRecipeIdsByTitle,
   getCookbookRecipesForDiff,
-  getNotionRecipePageIds,
-  getNotionRecipesForDiff,
 } from "~/server/domains/recipe/repo/crud";
 import {
   type CookbookImportContext,
   upsertCookbookRecipeFromCookbook,
   upsertImportRecipe,
-  upsertNotionRecipeFromImport,
 } from "~/server/domains/recipe/repo/import-recipe-convert";
 import {
   actorWithRun,
@@ -472,189 +458,6 @@ export async function getCookbookDiffWorkflow(
   const cookbook = await getCookbookByName(context.db, input.book);
   return cookbook ? getCookbookRecipesForDiff(context.db, cookbook.id) : [];
 }
-
-const normalizeNotionId = (id: string) => id.replace(/-/g, "");
-const previewNotionSyncDefinition = workflow<
-  AuthenticatedOperationContext,
-  undefined
->("recipe.previewNotionSync")
-  .branch("client", {
-    when: async ({ context }) => context.notionClient != null,
-    whenFalse: (branch) => branch.output(() => []),
-    whenTrue: (branch) =>
-      branch
-        .call("rows", async ({ context }) => {
-          const client = context.notionClient;
-          if (!client) return [];
-          return await client.queryRecipes();
-        })
-        .call(
-          "existing",
-          async ({ context }) =>
-            new Map(
-              (await getNotionRecipesForDiff(context.db)).map((entry) => [
-                normalizeNotionId(entry.pageId),
-                { id: entry.recipe.id, sig: recipeOutSignature(entry.recipe) },
-              ]),
-            ),
-        )
-        .map("pages", {
-          items: ({ rows, existing }) => rows.map((row) => ({ row, existing })),
-          concurrency: 10,
-          run: async ({ context }, { item }) => {
-            const client = context.notionClient;
-            if (!client)
-              throw new Error("Notion client disappeared during preview");
-            const { row, existing } = item;
-            const recipe = notionPageToImportRecipe(
-              row,
-              await client.getPageContent(row.id),
-            );
-            const { status: lintStatus, reasons } = lintImportRecipe(recipe);
-            const prior = existing.get(normalizeNotionId(row.id));
-            const status =
-              lintStatus === "needs-formatting"
-                ? ("needs-formatting" as const)
-                : !prior
-                  ? ("new" as const)
-                  : importRecipeSignature(recipe, row.tags) === prior.sig
-                    ? ("unchanged" as const)
-                    : ("will-update" as const);
-            return {
-              pageId: row.id,
-              name: row.name,
-              notionUrl: row.notionUrl,
-              status,
-              existingId: prior?.id ?? null,
-              reasons,
-              recipe,
-            };
-          },
-        })
-        .output(({ pages }) => pages),
-  })
-  .output(({ client }) => client);
-
-const previewNotionSync = bindWorkflow(previewNotionSyncDefinition);
-export const previewNotionSyncWorkflow = (
-  context: AuthenticatedOperationContext,
-) => previewNotionSync(context, undefined);
-
-type NotionSummary = { succeeded: number; failed: number };
-type NotionImportItem = {
-  readonly pageId: string;
-  readonly row:
-    | Awaited<
-        ReturnType<
-          NonNullable<
-            AuthenticatedOperationContext["notionClient"]
-          >["queryRecipes"]
-        >
-      >[number]
-    | null;
-  readonly existing: boolean;
-};
-type NotionImportResult = NotionImportProjection;
-const notionImportDefinition = defineBulkWorkflow({
-  name: "recipe.importNotionSyncStream",
-  items: workflow<
-    AuthenticatedOperationContext,
-    z.output<typeof importNotionSyncInput>
-  >("recipe.importNotionSyncStream.select")
-    .call("client", async ({ context }) => {
-      if (!context.notionClient)
-        throw createAppError(
-          "CONSTRAINT_VIOLATION",
-          "Notion is not configured.",
-        );
-      return context.notionClient;
-    })
-    .call("rows", async (_, { client }) => client.queryRecipes())
-    .call("existing", ({ context }) =>
-      getNotionRecipePageIds(context.db).then(
-        (pageIds) => new Set(pageIds.map(normalizeNotionId)),
-      ),
-    )
-    .output(({ input, rows, existing }) => {
-      const rowById = new Map(rows.map((row) => [row.id, row]));
-      return input.pageIds.map((pageId): NotionImportItem => ({
-        pageId,
-        row: rowById.get(pageId) ?? null,
-        existing: existing.has(normalizeNotionId(pageId)),
-      }));
-    }),
-  item: workflow<AuthenticatedOperationContext, NotionImportItem>(
-    "recipe.importNotionSyncStream.item",
-  )
-    .call("row", async (_, { input }) => {
-      if (input.row) return input.row;
-      throw createAppError(
-        "CONSTRAINT_VIOLATION",
-        "That page isn't in the Notion Recipes database.",
-      );
-    })
-    .call("recipe", async ({ context }, { input, row }) => {
-      const client = context.notionClient;
-      if (!client) throw new Error("Notion client was lost after selection.");
-      const recipe = notionPageToImportRecipe(
-        row,
-        await client.getPageContent(input.pageId),
-      );
-      const { status, reasons } = lintImportRecipe(recipe);
-      if (status === "needs-formatting")
-        throw createAppError(
-          "CONSTRAINT_VIOLATION",
-          `Recipe isn't import-ready: ${reasons.join(" ")}`,
-        );
-      return recipe;
-    })
-    .commit("imported", ({ context }, { input, recipe, row }) =>
-      upsertNotionRecipeFromImport(
-        recipe,
-        input.pageId,
-        row.tags,
-        context.db,
-        context.actorContext,
-      ),
-    )
-    .effect("event", async (_, { input, imported }) =>
-      projectNotionImportEvent(input.pageId, input.existing, imported),
-    )
-    .output(({ event }) => event),
-  finalize: workflow<
-    AuthenticatedOperationContext,
-    BulkWorkflowSummary<NotionImportItem, NotionImportResult>
-  >("recipe.importNotionSyncStream.finalize")
-    .commit("costing", ({ context }, { input }) => {
-      const recipeIds = input.succeeded.map(({ result }) => result.recipeId);
-      return recipeIds.length
-        ? context.services.recipeCosting.dispatchRecompute(recipeIds, {
-            source: "recipe.importNotionSyncStream",
-          })
-        : Promise.resolve(0);
-    })
-    .output(({ input }): NotionSummary => ({
-      succeeded: input.succeeded.filter(({ result }) => result.event.ok).length,
-      failed:
-        input.failed.length +
-        input.succeeded.filter(({ result }) => !result.event.ok).length,
-    })),
-  onItemError: "continue",
-  progress: (result) => result.event,
-  errorProgress: (error, item) => ({
-    pageId: item.pageId,
-    ok: false as const,
-    error: getErrorMessage(error),
-  }),
-});
-export const importNotionSyncWorkflow = bindBulkWorkflow(
-  notionImportDefinition,
-  (
-    context: AuthenticatedOperationContext,
-    input: z.output<typeof importNotionSyncInput>,
-    signal?: AbortSignal,
-  ) => ({ context, input, signal }),
-);
 
 type SetCookbookProductInput = z.output<typeof setCookbookProductInput>;
 export async function setCookbookProductWorkflow(

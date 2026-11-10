@@ -52,7 +52,7 @@ export const normalizeSorts = (sort: SortInput): SortParams[] => {
 
 type NonEmptyStringArray = readonly [string, ...string[]];
 
-export const createSortParamsSchema = <
+const createSortParamsSchema = <
   TFields extends NonEmptyStringArray,
   TDefault extends TFields[number],
 >(
@@ -133,7 +133,7 @@ export const entityFilterList = <T extends z.ZodTypeAny>(schema: T) =>
  * Unlike the internal match-nothing value, tokens are public, so the
  * published pattern advertises them beside the shortcode pattern.
  */
-export const tokenFilter = <T extends z.ZodTypeAny>(
+const tokenFilter = <T extends z.ZodTypeAny>(
   schema: T,
   tokens: readonly [string, ...string[]],
 ) => {
@@ -177,7 +177,7 @@ const paginationParams = z.object({
     .default(DEFAULT_PAGE_SIZE),
 });
 
-export function mcpPageSizeParam(opts: {
+function mcpPageSizeParam(opts: {
   defaultPageSize: number;
   maxPageSize: number;
 }) {
@@ -205,19 +205,6 @@ export function mcpPaginationFields(opts: {
       .default(0)
       .describe("Page index, 0-based (default 0)"),
     pageSize: mcpPageSizeParam(opts),
-  };
-}
-
-export function mcpListInputFields(
-  filterFields: Record<string, z.ZodType>,
-  opts?: { defaultPageSize?: number; maxPageSize?: number },
-) {
-  return {
-    ...filterFields,
-    ...mcpPaginationFields({
-      defaultPageSize: opts?.defaultPageSize ?? 50,
-      maxPageSize: opts?.maxPageSize ?? 100,
-    }),
   };
 }
 
@@ -258,7 +245,7 @@ export type PaginationParams = z.infer<typeof paginationParams>;
 export type SortParams = z.infer<typeof sortParams>;
 
 /** One dimension; ordering in a request is the grouping hierarchy. */
-export const listGroupBySchema = z
+const listGroupBySchema = z
   .object({
     key: z.string().min(1),
     level: z.number().int().positive().optional(),
@@ -442,14 +429,6 @@ export function createPaginatedResponseSchema<Entry extends z.ZodTypeAny>(
 ) {
   return z.object({
     meta: paginatedMetaSchema,
-    items: z.array(entrySchema),
-  });
-}
-
-export function createItemsResponseSchema<Entry extends z.ZodTypeAny>(
-  entrySchema: Entry,
-) {
-  return z.object({
     items: z.array(entrySchema),
   });
 }

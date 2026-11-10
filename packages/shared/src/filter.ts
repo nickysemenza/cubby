@@ -82,7 +82,7 @@ export const describeRelativeDate = (days: number): string => {
  * relative date token: `..@today-1d` is "before today". A range filter's
  * other values are preset keys, which never contain the separator.
  */
-export const RANGE_BOUNDS_SEPARATOR = ".." as const;
+const RANGE_BOUNDS_SEPARATOR = ".." as const;
 
 export const parseRangeBounds = (
   value: string,
@@ -102,7 +102,7 @@ export const formatRangeBounds = (
   from || to ? `${from ?? ""}${RANGE_BOUNDS_SEPARATOR}${to ?? ""}` : undefined;
 
 /** A date bound as a client shows it: a token as "today − 30 days", a date as is. */
-export const describeDateBound = (bound: string): string => {
+const describeDateBound = (bound: string): string => {
   const days = relativeDateOffset(bound);
   return days === undefined ? bound : describeRelativeDate(days);
 };

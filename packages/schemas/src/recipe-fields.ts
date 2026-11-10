@@ -56,7 +56,7 @@ export const recipeSectionInput = z.object({
 
 export const recipeSectionsInput = z.array(recipeSectionInput);
 
-export const sectionLineFields = {
+const sectionLineFields = {
   // Section and line rows have UUIDs, not public entity shortcodes.
   id: z.uuid(),
   amounts: z.array(amount),
@@ -86,7 +86,7 @@ export const recipeSectionIngredientOut = z.discriminatedUnion("type", [
   ingredientSectionLineOut,
   recipeSectionLineOut,
 ]);
-export const recipeSectionFields = {
+const recipeSectionFields = {
   id: z.uuid(),
   name: z.string().nullable(),
   instructions: z.array(recipeInstructionInput.omit({ id: true })),

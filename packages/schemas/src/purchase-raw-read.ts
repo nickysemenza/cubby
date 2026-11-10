@@ -8,4 +8,3 @@ export const rawPurchaseListItemOut = withEntityListMedia(
   definitionSchemas.list,
 );
 export type RawPurchaseOut = z.output<typeof rawPurchaseOut>;
-export type RawPurchaseListItemOut = z.output<typeof rawPurchaseListItemOut>;

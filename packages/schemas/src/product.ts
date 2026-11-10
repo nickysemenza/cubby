@@ -14,25 +14,10 @@ import {
   productPublicReadFields,
 } from "./generated/entity-field-envelope-fields.product.gen";
 import { productFieldEnvelopeSchemas } from "./generated/entity-field-envelopes.product.gen";
-import { rawProductOutput, rawProductList } from "./product-raw-read";
-import {
-  productCookbookRefOut,
-  productQuantityFields,
-  rawProductInventoryWithLocationOut,
-  productIngredientOut,
-  productLocationRefOut,
-} from "./product-read-fields";
+import { productQuantityFields } from "./product-read-fields";
 export {
   productPrimaryPlacement,
-  type ProductPrimaryPlacement,
-  productQuantityLedgerOut,
-  productCookbookRefOut,
-  productQuantityFields,
-  productUnitPriceMappings,
-  productOwnershipEvidenceOut,
-  productNutritionDisplay,
   type ProductQuantityLedgerOut,
-  type ProductCookbookRefOut,
   type ProductOwnershipEvidenceOut,
   type ProductNutritionDisplay,
 } from "./product-read-fields";
@@ -42,18 +27,12 @@ import {
   productCategoryFeature,
   type ProductCategoryFeature,
 } from "./product-category-fields";
-import {
-  rawProductWithMappings,
-  rawProductWithMappingsAndFood,
-  rawProductMcpWithMappings,
-  rawProductMcpWithMappingsAndFood,
-} from "./product-raw-read";
+import { rawProductWithMappingsAndFood } from "./product-raw-read";
 import { upc } from "@cubby/shared/upc";
 import { foodSummary } from "@cubby/usda";
 import { z } from "zod";
 import { locationRefOut } from "./location-fields";
 import { hasFdcLink, productRefOut } from "./product-fields";
-import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
 import { dateBound, dateRangeFields, numericRangeFields } from "./base-entity";
 import { amount } from "./codec";
 import { requiredName } from "./common";
@@ -67,18 +46,12 @@ import {
   productShortcode,
 } from "./identifiers";
 import { imageOut } from "./image";
-import { locationAncestorOut } from "./location";
 import { oneOrMany, presenceFilter } from "./pagination";
 import { plainDate, taskStatusSchema } from "./project";
 import { mutationSideEffectsSchema } from "./mutation-side-effects";
 import { generatedProductFieldSchemas } from "./generated/entity-field-schemas.product.gen";
-import { unitMappingOut, unitMappingWithMetadata } from "./unitmapping";
-import { productCategory, productPricingOut } from "./product-fields";
-import type { ProductCategorySummary } from "./product-category-fields";
-
-export { productPricingOut } from "./product-fields";
-
-export type ProductCategory = ProductCategorySummary;
+import { unitMappingWithMetadata } from "./unitmapping";
+import { productCategory } from "./product-fields";
 
 /**
  * The category feature a Product's identity evidence implies, read from the
@@ -101,7 +74,7 @@ export const impliedProductFeature = (evidence: {
   );
 };
 
-export const productBulkStockTrackedInput = z.object({
+const productBulkStockTrackedInput = z.object({
   ids: z.array(productShortcode).min(1),
   stockTracked: z.boolean().nullable(),
 });
@@ -109,13 +82,7 @@ export type ProductBulkStockTrackedInput = z.infer<
   typeof productBulkStockTrackedInput
 >;
 
-export const PRODUCT_SUMMARY_BATCH_MAX = 50;
-
-export const productSummaryBatchInput = z.object({
-  ids: z.array(productShortcode).max(PRODUCT_SUMMARY_BATCH_MAX),
-});
-
-export const PRODUCT_QUANTITY_SUMMARY_BATCH_MAX = 5_000;
+const PRODUCT_QUANTITY_SUMMARY_BATCH_MAX = 5_000;
 
 const productIdsBatchInput = z.object({
   ids: z.array(productShortcode).max(PRODUCT_QUANTITY_SUMMARY_BATCH_MAX),
@@ -170,10 +137,6 @@ export const productShortcodesInput = z.object({
   shortcodes: z.array(productShortcode),
 });
 
-export const productShortcodeInput = z.object({
-  shortcode: productShortcode,
-});
-
 export const productCreateManyInput = z
   .array(productCreateInput)
   .min(1)
@@ -186,7 +149,7 @@ export const productCreateManyInput = z
  * name; a Product is identity plus cost basis, so the create stays a separate,
  * deliberate call after the agent has read the candidates.
  */
-export const productResolveLineInput = z.object({
+const productResolveLineInput = z.object({
   name: z.string().trim().min(1),
   externalIds: z
     .array(
@@ -225,7 +188,7 @@ export type ProductResolveCandidateOut = z.infer<
   typeof productResolveCandidateOut
 >;
 
-export const productResolveNameOut = z.object({
+const productResolveNameOut = z.object({
   /** The requested name, trimmed, as the caller sent it. */
   name: z.string(),
   /**
@@ -378,13 +341,6 @@ export {
   type ProductMovementKind,
 } from "./product-movement-kind";
 
-// `expectedQuantity` and `quantityVariance` (units bought minus units gone,
-// and shelf minus that) are correlated subqueries in
-// repo/product/quantity-ledger.ts. Their sort keys must stay identical to the
-// column ids in productlist.tsx, or `buildOrderBy` drops the sort while the
-// header still renders a sort affordance.
-export type ProductSortField = GeneratedEntitySortField<"product">;
-
 /**
  * Units bought minus units gone, derived from the Expense ledger. See
  * repo/product/quantity-ledger.ts for the rule and why every negative line
@@ -432,7 +388,6 @@ export const productDiscardInput = z.object({
    */
   inventoryEntryId: inventoryShortcode.nullable().default(null),
 });
-export type ProductDiscardInput = z.infer<typeof productDiscardInput>;
 
 export const productDiscardOut = z.object({
   expenseId: expenseShortcode,
@@ -447,7 +402,6 @@ export const productDiscardOut = z.object({
     .nullable(),
   sideEffects: mutationSideEffectsSchema,
 });
-export type ProductDiscardOut = z.infer<typeof productDiscardOut>;
 
 /**
  * Advisory preview of a discard, computed on the server so every client reads
@@ -515,9 +469,6 @@ export const productAddToInventoryPreviewInput = z.object({
   productId: productShortcode,
   locationId: locationShortcode.nullable().default(null),
 });
-export type ProductAddToInventoryPreviewInput = z.infer<
-  typeof productAddToInventoryPreviewInput
->;
 
 export const productAddToInventoryPreviewOut = z.object({
   /** The quantity the ledger says is outstanding, else one unit. */
@@ -532,11 +483,6 @@ export const productAddToInventoryPreviewOut = z.object({
 export type ProductAddToInventoryPreviewOut = z.infer<
   typeof productAddToInventoryPreviewOut
 >;
-
-export type ProductPricingOut = z.infer<typeof productPricingOut>;
-
-const { coverImageUrl: _coverImageUrl, ...productTopLevelFields } =
-  rawProductOutput.shape;
 
 /**
  * find-or-create result: the product plus whether it was newly created (vs a
@@ -580,35 +526,8 @@ export const productLookupUpcOut = z.object({
     .describe("UPC lookup service match"),
 });
 
-export type ProductLookupUpcOut = z.infer<typeof productLookupUpcOut>;
-
-export type ProductFindOrCreateByUPCOut = z.infer<
-  typeof productFindOrCreateByUPCOut
->;
-
-export const productWithMappingsOut = withFieldEnvelopes(
-  rawProductWithMappings,
-  productFieldEnvelopeFields,
-  productPublicReadFields,
-);
 export const productWithMappingsAndFoodOut = withFieldEnvelopes(
   rawProductWithMappingsAndFood,
-  productFieldEnvelopeFields,
-  productPublicReadFields,
-);
-export type ProductWithMappingsOut = z.infer<typeof productWithMappingsOut>;
-
-export type ProductWithMappingsAndFoodOut = z.infer<
-  typeof productWithMappingsAndFoodOut
->;
-
-export const productWithMappingsMcpEntityOut = withFieldEnvelopes(
-  rawProductMcpWithMappings,
-  productFieldEnvelopeFields,
-  productPublicReadFields,
-);
-export const productWithMappingsAndFoodMcpEntityOut = withFieldEnvelopes(
-  rawProductMcpWithMappingsAndFood,
   productFieldEnvelopeFields,
   productPublicReadFields,
 );
@@ -639,41 +558,6 @@ export const productQuantitySummariesOut = z.record(
   z.string(),
   productQuantitySummaryOut,
 );
-export type ProductQuantitySummariesOut = z.infer<
-  typeof productQuantitySummariesOut
->;
-
-export const productWithIngredientAndInventoryAndMappingsOut = z.object({
-  ...productTopLevelFields,
-  // Same derived cover rule as `productTopLevelOut`/the picker (see
-  // `getProductCoverImageUrlsByProductIds`) — not a stored field.
-  coverImageUrl: rawProductOutput.shape.coverImageUrl,
-  ingredient: productIngredientOut.nullable(),
-  unitMappings: z.array(unitMappingOut),
-  inventoryEntry: z.array(rawProductInventoryWithLocationOut),
-  /**
-   * Locations that ARE this product — a bin, tote or rack in service, as
-   * opposed to `inventoryEntry`, which is stock held somewhere.
-   *
-   * Embedded on the detail read rather than fetched beside it, so the hero's
-   * count and the rows in the table cannot disagree while one of two queries is
-   * still in flight.
-   */
-  servingAsLocations: z.array(productLocationRefOut),
-  /**
-   * Live `productComponent` links where this product is the parent — non-zero
-   * means it is a kit or multi-pack. Counts distinct components, not units.
-   *
-   * Embedded here rather than read from `product.components` beside it, for the
-   * reason `servingAsLocations` gives above: the hero decides its presence
-   * stamp from this, and a stamp that flipped when a second query resolved
-   * would contradict the Kit Components table while it loaded.
-   */
-  componentCount: z.number().int().nonnegative(),
-  /** Live cookbooks whose physical copies are this product. */
-  cookbooks: z.array(productCookbookRefOut),
-  ...productQuantityFields,
-});
 
 export const productListInventoryEntryOut =
   productFieldEnvelopeSchemas.list.shape.inventoryEntry.element;
@@ -686,13 +570,8 @@ export const productInventoryEntriesByIdOut = z.record(
   z.string(),
   z.array(productListInventoryEntryOut),
 );
-export type ProductInventoryEntriesByIdOut = z.infer<
-  typeof productInventoryEntriesByIdOut
->;
 
 /** Generic MCP entity list row with storage-only child identifiers removed. */
-
-export const productDataGaps = rawProductList.shape.dataGaps;
 
 /** Generic MCP entity detail with storage-only child identifiers removed. */
 
@@ -701,24 +580,17 @@ export const productDataGaps = rawProductList.shape.dataGaps;
 export const productWithFoodAndSideEffectsOut = productWithFoodOut.extend({
   sideEffects: mutationSideEffectsSchema,
 });
-export type ProductWithFoodAndSideEffectsOut = z.infer<
-  typeof productWithFoodAndSideEffectsOut
->;
 
-export const productFoodSummariesOut = z.record(
-  z.string(),
-  foodSummary.nullable(),
-);
+const productFoodSummariesOut = z.record(z.string(), foodSummary.nullable());
 
-export const productImageSummariesOut = z.record(z.string(), z.array(imageOut));
+const productImageSummariesOut = z.record(z.string(), z.array(imageOut));
 
-export const productUnitMappingSummariesOut = z.record(
+const productUnitMappingSummariesOut = z.record(
   z.string(),
   z.array(unitMappingWithMetadata),
 );
 
-export const productSummaryInclude = z.enum(["food", "images", "unitMappings"]);
-export type ProductSummaryInclude = z.infer<typeof productSummaryInclude>;
+const productSummaryInclude = z.enum(["food", "images", "unitMappings"]);
 
 export const productSummariesInput = z.object({
   ids: z.array(productShortcode).max(500),
@@ -735,52 +607,12 @@ export type ProductSummariesOut = z.infer<typeof productSummariesOut>;
 
 export const productShortcodeListOut = z.array(productTopLevelOut);
 
-export const productTagOptionsOut = z.array(
-  z.object({
-    tag: z.string(),
-    count: z.number().int().nonnegative(),
-  }),
-);
-export type ProductTagOptionsOut = z.infer<typeof productTagOptionsOut>;
-
 export const productExternalIdSourceOptionsOut = z.array(
   z.object({
     source: z.string(),
     count: z.number().int().nonnegative(),
   }),
 );
-export type ProductExternalIdSourceOptionsOut = z.infer<
-  typeof productExternalIdSourceOptionsOut
->;
-
-export const productTagSiblingsOut = z.object({
-  siblings: z.array(
-    z.object({
-      id: productShortcode,
-      name: z.string(),
-      brandName: z.string().nullable(),
-      category: productCategory.nullable(),
-      tags: z.array(z.string()),
-    }),
-  ),
-  tagStorage: z.array(
-    z.object({
-      tag: z.string(),
-      locations: z.array(
-        z.object({
-          id: locationShortcode,
-          name: z.string(),
-          ancestors: z.array(locationAncestorOut),
-          /** Distinct sibling products stocked here, never the viewed one. */
-          productCount: z.number().int().positive(),
-          holdsSource: z.boolean(),
-        }),
-      ),
-      omittedLocationCount: z.number().int().nonnegative(),
-    }),
-  ),
-});
-export type ProductTagSiblingsOut = z.infer<typeof productTagSiblingsOut>;
 
 export const productCategoryDistributionOut = z.array(
   z.object({
@@ -813,10 +645,6 @@ export const productQuickCreatePayload = z.object({
   price: generatedProductFieldSchemas.create.price,
   categoryId: generatedProductFieldSchemas.create.categoryId,
 });
-
-export type ProductQuickCreatePayload = z.infer<
-  typeof productQuickCreatePayload
->;
 
 /**
  * Exact identifier ownership. The live unique index on (source, kind,
@@ -901,10 +729,6 @@ export const productMergeSummaryOut = z.object({
   aliasesAdded: z.array(z.string()),
   carriedFields: z.array(z.string()),
 });
-export type ProductMergeSummaryOut = z.infer<typeof productMergeSummaryOut>;
 
-export const mergeProductsOut = z.object({
-  product: productWithFoodOut,
-  mergeSummary: productMergeSummaryOut,
-});
-export type MergeProductsOut = z.infer<typeof mergeProductsOut>;
+/** @public Read through `import()` type queries. */
+export type { ProductPrimaryPlacement } from "./product-read-fields";

@@ -35,7 +35,7 @@ export const workflowCommandInput = z.discriminatedUnion("kind", [
 ]);
 
 /** Opt-in presentation for an ordinary mutation. Availability remains server-owned. */
-export const workflowCommandMetadata = z.object({
+const workflowCommandMetadata = z.object({
   label: z.string().min(1),
   inputs: z.array(workflowCommandInput).optional(),
   affectedEntities: z.array(z.string().min(1)).optional(),

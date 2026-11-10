@@ -10,16 +10,7 @@ import {
 } from "./financial-transaction-fields";
 import { cents, moneyToMinor } from "@cubby/shared";
 import { z } from "zod";
-import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
 import { financialTransactionFilterFields as financialTransactionBaseFilterFields } from "@cubby/schemas/entities/financialTransaction";
-export {
-  financialReconciliationStatus,
-  financialReconciliationSummary,
-} from "./financial-reconciliation";
-export type {
-  FinancialReconciliationStatus,
-  FinancialReconciliationSummary,
-} from "./financial-reconciliation";
 import {
   financialAccountShortcode,
   financialTransactionShortcode,
@@ -30,12 +21,7 @@ import {
   financialAccountIdentity,
   financialAccountSourceAliases,
 } from "./financial-account";
-import {
-  createPaginatedResponseSchema,
-  entityFilterList,
-  oneOrMany,
-  presenceFilter,
-} from "./pagination";
+import { entityFilterList, oneOrMany, presenceFilter } from "./pagination";
 import { plainDate } from "./project";
 import { externalIdSource } from "./external-id";
 import { generatedFinancialTransactionFieldSchemas } from "./generated/entity-field-schemas.financialTransaction.gen";
@@ -55,9 +41,6 @@ import {
 import { uniqueBy } from "./base-entity";
 
 export {
-  financialTransactionSourceRef,
-  financialTransactionSourceRefs,
-  merchantVendorCandidate,
   merchantVendorInference,
   type FinancialTransactionSourceRef,
 } from "./financial-transaction-fields";
@@ -66,7 +49,6 @@ export {
   financialTransactionKind,
   financialTransactionStatus,
   type FinancialTransactionKind,
-  type FinancialTransactionStatus,
 } from "./financial-transaction-fields";
 
 /** The same bounded candidate set reaches retrieval and declared ranking. */
@@ -74,7 +56,7 @@ export const SETTLEMENT_CANDIDATE_LIMIT = 20;
 
 export { purchaseSettlementKinds };
 
-export type PurchaseSettlementKind = (typeof purchaseSettlementKinds)[number];
+type PurchaseSettlementKind = (typeof purchaseSettlementKinds)[number];
 
 /**
  * Sign rule per settlement kind, and whether it binds only while the row is
@@ -102,7 +84,7 @@ const purchaseSettlementKindSet = new Set<FinancialTransactionKind>(
   purchaseSettlementKinds,
 );
 
-export const isPurchaseSettlementKind = (
+const isPurchaseSettlementKind = (
   kind: FinancialTransactionKind,
 ): kind is PurchaseSettlementKind => purchaseSettlementKindSet.has(kind);
 
@@ -191,27 +173,8 @@ export const purchaseSettlementSignSatisfiedExpression = (columns: {
 export const purchaseSettlementKindAllowedExpression = (kindColumn: string) =>
   `${kindColumn} IN (${quoteKinds(purchaseSettlementKinds)})`;
 
-/**
- * The SQL body of `FinancialTransaction_purchase_settlement_check`, generated
- * from `purchaseSettlementSignRules` so the DB constraint cannot drift from the
- * TypeScript rule above. The CHECK is scoped to linked rows, so `binds` is not
- * consulted here — every rule applies.
- */
-export const purchaseSettlementCheckExpression = (columns: {
-  purchaseId: string;
-  kind: string;
-  amount: string;
-}): string =>
-  `${columns.purchaseId} IS NULL OR (${purchaseSettlementKindAllowedExpression(
-    columns.kind,
-  )} AND ${purchaseSettlementSignSatisfiedExpression(columns)})`;
-
-export const financialTransactionAllocationOut = financialTransactionAllocation;
 export const financialTransactionAllocationInput =
   financialTransactionAllocation;
-export type FinancialTransactionAllocationInput = z.infer<
-  typeof financialTransactionAllocationInput
->;
 
 const financialTransactionCreateFields =
   generatedFinancialTransactionFieldSchemas.create;
@@ -318,13 +281,6 @@ export const financialTransactionUpdateData = z
 export type FinancialTransactionUpdateData = z.infer<
   typeof financialTransactionUpdateData
 >;
-export const financialTransactionUpdateInput = z.object({
-  id: financialTransactionShortcode,
-  data: financialTransactionUpdateData,
-});
-export type FinancialTransactionUpdateInput = z.infer<
-  typeof financialTransactionUpdateInput
->;
 
 /** The allocation-integrity gap, the one state its filter selects. */
 export const financialTransactionAllocationIntegrity = z.enum(["defect"]);
@@ -361,26 +317,12 @@ export type MerchantVendorInference = z.infer<typeof merchantVendorInference>;
 export const merchantVendorInferenceInput = z.object({
   merchant: z.string(),
 });
-export type MerchantVendorInferenceInput = z.infer<
-  typeof merchantVendorInferenceInput
->;
-
-export type FinancialTransactionSortField =
-  GeneratedEntitySortField<"financialTransaction">;
 
 export const financialTransactionOut = withFieldEnvelopes(
   rawFinancialTransactionOut,
   financialTransactionFieldEnvelopeFields,
   financialTransactionPublicReadFields,
 );
-export type FinancialTransactionOut = z.infer<typeof financialTransactionOut>;
-
-export const financialTransactionListResponse = createPaginatedResponseSchema(
-  financialTransactionOut,
-);
-export type FinancialTransactionListResponse = z.infer<
-  typeof financialTransactionListResponse
->;
 
 export const FINANCIAL_STATEMENT_IMPORT_MAX_ROWS = 200;
 
@@ -391,7 +333,7 @@ export const FINANCIAL_STATEMENT_IMPORT_MAX_ROWS = 200;
  * enum here would be the only closed member of the family and would reject the
  * next export format on the day it is needed.
  */
-export const KNOWN_STATEMENT_SOURCES = [
+const KNOWN_STATEMENT_SOURCES = [
   "monarch",
   "copilot",
   "mint",
@@ -402,7 +344,7 @@ export const KNOWN_STATEMENT_SOURCES = [
  * One already-parsed statement row. Cubby accepts data, never a CSV path or
  * upload: parsing and export handling belong to the MCP client.
  */
-export const financialTransactionImportRow = z.strictObject({
+const financialTransactionImportRow = z.strictObject({
   importFingerprint: z.string().min(1).optional(),
   rowPosition: z.number().int().positive().optional(),
   providerTransactionId: z.string().min(1).nullable().optional(),
@@ -450,16 +392,13 @@ export type FinancialTransactionImportPreviewInput = z.infer<
   typeof financialTransactionImportPreviewInput
 >;
 
-export const financialTransactionImportPreviewStatus = z.enum([
+const financialTransactionImportPreviewStatus = z.enum([
   "already_recorded",
   "ready_to_create",
   "possible_existing",
   "unresolved_account",
   "indistinguishable_duplicate",
 ]);
-export type FinancialTransactionImportPreviewStatus = z.infer<
-  typeof financialTransactionImportPreviewStatus
->;
 
 const financialTransactionImportProposedTransaction = z.object({
   sourceRef: financialTransactionSourceRef,
@@ -481,7 +420,7 @@ const financialStatementNewAccount = z.object({
   sourceAliases: financialAccountSourceAliases,
 });
 
-export const rawImportPreviewExistingTransaction = z.object({
+const rawImportPreviewExistingTransaction = z.object({
   id: financialTransactionShortcode,
   amount: z.number(),
   status: financialTransactionStatus,
@@ -496,7 +435,7 @@ export const importPreviewExistingTransaction = withFieldEnvelopes(
   financialTransactionPublicReadFields,
 );
 
-export const financialTransactionImportPreviewRow = z.object({
+const financialTransactionImportPreviewRow = z.object({
   key: z.string(),
   status: financialTransactionImportPreviewStatus,
   accountId: financialAccountShortcode.nullable(),
@@ -527,13 +466,13 @@ export const financialTransactionImportPreviewOut = z.object({
 export type FinancialTransactionImportPreviewOut = z.infer<
   typeof financialTransactionImportPreviewOut
 >;
-export const rawFinancialTransactionImportPreviewRow =
+const rawFinancialTransactionImportPreviewRow =
   financialTransactionImportPreviewRow.extend({
     existingTransactions: z
       .array(rawImportPreviewExistingTransaction)
       .default([]),
   });
-export const rawFinancialTransactionImportPreviewOut =
+const rawFinancialTransactionImportPreviewOut =
   financialTransactionImportPreviewOut.extend({
     rows: z.array(rawFinancialTransactionImportPreviewRow),
   });

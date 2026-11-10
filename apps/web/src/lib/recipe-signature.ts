@@ -8,7 +8,6 @@ import { sanitizeSectionName } from "@cubby/schemas/codec";
  * source change" check — independent of ingredient resolution / linking.
  */
 import type { CookbookRecipe } from "@cubby/schemas/cookbook";
-import type { ImportRecipe } from "@cubby/schemas/import-recipe";
 import type {
   RawRecipeGraph as RecipeGraphOut,
   RawRecipeOutput as RecipeOut,
@@ -16,7 +15,6 @@ import type {
 
 import {
   cookbookRecipeNotes,
-  normalizedImportSignatureContent,
   normalizeImportYield,
 } from "~/lib/import-recipe-normalizer";
 
@@ -54,20 +52,6 @@ export function recipeOutSignature(recipe: RecipeOut | RecipeGraphOut): string {
       instructions: s.instructions.map((i) => i.instruction),
     })),
   });
-}
-
-/**
- * Signature of the recipe an `ImportRecipe` (scraper / EPUB / Notion) *would*
- * import as — applies the same transforms as `importRecipeToRecipeInput` (yield
- * union → WASM parse or use-as-is, servings fallback, composed notes, sanitized
- * section names) so it matches the stored recipe's `recipeOutSignature`. `tags`
- * is supplied by the Notion column path; the EPUB path carries none.
- */
-export function importRecipeSignature(
-  cr: ImportRecipe,
-  tags: string[] = [],
-): string {
-  return signature(normalizedImportSignatureContent(cr, tags));
 }
 
 /**

@@ -8,12 +8,12 @@ import {
  * The one write/read seam for `EntityLink` (ADR 0007). Every many-to-many
  * relationship between entities is a row here, typed by its link kind in
  * `@cubby/schemas/entity-links`; the per-domain repositories (kit
- * components, purchase products, project tools, wish candidates, garden
- * plantings, dependencies) keep their own validation and refusals and call
+ * components, purchase products, project tools, garden plantings,
+ * dependencies) keep their own validation and refusals and call
  * these helpers for the rows themselves.
  *
  * Every predicate names its link kind: `toEntityId` alone matches a
- * product's purchase, tool, wish, and component links at once.
+ * product's purchase, tool, and component links at once.
  */
 import { and, eq, inArray, isNull, type SQL, sql } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";

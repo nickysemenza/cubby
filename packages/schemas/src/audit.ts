@@ -71,8 +71,6 @@ export const auditLogListInput = z.object({
     ),
 });
 
-export type AuditLogListInput = z.infer<typeof auditLogListInput>;
-
 export const auditLogActionSchema = z.enum(["create", "update", "delete"]);
 
 /**
@@ -113,6 +111,7 @@ const auditLogChangeSchema = z.object({
   to: auditJsonValueSchema.optional(),
 });
 
+/** @public Names a generated native model. */
 export const auditLogUserOut = z
   .object({
     id: z.string(),
@@ -122,6 +121,7 @@ export const auditLogUserOut = z
   })
   .nullable();
 
+/** @public Names a generated native model. */
 export const auditLogEntryOut = z.object({
   entryKey: z.string(),
   entityKind: auditEntitySchema,

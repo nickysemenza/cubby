@@ -36,13 +36,7 @@ const inventoryMoveSelection = (row: EntityActionRow) => {
   const { fields } = parsed.data;
   const amount = fieldValueOf(fields.amount);
   if (amount === null) {
-    return {
-      item: null,
-      reason:
-        fields.amount.work.kind === "failed"
-          ? fields.amount.work.error
-          : "Inventory amount is unavailable.",
-    };
+    return { item: null, reason: "Inventory amount is unavailable." };
   }
   if (
     fields.amount.current.controls.kind !== "editable" ||

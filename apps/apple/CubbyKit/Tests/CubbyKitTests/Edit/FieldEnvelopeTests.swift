@@ -33,8 +33,7 @@ struct FieldEnvelopeTests {
                 controls: F.editable(canSetNone: true, canConfirm: true, reset: F.resetNotLoaded),
                 result: F.cached(
                     F.decision("not_expected", provenance: F.inherited("purchase", "PUR-4K7M")),
-                    freshness: "stale"),
-                work: ["kind": "failed", "error": "Synthetic refresh failure", "retryAt": .null]))
+                    freshness: "stale")))
         #expect(
             cached.assignment
                 == .value("required", ownership: .automatic(receiptID: "RCPT-4K7M", confidence: 0.5)))
@@ -43,7 +42,6 @@ struct FieldEnvelopeTests {
         #expect(cached.effectiveValue == "not_expected")
         #expect(cached.isInherited)
         #expect(cached.isUpdating)
-        #expect(cached.failure == "Synthetic refresh failure")
         #expect(cached.unsupportedKinds.isEmpty)
 
         let computed = try envelope(
@@ -60,8 +58,8 @@ struct FieldEnvelopeTests {
             F.envelope(
                 assignment: ["kind": "future_intent"],
                 controls: F.editable(canSetNone: true, canConfirm: true, reset: F.resetNotLoaded),
-                result: ["kind": "future_result"], work: ["kind": "future_work"]))
-        #expect(future.unsupportedKinds == ["future_intent", "future_result", "future_work"])
+                result: ["kind": "future_result"]))
+        #expect(future.unsupportedKinds == ["future_intent", "future_result"])
         #expect(future.actions(field: field).isEmpty)
         #expect(future.readableValue == nil)
         #expect(future.storedDraft(field: field) == nil)
@@ -75,15 +73,11 @@ struct FieldEnvelopeTests {
     /// Missing is not a successful empty result: both read `.null`, the result tells them apart.
     @Test func missingAndEmptyReadNullButStayDistinct() throws {
         let field = try owner()
-        let missing = try envelope(F.envelope(result: F.missing, work: ["kind": "pending"]))
+        let missing = try envelope(F.envelope(result: F.missing))
         #expect(missing.readableValue == .null)
         #expect(missing.isMissing)
-        #expect(missing.isUpdating)
         #expect(missing.emptyLabel(field: field) == "Updating…")
         #expect(missing.visibleEmptyLabel(field: field) == "Updating…")
-        let failed = try envelope(
-            F.envelope(result: F.missing, work: ["kind": "failed", "error": "Synthetic", "retryAt": .null]))
-        #expect(failed.emptyLabel(field: field) == "Unavailable")
 
         let household = try envelope(
             F.envelope(result: F.live(F.emptyDecision("explicit_none", provenance: F.own))))

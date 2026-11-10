@@ -30,11 +30,9 @@ export const rawIngredientWithRecipesAndProduct = rawIngredientOutput.extend({
   appearsInRecipes: z.array(recipeRefOut),
   product: z.array(rawProductWithMappings),
 });
-export const rawIngredientWithFoodLean = rawIngredientOutput.extend({
+const rawIngredientWithFoodLean = rawIngredientOutput.extend({
   product: z.array(rawProductWithMappingsAndFood),
 });
-export type RawIngredientOutput = z.output<typeof rawIngredientOutput>;
-export type RawIngredientList = z.output<typeof rawIngredientList>;
 export type RawIngredientDetail = z.output<typeof rawIngredientDetail>;
 export type RawIngredientWithRecipesAndProduct = z.output<
   typeof rawIngredientWithRecipesAndProduct
@@ -43,7 +41,7 @@ export type RawIngredientWithFoodLean = z.output<
   typeof rawIngredientWithFoodLean
 >;
 
-export const enrichmentFixKind = z.enum([
+const enrichmentFixKind = z.enum([
   "no-product",
   "link-usda",
   "set-per-item-price",

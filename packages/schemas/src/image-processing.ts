@@ -20,9 +20,10 @@ import { productLabelNutrition } from "./nutrition";
  * A derivative belongs to an Image; it is never another gallery attachment.
  * The original Image.url deliberately remains the backwards-compatible source.
  */
-export const imageDerivativePurpose = z.enum(["transparent"]);
+const imageDerivativePurpose = z.enum(["transparent"]);
 export type ImageDerivativePurpose = z.infer<typeof imageDerivativePurpose>;
 
+/** @public Names a generated native model. */
 export const imageDerivativeStatus = z.enum([
   "pending",
   "ready",
@@ -59,14 +60,13 @@ export const imageCutoutEligibility = z.enum([
   "ineligible",
   "review",
 ]);
-export type ImageCutoutEligibility = z.infer<typeof imageCutoutEligibility>;
 
+/** @public Names a generated native model. */
 export const imageDescriptionClaim = z.object({
   text: z.string().trim().min(1).max(1_000),
   evidenceKind: z.enum(["label", "ocr", "visual"]),
   imageId: imageShortcode.optional(),
 });
-export type ImageDescriptionClaim = z.infer<typeof imageDescriptionClaim>;
 
 /** The portable, provider-neutral analysis result retained for history. */
 export const imageDescriptionResult = z.object({
@@ -99,12 +99,16 @@ const isoDateTime = z.iso.datetime({ offset: true });
 const positiveInt = z.int().positive();
 const sha256 = z.string().regex(/^[a-f0-9]{64}$/i);
 
-/** Availability and optional installed revision of a native image processor. */
+/**
+ * Availability and optional installed revision of a native image processor.
+ * @public Names a generated native model.
+ */
 export const imageProcessorAvailability = z.object({
   available: z.boolean(),
   revision: z.int().positive().optional(),
 });
 
+/** @public Names a generated native model. */
 export const imageProcessingCapabilities = z.object({
   /** True only when the native Vision subject-lift runtime can execute now. */
   visionSubjectLift: imageProcessorAvailability,
@@ -120,19 +124,16 @@ export const imageProcessingCapabilities = z.object({
   /** iOS must accurately report foreground-only availability. */
   foreground: z.boolean(),
 });
-export type ImageProcessingCapabilities = z.infer<
-  typeof imageProcessingCapabilities
->;
 
-/** The device-set half of the master participation switch (PR2 adds the
+/**
+ * The device-set half of the master participation switch (PR2 adds the
  * native surface that writes it); `remotePaused` is web-set and lives only on
- * the `Device` row, never on the wire. */
+ * the `Device` row, never on the wire.
+ * @public Names a generated native model.
+ */
 export const imageProcessingParticipation = z.object({
   automaticWork: z.boolean(),
 });
-export type ImageProcessingParticipation = z.infer<
-  typeof imageProcessingParticipation
->;
 
 export const imageProcessingHello = z.object({
   protocolVersion: z.literal(IMAGE_PROCESSING_PROTOCOL_VERSION),
@@ -191,6 +192,7 @@ export const imageProcessingCommand = z.discriminatedUnion("kind", [
 ]);
 export type ImageProcessingCommand = z.infer<typeof imageProcessingCommand>;
 
+/** @public Names a generated native model. */
 export const imageProcessingCompletedOutcome = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("subject_lift"),
@@ -212,12 +214,14 @@ export const imageProcessingCompletedOutcome = z.discriminatedUnion("kind", [
   }),
 ]);
 
+/** @public Names a generated native model. */
 export const imageProcessingSkippedOutcome = z.object({
   kind: imageProcessingJobKind,
   status: z.literal("skipped"),
   reason: z.enum(["no_subject", "not_suitable", "unsupported_format"]),
 });
 
+/** @public Names a generated native model. */
 export const imageProcessingFailedOutcome = z.object({
   kind: imageProcessingJobKind,
   status: z.literal("failed"),
@@ -236,6 +240,7 @@ export const imageProcessingNormalizedOutcome = z.object({
   height: positiveInt.max(2048),
 });
 
+/** @public Names a generated native model. */
 export const imageProcessingDiagnostics = z.object({
   osVersion: z.string().max(100).optional(),
   appVersion: z.string().max(100).optional(),
@@ -247,6 +252,7 @@ export const imageProcessingDiagnostics = z.object({
   height: z.int().positive().optional(),
   orientation: z.int().optional(),
 });
+/** @public Names a generated native model. */
 export const imageProcessingResult = z.object({
   diagnostics: imageProcessingDiagnostics.optional(),
   jobId: entityIdSchema("imageJob"),
@@ -272,11 +278,10 @@ export type ImageProcessingTerminalResult = z.infer<
   typeof imageProcessingTerminalResult
 >;
 
-/** Read projection shared by galleries, covers, logos, summaries, and MCP. */
-export {
-  imageRepresentations,
-  type ImageRepresentations,
-} from "./image-summary";
+/**
+ * Read projection shared by galleries, covers, logos, summaries, and MCP.
+ * @public Names a generated native model.
+ */
 
 export const imageProcessingStatus = z.object({
   cutout: imageDerivativeStatus.nullable(),
@@ -284,7 +289,6 @@ export const imageProcessingStatus = z.object({
   /** The current identification job's state; the Image page polls while it is active. */
   identification: imageProcessingJobState.nullable(),
 });
-export type ImageProcessingStatus = z.infer<typeof imageProcessingStatus>;
 
 /** Immutable model outputs, newest first. Cloud is preferred until policy changes. */
 export const imageDescriptionAnalysis = z.object({
@@ -298,6 +302,7 @@ export const imageDescriptionAnalysis = z.object({
   createdAt: isoDateTime,
   preferred: z.boolean(),
 });
+/** @public Names a generated native model. */
 export const imageDescriptionCorrectionOwner = z.object({
   kind: z.literal("correction"),
   effectId: z.uuid(),
@@ -544,6 +549,7 @@ export const imageAssociationSchema = z.object({
 });
 export type ImageAssociation = z.infer<typeof imageAssociationSchema>;
 
+/** @public Names a generated native model. */
 export const importTargetSummarySchema = z.object({
   runId: runShortcode,
   state: runTargetState,

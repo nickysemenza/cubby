@@ -24,7 +24,6 @@ describe("readPathValue", () => {
         assignment: null,
         controls: { kind: "readonly", reason: "computed" },
       },
-      work: { kind: "idle" },
       result: {
         kind: "live",
         decision: {

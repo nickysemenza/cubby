@@ -8,6 +8,7 @@ import { imageShortcode } from "./identifier-fields";
 /**
  * One displayable image of a list row. `id` is the image's public shortcode
  * so a thumbnail can key and link it; `url` is the public R2 URL.
+ * @public Names a generated native model.
  */
 export const displayImageSummary = z.object({
   id: imageShortcode,
@@ -25,7 +26,10 @@ export type DisplayImageSummary = z.infer<typeof displayImageSummary>;
  */
 export const displayImagesField = z.array(displayImageSummary);
 
-/** Explicit list projection: canonical first image and full deduplicated count. */
+/**
+ * Explicit list projection: canonical first image and full deduplicated count.
+ * @public Names a generated native model.
+ */
 export const displayCoverField = z.object({
   image: displayImageSummary.nullable(),
   count: z.number().int().nonnegative(),

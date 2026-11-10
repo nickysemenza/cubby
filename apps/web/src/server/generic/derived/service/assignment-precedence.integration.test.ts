@@ -98,7 +98,6 @@ describe("assignment and stored projection precedence", () => {
           provenance: { kind: "own" },
         },
       },
-      work: detail.fields.price.work,
     });
     expect(fieldValueOf(detail.fields.unitPriceDetailLabel)).toBe("$2.00/ea");
     const sorted = await executeEntity(context(), {
@@ -131,15 +130,10 @@ describe("assignment and stored projection precedence", () => {
     );
     expect(reset.fields.price.current.assignment).toEqual({ kind: "inherit" });
     expect(reset.fields.price.result).toEqual({ kind: "missing" });
-    expect(reset.fields.price.work).toMatchObject({ kind: "idle" });
     expect(reset.fields.cost.result).toEqual({ kind: "missing" });
-    expect(reset.fields.cost.work).toEqual(reset.fields.price.work);
     expect(reset.fields.unitPriceDetailLabel.result).toEqual({
       kind: "missing",
     });
-    expect(reset.fields.unitPriceDetailLabel.work).toEqual(
-      reset.fields.price.work,
-    );
     const resetTotals = await executeEntity(context(), {
       action: "list",
       entity: "product",
@@ -295,7 +289,6 @@ describe("assignment and stored projection precedence", () => {
       price: 13,
       unit: "each",
     });
-    expect(row.fields.unitPrice.work).toEqual(row.fields.price.work);
     const explanation = await explainField(context(), {
       entityKind: "product",
       entityId: product.id,

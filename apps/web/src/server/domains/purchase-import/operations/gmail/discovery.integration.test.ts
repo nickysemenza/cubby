@@ -57,7 +57,6 @@ import {
   saveMailDiscoveryBatch as saveMailDiscoveryBatchImplementation,
   finishMailDiscovery as finishMailDiscoveryImplementation,
   continueMailDiscovery as continueMailDiscoveryImplementation,
-  failMailDiscovery as failMailDiscoveryImplementation,
   type DiscoveryPorts,
 } from "./discovery";
 
@@ -136,20 +135,6 @@ const continueMailDiscovery = (
     },
     () => continueMailDiscoveryImplementation(...args),
   );
-const failMailDiscovery = (
-  ...args: Parameters<typeof failMailDiscoveryImplementation>
-) =>
-  withJobFixtureExecution(
-    args[0],
-    {
-      key: `run:${args[1].runId}`,
-      kind: "run.execute",
-      input: { runId: args[1].runId, purpose: "mail_discovery" },
-      runId: runEntityId.parse(args[1].runId),
-    },
-    () => failMailDiscoveryImplementation(...args),
-  );
-
 describe("scheduled Gmail discovery", () => {
   const ctx = withTestDb();
   const created = async () => {
@@ -721,54 +706,6 @@ describe("scheduled Gmail discovery", () => {
       });
     },
   );
-  it("keeps a failed page's raw diagnostic and Sentry event on the retained discovery Run", async () => {
-    const state = await seed();
-    const reportError = vi.fn(() => "ffffffffffffffffffffffffffffffff");
-    await failMailDiscovery(
-      ctx.db,
-      state.params,
-      "HTTP 503: Synthetic upstream failure\nSynthetic provider response",
-      { reportError },
-    );
-    expect(reportError).toHaveBeenCalledTimes(1);
-    expect(await readRun(state.params.runId)).toMatchObject({
-      status: "failed",
-      failureCode: "mail_discovery_failed",
-      dispatchError: expect.stringContaining(
-        "HTTP 503: Synthetic upstream failure",
-      ),
-    });
-    expect((await readRun(state.params.runId)).dispatchError).toContain(
-      "Synthetic provider response",
-    );
-    expect((await readRun(state.params.runId)).dispatchError).toContain(
-      "Sentry event: ffffffffffffffffffffffffffffffff",
-    );
-    const failed = await readRun(state.params.runId);
-    const [execution] = await readJobs(ctx.db, {
-      key: `run:${state.params.runId}`,
-    });
-    if (!execution) throw new Error("Synthetic execution missing");
-    await updateJobs(
-      ctx.db,
-      { id: execution.id },
-      { state: "completed", leaseToken: null, leaseExpiresAt: null },
-    );
-    const [completedExecution] = await readJobs(ctx.db, { id: execution.id });
-    await expect(
-      controlWorkflowRun(
-        ctx.db,
-        ctx.actor,
-        { runPublicId: failed.shortcode, action: "retry" },
-        "mail_discovery",
-      ),
-    ).rejects.toThrow("Completed Run cannot be relaunched");
-    expect(await readRun(state.params.runId)).toEqual(failed);
-    expect((await readJobs(ctx.db, { id: execution.id }))[0]).toEqual(
-      completedExecution,
-    );
-  });
-
   it("retains discovery through funding releases, provider waits and mailbox contention", async () => {
     const { AiBudgetExhaustedError } = await import("~/server/ai/budget");
     const { GatewayProviderStopError } =
@@ -1512,7 +1449,7 @@ describe("scheduled Gmail discovery", () => {
     });
     await getDb(ctx.db)
       .update(run)
-      .set({ status: "failed", failureCode: "mail_discovery_failed" })
+      .set({ status: "failed", failureCode: "job_failed" })
       .where(eq(run.id, recoveryId));
     const job = await enqueueJob(ctx.db, {
       key: `run:${recoveryId}`,
@@ -1677,7 +1614,7 @@ describe("scheduled Gmail discovery", () => {
     });
     await getDb(ctx.db)
       .update(run)
-      .set({ status: "failed", failureCode: "mail_discovery_failed" })
+      .set({ status: "failed", failureCode: "job_failed" })
       .where(eq(run.id, exclusiveId));
     const exclusiveJob = await enqueueJob(ctx.db, {
       key: `run:${exclusiveId}`,

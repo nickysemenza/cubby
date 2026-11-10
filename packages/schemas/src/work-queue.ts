@@ -27,7 +27,7 @@ export const workExecutor = z.enum(["automatic", "agent", "human", "external"]);
 export type WorkExecutor = z.infer<typeof workExecutor>;
 
 /** The kind of work a source contributes; Group by Family sections by it. */
-export const workFamily = z.enum([
+const workFamily = z.enum([
   "research",
   "email",
   "reconciliation",
@@ -71,7 +71,7 @@ export const workRecordTypeOptions = shortcodeEntities.map((value) => ({
  * its ids; `global-backfill` is broader than the group; `guided-flow` opens
  * the owning domain's dialog.
  */
-export const workAction = z.object({
+const workAction = z.object({
   id: z.string().min(1),
   label: z.string().min(1),
   scope: z.enum(["item", "group"]),
@@ -82,11 +82,11 @@ export type WorkAction = z.infer<typeof workAction>;
 
 /** Actions a work source declares outside Problems, whose ids are namespaced
  * by `problemActionId`; the web fills one handler for each. */
-export const workSourceActionIds = ["open-list", "pair-transfer"] as const;
+const workSourceActionIds = ["open-list", "pair-transfer"] as const;
 export type WorkSourceActionId = (typeof workSourceActionIds)[number];
 
 /** Where a row opens; route paths are client knowledge. */
-export const workLink = z.discriminatedUnion("kind", [
+const workLink = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("record") }),
   /** Opens the record's pending Suggestions across every family. */
   z.object({ kind: z.literal("suggestions") }),
@@ -109,7 +109,7 @@ export const workQueueGapViews = [
   view: string;
 }[];
 
-export const workQueueGapSchema = z.object({
+const workQueueGapSchema = z.object({
   check: dataCheck,
   message: z.string().min(1),
 });
@@ -119,7 +119,7 @@ const reasonOption = z.object({
   label: z.string().min(1),
 });
 
-export const workQueueRowSchema = z
+const workQueueRowSchema = z
   .object({
     key: z.string().min(1),
     entity: z.enum(shortcodeEntities).nullable(),
@@ -303,7 +303,7 @@ export type WorkQueueView = NonNullable<
 >;
 
 /** Queue sections count actionable work, independently of entity lists. */
-export const workQueueGroupSummarySchema = z
+const workQueueGroupSummarySchema = z
   .object({
     key: z.string().min(1),
     label: z.string().min(1),

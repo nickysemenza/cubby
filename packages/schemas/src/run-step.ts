@@ -21,7 +21,7 @@ export type RunStepState = z.infer<typeof runStepState>;
 export const RUN_STEP_ERROR_SAMPLE = 20;
 
 /** A raw failure as the step saw it; only `scrubErrorMessage` redacts it. */
-export const runStepError = z.object({
+const runStepError = z.object({
   at: z.iso.datetime(),
   message: z.string(),
   /** The failed item (`image:<uuid>`, `charge:<source>:<key>`) a retry re-admits. */
@@ -41,7 +41,7 @@ const tallies = z.record(z.string(), z.number().int().nonnegative());
  * generation over the predicate its pager walks, bounded by `boundary`
  * (a cutoff the pager also applies). Never recounted on resume or read.
  */
-export const runStepInput = z.object({
+const runStepInput = z.object({
   mode: runStepInputMode,
   /** The frozen count, or a provider's estimate; null for a tally. */
   total: z.number().int().nonnegative().nullable(),
@@ -58,7 +58,7 @@ export type RunStepInput = z.infer<typeof runStepInput>;
  * bounded phase's peak in-flight work. Absent until a driver measures it;
  * readers say "not measured", never estimate.
  */
-export const runStepPageSample = z.object({
+const runStepPageSample = z.object({
   /** Entire page wall time; database activity overlaps these phases. */
   wallMs: z.number().nonnegative().optional(),
   database: z
@@ -120,7 +120,7 @@ export const runStepMeta = z.object({
 });
 export type RunStepMeta = z.infer<typeof runStepMeta>;
 
-export const runStepCounts = z.object({
+const runStepCounts = z.object({
   found: z.number().int().nonnegative(),
   done: z.number().int().nonnegative(),
   failed: z.number().int().nonnegative(),

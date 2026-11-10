@@ -324,7 +324,7 @@ export function cubbyPiProviders(fetchFor: GatewayFetchFor): Provider[] {
  * `model` (an explicit override or comparison) is never substituted: it runs
  * on its own route's sources only.
  */
-export function fundedChatAttempts(
+function fundedChatAttempts(
   policy: { paid: boolean } & (
     | { tier: ChatTier }
     | { model: SupportedChatModel }

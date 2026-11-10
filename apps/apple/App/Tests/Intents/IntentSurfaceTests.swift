@@ -45,7 +45,7 @@ struct AuditIntentSurfaceTests {
         }
     }
     @Test func productLocationDistinguishesUnavailableFromEmptyAndRetainsCachedPlacement() {
-        func row(result: JSONValue, work: JSONValue = ["kind": "idle"]) -> EntityRow {
+        func row(result: JSONValue) -> EntityRow {
             EntityRow(
                 id: "PRD-2345", title: "Synthetic jar", subtitle: nil, imageURL: nil,
                 raw: [
@@ -55,7 +55,7 @@ struct AuditIntentSurfaceTests {
                             "current": [
                                 "assignment": .null, "controls": ["kind": "readonly", "reason": "computed"],
                             ],
-                            "result": result, "work": work,
+                            "result": result,
                         ]
                     ],
                 ])
@@ -73,7 +73,7 @@ struct AuditIntentSurfaceTests {
                     "outcome": ["kind": "value", "value": ["path": "Home › Pantry"]],
                     "provenance": ["kind": "computed"],
                 ],
-            ], work: ["kind": "failed", "error": "Synthetic refresh failed", "retryAt": .null])
+            ])
         #expect(
             WhereIsProductIntent.placementDescription(for: empty) == "Synthetic jar isn't stocked anywhere.")
         #expect(

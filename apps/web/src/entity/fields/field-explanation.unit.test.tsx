@@ -69,7 +69,6 @@ it.each(["fresh", "stale"] as const)(
             provenance: { kind: "inherited", source },
           },
         },
-        work: { kind: "idle" },
       },
       sources: [
         {
@@ -155,7 +154,6 @@ it("uses the declared Household label for an explicit None result and assignment
           provenance: { kind: "own", ownership: { kind: "record" } },
         },
       },
-      work: { kind: "idle" },
     },
   });
   render(<DecisionChain data={data} />, { wrapper: harness.wrapper });

@@ -9,7 +9,7 @@ import {
 type Labels = NonNullable<
   NonNullable<EntityFieldModel["fields"][number]["resolution"]>["labels"]
 >;
-type Envelope = Pick<ReadableFieldEnvelope, "result" | "work">;
+type Envelope = Pick<ReadableFieldEnvelope, "result">;
 type Policy = EntityFieldModel["fields"][number]["resolution"];
 
 /** Twin of Swift `FieldAssignmentAction.setNoneLabel(_:)`. */
@@ -17,9 +17,9 @@ export function fieldSetNoneLabel(policy: NonNullable<Policy>): string {
   return `Set to ${policy.labels?.none ?? "none"}`;
 }
 
-/** Twin of Swift `FieldEnvelope.missingLabel(failure:)`. */
-export function fieldMissingLabel(work: ReadableFieldEnvelope["work"]): string {
-  return work.kind === "failed" ? "Unavailable" : "Updating…";
+/** Twin of Swift `FieldEnvelope.missingLabel`. */
+export function fieldMissingLabel(): string {
+  return "Updating…";
 }
 
 /** Twin of Swift `FieldEnvelope.noneLabel(field:)`. */
@@ -27,13 +27,13 @@ export function fieldNoneLabel(labels?: Labels | null): string {
   return labels?.none ?? "None";
 }
 
-/** Twin of Swift `FieldEnvelope.label(for:field:failure:)`. */
+/** Twin of Swift `FieldEnvelope.label(for:field:)`. */
 export function fieldEmptyLabel(
   envelope: Envelope,
   labels?: Labels | null,
 ): string | null {
   const decision = fieldDecisionOf(envelope);
-  if (!decision) return fieldMissingLabel(envelope.work);
+  if (!decision) return fieldMissingLabel();
   if (decision.outcome.kind === "value") return null;
   switch (decision.outcome.reason) {
     case "explicit_none":

@@ -11,6 +11,3 @@ export type RawLocationDetail = z.output<typeof rawLocationDetail>;
 
 /** Private scalar hierarchy rungs used to build picker projections. */
 export const rawLocationPickerReference = locationListRefOut;
-export type RawLocationPickerReference = z.output<
-  typeof rawLocationPickerReference
->;

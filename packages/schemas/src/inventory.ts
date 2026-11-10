@@ -1,7 +1,4 @@
-import {
-  inventoryListItemOut,
-  inventoryDetailOut as inventoryWithLocationAndProductOut,
-} from "@cubby/schemas/entities/inventory";
+import { inventoryDetailOut as inventoryWithLocationAndProductOut } from "@cubby/schemas/entities/inventory";
 
 import {
   inventoryFieldEnvelopeFields,
@@ -14,9 +11,7 @@ import {
 import { withFieldEnvelopes } from "./field-envelope";
 import { rawReceivingInventoryStock } from "./inventory-raw-read";
 import { tradeSchema } from "./task-fields";
-import { inventoryPlacementValues } from "@cubby/shared";
 import { z } from "zod";
-import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
 import { relatedFilterFieldsByEntity } from "./generated/related-view-filters.gen";
 import { auditDateFilterFields, plainDate } from "./base-entity";
 import { mutationSideEffectsSchema } from "./mutation-side-effects";
@@ -53,21 +48,8 @@ export { positiveAmount } from "./codec";
  * placement, not about a product type — the same 150-pack of wire nuts is
  * stock in the garage and consumed in the wall.
  */
-export { inventoryPlacementValues } from "@cubby/shared";
 export type { InventoryPlacement } from "@cubby/shared";
 export const inventoryPlacement = cycleSafeInventoryPlacement;
-export { inventoryValuation } from "./inventory-fields";
-
-/**
- * The inventory snapshot's placement scope:
- * one placement, or `all`. List filters are any-of over the placements
- * instead, and an omitted list filter is unrestricted; the inventory list
- * opens on stock through its declared `initialFilter`.
- */
-export const inventoryPlacementFilter = z.enum([
-  ...inventoryPlacementValues,
-  "all",
-]);
 
 export const inventoryFilterFields = {
   ...auditDateFilterFields,
@@ -76,11 +58,6 @@ export const inventoryFilterFields = {
 };
 
 export const inventoryFiltersSchema = z.object(inventoryFilterFields);
-
-// `verifiedAt` (last deliberate recount, null = never) is sortable so "what
-// haven't I counted in ages?" is one click — NULLS LAST in both directions per
-// the house rule.
-export type InventorySortField = GeneratedEntitySortField<"inventory">;
 
 /**
  * `"<product name> · <location name>"`, or just the product name when the
@@ -97,24 +74,11 @@ export const inventoryDisplayName = ({
   locationName?: string | null;
 }): string => (locationName ? `${productName} · ${locationName}` : productName);
 
-export const inventoryListProductOut = inventoryListItemOut.shape.product;
-export type InventoryListProductOut = z.output<typeof inventoryListProductOut>;
-export const inventoryListLocationOut = inventoryListItemOut.shape.location;
-export type InventoryListLocationOut = z.output<
-  typeof inventoryListLocationOut
->;
-
+/** @public Names a generated native model. */
 export const inventoryDetailProductOut =
   inventoryWithLocationAndProductOut.shape.product;
-const inventoryWithLocationAndProductFields =
-  inventoryWithLocationAndProductOut.shape;
 
-export const inventoryWithLocationAndProductAndSideEffectsOut = z.object({
-  ...inventoryWithLocationAndProductFields,
-  sideEffects: mutationSideEffectsSchema,
-});
-
-export const inventoryWithLocationAndProductListOut = z.array(
+const inventoryWithLocationAndProductListOut = z.array(
   inventoryWithLocationAndProductOut,
 );
 
@@ -132,11 +96,6 @@ export const inventoryDuplicateUniqueProductsOut = z.array(
   inventoryDuplicateUniqueProductOut,
 );
 
-export const inventoryCountsByLocationOut = z.record(
-  z.string(),
-  z.number().int().nonnegative(),
-);
-
 export const inventoryUpdatePayloadData = z
   .object(generatedInventoryItemFieldSchemas.update)
   .superRefine((value, context) => {
@@ -152,13 +111,6 @@ export const inventoryUpdatePayloadData = z
       });
     }
   });
-
-export const inventoryUpdateInput = z.object({
-  id: inventoryShortcode,
-  data: inventoryUpdatePayloadData,
-});
-
-export type InventoryUpdateInput = z.infer<typeof inventoryUpdateInput>;
 
 export const inventoryCreatePayloadData = z
   .object(generatedInventoryItemFieldSchemas.create)
@@ -249,6 +201,7 @@ export const inventoryReceivingContextInput = z.object({
  * relocates (`fromLocationId` is the shelf it cannot move to). `add`: the
  * chosen shelf already holds the Product, so top up that entry in its unit.
  * `create`: a new entry at the chosen shelf.
+ * @public Names a generated native model.
  */
 export const inventoryReceivingPlan = z.discriminatedUnion("kind", [
   z.object({
@@ -303,9 +256,6 @@ export const inventoryReceiveExpenseOut = z.object({
   resolvedArrivedFindings: z.number().int().nonnegative(),
   sideEffects: mutationSideEffectsSchema,
 });
-export type InventoryReceiveExpenseOut = z.infer<
-  typeof inventoryReceiveExpenseOut
->;
 
 /**
  * One shelf row to write off, and how much of it.
@@ -351,9 +301,6 @@ export const inventoryBulkDiscardPayload = z.object({
       "Free text stored as each Expense's notes — broken, thrown away, given away.",
     ),
 });
-export type InventoryBulkDiscardPayload = z.infer<
-  typeof inventoryBulkDiscardPayload
->;
 
 /**
  * One result row per submitted item, in submission order.
@@ -381,15 +328,11 @@ const bulkMoveItem = z.object({
   quantity: positiveAmount, // How much to move (can be less than total for partial moves)
 });
 
-export type BulkMoveItem = z.infer<typeof bulkMoveItem>;
-
 export const bulkMovePayload = z.object({
   sourceLocationId: locationShortcode,
   targetLocationId: locationShortcode,
   items: z.array(bulkMoveItem).min(1),
 });
-
-export type BulkMovePayload = z.infer<typeof bulkMovePayload>;
 
 // Move entries to per-item destinations. The general shape: reorganizing is
 // inherently many-source→many-target (one shelf fanning out across a dozen
@@ -405,20 +348,15 @@ const moveInventoryItem = z.object({
   quantity: positiveAmount.optional(),
 });
 
-export type MoveInventoryItem = z.infer<typeof moveInventoryItem>;
-
 export const moveInventoryEntriesPayload = z.object({
   items: z.array(moveInventoryItem).min(1).max(200),
 });
-
-export type MoveInventoryEntriesPayload = z.infer<
-  typeof moveInventoryEntriesPayload
->;
 
 // One staged decision about an expected row, committed atomically on "Done".
 // `verify` = confirmed present as-is; `adjust` = present at a corrected count;
 // `remove` = not here, soft-delete it; `relocate` = move the full row to the
 // selected location (merging with an existing same-product row when needed).
+/** @public Names a generated native model. */
 export const inventorySessionResolution = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("verify"), inventoryEntryId: inventoryShortcode }),
   z.object({
@@ -435,10 +373,6 @@ export const inventorySessionResolution = z.discriminatedUnion("kind", [
     targetLocationId: locationShortcode,
   }),
 ]);
-
-export type InventorySessionResolution = z.infer<
-  typeof inventorySessionResolution
->;
 
 // Commit a location's recount as one atomic diff and stamp `lastBulkInventory`.
 // The expected-id set and row snapshot timestamp are a compare-and-swap guard: a bin
@@ -466,8 +400,6 @@ export const inventoryLocationSnapshotOut = z.object({
   items: inventoryWithLocationAndProductListOut,
   snapshotToken: z.string().min(1),
 });
-
-export type ReconcileSessionPayload = z.infer<typeof reconcileSessionPayload>;
 
 export const inventoryFindDuplicatesInput = z.object({
   excludeLocationId: locationShortcode.optional(),

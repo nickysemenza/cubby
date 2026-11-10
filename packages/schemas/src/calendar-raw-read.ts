@@ -16,7 +16,7 @@ import {
   rawCalendarPlantingSource,
 } from "./calendar";
 const media = { displayImages: displayImagesField.default([]) };
-export const rawCalendarItem = z.discriminatedUnion("kind", [
+const rawCalendarItem = z.discriminatedUnion("kind", [
   calendarMealItem.extend({ ...media, source: rawCalendarMealSource }),
   calendarTaskItem.extend({ ...media, source: rawCalendarTaskSource }),
   calendarExpenseItem.extend({ ...media, source: rawCalendarExpenseSource }),

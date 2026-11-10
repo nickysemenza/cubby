@@ -224,7 +224,7 @@ type AnthropicChatModel = z.infer<typeof anthropicChatModelSchema>;
 /** Every model a feature record can name. */
 export type AiModel = SupportedChatModel | SupportedDecisionModel;
 
-export const chatTierSchema = z.enum(["fast", "standard", "quality"]);
+const chatTierSchema = z.enum(["fast", "standard", "quality"]);
 /**
  * What a chat call needs from its model, not which model it is: `fast` for
  * interactive and bulk calls, `standard` for evidence that writes money,

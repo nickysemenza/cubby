@@ -304,8 +304,7 @@ Claiming is not an attempt; a failure is, and so is reclaiming an expired lease
 (the previous executor vanished mid-pass, and a crash loop must still exhaust).
 A failed Job backs off by its policy, `baseMs · 2^(failures - 1)` up to
 `maxMs`, and fails after `maxAttempts`; every kind has a bound, and a row
-stored with a null column uses its kind's. `releaseJobClaim` hands a claim back
-without an attempt, and deferrals never count.
+stored with a null column uses its kind's. Deferrals never count.
 
 Transient failures back off without spending attempts; their delay grows with
 the failing streak's age. They are a Hyperdrive pool-slot timeout (SQLSTATE

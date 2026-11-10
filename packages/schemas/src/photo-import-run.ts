@@ -54,7 +54,7 @@ export type RunTargetDeviceWorkState = z.infer<typeof runTargetDeviceWorkState>;
 
 export const photoRunImageState = runTargetState;
 export type PhotoRunImageState = z.infer<typeof photoRunImageState>;
-export const photoRunImageOutcome = z.enum(["attached", "skipped"]);
+const photoRunImageOutcome = z.enum(["attached", "skipped"]);
 export type PhotoRunImageOutcome = z.infer<typeof photoRunImageOutcome>;
 const photoFieldSuggestionReferences = z.array(
   z.object({ id: suggestionChildHandle, field: z.string(), value: z.json() }),
@@ -169,7 +169,6 @@ export const commitPhotoGroupProduct = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("existing"), existingId: productShortcode }),
   photoGroupCreateProductSelection,
 ]);
-export type CommitPhotoGroupProduct = z.infer<typeof commitPhotoGroupProduct>;
 
 /**
  * `ownershipMode` and `ownerPartyId` are both optional so a caller can omit
@@ -188,9 +187,7 @@ const commitPhotoGroupInventory = z.object({
   mode: z.enum(["create", "add"]).optional(),
   existingEntryId: inventoryShortcode.optional(),
 });
-export type CommitPhotoGroupInventory = z.infer<
-  typeof commitPhotoGroupInventory
->;
+type CommitPhotoGroupInventory = z.infer<typeof commitPhotoGroupInventory>;
 /**
  * What a proposal stores beside its `inventoryLocationId` and
  * `inventoryOwnerPartyId` FK columns.
@@ -262,12 +259,7 @@ export const commitPhotoGroupInput = commitPhotoGroupInputBase
   .superRefine(refineGroupImageRoster);
 export type CommitPhotoGroupInput = z.infer<typeof commitPhotoGroupInput>;
 
-export const commitPhotoGroupOutcome = z.enum([
-  "committed",
-  "replayed",
-  "conflict",
-]);
-export type CommitPhotoGroupOutcome = z.infer<typeof commitPhotoGroupOutcome>;
+const commitPhotoGroupOutcome = z.enum(["committed", "replayed", "conflict"]);
 
 const commitPhotoGroupOutputImage = z.object({
   id: imageShortcode,
@@ -299,13 +291,13 @@ export const photoGroupProposalState = z.enum([
   "committed",
   "discarded",
 ]);
-export type PhotoGroupProposalState = z.infer<typeof photoGroupProposalState>;
 
 /**
  * Who last wrote a proposal's payload: the Run's Pi coordinator, an external
  * Claude/Codex session over MCP, or the member's own review edit. Honest
  * last-writer metadata only — no proposal field is a Jev/Clef suggestion.
  * Null on rows written before the origin was recorded.
+ * @public Names a generated native model.
  */
 export const photoGroupProposalOrigin = z.enum([
   "coordinator",
@@ -314,7 +306,7 @@ export const photoGroupProposalOrigin = z.enum([
 ]);
 export type PhotoGroupProposalOrigin = z.infer<typeof photoGroupProposalOrigin>;
 
-export const photoGroupProposalGroup = commitPhotoGroupInputBase
+const photoGroupProposalGroup = commitPhotoGroupInputBase
   .omit({ runId: true })
   .extend({
     /** Why these photos are one item and why this Product — shown to the reviewer. */
@@ -375,19 +367,20 @@ export const proposePhotoGroupsInput = z
       }
     }
   });
-export type ProposePhotoGroupsInput = z.infer<typeof proposePhotoGroupsInput>;
 
 const proposalProductSummary = productSummaryWithCover;
 export type PhotoGroupProposalProductSummary = z.infer<
   typeof proposalProductSummary
 >;
 
+/** @public Names a generated native model. */
 export const photoFieldAgreement = z.enum([
   "agree",
   "disagree-or-missing",
   "unknown",
 ]);
 
+/** @public Names a generated native model. */
 export const photoFieldCrossCheck = z.object({
   field: z.enum(["name", "brandName", "model", "identifiers", "color", "size"]),
   mark: photoFieldAgreement,
@@ -414,6 +407,7 @@ export const photoFieldCrossCheck = z.object({
 });
 export type PhotoFieldCrossCheck = z.infer<typeof photoFieldCrossCheck>;
 
+/** @public Names a generated native model. */
 export const photoGroupProposal = z.object({
   groupKey: z.string(),
   steps: z.array(decisionStep),
@@ -533,7 +527,7 @@ export const reviewPhotoGroupsAction = z.discriminatedUnion("action", [
 ]);
 export type ReviewPhotoGroupsAction = z.infer<typeof reviewPhotoGroupsAction>;
 
-export const photoGroupApprovalResult = z.object({
+const photoGroupApprovalResult = z.object({
   groupKey: z.string(),
   outcome: z.enum(["committed", "replayed", "conflict", "failed"]),
   error: z.string().optional(),
@@ -547,7 +541,10 @@ export const reviewPhotoGroupsOutput = photoGroupProposalList.extend({
 });
 export type ReviewPhotoGroupsOutput = z.infer<typeof reviewPhotoGroupsOutput>;
 
-/** One run photo as the review table shows it: both renditions and where processing stands. */
+/**
+ * One run photo as the review table shows it: both renditions and where processing stands.
+ * @public Names a generated native model.
+ */
 export const photoRunImage = z.object({
   id: imageShortcode,
   position: z.number().int().nullable(),
@@ -691,7 +688,6 @@ export const photoProductCandidate = z.object({
     .optional(),
   purchaseLineCount: z.number().int().nonnegative().optional(),
 });
-export type PhotoProductCandidate = z.infer<typeof photoProductCandidate>;
 // Evidence retains the observed source facts used by frozen comparisons.
 const rawPhotoProductEvidence = photoProductCandidate
   .pick({
@@ -720,7 +716,7 @@ export const photoProductEvidence = withFieldEnvelopes(
   productPublicReadFields,
 );
 export type PhotoProductEvidence = z.infer<typeof photoProductEvidence>;
-export const photoRejectedCandidate = z.object({
+const photoRejectedCandidate = z.object({
   id: productShortcode,
   name: z.string(),
   rejected: z.literal(true),
@@ -758,14 +754,11 @@ export const photoProductCandidateSearchInput = z.object({
 
 export {
   storedPhotoRunInput,
-  photoInventoryRunInput,
   type PhotoInventoryRunInput,
   photoRunDefaults,
   type PhotoRunDefaults,
   photoRunProcessor,
   type PhotoRunProcessor,
-  photoRunUploadBatch,
-  type PhotoRunUploadBatch,
 } from "./photo-run-input";
 
 /**
@@ -778,6 +771,7 @@ export {
  * - `ready_for_handoff`: descriptions settled; copy the prompt to Claude/Codex (external).
  * - `ready_for_review`: proposals wait for member approval.
  * - `completed`: nothing pending remains.
+ * @public Names a generated native model.
  */
 export const photoRunLifecyclePhase = z.enum([
   "waiting_for_upload",
@@ -888,6 +882,7 @@ export const photoRunExcludeFailedInput = z.object({
   imageIds: z.array(imageShortcode).min(1).max(500),
 });
 
+/** @public Names a generated native model. */
 export const photoImportFinalizeImage = z.object({
   imageId: imageShortcode,
   position: z.int().nonnegative(),
@@ -932,6 +927,7 @@ export type RunPushKind = z.infer<typeof runPushKind>;
  * Which Cubby app build registered a push token, keyed like
  * `APPLE_APP_IDENTITIES`: it names the APNs topic (the build's bundle id), so
  * a token is never addressed to another build's topic.
+ * @public Names a generated native model.
  */
 export const photoRunPushAppIdentity = z.keyof(
   z.object(

@@ -160,14 +160,7 @@ describe("inventory and location action catalog", () => {
           ...inventoryRow,
           fields: {
             ...inventoryRow.fields,
-            amount: {
-              ...missing,
-              work: {
-                kind: "failed",
-                error: "Synthetic quantity failure",
-                retryAt: null,
-              },
-            },
+            amount: missing,
           },
         }}
         onResolved={(success) => resolved.push(success)}
@@ -182,7 +175,7 @@ describe("inventory and location action catalog", () => {
       screen.queryByRole("heading", { name: "Move 1 Item?" }),
     ).not.toBeInTheDocument();
     expect(screen.getByLabelText("Move availability")).toHaveTextContent(
-      "Synthetic quantity failure",
+      "Inventory amount is unavailable.",
     );
   });
 });

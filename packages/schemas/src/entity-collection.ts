@@ -14,7 +14,7 @@ import { z } from "zod";
  * hold. Every precondition is checked before any item changes, so a refused
  * patch changes nothing.
  */
-export const COLLECTION_PATCH_OPS = ["add", "replace", "remove"] as const;
+const COLLECTION_PATCH_OPS = ["add", "replace", "remove"] as const;
 export type CollectionPatchOp = (typeof COLLECTION_PATCH_OPS)[number];
 
 /** A collection keyed by its own value (`aliases`, `tags`). One instance, so every field shares generated models. */

@@ -159,7 +159,6 @@ export {
   FILTER_EXACT,
   FILTER_SUBTREE,
   FILTER_NONE,
-  includesSubtree,
   withSubtree,
 };
 

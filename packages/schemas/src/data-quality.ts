@@ -1,11 +1,9 @@
-export { displayImageQualityCheck } from "./entity-definitions/data-quality-image";
 import { z } from "zod";
 import { dataExceptionReason } from "./data-quality-shape";
 import {
   type DataCheck,
   dataCheck,
   dataCheckKind,
-  dataChecksByEntity,
   dataQualityExceptionEntities,
   scoredEntities,
 } from "./generated/data-quality-checks.gen";
@@ -33,33 +31,18 @@ export {
 } from "./generated/data-quality-checks.gen";
 export { qualityStatusOf, type QualityTerm } from "./data-quality-score";
 export {
-  dataQualityCheckKind,
-  dataQualityFacetName,
-  type DataQualityCheckKind,
-  type DataQualityFacetName,
-} from "./data-quality-facets";
-export {
   dataExceptionReason,
   dataExceptionReasonLabel,
   dataQuality,
   dataQualityException,
-  dataQualityFacet,
   dataQualityGap,
-  dataQualityGapKind,
   dataQualityStatus,
   type DataExceptionReason,
   type DataQuality,
   type DataQualityException,
-  type DataQualityFacet,
   type DataQualityGap,
-  type DataQualityGapKind,
   type DataQualityStatus,
 } from "./data-quality-shape";
-
-export const purchaseDataCheck = dataChecksByEntity.purchase;
-export type PurchaseDataCheck = z.infer<typeof purchaseDataCheck>;
-export const productDataCheck = dataChecksByEntity.product;
-export type ProductDataCheck = z.infer<typeof productDataCheck>;
 
 type ExceptionEntityMap = typeof dataQualityExceptionEntities;
 /** Entities whose declaration enables `DataException` records (ADR 0006). */
@@ -69,7 +52,7 @@ export type DataExceptionEntity = {
     : never;
 }[keyof ExceptionEntityMap];
 
-export const dataExceptionEntities = nonEmptyTuple(
+const dataExceptionEntities = nonEmptyTuple(
   scoredEntities.filter((entity): entity is DataExceptionEntity =>
     Boolean(dataQualityExceptionEntities[entity]),
   ),
@@ -82,7 +65,6 @@ export const dataException = z.object({
   reason: dataExceptionReason,
   note: z.string().trim().min(1),
 });
-export type DataException = z.infer<typeof dataException>;
 
 export const isDefectDataCheck = (check: DataCheck): boolean =>
   dataCheckKind[check] === "defect";

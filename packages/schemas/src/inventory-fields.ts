@@ -51,10 +51,10 @@ const productInventoryEmbedFields = {
   ...timestampedFields,
 };
 
-export const rawProductInventoryEmbed = z.object(productInventoryEmbedFields);
+const rawProductInventoryEmbed = z.object(productInventoryEmbedFields);
 export type RawProductInventoryEmbed = z.infer<typeof rawProductInventoryEmbed>;
 
-export const rawInventoryListProduct = z.object({
+const rawInventoryListProduct = z.object({
   id: productShortcode,
   name: z.string(),
   brandName: z.string().nullable(),
@@ -69,8 +69,7 @@ export const rawInventoryListProduct = z.object({
 });
 export type RawInventoryListProduct = z.infer<typeof rawInventoryListProduct>;
 
-export const rawInventoryListLocation = locationListRefOut;
-export type RawInventoryListLocation = z.infer<typeof rawInventoryListLocation>;
+const rawInventoryListLocation = locationListRefOut;
 
 export const rawInventoryDetailProduct = z.object({
   displayImages: displayImagesField.default([]),

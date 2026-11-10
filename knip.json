@@ -115,6 +115,11 @@
       "playwright": { "config": "playwright.config.ts" }
     },
     "packages/schemas": {
+      // Private package: an export no workspace imports is dead, not public API.
+      // Consumers knip cannot trace (the native generator names Swift models
+      // after export names; generated modules and `import()` type queries)
+      // keep their export with an `@public` tag naming that consumer.
+      "includeEntryExports": true,
       "entry": [
         "src/index.ts!",
         "src/**/*.test.ts!",
@@ -133,10 +138,12 @@
       ]
     },
     "packages/shared": {
+      "includeEntryExports": true,
       "entry": ["src/index.ts!", "src/**/*.test.ts!"],
       "project": ["src/**/*.ts!"]
     },
     "packages/usda": {
+      "includeEntryExports": true,
       "entry": [
         "src/index.ts!",
         "src/contract.ts!",
@@ -166,6 +173,10 @@
   // Registry copies stay whole so `shadcn add --overwrite` diffs cleanly;
   // their unused parts are expected.
   "ignoreIssues": {
+    // Generated package modules publish whole declaration sets; their
+    // generator owns pruning, not the entry-export check.
+    "packages/schemas/src/generated/**": ["exports", "types"],
+    "packages/shared/src/generated/**": ["exports", "types"],
     "apps/web/src/ui/primitives/**": ["exports", "types"],
     "apps/web/src/ui/reui/**": ["exports", "types"]
   },

@@ -20,6 +20,7 @@ import { mealDate } from "./meal-shared";
 import { generatedMealFieldSchemas } from "./generated/entity-field-schemas.meal.gen";
 import { nutritionTotals, measureEstimate } from "./nutrition";
 
+/** @public Names a generated native model. */
 export const mealFoodNutrients = z
   .partialRecord(nutrientKey, z.number().nonnegative())
   .refine(
@@ -125,4 +126,3 @@ export const mealNutritionOut = z.object({
   meals: z.array(nutritionMeal),
   people: z.array(mealNutritionPerson),
 });
-export type MealNutritionOut = z.infer<typeof mealNutritionOut>;

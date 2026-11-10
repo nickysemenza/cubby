@@ -116,7 +116,7 @@ export const suggestionSubjects = {
     pairKey: z.string().min(1),
   }),
 };
-export const suggestionSubject = z.discriminatedUnion("kind", [
+const suggestionSubject = z.discriminatedUnion("kind", [
   suggestionSubjects.field,
   suggestionSubjects.email_relevance,
   suggestionSubjects.email_link,
@@ -370,8 +370,6 @@ export type SuggestionSubject = z.infer<typeof suggestionSubject>;
 export type SuggestionProducer = z.infer<typeof suggestionProducer>;
 export type SuggestionCorrection = z.infer<typeof suggestionCorrection>;
 export type SuggestionSuppression = z.infer<typeof suggestionSuppression>;
-export type FeedbackEvent = z.infer<typeof feedbackEvent>;
-export type SuggestionPublication = z.infer<typeof suggestionPublication>;
 
 export type SuggestionReviewOut = z.infer<typeof suggestionReviewOut>;
 export type SuggestionReviewBatchOut = z.infer<typeof suggestionReviewBatchOut>;

@@ -1,3 +1,4 @@
+import type { ConnectionCandidate } from "@cubby/schemas/entity-connections";
 import { financialSpendingAdvice } from "@cubby/schemas/financial-booking";
 import {
   recordSourceTransactionRecordsInput,
@@ -15,6 +16,7 @@ import { seedFieldSuggestion } from "tooling/shared-suggestion-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
 import {
   suggestionTable,
@@ -23,7 +25,10 @@ import {
   sourceOccurrence,
   transactionImport,
 } from "~/server/db/schema";
-import { publishEntityConnection } from "~/server/domains/connection/repo/entity-connections";
+import {
+  prepareEntityConnectionEvidence,
+  publishPreparedEntityConnections,
+} from "~/server/domains/connection/repo/entity-connections";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import {
@@ -60,6 +65,18 @@ import {
   suggestionRecordCounts,
   suggestionCountsByFamily,
 } from "./suggestion-list";
+
+/** Capture and publish one candidate, as the production discovery path does. */
+const publishEntityConnection = async (
+  db: Database,
+  candidate: ConnectionCandidate,
+) =>
+  (
+    await publishPreparedEntityConnections(
+      db,
+      await prepareEntityConnectionEvidence(db, [candidate]),
+    )
+  )[0]!;
 
 type Ctx = ReturnType<typeof withTestDb>;
 

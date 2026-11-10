@@ -927,7 +927,7 @@ export function useEntityList<
     scope: infiniteResult.scope,
     planFor: infiniteResult.scopedPlan,
   });
-  // A module tree maps the accumulated rows (a wish's embedded candidates);
+  // A module tree maps the accumulated rows;
   // every other consumer above — the related-preview `sourceIds`,
   // `mappingsMap`, the select-all-matching count — keeps reading the root
   // `data`. Only `nest` may return a different row shape, and it is typed to.

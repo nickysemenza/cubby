@@ -5,7 +5,6 @@ import { entityFieldEnvelopeSchemas } from "./generated/entity-field-envelopes.g
 
 export { entityFieldEnvelopeSchemas };
 export { entityFieldEnvelopeFields } from "./generated/entity-field-envelopes.gen";
-export { entityFieldEnvelopeNested } from "./generated/entity-field-envelope-nested.gen";
 
 export type FieldEnvelopeEntity = keyof typeof entityFieldEnvelopeSchemas;
 export type FieldEnvelopeProjection =

@@ -4,7 +4,7 @@ import { dataTypeEnum, fdcId, foodSummary } from "../schemas";
 // The R2 layout of one USDA release. Shards hold plain `FoodSummary` records, so
 // they outlive any change to the release Durable Object's table layout: a new
 // schema generation reloads the same shards (ADR 0008).
-export const RELEASE_MANIFEST_FILE = "manifest.json";
+const RELEASE_MANIFEST_FILE = "manifest.json";
 
 export const releaseId = z
   .string()

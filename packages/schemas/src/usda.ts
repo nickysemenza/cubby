@@ -32,10 +32,6 @@ export const usdaFoodIdInput = z.object({
   id: z.number().int().positive(),
 });
 
-export const usdaFoodEnrichmentsInput = z.object({
-  fdcIds: z.array(z.number().int().positive()).max(1000),
-});
-
 // Enhanced food summary with unit mappings and linked products.
 const linkedProducts = z.array(productFieldEnvelopeSchemas.output);
 
@@ -47,7 +43,7 @@ export type FoodSummaryWithLinkedProducts = z.infer<
   typeof foodSummaryWithLinkedProducts
 >;
 
-export const foodSummaryEnrichment = foodSummaryWithLinkedProducts.pick({
+const foodSummaryEnrichment = foodSummaryWithLinkedProducts.pick({
   inferredUnitMappings: true,
   linkedProducts: true,
 });
@@ -62,8 +58,3 @@ export const usdaFoodListRow = usdaReadSchemas.list.extend({
 export type UsdaFoodListRow = z.infer<typeof usdaFoodListRow>;
 
 export const usdaFoodListOut = createPaginatedResponseSchema(usdaFoodListRow);
-
-export const usdaFoodEnrichmentsOut = z.record(
-  z.string(),
-  foodSummaryEnrichment,
-);

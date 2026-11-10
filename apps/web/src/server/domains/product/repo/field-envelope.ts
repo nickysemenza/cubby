@@ -63,7 +63,7 @@ export function projectProductFieldEnvelopes({
   ) {
     for (const key of unitFields) {
       const original = fieldEnvelopeFor(built, key);
-      if (original) selectedFields[key] = { ...original, work: price.work };
+      if (original) selectedFields[key] = original;
     }
     return { ...built, fields: selectedFields };
   }
@@ -79,7 +79,7 @@ export function projectProductFieldEnvelopes({
     });
     output = { ...built, unitPriceMappings: units.unitPriceMappings };
     // This is a current computation over selected inputs, not the historical
-    // graph that produced a cached price. Keep its decision computed and carry work separately.
+    // graph that produced a cached price. Keep its decision computed.
     for (const [key, value] of Object.entries(units.values)) {
       const original = fieldEnvelopeFor(built, key);
       if (!original) continue;
@@ -101,14 +101,13 @@ export function projectProductFieldEnvelopes({
                   provenance: { kind: "computed" },
                 },
               },
-        work: price.work,
       };
     }
   }
   return { ...output, fields: selectedFields };
 }
 
-/** Physical Cost has exactly the selected price snapshot, provenance and work. */
+/** Physical Cost has exactly the selected price snapshot and provenance. */
 function projectProductCost(
   price: ReadableFieldEnvelope,
   serviceCost: ReadableFieldEnvelope,
@@ -144,6 +143,5 @@ function projectProductCost(
                     },
             },
           },
-    work: price.work,
   };
 }

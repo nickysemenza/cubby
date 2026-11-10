@@ -22,7 +22,7 @@ import {
  * repeating across slots: `stats` (labelled figures), `chart` (labelled
  * values, bar/stack/line), `table`, `schedule` (dated spans) and `note`.
  */
-export { reportSlots, reportSlot } from "./entity-report-slots";
+export { reportSlot } from "./entity-report-slots";
 import { reportSlot } from "./entity-report-slots";
 
 /**
@@ -223,6 +223,7 @@ export type ReportCommandRequest = z.infer<typeof reportCommandRequest>;
  * request field of the same `key`; nothing is sent while a required input is empty. Each kind is
  * a primitive both clients already draw (a number field, the entity picker, an option list, a
  * text field).
+ * @public Names a generated native model.
  */
 export const reportCommandInput = workflowCommandInput;
 export type ReportCommandInput = z.infer<typeof reportCommandInput>;
@@ -245,6 +246,7 @@ export type ReportCommand = z.infer<typeof reportCommand>;
  * and `tradeChoiceId` the block choice that carries the default trade (null when no line needs
  * one). A client sends nothing until every required choice is answered. Only a form's command
  * carries it, never a row's.
+ * @public Names a generated native model.
  */
 export const commitPreparedRequest = z.object({
   kind: z.literal("commit-prepared"),
@@ -266,6 +268,7 @@ export type CommitPreparedRequest = z.infer<typeof commitPreparedRequest>;
  * words every label, ranks the suggestions and says what is required; nothing is preselected
  * (identity and merges are explicit), so a client starts with no answer. An answer is the chosen
  * option plus, when the option asks for them, a picked record (`pick`) and/or a reason (`text`).
+ * @public Names a generated native model.
  */
 export const reportChoice = z.object({
   /** Unique within the report; the key an answer is stored under. */
@@ -334,7 +337,10 @@ const reportForm = z.object({
 });
 export type ReportForm = z.infer<typeof reportForm>;
 
-/** Time precision is evidence: local wall time and calendar days are never instants. */
+/**
+ * Time precision is evidence: local wall time and calendar days are never instants.
+ * @public Names a generated native model.
+ */
 export const reportTime = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("instant"),
@@ -490,6 +496,7 @@ export const reportRecordsBlock = z.object({
   commands: z.array(reportCommand).optional(),
 });
 
+/** @public Names a generated native model. */
 export const reportBlock = z.discriminatedUnion("kind", [
   reportProgress,
   reportStats,

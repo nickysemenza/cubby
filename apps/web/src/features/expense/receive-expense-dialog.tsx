@@ -209,10 +209,10 @@ const ReceiveBody: FC<ReceiveBodyProps> = ({
             {match.evidence ? ` · ${match.evidence}` : ""}.{" "}
             {match.warnings.map((warning) => `${warning} `)}
             <Link
-              to="/recommendations/workbench"
+              to="/suggestions"
               search={{
-                kind: "product-match",
-                source: productId,
+                family: "product_pair",
+                record: `product:${productId}`,
                 candidate: match.candidate.id,
               }}
               className="font-medium text-primary hover:underline"

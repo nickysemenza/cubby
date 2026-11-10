@@ -24,7 +24,6 @@ export const rawExpenseListItemOut = withEntityListMedia(
   expenseDefinitionSchemas.list,
 );
 export type RawExpenseOut = z.output<typeof rawExpenseOut>;
-export type RawExpenseListItemOut = z.output<typeof rawExpenseListItemOut>;
 
 /** Private orchestration retains raw rows until the public operation serializes them. */
 export type RawActionableTaskOut = RawTaskOut;

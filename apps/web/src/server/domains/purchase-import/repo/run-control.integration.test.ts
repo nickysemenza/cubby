@@ -786,23 +786,6 @@ describe("purchase import run admission", () => {
   it("waits for the dispatch generation but ignores retired approval wakes", async () => {
     const party = await createMember();
     const run = await startAgentRun(party);
-    const { runApproval } = await import("~/server/db/schema");
-    const { getDb } = await import("~/server/db/helpers");
-    const [approval] = await getDb(ctx.db)
-      .insert(runApproval)
-      .values({
-        runId: run.id,
-        operationId: "note-rejected",
-        operationKind: "mcp:entity",
-        args: {},
-        argsFingerprint: "args",
-        targetFingerprint: "target",
-        evidenceFingerprint: "evidence",
-        state: "rejected",
-        decidedAt: new Date(),
-        rejectedAt: new Date(),
-      })
-      .returning({ id: runApproval.id });
     const settle = (
       receivedEventIds: string[],
       failure?: { failureCode: "agent_failed" },
@@ -817,7 +800,7 @@ describe("purchase import run admission", () => {
       });
     const kept = { reconciled: false, status: "running" };
     const dispatch = run.dispatchEventId!;
-    const wake = `approval:${approval!.id}:rejected`;
+    const wake = "approval:00000000-0000-4000-8000-000000000001:rejected";
 
     // The current dispatch generation is still queued for the agent.
     await expect(settle([wake])).resolves.toEqual(kept);

@@ -5,7 +5,6 @@ import type { ManifestWire, WireValue } from "./manifest-wire.ts";
 
 export type StructuredOption = ManifestWire<"LabeledOption">;
 export type StructuredField = ManifestWire<"ValueSchema.Field">;
-export type StructuredTextFormat = WireValue<"StructuredTextFormat~">;
 export type StructuredNode = ManifestWire<"ValueSchema.Node">;
 export type StructuredJson = WireValue<"Json">;
 export type StructuredValueSchema = ManifestWire<"ValueSchema">;

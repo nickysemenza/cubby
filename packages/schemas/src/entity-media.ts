@@ -14,7 +14,6 @@ export const ID_CHUNK_SIZE = 50;
 export const entityDisplayImagesInput = z.object({
   refs: z.array(entityRefSchema).max(ID_CHUNK_SIZE),
 });
-export type EntityDisplayImagesInput = z.infer<typeof entityDisplayImagesInput>;
 
 /** Canonical public `entityKind:shortcode` key → cover or explicit no-image. */
 export const entityDisplayImagesOutput = z.record(

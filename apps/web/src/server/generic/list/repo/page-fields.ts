@@ -122,14 +122,6 @@ export async function withPageFields<Row>(
             (work?.stale ?? false) ||
             (source.freshAt !== undefined &&
               identity.raw[source.freshAt] == null),
-          pending: work?.pending ?? false,
-          refreshReason: work?.refreshReason,
-          ...(work?.attribution ? { attribution: work.attribution } : {}),
-          waiting: work?.waiting ?? false,
-          waitCause: work?.waitCause ?? null,
-          ...(work?.execution ? { execution: work.execution } : {}),
-          error: work?.error ?? null,
-          retryAt: work?.retryAt ?? null,
         });
       }
       publications.set(identity.internalId, values);

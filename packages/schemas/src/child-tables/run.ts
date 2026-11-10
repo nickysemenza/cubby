@@ -807,63 +807,6 @@ export const runChildren = [
       },
     ],
   }),
-  /** One exact human grant; commit rechecks fingerprints and consumes it transactionally. */
-  defineChildTable({
-    name: "RunApproval",
-    exportName: "runApproval",
-    columns: [
-      {
-        key: "id",
-        kind: "uuid",
-        primaryKey: true,
-        default: { sql: "gen_random_uuid()" },
-      },
-      {
-        key: "runId",
-        kind: "uuid",
-        notNull: true,
-        reference: { table: "run", column: "id" },
-      },
-      { key: "operationId", kind: "text", notNull: true },
-      { key: "operationKind", kind: "text", notNull: true },
-      { key: "args", kind: "jsonb", notNull: true },
-      { key: "argsFingerprint", kind: "text", notNull: true },
-      { key: "targetFingerprint", kind: "text", notNull: true },
-      { key: "evidenceFingerprint", kind: "text", notNull: true },
-      { key: "state", kind: "text", notNull: true, default: "pending" },
-      {
-        key: "createdAt",
-        kind: "timestamp",
-        notNull: true,
-        default: { now: true },
-      },
-      {
-        key: "decidedByUserId",
-        kind: "text",
-        type: "UserId",
-        reference: { table: "user", column: "id" },
-      },
-      { key: "decidedAt", kind: "timestamp" },
-      { key: "rejectedAt", kind: "timestamp" },
-      { key: "consumedAt", kind: "timestamp" },
-      { key: "invalidatedAt", kind: "timestamp" },
-    ],
-    types: [{ module: "@cubby/schemas/identifiers", exports: ["UserId"] }],
-    indexes: [
-      {
-        name: "RunApproval_run_operation_key",
-        unique: true,
-        on: ["runId", "operationId"],
-      },
-      { name: "RunApproval_run_state_idx", on: ["runId", "state"] },
-    ],
-    checks: [
-      {
-        name: "RunApproval_state_check",
-        sql: "{state} IN ('pending', 'granted', 'rejected', 'consumed', 'invalidated')",
-      },
-    ],
-  }),
   defineChildTable({
     name: "AiEvaluation",
     exportName: "aiEvaluation",

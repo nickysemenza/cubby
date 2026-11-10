@@ -2,7 +2,7 @@
  * string the caller controls (e.g. `"brandName"`, `"classification"`). A
  * value may be a single string (a name) or a list (a classification path, a
  * set of aliases); `null`/`undefined` means that reason has no signal. */
-export type RedundantTokensRestating = Readonly<
+type RedundantTokensRestating = Readonly<
   Record<string, string | readonly string[] | null | undefined>
 >;
 

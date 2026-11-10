@@ -33,7 +33,6 @@ it.each([true, false])(
           provenance: { kind: "own", ownership: { kind: "record" } },
         },
       },
-      work: { kind: "idle" },
     };
     const record = {
       id: testShortcode("expense", "synthetic-bulk-expense"),

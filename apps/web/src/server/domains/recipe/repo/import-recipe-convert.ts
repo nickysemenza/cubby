@@ -28,7 +28,6 @@ import {
   type CookbookRef,
   normalizeTitle,
   upsertCookbookRecipe,
-  upsertNotionRecipe,
   upsertRecipe,
 } from "./crud";
 
@@ -46,8 +45,8 @@ const parsedAmountToInput = (parsed: WAmount): Amount => {
  * `reprocessCookbookStream` loop). Both maps are read AND mutated as the loop
  * runs, so a forward sub-recipe reference and a repeated ingredient resolve
  * against work already committed by earlier recipes — turning per-recipe DB
- * reads into in-memory lookups. Absent for single-recipe callers (scrape /
- * Notion), which keep the original per-recipe behavior.
+ * reads into in-memory lookups. Absent for single-recipe callers (scrape),
+ * which keep the original per-recipe behavior.
  */
 export type CookbookImportContext = {
   // normalizeTitle(name) → recipe id. Seeded from the cookbook once, appended
@@ -102,7 +101,7 @@ const makeIngredientResolvers = (
 };
 
 /**
- * The converter from a raw `ImportRecipe` (scraper / Notion) into a
+ * The converter from a raw `ImportRecipe` (scraper) into a
  * `RecipeCreateInput`: parses ingredient lines and the yield via WASM and
  * find-or-creates ingredients (memoized). Cookbook recipes take the other
  * path below; their lines arrive already parsed.
@@ -264,26 +263,6 @@ export const upsertImportRecipe = async (
 ) => {
   const recipeInput = await importRecipeToRecipeInput(cr, db);
   return await upsertRecipe(recipeInput, db, actor);
-};
-
-/**
- * Upsert a recipe synced from a Notion page: convert + apply the Notion-column
- * tags (the recipe body carries no tags), then upsert keyed on the page id.
- */
-export const upsertNotionRecipeFromImport = async (
-  cr: ImportRecipe,
-  pageId: string,
-  tags: string[] | null,
-  db: Database,
-  actor: ActorContext,
-) => {
-  const recipeInput = await importRecipeToRecipeInput(cr, db);
-  return await upsertNotionRecipe(
-    { ...recipeInput, tags: tags && tags.length > 0 ? tags : null },
-    pageId,
-    db,
-    actor,
-  );
 };
 
 /**

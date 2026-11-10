@@ -15,14 +15,7 @@ import {
 } from "~/entity/fields/field-resolution";
 import { compactFieldText } from "~/entity/fields/field-text";
 import { useEntityMetadata } from "~/entity/metadata";
-import {
-  pendingWorkLabel,
-  UpdatingDot,
-  useFieldExecutionCurrent,
-} from "~/ui/derived/value-mark";
-import { useDisplayNow } from "~/ui/hooks/use-display-now";
 import { Button } from "~/ui/primitives/button";
-import { Facts } from "~/ui/records/facts";
 import { Description } from "~/ui/text/description";
 import { DateDisplay } from "~/ui/values/date-display";
 
@@ -70,12 +63,10 @@ function EntityDecisionValue({
 
 function DecisionResult({
   result,
-  work,
   entity,
   field,
 }: {
   result: FieldExplanationOutput["envelope"]["result"];
-  work: FieldExplanationOutput["envelope"]["work"];
   entity: Entity;
   field: string;
 }) {
@@ -84,9 +75,9 @@ function DecisionResult({
   const decision = fieldDecisionOf({ result });
   const labels = resolutionPolicyFor(queryClient, entity, field)?.labels;
   const emptyLabel =
-    result.kind === "missing" && work.kind !== "failed"
+    result.kind === "missing"
       ? "Not published yet"
-      : fieldEmptyLabel({ result, work }, labels);
+      : fieldEmptyLabel({ result }, labels);
   if (emptyLabel !== null)
     return <span className="text-xs text-muted-foreground">{emptyLabel}</span>;
   if (!decision || decision.outcome.kind !== "value") return null;
@@ -128,7 +119,6 @@ export function DecisionChain({
         <h3 className="text-xs font-medium">Effective result</h3>
         <DecisionResult
           result={data.envelope.result}
-          work={data.envelope.work}
           entity={data.subject.entityKind}
           field={data.field}
         />
@@ -212,28 +202,8 @@ export function DecisionChain({
   );
 }
 
-/** Observed deadlines age on the display clock; a past one is not a future claim. */
-function WorkDeadline({
-  at,
-  future,
-  past,
-}: {
-  at: string;
-  future: string;
-  past: string;
-}) {
-  const now = useDisplayNow();
-  return (
-    <>
-      {" "}
-      · {now !== undefined && Date.parse(at) <= now ? past : future}{" "}
-      <DateDisplay timestamp={at} />
-    </>
-  );
-}
-
 export function DerivedFreshness({
-  envelope: { result, work },
+  envelope: { result },
   context,
 }: {
   envelope: FieldExplanationOutput["envelope"];
@@ -245,13 +215,7 @@ export function DerivedFreshness({
   );
   const contextual =
     field && "storedProjection" in field && field.storedProjection;
-  const execution = work.kind === "pending" ? work.execution : undefined;
-  const running = useFieldExecutionCurrent(execution);
-  const pendingLabel =
-    work.kind === "pending" ? pendingWorkLabel(work, running) : null;
-  const related = work.kind === "pending" && work.attribution === "related";
   const stale = result.kind === "cached" && result.freshness === "stale";
-  const refreshOwed = work.kind !== "idle" || stale;
   return (
     <div className="grid gap-1 text-xs text-muted-foreground">
       {result.kind === "cached" ? (
@@ -267,58 +231,8 @@ export function DerivedFreshness({
         </p>
       ) : null}
       {result.kind === "missing" ? <p>Not published yet</p> : null}
-      {pendingLabel ? (
-        <p>
-          <UpdatingDot active={running} label={pendingLabel} /> {pendingLabel}
-          {execution ? (
-            <>
-              {" "}
-              · Started <DateDisplay timestamp={execution.startedAt} />
-            </>
-          ) : related ? (
-            " · may not affect this value"
-          ) : null}
-        </p>
-      ) : null}
-      {work.kind === "waiting" ? (
-        <p>
-          {work.reason}
-          {work.retryAt ? (
-            <WorkDeadline
-              at={work.retryAt}
-              future="Next attempt"
-              past="Attempt was due"
-            />
-          ) : null}
-        </p>
-      ) : null}
-      {work.kind === "failed" ? (
-        <p role="alert" className="break-words text-destructive">
-          {work.error}
-          {work.retryAt ? (
-            <WorkDeadline
-              at={work.retryAt}
-              future="Next retry"
-              past="Retry was due"
-            />
-          ) : null}
-        </p>
-      ) : null}
-      {work.kind === "idle" && (stale || result.kind === "missing") ? (
+      {stale || result.kind === "missing" ? (
         <p>No refresh is currently queued.</p>
-      ) : null}
-      {refreshOwed ? (
-        <Facts
-          layout="inline"
-          facts={[
-            {
-              label: "Refresh trigger",
-              value: related
-                ? "Not attributed to this value"
-                : (work.refreshReason ?? "Not recorded"),
-            },
-          ]}
-        />
       ) : null}
     </div>
   );

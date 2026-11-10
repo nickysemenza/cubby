@@ -417,7 +417,6 @@ export const recipeHandlers = implementOperationDomain(recipeContract, {
     imports.getCookbookSourceWorkflow(context, input),
   getCookbookDiff: (context, input) =>
     imports.getCookbookDiffWorkflow(context, input),
-  previewNotionSync: (context) => imports.previewNotionSyncWorkflow(context),
   setCookbookProduct: (context, input) =>
     imports.setCookbookProductWorkflow(context, input),
   deleteCookbook: (context, input) =>
@@ -594,8 +593,6 @@ export const recipeStreamHandlers = implementSubscriptionDomain(
       recomputeStaleDurableWorkflow(context.services.recipeCosting, signal),
     importCookbookStream: (context, input, signal) =>
       imports.importCookbookWorkflow(context, input, signal),
-    importNotionSyncStream: (context, input, signal) =>
-      imports.importNotionSyncWorkflow(context, input, signal),
     reprocessCookbook: (context, input, signal) =>
       imports.reprocessCookbookWorkflow(context, input, signal),
   },

@@ -50,7 +50,10 @@ export const fieldDecisionStep = z.object({
   reason: fieldDecisionReason,
   effect: z.enum(["used", "blocked", "fallback", "overridden", "context"]),
   observed: z.array(fieldExplanationSource),
-  /** The matching row in chain.rows, including any branch summary rows. */
+  /**
+   * The matching row in chain.rows, including any branch summary rows.
+   * @public Names a generated native model.
+   */
   rowIndex: z.number().int().nonnegative(),
   branch: entityRefSchema.optional(),
   coverage: fieldEvidenceCoverage.optional(),

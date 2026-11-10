@@ -3,11 +3,9 @@ import {
   vendorFilterFields as vendorBaseFilterFields,
 } from "@cubby/schemas/entities/vendor";
 import { z } from "zod";
-import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
 import { imageUrlSummary } from "./image-summary";
 
 import { vendorShortcode } from "./identifiers";
-import { createPaginatedResponseSchema } from "./pagination";
 import { presenceFilter } from "./pagination";
 
 /** Comparison key for photo Brand evidence, member rejections and batch choices. */
@@ -40,7 +38,6 @@ export const setVendorSenderOut = z.object({
   sender: z.string(),
   vendorId: vendorShortcode.nullable(),
 });
-export type FetchVendorLogoInput = z.infer<typeof fetchVendorLogoInput>;
 
 export const vendorFilterFields = {
   ...vendorBaseFilterFields,
@@ -50,15 +47,7 @@ export const vendorFilterFields = {
 export const vendorFiltersSchema = z.object(vendorFilterFields);
 export type VendorFilters = z.infer<typeof vendorFiltersSchema>;
 
-// `purchaseCount`, `spend`, and `latestPurchaseDate` are rollups over the
-// vendor's live purchases and their expenses, resolved by correlated
-// subqueries in repo/vendor.ts — not columns on `Vendor`.
-export type VendorSortField = GeneratedEntitySortField<"vendor">;
-
-export const vendorListResponse = createPaginatedResponseSchema(vendorOut);
-export type VendorListResponse = z.infer<typeof vendorListResponse>;
-
-export const vendorOptionsOut = z.array(
+const vendorOptionsOut = z.array(
   z.object({
     id: vendorShortcode,
     name: z.string(),
@@ -72,7 +61,6 @@ export const mergeVendorsInput = z.object({
   keepId: vendorShortcode,
   mergeIds: z.array(vendorShortcode).min(1),
 });
-export type MergeVendorsInput = z.infer<typeof mergeVendorsInput>;
 
 /**
  * What a vendor merge actually moved or carried — populated straight from the
@@ -111,7 +99,6 @@ export const mergeVendorsOut = z.object({
   vendor: vendorOut,
   mergeSummary: vendorMergeSummaryOut,
 });
-export type MergeVendorsOut = z.infer<typeof mergeVendorsOut>;
 
 const ORDER_ID_TOKEN = "{orderId}";
 
@@ -143,8 +130,7 @@ export const isSyntheticOrderId = (orderId: string): boolean =>
  * - A scheme-less paste (`homedepot.com/orders?orderID={orderId}` — the natural
  *   thing to copy out of a browser) yields a string `z.url()` REJECTS, which
  *   would throw during output validation and 500 every `purchase.list` /
- *   `expense.list` / `problems.getFast` read containing that vendor, not merely
- *   drop the one link.
+ *   `expense.list` read containing that vendor, not merely drop the one link.
  * - `z.url()` ACCEPTS `javascript:alert(1)`, so validity alone is not enough:
  *   the result is rendered into an `href`, and a non-http(s) scheme there is a
  *   script-execution vector. Hence the explicit protocol allowlist rather than

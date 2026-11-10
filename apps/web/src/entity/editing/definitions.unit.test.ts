@@ -52,7 +52,6 @@ const explicitNoneResolution = () => ({
       provenance: { kind: "own", ownership: { kind: "record" } },
     },
   },
-  work: { kind: "idle" },
 });
 
 describe("entity edit definitions", () => {

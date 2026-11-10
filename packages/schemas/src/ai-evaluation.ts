@@ -8,6 +8,7 @@ export const MEMBER_CANCELLED_AI_WORK = "Cancelled by a member";
 /** Public confidence labels and eligible empty-field filling share one boundary. */
 export const HIGH_CONFIDENCE_PROBABILITY = 0.85;
 
+/** @public Names a generated native model. */
 export const aiDependencyStamp = z.object({
   feature: z.string().min(1),
   promptVersion: z.string().min(1),
@@ -75,7 +76,7 @@ export const aiExecutionKind = z.enum([
   "mail_discovery",
 ]);
 export type AiExecutionKind = z.infer<typeof aiExecutionKind>;
-export const aiEvaluationTargetKind = z.enum(["field", "email"]);
+const aiEvaluationTargetKind = z.enum(["field", "email"]);
 export const aiEvaluationTarget = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal(aiEvaluationTargetKind.enum.field),
@@ -134,7 +135,10 @@ export const aiRefreshProgress = z.object({
   errors: z.array(z.string()).max(10).optional(),
 });
 
-/** Ordered provider input evidence retained with field correction identity recipes. */
+/**
+ * Ordered provider input evidence retained with field correction identity recipes.
+ * @public Names a generated native model.
+ */
 export const capturedFieldInput = z.object({
   feature: z.string(),
   promptVersion: z.string(),

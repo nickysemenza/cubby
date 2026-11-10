@@ -3,7 +3,6 @@ import { eq } from "drizzle-orm";
 
 import {
   decisionChoiceFitsContext,
-  runDecisionChoice,
   runDecisionChoices,
   type DecisionChoiceResult,
   type DecisionPort,
@@ -57,24 +56,6 @@ const promotesDocument = (result: DecisionChoiceResult) =>
   result.confidence === "high" &&
   MAIL_ATTACHMENT_PURPOSE_FEATURE.choices[result.selectedIndex ?? -1] ===
     "purchase_document";
-
-/** Only a confident useful-document decision promotes a file; uncertainty retains the original. */
-export async function shouldPromoteMailAttachment(
-  mail: Pick<RetainedMail, "sender" | "subject" | "content" | "rawChecksum">,
-  attachment: AttachmentEvidence,
-  usage: AiRunContext,
-  port?: DecisionPort,
-) {
-  const prompt = attachmentPrompts(mail, [attachment])[0]!;
-  if (!decisionChoiceFitsContext(prompt)) return false;
-  const result = await runDecisionChoice({
-    ...prompt,
-    feature: MAIL_ATTACHMENT_PURPOSE_FEATURE,
-    usage,
-    port,
-  });
-  return promotesDocument(result);
-}
 
 /** Share email preparation and cache/model admission without changing attachment evidence. */
 export async function shouldPromoteMailAttachments(

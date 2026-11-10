@@ -19,10 +19,7 @@ import { preparePurchaseImport } from "../operations/import-orders";
 import { startImportRunFixture } from "../service/import-run.fixtures";
 import { resolveRunFinding } from "./findings";
 import { prepareSourceOrderReconciliation } from "./reconciliation";
-import {
-  loadImportSourceFamilyOrders,
-  readImportSourceClaimFamily,
-} from "./source-claim-family";
+import { readImportSourceClaimFamily } from "./source-claim-family";
 import { importVendorOrder } from "./writer";
 
 // A canonical source must replay its historical associations before any write;
@@ -197,22 +194,6 @@ describe("canonical source claim families", () => {
     expect(await f.db.select().from(expense)).toEqual(expenses);
     expect(await f.prepare(canonical, "prepare:after-family")).toBe(
       fingerprint,
-    );
-  });
-
-  it("resolves every historical alias key to its original association after canonicalization", async () => {
-    const f = await world();
-    const associations = await f.db.select().from(importSourceOrder);
-    await f.canonicalize();
-    const history = await loadImportSourceFamilyOrders(f.db, {
-      ledgerPartyId: f.party.id,
-      externalKeys: [f.firstAlias.externalKey, f.secondAlias.externalKey],
-    });
-    expect(history.map(({ association }) => association.id).sort()).toEqual(
-      associations.map(({ id }) => id).sort(),
-    );
-    expect(history.map(({ claim }) => claim.externalKey).sort()).toEqual(
-      [f.firstAlias.externalKey, f.secondAlias.externalKey].sort(),
     );
   });
 

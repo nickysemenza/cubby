@@ -45,20 +45,7 @@ describe("Product family current placement values", () => {
       matchReason: "Synthetic match",
       matchTerms: ["wrench"],
     };
-    const missing = searchInventoryPlacementSchema.parse({
-      ...placement,
-      fields: {
-        ...placement.fields,
-        amount: {
-          ...placement.fields.amount,
-          work: {
-            kind: "failed",
-            error: "Synthetic placement amount unavailable",
-            retryAt: null,
-          },
-        },
-      },
-    });
+    const missing = searchInventoryPlacementSchema.parse(placement);
     const group = searchResultGroupSchema.parse({
       kind: "product",
       key: product,
@@ -75,10 +62,7 @@ describe("Product family current placement values", () => {
     expect(child.destination.id).toBe(placement.id);
     render(<ProductFamilyChildContent child={child} />);
     expect(screen.getByText("Synthetic room › Shelf")).toBeVisible();
-    expect(screen.getByText("Unavailable")).toBeVisible();
-    expect(
-      screen.getByLabelText("Synthetic placement amount unavailable"),
-    ).toBeVisible();
+    expect(screen.getByLabelText("Not calculated yet")).toBeVisible();
     expect(screen.queryByText("0 each")).not.toBeInTheDocument();
   });
 });

@@ -28,6 +28,7 @@ const SHIPMENT_PURPOSE_PRESENTATION = {
   },
 } satisfies Record<ShipmentPurpose, { color: ColorToken; glyph: EnumIcon }>;
 
+/** @public The shortcode registry generator parses this module's `definition` and `readSchemas`. */
 export const { definition, readSchemas } = defineEntityModel({
   key: "shipment",
   names: { singular: "Shipment", plural: "Shipments" },

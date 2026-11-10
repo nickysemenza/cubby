@@ -1,7 +1,6 @@
 import { z } from "zod";
 import { SYSTEM_USER_ID } from "./identifier-fields";
 import type { DeviceId, RunId, UserId } from "./identifiers";
-export { SYSTEM_USER_ID };
 
 /**
  * How a write entered the app. Who and what did it are separate columns:

@@ -10,6 +10,7 @@ import {
 } from "../identifier-fields.js";
 import { defineEntity, defineEntityModel } from "./definition.js";
 
+/** @public The shortcode registry generator parses this module's `definition` and `readSchemas`. */
 export const { definition, readSchemas } = defineEntityModel({
   key: "device",
   names: { singular: "Device", plural: "Devices" },

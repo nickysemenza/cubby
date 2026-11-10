@@ -25,6 +25,7 @@ export const labelField = <const Key extends string>(
  * One row of a server-composed display list (`display.itemsPath`): a title, an
  * optional second line and trailing figure already worded, and the record the
  * row opens when it names one. Clients draw the rows; none re-derives a figure.
+ * @public Names a generated native model.
  */
 export const displayItem = z.object({
   entity: z.string().nullable(),
@@ -38,7 +39,10 @@ export type DisplayItem = z.infer<typeof displayItem>;
 /** The wire shape of a display list: items, or absent. */
 export const displayItems = z.array(displayItem).nullish();
 
-/** A server-composed display list a field's `display.itemsPath` names. */
+/**
+ * A server-composed display list a field's `display.itemsPath` names.
+ * @public Names a generated native model.
+ */
 export const displayItemsField = <const Key extends string>(
   key: Key,
   source: string,

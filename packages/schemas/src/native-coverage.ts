@@ -637,7 +637,7 @@ type HeroActionField = {
  * flow never adds a write path; the generated `NativeFlowID` makes the app switch over all of them.
  */
 export const NATIVE_FLOWS = ["receiveExpense", "locationPhotoPass"] as const;
-export type NativeFlowId = (typeof NATIVE_FLOWS)[number];
+type NativeFlowId = (typeof NATIVE_FLOWS)[number];
 
 /**
  * What the one generic native hero-action runner (`HeroActionRunner`) does for a verb. The verb
@@ -899,7 +899,7 @@ export const nativeHeroActionPlans = {
 } as const satisfies Partial<Record<HeroActionId, NativeHeroActionPlan>>;
 
 /** A record condition: the value at `path` (`readPath` grammar) is, or is not, one of these. */
-export type NativeRecordCondition = {
+type NativeRecordCondition = {
   readonly path: string;
   readonly oneOf?: readonly string[];
   readonly noneOf?: readonly string[];

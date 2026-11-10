@@ -1,10 +1,7 @@
 import { z } from "zod";
 import { shortcodeSchema } from "./identifier-fields";
 
-export const runStepInputStepKey = z.enum([
-  "statement_generate",
-  "statement_holds",
-]);
+const runStepInputStepKey = z.enum(["statement_generate", "statement_holds"]);
 
 const reference = z.object({
   run: shortcodeSchema("run"),
@@ -38,8 +35,3 @@ export const runStepInputInspection = z.discriminatedUnion("entity", [
   }),
 ]);
 export type RunStepInputInspection = z.infer<typeof runStepInputInspection>;
-
-export const supportsRunStepInputInspection = (
-  entity: string,
-  stepKey: string,
-) => runStepInputInspection.safeParse({ entity, stepKey }).success;

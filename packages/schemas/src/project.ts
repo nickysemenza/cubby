@@ -1,6 +1,5 @@
 import {
   taskOut,
-  type TaskOut,
   taskFilterFields as taskBaseFilterFields,
 } from "@cubby/schemas/entities/task";
 import {
@@ -34,16 +33,12 @@ import {
   projectPublicReadFields,
 } from "./generated/entity-field-envelope-fields.project.gen";
 import { withFieldEnvelopes } from "./field-envelope";
-import { dateRangeSchema, storedDateRangeSchema } from "./date-range";
+import { storedDateRangeSchema } from "./date-range";
 import { countLabel } from "@cubby/shared/pluralize";
 import { z } from "zod";
 import { dateTime } from "./codec";
 import { projectDateSourceSchema } from "./project-output-fields";
 export {
-  projectDateSourceSchema,
-  projectDateWindow,
-  projectRollup,
-  type ProjectDateSource,
   type ProjectDateWindow,
   type ProjectRollup,
 } from "./project-output-fields";
@@ -63,7 +58,6 @@ import {
 import { mutationSideEffectsSchema } from "./mutation-side-effects";
 import { dateBound, dateRangeFields, plainDate } from "./base-entity";
 import { generatedExpenseFieldSchemas } from "./generated/entity-field-schemas.expense.gen";
-import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
 import { projectKindSchema, projectStatusSchema } from "./project-fields";
 import { taskStatusSchema, tradeSchema } from "./task-fields";
 
@@ -109,9 +103,8 @@ export type { ProjectKind } from "./project-fields";
 export { taskStatusSchema, taskStatusValues } from "./task-fields";
 export type { TaskStatus } from "./task-fields";
 
-export const taskCompletionValues = ["all", "open", "done"] as const;
+const taskCompletionValues = ["all", "open", "done"] as const;
 export const taskCompletionSchema = z.enum(taskCompletionValues);
-export type TaskCompletion = z.infer<typeof taskCompletionSchema>;
 
 import { costTypeSchema } from "./expense-fields";
 export { costTypeValues, costTypeSchema } from "./expense-fields";
@@ -125,7 +118,7 @@ export const UNKNOWN_MANUFACTURER_LABEL = "Unknown brandName";
 
 export { MAX_PROJECT_TREE_DEPTH } from "./project-fields";
 
-export const projectOptionsOut = z.object({
+const projectOptionsOut = z.object({
   id: projectShortcode,
   name: z.string(),
   emoji: z.string().nullable(),
@@ -162,43 +155,17 @@ const projectScope = projectFiltersSchema
   .optional();
 export type ProjectFilters = z.infer<typeof projectFiltersSchema>;
 
-export type ProjectSortField = GeneratedEntitySortField<"project">;
-
 export const projectTreeInput = z.object({
   filters: projectFiltersSchema,
   ...sortPaginationFields,
 });
 
-export const taskBulkMoveInput = z.object({
-  ids: z.array(taskShortcode).min(1),
-  projectId: projectShortcode.nullable(),
-});
-export type TaskBulkMoveInput = z.infer<typeof taskBulkMoveInput>;
-
-export const taskBulkStatusInput = z.object({
-  ids: z.array(taskShortcode).min(1),
-  status: taskStatusSchema,
-});
-export type TaskBulkStatusInput = z.infer<typeof taskBulkStatusInput>;
-
-export const taskBulkTradeInput = z.object({
-  ids: z.array(taskShortcode).min(1),
-  trade: tradeSchema,
-});
-export type TaskBulkTradeInput = z.infer<typeof taskBulkTradeInput>;
-
-export const taskBulkDueDateInput = z.object({
-  ids: z.array(taskShortcode).min(1),
-  due: dateRangeSchema.nullable(),
-});
-export type TaskBulkDueDateInput = z.infer<typeof taskBulkDueDateInput>;
-
+/** @public Names a generated native model. */
 export const taskBoardMovePatch = z.object({
   status: taskStatusSchema.optional(),
   projectId: projectShortcode.nullable().optional(),
   trade: tradeSchema.optional(),
 });
-export type TaskBoardMovePatch = z.infer<typeof taskBoardMovePatch>;
 
 /** Placement anchors refer to the complete group; clients never renumber a partial page. */
 export const taskBulkReorderInput = z
@@ -257,8 +224,6 @@ export const taskFilterFields = {
 export const taskFiltersSchema = z.object(taskFilterFields);
 export type TaskFilters = z.infer<typeof taskFiltersSchema>;
 
-export type TaskSortField = GeneratedEntitySortField<"task">;
-
 export const taskBulkMutationOut = z.object({
   items: z.array(taskOut),
   sideEffects: mutationSideEffectsSchema,
@@ -272,7 +237,7 @@ export type CreateProjectFromTasksInput = z.infer<
   typeof createProjectFromTasksInput
 >;
 
-export const blockedReasonSchema = z.object({
+const blockedReasonSchema = z.object({
   kind: z.enum(["manual", "task", "project"]),
   chain: z.array(
     z.object({
@@ -288,22 +253,16 @@ export const blockedReasonSchema = z.object({
 });
 export type BlockedReason = z.infer<typeof blockedReasonSchema>;
 
-// Actionable/blocked rows are always top-level (subtask rows are excluded —
-// see repo/task/actionable.ts); the row shape is exactly `taskOut`.
-export type ActionableTaskOut = TaskOut;
-
 export const blockedTaskOut = z.object({
   task: taskOut,
   reasons: z.array(blockedReasonSchema),
 });
-export type BlockedTaskOut = z.infer<typeof blockedTaskOut>;
 
 export const actionableTasksOut = z.object({
   next: z.array(taskOut),
   later: z.array(taskOut),
   blocked: z.array(blockedTaskOut),
 });
-export type ActionableTasksOut = z.infer<typeof actionableTasksOut>;
 
 /** The compact ready-work projection used by Today's daily briefing. */
 export const taskTodayBriefingItemOut = z.object({
@@ -317,9 +276,8 @@ export const taskTodayBriefingItemOut = z.object({
   /** The row's one-tap commands (Done), carried onto the briefing report's row. */
   commands: z.array(reportCommand),
 });
-export type TaskTodayBriefingItemOut = z.infer<typeof taskTodayBriefingItemOut>;
 
-export const taskTodayBriefingOut = z.object({
+const taskTodayBriefingOut = z.object({
   // At most four rows: enough to answer Today's immediate question without
   // making the dashboard fetch the full actionable graph.
   next: z.array(taskTodayBriefingItemOut).max(4),
@@ -346,7 +304,6 @@ export const taskTimelineOut = z.object({
   tasks: z.array(taskOut),
   undatedCount: z.number().int(),
 });
-export type TaskTimelineOut = z.infer<typeof taskTimelineOut>;
 
 export { PRODUCT_QUANTITY_DESCRIPTION } from "./expense-fields";
 
@@ -357,24 +314,6 @@ export const expenseCreateInput = z
     message: EXPENSE_DATE_REQUIRED_MESSAGE,
   });
 export type ExpenseCreateInput = z.infer<typeof expenseCreateInput>;
-
-export const expenseBulkMoveInput = z.object({
-  ids: z.array(expenseShortcode).min(1),
-  projectId: projectShortcode.nullable(),
-});
-export type ExpenseBulkMoveInput = z.infer<typeof expenseBulkMoveInput>;
-
-export const expenseBulkTradeInput = z.object({
-  ids: z.array(expenseShortcode).min(1),
-  trade: tradeSchema,
-});
-export type ExpenseBulkTradeInput = z.infer<typeof expenseBulkTradeInput>;
-
-export const expenseBulkCostTypeInput = z.object({
-  ids: z.array(expenseShortcode).min(1),
-  costType: costTypeSchema,
-});
-export type ExpenseBulkCostTypeInput = z.infer<typeof expenseBulkCostTypeInput>;
 
 /** An expense's cost direction; zero and unknown costs have none. */
 export const expenseCostSign = z.enum(["negative", "positive"]);
@@ -435,9 +374,6 @@ export const expenseFilterFields = {
 };
 export const expenseFiltersSchema = z.object(expenseFilterFields);
 export type ExpenseFilters = z.infer<typeof expenseFiltersSchema>;
-export type { ExpenseProductCategoryRemainder } from "./expense-fields";
-
-export type ExpenseSortField = GeneratedEntitySortField<"expense">;
 
 export const expenseChargeContextPurchaseOut = withFieldEnvelopes(
   z.object({
@@ -458,7 +394,7 @@ export const expenseChargeContextOut = z
   })
   .nullable();
 
-export const deleteExpensesWithPurchaseEffectsOut = z.object({
+const deleteExpensesWithPurchaseEffectsOut = z.object({
   deleted: z.number().int().nonnegative(),
   deletedIds: z.array(expenseShortcode),
   affectedPurchaseIds: z.array(purchaseShortcode),
@@ -466,34 +402,6 @@ export const deleteExpensesWithPurchaseEffectsOut = z.object({
 });
 export type DeleteExpensesWithPurchaseEffectsOut = z.infer<
   typeof deleteExpensesWithPurchaseEffectsOut
->;
-
-export const deleteExpensesWithPurchaseEffectsInput = z.strictObject({
-  ids: z
-    .array(expenseShortcode)
-    .min(1)
-    .max(200)
-    .superRefine((ids, ctx) => {
-      const seen = new Set<string>();
-      for (const [index, id] of ids.entries()) {
-        if (seen.has(id)) {
-          ctx.addIssue({
-            code: "custom",
-            path: [index],
-            message: `Duplicate expense id ${id}; each expense may be deleted once.`,
-          });
-        }
-        seen.add(id);
-      }
-    }),
-});
-
-export const expenseListAndSideEffectsOut = z.object({
-  items: z.array(expenseOut),
-  sideEffects: mutationSideEffectsSchema,
-});
-export type ExpenseListAndSideEffectsOut = z.infer<
-  typeof expenseListAndSideEffectsOut
 >;
 
 const expenseAggregateFields = {
@@ -511,21 +419,19 @@ export const expenseAnalyticsSummary = z.object({
   /** Rows with an unknown cost: counted, never summed as $0. */
   unpricedCount: z.number().int(),
 });
-export type ExpenseAnalyticsSummary = z.infer<typeof expenseAnalyticsSummary>;
 
-export const expenseCostTypeAggregate = z.object({
+const expenseCostTypeAggregate = z.object({
   costType: costTypeSchema,
   ...expenseAggregateFields,
 });
 export type ExpenseCostTypeAggregate = z.infer<typeof expenseCostTypeAggregate>;
 
-export const expenseTradeAggregate = z.object({
+const expenseTradeAggregate = z.object({
   trade: tradeSchema.nullable(),
   ...expenseAggregateFields,
 });
-export type ExpenseTradeAggregate = z.infer<typeof expenseTradeAggregate>;
 
-export const expenseTradeCostAggregate = z.object({
+const expenseTradeCostAggregate = z.object({
   trade: tradeSchema.nullable(),
   costType: costTypeSchema,
   ...expenseAggregateFields,
@@ -534,7 +440,7 @@ export type ExpenseTradeCostAggregate = z.infer<
   typeof expenseTradeCostAggregate
 >;
 
-export const expenseMonthlyAggregate = z.object({
+const expenseMonthlyAggregate = z.object({
   month: z.string().describe('"yyyy-MM"'),
   ...expenseAggregateFields,
 });
@@ -543,13 +449,13 @@ export type ExpenseMonthlyAggregate = z.infer<typeof expenseMonthlyAggregate>;
 export const expenseMonthlySummaryOut = z.array(expenseMonthlyAggregate);
 export type ExpenseMonthlySummaryOut = z.infer<typeof expenseMonthlySummaryOut>;
 
-export const expenseCumulativePoint = z.object({
+const expenseCumulativePoint = z.object({
   month: z.string().describe('"yyyy-MM"'),
   cumulativeNet: money,
 });
 export type ExpenseCumulativePoint = z.infer<typeof expenseCumulativePoint>;
 
-export const expenseProjectAggregate = z.object({
+const expenseProjectAggregate = z.object({
   projectId: projectShortcode,
   projectName: z.string(),
   ...expenseAggregateFields,
@@ -568,7 +474,7 @@ export type ExpenseProjectAggregate = z.infer<typeof expenseProjectAggregate>;
  * Read the gap between `sum(byVendor.net)` and `summary.net` as the size of the
  * unattributed tail, not as a bug.
  */
-export const expenseVendorAggregate = z.object({
+const expenseVendorAggregate = z.object({
   vendorId: vendorShortcode,
   vendorName: z.string(),
   ...expenseAggregateFields,
@@ -624,10 +530,7 @@ export type ExpenseAnalyzeComparison = z.infer<
  * distinct `uncategorized` (no category resolved) and `unclassified` (receipt
  * role unresolved) buckets, so the axis reconciles to the filtered net.
  */
-export const expenseAnalyzeSpendingCategoryRollupSchema = z.enum([
-  "none",
-  "root",
-]);
+const expenseAnalyzeSpendingCategoryRollupSchema = z.enum(["none", "root"]);
 export type ExpenseAnalyzeSpendingCategoryRollup = z.infer<
   typeof expenseAnalyzeSpendingCategoryRollupSchema
 >;
@@ -683,26 +586,25 @@ export const expenseAnalyzeInput = z
   });
 export type ExpenseAnalyzeInput = z.infer<typeof expenseAnalyzeInput>;
 
-export const expenseAnalyzeAggregate = z.object({
+const expenseAnalyzeAggregate = z.object({
   ...expenseAggregateFields,
   unpricedCount: z.number().int().nonnegative().default(0),
 });
 export type ExpenseAnalyzeAggregate = z.infer<typeof expenseAnalyzeAggregate>;
 
-export const expenseAnalyzeBucket = z.object({
+const expenseAnalyzeBucket = z.object({
   key: z.string(),
   label: z.string(),
   filter: z.record(z.string(), z.string()),
 });
 export type ExpenseAnalyzeBucket = z.infer<typeof expenseAnalyzeBucket>;
 
-export const expenseAnalyzeCell = z.object({
+const expenseAnalyzeCell = z.object({
   rowKey: z.string(),
   columnKey: z.string().nullable(),
   current: expenseAnalyzeAggregate,
   previous: expenseAnalyzeAggregate.nullable(),
 });
-export type ExpenseAnalyzeCell = z.infer<typeof expenseAnalyzeCell>;
 
 const expenseAnalyzeComparisonOutput = z.object({
   mode: expenseAnalyzeComparisonSchema,
@@ -716,7 +618,7 @@ const expenseAnalyzeValuePair = z.object({
   previous: expenseAnalyzeAggregate.nullable(),
 });
 
-export const expenseAnalyzeReadyOut = z.object({
+const expenseAnalyzeReadyOut = z.object({
   status: z.literal("ready"),
   rowDimension: expenseAnalyzeRowDimensionSchema,
   columnDimension: expenseAnalyzeColumnDimensionSchema.nullable(),
@@ -739,15 +641,12 @@ export const expenseAnalyzeReadyOut = z.object({
 });
 export type ExpenseAnalyzeReadyOut = z.infer<typeof expenseAnalyzeReadyOut>;
 
-export const expenseAnalyzeTooLargeOut = z.object({
+const expenseAnalyzeTooLargeOut = z.object({
   status: z.literal("too_large"),
   reason: z.enum(["row_limit", "month_column_limit", "cell_limit"]),
   limit: z.number().int().positive(),
   observedAtLeast: z.number().int().nonnegative(),
 });
-export type ExpenseAnalyzeTooLargeOut = z.infer<
-  typeof expenseAnalyzeTooLargeOut
->;
 
 export const expenseAnalyzeOut = z.discriminatedUnion("status", [
   expenseAnalyzeReadyOut,
@@ -758,7 +657,7 @@ export type ExpenseAnalyzeOut = z.infer<typeof expenseAnalyzeOut>;
 /** Ledger URL search params selecting a node's or path's rows. */
 const expenseFlowLedgerFilter = z.record(z.string(), z.string());
 
-export const expenseFlowSankeyNode = z.object({
+const expenseFlowSankeyNode = z.object({
   id: z.string(),
   column: z.enum(["funder", "project", "spendingCategory"]),
   label: z.string(),
@@ -767,7 +666,7 @@ export const expenseFlowSankeyNode = z.object({
 });
 export type ExpenseFlowSankeyNode = z.infer<typeof expenseFlowSankeyNode>;
 
-export const expenseFlowSankeyLink = z.object({
+const expenseFlowSankeyLink = z.object({
   source: z.string(),
   target: z.string(),
   value: money,
@@ -775,13 +674,12 @@ export const expenseFlowSankeyLink = z.object({
 });
 export type ExpenseFlowSankeyLink = z.infer<typeof expenseFlowSankeyLink>;
 
-export const expenseFlowSankeyPath = z.object({
+const expenseFlowSankeyPath = z.object({
   funder: z.string(),
   project: z.string(),
   category: z.string(),
   net: money,
 });
-export type ExpenseFlowSankeyPath = z.infer<typeof expenseFlowSankeyPath>;
 
 /**
  * Funder → project bucket → root Spending Category over the analytics
@@ -798,7 +696,7 @@ export const expenseFlowSankeyOut = z.object({
 });
 export type ExpenseFlowSankeyOut = z.infer<typeof expenseFlowSankeyOut>;
 
-export const expenseFacetIdSchema = z.enum([
+const expenseFacetIdSchema = z.enum([
   "costType",
   "lineKind",
   "lineBasis",
@@ -809,7 +707,6 @@ export const expenseFacetIdSchema = z.enum([
   "vendor",
   "orderIdPresence",
 ]);
-export type ExpenseFacetId = z.infer<typeof expenseFacetIdSchema>;
 
 export const expenseFacetCountsInput = z.object({
   filters: expenseFiltersSchema,
@@ -840,7 +737,7 @@ export type ExpenseFacetCountsOut = z.infer<typeof expenseFacetCountsOut>;
  * `expenseMatchInput`. Lives here rather than beside `RECONCILIATION_TOLERANCE`
  * in ./purchase because that module imports from this one.
  */
-export const HOUSE_TAX_RATE = 0.08625;
+const HOUSE_TAX_RATE = 0.08625;
 
 /**
  * The standing bucket for spend that is life rather than project work —
@@ -855,12 +752,12 @@ export const HOUSE_TAX_RATE = 0.08625;
  */
 export { HOUSEHOLD_PROJECT_SHORTCODE } from "./project-fields";
 
-export const MATCH_TOLERANCE_LOW = 0.1;
-export const MATCH_TOLERANCE_HIGH = 0.15;
-export const MATCH_AMOUNT_FLOOR = 1.0;
-export const MATCH_MAX_ROWS = 200;
+const MATCH_TOLERANCE_LOW = 0.1;
+const MATCH_TOLERANCE_HIGH = 0.15;
+const MATCH_AMOUNT_FLOOR = 1.0;
+const MATCH_MAX_ROWS = 200;
 
-export const expenseMatchRow = z.object({
+const expenseMatchRow = z.object({
   key: z.string().min(1),
   date: plainDate,
   /**
@@ -872,7 +769,6 @@ export const expenseMatchRow = z.object({
   orderId: z.string().optional(),
   vendor: z.string().optional(),
 });
-export type ExpenseMatchRow = z.infer<typeof expenseMatchRow>;
 
 export const expenseMatchInput = z.object({
   rows: z.array(expenseMatchRow).min(1).max(MATCH_MAX_ROWS),
@@ -902,13 +798,11 @@ export const expenseMatchInput = z.object({
   taxRate: z.number().min(0).max(1).default(HOUSE_TAX_RATE),
   maxCandidatesPerRow: z.number().int().min(1).max(50).default(10),
 });
-export type ExpenseMatchInput = z.input<typeof expenseMatchInput>;
 export type ExpenseMatchOptions = z.output<typeof expenseMatchInput>;
 
-export const expenseMatchedOn = z.enum(["order_id", "amount_date"]);
-export type ExpenseMatchedOn = z.infer<typeof expenseMatchedOn>;
+const expenseMatchedOn = z.enum(["order_id", "amount_date"]);
 
-export const expenseMatchRatioLabel = z.enum([
+const expenseMatchRatioLabel = z.enum([
   "exact",
   "plus_tax",
   "pre_tax",
@@ -916,7 +810,7 @@ export const expenseMatchRatioLabel = z.enum([
 ]);
 export type ExpenseMatchRatioLabel = z.infer<typeof expenseMatchRatioLabel>;
 
-export const rawExpenseMatchPurchaseContext = z.object({
+const rawExpenseMatchPurchaseContext = z.object({
   id: purchaseShortcode,
   vendorName: z.string().nullable(),
   orderId: z.string().nullable(),
@@ -942,7 +836,7 @@ export const expenseMatchPurchaseContext = withFieldEnvelopes(
   purchasePublicReadFields,
 );
 
-export const expenseMatchCandidate = z.object({
+const expenseMatchCandidate = z.object({
   expenseId: expenseShortcode,
   name: z.string(),
   cost: moneyNullable,
@@ -978,7 +872,6 @@ export const expenseMatchCandidate = z.object({
    */
   tokenOverlap: z.number().int(),
 });
-export type ExpenseMatchCandidate = z.infer<typeof expenseMatchCandidate>;
 
 export const expenseMatchOut = z.object({
   matches: z.array(
@@ -994,12 +887,11 @@ export const expenseMatchOut = z.object({
     exactOrderIdHits: z.number().int(),
   }),
 });
-export type ExpenseMatchOut = z.infer<typeof expenseMatchOut>;
-export const rawExpenseMatchCandidate = expenseMatchCandidate.extend({
+const rawExpenseMatchCandidate = expenseMatchCandidate.extend({
   purchase: rawExpenseMatchPurchaseContext.nullable(),
 });
 export type RawExpenseMatchCandidate = z.infer<typeof rawExpenseMatchCandidate>;
-export const rawExpenseMatchOut = expenseMatchOut.extend({
+const rawExpenseMatchOut = expenseMatchOut.extend({
   matches: z.array(
     z.object({
       key: z.string(),
@@ -1014,7 +906,6 @@ export const expenseTradeAffinityOut = z.object({
   trade: tradeSchema,
   count: z.number(),
 });
-export type ExpenseTradeAffinityOut = z.infer<typeof expenseTradeAffinityOut>;
 
 export const projectResourceProjectInput = z.object({
   projectId: projectShortcode,
@@ -1041,9 +932,11 @@ export const repointProjectUsesOut = z.object({
   alreadyPresent: z.number().int().nonnegative(),
 });
 
+/** @public Names a generated native model. */
 export const reusableResourceCategory = z.enum(["tools", "software"]);
 export type ReusableResourceCategory = z.infer<typeof reusableResourceCategory>;
 
+/** @public Names a generated native model. */
 export const projectSharedWindowOut = z.object({
   startDate: plainDate,
   endDate: plainDate,
@@ -1092,10 +985,7 @@ export const projectResourceOut = projectResourceIdentity.extend({
 });
 export type ProjectResourceOut = z.infer<typeof projectResourceOut>;
 
-export const projectToolSuggestionLane = z.enum([
-  "purchased_here",
-  "trade_match",
-]);
+const projectToolSuggestionLane = z.enum(["purchased_here", "trade_match"]);
 export type ProjectToolSuggestionLane = z.infer<
   typeof projectToolSuggestionLane
 >;
@@ -1174,7 +1064,6 @@ export const projectToolUsageSetInput = z.object({
   productId: productShortcode,
   used: z.boolean(),
 });
-export type ProjectToolUsageSetInput = z.infer<typeof projectToolUsageSetInput>;
 
 /**
  * Deliberately just the echoed pair plus `changed` — no recomputed economics.
@@ -1191,7 +1080,6 @@ export const projectToolUsageSetOut = z.object({
   used: z.boolean(),
   changed: z.boolean(),
 });
-export type ProjectToolUsageSetOut = z.infer<typeof projectToolUsageSetOut>;
 
 /**
  * Full replacement of the project set for one tool — `[]` clears it. The
@@ -1203,18 +1091,10 @@ export const productProjectUsesSetInput = z.object({
   productId: productShortcode,
   projectIds: z.array(projectShortcode).max(200),
 });
-export type ProductProjectUsesSetInput = z.infer<
-  typeof productProjectUsesSetInput
->;
 
 export const productProjectUsesSetOut = z.object({
   changed: z.number().int().nonnegative(),
 });
-export type ProductProjectUsesSetOut = z.infer<typeof productProjectUsesSetOut>;
-
-export const projectMcpListOut = createPaginatedResponseSchema(projectOut);
-export const taskMcpListOut = createPaginatedResponseSchema(taskOut);
-export const expenseMcpListOut = createPaginatedResponseSchema(expenseOut);
 
 /**
  * Shared scope filters for both dashboard endpoints. Empty/omitted
@@ -1229,7 +1109,7 @@ export const expenseMcpListOut = createPaginatedResponseSchema(expenseOut);
  * `hiddenByDate.projects`. Non-recursive: a parent matches on its own content,
  * not its children's (see repo/project/dashboard-shared.ts).
  */
-export const projectDashboardFilterFields = {
+const projectDashboardFilterFields = {
   statusScope: z.array(projectStatusSchema).optional(),
   kinds: z.array(projectKindSchema).optional(),
   locations: z.array(z.string()).optional(),
@@ -1261,7 +1141,6 @@ export const toolGalleryInput = z.object({
     })
     .default({ pageIndex: 0, pageSize: 60 }),
 });
-export type ToolGalleryInput = z.input<typeof toolGalleryInput>;
 export type ToolGalleryFilters = z.infer<typeof toolGalleryInput>;
 
 export const toolGalleryInventoryEntryOut = withFieldEnvelopes(
@@ -1293,7 +1172,7 @@ export const toolGalleryItemOut = projectResourceIdentity.extend({
 });
 export type ToolGalleryItemOut = z.infer<typeof toolGalleryItemOut>;
 
-export const toolGalleryGroupOut = z.object({
+const toolGalleryGroupOut = z.object({
   key: z.string(),
   label: z.string(),
   itemCount: z.number().int().positive(),
@@ -1312,12 +1191,11 @@ export const toolGalleryOut = createPaginatedResponseSchema(
 });
 export type ToolGalleryOut = z.infer<typeof toolGalleryOut>;
 
-export const projectToolMatrixGroupBy = z.enum(["trade", "brandName"]);
-export type ProjectToolMatrixGroupBy = z.infer<typeof projectToolMatrixGroupBy>;
+const projectToolMatrixGroupBy = z.enum(["trade", "brandName"]);
 
-export const DEFAULT_TOOL_MATRIX_COST_FLOOR = 100;
-export const MAX_TOOL_MATRIX_COLUMNS = 40;
-export const DEFAULT_TOOL_MATRIX_COLUMNS = 24;
+const DEFAULT_TOOL_MATRIX_COST_FLOOR = 100;
+const MAX_TOOL_MATRIX_COLUMNS = 40;
+const DEFAULT_TOOL_MATRIX_COLUMNS = 24;
 
 export const projectToolMatrixInput = z.object({
   ...projectDashboardFilterFields,
@@ -1333,7 +1211,6 @@ export const projectToolMatrixInput = z.object({
     .default(DEFAULT_TOOL_MATRIX_COLUMNS),
   columnPage: z.number().int().positive().default(1),
 });
-export type ProjectToolMatrixInput = z.input<typeof projectToolMatrixInput>;
 export type ProjectToolMatrixFilters = z.infer<typeof projectToolMatrixInput>;
 
 export const projectToolMatrixColumnOut = z.object({
@@ -1348,9 +1225,6 @@ export const projectToolMatrixColumnOut = z.object({
   attachedCount: z.number().int().nonnegative(),
   suggestedCount: z.number().int().nonnegative(),
 });
-export type ProjectToolMatrixColumnOut = z.infer<
-  typeof projectToolMatrixColumnOut
->;
 
 export const projectToolMatrixRowOut = projectResourceIdentity.extend({
   groupKey: z.string(),
@@ -1385,7 +1259,7 @@ export const projectToolMatrixRowOut = projectResourceIdentity.extend({
 });
 export type ProjectToolMatrixRowOut = z.infer<typeof projectToolMatrixRowOut>;
 
-export const projectToolMatrixCellOut = z.object({
+const projectToolMatrixCellOut = z.object({
   projectId: projectShortcode,
   productId: productShortcode,
   /**
@@ -1405,7 +1279,7 @@ export const projectToolMatrixCellOut = z.object({
 });
 export type ProjectToolMatrixCellOut = z.infer<typeof projectToolMatrixCellOut>;
 
-export const projectToolMatrixGroupOut = z.object({
+const projectToolMatrixGroupOut = z.object({
   key: z.string(),
   label: z.string(),
   rowCount: z.number().int().positive(),
@@ -1441,7 +1315,7 @@ export const projectToolMatrixOut = z.object({
 });
 export type ProjectToolMatrixOut = z.infer<typeof projectToolMatrixOut>;
 
-export const projectAttentionTypeValues = [
+const projectAttentionTypeValues = [
   "overdue_task",
   "stalled_project",
   "missing_budget",
@@ -1606,11 +1480,6 @@ type _AttentionUnionIsExhaustive =
 const _attentionUnionIsExhaustive: _AttentionUnionIsExhaustive = true;
 void _attentionUnionIsExhaustive;
 
-export type ProjectAttentionFacts<T extends ProjectAttentionType> = Extract<
-  ProjectAttentionItem,
-  { type: T }
->["facts"];
-
 type DistributivePick<T, K extends keyof T> = T extends unknown
   ? Pick<T, K>
   : never;
@@ -1675,13 +1544,12 @@ export type ProjectTaskStatusBreakdown = z.infer<
   typeof projectTaskStatusBreakdown
 >;
 
-export const projectFilterOptionsOut = z.object({
+const projectFilterOptionsOut = z.object({
   kinds: z.array(projectKindSchema),
   locations: z.array(z.string()),
   completionYears: z.array(z.string()),
   years: z.array(z.string()),
 });
-export type ProjectFilterOptionsOut = z.infer<typeof projectFilterOptionsOut>;
 
 export const projectDashboardSummaryOut = z.object({
   summary: z.object({
@@ -1724,9 +1592,6 @@ export const projectDashboardSummaryOut = z.object({
   }),
   completedCount: z.number().int(),
 });
-export type ProjectDashboardSummaryOut = z.infer<
-  typeof projectDashboardSummaryOut
->;
 
 export const projectPortfolioAnalyticsOut = z.object({
   costVsEstimate: z.array(
@@ -1767,3 +1632,17 @@ export const projectPortfolioAnalyticsOut = z.object({
 export type ProjectPortfolioAnalyticsOut = z.infer<
   typeof projectPortfolioAnalyticsOut
 >;
+
+/** @public Read through `import()` type queries. */
+export type BlockedTaskOut = z.infer<typeof blockedTaskOut>;
+
+/** @public Read through `import()` type queries. */
+export type ActionableTasksOut = z.infer<typeof actionableTasksOut>;
+
+/** @public Read through `import()` type queries. */
+export type ProjectDashboardSummaryOut = z.infer<
+  typeof projectDashboardSummaryOut
+>;
+
+/** @public Read through `import()` type queries. */
+export type TaskTimelineOut = z.infer<typeof taskTimelineOut>;

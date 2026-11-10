@@ -5,12 +5,15 @@ import {
   fieldEvidenceCoverage,
 } from "./field-explanation-evidence";
 export {
-  fieldDecisionStep,
   fieldExplanationSource,
-  fieldDecisionReason,
-  fieldEvidenceCoverage,
   type FieldDecisionStep,
 } from "./field-explanation-evidence";
+/** @public Names a generated native model. */
+export { fieldDecisionStep } from "./field-explanation-evidence";
+/** @public Names a generated native model. */
+export { fieldDecisionReason } from "./field-explanation-evidence";
+/** @public Names a generated native model. */
+export { fieldEvidenceCoverage } from "./field-explanation-evidence";
 import { fieldEnvelope } from "./field-envelope";
 import { dataExceptionReason, dataQualityStatus } from "./data-quality-shape";
 import { entityRefSchema } from "./entity-core";
@@ -48,7 +51,6 @@ export const fieldRefreshLocator = fieldExplanationInput.pick({
   surface: true,
   scope: true,
 });
-export type FieldRefreshLocator = z.output<typeof fieldRefreshLocator>;
 
 export const qualityBreakdown = z.object({
   /** Shipped native builds decode these keys; only `status` and `summary` carry meaning. */

@@ -63,7 +63,6 @@ export const scanStrayOut = withFieldEnvelopes(
   inventoryFieldEnvelopeFields,
   inventoryPublicReadFields,
 );
-export type ScanStrayOut = z.output<typeof scanStrayOut>;
 export const scanProductOut = withFieldEnvelopes(
   rawScanProduct,
   productFieldEnvelopeFields,
@@ -75,7 +74,6 @@ export const scanAtLocationOut = rawScanAtLocation
     product: scanProductOut,
     strays: z.array(scanStrayOut),
   });
-export type ScanAtLocationOut = z.infer<typeof scanAtLocationOut>;
 
 export const resolveScanStraysInput = z.object({
   targetLocationId: locationShortcode,
@@ -95,13 +93,13 @@ export type ResolveScanStraysInput = z.infer<typeof resolveScanStraysInput>;
  * Why a queued stray did not move. Structured, not prose, so a caller can
  * branch on it — `message` carries the sentence. Same split as
  * `describeToolError`'s `{code, reason, message}`.
+ * @public Names a generated native model.
  */
 export const scanStraySkipReason = z.enum([
   /** The source row is gone: a prior move in this batch consumed it. */
   "already-moved",
   "already-here",
 ]);
-export type ScanStraySkipReason = z.infer<typeof scanStraySkipReason>;
 
 export const resolveScanStraysOut = z.object({
   moved: z.number().int().nonnegative(),
@@ -110,6 +108,7 @@ export const resolveScanStraysOut = z.object({
    * existing destination row HARD-deletes its source, so by commit time a
    * queued id can legitimately no longer exist — and one stale row is no
    * reason to strand the other fifty.
+   * @public Names a generated native model.
    */
   skipped: z.array(
     z.object({

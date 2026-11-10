@@ -140,7 +140,12 @@ function DeclaredListActions({
         <Button
           key={link.path}
           variant="outline"
-          render={<Link to={link.path} />}
+          render={
+            <Link
+              to={link.path}
+              search={"search" in link ? link.search : undefined}
+            />
+          }
           nativeButton={false}
         >
           {link.label}

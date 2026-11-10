@@ -64,7 +64,6 @@ const base: ReadableFieldEnvelope = {
       provenance: { kind: "own", ownership: { kind: "record" } },
     },
   },
-  work: { kind: "idle" },
 };
 it("uses the declared enum label for the deciding value", () => {
   render(<DecisionChain data={explain(base)} />);

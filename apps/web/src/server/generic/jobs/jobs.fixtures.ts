@@ -16,8 +16,15 @@ import {
   type JobRow,
 } from "~/server/generic/jobs/repo/job-reads";
 
-/** The drain's lease heartbeat, for tests that renew a claim mid-page. */
-export { renewJob } from "~/server/generic/jobs/repo/queue";
+/** Insert bare queued Jobs in one statement, for backlog-shaped fixtures. */
+export const seedJobs = (
+  db: RepositoryQueryInput,
+  rows: readonly { key: string; kind: string; input: Record<string, never> }[],
+): Promise<JobRow[]> =>
+  repositoryQueries(db)
+    .insert(job)
+    .values([...rows])
+    .returning();
 
 /** Write Job columns directly: a forced state, an aged lease, a test-only priority. */
 export const updateJobs = (
@@ -55,10 +62,9 @@ export const replaceJobGeneration = (
     .set({ generation: sql`${job.generation} + 1` })
     .where(jobWhere(filter));
 
-/** Claim, hand back and settle a Job in a test, as the drain executor would. */
+/** Claim and settle a Job in a test, as the drain executor would. */
 export {
   claimJob,
   publishJobPage,
-  releaseJobClaim,
   type JobClaim,
 } from "~/server/generic/jobs/repo/queue";

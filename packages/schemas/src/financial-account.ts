@@ -1,34 +1,22 @@
 export type { FinancialAccountPartyPeriod } from "./financial-account-party-fields";
 import { z } from "zod";
-import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
-import {
-  createPaginatedResponseSchema,
-  oneOrMany,
-  presenceFilter,
-} from "./pagination";
+import { oneOrMany, presenceFilter } from "./pagination";
 import {
   financialAccountIdentityKind,
   financialAccountLast4 as last4,
 } from "./financial-account-fields";
-import {
-  financialAccountFilterFields as financialAccountBaseFilterFields,
-  financialAccountOut,
-} from "@cubby/schemas/entities/financialAccount";
+import { financialAccountFilterFields as financialAccountBaseFilterFields } from "@cubby/schemas/entities/financialAccount";
 
 export {
   cardLastFoursOn,
   currentLast4,
-  financialAccountCardNumber,
-  financialAccountCardNumberKind,
   financialAccountCardNumbers,
   financialAccountIdentity,
   financialAccountIdentityKind,
-  financialAccountSourceAlias,
   financialAccountSourceAliases,
   type FinancialAccountCardNumber,
   type FinancialAccountCardNumberKind,
   type FinancialAccountIdentity,
-  type FinancialAccountIdentityKind,
   type FinancialAccountSourceAlias,
 } from "./financial-account-fields";
 
@@ -40,18 +28,7 @@ export const financialAccountFilterFields = {
   externalAccountId: oneOrMany(z.string().min(1)).optional(),
   sourceAliasPresenceFilter: presenceFilter,
 };
-export const financialAccountFiltersSchema = z.object(
-  financialAccountFilterFields,
-);
+const financialAccountFiltersSchema = z.object(financialAccountFilterFields);
 export type FinancialAccountFilters = z.infer<
   typeof financialAccountFiltersSchema
->;
-
-export type FinancialAccountSortField =
-  GeneratedEntitySortField<"financialAccount">;
-
-export const financialAccountListResponse =
-  createPaginatedResponseSchema(financialAccountOut);
-export type FinancialAccountListResponse = z.infer<
-  typeof financialAccountListResponse
 >;

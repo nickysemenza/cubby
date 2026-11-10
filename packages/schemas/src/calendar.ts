@@ -50,7 +50,7 @@ import {
   tradeSchema,
 } from "./project";
 
-export const MAX_CALENDAR_RANGE_DAYS = 366;
+const MAX_CALENDAR_RANGE_DAYS = 366;
 const MILLISECONDS_PER_DAY = 86_400_000;
 
 function calendarRangeDays(value: {
@@ -74,7 +74,10 @@ export const calendarItemKind = z.enum([
 ]);
 export type CalendarItemKind = z.infer<typeof calendarItemKind>;
 
-/** A source may project more than one canonical entity kind. */
+/**
+ * A source may project more than one canonical entity kind.
+ * @public Names a generated native model.
+ */
 export const calendarSourceKind = z.enum([
   "meal",
   "task",
@@ -86,6 +89,7 @@ export type CalendarSourceKind = z.infer<typeof calendarSourceKind>;
 export const calendarSourceEntity = (source: CalendarSourceKind) =>
   source === "spending" ? "expense" : source;
 
+/** @public Names a generated native model. */
 export const calendarInteraction = z.enum(["move", "read-only"]);
 
 const calendarItemBase = {
@@ -268,9 +272,12 @@ export const calendarProjectItem = z.object({
   source: calendarProjectSource,
 });
 
-/** A planting's lifecycle milestones, in the order they occur. Each populated
+/**
+ * A planting's lifecycle milestones, in the order they occur. Each populated
  * milestone date becomes its own read-only calendar item — see
- * `loadCalendarPlantings`/`mapPlantingItems` in repo/calendar-plantings.ts. */
+ * `loadCalendarPlantings`/`mapPlantingItems` in repo/calendar-plantings.ts.
+ * @public Names a generated native model.
+ */
 export const calendarPlantingMilestone = z.enum([
   "sowed",
   "transplanted",
@@ -326,7 +333,7 @@ const calendarListFilterFields = {
   ids: z.array(z.string()).max(500).optional(),
 };
 
-export const calendarFilterFields = {
+const calendarFilterFields = {
   kinds: z.array(calendarSourceKind).nonempty().optional(),
   filters: z
     .object({
@@ -408,6 +415,7 @@ export const calendarRangeInput = calendarWindowInput.safeExtend({
 });
 export type CalendarRangeInput = z.infer<typeof calendarRangeInput>;
 
+/** @public Names a generated native model. */
 export const calendarDaySummary = z.object({
   actualSpend: money,
   plannedSpend: money,
@@ -434,7 +442,6 @@ export const calendarScheduleOut = z.object({
   tasks: z.array(taskOut),
   plantings: z.array(plantingOut),
 });
-export type CalendarScheduleOut = z.infer<typeof calendarScheduleOut>;
 
 export const calendarFeedOut = z.object({ token: z.string().nullable() });
 export const calendarRotateFeedOut = z.object({ token: z.string() });
@@ -528,3 +535,6 @@ export const clearCalendarUncertainWriteInput = z.object({
   collection: z.enum(["tasks", "completed-tasks", "meals"]),
   filename: z.string().min(1),
 });
+
+/** @public Read through `import()` type queries. */
+export type CalendarScheduleOut = z.infer<typeof calendarScheduleOut>;

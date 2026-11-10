@@ -38,15 +38,15 @@ export const searchableEntityIdSchema = anyShortcodeSchema(
   searchableEntityKinds,
 );
 
-export const searchableEntityRefFields = {
+const searchableEntityRefFields = {
   entityKind: searchableEntitySchema,
   entityId: searchableEntityIdSchema,
 };
 
-export const searchableEntityRefSchema = z.object(searchableEntityRefFields);
+const searchableEntityRefSchema = z.object(searchableEntityRefFields);
 export type SearchableEntityRef = z.infer<typeof searchableEntityRefSchema>;
 
-export const searchTypeOptions = ["all", ...searchableEntities] as const;
+const searchTypeOptions = ["all", ...searchableEntities] as const;
 export const searchTypeSchema = z.enum(searchTypeOptions);
 export type SearchType = z.infer<typeof searchTypeSchema>;
 
@@ -67,9 +67,8 @@ export const searchQueryInputFields = {
 export const searchQueryInputSchema = z.object(searchQueryInputFields);
 export type SearchQueryInput = z.infer<typeof searchQueryInputSchema>;
 
-export const similarEntityPairKeys = activeRelatednessPairKeys;
-export const similarEntityPairSchema = z.enum(similarEntityPairKeys);
-export type SimilarEntityPair = z.infer<typeof similarEntityPairSchema>;
+const similarEntityPairKeys = activeRelatednessPairKeys;
+const similarEntityPairSchema = z.enum(similarEntityPairKeys);
 
 export const similarEntityPairs = Object.fromEntries(
   similarEntityPairKeys.map((key) => [key, relatednessPairRegistry[key]]),
@@ -90,9 +89,6 @@ export const requestEmbeddingRefreshInputSchema = z.object({
   entityKind: searchableEntitySchema,
   entityId: searchableEntityIdSchema,
 });
-export type RequestEmbeddingRefreshInput = z.infer<
-  typeof requestEmbeddingRefreshInputSchema
->;
 
 /**
  * An explicit refresh is accepted, not completed: the embedding runs on the
@@ -101,10 +97,8 @@ export type RequestEmbeddingRefreshInput = z.infer<
 export const requestEmbeddingRefreshOutSchema = z.object({
   accepted: z.literal(true),
 });
-export type RequestEmbeddingRefreshOut = z.infer<
-  typeof requestEmbeddingRefreshOutSchema
->;
 
+/** @public Names a generated native model. */
 export const searchMatchKindSchema = z.enum([
   "exact",
   "prefix",
@@ -114,6 +108,7 @@ export const searchMatchKindSchema = z.enum([
 ]);
 export type SearchMatchKind = z.infer<typeof searchMatchKindSchema>;
 
+/** @public Names a generated native model. */
 export const searchMatchFieldSchema = z.enum([
   "shortcode",
   "title",
@@ -181,7 +176,7 @@ export type SearchInventoryPlacement = z.infer<
   typeof searchInventoryPlacementSchema
 >;
 
-export const searchComponentPlacementSchema = z.object({
+const searchComponentPlacementSchema = z.object({
   component: searchDestinationSchema,
   componentQuantity: z.number().int().positive(),
   placement: searchInventoryPlacementSchema,
@@ -220,7 +215,7 @@ export type SearchResultGroup = z.infer<typeof searchResultGroupSchema>;
 export const searchResultGroupsOut = z.array(searchResultGroupSchema);
 
 /** Pending corpus work can settle; an exhausted ANN budget cannot settle by waiting. */
-export const semanticCoverageGap = z.enum(["pending", "budget_exceeded"]);
+const semanticCoverageGap = z.enum(["pending", "budget_exceeded"]);
 export type SemanticCoverageGap = z.infer<typeof semanticCoverageGap>;
 
 /** Semantic results are separate so they cannot reorder lexical hits. */
@@ -236,15 +231,11 @@ export type RelatedSearchOut = z.infer<typeof relatedSearchOutSchema>;
 export const relatedSearchGroupsOutSchema = relatedSearchOutSchema
   .omit({ results: true })
   .extend({ groups: searchResultGroupsOut });
-export type RelatedSearchGroupsOut = z.infer<
-  typeof relatedSearchGroupsOutSchema
->;
 
-export const similarEntityResultSchema = z.object({
+const similarEntityResultSchema = z.object({
   similarity: z.number(),
   entity: searchHitSchema,
 });
-export type SimilarEntityResult = z.infer<typeof similarEntityResultSchema>;
 
 export const similarEntitiesOut = z.object({
   source: searchableEntityRefSchema,
@@ -261,4 +252,3 @@ export const searchDebugOutSchema = z.object({
   semantic: z.array(searchHitSchema),
   results: z.array(searchHitSchema),
 });
-export type SearchDebugOut = z.infer<typeof searchDebugOutSchema>;

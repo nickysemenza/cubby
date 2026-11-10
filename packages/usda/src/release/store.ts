@@ -30,7 +30,7 @@ import {
 
 // Stable namespace generation. Schema changes migrate the existing object in
 // place so loaded releases and in-flight shard progress survive deployments.
-export const USDA_RELEASE_GENERATION = 1;
+const USDA_RELEASE_GENERATION = 1;
 
 export const usdaReleaseObjectName = (release: ReleaseId) =>
   `${release}.g${USDA_RELEASE_GENERATION}`;
@@ -56,7 +56,7 @@ export interface ReleaseSql {
   readonly databaseSize: number;
 }
 
-export const releaseStatus = z.object({
+const releaseStatus = z.object({
   release: z.string(),
   state: z.enum(["loading", "ready", "failed"]),
   shardsLoaded: z.number().int(),
@@ -68,7 +68,7 @@ export const releaseStatus = z.object({
 });
 export type ReleaseStatus = z.infer<typeof releaseStatus>;
 
-export const releaseCounts = releaseManifest.pick({
+const releaseCounts = releaseManifest.pick({
   release: true,
   foodsByDataType: true,
   supersededCount: true,

@@ -15,7 +15,7 @@ export type UserId = z.infer<typeof userId>;
 /** Reserved actor for unattended work, including declaration-owned receipt inputs. */
 export const SYSTEM_USER_ID = userId.parse("cubby-system");
 
-export const expenseAttributionId = brandedId("ExpenseAttributionId");
+const expenseAttributionId = brandedId("ExpenseAttributionId");
 export type ExpenseAttributionId = z.infer<typeof expenseAttributionId>;
 
 export const mealRecipeId = brandedId("MealRecipeId");
@@ -26,7 +26,7 @@ export const mealFoodEntryId = brandedId("MealFoodEntryId");
 export type MealFoodEntryId = z.infer<typeof mealFoodEntryId>;
 
 /** Storage-only identity for a portion row; never exposed by meal APIs. */
-export const mealRecipePortionId = brandedId("MealRecipePortionId");
+const mealRecipePortionId = brandedId("MealRecipePortionId");
 export type MealRecipePortionId = z.infer<typeof mealRecipePortionId>;
 
 /** The Zod brand an entity's private UUID carries: `product` → `ProductId`. */
@@ -65,38 +65,18 @@ export const entityIdSchema = <E extends ShortcodeEntity>(
   entity: E,
 ): (typeof ENTITY_ID_SCHEMA)[E] => ENTITY_ID_SCHEMA[entity];
 
-// Named per-entity exports over the same map — the stable import surface.
-export const recipeId = ENTITY_ID_SCHEMA.recipe;
 export const imageId = ENTITY_ID_SCHEMA.image;
-export const ingredientId = ENTITY_ID_SCHEMA.ingredient;
-export const productCategoryId = ENTITY_ID_SCHEMA.productCategory;
-export const spendingCategoryId = ENTITY_ID_SCHEMA.spendingCategory;
 export const productId = ENTITY_ID_SCHEMA.product;
 export const locationId = ENTITY_ID_SCHEMA.location;
-export const inventoryId = ENTITY_ID_SCHEMA.inventory;
-export const cookbookId = ENTITY_ID_SCHEMA.cookbook;
-export const mealId = ENTITY_ID_SCHEMA.meal;
 export const ledgerPartyId = ENTITY_ID_SCHEMA.ledgerParty;
-export const ledgerTransferId = ENTITY_ID_SCHEMA.ledgerTransfer;
-export const projectId = ENTITY_ID_SCHEMA.project;
-export const taskId = ENTITY_ID_SCHEMA.task;
 export const expenseId = ENTITY_ID_SCHEMA.expense;
-export const sourceTransactionRecordId =
-  ENTITY_ID_SCHEMA.sourceTransactionRecord;
-export const transactionImportId = ENTITY_ID_SCHEMA.transactionImport;
-export const sourceOccurrenceId = ENTITY_ID_SCHEMA.sourceOccurrence;
-export const financialAccountId = ENTITY_ID_SCHEMA.financialAccount;
-export const financialTransactionId = ENTITY_ID_SCHEMA.financialTransaction;
 export const vendorId = ENTITY_ID_SCHEMA.vendor;
 export const vendorAccountId = ENTITY_ID_SCHEMA.vendorAccount;
 export const runEntityId = ENTITY_ID_SCHEMA.run;
 export const purchaseId = ENTITY_ID_SCHEMA.purchase;
-export const shipmentId = ENTITY_ID_SCHEMA.shipment;
-export const plantingId = ENTITY_ID_SCHEMA.planting;
-export const gardenEntryId = ENTITY_ID_SCHEMA.gardenEntry;
 export const deviceId = ENTITY_ID_SCHEMA.device;
-export const plantId = ENTITY_ID_SCHEMA.plant;
 export const emailId = ENTITY_ID_SCHEMA.email;
+/** @public Names a generated native model. */
 export const imageJobId = ENTITY_ID_SCHEMA.imageJob;
 
 export type RecipeId = EntityId<"recipe">;
@@ -161,7 +141,7 @@ export type EntityRef<E extends ShortcodeEntity = ShortcodeEntity> = {
   [K in E]: EntityRefFor<K>;
 }[E];
 
-export interface EntityRefFor<E extends ShortcodeEntity> {
+interface EntityRefFor<E extends ShortcodeEntity> {
   entity: E;
   id: EntityId<E>;
 }
@@ -180,7 +160,10 @@ const checkedEntityRef = z.custom<EntityRef>((value) => {
   );
 });
 
-/** Parse and correlate an internal entity discriminator with its UUID brand. */
+/**
+ * Parse and correlate an internal entity discriminator with its UUID brand.
+ * @public Names a generated native model.
+ */
 export function parseEntityRef<E extends ShortcodeEntity>(
   entity: E,
   value: unknown,
@@ -200,7 +183,6 @@ export {
   anyShortcodeSchema,
   cookbookShortcode,
   expenseShortcode,
-  sourceTransactionRecordShortcode,
   transactionImportShortcode,
   financialAccountShortcode,
   financialTransactionShortcode,
@@ -216,7 +198,6 @@ export {
   spendingCategoryShortcode,
   projectShortcode,
   purchaseShortcode,
-  shipmentShortcode,
   parseShortcodeFor,
   recipeShortcode,
   shortcodeSchema,
@@ -230,13 +211,12 @@ export {
   deviceShortcode,
   plantShortcode,
   emailShortcode,
-  imageJobShortcode,
 } from "@cubby/shared";
+/** @public Names a generated native model. */
+export { shipmentShortcode } from "@cubby/shared";
 export type {
   CookbookShortcode,
   ExpenseShortcode,
-  SourceTransactionRecordShortcode,
-  TransactionImportShortcode,
   FinancialAccountShortcode,
   FinancialTransactionShortcode,
   ImageShortcode,
@@ -251,7 +231,6 @@ export type {
   SpendingCategoryShortcode,
   ProjectShortcode,
   PurchaseShortcode,
-  ShipmentShortcode,
   RecipeShortcode,
   ShortcodeFor,
   TaskShortcode,
@@ -261,7 +240,6 @@ export type {
   DeviceShortcode,
   PlantShortcode,
   EmailShortcode,
-  ImageJobShortcode,
 } from "@cubby/shared";
 
 export type SpendingCategoryId = EntityId<"spendingCategory">;

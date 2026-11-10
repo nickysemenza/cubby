@@ -3,88 +3,22 @@ import {
   suggestionReviewReference,
 } from "./suggestion-reference";
 import { z } from "zod";
-import { locationRefOut } from "./location-fields";
 import { ledgerPartyRefOut } from "./ledger-party-fields";
 import { generatedPurchaseFieldSchemas } from "./generated/entity-field-schemas.purchase.gen";
-import {
-  inventoryShortcode,
-  productShortcode,
-  purchaseShortcode,
-} from "./identifiers";
-import { duplicateProductIdentitySchema } from "./problem-identities";
-import { embeddingReadinessSchema, relatednessOutSchema } from "./relatedness";
+import { productShortcode, purchaseShortcode } from "./identifiers";
+import { relatednessOutSchema } from "./relatedness";
 import { productVariantComparison } from "./product-variant-comparison";
-
-export const recommendationWorkbenchInput = z.object({
-  sourceId: productShortcode,
-});
-
-export const recommendationKind = z.enum([
-  "product-related",
-  "duplicate-product",
-  "product-match",
-  "tag-propagation",
-  "placement",
-]);
-export type RecommendationKind = z.infer<typeof recommendationKind>;
-
-/** Only an entity shortcode is permitted in the workbench URL. */
-export const recommendationWorkbenchSearch = z
-  .object({
-    kind: recommendationKind.optional(),
-    source: productShortcode.optional(),
-    candidate: productShortcode.optional(),
-    inventory: inventoryShortcode.optional(),
-  })
-  .strict();
 
 export const recommendationOkSchema = z.object({ ok: z.literal(true) });
 
+/** @public Names a generated native model. */
 export const recommendationWorkbenchOut = relatednessOutSchema;
-
-export const duplicateProductRecommendationInput = z.object({
-  sourceId: productShortcode,
-});
-export const duplicateProductRecommendationOut = duplicateProductIdentitySchema
-  .extend({ review: suggestionReviewReference.optional() })
-  .nullable();
-
-export const tagPropagationRecommendationInput = z.object({
-  sourceId: productShortcode,
-});
-export const tagPropagationRecommendationOut = z.object({
-  status: embeddingReadinessSchema,
-  currentTags: z.array(z.string()),
-  proposals: z.array(
-    z.object({
-      review: suggestionReviewReference.optional(),
-      tag: z.string(),
-      supportingProductCount: z.number().int().positive(),
-      supportingProductIds: z.array(productShortcode).optional(),
-    }),
-  ),
-});
-export type TagPropagationRecommendationOut = z.infer<
-  typeof tagPropagationRecommendationOut
->;
-
-export const placementRecommendationInput = z.object({
-  inventoryId: inventoryShortcode,
-});
-export const placementRecommendationOut = z
-  .object({
-    inventoryId: inventoryShortcode,
-    productName: z.string(),
-    sourceLocation: locationRefOut,
-    destination: locationRefOut,
-  })
-  .nullable();
 
 /**
  * Two Products for one real item, as a single unordered pair. Order is the
  * caller's; the pair is the identity.
  */
-export const productMatchPair = z
+const productMatchPair = z
   .array(productShortcode)
   .length(2)
   .refine(([a, b]) => a !== b, {
@@ -92,7 +26,7 @@ export const productMatchPair = z
   });
 
 export const productMatchSource = z.enum(["agent", "detector"]);
-export const productMatchState = z.enum(["open", "dismissed"]);
+const productMatchState = z.enum(["open", "dismissed"]);
 
 /**
  * `photo`: stocked, with no purchase line or spend yet (typically created from
@@ -101,9 +35,9 @@ export const productMatchState = z.enum(["open", "dismissed"]);
  */
 export const productMatchSideRole = z.enum(["photo", "purchase", "other"]);
 
-export const productMatchOwner = ledgerPartyRefOut;
+const productMatchOwner = ledgerPartyRefOut;
 
-export const productMatchSourceUrls = z.array(z.url()).max(10);
+const productMatchSourceUrls = z.array(z.url()).max(10);
 
 export const productMatchSide = z.object({
   id: productShortcode,
@@ -133,7 +67,7 @@ export type ProductMatchSide = z.infer<typeof productMatchSide>;
 export const PRODUCT_PAIR_NOT_ACTIONABLE =
   "Not actionable: no exact identifier binds both records; investigate before merging";
 
-export const productMatchCandidate = z.object({
+const productMatchCandidate = z.object({
   review: suggestionReviewReference.optional(),
   suggestionId: suggestionChildHandle,
   fingerprint: z.string().nullable(),
@@ -159,18 +93,17 @@ export const productMatchCandidate = z.object({
 });
 export type ProductMatchCandidate = z.infer<typeof productMatchCandidate>;
 
-export const productMatchQueueInput = z.object({
-  productId: productShortcode.optional(),
-  candidateId: productShortcode.optional(),
-});
-export const productMatchQueueOut = z.object({
+const productMatchQueueOut = z.object({
   /** False when the vector index is unreachable: ranking fell back to names. */
   semanticRanking: z.boolean(),
   items: z.array(productMatchCandidate),
 });
 export type ProductMatchQueueOut = z.infer<typeof productMatchQueueOut>;
 
-/** Merge `mergeId` into `keepId`, then lead the survivor's covers with own photos. */
+/**
+ * Merge `mergeId` into `keepId`, then lead the survivor's covers with own photos.
+ * @public Names a generated native model.
+ */
 export const mergeProductMatchInput = z.object({
   suggestionId: suggestionChildHandle,
   expectedFingerprint: z.string().min(1),
@@ -178,7 +111,7 @@ export const mergeProductMatchInput = z.object({
   mergeId: productShortcode,
 });
 
-export const productMergeDecision = z.object({
+const productMergeDecision = z.object({
   field: z.string(),
   keeper: z.string(),
   incoming: z.string(),

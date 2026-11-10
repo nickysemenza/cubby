@@ -96,7 +96,6 @@ describe("effective reference display", () => {
               provenance: { kind: "allocated" },
             },
           },
-          work: { kind: "idle" },
         },
       },
       spendingCategoryAllocations: [
@@ -158,7 +157,6 @@ describe("effective reference display", () => {
               provenance: { kind: "default", source: null },
             },
           },
-          work: { kind: "idle" },
         },
       },
       projectAllocations: [
@@ -200,7 +198,6 @@ it("keeps an inherited effective target out of the stored picker baseline", () =
             provenance: { kind: "default", source: null },
           },
         },
-        work: { kind: "idle" },
       },
     },
   };

@@ -50,17 +50,14 @@ export function projectScheduleRow(
     blockedByIds: project.blockedByIds,
     blockingIds: project.blockingIds,
   };
-  if (envelope.work.kind === "failed") row.meta += ` · ${envelope.work.error}`;
-  else if (
-    envelope.work.kind !== "idle" ||
-    (envelope.result.kind === "cached" && envelope.result.freshness === "stale")
+  if (
+    envelope.result.kind === "cached" &&
+    envelope.result.freshness === "stale"
   )
-    row.meta += ` · ${fieldMissingLabel(envelope.work)}`;
+    row.meta += ` · ${fieldMissingLabel()}`;
   if (!dated)
     row.noDateLabel =
-      envelope.result.kind === "missing"
-        ? fieldMissingLabel(envelope.work)
-        : "No dates";
+      envelope.result.kind === "missing" ? fieldMissingLabel() : "No dates";
   return row;
 }
 

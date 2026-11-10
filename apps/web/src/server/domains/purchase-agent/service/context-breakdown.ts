@@ -14,7 +14,7 @@ import { z } from "zod";
 import { MCP_TOOL_PREFIX } from "./tool-protocol";
 
 /** Character weight for one image; base64 length says nothing about tokens. */
-export const IMAGE_CHAR_WEIGHT = 4_000;
+const IMAGE_CHAR_WEIGHT = 4_000;
 /** MCP tools reach the model as `mcp__<server>__<tool>`. */
 const UNKNOWN_TOOL = "unknown";
 const MAX_CALLS_PER_SCOPE = 256;
@@ -217,15 +217,6 @@ const measureParsed = (request: ModelRequest) =>
   request.api === "responses"
     ? measureResponses(request.body)
     : measureMessages(request.body);
-
-/**
- * Serialized sizes of an OpenAI Responses or Anthropic Messages request body.
- * Model settings outside the prompt (model id, reasoning effort) are ignored.
- */
-export function measureRequestContext(text: string): ContextSections {
-  const request = parseModelRequest(text);
-  return request ? measureParsed(request) : emptySections();
-}
 
 const FIXED_KEYS = [
   "instructions",

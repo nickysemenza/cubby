@@ -42,6 +42,8 @@ const scopeSearchSchema = z.object({
     .refine((value) => parseRecordParam(value) !== null)
     .optional()
     .catch(undefined),
+  /** The other Product of a reviewed pair; a pair's review link names both sides. */
+  candidate: z.string().max(40).optional().catch(undefined),
   runId: z.string().max(40).optional().catch(undefined),
   /** The Sweep this page started, followed in the status line. */
   sweep: z.string().max(40).optional().catch(undefined),

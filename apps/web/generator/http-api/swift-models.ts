@@ -304,11 +304,9 @@ export function renderSwiftModels(
       schema.type === "object" &&
       schema.properties?.current &&
       schema.properties.result &&
-      schema.properties.work &&
-      Object.keys(schema.properties).length === 3 &&
+      Object.keys(schema.properties).length === 2 &&
       schema.required?.includes("current") &&
       schema.required.includes("result") &&
-      schema.required.includes("work") &&
       resolve(schema.properties.current).properties?.assignment &&
       resolve(schema.properties.current).properties?.controls,
     );

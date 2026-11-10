@@ -329,9 +329,9 @@ explicit choices.
 ### Field envelopes
 
 `current` carries authoritative assignment intent and controls; `result` couples the effective
-outcome with its matching provenance; `work` reports background activity separately. Inherit,
+outcome with its matching provenance. Inherit,
 explicit value and explicit None are distinct intents. A successful empty outcome is not a missing
-computation: a missing result renders Updating… (or Unavailable with its raw failure), never the
+computation: a missing result renders Updating…, never the
 successful empty state. Automatic ownership comes from current receipts and audit evidence, never a
 cached `automaticFields` value; edits and same-value confirmation end it immediately.
 

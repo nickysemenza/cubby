@@ -5,12 +5,7 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { getDb } from "~/server/db/helpers";
-import {
-  ledgerParty,
-  run as runTable,
-  runApproval,
-  runOperation,
-} from "~/server/db/schema";
+import { ledgerParty, run as runTable, runOperation } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import type { Principal } from "~/server/http/authenticate";
@@ -173,15 +168,10 @@ describe("purchase-agent automatic mutations", () => {
       accepted: true,
     });
     expect(executions).toBe(1);
-    const [consumed] = await getDb(ctx.db)
-      .select()
-      .from(runApproval)
-      .where(eq(runApproval.runId, run.id));
     const [operation] = await getDb(ctx.db)
       .select()
       .from(runOperation)
       .where(eq(runOperation.runId, run.id));
-    expect(consumed).toBeUndefined();
     expect(operation?.state).toBe("completed");
     for (const status of ["paused", "completed", "failed"] as const) {
       await getDb(ctx.db)

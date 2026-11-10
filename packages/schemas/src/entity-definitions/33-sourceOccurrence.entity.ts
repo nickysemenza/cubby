@@ -31,6 +31,7 @@ const enumPresentation = (values: readonly string[], quiet?: string) => ({
   },
 });
 
+/** @public The shortcode registry generator parses this module's `definition` and `readSchemas`. */
 export const { definition, readSchemas } = defineEntityModel(
   {
     key: "sourceOccurrence",

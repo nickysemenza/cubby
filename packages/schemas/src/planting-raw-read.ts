@@ -8,4 +8,3 @@ export const rawPlantingListItemOut = withEntityListMedia(
   definitionSchemas.list,
 );
 export type RawPlantingOut = z.output<typeof rawPlantingOut>;
-export type RawPlantingListItemOut = z.output<typeof rawPlantingListItemOut>;

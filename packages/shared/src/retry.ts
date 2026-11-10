@@ -15,9 +15,7 @@ export function sleep(ms: number, signal?: AbortSignal): Promise<void> {
 }
 
 /** What one attempt produced, handed to `delayFor` to decide on a retry. */
-export type RetryOutcome<T> =
-  | { ok: true; value: T }
-  | { ok: false; error: unknown };
+type RetryOutcome<T> = { ok: true; value: T } | { ok: false; error: unknown };
 
 export interface RetryOptions<T> {
   /**

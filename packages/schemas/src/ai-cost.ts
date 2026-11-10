@@ -1,6 +1,5 @@
 import { z } from "zod";
 export { aiCostEvidenceSchema } from "@cubby/shared/ai/pricing";
-export type { AiCostEvidence } from "@cubby/shared/ai/pricing";
 import { aiCostEvidenceSchema } from "@cubby/shared/ai/pricing";
 export const aiCallCostFields = {
   standardCost: z.number().nullable(),

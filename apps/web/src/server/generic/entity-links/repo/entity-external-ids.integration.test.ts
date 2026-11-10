@@ -1,6 +1,6 @@
 import { financialTransactionCreateInput } from "@cubby/schemas/financial-transaction";
 import { recordSourceTransactionRecordsInput } from "@cubby/schemas/source-transaction-record";
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { buildEntity } from "tooling/factories/build";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
@@ -24,10 +24,6 @@ import {
   findProductsByExternalIds,
 } from "~/server/domains/product/repo/find-by-external-ids";
 import { readPurchaseById } from "~/server/domains/purchase/repo/purchase";
-import {
-  getNotionRecipePageIds,
-  upsertNotionRecipe,
-} from "~/server/domains/recipe/repo/crud";
 import { recordSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
 import {
   findOrCreateVendor,
@@ -47,14 +43,12 @@ import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolv
  *   wrong evidence once references leave the transaction row;
  * - two products claim the same identity identifier without a structured
  *   refusal;
- * - re-importing a statement export writes anything;
- * - re-importing a Notion recipe page mints a second recipe.
+ * - re-importing a statement export writes anything.
  */
 import { deleteThroughKernel } from "~/server/testing/entity-kernel";
 import {
   createProductFixture as createProduct,
   makeProductInput,
-  makeRecipeInput,
 } from "~/server/testing/repo.fixtures";
 
 describe("EntityExternalId", () => {
@@ -334,33 +328,5 @@ describe("EntityExternalId", () => {
     await expect(
       recordSourceTransactionRecords(ctx.db, input, ctx.actor),
     ).resolves.toMatchObject({ inserted: 0 });
-  });
-
-  it("re-imports a Notion recipe page into the same recipe", async () => {
-    const pageId = "0f8e7d6c-5b4a-4938-8271-605f4e3d2c1b";
-    const first = await upsertNotionRecipe(
-      makeRecipeInput({ name: "Synthetic Notion Soup" }),
-      pageId,
-      ctx.db,
-      ctx.actor,
-    );
-    const renamed = await upsertNotionRecipe(
-      makeRecipeInput({ name: "Synthetic Notion Soup, renamed" }),
-      pageId,
-      ctx.db,
-      ctx.actor,
-    );
-    expect(renamed.id).toBe(first.id);
-    expect(await getNotionRecipePageIds(ctx.db)).toEqual([pageId]);
-    const rows = await getDb(ctx.db)
-      .select({ entityId: entityExternalId.entityId })
-      .from(entityExternalId)
-      .where(
-        and(
-          eq(entityExternalId.source, "notion"),
-          eq(entityExternalId.externalId, pageId),
-        ),
-      );
-    expect(rows).toEqual([{ entityId: first.id }]);
   });
 });

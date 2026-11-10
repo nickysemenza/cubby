@@ -1,9 +1,11 @@
+import type { ConnectionCandidate } from "@cubby/schemas/entity-connections";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { moneyToMinor } from "@cubby/shared";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
 import { purchase as purchaseTable, vendorAccount } from "~/server/db/schema";
 import {
@@ -28,9 +30,22 @@ import { activeEmailPurchaseDecision } from "~/server/testing/email-link.fixture
 
 import { retrieveEmailConnectionCandidates as retrieveConnectionCandidates } from "./email-connections";
 import {
-  publishEntityConnection,
+  prepareEntityConnectionEvidence,
+  publishPreparedEntityConnections,
   readEntityConnections,
 } from "./entity-connections";
+
+/** Capture and publish one candidate, as the production discovery path does. */
+const publishEntityConnection = async (
+  db: Database,
+  candidate: ConnectionCandidate,
+) =>
+  (
+    await publishPreparedEntityConnections(
+      db,
+      await prepareEntityConnectionEvidence(db, [candidate]),
+    )
+  )[0]!;
 
 describe("fresh retained Email connection recommendations", () => {
   const ctx = withTestDb();

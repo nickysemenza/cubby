@@ -105,6 +105,7 @@ const RUN_STATUS_OPTIONS = [
  * written only by the run service and the writers; the manifest
  * exposes it read-only so the generic list, detail, inspector and MCP get/list
  * render it like any other record.
+ * @public The shortcode registry generator parses this module's `definition` and `readSchemas`.
  */
 export const { definition, readSchemas } = defineEntityModel({
   key: "run",

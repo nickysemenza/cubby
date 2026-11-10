@@ -1,12 +1,16 @@
 import type { Entity } from "./entity-core";
 import type { CompiledEntityPresentation } from "./entity-definitions/definition";
 import type { entitySummary } from "./generated/entity-summary.gen";
+/** @public Re-exported by generated modules. */
 export type EntityNames = { singular: string; plural: string | null };
 export type EntitySummary = EntityNames &
   CompiledEntityPresentation & {
     primarySearch: { key: string; placeholder: string } | null;
     bulkUpdate: { fields: readonly string[] } | null;
-    /** The kernel serves `merge`, so the generic merge verb applies. */
+    /**
+     * The kernel serves `merge`, so the generic merge verb applies.
+     * @public Re-exported by generated modules.
+     */
     merge: boolean;
   };
 type GeneratedDetailSection<E extends Entity> =

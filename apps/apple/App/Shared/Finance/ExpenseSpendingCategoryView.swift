@@ -26,7 +26,7 @@ struct ExpenseSpendingCategoryView: View {
                         EntityCatalog[.expense].field("spendingCategoryId").map {
                             envelope.emptyLabel(field: $0)
                         }
-                        ?? FieldEnvelope.missingLabel(failure: envelope.failure))
+                        ?? FieldEnvelope.missingLabel)
             } else if !envelope.unsupportedKinds.isEmpty {
                 Text("Unsupported spending category: \(envelope.unsupportedKinds.joined(separator: ", "))")
                     .foregroundStyle(.secondary)
@@ -93,7 +93,6 @@ struct ExpenseSpendingCategoryView: View {
                                 "outcome": ["kind": "empty", "reason": "unset"], "provenance": .null,
                             ],
                         ],
-                        "work": ["kind": "idle"],
                     ]
                 ],
             ]

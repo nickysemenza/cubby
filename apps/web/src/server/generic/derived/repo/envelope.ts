@@ -16,7 +16,6 @@ import {
   fieldResolutionsSchema,
   type FieldResolution,
 } from "@cubby/schemas/field-resolution";
-import { WORK_WAIT_CAUSE_TEXT } from "@cubby/schemas/job";
 import { z } from "zod";
 
 import type {
@@ -227,7 +226,6 @@ function ownValueResult({
           provenance: { kind: "own", ownership: owner },
         },
       },
-      work: { kind: "idle" },
     });
     if (immediate.success) {
       return envelopeSchema.parse(immediate.data).result;
@@ -476,31 +474,6 @@ export function buildFieldEnvelopeRow<S extends z.ZodObject>({
     fields[key] = {
       current: { assignment, controls },
       result,
-      work: {
-        ...(read?.refreshReason != null
-          ? { refreshReason: read.refreshReason }
-          : {}),
-        ...(read?.execution
-          ? { kind: "pending", execution: read.execution }
-          : read?.error
-            ? { kind: "failed", error: read.error, retryAt: read.retryAt }
-            : read?.waiting
-              ? {
-                  kind: "waiting",
-                  reason: read.waitCause
-                    ? WORK_WAIT_CAUSE_TEXT[read.waitCause]
-                    : "Refresh is scheduled",
-                  ...(read.retryAt ? { retryAt: read.retryAt } : {}),
-                }
-              : (read?.pending ?? read?.stale)
-                ? {
-                    kind: "pending",
-                    ...(read?.attribution
-                      ? { attribution: read.attribution }
-                      : {}),
-                  }
-                : { kind: "idle" }),
-      },
     };
   }
   const ordinary = Object.fromEntries(

@@ -21,7 +21,7 @@ export const emailAtChecksum = z
   .strict();
 export type EmailAtChecksum = z.infer<typeof emailAtChecksum>;
 
-export const EMAIL_IMPORT_LIMIT = 50;
+const EMAIL_IMPORT_LIMIT = 50;
 /**
  * An explicit member authorization to import selected Emails, all owned by
  * the member. Search and read results carry each Email's `id` and checksum.
@@ -110,7 +110,7 @@ export const reclassifyEmailsInput = z
  * reached within a historical request's time budget. `failed`
  * can occur after publication during read-back; reconcile before retrying.
  */
-export const emailReclassifyOutcome = z.enum([
+const emailReclassifyOutcome = z.enum([
   "replaced",
   "confirmed",
   "awaiting_acceptance",
@@ -135,7 +135,6 @@ export const emailReclassifyResult = z
   })
   .strict();
 export const emailReclassifyResults = z.array(emailReclassifyResult);
-export type EmailReclassifyResult = z.infer<typeof emailReclassifyResult>;
 export const reclassifyEmailsOut = z
   .object({ runIds: z.array(runShortcode) })
   .strict();

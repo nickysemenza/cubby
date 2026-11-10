@@ -1,13 +1,10 @@
-import { recipeOut } from "@cubby/schemas/entities/recipe";
 import { z } from "zod";
 
 import { sectionIngredientOut } from "../recipe";
-import { testCompleteDataQuality } from "./identifiers";
 
 /** Shared builders for the recipe-shaped rows web tests render. */
 
 type LineInput = z.input<typeof sectionIngredientOut>;
-type RecipeInput = z.input<typeof recipeOut>;
 
 /** Read fixtures supply outcomes without inventing stored assignment authority. */
 function readFields(
@@ -41,7 +38,6 @@ function readFields(
                     provenance: { kind: "computed" },
                   },
                 },
-          work: { kind: "idle" },
         }),
       ];
     }),
@@ -103,33 +99,4 @@ export const testSubRecipeLine = (line: {
       ...STAMP,
     },
     ...STAMP,
-  });
-
-/** A Recipe with no sections, images, or tags. */
-export const testEmptyRecipe = (recipe: {
-  id: RecipeInput["id"];
-  name: string;
-}) =>
-  recipeOut.parse({
-    fields: readFields(recipeOut.shape.fields.shape, {
-      source: null,
-      servings: null,
-      tags: [],
-      images: [],
-      dataQuality: testCompleteDataQuality(),
-    }),
-    id: recipe.id,
-    name: recipe.name,
-    meta: null,
-    yield: null,
-    servings: null,
-    notes: null,
-    forkedFromRecipeId: null,
-    forkedFromRecipeName: null,
-    source: null,
-    images: [],
-    sections: [],
-    tags: [],
-    ...STAMP,
-    dataQuality: testCompleteDataQuality(),
   });

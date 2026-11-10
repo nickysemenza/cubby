@@ -49,7 +49,6 @@ import {
   recipeSection,
   recipeSectionIngredient,
   run as runTable,
-  runApproval,
   runControlEvent,
   runOperation,
   runStep,
@@ -1745,17 +1744,6 @@ const SOURCE_FACTORIES = {
   "ImportPreparedOrder.runId": (db, targetId) =>
     mkImportPreparedOrder(db, {
       runId: parseEntityId("run", targetId),
-    }),
-
-  "RunApproval.runId": (db, targetId) =>
-    insertAndReturn(db, runApproval, {
-      runId: parseEntityId("run", targetId),
-      operationId: uniq("approval-operation"),
-      operationKind: "liveness-fixture",
-      args: {},
-      argsFingerprint: uniq("args-fingerprint"),
-      targetFingerprint: uniq("target-fingerprint"),
-      evidenceFingerprint: uniq("evidence-fingerprint"),
     }),
 
   "ImportSourceClaim.firstRunId": (db, targetId) =>

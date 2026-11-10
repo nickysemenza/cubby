@@ -2,7 +2,7 @@ import type { BrowserRoutedEntity } from "./entity-manifest";
 import type { WayfindingDomain } from "./entity-definitions/definition";
 
 /** Entity glyphs come from the catalog; specialist routes declare their Apple glyph. */
-export type SidebarDestination = {
+type SidebarDestination = {
   readonly label: string;
   readonly route: string;
 } & (

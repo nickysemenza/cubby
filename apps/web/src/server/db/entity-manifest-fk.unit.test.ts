@@ -319,10 +319,6 @@ const NON_GRAPH_ENTITY_FK_EXEMPTIONS = {
     classification: "ownership",
     reason: "a control-plane event (pause/resume/prompt/...) owned by its run",
   },
-  "RunApproval.runId": {
-    classification: "ownership",
-    reason: "an approval decision owned by its run",
-  },
   "ImportSourceClaim.firstRunId": {
     classification: "metadata",
     reason: "records the run that first captured this idempotent source claim",

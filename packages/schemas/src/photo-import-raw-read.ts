@@ -7,12 +7,12 @@ import {
   photoProductOwnPhoto,
 } from "./photo-import-run";
 
-export const rawPhotoProductOwnPhoto = rawImageOutput
+const rawPhotoProductOwnPhoto = rawImageOutput
   .pick({ id: true, url: true, representations: true })
   .extend({
     capturedAt: photoProductOwnPhoto.shape.capturedAt,
   });
-export const rawOwnPhotoProductCandidate = photoProductCandidate.extend({
+const rawOwnPhotoProductCandidate = photoProductCandidate.extend({
   ownPhotos: z.array(rawPhotoProductOwnPhoto).optional(),
 });
 export const rawOwnPhotoProductEvidence = photoProductEvidence.extend({

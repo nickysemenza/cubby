@@ -38,7 +38,7 @@ export type LocationType = (typeof locationTypeValues)[number];
  * else. Grouped families share a rung so related types read together; matte,
  * off the warm axis, distinguished by value not hue.
  */
-export const locationTypeColors = {
+const locationTypeColors = {
   house: "var(--chart-1)",
   room: "var(--chart-1)",
   area: "var(--chart-2)",

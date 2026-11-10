@@ -9,8 +9,8 @@ import { match, P } from "ts-pattern";
  * - Website: `sourceUrl`.
  * - Book: the Cookbook row (`cookbookId`) names the book; a book with no
  *   Cookbook row keeps its title in `sourceLabel`.
- * - Notion: the page id is a `(notion, page)` EntityExternalId — the
- *   identity a re-import matches on.
+ * - Notion: stored recipes from the retired Notion import keep their page id
+ *   as a `(notion, page)` EntityExternalId.
  * - Other: nothing.
  *
  * Kept in one place so the pairing isn't reconstructed ad hoc across repos.
@@ -28,18 +28,15 @@ type SourceColumns = {
 // Provenance override for recipes whose source isn't a website URL (e.g. EPUB
 // cookbooks → sourceType "Book"). When omitted, source derives from meta.url.
 // `sourceData` is the URL (Website), the book title (Book without a Cookbook
-// row), or the page id (Notion); `cookbookId` is set only for Book recipes.
+// row); `cookbookId` is set only for Book recipes.
 export type RecipeProvenance = {
-  sourceType: "Book" | "Website" | "Other" | "Notion";
+  sourceType: "Book" | "Website" | "Other";
   sourceData: string | null;
   cookbookId?: CookbookId | null;
   cookbookShortcode?: string | null;
 };
 
-/**
- * Tagged provenance → the Recipe columns. A Notion page id is not a column:
- * the caller records it with `recordNotionRecipePage`.
- */
+/** Tagged provenance → the Recipe columns. */
 export function recipeSourceToColumns(p: RecipeProvenance) {
   const cookbookId = p.cookbookId ?? null;
   return {

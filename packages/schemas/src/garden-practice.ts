@@ -61,8 +61,7 @@ export const gardenCropKeys = [
 export const gardenCropKey = z.enum(gardenCropKeys);
 export type GardenCropKey = z.infer<typeof gardenCropKey>;
 
-export const gardenStart = z.enum(["direct", "tray", "indoor", "bought"]);
-export type GardenStart = z.infer<typeof gardenStart>;
+const gardenStart = z.enum(["direct", "tray", "indoor", "bought"]);
 
 const days = z.number().int().positive();
 const dayRange = z

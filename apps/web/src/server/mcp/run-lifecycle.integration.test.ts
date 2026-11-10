@@ -14,7 +14,6 @@ import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
   aiUsage,
   appSettings,
-  runApproval,
   runControlEvent,
   run as runTable,
 } from "~/server/db/schema";
@@ -606,10 +605,5 @@ describe("Mail import switch and discovery through MCP", () => {
     await expect(executePurchaseAgentMutation(pending)).resolves.toEqual({
       accepted: true,
     });
-    const [grant] = await getDb(ctx.db)
-      .select()
-      .from(runApproval)
-      .where(eq(runApproval.runId, run.id));
-    expect(grant).toBeUndefined();
   });
 });

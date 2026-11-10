@@ -78,7 +78,6 @@ function fixtureField(value: unknown, computed = false) {
         provenance: null,
       },
     },
-    work: { kind: "idle" },
   };
 }
 
@@ -1655,7 +1654,6 @@ describe("record suggestions", () => {
                   provenance: { kind: "default", source: null },
                 },
               },
-              work: { kind: "idle" },
             },
           },
         })}
@@ -1817,7 +1815,6 @@ describe("record suggestions", () => {
               provenance: { kind: "own", ownership: { kind: "record" } },
             },
           },
-          work: { kind: "idle" },
         },
       },
     });
@@ -1889,7 +1886,6 @@ describe("record suggestions", () => {
           provenance: null,
         },
       },
-      work: { kind: "idle" },
     };
     render(
       <RecordSuggestionsProvider
@@ -2072,7 +2068,6 @@ it("reads effective governed suggestion values without falling back to stale pla
         provenance: null,
       },
     },
-    work: { kind: "idle" },
   };
   const record = {
     id: testShortcode("product", "canonical-tags"),

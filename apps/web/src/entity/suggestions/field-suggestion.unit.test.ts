@@ -68,7 +68,6 @@ it("keeps suggestion evidence stable through refresh metadata changes but detect
       computedAt: "2026-01-01T00:00:00Z",
       freshness: "fresh",
     },
-    work: { kind: "idle" },
   };
   const after = {
     ...before,

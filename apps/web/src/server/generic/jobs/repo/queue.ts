@@ -9,7 +9,6 @@ import {
   jobPage,
   type JobExecution,
   type JobPage,
-  type JobWaitReason,
 } from "@cubby/schemas/job";
 import { runStatus, VISIBLE_RUN_PURPOSES } from "@cubby/schemas/run-fields";
 import { and, eq, inArray, or, sql, type SQL } from "drizzle-orm";
@@ -287,66 +286,6 @@ export async function claimJob(
       ? { ...claimed, leaseToken: token, leaseExpiresAt: expires }
       : null;
   });
-}
-
-/** The token, not the elapsed wall clock alone, owns publication. */
-export async function renewJob(
-  db: RepositoryQueryInput,
-  claim: Pick<JobClaim, "id" | "leaseToken" | "generation">,
-  leaseMs = JOB_LEASE_MS,
-): Promise<boolean> {
-  const [row] = await repositoryQueries(db)
-    .update(job)
-    .set({
-      leaseExpiresAt: new Date(Date.now() + leaseMs),
-      updatedAt: new Date(),
-    })
-    .where(
-      and(
-        eq(job.id, claim.id),
-        eq(job.state, "running"),
-        eq(job.leaseToken, claim.leaseToken),
-        eq(job.generation, claim.generation),
-        sql`${job.leaseExpiresAt} > now()`,
-      ),
-    )
-    .returning({ id: job.id });
-  return Boolean(row);
-}
-
-/**
- * Hand a claim back without counting an attempt: the executor stopped (or
- * the server could not hand the work over), not the work failing. The Job is
- * due again immediately unless `availableAt` says otherwise.
- */
-export async function releaseJobClaim(
-  db: RepositoryQueryInput,
-  claim: Pick<JobClaim, "id" | "leaseToken" | "generation">,
-  {
-    availableAt = new Date(),
-    waitReason = null,
-  }: { availableAt?: Date; waitReason?: JobWaitReason | null } = {},
-) {
-  const [row] = await repositoryQueries(db)
-    .update(job)
-    .set({
-      state: "queued",
-      waitReason,
-      leaseToken: null,
-      leaseExpiresAt: null,
-      availableAt,
-      updatedAt: new Date(),
-    })
-    .where(
-      and(
-        eq(job.id, claim.id),
-        eq(job.state, "running"),
-        eq(job.leaseToken, claim.leaseToken),
-        eq(job.generation, claim.generation),
-      ),
-    )
-    .returning({ id: job.id });
-  return Boolean(row);
 }
 
 /** Used by domain receipt transactions before applying externally prepared results. */

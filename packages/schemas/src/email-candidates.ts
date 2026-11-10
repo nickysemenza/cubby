@@ -12,7 +12,10 @@ export const emailCandidateSource = z
   })
   .strict();
 export type EmailCandidateSource = z.infer<typeof emailCandidateSource>;
-/** Spans are UTF-16 offsets into the exact, checksum-fenced source content. */
+/**
+ * Spans are UTF-16 offsets into the exact, checksum-fenced source content.
+ * @public Names a generated native model.
+ */
 export const emailEvidenceCandidate = z
   .object({
     id: checksum,

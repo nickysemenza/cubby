@@ -11,7 +11,7 @@ import {
 
 export const automaticDecisionFamily = suggestionFamily;
 
-export const automaticDecisionFilters = z.object({
+const automaticDecisionFilters = z.object({
   family: automaticDecisionFamily.optional(),
   recordIds: z
     .array(z.string().min(1))

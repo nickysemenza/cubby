@@ -1161,7 +1161,6 @@ describe("suggestFields", () => {
     expect(result.fields?.trade).toMatchObject({
       current: { controls: { kind: "readonly", reason: "allocated" } },
       result: { kind: "missing" },
-      work: { kind: "idle" },
     });
     expect(result.eligibleTargets).toEqual([]);
   });

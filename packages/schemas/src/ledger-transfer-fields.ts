@@ -6,7 +6,7 @@ import { dateTime } from "./codec";
 
 export const ledgerTransferAmount = settledMoney.positive();
 
-export const ledgerSource = z
+const ledgerSource = z
   .string()
   .trim()
   .toLowerCase()
@@ -22,19 +22,13 @@ export const ledgerSourceClaimNormalizedEvidence = z.strictObject({
 export type LedgerSourceClaimNormalizedEvidence = z.infer<
   typeof ledgerSourceClaimNormalizedEvidence
 >;
-export const ledgerSourceClaimReconciliation = z.discriminatedUnion(
-  "decision",
-  [
-    z.strictObject({ decision: z.literal("amounts_match") }),
-    z.strictObject({
-      decision: z.literal("accept_target_amount"),
-      note: z.string().trim().min(1),
-    }),
-  ],
-);
-export type LedgerSourceClaimReconciliation = z.infer<
-  typeof ledgerSourceClaimReconciliation
->;
+const ledgerSourceClaimReconciliation = z.discriminatedUnion("decision", [
+  z.strictObject({ decision: z.literal("amounts_match") }),
+  z.strictObject({
+    decision: z.literal("accept_target_amount"),
+    note: z.string().trim().min(1),
+  }),
+]);
 const ledgerSourceClaimInputFields = {
   source: ledgerSource,
   providerId: z.string().trim().min(1).optional(),

@@ -23,7 +23,7 @@ const usageSchema = z.object({
   cacheWriteTokens: z.number().int().nonnegative(),
 });
 
-export const agentConversationPartSchema = z.discriminatedUnion("type", [
+const agentConversationPartSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("text"), text: z.string() }),
   z.object({ type: z.literal("reasoning"), text: z.string() }),
   /** Image content; the bytes stay in the agent's transcript. */
@@ -45,7 +45,7 @@ export const agentConversationPartSchema = z.discriminatedUnion("type", [
   }),
 ]);
 
-export const agentConversationMessageSchema = z.object({
+const agentConversationMessageSchema = z.object({
   id: z.string(),
   role: z.enum(["user", "assistant", "signal"]),
   /** A short label for the transcript row (`member`, `coordinator`, …). */

@@ -6,7 +6,7 @@ import { z } from "zod";
  * (`apps/web/src/server/generic/actions/entity-action-states.ts`); clients
  * render it and derive no availability themselves.
  */
-export const entityActionState = z.object({
+const entityActionState = z.object({
   /** A manifest verb id: a declared verb or a kernel one (edit, delete, merge, bulkEdit). */
   id: z.string(),
   enabled: z.boolean(),

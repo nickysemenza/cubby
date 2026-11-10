@@ -16,11 +16,9 @@ import { runShortcode } from "./identifiers";
  * One-hop physical and explicitly opted-in repository reference connections.
  * `incoming` rows point at the entity; `outgoing` rows are what the entity
  * points at. Repository connections do not participate in the physical graph.
+ * @public Names a generated native model.
  */
 export const entityConnectionDirection = z.enum(["incoming", "outgoing"]);
-export type EntityConnectionDirection = z.infer<
-  typeof entityConnectionDirection
->;
 
 export const entityConnectionsInput = z.object({
   /** Any entity's public code; a merged-away code reads its survivor. */
@@ -41,6 +39,7 @@ export const entityConnectionItem = z.object({
 });
 export type EntityConnectionItem = z.infer<typeof entityConnectionItem>;
 
+/** @public Names a generated native model. */
 export const entityConnectionGroup = z.object({
   direction: entityConnectionDirection,
   edgeKey: z.string(),
@@ -79,6 +78,7 @@ export const entityMergePreviewInput = z.object({
 });
 export type EntityMergePreviewInput = z.input<typeof entityMergePreviewInput>;
 
+/** @public Names a generated native model. */
 export const entityMergeCandidate = z.object({
   id: z.string(),
   name: z.string().nullable(),
@@ -93,6 +93,7 @@ export const entityMergeCandidate = z.object({
   connections: z.array(entityConnectionGroup),
 });
 
+/** @public Names a generated native model. */
 export const entityMergeConflictValue = z.object({
   /** The candidate holding this value. */
   id: z.string(),
@@ -102,6 +103,7 @@ export const entityMergeConflictValue = z.object({
   display: z.string(),
 });
 
+/** @public Names a generated native model. */
 export const entityMergeConflict = z.object({
   field: z.string(),
   label: z.string(),
@@ -132,7 +134,7 @@ export const entityMergePreviewOut = z.object({
 export type EntityMergePreviewOut = z.infer<typeof entityMergePreviewOut>;
 
 /** Entities with no live physical connection, for the Problems page. */
-export const orphanEntitiesOut = z.object({
+const orphanEntitiesOut = z.object({
   items: z.array(entityConnectionItem),
   count: z.number().int().nonnegative(),
 });
@@ -175,11 +177,6 @@ const connectionEndpoints = {
   "inventory-location": ["inventory", "location"],
 } satisfies Record<ConnectionRelation, readonly [string, string]>;
 
-/** Every record kind some connection relation can start or end at. */
-export const connectionEndpointKinds = [
-  ...new Set(Object.values(connectionEndpoints).flat()),
-];
-
 export const connectionEvidence = z.object({
   reasons: z.array(z.string()).max(30),
   contradictions: z.array(z.string()).max(30),
@@ -187,7 +184,7 @@ export const connectionEvidence = z.object({
 });
 
 /** Direction is canonical regardless of which endpoint requests discovery. */
-export const connectionEdge = z
+const connectionEdge = z
   .object({
     relation: connectionRelation,
     source: entityGraphRootSchema,
@@ -207,21 +204,6 @@ export const connectionEdge = z
 export type ConnectionEdge = z.infer<typeof connectionEdge>;
 export const connectionEdgeKey = (edge: ConnectionEdge): string =>
   `${edge.relation}:${edge.source.entityKind}:${edge.source.entityId}:${edge.target.entityKind}:${edge.target.entityId}`;
-
-/** Live published endpoints are canonical codes; retain opaque legacy keys without guessing. */
-export function connectionEdgeFromKey(key: string): ConnectionEdge | undefined {
-  const parts = key.split(":");
-  if (parts.length !== 5) return undefined;
-  const [relation, sourceKind, sourceId, targetKind, targetId] = parts;
-  const parsed = connectionEdge.safeParse({
-    relation,
-    source: { entityKind: sourceKind, entityId: sourceId },
-    target: { entityKind: targetKind, entityId: targetId },
-  });
-  return parsed.success && connectionEdgeKey(parsed.data) === key
-    ? parsed.data
-    : undefined;
-}
 
 export const connectionCandidate = connectionEdge.safeExtend({
   label: z.string().min(1),

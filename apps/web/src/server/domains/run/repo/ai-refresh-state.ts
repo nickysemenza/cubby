@@ -1,16 +1,13 @@
 import {
-  aiRefreshActivation,
   aiProvenance,
-  aiRefreshRunInput,
   suggestionAcceptanceReceipt,
   type AiEvaluationTarget,
   type AiProvenance,
 } from "@cubby/schemas/ai-evaluation";
-import { runEntityId, type RunId } from "@cubby/schemas/identifiers";
+import { runEntityId } from "@cubby/schemas/identifiers";
 import { sha256Hex } from "@cubby/shared/sha256";
 import {
   and,
-  asc,
   count,
   desc,
   eq,
@@ -24,11 +21,7 @@ import { z } from "zod";
 import { evaluationSlotKey } from "~/server/ai/evaluation/repo/ai-evaluation-requests";
 import { markAiEvaluationWork } from "~/server/ai/evaluation/repo/ai-evaluation-work";
 import type { Database } from "~/server/db";
-import {
-  getDb,
-  notDeleted,
-  withTransactionDatabase,
-} from "~/server/db/helpers";
+import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import {
   aiEvaluation,
   aiEvaluationRequest,
@@ -41,12 +34,8 @@ import {
   transitionSuggestionStates,
 } from "~/server/generic/suggestions/repo/suggestion-state";
 
-import {
-  hasAiRefreshRunCapacity,
-  tryLockAiRefreshScheduling,
-} from "./ai-refresh-admission";
+import { tryLockAiRefreshScheduling } from "./ai-refresh-admission";
 import { readAutomaticAiStop } from "./automatic-ai-stop";
-import { ensureRun } from "./ensure-run";
 
 export type { SuggestionStateRow };
 const jsonSnapshot = (value: unknown) =>
@@ -71,7 +60,6 @@ const targetWorkKey = ({ target, provenance }: EvaluationTargetInput) =>
 const MAX_REOPENS = 3;
 /** failureCode of a Run whose queued work was cleared as redundant, not refused. */
 const SUPERSEDED_RUN_FAILURE = "superseded";
-const refreshRunRevision = sql<number>`coalesce((${run.input}->${aiRefreshRunInput.keyof().enum.activation}->>${aiRefreshActivation.keyof().enum.revision})::int, 0)`;
 
 const targetFeature = (target: AiEvaluationTarget) =>
   target.kind === "field" ? "field-suggestion" : "mailbox-triage";
@@ -306,11 +294,6 @@ export async function insertEvaluationTargets(
   });
 }
 
-type ScheduleEvaluationResult =
-  | { kind: "scheduled"; runId: RunId }
-  | { kind: "unchanged" }
-  | { kind: "deferred"; reason: "scheduling_busy" | "capacity" };
-
 /** Automatic evaluations waiting before a discovery page holds its cursor. */
 const AUTOMATIC_EVALUATION_BACKLOG = 1_000;
 
@@ -342,118 +325,6 @@ export async function scheduleAutomaticEvaluations(
       return { kind: "deferred", reason: "capacity" };
     return (await insertEvaluationTargets(tx, null, targets))
       ? { kind: "scheduled" }
-      : { kind: "unchanged" };
-  });
-}
-
-/** Work and its owner commit together. A deferred discovery keeps its cursor. */
-export async function scheduleEvaluationRun(
-  db: Database,
-  actor: Parameters<typeof ensureRun>[1],
-  input: Parameters<typeof ensureRun>[2] & {
-    input: z.infer<typeof aiRefreshRunInput>;
-  },
-  targets: EvaluationTargetInput[],
-): Promise<ScheduleEvaluationResult> {
-  if (actor.runId)
-    throw new Error(
-      "Run-scoped actors cannot schedule independent AI refresh owners",
-    );
-  if (!(await hasAdmissibleTarget(db, targets))) return { kind: "unchanged" };
-  return withTransactionDatabase(db, async (tx) => {
-    if (!(await tryLockAiRefreshScheduling(tx)))
-      return { kind: "deferred", reason: "scheduling_busy" };
-    // Do not create empty Runs for terminal, cancelled or already queued work.
-    if (!(await hasAdmissibleTarget(tx, targets))) return { kind: "unchanged" };
-    // Updating a queued slot keeps its original owner, even when a mailbox
-    // roster is full or the caller would otherwise open a new Run.
-    const updates = (await slotAdmissions(tx, targets)).filter(
-      (entry) => entry.kind === "update" && entry.row,
-    );
-    const updatedOwner = updates[0]?.row?.runId;
-    if (updatedOwner)
-      await insertEvaluationTargets(tx, updatedOwner, targets, {
-        updatesOnly: true,
-      });
-    if (!(await hasAdmissibleTarget(tx, targets)))
-      return updatedOwner
-        ? { kind: "scheduled", runId: updatedOwner }
-        : { kind: "unchanged" };
-    const lockRun = async (id: string) =>
-      (
-        await getDb(tx)
-          .select({
-            status: run.status,
-            failureCode: run.failureCode,
-            revision: refreshRunRevision,
-          })
-          .from(run)
-          .where(eq(run.id, runEntityId.parse(id)))
-          .for("no key update")
-      )[0];
-    const [shared] =
-      input.status !== "completed" &&
-      targets.every((item) => item.target.kind !== "email")
-        ? await getDb(tx)
-            .select({ id: run.id })
-            .from(run)
-            .where(
-              and(
-                eq(run.purpose, "ai_refresh"),
-                eq(run.status, "running"),
-                eq(run.actorUserId, actor.userId),
-                isNull(run.parentRunId),
-                sql`coalesce((${run.input}->>${aiRefreshRunInput.keyof().enum.discovery})::boolean, false) = false`,
-                sql`${run.input}->>${aiRefreshRunInput.keyof().enum.mailboxId} IS NULL`,
-                sql`${refreshRunRevision} = ${input.input.activation.revision}`,
-                notDeleted(run),
-              ),
-            )
-            .orderBy(asc(run.createdAt), asc(run.id))
-            .limit(1)
-            .for("no key update")
-        : [];
-    if (
-      !shared &&
-      input.status !== "completed" &&
-      !(await hasAiRefreshRunCapacity(tx))
-    )
-      return { kind: "deferred", reason: "capacity" };
-    let runId = shared?.id ?? (await ensureRun(tx, actor, input));
-    // Work and its owner become visible together, before recovery can launch a Workflow.
-    let owner = await lockRun(runId);
-    // A settled Run never relaunches automatically, so new or reopened work continues in a successor.
-    if (input.status !== "completed" && input.clientKey)
-      for (
-        let generation = 1;
-        (owner?.status === "completed" ||
-          owner?.status === "failed" ||
-          owner?.status === "dispatch_failed" ||
-          (owner !== undefined &&
-            owner.revision !== input.input.activation.revision)) &&
-        (await hasAdmissibleTarget(tx, targets));
-        generation++
-      ) {
-        runId = await ensureRun(tx, actor, {
-          ...input,
-          clientKey: `${input.clientKey}:successor:${generation}`,
-        });
-        owner = await lockRun(runId);
-      }
-    const inserted = await insertEvaluationTargets(tx, runId, targets);
-    if (!inserted)
-      await getDb(tx)
-        .update(run)
-        .set({ status: "completed", endedAt: new Date() })
-        .where(
-          and(
-            eq(run.id, runId),
-            eq(run.status, "running"),
-            sql`NOT EXISTS (SELECT 1 FROM "AiEvaluation" WHERE "runId" = ${run.id})`,
-          ),
-        );
-    return inserted && input.status !== "completed"
-      ? { kind: "scheduled", runId }
       : { kind: "unchanged" };
   });
 }

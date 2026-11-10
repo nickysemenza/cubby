@@ -43,7 +43,6 @@ interface Env {
   UPC_UPSTREAM_DISABLED?: string;
   E2E_GOOGLE_PROVIDER_URL?: string;
   GOOGLE_CLIENT_SECRET?: string;
-  NOTION_API_KEY?: string;
   /** Workerd harness only; see `RequestDbConnections.poolIdleTimeoutMs`. */
   CUBBY_TEST_POOL_IDLE_TIMEOUT_MS?: string;
   /** Workerd harness only; see `PurchaseAgentEnvironment.settlementPollMs`. */

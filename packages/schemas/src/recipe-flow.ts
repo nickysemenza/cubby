@@ -2,12 +2,14 @@ import { z } from "zod";
 import { dateTime } from "./codec";
 import { recipeShortcode } from "./identifiers";
 
+/** @public Names a generated native model. */
 export const recipeFlowNodeId = z
   .string()
   .min(1)
   .max(64)
   .regex(/^[a-z][a-z0-9-]*$/);
 
+/** @public Names a generated native model. */
 export const recipeFlowInstructionRefSchema = z.object({
   sectionId: z.uuid(),
   instructionIndex: z.number().int().nonnegative(),
@@ -16,15 +18,18 @@ export type RecipeFlowInstructionRef = z.infer<
   typeof recipeFlowInstructionRefSchema
 >;
 
-/** The same annotation vocabulary in canonical and provider flow plans. */
+/**
+ * The same annotation vocabulary in canonical and provider flow plans.
+ * @public Names a generated native model.
+ */
 export const recipeFlowAnnotationKind = z.enum(["time", "temperature", "cue"]);
 
 export const recipeFlowAnnotationSchema = z.object({
   kind: recipeFlowAnnotationKind,
   text: z.string().min(1).max(160),
 });
-export type RecipeFlowAnnotation = z.infer<typeof recipeFlowAnnotationSchema>;
 
+/** @public Names a generated native model. */
 export const recipeFlowSourceSchema = z.discriminatedUnion("kind", [
   z.object({
     id: recipeFlowNodeId,
@@ -41,14 +46,15 @@ export const recipeFlowSourceSchema = z.discriminatedUnion("kind", [
 ]);
 export type RecipeFlowSource = z.infer<typeof recipeFlowSourceSchema>;
 
+/** @public Names a generated native model. */
 export const recipeFlowSetupSchema = z.object({
   id: recipeFlowNodeId,
   label: z.string().min(1).max(160),
   instructionRefs: z.array(recipeFlowInstructionRefSchema).min(1),
   annotations: z.array(recipeFlowAnnotationSchema),
 });
-export type RecipeFlowSetup = z.infer<typeof recipeFlowSetupSchema>;
 
+/** @public Names a generated native model. */
 export const recipeFlowInputRefSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("source"),
@@ -59,8 +65,8 @@ export const recipeFlowInputRefSchema = z.discriminatedUnion("kind", [
     id: recipeFlowNodeId,
   }),
 ]);
-export type RecipeFlowInputRef = z.infer<typeof recipeFlowInputRefSchema>;
 
+/** @public Names a generated native model. */
 export const recipeFlowOperationSchema = z.object({
   id: recipeFlowNodeId,
   label: z.string().min(1).max(160),
@@ -71,6 +77,7 @@ export const recipeFlowOperationSchema = z.object({
 });
 export type RecipeFlowOperation = z.infer<typeof recipeFlowOperationSchema>;
 
+/** @public Names a generated native model. */
 export const recipeFlowWalkthroughStopSchema = z.object({
   id: recipeFlowNodeId,
   title: z.string().min(1).max(160),
@@ -79,15 +86,12 @@ export const recipeFlowWalkthroughStopSchema = z.object({
   explanation: z.string().min(1).max(500),
   operationIds: z.array(recipeFlowNodeId).min(1),
 });
-export type RecipeFlowWalkthroughStop = z.infer<
-  typeof recipeFlowWalkthroughStopSchema
->;
 
+/** @public Names a generated native model. */
 export const recipeFlowWalkthroughSchema = z.object({
   overview: z.string().min(1).max(500),
   stops: z.array(recipeFlowWalkthroughStopSchema).min(1),
 });
-export type RecipeFlowWalkthrough = z.infer<typeof recipeFlowWalkthroughSchema>;
 
 export const recipeFlowPlanSchema = z.object({
   schemaVersion: z.literal(1),
@@ -198,14 +202,15 @@ export function safeNormalizeRecipeFlowAiPlan(candidate: RecipeFlowAiPlan) {
   return recipeFlowPlanSchema.safeParse(canonicalRecipeFlowAiPlan(candidate));
 }
 
+/** @public Names a generated native model. */
 export const recipeFlowWarningCode = z.enum([
   "unlisted-input",
   "unreferenced-instruction",
   "divided-usage",
   "multiple-outputs",
 ]);
-export type RecipeFlowWarningCode = z.infer<typeof recipeFlowWarningCode>;
 
+/** @public Names a generated native model. */
 export const recipeFlowWarningSchema = z.object({
   code: recipeFlowWarningCode,
   message: z.string().min(1),

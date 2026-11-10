@@ -54,7 +54,7 @@ export const relatednessPairRegistry = {
   }
 >;
 
-export type RelatednessPair = keyof typeof relatednessPairRegistry;
+type RelatednessPair = keyof typeof relatednessPairRegistry;
 export type ActiveRelatednessPair = {
   [
     K in RelatednessPair
@@ -75,7 +75,7 @@ for (const [key, pair] of Object.entries(relatednessPairRegistry)) {
   }
 }
 
-export const embeddingReadinessValues = [
+const embeddingReadinessValues = [
   "ready",
   "stale",
   "uncomputed",
@@ -84,12 +84,14 @@ export const embeddingReadinessValues = [
 export const embeddingReadinessSchema = z.enum(embeddingReadinessValues);
 export type EmbeddingReadiness = z.infer<typeof embeddingReadinessSchema>;
 
+/** @public Names a generated native model. */
 export const relatednessEvidenceSchema = z.object({
   signal: z.string(),
   detail: z.string().nullable(),
   weight: z.number(),
 });
 
+/** @public Names a generated native model. */
 export const relatednessItemSchema = z.object({
   review: suggestionReviewReference.optional(),
   entity: entitySchema,

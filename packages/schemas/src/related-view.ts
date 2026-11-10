@@ -1,5 +1,4 @@
 import { relatedViewRegistry } from "./generated/related-views.gen";
-export { relatedViewRegistry } from "./generated/related-views.gen";
 import { z } from "zod";
 import type { Entity } from "./entity";
 import { money } from "./money";
@@ -31,7 +30,7 @@ export interface RelatedViewDefinition extends RelatedViewPresentationDefinition
   label: string;
 }
 
-export const relatedViewKeys = nonEmptyTuple(
+const relatedViewKeys = nonEmptyTuple(
   relatedViewRegistry.map((view) => view.key),
 );
 export const relatedViewKeySchema = z.enum(relatedViewKeys);
@@ -46,15 +45,14 @@ export const relatedPreviewInput = z.object({
 });
 export type RelatedPreviewInput = z.infer<typeof relatedPreviewInput>;
 
-export const relatedPreviewItem = z.object({
+const relatedPreviewItem = z.object({
   entity: entitySchema,
   id: z.string(),
   label: z.string(),
   displayImage: imageUrlSummary.nullable(),
 });
-export type RelatedPreviewItem = z.infer<typeof relatedPreviewItem>;
 
-export const relatedPreviewGroup = z.object({
+const relatedPreviewGroup = z.object({
   sourceId: z.string(),
   relationKey: relatedViewKeySchema,
   totalCount: z.number().int().nonnegative(),
@@ -88,14 +86,12 @@ export const relatedSummaryRelationKeys = [
   "project.purchasedProducts",
   "product.vendors",
 ] as const;
-export const relatedSummaryRelationKeySchema = z.enum(
-  relatedSummaryRelationKeys,
-);
+const relatedSummaryRelationKeySchema = z.enum(relatedSummaryRelationKeys);
 export type RelatedSummaryRelationKey = z.infer<
   typeof relatedSummaryRelationKeySchema
 >;
 
-export const relatedSummarySortFieldSchema = z.enum([
+const relatedSummarySortFieldSchema = z.enum([
   "target",
   "latestActivity",
   "netSpend",

@@ -24,18 +24,13 @@ import type {
 } from "./generated/entity-roster.gen";
 import { mapRecord } from "@cubby/shared";
 export {
-  imagePolicyCatalog,
   photoCategories,
   type ImageDisplayBinding,
   type ImageIngressBinding,
   type ImageIngressRoute,
-  type ImagePolicy,
-  type ImageRoutingPolicy,
-  type ImageStorage,
-  type PhotoCategory,
 } from "./generated/image-policy.gen";
 
-export type ImageIngressRouteId =
+type ImageIngressRouteId =
   (typeof imagePolicyCatalog)[Entity]["ingress"][number]["routeId"];
 /** Every entity's photo ingress routes by `routeId`, which the compiler keeps unique. */
 export type ImageIngressRouteIndex = {
@@ -55,7 +50,6 @@ export const imageDisplayBindings: Record<
   entityKeys,
   (entity) => imagePolicyCatalog[entity].displaySources,
 );
-export type { PhotoCategoryKey } from "./photo-categories";
 import { generatedEntityManifest } from "./generated/entity-manifest-data.gen";
 export type {
   DetailRendererId,
@@ -172,10 +166,7 @@ export type LocalPathRelationship = EntityRelationship & {
   provenance: { kind: "local-path"; steps: readonly RelationshipPathStep[] };
 };
 
-export const relationshipByKey = (
-  source: Entity,
-  key: string,
-): EntityRelationship => {
+const relationshipByKey = (source: Entity, key: string): EntityRelationship => {
   const candidate = entityManifest[source].relationships.find(
     (relationship) => relationship.key === key,
   );
@@ -214,10 +205,8 @@ export {
   browserRoutedEntities,
   countableEntities,
   coverEntities,
-  displayImageEntities,
   embeddableEntities,
   galleryEntities,
-  imageEntities,
   logoEntities,
   searchableEntities,
   shortcodeEntities,

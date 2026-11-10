@@ -31,7 +31,6 @@ export function fieldValueFixture<S extends z.ZodType>(
       },
     },
     result,
-    work: { kind: "idle" },
   });
   return editable.success
     ? editable.data
@@ -44,7 +43,6 @@ export function fieldValueFixture<S extends z.ZodType>(
           ...result,
           decision: { ...result.decision, provenance: { kind: "computed" } },
         },
-        work: { kind: "idle" },
       });
 }
 
@@ -55,7 +53,6 @@ function missingFieldFixture<S extends z.ZodType>(schema: S): z.output<S> {
       controls: { kind: "readonly", reason: "computed" },
     },
     result: { kind: "missing" },
-    work: { kind: "idle" },
   });
 }
 

@@ -26,17 +26,13 @@ const authenticatedRoutes = [
 // These routes are contextual, global controls, account pages or retired redirects.
 const contextualRoutes = new Set([
   "/connections",
-  "/recipes/graph",
   "/emails/coverage",
   "/automatic-decisions",
-  "/recommendations/workbench",
   "/search",
   "/settings",
   "/account/connected-apps",
-  "/activities",
   "/history",
   "/jobs",
-  "/records",
   "/work-queue",
 ]);
 

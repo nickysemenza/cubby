@@ -10,20 +10,10 @@ import {
 } from "./generated/entity-field-envelope-fields.ingredient.gen";
 import { rawIngredientEnrichment } from "./ingredient-raw-read";
 
-import { readSchemas as ingredientReadSchemas } from "./entity-definitions/02-ingredient.entity";
 import { z } from "zod";
-import { productRefOut } from "./product-fields";
-import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
 import { ingredientShortcode, recipeShortcode } from "./identifiers";
-import { createPaginatedResponseSchema, presenceFilter } from "./pagination";
+import { presenceFilter } from "./pagination";
 import { recipeUsageOut } from "./recipe-fields";
-
-export const ingredientBaseFields = {
-  name: ingredientReadSchemas.output.shape.name,
-  aliases: ingredientReadSchemas.output.shape.aliases,
-};
-
-export const ingredientBase = z.object(ingredientBaseFields);
 
 export const ingredientFilterFields = {
   ...ingredientBaseFilterFields,
@@ -59,10 +49,6 @@ export const ingredientFilterFields = {
 export const ingredientFiltersSchema = z.object(ingredientFilterFields);
 export type IngredientFilters = z.infer<typeof ingredientFiltersSchema>;
 
-export type IngredientSortField = GeneratedEntitySortField<"ingredient">;
-
-const ingredientOutFields = ingredientReadSchemas.output.shape;
-
 /**
  * Per-cluster change summary returned by an ingredient merge — the serialized
  * shape surfaced to the MCP tool / any caller. The repo's internal `MergeSummary`
@@ -85,7 +71,7 @@ export type MergeSummaryOut = z.infer<typeof mergeSummary>;
 
 export const ingredientRecipeUsagesOut = z.array(recipeUsageOut);
 
-export const ingredientMatchOut = z
+const ingredientMatchOut = z
   .object({
     id: ingredientShortcode,
     name: z.string(),
@@ -120,10 +106,7 @@ export const ingredientResolveOrCreateOut = z.array(
  * nutrition and a price (nutrition and cost-per-nutrient must share a basis),
  * a package label before USDA. `display` is that product's `nutritionDisplay`.
  */
-export {
-  ingredientNutritionProductOut,
-  type IngredientNutritionProductOut,
-} from "./ingredient-read-fields";
+export { type IngredientNutritionProductOut } from "./ingredient-read-fields";
 
 /** Generic MCP entity detail with storage-only child identifiers removed. */
 
@@ -139,7 +122,6 @@ export type IngredientWithFoodLeanOut = z.output<
 
 /** Generic MCP entity list row with storage-only product child ids removed. */
 
-export { enrichmentFixKind } from "./ingredient-raw-read";
 export const enrichmentRowOut = withFieldEnvelopes(
   rawIngredientEnrichment,
   ingredientFieldEnvelopeFields,
@@ -147,7 +129,6 @@ export const enrichmentRowOut = withFieldEnvelopes(
 ).extend({
   product: ingredientWithFoodOut.shape.product,
 });
-export type EnrichmentRow = z.output<typeof enrichmentRowOut>;
 
 export const enrichmentWorkbenchInput = z
   .object({
@@ -180,27 +161,3 @@ export const ingredientNamesInput = z.object({
 export const ingredientResolvableNamesInput = z.object({
   names: z.array(z.string().min(1)).max(1000),
 });
-
-/**
- * Slim MCP projection of an ingredient list/detail row.
- *
- * The scalar half is built from the same field map as `ingredientOut`, so it
- * cannot drift from the plain shape. The two added keys are aggregates no
- * plain ingredient output carries under these names: `products` is a
- * `{id,name}` digest of `product[]`, and `recipeCount` counts
- * `appearsInRecipes[]` (the list row's `ownRecipeCount` counts something else
- * and the detail row has no count at all).
- */
-export const ingredientMcpOut = z.object({
-  id: ingredientOutFields.id,
-  name: ingredientOutFields.name,
-  aliases: ingredientOutFields.aliases,
-  naKinds: ingredientOutFields.naKinds,
-  usuallyOnHand: ingredientOutFields.usuallyOnHand,
-  products: z.array(productRefOut),
-  recipeCount: z.number().int().nonnegative(),
-});
-export type IngredientMcpOut = z.infer<typeof ingredientMcpOut>;
-
-export const ingredientMcpListOut =
-  createPaginatedResponseSchema(ingredientMcpOut);

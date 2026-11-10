@@ -239,7 +239,7 @@ private struct ProductJourneySummaryView: View {
                         systemImage: onHandUnits <= 0 ? "circle.dotted" : "checkmark.circle.fill"
                     )
                 } else {
-                    Text(quantityEnvelope?.failure ?? "Inventory quantity: \(quantityEmptyLabel)")
+                    Text("Inventory quantity: \(quantityEmptyLabel)")
                         .foregroundStyle(.secondary)
                 }
             }

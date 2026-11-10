@@ -43,10 +43,6 @@ export const EXPENSE_LINE_BASIS_LABELS = {
   allocation: "Share of a lump sum",
 } as const satisfies Record<ExpenseLineBasis, string>;
 
-export const isPrincipalExpense = (expense: {
-  lineKind: ExpenseLineKind;
-}): boolean => expense.lineKind === "principal";
-
 export const isPurchaseAdjustmentExpense = (expense: {
   lineKind: ExpenseLineKind;
 }): boolean =>

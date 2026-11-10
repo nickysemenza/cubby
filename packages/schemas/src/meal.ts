@@ -1,5 +1,4 @@
 import {
-  mealOut,
   mealListItemOut,
   mealFilterFields as mealBaseFilterFields,
 } from "@cubby/schemas/entities/meal";
@@ -12,7 +11,6 @@ export * from "./meal-amount";
 import { mealFoodAmount } from "./meal-amount";
 import { recipeYieldSchema, recipeRefOut } from "./recipe-shared";
 import { uniqueBy } from "./base-entity";
-import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
 import {
   aggregatedNeedOut,
   needViaOut,
@@ -34,42 +32,15 @@ import {
   nutritionTotalsPartial,
   measureEstimate,
 } from "./nutrition";
-export {
-  mealRecipeInput,
-  type MealRecipeInput,
-  scaledTotals,
-  type ScaledTotals,
-  mealTotals,
-  type MealTotals,
-} from "./meal-fields";
+export { type MealRecipeInput } from "./meal-fields";
 
 export {
-  MEAL_KIND_LABELS,
-  MEAL_TYPE_LABELS,
   type MealKind,
   mealKindSchema,
-  mealKindValues,
   type MealType,
-  mealTypeRank,
   mealTypeSchema,
-  mealTypeValues,
 } from "./meal-classification";
-export {
-  mealDate,
-  mealDateRange,
-  mealScale,
-  mealYieldGrams,
-  type MealYieldGrams,
-} from "./meal-shared";
-
-/**
- * `mealType` sorts by SLOT, not alphabetically — the repo resolves it through
- * `mealTypeValues`' declaration order, because a raw text sort would put
- * dessert before dinner. Cost is deliberately absent: it's a read-time rollup
- * of current `recipe.totals x scale`; estimate status cannot be represented by
- * a useful SQL sort key.
- */
-export type MealSortField = GeneratedEntitySortField<"meal">;
+export { mealDateRange } from "./meal-shared";
 
 export const mealAddRecipeInput = z.object({
   mealId: mealShortcode,
@@ -150,6 +121,7 @@ const mealRecipePreparationRemoveChange = z.object({
   ledgerPartyId: ledgerPartyShortcode,
 });
 
+/** @public Names a generated native model. */
 export const mealRecipePreparationChange = z.discriminatedUnion("action", [
   mealRecipePreparationSetChange,
   mealRecipePreparationRemoveChange,
@@ -191,7 +163,7 @@ const mealPreparationTargetMealOut = mealPreparationSourceMealOut;
 
 const mealPreparationEaterOut = ledgerPartyPersonSummary;
 
-export const mealRecipePreparationPortionOut = z.object({
+const mealRecipePreparationPortionOut = z.object({
   targetMeal: mealPreparationTargetMealOut,
   eater: mealPreparationEaterOut,
   amount: mealFoodAmount,
@@ -236,7 +208,7 @@ const mealRecipePreparationFields = {
   portions: z.array(mealRecipePreparationPortionOut),
 };
 
-export const mealRecipePreparationOut = z
+const mealRecipePreparationOut = z
   .object(mealRecipePreparationFields)
   .refine(...preparedHereMatchesSourceSummary);
 export type MealRecipePreparationOut = z.infer<typeof mealRecipePreparationOut>;
@@ -256,7 +228,7 @@ export const getMealPreparationsOut = z.object({
 });
 export type GetMealPreparationsOut = z.infer<typeof getMealPreparationsOut>;
 
-export const mealPreparationNutritionDetail = z.enum([
+const mealPreparationNutritionDetail = z.enum([
   "full",
   "macros",
   "kcal",
@@ -301,9 +273,6 @@ export const getMealPreparationsMcpOut = z.object({
     }),
   }),
 });
-export type GetMealPreparationsMcpOut = z.infer<
-  typeof getMealPreparationsMcpOut
->;
 
 export const saveMealRecipePreparationOut = z.object({
   mealRecipeId,
@@ -320,10 +289,9 @@ export type SaveMealRecipePreparationOut = z.infer<
 /** Generic MCP entity result; MealRecipe rows have no public shortcode. */
 
 export const mealRecipeOut = mealListItemOut.shape.recipes.element;
+/** @public Names a generated native model. */
 export const mealRecipeSummary = mealRecipeOut.shape.recipe;
 export type MealRecipeOut = z.output<typeof mealRecipeOut>;
-
-export const mealListOut = z.array(mealOut);
 
 export const upcomingMealSummaryOut = rawUpcomingMealSummary
   .omit({ mealType: true, mealKind: true })
@@ -334,7 +302,6 @@ export const upcomingMealSummaryOut = rawUpcomingMealSummary
     }),
   })
   .array();
-export type UpcomingMealSummaryOut = z.infer<typeof upcomingMealSummaryOut>;
 
 export const shoppingListContribution = z.object({
   mealId: mealShortcode,
@@ -355,7 +322,7 @@ export type ShoppingListContribution = z.infer<typeof shoppingListContribution>;
  * of a real omission — deliberately its own channel rather than a pseudo-item,
  * which would sort to the bottom of a shortfall-ordered list and read as "fine".
  */
-export const unexpandedSubRecipeOut = z.object({
+const unexpandedSubRecipeOut = z.object({
   recipeId: recipeShortcode,
   name: z.string(),
   reason: subRecipeBlockReason,

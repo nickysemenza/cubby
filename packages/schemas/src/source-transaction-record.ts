@@ -2,7 +2,6 @@ import { z } from "zod";
 import { dateTime } from "./codec";
 import { externalIdSource } from "./external-id";
 import { money, settledMoney } from "./money";
-import { createSortPaginationFields } from "./pagination";
 import {
   financialAccountShortcode,
   financialTransactionShortcode,
@@ -31,13 +30,6 @@ import {
 } from "./source-transaction-record-fields";
 
 import { sourceTransactionRecordFilterFields as sourceTransactionRecordBaseFilterFields } from "@cubby/schemas/entities/sourceTransactionRecord";
-import { sourceTransactionRecordOut } from "@cubby/schemas/entities/sourceTransactionRecord";
-
-export {
-  transactionImportOut,
-  type TransactionImportOut,
-} from "@cubby/schemas/entities/transactionImport";
-import { transactionImportOut } from "@cubby/schemas/entities/transactionImport";
 
 export const sourceTransactionRecordFilterFields = {
   ...sourceTransactionRecordBaseFilterFields,
@@ -45,11 +37,8 @@ export const sourceTransactionRecordFilterFields = {
 export const sourceTransactionRecordFilters = z.object(
   sourceTransactionRecordFilterFields,
 );
-export type SourceTransactionRecordFilters = z.infer<
-  typeof sourceTransactionRecordFilters
->;
 
-export const sourceTransactionRecordLegacyFilters = z.object({
+const sourceTransactionRecordLegacyFilters = z.object({
   source: z.string().optional(),
   importFingerprint: z.string().optional(),
   accountId: financialAccountShortcode.optional(),
@@ -73,15 +62,7 @@ export type SourceTransactionRecordLegacyFilters = z.infer<
   typeof sourceTransactionRecordLegacyFilters
 >;
 
-export const sourceTransactionRecordSortableFields = [
-  "statementDate",
-  "amount",
-  "accountDescriptor",
-  "rawDescription",
-  "createdAt",
-] as const;
-
-export const STATEMENT_ROW_RECORD_MAX_ROWS = 500;
+const STATEMENT_ROW_RECORD_MAX_ROWS = 500;
 
 export const transactionImportInput = z.strictObject({
   source: externalIdSource,
@@ -108,7 +89,7 @@ export type TransactionImportInput = z.infer<typeof transactionImportInput>;
  * the server derives it, so a client cannot mint an identity that disagrees
  * with the one `sourceRefs` matching depends on.
  */
-export const sourceTransactionRecordInput = z.strictObject({
+const sourceTransactionRecordInput = z.strictObject({
   rowPosition: z.number().int().positive().optional(),
   providerTransactionId: z.string().min(1).nullable().optional(),
   providerAccountId: z
@@ -229,7 +210,7 @@ const hasSourceTransactionRecordFilterValue = (
   value: SourceTransactionRecordFilterValue,
 ): boolean => value !== undefined && value !== "";
 
-export const sourceTransactionRecordSelector = z.union([
+const sourceTransactionRecordSelector = z.union([
   z.strictObject({
     source: externalIdSource,
     externalIds: z.array(z.string()).min(1).max(500),
@@ -251,7 +232,7 @@ export type SourceTransactionRecordSelector = z.infer<
  * is enforced by this schema's shape rather than by convention.
  */
 
-export const sourceTransactionRecordLegacyUpdateData = z.strictObject({
+const sourceTransactionRecordLegacyUpdateData = z.strictObject({
   accountId: financialAccountShortcode.nullable().optional(),
   disposition: sourceTransactionRecordDisposition.optional(),
   dispositionReason: sourceTransactionRecordDispositionReason
@@ -261,11 +242,8 @@ export const sourceTransactionRecordLegacyUpdateData = z.strictObject({
   supersededByExternalId: z.string().nullable().optional(),
   notes: z.string().nullable().optional(),
 });
-export type SourceTransactionRecordLegacyUpdateData = z.infer<
-  typeof sourceTransactionRecordLegacyUpdateData
->;
 
-export const updateSourceTransactionRecordsInput = z.strictObject({
+const updateSourceTransactionRecordsInput = z.strictObject({
   selector: sourceTransactionRecordSelector,
   data: sourceTransactionRecordLegacyUpdateData,
 });
@@ -278,7 +256,7 @@ export type UpdateSourceTransactionRecordsInput = z.infer<
  * hint only; accepted ownership is the occurrence FK. A member may explicitly
  * retain a replacement edge, without declaring the two identities equivalent.
  */
-export const sourceTransactionRecordDriftCandidate = z.object({
+const sourceTransactionRecordDriftCandidate = z.object({
   source: z.string(),
   accountDescriptor: z.string(),
   statementDate: plainDate,
@@ -336,34 +314,8 @@ export const findSourceTransactionRecordDriftOut = z.object({
   truncated: z.boolean(),
 });
 
-export const deleteSourceTransactionRecordsInput = z.strictObject({
-  selector: sourceTransactionRecordSelector,
-});
-
-export const sourceTransactionRecordWriteOut = z.object({
-  affected: z.number().int(),
-});
-
-/** Shared by the browser workflow and MCP tool, so they cannot drift. */
-export const listSourceTransactionRecordsInput = z.object({
-  filters: sourceTransactionRecordLegacyFilters.optional(),
-  ...createSortPaginationFields({
-    sortableFields: sourceTransactionRecordSortableFields,
-    defaultSort: "statementDate",
-  }),
-});
-
 export const sourceTransactionRecordSummaryInput = z.object({
   filters: sourceTransactionRecordLegacyFilters.optional(),
-});
-
-export const listTransactionImportsInput = z.object({
-  source: externalIdSource.optional(),
-});
-
-export const sourceTransactionRecordListOut = z.object({
-  data: z.array(sourceTransactionRecordOut),
-  count: z.number().int(),
 });
 
 export const sourceTransactionRecordSummaryOut = z.object({
@@ -384,9 +336,4 @@ export const sourceTransactionRecordSummaryOut = z.object({
   supersededAmount: money,
   /** Distinct provider charges behind the unmatched observations. */
   unmatchedCharges: z.number().int(),
-});
-
-export const transactionImportListOut = z.object({
-  data: z.array(transactionImportOut),
-  count: z.number().int(),
 });

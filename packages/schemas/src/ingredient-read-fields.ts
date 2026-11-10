@@ -17,7 +17,7 @@ const ingredientProductSummary = productWithMappingsOut.pick({
   labelNutrition: true,
 });
 
-export const ingredientNutritionProductOut = z.object({
+const ingredientNutritionProductOut = z.object({
   productId: productShortcode,
   name: z.string(),
   brandName: z.string().nullable(),

@@ -33,7 +33,10 @@ export const suggestionListFamily = z.enum([
 ]);
 export type SuggestionListFamily = z.infer<typeof suggestionListFamily>;
 
-/** How well a Suggestion's own evidence supports it, judged by its family. */
+/**
+ * How well a Suggestion's own evidence supports it, judged by its family.
+ * @public Names a generated native model.
+ */
 export const suggestionStrength = z.enum(["strong", "medium", "weak"]);
 export type SuggestionStrength = z.infer<typeof suggestionStrength>;
 
@@ -45,7 +48,10 @@ export const suggestionRecordRef = z.object({
 });
 export type SuggestionRecordRef = z.infer<typeof suggestionRecordRef>;
 
-/** Structured summary parts; clients render each part with its own control. */
+/**
+ * Structured summary parts; clients render each part with its own control.
+ * @public Names a generated native model.
+ */
 export const suggestionSummaryPart = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("text"), text: z.string() }),
   z.object({ kind: z.literal("record"), ref: suggestionRecordRef }),
@@ -63,6 +69,7 @@ export type SuggestionSummaryPart = z.infer<typeof suggestionSummaryPart>;
 /**
  * What accepting restores: a data-quality check it closes, another state it
  * resolves (a statement charge matched), or a caution about what it may open.
+ * @public Names a generated native model.
  */
 export const suggestionImpact = z.object({
   kind: z.enum(["quality_check", "resolves", "caution"]),
@@ -71,6 +78,7 @@ export const suggestionImpact = z.object({
 });
 export type SuggestionImpact = z.infer<typeof suggestionImpact>;
 
+/** @public Names a generated native model. */
 export const suggestionActionVerb = z.enum([
   "accept",
   "correct",
@@ -89,6 +97,7 @@ export const suggestionAction = z.object({
 /**
  * A column's filter and sort value. Refs hold shortcodes; a multi-valued
  * column (a connection's endpoint kinds) matches when any value does.
+ * @public Names a generated native model.
  */
 export const suggestionColumnValue = z.union([
   z.string(),
@@ -137,7 +146,10 @@ const rowBase = {
   ),
 };
 
-/** Server-owned evidence for additional proposal scopes; clients share one renderer. */
+/**
+ * Server-owned evidence for additional proposal scopes; clients share one renderer.
+ * @public Names a generated native model.
+ */
 export const declaredSuggestionEvidence = z.object({
   kind: z.literal("declared"),
   description: z.string(),
@@ -172,7 +184,10 @@ export const productPairSuggestionRow = z.object({
   family: z.literal("product_pair"),
   evidence: declaredSuggestionEvidence,
 });
-/** One Suggestion of any family; `evidence` is the family's own payload. */
+/**
+ * One Suggestion of any family; `evidence` is the family's own payload.
+ * @public Names a generated native model.
+ */
 export const suggestionListRow = z.discriminatedUnion("family", [
   fieldSuggestionRow,
   statementSuggestionRow,
@@ -213,7 +228,6 @@ const suggestionPaging = z.object({
 export const suggestionListInput = suggestionDeclaredFilters.extend(
   suggestionPaging.shape,
 );
-export type SuggestionListInput = z.input<typeof suggestionListInput>;
 
 /** One account × month section of the grouped statement list. */
 export const suggestionGroup = z.object({
@@ -270,7 +284,7 @@ const count = z.number().int().nonnegative();
  * outcomes follow family, entity and runId; `fields` is the field family's
  * per-field breakdown.
  */
-export const suggestionFamilyCount = z.object({
+const suggestionFamilyCount = z.object({
   family: suggestionListFamily,
   pending: count,
   clean: count,
@@ -283,7 +297,6 @@ export const suggestionFamilyCount = z.object({
   resolved: count,
   fields: z.array(suggestionFieldCount),
 });
-export type SuggestionFamilyCount = z.infer<typeof suggestionFamilyCount>;
 export const suggestionCountsOut = z.object({
   families: z.array(suggestionFamilyCount),
 });

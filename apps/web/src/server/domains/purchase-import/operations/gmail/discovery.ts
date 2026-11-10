@@ -54,7 +54,6 @@ import { readRun } from "~/server/domains/run/repo/ai-work-state";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { recordPaidGrant } from "~/server/domains/run/repo/paid-grant";
 import { recordRunProgress } from "~/server/domains/run/repo/run-progress";
-import { reportServerError } from "~/server/errors/report-error";
 import {
   currentJobExecution,
   withJobPhase,
@@ -65,7 +64,6 @@ import type { PreparedJobPage } from "~/server/generic/jobs/types";
 import type { WorkflowRunParams } from "~/server/workflows/runs/contract";
 import {
   claimWorkflowRun,
-  failWorkflowRun,
   launchWorkflowRun,
   mailDiscoveryBackpressure,
   runFailureText,
@@ -1005,22 +1003,4 @@ async function stopDiscoveryPage(
       owner.dispatchError ?? "Mailbox requires authorization",
     );
   return { done: true };
-}
-
-export async function failMailDiscovery(
-  db: Database,
-  params: WorkflowRunParams,
-  stepError: string,
-  options: { reportError?: typeof reportServerError } = {},
-): Promise<null> {
-  const error = new Error(stepError);
-  const eventId = (options.reportError ?? reportServerError)(error, {
-    operation: "mail-discovery",
-    stage: "workflow",
-  });
-  await failWorkflowRun(db, params, {
-    failureCode: "mail_discovery_failed",
-    message: runFailureText(error, eventId),
-  });
-  return null;
 }

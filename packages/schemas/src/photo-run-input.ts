@@ -29,7 +29,7 @@ export type PhotoRunProcessor = z.infer<typeof photoRunProcessor>;
  * chunks is grouped once, whole. `imageCount` is the photos it planned, for
  * progress only.
  */
-export const photoRunUploadBatch = z.strictObject({
+const photoRunUploadBatch = z.strictObject({
   clientBatchId: z.uuid(),
   imageCount: z.int().positive(),
   /**
@@ -40,13 +40,12 @@ export const photoRunUploadBatch = z.strictObject({
   positionOffset: z.int().nonnegative(),
   state: z.enum(["open", "sealed"]),
 });
-export type PhotoRunUploadBatch = z.infer<typeof photoRunUploadBatch>;
 
 /**
  * `Run.input` of a photo-inventory Run. A legacy Run with a null input keeps
  * manual Start grouping semantics.
  */
-export const photoInventoryRunInput = z.strictObject({
+const photoInventoryRunInput = z.strictObject({
   kind: z.literal("photo_inventory"),
   /** Null preserves manual grouping when an older Run gains capture defaults. */
   processor: photoRunProcessor.nullable(),

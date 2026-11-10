@@ -12,7 +12,7 @@ export type MaintenanceRunOut = z.infer<typeof maintenanceRunOutSchema>;
 
 const count = z.number().int().nonnegative();
 
-export const maintenanceRunSummarySchema = z.object({
+const maintenanceRunSummarySchema = z.object({
   runId: runShortcode,
   status: runStatus,
   trigger: runTrigger,
@@ -50,7 +50,7 @@ export const imageProcessingMaintenanceCounts = z.object({
   reviewNeeded: count,
   remaining: count,
 });
-export const imageProcessingMaintenanceOutput = z.object({
+const imageProcessingMaintenanceOutput = z.object({
   description: imageProcessingMaintenanceCounts,
   cutout: imageProcessingMaintenanceCounts,
 });
@@ -144,7 +144,7 @@ export type ClassifyImageProvenanceOut = z.infer<
 >;
 
 /** Committed computations across the shared pass; no estimated population or fabricated repair counts. */
-export const searchRebuildResultSchema = z.object({
+const searchRebuildResultSchema = z.object({
   processedRecords: z.int().nonnegative(),
   failedPages: z.int().nonnegative(),
   finishedAt: z.iso.datetime().nullable(),

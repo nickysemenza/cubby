@@ -35,7 +35,6 @@ const base: ReadableFieldEnvelope = {
       },
     },
   },
-  work: { kind: "idle" },
 };
 
 it("keeps a server-approved reset action available before its exact preview is loaded", () => {
@@ -71,61 +70,6 @@ it("keeps a server-approved reset action available before its exact preview is l
   }
 });
 
-it("keeps inherited provenance visible while refresh work changes independently", () => {
-  const record = {
-    id: testShortcode("expense", "synthetic-envelope"),
-    fields: { trade: { ...base, work: { kind: "pending" } } },
-  };
-  const view = render(
-    <FieldRecordValue record={record} field="trade">
-      Plumbing
-    </FieldRecordValue>,
-  );
-  expect(screen.getByLabelText("Queued for refresh")).toBeVisible();
-  expect(screen.getByLabelText("Inherited")).toBeVisible();
-  view.rerender(
-    <FieldRecordValue
-      record={{ ...record, fields: { trade: base } }}
-      field="trade"
-    >
-      Plumbing
-    </FieldRecordValue>,
-  );
-  expect(screen.queryByLabelText("Queued for refresh")).not.toBeInTheDocument();
-  expect(screen.getByLabelText("Inherited")).toBeVisible();
-});
-
-it("retains cached provenance and the raw failure alongside stale status", () => {
-  if (base.result.kind !== "live")
-    throw new Error("Missing synthetic live decision");
-  const error = "Synthetic SQLSTATE 40001: refresh failed";
-  render(
-    <FieldRecordValue
-      record={{
-        fields: {
-          trade: {
-            ...base,
-            result: {
-              kind: "cached",
-              decision: base.result.decision,
-              computedAt: "2026-10-01T00:00:00Z",
-              freshness: "stale",
-            },
-            work: { kind: "failed", error, retryAt: null },
-          },
-        },
-      }}
-      field="trade"
-    >
-      Plumbing
-    </FieldRecordValue>,
-  );
-  expect(screen.getByText("Plumbing")).toBeVisible();
-  expect(screen.getByLabelText("Inherited")).toBeVisible();
-  expect(screen.queryByLabelText("Updating")).not.toBeInTheDocument();
-  expect(screen.getByRole("button", { name: error })).toBeVisible();
-});
-
 it("ends the automatic marker from current ownership without rewriting cached provenance", () => {
   const envelope: ReadableFieldEnvelope = {
     current: {
@@ -152,7 +96,6 @@ it("ends the automatic marker from current ownership without rewriting cached pr
         },
       },
     },
-    work: { kind: "pending" },
   };
   render(
     <FieldRecordValue record={{ fields: { trade: envelope } }} field="trade">
@@ -165,7 +108,7 @@ it("ends the automatic marker from current ownership without rewriting cached pr
   });
 });
 
-it("distinguishes a missing computation from successful empty and retains its failure", () => {
+it("distinguishes a missing computation from successful empty", () => {
   const view = render(
     <FieldRecordValue
       record={{ fields: { trade: { ...base, result: { kind: "missing" } } } }}
@@ -176,25 +119,6 @@ it("distinguishes a missing computation from successful empty and retains its fa
   );
   expect(screen.getByLabelText("Not calculated yet")).toBeVisible();
   expect(screen.queryByText("Not recorded")).not.toBeInTheDocument();
-  const error = "Synthetic initial computation failed";
-  view.rerender(
-    <FieldRecordValue
-      record={{
-        fields: {
-          trade: {
-            ...base,
-            result: { kind: "missing" },
-            work: { kind: "failed", error, retryAt: null },
-          },
-        },
-      }}
-      field="trade"
-    >
-      Not recorded
-    </FieldRecordValue>,
-  );
-  expect(screen.getByText("Unavailable")).toBeVisible();
-  expect(screen.getByRole("button", { name: error })).toBeVisible();
   view.rerender(
     <FieldRecordValue
       record={{

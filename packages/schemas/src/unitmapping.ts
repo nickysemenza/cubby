@@ -24,17 +24,6 @@ const mappingTargetAmount = amount.refine((a) => a.value >= 0, {
   path: ["value"],
 });
 
-export const unitMappingBase = z.object({
-  a: amount.describe('left side of the pair, e.g. { value: 8, unit: "oz" }'),
-  b: amount.describe(
-    'right side of the pair, e.g. { value: 10, unit: "dollar" }',
-  ),
-  source: z
-    .string()
-    .nullable()
-    .describe('provenance note (null if unknown), e.g. "manual"'),
-});
-
 export const unitMappingInput = z.object({
   a: positiveAmount
     .describe('left side of the pair, e.g. { value: 8, unit: "oz" }')
@@ -68,7 +57,6 @@ export const mcpUnitMappingInput = z
   .describe(
     'One conversion/price edge in the unit graph, e.g. 8 oz = $10 → { a: { value: 8, unit: "oz" }, b: { value: 10, unit: "dollar" } }. Money unit is "dollar"; nutrient edges use the b unit (e.g. "kcal", "g protein").',
   );
-export type McpUnitMappingInput = z.infer<typeof mcpUnitMappingInput>;
 
 export type UnitMappingInput = z.infer<typeof unitMappingInput>;
 
@@ -100,12 +88,6 @@ export const unitMappingOut = z.object({
 });
 
 export type UnitMapping = z.infer<typeof unitMappingWithMetadata>;
-
-export const mcpUnitMappingOut = z.object({
-  a: amount,
-  b: amount,
-  source: z.string().nullable(),
-});
 
 /**
  * Build a `UnitMapping` edge with the "manual" provenance stamp — the shape that

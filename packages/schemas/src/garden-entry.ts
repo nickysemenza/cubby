@@ -1,11 +1,8 @@
 import { z } from "zod";
 
 import { plantingShortcode } from "./identifiers";
-import { createPaginatedResponseSchema, oneOrMany } from "./pagination";
-import {
-  gardenEntryFilterFields as gardenEntryBaseFilterFields,
-  gardenEntryListItemOut,
-} from "@cubby/schemas/entities/gardenEntry";
+import { oneOrMany } from "./pagination";
+import { gardenEntryFilterFields as gardenEntryBaseFilterFields } from "@cubby/schemas/entities/gardenEntry";
 
 export const gardenEntryFilterFields = {
   ...gardenEntryBaseFilterFields,
@@ -15,8 +12,5 @@ export const gardenEntryFilterFields = {
    */
   journalPlantingId: oneOrMany(plantingShortcode).optional(),
 };
-export const gardenEntryFiltersSchema = z.object(gardenEntryFilterFields);
+const gardenEntryFiltersSchema = z.object(gardenEntryFilterFields);
 export type GardenEntryFilters = z.infer<typeof gardenEntryFiltersSchema>;
-export const gardenEntryListOut = createPaginatedResponseSchema(
-  gardenEntryListItemOut,
-);

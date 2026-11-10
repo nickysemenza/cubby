@@ -1137,7 +1137,6 @@ export async function explainField(
           provenance: { kind: "computed" },
         },
       },
-      work: { kind: "idle" },
     });
   if (
     snapshot.resetPreview &&

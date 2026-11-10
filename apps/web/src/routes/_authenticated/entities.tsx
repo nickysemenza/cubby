@@ -61,8 +61,7 @@ const searchSchema = z.object({
   // it preserves the pre-merge /entities content (and its zero-query cost);
   // the recipe graph is opt-in via ?tab=recipes (the recipes-list Graph button).
   tab: tabSchema.optional().catch(undefined),
-  // Recipe-graph filters (migrated from the old /recipes/graph route). Branded
-  // at the route boundary so garbage ?cookbookId= values are rejected here.
+  // Recipe-graph filters. Branded at the route boundary so garbage ?cookbookId= values are rejected here.
   cookbookId: cookbookShortcode.optional().catch(undefined),
   hide: z.boolean().optional().catch(true),
   projectId: projectShortcode.optional().catch(undefined),

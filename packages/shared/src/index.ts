@@ -1,15 +1,9 @@
 export * from "./shortcode";
 export { mapRecord, recordKeys } from "./record";
-export {
-  capitalize,
-  humanize,
-  screamingSnake,
-  type ScreamingSnake,
-} from "./text-case";
+export { capitalize, humanize } from "./text-case";
 
 export {
   CURRENT_MEMBER_FILTER,
-  describeDateBound,
   describeNumberRangeBounds,
   describeRangeBounds,
   describeRelativeDate,
@@ -21,7 +15,6 @@ export {
   parseNumberBound,
   parseNumberRangeBounds,
   parseRangeBounds,
-  RANGE_BOUNDS_SEPARATOR,
   RELATIVE_DATE_MAX_DAYS,
   RELATIVE_DATE_PATTERN,
   RELATIVE_DATE_TODAY,
@@ -49,7 +42,6 @@ export type { InventoryPlacement, ProductCategory } from "./category-theme";
 
 export {
   locationTypeValues,
-  locationTypeColors,
   getLocationTypeColor,
 } from "./location-type-theme";
 export type { LocationType } from "./location-type-theme";
@@ -60,17 +52,6 @@ export {
   getMiscDisplayName,
 } from "./constants";
 
-export {
-  ExternalFetchError,
-  MAX_EXTERNAL_HTML_BYTES,
-  MAX_EXTERNAL_IMAGE_BYTES,
-  assertResponseContentType,
-  fetchExternalResponse,
-  readResponseWithLimit,
-  responseBodyWithLimit,
-  sanitizeExternalUrl,
-  validateExternalHttpUrl,
-} from "./external-fetch";
-export type { ExternalFetchOptions } from "./external-fetch";
+export { MAX_EXTERNAL_HTML_BYTES } from "./external-fetch";
 
 export { isNonFoodCategory } from "./category-theme";

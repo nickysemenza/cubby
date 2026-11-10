@@ -36,14 +36,11 @@ function CalendarBeneficiaries({
     (source) => source.fields.effectiveBeneficiaries,
   );
   const status =
-    envelopes.find((envelope) => envelope.work.kind === "failed") ??
     envelopes.find((envelope) => envelope.result.kind === "missing") ??
     envelopes.find(
       (envelope) =>
-        envelope.work.kind === "pending" ||
-        envelope.work.kind === "waiting" ||
-        (envelope.result.kind === "cached" &&
-          envelope.result.freshness === "stale"),
+        envelope.result.kind === "cached" &&
+        envelope.result.freshness === "stale",
     );
   if (!parties.length && !sources.length) return null;
   return (

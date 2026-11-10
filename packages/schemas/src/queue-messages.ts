@@ -12,7 +12,7 @@ export const BACKGROUND_TASK_MESSAGE_VERSION = 3;
  * expiry: it runs only if that claim is still leased and its lease lapsed (its
  * invocation died), and otherwise exits without running or sending anything.
  */
-export const permitRecovery = z.discriminatedUnion("kind", [
+const permitRecovery = z.discriminatedUnion("kind", [
   z.strictObject({ kind: z.literal("job"), id: z.uuid(), lease: z.uuid() }),
   z.strictObject({ kind: z.literal("image"), id: z.uuid(), attempt: z.uuid() }),
 ]);

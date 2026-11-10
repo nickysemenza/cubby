@@ -15,10 +15,7 @@ const telemetryEnvelope = {
 export const mcpToolCallOutcomeSchema = z.enum(["success", "error"]);
 export type McpToolCallOutcome = z.infer<typeof mcpToolCallOutcomeSchema>;
 
-export const mcpToolCallSurfaceSchema = z.enum([
-  "external_mcp",
-  "in_app_agent",
-]);
+const mcpToolCallSurfaceSchema = z.enum(["external_mcp", "in_app_agent"]);
 export type McpToolCallSurface = z.infer<typeof mcpToolCallSurfaceSchema>;
 
 /**
@@ -81,7 +78,7 @@ export const AI_USAGE_TRANSPORT_LABELS = {
   unknown: "Unknown transport",
 } as const satisfies Record<AiUsageTransport, string>;
 
-export const aiUsageTelemetrySchema = z.strictObject({
+const aiUsageTelemetrySchema = z.strictObject({
   ...telemetryEnvelope,
   type: z.literal("ai_usage"),
   feature: z.string().min(1),
@@ -116,51 +113,15 @@ export const aiUsageTelemetrySchema = z.strictObject({
   transport: aiUsageTransport.optional(),
   entityKind: z.string().min(1).nullable(),
   entityId: z.uuid().nullable(),
-  // Current prices and evidence are captured before enqueueing; legacy queue ingress alone can recover missing estimates.
+  // Current prices and evidence are captured before enqueueing.
   ...aiCallCostFields,
 });
 export type AiUsageTelemetry = z.infer<typeof aiUsageTelemetrySchema>;
 
-const currentTelemetryMessageV1Schema = z.discriminatedUnion("type", [
+export const telemetryMessageV1Schema = z.discriminatedUnion("type", [
   mcpToolCallTelemetrySchema,
   aiUsageTelemetrySchema,
 ]);
-/** Only the raw queue shape from the previous deployment can enter cost recovery. */
-export const legacyAiUsageTelemetrySchema = aiUsageTelemetrySchema
-  .omit({ standardCost: true, chargedCost: true, costEvidence: true })
-  .extend({ estimatedCost: z.number().nullable().optional() });
-export type LegacyAiUsageTelemetry = z.infer<
-  typeof legacyAiUsageTelemetrySchema
->;
-
-export function normalizeLegacyAiUsageTelemetry(
-  legacy: LegacyAiUsageTelemetry,
-): AiUsageTelemetry {
-  const { estimatedCost, ...event } = legacy;
-  const free = legacy.transport === "chatgpt" || legacy.transport === "cache";
-  const chargedCost = estimatedCost ?? (free ? 0 : null);
-  return {
-    ...event,
-    standardCost: null,
-    chargedCost,
-    costEvidence: {
-      standard: null,
-      charged: chargedCost === null ? null : { source: "historical_recorded" },
-      billingReason:
-        legacy.transport === "chatgpt"
-          ? "plan"
-          : legacy.transport === "cache"
-            ? "cache"
-            : "unknown",
-      original: { estimatedCost: estimatedCost ?? null },
-    },
-  };
-}
-/** Migration ingress preserves old figures; the queue consumer prepares supported missing prices once. */
-export const telemetryMessageV1Schema = z.preprocess((input) => {
-  const legacy = legacyAiUsageTelemetrySchema.safeParse(input);
-  return legacy.success ? normalizeLegacyAiUsageTelemetry(legacy.data) : input;
-}, currentTelemetryMessageV1Schema);
 export type TelemetryMessageV1 = z.infer<typeof telemetryMessageV1Schema>;
 
 export const mcpTelemetryIdentitySchema = z.strictObject({
@@ -171,7 +132,7 @@ export const mcpTelemetryIdentitySchema = z.strictObject({
 });
 export type McpTelemetryIdentity = z.infer<typeof mcpTelemetryIdentitySchema>;
 
-export const mcpUsageWindowSchema = z.union([
+const mcpUsageWindowSchema = z.union([
   z.literal(7),
   z.literal(30),
   z.literal(90),
@@ -180,7 +141,7 @@ export const mcpUsageWindowSchema = z.union([
 ]);
 export type McpUsageWindow = z.infer<typeof mcpUsageWindowSchema>;
 
-export const mcpToolUsageStatusSchema = z.enum([
+const mcpToolUsageStatusSchema = z.enum([
   "active",
   "inactive",
   "never",
@@ -272,7 +233,7 @@ const usageBreakdownSchema = z.strictObject({
   count: z.number().int().nonnegative(),
 });
 
-export const mcpUsageDashboardOut = z.strictObject({
+const mcpUsageDashboardOut = z.strictObject({
   window: mcpUsageWindowSchema,
   observationStartedAt: dateTime.nullable(),
   observationComplete: z.boolean(),

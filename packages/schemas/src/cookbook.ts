@@ -15,7 +15,7 @@ const passthrough = <T extends z.ZodRawShape>(fields: T) =>
   z.object(fields).catchall(z.json());
 
 /** An image inside the EPUB archive: a path, never a URL. */
-export const archiveImageRefSchema = passthrough({
+const archiveImageRefSchema = passthrough({
   path: z.string().min(1),
   mime: z.string().min(1),
   alt: z.string().nullable().optional(),
@@ -24,31 +24,32 @@ export const archiveImageRefSchema = passthrough({
 });
 export type ArchiveImageRef = z.infer<typeof archiveImageRefSchema>;
 
-export const cookbookRefKind = z.enum([
+const cookbookRefKind = z.enum([
   "ingredient",
   "step",
   "note",
   "variation",
   "caption",
 ]);
-export const cookbookRefMethod = z.enum(["anchor", "page", "title"]);
+const cookbookRefMethod = z.enum(["anchor", "page", "title"]);
 
 /** A resolved cross-reference to another item in the same book. */
-export const cookbookRecipeRefSchema = passthrough({
+const cookbookRecipeRefSchema = passthrough({
   target_id: z.string().min(1),
   text: z.string(),
   kind: cookbookRefKind,
   method: cookbookRefMethod,
 });
-export type CookbookRecipeRef = z.infer<typeof cookbookRecipeRefSchema>;
 
 // The `ingredient` parser's structured reading, as `WIngredient` already
 // crosses the wasm boundary today (snake_case `upper_value`).
+/** @public Names a generated native model. */
 export const parsedAmountSchema = passthrough({
   unit: z.string(),
   value: z.number(),
   upper_value: z.number().nullable().optional(),
 });
+/** @public Names a generated native model. */
 export const parsedIngredientSchema = passthrough({
   name: z.string(),
   amounts: z.array(parsedAmountSchema),
@@ -56,7 +57,7 @@ export const parsedIngredientSchema = passthrough({
   optional: z.boolean().optional(),
 });
 
-export const cookbookIngredientLineSchema = passthrough({
+const cookbookIngredientLineSchema = passthrough({
   raw: z.string(),
   line: z.number().int().nonnegative(),
   parsed: parsedIngredientSchema,
@@ -67,25 +68,24 @@ export type CookbookIngredientLine = z.infer<
   typeof cookbookIngredientLineSchema
 >;
 
-export const cookbookStepSchema = passthrough({
+const cookbookStepSchema = passthrough({
   text: z.string(),
   line: z.number().int().nonnegative(),
   refs: z.array(cookbookRecipeRefSchema).default([]),
 });
 
-export const cookbookNoteSchema = passthrough({
+const cookbookNoteSchema = passthrough({
   label: z.string().nullable().optional(),
   text: z.string(),
   line: z.number().int().nonnegative(),
   refs: z.array(cookbookRecipeRefSchema).default([]),
 });
 
-export const cookbookSectionSchema = passthrough({
+const cookbookSectionSchema = passthrough({
   name: z.string().nullable().optional(),
   ingredients: z.array(cookbookIngredientLineSchema),
   steps: z.array(cookbookStepSchema),
 });
-export type CookbookSection = z.infer<typeof cookbookSectionSchema>;
 
 // Mirrors the Rust `recipe_types::RecipeTimes` JSON (snake_case, strings and
 // minute counts carried independently — see `import-recipe.ts`).
@@ -100,7 +100,7 @@ const cookbookTimes = passthrough({
   cook_minutes: z.number().int().nonnegative().nullable().optional(),
 });
 
-export const cookbookRecipeMetaSchema = passthrough({
+const cookbookRecipeMetaSchema = passthrough({
   description: z.array(z.string()).default([]),
   recipe_yield: z.string().nullable().optional(),
   times: cookbookTimes.nullable().optional(),
@@ -109,7 +109,7 @@ export const cookbookRecipeMetaSchema = passthrough({
   page: z.string().nullable().optional(),
 });
 
-export const cookbookSpanSchema = passthrough({
+const cookbookSpanSchema = passthrough({
   start: z.number().int().nonnegative(),
   end: z.number().int().nonnegative(),
   doc_path: z.string(),
@@ -117,7 +117,7 @@ export const cookbookSpanSchema = passthrough({
 });
 
 /** A recipe item: the only kind cubby imports. */
-export const cookbookRecipeSchema = passthrough({
+const cookbookRecipeSchema = passthrough({
   kind: z.literal("recipe"),
   id: z.string().min(1),
   title: z.string(),
@@ -140,20 +140,18 @@ const cookbookOtherItemSchema = passthrough({
   span: cookbookSpanSchema,
 });
 
-export const cookbookItemSchema = z.discriminatedUnion("kind", [
+const cookbookItemSchema = z.discriminatedUnion("kind", [
   cookbookRecipeSchema,
   cookbookOtherItemSchema,
 ]);
-export type CookbookItem = z.infer<typeof cookbookItemSchema>;
 
-export const cookbookChapterSchema = passthrough({
+const cookbookChapterSchema = passthrough({
   id: z.string().min(1),
   title: z.string().nullable().optional(),
   items: z.array(cookbookItemSchema),
 });
-export type CookbookChapter = z.infer<typeof cookbookChapterSchema>;
 
-export const cookbookEdgeSchema = passthrough({
+const cookbookEdgeSchema = passthrough({
   from: z.string().min(1),
   to: z.string().min(1),
   kind: cookbookRefKind,
@@ -161,7 +159,7 @@ export const cookbookEdgeSchema = passthrough({
 });
 export type CookbookEdge = z.infer<typeof cookbookEdgeSchema>;
 
-export const cookbookSourceSchema = passthrough({
+const cookbookSourceSchema = passthrough({
   label: z.string(),
   sha256: z.string(),
   title: z.string(),

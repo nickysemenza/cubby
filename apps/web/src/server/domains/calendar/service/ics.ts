@@ -417,9 +417,3 @@ export function serializeIcsEvent(
 ): string {
   return serializeCalendarComponent(toEvent(item, opts));
 }
-
-export function renderIcs(items: CalendarItem[], opts: IcsOptions): string {
-  const document = createIcsDocument(opts);
-  document.append(items);
-  return document.finish();
-}

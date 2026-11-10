@@ -66,7 +66,7 @@ struct ImageDiagnosticsCancellationTests {
         let date = Date(timeIntervalSince1970: 1_700_000_000)
         let missing: JSONValue = [
             "current": ["assignment": .null, "controls": ["kind": "readonly", "reason": "computed"]],
-            "result": ["kind": "missing"], "work": ["kind": "idle"],
+            "result": ["kind": "missing"],
         ]
         let fields = try JSONValue.object(
             Dictionary(

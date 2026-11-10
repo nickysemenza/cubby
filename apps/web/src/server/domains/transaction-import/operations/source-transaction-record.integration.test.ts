@@ -22,8 +22,7 @@ import {
   saveMailboxMetadata,
 } from "~/server/domains/purchase-import/repo/gmail/persistence";
 import * as changes from "~/server/generic/changes/repo/change";
-import { renewJob } from "~/server/generic/jobs/jobs.fixtures";
-import { claimJob } from "~/server/generic/jobs/jobs.fixtures";
+import { claimJob, updateJobs } from "~/server/generic/jobs/jobs.fixtures";
 import { enqueueJob } from "~/server/generic/jobs/repo/producer";
 import { systemPrincipal } from "~/server/http/authenticate";
 
@@ -336,7 +335,16 @@ describe("finance.record source and Job lifecycle contention", () => {
                       const written =
                         change === "claim"
                           ? (await claimJob(writerDb, search.id)) !== null
-                          : claim !== null && (await renewJob(writerDb, claim));
+                          : claim !== null &&
+                            (
+                              await updateJobs(
+                                writerDb,
+                                { id: claim.id },
+                                {
+                                  leaseExpiresAt: new Date(Date.now() + 60_000),
+                                },
+                              )
+                            ).length === 1;
                       if (!written)
                         throw new Error(`Synthetic search ${change} refused`);
                     });

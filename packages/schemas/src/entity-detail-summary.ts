@@ -27,7 +27,7 @@ const identity = {
  * the record's glance; a field a slot shows is omitted from later field
  * sections.
  */
-export const detailSummarySlotSchema = z.discriminatedUnion("kind", [
+const detailSummarySlotSchema = z.discriminatedUnion("kind", [
   z.strictObject({
     ...identity,
     kind: z.literal("fields"),

@@ -24,6 +24,7 @@ export const connectedPathNodeSchema = z.object({
 });
 export type ConnectedPathNode = z.infer<typeof connectedPathNodeSchema>;
 
+/** @public Names a generated native model. */
 export const connectedRecordSchema = z.object({
   target: connectedPathNodeSchema,
   /** Every distinct witnessed route, shortest first. Includes source and target. */
@@ -50,7 +51,10 @@ export type ConnectedRecordsPreviewInput = z.input<
   typeof connectedRecordsPreviewInputSchema
 >;
 
-/** Every curated connected view of one record in manifest order, first rows only. */
+/**
+ * Every curated connected view of one record in manifest order, first rows only.
+ * @public Names a generated native model.
+ */
 export const connectedRecordsPreviewOutputSchema = z.object({
   views: z.array(
     connectedRecordsOutputSchema.extend({

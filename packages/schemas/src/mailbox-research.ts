@@ -85,7 +85,7 @@ export const emailStatus = z.enum([
   "excluded",
 ]);
 export type EmailStatus = z.infer<typeof emailStatus>;
-export const mailboxScopedQuery = z.object({
+const mailboxScopedQuery = z.object({
   key: z.string().min(1),
   query: z.string().min(1),
 });
@@ -151,7 +151,7 @@ export function mergeMailboxQueries(
   return next;
 }
 
-export const mailboxHistoryEvent = z.object({
+const mailboxHistoryEvent = z.object({
   sourceKey: z.string(),
   mailboxId: z.string(),
   historyId: z.string(),
@@ -165,7 +165,7 @@ export const mailboxHistoryEvent = z.object({
   ]),
   labelIds: z.array(z.string()),
 });
-export const mailboxPage = z.object({
+const mailboxPage = z.object({
   messageIds: z.array(z.string()),
   /** Completed acquisition prefix; older frozen pages resume at their first message. */
   messageOffset: z.number().int().nonnegative().optional(),
@@ -196,7 +196,7 @@ export const mailboxDiscoveryInput = z.object({
 /** A missing scope on retained work owns the whole mailbox until it is readmitted. */
 export const MAIL_DISCOVERY_CAPACITY = 4;
 export const MAIL_DISCOVERY_ADMISSION_WAIT = "mail_discovery_queued";
-export const mailboxDiscoveryScope = z.discriminatedUnion("kind", [
+const mailboxDiscoveryScope = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("query"), key: z.string().min(1) }),
   z.object({
     kind: z.literal("mailbox"),
@@ -309,7 +309,7 @@ export const mailAdmissionPath = z
  * Evidence omissions in Mail triage's bounded view, supplied to the decision
  * model and exposed in previews without overriding its definite choice.
  */
-export const mailTriageIncompleteReason = z.enum([
+const mailTriageIncompleteReason = z.enum([
   /** An amount, order/invoice number or receipt phrase fell outside the view,
    * or the body was clipped while cues past the scan bound went unchecked. */
   "purchase_cue_clipped",
@@ -336,7 +336,7 @@ export const mailTriagePreviewInput = mailMessageRef.extend({
 });
 export type MailTriagePreviewInput = z.infer<typeof mailTriagePreviewInput>;
 
-export const mailImageEvidence = z.object({
+const mailImageEvidence = z.object({
   attempted: z.number().int().nonnegative(),
   prepared: z.number().int().nonnegative(),
   supplied: z.number().int().nonnegative(),
@@ -492,7 +492,7 @@ export function mailAttributionHeaders(
  * part is empty or poorer), or, when `includeHtml` pages it, one raw HTML page
  * in place of that text.
  */
-export const mailReadContent = z.object({
+const mailReadContent = z.object({
   snippet: z.string().nullable(),
   /** The hidden inbox summary before the visible body, from the HTML. */
   preheader: z.string().nullable().default(null),
@@ -544,13 +544,13 @@ export const mailSearchInput = z.object({
 });
 export type MailSearchInput = z.infer<typeof mailSearchInput>;
 
-export const mailFinancialReview = z.strictObject({
+const mailFinancialReview = z.strictObject({
   transactionId: financialTransactionShortcode,
   reviewedAccountId: financialAccountShortcode,
   sourceAccountLabel: z.string().trim().min(1).max(320),
   reviewReason: z.string().trim().min(1).max(1_000),
 });
-export const mailSettlementReview = z.strictObject({
+const mailSettlementReview = z.strictObject({
   refundAmount: z
     .number()
     .finite()
@@ -578,7 +578,7 @@ export const mailFinancialAssociation = mailFinancialReview.extend({
   reviewedAccountDeleted: z.boolean(),
   accountChanged: z.boolean(),
 });
-export const mailResolveDisposition = z.discriminatedUnion("kind", [
+const mailResolveDisposition = z.discriminatedUnion("kind", [
   z
     .object({
       kind: z.literal("linked"),
@@ -702,7 +702,7 @@ export function mailReadAgentText<
  * `linked`: a reviewed link on one of its order events. Both are links;
  * Relevance and import outcome are separate facts (`entity_read` on email).
  */
-export const mailPurchaseAssociation = z.object({
+const mailPurchaseAssociation = z.object({
   purchaseId: purchaseShortcode,
   purchaseDeleted: z.boolean(),
   kind: z.enum(["accepted", "linked"]),
@@ -890,7 +890,6 @@ export const summarizeDiscoveryProgress = ({
   });
 
 export {
-  mailSearchState,
   MAIL_SEARCH_STATE_LABEL,
   type MailSearchState,
 } from "./mail-search-fields";
@@ -938,7 +937,7 @@ export const scopedPositionState = (
       : "not_started";
 
 /** `vendor:<uuid>:…` searches a known Vendor's senders; `merchant:`/`descriptor:` search an unmatched charge. */
-export const isVendorMailSearchKey = (key: string) => key.startsWith("vendor:");
+const isVendorMailSearchKey = (key: string) => key.startsWith("vendor:");
 
 const PENDING_SAMPLE = 5;
 const searchCount = z.object({

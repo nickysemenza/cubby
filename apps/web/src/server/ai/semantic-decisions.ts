@@ -170,27 +170,6 @@ function variantComparison(
   };
 }
 
-export async function decideProductVariantComparison(args: {
-  firstTitle: string;
-  secondTitle: string;
-  usage: AiRunContext;
-  port?: DecisionPort;
-}) {
-  if (
-    args.firstTitle.length > PRODUCT_VARIANT_TITLE_LIMIT ||
-    args.secondTitle.length > PRODUCT_VARIANT_TITLE_LIMIT
-  )
-    return variantComparison(args, null);
-  const result = await choice({
-    feature: PRODUCT_VARIANT_RELATION_FEATURE,
-    prompt: productVariantRelationPrompt(args),
-    values: PRODUCT_VARIANT_RELATION_CHOICES,
-    usage: args.usage,
-    port: args.port,
-  });
-  return variantComparison(args, result.value);
-}
-
 /** Each pair remains an independent question and an independently cached decision. */
 export async function decideProductVariantComparisons(args: {
   comparisons: readonly { firstTitle: string; secondTitle: string }[];

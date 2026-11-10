@@ -38,7 +38,6 @@ import { getDb } from "~/server/db/helpers";
 import { aiUsage, run } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { processTelemetryQueueBatch } from "~/server/observability/telemetry-queue";
 import {
   createLocationFixture,
   makeLocationInput,
@@ -744,56 +743,6 @@ describe("AiUsage accounting", () => {
 
   // A message queued by the preceding deployment carries no cost; the
   // consumer prices it from tokens unless no model call was billed.
-  it("never prices a queued cache replay from its tokens", async () => {
-    const runId = await ensureRun(ctx.db, ctx.actor, { purpose: "ai_suggest" });
-    const queued = (transport: "cache" | "gateway") => ({
-      version: 1 as const,
-      queueType: "telemetry" as const,
-      eventId: crypto.randomUUID(),
-      occurredAt: new Date().toISOString(),
-      release: "synthetic",
-      type: "ai_usage" as const,
-      feature: "location-description",
-      provider: "openai",
-      model: "gpt-6.1-sol",
-      operation: "locationDescription",
-      runId,
-      inputTokens: 1_000,
-      outputTokens: 1_000,
-      durationMs: 1,
-      cacheStatus: "hit" as const,
-      transport,
-      entityKind: null,
-      entityId: null,
-    });
-    await processTelemetryQueueBatch(ctx.db, {
-      queue: "cubby-telemetry",
-      messages: [queued("cache"), queued("gateway")].map((body) => ({
-        body,
-        ack: () => undefined,
-        retry: () => undefined,
-      })),
-    });
-
-    const rows = await usageRows();
-    const cost = Object.fromEntries(
-      rows.map((row) => [row.transport, row.chargedCost]),
-    );
-    expect(cost.cache).toBe(0);
-    expect(cost.gateway).toBe(0.003);
-    expect(rows.find((row) => row.transport === "gateway")).toMatchObject({
-      standardCost: 0.003,
-      costEvidence: {
-        standard: { source: "reconstructed", pricingSource: "models.dev" },
-        charged: { source: "reconstructed", pricingSource: "models.dev" },
-        original: { estimatedCost: null },
-      },
-    });
-    expect(
-      rows.find((row) => row.transport === "cache")?.standardCost,
-    ).toBeNull();
-  });
-
   it("records unknown when a failed call never selected a transport", async () => {
     const runId = await ensureRun(ctx.db, ctx.actor, { purpose: "ai_suggest" });
     const faux = fauxProvider();

@@ -472,7 +472,6 @@ describe("complete list composition", () => {
     expect(result.items.length).toBeGreaterThan(0);
     for (const row of result.items) {
       expect(row).toHaveProperty("fields.quantityVariance.result.kind");
-      expect(row).toHaveProperty("fields.quantityVariance.work.kind");
     }
   }, 60_000);
 });
