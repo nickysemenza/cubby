@@ -243,7 +243,7 @@ private struct PhotoTab: View {
                 }
             } else {
                 Text(FieldEnvelope.missingLabel)
-                .foregroundStyle(.secondary)
+                    .foregroundStyle(.secondary)
                 FieldValueStatus(
                     raw: .object(["fields": .object(["sightings": record["fields"]?["sightings"] ?? .null])]))
             }
