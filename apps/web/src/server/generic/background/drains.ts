@@ -194,6 +194,8 @@ export function rowDrain<P>(
             : repositoryTransactionDatabase)(db, work)),
     };
     let released = false;
+    // Items already waiting for funding or a provider; a later page failure leaves them waiting.
+    const waiting = new Set<DrainItem>();
     try {
       const backoff = spec.backoff;
       const { store } = spec;
@@ -238,13 +240,31 @@ export function rowDrain<P>(
             spec.prepare(db, items, context),
           );
         preparation = { prepared };
-        for (const error of preparationFailures.values())
+        // An item refused for a funding or provider wait waits for it, spending
+        // no attempt; the page's other items still publish.
+        const waits = store.wait
+          ? [...preparationFailures].flatMap(([item, error]) => {
+              const failure = classifyJobFailure(error);
+              return failure.kind === "deferred"
+                ? [{ item, error, until: failure.until }]
+                : [];
+            })
+          : [];
+        if (waits.length) {
+          await context.fenced(async (tx) => {
+            for (const { item, error, until } of waits)
+              await store.wait!(tx, [item], message(error), until);
+          });
+          for (const { item } of waits) waiting.add(item);
+        }
+        const failures = [...preparationFailures].filter(
+          ([item]) => !waiting.has(item),
+        );
+        for (const [, error] of failures)
           if (stopsDrainPage(error)) throw error;
-        if (preparationFailures.size)
+        if (failures.length)
           countDrainItems({
-            failed: await context.fenced((tx) =>
-              settleFailed(tx, [...preparationFailures]),
-            ),
+            failed: await context.fenced((tx) => settleFailed(tx, failures)),
           });
         // A rolled-back chunk splits; committed siblings never replay.
         const publish = async (chunk: readonly DrainItem[]): Promise<void> => {
@@ -305,12 +325,23 @@ export function rowDrain<P>(
         // provider error outside any item) settles its still-held items as
         // failed, so persistent page failures reach the same bounds. Pauses,
         // waits and lost leases stop the page without touching its items.
+        const failure = classifyJobFailure(error);
+        if (failure.kind === "deferred" && store.wait) {
+          // A funding or provider wait is the page's outcome, not a failure:
+          // every claimed item waits for it without spending an attempt.
+          await context.fenced((tx) =>
+            store.wait!(tx, items, message(error), failure.until),
+          );
+          return { claimed: items.length, outcome: "deferred" };
+        }
         if (!stopsDrainPage(error))
           await context
             .fenced((tx) =>
               settleFailed(
                 tx,
-                items.map((item) => [item, error] as const),
+                items
+                  .filter((item) => !waiting.has(item))
+                  .map((item) => [item, error] as const),
               ),
             )
             .then((failed) => countDrainItems({ failed }))
@@ -321,7 +352,9 @@ export function rowDrain<P>(
       }
       released = true;
       await spec.store.release?.(db);
-      return { claimed: items.length };
+      return waiting.size
+        ? { claimed: items.length, outcome: "deferred" }
+        : { claimed: items.length };
     } finally {
       if (!released) await spec.store.release?.(db);
     }

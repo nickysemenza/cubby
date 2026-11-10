@@ -35,6 +35,17 @@ export type DrainStore = {
     backoff: JobBackoff,
     transient: boolean,
   ): Promise<void>;
+  /**
+   * Hold items for an external wait (funding or provider capacity) until
+   * `until`: no attempt is spent and no failure streak starts. Without it, a
+   * wait stops the page and the items stay owed as they were.
+   */
+  wait?(
+    tx: Database,
+    items: readonly DrainItem[],
+    error: string,
+    until: Date,
+  ): Promise<void>;
 };
 
 /** A transient failure's retry time: it grows with the streak's age, within the backoff bounds. */
