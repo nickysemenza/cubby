@@ -174,9 +174,10 @@ describe("product list declared filters", () => {
           { pageIndex: 0, pageSize: 25 },
         )
       ).data;
-    expect((await list({ kitAccounting: false })).map((row) => row.id)).toEqual(
-      [],
-    );
+    // Stock predicates are live SQL: no background pass before membership.
+    expect((await list({ kitAccounting: true })).map((row) => row.id)).toEqual([
+      w.kit.id,
+    ]);
     // Unlinked ownership exits must not turn every other Product's membership into SQL NULL.
     const disposalVendor = await createRepoEntity(ctx, "vendor", {
       name: "Synthetic disposal vendor",
@@ -195,11 +196,11 @@ describe("product list declared filters", () => {
         cost: -5,
       }),
     );
-    await drainStoredDerived(ctx.db);
     expect((await list({ kitAccounting: true })).map((row) => row.id)).toEqual([
       w.kit.id,
     ]);
-    // Work and the list use the same publication, including kit accounting.
+    // Work sources read the same predicates after their hourly diagnostics.
+    await drainStoredDerived(ctx.db);
     const work = await readWorkQueue(ctx.db, {
       input: workQueueInput.parse({ pageSize: 100 }),
       memberPartyId: null,
@@ -233,7 +234,6 @@ describe("product list declared filters", () => {
           cost: 0,
         }),
       );
-    await drainStoredDerived(ctx.db);
     expect(
       (await list({ ownershipReconciliation: true })).map((row) => row.id),
     ).toEqual([w.driver.id]);

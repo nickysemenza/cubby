@@ -1757,8 +1757,8 @@ authoritative validation and audit records stay transactional; `sideEffects.deri
 
 ### Product placement and search facts
 
-Product complete list and detail reads carry `primaryPlacement` (nullable), computed in the quantity
-batch: the live location with the greatest on-hand amount, then most recent stock activity, then
+Product complete list and detail reads carry `primaryPlacement` (nullable), read live in the page's
+stock-facts batch: the live location with the greatest on-hand amount, then most recent stock activity, then
 public location code. Its path joins ancestors and the location with `›`; identity Locations count
 as one owned unit; services have none. It is read-only and the default column after Name, with a
 mobile trailing path. Search hits carry at most three preformatted `facts`: Products show primary
@@ -2229,16 +2229,15 @@ omitting a record means no result, and publication rejects a value/outcome misma
 Project start-date provenance are selected with their values in one statement. Current receipts never
 relabel an older snapshot.
 
-Product reads use typed `readFacts` for pricing, quantities, placement and ownership evidence, and
-`food` for food summaries; reads never refresh them. `readFacts.workFacts` publishes accounted kit
-units, unknown acquisition, kit double-counting, disposal reconciliation, quantity gaps and price
-eligibility; disposal membership uses a correlated existence check so unlinked Expenses stay valid
-evidence. Work and list predicates read those typed members, including negative filters; payloads
-without the members stay unresolved until the hourly pass. The publisher reuses its loaded quantity
-ledger and pricing facts, so browsing never prepares a separate quantity CTE or reruns kit ancestry.
-Product stock publications keep inventory amounts, resolved tracking policy and the service
-predicate; ancestor-category policy edits converge through the next pass. Recipe totals prepare
-bounded batches through a shared costing context.
+Product reads use typed `readFacts` for pricing and price eligibility, and `food` for food
+summaries; reads never refresh them. Product stock is not stored: quantity ledger, expected
+quantity, on-hand units, variance, placement, stock status, picker on-hand and ownership evidence
+come from one live stock-facts batch per page (pickers, kit previews and purchase lines included),
+so a member's own Expense, Inventory or Location write shows at once. List sorts, filters and
+totals over expected quantity, variance, kit double-counting, disposal reconciliation and
+unquantified lines compile the same rules as correlated SQL; disposal membership includes unlinked
+Expenses. Owners and price keep the hourly lag. Recipe totals prepare bounded batches through a
+shared costing context.
 
 A stored result may declare `resultSchema` and supply several scalar fields through
 `model.derived.<field>.fromResult: { key, path }`; generation checks each path and scalar type. These
@@ -2408,7 +2407,8 @@ payloads). Scalar publications keep their numeric/null shape and may capture pri
 `storedEvidence` in their decision metadata, removed in SQL from ordinary reads. Inventory valuation
 captures the actual conversion graph including the unrounded price edge; Product price its weighted
 cost and quantity operands (keeping PostgreSQL decimal rounding, never binary floating point);
-quantities their ledger and counted units; USDA food its chosen lookup. A publication missing an
+USDA food its chosen lookup. Live Product stock fields explain from the current row's ledger and
+inventory. A publication missing an
 optional evidence path stays readable with available aggregate evidence but reports the explanation
 unavailable; it never throws, reconstructs, or certifies partial capture. Opening an explanation
 never computes missing service Cost evidence. Field explanations never publish a comparison; clients

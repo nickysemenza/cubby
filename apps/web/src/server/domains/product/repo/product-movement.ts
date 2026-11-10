@@ -80,15 +80,62 @@ export function classifyProductMovement(
  * Build only ownership spans that the recorded quantities prove. Once a
  * movement has no quantity, or the running balance would go negative, the
  * remaining history stays marker-only rather than inventing a balance.
+ *
+ * Undated quantified exits (a discard with no known date) keep the dated
+ * history: ownership is proven up to the last dated movement and unknown
+ * from there. Any other undated movement could fall anywhere in the balance
+ * history, so it leaves no proven span.
  */
 export function buildConfidentOwnershipIntervals(
   markers: readonly ProductMovementMarker[],
   today: string,
 ): ProductOwnershipEvidence {
+  const undated = markers.filter((marker) => marker.date === null);
+  if (
+    undated.some(
+      (marker) => marker.signedQuantity === null || marker.signedQuantity >= 0,
+    )
+  )
+    return { intervals: [], confidenceLostAt: null, undatedExits: false };
+  const dated = foldDatedOwnership(
+    markers.flatMap((marker) =>
+      marker.date === null
+        ? []
+        : [{ date: marker.date, signedQuantity: marker.signedQuantity }],
+    ),
+    today,
+  );
+  if (undated.length === 0 || dated.confidenceLostAt !== null)
+    return {
+      intervals: dated.intervals,
+      confidenceLostAt: dated.confidenceLostAt,
+      undatedExits: false,
+    };
+  if (dated.lastDate === null)
+    return { intervals: [], confidenceLostAt: null, undatedExits: false };
+  const lastDate = dated.lastDate;
+  return {
+    intervals: dated.intervals.map((interval) =>
+      interval.end > lastDate ? { ...interval, end: lastDate } : interval,
+    ),
+    confidenceLostAt: lastDate,
+    undatedExits: true,
+  };
+}
+
+/** The fold over dated movements, with the last dated movement's date. */
+interface DatedOwnershipFold {
+  intervals: ProductOwnershipInterval[];
+  confidenceLostAt: string | null;
+  lastDate: string | null;
+}
+
+function foldDatedOwnership(
+  markers: readonly { date: string; signedQuantity: number | null }[],
+  today: string,
+): DatedOwnershipFold {
   const totalsByDate = new Map<string, number | null>();
   for (const marker of markers) {
-    // An undated movement could fall anywhere in the balance history.
-    if (marker.date === null) return { intervals: [], confidenceLostAt: null };
     const current = totalsByDate.get(marker.date);
     if (marker.signedQuantity === null || current === null) {
       totalsByDate.set(marker.date, null);
@@ -103,12 +150,13 @@ export function buildConfidentOwnershipIntervals(
   let balance = 0;
   let openStart: string | null = null;
 
+  const lastDate = ordered.at(-1)?.date ?? null;
   for (const marker of ordered) {
     if (marker.signedQuantity === null || balance + marker.signedQuantity < 0) {
       if (openStart !== null) {
         intervals.push({ start: openStart, end: marker.date });
       }
-      return { intervals, confidenceLostAt: marker.date };
+      return { intervals, confidenceLostAt: marker.date, lastDate };
     }
 
     const previous = balance;
@@ -121,10 +169,12 @@ export function buildConfidentOwnershipIntervals(
   }
 
   if (openStart !== null) intervals.push({ start: openStart, end: today });
-  return { intervals, confidenceLostAt: null };
+  return { intervals, confidenceLostAt: null, lastDate };
 }
 
 interface ProductOwnershipEvidence {
   intervals: ProductOwnershipInterval[];
   confidenceLostAt: string | null;
+  /** Only undated quantified exits follow the proven history. */
+  undatedExits: boolean;
 }

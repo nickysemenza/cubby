@@ -59,6 +59,7 @@ describe("buildConfidentOwnershipIntervals", () => {
         { start: "2023-01-01", end: "2024-01-01" },
       ],
       confidenceLostAt: "2024-01-01",
+      undatedExits: false,
     });
   });
 
@@ -75,6 +76,7 @@ describe("buildConfidentOwnershipIntervals", () => {
     ).toEqual({
       intervals: [{ start: "2020-01-01", end: "2021-01-01" }],
       confidenceLostAt: "2021-01-01",
+      undatedExits: false,
     });
   });
 
@@ -91,7 +93,33 @@ describe("buildConfidentOwnershipIntervals", () => {
     ).toEqual({
       intervals: [{ start: "2021-01-01", end: "2022-01-01" }],
       confidenceLostAt: null,
+      undatedExits: false,
     });
+  });
+
+  it("keeps dated history before undated exits and loses confidence after it", () => {
+    const dated = [
+      { date: "2020-01-01", signedQuantity: 2 },
+      { date: "2021-01-01", signedQuantity: -1 },
+    ];
+    expect(
+      buildConfidentOwnershipIntervals(
+        [...dated, { date: null, signedQuantity: -1 }],
+        "2026-08-11",
+      ),
+    ).toEqual({
+      intervals: [{ start: "2020-01-01", end: "2021-01-01" }],
+      confidenceLostAt: "2021-01-01",
+      undatedExits: true,
+    });
+    // Any other undated movement could fall anywhere in the history.
+    for (const signedQuantity of [1, null])
+      expect(
+        buildConfidentOwnershipIntervals(
+          [...dated, { date: null, signedQuantity }],
+          "2026-08-11",
+        ),
+      ).toEqual({ intervals: [], confidenceLostAt: null, undatedExits: false });
   });
 });
 

@@ -1,21 +1,16 @@
 import { fieldProvenance } from "@cubby/schemas/field-envelope";
-import { parseEntityId } from "@cubby/schemas/identifiers";
 import { and, isNull, sql } from "drizzle-orm";
 /**
  * Product's stored derived values (ADR 0021): the effective price and the
- * ledger quantities, each the same SQL the list once evaluated per page.
+ * owner collection. Ledger quantities are live SQL.
  */
 
 import { unwrapDb, uuidArrayParam } from "~/server/db/helpers";
 import { product } from "~/server/db/schema";
 import { productOwnershipCompute } from "~/server/domains/inventory/repo/derived";
-import {
-  sharedDerivedPreparation,
-  type DerivedCompute,
-} from "~/server/generic/derived/repo/compute";
+import type { DerivedCompute } from "~/server/generic/derived/repo/compute";
 
 import { loadProductPriceFacts } from "./pricing";
-import { loadProductQuantitySummaries } from "./quantity-ledger";
 
 const computeProductPrice: DerivedCompute = async (db, ids) => {
   const rows = await unwrapDb(db)
@@ -58,44 +53,6 @@ const computeProductPrice: DerivedCompute = async (db, ids) => {
   );
 };
 
-const quantityPreparation = sharedDerivedPreparation((db, ids) =>
-  loadProductQuantitySummaries(
-    db,
-    ids.map((id) => parseEntityId("product", id)),
-  ),
-);
-const computeProductQuantity = (
-  key: "ledgerExpectedQuantity" | "quantityVariance",
-): DerivedCompute =>
-  quantityPreparation((summaries, ids) => {
-    const wanted = new Set(ids);
-    return new Map(
-      [...summaries]
-        .filter(([id]) => wanted.has(id))
-        .map(([id, summary]) => {
-          const value =
-            key === "ledgerExpectedQuantity"
-              ? summary.quantityLedger.expectedQuantity
-              : summary.quantityVariance;
-          return [
-            id,
-            {
-              value,
-              sort: value,
-              decision: {
-                outcome:
-                  value === null
-                    ? { kind: "empty" as const, reason: "unset" as const }
-                    : { kind: "value" as const },
-                provenance: fieldProvenance.parse({ kind: "computed" }),
-                evidence: summary,
-              },
-            },
-          ];
-        }),
-    );
-  });
-
 export const productDerivedComputes = {
   "product.ownership": Object.assign(productOwnershipCompute, {
     preparationBatchSize: 100,
@@ -103,13 +60,4 @@ export const productDerivedComputes = {
   "product.price": Object.assign(computeProductPrice, {
     preparationBatchSize: 200,
   }),
-  // Quantity folds aggregate in SQL; bounded pages amortize the full-pass round trips.
-  "product.ledgerExpectedQuantity": Object.assign(
-    computeProductQuantity("ledgerExpectedQuantity"),
-    { preparationBatchSize: 200 },
-  ),
-  "product.quantityVariance": Object.assign(
-    computeProductQuantity("quantityVariance"),
-    { preparationBatchSize: 200 },
-  ),
 };

@@ -47,7 +47,6 @@ import {
 } from "./product-components";
 import {
   loadProductQuantityLedgers,
-  loadProductDetailQuantityLedgers,
   loadProductPickerQuantities,
   loadProductQuantitySummaries,
 } from "./quantity-ledger";
@@ -586,8 +585,6 @@ describe("category-based service Products", () => {
     }
     const ids = [service.entityId, physical.entityId, part.entityId];
     const batch = await loadProductQuantityLedgers(ctx.db, ids);
-    const detail = await loadProductDetailQuantityLedgers(ctx.db, ids);
-    for (const id of ids) expect(detail.get(id)).toEqual(batch.get(id));
     expect(batch.has(service.entityId)).toBe(false);
     const serviceDetail = await getProductWithFood(
       ctx.db,

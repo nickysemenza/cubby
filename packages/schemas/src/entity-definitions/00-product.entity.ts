@@ -1,6 +1,5 @@
 import { galleryImagesField } from "./image-fields";
 import { historicalDateRangePresets } from "../date-range";
-import { MAX_LOCATION_TREE_DEPTH } from "../location-fields";
 import { aliasList, readOnly, timestampField } from "./field-policy";
 import { PRODUCT_OWNERSHIP_INPUTS } from "./ownership-inputs";
 import { storedProductOwnership } from "@cubby/schemas/inventory-ownership";
@@ -15,11 +14,7 @@ import {
   productReadFacts,
 } from "../product-read-fields";
 import { productChildren } from "../child-tables/product.js";
-import {
-  type DerivedStoredInput,
-  defineEntity,
-  defineEntityModel,
-} from "./definition.js";
+import { defineEntity, defineEntityModel } from "./definition.js";
 import {
   CURRENT_MEMBER_FILTER,
   OWNER_FILTER_HOUSEHOLD,
@@ -64,20 +59,6 @@ import {
   productCategoryFeature,
 } from "../product-category-fields";
 
-/** Kit links: a component's price and quantities read its kits' lines. */
-const KIT_LINK_INPUTS: DerivedStoredInput[] = [
-  {
-    table: "EntityLink",
-    match: { fromEntityId: "id" },
-    where: { kind: "productComponent" },
-  },
-  {
-    table: "EntityLink",
-    match: { toEntityId: "id" },
-    where: { kind: "productComponent" },
-  },
-];
-
 /** A kit's value changes its components': propagate kit → component. */
 const KIT_COMPONENT_LINK = {
   table: "EntityLink",
@@ -85,38 +66,6 @@ const KIT_COMPONENT_LINK = {
   dependent: "toEntityId",
   where: { kind: "productComponent" },
 };
-
-/** Rows the ledger quantities read: acquisition lines, stock and locations. */
-const QUANTITY_INPUTS: DerivedStoredInput[] = [
-  {
-    table: "Product",
-    match: { id: "id" },
-    columns: ["categoryId", "expectedQuantity", "deletedAt"],
-  },
-  {
-    table: "Expense",
-    match: { productId: "id" },
-    columns: ["productQuantity", "lineKind", "future", "deletedAt"],
-  },
-  {
-    table: "InventoryEntry",
-    match: { productId: "id" },
-    columns: [
-      "amountValue",
-      "amountUnit",
-      "placement",
-      "locationId",
-      "deletedAt",
-    ],
-  },
-  {
-    table: "Location",
-    match: { productId: "id" },
-    columns: ["deletedAt"],
-  },
-  ...KIT_LINK_INPUTS,
-  { table: "ProductCategory", match: { id: "categoryId" } },
-];
 import { productKindSchema } from "../product-fields";
 import { labelField, displayItemsField } from "./label-field";
 import { selectControlOptions } from "./select-control-options";
@@ -1005,8 +954,6 @@ export const { definition, readSchemas } = defineEntityModel(
         {
           output: false,
           key: "primaryPlacement",
-          storedKey: "readFacts",
-          storedPath: ["primaryPlacement"],
           kind: "json",
           nullable: true,
           label: "Where",
@@ -2086,10 +2033,7 @@ Rules:
               summary: "ledgerExpectedQuantity",
             },
             sourceDependencies: [
-              {
-                path: "storedEvidence.quantityLedger",
-                label: "Expense quantity ledger",
-              },
+              { path: "quantityLedger", label: "Expense quantity ledger" },
             ],
           },
           validation: readOnly(z.number()),
@@ -2097,8 +2041,6 @@ Rules:
         {
           output: false,
           key: "stockStatus",
-          storedKey: "readFacts",
-          storedPath: ["stockStatus"],
           kind: "text",
           label: "Inventory status",
           display: { columnGroup: "Stock", listHidden: true, width: "md" },
@@ -2113,26 +2055,12 @@ Rules:
             resolver: "productQuantity",
             readPath: "stockStatus",
             sourceDependencies: [
+              { path: "stockStatusItems", label: "Inventory evaluation" },
               {
-                path: "storedResult.stockStatusItems",
-                label: "Inventory evaluation",
-              },
-              {
-                path: "storedResult.quantityLedger",
+                path: "quantityLedger",
                 label: "Quantity history and installed locations",
               },
-              {
-                path: "storedResult.stockEvidence.inventoryAmounts",
-                label: "Recorded inventory amounts",
-              },
-              {
-                path: "storedResult.stockEvidence.stockTracked",
-                label: "Resolved tracking policy",
-              },
-              {
-                path: "storedResult.stockEvidence.service",
-                label: "Service category",
-              },
+              { path: "inventoryEntry", label: "Recorded inventory" },
             ],
           },
           validation: readOnly(z.string().nullish()),
@@ -2197,12 +2125,9 @@ Rules:
             resolver: "productQuantity",
             readPath: "quantityVariance",
             sourceDependencies: [
+              { path: "onHandUnits", label: "Counted inventory units" },
               {
-                path: "storedEvidence.onHandUnits",
-                label: "Counted inventory units",
-              },
-              {
-                path: "storedEvidence.quantityLedger.expectedQuantity",
+                path: "quantityLedger.expectedQuantity",
                 label: "Expected ledger quantity",
               },
             ],
@@ -2265,8 +2190,6 @@ Rules:
           // hidden-by-default addition (same shape as the task entity's
           // `dueEndDate`/`sortOrder`), not part of the read-only cluster above.
           key: "onHandUnits",
-          storedKey: "readFacts",
-          storedPath: ["onHandUnits"],
           kind: "number",
           nullable: true,
           display: {
@@ -2287,17 +2210,10 @@ Rules:
             resolver: "productQuantity",
             readPath: "onHandUnits",
             sourceDependencies: [
+              { path: "inventoryEntry", label: "Recorded inventory" },
               {
-                path: "storedResult.stockEvidence.inventoryAmounts",
-                label: "Recorded inventory amounts",
-              },
-              {
-                path: "storedResult.quantityLedger.locationCount",
+                path: "quantityLedger.locationCount",
                 label: "Installed locations",
-              },
-              {
-                path: "storedResult.stockEvidence.service",
-                label: "Service category",
               },
             ],
           },
@@ -2399,59 +2315,16 @@ Rules:
             sort: "readFactsSort",
           },
           publishes: "derivedValue",
-          clock: "householdDay",
           resultSchema: productReadFacts,
+          // Price facts only: stock, placement and ownership evidence are live.
           inputs: [
             ...PRODUCT_PRICING_INPUTS,
-            ...QUANTITY_INPUTS,
-            ...PRODUCT_OWNERSHIP_INPUTS,
-            {
-              table: "Product",
-              match: { id: "id" },
-              columns: ["stockTracked", "categoryId"],
-            },
-            // Placements include both recorded stock and Locations that are Products.
-            {
-              table: "Location",
-              match: { id: "id" },
-              columns: ["name", "parentId", "deletedAt"],
-              paths: [
-                [
-                  {
-                    table: "Location",
-                    from: "parentId",
-                    to: "id",
-                    recursive: { maxDepth: MAX_LOCATION_TREE_DEPTH },
-                  },
-                  {
-                    table: "InventoryEntry",
-                    from: "locationId",
-                    to: "productId",
-                  },
-                ],
-                [
-                  {
-                    table: "Location",
-                    from: "parentId",
-                    to: "id",
-                    recursive: { maxDepth: MAX_LOCATION_TREE_DEPTH },
-                  },
-                  { table: "Location", from: "id", to: "productId" },
-                ],
-              ],
-            },
-            // Tracking and service behavior inherit through category ancestors.
+            // Service behavior inherits through category ancestors.
             // Rare taxonomy edits conservatively refresh the complete Product set.
             {
               table: "ProductCategory",
               match: { id: "id" },
-              columns: [
-                "stockTracked",
-                "parentId",
-                "name",
-                "feature",
-                "deletedAt",
-              ],
+              columns: ["parentId", "feature", "deletedAt"],
               targetWhere: { deletedAt: null },
             },
           ],
@@ -2624,50 +2497,10 @@ Rules:
         expenseTotal: { type: "number" },
         sellers: { via: "sellerMemberships.seller" },
         expenseCount: { type: "number" },
-        ledgerExpectedQuantity: {
-          type: "number",
-          stored: {
-            compute: "product.ledgerExpectedQuantity",
-            snapshotSource: {
-              table: "ProductReadSnapshot",
-              value: "ledgerExpectedQuantity",
-              computedAt: "ledgerExpectedQuantityComputedAt",
-              decidedBy: "ledgerExpectedQuantityDecision",
-              storage: "number",
-              sort: "ledgerExpectedQuantitySort",
-            },
-            inputs: QUANTITY_INPUTS,
-            dependsOn: [
-              {
-                entity: "product",
-                key: "ledgerExpectedQuantity",
-                through: KIT_COMPONENT_LINK,
-              },
-            ],
-          },
-        },
-        quantityVariance: {
-          type: "number",
-          stored: {
-            compute: "product.quantityVariance",
-            snapshotSource: {
-              table: "ProductReadSnapshot",
-              value: "quantityVariance",
-              computedAt: "quantityVarianceComputedAt",
-              decidedBy: "quantityVarianceDecision",
-              storage: "number",
-              sort: "quantityVarianceSort",
-            },
-            inputs: QUANTITY_INPUTS,
-            dependsOn: [
-              {
-                entity: "product",
-                key: "ledgerExpectedQuantity",
-                through: KIT_COMPONENT_LINK,
-              },
-            ],
-          },
-        },
+        // Live ledger SQL, so a member's own Expense or Inventory write
+        // re-sorts and re-filters at once.
+        ledgerExpectedQuantity: { type: "number" },
+        quantityVariance: { type: "number" },
         // Shelf against ledger, only where stock and comparable ledger history
         // both exist; no value otherwise.
         quantityVarianceState: {
@@ -2680,39 +2513,20 @@ Rules:
         servingAsLocations: { via: "locations" },
         components: { via: "components" },
         containingKits: { via: "containing-kits" },
-        // Filter-only values. The read-context ones (kit accounting, ownership
-        // reconciliation, an effective price) read a Problem read's
-        // materialized on-hand units when it passes them.
+        // Filter-only values. Kit accounting, ownership reconciliation and
+        // unknown quantity lines are live ledger SQL.
         upcPresence: { type: "boolean" },
         usdaKey: { type: "boolean" },
         image: { type: "boolean" },
         inventoryMultiplicity: { type: "boolean" },
-        kitAccounting: {
-          type: "boolean",
-          fromResult: {
-            key: "readFacts",
-            path: ["workFacts", "kitAccounting"],
-          },
-        },
-        ownershipReconciliation: {
-          type: "boolean",
-          fromResult: {
-            key: "readFacts",
-            path: ["workFacts", "ownershipReconciliation"],
-          },
-        },
+        kitAccounting: { type: "boolean" },
+        ownershipReconciliation: { type: "boolean" },
         conversionCoverage: { type: "boolean" },
         conversionTopology: { type: "boolean" },
         unitMappingQuality: { type: "boolean" },
         stockTrackedDecided: { type: "boolean" },
         miscBucket: { type: "boolean" },
-        unknownQuantityLines: {
-          type: "boolean",
-          fromResult: {
-            key: "readFacts",
-            path: ["workFacts", "unknownQuantityLines"],
-          },
-        },
+        unknownQuantityLines: { type: "boolean" },
         priced: {
           type: "boolean",
           requiresResult: "price",

@@ -228,7 +228,6 @@ describe("state predicates re-declared as values", () => {
       ]),
       await seed("Parity untouched", []),
     ];
-    await drainStoredDerived(ctx.db);
     const fixture = all.map(({ id }) => id);
     const fixtureIds = all.map(({ entityId }) => entityId);
 
@@ -303,11 +302,7 @@ describe("state predicates re-declared as values", () => {
         cost: 1,
       }),
     );
-    // Membership follows the published variance until the drain catches up.
-    expect(await listed({ quantityVarianceFilter: ["matched"] })).toEqual(
-      matched,
-    );
-    await drainStoredDerived(ctx.db);
+    // Ledger SQL is live: a member's own write moves membership at once.
     expect(await listed({ quantityVarianceFilter: ["matched"] })).toEqual([]);
     expect(await listed({ quantityVarianceFilter: ["mismatched"] })).toEqual(
       sorted([all[0]!.id, all[1]!.id]),

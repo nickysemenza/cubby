@@ -35,23 +35,6 @@ export const productReadSnapshot = pgTable(
     priceDecision: jsonb("priceDecision").$type<StoredFieldDecision>(),
     priceComputedAt: timestamp("priceComputedAt", { mode: "date" }),
     priceSort: doublePrecision("priceSort"),
-    ledgerExpectedQuantity: doublePrecision("ledgerExpectedQuantity"),
-    ledgerExpectedQuantityDecision: jsonb(
-      "ledgerExpectedQuantityDecision",
-    ).$type<StoredFieldDecision>(),
-    ledgerExpectedQuantityComputedAt: timestamp(
-      "ledgerExpectedQuantityComputedAt",
-      { mode: "date" },
-    ),
-    ledgerExpectedQuantitySort: doublePrecision("ledgerExpectedQuantitySort"),
-    quantityVariance: doublePrecision("quantityVariance"),
-    quantityVarianceDecision: jsonb(
-      "quantityVarianceDecision",
-    ).$type<StoredFieldDecision>(),
-    quantityVarianceComputedAt: timestamp("quantityVarianceComputedAt", {
-      mode: "date",
-    }),
-    quantityVarianceSort: doublePrecision("quantityVarianceSort"),
     readFacts: jsonb("readFacts").$type<z.infer<typeof productReadFacts>>(),
     readFactsDecision: jsonb("readFactsDecision").$type<StoredFieldDecision>(),
     readFactsComputedAt: timestamp("readFactsComputedAt", { mode: "date" }),

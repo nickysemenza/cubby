@@ -1,0 +1,189 @@
+{
+  "type": "diff",
+  "version": "9",
+  "dialect": "postgres",
+  "id": "095012eb-5225-419a-83c9-498ac0099a24",
+  "prevIds": [
+    "0d71d990-cdca-4601-b96f-55c95136575a"
+  ],
+  "footprints": [
+    {
+      "statementType": "drop_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "ProductReadSnapshot",
+        "ledgerExpectedQuantity"
+      ],
+      "writes": [
+        "s|col|public.ProductReadSnapshot.ledgerExpectedQuantity",
+        "n|col|public.ProductReadSnapshot.ledgerExpectedQuantity",
+        "e|col|public.ProductReadSnapshot.ledgerExpectedQuantity"
+      ],
+      "reads": [
+        "n|tbl|public.ProductReadSnapshot",
+        "n|sch|public"
+      ]
+    },
+    {
+      "statementType": "drop_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "ProductReadSnapshot",
+        "ledgerExpectedQuantityDecision"
+      ],
+      "writes": [
+        "s|col|public.ProductReadSnapshot.ledgerExpectedQuantityDecision",
+        "n|col|public.ProductReadSnapshot.ledgerExpectedQuantityDecision",
+        "e|col|public.ProductReadSnapshot.ledgerExpectedQuantityDecision"
+      ],
+      "reads": [
+        "n|tbl|public.ProductReadSnapshot",
+        "n|sch|public"
+      ]
+    },
+    {
+      "statementType": "drop_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "ProductReadSnapshot",
+        "ledgerExpectedQuantityComputedAt"
+      ],
+      "writes": [
+        "s|col|public.ProductReadSnapshot.ledgerExpectedQuantityComputedAt",
+        "n|col|public.ProductReadSnapshot.ledgerExpectedQuantityComputedAt",
+        "e|col|public.ProductReadSnapshot.ledgerExpectedQuantityComputedAt"
+      ],
+      "reads": [
+        "n|tbl|public.ProductReadSnapshot",
+        "n|sch|public"
+      ]
+    },
+    {
+      "statementType": "drop_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "ProductReadSnapshot",
+        "ledgerExpectedQuantitySort"
+      ],
+      "writes": [
+        "s|col|public.ProductReadSnapshot.ledgerExpectedQuantitySort",
+        "n|col|public.ProductReadSnapshot.ledgerExpectedQuantitySort",
+        "e|col|public.ProductReadSnapshot.ledgerExpectedQuantitySort"
+      ],
+      "reads": [
+        "n|tbl|public.ProductReadSnapshot",
+        "n|sch|public"
+      ]
+    },
+    {
+      "statementType": "drop_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "ProductReadSnapshot",
+        "quantityVariance"
+      ],
+      "writes": [
+        "s|col|public.ProductReadSnapshot.quantityVariance",
+        "n|col|public.ProductReadSnapshot.quantityVariance",
+        "e|col|public.ProductReadSnapshot.quantityVariance"
+      ],
+      "reads": [
+        "n|tbl|public.ProductReadSnapshot",
+        "n|sch|public"
+      ]
+    },
+    {
+      "statementType": "drop_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "ProductReadSnapshot",
+        "quantityVarianceDecision"
+      ],
+      "writes": [
+        "s|col|public.ProductReadSnapshot.quantityVarianceDecision",
+        "n|col|public.ProductReadSnapshot.quantityVarianceDecision",
+        "e|col|public.ProductReadSnapshot.quantityVarianceDecision"
+      ],
+      "reads": [
+        "n|tbl|public.ProductReadSnapshot",
+        "n|sch|public"
+      ]
+    },
+    {
+      "statementType": "drop_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "ProductReadSnapshot",
+        "quantityVarianceComputedAt"
+      ],
+      "writes": [
+        "s|col|public.ProductReadSnapshot.quantityVarianceComputedAt",
+        "n|col|public.ProductReadSnapshot.quantityVarianceComputedAt",
+        "e|col|public.ProductReadSnapshot.quantityVarianceComputedAt"
+      ],
+      "reads": [
+        "n|tbl|public.ProductReadSnapshot",
+        "n|sch|public"
+      ]
+    },
+    {
+      "statementType": "drop_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "ProductReadSnapshot",
+        "quantityVarianceSort"
+      ],
+      "writes": [
+        "s|col|public.ProductReadSnapshot.quantityVarianceSort",
+        "n|col|public.ProductReadSnapshot.quantityVarianceSort",
+        "e|col|public.ProductReadSnapshot.quantityVarianceSort"
+      ],
+      "reads": [
+        "n|tbl|public.ProductReadSnapshot",
+        "n|sch|public"
+      ]
+    }
+  ],
+  "deltas": [
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"ProductReadSnapshot\",\"ledgerExpectedQuantity\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"ProductReadSnapshot\",\"ledgerExpectedQuantityDecision\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"ProductReadSnapshot\",\"ledgerExpectedQuantityComputedAt\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"ProductReadSnapshot\",\"ledgerExpectedQuantitySort\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"ProductReadSnapshot\",\"quantityVariance\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"ProductReadSnapshot\",\"quantityVarianceDecision\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"ProductReadSnapshot\",\"quantityVarianceComputedAt\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"ProductReadSnapshot\",\"quantityVarianceSort\"]"
+    }
+  ]
+}

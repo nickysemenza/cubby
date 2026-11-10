@@ -27,7 +27,6 @@ export const repositoryOwners = [
   "src/server/domains/purchase-import/repo/mail-import-settings.ts",
   "src/server/domains/purchase-import/repo/controlled-mail-import.ts",
   "src/server/domains/purchase-import/repo/gmail/mail-coverage.ts",
-  "src/server/domains/product/repo/stored-display.ts",
   "src/server/db/entity-identity-ddl.ts",
   "src/server/domains/product/repo/service-category.ts",
   "src/server/domains/product/repo/list-enrichment.ts",

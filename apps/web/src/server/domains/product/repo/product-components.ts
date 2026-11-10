@@ -63,7 +63,7 @@ import {
 import { findMergeComponentCycle } from "~/server/domains/product/repo/merge";
 import { storedProductPrice } from "~/server/domains/product/repo/pricing";
 import { serviceCategorySql } from "~/server/domains/product/repo/service-category";
-import { loadStoredProductDisplay } from "~/server/domains/product/repo/stored-display";
+import { loadProductDisplay } from "~/server/domains/product/repo/stock-facts";
 // A kit's most recent acquisition remains narrower than identity relations,
 // which also include exits and planned Expenses.
 import { expenseAcquisitionPairPredicate } from "~/server/domains/purchase/repo/purchase-products";
@@ -198,7 +198,7 @@ export async function listProductComponents(
 
   const componentProductIds = rows.map((row) => row.productId);
   const [display, coverImageUrls] = await Promise.all([
-    loadStoredProductDisplay(db, componentProductIds),
+    loadProductDisplay(db, componentProductIds),
     getProductCoverImageUrlsByProductIds(db, componentProductIds),
   ]);
 
@@ -360,7 +360,7 @@ export async function listKitMembership(
   const parentProductIds = uniq(rows.map((row) => row.parentId));
   const [display, expenseCounts, purchases, coverImageUrls] = await Promise.all(
     [
-      loadStoredProductDisplay(db, parentProductIds),
+      loadProductDisplay(db, parentProductIds),
       loadLiveExpenseCountsByProductId(db, parentProductIds),
       loadMostRecentPurchaseByProductId(db, parentProductIds),
       getProductCoverImageUrlsByProductIds(db, parentProductIds),

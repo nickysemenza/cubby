@@ -49,7 +49,7 @@ import {
 import { storedProductPrice } from "~/server/domains/product/repo/pricing";
 import { classifyProductMovement } from "~/server/domains/product/repo/product-movement";
 import { serviceCategorySql } from "~/server/domains/product/repo/service-category";
-import { loadStoredProductDisplay } from "~/server/domains/product/repo/stored-display";
+import { loadProductDisplay } from "~/server/domains/product/repo/stock-facts";
 import { pagePurchaseRelationTargets } from "~/server/domains/purchase/repo/purchase";
 import {
   type RelationListPageInput,
@@ -292,7 +292,7 @@ export async function listPurchaseProducts(
 
   const productIds = rows.map((row) => row.productId);
   const [display, coverImageUrls, componentCounts] = await Promise.all([
-    loadStoredProductDisplay(db, productIds),
+    loadProductDisplay(db, productIds),
     getProductCoverImageUrlsByProductIds(db, productIds),
     loadComponentCountsByProductId(dbc, productIds),
   ]);

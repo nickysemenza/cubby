@@ -102,6 +102,18 @@ export const expectedQuantitySql = (productAlias = '"product"') =>
     SELECT ${PROJECTED_EXPECTED}
     ${QUANTITY_PROJECTION_FROM})`;
 
+/** Projected unquantified acquisition lines, matching the batch ledger loader. */
+export const unknownAcquisitionLinesSql = (productAlias = '"product"') =>
+  `(${kitAncestorCteText(kitSeedForProductAlias(productAlias))}
+    SELECT COALESCE(sum(ko."unknownAcquisitionLines"), 0)::int
+    ${QUANTITY_PROJECTION_FROM})`;
+
+/** Projected unquantified acquisition and exit lines together. */
+export const unknownQuantityLinesSql = (productAlias = '"product"') =>
+  `(${kitAncestorCteText(kitSeedForProductAlias(productAlias))}
+    SELECT COALESCE(sum(ko."unknownAcquisitionLines") + sum(ko."unknownExitLines"), 0)::int
+    ${QUANTITY_PROJECTION_FROM})`;
+
 const onHandUnitsProjection = (
   inventoryCount = "ohu_inv.n",
   locationCount = "ohu_loc.n",
@@ -130,18 +142,6 @@ export const onHandUnitsSql = (productAlias = '"product"') =>
                AND ohu_i."productId" = ${productAlias}."id") ohu_inv,
            (SELECT ${ON_HAND_LOCATIONS}
                AND ohu_ol."productId" = ${productAlias}."id") ohu_loc)`;
-
-/** Broad callers opt into one stock relation; missing rows retain unavailable stock. */
-export const onHandUnitsReadSql = () => sql`
-  SELECT COALESCE(ohu_inv."productId", ohu_loc."productId") AS "productId",
-    CASE WHEN ${sql.raw(serviceProductSqlText('COALESCE(ohu_inv."productId", ohu_loc."productId")'))} THEN NULL ELSE ${sql.raw(onHandUnitsProjection("COALESCE(ohu_inv.n, 0)", "COALESCE(ohu_loc.n, 0)"))} END AS "onHandUnits"
-  FROM (
-    SELECT ohu_i."productId", ${sql.raw(ON_HAND_INVENTORY)}
-    GROUP BY ohu_i."productId"
-  ) ohu_inv FULL JOIN (
-    SELECT ohu_ol."productId", ${sql.raw(ON_HAND_LOCATIONS)}
-      AND ohu_ol."productId" IS NOT NULL GROUP BY ohu_ol."productId"
-  ) ohu_loc ON ohu_inv."productId" = ohu_loc."productId"`;
 
 /**
  * Shelf minus ledger. Zero means the two agree; a product with no inventory and
@@ -266,93 +266,6 @@ export const loadProductQuantityLedgers = async (
   return byProduct;
 };
 
-type QuantityLedgerAggregateRow = {
-  productId: ProductId;
-  acquiredUnits: number;
-  exitedUnits: number;
-  unknownAcquisitionLines: number;
-  unknownExitLines: number;
-  ledgerLines: number;
-  locationCount: number;
-};
-
-const quantityLedgerAggregateRowSchema = projectedQuantityRowSchema.extend({
-  locationCount: z.number().int(),
-});
-
-const quantityLedgersFromAggregateRows = (
-  rows: readonly QuantityLedgerAggregateRow[],
-): Map<ProductId, QuantityLedger> => {
-  const byProduct = new Map<ProductId, QuantityLedger>();
-  for (const row of rows) {
-    const ledgerLines = Number(row.ledgerLines);
-    const locationCount = Number(row.locationCount);
-    // The seed emits one row even when there are no Expense lines. Preserve the
-    // existing empty-product behavior, while retaining a row for a product that
-    // is represented by a live Location rather than an Expense.
-    if (ledgerLines === 0 && locationCount === 0) continue;
-    const acquiredUnits = Number(row.acquiredUnits);
-    const exitedUnits = Number(row.exitedUnits);
-    byProduct.set(row.productId, {
-      acquiredUnits,
-      exitedUnits,
-      expectedQuantity: acquiredUnits - exitedUnits,
-      unknownAcquisitionLines: Number(row.unknownAcquisitionLines),
-      unknownExitLines: Number(row.unknownExitLines),
-      locationCount,
-    });
-  }
-  return byProduct;
-};
-
-/**
- * Detail-only quantity read: keep the Expense projection and Location count as
- * separate aggregates, then join their one-row-per-product results. The public
- * batch loader above remains two statements because its callers may be inside a
- * transaction; this read-only Database path can remove one network round trip
- * without multiplying the Expense aggregate by the Location relation.
- */
-export const loadProductDetailQuantityLedgers = async (
-  db: Database,
-  ids: readonly ProductId[],
-): Promise<Map<ProductId, QuantityLedger>> => {
-  if (ids.length === 0) return new Map();
-
-  const query = sql`${kitAncestorCteSql(kitSeedForProductIds(ids))},
-    quantity_ledger AS (
-      SELECT ka.target AS "productId",
-             COALESCE(${sql.raw(PROJECTED_ACQUIRED)}, 0)::double precision AS "acquiredUnits",
-             COALESCE(${sql.raw(PROJECTED_EXITED)}, 0)::double precision AS "exitedUnits",
-             COALESCE(${sql.raw(`sum(ko."unknownAcquisitionLines")`)}, 0)::int AS "unknownAcquisitionLines",
-             COALESCE(${sql.raw(`sum(ko."unknownExitLines")`)}, 0)::int AS "unknownExitLines",
-             COALESCE(sum(ko."ledgerLines"), 0)::int AS "ledgerLines"
-        ${sql.raw(QUANTITY_PROJECTION_FROM)}
-       GROUP BY ka.target
-    ),
-    location_counts AS (
-      SELECT l."productId", count(*)::int AS "locationCount"
-        FROM "Location" l
-       WHERE ${notDeleted("l")}
-         AND l."productId" = ANY(${uuidArrayParam(ids)})
-       GROUP BY l."productId"
-    )
-    SELECT q."productId",
-           q."acquiredUnits",
-           q."exitedUnits",
-           q."unknownAcquisitionLines",
-           q."unknownExitLines",
-           q."ledgerLines",
-           COALESCE(l."locationCount", 0)::int AS "locationCount"
-      FROM quantity_ledger q
-      LEFT JOIN location_counts l ON l."productId" = q."productId"`;
-
-  const rows = projectionRows(
-    await unwrapDb(db).execute(query),
-    quantityLedgerAggregateRowSchema,
-  );
-  return quantityLedgersFromAggregateRows(rows);
-};
-
 const placementRowSchema = z.object({
   productId,
   locationId,
@@ -363,7 +276,7 @@ const placementRowSchema = z.object({
 });
 
 /** One bounded stock aggregate and one ancestor batch for the whole page.
- * Identity Locations count as one owned unit, as in onHandUnitsReadSql.
+ * Identity Locations count as one owned unit, as in onHandUnitsSql.
  * Activity breaks quantity ties; the public code makes exact ties stable. */
 export const loadProductPlacementFacts = async (
   db: Database,
