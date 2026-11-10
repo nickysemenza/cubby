@@ -354,3 +354,7 @@ export async function recordFeedbackWithInsertion(
     return { event: row, inserted: true };
   });
 }
+
+export type FeedbackEvent = Awaited<
+  ReturnType<typeof recordFeedbackWithInsertion>
+>["event"];

@@ -11,13 +11,10 @@ import type {
 import type { DrizzleTransaction } from "~/server/db";
 import { importSourceProduct } from "~/server/db/schema";
 import type { ExistingExpenseSnapshot } from "~/server/domains/purchase-import/repo/writer-policy";
+import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import type { LineIdentityDecision } from "./writer";
-import {
-  applyAggregateExpense,
-  applyExpenseProductBinding,
-  applyImportedExpense,
-} from "./writer-apply";
+import { applyExpenseProductBinding } from "./writer-apply";
 import {
   planAggregateExpense,
   planLineAction,
@@ -100,7 +97,7 @@ export async function writePurchaseLines(
         existing,
       );
       if (plan) {
-        const inserted = await applyAggregateExpense(tx, plan);
+        const inserted = await insertWithShortcode(tx, "expense", plan);
         rowMutations.push({
           targetKind: "expense",
           targetId: inserted.id,
@@ -179,7 +176,7 @@ export async function writePurchaseLines(
           orderDate,
           unpricedForeign,
         );
-        const inserted = await applyImportedExpense(tx, plan);
+        const inserted = await insertWithShortcode(tx, "expense", plan.values);
         productLines.push({ lineIndex, productId, expenseId: inserted.id });
         rowMutations.push({
           targetKind: "expense",

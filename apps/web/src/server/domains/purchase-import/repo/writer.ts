@@ -148,7 +148,6 @@ import {
   planFallbackExpenses,
   planReplayClaim,
   planPurchaseNote,
-  planRunCounter,
   planLineMode,
   planAcceptedPaymentReview,
   planPurchaseHeader,
@@ -465,8 +464,6 @@ export async function explicitLineDecisions(
   }
   return decisions;
 }
-
-export { receiptProductQuantity } from "./writer-plan";
 
 /**
  * A created Product must not fork an Exact identity match (terminology). An
@@ -1359,8 +1356,7 @@ export async function importVendorOrder(
       }),
       runWrites,
     );
-    const runCounter = planRunCounter(input.runId, created);
-    await applyRunCounter(tx, runCounter);
+    await applyRunCounter(tx, { runId: input.runId, created });
 
     // An order Email retained before this Purchase existed links by its exact order id.
     await linkExactOrderEmails(databaseForTransaction(tx), {

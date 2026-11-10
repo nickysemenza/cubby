@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
@@ -20,17 +20,18 @@ export async function loadObservationRevision(
     eq(shipmentObservation.sourcePackageId, sourcePackageId),
     eq(shipmentObservation.occurrenceKey, occurrenceKey),
   );
-  const [current] = await database
-    .select()
-    .from(shipmentObservation)
-    .where(and(sameOccurrence, isNull(shipmentObservation.supersededById)))
-    .orderBy(desc(shipmentObservation.lastSeenAt))
-    .limit(1);
   const versions = await database
     .select()
     .from(shipmentObservation)
     .where(sameOccurrence)
     .orderBy(desc(shipmentObservation.firstSeenAt));
+  const current = versions
+    .filter((version) => version.supersededById === null)
+    .reduce<(typeof versions)[number] | undefined>(
+      (latest, version) =>
+        !latest || version.lastSeenAt > latest.lastSeenAt ? version : latest,
+      undefined,
+    );
   return { current, versions };
 }
 

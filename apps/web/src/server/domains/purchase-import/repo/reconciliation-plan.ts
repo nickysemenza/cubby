@@ -27,7 +27,7 @@ import type {
   ReconciliationFix,
   ReconciliationState,
 } from "./reconciliation-state";
-import { receiptProductQuantity } from "./writer";
+import { receiptProductQuantity } from "./writer-plan";
 
 export function foreignProductBinding(
   candidate: ReconciliationFix["proposedExtraction"]["candidate"],
@@ -60,6 +60,10 @@ export function reappliesAcceptedObservation(
           state.currentOriginalReview)))
   );
 }
+
+export type ReconciliationPlan = ReturnType<
+  typeof planSourceOrderReconciliation
+>;
 
 /** Choose the reviewed rows before applying any changes to them. */
 export function planSourceOrderReconciliation(
@@ -230,7 +234,7 @@ export function planReconciliationOutputFingerprint(
 /** Plan source binding changes after the association and Expense IDs exist. */
 export async function planReconciliationBindings(
   state: ReconciliationState,
-  plan: ReturnType<typeof planSourceOrderReconciliation>,
+  plan: ReconciliationPlan,
   firstObservation: typeof sourceOrderObservation.$inferSelect,
   associationId: typeof importSourceOrder.$inferSelect.id,
   lineExpenses: Map<number, typeof expense.$inferSelect.id>,
@@ -342,8 +346,8 @@ export function partyIdForShortcode(
 /** Prepare one Expense after Product resolution has produced its ID. */
 export function planReconciliationLine(
   state: ReconciliationState,
-  plan: ReturnType<typeof planSourceOrderReconciliation>,
-  entry: ReturnType<typeof planSourceOrderReconciliation>["lines"][number],
+  plan: ReconciliationPlan,
+  entry: ReconciliationPlan["lines"][number],
   productId: ProductId | null,
   reused: ReadonlySet<typeof expense.$inferSelect.id>,
   current: z.infer<typeof sourceOrderReconciliationReview>,
@@ -396,7 +400,7 @@ export function planReconciliationLine(
 }
 
 export function planReconciliationRemovals(
-  plan: ReturnType<typeof planSourceOrderReconciliation>,
+  plan: ReconciliationPlan,
   reused: ReadonlySet<typeof expense.$inferSelect.id>,
 ) {
   return plan.selected
@@ -408,7 +412,7 @@ export function planReconciliationRemovals(
 export function planReconciliationFinal(
   state: ReconciliationState,
   current: z.infer<typeof sourceOrderReconciliationReview>,
-  plan: ReturnType<typeof planSourceOrderReconciliation>,
+  plan: ReconciliationPlan,
   acceptedObservation: typeof sourceOrderObservation.$inferSelect,
   fix: ReconciliationFix,
   ownerId: ReconciliationState["family"]["root"]["ledgerPartyId"],

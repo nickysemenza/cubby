@@ -7,7 +7,35 @@ import { shipment, shipmentSourcePackage } from "~/server/db/schema";
 import { logAuditEntries } from "~/server/generic/audit-log/repo/audit-log";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
-import type { ShipmentWritePlan } from "./evidence-shipment-plan";
+type Shipment = typeof shipment.$inferSelect;
+
+export type ShipmentWritePlan = {
+  assignment:
+    | {
+        kind: "create";
+        values: Pick<
+          typeof shipment.$inferInsert,
+          | "name"
+          | "purchaseId"
+          | "carrierId"
+          | "trackingNumber"
+          | "extraTrackingNumbers"
+          | "purpose"
+        >;
+      }
+    | {
+        kind: "update";
+        row: Shipment;
+        purchaseId: Shipment["purchaseId"];
+        projection: Pick<
+          Shipment,
+          "carrierId" | "trackingNumber" | "extraTrackingNumbers"
+        > | null;
+      };
+  binding: typeof shipmentSourcePackage.$inferSelect | undefined;
+  sourceKey: string;
+  packageKey: string;
+};
 
 export async function applyShipmentWrite(
   db: Database,

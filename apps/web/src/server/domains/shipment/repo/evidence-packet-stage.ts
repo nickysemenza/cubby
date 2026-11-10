@@ -43,7 +43,7 @@ export async function processShipmentPacket(
   context: PacketContext,
   state: PacketState,
 ) {
-  const { actor, capture, sourceKey } = context;
+  const { actor } = context;
   const { shipmentIds } = state;
   const prepared = await prepareShipmentPacket(tdb, context, state);
   if (!prepared) return;
@@ -54,21 +54,16 @@ export async function processShipmentPacket(
     state,
   );
   if (!shipmentPlan) return;
-  const applied = await applyShipmentWrite(tdb, actor, shipmentPlan);
-  const row = applied.row;
-  const sourcePackage = applied.sourcePackage;
+  const { row, sourcePackage } = await applyShipmentWrite(
+    tdb,
+    actor,
+    shipmentPlan,
+  );
   shipmentIds.push(parseShortcodeFor("shipment", row.shortcode));
   await writePacketObservations(
     tdb,
-    {
-      identified: prepared.identified,
-      row,
-      sourcePackage,
-      capture,
-      sourceKey,
-      observedAt: context.observedAt,
-      deliveryCodes: context.deliveryCodes,
-    },
+    context,
+    { identified: prepared.identified, row, sourcePackage },
     state,
   );
   await recordChange(tdb, { kind: "source", categories: ["shipment"] });

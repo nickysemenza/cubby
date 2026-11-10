@@ -2,7 +2,7 @@ import type { DrizzleTransaction } from "~/server/db";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import type { ReconciliationExpenseContext } from "./reconciliation-apply";
-import type { planSourceOrderReconciliation } from "./reconciliation-plan";
+import type { ReconciliationPlan } from "./reconciliation-plan";
 import type { ReconciliationState } from "./reconciliation-state";
 import { resolveLineProduct } from "./writer";
 
@@ -10,7 +10,7 @@ import { resolveLineProduct } from "./writer";
 export async function resolveReconciliationProduct(
   tx: DrizzleTransaction,
   state: ReconciliationState,
-  entry: ReturnType<typeof planSourceOrderReconciliation>["lines"][number],
+  entry: ReconciliationPlan["lines"][number],
   applied: ReconciliationExpenseContext,
 ) {
   const { binding, line } = entry;

@@ -6,7 +6,7 @@ import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import { suggestionTable } from "~/server/db/schema";
 import type { EmailEvidenceWriteScope } from "~/server/domains/purchase-import/repo/email-evidence-write-scope";
 import { withEmailReviewBoundary } from "~/server/domains/purchase-import/repo/email-review-intent";
-import type { recordFeedbackWithInsertion } from "~/server/generic/suggestions/repo/suggestion";
+import type { FeedbackEvent } from "~/server/generic/suggestions/repo/suggestion";
 import {
   transitionSuggestionState,
   transitionSuggestionStates,
@@ -21,7 +21,7 @@ export async function settleReviewHistory(
   input: Review,
   emailScope: EmailEvidenceWriteScope | undefined,
   prediction: Prediction,
-  event: Awaited<ReturnType<typeof recordFeedbackWithInsertion>>["event"],
+  event: FeedbackEvent,
 ) {
   const writeHistory = async (transactionDb: Database) => {
     const [state] = await getDb(transactionDb)

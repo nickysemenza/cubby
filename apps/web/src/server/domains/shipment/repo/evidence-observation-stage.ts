@@ -1,13 +1,6 @@
 import type { Database } from "~/server/db";
-import type {
-  shipment,
-  shipmentSourceCapture,
-  shipmentSourcePackage,
-} from "~/server/db/schema";
-import {
-  withoutDeliveryFieldCarrier,
-  type deliveryFieldCodes,
-} from "~/server/domains/shipment/repo/carrier-evidence";
+import type { shipment, shipmentSourcePackage } from "~/server/db/schema";
+import { withoutDeliveryFieldCarrier } from "~/server/domains/shipment/repo/carrier-evidence";
 
 import { carrierReference } from "./evidence-internal";
 import { applyObservationWrite } from "./evidence-observation-application";
@@ -16,29 +9,22 @@ import {
   planObservationWrite,
   type planPacketObservationIdentities,
 } from "./evidence-observation-plan";
-import type { PacketState } from "./evidence-packet-stage";
+import type { PacketContext, PacketState } from "./evidence-packet-stage";
 export async function writePacketObservations(
   tdb: Database,
+  context: Pick<
+    PacketContext,
+    "capture" | "sourceKey" | "observedAt" | "deliveryCodes"
+  >,
   input: {
     identified: Awaited<ReturnType<typeof planPacketObservationIdentities>>;
     row: typeof shipment.$inferSelect;
     sourcePackage: typeof shipmentSourcePackage.$inferSelect;
-    capture: typeof shipmentSourceCapture.$inferSelect;
-    sourceKey: string;
-    observedAt: Date;
-    deliveryCodes: ReturnType<typeof deliveryFieldCodes>;
   },
   state: PacketState,
 ) {
-  const {
-    identified,
-    row,
-    sourcePackage,
-    capture,
-    sourceKey,
-    observedAt,
-    deliveryCodes,
-  } = input;
+  const { capture, sourceKey, observedAt, deliveryCodes } = context;
+  const { identified, row, sourcePackage } = input;
   for (const {
     observation,
     fingerprint,

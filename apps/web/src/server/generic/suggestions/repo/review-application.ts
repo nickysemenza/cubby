@@ -3,10 +3,11 @@ import {
   suggestionProjectionTargets,
   suggestionReviewOut,
 } from "@cubby/schemas/suggestion";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
+import { advisoryXactLock } from "~/server/db/advisory-lock";
 import {
   getDb,
   withTransactionDatabase,
@@ -19,7 +20,7 @@ import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { fieldInputFingerprint } from "~/server/generic/suggestions/repo/field-input-fence";
 import {
   recordFeedback,
-  type recordFeedbackWithInsertion,
+  type FeedbackEvent,
 } from "~/server/generic/suggestions/repo/suggestion";
 import { decisionForOperation } from "~/server/generic/suggestions/repo/suggestion-decisions";
 import { suggestionFamilies } from "~/server/generic/suggestions/repo/suggestion-family-declarations";
@@ -47,7 +48,7 @@ export function executeReviewApplication(
   prediction: Prediction,
   name: ReviewFamily,
   family: (typeof suggestionFamilies)[ReviewFamily],
-  event: Awaited<ReturnType<typeof recordFeedbackWithInsertion>>["event"],
+  event: FeedbackEvent,
 ) {
   const authority = automatic ? "automatic" : "member";
   const executeApplication = () => {
@@ -60,8 +61,10 @@ export function executeReviewApplication(
       };
       // Serialize generic commands without taking projection locks ahead of the
       // domain's parent locks. Receipt and mutation commit in the same boundary.
-      await getDb(transactionDb).execute(
-        sql`SELECT pg_advisory_xact_lock(hashtextextended(${`suggestion-review:${prediction.id}`},0))`,
+      await advisoryXactLock(
+        getDb(transactionDb),
+        "suggestion-review",
+        prediction.id,
       );
       const [owner] = await getDb(transactionDb)
         .select({ decisions: suggestionTable.decisions })

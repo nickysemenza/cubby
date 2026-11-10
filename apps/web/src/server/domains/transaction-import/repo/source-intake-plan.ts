@@ -11,10 +11,12 @@ import {
 import { providerIdentityClaims } from "~/server/domains/transaction-import/repo/source-transaction-record-identity";
 import { constraintViolation } from "~/server/errors/app-error";
 
-import type { prepareRows } from "./source-intake-stages";
+import type {
+  SourceIntakeLoaded,
+  SourceIntakePrepared,
+} from "./source-intake-stages";
 import type { AdoptionFacts } from "./source-intake-stages";
 
-type Prepared = Awaited<ReturnType<typeof prepareRows>>;
 type Owner = typeof sourceOccurrence.$inferSelect;
 type Observation = typeof sourceTransactionRecord.$inferSelect;
 type Member = {
@@ -97,7 +99,7 @@ export function planSourceIntake({
   existingBatch,
   observedAt,
 }: {
-  prepared: Prepared;
+  prepared: SourceIntakePrepared;
   members: Member[];
   byKey: Map<string, Owner>;
   retained: Observation[];
@@ -328,9 +330,7 @@ export function planSourceHeads({
 
 export function planIntakeReceipt(
   input: RecordSourceTransactionRecordsInput,
-  loaded: Awaited<
-    ReturnType<typeof import("./source-intake-stages").lockAndLoadSourceIntake>
-  >,
+  loaded: SourceIntakeLoaded,
   plan: ReturnType<typeof planSourceIntake>,
 ) {
   const { existingBatch, members } = loaded;
@@ -370,9 +370,7 @@ function statementSignWarning(
 
 export function planWithdrawals(
   input: RecordSourceTransactionRecordsInput,
-  loaded: Awaited<
-    ReturnType<typeof import("./source-intake-stages").lockAndLoadSourceIntake>
-  >,
+  loaded: SourceIntakeLoaded,
   plan: ReturnType<typeof planSourceIntake>,
   completed: boolean,
   rowCountStored: number,

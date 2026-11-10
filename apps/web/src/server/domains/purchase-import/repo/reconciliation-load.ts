@@ -1,16 +1,12 @@
-import type { ProductId } from "@cubby/schemas/identifiers";
 import { cents } from "@cubby/shared";
 import { and, asc, eq, sql } from "drizzle-orm";
 
 import type { DrizzleTransaction } from "~/server/db";
 import { notDeleted } from "~/server/db/helpers";
 import { outer } from "~/server/db/helpers/related";
-import { requested } from "~/server/db/helpers/requested";
 import {
   expense,
-  importSourceOrder,
   ledgerParty,
-  product,
   sourceOrderObservation,
 } from "~/server/db/schema";
 import { unpricedForeignExpenseSql } from "~/server/domains/purchase-import/repo/writer-policy";
@@ -125,60 +121,4 @@ export async function loadFirstReconciliationObservation(
   if (!firstObservation)
     throw new Error("Reconciliation observation provenance is missing.");
   return firstObservation;
-}
-
-/** Read the Product output of its transaction stage before planning an Expense. */
-export async function loadReconciliationProduct(
-  tx: DrizzleTransaction,
-  id: ProductId | null,
-) {
-  if (!id) return null;
-  const [row] = await tx
-    .select({ id: product.id })
-    .from(product)
-    .where(
-      requested([{ entity: "product", id }]).match({
-        entity: "product",
-        id: sql`${product.id}`,
-      }),
-    );
-  if (!row) throw new Error("The reviewed Product no longer exists.");
-  return row.id;
-}
-
-/** Read the accepted observation after its transaction stage. */
-export async function loadReconciliationObservation(
-  tx: DrizzleTransaction,
-  id: typeof sourceOrderObservation.$inferSelect.id,
-) {
-  const [row] = await tx
-    .select()
-    .from(sourceOrderObservation)
-    .where(
-      requested([{ entity: "sourceOrderObservation", id }]).match({
-        entity: "sourceOrderObservation",
-        id: sql`${sourceOrderObservation.id}`,
-      }),
-    );
-  if (!row)
-    throw new Error("Reconciliation observation provenance is missing.");
-  return row;
-}
-
-/** Read the accepted association before planning source bindings. */
-export async function loadReconciliationAssociation(
-  tx: DrizzleTransaction,
-  id: typeof importSourceOrder.$inferSelect.id,
-) {
-  const [row] = await tx
-    .select()
-    .from(importSourceOrder)
-    .where(
-      requested([{ entity: "importSourceOrder", id }]).match({
-        entity: "importSourceOrder",
-        id: sql`${importSourceOrder.id}`,
-      }),
-    );
-  if (!row) throw new Error("Accepted source association was not persisted.");
-  return row;
 }

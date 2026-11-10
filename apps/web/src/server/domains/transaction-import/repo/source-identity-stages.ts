@@ -14,6 +14,7 @@ import {
   notDeleted,
   unwrapDb,
 } from "~/server/db/helpers";
+import { uuidArrayParam } from "~/server/db/helpers/query";
 import { transactionImportRecord } from "~/server/db/retained-tables";
 import {
   financialAccount,
@@ -240,10 +241,7 @@ export async function lockAndLoadSourceIdentity(
     sql`
     SELECT * FROM (${sourceHistoricalTransactionRows(
       sql`${observation.id}::uuid`,
-      sql`ARRAY[${sql.join(
-        owners.map((item) => sql`${item.id}::uuid`),
-        sql`, `,
-      )}]::uuid[]`,
+      uuidArrayParam(owners.map((item) => item.id)),
     )}) history ORDER BY history.id`,
     "objects",
   );

@@ -48,23 +48,21 @@ export async function loadSuggestionRowCounts(
     )
     .groupBy(suggestionTable.recordId);
   const fieldIds = rows.flatMap((row) => row.fieldIds);
-  const filters = suggestionListFilters.parse({});
-  const familyDb = isTransaction(db) ? databaseForTransaction(db) : db;
-  const [listed, guesses] = fieldIds.length
-    ? await Promise.all([
-        suggestionFamilies.field.keys(familyDb, {
-          filters,
-          suggestionIds: fieldIds,
-        }),
-        suggestionFamilies.field.keys(familyDb, {
-          filters: { ...filters, disposition: ["guess"] },
-          suggestionIds: fieldIds,
-        }),
-      ])
-    : [[], []];
-  const listedIds = new Set(listed.map((key) => key.suggestionId));
+  // A disposition filter keeps guesses in the keys, so one pass labels them.
+  const filters = {
+    ...suggestionListFilters.parse({}),
+    disposition: ["guess"],
+  };
+  const keys = fieldIds.length
+    ? await suggestionFamilies.field.keys(
+        isTransaction(db) ? databaseForTransaction(db) : db,
+        { filters, suggestionIds: fieldIds },
+      )
+    : [];
   const excluded = new Set(
-    guesses.map((key) => key.suggestionId).filter((id) => !listedIds.has(id)),
+    keys
+      .filter((key) => key.columns.disposition === "guess")
+      .map((key) => key.suggestionId),
   );
   for (const row of rows)
     if (row.recordId)

@@ -58,9 +58,6 @@ import {
   loadReviewedReconciliation,
   loadReconciliationExpenseValidation,
   loadFirstReconciliationObservation,
-  loadReconciliationProduct,
-  loadReconciliationObservation,
-  loadReconciliationAssociation,
 } from "./reconciliation-load";
 import { reviewPreparedNewProducts } from "./reconciliation-new-product";
 import { recordSourceOrderObservation } from "./reconciliation-observations";
@@ -718,12 +715,11 @@ export async function commitSourceOrderReconciliation(
       entry,
       applied,
     );
-    const loadedProductId = await loadReconciliationProduct(tx, productId);
     const linePlan = planReconciliationLine(
       state,
       plan,
       entry,
-      loadedProductId,
+      productId,
       applied.reused,
       current,
     );
@@ -766,27 +762,19 @@ export async function commitSourceOrderReconciliation(
     fix,
     applied.resolvedBindings,
   );
-  const observationOutput = await recordSourceOrderObservation(
+  const acceptedObservation = await recordSourceOrderObservation(
     tx,
     observationPlan.identity,
     observationPlan.input,
     observationPlan.bindings,
   );
-  const acceptedObservation = await loadReconciliationObservation(
-    tx,
-    observationOutput.id,
-  );
-  const associationOutput = await applyReconciliationAssociation(
+  const association = await applyReconciliationAssociation(
     tx,
     state,
     fix,
     firstObservation,
     acceptedObservation,
     outputFingerprint,
-  );
-  const association = await loadReconciliationAssociation(
-    tx,
-    associationOutput.id,
   );
   const bindingPlan = await planReconciliationBindings(
     state,

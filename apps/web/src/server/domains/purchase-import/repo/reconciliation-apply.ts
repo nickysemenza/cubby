@@ -20,7 +20,7 @@ import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-u
 import {
   planReconciliationLine,
   planReconciliationBindings,
-  planSourceOrderReconciliation,
+  type ReconciliationPlan,
 } from "./reconciliation-plan";
 import {
   type ReconciliationFix,
@@ -126,7 +126,7 @@ export async function applyReconciliationRemovals(
 
 export async function applyReconciliationHeader(
   tx: DrizzleTransaction,
-  plan: ReturnType<typeof planSourceOrderReconciliation>,
+  plan: ReconciliationPlan,
   applied: ReconciliationExpenseContext,
 ) {
   const { purchaseId, statedTotal, orderId, imageIds } = plan.header;
@@ -211,7 +211,7 @@ export async function applyReconciliationAssociation(
 
 export async function applyReconciliationSource(
   tx: DrizzleTransaction,
-  plan: ReturnType<typeof planSourceOrderReconciliation>,
+  plan: ReconciliationPlan,
   association: typeof importSourceOrder.$inferSelect,
   bindingPlan: Awaited<ReturnType<typeof planReconciliationBindings>>,
 ) {

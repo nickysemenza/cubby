@@ -10,20 +10,10 @@ import { suggestionTable } from "~/server/db/schema";
 import { resolveMailDecisionHandle } from "~/server/domains/purchase-import/repo/mail-decision-review";
 
 import type { Review } from "./review";
+import type { Prediction } from "./review-plan";
 
 export async function loadReviewPrediction(db: Database, input: Review) {
-  let prediction:
-    | Pick<
-        typeof suggestionTable.$inferSelect,
-        | "id"
-        | "family"
-        | "subject"
-        | "judgment"
-        | "producer"
-        | "evidence"
-        | "fingerprint"
-      >
-    | undefined;
+  let prediction: Prediction | undefined;
   if (input.suggestionId) {
     [prediction] = await getDb(db)
       .select({

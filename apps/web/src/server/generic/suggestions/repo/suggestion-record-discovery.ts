@@ -188,36 +188,34 @@ export function statementRecords(requested?: readonly string[]) {
 }
 
 export function statementSettlementMatch(scope: SuggestionRecordScope) {
+  const set = scope.records && requested(scope.records);
   const settled = statementSettlementRefs.flatMap(({ entity, id }) => {
     if (scope.entity && scope.entity !== entity) return [];
-    const records = scope.records?.filter((record) => record.entity === entity);
-    if (records?.length === 0) return [];
+    if (set && !set.entities.has(entity)) return [];
     // Resolved UUIDs keep the relation's primary-key lookup available. Display
     // JSON instead casts every linked id to text before applying the scope.
-    return [records ? requested(records).match({ entity, id }) : isNotNull(id)];
+    return [set ? set.match({ entity, id }) : isNotNull(id)];
   });
   return or(...settled);
 }
 
 /** Reverse collection reach starts with physical membership, never every suggestion's observation projection. */
 export function statementSourceMatch(scope: SuggestionRecordScope) {
+  const set = scope.records && requested(scope.records);
   const branches = [
     entities.sourceTransactionRecord,
     entities.sourceOccurrence,
     entities.transactionImport,
   ].flatMap((entity) => {
     if (scope.entity && scope.entity !== entity) return [];
-    const records = scope.records?.filter((record) => record.entity === entity);
-    if (records?.length === 0) return [];
+    if (set && !set.entities.has(entity)) return [];
     const id =
       entity === entities.transactionImport
         ? sql`member."importId"`
         : entity === entities.sourceOccurrence
           ? sql`seed."occurrenceId"`
           : sql`seed.id`;
-    const match = records
-      ? requested(records).match({ entity, id })
-      : sql`${id} IS NOT NULL`;
+    const match = set ? set.match({ entity, id }) : sql`${id} IS NOT NULL`;
     return [
       sql`s."recordId" IN (
       SELECT sibling.id FROM ${entity === entities.transactionImport ? sql`${transactionImportRecord} member JOIN "SourceTransactionRecord" seed ON seed.id = member."statementRowId"` : sql`"SourceTransactionRecord" seed`}

@@ -1,5 +1,4 @@
 import { parseEntityId } from "@cubby/schemas/identifiers";
-import { sha256Hex } from "@cubby/shared/sha256";
 import { and, eq, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
@@ -14,15 +13,15 @@ import {
 } from "~/server/domains/shipment/repo/carrier-evidence";
 import { normalizeTrackingNumber } from "~/server/domains/shipment/repo/carrier-recognition";
 import { constraintViolation } from "~/server/errors/app-error";
-import { canonicalJson, jsonSnapshot } from "~/server/lib/canonical-json";
 
 import { deduplicateShipmentTrackingReferences } from "./carrier-references";
 import {
-  retainedPackageShipment,
-  canonicalShipment,
-  projectCarrierReferences,
   assertPurchaseSourceOwner,
   automaticPurchaseAssociation,
+  canonicalDigest,
+  canonicalShipment,
+  projectCarrierReferences,
+  retainedPackageShipment,
 } from "./evidence-internal";
 import { loadIdentityCandidates } from "./evidence-packet-load";
 import {
@@ -32,8 +31,7 @@ import {
 } from "./evidence-packet-plan";
 import type { prepareShipmentPacket } from "./evidence-packet-prepare";
 import type { PacketContext, PacketState } from "./evidence-packet-stage";
-import { planShipmentWrite } from "./evidence-shipment-plan";
-const canonical = (value: unknown) => canonicalJson(jsonSnapshot.parse(value));
+import type { ShipmentWritePlan } from "./evidence-shipment-application";
 // oxlint-disable-next-line complexity -- Candidate locks and evidence revalidation follow the shipment transaction order.
 export async function resolveShipmentAdmission(
   tdb: Database,
@@ -239,9 +237,11 @@ export async function resolveShipmentAdmission(
         kind: "shipment_identity_ambiguous",
         summary: `${ambiguity}${advisory}`,
         proposedFix: null,
-        evidenceFingerprint: await sha256Hex(
-          canonical({ sourceKey, packageKey, packet: submitted }),
-        ),
+        evidenceFingerprint: await canonicalDigest({
+          sourceKey,
+          packageKey,
+          packet: submitted,
+        }),
       });
     return;
   }
@@ -263,8 +263,8 @@ export async function resolveShipmentAdmission(
   const acceptedPurchaseId = row
     ? await automaticPurchaseAssociation(tdb, row, purchaseId)
     : purchaseId;
-  const assignment = row
-    ? { kind: "update" as const, row }
+  const assignment: ShipmentWritePlan["assignment"] = row
+    ? { kind: "update", row, purchaseId: acceptedPurchaseId, projection }
     : {
         kind: "create" as const,
         values: {
@@ -289,13 +289,10 @@ export async function resolveShipmentAdmission(
               : packet.purpose,
         },
       };
-  const shipmentPlan = planShipmentWrite({
+  return {
     assignment,
-    purchaseId: acceptedPurchaseId,
-    projection,
     binding,
     sourceKey,
     packageKey,
-  });
-  return shipmentPlan;
+  } satisfies ShipmentWritePlan;
 }

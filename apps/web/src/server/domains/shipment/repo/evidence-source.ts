@@ -18,9 +18,9 @@ import { assertMailSourceIdentityReady } from "~/server/domains/purchase-import/
 import { runPurposePolicy } from "~/server/domains/run/repo/purpose-policy";
 import { constraintViolation } from "~/server/errors/app-error";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { canonicalJson, jsonSnapshot } from "~/server/lib/canonical-json";
 
-const canonical = (value: unknown) => canonicalJson(jsonSnapshot.parse(value));
+import { canonical } from "./evidence-internal";
+
 export async function loadSourceCapture(
   db: Database,
   input: Pick<RecordShipmentEvidenceInput, "source">,
@@ -141,21 +141,26 @@ export async function loadSourceCapture(
   };
 }
 
-type LoadedSource = Awaited<ReturnType<typeof loadSourceCapture>>;
-export function planSourceCapture(loaded: LoadedSource) {
-  return {
-    sourceKey: loaded.sourceKey,
-    checksum: loaded.checksum,
-    source: loaded.source,
-    originalContent: loaded.originalContent,
-    emailId: loaded.emailId,
-    actorUserId: loaded.actorUserId,
-  };
-}
+/** Retains the capture; `loadSourceCapture` also returns owner and date facts for later stages. */
 export async function applySourceCapture(
   db: Database,
-  plan: ReturnType<typeof planSourceCapture>,
+  {
+    sourceKey,
+    checksum,
+    source,
+    originalContent,
+    emailId,
+    actorUserId,
+  }: Awaited<ReturnType<typeof loadSourceCapture>>,
 ) {
+  const plan = {
+    sourceKey,
+    checksum,
+    source,
+    originalContent,
+    emailId,
+    actorUserId,
+  };
   const [capture] = await getDb(db)
     .insert(shipmentSourceCapture)
     .values(plan)

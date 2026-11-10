@@ -18,7 +18,7 @@ import { uuidArrayParam } from "~/server/db/helpers/query";
  * back to a hashed SubPlan over a full scan (measured on production: 270
  * buffers against 3).
  */
-export type RequestedRecord = {
+type RequestedRecord = {
   entity: string;
   id: string;
   code?: string;
@@ -40,12 +40,6 @@ export interface Requested {
   ids(entity?: string): readonly string[];
   /** Index-shaped semi-join predicate; `false` when no requested record can match. */
   match(ref: RecordRef): SQL;
-  /**
-   * The set as a relation `alias(entity, id, code)` for attribution joins.
-   * Join it only against rows already narrowed by `match` or a key probe; the
-   * planner cannot estimate its cardinality.
-   */
-  rows(alias: string): SQL;
   /** Upper-cased stored-reference keys of one record, for attributing token matches. */
   keysOf(record: { entity: string; id: string }): readonly string[];
 }
@@ -79,66 +73,41 @@ function recordKeys(record: RequestedRecord, id: string) {
         ? [`${prefix}${code.slice(dash + 1)}`]
         : [],
   );
-  return [...new Set([...keys, code, ...legacy])];
+  return [...keys, code, ...legacy];
 }
 
 /** Stored tokens compare after the same normalisation as `recordKeys`. */
 const normalisedToken = (token: SQL) => sql`upper(btrim(${token}))`;
 
 export function requested(records: readonly RequestedRecord[]): Requested {
-  const byEntity = new Map<
-    string,
-    {
-      ids: Set<string>;
-      keys: Map<string, readonly string[]>;
-      codes: Map<string, string>;
-    }
-  >();
+  const byEntity = new Map<string, Map<string, Set<string>>>();
   for (const record of records) {
     const id = uuid.parse(record.id).toLowerCase();
-    const group = byEntity.get(record.entity) ?? {
-      ids: new Set<string>(),
-      keys: new Map<string, readonly string[]>(),
-      codes: new Map<string, string>(),
-    };
-    group.ids.add(id);
-    group.keys.set(id, [
-      ...new Set([...(group.keys.get(id) ?? []), ...recordKeys(record, id)]),
-    ]);
-    if (record.code)
-      group.codes.set(
-        id,
-        parseShortcode(record.code)?.shortcode ??
-          record.code.trim().toUpperCase(),
-      );
+    const group = byEntity.get(record.entity) ?? new Map<string, Set<string>>();
+    const keys = group.get(id) ?? new Set<string>();
+    for (const key of recordKeys(record, id)) keys.add(key);
+    group.set(id, keys);
     byEntity.set(record.entity, group);
   }
-  const groups = [...byEntity].map(([entity, group]) => ({
-    entity,
-    ids: [...group.ids],
-    keys: [...new Set([...group.keys.values()].flat())],
-    group,
-  }));
-  const entities = groups.map((group) => group.entity);
+  const entities = [...byEntity.keys()];
   const ids = (entity?: string) =>
     entity === undefined
-      ? groups.flatMap((group) => group.ids)
-      : (groups.find((group) => group.entity === entity)?.ids ?? []);
+      ? [...byEntity.values()].flatMap((group) => [...group.keys()])
+      : [...(byEntity.get(entity)?.keys() ?? [])];
   const keys = (entity: string) =>
-    groups.find((group) => group.entity === entity)?.keys ?? [];
-  const qualified = (
-    pick: (group: (typeof groups)[number]) => readonly string[],
-  ) =>
-    groups.flatMap((group) =>
-      pick(group).map((value) => `${group.entity}:${value}`),
+    [...(byEntity.get(entity)?.values() ?? [])].flatMap((set) => [...set]);
+  const qualified = (pick: (entity: string) => readonly string[]) =>
+    entities.flatMap((entity) =>
+      pick(entity).map((value) => `${entity}:${value}`),
     );
 
   return {
-    size: groups.reduce((total, group) => total + group.ids.length, 0),
+    size: ids().length,
     entities: new Set(entities),
     ids,
-    keysOf: (record) =>
-      byEntity.get(record.entity)?.keys.get(record.id.toLowerCase()) ?? [],
+    keysOf: (record) => [
+      ...(byEntity.get(record.entity)?.get(record.id.toLowerCase()) ?? []),
+    ],
     match(ref) {
       if (typeof ref.entity === "string") {
         if ("token" in ref) {
@@ -152,44 +121,28 @@ export function requested(records: readonly RequestedRecord[]): Requested {
           ? sql`${ref.id} = ANY(${uuidArrayParam(selected)})`
           : sql`false`;
       }
-      if (!groups.length) return sql`false`;
+      if (!entities.length) return sql`false`;
       const entity = ref.entity;
       // Both array probes drive the composite (entity, id) index; with several
       // entities the qualified recheck removes cross-entity combinations.
       if ("token" in ref) {
         const token = normalisedToken(ref.token);
-        const all = [...new Set(groups.flatMap((group) => group.keys))];
-        return groups.length === 1
+        const all = entities.flatMap(keys);
+        return entities.length === 1
           ? sql`(${entity} = ${entities[0]} AND ${token} = ANY(${textArrayParam(all)}))`
           : sql`(${entity} = ANY(${textArrayParam(entities)}) AND ${token} = ANY(${textArrayParam(
               all,
             )}) AND (${entity} || ':' || ${token}) = ANY(${textArrayParam(
-              qualified((group) => group.keys),
+              qualified(keys),
             )}))`;
       }
-      return groups.length === 1
+      return entities.length === 1
         ? sql`(${entity} = ${entities[0]} AND ${ref.id} = ANY(${uuidArrayParam(ids())}))`
         : sql`(${entity} = ANY(${textArrayParam(entities)}) AND ${ref.id} = ANY(${uuidArrayParam(
             ids(),
           )}) AND (${entity} || ':' || ${ref.id}::text) = ANY(${textArrayParam(
-            qualified((group) => group.ids),
+            qualified(ids),
           )}))`;
-    },
-    rows(alias) {
-      const flat = groups.flatMap((group) =>
-        group.ids.map((id) => ({
-          entity: group.entity,
-          id,
-          code: group.group.codes.get(id) ?? null,
-        })),
-      );
-      // Positional arrays: `uuidArrayParam` deduplicates, which is safe only
-      // because ids are already distinct per entity and uuids are global.
-      return sql`unnest(${nullableTextArrayParam(flat.map((row) => row.entity))}, ${uuidArrayParam(
-        flat.map((row) => row.id),
-      )}, ${nullableTextArrayParam(
-        flat.map((row) => row.code),
-      )}) AS ${sql.identifier(alias)}(entity, id, code)`;
     },
   };
 }
@@ -200,27 +153,23 @@ const nullableTextArrayParam = (values: readonly (string | null)[]): SQL =>
     .map((value) => (value === null ? "NULL" : arrayElement(value)))
     .join(",")}}`}::text[]`;
 
-const columnCasts = {
-  uuid: "uuid",
-  text: "text",
-  int: "int",
-  numeric: "numeric",
-  timestamp: "timestamp",
-  timestamptz: "timestamptz",
-  bool: "bool",
-} as const;
-type ColumnType = keyof typeof columnCasts;
+type ColumnType =
+  | "uuid"
+  | "text"
+  | "int"
+  | "numeric"
+  | "timestamp"
+  | "timestamptz"
+  | "bool";
 
-export type RequestedRows<C> = {
+type RequestedRows<C> = {
   from: SQL;
   col(name: keyof C & string): SQL;
-  ordinality: SQL;
 };
 
 /**
  * Tuples with extra columns as one relation, binding ONE array per column.
- * Replaces hand-rolled `VALUES ${sql.join(...)}` lists. Rows keep their order
- * through `ordinality`.
+ * Replaces hand-rolled `VALUES ${sql.join(...)}` lists.
  */
 export function requestedRows<C extends Record<string, ColumnType>>(
   rows: readonly { [K in keyof C]: string | number | boolean | null }[],
@@ -229,8 +178,7 @@ export function requestedRows<C extends Record<string, ColumnType>>(
 ): RequestedRows<C> {
   // SAFETY: `Object.keys` of `C` returns exactly its own string keys.
   const names = Object.keys(columns) as (keyof C & string)[];
-  const types: Record<string, ColumnType> = columns;
-  const cast = (name: string) => sql.raw(columnCasts[types[name] ?? "text"]);
+  const cast = (name: keyof C & string) => sql.raw(columns[name] ?? "text");
   const arrays = names.map((name) => {
     const values = rows.map((row) => {
       const value = row[name];
@@ -241,11 +189,8 @@ export function requestedRows<C extends Record<string, ColumnType>>(
   const table = sql.identifier(alias);
   return {
     from: rows.length
-      ? sql`unnest(${sql.join(arrays, sql`, `)}) WITH ORDINALITY AS ${table}(${sql.join(
-          [
-            ...names.map((name) => sql.identifier(name)),
-            sql.identifier("ordinality"),
-          ],
+      ? sql`unnest(${sql.join(arrays, sql`, `)}) AS ${table}(${sql.join(
+          names.map((name) => sql.identifier(name)),
           sql`, `,
         )})`
       : sql`(SELECT ${sql.join(
@@ -253,8 +198,7 @@ export function requestedRows<C extends Record<string, ColumnType>>(
             (name) => sql`NULL::${cast(name)} AS ${sql.identifier(name)}`,
           ),
           sql`, `,
-        )}, NULL::bigint AS ordinality WHERE false) AS ${table}`,
+        )} WHERE false) AS ${table}`,
     col: (name) => sql`${table}.${sql.identifier(name)}`,
-    ordinality: sql`${table}.ordinality`,
   };
 }

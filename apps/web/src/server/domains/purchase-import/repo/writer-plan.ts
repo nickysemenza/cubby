@@ -635,13 +635,6 @@ export function planPurchaseNote(
     : null;
 }
 
-export function planRunCounter(
-  runId: ImportWriterInput["runId"],
-  created: boolean,
-) {
-  return { runId, created };
-}
-
 export function planLineAction(
   mode: ReturnType<typeof planLineMode>["kind"],
   line: ExtractedPurchaseLine,

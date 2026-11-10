@@ -13,7 +13,6 @@ import {
   type RecordShipmentEvidenceInput,
 } from "@cubby/schemas/shipment-evidence";
 import { type ShipmentExtraTrackingNumberRemovals } from "@cubby/schemas/shipment-fields";
-import { sha256Hex } from "@cubby/shared/sha256";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
@@ -43,38 +42,33 @@ import { constraintViolation, createAppError } from "~/server/errors/app-error";
 import { logAuditEntries } from "~/server/generic/audit-log/repo/audit-log";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { finalizeMerge, mergeNotes } from "~/server/generic/merge/repo/core";
-import { canonicalJson, jsonSnapshot } from "~/server/lib/canonical-json";
 
 import {
   deduplicateShipmentTrackingReferences,
   shipmentTrackingReferenceKey,
 } from "./carrier-references";
 import {
-  shipmentPurposesDisagree,
-  lockShipmentWrites,
-  canonicalShipment,
-  carrierReference,
-  purchaseReference,
-  assertPurchaseSourceOwner,
-  assertShipmentAssociation,
-} from "./evidence-internal";
-export { canonicalShipment } from "./evidence-internal";
-import {
   retainedRecordInput,
   type ShipmentWriterInput,
 } from "./evidence-input";
+import {
+  assertPurchaseSourceOwner,
+  assertShipmentAssociation,
+  canonical,
+  canonicalDigest,
+  canonicalShipment,
+  carrierReference,
+  lockShipmentWrites,
+  purchaseReference,
+  shipmentPurposesDisagree,
+} from "./evidence-internal";
 import { validateNotificationDates } from "./evidence-packet-plan";
 import {
   processShipmentPacket,
   type PacketState,
 } from "./evidence-packet-stage";
-import {
-  loadSourceCapture,
-  planSourceCapture,
-  applySourceCapture,
-} from "./evidence-source";
+import { loadSourceCapture, applySourceCapture } from "./evidence-source";
 
-const canonical = (value: unknown) => canonicalJson(jsonSnapshot.parse(value));
 export async function recordShipmentEvidence(
   db: Database,
   raw: RecordShipmentEvidenceInput,
@@ -104,7 +98,7 @@ async function writeShipmentEvidence(
   return withTransactionDatabase(db, async (tdb) => {
     await lockShipmentWrites(tdb);
     const source = await loadSourceCapture(tdb, input, actor);
-    const capture = await applySourceCapture(tdb, planSourceCapture(source));
+    const capture = await applySourceCapture(tdb, source);
     const { sourceKey, ownerId, notificationDate } = source;
     validateNotificationDates({
       sourceKind: input.source.kind,
@@ -231,7 +225,7 @@ export async function editShipmentObservation(
       event.carrierName,
     );
     event.carrierId = carrier.code;
-    const fingerprint = await sha256Hex(canonical(event));
+    const fingerprint = await canonicalDigest(event);
     const result = { shipmentId: parseShortcodeFor("shipment", row.shortcode) };
     if (original.supersededById) {
       const [successor] = await database

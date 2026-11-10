@@ -10,7 +10,8 @@ type AdvisoryLockNamespace =
   | "purchase-settlement"
   | "transfer-pair"
   | "transfer-pair-leg"
-  | "run-vendor-account";
+  | "run-vendor-account"
+  | "suggestion-review";
 
 /**
  * The text a transaction lock hashes. Suggestion slots that guard the same

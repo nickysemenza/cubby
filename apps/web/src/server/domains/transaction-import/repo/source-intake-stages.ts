@@ -242,6 +242,8 @@ export async function prepareRows(input: RecordSourceTransactionRecordsInput) {
   return rows;
 }
 
+export type SourceIntakePrepared = Awaited<ReturnType<typeof prepareRows>>;
+
 async function insertOccurrences(
   tx: DrizzleTransaction,
   rows: Omit<typeof sourceOccurrence.$inferInsert, "shortcode">[],
@@ -303,7 +305,7 @@ async function insertObservations(
 export async function lockAndLoadSourceIntake(
   tx: DrizzleTransaction,
   input: RecordSourceTransactionRecordsInput,
-  prepared: Awaited<ReturnType<typeof prepareRows>>,
+  prepared: SourceIntakePrepared,
 ) {
   const query = unwrapDb(tx);
   const { source } = input.import;
@@ -536,13 +538,15 @@ export async function lockAndLoadSourceIntake(
   };
 }
 
-type Loaded = Awaited<ReturnType<typeof lockAndLoadSourceIntake>>;
+export type SourceIntakeLoaded = Awaited<
+  ReturnType<typeof lockAndLoadSourceIntake>
+>;
 export async function applySourceIntake(
   tx: DrizzleTransaction,
   input: RecordSourceTransactionRecordsInput,
   actor: ActorContext,
-  prepared: Awaited<ReturnType<typeof prepareRows>>,
-  loaded: Loaded,
+  prepared: SourceIntakePrepared,
+  loaded: SourceIntakeLoaded,
   plan: ReturnType<typeof planSourceIntake>,
   base: ReturnType<typeof planIntakeReceipt>,
 ) {

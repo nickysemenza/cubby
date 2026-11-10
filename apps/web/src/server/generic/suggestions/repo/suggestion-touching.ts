@@ -12,7 +12,11 @@ import type { Database } from "~/server/db";
 import { unwrapDb } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { outer, type RelatedColumns } from "~/server/db/helpers/related";
-import { requested, textArrayParam } from "~/server/db/helpers/requested";
+import {
+  requested,
+  textArrayParam,
+  type Requested,
+} from "~/server/db/helpers/requested";
 import { suggestionTable, run } from "~/server/db/schema";
 import { SHORTCODE_TABLE } from "~/server/generated/shortcode-tables.gen";
 import { type SuggestionRecordSelection } from "~/server/generic/suggestions/repo/pending-admission";
@@ -101,8 +105,8 @@ function referenceMatches(
   scope: SuggestionRecordScope,
   family: ReviewFamily,
   admission: (alias?: string) => SQL | undefined,
+  set: Requested | undefined,
 ): SQL | undefined {
-  const set = scope.records ? requested(scope.records) : undefined;
   const guard = ref.guard;
   const guardSql = and(
     guard?.entity ? eq(reviewSuggestion.entity, guard.entity) : undefined,
@@ -235,13 +239,14 @@ export function touchingSuggestionQuery(
     });
   };
   const stateAdmission = admission();
+  const set = scope.records ? requested(scope.records) : undefined;
   const branches = families.flatMap((family) => {
     const declaration = reviewFamilyDeclarations[family].affectedRecords;
     const graph = declaration.graph?.(db, scope, admission);
     const settlement = graph?.query;
     const matches = [
       ...declaration.references.map((ref) =>
-        referenceMatches(ref, scope, family, admission),
+        referenceMatches(ref, scope, family, admission, set),
       ),
       ...(graph?.matches ?? []),
     ];

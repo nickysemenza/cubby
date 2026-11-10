@@ -1,3 +1,4 @@
+import type { ImportWriterInput } from "@cubby/schemas/purchase-import";
 import { eq, isNotNull, sql } from "drizzle-orm";
 
 import type { DrizzleTransaction } from "~/server/db";
@@ -13,17 +14,14 @@ import {
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import type {
-  planAggregateExpense,
   planAttachments,
   planExpenseProductBinding,
   planFallbackExpenses,
-  planImportedExpense,
   planOriginalBindings,
   planPaymentEvidence,
   planPurchaseHeader,
   planPurchaseNote,
   planReplayClaim,
-  planRunCounter,
   planSourceAssociation,
   planTenderUpdates,
 } from "./writer-plan";
@@ -45,15 +43,7 @@ export async function applyPaymentEvidence(
   tx: DrizzleTransaction,
   plan: ReturnType<typeof planPaymentEvidence>,
 ) {
-  for (const payment of plan)
-    await tx.insert(purchasePaymentEvidence).values(payment);
-}
-
-export async function applyImportedExpense(
-  tx: DrizzleTransaction,
-  plan: ReturnType<typeof planImportedExpense>,
-) {
-  return insertWithShortcode(tx, "expense", plan.values);
+  if (plan.length) await tx.insert(purchasePaymentEvidence).values(plan);
 }
 
 export async function applyExpenseProductBinding(
@@ -61,13 +51,6 @@ export async function applyExpenseProductBinding(
   plan: NonNullable<ReturnType<typeof planExpenseProductBinding>>,
 ) {
   await tx.update(expense).set(plan.values).where(eq(expense.id, plan.id));
-}
-
-export async function applyAggregateExpense(
-  tx: DrizzleTransaction,
-  plan: NonNullable<ReturnType<typeof planAggregateExpense>>,
-) {
-  return insertWithShortcode(tx, "expense", plan);
 }
 
 export async function applyFallbackExpenses(
@@ -105,7 +88,7 @@ export async function applyPurchaseNote(
 
 export async function applyRunCounter(
   tx: DrizzleTransaction,
-  plan: ReturnType<typeof planRunCounter>,
+  plan: { runId: ImportWriterInput["runId"]; created: boolean },
 ) {
   await tx.execute(
     sql`UPDATE "Run" SET "ordersSeen" = "ordersSeen" + 1, ${plan.created ? sql`"imported" = "imported" + 1` : sql`"updated" = "updated" + 1`}, "updatedAt" = now() WHERE "id" = ${plan.runId}`,
@@ -127,8 +110,8 @@ export async function applyAttachments(
   tx: DrizzleTransaction,
   plan: ReturnType<typeof planAttachments>,
 ) {
-  for (const attachment of plan)
-    await tx.insert(entityAttachment).values(attachment).onConflictDoNothing();
+  if (plan.length)
+    await tx.insert(entityAttachment).values(plan).onConflictDoNothing();
 }
 
 export async function applySourceAssociation(

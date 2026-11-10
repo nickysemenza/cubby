@@ -10,7 +10,7 @@ import {
 import { sourceOccurrenceIdentityKind } from "@cubby/schemas/source-occurrence-fields";
 import { sourceOccurrenceReviewState } from "@cubby/schemas/source-occurrence-fields";
 import { and, eq, inArray, or, sql } from "drizzle-orm";
-import { chunk, uniq, uniqBy } from "es-toolkit";
+import { uniq, uniqBy } from "es-toolkit";
 
 import { shiftPlainDate } from "~/lib/household-date";
 import { minorToDollarsSql } from "~/server/db/computed/money";
@@ -126,9 +126,9 @@ async function sameFilePositions(
   );
   // Install every pending scope before awaiting, so overlapping previews share
   // both observations and known misses without sharing duplicate admission.
-  for (const batch of chunk(missing, 512)) {
+  if (missing.length) {
     const requested = requestedRows(
-      batch,
+      missing,
       { fingerprint: "text", source: "text", externalId: "text" },
       "requested",
     );
@@ -170,7 +170,7 @@ async function sameFilePositions(
         }
         return indexed;
       });
-    for (const scope of batch) {
+    for (const scope of missing) {
       const file =
         cache.get(scope.fingerprint) ??
         new Map<string, Promise<ReadonlySet<number | null>>>();

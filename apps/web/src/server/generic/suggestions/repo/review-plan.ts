@@ -8,7 +8,7 @@ import { z } from "zod";
 import { suggestionTable } from "~/server/db/schema";
 import {
   assertApplicationReceipt,
-  type recordFeedbackWithInsertion,
+  type FeedbackEvent,
 } from "~/server/generic/suggestions/repo/suggestion";
 import type { decisionForOperation } from "~/server/generic/suggestions/repo/suggestion-decisions";
 import { suggestionFamilies } from "~/server/generic/suggestions/repo/suggestion-family-declarations";
@@ -163,7 +163,7 @@ export function planReviewInput(input: Review, prediction: Prediction): Review {
 
 export function planApplicationReceipt(
   receipt: ReturnType<typeof decisionForOperation>,
-  event: Awaited<ReturnType<typeof recordFeedbackWithInsertion>>["event"],
+  event: FeedbackEvent,
   outcome: z.infer<typeof suggestionReviewOut>,
 ) {
   if (receipt) {

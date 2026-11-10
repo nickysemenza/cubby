@@ -1,9 +1,9 @@
 import type { ShipmentObservationInput } from "@cubby/schemas/shipment-evidence";
-import { sha256Hex } from "@cubby/shared/sha256";
 
 import type { shipmentObservation } from "~/server/db/schema";
 import { normalizeTrackingNumber } from "~/server/domains/shipment/repo/carrier-recognition";
-import { canonicalJson, jsonSnapshot } from "~/server/lib/canonical-json";
+
+import { canonical, canonicalDigest } from "./evidence-internal";
 
 type Observation = typeof shipmentObservation.$inferSelect;
 
@@ -98,15 +98,13 @@ export function planObservationWrite(input: {
 }
 export type ObservationWritePlan = ReturnType<typeof planObservationWrite>;
 
-const canonical = (value: unknown) => canonicalJson(jsonSnapshot.parse(value));
-
 async function observationIdentity(
   observation: ShipmentObservationInput,
   occurrences: Map<string, number>,
 ) {
-  const fingerprint = await sha256Hex(canonical(observation));
+  const fingerprint = await canonicalDigest(observation);
   const { timeBasis: _timeBasis, ...literalObservation } = observation;
-  const literalFingerprint = await sha256Hex(canonical(literalObservation));
+  const literalFingerprint = await canonicalDigest(literalObservation);
   const ordinal = occurrences.get(literalFingerprint) ?? 0;
   occurrences.set(literalFingerprint, ordinal + 1);
   return {
@@ -138,7 +136,8 @@ const eventPlace = (event: ShipmentObservationInput) =>
  * wording. Anything else stays a separate event: same-day occurrences are never guessed.
  */
 export async function planPacketObservationIdentities(
-  supported: ReadonlySet<string>,
+  /** Loaded only when a restatement match needs it; most replays never query. */
+  loadSupported: () => Promise<ReadonlySet<string>>,
   observations: readonly ShipmentObservationInput[],
   history: readonly (typeof shipmentObservation.$inferSelect)[],
 ) {
@@ -181,6 +180,7 @@ export async function planPacketObservationIdentities(
     claimed.add(revised.occurrenceKey);
   }
   if (!sourceVersions.length || !unmatched().length) return identified;
+  const supported = await loadSupported();
   for (const restated of [
     (event: ShipmentObservationInput) =>
       canonical([restatedEvent(event), eventPlace(event), event.rawStatus]),

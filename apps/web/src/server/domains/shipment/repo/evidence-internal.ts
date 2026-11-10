@@ -33,7 +33,11 @@ import { resolveProductBrand } from "~/server/domains/vendor/repo/product-brand"
 import { resolveEntityIdentity } from "~/server/entity-kernel/repo/entity-identity";
 import { constraintViolation } from "~/server/errors/app-error";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { canonicalJson, jsonSnapshot } from "~/server/lib/canonical-json";
+import {
+  canonicalJson,
+  jsonSnapshot,
+  sha256CanonicalJson,
+} from "~/server/lib/canonical-json";
 
 import { deduplicateShipmentTrackingReferences } from "./carrier-references";
 import {
@@ -42,7 +46,12 @@ import {
   sourcePackageSpelling,
   planCarrierProjection,
 } from "./evidence-packet-plan";
-const canonical = (value: unknown) => canonicalJson(jsonSnapshot.parse(value));
+export const canonical = (value: unknown) =>
+  canonicalJson(jsonSnapshot.parse(value));
+
+/** Same digest as `sha256Hex(canonical(value))`; stored fingerprints keep their bytes. */
+export const canonicalDigest = (value: unknown) =>
+  sha256CanonicalJson(jsonSnapshot.parse(value));
 
 export const shipmentPurposesDisagree = (
   first: ShipmentPurpose,

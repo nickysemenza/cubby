@@ -190,9 +190,8 @@ export async function prepareShipmentPacket(
         .from(shipmentObservation)
         .where(eq(shipmentObservation.sourcePackageId, binding.id))
     : [];
-  const supported = await loadCaptureObservationIds(tdb, capture.id, history);
   const identified = await planPacketObservationIdentities(
-    supported,
+    () => loadCaptureObservationIds(tdb, capture.id, history),
     packet.observations,
     history,
   );
