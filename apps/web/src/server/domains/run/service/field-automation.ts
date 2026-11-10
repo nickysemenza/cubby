@@ -190,7 +190,8 @@ async function policyPage(db: Database) {
  * changes, corrections, hand-backs) and policy revisions. Page views schedule
  * nothing, and no periodic pass exists.
  */
-// Permits route a unit to the drain whose name it equals or prefixes.
+// Unit names key each unit's rotation and execution record, so they stay
+// unique across drains.
 const EVENTS_UNIT = "field-automation:events";
 const POLICY_UNIT = "field-automation:policy";
 

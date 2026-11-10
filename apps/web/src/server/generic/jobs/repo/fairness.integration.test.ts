@@ -220,13 +220,16 @@ describe("durable Job selection", () => {
     expect(ran.at(-1)).toBe("synthetic.b-progress");
   });
 
-  it("records a failed drain page's committed items and AI cost", async () => {
+  it("runs a unit on the drain that reported it, whatever its name, and records a failed page", async () => {
+    // The unit neither equals nor extends the drain's name: routing by name
+    // would drop it without a page.
     const drain: BackgroundDrain = {
       name: "synthetic.failing",
       due: () =>
-        sql`SELECT 'synthetic.failing'::text AS unit, false AS demand, now()::timestamp AS since`,
+        sql`SELECT 'synthetic-events'::text AS unit, false AS demand, now()::timestamp AS since`,
       next: () => null,
-      page: async () => {
+      page: async (_db, unit) => {
+        expect(unit).toBe("synthetic-events");
         countDrainItems({ claimed: 2, published: 1 });
         addJobAiCost(0.25);
         throw new Error("Synthetic page failure after one publication");
@@ -248,14 +251,45 @@ describe("durable Job selection", () => {
     ).toBeNull();
     expect(captured).toHaveLength(1);
     const [record] = await getDb(ctx.db)
-      .select({ lastExecution: job.lastExecution })
+      .select({
+        lastExecution: job.lastExecution,
+        error: job.error,
+        failingSince: job.failingSince,
+      })
       .from(job)
-      .where(eq(job.key, "drain:synthetic.failing"));
+      .where(eq(job.key, "drain:synthetic-events"));
     expect(record?.lastExecution).toMatchObject({
       outcome: "failed",
       errorClass: "failed",
       aiCostUsd: 0.25,
       items: { claimed: 2, published: 1, failed: 0 },
+    });
+    expect(record?.error).toContain(
+      "Synthetic page failure after one publication",
+    );
+    expect(record?.failingSince).toBeInstanceOf(Date);
+
+    // Only the latest page is stored, so a run of deferrals keeps its start.
+    const deferrals = [];
+    for (const _page of [1, 2]) {
+      await runPermit({
+        db: ctx.db,
+        handlers: {},
+        drains: [
+          { ...drain, page: async () => ({ claimed: 1, outcome: "deferred" }) },
+        ],
+        ports: { send: async () => {}, captureException: () => {} },
+      });
+      const [row] = await getDb(ctx.db)
+        .select({ lastExecution: job.lastExecution })
+        .from(job)
+        .where(eq(job.key, "drain:synthetic-events"));
+      deferrals.push(row?.lastExecution);
+    }
+    expect(deferrals[0]?.deferringSince).toBe(deferrals[0]?.finishedAt);
+    expect(deferrals[1]).toMatchObject({
+      outcome: "deferred",
+      deferringSince: deferrals[0]?.finishedAt,
     });
   });
 

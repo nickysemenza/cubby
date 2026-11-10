@@ -29,6 +29,7 @@ import {
   jobLeaseLapsed,
   nextDueAt,
   recordJobExecution,
+  type DrainDue,
   type DueUnit,
 } from "~/server/generic/jobs/repo/queue";
 import { advanceJob } from "~/server/generic/jobs/service/jobs";
@@ -88,15 +89,15 @@ export type PermitRuntime = {
   ports: PermitPorts;
 };
 
-const drainFor = (drains: readonly BackgroundDrain[], unit: string) =>
-  drains.find(
-    (drain) => drain.name === unit || unit.startsWith(`${drain.name}:`),
-  );
+/** Every drain's due rows, each tagged with the drain that will run them. */
+export const dueDrains = (drains: readonly BackgroundDrain[]): DrainDue[] =>
+  drains.flatMap((drain) => {
+    const due = drain.due();
+    return due ? [{ name: drain.name, due }] : [];
+  });
 
-const fragments = (
-  drains: readonly BackgroundDrain[],
-  part: "due" | "next",
-): SQL[] => drains.flatMap((drain) => drain[part]() ?? []);
+const nextFragments = (drains: readonly BackgroundDrain[]): SQL[] =>
+  drains.flatMap((drain) => drain.next() ?? []);
 
 /** Whether the unit claimed work; an unclaimed unit is a sibling's or nobody's. */
 async function runUnit(
@@ -127,8 +128,14 @@ async function runUnit(
     });
     return outcome !== "skipped";
   }
-  const drain = drainFor(drains, candidate.unit);
-  if (!drain) return false;
+  // Selection tags each unit with the drain that reported it, so a unit can
+  // never be left without a page. A miss means selection and this runtime
+  // disagree about the registered drains: fail the permit, never drop the work.
+  const drain = drains.find((entry) => entry.name === candidate.drain);
+  if (!drain)
+    throw new Error(
+      `Drain unit ${candidate.unit} names unregistered drain ${candidate.drain}`,
+    );
   return runDrainPage(runtime, candidate.unit, (armRecovery) =>
     drain.page(db, candidate.unit, armRecovery),
   );
@@ -159,10 +166,11 @@ async function runDrainPage(
       outcome: JobExecution["outcome"],
       errorClass: string | null,
       claimed: number,
+      error?: UnparsedError,
     ) =>
       recordJobExecution(
         db,
-        { unit },
+        { unit, error },
         {
           outcome,
           errorClass,
@@ -205,7 +213,12 @@ async function runDrainPage(
       // record row moves it back in rotation for other permits and the cron.
       log.error("drain page failed", { unit, error });
       ports.captureException(error, unit);
-      await record("failed", classifyJobFailure(error).kind, meter.claimed);
+      await record(
+        "failed",
+        classifyJobFailure(error).kind,
+        meter.claimed,
+        error,
+      );
       return false;
     }
   });
@@ -258,11 +271,7 @@ export async function runPermit(
   { successor = true }: { successor?: boolean } = {},
 ): Promise<string | null> {
   const { db, drains } = runtime;
-  for (const candidate of await dueUnits(
-    db,
-    fragments(drains, "due"),
-    CANDIDATES,
-  )) {
+  for (const candidate of await dueUnits(db, dueDrains(drains), CANDIDATES)) {
     if (!(await runUnit(runtime, candidate))) continue;
     if (successor) await sendSuccessor(runtime, "permit.successor");
     return candidate.unit;
@@ -279,7 +288,7 @@ export async function sendSuccessor(
   source: string,
   parallel = 1,
 ) {
-  const at = await nextDueAt(db, fragments(drains, "next"));
+  const at = await nextDueAt(db, nextFragments(drains));
   if (!at) return;
   const delay = at.getTime() - Date.now();
   if (delay > MAX_PERMIT_DELAY_MS) return;

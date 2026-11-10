@@ -159,6 +159,12 @@ export const jobExecution = z.object({
     })
     .optional(),
   finishedAt: z.iso.datetime(),
+  /**
+   * When the row's unbroken run of deferred executions began. A deferred
+   * execution sets it and one that claimed nothing keeps it; any other
+   * outcome drops it.
+   */
+  deferringSince: z.iso.datetime().optional(),
 });
 export type JobExecution = z.infer<typeof jobExecution>;
 
@@ -487,6 +493,72 @@ const workStream = z.object({
   oldestDueAt: z.iso.datetime().nullable(),
   runIds: z.array(runShortcode),
 });
+/**
+ * Waiting Jobs of one kind that share a wait: why they wait, whose Runs they
+ * are, and the Runs at the head of the kind's claim order.
+ */
+/** A stored wait reason, `retry` after a failure, or `turn` for plain queued work. */
+export const workQueueWaitReason = z.enum([...jobWaitReasons, "retry", "turn"]);
+
+const workQueueWait = z.object({
+  reason: workQueueWaitReason,
+  /** The owning Runs' purpose; null when the Jobs belong to no Run. */
+  runPurpose: z.string().nullable(),
+  count: z.number().int().nonnegative(),
+  /** How many of them deferred on their latest execution. */
+  deferred: z.number().int().nonnegative(),
+  /** The group in one sentence, e.g. "115 Mail discovery Runs keep deferring on provider capacity." */
+  summary: z.string(),
+  /** Up to three owning Runs, first in claim order. */
+  runIds: z.array(runShortcode),
+});
+export type WorkQueueWait = z.infer<typeof workQueueWait>;
+
+/**
+ * What the queue did for one permit unit (a Job kind or a drain unit) within
+ * `windows.outcomeMinutes`. Only each row's latest execution is stored, so
+ * `claimed` counts rows claimed in the window and the outcome counts are rows
+ * by their latest execution, never executions: a Job that deferred forty times
+ * counts once. A drain unit has one record row, so its counts are 0 or 1 and
+ * `lastExecution` carries the page's item counts.
+ */
+const workQueueUnit = z.object({
+  unit: z.string(),
+  type: z.union([z.literal("job"), z.literal("drain")]),
+  label: z.string(),
+  claimed: z.number().int().nonnegative(),
+  succeeded: z.number().int().nonnegative(),
+  deferred: z.number().int().nonnegative(),
+  failed: z.number().int().nonnegative(),
+  lastClaimedAt: z.iso.datetime().nullable(),
+  /** The longest-waiting claimable work; a drain unit reads its stream's. */
+  oldestDueAt: z.iso.datetime().nullable(),
+  /** Live leases: Jobs an executor holds, or a drain's leased items. */
+  leased: z.number().int().nonnegative(),
+  /** Jobs whose lease lapsed unreclaimed. */
+  expiredLeases: z.number().int().nonnegative(),
+  /** A drain unit's latest page; null for a Job kind. */
+  lastExecution: jobExecution.nullable(),
+  /** A Job kind's waiting Jobs by cause, largest group first. */
+  waits: z.array(workQueueWait),
+});
+export type WorkQueueUnit = z.infer<typeof workQueueUnit>;
+
+/**
+ * AI evaluations of one feature in one state. `oldestAt` is the oldest row's
+ * creation; `errorClass` is the most common stored error's name. `blocked`
+ * counts rows blocked within `windows.blockedDays`.
+ */
+const aiEvaluationBacklog = z.object({
+  feature: z.string(),
+  label: z.string(),
+  state: z.enum(["queued", "result_ready", "blocked"]),
+  count: z.number().int().positive(),
+  oldestAt: z.iso.datetime(),
+  errorClass: z.string().nullable(),
+});
+export type AiEvaluationBacklog = z.infer<typeof aiEvaluationBacklog>;
+
 export const workActivity = z.object({
   rebuild: rebuildObservation,
   measuredAt: z.iso.datetime(),
@@ -494,7 +566,12 @@ export const workActivity = z.object({
     paceMinutes: z.number().int().positive(),
     completedMinutes: z.number().int().positive(),
     failedMinutes: z.number().int().positive(),
+    outcomeMinutes: z.number().int().positive(),
+    blockedDays: z.number().int().positive(),
   }),
   streams: z.array(workStream),
+  /** Every permit unit that is live or ran within `windows.outcomeMinutes`. */
+  queue: z.array(workQueueUnit),
+  evaluations: z.array(aiEvaluationBacklog),
 });
 export type WorkActivity = z.infer<typeof workActivity>;

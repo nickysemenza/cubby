@@ -638,7 +638,9 @@ Project attention uses one quiet shared completeness notice in its dashboard, Pr
 The Work page is one flat screen with no tabs, stat tiles or intro; its behavior
 is in [web UI contracts](docs/web-ui.md#work-page). The health line is one
 sentence in secondary ink. Stuck rows are flat with hairlines and a static
-`warning-ink` glyph. An empty queue reads `Nothing needs you.` at the page's
+`warning-ink` glyph. Queue details is a closed disclosure of the same flat
+hairline rows, with counts and stored names in mono tabular figures and no
+status color. An empty queue reads `Nothing needs you.` at the page's
 largest size. The footer nav carries one plain Changes by Cubby link, with no
 count or badge. Citron is never a warning: the sidebar Work row and collapsed rail
 use a static warning glyph or dot only for stuck or stale work, and healthy work

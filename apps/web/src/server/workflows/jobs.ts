@@ -30,7 +30,10 @@ import { embeddingCleanupDrain } from "~/server/generic/embedding/service/embedd
 import { embeddingRefreshDrain } from "~/server/generic/embedding/service/embedding-refresh";
 import { JobDeferredError } from "~/server/generic/jobs/errors";
 import { defineJobHandler } from "~/server/generic/jobs/service/jobs";
-import type { PermitRuntime } from "~/server/generic/jobs/service/permits";
+import {
+  dueDrains,
+  type PermitRuntime,
+} from "~/server/generic/jobs/service/permits";
 import type { JobHandler, JobHandlers } from "~/server/generic/jobs/types";
 import { backgroundJobHandlers } from "~/server/workflows/background-tasks/kinds";
 import { wakeAt, wakeJobs } from "~/server/workflows/background-tasks/publish";
@@ -169,6 +172,9 @@ const productionDrains = (): readonly BackgroundDrain[] => [
   fieldAutomationDrain,
   reconcileDrain,
 ];
+
+/** Every production drain's `due` rows, for reads that report owed drain units. */
+export const productionDrainDues = () => dueDrains(productionDrains());
 
 /** The production permit runtime: these handlers and drains, waking through the background queue. */
 export function productionPermitRuntime(
