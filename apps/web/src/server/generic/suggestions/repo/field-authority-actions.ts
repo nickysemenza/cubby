@@ -36,10 +36,28 @@ export async function applyFieldAuthorityAction(
   return withTransactionDatabase(db, async (tx) => {
     const recordId = await resolveLiveShortcode(tx, input.id, input.entity);
     if (!recordId) throw new Error(`Record not found: ${input.id}`);
-    // Serialize with the automatic gate, which reads the same audit trail.
-    await getDb(tx).execute(
-      sql`SELECT pg_advisory_xact_lock(hashtextextended(${`field-authority:${input.entity}:${recordId}:${input.field}`},0))`,
+    const table = SHORTCODE_TABLE[input.entity];
+    // Serialize with the automatic gate, which locks the record row before it
+    // writes; reading the stored value under the same lock.
+    const [row] = await getDb(tx).execute<{ value: unknown }>(
+      sql`SELECT to_jsonb(t)->${input.field} AS value FROM ${table} t WHERE t.id = ${recordId}::uuid FOR UPDATE`,
+      "objects",
     );
+    const value = z
+      .json()
+      .nullable()
+      .parse(row?.value ?? null);
+    const markPerson = (authorityValue: "released" | undefined) =>
+      logAuditEntry(
+        tx,
+        { ...context.actorContext, authority: authorityValue },
+        {
+          entityKind: auditEntitySchema.parse(input.entity),
+          entityId: recordId,
+          action: "update",
+          changes: { [input.field]: { from: value, to: value } },
+        },
+      );
     const authority = await fieldAuthority(
       tx,
       input.entity,
@@ -52,27 +70,26 @@ export async function applyFieldAuthorityAction(
         throw new Error("Only a person's value can be handed to Cubby");
       if (suggestApplyPolicy(input.entity, input.field) !== "auto")
         throw new Error("Cubby does not decide this field on its own");
-      const table = SHORTCODE_TABLE[input.entity];
-      const [row] = await getDb(tx).execute<{ value: unknown }>(
-        sql`SELECT to_jsonb(t)->${input.field} AS value FROM ${table} t WHERE t.id = ${recordId}::uuid`,
-        "objects",
-      );
-      const value = row?.value ?? null;
+      if (policy.fillOnly)
+        throw new Error("Cubby only fills this field; it never revises it");
       // An unchanged value with the released authority: the field is Cubby's again.
-      await logAuditEntry(
-        tx,
-        { ...member, authority: "released" },
-        {
-          entityKind: auditEntitySchema.parse(input.entity),
-          entityId: recordId,
-          action: "update",
-          changes: { [input.field]: { from: value, to: value } },
-        },
-      );
+      await markPerson("released");
       return { holder: value == null || value === "" ? "open" : "cubby" };
     }
-    if (authority.holder !== "cubby" || !authority.suggestionId)
+    if (authority.holder !== "cubby")
       throw new Error("This value was not set by Cubby");
+    // Keep on a handed-back value takes it back as the member's.
+    if (authority.suggestionId === null) {
+      if (input.action !== "keep")
+        throw new Error("This value is yours; edit it instead");
+      await markPerson(undefined);
+      return { holder: "person" };
+    }
+    // A row names the value it shows; a later revision is a different value.
+    if (input.suggestionId && input.suggestionId !== authority.suggestionId)
+      throw new Error(
+        "Cubby has changed this value since; review the newer one",
+      );
     const suggestionId = authority.suggestionId;
     if (input.action === "keep") {
       await recordFeedback(tx, {

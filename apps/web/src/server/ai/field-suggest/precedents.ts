@@ -9,7 +9,7 @@ import {
   feedbackVerdict,
   suggestionFamily,
 } from "@cubby/schemas/suggestion";
-import { sql } from "drizzle-orm";
+import { getTableColumns, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
@@ -45,11 +45,17 @@ export async function fieldPrecedents(
 ): Promise<string | null> {
   const model = entityFieldByKey(entity, field);
   const basis = model?.control?.suggest?.basis ?? [];
-  const parents = basis.filter(
-    (key) => entityFieldByKey(entity, key)?.reference,
-  );
-  if (!model || !parents.length) return null;
   const table = SHORTCODE_TABLE[entity];
+  const columns = getTableColumns(table);
+  // Parents are reference-valued basis keys stored as real columns, so the
+  // sibling join uses their indexes.
+  const parents = basis.flatMap((key) => {
+    const column = Object.entries(columns).find(([name]) => name === key)?.[1];
+    return entityFieldByKey(entity, key)?.reference && column
+      ? [column.name]
+      : [];
+  });
+  if (!model || !parents.length) return null;
   const referenced = shortcodeEntity.safeParse(model.reference?.entity).data;
   const referenceTable = referenced ? SHORTCODE_TABLE[referenced] : null;
   const valueLabel = referenceTable
@@ -57,8 +63,8 @@ export async function fieldPrecedents(
     : sql`NULL::text`;
   const sameParent = sql.join(
     parents.map(
-      (key) =>
-        sql`(to_jsonb(t)->${key} IS NOT NULL AND to_jsonb(t)->${key} = to_jsonb(subject)->${key})`,
+      (column) =>
+        sql`t.${sql.identifier(column)} = subject.${sql.identifier(column)}`,
     ),
     sql` OR `,
   );

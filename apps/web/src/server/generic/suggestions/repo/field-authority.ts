@@ -1,6 +1,7 @@
 import { suggestionStatus } from "@cubby/schemas/ai";
 import { auditLogActionSchema } from "@cubby/schemas/audit";
 import { auditAuthoritySchema, SYSTEM_USER_ID } from "@cubby/schemas/context";
+import { entityFieldByKey } from "@cubby/schemas/entity-fields";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import type { FieldGuess, FieldOrigin } from "@cubby/schemas/field-authority";
 import { suggestApplyPolicy } from "@cubby/schemas/field-suggestion-policy";
@@ -111,15 +112,17 @@ export async function fieldAuthority(
     return empty(live) && fact.hasLive
       ? { holder: "open" }
       : { holder: "person", at: null, auditId: null, keptAt: null };
-  if (fact.authority === "released")
-    return empty(live)
-      ? { holder: "open" }
-      : {
-          holder: "cubby",
-          suggestionId: null,
-          confidence: null,
-          at: fact.writtenAt ?? new Date(0),
-        };
+  if (fact.authority === "released") {
+    if (empty(live)) return { holder: "open" };
+    // A value written after the hand-back without its own audit row is a person's.
+    if (fact.matches === true)
+      return {
+        holder: "cubby",
+        suggestionId: null,
+        confidence: null,
+        at: fact.writtenAt ?? new Date(0),
+      };
+  }
   if (
     fact.authority === "automatic" &&
     fact.matches === true &&
@@ -211,7 +214,12 @@ export async function describeFieldOrigin(
   const authority = await fieldAuthority(db, entity, recordId, field);
   const auditId = authority.holder === "person" ? authority.auditId : null;
   let writer: FieldOrigin["writer"] = null;
-  if (authority.holder === "cubby") writer = { kind: "cubby", name: null };
+  // A kept value's newest audit row is still Cubby's write.
+  if (
+    authority.holder === "cubby" ||
+    (authority.holder === "person" && authority.keptAt)
+  )
+    writer = { kind: "cubby", name: null };
   else if (auditId) {
     const actor = actorRow.safeParse(
       (
@@ -240,7 +248,11 @@ export async function describeFieldOrigin(
         ? authority.keptAt.toISOString()
         : null,
     writer,
+    released: authority.holder === "cubby" && authority.suggestionId === null,
     apply: suggestApplyPolicy(entity, field),
+    fillOnly: Boolean(
+      entityFieldByKey(entity, field)?.control?.suggest?.fillOnly,
+    ),
     guess:
       authority.holder === "person"
         ? null

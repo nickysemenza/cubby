@@ -1,4 +1,5 @@
 import { HIGH_CONFIDENCE_PROBABILITY } from "@cubby/schemas/ai-evaluation";
+import { entityFieldByKey } from "@cubby/schemas/entity-fields";
 import { suggestApplyPolicy } from "@cubby/schemas/field-suggestion-policy";
 import { suggestionJudgments } from "@cubby/schemas/suggestion";
 import {
@@ -57,9 +58,13 @@ export const fieldFamily: SuggestionFamilyDeclaration<"field"> = {
       // confident answer for a field only a member applies. Every other
       // pending answer is a guess the field's picker offers.
       const disposition =
-        kind === "correction" && confident && !row.answered
+        kind === "correction" && confident && !row.answered && !row.cubbyHeld
           ? "disagreement"
-          : confident && suggestApplyPolicy(entity, row.field) === "review"
+          : confident &&
+              // Removals (prune) never apply automatically, like review fields.
+              (suggestApplyPolicy(entity, row.field) === "review" ||
+                entityFieldByKey(entity, row.field)?.control?.suggest?.mode ===
+                  "prune")
             ? "needs_you"
             : "guess";
       const key = {

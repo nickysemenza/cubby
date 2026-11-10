@@ -38,6 +38,10 @@ function writerName(
 
 /** "Set by Cubby · Nov 3 · 91% sure", or null when nothing is saved. */
 function originText(origin: FieldOrigin, viewer: string | undefined) {
+  if (origin.released)
+    return origin.at
+      ? `You let Cubby decide · ${day(origin.at)}`
+      : "You let Cubby decide";
   if (!origin.writer) return "Set here";
   const parts = [`Set by ${writerName(origin.writer, viewer)}`];
   if (origin.at) parts.push(day(origin.at));
@@ -112,20 +116,24 @@ export function FieldOriginLine({
           >
             Keep
           </Button>
-          <Button
-            variant="link"
-            size="xs"
-            disabled={authority.isPending}
-            onClick={() => run("clear")}
-          >
-            Wrong, clear it
-          </Button>
+          {/* A handed-back value is the member's: Keep takes it back, there is nothing to clear. */}
+          {origin.released ? null : (
+            <Button
+              variant="link"
+              size="xs"
+              disabled={authority.isPending}
+              onClick={() => run("clear")}
+            >
+              Wrong, clear it
+            </Button>
+          )}
         </div>
       ) : null}
       {saved &&
       canAct &&
       origin.holder === "person" &&
-      origin.apply === "auto" ? (
+      origin.apply === "auto" &&
+      !origin.fillOnly ? (
         <div className="flex flex-wrap gap-2">
           <Button
             variant="link"

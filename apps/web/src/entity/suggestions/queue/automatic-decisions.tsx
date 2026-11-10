@@ -187,7 +187,11 @@ function FieldChange({
       id: change.recordId,
       field: change.field,
       action,
+      // The row's own value: refused once Cubby has revised it since.
+      suggestionId: change.suggestionId,
     });
+  // Only a value Cubby still holds and nobody has answered offers actions.
+  const current = change.status === "applied" && row.verdict === null;
   const object = [valueText.text, recordText.text && `for ${recordText.text}`]
     .filter(Boolean)
     .join(" ");
@@ -247,7 +251,7 @@ function FieldChange({
       trailing={<DateDisplay timestamp={row.createdAt} />}
       actions={
         <span className="inline-flex items-center gap-1">
-          {done ? null : (
+          {done || !current ? null : (
             <>
               <Button
                 size="xs"

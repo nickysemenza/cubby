@@ -16,6 +16,8 @@ export const fieldAuthorityActionInput = z.object({
    * `release`: hand a person's value back to Cubby, which may replace it.
    */
   action: z.enum(["keep", "clear", "release"]),
+  /** The Suggestion a Changes by Cubby row shows; refused once Cubby revised it. */
+  suggestionId: z.string().optional(),
 });
 export const fieldAuthorityActionOut = z.object({ holder: fieldHolder });
 
@@ -50,8 +52,12 @@ export const fieldOrigin = z.object({
       name: z.string().nullable(),
     })
     .nullable(),
+  /** A member handed this value to Cubby; Keep takes it back. */
+  released: z.boolean(),
   /** Who decides once Cubby is confident: Cubby, the queue, or the picker. */
   apply: z.enum(["auto", "review", "offer"]),
+  /** Cubby fills it when empty but never revises it, so release is not offered. */
+  fillOnly: z.boolean(),
   guess: fieldGuess.nullable(),
 });
 export type FieldOrigin = z.infer<typeof fieldOrigin>;

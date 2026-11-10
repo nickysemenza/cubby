@@ -99,28 +99,23 @@ async function processRow(db: Database, row: PendingAuditRow) {
 }
 
 async function eventsPage(db: Database) {
-  const claimed = await claimAutomationRows(db, async (tx, rows) => {
-    const finished: string[] = [];
+  const page = await claimAutomationRows(db, async (tx, row) => {
     const schedule = fieldEvaluationScheduler(tx, []);
-    for (const row of rows) {
-      let deferred = false;
-      for (const target of await processRow(tx, row)) {
-        const result = await scheduleField(
-          tx,
-          schedule,
-          shortcodeEntity.parse(row.entityKind),
-          target.recordId,
-          target.field,
-        );
-        if (result === "deferred") deferred = true;
-      }
-      // A full backlog stops the page; unfinished rows stay owed.
-      if (deferred) break;
-      finished.push(row.id);
+    for (const target of await processRow(tx, row)) {
+      const result = await scheduleField(
+        tx,
+        schedule,
+        shortcodeEntity.parse(row.entityKind),
+        target.recordId,
+        target.field,
+      );
+      if (result === "deferred") return "deferred";
     }
-    return finished;
+    return "finished";
   });
-  return { claimed };
+  return page.deferred && page.finished === 0
+    ? { claimed: 0, outcome: "deferred" as const }
+    : { claimed: page.finished };
 }
 
 /**
@@ -134,6 +129,7 @@ async function policyPage(db: Database) {
   const schedule = fieldEvaluationScheduler(db, []);
   let last = cursor.field;
   let deferred = false;
+  let advanced = 0;
   for (const row of rows) {
     const entity = shortcodeEntity.parse(row.entity);
     if (automatedFields(entity).some((field) => field.key === row.field)) {
@@ -150,13 +146,16 @@ async function policyPage(db: Database) {
       }
     }
     last = row;
+    advanced += 1;
   }
   await saveAiDiscoveryCursor(db, {
     ...cursor,
     field: last,
     fieldDone: !deferred && rows.length < POLICY_PAGE,
   });
-  return { claimed: Math.max(1, rows.length) };
+  if (deferred && advanced === 0)
+    return { claimed: 0, outcome: "deferred" as const };
+  return { claimed: Math.max(1, advanced) };
 }
 
 /**
@@ -176,7 +175,9 @@ export const fieldAutomationDrain: BackgroundDrain = {
     WHERE id = ${AI_DISCOVERY_SETTINGS_ID}::uuid
       AND NOT COALESCE((metadata->>${"fieldDone"})::boolean, false)
   `,
-  next: () => null,
+  // Owed audit rows are claimable at once; the policy pass waits for its wake.
+  next: () =>
+    sql`SELECT min("createdAt")::timestamp FROM "AuditLog" WHERE "automationPending"`,
   async page(db, unit) {
     try {
       return unit === "policy" ? await policyPage(db) : await eventsPage(db);

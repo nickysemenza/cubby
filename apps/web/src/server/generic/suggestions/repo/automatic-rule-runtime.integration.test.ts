@@ -580,6 +580,21 @@ describe("automatic field assignments", () => {
     expect(await productCategoryId(ctx.db, item.id)).toBe(taxonomyId("food"));
   });
 
+  it("treats a value written after a hand-back without its own audit row as a person's", async () => {
+    const item = await productFixture(ctx, "Synthetic out-of-band value");
+    await writeCategory(item, taxonomyShortcode("tools"));
+    await applyFieldAuthorityAction(ctx.db, kernelCtx(ctx), {
+      entity: "product",
+      id: item.id,
+      field: "categoryId",
+      action: "release",
+    });
+    await getDb(ctx.db).execute(
+      sql`UPDATE "Product" SET "categoryId" = ${taxonomyId("household")} WHERE shortcode = ${item.id}`,
+    );
+    expect(await holderOf(item)).toBe("person");
+  });
+
   it("preserves Vendor itemization inherited from online order evidence", async () => {
     const merchant = (
       await createRepoEntity(ctx, "vendor", {

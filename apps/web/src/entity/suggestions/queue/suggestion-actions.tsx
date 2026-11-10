@@ -169,9 +169,11 @@ function FieldSuggestionActions({
           size="xs"
           variant="outline"
           disabled={busy}
+          // The row already shows both values; the accessible name repeats them.
+          aria-label={`Use ${proposedText.text || "this value"}`}
           onClick={() => run((target) => acceptItem(target))}
         >
-          Use {proposedText.text || "this value"}
+          Use
         </Button>
       ) : null}
       {keepsCurrent ? (
@@ -179,9 +181,10 @@ function FieldSuggestionActions({
           size="xs"
           variant="ghost"
           disabled={busy}
+          aria-label={`Keep ${currentText.text || "current value"}`}
           onClick={() => run(wrongItem)}
         >
-          Keep {currentText.text || "current value"}
+          Keep
         </Button>
       ) : (
         <Button

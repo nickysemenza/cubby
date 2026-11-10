@@ -6,6 +6,7 @@ import {
 import { aiProvenance } from "@cubby/schemas/ai-evaluation";
 import { HIGH_CONFIDENCE_PROBABILITY } from "@cubby/schemas/ai-evaluation";
 import { suggestionAcceptanceReceipt } from "@cubby/schemas/ai-evaluation";
+import { auditLogActionSchema } from "@cubby/schemas/audit";
 import { entityRefKey } from "@cubby/schemas/entity";
 import { entityFieldEnvelopeFields } from "@cubby/schemas/entity-field-envelopes";
 import { entityFieldByKey } from "@cubby/schemas/entity-fields";
@@ -278,6 +279,18 @@ export async function fieldSuggestionKeys(
       createdAt: suggestionTable.createdAt,
       matchedRules: matchedRulesOf(sql`${suggestionTable.data}`),
       automaticRule: automaticApplicationRule(sql`${suggestionTable.id}`),
+      // Cubby holds the field when its newest audited write is Cubby's own or
+      // a hand-back; a change to that value is Cubby revising itself, not a
+      // Disagreement with a person.
+      cubbyHeld: sql<boolean>`COALESCE((
+        SELECT latest.authority IS NOT NULL FROM "AuditLog" latest
+        WHERE latest."entityKind" = ${suggestionTable.entity}
+          AND latest."entityId" = ${suggestionTable.recordId}
+          AND latest.action = ${auditLogActionSchema.enum.update}
+          AND latest.changes ? ${suggestionTable.field}
+        ORDER BY latest."createdAt" DESC, latest.id DESC
+        LIMIT 1
+      ), false)`,
       // A Disagreement the member already answered is never listed again.
       answered: sql<boolean>`EXISTS (
         SELECT 1 FROM "Suggestion" earlier

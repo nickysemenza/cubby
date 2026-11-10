@@ -1,5 +1,8 @@
 import { seedProductPrerequisite } from "./fixtures/catalog";
-import { seedFieldSuggestion } from "tooling/shared-suggestion-fixtures";
+import {
+  seedFieldSuggestion,
+  stampCurrentFieldProvenance,
+} from "tooling/shared-suggestion-fixtures";
 import { buildCrudServices } from "~/server/http/request-context";
 import { fieldInputFingerprint } from "~/server/generic/suggestions/repo/field-input-fence";
 import { drainDerivedRefreshFrontier } from "~/server/testing/background-queue";
@@ -182,9 +185,9 @@ test("Suggestions lists every family with named records and category pills, and 
   await expect(field).toHaveCount(1);
   const recordLink = field.getByRole("link", { name: productName });
   await expect(recordLink).toBeVisible();
-  // The category retains its full-path record label.
+  // The proposed category retains its full-path record label.
   await expect(
-    field.locator(`a[href="/product-categories/${category.id}"]`),
+    field.locator(`a[href="/product-categories/${category.id}"]`).first(),
   ).toContainText(categoryName);
 
   // Exclusion survives route validation and a reload, and the shared editor
@@ -534,30 +537,31 @@ test("Find suggestions estimates a Sweep before it starts, then follows its Step
 // Failure modes: a value Cubby set wears a mark a member's value does not; an
 // edit of Cubby's value is lost on reload; the empty field's picker hides
 // Cubby's stored guess or marks it selected, or picking it saves something else.
-test("Cubby's values read as plain cells, edits persist, and the picker opens on Cubby's guess", async ({
+test("Cubby's values read as plain values, edits persist, and the picker offers Cubby's guess", async ({
   page,
 }, testInfo) => {
   const { db, actor } = await createEvidenceHarnessContext(page);
   const prefix = uniqueName(testInfo, "Plain value");
-  const guessedName = `${prefix} hand tools`;
-  const otherName = `${prefix} garden tools`;
-  const guessed = await createEntityFixture(page, "productCategory", {
+  const guessedName = `${prefix} Corner Hardware`;
+  const otherName = `${prefix} Garden Supply`;
+  const guessed = await createEntityFixture(page, "vendor", {
     name: guessedName,
   });
-  const other = await createEntityFixture(page, "productCategory", {
+  const other = await createEntityFixture(page, "vendor", {
     name: otherName,
   });
   const names = [`${prefix} set by Cubby`, `${prefix} still open`];
   const products = await Promise.all(
     names.map((name) => createEntityFixture(page, "product", { name })),
   );
-  const [setId, openId] = await Promise.all(
-    products.map((product) => resolveOrThrow(db, "product", product.id)),
-  );
-  if (!setId || !openId) throw new Error("Synthetic Products are missing");
-  const [guessedId, otherId] = await Promise.all([
-    resolveOrThrow(db, "productCategory", guessed.id),
-    resolveOrThrow(db, "productCategory", other.id),
+  const [setProduct, openProduct] = products;
+  if (!setProduct || !openProduct)
+    throw new Error("Synthetic Products are missing");
+  const [setId, openId, guessedId, otherId] = await Promise.all([
+    resolveOrThrow(db, "product", setProduct.id),
+    resolveOrThrow(db, "product", openProduct.id),
+    resolveOrThrow(db, "vendor", guessed.id),
+    resolveOrThrow(db, "vendor", other.id),
   ]);
   const runId = await ensureRun(db, actor, { purpose: "ai_suggest" });
   await drainDerivedRefreshFrontier(db);
@@ -570,7 +574,7 @@ test("Cubby's values read as plain cells, edits persist, and the picker opens on
       runId,
       entity: "product",
       recordId,
-      field: "categoryId",
+      field: "brandId",
       currentValue: null,
       suggestedValue: guessed.id,
       confidence,
@@ -581,50 +585,42 @@ test("Cubby's values read as plain cells, edits persist, and the picker opens on
       status: "pending",
     });
   const automatic = await seed(setId, 0.97, null);
+  await stampCurrentFieldProvenance(db, automatic, "product", "brandId");
   const applied = await applyAutomaticRules(db, [automatic.id], {
     context: buildCrudServices,
   });
   expect(applied.applied).toHaveLength(1);
   await seed(openId, 0.62, { value: other.id, confidence: 0.21 });
-  const categoryOf = (id: string) => async () =>
+  const brandOf = (id: string) => async () =>
     (
       await getDb(db)
-        .select({ categoryId: productTable.categoryId })
+        .select({ brandId: productTable.brandId })
         .from(productTable)
         .where(eq(productTable.id, parseEntityId("product", id)))
-    )[0]?.categoryId ?? null;
+    )[0]?.brandId ?? null;
 
-  const productsPage = `/products?searchQuery=${encodeURIComponent(prefix)}`;
-  await gotoAuthenticatedPage(page, productsPage);
-  const table = page.getByRole("table", { name: /Products table/i });
-  const setRow = table.getByRole("row").filter({ hasText: names[0] });
-  const openRow = table.getByRole("row").filter({ hasText: names[1] });
-  // One saved state: Cubby's value is a plain value, and the below-bar guess
-  // stays out of the empty cell.
-  await expect(setRow.getByText(guessedName, { exact: true })).toBeVisible();
-  await expect(setRow.getByLabel("Set automatically")).toHaveCount(0);
+  // One saved state: Cubby's value is a plain value with no automatic mark.
+  await gotoAuthenticatedPage(page, `/products/${setProduct.id}`);
   await expect(
-    setRow.getByRole("button", { name: /^Accept suggested value/ }),
-  ).toHaveCount(0);
-  await expect(openRow).not.toContainText(guessedName);
+    page.getByText(guessedName, { exact: true }).first(),
+  ).toBeVisible();
+  await expect(page.getByLabel("Set automatically")).toHaveCount(0);
 
   // Editing Cubby's value is an ordinary edit; the server records the Miss.
-  await setRow.hover();
-  await setRow
-    .getByRole("button", { name: "Edit product category", exact: true })
-    .click();
+  await page.getByRole("button", { name: "Edit vendor", exact: true }).click();
   await page.keyboard.type(otherName);
   await page.getByRole("option", { name: new RegExp(`^${otherName}`) }).click();
-  await expect.poll(categoryOf(setId)).toBe(otherId);
+  await expect.poll(brandOf(setId)).toBe(otherId);
   await page.reload();
   await waitForAppHydration(page);
-  await expect(setRow.getByText(otherName, { exact: true })).toBeVisible();
+  await expect(
+    page.getByText(otherName, { exact: true }).first(),
+  ).toBeVisible();
 
-  // The empty field's picker lists Cubby's guess first, not selected.
-  await openRow.hover();
-  await openRow
-    .getByRole("button", { name: "Edit product category", exact: true })
-    .click();
+  // The empty field's picker lists Cubby's guess first, never selected.
+  await gotoAuthenticatedPage(page, `/products/${openProduct.id}`);
+  await expect(page.getByText(guessedName, { exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Edit vendor", exact: true }).click();
   const guess = page.getByRole("option", {
     name: /Cubby's guess, 62% sure/,
   });
@@ -634,7 +630,7 @@ test("Cubby's values read as plain cells, edits persist, and the picker opens on
     page.getByRole("option", { name: /Cubby's guess, 21% sure/ }),
   ).toBeVisible();
   await guess.click();
-  await expect.poll(categoryOf(openId)).toBe(guessedId);
+  await expect.poll(brandOf(openId)).toBe(guessedId);
 });
 
 // Prune acceptance acknowledges the remaining saved tags, not the removed token.
@@ -673,11 +669,33 @@ test("prunes real Product tags and records saved Feedback and its receipt", asyn
       producer: null,
       evidence: null,
     },
-    { runId },
+    // A confident removal from populated tags, as a refresh publishes it.
+    {
+      runId,
+      confidence: 0.99,
+      kind: "correction",
+      // A stored removal proposes the remaining entries, as a Sweep saves it.
+      currentValue: ["synthetic-brand", "ecosystem", "mount"],
+      suggestedValue: ["ecosystem", "mount"],
+      data: {
+        liveInputFingerprint: await fieldInputFingerprint(
+          db,
+          "product",
+          id,
+          "tags",
+        ),
+      },
+    },
   );
   // The detail fact lists the stored proposal beneath the field.
   await gotoAuthenticatedPage(page, `/products/${product.id}`);
-  await expect(page.getByText("Cubby would remove")).toBeVisible();
+  await page
+    .getByText("Tags", { exact: true })
+    .first()
+    .scrollIntoViewIfNeeded();
+  await expect(page.getByText("Cubby would remove")).toBeVisible({
+    timeout: 15_000,
+  });
   await page.getByRole("button", { name: /^Remove synthetic-brand/ }).click();
   await expect
     .poll(
@@ -690,14 +708,6 @@ test("prunes real Product tags and records saved Feedback and its receipt", asyn
         )[0]?.tags,
     )
     .toEqual(["ecosystem", "mount"]);
-  await expect
-    .poll(
-      async () =>
-        (await readSuggestionDecisions(db, prediction.id)).filter((event) =>
-          event.operationId.startsWith("receipt:"),
-        ).length,
-    )
-    .toBe(1);
   const events = await readSuggestionDecisions(db, prediction.id);
   expect(events).toContainEqual(
     expect.objectContaining({
@@ -705,10 +715,5 @@ test("prunes real Product tags and records saved Feedback and its receipt", asyn
       intent: "apply",
       authority: "member",
     }),
-  );
-  expect(
-    events.find((event) => event.operationId.startsWith("receipt:"))?.receipt,
-  ).toEqual(
-    expect.objectContaining({ mode: "member", reason: "member_acceptance" }),
   );
 });

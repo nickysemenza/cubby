@@ -17,6 +17,19 @@ import { acceptItem, wrongItem } from "./queue/suggestion-review";
 import { useRenderedText } from "./use-rendered-text";
 
 const recordIdSchema = z.object({ id: z.string() });
+const entries = z.array(z.json());
+
+/** Entries a removal proposal drops: the current list minus the remaining one. */
+function removedEntries(current: unknown, remaining: unknown) {
+  const kept = new Set(
+    (entries.safeParse(remaining).data ?? []).map((entry) =>
+      JSON.stringify(entry),
+    ),
+  );
+  return (entries.safeParse(current).data ?? []).filter(
+    (entry) => !kept.has(JSON.stringify(entry)),
+  );
+}
 type FieldRow = Extract<SuggestionListRow, { family: "field" }>;
 
 /** The record's pending field rows; the server lists Disagreements and needs-you only. */
@@ -100,10 +113,14 @@ function FieldProposal({
   const accept = acceptItem(row);
   const keep = wrongItem(row);
   const percent = `${Math.round(evidence.confidence * 100)}%`;
-  // A prune field's proposal names entries to remove, not a replacement.
+  // A prune field's proposal stores the remaining entries; it names the ones
+  // it removes.
   const prune =
     metadata.fields.fields.find((candidate) => candidate.key === evidence.field)
       ?.control?.suggest?.mode === "prune";
+  const shown = prune
+    ? removedEntries(evidence.currentValue, evidence.suggestedValue)
+    : evidence.suggestedValue;
   return (
     <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-xs">
       <span className="inline-flex min-w-0 items-center gap-1 text-muted-foreground">
@@ -112,7 +129,7 @@ function FieldProposal({
           ref={proposed.ref}
           className="inline-flex min-w-0 text-foreground"
         >
-          {render(evidence.suggestedValue)}
+          {render(shown)}
         </span>
         · {percent} sure
       </span>

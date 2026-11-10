@@ -228,10 +228,10 @@ struct WhyThisValueView: View {
 
     // MARK: Content
 
-    @ViewBuilder
     /// One line naming who set a suggested field's value, or Cubby's guess for an empty one.
     static func originLine(_ origin: FieldOrigin) -> String? {
         let when = origin.at.map { " · \($0.formatted(.dateTime.day().month(.abbreviated)))" } ?? ""
+        if origin.released { return "You let Cubby decide\(when)" }
         switch origin.holder {
         case .cubby:
             let sure = origin.confidence.map { " · \(Int(($0 * 100).rounded()))% sure" } ?? ""
@@ -255,6 +255,7 @@ struct WhyThisValueView: View {
         }
     }
 
+    @ViewBuilder
     private func content(_ explanation: FieldExplanationOutput) -> some View {
         let envelope = (try? JSONValue(encoding: explanation.envelope)).flatMap(FieldEnvelope.init)
         if let envelope {

@@ -4,6 +4,7 @@ import { taxonomyShortcode } from "tooling/product-category-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { activateAiRefresh } from "~/server/ai/repo/ai-refresh";
 import { getDb } from "~/server/db/helpers";
 import { suggestionTable } from "~/server/db/schema";
 import { fieldAutomationDrain } from "~/server/domains/run/service/field-automation";
@@ -39,6 +40,10 @@ describe("field automation drain", () => {
   const ctx = withTestDb();
 
   const cubbyValue = async (name: string) => {
+    // Field work waits for an executable activation, as after a deploy.
+    await activateAiRefresh(ctx.db, "synthetic-field-automation", {
+      enabled: true,
+    });
     const item = await productFixture(ctx, name);
     const sweep = await startSuggestionSweep(
       ctx.db,

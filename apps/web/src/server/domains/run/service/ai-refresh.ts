@@ -327,8 +327,9 @@ export function fieldEvaluationScheduler(
     options: { populated?: boolean } = {},
   ): Promise<"scheduled" | "unchanged" | "deferred"> => {
     const current = await (activation ??= currentAiRefreshActivation(db));
-    // Automatic AI is off or mid-deploy: nothing to schedule for this write.
-    if (!current) return "unchanged";
+    // No executable activation (mid-deploy, or automatic AI off): the write
+    // stays owed until one exists, so nothing is consumed unscheduled.
+    if (!current) return "deferred";
     const prepared = await prepareField(db, target, ports, {
       manifest: current.manifest,
       record: async (request) => {

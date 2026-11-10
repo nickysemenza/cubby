@@ -6,14 +6,19 @@ import {
   feedbackVerdict,
   suggestionFamily,
 } from "@cubby/schemas/suggestion";
+import { createLogger } from "@cubby/worker-tracing";
 import { sql } from "drizzle-orm";
 import { z } from "zod";
 
+import { scrubErrorMessage } from "~/lib/error-diagnostics";
 import type { Database } from "~/server/db";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import { uuidArrayParam } from "~/server/db/helpers/query";
+import { isSerializationFailure } from "~/server/errors/db-errors";
 import { recordFeedback } from "~/server/generic/suggestions/repo/suggestion";
 import { transitionSuggestionState } from "~/server/generic/suggestions/repo/suggestion-state";
+
+const log = createLogger("field-automation");
 
 const FIELD = suggestionFamily.enum.field;
 const APPLIED = suggestionStatus.enum.applied;
@@ -25,7 +30,7 @@ const CORRECT = feedbackVerdict.enum.correct;
 type JsonValue = z.infer<ReturnType<typeof z.json>>;
 
 /** Audit rows one events page reads. */
-const EVENTS_PAGE = 100;
+const EVENTS_PAGE = 25;
 /** Similar Cubby-held values one member correction rechecks. */
 const CORRECTION_RECHECK_CAP = 25;
 /** Field slots one policy page schedules. */
@@ -55,6 +60,29 @@ export async function captureFieldCorrection(
   row: PendingAuditRow,
   field: string,
 ): Promise<{ suggestionId: string; wrongValue: JsonValue | null } | null> {
+  const operationId = `correction:${row.id}:${field}`;
+  // A replayed row (its page deferred after recording the Miss) still owes the
+  // recheck: find the correction it already recorded.
+  const [recorded] = z
+    .array(
+      z.object({ suggestionId: z.string(), wrongValue: z.json().nullable() }),
+    )
+    .parse(
+      (
+        await getDb(db).execute<{
+          suggestionId: string;
+          wrongValue: unknown;
+        }>(sql`
+          SELECT s.id::text AS "suggestionId", s."suggestedValue" AS "wrongValue"
+          FROM "Suggestion" s
+          WHERE s.family = ${FIELD} AND s.entity = ${row.entityKind}
+            AND s."recordId" = ${row.entityId}::uuid AND s.field = ${field}
+            AND s.decisions @> ${JSON.stringify([{ operationId }])}::jsonb
+          LIMIT 1
+        `)
+      ).rows,
+    );
+  if (recorded) return recorded;
   // The newest earlier write to this field decides: only a value Cubby set,
   // and nobody kept, can be Cubby's Miss.
   const [previous] = z
@@ -106,7 +134,7 @@ export async function captureFieldCorrection(
   const correctValue = changedTo(row, field) ?? null;
   await recordFeedback(db, {
     suggestionId,
-    operationId: `correction:${row.id}:${field}`,
+    operationId,
     verdict: "wrong",
     authority: "member",
     actorUserId: row.userId,
@@ -147,13 +175,17 @@ export async function correctionRecheckRecords(
 }
 
 /**
- * Claim the oldest audit rows owed to field automation in one transaction.
- * `handle` returns the ids it finished; only those leave the queue, so a
- * deferral keeps the rest owed and a crash replays the page.
+ * Claim the oldest audit rows owed to field automation in one transaction and
+ * handle each in its own savepoint. A deferral stops the page and keeps the
+ * rest owed; a row whose handling throws is logged and released, so one bad
+ * row cannot stall the queue (its record waits for its next write or a Sweep).
  */
 export async function claimAutomationRows(
   db: Database,
-  handle: (tx: Database, rows: PendingAuditRow[]) => Promise<string[]>,
+  handle: (
+    tx: Database,
+    row: PendingAuditRow,
+  ) => Promise<"finished" | "deferred">,
 ) {
   return withTransactionDatabase(db, async (tx) => {
     const rows = z.array(pendingAuditRow).parse(
@@ -169,14 +201,32 @@ export async function claimAutomationRows(
         `)
       ).rows,
     );
-    if (!rows.length) return 0;
-    const finished = await handle(tx, rows);
+    const finished: string[] = [];
+    let deferred = false;
+    for (const row of rows) {
+      try {
+        const result = await withTransactionDatabase(tx, (savepoint) =>
+          handle(savepoint, row),
+        );
+        if (result === "deferred") {
+          deferred = true;
+          break;
+        }
+      } catch (error) {
+        if (isSerializationFailure(error)) throw error;
+        log.warn("Field automation released an audit row it could not handle", {
+          auditId: row.id,
+          error: scrubErrorMessage(String(error)),
+        });
+      }
+      finished.push(row.id);
+    }
     if (finished.length)
       await getDb(tx).execute(sql`
         UPDATE "AuditLog" SET "automationPending" = false
         WHERE id = ANY(${uuidArrayParam(finished)})
       `);
-    return finished.length;
+    return { finished: finished.length, deferred };
   });
 }
 
