@@ -98,7 +98,8 @@ export async function prepareStatementSpending(
 
 const spendingTarget = (judgment: StatementTransactionJudgment) =>
   judgment.matchedTransactionId ??
-  (judgment.recommended === "attach" && judgment.candidates.length === 1
+  (judgment.recommended === "attach" &&
+  (judgment.candidates.length === 1 || judgment.pairedTransactionId)
     ? judgment.candidates[0]!.transactionId
     : null);
 

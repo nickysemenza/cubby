@@ -20,6 +20,7 @@ import {
   type StatementKindVotes,
   type StatementTransactionCandidate,
   statementTransactionAction,
+  statementTransactionJudgment,
   type StatementTransactionJudgment,
   STATEMENT_LABEL_REVISION,
   statementLabelCheckpoint,
@@ -515,6 +516,281 @@ async function siblingsFor(
       );
   }
   return result;
+}
+
+type CopyMember = {
+  charge: ChargeRef;
+  canonical: Observation;
+  accountCode: string;
+  transactionId: string | null;
+};
+
+/** Attested provider rows outrank collection rows, which outrank legacy records. */
+const copyRank = (row: Observation) =>
+  row.providerTransactionId ? 0 : row.rowPosition !== null ? 1 : 2;
+
+const byStatementOrder = (a: CopyMember, b: CopyMember) =>
+  a.canonical.statementDate.localeCompare(b.canonical.statementDate) ||
+  a.canonical.createdAt.localeCompare(b.canonical.createdAt) ||
+  a.charge.chargeKey.localeCompare(b.charge.chargeKey);
+
+/**
+ * Every live charge from any source on the same resolved account, at the exact
+ * amount and within the sibling window, booked or not: the copies several
+ * exports may hold of one bank event. Accounts resolve through the same
+ * preview as the page, because intake leaves the owner's account unset.
+ */
+async function copyMembersFor(
+  db: Database,
+  grouped: readonly { charge: ChargeRef; canonical: Observation }[],
+  page: {
+    previewByKey: ReadonlyMap<string, { accountId?: string | null }>;
+    matchedByCharge: ReadonlyMap<string, string>;
+    ids: Map<string, string>;
+  },
+  preparation: Awaited<ReturnType<typeof prepareFinancialStatementPreview>>,
+): Promise<Map<string, CopyMember[]>> {
+  const result = new Map<string, CopyMember[]>();
+  if (!grouped.length) return result;
+  const values = sql.join(
+    grouped.map(
+      ({ charge, canonical }) =>
+        sql`(${chargeId(charge)}, ${charge.source}, ${charge.chargeKey}, ${canonical.providerAmount}::numeric, ${canonical.statementDate}::date)`,
+    ),
+    sql`, `,
+  );
+  const rows = await unwrapDb(db).execute<{
+    key: string;
+    source: string;
+    chargeKey: string;
+  }>(
+    sql`
+    WITH p AS MATERIALIZED (
+      SELECT * FROM (VALUES ${values}) AS v(key, source, "chargeKey", amount, day)
+    ),
+    o AS MATERIALIZED (
+      SELECT DISTINCT p.key, o.source, ${chargeKeyOf("o")} AS "chargeKey"
+      FROM p JOIN ${sourceObservations} o ON o."providerAmount" = p.amount
+        AND o."statementDate" BETWEEN p.day - ${SIBLING_WINDOW_DAYS}::int AND p.day + ${SIBLING_WINDOW_DAYS}::int
+        AND ${notDeleted("o")}
+        AND NOT (o.source = p.source AND ${chargeKeyOf("o")} = p."chargeKey")
+    ),
+    cs AS MATERIALIZED ${chargeStateOf(
+      sql`(r.source, ${chargeKeyOf("r")}) IN (SELECT source, "chargeKey" FROM o)`,
+    )}
+    SELECT o.key, o.source, o."chargeKey" FROM o
+    JOIN cs ON cs.source = o.source AND cs."chargeKey" = o."chargeKey"
+      AND NOT cs.ignored AND NOT cs.superseded
+  `,
+    "objects",
+  );
+  if (!rows.length) return result;
+  const inPage = new Map(
+    grouped.map((input) => [chargeId(input.charge), input]),
+  );
+  const outside = [
+    ...new Map(
+      rows
+        .filter((row) => !inPage.has(chargeId(row)))
+        .map((row) => [
+          chargeId(row),
+          { source: row.source, chargeKey: row.chargeKey },
+        ]),
+    ).values(),
+  ];
+  const extra = outside.length
+    ? await prepareChargePreviews(db, outside, preparation)
+    : null;
+  const extraPreview = new Map(
+    (extra?.preview.rows ?? []).map((row) => [row.key, row]),
+  );
+  const extraCanonical = new Map(
+    (extra?.grouped ?? []).map((input) => [chargeId(input.charge), input]),
+  );
+  const codes = [
+    ...new Set([
+      ...page.matchedByCharge.values(),
+      ...(extra?.matchedByCharge.values() ?? []),
+    ]),
+  ].filter((code) => !page.ids.has(code));
+  if (codes.length) {
+    const found = await unwrapDb(db).execute<{ id: string; shortcode: string }>(
+      sql`SELECT id, shortcode FROM "FinancialTransaction" WHERE shortcode IN (${sql.join(
+        codes.map((code) => sql`${code}`),
+        sql`, `,
+      )})`,
+      "objects",
+    );
+    for (const row of found) page.ids.set(row.shortcode, String(row.id));
+  }
+  const member = (charge: ChargeRef): CopyMember | null => {
+    const key = chargeId(charge);
+    const input = inPage.get(key) ?? extraCanonical.get(key);
+    const accountCode = (page.previewByKey.get(key) ?? extraPreview.get(key))
+      ?.accountId;
+    if (!input || !accountCode) return null;
+    const code =
+      page.matchedByCharge.get(key) ?? extra?.matchedByCharge.get(key);
+    return {
+      charge,
+      canonical: input.canonical,
+      accountCode,
+      transactionId: code ? (page.ids.get(code) ?? null) : null,
+    };
+  };
+  for (const { charge } of grouped) {
+    const self = member(charge);
+    if (!self) continue;
+    const others = rows
+      .filter((row) => row.key === chargeId(charge))
+      .flatMap((row) => {
+        const other = member({ source: row.source, chargeKey: row.chargeKey });
+        return other && other.accountCode === self.accountCode ? [other] : [];
+      });
+    if (others.some((other) => other.charge.source !== charge.source))
+      result.set(chargeId(charge), [self, ...others]);
+  }
+  return result;
+}
+
+/** The copies a booked primary charge's applied suggestion named. */
+async function bookedCopies(db: Database, charge: ChargeRef) {
+  const rows = await unwrapDb(db).execute<{ copies: unknown }>(
+    sql`
+    SELECT s.judgment->'copies' AS copies FROM "Suggestion" s
+    WHERE s.family = ${suggestionFamily.enum.statement_transaction}
+      AND s.status = ${suggestionStatus.enum.applied}
+      AND s.data->>${"source"} = ${charge.source} AND s.data->>${"chargeKey"} = ${charge.chargeKey}
+    ORDER BY s."updatedAt" DESC LIMIT 1
+  `,
+    "objects",
+  );
+  const parsed = statementTransactionJudgment.shape.copies.safeParse(
+    rows[0]?.copies ?? [],
+  );
+  return parsed.success ? parsed.data : [];
+}
+
+type CopyPairing =
+  | { kind: "none" }
+  /** Per-source counts differ: repeat charges and copies cannot be told apart. */
+  | { kind: "ambiguous"; others: ChargeRef[] }
+  | { kind: "primary"; copies: ChargeRef[] }
+  | { kind: "copy"; transactionId: string | null };
+
+/**
+ * The k-th charge of each source within the group is one bank event. Equal
+ * counts are required, so two real repeat charges in each of two sources stay
+ * two events. One primary per event books; the others attach to its
+ * Transaction once it exists.
+ */
+function copyPairing(charge: ChargeRef, members: readonly CopyMember[]) {
+  const bySource = new Map<string, CopyMember[]>();
+  for (const member of members)
+    bySource.set(member.charge.source, [
+      ...(bySource.get(member.charge.source) ?? []),
+      member,
+    ]);
+  const counts = new Set([...bySource.values()].map((list) => list.length));
+  const others = members.filter(
+    (member) => chargeId(member.charge) !== chargeId(charge),
+  );
+  if (counts.size !== 1)
+    return {
+      kind: "ambiguous",
+      others: others
+        .filter((member) => member.charge.source !== charge.source)
+        .map((member) => member.charge),
+    } satisfies CopyPairing;
+  const own = [...bySource.get(charge.source)!].sort(byStatementOrder);
+  const index = own.findIndex(
+    (member) => chargeId(member.charge) === chargeId(charge),
+  );
+  const pair = [...bySource]
+    .filter(([source]) => source !== charge.source)
+    .map(([, list]) => [...list].sort(byStatementOrder)[index]!);
+  const booked = pair.find((member) => member.transactionId);
+  if (booked)
+    return {
+      kind: "copy",
+      transactionId: booked.transactionId,
+    } satisfies CopyPairing;
+  const [primary] = [own[index]!, ...pair].sort(
+    (a, b) =>
+      copyRank(a.canonical) - copyRank(b.canonical) ||
+      a.canonical.createdAt.localeCompare(b.canonical.createdAt) ||
+      chargeId(a.charge).localeCompare(chargeId(b.charge)),
+  );
+  // Booking the primary changes every group member's candidates, so all of
+  // them refresh, not only this event's copies.
+  return chargeId(primary!.charge) === chargeId(charge)
+    ? ({
+        kind: "primary",
+        copies: others.map((member) => member.charge),
+      } satisfies CopyPairing)
+    : ({ kind: "copy", transactionId: null } satisfies CopyPairing);
+}
+
+const uniqueCharges = (charges: readonly ChargeRef[]) =>
+  charges.filter(
+    (charge, index, all) =>
+      all.findIndex((other) => chargeId(other) === chargeId(charge)) === index,
+  );
+
+type CopyOutcome = {
+  /** A copy whose event has no booked Transaction yet publishes nothing. */
+  waiting: boolean;
+  siblings: ChargeRef[];
+  copies: ChargeRef[];
+  pairedTransactionId: string | null;
+};
+
+/**
+ * Applies a charge's copy pairing to its candidates: a booked copy attaches to
+ * its paired Transaction first, a primary drops Transactions its own source's
+ * other charges settle, and anything unpairable becomes review siblings.
+ */
+function pairCopies(
+  charge: ChargeRef,
+  members: readonly CopyMember[] | undefined,
+  candidates: StatementTransactionCandidate[],
+  state: { hold: boolean; matched: boolean },
+): CopyOutcome {
+  const none: CopyOutcome = {
+    waiting: false,
+    siblings: [],
+    copies: [],
+    pairedTransactionId: null,
+  };
+  // A booked charge is its event's Transaction already.
+  if (!members || state.matched) return none;
+  const pairing = copyPairing(charge, members);
+  if (pairing.kind === "copy" && !pairing.transactionId)
+    return { ...none, waiting: true };
+  if (pairing.kind === "ambiguous")
+    return { ...none, siblings: pairing.others };
+  if (pairing.kind === "primary") {
+    if (!state.hold)
+      candidates.splice(
+        0,
+        candidates.length,
+        ...candidates.filter((candidate) => !candidate.claimed),
+      );
+    return { ...none, copies: pairing.copies };
+  }
+  const pairedIndex = candidates.findIndex(
+    (candidate) => candidate.transactionId === pairing.transactionId,
+  );
+  // The paired Transaction is not attachable here; review the copies.
+  if (pairedIndex < 0)
+    return {
+      ...none,
+      siblings: members
+        .filter((member) => member.charge.source !== charge.source)
+        .map((member) => member.charge),
+    };
+  candidates.unshift(...candidates.splice(pairedIndex, 1));
+  return { ...none, pairedTransactionId: pairing.transactionId };
 }
 
 /**
@@ -1068,39 +1344,46 @@ export async function buildChargeProposals(
     ),
     ledgerPartyId: account.ledgerPartyId,
   }));
-  const [pendingTransactions, siblings, claimed, history] = await Promise.all([
-    statementPendingTransactions(db, accountIds),
-    siblingsFor(db, grouped),
-    claimedCandidates(
-      db,
-      grouped.flatMap(({ charge }) =>
-        (
-          previewByKey.get(chargeId(charge))?.existingTransactions ?? []
-        ).flatMap((existing) => {
-          const transactionId = ids.get(existing.id);
-          return transactionId ? [{ charge, transactionId }] : [];
+  const [pendingTransactions, siblings, claimed, history, copies] =
+    await Promise.all([
+      statementPendingTransactions(db, accountIds),
+      siblingsFor(db, grouped),
+      claimedCandidates(
+        db,
+        grouped.flatMap(({ charge }) =>
+          (
+            previewByKey.get(chargeId(charge))?.existingTransactions ?? []
+          ).flatMap((existing) => {
+            const transactionId = ids.get(existing.id);
+            return transactionId ? [{ charge, transactionId }] : [];
+          }),
+        ),
+      ),
+      merchantHistory(
+        db,
+        grouped.flatMap(({ charge, canonical }) => {
+          const row = previewByKey.get(chargeId(charge));
+          const accountId = row?.accountId ? ids.get(row.accountId) : null;
+          return row && accountId
+            ? [
+                {
+                  key: chargeId(charge),
+                  accountId,
+                  merchant: canonical.merchant,
+                  date: canonical.statementDate,
+                  amount: row.proposed.amount,
+                },
+              ]
+            : [];
         }),
       ),
-    ),
-    merchantHistory(
-      db,
-      grouped.flatMap(({ charge, canonical }) => {
-        const row = previewByKey.get(chargeId(charge));
-        const accountId = row?.accountId ? ids.get(row.accountId) : null;
-        return row && accountId
-          ? [
-              {
-                key: chargeId(charge),
-                accountId,
-                merchant: canonical.merchant,
-                date: canonical.statementDate,
-                amount: row.proposed.amount,
-              },
-            ]
-          : [];
-      }),
-    ),
-  ]);
+      copyMembersFor(
+        db,
+        grouped,
+        { previewByKey, matchedByCharge, ids },
+        preparation,
+      ),
+    ]);
   const accountById = new Map(accounts.map((account) => [account.id, account]));
   const pending: Array<{
     charge: ChargeRef;
@@ -1244,7 +1527,16 @@ export async function buildChargeProposals(
       },
       transfer,
     });
-    const chargeSiblings = siblings.get(chargeId(charge)) ?? [];
+    const copy = pairCopies(charge, copies.get(chargeId(charge)), candidates, {
+      hold: Boolean(hold),
+      matched: Boolean(matchedCode),
+    });
+    // A copy waits for its event's primary to book, then attaches to it.
+    if (copy.waiting) continue;
+    const chargeSiblings = uniqueCharges([
+      ...(siblings.get(chargeId(charge)) ?? []),
+      ...copy.siblings,
+    ]);
     const recommended = matchedCode
       ? "book"
       : hold
@@ -1285,6 +1577,8 @@ export async function buildChargeProposals(
         : null,
       void: null,
       siblings: chargeSiblings,
+      copies: copy.copies,
+      pairedTransactionId: copy.pairedTransactionId,
       transfer,
       transferPair: pairsByCharge.get(chargeId(charge)) ?? null,
       clean: false,
@@ -1475,6 +1769,8 @@ async function buildHoldVoidProposalsForHolds(
           supersede: null,
           void: { transactionId: hold.id, coverageImportId: coverage },
           siblings: [],
+          copies: [],
+          pairedTransactionId: null,
           transfer: null,
           transferPair: null,
           clean: false,
@@ -3148,6 +3444,16 @@ export async function generateStatementSuggestionPage(
           true,
           input.scope,
         );
+        // Booking a primary republished its copies as attaches; settle the
+        // ones this import covers in the same pass.
+        for (const copy of await bookedCopies(db, charge))
+          await applyAutomaticRulesForCharge(
+            db,
+            copy,
+            input.servicesFor,
+            true,
+            input.scope,
+          );
       } catch (error) {
         if (isWorkflowInterrupted(error)) throw error;
         failed.push(statementGenerationFailure(ref, error));

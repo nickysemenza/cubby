@@ -64,13 +64,17 @@ export const AUTOMATIC_RULES = {
   "statement_transaction.book_spending": {
     family: "statement_transaction",
     execution: "import_clean",
-    description: "Book clean supported spending from imports automatically.",
+    description:
+      "Book clean supported spending from imports automatically, and attach another source's copy of a booked bank event to its Transaction.",
     revision: () => STATEMENT_SUGGESTION_REVISION,
     match: (judgment) =>
-      judgment.recommended !== "attach" &&
-      !judgment.reviewReason &&
-      judgment.clean &&
-      judgment.spending?.status === "ready",
+      judgment.recommended === "attach"
+        ? !judgment.reviewReason &&
+          judgment.clean &&
+          judgment.pairedTransactionId !== null
+        : !judgment.reviewReason &&
+          judgment.clean &&
+          judgment.spending?.status === "ready",
     application: () => ({ kind: "accept_as_is" }),
   },
 } satisfies { [K in AutomaticRuleKey]: Declaration<FamilyOf<K>> };

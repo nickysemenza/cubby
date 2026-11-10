@@ -239,19 +239,19 @@ export async function applyStatementTransactionSuggestion(
         );
     } else await commitFinancialSpending(db, spending, actor);
   }
-  // A sibling's evidence included this charge being unmatched; refresh it
-  // now rather than leaving it stale until a whole-ledger pass.
-  if (judgment.siblings.length)
+  // A sibling's or copy's evidence included this charge being unmatched;
+  // refresh it now rather than leaving it stale until a whole-ledger pass.
+  if (judgment.siblings.length || judgment.copies.length)
     await runAfterCommit(db, async (committed) => {
       try {
-        await regenerateCharges(
-          committed,
-          judgment.siblings.map((sibling) =>
+        await regenerateCharges(committed, [
+          ...judgment.siblings.map((sibling) =>
             typeof sibling === "string"
               ? { source: charge.source, chargeKey: sibling }
               : sibling,
           ),
-        );
+          ...judgment.copies,
+        ]);
       } catch (error) {
         // SILENT: advisory refresh only; the apply committed and the sibling's
         // own accept rechecks evidence, so the next Refresh repairs it.
