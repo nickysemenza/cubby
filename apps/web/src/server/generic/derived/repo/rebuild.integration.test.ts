@@ -264,5 +264,7 @@ describe("hourly deterministic rebuild", () => {
     expect(bounded?.afterId).toBe(product.entityId);
     expect(bounded?.failures).toBe(1);
     expect(bounded?.error).toContain("repeated isolate termination");
+    // The skip keeps the drop that caused it.
+    expect(bounded?.error).toContain("Connection terminated unexpectedly");
   });
 });

@@ -179,7 +179,7 @@ export async function commitRebuildPage(
         "failedPages" = "failedPages" + ${problem ? 1 : 0},
         failures = CASE WHEN ${next === null} AND "passFailures" = 0 AND NOT ${!!problem} THEN 0 ELSE failures + ${problem ? 1 : 0} END,
         "passFailures" = "passFailures" + ${problem ? 1 : 0},
-        error = CASE WHEN ${!!problem} THEN ${problem ?? null} WHEN ${next === null} AND "passFailures" = 0 THEN NULL ELSE error END,
+        error = CASE WHEN ${!!problem} THEN ${problem ?? null} || coalesce(${": "} || error, '') WHEN ${next === null} AND "passFailures" = 0 THEN NULL ELSE error END,
         "lastMovementAt" = now() AT TIME ZONE 'UTC',
         "cleanAt" = CASE WHEN ${next === null} AND "passFailures" = 0 AND NOT ${!!problem} THEN now() AT TIME ZONE 'UTC' ELSE "cleanAt" END,
         running = ${next !== null}, target = ${next?.target ?? null}, "afterId" = ${next?.afterId ?? null}::uuid,
