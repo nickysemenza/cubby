@@ -573,19 +573,54 @@ export function paidRefusedResponse(refusal: { reason: string }): Response {
  * OpenAI's prepaid-balance refusal. The Responses envelope carries
  * `error.code` / `error.type` (`credit_balance_exhausted`, sometimes still
  * `insufficient_quota`); pi-ai then prefixes that code. A body or terminal
- * message with neither falls back to OpenAI's billing sentence.
+ * message with neither falls back to OpenAI's billing sentence, read from the
+ * provider `error.message` when the text is JSON. Claude's recorded
+ * `cubby_credit_refused` uses the same type and is not this refusal.
  */
 const OPENAI_CREDIT_CODE =
-  /"(?:code|type)"\s*:\s*"(?:credit_balance_exhausted|insufficient_quota|cubby_credit_refused)"/u;
+  /"(?:code|type)"\s*:\s*"(?:credit_balance_exhausted|insufficient_quota)"/u;
 const OPENAI_CREDIT_STREAM_CODE =
   /^(?:Error Code )?(?:credit_balance_exhausted|insufficient_quota):/u;
-const OPENAI_CREDIT_MESSAGE = /You have no credits remaining\b/u;
+const OPENAI_CREDIT_SENTENCE = /^You have no credits remaining\b/u;
+const OPENAI_RECORDED_CREDIT = /^OpenAI credit refused\b/u;
+
+function objectMessage(value: unknown): string | undefined {
+  if (!value || typeof value !== "object" || !("message" in value))
+    return undefined;
+  return typeof value.message === "string" ? value.message : undefined;
+}
+
+function providerErrorMessage(text: string): string | undefined {
+  try {
+    const parsed: unknown = JSON.parse(text);
+    if (!parsed || typeof parsed !== "object") return undefined;
+    const direct = "error" in parsed ? objectMessage(parsed.error) : undefined;
+    if (direct) return direct;
+    if (!("response" in parsed) || !parsed.response) return undefined;
+    return typeof parsed.response === "object" && "error" in parsed.response
+      ? objectMessage(parsed.response.error)
+      : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** pi prefixes a codeless terminal error with `unknown:`. */
+function terminalOpenAiCreditMessage(text: string): string {
+  const trimmed = text.trim();
+  return /^unknown:\s*(.*)$/u.exec(trimmed)?.[1] ?? trimmed;
+}
 
 export function isOpenAiCreditRefusal(text: string): boolean {
+  if (OPENAI_CREDIT_CODE.test(text) || OPENAI_CREDIT_STREAM_CODE.test(text))
+    return true;
+  const field = providerErrorMessage(text);
+  // A JSON envelope that is not the provider error must not match prompt text
+  // echoed elsewhere in the body.
+  if (field === undefined && text.trim().startsWith("{")) return false;
+  const message = field ?? terminalOpenAiCreditMessage(text);
   return (
-    OPENAI_CREDIT_CODE.test(text) ||
-    OPENAI_CREDIT_STREAM_CODE.test(text) ||
-    OPENAI_CREDIT_MESSAGE.test(text)
+    OPENAI_CREDIT_SENTENCE.test(message) || OPENAI_RECORDED_CREDIT.test(message)
   );
 }
 

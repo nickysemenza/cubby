@@ -204,12 +204,17 @@ export async function releaseRebuild(
   db: Database,
   token: string,
   error: string | null = null,
+  options?: { readonly countFailure?: boolean },
 ): Promise<void> {
+  // A transient drop passes the error with countFailure false: the attempt
+  // streak and the error stay, and failures do not move. A clean release
+  // (no error) still resets the streak. A real release error counts.
+  const countFailure = (options?.countFailure ?? error !== null) ? 1 : 0;
   await getDb(db)
     .execute(sql`UPDATE "DerivedRebuild" SET token = NULL, "leaseExpiresAt" = NULL,
     "cursorAttempts" = CASE WHEN ${error}::text IS NULL THEN 0 ELSE "cursorAttempts" END,
-    failures = CASE WHEN ${error}::text IS NULL THEN failures ELSE failures + 1 END,
-    "passFailures" = CASE WHEN ${error}::text IS NULL THEN "passFailures" ELSE "passFailures" + 1 END,
+    failures = failures + ${countFailure},
+    "passFailures" = "passFailures" + ${countFailure},
     error = coalesce(${error}::text, error)
     WHERE key = ${DERIVED_REBUILD_KEY} AND token = ${token}::uuid`);
 }

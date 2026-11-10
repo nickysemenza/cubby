@@ -871,6 +871,32 @@ describe("purchase import run admission", () => {
       expect(await resumes()).toHaveLength(1);
     });
 
+    it("names an exhausted provider credit balance on an OpenAI credit stop", async () => {
+      const run = await startAgentRun(await createMember());
+      const detail =
+        "Coordinator deterministic failure (error): You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.";
+      await reconcileSettledRun(ctx.db, {
+        runId: runEntityId.parse(run.id),
+        operationId: "submission-settled:1",
+        generation: run.dispatchEventId!,
+        sequence: 1,
+        receivedEventIds: new Set([run.dispatchEventId!]),
+        failure: { failureCode: "agent_failed", detail },
+        fundingUnavailable: true,
+      });
+      const [paused] = await getDb(ctx.db)
+        .select({ dispatchError: runTable.dispatchError })
+        .from(runTable)
+        .where(eq(runTable.id, runEntityId.parse(run.id)));
+      expect(paused?.dispatchError).toMatch(
+        /^Paid models unavailable: exhausted provider credit balance \(.*You have no credits remaining.*\); retrying at /u,
+      );
+      expect(await stored(run.id)).toEqual({
+        status: "paused_auth",
+        failureCode: "execution_limit",
+      });
+    });
+
     it("fails when only an earlier attempt's usage said so", async () => {
       const run = await startAgentRun(await createMember());
       const { aiUsage } = await import("~/server/db/schema");
