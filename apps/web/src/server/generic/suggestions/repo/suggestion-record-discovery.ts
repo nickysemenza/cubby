@@ -14,8 +14,8 @@ import { and, eq, inArray, isNotNull, or, sql, type SQL } from "drizzle-orm";
 import { alias, QueryBuilder } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
-import { uuidArrayParam } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
+import { requested } from "~/server/db/helpers/requested";
 import { transactionImportRecord } from "~/server/db/retained-tables";
 import { suggestionTable } from "~/server/db/schema";
 import { financialSourceReferenceRows } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
@@ -258,11 +258,7 @@ export function statementSettlementMatch(scope: SuggestionRecordScope) {
     if (records?.length === 0) return [];
     // Resolved UUIDs keep the relation's primary-key lookup available. Display
     // JSON instead casts every linked id to text before applying the scope.
-    return [
-      records
-        ? sql`${id} = ANY(${uuidArrayParam(records.map((record) => record.id))})`
-        : isNotNull(id),
-    ];
+    return [records ? requested(records).match({ entity, id }) : isNotNull(id)];
   });
   return or(...settled);
 }
@@ -284,7 +280,7 @@ function statementSourceMatch(scope: SuggestionRecordScope) {
           ? sql`seed."occurrenceId"`
           : sql`seed.id`;
     const match = records
-      ? sql`${id} = ANY(${uuidArrayParam(records.map((record) => record.id))})`
+      ? requested(records).match({ entity, id })
       : sql`${id} IS NOT NULL`;
     return [
       sql`s."recordId" IN (
@@ -358,14 +354,10 @@ export function primaryRecordMatch(scope: SuggestionRecordScope) {
   return and(
     scope.entity ? eq(reviewSuggestion.entity, scope.entity) : undefined,
     scope.records
-      ? or(
-          ...scope.records.map((record) =>
-            and(
-              eq(reviewSuggestion.entity, record.entity),
-              eq(reviewSuggestion.recordId, record.id),
-            ),
-          ),
-        )
+      ? requested(scope.records).match({
+          entity: sql`${reviewSuggestion.entity}`,
+          id: sql`${reviewSuggestion.recordId}`,
+        })
       : sql`true`,
   );
 }
