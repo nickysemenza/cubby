@@ -18,7 +18,7 @@ import {
 } from "./evidence-internal";
 import { loadCaptureObservationIds } from "./evidence-observation-load";
 import {
-  planObservationRevision,
+  planEffectiveObservations,
   planPacketObservationIdentities,
 } from "./evidence-observation-plan";
 import {
@@ -221,26 +221,11 @@ export async function prepareShipmentPacket(
     packet.observations,
     history,
   );
-  const effectiveObservations = [];
-  for (const key of identified) {
-    const { observation } = key;
-    const versions = history
-      .filter((version) => version.occurrenceKey === key.occurrenceKey)
-      .sort((a, b) => b.firstSeenAt.getTime() - a.firstSeenAt.getTime());
-    const current = versions.find((version) => !version.supersededById);
-    const { keepCurrent } = planObservationRevision({
-      versions,
-      current,
-      fingerprint: key.fingerprint,
-      literalFingerprint: key.literalFingerprint,
-      observedAt,
-      revisesFromSameCapture: key.revisesFromSameCapture,
-    });
-    // Period admission uses the revision replay will retain.
-    effectiveObservations.push(
-      keepCurrent && current ? current.event : observation,
-    );
-  }
+  const effectiveObservations = planEffectiveObservations(
+    identified,
+    history,
+    observedAt,
+  );
   return {
     packet,
     suggestion,

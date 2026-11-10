@@ -223,3 +223,31 @@ export async function planPacketObservationIdentities(
   }
   return identified;
 }
+
+export function planEffectiveObservations(
+  identified: Awaited<ReturnType<typeof planPacketObservationIdentities>>,
+  history: readonly Observation[],
+  observedAt: Date,
+) {
+  const effectiveObservations = [];
+  for (const key of identified) {
+    const { observation } = key;
+    const versions = history
+      .filter((version) => version.occurrenceKey === key.occurrenceKey)
+      .sort((a, b) => b.firstSeenAt.getTime() - a.firstSeenAt.getTime());
+    const current = versions.find((version) => !version.supersededById);
+    const { keepCurrent } = planObservationRevision({
+      versions,
+      current,
+      fingerprint: key.fingerprint,
+      literalFingerprint: key.literalFingerprint,
+      observedAt,
+      revisesFromSameCapture: key.revisesFromSameCapture,
+    });
+    // Period admission uses the revision replay will retain.
+    effectiveObservations.push(
+      keepCurrent && current ? current.event : observation,
+    );
+  }
+  return effectiveObservations;
+}

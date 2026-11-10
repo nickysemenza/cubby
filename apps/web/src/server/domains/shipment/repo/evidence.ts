@@ -10,14 +10,9 @@ import {
   reassignShipmentEvidenceInput,
   editShipmentObservationInput,
   shipmentObservationInput,
-  retainedShipmentEvidence,
-  datedShipmentEventTime,
   type RecordShipmentEvidenceInput,
 } from "@cubby/schemas/shipment-evidence";
-import {
-  shipmentPurpose,
-  type ShipmentExtraTrackingNumberRemovals,
-} from "@cubby/schemas/shipment-fields";
+import { type ShipmentExtraTrackingNumberRemovals } from "@cubby/schemas/shipment-fields";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
@@ -64,6 +59,10 @@ import {
   assertShipmentAssociation,
 } from "./evidence-internal";
 export { canonicalShipment } from "./evidence-internal";
+import {
+  retainedRecordInput,
+  type ShipmentWriterInput,
+} from "./evidence-input";
 import { validateNotificationDates } from "./evidence-packet-plan";
 import {
   processShipmentPacket,
@@ -76,39 +75,6 @@ import {
 } from "./evidence-source";
 
 const canonical = (value: unknown) => canonicalJson(jsonSnapshot.parse(value));
-// Pending preparations retain their literal provenance. This private Email ingress
-// still requires dated observations and shares all source/identity/write enforcement.
-const retainedRecordInput = z.strictObject({
-  ...recordShipmentEvidenceInput.shape,
-  source: recordShipmentEvidenceInput.shape.source.options[0],
-  shipments: z
-    .array(
-      retainedShipmentEvidence.safeExtend({
-        purpose: shipmentPurpose,
-        observations: z
-          .array(
-            shipmentObservationInput
-              .extend({ time: datedShipmentEventTime })
-              .refine(
-                (event) =>
-                  event.timeBasis !== "notification_received" ||
-                  event.time.kind === "date",
-                "Notification fallback uses its calendar date at date-only precision.",
-              ),
-          )
-          .min(1)
-          .max(500),
-      }),
-    )
-    .min(1)
-    .max(50),
-});
-export type ShipmentWriterInput = Omit<
-  RecordShipmentEvidenceInput,
-  "shipments"
-> &
-  Pick<z.infer<typeof retainedRecordInput>, "shipments">;
-
 export async function recordShipmentEvidence(
   db: Database,
   raw: RecordShipmentEvidenceInput,

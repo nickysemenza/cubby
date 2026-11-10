@@ -19,7 +19,6 @@ import {
   resolveCarrierName,
   carrierFormatEvidence,
   deliveryFieldCodes,
-  withoutDeliveryFieldCarrier,
 } from "~/server/domains/shipment/repo/carrier-evidence";
 import { normalizeTrackingNumber } from "~/server/domains/shipment/repo/carrier-recognition";
 import { constraintViolation } from "~/server/errors/app-error";
@@ -27,18 +26,15 @@ import { recordChange } from "~/server/generic/changes/repo/change";
 import { canonicalJson, jsonSnapshot } from "~/server/lib/canonical-json";
 
 import { deduplicateShipmentTrackingReferences } from "./carrier-references";
-import type { ShipmentWriterInput } from "./evidence";
+import type { ShipmentWriterInput } from "./evidence-input";
 import {
   retainedPackageShipment,
   canonicalShipment,
-  carrierReference,
   projectCarrierReferences,
   assertPurchaseSourceOwner,
   automaticPurchaseAssociation,
 } from "./evidence-internal";
-import { applyObservationWrite } from "./evidence-observation-application";
-import { loadObservationRevision } from "./evidence-observation-load";
-import { planObservationWrite } from "./evidence-observation-plan";
+import { writePacketObservations } from "./evidence-observation-stage";
 import { loadIdentityCandidates } from "./evidence-packet-load";
 import {
   identityWindowSchema,
@@ -82,8 +78,6 @@ export async function processShipmentPacket(
     ownerId,
     notificationDate,
     purchaseId,
-    observedAt,
-    deliveryCodes,
     submitted,
   } = context;
   const { shipmentIds, unresolvedPackages } = state;
@@ -338,53 +332,18 @@ export async function processShipmentPacket(
   row = applied.row;
   const sourcePackage = applied.sourcePackage;
   shipmentIds.push(parseShortcodeFor("shipment", row.shortcode));
-  for (const {
-    observation,
-    fingerprint,
-    literalFingerprint,
-    occurrenceKey,
-    revisesFromSameCapture,
-  } of identified) {
-    const eventHint = await withoutDeliveryFieldCarrier(
-      tdb,
-      {
-        carrierId: observation.carrierId,
-        carrierName: observation.carrierName,
-      },
-      deliveryCodes,
-    );
-    const eventCarrier = await carrierReference(
-      tdb,
-      eventHint.carrierId,
-      eventHint.carrierName,
-    );
-    const event = {
-      ...observation,
-      ...eventHint,
-      carrierId: eventCarrier.code,
-    };
-    const { current, versions } = await loadObservationRevision(
-      tdb,
-      sourcePackage.id,
-      occurrenceKey,
-    );
-    const plan = planObservationWrite({
-      versions,
-      current,
-      fingerprint,
-      literalFingerprint,
-      observedAt,
-      revisesFromSameCapture,
-      event,
-      shipmentId: row.id,
-      sourceCaptureId: capture.id,
-      sourcePackageId: sourcePackage.id,
+  await writePacketObservations(
+    tdb,
+    {
+      identified,
+      row,
+      sourcePackage,
+      capture,
       sourceKey,
-      occurrenceKey,
-    });
-    await applyObservationWrite(tdb, plan);
-    if (plan.kind === "repeat") state.repeatedObservations++;
-    else state.insertedObservations++;
-  }
+      observedAt: context.observedAt,
+      deliveryCodes: context.deliveryCodes,
+    },
+    state,
+  );
   await recordChange(tdb, { kind: "source", categories: ["shipment"] });
 }

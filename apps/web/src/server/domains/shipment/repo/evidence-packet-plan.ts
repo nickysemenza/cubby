@@ -224,3 +224,60 @@ export function validateNotificationDates(input: {
           "Notification fallback must use the source notification's Los Angeles calendar date.",
         );
 }
+
+export function planCarrierProjection(input: {
+  row: typeof shipment.$inferSelect;
+  carrier: {
+    id: (typeof shipment.$inferSelect)["carrierId"];
+    code: (typeof shipment.$inferSelect)["extraTrackingNumbers"][number]["carrierId"];
+  };
+  number: string | null;
+  carrierName: string | null;
+  extraTrackingNumbers: (typeof shipment.$inferSelect)["extraTrackingNumbers"];
+  correctingCarrier: boolean;
+  previousCarrier: { shortcode: string } | undefined;
+}) {
+  const {
+    row,
+    carrier,
+    number,
+    extraTrackingNumbers,
+    correctingCarrier,
+    previousCarrier,
+  } = input;
+  const refs = [
+    ...row.extraTrackingNumbers.filter(
+      (ref) =>
+        !correctingCarrier ||
+        !(
+          ref.carrierId === previousCarrier?.shortcode &&
+          normalizeTrackingNumber(ref.trackingNumber) === number
+        ),
+    ),
+    ...extraTrackingNumbers,
+  ];
+  const adoptedCarrier = correctingCarrier
+    ? carrier.id
+    : !row.trackingNumber
+      ? (carrier.id ?? row.carrierId)
+      : (row.carrierId ??
+        (normalizeTrackingNumber(row.trackingNumber) === number
+          ? carrier.id
+          : null));
+  if (
+    number &&
+    row.trackingNumber &&
+    (normalizeTrackingNumber(row.trackingNumber) !== number ||
+      (adoptedCarrier && carrier.id && adoptedCarrier !== carrier.id))
+  )
+    refs.push({
+      carrierId: carrier.code,
+      carrierName: input.carrierName,
+      trackingNumber: number,
+    });
+  return {
+    trackingNumber: row.trackingNumber ?? number,
+    carrierId: adoptedCarrier,
+    extraTrackingNumbers: refs,
+  };
+}

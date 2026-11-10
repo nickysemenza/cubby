@@ -28,10 +28,7 @@ import {
   carrierCaptureEvidence,
   resolveCarrierName,
 } from "~/server/domains/shipment/repo/carrier-evidence";
-import {
-  normalizeTrackingNumber,
-  vendorPackageLink,
-} from "~/server/domains/shipment/repo/carrier-recognition";
+import { vendorPackageLink } from "~/server/domains/shipment/repo/carrier-recognition";
 import { resolveProductBrand } from "~/server/domains/vendor/repo/product-brand";
 import { resolveEntityIdentity } from "~/server/entity-kernel/repo/entity-identity";
 import { constraintViolation } from "~/server/errors/app-error";
@@ -43,6 +40,7 @@ import {
   identityWindowSchema,
   withinIdentityPeriod,
   sourcePackageSpelling,
+  planCarrierProjection,
 } from "./evidence-packet-plan";
 const canonical = (value: unknown) => canonicalJson(jsonSnapshot.parse(value));
 
@@ -341,8 +339,7 @@ export async function projectCarrierReferences(
     correctingCarrier: boolean;
   },
 ) {
-  const { row, carrier, number, extraTrackingNumbers, correctingCarrier } =
-    input;
+  const { row, correctingCarrier } = input;
   const database = getDb(db);
   const [previousCarrier] =
     correctingCarrier && row.carrierId
@@ -351,44 +348,13 @@ export async function projectCarrierReferences(
           .from(vendor)
           .where(eq(vendor.id, row.carrierId))
       : [];
-  const refs = [
-    ...row.extraTrackingNumbers.filter(
-      (ref) =>
-        !correctingCarrier ||
-        !(
-          ref.carrierId === previousCarrier?.shortcode &&
-          normalizeTrackingNumber(ref.trackingNumber) === number
-        ),
-    ),
-    ...extraTrackingNumbers,
-  ];
-  const adoptedCarrier = correctingCarrier
-    ? carrier.id
-    : !row.trackingNumber
-      ? (carrier.id ?? row.carrierId)
-      : (row.carrierId ??
-        (normalizeTrackingNumber(row.trackingNumber) === number
-          ? carrier.id
-          : null));
-  if (
-    number &&
-    row.trackingNumber &&
-    (normalizeTrackingNumber(row.trackingNumber) !== number ||
-      (adoptedCarrier && carrier.id && adoptedCarrier !== carrier.id))
-  )
-    refs.push({
-      carrierId: carrier.code,
-      carrierName: input.carrierName,
-      trackingNumber: number,
-    });
+  const projection = planCarrierProjection({ ...input, previousCarrier });
   const uniqueRefs = await deduplicateShipmentTrackingReferences(db, {
-    trackingNumber: row.trackingNumber ?? number,
-    carrierId: adoptedCarrier,
-    extraTrackingNumbers: refs,
+    ...projection,
   });
   return {
-    carrierId: adoptedCarrier,
-    trackingNumber: row.trackingNumber ?? number,
+    carrierId: projection.carrierId,
+    trackingNumber: projection.trackingNumber,
     extraTrackingNumbers: uniqueRefs,
   };
 }
