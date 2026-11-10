@@ -121,10 +121,10 @@ export async function openWorkerdRuntime<T>(
     models: options.models,
     coordinatorModels: options.coordinatorModels,
     poolIdleTimeoutMs: options.poolIdleTimeoutMs,
+    onPhase: phase,
   });
   cleanup.defer(harness.close);
   const { url } = await harness.listen();
-  phase("harness create+listen");
 
   let prepared: T;
   const runtime: WorkerdRuntime = {

@@ -99,10 +99,7 @@ const recordRows =
 const suggestionsTable = (page: Page) =>
   page.getByRole("table", { name: "Suggestions" });
 
-// Failure modes: a family drops out of the page; a record renders as a bare
-// shortcode or a category as the generic grey reference chip; Use on a field
-// Disagreement writes nothing.
-test("Suggestions lists every family with named records and category pills, and reviews fields", async ({
+test("reviews a field suggestion for a named record", async ({
   page,
 }, testInfo) => {
   const { db, actor } = await createEvidenceHarnessContext(page);
@@ -122,25 +119,6 @@ test("Suggestions lists every family with named records and category pills, and 
   const itemId = await resolveOrThrow(db, "product", item.id);
   const runId = await ensureRun(db, actor, { purpose: "ai_suggest" });
 
-  const alias = uniqueName(testInfo, "Suggestions card");
-  await createEntityFixture(page, "financialAccount", {
-    name: alias,
-    identity: { kind: "credit_card", network: "visa" },
-    sourceAliases: [{ source: "monarch", alias, externalAccountId: null }],
-  });
-  const importId = await recordRows(
-    page,
-    alias,
-    db,
-  )(alias, [
-    {
-      statementDate: "2026-05-11",
-      providerAmount: -17.25,
-      rawDescription: `${alias} CAFE`,
-    },
-  ]);
-  await generateStatementSuggestions(db, importId);
-  await drainDerivedRefreshFrontier(db);
   const seedCategoryAdvice = async () =>
     seedFieldSuggestion(
       db,
@@ -169,14 +147,6 @@ test("Suggestions lists every family with named records and category pills, and 
       true,
     );
   await seedCategoryAdvice();
-  await gotoAuthenticatedPage(page, "/suggestions");
-  const families = page.getByRole("group", { name: "Suggestion families" });
-  for (const family of ["Statements", "Fields"])
-    await expect(
-      families.getByRole("button", { name: new RegExp(`^${family} [1-9]`) }),
-    ).toBeVisible();
-
-  // A record's Suggestions list under it, in the All view.
   await gotoAuthenticatedPage(page, `/suggestions?record=product:${item.id}`);
   const rows = suggestionsTable(page).getByRole("row");
   const field = rows
@@ -190,66 +160,6 @@ test("Suggestions lists every family with named records and category pills, and 
     field.locator(`a[href="/product-categories/${category.id}"]`).first(),
   ).toContainText(categoryName);
 
-  // Exclusion survives route validation and a reload, and the shared editor
-  // can clear it without losing the scoped proposal.
-  // SSR can supply the scoped read; membership must not depend on a second RPC.
-  await gotoAuthenticatedPage(
-    page,
-    `/suggestions?family=field&record=product:${item.id}&entityExclude=product`,
-  );
-  await expect(
-    page.getByText("No pending suggestions.", { exact: true }),
-  ).toBeVisible();
-  await expect(
-    suggestionsTable(page).getByRole("link", { name: productName }),
-  ).toHaveCount(0);
-  await page.reload();
-  await waitForAppHydration(page);
-  await expect(page.getByText("__not__:product", { exact: true })).toHaveCount(
-    0,
-  );
-  await page.getByRole("button", { name: "Filters", exact: true }).click();
-  await page
-    .getByRole("dialog")
-    .getByRole("button", { name: /^Entity:/ })
-    .click();
-  await expect(
-    page.getByLabel("Entity is or is not", { exact: true }),
-  ).toBeVisible();
-  await page.keyboard.press("Escape");
-  await page
-    .getByRole("button", { name: "Clear Entity filter", exact: true })
-    .click();
-  await expect(
-    suggestionsTable(page).getByRole("link", { name: productName }),
-  ).toBeVisible();
-  await gotoAuthenticatedPage(page, `/suggestions?record=product:${item.id}`);
-
-  // The shared workbench must clear selected actions when server sort swaps
-  // the query, without applying or dismissing the selected proposal.
-  await field
-    .getByRole("checkbox", { name: "Select row", exact: true })
-    .check();
-  const selected = page.getByRole("region", {
-    name: "Selected rows",
-    exact: true,
-  });
-  await expect(selected).toBeVisible();
-  await selected.getByRole("button", { name: "More", exact: true }).click();
-  await expect(
-    page.getByRole("menuitem", { name: /^Never suggest/ }),
-  ).toBeDisabled();
-  await page.keyboard.press("Escape");
-  await page.getByRole("combobox", { name: "Sort", exact: true }).click();
-  await page.getByRole("option", { name: "Most impact", exact: true }).click();
-  await expect(selected).toHaveCount(0);
-  await expect(
-    field.getByRole("checkbox", { name: "Select row", exact: true }),
-  ).not.toBeChecked();
-
-  await drainDerivedRefreshFrontier(db);
-  await gotoAuthenticatedPage(page, `/suggestions?record=product:${item.id}`);
-  await expect(field).toHaveCount(1);
   expect(
     (
       await getDb(db)

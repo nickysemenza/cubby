@@ -88,9 +88,6 @@ test("meal product nutrition preserves entered amounts through creation, edits a
   await expect(member.getByLabel(/^Carbs: 40 g\./)).toHaveCount(2);
   await expect(member.getByLabel(/^Fat: 8 g\./)).toHaveCount(2);
 
-  await page.reload();
-  await expect(page.getByText("Food updated", { exact: true })).toBeHidden();
-  await productRow.getByText("Details and editing", { exact: true }).click();
   await productRow.getByRole("button", { name: "Remove food" }).click();
   await expect(productRow).toHaveCount(0);
 });

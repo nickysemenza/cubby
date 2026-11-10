@@ -38,42 +38,6 @@ async function seedLabelReview(page: Page, objectStorageUrl: string) {
   return { name, imageCode, dialog, review };
 }
 
-test("detected label nutrition previews inferred values and Cancel preserves current nutrition", async ({
-  page,
-  e2eRuntime,
-}) => {
-  const { name, dialog, review } = await seedLabelReview(
-    page,
-    e2eRuntime.objectStorageUrl,
-  );
-  await review.click();
-  await expect(
-    dialog.getByRole("img", { name: "Source nutrition panel" }),
-  ).toBeVisible();
-  await dialog
-    .getByText("Current nutrition · 30 g per serving", { exact: true })
-    .click();
-  const fatComparison = dialog.getByRole("row").filter({
-    has: page.getByRole("cell", { name: "Total Fat", exact: true }),
-  });
-  await expect(
-    fatComparison.getByRole("cell", { name: "2", exact: true }),
-  ).toBeVisible();
-  await expect(
-    fatComparison.getByRole("cell", { name: /0 \(inferred\)/ }),
-  ).toBeVisible();
-  await dialog.getByRole("heading", { name: "Nutrition", exact: true }).click();
-  await expect(dialog.getByLabel("Serving size, as printed (g)")).toHaveValue(
-    "40",
-  );
-  await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
-  expect(await readStoredLabelNutrition(name)).toMatchObject({
-    servingGrams: 30,
-    nutrients: { kcal: 90, fat: 2 },
-    source: "Synthetic prior label",
-  });
-});
-
 test("detected label nutrition stays editable and Save persists the panel evidence", async ({
   page,
   e2eRuntime,

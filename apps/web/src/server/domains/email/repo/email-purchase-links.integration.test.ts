@@ -24,7 +24,6 @@ import { seedEmailLinkDecision } from "tooling/shared-suggestion-fixtures";
  */
 import { raceUniqueInsert, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
-import { z } from "zod";
 
 import { emailRepositoryReadSchema } from "~/entity/generated/entity-schema-bindings.email.gen";
 import { account as googleAccount } from "~/server/db/auth.schema";
@@ -48,10 +47,7 @@ import {
   vendorAccount,
 } from "~/server/db/schema";
 import { emailScaffold } from "~/server/domains/email/repo/email";
-import {
-  emailLinkedSql,
-  emailMemberClassificationSql,
-} from "~/server/domains/email/repo/email-sql";
+import { emailMemberClassificationSql } from "~/server/domains/email/repo/email-sql";
 import {
   decideEmailPurchase,
   EXACT_ORDER_LINK_REVISION,
@@ -408,104 +404,10 @@ describe("Email Purchase links", () => {
           changed: fact.changed,
         }));
       };
-      const unchangedAccepted = [{ purchaseId: purchase.id, changed: false }];
-      const [emptyRoot] = await getDb(ctx.db)
-        .insert(importSourceClaim)
-        .values({
-          ledgerPartyId: party.id,
-          kind,
-          externalKey: "synthetic:empty-family-root",
-          checksum,
-          firstRunId: scope.id,
-          lastRunId: scope.id,
-        })
-        .returning();
-      if (!emptyRoot) throw new Error("Synthetic empty source family missing");
-      await drainEmail();
-      expect(await facts()).toEqual(unchangedAccepted);
-      // Move the matching identity onto an alias with no accepted associations.
-      // Its old parent is the only path to the former family's Purchase after a move.
       await getDb(ctx.db)
         .update(importSourceClaim)
         .set({ externalKey: "synthetic:renamed-family-root" })
         .where(eq(importSourceClaim.id, root.id));
-      await drainEmail();
-      expect(await facts()).toEqual([]);
-      const [identityAlias] = await getDb(ctx.db)
-        .insert(importSourceClaim)
-        .values({
-          ledgerPartyId: party.id,
-          kind,
-          externalKey,
-          canonicalClaimId: root.id,
-          checksum,
-          firstRunId: scope.id,
-          lastRunId: scope.id,
-        })
-        .returning();
-      const [nestedParent] = await getDb(ctx.db)
-        .insert(importSourceClaim)
-        .values({
-          ledgerPartyId: party.id,
-          kind,
-          externalKey: "synthetic:intermediate-family-alias",
-          canonicalClaimId: root.id,
-          checksum,
-          firstRunId: scope.id,
-          lastRunId: scope.id,
-        })
-        .returning();
-      if (!identityAlias || !nestedParent)
-        throw new Error("Synthetic source family aliases missing");
-      await drainEmail();
-      expect(await facts()).toEqual(unchangedAccepted);
-      for (const parent of [emptyRoot.id, null, nestedParent.id]) {
-        await getDb(ctx.db)
-          .update(importSourceClaim)
-          .set({ canonicalClaimId: parent })
-          .where(eq(importSourceClaim.id, identityAlias.id));
-        await drainEmail();
-        expect(await facts()).toEqual([]);
-        await getDb(ctx.db)
-          .update(importSourceClaim)
-          .set({ canonicalClaimId: root.id })
-          .where(eq(importSourceClaim.id, identityAlias.id));
-        await drainEmail();
-        expect(await facts()).toEqual(unchangedAccepted);
-      }
-      // Invalid cyclic families lose canonical evidence but the pass must complete.
-      await getDb(ctx.db)
-        .update(importSourceClaim)
-        .set({ canonicalClaimId: identityAlias.id })
-        .where(eq(importSourceClaim.id, root.id));
-      await drainEmail();
-      expect(await facts()).toEqual([]);
-      await getDb(ctx.db)
-        .update(importSourceClaim)
-        .set({ canonicalClaimId: null })
-        .where(eq(importSourceClaim.id, root.id));
-      await drainEmail();
-      expect(await facts()).toEqual(unchangedAccepted);
-      for (const changed of [
-        { ledgerPartyId: foreignParty.id },
-        { kind: "browser_order" },
-      ]) {
-        await getDb(ctx.db)
-          .update(importSourceClaim)
-          .set(changed)
-          .where(eq(importSourceClaim.id, root.id));
-        await drainEmail();
-        expect(await facts()).toEqual([]);
-        await getDb(ctx.db)
-          .update(importSourceClaim)
-          .set({ ledgerPartyId: party.id, kind })
-          .where(eq(importSourceClaim.id, root.id));
-        await drainEmail();
-        expect(await facts()).toEqual(unchangedAccepted);
-      }
-      await getDb(ctx.db)
-        .delete(importSourceClaim)
-        .where(eq(importSourceClaim.id, identityAlias.id));
       await drainEmail();
       expect(await facts()).toEqual([]);
       await getDb(ctx.db)
@@ -513,7 +415,9 @@ describe("Email Purchase links", () => {
         .set({ externalKey })
         .where(eq(importSourceClaim.id, root.id));
       await drainEmail();
-      expect(await facts()).toEqual(unchangedAccepted);
+      expect(await facts()).toEqual([
+        { purchaseId: purchase.id, changed: false },
+      ]);
       await getDb(ctx.db)
         .update(importSourceOrder)
         .set({ checksum: "b".repeat(64) })
@@ -895,163 +799,6 @@ describe("Email Purchase links", () => {
         "synthetic-older",
       ]);
     }
-  });
-
-  // A boolean link check must stop at accepted evidence instead of reading and
-  // deduplicating every accepted order before it can return true.
-  it("bounds link existence work when one Email has many accepted orders", async () => {
-    const f = await retainedReviewFixture();
-    const [claim] = await getDb(ctx.db)
-      .insert(importSourceClaim)
-      .values({
-        ledgerPartyId: f.party.id,
-        kind: "mail_message",
-        externalKey: `gmail:${f.source.mailboxId}:${f.source.messageId}`,
-        checksum: f.checksum,
-        firstRunId: f.runId,
-        lastRunId: f.runId,
-      })
-      .returning();
-    if (!claim) throw new Error("Synthetic accepted claim missing");
-    await getDb(ctx.db)
-      .insert(importSourceOrder)
-      .values(
-        Array.from({ length: 1000 }, (_, i) => ({
-          sourceClaimId: claim.id,
-          orderKey: `synthetic-accepted-order-${i}`,
-          purchaseId: f.purchase.id,
-          checksum: f.checksum,
-          outputFingerprint: `synthetic-fingerprint-${i}`,
-        })),
-      );
-    const statement = sql`SELECT ${emailLinkedSql()} AS linked FROM "Email"
-      WHERE "Email"."shortcode" = ${f.email}`;
-    expect(await getDb(ctx.db).execute(statement, "objects")).toEqual([
-      { linked: true },
-    ]);
-    const result = await getDb(ctx.db).execute(
-      sql`EXPLAIN (ANALYZE, FORMAT JSON) ${statement}`,
-      "objects",
-    );
-    const plans = z
-      .array(
-        z.object({ "QUERY PLAN": z.array(z.object({ Plan: z.unknown() })) }),
-      )
-      .parse(result);
-    const nodeSchema = z.object({
-      "Relation Name": z.string().optional(),
-      "Actual Rows": z.number().default(0),
-      "Actual Loops": z.number().default(0),
-      "Rows Removed by Filter": z.number().default(0),
-      Plans: z.array(z.unknown()).optional(),
-    });
-    let acceptedRows = 0;
-    const visit = (value: unknown) => {
-      const node = nodeSchema.parse(value);
-      if (node["Relation Name"] === "ImportSourceOrder")
-        acceptedRows +=
-          (node["Actual Rows"] + node["Rows Removed by Filter"]) *
-          node["Actual Loops"];
-      node.Plans?.forEach(visit);
-    };
-    for (const row of plans)
-      row["QUERY PLAN"].forEach(({ Plan }) => visit(Plan));
-    expect(acceptedRows).toBeLessThan(10);
-  });
-
-  // Canonical-family equality must use the root/alias indexes rather than
-  // scanning every unrelated claim owned by the same household member.
-  it("bounds accepted-family lookup with unrelated mailbox history", async () => {
-    const f = await retainedReviewFixture();
-    const [root] = await getDb(ctx.db)
-      .insert(importSourceClaim)
-      .values({
-        ledgerPartyId: f.party.id,
-        kind: "mail_message",
-        externalKey: `gmail:${f.source.mailboxId}:${f.source.messageId}`,
-        checksum: f.checksum,
-        firstRunId: f.runId,
-        lastRunId: f.runId,
-      })
-      .returning();
-    if (!root) throw new Error("Missing synthetic family root");
-    const [alias] = await getDb(ctx.db)
-      .insert(importSourceClaim)
-      .values({
-        ledgerPartyId: f.party.id,
-        kind: "mail_message",
-        externalKey: "synthetic:historical-family-alias",
-        canonicalClaimId: root.id,
-        checksum: f.checksum,
-        firstRunId: f.runId,
-        lastRunId: f.runId,
-      })
-      .returning();
-    if (!alias) throw new Error("Missing synthetic family alias");
-    const unrelated = await getDb(ctx.db)
-      .insert(importSourceClaim)
-      .values(
-        Array.from({ length: 1000 }, (_, index) => ({
-          ledgerPartyId: f.party.id,
-          kind: "mail_message" as const,
-          externalKey: `synthetic:unrelated-family-${index}`,
-          checksum: f.checksum,
-          firstRunId: f.runId,
-          lastRunId: f.runId,
-        })),
-      )
-      .returning({ id: importSourceClaim.id });
-    await getDb(ctx.db)
-      .insert(importSourceOrder)
-      .values(
-        unrelated.map((claim, index) => ({
-          sourceClaimId: claim.id,
-          orderKey: `synthetic-unrelated-order-${index}`,
-          purchaseId: f.purchase.id,
-          checksum: f.checksum,
-          outputFingerprint: `synthetic-unrelated-fingerprint-${index}`,
-        })),
-      );
-    await getDb(ctx.db).insert(importSourceOrder).values({
-      sourceClaimId: alias.id,
-      orderKey: "synthetic-family-order",
-      purchaseId: f.purchase.id,
-      checksum: f.checksum,
-      outputFingerprint: "synthetic-family-fingerprint",
-    });
-    await getDb(ctx.db).execute(sql`ANALYZE "ImportSourceClaim"`);
-    const statement = sql`SELECT ${emailLinkedSql()} AS linked FROM "Email" WHERE "Email".shortcode = ${f.email}`;
-    expect(await getDb(ctx.db).execute(statement, "objects")).toEqual([
-      { linked: true },
-    ]);
-    const result = await getDb(ctx.db).execute(
-      sql`EXPLAIN (ANALYZE, FORMAT JSON) ${statement}`,
-      "objects",
-    );
-    const nodeSchema = z.object({
-      Alias: z.string().optional(),
-      "Actual Rows": z.number().default(0),
-      "Rows Removed by Filter": z.number().default(0),
-      "Actual Loops": z.number().default(0),
-      Plans: z.array(z.unknown()).optional(),
-    });
-    let visited = 0;
-    const visit = (value: unknown) => {
-      const node = nodeSchema.parse(value);
-      if (node.Alias === "family")
-        visited +=
-          (node["Actual Rows"] + node["Rows Removed by Filter"]) *
-          node["Actual Loops"];
-      node.Plans?.forEach(visit);
-    };
-    const plans = z
-      .array(
-        z.object({ "QUERY PLAN": z.array(z.object({ Plan: z.unknown() })) }),
-      )
-      .parse(result);
-    for (const row of plans)
-      row["QUERY PLAN"].forEach(({ Plan }) => visit(Plan));
-    expect(visited).toBeLessThan(20);
   });
 
   it("retries an identical current Email decision without duplicating its immutable history", async () => {

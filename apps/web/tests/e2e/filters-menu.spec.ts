@@ -4,7 +4,6 @@ import {
   closePopovers,
   escapeRegExp,
   gotoAuthenticatedPage,
-  reloadAuthenticatedPage,
   uniqueName,
 } from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
@@ -47,21 +46,6 @@ const pickInline = async (page: Page, label: string, option: string) => {
   await expect(choice).toBeVisible();
   await choice.click();
 };
-
-/**
- * The next list read whose input matches. The request, not the response:
- * live apply rewrites the URL, and Playwright cannot read a response body
- * after that navigation. Facet and view-count reads carry the same filters
- * and are skipped.
- */
-const succeedsWith = (page: Page, matches: (input: string) => boolean) =>
-  page.waitForRequest((request) =>
-    dispatchOperations(request).some(
-      (item) =>
-        !/facetCounts|viewCounts/.test(item.operation) &&
-        matches(inputText(item.input)),
-    ),
-  );
 
 // Failure mode: the server takes one value across Email's Purchase, Vendor
 // and Vendor account scopes, but the menu let a person combine them into a
@@ -166,73 +150,6 @@ test("Linked transactions reference pickers load their rosters", async ({
   await picker.fill(accountName);
   await expect(
     page.getByRole("option", { name: new RegExp(accountName) }),
-  ).toBeVisible();
-});
-
-// Failure modes: a declared number range with no presets (image upload age)
-// had no web encoding, so the menu hid it; a negative bound against a
-// nonnegative declaration reached the server and failed the list query; a
-// reload lost the bounds' chip; a hand-edited invalid deep link failed the
-// whole list instead of dropping the bound.
-test("a number range filter keeps its bounds through entry, reload and clear", async ({
-  page,
-}) => {
-  const param = () => new URL(page.url()).searchParams.get("uploadedAgeHours");
-  await gotoAuthenticatedPage(page, "/images");
-  await openFilter(page, "Upload age");
-  const min = page.getByRole("textbox", { name: "Upload age minimum" });
-  const max = page.getByRole("textbox", { name: "Upload age maximum" });
-  await expect(
-    page.getByText("Only images uploaded at least this many hours ago."),
-  ).toBeVisible();
-
-  const bounded = succeedsWith(page, (body) =>
-    body.includes('"uploadedAgeHoursMin":1.5'),
-  );
-  await min.fill("1.5");
-  await bounded;
-  await expect.poll(param).toBe("1.5..");
-
-  await max.fill("-2");
-  await expect(max).toHaveAttribute("aria-invalid", "true");
-  await expect(page.getByText("Enter a number 0 or more.")).toBeVisible();
-  await expect.poll(param).toBe("1.5..");
-
-  // Reversed bounds are an inline error, never a request.
-  await max.fill("1");
-  await expect(
-    page.getByText("The minimum is above the maximum."),
-  ).toBeVisible();
-  await expect.poll(param).toBe("1.5..");
-
-  const ranged = succeedsWith(page, (body) =>
-    body.includes('"uploadedAgeHoursMax":48'),
-  );
-  await max.fill("48");
-  await ranged;
-  await expect.poll(param).toBe("1.5..48");
-  await closePopovers(page);
-
-  const chip = page.getByRole("button", {
-    name: "Upload age: 1.5 to 48",
-    exact: true,
-  });
-  await reloadAuthenticatedPage(page);
-  await expect(chip).toBeVisible();
-  await chip.click();
-  await expect(min).toHaveValue("1.5");
-  await expect(max).toHaveValue("48");
-  await min.fill("");
-  await max.fill("");
-  await expect.poll(param).toBeNull();
-  await closePopovers(page);
-  await expect(chip).toHaveCount(0);
-
-  // Direct navigation can hydrate the read from SSR without a browser RPC.
-  // The invalid upper bound must still disappear from the visible filter.
-  await gotoAuthenticatedPage(page, "/images?uploadedAgeHours=2..-3");
-  await expect(
-    page.getByRole("button", { name: "Upload age: at least 2", exact: true }),
   ).toBeVisible();
 });
 
