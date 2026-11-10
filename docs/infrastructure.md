@@ -409,17 +409,21 @@ keep password login.
 
 ## AI providers
 
-All billed application, live-evaluation, and integration-enabled development
-calls use gateway `cubby`. Production uses the Workers AI Gateway binding:
-`AI.run` with an explicit gateway for Workers AI models, and
-`AI.gateway("cubby").run` for managed providers. Named subscriber-credit BYOK
-uses native authenticated passthrough instead; see setup below. Tools outside
-Workers use explicitly authenticated REST requests. Workers AI REST calls use
-the account `/ai/run` endpoint with gateway routing, metadata, caching and
-timeout controls in `cf-aig-*` headers (not body options), avoiding a nested
-unscoped provider call. Every REST request names the gateway explicitly: the
-first authenticated request without a gateway ID recreates `default` even after
-it is deleted
+Credit BYOK, Jev BYOK, Workers AI, and live-evaluation use gateway `cubby`.
+Paid OpenAI/Anthropic Unified Billing uses gateway `cubby-testing`
+(`CUBBY_PAID_AI_GATEWAY_ID`): Cloudflare refuses wholesale on `cubby` while
+named BYOK keys exist (`2049` / "Insufficient balance…") even with a positive
+account credit balance, and `cubby-testing` has no provider keys so paid draws
+the same credits. Keep provider keys off `cubby-testing`. Production uses the
+Workers AI Gateway binding: `AI.run` with an explicit gateway for Workers AI
+models, and `AI.gateway("cubby").run` for managed providers. Named
+subscriber-credit BYOK uses native authenticated passthrough instead; see setup
+below. Tools outside Workers use explicitly authenticated REST requests.
+Workers AI REST calls use the account `/ai/run` endpoint with gateway routing,
+metadata, caching and timeout controls in `cf-aig-*` headers (not body
+options), avoiding a nested unscoped provider call. Every REST request names
+the gateway explicitly: the first authenticated request without a gateway ID
+recreates `default` even after it is deleted
 ([manage gateways](https://developers.cloudflare.com/ai-gateway/configuration/manage-gateway/#default-gateway)).
 The `AI_GATEWAY_API_KEY` environment variable authenticates the direct REST
 fallback used outside Cloudflare Workers; the deployed Worker also needs it for
@@ -442,9 +446,10 @@ gateway or metadata, so shared-gateway traffic can return another environment's
 cached response
 ([caching](https://developers.cloudflare.com/ai-gateway/features/caching/#how-the-cache-key-works)).
 
-All environments use `cubby`; `environment` metadata separates their logs and
-spend rules. The shared gateway also shares Cloudflare's Unified Billing
-allowance of 200 requests per 60 seconds. The egress DO admits a rolling 180
+Credit and Workers AI use `cubby`; paid Unified Billing uses `cubby-testing`.
+`environment` metadata separates logs and spend rules across those gateways.
+Both gateways share Cloudflare's Unified Billing allowance of 200 requests per
+60 seconds. The egress DO admits a rolling 180
 starts/minute and at most 64 in-flight requests in the `unified` bucket,
 covering Workers AI and paid managed-provider calls. The 20-request margin
 leaves room for clients outside the Worker. 64 is an operating safety bound,
@@ -560,20 +565,21 @@ Setup:
 3. In Cloudflare **AI → AI Gateway → cubby → Provider Keys**, add the Anthropic
    key with alias **subscriber-credit**. Never put it in repository files, CI,
    application environment variables or chat. Leave the **default** Anthropic
-   BYOK key unset; unaliased requests must be able to use paid Unified Billing.
-4. Keep Unified Billing enabled and Require provider credentials disabled for
-   the final paid route. Credit requests explicitly send the named alias and
-   `cf-aig-no-wholesale: true`; a missing or invalid key fails with raw setup
-   diagnostics rather than silently spending paid credits.
+   BYOK key unset on `cubby`. Do not store provider keys on `cubby-testing`.
+4. Keep Unified Billing enabled and Require provider credentials disabled on
+   `cubby-testing` for the paid route. Credit requests explicitly send the
+   named alias and `cf-aig-no-wholesale: true`; a missing or invalid key fails
+   with raw setup diagnostics rather than silently spending paid credits.
 
 Production paid OpenAI/Anthropic chat uses Cloudflare's dedicated
-[`/ai/v1/responses`, `/ai/v1/messages`, or `/ai/v1/chat/completions` REST API](https://developers.cloudflare.com/ai-gateway/usage/rest-api/).
-It preserves each provider's wire format and changes only `model` to the
-explicit Cloudflare catalog id declared in `models.ts` (including dotted
-Anthropic ids). The dedicated endpoints
+[`/ai/v1/responses`, `/ai/v1/messages`, or `/ai/v1/chat/completions` REST API](https://developers.cloudflare.com/ai-gateway/usage/rest-api/)
+scoped to `cubby-testing`. It preserves each provider's wire format and changes
+only `model` to the explicit Cloudflare catalog id declared in `models.ts`
+(including dotted Anthropic ids). The dedicated endpoints
 [consult only default BYOK keys before Unified Billing](https://developers.cloudflare.com/ai-gateway/features/unified-billing/),
 whereas Universal `gateway.run()` and native unaliased paid requests fail BYOK
-alias resolution when non-default keys exist; keep default keys unset.
+alias resolution when non-default keys exist; keep default keys unset and keep
+named keys off the paid gateway.
 
 Credit uses native provider passthrough with both `cf-aig-byok-alias:
 subscriber-credit` and `cf-aig-no-wholesale: true`. Explicit alias or

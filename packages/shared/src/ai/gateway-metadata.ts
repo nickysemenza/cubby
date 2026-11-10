@@ -2,6 +2,14 @@ import { z } from "zod";
 
 /** Production egress is admitted by the shared gateway Durable Object. */
 export const CUBBY_AI_GATEWAY_ID = "cubby";
+/**
+ * Paid Unified Billing gateway. Cloudflare currently refuses OpenAI/Anthropic
+ * wholesale on `cubby` while named BYOK keys exist (`2049` / "Insufficient
+ * balance…") even with a positive credit balance; `cubby-testing` has no
+ * provider keys and still draws the same account credits. Credit BYOK, Jev
+ * BYOK, and Workers AI stay on {@link CUBBY_AI_GATEWAY_ID}.
+ */
+export const CUBBY_PAID_AI_GATEWAY_ID = "cubby-testing";
 /** One gateway for every environment; metadata retains attribution. */
 export const aiGatewayId = (_environment: AiGatewayEnvironment): string =>
   CUBBY_AI_GATEWAY_ID;
