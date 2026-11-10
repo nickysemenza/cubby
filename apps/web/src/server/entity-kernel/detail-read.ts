@@ -67,19 +67,14 @@ export function defineEntityGet<
         };
       })
       .call("media", async ({ context }, { found }) => {
-        if (found.item === null) return null;
+        // The parsed detail schema is typed loosely; a found record is an object.
+        const record = found.item;
+        if (record === null || record === undefined) return null;
         // The breadcrumb reads reference and placement fields, which media
         // never changes, so both start together and share round trips.
         const [[item], breadcrumb] = await Promise.all([
-          withUniversalEntityMedia(
-            context.db,
-            binding.entity,
-            [found.item],
-            true,
-          ),
-          found.item === undefined
-            ? undefined
-            : detailBreadcrumb(context.db, binding.entity, found.item),
+          withUniversalEntityMedia(context.db, binding.entity, [record], true),
+          detailBreadcrumb(context.db, binding.entity, record),
         ]);
         return {
           ...item,
