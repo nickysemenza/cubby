@@ -35,7 +35,10 @@ import { labelStatementSuggestions } from "~/server/domains/transaction-import/s
 import { executeEntity } from "~/server/entity-kernel";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { readSuggestionRecordRefs } from "~/server/generic/suggestions/repo/suggestion-reference-resolution";
-import { touchingSuggestionIds } from "~/server/generic/suggestions/repo/suggestion-touching";
+import {
+  touchingSuggestionIds,
+  touchingSuggestionQuery,
+} from "~/server/generic/suggestions/repo/suggestion-touching";
 import { buildCrudServices } from "~/server/http/request-context";
 import {
   createProductFixture,
@@ -158,6 +161,56 @@ async function fieldSuggestion(
 }
 
 describe("cross-family Suggestion list", () => {
+  it("uses indexed Suggestion probes for a 50-record scope", async () => {
+    await getDb(ctx.db)
+      .execute(sql`INSERT INTO "Suggestion" ("publicationKey", family, subject, judgment, entity, "recordId", field, status, active, "suggestedValue", evidence, data)
+      SELECT 'plan-' || n, (ARRAY[${suggestionFamily.enum.field},${suggestionFamily.enum.recommendation},${suggestionFamily.enum.statement_transaction},${suggestionFamily.enum.product_pair},${suggestionFamily.enum.transfer_pair}])[1 + (n % 5)],
+        '{}'::jsonb, '{}'::jsonb, ${"product"}, gen_random_uuid(), ${"brandId"},
+        CASE WHEN (n / 5) % 100 = 0 THEN ${"pending"} ELSE ${"resolved"} END, true, to_jsonb('00000000-0000-4000-8000-000000000001'::text), jsonb_build_object('records', jsonb_build_array(jsonb_build_object('entity', ${"vendor"}::text, 'id', '00000000-0000-4000-8000-000000000001'))), '{}'::jsonb
+      FROM generate_series(1, 10000) n`);
+    await getDb(ctx.db).execute(sql`ANALYZE "Suggestion"`);
+    const records = Array.from({ length: 50 }, (_, n) => ({
+      entity: "vendor",
+      id: `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`,
+      code: `VND-${String(n).padStart(4, "0")}`,
+    }));
+    const query = touchingSuggestionQuery(ctx.db, {
+      records,
+      eligibility: {
+        kind: "suggestions",
+        families: [
+          "field",
+          "recommendation",
+          "statement_transaction",
+          "product_pair",
+          "transfer_pair",
+        ],
+        status: "pending",
+      },
+    });
+    const result = await getDb(ctx.db).execute(
+      sql`EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) ${query}`,
+      "objects",
+    );
+    type Plan = {
+      "Node Type": string;
+      "Relation Name"?: string;
+      Plans?: Plan[];
+    };
+    const document = result[0]!["QUERY PLAN"] as { Plan: Plan }[];
+    const scans: string[] = [];
+    const visit = (plan: Plan) => {
+      if (
+        plan["Node Type"] === "Seq Scan" &&
+        plan["Relation Name"] === "Suggestion"
+      )
+        scans.push(plan["Node Type"]);
+      plan.Plans?.forEach(visit);
+    };
+    visit(document[0]!.Plan);
+    expect(scans).toEqual([]);
+  });
+
   const ctx = withTestDb();
 
   it("omits ignored statement evidence without a retirement pass", async () => {

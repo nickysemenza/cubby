@@ -12,7 +12,10 @@ export interface SuggestionFamilyDeclaration<F extends SuggestionListFamily>
   family: F;
   kind: "proposal" | "automatic_decision";
   label: string;
-  affectedRecords: Parameters<typeof declareAffectedRecords>[0];
+  affectedRecords: Omit<Parameters<typeof declareAffectedRecords>[0], "graph"> &
+    (F extends "statement_transaction"
+      ? Pick<Parameters<typeof declareAffectedRecords>[0], "graph">
+      : { graph?: never });
   actionable: SQL;
   scopes?: typeof recommendationScopes;
   summarize?: (value: z.infer<ReturnType<typeof z.json>>) => string;

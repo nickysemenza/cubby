@@ -9,11 +9,9 @@ import {
   type SuggestionListRow,
 } from "@cubby/schemas/suggestion-list";
 import { suggestionReviewFamilies } from "@cubby/schemas/suggestion-review-family";
-import { sql, and, inArray, type SQL } from "drizzle-orm";
-import { alias } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 import { unwrapDb } from "~/server/db/helpers";
-import { suggestionTable } from "~/server/db/schema";
 import { readStoredConnectionProposals } from "~/server/domains/connection/repo/entity-connections";
 import {
   pendingRecommendationEligibility,
@@ -32,13 +30,9 @@ import {
   connectionImpactCount,
 } from "~/server/generic/suggestions/repo/suggestion-presentation";
 import {
-  reviewSuggestion,
   one,
-  reviewQueryBuilder,
-  relatedRecordMatch,
   endpoint,
   declareAffectedRecords,
-  primaryRecordMatch,
 } from "~/server/generic/suggestions/repo/suggestion-record-discovery";
 
 export const recommendationFamily: SuggestionFamilyDeclaration<"recommendation"> & {
@@ -192,67 +186,26 @@ export const recommendationFamily: SuggestionFamilyDeclaration<"recommendation">
     forward: () => sql`${one} || CASE WHEN ${recommendationScopes.connection}
       THEN jsonb_build_array(${endpoint("source")}, ${endpoint("target")})
       ELSE COALESCE(s.evidence->'records', '[]'::jsonb) END`,
-    reverse: (scope) => {
-      let retained: SQL | undefined;
-      if (scope.records?.length) {
-        const indexed = alias(suggestionTable, "retained_indexed");
-        const requestedName = sql.identifier("retained_requested");
-        const valueName = sql.identifier("value");
-        const membershipName = sql.identifier("retained_membership");
-        const needles = scope.records.flatMap((record) =>
-          [record.id, record.code].map(
-            (id) =>
-              sql`${JSON.stringify([{ entity: record.entity, id }])}::jsonb`,
-          ),
-        );
-        const pointQuery = reviewQueryBuilder
-          .select({ id: indexed.id })
-          .from(indexed)
-          .where(
-            and(
-              sql`${indexed.evidence}->'records' @> ${requestedName}.${valueName}`,
-            ),
-          );
-        // One fenced GIN probe per reference avoids scanning every pending
-        // recommendation's evidence when the combined OR is estimated broadly.
-        const membershipIds = reviewQueryBuilder
-          .select({
-            id: sql<string>`${membershipName}.${sql.identifier("id")}`,
-          })
-          .from(
-            sql`unnest(ARRAY[${sql.join(needles, sql`, `)}]::jsonb[]) AS ${requestedName}(${valueName})`,
-          )
-          .innerJoinLateral(
-            sql`(${pointQuery.getSQL()} OFFSET 0) AS ${membershipName}`,
-            sql`true`,
-          );
-        retained = inArray(reviewSuggestion.id, membershipIds);
-      } else if (!scope.records) {
-        retained = sql`EXISTS (SELECT 1 FROM jsonb_array_elements(COALESCE(s.evidence->'records', '[]'::jsonb)) r
-            WHERE ${relatedRecordMatch(scope, sql`r->>'entity'`, sql<string>`r->>'id'`)})`;
-      }
-      return [
-        primaryRecordMatch(scope),
-        ...[
-          {
-            entity: sql<string>`s.evidence #>> '{candidate,source,entityKind}'`,
-            id: sql<string>`s.evidence #>> '{candidate,source,entityId}'`,
-          },
-          {
-            entity: sql<string>`s.evidence #>> '{candidate,target,entityKind}'`,
-            id: sql<string>`s.evidence #>> '{candidate,target,entityId}'`,
-          },
-        ].map(({ entity, id }) =>
-          and(
-            recommendationScopes.connection,
-            relatedRecordMatch(scope, entity, id),
-          ),
-        ),
-        retained
-          ? and(sql`(${recommendationScopes.connection}) IS NOT TRUE`, retained)
-          : undefined,
-      ];
-    },
+    references: [
+      { kind: "primary" },
+      ...(["source", "target"] as const).map((end) => ({
+        kind: "value" as const,
+        at: {
+          column: "evidence" as const,
+          path: ["candidate", end, "entityId"],
+        },
+        entity: {
+          column: "evidence" as const,
+          path: ["candidate", end, "entityKind"],
+        },
+        guard: { scope: "connection" },
+      })),
+      {
+        kind: "contains",
+        at: { column: "evidence", path: ["records"] },
+        guard: { scope: "connection", negate: true },
+      },
+    ],
   }),
   actionable: sql`(${sql.join(Object.values(recommendationScopes), sql` OR `)})`,
   transactionBound: false,

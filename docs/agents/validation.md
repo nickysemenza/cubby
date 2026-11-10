@@ -92,7 +92,7 @@ If that case is not established, make no test change. Report the existing
 checks and any deliberate coverage gap. Disposable probes can establish a
 refinement without becoming permanent coverage.
 
-Do not assert SQL statement or query counts, timing budgets, or ratchets in
+Apart from the Suggestion touching query plan-shape test for 50 records, do not assert SQL statement or query counts, timing budgets, or ratchets in
 tests: they fail on unrelated additive changes and protect cost, not data.
 Find N+1 work with [performance review](#performance-review) measurements.
 Keep load generation and throughput sampling out of correctness regressions:
@@ -341,7 +341,7 @@ compatibility with the code running while the release applies it.
 ## Performance review
 
 AI review owns performance judgment. Measurements feed that review; they do not
-introduce universal timing, query-count, or plan-shape CI gates. Retain
+introduce universal timing or query-count CI gates. The Suggestion touching query has one plan-shape test for indexed access to Suggestion across 50 records. Retain
 correctness regressions and the final-content CI merge gate above.
 
 Performance changes provide a non-blocking before/after evidence report using
