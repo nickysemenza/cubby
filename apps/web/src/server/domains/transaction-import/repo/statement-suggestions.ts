@@ -2026,6 +2026,7 @@ export const statementSuggestions: SuggestionFamilyDeclaration<"statement_transa
       entry.label = previous.candidates.find(
         (saved) => saved.transactionId === entry.transactionId,
       )!.label;
+    judgment.recommended = recommendedWithLabels(judgment);
     judgment.spending = await prepareStatementSpending(
       tx,
       judgment,
