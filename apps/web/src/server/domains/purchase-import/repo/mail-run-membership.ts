@@ -11,6 +11,7 @@ import { and, eq, inArray, lt, ne, or, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { runOperation } from "~/server/db/generated/entity-table-definitions.gen";
+import { requested } from "~/server/db/helpers/requested";
 import {
   repositoryQueries,
   type RepositoryQueryInput,
@@ -131,10 +132,12 @@ export async function readMailRunRoster(
     .select()
     .from(emailTable)
     .where(
-      inArray(
-        emailTable.orderMailId,
-        frozen.map((source) => source.orderMailId),
-      ),
+      requested(
+        frozen.map((source) => ({
+          entity: "orderMail",
+          id: source.orderMailId,
+        })),
+      ).match({ entity: "orderMail", id: sql`${emailTable.orderMailId}` }),
     );
   return frozen.map((source, position) => {
     const email = messages.find(
@@ -362,10 +365,9 @@ export async function transferMailRunSources(
     .where(
       and(
         eq(emailTable.runId, fromRunId),
-        inArray(
-          emailTable.id,
-          sources.map((source) => source.email.id),
-        ),
+        requested(
+          sources.map((source) => ({ entity: "email", id: source.email.id })),
+        ).match({ entity: "email", id: sql`${emailTable.id}` }),
       ),
     )
     .returning({ id: emailTable.id });

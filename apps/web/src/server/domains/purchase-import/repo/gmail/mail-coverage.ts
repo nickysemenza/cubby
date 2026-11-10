@@ -133,10 +133,11 @@ export async function readMailCoverage(
   db: Database,
   viewerUserId: string,
 ): Promise<MailCoverage> {
+  return projectMailCoverage(await loadMailCoverage(db), viewerUserId);
+}
+
+async function loadMailCoverage(db: Database) {
   const senderAttributions = await readSenderAttributions(db);
-  const attributionBySender = new Map(
-    senderAttributions.map((row) => [row.sender, row]),
-  );
   const [
     members,
     vendors,
@@ -372,6 +373,45 @@ export async function readMailCoverage(
       ),
     )
   ).flat();
+  return {
+    senderAttributions,
+    members,
+    vendors,
+    accounts,
+    settings,
+    observed,
+    linked,
+    controls,
+    cursorRows,
+    importRuns,
+    discoveryRuns,
+    targets,
+    unresolvedEmails,
+  };
+}
+
+function projectMailCoverage(
+  state: Awaited<ReturnType<typeof loadMailCoverage>>,
+  viewerUserId: string,
+): MailCoverage {
+  const {
+    senderAttributions,
+    members,
+    vendors,
+    accounts,
+    settings,
+    observed,
+    linked,
+    controls,
+    cursorRows,
+    importRuns,
+    discoveryRuns,
+    targets,
+    unresolvedEmails,
+  } = state;
+  const attributionBySender = new Map(
+    senderAttributions.map((row) => [row.sender, row]),
+  );
   const terms = new Map(
     vendors.map((row) => [
       row.id,
