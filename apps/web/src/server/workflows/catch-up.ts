@@ -75,15 +75,18 @@ export async function maintainRunHistory(db: Database) {
     import("~/server/workflows/runs/lifecycle"),
     import("~/server/domains/purchase-import/operations/coordinator-gate"),
   ]);
-  // A coordinator queued for a household turn is waiting, not stale. Without
-  // the gate's answer nothing is expired.
+  // A coordinator holding or queued for a household turn is alive, not stale
+  // (a just-granted one may not have written activity yet). Without the
+  // gate's answer nothing is expired.
   const gate = getCoordinatorGateNamespace();
   if (!gate && isCloudflareRuntime())
     throw new Error("COORDINATOR_GATE binding is unavailable");
-  const waiting = gate
-    ? await gate.getByName(COORDINATOR_GATE_NAME).waiting()
-    : [];
-  const stale = await expireStaleRuns(db, new Date(), { waiting });
+  const turns = gate
+    ? await gate.getByName(COORDINATOR_GATE_NAME).status()
+    : { holders: [], waiting: [] };
+  const stale = await expireStaleRuns(db, new Date(), {
+    exempt: [...turns.holders, ...turns.waiting],
+  });
   const reconciled = await reconcileWorkflowRuns(db);
   return { ...stale, reconciled: reconciled.reconciled };
 }

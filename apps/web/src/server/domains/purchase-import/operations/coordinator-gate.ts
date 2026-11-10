@@ -15,6 +15,7 @@
 
 import type {
   CoordinatorGateRequest,
+  CoordinatorGateStatus,
   CoordinatorTurnGrant,
 } from "./coordinator-gate-rpc";
 
@@ -145,10 +146,16 @@ export class CoordinatorGateQueue {
     return this.reserve(now);
   }
 
-  /** Runs waiting for a turn now; they are alive however long they wait. */
-  waiting(now: number): string[] {
+  /**
+   * Runs holding or waiting for a turn now. Both are alive: a holder until
+   * its lease plus grace lapses, a waiter until it stops asking.
+   */
+  status(now: number): CoordinatorGateStatus {
     this.prune(now);
-    return this.state.waiters.map((entry) => entry.runId);
+    return {
+      holders: this.state.holders.map((entry) => entry.runId),
+      waiting: this.state.waiters.map((entry) => entry.runId),
+    };
   }
 
   /** When a lease, grace, reservation or waiter entry next lapses. */

@@ -225,12 +225,14 @@ Postgres, so a waiting coordinator opens no database scope.
   holder's slot is re-granted only after its lease plus a 5-minute grace.
 - **Waiting.** Nothing loads: an alarm re-arms 15 s–5 min later besides the
   gate's wake; a `purchase.dispatch` defers with `provider_capacity` and no
-  attempt, and its coordinator brings it forward when reserved a turn (fallback
+  attempt while its coordinator keeps polling on the same alarm backoff, and
+  brings the Job forward when reserved a turn (fallback
   re-poll 8–12 minutes, 1–2 minutes when the gate cannot be asked); a prompt
   answers 503 with `Retry-After`. A member's stop never waits.
 - **Runs.** The cap starts, resumes, retries, cancels and reassigns nothing.
-  Stale-Run expiry skips Runs queued at the gate and expires nothing when the
-  gate cannot answer.
+  Stale-Run expiry skips Runs holding or queued for a turn (the gate's
+  `status()`), so a just-granted Run is exempt until its lease plus grace
+  lapses, and expires nothing when the gate cannot answer.
 
 Past the budget, Hyperdrive queues for an origin slot and then fails the query
 with SQLSTATE 58000 "Timed out while waiting for an open slot in the pool".

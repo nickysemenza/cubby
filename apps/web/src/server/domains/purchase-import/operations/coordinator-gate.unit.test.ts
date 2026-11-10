@@ -24,7 +24,10 @@ describe("coordinator gate", () => {
     expect(ask(gate, "c", 4).grant).toMatchObject({ held: false, position: 1 });
     expect(ask(gate, "a", 5).grant.held).toBe(true);
     expect(gate.state.holders).toHaveLength(2);
-    expect(gate.waiting(6)).toEqual(["c", "d"]);
+    expect(gate.status(6)).toEqual({
+      holders: ["a", "b"],
+      waiting: ["c", "d"],
+    });
   });
 
   it("reserves a freed slot for the head of the queue and wakes it", () => {
@@ -86,8 +89,8 @@ describe("coordinator gate", () => {
     const gate = new CoordinatorGateQueue(undefined, 1);
     ask(gate, "a", 0);
     ask(gate, "b", 1);
-    expect(gate.waiting(15 * 60_000)).toEqual(["b"]);
-    expect(gate.waiting(15 * 60_000 + 2)).toEqual([]);
+    expect(gate.status(15 * 60_000).waiting).toEqual(["b"]);
+    expect(gate.status(15 * 60_000 + 2).waiting).toEqual([]);
   });
 
   // Review regression (Sol, #3927): a passed-over head that asks again must

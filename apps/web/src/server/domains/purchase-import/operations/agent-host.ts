@@ -506,6 +506,9 @@ class PurchaseImportRunAgentHost
           if (turn.ran) return turn.value;
           this.turnWaited(turn, "dispatch");
           await this.ctx.storage.put(PENDING_DISPATCH, true);
+          // Keep asking, like a refused alarm, so this coordinator keeps its
+          // place in the gate's queue while its Job waits.
+          await this.alarmAt(Date.now() + turn.retryAfterMs);
           return {
             accepted: false,
             waiting: {
