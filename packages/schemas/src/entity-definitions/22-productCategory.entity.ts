@@ -32,6 +32,7 @@ export const { definition, readSchemas } = defineEntityModel({
   identifiers: { brand: "ProductCategoryId", shortcode: "CAT-" },
   presentation: {
     recordEmojiField: "emoji",
+    recordGlyph: { field: "effectiveFeature", options: "feature" },
     titleField: "name",
     detail: {
       summary: [
@@ -347,6 +348,7 @@ export const { definition, readSchemas } = defineEntityModel({
           options: [
             {
               value: "services",
+              glyph: { phosphor: "Receipt", sfSymbol: "doc.text" },
               label: "Services",
               description:
                 "Utilities, insurance, subscriptions and obligations: track charges without physical stock or unit valuation",
@@ -944,7 +946,7 @@ export default defineEntity(
       .path("product", "many", [
         { edge: "Product.categoryId", direction: "incoming" },
       ])
-      .named("products", "Products"),
+      .named("products", "Products", { view: { defaultVisible: true } }),
     r
       .path("productCategory", "many", [
         { edge: "ProductCategory.parentId", direction: "incoming" },

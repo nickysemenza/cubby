@@ -6,18 +6,24 @@ import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { ChipCluster } from "~/ui/records/chip-cluster";
 import { NoneValue } from "~/ui/text/none-value";
 
+const viewAllClass =
+  "text-xs text-muted-foreground underline decoration-dotted underline-offset-2 hover:text-foreground";
+
 export function RelatedPreviewCell({
   group,
   loading,
   error,
   source,
   relationship,
+  listHref,
 }: {
   group?: RelatedPreviewGroup;
   loading: boolean;
   error?: Error;
   source: Entity;
   relationship?: string;
+  /** The target's list filtered to this row; otherwise "View all" opens Connections. */
+  listHref?: string;
 }) {
   if (loading) {
     return <span className="text-muted-foreground">…</span>;
@@ -29,7 +35,16 @@ export function RelatedPreviewCell({
     <ChipCluster
       more={group.totalCount - group.items.length}
       trailing={
-        relationship ? (
+        relationship && listHref ? (
+          <a
+            href={listHref}
+            className={viewAllClass}
+            aria-label={`View all ${group.totalCount} related records`}
+            onClick={(event) => event.stopPropagation()}
+          >
+            View all
+          </a>
+        ) : relationship ? (
           <Link
             to="/connections"
             search={{
@@ -37,7 +52,7 @@ export function RelatedPreviewCell({
               id: group.sourceId,
               view: `relation:${relationship}`,
             }}
-            className="text-xs text-muted-foreground underline decoration-dotted underline-offset-2 hover:text-foreground"
+            className={viewAllClass}
             aria-label={`View all ${group.totalCount} related records`}
             onClick={(event) => event.stopPropagation()}
           >

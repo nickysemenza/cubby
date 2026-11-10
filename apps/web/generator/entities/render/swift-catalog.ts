@@ -871,6 +871,14 @@ const entityJSON = (
     emoji: entity.inspector.icons.emoji,
     recordEmojiField: entity.inspector.recordEmojiField,
     recordIconEntityField: entity.inspector.recordIconEntityField,
+    recordGlyph: entity.inspector.recordGlyph && {
+      field: entity.inspector.recordGlyph.field,
+      symbols: Object.fromEntries(
+        Object.entries(entity.inspector.recordGlyph.glyphs).map(
+          ([value, glyph]) => [value, glyph.sfSymbol],
+        ),
+      ),
+    },
     searchable,
     nativeBrowse: entity.inspector.nativeBrowse,
     hasRelatedness:

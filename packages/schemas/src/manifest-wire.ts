@@ -429,6 +429,8 @@ export const manifestWire = {
   }),
   EntityTimelineMode: raw({ default: "default", custom: "custom" }),
   PrimarySearchDescriptor: record({ key: "string", placeholder: "string" }),
+  /** Option value → SF Symbol for a record without an emoji or image. */
+  RecordGlyph: record({ field: "string", symbols: "[string:string]" }),
   EntityEmptyState: record({
     title: "string",
     description: "string",
@@ -449,6 +451,7 @@ export const manifestWire = {
       emoji: "string",
       recordEmojiField: "string~",
       recordIconEntityField: "string~",
+      recordGlyph: "RecordGlyph~",
       searchable: "boolean",
       nativeBrowse: "boolean",
       hasRelatedness: "boolean",

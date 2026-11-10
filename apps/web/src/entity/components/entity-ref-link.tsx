@@ -1,5 +1,6 @@
 import type { Entity } from "@cubby/schemas/entity";
 import type { ImageUrlSummary } from "@cubby/schemas/image-summary";
+import type { ReactNode } from "react";
 
 import { isBrowserRoutedEntity } from "~/entity/entities";
 
@@ -24,6 +25,8 @@ type RecordLinkProps = {
   parent?: string | null;
   displayImage?: ImageUrlSummary | null;
   emoji?: string | null;
+  /** The mark shown when the record has no emoji or image. */
+  fallback?: ReactNode;
   bare?: boolean;
   className?: string;
 };
@@ -50,6 +53,7 @@ export function EntityRefLink(props: InlineRefLinkProps | RecordLinkProps) {
         parent={props.parent}
         displayImage={props.displayImage ?? null}
         emoji={props.emoji}
+        fallback={props.fallback}
       />
     );
   return (

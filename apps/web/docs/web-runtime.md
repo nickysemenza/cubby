@@ -540,8 +540,9 @@ the current matrix.
   separate store.
 - Category labels read their shared unfiltered hierarchy with a fixed typed list
   input and never compile route search or admit category metadata. The Product
-  Category vocabulary selects only label and hierarchy fields; add a field there
-  before reading it from a vocabulary row (the full projection is about 3.8 MB).
+  Category vocabulary selects only label, hierarchy and record-mark fields; add a
+  field there before reading it from a vocabulary row (the full projection is
+  about 3.8 MB).
   Category pills share the complete vocabulary used by pickers and filters;
   unresolved references distinguish pending pages, missing IDs and failed reads.
 - Inventory dialogs keep canonical amount, Product and Location evidence; a

@@ -2,6 +2,7 @@ import { useMemo } from "react";
 
 import { EntityPill } from "~/entity/components/entity-pill";
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import { recordEmojiOf } from "~/entity/components/record-emoji";
 import type { EntityListParams } from "~/entity/entity-list";
 import { useServerTree } from "~/entity/hooks/use-server-tree";
 import { defaultPagination } from "~/ui/data-table/table-utils";
@@ -21,7 +22,6 @@ const spendingCategoryTreeInput = {
 type SpendingCategoryTreeRow = {
   id: string;
   name: string;
-  emoji?: string | null;
   subRows?: SpendingCategoryTreeRow[];
 };
 
@@ -37,7 +37,8 @@ function findSpendingCategory(
 ): ResolvedSpendingCategory | null {
   for (const row of rows) {
     const here = [...path, row.name];
-    if (row.id === id) return { path: here, emoji: row.emoji ?? null };
+    if (row.id === id)
+      return { path: here, emoji: recordEmojiOf("spendingCategory", row) };
     const nested = row.subRows
       ? findSpendingCategory(row.subRows, id, here)
       : null;

@@ -22,6 +22,12 @@ interface RelatedViewPresentationDefinition {
    * useful list/table concept; callers must not manufacture SQL from paths.
    */
   inverseKey?: string;
+  /**
+   * The target list filter that scopes it to one source record: the same
+   * descriptor the source's detail relation table uses. Absent, "View all"
+   * opens Connections.
+   */
+  listFilter?: string;
 }
 
 /** Fully resolved runtime projection; presentation declarations never carry paths. */

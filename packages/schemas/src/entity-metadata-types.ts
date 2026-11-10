@@ -35,6 +35,10 @@ export type EntityRosterData = Record<
     titleField: string;
     recordIconEntityField: string | null;
     recordEmojiField: string | null;
+    recordGlyph: {
+      field: string;
+      glyphs: Readonly<Record<string, { phosphor: string; sfSymbol: string }>>;
+    } | null;
     merge: boolean;
     /** `specialized`: web merges through its own flow, not the generic kernel dialog. */
     mergeFlow: "generic" | "specialized";

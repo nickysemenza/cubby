@@ -505,14 +505,16 @@ export const EntityIcon = ({
 }: { entity: Entity } & IconProps) => {
   if (!isBrowserRoutedEntity(entity)) return null;
   const def = entities[entity];
-  const domain = domainForEntity(entity);
   return (
     <def.phosphorIcon
       {...props}
-      className={cn(
-        domain ? domainIconClass(domain) : def.color.text,
-        className,
-      )}
+      className={cn(entityIconToneClass(entity), className)}
     />
   );
+};
+
+/** The identity-mark ink an entity's glyphs share: its domain hue or tone. */
+export const entityIconToneClass = (entity: BrowserRoutedEntity) => {
+  const domain = domainForEntity(entity);
+  return domain ? domainIconClass(domain) : entities[entity].color.text;
 };

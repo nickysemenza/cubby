@@ -534,7 +534,7 @@ export default defineEntity(
       .path("purchase", "many", [
         { edge: "Purchase.spendingCategoryId", direction: "incoming" },
       ])
-      .named("purchases", "Purchases"),
+      .named("purchases", "Purchases", { view: { order: "newest" } }),
     r
       .path("expense", "many", [
         { edge: "Expense.spendingCategoryId", direction: "incoming" },
@@ -547,7 +547,9 @@ export default defineEntity(
           direction: "incoming",
         },
       ])
-      .named("transactions", "Transactions"),
+      .named("transactions", "Transactions", {
+        view: { order: "newest", defaultVisible: true },
+      }),
   ],
   readSchemas,
 );
