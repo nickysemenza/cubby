@@ -80,9 +80,6 @@ import {
 } from "~/server/domains/purchase-import/repo/source-claim-family";
 import { sourceOrderKey } from "~/server/domains/purchase-import/repo/source-order-key";
 import {
-  decideLineWrite,
-  importedLineMatchesExpense,
-  originalItemFacts,
   sourceFinancialFacts,
   type ExistingExpenseSnapshot,
 } from "~/server/domains/purchase-import/repo/writer-policy";
@@ -121,6 +118,8 @@ import {
 } from "./retained-settlement";
 import { recordRunWrites } from "./run-audit";
 import { recordImportedShipmentEvidence } from "./shipment-intake";
+import { loadOriginalLineBindings } from "./writer-load";
+import { planLineMatch } from "./writer-plan";
 
 const PURCHASE_EXTERNAL_ID_KIND = "retailer_sku" as const;
 
@@ -1551,59 +1550,17 @@ export async function importVendorOrder(
     const current = unpricedForeign
       ? ledger.filter((row) => row.lineBasis !== "allocation")
       : ledger;
-    const originalExpenses = new Map<number, string>();
-    if (target && unpricedForeign && current.length) {
-      const sources = await tx
-        .select()
-        .from(importSourceOrder)
-        .where(eq(importSourceOrder.purchaseId, target.id));
-      const bindings = sources.length
-        ? await tx
-            .select()
-            .from(importSourceProduct)
-            .where(
-              inArray(
-                importSourceProduct.sourceOrderId,
-                sources.map((row) => row.id),
-              ),
-            )
-        : [];
-      for (const source of sources) {
-        const prior = source.originalOrder?.extraction.candidate;
-        const lines = bindings.filter((row) => row.sourceOrderId === source.id);
-        if (
-          !prior ||
-          JSON.stringify(originalItemFacts(prior)) !==
-            JSON.stringify(originalItemFacts(candidate)) ||
-          lines.length !== candidate.lines.length ||
-          lines.length !== current.length ||
-          new Set(lines.map((row) => row.expenseId)).size !== lines.length ||
-          lines.some(
-            (row) =>
-              !row.expenseId ||
-              !current.some((item) => item.id === row.expenseId),
-          )
-        )
-          continue;
-        for (const line of lines)
-          originalExpenses.set(line.lineIndex, line.expenseId!);
-        break;
-      }
-    }
-    const matchingExpenses = (
-      line: (typeof candidate.lines)[number],
-      lineIndex: number,
-    ) =>
-      current.filter(
-        (row) =>
-          (!originalExpenses.size ||
-            originalExpenses.get(lineIndex) === row.id) &&
-          importedLineMatchesExpense(row, line, valuation),
-      );
-    const decision =
-      unpricedForeign && current.length && !originalExpenses.size
-        ? { kind: "conflict" as const, reason: "duplicate_lines" as const }
-        : decideLineWrite(current, candidate.lines, valuation);
+    const originalBindings =
+      target && unpricedForeign && current.length
+        ? await loadOriginalLineBindings(tx, target.id)
+        : { sources: [], bindings: [] };
+    const { matchingExpenses, decision } = planLineMatch(
+      candidate,
+      current,
+      unpricedForeign,
+      valuation,
+      originalBindings,
+    );
     if (target && writesLines) {
       const [priorSourceOrder] =
         decision.kind === "no_op"
