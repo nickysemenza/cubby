@@ -1,4 +1,9 @@
+import type { ShipmentObservationInput } from "@cubby/schemas/shipment-evidence";
+import { sha256Hex } from "@cubby/shared/sha256";
+
 import type { shipmentObservation } from "~/server/db/schema";
+import { normalizeTrackingNumber } from "~/server/domains/shipment/repo/carrier-recognition";
+import { canonicalJson, jsonSnapshot } from "~/server/lib/canonical-json";
 
 type Observation = typeof shipmentObservation.$inferSelect;
 
@@ -92,3 +97,129 @@ export function planObservationWrite(input: {
   };
 }
 export type ObservationWritePlan = ReturnType<typeof planObservationWrite>;
+
+const canonical = (value: unknown) => canonicalJson(jsonSnapshot.parse(value));
+
+async function observationIdentity(
+  observation: ShipmentObservationInput,
+  occurrences: Map<string, number>,
+) {
+  const fingerprint = await sha256Hex(canonical(observation));
+  const { timeBasis: _timeBasis, ...literalObservation } = observation;
+  const literalFingerprint = await sha256Hex(canonical(literalObservation));
+  const ordinal = occurrences.get(literalFingerprint) ?? 0;
+  occurrences.set(literalFingerprint, ordinal + 1);
+  return {
+    fingerprint,
+    literalFingerprint,
+    occurrenceKey: observation.sourceEventKey
+      ? `event:${observation.sourceEventKey}`
+      : `content:${literalFingerprint}:${ordinal}`,
+  };
+}
+
+// Without wording, carrier or place: what must agree for one source to restate an event.
+const restatedEvent = (event: ShipmentObservationInput) =>
+  canonical({
+    kind: event.kind,
+    time: event.time,
+    forecast: event.timeBasis === "estimate",
+    trackingNumber: normalizeTrackingNumber(event.trackingNumber ?? ""),
+  });
+const eventPlace = (event: ShipmentObservationInput) =>
+  event.location?.trim().toLowerCase() ?? null;
+
+/**
+ * Occurrence identities for one packet, keeping stored keys and fingerprints. A keyless
+ * identity hashes the submitted wording and carrier hints, so re-reading identical source
+ * content under a new extraction looks like a new event. Only that same capture can revise
+ * an occurrence, and only when exactly one unclaimed occurrence and one unmatched
+ * observation restate each other, first apart from carrier hints and then apart from
+ * wording. Anything else stays a separate event: same-day occurrences are never guessed.
+ */
+export async function planPacketObservationIdentities(
+  supported: ReadonlySet<string>,
+  observations: readonly ShipmentObservationInput[],
+  history: readonly (typeof shipmentObservation.$inferSelect)[],
+) {
+  const occurrences = new Map<string, number>();
+  const identified: (Awaited<ReturnType<typeof observationIdentity>> & {
+    observation: ShipmentObservationInput;
+    revisesFromSameCapture: boolean;
+  })[] = [];
+  for (const observation of observations)
+    identified.push({
+      observation,
+      ...(await observationIdentity(observation, occurrences)),
+      revisesFromSameCapture: false,
+    });
+  const known = new Set(history.map((version) => version.occurrenceKey));
+  const claimed = new Set(
+    identified
+      .map(({ occurrenceKey }) => occurrenceKey)
+      .filter((key) => known.has(key)),
+  );
+  const sourceVersions = history.filter(
+    (version) => version.sourceEventKey === null && !version.memberReviewed,
+  );
+  const unmatched = () =>
+    identified.filter(
+      ({ observation, occurrenceKey }) =>
+        observation.sourceEventKey === null && !claimed.has(occurrenceKey),
+    );
+  // An earlier correction already holds this wording under the original occurrence.
+  for (const entry of unmatched()) {
+    const revised = sourceVersions.find(
+      (version) =>
+        !claimed.has(version.occurrenceKey) &&
+        (version.fingerprint === entry.fingerprint ||
+          (version.event.timeBasis === undefined &&
+            version.fingerprint === entry.literalFingerprint)),
+    );
+    if (!revised) continue;
+    entry.occurrenceKey = revised.occurrenceKey;
+    claimed.add(revised.occurrenceKey);
+  }
+  if (!sourceVersions.length || !unmatched().length) return identified;
+  for (const restated of [
+    (event: ShipmentObservationInput) =>
+      canonical([restatedEvent(event), eventPlace(event), event.rawStatus]),
+    restatedEvent,
+  ]) {
+    const pending = unmatched();
+    for (const entry of pending) {
+      const key = restated(entry.observation);
+      const open = new Map(
+        sourceVersions
+          .filter(
+            (version) =>
+              supported.has(version.id) &&
+              !claimed.has(version.occurrenceKey) &&
+              restated(version.event) === key,
+          )
+          .map((version) => [version.occurrenceKey, version.event]),
+      );
+      const [only, rival] = open.entries();
+      if (
+        !only ||
+        rival ||
+        pending.filter(
+          (other) =>
+            restated(other.observation) === key &&
+            !claimed.has(other.occurrenceKey),
+        ).length !== 1
+      )
+        continue;
+      const [occurrenceKey, event] = only;
+      const [stored, submitted] = [
+        eventPlace(event),
+        eventPlace(entry.observation),
+      ];
+      if (stored && submitted && stored !== submitted) continue;
+      entry.occurrenceKey = occurrenceKey;
+      entry.revisesFromSameCapture = true;
+      claimed.add(occurrenceKey);
+    }
+  }
+  return identified;
+}
