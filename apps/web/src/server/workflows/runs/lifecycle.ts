@@ -600,28 +600,6 @@ export async function claimWorkflowRun(
   return row ?? null;
 }
 
-/** Terminal domain outcome is retained; retry policy remains exclusively on Job. */
-export async function failWorkflowRun(
-  db: Database,
-  params: WorkflowRunParams,
-  input: { failureCode: string; message: string },
-): Promise<boolean> {
-  if (!currentJobExecution())
-    throw new Error("Run failure requires its universal Job claim");
-  await assertWorkflowEffect(db);
-  const [failed] = await getDb(db)
-    .update(runTable)
-    .set({
-      status: "failed",
-      endedAt: new Date(),
-      failureCode: input.failureCode,
-      dispatchError: input.message,
-    })
-    .where(eq(runTable.id, runEntityId.parse(params.runId)))
-    .returning({ id: runTable.id });
-  return Boolean(failed);
-}
-
 const reconcilable = () =>
   or(
     eq(runTable.status, "running"),

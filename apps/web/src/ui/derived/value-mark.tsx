@@ -18,7 +18,7 @@ import {
 
 const AUTO_LABEL = "Set automatically";
 
-export function UpdatingDot({
+function UpdatingDot({
   label = "Updating",
   active = true,
 }: {
