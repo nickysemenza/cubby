@@ -15,8 +15,6 @@ import type {
   SourceIntakeLoaded,
   SourceIntakePrepared,
 } from "./source-intake-stages";
-import type { AdoptionFacts } from "./source-intake-stages";
-
 type Owner = typeof sourceOccurrence.$inferSelect;
 type Observation = typeof sourceTransactionRecord.$inferSelect;
 type Member = {
@@ -24,72 +22,10 @@ type Member = {
   observation: Observation;
   legacyAlias: string | null;
 };
-
-export function planAdoption(
-  source: string,
-  locked: ReadonlyArray<Owner>,
-  observedAt: Date,
-  facts: AdoptionFacts,
-) {
-  const { incoming, antecedents, ownerSizes } = facts;
-  const adopted = new Map<string, Owner>();
-  const targets = new Map<string, number>();
-  const plans = incoming.flatMap((row) => {
-    const identity = row.identity!;
-    const prior = antecedents.filter(
-      (record) => record.providerTransactionId === identity.providerId,
-    );
-    const ownerIds = new Set(prior.map((record) => record.occurrenceId));
-    const owner = locked.find((candidate) => ownerIds.has(candidate.id));
-    if (
-      ownerIds.size !== 1 ||
-      !owner ||
-      owner.source !== source ||
-      owner.identityKind !== "unproven" ||
-      owner.deletedAt ||
-      owner.withdrawnAt ||
-      owner.supersededByOccurrenceId ||
-      owner.lastObservedAt > observedAt ||
-      prior.length !== 1 ||
-      ownerSizes.get(owner.id) !== 1 ||
-      prior.some((record) => {
-        const claims = providerIdentityClaims(
-          z.json().parse(record.providerData),
-        );
-        return (
-          record.deletedAt !== null ||
-          claims.malformed ||
-          claims.providerIds.some((id) => id !== identity.providerId) ||
-          claims.accounts.some((id) => id !== row.row.providerAccountId) ||
-          String(record.amount) !==
-            String(moneyToMinor(-row.row.providerAmount)) ||
-          record.providerAccountId !== row.row.providerAccountId
-        );
-      })
-    )
-      return [];
-    targets.set(owner.id, (targets.get(owner.id) ?? 0) + 1);
-    return [{ key: row.key, identity, owner }];
-  });
-  for (const { key, identity, owner } of plans) {
-    if (targets.get(owner.id) !== 1) continue;
-    adopted.set(key, {
-      ...owner,
-      identityKind: "provider",
-      identityScope: identity.scope,
-      providerIdentity: identity.providerId,
-      identityProof: {
-        kind: "raw_provider_ids",
-        source,
-        account: identity.scope.slice("provider-account:".length),
-        provider: identity.providerId!,
-        originalIdentityProof: owner.identityProof,
-      },
-      reviewState: "ready",
-    });
-  }
-  return adopted;
-}
+const reexportedPosition = (
+  identity: SourceIntakePrepared[number]["identity"],
+  owner: Owner,
+) => identity?.kind === "positioned" && identity.scope !== owner.identityScope;
 
 export function planSourceIntake({
   prepared,
@@ -110,8 +46,7 @@ export function planSourceIntake({
     // A parser-supplied ordinal cannot retroactively attest an old collection.
     // Refuse even an ignored twin before a new occurrence could authorize money.
     if (
-      (incoming.identity?.kind === "positioned" ||
-        incoming.identity?.kind === "provider") &&
+      incoming.identity?.kind === "positioned" &&
       members.some(
         (member) =>
           member.membership.rowPosition === null &&
@@ -195,18 +130,24 @@ export function planSourceIntake({
             saved.deletedAt === null,
         )
       : undefined;
-    const observation =
-      current ??
-      (owner
-        ? retained.find(
-            (saved) =>
-              saved.occurrenceId === owner.id &&
-              saved.factFingerprint === incoming.factFingerprint &&
-              saved.deletedAt === null,
-          )
-        : undefined);
+    const reexport =
+      incoming.identity.kind === "positioned" &&
+      owner &&
+      owner.identityScope !== incoming.identity.scope;
+    const observation = reexport
+      ? undefined
+      : (current ??
+        (owner
+          ? retained.find(
+              (saved) =>
+                saved.occurrenceId === owner.id &&
+                saved.factFingerprint === incoming.factFingerprint &&
+                saved.deletedAt === null,
+            )
+          : undefined));
     if (
       owner?.identityKind === "positioned" &&
+      owner.identityScope === incoming.identity.scope &&
       retained.some(
         (saved) =>
           saved.occurrenceId === owner.id &&
@@ -244,16 +185,12 @@ export function planSourceHeads({
   byKey,
   createdObservations,
   retained,
-  adopted,
-  overlapKeys,
   observedAt,
 }: {
   chosen: Chosen;
   byKey: Map<string, Owner>;
   createdObservations: Observation[];
   retained: Observation[];
-  adopted: Map<string, Owner>;
-  overlapKeys: Set<string>;
   observedAt: Date;
 }) {
   const headChanges = chosen.flatMap((row) => {
@@ -271,42 +208,73 @@ export function planSourceHeads({
       owner.currentObservationId !== observation.id &&
       retained.find((saved) => saved.id === owner.currentObservationId)
         ?.factFingerprint !== row.incoming.factFingerprint;
-    const adoption = adopted.has(row.incoming.key);
-    // Adoption proves identity, not revision order: differing facts wait
-    // for the same head review as any provider owner.
-    const currentObservationId = adoption
-      ? differentFacts
-        ? null
-        : observation.id
-      : !row.owner
+    const current = retained.find(
+      (saved) => saved.id === owner.currentObservationId,
+    );
+    const claims = providerIdentityClaims(row.incoming.row.providerData);
+    const account =
+      row.incoming.row.providerAccountId ?? claims.accounts[0] ?? null;
+    const identityConflict =
+      row.incoming.identity?.kind === "provider" &&
+      (claims.malformed ||
+        new Set(claims.accounts).size > 1 ||
+        claims.providerIds.some(
+          (id) => id !== row.incoming.row.providerTransactionId,
+        ) ||
+        claims.accounts.some((id) => account != null && id !== account) ||
+        (account != null &&
+          retained.some(
+            (saved) =>
+              saved.occurrenceId === owner.id &&
+              [
+                saved.providerAccountId,
+                ...providerIdentityClaims(z.json().parse(saved.providerData))
+                  .accounts,
+              ].some((id) => id != null && id !== account),
+          )));
+    const annotationsOnly =
+      row.incoming.identity?.kind === "provider" &&
+      current &&
+      String(current.amount) ===
+        String(moneyToMinor(-row.incoming.row.providerAmount)) &&
+      current.statementDate === row.incoming.row.statementDate &&
+      current.rawDescription === row.incoming.row.rawDescription &&
+      current.accountDescriptor === row.incoming.row.accountDescriptor &&
+      (current.providerAccountId == null ||
+        account == null ||
+        current.providerAccountId === account);
+    const orderedRevision =
+      differentFacts && annotationsOnly && observedAt > owner.lastObservedAt;
+    const currentObservationId = !row.owner
+      ? observation.id
+      : orderedRevision ||
+          (reexportedPosition(row.incoming.identity, owner) &&
+            !differentFacts &&
+            observedAt > owner.lastObservedAt)
         ? observation.id
         : differentFacts &&
+            !annotationsOnly &&
             owner.withdrawnAt === null &&
             owner.reviewState === "ready"
           ? null
           : owner.currentObservationId;
-    const failedProviderProof =
-      !!row.incoming.row.providerTransactionId &&
-      row.incoming.identity?.kind !== "provider";
-    const reviewState = adoption
-      ? differentFacts
-        ? "revision_order_unknown"
-        : owner.reviewState
-      : owner.reviewState !== "ready" &&
-          owner.reviewState !== "revision_order_unknown"
+    const reviewState =
+      owner.reviewState !== "ready" &&
+      owner.reviewState !== "revision_order_unknown"
         ? owner.reviewState
-        : overlapKeys.has(row.incoming.key) || failedProviderProof
+        : identityConflict
           ? "identity_conflict"
           : owner.withdrawnAt !== null && observedAt > owner.withdrawnAt
             ? "reappeared"
-            : differentFacts && owner.reviewState === "ready"
+            : differentFacts &&
+                !annotationsOnly &&
+                owner.reviewState === "ready"
               ? "revision_order_unknown"
               : owner.reviewState;
     const semantic =
-      adoption ||
-      (row.owner !== undefined &&
-        (currentObservationId !== owner.currentObservationId ||
-          reviewState !== owner.reviewState));
+      row.owner !== undefined &&
+      (currentObservationId !== owner.currentObservationId ||
+        reviewState !== owner.reviewState);
     const lastObservedAt =
       owner.lastObservedAt < observedAt ? observedAt : owner.lastObservedAt;
     if (
@@ -392,7 +360,6 @@ export function planWithdrawals(
     (owner) =>
       owner.source === source &&
       owner.identityKind === "provider" &&
-      owner.identityScope === `provider-account:${coverage.account}` &&
       input.confirmedWithdrawals.includes(owner.providerIdentity!),
   );
   if (withdrawals.length !== input.confirmedWithdrawals.length)
@@ -403,6 +370,7 @@ export function planWithdrawals(
     const head = retained.find((row) => row.id === owner.currentObservationId);
     if (
       !head ||
+      head.providerAccountId !== coverage.account ||
       head.statementDate < coverage.from ||
       head.statementDate > coverage.to ||
       owner.lastObservedAt > observedAt ||

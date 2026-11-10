@@ -3,7 +3,7 @@ import { cents } from "@cubby/shared";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { z } from "zod";
 
-/** Frozen legacy aliases explain retained evidence; they never establish event identity or accepted ownership. */
+/** A unique legacy alias can join observations within the same source. */
 /**
  * Fold away the differences an export can introduce without the underlying
  * charge changing: unicode form, surrounding and repeated whitespace, case.

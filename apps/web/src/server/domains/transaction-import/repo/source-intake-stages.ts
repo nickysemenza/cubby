@@ -8,6 +8,7 @@ import { z } from "zod";
 
 import type { DrizzleTransaction } from "~/server/db";
 import { unwrapDb } from "~/server/db/helpers";
+import { notDeleted } from "~/server/db/helpers/predicates";
 import { requestedRows } from "~/server/db/helpers/requested";
 import {
   sourceOccurrence,
@@ -16,16 +17,12 @@ import {
   transactionImportRecord,
   financialEvidenceAlias,
 } from "~/server/db/schema";
-import { sqlEnumConstant } from "~/server/db/sql-enum";
 import { lockFinancialEvidenceKeys } from "~/server/domains/financial-transaction/repo/financial-evidence";
 import {
   sourceObservationColumns,
   sourceObservationFrom,
 } from "~/server/domains/transaction-import/repo/source-observation-state";
-import {
-  sourceTransactionRecordExternalId,
-  providerIdentityClaims,
-} from "~/server/domains/transaction-import/repo/source-transaction-record-identity";
+import { sourceTransactionRecordExternalId } from "~/server/domains/transaction-import/repo/source-transaction-record-identity";
 import {
   insertPayloadsWithIdentities,
   isEntityShortcodeCollision,
@@ -39,7 +36,6 @@ import { canonicalJson, jsonSnapshot } from "~/server/lib/canonical-json";
 import { auditEvidenceRows } from "./intake-audit";
 import {
   planSourceHeads,
-  planAdoption,
   planWithdrawals,
   type planSourceIntake,
   type planIntakeReceipt,
@@ -85,19 +81,10 @@ function provenIdentity(
   fingerprint: string,
   row: RecordSourceTransactionRecordsInput["rows"][number],
 ): Identity | null {
-  const { accounts, providerIds } = providerIdentityClaims(row.providerData);
-  if (
-    source === "monarch" &&
-    row.providerTransactionId &&
-    row.providerAccountId &&
-    accounts.length > 0 &&
-    providerIds.length > 0 &&
-    accounts.every((id) => id === row.providerAccountId) &&
-    providerIds.every((id) => id === row.providerTransactionId)
-  )
+  if (source === "monarch" && row.providerTransactionId)
     return {
       kind: "provider",
-      scope: `provider-account:${row.providerAccountId}`,
+      scope: "provider:monarch",
       providerId: row.providerTransactionId,
       position: null,
     };
@@ -109,69 +96,6 @@ function provenIdentity(
       position: row.rowPosition,
     };
   return null;
-}
-
-/**
- * An attested provider row whose transaction id, provider account and amount
- * equal every live observation of exactly one unproven owner proves that
- * owner's identity: it becomes the provider occurrence in place, keeping its
- * account, disposition and history. Any disagreement, a second owner or a
- * second incoming row leaves the ordinary identity conflict for review.
- */
-export type AdoptionFacts = Awaited<ReturnType<typeof loadAdoptionFacts>>;
-
-async function loadAdoptionFacts(
-  query: ReturnType<typeof unwrapDb>,
-  source: string,
-  prepared: ReadonlyArray<{
-    key: string;
-    identity: Identity | null;
-    row: RecordSourceTransactionRecordsInput["rows"][number];
-  }>,
-  byKey: ReadonlyMap<string, typeof sourceOccurrence.$inferSelect>,
-) {
-  const incoming = prepared.filter(
-    (row) =>
-      row.identity?.kind === "provider" &&
-      row.identity.providerId &&
-      !byKey.has(row.key),
-  );
-
-  const antecedents = incoming.length
-    ? await query
-        .select({
-          occurrenceId: sourceTransactionRecord.occurrenceId,
-          providerTransactionId: sourceTransactionRecord.providerTransactionId,
-          providerAccountId: sourceTransactionRecord.providerAccountId,
-          amount: sourceTransactionRecord.amount,
-          providerData: sourceTransactionRecord.providerData,
-          deletedAt: sourceTransactionRecord.deletedAt,
-        })
-        .from(sourceTransactionRecord)
-        .where(
-          and(
-            eq(sourceTransactionRecord.source, source),
-            inArray(
-              sourceTransactionRecord.providerTransactionId,
-              incoming.map((row) => row.identity!.providerId!),
-            ),
-          ),
-        )
-    : [];
-  const ownerSizes = new Map<string, number>();
-  const antecedentOwnerIds = [
-    ...new Set(antecedents.map((record) => record.occurrenceId)),
-  ];
-  if (antecedentOwnerIds.length)
-    for (const record of await query
-      .select({ occurrenceId: sourceTransactionRecord.occurrenceId })
-      .from(sourceTransactionRecord)
-      .where(inArray(sourceTransactionRecord.occurrenceId, antecedentOwnerIds)))
-      ownerSizes.set(
-        record.occurrenceId,
-        (ownerSizes.get(record.occurrenceId) ?? 0) + 1,
-      );
-  return { incoming, antecedents, ownerSizes };
 }
 
 /** Frozen tuple for fact equality only; the migration emits these exact JSON bytes independently. */
@@ -377,15 +301,32 @@ export async function lockAndLoadSourceIntake(
       prepared.flatMap((row) => (row.identity ? [row.identity.scope] : [])),
     ),
   ];
-  const adoptableIds = [
-    ...new Set(
-      prepared.flatMap((row) =>
-        row.identity?.kind === "provider" && row.identity.providerId
-          ? [row.identity.providerId]
-          : [],
-      ),
-    ),
-  ];
+  // An unambiguous legacy reference within this source joins re-exports.
+  const positioned = prepared.filter(
+    (row) => row.identity?.kind === "positioned",
+  );
+  const aliasMatches = positioned.length
+    ? (
+        await query.execute<{ key: string; owner: string }>(sql`
+    WITH incoming(key, reference) AS (VALUES ${sql.join(
+      positioned.map((row) => sql`(${row.key}, ${row.legacyExternalId})`),
+      sql`, `,
+    )}),
+    unique_incoming AS (SELECT min(key) AS key, reference FROM incoming GROUP BY reference HAVING count(*) = 1),
+    candidates AS (
+      SELECT i.key, o.id AS owner FROM unique_incoming i
+      JOIN "FinancialEvidenceAlias" a ON a.source=${source} AND a.value=i.reference
+      JOIN "SourceTransactionRecord" r ON r.id=a."observationId" AND ${notDeleted("r")}
+      JOIN "SourceOccurrence" o ON o.id=r."occurrenceId" AND ${notDeleted("o")}
+        AND o."withdrawnAt" IS NULL AND o."supersededByOccurrenceId" IS NULL
+      WHERE r."batchId" IS DISTINCT FROM ${existingBatch?.id ?? null}::uuid
+      GROUP BY i.key, o.id
+    )
+    SELECT min(key) AS key, min(owner::text) AS owner FROM candidates GROUP BY key HAVING count(*)=1
+  `)
+      ).rows
+    : [];
+  const aliasOwnerIds = aliasMatches.map((match) => match.owner);
   const possibleOwners = await query
     .select()
     .from(sourceOccurrence)
@@ -393,31 +334,17 @@ export async function lockAndLoadSourceIntake(
       and(
         eq(sourceOccurrence.source, source),
         or(
+          aliasOwnerIds.length
+            ? sql`${sourceOccurrence.id} IN (${sql.join(
+                aliasOwnerIds.map((id) => sql`${id}::uuid`),
+                sql`, `,
+              )})`
+            : undefined,
           scopes.length
             ? inArray(sourceOccurrence.identityScope, scopes)
             : undefined,
           providerIds.length
             ? inArray(sourceOccurrence.providerIdentity, providerIds)
-            : undefined,
-          adoptableIds.length
-            ? and(
-                eq(sourceOccurrence.identityKind, "unproven"),
-                inArray(
-                  sourceOccurrence.id,
-                  query
-                    .select({ id: sourceTransactionRecord.occurrenceId })
-                    .from(sourceTransactionRecord)
-                    .where(
-                      and(
-                        eq(sourceTransactionRecord.source, source),
-                        inArray(
-                          sourceTransactionRecord.providerTransactionId,
-                          adoptableIds,
-                        ),
-                      ),
-                    ),
-                ),
-              )
             : undefined,
         ) ?? sql`false`,
       ),
@@ -443,7 +370,7 @@ export async function lockAndLoadSourceIntake(
       prepared.some((row) => row.key === identityKey(storedIdentity(owner))) ||
       input.confirmedWithdrawals.includes(owner.providerIdentity ?? "") ||
       redirectIds.includes(owner.id) ||
-      owner.identityKind === "unproven",
+      aliasOwnerIds.includes(owner.id),
   );
   await lockFinancialEvidenceKeys(
     tx,
@@ -509,9 +436,17 @@ export async function lockAndLoadSourceIntake(
       byKey.set(identityKey(storedIdentity(reservation)), survivor);
     }
   }
-  const adoptionFacts = await loadAdoptionFacts(query, source, prepared, byKey);
-  const adopted = planAdoption(source, locked, observedAt, adoptionFacts);
-  for (const [key, owner] of adopted) byKey.set(key, owner);
+  for (const match of aliasMatches) {
+    const owner = locked.find((candidate) => candidate.id === match.owner);
+    if (
+      !byKey.has(match.key) &&
+      owner &&
+      !owner.deletedAt &&
+      !owner.withdrawnAt &&
+      !owner.supersededByOccurrenceId
+    )
+      byKey.set(match.key, owner);
+  }
   if (existingBatch)
     await query
       .select({ id: transactionImport.id })
@@ -533,7 +468,6 @@ export async function lockAndLoadSourceIntake(
     members,
     byKey,
     locked,
-    adopted,
     retained,
   };
 }
@@ -558,7 +492,6 @@ export async function applySourceIntake(
     members,
     byKey,
     locked,
-    adopted,
     retained,
   } = loaded;
   const { chosen, novel } = plan;
@@ -570,22 +503,6 @@ export async function applySourceIntake(
       observedAt,
       coverage: input.import.coverage ?? null,
     }));
-  for (const owner of adopted.values())
-    await query
-      .update(sourceOccurrence)
-      .set({
-        identityKind: owner.identityKind,
-        identityScope: owner.identityScope,
-        providerIdentity: owner.providerIdentity,
-        identityProof: owner.identityProof,
-        reviewState: owner.reviewState,
-      })
-      .where(
-        and(
-          eq(sourceOccurrence.id, owner.id),
-          eq(sourceOccurrence.identityKind, "unproven"),
-        ),
-      );
   const fresh = chosen.filter(
     (row) => !row.owner && row.incoming.identity !== null,
   );
@@ -606,9 +523,7 @@ export async function applySourceIntake(
           ? {
               kind: "raw_provider_ids",
               source,
-              account: requiredIdentity(incoming.identity).scope.slice(
-                "provider-account:".length,
-              ),
+              account: incoming.row.providerAccountId ?? null,
               provider: requiredIdentity(incoming.identity).providerId!,
             }
           : {
@@ -663,48 +578,11 @@ export async function applySourceIntake(
         }));
       }),
     );
-  const incomingRows = requestedRows(
-    fresh.map(({ incoming }) => ({
-      key: incoming.key,
-      reference: incoming.legacyExternalId,
-      provider: incoming.row.providerTransactionId ?? null,
-      owner: byKey.get(incoming.key)!.id,
-      kind: requiredIdentity(incoming.identity).kind,
-    })),
-    {
-      key: "text",
-      reference: "text",
-      provider: "text",
-      owner: "uuid",
-      kind: "text",
-    },
-    "incoming",
-  );
-  const overlapKeys = new Set(
-    fresh.length
-      ? (
-          await query.execute<{ key: string }>(sql`
-    -- includes-deleted: unknown historical scope and cross-collection overlap only block automatic authority.
-    SELECT DISTINCT incoming.key FROM ${incomingRows.from}
-    JOIN "FinancialEvidenceAlias" alias ON alias.source=${source} AND alias.value=incoming.reference
-    LEFT JOIN "SourceTransactionRecord" antecedent ON antecedent.id=alias."observationId"
-    WHERE incoming.kind=${sqlEnumConstant(sourceOccurrenceIdentityKind, sourceOccurrenceIdentityKind.enum.positioned)} AND (antecedent."batchId"<>${batch.id}::uuid OR (antecedent.id IS NULL AND alias."historicalTransactionId" IS NOT NULL))
-    UNION
-    SELECT DISTINCT incoming.key FROM ${incomingRows.from}
-    JOIN "SourceTransactionRecord" antecedent ON antecedent.source=${source} AND antecedent."providerTransactionId"=incoming.provider
-    LEFT JOIN "SourceOccurrence" prior ON prior.id=antecedent."occurrenceId"
-    WHERE incoming.provider IS NOT NULL AND antecedent."batchId"<>${batch.id}::uuid AND antecedent."occurrenceId" IS DISTINCT FROM incoming.owner
-      AND (prior.id IS NULL OR prior."identityKind"<>${sqlEnumConstant(sourceOccurrenceIdentityKind, sourceOccurrenceIdentityKind.enum.provider)})`)
-        ).rows.map((row) => row.key)
-      : [],
-  );
   const headChanges = planSourceHeads({
     chosen,
     byKey,
     createdObservations,
     retained,
-    adopted,
-    overlapKeys,
     observedAt,
   });
   const requestedChanges = requestedRows(

@@ -45,7 +45,7 @@ export const { definition, readSchemas } = defineEntityModel(
       domain: "finance",
       nativeBrowse: false,
       description:
-        "One bank-record judgment owner; unproven identity stays held.",
+        "One bank-record judgment owner with source identity and decisions.",
       icons: { phosphor: "Receipt", sfSymbol: "doc.text", emoji: "🧾" },
       emptyState: {
         title: "No bank record groups",
@@ -336,11 +336,7 @@ export const { definition, readSchemas } = defineEntityModel(
         { column: "dispositionReason", nullClause: true },
         {
           name: "SourceOccurrence_identity_check",
-          sql: "({identityKind} = 'provider' AND {providerIdentity} IS NOT NULL AND {physicalImportId} IS NULL AND {physicalPosition} IS NULL) OR ({identityKind} = 'positioned' AND {providerIdentity} IS NULL AND {physicalImportId} IS NOT NULL AND {physicalPosition} > 0) OR ({identityKind} IN ('reviewed', 'unproven') AND {providerIdentity} IS NULL AND {physicalImportId} IS NULL AND {physicalPosition} IS NULL)",
-        },
-        {
-          name: "SourceOccurrence_unproven_check",
-          sql: "({identityKind} = 'unproven') = ({reviewState} = 'unproven') AND ({identityKind} <> 'unproven' OR {acceptedTransactionId} IS NULL)",
+          sql: "({identityKind} = 'provider' AND {providerIdentity} IS NOT NULL AND {physicalImportId} IS NULL AND {physicalPosition} IS NULL) OR ({identityKind} = 'positioned' AND {providerIdentity} IS NULL AND {physicalImportId} IS NOT NULL AND {physicalPosition} > 0) OR ({identityKind} IN ('reviewed', 'legacy') AND {providerIdentity} IS NULL AND {physicalImportId} IS NULL AND {physicalPosition} IS NULL)",
         },
         { name: "SourceOccurrence_version_check", sql: "{version} > 0" },
         {

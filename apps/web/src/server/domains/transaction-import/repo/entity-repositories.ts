@@ -44,7 +44,7 @@ import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolv
 
 import { updateSourceObservationJudgments } from "./source-occurrence";
 import {
-  retireDeletedUnprovenOwners,
+  retireDeletedLegacyOwners,
   lockSourceObservationRemoval,
   assertSourceTransactionRecordDeletionAllowed,
 } from "./source-transaction-record-lifecycle";
@@ -396,7 +396,7 @@ export const sourceTransactionRecordRepository = defineRepository(
       beforeDelete: assertSourceTransactionRecordDeletionAllowed,
     },
     afterDelete: (ctx, ids) =>
-      retireDeletedUnprovenOwners(ctx.db, ids, ctx.actorContext),
+      retireDeletedLegacyOwners(ctx.db, ids, ctx.actorContext),
     scaffold: sourceTransactionRecordScaffold,
     update: asActor(updateSource),
   },
