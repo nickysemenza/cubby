@@ -442,9 +442,16 @@ describe("scheduled Gmail discovery", () => {
     ).page;
     if (!frozen?.scopedKey)
       throw new Error("Synthetic controlled page missing");
+    // A frozen page keeps only its own query: advance the cursor's full
+    // coverage so the other selected queries must survive the rebase.
+    const [cursor] = await getDb(ctx.db)
+      .select()
+      .from(mailboxCursor)
+      .where(eq(mailboxCursor.id, before.id));
+    if (!cursor?.coverage) throw new Error("Synthetic mailbox cursor missing");
     const selectedAdvanced = {
-      ...frozen.startCoverage,
-      scoped: frozen.startCoverage.scoped.map((query) =>
+      ...cursor.coverage,
+      scoped: cursor.coverage.scoped.map((query) =>
         query.key === frozen.scopedKey
           ? { ...query, pageToken: "newer-selected-page" }
           : query,
@@ -651,11 +658,17 @@ describe("scheduled Gmail discovery", () => {
         progress: { page: frozen, attempt: retriedExecution.generation },
       });
       const retry = { ...successor, attempt: retriedExecution.generation };
+      const [cursor] = await getDb(ctx.db)
+        .select()
+        .from(mailboxCursor)
+        .where(eq(mailboxCursor.id, mailbox.id));
+      if (!cursor?.coverage)
+        throw new Error("Synthetic mailbox cursor missing");
       const intervening = {
-        ...frozen.startCoverage,
+        ...cursor.coverage,
         history: { historyId: "160", pageToken: null, targetHistoryId: null },
         nextLane: "history" as const,
-        scoped: frozen.startCoverage.scoped
+        scoped: cursor.coverage.scoped
           .filter(
             (query) => search !== "pruned" || query.key !== frozen.scopedKey,
           )

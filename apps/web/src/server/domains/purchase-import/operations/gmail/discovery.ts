@@ -80,6 +80,7 @@ import {
   creditScopedPage,
   initializeMailboxCoverage,
   listGmailPage,
+  frozenMailboxPage,
   rebaseMailboxPage,
 } from "../../repo/gmail/sync";
 import { isGmailAuthorizationFailure } from "../../repo/gmail/tokens";
@@ -372,6 +373,9 @@ const claimDiscovery = async (db: Database, params: WorkflowRunParams) => {
     progress: mailboxDiscoveryProgress.parse(row.progress),
   };
 };
+/** The claim fence alone, without reading the Run's frozen query roster. */
+const discoveryStillClaimed = async (db: Database, params: WorkflowRunParams) =>
+  Boolean(await claimWorkflowRun(db, params, "id"));
 const eligibleAttempt = (params: WorkflowRunParams) =>
   and(
     eq(runTable.id, runEntityId.parse(params.runId)),
@@ -551,7 +555,9 @@ export async function listMailDiscovery(
   if (claimed.progress.page)
     return {
       kind: "listed",
-      more: continuing(claimed.progress.page.nextCoverage),
+      more:
+        claimed.progress.page.more ??
+        continuing(claimed.progress.page.nextCoverage),
     };
   try {
     const provider = await (
@@ -629,20 +635,21 @@ export async function listMailDiscovery(
             : undefined,
       ),
     );
+    const more = continuing(page.nextCoverage);
     const frozen = await (
       await import("~/server/domains/run/repo/ai-work-state")
     ).writeRunningAttemptProgress(
       db,
       runEntityId.parse(params.runId),
       params.attempt,
-      { progress: patchProgress({ phase: "fetching", page }) },
+      {
+        progress: patchProgress({
+          phase: "fetching",
+          page: frozenMailboxPage(page, more),
+        }),
+      },
     );
-    return frozen
-      ? {
-          kind: "listed",
-          more: continuing(page.nextCoverage),
-        }
-      : { kind: "stopped" };
+    return frozen ? { kind: "listed", more } : { kind: "stopped" };
   } catch (error) {
     if (await pauseAuthorization(db, params, error)) return { kind: "stopped" };
     throw error;
@@ -693,7 +700,7 @@ export async function saveMailDiscoveryBatch(
       relevance: ports.relevance,
       storage: ports.storage,
     });
-    if (!(await claimDiscovery(db, params))) return { kind: "stopped" };
+    if (!(await discoveryStillClaimed(db, params))) return { kind: "stopped" };
     // Reused classifications still need import admission when automatic
     // import was previously off. Limit the replay to this selected Gmail page.
     const pageImportMailIds =
@@ -751,7 +758,8 @@ export async function saveMailDiscoveryBatch(
       offset < importMailIds.length;
       offset += 50
     ) {
-      if (!(await claimDiscovery(db, params))) return { kind: "stopped" };
+      if (!(await discoveryStillClaimed(db, params)))
+        return { kind: "stopped" };
       // Admission commits durable child dispatch intent. An existing child's
       // terminal failure belongs to that child, not to discovery's checkpoint.
       await withJobPhase("mail.admit", async () =>

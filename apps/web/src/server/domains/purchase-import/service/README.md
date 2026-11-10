@@ -38,7 +38,10 @@ contract underneath is [Durable Jobs](../../../../../../../docs/jobs.md).
 
 Discovery (`gmail/discovery.ts`, the `MAIL_DISCOVERY` Workflow) pages a
 connected mailbox (`-in:spam -in:trash`), freezes each provider page in
-`Run.progress`, and replays it until its page commits. `gmail/ingest.ts`
+`Run.progress` (its message ids, history events and only the coverage positions
+it advances, never the mailbox's whole query roster), and replays it until its
+page commits; the checkpoint rebases those positions onto the cursor's current
+coverage. `gmail/ingest.ts`
 classifies each message (`gmail/triage.ts` rule/decision model, then
 `gmail/relevance.ts` for uncertain mail) and records the deciding stage and
 reason on `Email`. Confident positives proceed to extraction/matching; only

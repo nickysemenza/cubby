@@ -175,6 +175,13 @@ const mailboxPage = z.object({
   /** The targeted search this page advanced; absent for a new-mail page. */
   scopedKey: z.string().min(1).optional(),
   /**
+   * Whether discovery continues after this page, decided against the full
+   * coverage when the page was listed. A frozen page's coverage holds only the
+   * positions it advances (`frozenMailboxPage`), so this cannot be re-derived
+   * from it; pages frozen before this field re-derive it from their coverage.
+   */
+  more: z.boolean().optional(),
+  /**
    * Retained sources across this page's attempts, saved before research
    * dispatch: a retry skips an Email whose import already completed, so its
    * own ingestion result would undercount the page.

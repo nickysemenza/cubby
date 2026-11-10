@@ -33,8 +33,35 @@ import {
 } from "~/server/generic/jobs/repo/queue";
 import { advanceJob } from "~/server/generic/jobs/service/jobs";
 import type { JobHandlers } from "~/server/generic/jobs/types";
+import { annotateActiveSpan } from "~/server/observability/tracing";
 
 const log = createLogger("permits");
+
+/**
+ * Name the claimed unit before any work: an invocation killed for exceeding
+ * memory writes no execution record, so this log line and span attribute are
+ * what join its outcome to a unit in Workers telemetry.
+ */
+function claimed(fields: {
+  unit: string;
+  kind: string;
+  jobId?: string;
+  key?: string;
+  runId?: string | null;
+  generation?: number;
+  recovery?: boolean;
+}) {
+  annotateActiveSpan({
+    "cubby.background.unit": fields.unit,
+    "cubby.background.kind": fields.kind,
+    ...(fields.jobId && { "cubby.job.id": fields.jobId }),
+    ...(fields.runId && { "cubby.run.id": fields.runId }),
+  });
+  // `key` stays out of the log: Job keys are free-form and could one day name
+  // household data; the Job id joins to the row.
+  const { key: _key, ...logged } = fields;
+  log.info("permit claimed", logged);
+}
 
 /** Candidates one permit may try when siblings took its first choices. */
 const CANDIDATES = 8;
@@ -82,12 +109,21 @@ async function runUnit(
       report: (error) => ports.captureException(error, candidate.unit),
       // A killed invocation's lease lapses unobserved. Only this held claim
       // arms a recovery, and it does nothing once the claim settled.
-      onClaim: (claim) =>
-        ports.send(
+      onClaim: (claim) => {
+        claimed({
+          unit: candidate.unit,
+          kind: claim.kind,
+          jobId: claim.id,
+          key: claim.key,
+          runId: claim.runId,
+          generation: claim.generation,
+        });
+        return ports.send(
           new Date(claim.leaseExpiresAt.getTime() + 5_000),
           "job.lease-recovery",
           { kind: "job", id: claim.id, lease: claim.leaseToken },
-        ),
+        );
+      },
     });
     return outcome !== "skipped";
   }
@@ -111,6 +147,7 @@ async function runDrainPage(
   // A recovery leaves the unit's rotation alone, and one that reclaimed
   // nothing leaves the unit's record as its last real page wrote it.
   if (!recovery) await claimDrainUnit(db, unit);
+  claimed({ unit, kind: "background.drain", recovery });
   const meter: DrainMeter = {
     aiCostUsd: 0,
     claimed: 0,
