@@ -4,9 +4,13 @@ import type {
   ExtractedPurchaseLine,
   ImportWriterInput,
 } from "@cubby/schemas/purchase-import";
-import { minorToMoney, moneyToMinor } from "@cubby/shared";
+import { cents, minorToMoney, moneyToMinor } from "@cubby/shared";
+import { and, eq, isNull, sql } from "drizzle-orm";
 
-import { purchase } from "~/server/db/schema";
+import { notDeleted } from "~/server/db/helpers";
+import { requested } from "~/server/db/helpers/requested";
+import { expense, purchase } from "~/server/db/schema";
+import { effectiveExpenseTradeSql } from "~/server/domains/expense/repo/expense-inheritance";
 import { financialEvidenceAmountMinor } from "~/server/domains/financial-transaction/repo/financial-evidence";
 
 import { normalizeOrderKey } from "./order-identity";
@@ -453,4 +457,321 @@ export function planExpenseProductBinding(
             receiptProductQuantity(productId, line, identity),
         },
       };
+}
+
+export type LineFinding = {
+  kind:
+    | "product_unresolved"
+    | "variant_doubt"
+    | "kit_double_booked"
+    | "reversal_kind";
+  summary: string;
+};
+
+export function planIdentityFindings(
+  line: ExtractedPurchaseLine,
+  identity: LineIdentityDecision,
+): LineFinding[] {
+  const findings: LineFinding[] = [];
+  if (identity.unresolvedReason)
+    findings.push({
+      kind: "product_unresolved",
+      summary: `Product resolution is required for “${line.title}”: ${identity.unresolvedReason}`,
+    });
+  if (identity.variantDoubt)
+    findings.push({
+      kind: "variant_doubt",
+      summary: `The existing match for “${line.title}” does not establish its exact ordered variant. Review the distinct Product before merging.`,
+    });
+  return findings;
+}
+
+export function planInsertedFindings(
+  line: ExtractedPurchaseLine,
+  identity: LineIdentityDecision,
+): LineFinding[] {
+  const findings: LineFinding[] = [];
+  if (identity.unresolvedReason && identity.lineKind === "principal")
+    findings.push({
+      kind: "product_unresolved",
+      summary: `Product resolution is required for “${line.title}”: ${identity.unresolvedReason}`,
+    });
+  if (identity.variantDoubt)
+    findings.push({
+      kind: "variant_doubt",
+      summary: `Created a distinct product for “${line.title}” because the closest existing match was uncertain (${Math.round(identity.probability * 100)}%).`,
+    });
+  if (identity.kitKind === "kit_with_components")
+    findings.push({
+      kind: "kit_double_booked",
+      summary: `“${line.title}” appears to be a kit. Review its component accounting before receiving inventory.`,
+    });
+  if (
+    identity.lineKind === "principal" &&
+    line.amount < 0 &&
+    identity.reversalKind !== "return" &&
+    identity.reversalKind !== "concession"
+  )
+    findings.push({
+      kind: "reversal_kind",
+      summary: `“${line.title}” was classified as ${identity.reversalKind ?? "an uncertain reversal"}; no inventory quantity was inferred.`,
+    });
+  return findings;
+}
+
+export function planLineMode(
+  input: ImportWriterInput,
+  candidate: ExtractedOrderCandidate,
+  identityOnly: boolean,
+  unpricedForeign: boolean,
+  decision: ReturnType<typeof planLineMatch>["decision"],
+) {
+  const reason =
+    input.extraction.status === "needs_review" ? input.extraction.reason : null;
+  const detail =
+    input.extraction.status === "needs_review"
+      ? input.extraction.detail
+      : "Imported order requires review.";
+  if (identityOnly) return { kind: "identity" as const };
+  if (reason === "sum_mismatch" || reason === "missing_total")
+    return { kind: "aggregate" as const, detail };
+  if (
+    !unpricedForeign &&
+    (reason === "foreign_currency" || candidate.currency !== "USD")
+  )
+    return {
+      kind: "foreign" as const,
+      detail:
+        input.extraction.status === "needs_review"
+          ? input.extraction.detail
+          : `Order uses ${candidate.currency}; no expense lines were written.`,
+    };
+  return {
+    kind:
+      decision.kind === "no_op"
+        ? ("no_op" as const)
+        : decision.kind === "insert"
+          ? ("insert" as const)
+          : ("none" as const),
+  };
+}
+
+export function planAggregateExpense(
+  purchaseId: typeof purchase.$inferSelect.id,
+  candidate: ExtractedOrderCandidate,
+  orderDate: string | null,
+  current: ExistingExpenseSnapshot[],
+) {
+  if (candidate.printedGrandTotal === null || current.length) return null;
+  return {
+    purchaseId,
+    name: candidate.merchant ?? "Imported order",
+    cost: candidate.printedGrandTotal,
+    date: orderDate,
+    lineKind: "principal" as const,
+    lineBasis: "allocation" as const,
+    costType: "materials" as const,
+    trade: null,
+  };
+}
+
+export function planFallbackExpenses(expenseIds: readonly string[]) {
+  const ids = requested(
+    expenseIds.map((id) => ({
+      entity: "expense",
+      id: parseEntityId("expense", id),
+    })),
+  );
+  return {
+    where: and(
+      ids.match({ entity: "expense", id: sql`${expense.id}` }),
+      eq(expense.lineKind, "principal"),
+      isNull(effectiveExpenseTradeSql()),
+      notDeleted(expense),
+    ),
+  };
+}
+
+export function planReplayClaim(
+  input: ImportWriterInput,
+  id: typeof import("~/server/db/schema").importSourceClaim.$inferSelect.id,
+  updatedAt: Date,
+) {
+  return {
+    id,
+    values: {
+      checksum: input.source.checksum,
+      lastRunId: input.runId,
+      updatedAt,
+    },
+  };
+}
+
+export function planPurchaseNote(
+  purchaseId: typeof purchase.$inferSelect.id,
+  fallbackAt: string | null,
+  messageId: string | undefined,
+  used: boolean,
+) {
+  return used && fallbackAt && messageId !== undefined
+    ? {
+        purchaseId,
+        research: `Order date defaults to email receipt time (${fallbackAt}); no printed order date was supplied.\nhttps://mail.google.com/mail/u/0/#all/${messageId}`,
+      }
+    : null;
+}
+
+export function planRunCounter(
+  runId: ImportWriterInput["runId"],
+  created: boolean,
+) {
+  return { runId, created };
+}
+
+export function planLineAction(
+  mode: ReturnType<typeof planLineMode>["kind"],
+  line: ExtractedPurchaseLine,
+  lineIndex: number,
+  identityDecisions: LineIdentityDecision[],
+  lineMatch: ReturnType<typeof planLineMatch>,
+) {
+  const identity =
+    identityDecisions[lineIndex] ??
+    (mode === "insert"
+      ? {
+          productId: null,
+          promote: false,
+          variantDoubt: false,
+          unresolvedReason: null,
+          probability: 0,
+          lineKind: line.lineKind,
+          kitKind: "single" as const,
+          reversalKind: null,
+        }
+      : undefined);
+  if (!identity || (mode !== "insert" && identity.lineKind !== "principal"))
+    return { kind: "skip" as const };
+  if (mode === "no_op" && identity.unresolvedReason) {
+    const matches = lineMatch.matchingExpenses(line, lineIndex);
+    return {
+      kind: "unresolved" as const,
+      expenseId:
+        matches.length === 1 && matches[0]
+          ? parseEntityId("expense", matches[0].id)
+          : null,
+      finding: {
+        kind: "product_unresolved" as const,
+        summary: `Product resolution is required for “${line.title}”: ${identity.unresolvedReason}`,
+      },
+    };
+  }
+  if (mode === "no_op" && !identity.productId && !identity.promote)
+    return { kind: "skip" as const };
+  return { kind: "resolve" as const, identity };
+}
+
+export function planResolvedNoOp(
+  line: ExtractedPurchaseLine,
+  lineIndex: number,
+  identity: LineIdentityDecision,
+  productId: string,
+  lineMatch: ReturnType<typeof planLineMatch>,
+) {
+  const matches = lineMatch.matchingExpenses(line, lineIndex);
+  const row = matches[0];
+  if (matches.length !== 1 || !row)
+    throw new Error("Reviewed item Expense binding changed during import.");
+  return {
+    row,
+    binding: planExpenseProductBinding(row, line, identity, productId),
+  };
+}
+
+export function planRunWrites(
+  purchaseId: typeof purchase.$inferSelect.id,
+  created: boolean,
+  usedFallbackNote: boolean,
+  mutations: import("./writer-lines").LineMutation[],
+) {
+  return [
+    {
+      entityKind: "purchase" as const,
+      entityId: purchaseId,
+      action: created ? ("create" as const) : ("update" as const),
+      fields: [
+        "header",
+        "documents",
+        "expenses",
+        "paymentEvidence",
+        ...(usedFallbackNote ? ["notes"] : []),
+      ],
+    },
+    ...mutations.map(({ targetKind, targetId, mutationKind, fields }) => ({
+      entityKind: targetKind,
+      entityId: targetId,
+      action:
+        mutationKind === "create" ? ("create" as const) : ("update" as const),
+      fields,
+    })),
+  ];
+}
+
+export function planFinancialProjection(
+  candidate: ExtractedOrderCandidate,
+  accepted: ImportWriterInput["extraction"] | undefined,
+) {
+  return accepted?.candidate
+    ? JSON.stringify(sourceFinancialFacts(accepted.candidate)) ===
+        JSON.stringify(sourceFinancialFacts(candidate))
+    : true;
+}
+
+const tenderFactKey = (payment: {
+  amount: number;
+  chargedAt: string | null;
+  cardLastFour: string | null;
+}) =>
+  `${cents(payment.amount)}|${payment.chargedAt ?? ""}|${payment.cardLastFour ?? ""}`;
+
+export function planLearnedTender(
+  proposed: readonly import("@cubby/schemas/purchase-import").ExtractedPaymentEvidence[],
+) {
+  const learned = new Map<
+    string,
+    import("@cubby/schemas/purchase-import").PaymentTender | null
+  >();
+  for (const payment of proposed) {
+    const tender = payment.tender ?? "unknown";
+    const key = tenderFactKey({
+      amount: payment.amount,
+      chargedAt: payment.chargedAt
+        ? new Date(payment.chargedAt).toISOString()
+        : null,
+      cardLastFour: payment.cardLastFour ?? null,
+    });
+    const prior = learned.get(key);
+    learned.set(key, prior === undefined || prior === tender ? tender : null);
+  }
+  return [...learned.values()].some((tender) => tender && tender !== "unknown")
+    ? learned
+    : null;
+}
+
+export function planTenderUpdates(
+  learned: NonNullable<ReturnType<typeof planLearnedTender>>,
+  retained: Awaited<
+    ReturnType<typeof import("./writer-load").loadRetainedTender>
+  >,
+) {
+  return retained.flatMap((row) => {
+    if (row.tender !== "unknown") return [];
+    const tender = learned.get(
+      tenderFactKey({
+        amount: minorToMoney(row.amountMinor),
+        chargedAt: row.chargedAt?.toISOString() ?? null,
+        cardLastFour: row.cardLastFour,
+      }),
+    );
+    return !tender || tender === "unknown" ? [] : [{ id: row.id, tender }];
+  });
 }

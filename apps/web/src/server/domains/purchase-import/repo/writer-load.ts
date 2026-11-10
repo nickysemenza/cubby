@@ -367,3 +367,34 @@ export async function loadUnlinkedProducts(
         .limit(1)
     : [];
 }
+
+export async function loadClassifiedPurchaseLines(
+  tx: DrizzleTransaction,
+  purchaseId: PurchaseId,
+) {
+  return tx.query.expense.findMany({
+    where: {
+      RAW: (table: PgTable) =>
+        relationalSql(
+          table,
+          and(eq(expense.purchaseId, purchaseId), notDeleted(expense)),
+        ),
+    },
+  });
+}
+
+export async function loadRetainedTender(
+  tx: DrizzleTransaction,
+  purchaseId: PurchaseId,
+  sourceClaimId: string,
+) {
+  return tx
+    .select()
+    .from(purchasePaymentEvidence)
+    .where(
+      and(
+        eq(purchasePaymentEvidence.purchaseId, purchaseId),
+        eq(purchasePaymentEvidence.sourceClaimId, sourceClaimId),
+      ),
+    );
+}
