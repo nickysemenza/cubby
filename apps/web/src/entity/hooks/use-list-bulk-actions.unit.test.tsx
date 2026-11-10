@@ -201,7 +201,6 @@ describe("useListBulkActions", () => {
                 provenance: { kind: "own", ownership: { kind: "record" } },
               },
             },
-            work: { kind: "idle" },
           },
         },
       },

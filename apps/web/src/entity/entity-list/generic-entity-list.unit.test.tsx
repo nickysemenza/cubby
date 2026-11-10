@@ -154,7 +154,7 @@ describe("listPage", () => {
     for (const link of entitySummary.recipe.list.links) {
       expect(screen.getByRole("button", { name: link.label })).toHaveAttribute(
         "href",
-        link.search
+        "search" in link
           ? `${link.path}?${new URLSearchParams(link.search)}`
           : link.path,
       );

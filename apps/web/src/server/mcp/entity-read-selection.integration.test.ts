@@ -354,7 +354,6 @@ describe("entity_read field selection", () => {
           type: {
             current: { assignment: { kind: "value", value: "room" } },
             result: { decision: { outcome: { kind: "value", value: "room" } } },
-            work: { kind: "idle" },
           },
         },
       },

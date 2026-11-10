@@ -492,7 +492,6 @@ struct EntityEditorSheet: View {
                         ],
                     ],
                 ],
-                "work": ["kind": "idle"],
             ]
         ],
     ]

@@ -131,12 +131,6 @@ struct EntityFieldControl: View {
                     }
                 }
             }
-            if let failure = envelope.failure {
-                Text(failure)
-                    .font(.caption)
-                    .foregroundStyle(FieldGuideTokens.destructive)
-                    .textSelection(.enabled)
-            }
         }
     }
 
@@ -146,7 +140,7 @@ struct EntityFieldControl: View {
         guard action.kind == .useInherited else { return "\(action.label) on save" }
         guard let original = model.original, let saved = FieldEnvelope.of(original, field: field),
             let preview = saved.resetPreview
-        else { return "Use inherited on save · \(FieldEnvelope.missingLabel(failure: nil))" }
+        else { return "Use inherited on save · \(FieldEnvelope.missingLabel)" }
         let text = preview.value.flatMap(valueText) ?? FieldEnvelope.label(for: preview, field: field)
         return "Use inherited on save · \(text)"
     }

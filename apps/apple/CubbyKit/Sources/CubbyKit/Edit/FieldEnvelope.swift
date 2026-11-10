@@ -10,7 +10,6 @@ public struct FieldEnvelope: Sendable, Hashable {
     public let assignment: Assignment?
     public let controls: Controls
     public let result: Result
-    public let work: Work
 
     public enum Ownership: Sendable, Hashable {
         case record
@@ -106,25 +105,17 @@ public struct FieldEnvelope: Sendable, Hashable {
         }
     }
 
-    public enum Work: Sendable, Hashable {
-        case idle, pending
-        case waiting(reason: String)
-        case failed(error: String, retryAt: String?)
-        case unsupported(String)
-    }
-
     /// `nil` when the JSON is not an envelope at all (a missing part or a non-object).
     public init?(_ raw: JSONValue) {
         guard let current = raw["current"], let controls = current["controls"],
             let assignment = current["assignment"],
-            let result = raw["result"].flatMap(Self.result), let work = raw["work"].flatMap(Self.work),
+            let result = raw["result"].flatMap(Self.result),
             let parsedControls = Self.controls(controls)
         else { return nil }
         self.raw = raw
         self.assignment = assignment == .null ? nil : Self.assignment(assignment)
         self.controls = parsedControls
         self.result = result
-        self.work = work
     }
 
     /// The canonical envelope a record carries for a field: its read key first, then its key.
@@ -165,19 +156,10 @@ public struct FieldEnvelope: Sendable, Hashable {
         return false
     }
 
-    /// A refresh is queued, waiting, or the cached result is known stale.
+    /// The cached result is known stale.
     public var isUpdating: Bool {
-        switch work {
-        case .pending, .waiting: return true
-        default: break
-        }
         if case .cached(_, _, .stale) = result { return true }
         return false
-    }
-
-    public var failure: String? {
-        if case .failed(let error, _) = work { return error }
-        return nil
     }
 
     /// Raw kinds this client does not understand, for an "Unsupported" diagnostic.
@@ -198,7 +180,6 @@ public struct FieldEnvelope: Sendable, Hashable {
         default: break
         }
         Self.unsupportedKinds(in: result).forEach(note)
-        if case .unsupported(let kind) = work { note(kind) }
         return kinds
     }
 
@@ -357,17 +338,5 @@ public struct FieldEnvelope: Sendable, Hashable {
         guard let value, let kind = value["entityKind"]?.stringValue, let id = value["entityId"]?.stringValue
         else { return nil }
         return Source(entityKind: kind, entityID: id, name: value["name"]?.stringValue)
-    }
-
-    private static func work(_ value: JSONValue) -> Work? {
-        switch value["kind"]?.stringValue {
-        case "idle": return .idle
-        case "pending": return .pending
-        case "waiting": return .waiting(reason: value["reason"]?.stringValue ?? "")
-        case "failed":
-            return .failed(error: value["error"]?.stringValue ?? "", retryAt: value["retryAt"]?.stringValue)
-        case nil: return nil
-        default: return .unsupported(kind(value))
-        }
     }
 }

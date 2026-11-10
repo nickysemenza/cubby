@@ -41,7 +41,6 @@ function project(
             },
           },
         },
-        work: { kind: "idle" },
       },
     },
     blockedByIds: [],

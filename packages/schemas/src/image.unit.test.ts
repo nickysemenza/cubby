@@ -73,7 +73,6 @@ describe("native image metadata", () => {
               controls: { kind: "readonly", reason: "computed" },
             },
             result: { kind: "missing" },
-            work: { kind: "pending" },
           }),
         ]),
       ),

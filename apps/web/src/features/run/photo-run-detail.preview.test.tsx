@@ -1321,7 +1321,6 @@ it.each(["create", "existing"] as const)(
                 provenance: null,
               },
             },
-            work: { kind: "idle" },
           },
           brandName: {
             current: {
@@ -1335,7 +1334,6 @@ it.each(["create", "existing"] as const)(
                 provenance: null,
               },
             },
-            work: { kind: "idle" },
           },
           tags: {
             current: {
@@ -1358,7 +1356,6 @@ it.each(["create", "existing"] as const)(
                 provenance: { kind: "own", ownership: { kind: "record" } },
               },
             },
-            work: { kind: "idle" },
           },
         },
         model: null,

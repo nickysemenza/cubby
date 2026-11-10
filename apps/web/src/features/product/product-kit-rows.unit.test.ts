@@ -30,7 +30,6 @@ const productAt = (shortcode: string, componentCount = 0) =>
             provenance: { kind: "computed" },
           },
         },
-        work: { kind: "idle" },
       },
     },
   });

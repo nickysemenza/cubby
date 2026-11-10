@@ -94,10 +94,6 @@ struct CookbookContentsSlot: View {
                         Text(FieldEnvelopePresentation.emptyLabel(extraction, field: field))
                             .font(.caption).foregroundStyle(.secondary)
                     }
-                    if let failure = extraction?.failure {
-                        Text(failure).foregroundStyle(FieldGuideTokens.destructive)
-                            .textSelection(.enabled)
-                    }
                 }
             }
         }
@@ -185,7 +181,7 @@ struct CookbookImportProgressSlot: View {
                     let envelope = FieldEnvelope.of(row.raw, key: key)
                     let value = row.raw.recordValue(key)
                     if value == nil || value == .null || envelope?.isUpdating == true
-                        || envelope?.failure != nil || envelope?.unsupportedKinds.isEmpty == false
+                        || envelope?.unsupportedKinds.isEmpty == false
                     {
                         HStack {
                             if value == nil || value == .null {
@@ -197,10 +193,6 @@ struct CookbookImportProgressSlot: View {
                             }
                             FieldValueStatus(raw: row.raw, field: field)
                         }
-                    }
-                    if let failure = envelope?.failure {
-                        Text(failure).font(.caption).foregroundStyle(FieldGuideTokens.destructive)
-                            .textSelection(.enabled)
                     }
                 }
             }

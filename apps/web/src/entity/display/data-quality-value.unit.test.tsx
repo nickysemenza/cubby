@@ -1,8 +1,5 @@
 import { dataQuality } from "@cubby/schemas/data-quality";
-import {
-  computedFieldEnvelope,
-  fieldDecisionOf,
-} from "@cubby/schemas/field-envelope";
+import { computedFieldEnvelope } from "@cubby/schemas/field-envelope";
 import { testCompleteDataQuality } from "@cubby/schemas/testing";
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
@@ -70,50 +67,6 @@ describe("compact quality reads", () => {
       expect(
         screen.queryByLabelText("Quality unavailable"),
       ).not.toBeInTheDocument();
-    } finally {
-      harness.dispose();
-    }
-  });
-
-  it("retains a stale score and exposes its raw refresh error", () => {
-    const harness = createBrowserTestHarness();
-    try {
-      const renderer = compactFieldRendererFor("task", "dataQuality");
-      if (!renderer) throw new Error("Expected quality renderer");
-      const envelope = fieldValueFixture(
-        computedFieldEnvelope(dataQuality),
-        testCompleteDataQuality(),
-      );
-      const decision = fieldDecisionOf(envelope);
-      if (!decision) throw new Error("Expected published score");
-      render(
-        renderer({
-          id: "TSK-4K7M",
-          fields: {
-            dataQuality: {
-              ...envelope,
-              result: {
-                kind: "cached",
-                decision,
-                computedAt: "2026-10-01T00:00:00Z",
-                freshness: "stale",
-              },
-              work: {
-                kind: "failed",
-                error: "Synthetic quality refresh failed",
-                retryAt: null,
-              },
-            },
-          },
-        }),
-        { wrapper: harness.wrapper },
-      );
-      expect(screen.getByText("Complete")).toBeVisible();
-      expect(
-        screen.getByRole("button", {
-          name: "Synthetic quality refresh failed",
-        }),
-      ).toBeVisible();
     } finally {
       harness.dispose();
     }

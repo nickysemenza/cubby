@@ -89,9 +89,6 @@
             }
           }
         }
-      },
-      "work": {
-        "kind": "idle"
       }
     },
     "brandId": {
@@ -126,9 +123,6 @@
             }
           }
         }
-      },
-      "work": {
-        "kind": "idle"
       }
     },
     "brandName": {
@@ -150,9 +144,6 @@
             "kind": "computed"
           }
         }
-      },
-      "work": {
-        "kind": "idle"
       }
     },
     "categoryId": {
@@ -178,9 +169,6 @@
           },
           "provenance": null
         }
-      },
-      "work": {
-        "kind": "idle"
       }
     },
     "growsPlantId": {
@@ -206,9 +194,6 @@
           },
           "provenance": null
         }
-      },
-      "work": {
-        "kind": "idle"
       }
     },
     "price": {
@@ -234,9 +219,6 @@
           },
           "provenance": null
         }
-      },
-      "work": {
-        "kind": "idle"
       }
     },
     "cost": {
@@ -249,9 +231,6 @@
       },
       "result": {
         "kind": "missing"
-      },
-      "work": {
-        "kind": "idle"
       }
     },
     "stockTracked": {
@@ -277,9 +256,6 @@
           },
           "provenance": null
         }
-      },
-      "work": {
-        "kind": "idle"
       }
     },
     "primaryGtin": {
@@ -301,9 +277,6 @@
             "kind": "computed"
           }
         }
-      },
-      "work": {
-        "kind": "idle"
       }
     },
     "images": {
@@ -325,9 +298,6 @@
             "kind": "computed"
           }
         }
-      },
-      "work": {
-        "kind": "idle"
       }
     },
     "food": {
@@ -349,9 +319,6 @@
             "kind": "computed"
           }
         }
-      },
-      "work": {
-        "kind": "idle"
       }
     },
     "owners": {
@@ -379,9 +346,6 @@
             "kind": "computed"
           }
         }
-      },
-      "work": {
-        "kind": "idle"
       }
     },
     "componentCount": {
@@ -403,9 +367,6 @@
             "kind": "computed"
           }
         }
-      },
-      "work": {
-        "kind": "idle"
       }
     },
     "servingAsLocations": {
@@ -427,9 +388,6 @@
             "kind": "computed"
           }
         }
-      },
-      "work": {
-        "kind": "idle"
       }
     },
     "stockStatus": {
@@ -442,9 +400,6 @@
       },
       "result": {
         "kind": "missing"
-      },
-      "work": {
-        "kind": "idle"
       }
     },
     "stockStatusItems": {
@@ -457,9 +412,6 @@
       },
       "result": {
         "kind": "missing"
-      },
-      "work": {
-        "kind": "idle"
       }
     },
     "unitPriceDetailLabel": {
@@ -472,9 +424,6 @@
       },
       "result": {
         "kind": "missing"
-      },
-      "work": {
-        "kind": "idle"
       }
     },
     "externalIdsLabel": {
@@ -487,9 +436,6 @@
       },
       "result": {
         "kind": "missing"
-      },
-      "work": {
-        "kind": "idle"
       }
     },
     "quantityVariance": {
@@ -511,9 +457,6 @@
             "kind": "computed"
           }
         }
-      },
-      "work": {
-        "kind": "idle"
       }
     },
     "onHandUnits": {
@@ -535,9 +478,6 @@
             "kind": "computed"
           }
         }
-      },
-      "work": {
-        "kind": "idle"
       }
     },
     "dataQuality": {
@@ -567,9 +507,6 @@
             "kind": "computed"
           }
         }
-      },
-      "work": {
-        "kind": "idle"
       }
     },
     "displayImages": {
@@ -591,9 +528,6 @@
             "kind": "computed"
           }
         }
-      },
-      "work": {
-        "kind": "idle"
       }
     },
     "primaryPlacement": {
@@ -619,9 +553,6 @@
             "kind": "computed"
           }
         }
-      },
-      "work": {
-        "kind": "idle"
       }
     },
     "categoryFeature": {
@@ -643,9 +574,6 @@
             "kind": "computed"
           }
         }
-      },
-      "work": {
-        "kind": "idle"
       }
     },
     "pricing": {
@@ -658,9 +586,6 @@
       },
       "result": {
         "kind": "missing"
-      },
-      "work": {
-        "kind": "idle"
       }
     },
     "unitPrice": {
@@ -673,9 +598,6 @@
       },
       "result": {
         "kind": "missing"
-      },
-      "work": {
-        "kind": "idle"
       }
     },
     "modelPresence": {
@@ -688,9 +610,6 @@
       },
       "result": {
         "kind": "missing"
-      },
-      "work": {
-        "kind": "idle"
       }
     },
     "upcPresence": {
@@ -703,9 +622,6 @@
       },
       "result": {
         "kind": "missing"
-      },
-      "work": {
-        "kind": "idle"
       }
     },
     "notesPresence": {
@@ -718,9 +634,6 @@
       },
       "result": {
         "kind": "missing"
-      },
-      "work": {
-        "kind": "idle"
       }
     },
     "expenseTotal": {
@@ -733,9 +646,6 @@
       },
       "result": {
         "kind": "missing"
-      },
-      "work": {
-        "kind": "idle"
       }
     },
     "ledgerExpectedQuantity": {
@@ -748,9 +658,6 @@
       },
       "result": {
         "kind": "missing"
-      },
-      "work": {
-        "kind": "idle"
       }
     },
     "ledgerExpectedQuantityLabel": {
@@ -763,9 +670,6 @@
       },
       "result": {
         "kind": "missing"
-      },
-      "work": {
-        "kind": "idle"
       }
     },
     "quantityVarianceLabel": {
@@ -778,9 +682,6 @@
       },
       "result": {
         "kind": "missing"
-      },
-      "work": {
-        "kind": "idle"
       }
     },
     "unitPriceLabel": {
@@ -793,9 +694,6 @@
       },
       "result": {
         "kind": "missing"
-      },
-      "work": {
-        "kind": "idle"
       }
     },
     "purchaseDate": {
@@ -808,9 +706,6 @@
       },
       "result": {
         "kind": "missing"
-      },
-      "work": {
-        "kind": "idle"
       }
     },
     "expenseCount": {
@@ -823,9 +718,6 @@
       },
       "result": {
         "kind": "missing"
-      },
-      "work": {
-        "kind": "idle"
       }
     },
     "dataGaps": {
@@ -838,9 +730,6 @@
       },
       "result": {
         "kind": "missing"
-      },
-      "work": {
-        "kind": "idle"
       }
     }
   }

@@ -378,7 +378,6 @@ it("offers Purchase dismissal from an Email's governed pair facts", () => {
           provenance: { kind: "computed" },
         },
       },
-      work: { kind: "idle" },
     });
   const wrapper = ({ children }: { children: ReactNode }) => (
     <harness.wrapper>

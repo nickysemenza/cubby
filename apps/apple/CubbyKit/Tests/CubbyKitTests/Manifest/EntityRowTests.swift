@@ -17,8 +17,7 @@ struct EntityRowTests {
                         "decision": [
                             "outcome": ["kind": "value", "value": 13]
                         ], "freshness": "stale",
-                    ],
-                    "work": ["kind": "failed", "error": "Synthetic refresh failure"],
+                    ]
                 ],
                 "displayImages": [
                     "result": [
@@ -36,7 +35,6 @@ struct EntityRowTests {
         #expect(row?.raw == input)
         #expect(row?.imageURL == URL(string: "https://images.example/canonical.jpg"))
         #expect(row?.raw.pathText("price") == "13")
-        #expect(row?.raw["fields"]?["price"]?["work"]?["error"]?.stringValue == "Synthetic refresh failure")
     }
 
     @Test func nilWhenIdIsMissing() {
@@ -296,7 +294,6 @@ struct EntityRowTests {
                     "provenance": ["kind": "computed"],
                 ],
             ],
-            "work": ["kind": "idle"],
         ]
         payload["fields"] = .object(fields)
         let row = try #require(product.row(from: .object(payload)))

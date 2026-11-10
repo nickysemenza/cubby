@@ -86,7 +86,6 @@ describe("calendar day membership", () => {
           fields: {
             effectiveBeneficiaries: {
               result: { freshness: "fresh" },
-              work: { kind: "idle" },
             },
           },
         },

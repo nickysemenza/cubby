@@ -538,7 +538,6 @@ describe("createImageColumn", () => {
                     provenance: { kind: "computed" },
                   },
                 },
-                work: { kind: "idle" },
               },
             },
           },
@@ -795,7 +794,6 @@ describe("createBooleanColumn with a field resolution", () => {
             provenance: { kind: "default", source: null },
           },
         },
-        work: { kind: "idle" },
       },
     },
   });
@@ -912,11 +910,6 @@ describe("canonical Product Cost", () => {
           provenance: { kind: "computed" },
         },
       },
-      work: {
-        kind: "failed",
-        error: "Synthetic refresh failure",
-        retryAt: null,
-      },
     });
     render(
       <>
@@ -937,12 +930,11 @@ describe("canonical Product Cost", () => {
           envelope={envelope.parse({
             current,
             result: { kind: "missing" },
-            work: { kind: "pending" },
           })}
         />
       </>,
     );
-    expect(screen.getByLabelText("Queued for refresh")).toBeVisible();
+    expect(screen.getByLabelText("Not calculated yet")).toBeVisible();
     view.rerender(
       <>
         <ProductCostValue
@@ -955,13 +947,12 @@ describe("canonical Product Cost", () => {
                 provenance: { kind: "computed" },
               },
             },
-            work: { kind: "idle" },
           })}
         />
       </>,
     );
     expect(
-      screen.queryByLabelText("Queued for refresh"),
+      screen.queryByLabelText("Not calculated yet"),
     ).not.toBeInTheDocument();
   });
 });

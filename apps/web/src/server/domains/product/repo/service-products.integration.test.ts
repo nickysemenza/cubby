@@ -345,7 +345,6 @@ describe("category-based service Products", () => {
           },
         },
       });
-      expect(changed.fields.cost.work).toEqual({ kind: "idle" });
       const explainCost = () =>
         explainField(
           entityKernelContextSchema.parse(
@@ -497,7 +496,6 @@ describe("category-based service Products", () => {
       freshness: "fresh",
       decision: { outcome: { kind: "value", value: { amount: 40 } } },
     });
-    expect(restored.fields.cost.work).toEqual({ kind: "idle" });
     const valued = await listProductsFixture(
       ctx.db,
       { ids: [service.id], pricePresenceFilter: "has" },

@@ -59,9 +59,6 @@
                 "kind": "computed"
               }
             }
-          },
-          "work": {
-            "kind": "idle"
           }
         },
         "price": {
@@ -87,9 +84,6 @@
               },
               "provenance": null
             }
-          },
-          "work": {
-            "kind": "idle"
           }
         },
         "primaryGtin": {
@@ -111,9 +105,6 @@
                 "kind": "computed"
               }
             }
-          },
-          "work": {
-            "kind": "idle"
           }
         },
         "images": {
@@ -171,9 +162,6 @@
                         },
                         "result": {
                           "kind": "missing"
-                        },
-                        "work": {
-                          "kind": "idle"
                         }
                       },
                       "url": {
@@ -195,9 +183,6 @@
                               "kind": "computed"
                             }
                           }
-                        },
-                        "work": {
-                          "kind": "idle"
                         }
                       },
                       "capturedByName": {
@@ -219,9 +204,6 @@
                               "kind": "computed"
                             }
                           }
-                        },
-                        "work": {
-                          "kind": "idle"
                         }
                       },
                       "sightings": {
@@ -234,9 +216,6 @@
                         },
                         "result": {
                           "kind": "missing"
-                        },
-                        "work": {
-                          "kind": "idle"
                         }
                       },
                       "provenanceEvidenceLabel": {
@@ -249,9 +228,6 @@
                         },
                         "result": {
                           "kind": "missing"
-                        },
-                        "work": {
-                          "kind": "idle"
                         }
                       }
                     }
@@ -297,9 +273,6 @@
                         },
                         "result": {
                           "kind": "missing"
-                        },
-                        "work": {
-                          "kind": "idle"
                         }
                       },
                       "url": {
@@ -321,9 +294,6 @@
                               "kind": "computed"
                             }
                           }
-                        },
-                        "work": {
-                          "kind": "idle"
                         }
                       },
                       "capturedByName": {
@@ -345,9 +315,6 @@
                               "kind": "computed"
                             }
                           }
-                        },
-                        "work": {
-                          "kind": "idle"
                         }
                       },
                       "sightings": {
@@ -360,9 +327,6 @@
                         },
                         "result": {
                           "kind": "missing"
-                        },
-                        "work": {
-                          "kind": "idle"
                         }
                       },
                       "provenanceEvidenceLabel": {
@@ -375,9 +339,6 @@
                         },
                         "result": {
                           "kind": "missing"
-                        },
-                        "work": {
-                          "kind": "idle"
                         }
                       }
                     }
@@ -388,9 +349,6 @@
                 "kind": "computed"
               }
             }
-          },
-          "work": {
-            "kind": "idle"
           }
         },
         "displayImages": {
@@ -417,9 +375,6 @@
                 "kind": "computed"
               }
             }
-          },
-          "work": {
-            "kind": "idle"
           }
         },
         "categoryFeature": {
@@ -441,9 +396,6 @@
                 "kind": "computed"
               }
             }
-          },
-          "work": {
-            "kind": "idle"
           }
         }
       }
@@ -484,9 +436,6 @@
                 }
               }
             }
-          },
-          "work": {
-            "kind": "idle"
           }
         }
       }
@@ -516,9 +465,6 @@
               "kind": "computed"
             }
           }
-        },
-        "work": {
-          "kind": "idle"
         }
       },
       "ownerLedgerPartyId": {
@@ -531,9 +477,6 @@
         },
         "result": {
           "kind": "missing"
-        },
-        "work": {
-          "kind": "idle"
         }
       },
       "valuation": {
@@ -546,9 +489,6 @@
         },
         "result": {
           "kind": "missing"
-        },
-        "work": {
-          "kind": "idle"
         }
       },
       "dataQuality": {
@@ -578,9 +518,6 @@
               "kind": "computed"
             }
           }
-        },
-        "work": {
-          "kind": "idle"
         }
       },
       "displayImages": {
@@ -593,9 +530,6 @@
         },
         "result": {
           "kind": "missing"
-        },
-        "work": {
-          "kind": "idle"
         }
       },
       "locationId": {
@@ -630,9 +564,6 @@
               }
             }
           }
-        },
-        "work": {
-          "kind": "idle"
         }
       },
       "effectiveOwnership": {
@@ -665,9 +596,6 @@
           },
           "computedAt": "2026-03-02T10:00:00.000Z",
           "freshness": "fresh"
-        },
-        "work": {
-          "kind": "idle"
         }
       }
     }
@@ -711,9 +639,6 @@
                 "kind": "computed"
               }
             }
-          },
-          "work": {
-            "kind": "idle"
           }
         },
         "price": {
@@ -739,9 +664,6 @@
               },
               "provenance": null
             }
-          },
-          "work": {
-            "kind": "idle"
           }
         },
         "primaryGtin": {
@@ -763,9 +685,6 @@
                 "kind": "computed"
               }
             }
-          },
-          "work": {
-            "kind": "idle"
           }
         },
         "images": {
@@ -787,9 +706,6 @@
                 "kind": "computed"
               }
             }
-          },
-          "work": {
-            "kind": "idle"
           }
         },
         "displayImages": {
@@ -811,9 +727,6 @@
                 "kind": "computed"
               }
             }
-          },
-          "work": {
-            "kind": "idle"
           }
         },
         "categoryFeature": {
@@ -835,9 +748,6 @@
                 "kind": "computed"
               }
             }
-          },
-          "work": {
-            "kind": "idle"
           }
         }
       }
@@ -878,9 +788,6 @@
                 }
               }
             }
-          },
-          "work": {
-            "kind": "idle"
           }
         }
       }
@@ -910,9 +817,6 @@
               "kind": "computed"
             }
           }
-        },
-        "work": {
-          "kind": "idle"
         }
       },
       "ownerLedgerPartyId": {
@@ -925,9 +829,6 @@
         },
         "result": {
           "kind": "missing"
-        },
-        "work": {
-          "kind": "idle"
         }
       },
       "valuation": {
@@ -940,9 +841,6 @@
         },
         "result": {
           "kind": "missing"
-        },
-        "work": {
-          "kind": "idle"
         }
       },
       "dataQuality": {
@@ -972,9 +870,6 @@
               "kind": "computed"
             }
           }
-        },
-        "work": {
-          "kind": "idle"
         }
       },
       "displayImages": {
@@ -987,9 +882,6 @@
         },
         "result": {
           "kind": "missing"
-        },
-        "work": {
-          "kind": "idle"
         }
       },
       "locationId": {
@@ -1024,9 +916,6 @@
               }
             }
           }
-        },
-        "work": {
-          "kind": "idle"
         }
       },
       "effectiveOwnership": {
@@ -1059,9 +948,6 @@
           },
           "computedAt": "2026-03-02T10:00:00.000Z",
           "freshness": "fresh"
-        },
-        "work": {
-          "kind": "idle"
         }
       }
     }

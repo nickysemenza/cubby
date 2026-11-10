@@ -9,12 +9,7 @@ import { generatedEntityListFields } from "@cubby/schemas/entity-list-fields";
  * figure the row shows. Publication existence distinguishes missing output from
  * a successful empty value, including optional typed snapshot members.
  */
-import {
-  fieldDecision,
-  fieldProvenance,
-  fieldWorkAttribution,
-} from "@cubby/schemas/field-envelope";
-import { workWaitCause } from "@cubby/schemas/job";
+import { fieldDecision, fieldProvenance } from "@cubby/schemas/field-envelope";
 import { type AnyColumn, type SQL, sql } from "drizzle-orm";
 import { z } from "zod";
 
@@ -204,21 +199,11 @@ const valueRow = z.object({
   decidedBy: z.unknown(),
   computedAt: dateTime.nullable(),
   stale: z.boolean(),
-  pending: z.boolean(),
-  waiting: z.boolean(),
-  waitCause: workWaitCause.nullable(),
-  runningSince: dateTime.nullable(),
-  leaseExpiresAt: dateTime.nullable(),
-  error: z.string().nullable(),
-  retryAt: dateTime.nullable(),
-  refreshReason: z.string().nullable(),
-  attribution: fieldWorkAttribution.nullable(),
 });
 
 /**
  * Stored values and their meta for a page of records, in one statement. A
- * record without a row reads as missing; a queued mark as stale; a mark with
- * a recorded error as failed (the previous value stays).
+ * record without a row reads as missing.
  */
 export async function loadStoredDerived(
   db: RepositoryQueryInput,
@@ -239,9 +224,7 @@ export async function loadStoredDerived(
     )}) AS declared(key))
     SELECT i.id AS "entityId", k.key, v.value,
            ${options.includeEvidence ? sql`v."decidedBy"` : sql`v."decidedBy" - ${storedFieldDecision.keyof().enum.evidence}`} AS "decidedBy", v."computedAt",
-           false AS pending, false AS stale, NULL::text AS "refreshReason", NULL::text AS attribution,
-           NULL::text AS error, NULL::timestamp AS "retryAt", false AS waiting, NULL::text AS "waitCause",
-           NULL::timestamp AS "runningSince", NULL::timestamp AS "leaseExpiresAt"
+           false AS stale
       FROM unnest(${uuidArrayParam(ids)}) AS i(id)
      CROSS JOIN keys k
       LEFT JOIN LATERAL (
@@ -278,22 +261,7 @@ export async function loadStoredDerived(
       ...(decision.success ? { decision: decision.data } : {}),
       resultExists: row.computedAt !== null && decision.success,
       stale: row.stale,
-      pending: row.pending,
-      refreshReason: row.refreshReason,
-      ...(row.attribution ? { attribution: row.attribution } : {}),
-      waiting: row.waiting,
-      waitCause: row.waitCause,
-      ...(row.runningSince && row.leaseExpiresAt
-        ? {
-            execution: {
-              startedAt: row.runningSince.toISOString(),
-              leaseExpiresAt: row.leaseExpiresAt.toISOString(),
-            },
-          }
-        : {}),
-      retryAt: row.retryAt?.toISOString() ?? null,
       computedAt: row.computedAt?.toISOString() ?? null,
-      error: row.error,
     });
     out.set(row.entityId, byKey);
   }

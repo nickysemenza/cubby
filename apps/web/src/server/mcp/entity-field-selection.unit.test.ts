@@ -48,7 +48,6 @@ const locationType = {
       provenance: { kind: "own", ownership: { kind: "record" } },
     },
   },
-  work: { kind: "idle" },
 };
 
 describe("canonical governed-field selection", () => {
@@ -133,7 +132,6 @@ describe("canonical governed-field selection", () => {
           provenance: { kind: "own", ownership: { kind: "record" } },
         },
       },
-      work: { kind: "idle" },
     };
     for (const [entity, id, fields, expectedKeys] of [
       ["location", "LOC-ABCD", { type: locationType }, ["type"]],

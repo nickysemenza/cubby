@@ -9,7 +9,7 @@ struct NativeCodecTests {
     func imageURLsUseCanonicalRepresentationSnapshots(cached: Bool) throws {
         let missing: JSONValue = [
             "current": ["assignment": .null, "controls": ["kind": "readonly", "reason": "computed"]],
-            "result": ["kind": "missing"], "work": ["kind": "idle"],
+            "result": ["kind": "missing"],
         ]
         var representation = try #require(missing.objectValue)
         var result: [String: JSONValue] = [
@@ -61,7 +61,7 @@ struct NativeCodecTests {
     @Test func recursiveLocationParentsRoundTripWithValueSemantics() throws {
         let missing: JSONValue = [
             "current": ["assignment": .null, "controls": ["kind": "readonly", "reason": "computed"]],
-            "result": ["kind": "missing"], "work": ["kind": "idle"],
+            "result": ["kind": "missing"],
         ]
         let fields = JSONValue.object(
             Dictionary(

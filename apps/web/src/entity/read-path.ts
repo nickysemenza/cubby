@@ -97,6 +97,5 @@ export function fieldEnvelopeAtPath(
                   : { kind: "value", value },
             },
           },
-    work: parent.work,
   };
 }

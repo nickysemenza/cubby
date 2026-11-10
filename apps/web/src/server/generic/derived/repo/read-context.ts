@@ -1,10 +1,8 @@
 import type { StoredFieldDecision } from "@cubby/schemas/derived-value";
 import type {
   fieldAssignmentOwnership,
-  fieldWork,
   ReadableFieldEnvelope,
 } from "@cubby/schemas/field-envelope";
-import type { WorkWaitCause } from "@cubby/schemas/job";
 import { z } from "zod";
 
 /** Batch read facts without importing database or hydration implementations. */
@@ -12,27 +10,12 @@ export interface StoredDerivedRead {
   readonly value: unknown;
   readonly evidence?: StoredFieldDecision["evidence"];
   readonly computedAt: string | null;
-  readonly error: string | null;
   readonly decision?: Extract<
     ReadableFieldEnvelope["result"],
     { kind: "live" }
   >["decision"];
   readonly resultExists: boolean;
   readonly stale: boolean;
-  /** Actual queued work; expiry alone does not imply a worker is pending. */
-  readonly pending?: boolean;
-  readonly refreshReason?: string | null;
-  readonly attribution?: Extract<
-    z.output<typeof fieldWork>,
-    { kind: "pending" }
-  >["attribution"];
-  readonly waiting?: boolean;
-  readonly waitCause?: WorkWaitCause | null;
-  readonly execution?: Extract<
-    z.output<typeof fieldWork>,
-    { kind: "pending" }
-  >["execution"];
-  readonly retryAt: string | null;
 }
 
 export type PageStoredMeta = ReadonlyMap<

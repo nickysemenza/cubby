@@ -38,7 +38,6 @@ const explanation = mock(fieldExplanationOutput, {
           provenance: { kind: "computed" },
         },
       },
-      work: { kind: "idle" },
     },
     evaluatedAt: "2026-09-01T12:00:00Z",
     rule: {

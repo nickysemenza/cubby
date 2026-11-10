@@ -15,7 +15,6 @@ struct EntityRowPresentationTests {
                     "outcome": ["kind": "value", "value": value], "provenance": ["kind": "computed"],
                 ],
             ],
-            "work": ["kind": "idle"],
         ]
     }
 
@@ -189,7 +188,7 @@ struct EntityRowPresentationTests {
                         "reset": ["kind": "unavailable"],
                     ],
                 ],
-                "result": result, "work": ["kind": "idle"],
+                "result": result,
             ]
             let row = EntityRow(
                 id: "INV-1001", title: "Synthetic entry", subtitle: nil, imageURL: nil,

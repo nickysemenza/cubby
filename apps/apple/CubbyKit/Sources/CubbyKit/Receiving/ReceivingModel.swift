@@ -254,8 +254,7 @@ extension CubbyClient: ReceivingService {
                     let locationValue = locationField?.effectiveValue
                 else {
                     throw UnsupportedNativeResponse(
-                        context: amountField?.failure ?? locationField?.failure
-                            ?? "Inventory stock amount or location is unavailable",
+                        context: "Inventory stock amount or location is unavailable",
                         raw: raw)
                 }
                 let amount = try amountValue.decoded(Amount.self)

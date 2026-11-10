@@ -66,10 +66,9 @@ enum FieldEnvelopeFixture {
     static let missing: JSONValue = ["kind": "missing"]
 
     static func envelope(
-        assignment: JSONValue = .null, controls: JSONValue = readonly("computed"), result: JSONValue,
-        work: JSONValue = idle
+        assignment: JSONValue = .null, controls: JSONValue = readonly("computed"), result: JSONValue
     ) -> JSONValue {
-        ["current": ["assignment": assignment, "controls": controls], "result": result, "work": work]
+        ["current": ["assignment": assignment, "controls": controls], "result": result]
     }
 
     /// A record whose `fields` hold the given envelopes beside its ordinary keys.

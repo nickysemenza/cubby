@@ -165,21 +165,19 @@ extension FieldEnvelope {
 
     /// What a result without a value reads as. Missing is never a successful empty result.
     public func emptyLabel(field: FieldDescriptor) -> String {
-        Self.label(for: result, field: field, failure: failure)
+        Self.label(for: result, field: field)
     }
 
-    public static func missingLabel(failure: String?) -> String {
-        failure == nil ? "Updating…" : FieldEnvelopePresentation.unavailableLabel
-    }
+    public static let missingLabel = "Updating…"
 
     public static func noneLabel(field: FieldDescriptor) -> String {
         field.resolution?.labels?.none ?? "None"
     }
 
-    public static func label(for result: Result, field: FieldDescriptor, failure: String? = nil) -> String {
+    public static func label(for result: Result, field: FieldDescriptor) -> String {
         let labels = field.resolution?.labels
         switch result {
-        case .missing: return missingLabel(failure: failure)
+        case .missing: return missingLabel
         case .unsupported(let kind): return "Unsupported result: \(kind)"
         case .live(let decision), .cached(let decision, _, _):
             switch decision.outcome {

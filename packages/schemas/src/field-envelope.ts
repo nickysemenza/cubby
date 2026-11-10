@@ -133,37 +133,6 @@ export const fieldResult = shareSchema(<V extends z.ZodType>(value: V) =>
   ]),
 );
 
-/** A conservative target-wide flag: this value has no ticket of its own. */
-export const fieldWorkAttribution = z.literal("related");
-
-/** A failed or waiting refresh does not imply whether a usable result exists. */
-export const fieldWork = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("idle"), refreshReason: z.string().optional() }),
-  z.object({
-    kind: z.literal("pending"),
-    refreshReason: z.string().optional(),
-    attribution: fieldWorkAttribution.optional(),
-    execution: z
-      .object({
-        startedAt: z.iso.datetime(),
-        leaseExpiresAt: z.iso.datetime(),
-      })
-      .optional(),
-  }),
-  z.object({
-    kind: z.literal("waiting"),
-    refreshReason: z.string().optional(),
-    reason: z.string(),
-    retryAt: z.iso.datetime().optional(),
-  }),
-  z.object({
-    kind: z.literal("failed"),
-    refreshReason: z.string().optional(),
-    error: z.string(),
-    retryAt: z.iso.datetime().nullable(),
-  }),
-]);
-
 export const fieldResetPreview = shareSchema(
   <V extends z.ZodType>(value: V) => {
     const result = fieldResult(value);
@@ -212,7 +181,6 @@ export const fieldEnvelope = <S extends z.ZodType, V extends z.ZodType>(
       controls: fieldControls(effective),
     }),
     result: fieldResult(effective),
-    work: fieldWork,
   });
 
 /** Computed fields expose no fictitious assignment or edit capability. */
@@ -226,7 +194,6 @@ export const computedFieldEnvelope = <V extends z.ZodType>(effective: V) =>
       }),
     }),
     result: fieldResult(effective),
-    work: fieldWork,
   });
 
 type StoredFieldSchemas = Readonly<Record<string, z.ZodType | null>>;

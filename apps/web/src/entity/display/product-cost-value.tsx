@@ -17,8 +17,7 @@ export function ProductCostValue({
 }: {
   envelope: EntityFieldEnvelopeRead<"product", "output">["fields"]["cost"];
 }) {
-  if (envelope.result.kind === "missing")
-    return <MissingFieldValue envelope={envelope} />;
+  if (envelope.result.kind === "missing") return <MissingFieldValue />;
   const cost = fieldValueOf(envelope);
   if (!cost) return <NoneValue />;
   if (cost.kind === "item") return formatCurrency(cost.amount);

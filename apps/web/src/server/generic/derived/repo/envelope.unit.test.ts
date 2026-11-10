@@ -18,9 +18,7 @@ function cached(
     ...values,
     resultExists: true,
     stale: true,
-    retryAt: null,
     computedAt: "2026-10-25T20:00:00Z",
-    error: null,
     decision: values.decision ?? {
       outcome:
         values.value == null
@@ -142,10 +140,7 @@ describe("canonical field reads", () => {
         raw: {},
         ownership: {},
         stored: new Map([
-          [
-            "eventSummary",
-            { ...cached({ value: { eventCount: 0 } }), pending: false },
-          ],
+          ["eventSummary", cached({ value: { eventCount: 0 } })],
         ]),
       },
     );
@@ -153,7 +148,6 @@ describe("canonical field reads", () => {
       kind: "cached",
       freshness: "stale",
     });
-    expect(row.fields.eventCount.work).toEqual({ kind: "idle" });
   });
 
   it("uses the current classifier for action eligibility instead of the hydrated row", () => {
@@ -221,15 +215,12 @@ describe("canonical field reads", () => {
     });
   });
 
-  it("uses the declared stored snapshot key with its provenance, freshness and failed work", () => {
+  it("uses the declared stored snapshot key with its provenance and freshness", () => {
     const schema = withFieldEnvelopes(
       z.object({ id: z.string(), valuation: z.number().nullable() }),
       { valuation: null },
     );
-    const snapshot = {
-      ...cached({ value: 12 }),
-      error: "Synthetic valuation refresh failure",
-    };
+    const snapshot = cached({ value: 12 });
     const row = publicFieldEnvelopeRow(
       schema,
       "location",
@@ -246,14 +237,10 @@ describe("canonical field reads", () => {
       computedAt: snapshot.computedAt,
       freshness: "stale",
     });
-    expect(row.fields.valuation.work).toMatchObject({
-      kind: "failed",
-      error: snapshot.error,
-    });
     expect(snapshot.value).toBe(12);
   });
 
-  it("projects physical Cost from selected price when price is omitted, including reset and refresh failure", () => {
+  it("projects physical Cost from selected price when price is omitted, including reset", () => {
     const schema = withFieldEnvelopes(
       z.object({
         id: z.string(),
@@ -278,10 +265,7 @@ describe("canonical field reads", () => {
           ownership: {},
         },
       );
-    const snapshot = {
-      ...cached({ value: 8 }),
-      error: "Synthetic price refresh failure",
-    };
+    const snapshot = cached({ value: 8 });
     const own = costOnly(12, snapshot);
     expect(own.fields.cost.result).toMatchObject({
       kind: "live",
@@ -300,10 +284,6 @@ describe("canonical field reads", () => {
         outcome: { kind: "value", value: { kind: "item", amount: 8 } },
         provenance: { kind: "computed" },
       },
-    });
-    expect(inherited.fields.cost.work).toMatchObject({
-      kind: "failed",
-      error: snapshot.error,
     });
     const reset = costOnly(
       null,
@@ -337,7 +317,6 @@ describe("canonical field reads", () => {
       stored: new Map([["assigneeId", read]]),
     });
     expect(row.fields.assigneeId.result).toEqual({ kind: "missing" });
-    expect(row.fields.assigneeId.work).toEqual({ kind: "idle" });
     expect(read.value).toBe("LPY-REMOVED");
   });
 
@@ -427,28 +406,21 @@ describe("canonical field reads", () => {
     expect(row).not.toHaveProperty("derived");
   });
 
-  it("keeps explicit None distinct from a missing first computation failure", () => {
-    const failed: StoredDerivedRead = {
+  it("keeps explicit None distinct from a missing first computation", () => {
+    const missingRead: StoredDerivedRead = {
       value: null,
       resultExists: false,
       stale: true,
-      retryAt: "2026-10-25T20:01:00Z",
       computedAt: null,
-      error: "Synthetic computation failure",
     };
     const base = {
       schema: assigneeRead,
       entity: "project",
       row: { id: "PRJ-EXAMPLE", assigneeId: null },
-      stored: new Map([["assigneeId", failed]]),
+      stored: new Map([["assigneeId", missingRead]]),
     } as const;
     const missing = buildFieldEnvelopeRow(base);
     expect(missing.fields.assigneeId.result).toEqual({ kind: "missing" });
-    expect(missing.fields.assigneeId.work).toEqual({
-      kind: "failed",
-      error: "Synthetic computation failure",
-      retryAt: "2026-10-25T20:01:00Z",
-    });
     const none = buildFieldEnvelopeRow({
       ...base,
       currentAssignments: { assigneeId: { kind: "none" } },
@@ -532,7 +504,7 @@ describe("canonical field reads", () => {
     });
   });
 
-  it("keeps a failed refresh's old value and historical source together", () => {
+  it("keeps a cached value and its historical source together", () => {
     const read = cached({
       value: "LPY-PREVIOUS",
       decision: {
@@ -547,7 +519,6 @@ describe("canonical field reads", () => {
         },
       },
     });
-    const failedRead = { ...read, error: "Synthetic refresh failure" };
     const row = buildFieldEnvelopeRow({
       schema: assigneeRead,
       entity: "project",
@@ -566,7 +537,7 @@ describe("canonical field reads", () => {
           },
         },
       },
-      stored: new Map([["assigneeId", failedRead]]),
+      stored: new Map([["assigneeId", read]]),
     });
     expect(row.fields.assigneeId.result).toMatchObject({
       kind: "cached",
@@ -575,10 +546,6 @@ describe("canonical field reads", () => {
         outcome: { value: "LPY-PREVIOUS" },
         provenance: { source: { entityId: "PRJ-PREVIOUS" } },
       },
-    });
-    expect(row.fields.assigneeId.work).toMatchObject({
-      kind: "failed",
-      error: "Synthetic refresh failure",
     });
   });
 });

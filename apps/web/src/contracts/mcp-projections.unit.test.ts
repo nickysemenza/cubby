@@ -78,7 +78,6 @@ describe("canonical Product MCP attachments", () => {
               provenance: { kind: "computed" },
             },
           },
-          work: { kind: "idle" },
         },
       },
     });

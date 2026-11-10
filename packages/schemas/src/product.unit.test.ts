@@ -29,7 +29,6 @@ describe("canonical Product MCP fields", () => {
           provenance: { kind: "own", ownership: { kind: "record" } },
         },
       },
-      work: { kind: "idle" },
     };
     expect(schema.shape.fields.shape.price.safeParse(price).success).toBe(true);
     expect(

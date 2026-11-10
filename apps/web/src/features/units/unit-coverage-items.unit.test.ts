@@ -21,7 +21,6 @@ const noMappingProduct = (over: Partial<NoMappings> = {}): NoMappings => ({
         controls: { kind: "readonly", reason: "computed" },
       },
       result: { kind: "missing" },
-      work: { kind: "idle" },
     },
   },
   createdAt: new Date(0),
@@ -41,7 +40,6 @@ const partialProduct = (over: Partial<Partial_> = {}): Partial_ => ({
         controls: { kind: "readonly", reason: "computed" },
       },
       result: { kind: "missing" },
-      work: { kind: "idle" },
     },
   },
   coverage: {
@@ -65,7 +63,6 @@ const islandedProduct = (over: Partial<Islanded> = {}): Islanded => ({
         controls: { kind: "readonly", reason: "computed" },
       },
       result: { kind: "missing" },
-      work: { kind: "idle" },
     },
   },
   islandCount: 2,

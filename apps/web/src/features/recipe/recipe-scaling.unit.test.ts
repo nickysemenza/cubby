@@ -83,7 +83,6 @@ const recipe = (
             provenance: null,
           },
         },
-        work: { kind: "idle" },
       },
       ...extra.fields,
     },
@@ -187,7 +186,6 @@ describe("scaleRecipe", () => {
                 provenance: { kind: "own", ownership: { kind: "record" } },
               },
             },
-            work: { kind: "idle" },
           },
         },
       }),
@@ -218,7 +216,6 @@ describe("scaleRecipe", () => {
               provenance: { kind: "default", source: null },
             },
           },
-          work: { kind: "idle" },
         },
       },
     });
@@ -241,7 +238,6 @@ describe("scaleRecipe", () => {
           provenance: { kind: "default", source: null },
         },
       },
-      work: { kind: "idle" },
     });
     expect(fieldValueOf(input.fields.servings)).toBe(4);
   });

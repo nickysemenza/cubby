@@ -14,7 +14,6 @@ struct PhotoVisualEvidenceMatcherTests {
                     "outcome": ["kind": "value", "value": value], "provenance": ["kind": "computed"],
                 ],
             ],
-            "work": ["kind": "idle"],
         ]
     }
 

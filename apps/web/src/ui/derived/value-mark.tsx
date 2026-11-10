@@ -2,13 +2,10 @@ import {
   fieldDecisionOf,
   type ReadableFieldEnvelope,
 } from "@cubby/schemas/field-envelope";
-import { ArrowClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowClockwise";
 import { CircleDashedIcon } from "@phosphor-icons/react/dist/csr/CircleDashed";
-import { ClockIcon } from "@phosphor-icons/react/dist/csr/Clock";
 import { cn } from "cn";
-import { useEffect, useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 
-import { useDisplayNow } from "~/ui/hooks/use-display-now";
 import {
   Tooltip,
   TooltipContent,
@@ -20,40 +17,6 @@ import {
 } from "~/ui/records/record-pill";
 
 const AUTO_LABEL = "Set automatically";
-
-type PendingWork = Extract<ReadableFieldEnvelope["work"], { kind: "pending" }>;
-
-/** Branch on the wire attribution; refresh reasons are display text. */
-export function pendingWorkLabel(work: PendingWork, running: boolean) {
-  if (work.execution)
-    return running ? "Updating" : "Refresh status may be out of date";
-  return work.attribution === "related"
-    ? "Related refresh pending"
-    : "Queued for refresh";
-}
-
-/** Expire the observation locally; a timer never asserts that replacement work is queued. */
-export function useFieldExecutionCurrent(execution: PendingWork["execution"]) {
-  const now = useDisplayNow();
-  const [expiredLease, setExpiredLease] = useState<string>();
-  const expiresAt = execution?.leaseExpiresAt;
-  useEffect(() => {
-    if (!expiresAt) return;
-    const remaining = Date.parse(expiresAt) - Date.now();
-    if (remaining <= 0) {
-      setExpiredLease(expiresAt);
-      return;
-    }
-    const timer = setTimeout(() => setExpiredLease(expiresAt), remaining);
-    return () => clearTimeout(timer);
-  }, [expiresAt]);
-  return (
-    expiresAt !== undefined &&
-    expiredLease !== expiresAt &&
-    now !== undefined &&
-    Date.parse(expiresAt) > now
-  );
-}
 
 export function UpdatingDot({
   label = "Updating",
@@ -79,48 +42,22 @@ export function UpdatingDot({
   );
 }
 
-/** Missing is not evidence that work is running; keep the work state explicit. */
+/** Missing is not evidence that work is running. */
 export function MissingFieldValue({
-  envelope,
   interactive = true,
 }: {
-  envelope: ReadableFieldEnvelope;
   interactive?: boolean;
 }) {
-  const work = envelope.work;
-  const running = useFieldExecutionCurrent(
-    work.kind === "pending" ? work.execution : undefined,
-  );
-  if (work.kind === "failed")
-    return <span className="font-sans text-muted-foreground">Unavailable</span>;
-  const label =
-    work.kind === "pending"
-      ? pendingWorkLabel(work, running)
-      : work.kind === "waiting"
-        ? "Waiting to refresh"
-        : "Not calculated yet";
-  const detail =
-    work.kind === "waiting"
-      ? work.reason
-      : work.kind === "idle"
-        ? "No refresh is currently queued."
-        : null;
-  const Icon = running
-    ? ArrowClockwiseIcon
-    : work.kind === "pending" || work.kind === "waiting"
-      ? ClockIcon
-      : CircleDashedIcon;
+  const label = "Not calculated yet";
+  const detail = "No refresh is currently queued.";
   if (!interactive)
     return (
       <span
-        title={detail ? `${label}. ${detail}` : label}
+        title={`${label}. ${detail}`}
         aria-label={label}
         className="inline-flex font-sans text-muted-foreground"
       >
-        <Icon
-          aria-hidden="true"
-          className={cn("size-3", running && "motion-safe:animate-spin")}
-        />
+        <CircleDashedIcon aria-hidden="true" className="size-3" />
       </span>
     );
   return (
@@ -134,14 +71,11 @@ export function MissingFieldValue({
           />
         }
       >
-        <Icon
-          aria-hidden="true"
-          className={cn("size-3", running && "motion-safe:animate-spin")}
-        />
+        <CircleDashedIcon aria-hidden="true" className="size-3" />
       </TooltipTrigger>
       <TooltipContent className="max-w-80 font-sans break-words">
         <p>{label}</p>
-        {detail ? <p>{detail}</p> : null}
+        <p>{detail}</p>
       </TooltipContent>
     </Tooltip>
   );
@@ -169,21 +103,8 @@ export function FieldValueMark({
     envelope.current.assignment.ownership.kind === "automatic" &&
     provenance.ownership.receiptId ===
       envelope.current.assignment.ownership.receiptId;
-  const updating =
-    envelope?.work.kind === "pending" ||
-    envelope?.work.kind === "waiting" ||
-    (envelope?.result.kind === "cached" &&
-      envelope.result.freshness === "stale");
-  const error = envelope?.work.kind === "failed" ? envelope.work.error : null;
-  const execution =
-    envelope?.work.kind === "pending" ? envelope.work.execution : undefined;
-  const running = useFieldExecutionCurrent(execution);
-  const refreshLabel =
-    envelope?.work.kind === "pending"
-      ? pendingWorkLabel(envelope.work, running)
-      : envelope?.work.kind === "waiting"
-        ? "Waiting to refresh"
-        : "Stale result";
+  const stale =
+    envelope?.result.kind === "cached" && envelope.result.freshness === "stale";
   const missing = envelope?.result.kind === "missing";
   return (
     <span
@@ -206,8 +127,8 @@ export function FieldValueMark({
         </span>
       ) : null}
       <span className="min-w-0 truncate">
-        {missing && envelope ? (
-          <MissingFieldValue envelope={envelope} interactive={interactive} />
+        {missing ? (
+          <MissingFieldValue interactive={interactive} />
         ) : auto ? (
           <RecordPillTreatmentContext.Provider value={{ kind: "auto" }}>
             {children}
@@ -229,31 +150,8 @@ export function FieldValueMark({
           <TooltipContent>{AUTO_LABEL}</TooltipContent>
         </Tooltip>
       ) : null}
-      {!missing && updating && error === null ? (
-        <UpdatingDot label={refreshLabel} active={running} />
-      ) : null}
-      {error !== null && !interactive ? (
-        <span title={error} className="shrink-0 text-destructive">
-          <span aria-hidden="true">!</span>
-          <span className="sr-only">{error}</span>
-        </span>
-      ) : error !== null ? (
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <button
-                type="button"
-                aria-label={error}
-                className="shrink-0 text-destructive"
-              />
-            }
-          >
-            !
-          </TooltipTrigger>
-          <TooltipContent className="max-w-80 break-words whitespace-pre-wrap">
-            {error}
-          </TooltipContent>
-        </Tooltip>
+      {!missing && stale ? (
+        <UpdatingDot label="Stale result" active={false} />
       ) : null}
     </span>
   );

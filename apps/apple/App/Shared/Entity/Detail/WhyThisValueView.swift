@@ -30,13 +30,6 @@ struct FieldValueStatus: View {
                 .accessibilityLabel("Updating")
                 .help("Updating")
         }
-        if let failure = envelopes.lazy.compactMap(\.failure).first {
-            Image(systemName: "exclamationmark.circle")
-                .font(.caption)
-                .foregroundStyle(FieldGuideTokens.destructive)
-                .help(failure)
-                .accessibilityLabel("Refresh failed: \(failure)")
-        }
         let unsupported = envelopes.flatMap(\.unsupportedKinds)
         if !unsupported.isEmpty {
             Image(systemName: "questionmark.diamond")
@@ -344,7 +337,7 @@ struct WhyThisValueView: View {
         return VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
             sectionLabel("Effective result")
             HStack(alignment: .firstTextBaseline, spacing: FieldGuideTokens.Space.sm) {
-                resultText(envelope.result, failure: envelope.failure)
+                resultText(envelope.result)
                     .font(.fieldGuideData.weight(.semibold))
                     .accessibilityIdentifier("field.explanation.effective-value")
                 Spacer(minLength: FieldGuideTokens.Space.sm)
@@ -410,11 +403,11 @@ struct WhyThisValueView: View {
             Text("With inherited values:").foregroundStyle(.secondary)
             Group {
                 if let preview = envelope.resetPreview {
-                    resultText(preview, failure: nil)
+                    resultText(preview)
                 } else if case .editable(_, _, .available(.unsupported(let kind))) = envelope.controls {
                     Text("Unsupported preview: \(kind)").foregroundStyle(FieldGuideTokens.warning)
                 } else {
-                    Text(FieldEnvelope.missingLabel(failure: nil)).foregroundStyle(.secondary)
+                    Text(FieldEnvelope.missingLabel).foregroundStyle(.secondary)
                 }
             }
             .accessibilityIdentifier("field.explanation.fallback-value")
@@ -449,7 +442,7 @@ struct WhyThisValueView: View {
     }
 
     @ViewBuilder
-    private func resultText(_ result: FieldEnvelope.Result, failure: String?) -> some View {
+    private func resultText(_ result: FieldEnvelope.Result) -> some View {
         if let value = result.value {
             if let text = valueText(value) {
                 Text(text).textSelection(.enabled)
@@ -457,7 +450,7 @@ struct WhyThisValueView: View {
                 ExplanationEvidenceValue(value: value)
             }
         } else {
-            Text(FieldEnvelope.label(for: result, field: field, failure: failure))
+            Text(FieldEnvelope.label(for: result, field: field))
                 .foregroundStyle(.secondary)
         }
     }
@@ -667,7 +660,7 @@ struct WhyThisValueView: View {
         }
     }
 
-    /// The result's own age and refresh work: a cached
+    /// The result's own age: a cached
     /// result's recorded provenance is never restated as a current observation.
     private func freshness(_ envelope: FieldEnvelope) -> some View {
         VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
@@ -684,18 +677,6 @@ struct WhyThisValueView: View {
             case .live:
                 Text("Live result")
             default:
-                EmptyView()
-            }
-            switch envelope.work {
-            case .pending:
-                Label("Updating", systemImage: "circle.fill").foregroundStyle(FieldGuideTokens.info)
-            case .waiting(let reason):
-                Text(reason)
-            case .failed(let error, _):
-                Text(error).foregroundStyle(FieldGuideTokens.destructive).textSelection(.enabled)
-            case .unsupported(let kind):
-                Text("Unsupported refresh state: \(kind)").foregroundStyle(FieldGuideTokens.warning)
-            case .idle:
                 EmptyView()
             }
         }
@@ -988,7 +969,6 @@ private enum WhyThisValuePreviewData {
                         ],
                     ],
                 ],
-                "work": ["kind": "failed", "error": "Synthetic refresh failure", "retryAt": .null],
             ]
         ],
     ]

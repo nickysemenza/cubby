@@ -93,9 +93,6 @@
                               }
                             }
                           }
-                        },
-                        "work": {
-                          "kind": "idle"
                         }
                       },
                       "product": {
@@ -117,9 +114,6 @@
                               "kind": "computed"
                             }
                           }
-                        },
-                        "work": {
-                          "kind": "idle"
                         }
                       },
                       "aiDescription": {
@@ -141,9 +135,6 @@
                               "kind": "computed"
                             }
                           }
-                        },
-                        "work": {
-                          "kind": "idle"
                         }
                       },
                       "images": {
@@ -165,9 +156,6 @@
                               "kind": "computed"
                             }
                           }
-                        },
-                        "work": {
-                          "kind": "idle"
                         }
                       },
                       "valuationLabel": {
@@ -180,9 +168,6 @@
                         },
                         "result": {
                           "kind": "missing"
-                        },
-                        "work": {
-                          "kind": "idle"
                         }
                       },
                       "valuation": {
@@ -195,9 +180,6 @@
                         },
                         "result": {
                           "kind": "missing"
-                        },
-                        "work": {
-                          "kind": "idle"
                         }
                       },
                       "dataQuality": {
@@ -227,9 +209,6 @@
                               "kind": "computed"
                             }
                           }
-                        },
-                        "work": {
-                          "kind": "idle"
                         }
                       },
                       "dataGaps": {
@@ -242,9 +221,6 @@
                         },
                         "result": {
                           "kind": "missing"
-                        },
-                        "work": {
-                          "kind": "idle"
                         }
                       },
                       "displayImages": {
@@ -257,9 +233,6 @@
                         },
                         "result": {
                           "kind": "missing"
-                        },
-                        "work": {
-                          "kind": "idle"
                         }
                       }
                     }
@@ -299,9 +272,6 @@
                           }
                         }
                       }
-                    },
-                    "work": {
-                      "kind": "idle"
                     }
                   },
                   "product": {
@@ -323,9 +293,6 @@
                           "kind": "computed"
                         }
                       }
-                    },
-                    "work": {
-                      "kind": "idle"
                     }
                   },
                   "aiDescription": {
@@ -347,9 +314,6 @@
                           "kind": "computed"
                         }
                       }
-                    },
-                    "work": {
-                      "kind": "idle"
                     }
                   },
                   "images": {
@@ -371,9 +335,6 @@
                           "kind": "computed"
                         }
                       }
-                    },
-                    "work": {
-                      "kind": "idle"
                     }
                   },
                   "valuationLabel": {
@@ -386,9 +347,6 @@
                     },
                     "result": {
                       "kind": "missing"
-                    },
-                    "work": {
-                      "kind": "idle"
                     }
                   },
                   "valuation": {
@@ -401,9 +359,6 @@
                     },
                     "result": {
                       "kind": "missing"
-                    },
-                    "work": {
-                      "kind": "idle"
                     }
                   },
                   "dataQuality": {
@@ -433,9 +388,6 @@
                           "kind": "computed"
                         }
                       }
-                    },
-                    "work": {
-                      "kind": "idle"
                     }
                   },
                   "dataGaps": {
@@ -448,9 +400,6 @@
                     },
                     "result": {
                       "kind": "missing"
-                    },
-                    "work": {
-                      "kind": "idle"
                     }
                   },
                   "displayImages": {
@@ -463,9 +412,6 @@
                     },
                     "result": {
                       "kind": "missing"
-                    },
-                    "work": {
-                      "kind": "idle"
                     }
                   }
                 }
@@ -505,9 +451,6 @@
                       }
                     }
                   }
-                },
-                "work": {
-                  "kind": "idle"
                 }
               },
               "product": {
@@ -529,9 +472,6 @@
                       "kind": "computed"
                     }
                   }
-                },
-                "work": {
-                  "kind": "idle"
                 }
               },
               "aiDescription": {
@@ -553,9 +493,6 @@
                       "kind": "computed"
                     }
                   }
-                },
-                "work": {
-                  "kind": "idle"
                 }
               },
               "images": {
@@ -577,9 +514,6 @@
                       "kind": "computed"
                     }
                   }
-                },
-                "work": {
-                  "kind": "idle"
                 }
               },
               "valuationLabel": {
@@ -592,9 +526,6 @@
                 },
                 "result": {
                   "kind": "missing"
-                },
-                "work": {
-                  "kind": "idle"
                 }
               },
               "valuation": {
@@ -607,9 +538,6 @@
                 },
                 "result": {
                   "kind": "missing"
-                },
-                "work": {
-                  "kind": "idle"
                 }
               },
               "dataQuality": {
@@ -639,9 +567,6 @@
                       "kind": "computed"
                     }
                   }
-                },
-                "work": {
-                  "kind": "idle"
                 }
               },
               "dataGaps": {
@@ -654,9 +579,6 @@
                 },
                 "result": {
                   "kind": "missing"
-                },
-                "work": {
-                  "kind": "idle"
                 }
               },
               "displayImages": {
@@ -669,9 +591,6 @@
                 },
                 "result": {
                   "kind": "missing"
-                },
-                "work": {
-                  "kind": "idle"
                 }
               }
             }
@@ -711,9 +630,6 @@
                   }
                 }
               }
-            },
-            "work": {
-              "kind": "idle"
             }
           },
           "product": {
@@ -735,9 +651,6 @@
                   "kind": "computed"
                 }
               }
-            },
-            "work": {
-              "kind": "idle"
             }
           },
           "aiDescription": {
@@ -759,9 +672,6 @@
                   "kind": "computed"
                 }
               }
-            },
-            "work": {
-              "kind": "idle"
             }
           },
           "images": {
@@ -783,9 +693,6 @@
                   "kind": "computed"
                 }
               }
-            },
-            "work": {
-              "kind": "idle"
             }
           },
           "valuationLabel": {
@@ -798,9 +705,6 @@
             },
             "result": {
               "kind": "missing"
-            },
-            "work": {
-              "kind": "idle"
             }
           },
           "valuation": {
@@ -813,9 +717,6 @@
             },
             "result": {
               "kind": "missing"
-            },
-            "work": {
-              "kind": "idle"
             }
           },
           "dataQuality": {
@@ -845,9 +746,6 @@
                   "kind": "computed"
                 }
               }
-            },
-            "work": {
-              "kind": "idle"
             }
           },
           "dataGaps": {
@@ -860,9 +758,6 @@
             },
             "result": {
               "kind": "missing"
-            },
-            "work": {
-              "kind": "idle"
             }
           },
           "displayImages": {
@@ -875,9 +770,6 @@
             },
             "result": {
               "kind": "missing"
-            },
-            "work": {
-              "kind": "idle"
             }
           }
         }
@@ -940,9 +832,6 @@
                       }
                     }
                   }
-                },
-                "work": {
-                  "kind": "idle"
                 }
               },
               "product": {
@@ -964,9 +853,6 @@
                       "kind": "computed"
                     }
                   }
-                },
-                "work": {
-                  "kind": "idle"
                 }
               },
               "aiDescription": {
@@ -988,9 +874,6 @@
                       "kind": "computed"
                     }
                   }
-                },
-                "work": {
-                  "kind": "idle"
                 }
               },
               "images": {
@@ -1012,9 +895,6 @@
                       "kind": "computed"
                     }
                   }
-                },
-                "work": {
-                  "kind": "idle"
                 }
               },
               "valuationLabel": {
@@ -1027,9 +907,6 @@
                 },
                 "result": {
                   "kind": "missing"
-                },
-                "work": {
-                  "kind": "idle"
                 }
               },
               "valuation": {
@@ -1042,9 +919,6 @@
                 },
                 "result": {
                   "kind": "missing"
-                },
-                "work": {
-                  "kind": "idle"
                 }
               },
               "dataQuality": {
@@ -1074,9 +948,6 @@
                       "kind": "computed"
                     }
                   }
-                },
-                "work": {
-                  "kind": "idle"
                 }
               },
               "dataGaps": {
@@ -1089,9 +960,6 @@
                 },
                 "result": {
                   "kind": "missing"
-                },
-                "work": {
-                  "kind": "idle"
                 }
               },
               "displayImages": {
@@ -1104,9 +972,6 @@
                 },
                 "result": {
                   "kind": "missing"
-                },
-                "work": {
-                  "kind": "idle"
                 }
               }
             }
@@ -1146,9 +1011,6 @@
                   }
                 }
               }
-            },
-            "work": {
-              "kind": "idle"
             }
           },
           "product": {
@@ -1170,9 +1032,6 @@
                   "kind": "computed"
                 }
               }
-            },
-            "work": {
-              "kind": "idle"
             }
           },
           "aiDescription": {
@@ -1194,9 +1053,6 @@
                   "kind": "computed"
                 }
               }
-            },
-            "work": {
-              "kind": "idle"
             }
           },
           "images": {
@@ -1218,9 +1074,6 @@
                   "kind": "computed"
                 }
               }
-            },
-            "work": {
-              "kind": "idle"
             }
           },
           "valuationLabel": {
@@ -1233,9 +1086,6 @@
             },
             "result": {
               "kind": "missing"
-            },
-            "work": {
-              "kind": "idle"
             }
           },
           "valuation": {
@@ -1248,9 +1098,6 @@
             },
             "result": {
               "kind": "missing"
-            },
-            "work": {
-              "kind": "idle"
             }
           },
           "dataQuality": {
@@ -1280,9 +1127,6 @@
                   "kind": "computed"
                 }
               }
-            },
-            "work": {
-              "kind": "idle"
             }
           },
           "dataGaps": {
@@ -1295,9 +1139,6 @@
             },
             "result": {
               "kind": "missing"
-            },
-            "work": {
-              "kind": "idle"
             }
           },
           "displayImages": {
@@ -1310,9 +1151,6 @@
             },
             "result": {
               "kind": "missing"
-            },
-            "work": {
-              "kind": "idle"
             }
           }
         }
@@ -1352,9 +1190,6 @@
               }
             }
           }
-        },
-        "work": {
-          "kind": "idle"
         }
       },
       "product": {
@@ -1376,9 +1211,6 @@
               "kind": "computed"
             }
           }
-        },
-        "work": {
-          "kind": "idle"
         }
       },
       "aiDescription": {
@@ -1400,9 +1232,6 @@
               "kind": "computed"
             }
           }
-        },
-        "work": {
-          "kind": "idle"
         }
       },
       "images": {
@@ -1424,9 +1253,6 @@
               "kind": "computed"
             }
           }
-        },
-        "work": {
-          "kind": "idle"
         }
       },
       "valuationLabel": {
@@ -1439,9 +1265,6 @@
         },
         "result": {
           "kind": "missing"
-        },
-        "work": {
-          "kind": "idle"
         }
       },
       "valuation": {
@@ -1454,9 +1277,6 @@
         },
         "result": {
           "kind": "missing"
-        },
-        "work": {
-          "kind": "idle"
         }
       },
       "dataQuality": {
@@ -1486,9 +1306,6 @@
               "kind": "computed"
             }
           }
-        },
-        "work": {
-          "kind": "idle"
         }
       },
       "dataGaps": {
@@ -1501,9 +1318,6 @@
         },
         "result": {
           "kind": "missing"
-        },
-        "work": {
-          "kind": "idle"
         }
       },
       "displayImages": {
@@ -1516,9 +1330,6 @@
         },
         "result": {
           "kind": "missing"
-        },
-        "work": {
-          "kind": "idle"
         }
       }
     }
@@ -1569,9 +1380,6 @@
               }
             }
           }
-        },
-        "work": {
-          "kind": "idle"
         }
       },
       "product": {
@@ -1593,9 +1401,6 @@
               "kind": "computed"
             }
           }
-        },
-        "work": {
-          "kind": "idle"
         }
       },
       "aiDescription": {
@@ -1617,9 +1422,6 @@
               "kind": "computed"
             }
           }
-        },
-        "work": {
-          "kind": "idle"
         }
       },
       "images": {
@@ -1641,9 +1443,6 @@
               "kind": "computed"
             }
           }
-        },
-        "work": {
-          "kind": "idle"
         }
       },
       "valuationLabel": {
@@ -1656,9 +1455,6 @@
         },
         "result": {
           "kind": "missing"
-        },
-        "work": {
-          "kind": "idle"
         }
       },
       "valuation": {
@@ -1671,9 +1467,6 @@
         },
         "result": {
           "kind": "missing"
-        },
-        "work": {
-          "kind": "idle"
         }
       },
       "dataQuality": {
@@ -1703,9 +1496,6 @@
               "kind": "computed"
             }
           }
-        },
-        "work": {
-          "kind": "idle"
         }
       },
       "dataGaps": {
@@ -1718,9 +1508,6 @@
         },
         "result": {
           "kind": "missing"
-        },
-        "work": {
-          "kind": "idle"
         }
       },
       "displayImages": {
@@ -1733,9 +1520,6 @@
         },
         "result": {
           "kind": "missing"
-        },
-        "work": {
-          "kind": "idle"
         }
       }
     }

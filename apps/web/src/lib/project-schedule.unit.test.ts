@@ -39,7 +39,6 @@ function project(
             },
           },
         },
-        work: { kind: "idle" },
       },
     },
     blockedByIds: [],
@@ -67,23 +66,14 @@ function task(
 }
 
 describe("detail schedule rows", () => {
-  it("distinguishes missing and failed windows from a completed empty window", () => {
+  it("distinguishes a missing window from a completed empty window", () => {
     const root = project("pending");
     root.fields.dateWindow = fromPartial<ProjectOut["fields"]["dateWindow"]>({
       result: { kind: "missing" },
-      work: { kind: "pending" },
     });
     expect(buildDetailScheduleRows(root, [], [])[0]?.noDateLabel).toBe(
       "Updating…",
     );
-    root.fields.dateWindow.work = {
-      kind: "failed",
-      error: "Synthetic window failure",
-      retryAt: null,
-    };
-    const failed = buildDetailScheduleRows(root, [], [])[0];
-    expect(failed?.noDateLabel).toBe("Unavailable");
-    expect(failed?.meta).toContain("Synthetic window failure");
     expect(
       buildDetailScheduleRows(project("empty"), [], [])[0]?.noDateLabel,
     ).toBe("No dates");

@@ -19,16 +19,12 @@ const totals = (amount: number) =>
     direct: { priced: 1, missingPricing: 2, miscNoPrice: 0 },
     total: { priced: 1, missingPricing: 2, miscNoPrice: 0 },
   });
-const envelope = (
-  result: ValuationEnvelope["result"],
-  work: ValuationEnvelope["work"] = { kind: "idle" },
-): ValuationEnvelope => ({
+const envelope = (result: ValuationEnvelope["result"]): ValuationEnvelope => ({
   current: {
     assignment: null,
     controls: { kind: "readonly", reason: "computed" },
   },
   result,
-  work,
 });
 
 let harness: ReturnType<typeof createBrowserTestHarness>;
@@ -49,9 +45,9 @@ describe.each(["compact", "full"] as const)(
         { wrapper: harness.wrapper },
       );
 
-    it("keeps an unpublished pending result distinct from zero and pricing counts", () => {
-      show(envelope({ kind: "missing" }, { kind: "pending" }));
-      expect(screen.getByLabelText("Queued for refresh")).toBeVisible();
+    it("keeps an unpublished result distinct from zero and pricing counts", () => {
+      show(envelope({ kind: "missing" }));
+      expect(screen.getByLabelText("Not calculated yet")).toBeVisible();
       expect(screen.queryByText(/\$/)).not.toBeInTheDocument();
       expect(screen.queryByText(/no pricing/)).not.toBeInTheDocument();
     });
@@ -70,7 +66,7 @@ describe.each(["compact", "full"] as const)(
       expect(screen.queryByText(/\$/)).not.toBeInTheDocument();
       expect(screen.queryByText(/no pricing/)).not.toBeInTheDocument();
       expect(
-        screen.queryByLabelText("Queued for refresh"),
+        screen.queryByLabelText("Not calculated yet"),
       ).not.toBeInTheDocument();
     });
 
@@ -86,39 +82,6 @@ describe.each(["compact", "full"] as const)(
       );
       expect(screen.getByText("$0.00")).toBeVisible();
       expect(screen.getByText(/no pricing for 2/)).toBeVisible();
-    });
-
-    it("keeps a stale usable value and exposes its raw refresh failure", () => {
-      const error = "Synthetic SQLSTATE 40001: valuation refresh failed";
-      show(
-        envelope(
-          {
-            kind: "cached",
-            computedAt: "2026-10-01T00:00:00Z",
-            freshness: "stale",
-            decision: {
-              outcome: { kind: "value", value: totals(37) },
-              provenance: { kind: "computed" },
-            },
-          },
-          { kind: "failed", error, retryAt: null },
-        ),
-      );
-      expect(screen.getByText("$37.00")).toBeVisible();
-      expect(screen.getByText(/no pricing for 2/)).toBeVisible();
-      expect(screen.queryByLabelText("Updating")).not.toBeInTheDocument();
-      expect(screen.getByRole("button", { name: error })).toBeVisible();
-    });
-
-    it("shows an unavailable result with the raw failure and no money or pricing counts", () => {
-      const error = "Synthetic valuation source unavailable";
-      show(
-        envelope({ kind: "missing" }, { kind: "failed", error, retryAt: null }),
-      );
-      expect(screen.getByText("Unavailable")).toBeVisible();
-      expect(screen.getByRole("button", { name: error })).toBeVisible();
-      expect(screen.queryByText(/\$/)).not.toBeInTheDocument();
-      expect(screen.queryByText(/no pricing/)).not.toBeInTheDocument();
     });
   },
 );

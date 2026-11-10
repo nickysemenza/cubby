@@ -41,7 +41,6 @@ function readFields(
                     provenance: { kind: "computed" },
                   },
                 },
-          work: { kind: "idle" },
         }),
       ];
     }),
