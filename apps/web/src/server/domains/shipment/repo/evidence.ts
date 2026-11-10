@@ -1,5 +1,4 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import type { EmailId } from "@cubby/schemas/identifiers";
 import {
   parseEntityId,
   parseShortcodeFor,
@@ -38,7 +37,6 @@ import {
 } from "drizzle-orm";
 import { z } from "zod";
 
-import { householdLocalDate } from "~/lib/household-date";
 import type { Database } from "~/server/db";
 import {
   getDb,
@@ -59,14 +57,6 @@ import {
   vendorAccount,
   vendor,
 } from "~/server/db/schema";
-import {
-  readRetainedMail,
-  type RetainedMail,
-} from "~/server/domains/mail/repo/retained-mail";
-import { loadImportScope } from "~/server/domains/purchase-import/repo/import-scope";
-import { assertMailRunMembership } from "~/server/domains/purchase-import/repo/mail-run-membership";
-import { assertMailSourceIdentityReady } from "~/server/domains/purchase-import/repo/mail-source-identity";
-import { runPurposePolicy } from "~/server/domains/run/repo/purpose-policy";
 import { publishRunFinding } from "~/server/domains/run/repo/run-finding";
 import {
   assessCarrierPacket,
@@ -96,7 +86,16 @@ import {
   deduplicateShipmentTrackingReferences,
   shipmentTrackingReferenceKey,
 } from "./carrier-references";
-import { planObservationRevision } from "./evidence-observation-plan";
+import { applyObservationWrite } from "./evidence-observation-application";
+import {
+  planObservationRevision,
+  planObservationWrite,
+} from "./evidence-observation-plan";
+import {
+  loadSourceCapture,
+  planSourceCapture,
+  applySourceCapture,
+} from "./evidence-source";
 
 const canonical = (value: unknown) => canonicalJson(jsonSnapshot.parse(value));
 // Re-extraction can respell one source's key. Only that same source may match it:
@@ -678,133 +677,6 @@ async function projectCarrierReferences(
   };
 }
 
-async function sourceCapture(
-  db: Database,
-  input: Pick<ShipmentWriterInput, "source">,
-  actor: ActorContext,
-) {
-  const source = input.source;
-  let emailId: EmailId | null = null;
-  let ownerId: string | null = null;
-  let sourceKey: string;
-  let checksum: string;
-  let originalContent: RetainedMail["content"] | null = null;
-  let notificationDate: string | null = null;
-  if (source.kind === "email") {
-    emailId = await resolveOrThrow(db, "email", source.emailId);
-    const [message] = await getDb(db)
-      .select()
-      .from(email)
-      .where(and(eq(email.id, emailId), notDeleted(email)))
-      .for("share");
-    if (!message?.orderMailId)
-      return constraintViolation(
-        "Shipment Email requires a retained original.",
-      );
-    const parties = await getDb(db)
-      .select({ id: ledgerParty.id })
-      .from(ledgerParty)
-      .where(
-        and(
-          eq(ledgerParty.userId, actor.userId),
-          eq(ledgerParty.kind, "member"),
-          notDeleted(ledgerParty),
-        ),
-      );
-    const [original] = await readRetainedMail(
-      db,
-      {
-        ledgerPartyIds: parties.map((row) => row.id),
-        orderMailIds: [message.orderMailId],
-      },
-      "share",
-    );
-    if (!original || original.rawChecksum !== source.checksum)
-      return constraintViolation(
-        "Shipment Email is foreign, missing or changed; read its original again.",
-      );
-    await assertMailSourceIdentityReady(getDb(db), original);
-    if (actor.runId) {
-      const scope = await loadImportScope(db, actor.runId, actor);
-      if (
-        scope.ledgerPartyId !== original.ledgerPartyId ||
-        scope.status !== "running"
-      )
-        return constraintViolation(
-          "The active import Run does not own this Email or is not running.",
-        );
-      const mailSources = runPurposePolicy(scope.purpose).mailSources;
-      if (mailSources === "admitted")
-        await assertMailRunMembership(getDb(db), actor.runId, original.id);
-      else if (mailSources !== "owner")
-        return constraintViolation("This Run cannot record shipment evidence.");
-    }
-    ownerId = original.ledgerPartyId;
-    originalContent = original.content;
-    notificationDate = original.receivedAt
-      ? householdLocalDate(original.receivedAt)
-      : null;
-    sourceKey = `email:${emailId}`;
-    checksum = source.checksum;
-  } else {
-    if (actor.runId)
-      return constraintViolation(
-        "Unattended mail processing cannot submit interactive shipment captures.",
-      );
-    if (new Date(source.capturedAt).getTime() > Date.now() + 300000)
-      return constraintViolation(
-        "Tracking capture time cannot be in the future.",
-      );
-    sourceKey =
-      source.kind === "tracking_page"
-        ? `tracking_page:${actor.userId}:${source.url}:${source.externalKey}`
-        : `sms_export:${actor.userId}:${source.externalKey}`;
-    checksum = await sha256Hex(
-      source.kind === "sms_export"
-        ? canonical({
-            sender: source.sender,
-            sentAt: source.sentAt,
-            content: source.content,
-          })
-        : source.content,
-    );
-    if (source.kind === "sms_export") {
-      notificationDate =
-        source.sentAt.kind === "instant"
-          ? householdLocalDate(new Date(source.sentAt.value))
-          : source.sentAt.kind === "date" || source.sentAt.kind === "local"
-            ? source.sentAt.value.slice(0, 10)
-            : null;
-      const prior = await getDb(db)
-        .select({ checksum: shipmentSourceCapture.checksum })
-        .from(shipmentSourceCapture)
-        .where(eq(shipmentSourceCapture.sourceKey, sourceKey))
-        .limit(1);
-      if (prior[0] && prior[0].checksum !== checksum)
-        return constraintViolation(
-          "The exported SMS source changed; review its original instead of replacing it.",
-        );
-    }
-  }
-  const [capture] = await getDb(db)
-    .insert(shipmentSourceCapture)
-    .values({
-      sourceKey,
-      checksum,
-      source,
-      originalContent,
-      emailId,
-      actorUserId: actor.userId,
-    })
-    .onConflictDoUpdate({
-      target: [shipmentSourceCapture.sourceKey, shipmentSourceCapture.checksum],
-      set: { sourceKey },
-    })
-    .returning();
-  if (!capture) throw new Error("Shipment source capture was not retained.");
-  return { capture, sourceKey, ownerId, notificationDate };
-}
-
 // Ownership is checked on the Purchase's purchasing account, never inferred from who paid.
 async function purchaseSourceOwner(db: Database, id: PurchaseId) {
   const [row] = await getDb(db)
@@ -897,8 +769,9 @@ async function writeShipmentEvidence(
   return withTransactionDatabase(db, async (tdb) => {
     await lockShipmentWrites(tdb);
     const database = getDb(tdb);
-    const { capture, sourceKey, ownerId, notificationDate } =
-      await sourceCapture(tdb, input, actor);
+    const source = await loadSourceCapture(tdb, input, actor);
+    const capture = await applySourceCapture(tdb, planSourceCapture(source));
+    const { sourceKey, ownerId, notificationDate } = source;
     for (const packet of input.shipments)
       for (const observation of packet.observations)
         if (
@@ -1562,80 +1435,23 @@ async function writeShipmentEvidence(
           .from(shipmentObservation)
           .where(sameOccurrence)
           .orderBy(desc(shipmentObservation.firstSeenAt));
-        const { prior, restored, canSupersede } = planObservationRevision({
+        const plan = planObservationWrite({
           versions,
           current,
           fingerprint,
           literalFingerprint,
           observedAt,
           revisesFromSameCapture,
+          event,
+          shipmentId: row.id,
+          sourceCaptureId: capture.id,
+          sourcePackageId: sourcePackage.id,
+          sourceKey,
+          occurrenceKey,
         });
-        let retainedId: string;
-        if (prior && !restored) {
-          await database
-            .update(shipmentObservation)
-            .set({
-              firstSeenAt: new Date(
-                Math.min(prior.firstSeenAt.getTime(), observedAt.getTime()),
-              ),
-              lastSeenAt: new Date(
-                Math.max(prior.lastSeenAt.getTime(), observedAt.getTime()),
-              ),
-            })
-            .where(eq(shipmentObservation.id, prior.id));
-          repeatedObservations++;
-          retainedId = prior.id;
-        } else {
-          const [created] = await database
-            .insert(shipmentObservation)
-            .values({
-              shipmentId: row.id,
-              sourceCaptureId: capture.id,
-              sourceKey,
-              sourcePackageId: sourcePackage.id,
-              sourceEventKey: event.sourceEventKey,
-              occurrenceKey,
-              fingerprint,
-              event,
-              firstSeenAt: observedAt,
-              lastSeenAt: observedAt,
-              supersededById: canSupersede ? null : (current?.id ?? null),
-            })
-            .returning();
-          if (!created)
-            throw new Error("Shipment observation was not retained.");
-          if (canSupersede)
-            await database
-              .update(shipmentObservation)
-              .set({ supersededById: created.id })
-              .where(
-                and(
-                  sameOccurrence,
-                  isNull(shipmentObservation.supersededById),
-                  ne(shipmentObservation.id, created.id),
-                ),
-              );
-          insertedObservations++;
-          retainedId = created.id;
-        }
-        await database
-          .insert(shipmentObservationCapture)
-          .values({
-            observationId: retainedId,
-            captureId: capture.id,
-            firstSeenAt: observedAt,
-            lastSeenAt: observedAt,
-          })
-          .onConflictDoUpdate({
-            target: [
-              shipmentObservationCapture.observationId,
-              shipmentObservationCapture.captureId,
-            ],
-            set: {
-              firstSeenAt: sql`least(${shipmentObservationCapture.firstSeenAt}, ${observedAt})`,
-              lastSeenAt: sql`greatest(${shipmentObservationCapture.lastSeenAt}, ${observedAt})`,
-            },
-          });
+        await applyObservationWrite(tdb, plan);
+        if (plan.kind === "repeat") repeatedObservations++;
+        else insertedObservations++;
       }
       await recordChange(tdb, { kind: "source", categories: ["shipment"] });
     }

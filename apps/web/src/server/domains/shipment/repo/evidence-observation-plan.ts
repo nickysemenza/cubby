@@ -42,3 +42,53 @@ export function planObservationRevision(input: {
         : current.lastSeenAt < observedAt));
   return { prior, restored, keepCurrent, canSupersede };
 }
+
+export function planObservationWrite(input: {
+  versions: readonly Observation[];
+  current: Observation | undefined;
+  fingerprint: string;
+  literalFingerprint: string;
+  observedAt: Date;
+  revisesFromSameCapture: boolean;
+  event: Observation["event"];
+  shipmentId: Observation["shipmentId"];
+  sourceCaptureId: Observation["sourceCaptureId"];
+  sourcePackageId: Observation["sourcePackageId"];
+  sourceKey: string;
+  occurrenceKey: string;
+}) {
+  const { prior, restored, canSupersede } = planObservationRevision(input);
+  if (prior && !restored)
+    return {
+      kind: "repeat" as const,
+      id: prior.id,
+      firstSeenAt: new Date(
+        Math.min(prior.firstSeenAt.getTime(), input.observedAt.getTime()),
+      ),
+      lastSeenAt: new Date(
+        Math.max(prior.lastSeenAt.getTime(), input.observedAt.getTime()),
+      ),
+      captureId: input.sourceCaptureId,
+      observedAt: input.observedAt,
+    };
+  return {
+    kind: "insert" as const,
+    values: {
+      shipmentId: input.shipmentId,
+      sourceCaptureId: input.sourceCaptureId,
+      sourceKey: input.sourceKey,
+      sourcePackageId: input.sourcePackageId,
+      sourceEventKey: input.event.sourceEventKey,
+      occurrenceKey: input.occurrenceKey,
+      fingerprint: input.fingerprint,
+      event: input.event,
+      firstSeenAt: input.observedAt,
+      lastSeenAt: input.observedAt,
+      supersededById: canSupersede ? null : (input.current?.id ?? null),
+    },
+    canSupersede,
+    captureId: input.sourceCaptureId,
+    observedAt: input.observedAt,
+  };
+}
+export type ObservationWritePlan = ReturnType<typeof planObservationWrite>;
