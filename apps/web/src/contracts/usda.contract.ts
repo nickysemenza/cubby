@@ -58,7 +58,6 @@ export const usdaFoodContract = defineContract(
       output: foodSummaryWithLinkedProducts.nullable(),
       cache: { tags: [["usda-food"]] },
     }),
-    // Agent-facing (MCP `usda_food`).
     /** Relevance-ranked FoodData Central search. */
     search: query({
       description:

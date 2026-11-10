@@ -143,8 +143,7 @@ export const isSyntheticOrderId = (orderId: string): boolean =>
  * - A scheme-less paste (`homedepot.com/orders?orderID={orderId}` — the natural
  *   thing to copy out of a browser) yields a string `z.url()` REJECTS, which
  *   would throw during output validation and 500 every `purchase.list` /
- *   `expense.list` / `problems.getFast` read containing that vendor, not merely
- *   drop the one link.
+ *   `expense.list` read containing that vendor, not merely drop the one link.
  * - `z.url()` ACCEPTS `javascript:alert(1)`, so validity alone is not enough:
  *   the result is rendered into an `href`, and a non-http(s) scheme there is a
  *   script-execution vector. Hence the explicit protocol allowlist rather than

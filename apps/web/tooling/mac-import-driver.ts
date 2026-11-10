@@ -827,14 +827,9 @@ export class MacImportDriver {
       JSON.stringify({ ownedPID: this.pid, windowID }),
     );
   }
-  async clickSidebar(
-    label: "Browse" | "Photos" | "Browser Sync",
-  ): Promise<void> {
-    // CubbyCommands binds these destinations to AppSection tabs four, five and nine.
-    this.nativeShortcut(
-      label === "Photos" ? 21 : label === "Browse" ? 23 : 25,
-      label,
-    );
+  async clickSidebar(label: "Browse" | "Photos"): Promise<void> {
+    // CubbyCommands binds these destinations to AppSection tabs four and five.
+    this.nativeShortcut(label === "Photos" ? 21 : 23, label);
     await this.wait(`label="${label}" role=window`);
     // View commands can change the main destination while Settings remains key.
     // Raise the owned main window before invoking a file importer or sheet.
