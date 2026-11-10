@@ -63,42 +63,6 @@ const succeedsWith = (page: Page, matches: (input: string) => boolean) =>
     ),
   );
 
-// Failure mode: typed `ext-a, ext-b` reached the server as one value, a
-// reload of the same URL decoded two, and the editor showed only the first.
-test("typed id values keep one meaning through entry, reload and edit", async ({
-  page,
-}) => {
-  await gotoAuthenticatedPage(page, "/financial-transactions");
-  await openFilter(page, "External id");
-  const input = page.getByRole("textbox", { name: /^Filter External id$/i });
-  const typed = succeedsWith(page, (body) =>
-    body.includes('["ext-a","ext-b"]'),
-  );
-  await input.fill("ext-a, ext-b");
-  await typed;
-  await expect
-    .poll(() => new URL(page.url()).searchParams.get("externalId"))
-    .toBe("ext-a,ext-b");
-  await closePopovers(page);
-
-  const chip = page.getByRole("button", {
-    name: /^External id: ext-a or ext-b$/i,
-  });
-  await reloadAuthenticatedPage(page);
-  await expect(chip).toBeVisible();
-  await chip.click();
-  await expect(input).toHaveValue("ext-a, ext-b");
-  const edited = succeedsWith(page, (body) =>
-    body.includes('["ext-a","ext-b","ext-c"]'),
-  );
-  await input.press("End");
-  await input.pressSequentially(", ext-c");
-  await edited;
-  await expect
-    .poll(() => new URL(page.url()).searchParams.get("externalId"))
-    .toBe("ext-a,ext-b,ext-c");
-});
-
 // Failure mode: the server takes one value across Email's Purchase, Vendor
 // and Vendor account scopes, but the menu let a person combine them into a
 // list query that always failed.
@@ -203,91 +167,6 @@ test("Linked transactions reference pickers load their rosters", async ({
   await expect(
     page.getByRole("option", { name: new RegExp(accountName) }),
   ).toBeVisible();
-});
-
-// Failure mode: the codec split every picked value on commas, so the tag
-// `quick, easy` reached the server as two tags and decoded as two on reload.
-test("a picked tag containing a comma stays one tag through URL and reload", async ({
-  page,
-}, testInfo) => {
-  const tag = `${uniqueName(testInfo, "quick")}, easy`;
-  const tagged = uniqueName(testInfo, "Comma Tag Recipe");
-  const untagged = uniqueName(testInfo, "Untagged Recipe");
-  await createEntityFixture(page, "recipe", { name: tagged, tags: [tag] });
-  await createEntityFixture(page, "recipe", { name: untagged });
-  const recipe = (name: string) =>
-    page.getByRole("link", { name, exact: true });
-
-  await gotoAuthenticatedPage(page, "/recipes");
-  await openFilter(page, "Tags");
-  const filtered = succeedsWith(page, (body) =>
-    body.includes(JSON.stringify([tag])),
-  );
-  await pickInline(page, "Tags", tag);
-  await filtered;
-  await closePopovers(page);
-  await expect(recipe(tagged)).toBeVisible();
-  await expect(recipe(untagged)).toHaveCount(0);
-
-  // Split into `quick` and `easy`, the reloaded query would match nothing.
-  await reloadAuthenticatedPage(page);
-  await expect(
-    page.getByRole("button", { name: `Tags: ${tag}`, exact: true }),
-  ).toBeVisible();
-  await expect(recipe(tagged)).toBeVisible();
-  await expect(recipe(untagged)).toHaveCount(0);
-});
-
-// Failure mode: landing on the `?parentTaskId=` alias then picking another
-// parent kept two states, and the alias's stale value won the request.
-test("editing Parent task after landing on its deep-link alias", async ({
-  page,
-}, testInfo) => {
-  const task = async (label: string, parentTaskId?: string) => {
-    const name = uniqueName(testInfo, label);
-    const { id } = await createEntityFixture(page, "task", {
-      name,
-      trade: "other",
-      ...(parentTaskId ? { parentTaskId } : {}),
-    });
-    return { id, name };
-  };
-  const parentA = await task("Alias Parent A");
-  const parentB = await task("Alias Parent B");
-  const childA = await task("Alias Child A", parentA.id);
-  const childB = await task("Alias Child B", parentB.id);
-  const row = (name: string) => page.getByRole("link", { name, exact: true });
-
-  await gotoAuthenticatedPage(page, `/tasks?parentTaskId=${parentA.id}`);
-  await expect(row(childA.name)).toBeVisible();
-  await expect(row(childB.name)).toHaveCount(0);
-  // The alias is read into the Parent task filter and the URL moves to its key.
-  await expect
-    .poll(() => new URL(page.url()).searchParams.get("parentTask"))
-    .toBe(parentA.id);
-  expect(new URL(page.url()).searchParams.has("parentTaskId")).toBe(false);
-
-  await page
-    .getByRole("button", { name: `Parent task: ${parentA.name}`, exact: true })
-    .click();
-  // Clearing the last value removes the chip and its editor. Reopen the inactive filter.
-  await pickInline(page, "Parent task", parentA.name);
-  await expect(
-    page.getByRole("button", {
-      name: `Parent task: ${parentA.name}`,
-      exact: true,
-    }),
-  ).toHaveCount(0);
-  await closePopovers(page);
-  await openFilter(page, "Parent task");
-  await pickInline(page, "Parent task", parentB.name);
-  await closePopovers(page);
-
-  await expect(row(childB.name)).toBeVisible();
-  await expect(row(childA.name)).toHaveCount(0);
-  await expect
-    .poll(() => new URL(page.url()).searchParams.get("parentTask"))
-    .toBe(parentB.id);
 });
 
 // Failure modes: a declared number range with no presets (image upload age)

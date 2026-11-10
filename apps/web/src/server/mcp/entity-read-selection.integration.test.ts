@@ -1,4 +1,5 @@
 import { testUserId } from "@cubby/schemas/testing";
+import { createRepoIdentity } from "tooling/factories/repo";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
@@ -7,10 +8,7 @@ import { listEntities } from "~/entity/model/list-contracts";
 import { unwrapDb } from "~/server/db/helpers";
 import { entityExternalId } from "~/server/db/schema";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
-import {
-  buildKernelContext,
-  seedReferenceUniverse,
-} from "~/server/entity-kernel/reference-universe.fixtures";
+import { buildKernelContext } from "~/server/entity-kernel/reference-universe.fixtures";
 import { ENTITY_SCHEMA_BINDINGS } from "~/server/generated/entity-bindings.gen";
 import { ENTITY_REPOSITORY_READ_SCHEMAS } from "~/server/generated/entity-bindings.gen";
 import { generatedMcpEntityActionEntities } from "~/server/generated/entity-kernel-entities.gen";
@@ -497,7 +495,34 @@ describe("entity_read field selection", () => {
   // representative kinds cover it: Product (widest projection), Expense and
   // FinancialTransaction (money, derived source labels), Location (nested).
   it("serves compact and field selections for representative entity_read kinds", async () => {
-    await seedReferenceUniverse(ctx.db);
+    await world();
+    await createProductIdentityFixture(
+      ctx.db,
+      makeProductInput({ name: "Synthetic selection product" }),
+      ctx.actor,
+    );
+    await insertWithShortcode(ctx.db, "location", {
+      name: "Synthetic selection location",
+      type: "room",
+    });
+    const owner = await createRepoIdentity(ctx, "ledgerParty", {
+      name: "Synthetic selection member",
+      kind: "member",
+    });
+    const account = await createRepoIdentity(ctx, "financialAccount", {
+      name: "Synthetic selection account",
+      identity: { kind: "cash" },
+      ledgerPartyId: owner.output.id,
+    });
+    await createRepoIdentity(ctx, "financialTransaction", {
+      accountId: account.output.id,
+      kind: "purchase",
+      status: "posted",
+      amount: 12.5,
+      transactionDate: "2026-09-01",
+      postedDate: "2026-09-01",
+      merchant: "Synthetic selection merchant",
+    });
     const entityKernel = entityKernelContextSchema.parse(
       buildKernelContext(ctx.db),
     );

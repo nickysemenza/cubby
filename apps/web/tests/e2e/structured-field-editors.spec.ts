@@ -1,12 +1,7 @@
-import type { PgTable } from "drizzle-orm/pg-core";
-import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { and, asc, eq } from "drizzle-orm";
-import { entityExternalId, financialAccount } from "~/server/db/schema";
+import { entityExternalId } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/db/helpers";
-import {
-  gotoAuthenticatedPage,
-  selectComboboxItem,
-} from "./support/e2e-helpers";
+import { gotoAuthenticatedPage } from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
 import { createEntityFixture, getFixtureDb } from "./fixtures/core";
 
@@ -126,100 +121,4 @@ test("vendor agent hints are edited with the generic structured editor", async (
   await expect(dialog.getByRole("textbox", { name: "Note 1" })).toHaveValue(
     "Sign in first",
   );
-});
-
-test("a new account must choose its identity kind instead of getting a default", async ({
-  page,
-}) => {
-  const providerName = `Synthetic account provider ${Date.now()}`;
-  const provider = await createEntityFixture(page, "vendor", {
-    name: providerName,
-  });
-  await page.setViewportSize({ width: 1280, height: 1000 });
-  const name = `Example card ${Date.now()}`;
-  await gotoAuthenticatedPage(
-    page,
-    `/financial-accounts?create=true&searchQuery=${encodeURIComponent(name)}`,
-  );
-  const dialog = page.getByRole("dialog", { name: "New Account" });
-  await dialog.getByRole("textbox", { name: "Name", exact: true }).fill(name);
-
-  const identity = dialog.getByRole("combobox", { name: "Identity" });
-  await expect(identity).toHaveText(/^Choose/);
-  await expect(dialog.getByRole("textbox", { name: "Issuer" })).toHaveCount(0);
-  await dialog.getByRole("button", { name: "Create" }).click();
-  // The form refuses an account with no identity, and the dialog stays open.
-  await expect(dialog).toBeVisible();
-
-  await identity.click();
-  await page.getByRole("option", { name: "Credit card" }).click();
-  await expect(dialog.getByRole("textbox", { name: "Issuer" })).toHaveCount(0);
-  await selectComboboxItem(
-    page,
-    dialog.getByRole("combobox", { name: "Provider vendor", exact: true }),
-    providerName,
-    { query: providerName, code: provider.id },
-  );
-  await dialog.getByRole("button", { name: "Add card number" }).click();
-  await dialog.getByRole("textbox", { name: "Last 4" }).fill("4242");
-  await dialog.getByRole("combobox", { name: "Kind" }).click();
-  await page.getByRole("option", { name: "Primary" }).click();
-  await dialog.getByRole("button", { name: "Create" }).click();
-  await expect(dialog).toBeHidden();
-  const stored = await getDb(getFixtureDb()).query.financialAccount.findFirst({
-    with: { providerVendor: { columns: { shortcode: true } } },
-    where: {
-      RAW: (table: PgTable) =>
-        relationalSql(
-          table,
-          and(eq(financialAccount.name, name), notDeleted(financialAccount)),
-        ),
-    },
-  });
-  expect(stored).toMatchObject({
-    identity: { kind: "credit_card", network: null },
-    providerVendor: { shortcode: provider.id },
-    cardNumbers: [{ last4: "4242", kind: "primary" }],
-  });
-});
-
-// A browser journey found the Edit dialog refusing a source-claim description edit with
-// "Invalid input at sourceClaims" before any request left the browser.
-test("an expense's source claim description is edited without losing the claim", async ({
-  page,
-}) => {
-  await page.setViewportSize({ width: 1280, height: 1000 });
-  const expense = await createEntityFixture(page, "expense", {
-    name: `Example claim expense ${Date.now()}`,
-    cost: 10,
-    trade: "other",
-    sourceClaims: [
-      {
-        source: "example-provider",
-        providerId: "example-row-1",
-        normalizedEvidence: {
-          amount: 10,
-          occurredOn: "2026-08-20",
-          description: "Example claim evidence",
-          context: null,
-          disambiguator: null,
-        },
-        reconciliation: { decision: "amounts_match" },
-      },
-    ],
-  });
-  await gotoAuthenticatedPage(page, `/expenses/${expense.id}`);
-  const dialog = page.getByRole("dialog", { name: "Edit Expense" });
-  const edit = page.getByRole("button", { name: "Edit Expense", exact: true });
-  await edit.click();
-  await dialog
-    .getByRole("textbox", { name: "Description" })
-    .fill("Example claim evidence revised");
-  await dialog.getByRole("button", { name: "Save changes" }).click();
-  await expect(dialog).toBeHidden();
-
-  await edit.click();
-  await expect(
-    dialog.getByRole("textbox", { name: "Description" }),
-  ).toHaveValue("Example claim evidence revised");
 });

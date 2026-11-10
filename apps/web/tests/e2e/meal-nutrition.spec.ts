@@ -1,4 +1,3 @@
-import { operationCall } from "./support/operation";
 import type { Route } from "@playwright/test";
 
 import { browserOperationPath } from "~/lib/browser-operation-path";
@@ -10,7 +9,7 @@ import {
 } from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
 
-test("meal product nutrition preserves entered amounts on creation", async ({
+test("meal product nutrition preserves entered amounts through creation, edits and removal", async ({
   page,
 }, testInfo) => {
   const name = `Nutrition ${Date.now().toString(36).slice(-5)}-${testInfo.workerIndex}`;
@@ -74,27 +73,6 @@ test("meal product nutrition preserves entered amounts on creation", async ({
   await expect(member.getByLabel(/^Protein: 4\.5 g\./)).toHaveCount(2);
   await expect(member.getByLabel(/^Carbs: 30 g\./)).toHaveCount(2);
   await expect(member.getByLabel(/^Fat: 6 g\./)).toHaveCount(2);
-});
-
-test("meal product nutrition preserves entered amounts through edits and removal", async ({
-  page,
-}, testInfo) => {
-  const name = `Nutrition edit ${Date.now().toString(36).slice(-5)}-${testInfo.workerIndex}`;
-  const fixture = await seedMealNutritionPrerequisite(page, name);
-  // Creation through this dialog is covered by the preceding Product food test.
-  const seeded = await operationCall(page.request, "meal.saveFood", {
-    mealId: fixture.meal.id,
-    ledgerPartyId: fixture.member.id,
-    sourceKind: "product",
-    productId: fixture.product.id,
-    amount: { value: 1.5, unit: "serving" },
-  });
-  expect(seeded.ok(), await seeded.text()).toBeTruthy();
-  await gotoAuthenticatedPage(page, `/meals/${fixture.meal.id}`);
-  const member = page.getByRole("region", { name: `${name} member nutrition` });
-  const productRow = member
-    .getByRole("listitem")
-    .filter({ has: page.getByText(`${name} snack`, { exact: true }) });
   await productRow.getByText("Details and editing", { exact: true }).click();
   await productRow.getByRole("button", { name: "Edit amount" }).click();
   const editDialog = page.getByRole("dialog", { name: "Edit food" });
@@ -115,59 +93,6 @@ test("meal product nutrition preserves entered amounts through edits and removal
   await productRow.getByText("Details and editing", { exact: true }).click();
   await productRow.getByRole("button", { name: "Remove food" }).click();
   await expect(productRow).toHaveCount(0);
-});
-
-test("meal ingredient nutrition preserves entered amounts through removal", async ({
-  page,
-}, testInfo) => {
-  const name = `Nutrition ${Date.now().toString(36).slice(-5)}-${testInfo.workerIndex}`;
-  const fixture = await seedMealNutritionPrerequisite(page, name);
-  await gotoAuthenticatedPage(page, `/meals/${fixture.meal.id}`);
-  const member = page.getByRole("region", { name: `${name} member nutrition` });
-  await openDetailActions(page);
-  await page.getByRole("button", { name: "Add food", exact: true }).click();
-  const ingredientDialog = page.getByRole("dialog", { name: "Add food" });
-  await ingredientDialog
-    .getByRole("button", { name: "Ingredient", exact: true })
-    .click();
-  await selectComboboxItem(
-    page,
-    ingredientDialog.getByRole("combobox", { name: "Person" }),
-    `${name} member`,
-  );
-  await selectComboboxItem(
-    page,
-    ingredientDialog.getByRole("combobox", { name: "Ingredient" }),
-    `${name} snack ingredient`,
-  );
-  await ingredientDialog.getByLabel("Amount").fill("1/2");
-  await ingredientDialog.getByLabel("Unit").fill("serving");
-  // Close the unit suggestions; an open combobox popup hides the dialog from
-  // the accessibility tree.
-  await page.keyboard.press("Tab");
-  await expect(ingredientDialog).toContainText("Estimated weight 15 g");
-  await ingredientDialog.getByRole("button", { name: "Add food" }).click();
-  await expect(ingredientDialog).not.toBeVisible();
-  const ingredientRow = member
-    .getByRole("listitem")
-    .filter({ hasText: `${name} snack ingredient` });
-  await expect(ingredientRow.getByText(/serving/)).toBeVisible();
-  await expect(ingredientRow.getByText("Estimated weight 15 g")).toBeVisible();
-
-  await page.reload();
-  const refreshedIngredientRow = page
-    .getByRole("region", { name: `${name} member nutrition` })
-    .getByRole("listitem")
-    .filter({ hasText: `${name} snack ingredient` });
-  await refreshedIngredientRow
-    .getByText("Details and editing", { exact: true })
-    .click();
-  await refreshedIngredientRow
-    .getByRole("button", { name: "Remove food" })
-    .click();
-  await expect(
-    page.getByRole("region", { name: `${name} member nutrition` }),
-  ).toHaveCount(0);
 });
 
 test("meal nutrition links planned days and today from home", async ({

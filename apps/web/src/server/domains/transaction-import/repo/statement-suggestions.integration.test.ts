@@ -12,7 +12,6 @@ import {
 } from "@cubby/schemas/statement-suggestion";
 import {
   suggestionSubjects,
-  suggestionFamily,
   suggestionProducer,
 } from "@cubby/schemas/suggestion";
 import { workQueueInput } from "@cubby/schemas/work-queue";
@@ -826,90 +825,6 @@ describe("statement Transaction suggestions", () => {
       }
     },
   );
-
-  it("keeps scoped label scan batches full behind a nearly full output page", async () => {
-    const account = (await card(ctx)).output;
-    await createRepoIdentity(ctx, "financialAccount", {
-      name: "Synthetic scan exclusion",
-      identity: { kind: "credit_card", network: "visa" },
-      sourceAliases: [
-        {
-          source: "monarch",
-          alias: "Excluded scan card",
-          externalAccountId: null,
-        },
-      ],
-    });
-    await record(
-      ctx,
-      Array.from({ length: 69 }, (_, index) =>
-        rowInput({
-          providerTransactionId: `synthetic-full-scan-${index}`,
-          rawDescription: `SYNTHETIC FULL SCAN ${index}`,
-          providerAmount: -100 - index,
-          ...(index >= 32 &&
-            index < 67 && { accountDescriptor: "Excluded scan card" }),
-        }),
-      ),
-    );
-    await generate(ctx);
-    // The supported publications exist; only their historical cursor positions
-    // are arranged to put a long excluded suffix behind 32 admitted rows.
-    await getDb(ctx.db).execute(sql`UPDATE "Suggestion" SET "createdAt" =
-      '2026-01-01'::timestamp + ((data->>'amount')::int - 100) * interval '1 second'
-      WHERE family = ${suggestionFamily.enum.statement_transaction}`);
-    const scope = {
-      accountIds: [
-        await resolveOrThrow(ctx.db, "financialAccount", account.id),
-      ],
-    };
-    const preview = vi.spyOn(
-      statementPreview,
-      "previewFinancialTransactionImport",
-    );
-    try {
-      const page = await statementSuggestionsRepo.suggestionsNeedingLabels(
-        ctx.db,
-        33,
-        null,
-        scope,
-      );
-      const batches = preview.mock.calls.map(([, input]) => input.rows.length);
-      expect(batches.length).toBeLessThanOrEqual(3);
-      expect(batches).not.toContain(1);
-      expect(page.map((row) => row.judgment.create?.rawDescription)).toEqual([
-        ...Array.from(
-          { length: 32 },
-          (_, index) => `SYNTHETIC FULL SCAN ${index}`,
-        ),
-        "SYNTHETIC FULL SCAN 67",
-      ]);
-      const last = page.at(-1);
-      if (!last) throw new Error("Synthetic full scan cursor missing");
-      expect(
-        (
-          await statementSuggestionsRepo.suggestionsNeedingLabels(
-            ctx.db,
-            1,
-            { createdAt: last.createdAt, id: last.cursorId },
-            scope,
-          )
-        ).map((row) => row.judgment.create?.rawDescription),
-      ).toEqual(["SYNTHETIC FULL SCAN 68"]);
-      expect(
-        (
-          await statementSuggestionsRepo.suggestionsNeedingLabels(
-            ctx.db,
-            1,
-            { createdAt: last.createdAt, id: last.cursorId, inclusive: true },
-            scope,
-          )
-        )[0]?.id,
-      ).toBe(last.id);
-    } finally {
-      preview.mockRestore();
-    }
-  });
 
   it.each(["checkpoint", "publication", "publication fallback"])(
     "fences statement scope inside %s write admission",

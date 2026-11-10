@@ -14,10 +14,6 @@ import {
   attachExistingImageToEntity,
   createUploadedImageRecord,
 } from "~/server/domains/image/repo/image";
-import {
-  IMAGE_DESCRIPTION_PROCESSOR_REVISION,
-  IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION,
-} from "~/server/domains/image-processing/repo/processor-policy";
 import { getDb } from "~/server/db/helpers";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { insertEntityFixtures } from "~/server/testing/repo.fixtures";
@@ -32,60 +28,6 @@ import {
   ensureMemberParty,
   createEvidenceHarnessContext,
 } from "./core";
-
-export async function seedPhotoReviewProcessingFailure(
-  imageCode: ImageShortcode,
-  kind: "subject_lift" | "describe_image",
-  reason: string,
-) {
-  const db = getFixtureDb();
-  const [row] = await getDb(db)
-    .select({ id: schema.image.id, sha256: schema.image.sha256 })
-    .from(schema.image)
-    .where(eq(schema.image.shortcode, imageCode));
-  if (!row?.sha256) throw new Error("Synthetic photo needs a content hash");
-  await insertEntityFixtures(db, schema.imageProcessingJob, "imageJob", [
-    {
-      lane: kind === "subject_lift" ? "device" : "cloud",
-      shortcode: generateShortcode("imageJob"),
-      imageId: parseEntityId("image", row.id),
-      kind,
-      state: "failed",
-      sourceContentHash: row.sha256,
-      processorRevision:
-        kind === "describe_image"
-          ? IMAGE_DESCRIPTION_PROCESSOR_REVISION
-          : IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION,
-      lastError: reason,
-    },
-  ]);
-}
-
-export async function seedPhotoReviewLabelText(
-  imageCode: ImageShortcode,
-  text: string,
-) {
-  const db = getFixtureDb();
-  const [row] = await getDb(db)
-    .select({ id: schema.image.id })
-    .from(schema.image)
-    .where(eq(schema.image.shortcode, imageCode));
-  if (!row) throw new Error("Synthetic label photo not found");
-  await getDb(db)
-    .insert(schema.aiAnalysis)
-    .values({
-      entityKind: "image",
-      entityId: row.id,
-      feature: "photo-local-analysis",
-      model: "synthetic",
-      promptVersion: "v1",
-      inputFingerprint: crypto.randomUUID(),
-      result: {
-        classifications: [],
-        recognizedText: [{ text, confidence: 1 }],
-      },
-    });
-}
 
 /** A verified Image record over real, servable synthetic bytes. */
 const uploadSyntheticImage = async (name: string, objectStorageUrl: string) => {
