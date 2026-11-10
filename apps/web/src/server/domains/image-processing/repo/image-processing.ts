@@ -1377,6 +1377,27 @@ type CompletionInput = {
   identificationAnalysis?: DescriptionAnalysisIdentity;
   /** A rejected output belongs to this verified attempt and is retired atomically. */
   orphanOutputKey?: string;
+  /**
+   * Which stored-object check failed, with the device claim beside the bytes
+   * actually stored. The failed outcome replaces the claim on the job result.
+   */
+  outputCheck?: {
+    failed: string[];
+    claimed: {
+      contentType: "image/png";
+      sha256: string;
+      width: number;
+      height: number;
+    };
+    stored: {
+      contentType: string | null;
+      detectedContentType: string;
+      sha256: string;
+      width: number | null;
+      height: number | null;
+      transparency: boolean;
+    };
+  };
 };
 
 type CompletionJob = {
@@ -1759,7 +1780,7 @@ export async function completeImageProcessingJob(
         state: outcome.status === "completed" ? "ready" : outcome.status,
         completedAt: sql`now()`,
         result: outcome,
-        diagnostics: sql`coalesce(${imageProcessingAttempt.diagnostics}, '{}'::jsonb) || ${JSON.stringify({ runtime: input.runtime ?? null, device: input.result.diagnostics ?? null, validation: input.verifiedDerivative ? { outcome: "validated transparent PNG", ...input.verifiedDerivative } : input.orphanOutputKey ? { outcome: "rejected output" } : null })}::jsonb`,
+        diagnostics: sql`coalesce(${imageProcessingAttempt.diagnostics}, '{}'::jsonb) || ${JSON.stringify({ runtime: input.runtime ?? null, device: input.result.diagnostics ?? null, validation: input.verifiedDerivative ? { outcome: "validated transparent PNG", ...input.verifiedDerivative } : input.outputCheck ? { outcome: "rejected output", ...input.outputCheck } : input.orphanOutputKey ? { outcome: "rejected output" } : null })}::jsonb`,
         error: outcome.status === "completed" ? null : outcome.reason,
       })
       .where(eq(imageProcessingAttempt.id, input.result.attemptId))

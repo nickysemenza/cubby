@@ -4,6 +4,8 @@ import {
   type GatewayQuery,
   inferenceFundingHeaders,
   isInferenceFundingRefusal,
+  isInferenceStreamFundingRefusal,
+  isOpenAiCreditRefusal,
   runProviderGateway,
   gatewayFetchThrough,
   type InferenceFunding,
@@ -156,6 +158,51 @@ describe("inference funding", () => {
       ).toBe(false);
     },
   );
+
+  // The Responses envelope usually carries code and type. When it does not,
+  // the billing sentence is the refusal, including pi's terminal text.
+  it("recognizes OpenAI's no-credits sentence when the envelope has no code", () => {
+    const message =
+      "You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.";
+    const body = JSON.stringify({ error: { message } });
+    expect(isInferenceFundingRefusal(429, body, "openai_credit")).toBe(true);
+    expect(
+      isInferenceFundingRefusal(
+        429,
+        JSON.stringify({
+          error: {
+            message,
+            type: "insufficient_quota",
+            code: "credit_balance_exhausted",
+          },
+        }),
+        "openai_credit",
+      ),
+    ).toBe(true);
+    expect(isInferenceFundingRefusal(500, message, "openai_credit")).toBe(
+      false,
+    );
+    expect(isInferenceFundingRefusal(429, message, "subscriber_credit")).toBe(
+      false,
+    );
+    expect(isInferenceStreamFundingRefusal(message, "openai_credit")).toBe(
+      true,
+    );
+    expect(
+      isInferenceStreamFundingRefusal(`unknown: ${message}`, "openai_credit"),
+    ).toBe(true);
+    expect(
+      isInferenceStreamFundingRefusal(
+        `Error Code credit_balance_exhausted: ${message}`,
+        "openai_credit",
+      ),
+    ).toBe(true);
+    expect(isInferenceStreamFundingRefusal(message, "subscriber_credit")).toBe(
+      false,
+    );
+    expect(isOpenAiCreditRefusal(message)).toBe(true);
+    expect(isOpenAiCreditRefusal("429 Too Many Requests")).toBe(false);
+  });
 
   it("leaves subscription quota refusal to the model owner without internal paid fallback", async () => {
     const calls: string[] = [];

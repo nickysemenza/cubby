@@ -18,8 +18,20 @@ import {
   rebuildActive,
   releaseRebuild,
 } from "~/server/generic/derived/repo/rebuild";
+import { classifyJobFailure } from "~/server/generic/jobs/failure";
 
 const log = createLogger("derived-rebuild");
+
+/**
+ * A dropped connection before a page commits retries the same cursor.
+ * `classifyJobFailure` already treats that socket loss as transient, so it
+ * must not increment the pass failure count. A committed page failure still
+ * records its own error.
+ */
+function recordedRebuildError(error: unknown): string | null {
+  if (classifyJobFailure(error).kind === "transient") return null;
+  return scrubErrorMessage(JSON.stringify(describeErrorCauses(error)));
+}
 
 /** A transport retry must outlive the single-writer lease after an isolate is terminated. */
 export class DerivedRebuildBusyError extends Error {
@@ -91,11 +103,7 @@ export async function rebuildDerived(
           );
         } catch (error) {
           // Enumeration observed no population: retry the unchanged cursor.
-          await releaseRebuild(
-            db,
-            claim.token,
-            scrubErrorMessage(JSON.stringify(describeErrorCauses(error))),
-          );
+          await releaseRebuild(db, claim.token, recordedRebuildError(error));
           return true;
         }
         if (!observed) return false;
@@ -154,6 +162,10 @@ export async function rebuildDerived(
             return false;
         }
       } catch (error) {
+        // A dropped connection never published this page: the outer release
+        // retries the same cursor and does not count it. A real page failure
+        // still advances and counts.
+        if (classifyJobFailure(error).kind === "transient") throw error;
         // Keep this page's prior output; later IDs must not starve behind one bad record.
         // During an outage this deliberately makes one failed call per bounded page.
         if (
@@ -179,11 +191,7 @@ export async function rebuildDerived(
     log.info("pass invocation yielded", { target: current.target });
     return true;
   } catch (error) {
-    await releaseRebuild(
-      db,
-      claim.token,
-      scrubErrorMessage(JSON.stringify(describeErrorCauses(error))),
-    );
+    await releaseRebuild(db, claim.token, recordedRebuildError(error));
     throw error;
   }
 }

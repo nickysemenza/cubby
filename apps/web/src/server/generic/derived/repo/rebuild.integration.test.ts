@@ -200,4 +200,49 @@ describe("hourly deterministic rebuild", () => {
       (await getDb(ctx.db).select().from(derivedRebuild))[0]?.error,
     ).toBeNull();
   });
+
+  it("retries a dropped connection on the same cursor without counting a failure", async () => {
+    await createProductIdentityFixture(
+      ctx.db,
+      makeProductInput({ name: "Synthetic connection drop" }),
+      ctx.actor,
+    );
+    const dropped = new Error("Failed query: begin", {
+      cause: new Error("Connection terminated unexpectedly"),
+    });
+    const computes: DerivedComputes = {
+      ...derivedComputes,
+      ...Object.fromEntries(
+        Object.keys(derivedComputes).map((key) => [
+          key,
+          Object.assign(
+            async () => {
+              throw dropped;
+            },
+            { preparationBatchSize: 1 },
+          ),
+        ]),
+      ),
+    };
+    let thrown: unknown;
+    const pageLimit = rebuildDeclarations().length + 1;
+    for (let page = 0; page < pageLimit; page++) {
+      try {
+        if (!(await rebuildDerived(ctx.db, computes, { force: page === 0 })))
+          break;
+      } catch (error) {
+        thrown = error;
+        break;
+      }
+    }
+    expect(thrown).toBe(dropped);
+    const [row] = await getDb(ctx.db).select().from(derivedRebuild);
+    expect(row).toMatchObject({
+      failures: 0,
+      passFailures: 0,
+      failedPages: 0,
+      error: null,
+      token: null,
+    });
+  });
 });

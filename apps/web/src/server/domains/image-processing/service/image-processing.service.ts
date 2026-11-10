@@ -111,7 +111,76 @@ export async function scheduleAppleImageDescriptionEvaluation(
   return scheduled;
 }
 
-class TransparentOutputMismatchError extends Error {}
+type TransparentOutputCheck = {
+  failed: string[];
+  claimed: {
+    contentType: "image/png";
+    sha256: string;
+    width: number;
+    height: number;
+  };
+  stored: {
+    contentType: string | null;
+    detectedContentType: string;
+    sha256: string;
+    width: number | null;
+    height: number | null;
+    transparency: boolean;
+  };
+};
+
+class TransparentOutputMismatchError extends Error {
+  constructor(
+    message: string,
+    readonly outputCheck: TransparentOutputCheck,
+  ) {
+    super(message);
+    this.name = "TransparentOutputMismatchError";
+  }
+}
+
+export function transparentOutputFailure(
+  storedType: string | undefined,
+  inspected: {
+    detectedContentType: string;
+    sha256: string;
+    width: number | null;
+    height: number | null;
+  },
+  claimed: TransparentOutputCheck["claimed"],
+  hasTransparency: boolean,
+): TransparentOutputMismatchError | null {
+  const stored = {
+    contentType: storedType ?? null,
+    detectedContentType: inspected.detectedContentType,
+    sha256: inspected.sha256,
+    width: inspected.width,
+    height: inspected.height,
+    transparency: hasTransparency,
+  };
+  const failed: string[] = [];
+  if (stored.contentType !== "image/png")
+    failed.push(
+      `content-type claimed image/png, stored ${stored.contentType ?? "missing"}`,
+    );
+  if (stored.detectedContentType !== "image/png")
+    failed.push(
+      `png-signature claimed image/png, stored ${stored.detectedContentType}`,
+    );
+  if (stored.sha256 !== claimed.sha256)
+    failed.push(`sha256 claimed ${claimed.sha256}, stored ${stored.sha256}`);
+  if (stored.width !== claimed.width)
+    failed.push(`width claimed ${claimed.width}, stored ${stored.width}`);
+  if (stored.height !== claimed.height)
+    failed.push(`height claimed ${claimed.height}, stored ${stored.height}`);
+  if (!stored.transparency)
+    failed.push("transparency claimed meaningful, stored none");
+  if (!failed.length) return null;
+  return new TransparentOutputMismatchError(
+    `Transparent output failed ${failed.join("; ")}`,
+    { failed, claimed, stored },
+  );
+}
 
 async function verifyTransparentOutput(
   key: string,
@@ -130,22 +199,23 @@ async function verifyTransparentOutput(
   const bytes = new Uint8Array(await response.arrayBuffer());
   const inspected = await inspectImageFile(bytes, "image/png");
   const hasTransparency = await hasMeaningfulPngTransparency(bytes);
-  if (
-    storedType !== "image/png" ||
-    inspected.detectedContentType !== "image/png" ||
-    inspected.sha256 !== result.sha256 ||
-    inspected.width !== result.width ||
-    inspected.height !== result.height ||
-    !hasTransparency
-  )
-    throw new TransparentOutputMismatchError(
-      "Transparent output does not match the leased command",
-    );
+  const mismatch = transparentOutputFailure(
+    storedType,
+    inspected,
+    {
+      contentType: "image/png",
+      sha256: result.sha256,
+      width: result.width,
+      height: result.height,
+    },
+    hasTransparency,
+  );
+  if (mismatch) throw mismatch;
   return {
     sha256: inspected.sha256,
     contentType: "image/png" as const,
-    width: inspected.width,
-    height: inspected.height,
+    width: result.width,
+    height: result.height,
   };
 }
 
@@ -350,6 +420,10 @@ async function prepareSubjectLiftCompletion(
         },
       },
       orphanOutputKey: outputKey,
+      outputCheck:
+        error instanceof TransparentOutputMismatchError
+          ? error.outputCheck
+          : undefined,
     });
     return null;
   }

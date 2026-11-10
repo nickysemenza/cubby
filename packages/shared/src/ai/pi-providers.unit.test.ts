@@ -60,6 +60,46 @@ it("restarts a credit-refused generation on the subscription with its actual mod
   ]);
 });
 
+it("advances past an OpenAI credit refusal that only carries the billing sentence", async () => {
+  const attempts: string[] = [];
+  const message =
+    "You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.";
+  const models = createModels();
+  for (const provider of fundedCubbyPiProviders(
+    (route, _unbilled, funding) => async () => {
+      attempts.push(`${route}:${funding}`);
+      if (funding === "openai_credit")
+        return new Response(
+          `data: ${JSON.stringify({
+            type: "response.failed",
+            response: { status: "failed", error: { message } },
+          })}\n\n`,
+          { headers: { "content-type": "text/event-stream" } },
+        );
+      if (funding === "subscriber_credit")
+        return Response.json(
+          { error: { message: "Your credit balance is too low" } },
+          { status: 400 },
+        );
+      return openAiCompleted();
+    },
+  ))
+    models.setProvider(provider);
+  const model = models.getModel("openai", "gpt-6.1-sol");
+  if (!model) throw new Error("Missing Sol");
+  const response = await models.completeSimple(
+    model,
+    { messages: [] },
+    { maxTokens: 512 },
+  );
+  expect(response.errorMessage).toBeUndefined();
+  expect(attempts).toEqual([
+    "anthropic:subscriber_credit",
+    "openai:openai_credit",
+    "openai:subscription",
+  ]);
+});
+
 // Regression: a Console-refused credit key was re-tried on every request. The
 // egress Durable Object now answers for it; the ladder must treat that answer
 // as the provider's own refusal and move to the plan.
