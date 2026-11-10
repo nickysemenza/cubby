@@ -398,3 +398,72 @@ export async function loadRetainedTender(
       ),
     );
 }
+
+export async function loadAssociationRun(
+  tx: DrizzleTransaction,
+  input: import("./writer").ImportSourceAssociationInput,
+  partyId: typeof ledgerParty.$inferSelect.id,
+) {
+  const [owned] = await tx
+    .select({ id: runTable.id })
+    .from(runTable)
+    .innerJoin(
+      ledgerParty,
+      and(
+        eq(ledgerParty.id, runTable.ledgerPartyId),
+        eq(ledgerParty.userId, runTable.actorUserId),
+        eq(ledgerParty.kind, "member"),
+        notDeleted(ledgerParty),
+      ),
+    )
+    .where(
+      and(
+        eq(runTable.id, runEntityId.parse(input.runId)),
+        eq(runTable.ledgerPartyId, partyId),
+      ),
+    )
+    .limit(1);
+  return owned;
+}
+
+export async function loadAssociationTarget(
+  tx: DrizzleTransaction,
+  input: import("./writer").ImportSourceAssociationInput,
+  purchaseId: PurchaseId,
+) {
+  const [target] = await tx
+    .select({ id: purchase.id })
+    .from(purchase)
+    .where(
+      and(
+        eq(purchase.id, purchaseId),
+        eq(purchase.vendorId, parseEntityId("vendor", input.vendorId)),
+        notDeleted(purchase),
+      ),
+    )
+    .limit(1);
+  return target;
+}
+
+export async function loadAssociationAccount(
+  tx: DrizzleTransaction,
+  input: import("./writer").ImportSourceAssociationInput,
+  partyId: typeof ledgerParty.$inferSelect.id,
+) {
+  const [ownedAccount] = await tx
+    .select({ id: vendorAccount.id })
+    .from(vendorAccount)
+    .where(
+      and(
+        eq(
+          vendorAccount.id,
+          parseEntityId("vendorAccount", input.vendorAccountId!),
+        ),
+        eq(vendorAccount.ledgerPartyId, partyId),
+        eq(vendorAccount.vendorId, parseEntityId("vendor", input.vendorId)),
+        notDeleted(vendorAccount),
+      ),
+    )
+    .limit(1);
+  return ownedAccount;
+}

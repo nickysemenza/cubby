@@ -35,10 +35,8 @@ import {
 } from "~/server/db/helpers";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
 import {
-  entityAttachment,
   expense,
   importSourceClaim,
-  importSourceOrder,
   importSourceProduct,
   ledgerParty,
   ledgerSourceClaim,
@@ -102,6 +100,10 @@ import { recordRunWrites } from "./run-audit";
 import { recordImportedShipmentEvidence } from "./shipment-intake";
 import {
   applyPaymentEvidence,
+  applySourceAssociation,
+  applyOriginalBindings,
+  applyAcceptedObservation,
+  applyAttachments,
   applyPurchaseHeader,
   applyFallbackExpenses,
   applyReplayClaim,
@@ -112,6 +114,9 @@ import {
 import { writePurchaseLines } from "./writer-lines";
 import {
   loadAcceptedProductChoices,
+  loadAssociationRun,
+  loadAssociationTarget,
+  loadAssociationAccount,
   loadAcceptedPaymentFacts,
   loadAcceptedPurchase,
   loadAssignedPurchaseLine,
@@ -131,6 +136,11 @@ import {
 import {
   changedAcceptedProductChoice,
   planLineMatch,
+  planFinding,
+  planReconciliationFix,
+  planSourceAssociation,
+  planOriginalBindings,
+  planAttachments,
   planLearnedTender,
   planTenderUpdates,
   planRunWrites,
@@ -316,36 +326,6 @@ export async function existingExpenses(
     costType: row.costType,
     sourceClaimed: row.sourceClaimId !== null,
   }));
-}
-
-async function attachEvidence(
-  tx: DrizzleTransaction,
-  purchaseId: ReturnType<typeof parseEntityId<"purchase">>,
-  input: ImportWriterInput,
-) {
-  const attachments = [
-    input.primaryDocumentImageId
-      ? {
-          imageId: input.primaryDocumentImageId,
-          documentKind: "order_confirmation" as const,
-        }
-      : null,
-    input.screenshotImageId
-      ? { imageId: input.screenshotImageId, documentKind: "other" as const }
-      : null,
-  ].filter((row): row is NonNullable<typeof row> => row !== null);
-  for (const attachment of attachments) {
-    await tx
-      .insert(entityAttachment)
-      .values({
-        entityId: purchaseId,
-        entityKind: "purchase",
-        role: "attachment",
-        imageId: attachment.imageId,
-        documentKind: attachment.documentKind,
-      })
-      .onConflictDoNothing();
-  }
 }
 
 const lineIdentifiers = (
@@ -673,46 +653,33 @@ async function learnLineIdentifiers(
 }
 
 /** A reconciliation of a promoted historical observation has no Run. */
-type FindingOrigin = Pick<ImportWriterInput, "ledgerPartyId" | "source"> & {
+export type FindingOrigin = Pick<
+  ImportWriterInput,
+  "ledgerPartyId" | "source"
+> & {
   runId: ImportWriterInput["runId"] | null;
 };
+
+export type FindingKind =
+  | "duplicate_lines"
+  | "sum_mismatch"
+  | "foreign_currency"
+  | "reversal_kind"
+  | "kit_double_booked"
+  | "variant_doubt"
+  | "product_unresolved"
+  | "other";
 
 async function fileFinding(
   tx: DrizzleTransaction,
   input: FindingOrigin,
-  purchaseId: ReturnType<typeof parseEntityId<"purchase">>,
-  kind:
-    | "duplicate_lines"
-    | "sum_mismatch"
-    | "foreign_currency"
-    | "reversal_kind"
-    | "kit_double_booked"
-    | "variant_doubt"
-    | "product_unresolved"
-    | "other",
+  purchaseId: PurchaseId,
+  kind: FindingKind,
   summary: string,
   proposedFix: ProposedImportFix | null,
 ): Promise<string> {
-  const evidenceFingerprint = await sha256Hex(
-    JSON.stringify({
-      source: input.source,
-      kind,
-      purchaseId,
-      proposedFix,
-    }),
-  );
-  return (
-    await publishRunFinding(tx, {
-      runId: input.runId,
-      ledgerPartyId: input.ledgerPartyId,
-      entityKind: "purchase",
-      entityId: purchaseId,
-      kind,
-      summary,
-      proposedFix,
-      evidenceFingerprint,
-    })
-  ).id;
+  const plan = await planFinding(input, purchaseId, kind, summary, proposedFix);
+  return (await publishRunFinding(tx, plan)).id;
 }
 
 async function fileSourceReconciliation(
@@ -728,16 +695,13 @@ async function fileSourceReconciliation(
     { sourceClaimId, orderKey, purchaseId },
     input,
   );
-  const fix: Extract<ProposedImportFix, { kind: "reconcile_source_order" }> = {
-    kind: "reconcile_source_order",
+  const fix = planReconciliationFix(
+    input,
     purchaseId,
-    source: input.source,
     orderKey,
-    acceptedChecksum: accepted?.checksum ?? null,
-    proposedExtraction: input.extraction,
-    observationId: observation.id,
-    reviewedFingerprint: "0".repeat(64),
-  };
+    accepted,
+    observation.id,
+  );
   const state = await loadSourceReconciliationState(
     tx,
     fix,
@@ -758,7 +722,7 @@ async function fileSourceReconciliation(
   );
 }
 
-type ImportSourceAssociationInput = Pick<
+export type ImportSourceAssociationInput = Pick<
   ImportWriterInput,
   | "ledgerPartyId"
   | "runId"
@@ -779,103 +743,28 @@ type ImportSourceAssociationInput = Pick<
   >;
 };
 
-async function recordOriginalProductBindings(
-  tx: Pick<DrizzleTransaction, "insert">,
-  sourceOrderId: typeof importSourceProduct.$inferInsert.sourceOrderId,
-  existingOriginal: AcceptedSourceOrder | null | undefined,
-  input: Pick<
-    ImportSourceAssociationInput,
-    "originalOrder" | "productBindings"
-  >,
-) {
-  // Bind the first accepted original, never a changed source's line positions.
-  // Existing bindings may already point at a merge survivor and stay immutable.
-  if (
-    existingOriginal ||
-    !input.originalOrder ||
-    !input.productBindings?.length
-  )
-    return;
-  for (const binding of input.productBindings) {
-    if (!input.originalOrder.extraction.candidate?.lines[binding.lineIndex])
-      throw new Error(
-        "Import Product binding does not name an original order line.",
-      );
-  }
-  await tx.insert(importSourceProduct).values(
-    input.productBindings.map((binding) => ({
-      sourceOrderId,
-      lineIndex: binding.lineIndex,
-      productId: binding.productId,
-      expenseId: binding.expenseId,
-    })),
-  );
-}
-
 /** Source ownership and accepted order identity are shared by imports and lifecycle links. */
 // Accepted observation and original Product identity must be retained atomically.
 async function recordImportSourceAssociation(
-  tx: Pick<DrizzleTransaction, "insert" | "select" | "update">,
+  tx: DrizzleTransaction,
   input: ImportSourceAssociationInput,
   purchaseId: ReturnType<typeof parseEntityId<"purchase">>,
   outputFingerprint: string,
   recordCanonicalProductBindings = true,
 ) {
   const partyId = parseEntityId("ledgerParty", input.ledgerPartyId);
-  const [owned] = await tx
-    .select({ id: runTable.id })
-    .from(runTable)
-    .innerJoin(
-      ledgerParty,
-      and(
-        eq(ledgerParty.id, runTable.ledgerPartyId),
-        eq(ledgerParty.userId, runTable.actorUserId),
-        eq(ledgerParty.kind, "member"),
-        notDeleted(ledgerParty),
-      ),
-    )
-    .where(
-      and(
-        eq(runTable.id, runEntityId.parse(input.runId)),
-        eq(runTable.ledgerPartyId, partyId),
-      ),
-    )
-    .limit(1);
+  const owned = await loadAssociationRun(tx, input, partyId);
   if (!owned)
     throw new Error(
       "Import source is not owned by this Run's authenticated member.",
     );
-  const [target] = await tx
-    .select({ id: purchase.id })
-    .from(purchase)
-    .where(
-      and(
-        eq(purchase.id, purchaseId),
-        eq(purchase.vendorId, parseEntityId("vendor", input.vendorId)),
-        notDeleted(purchase),
-      ),
-    )
-    .limit(1);
+  const target = await loadAssociationTarget(tx, input, purchaseId);
   if (!target)
     throw new Error(
       "Import source order does not match the supported Purchase vendor.",
     );
   if (input.vendorAccountId) {
-    const [ownedAccount] = await tx
-      .select({ id: vendorAccount.id })
-      .from(vendorAccount)
-      .where(
-        and(
-          eq(
-            vendorAccount.id,
-            parseEntityId("vendorAccount", input.vendorAccountId),
-          ),
-          eq(vendorAccount.ledgerPartyId, partyId),
-          eq(vendorAccount.vendorId, parseEntityId("vendor", input.vendorId)),
-          notDeleted(vendorAccount),
-        ),
-      )
-      .limit(1);
+    const ownedAccount = await loadAssociationAccount(tx, input, partyId);
     if (!ownedAccount)
       throw new Error("Import source account is not owned by this member.");
   }
@@ -904,46 +793,22 @@ async function recordImportSourceAssociation(
       orderKey,
       parseEntityId("vendor", input.vendorId),
     ));
-  if (existing) orderKey = existing.orderKey;
-  const ownerId = existing?.sourceClaimId ?? family.root.id;
-  if (existing && existing.purchaseId !== purchaseId)
-    throw new Error(
-      "This source order already belongs to a different Purchase.",
-    );
-  const [association] = await tx
-    .insert(importSourceOrder)
-    .values({
-      sourceClaimId: ownerId,
-      orderKey,
-      purchaseId,
-      checksum: input.source.checksum,
-      outputFingerprint,
-      originalOrder: input.originalOrder ?? null,
-    })
-    .onConflictDoUpdate({
-      target: [importSourceOrder.sourceClaimId, importSourceOrder.orderKey],
-      // Only a live association arbitrates, so a deleted Purchase's detached
-      // row stays as history beside this one. Until the live-only key is
-      // applied, the full key still conflicts with that row and this import
-      // takes it over as a fresh acceptance instead.
-      targetWhere: isNotNull(importSourceOrder.purchaseId),
-      set: {
-        purchaseId,
-        checksum: input.source.checksum,
-        outputFingerprint,
-        originalOrder: existing
-          ? existing.originalOrder
-          : (input.originalOrder ?? null),
-        ...(existing ? {} : { acceptedObservationId: null }),
-        updatedAt: new Date(),
-      },
-    })
-    .returning({ id: importSourceOrder.id });
-  if (!association) throw new Error("Import source order was not persisted");
-  // Equivalent sources retain complete observation bindings below, while the
-  // first source keeps the Purchase's canonical original Product associations.
-  if (!existing && recordCanonicalProductBindings)
-    await recordOriginalProductBindings(tx, association.id, null, input);
+  const associationPlan = planSourceAssociation(
+    input,
+    purchaseId,
+    outputFingerprint,
+    orderKey,
+    family.root.id,
+    existing,
+    new Date(),
+  );
+  const { ownerId } = associationPlan;
+  orderKey = associationPlan.orderKey;
+  const association = await applySourceAssociation(tx, associationPlan);
+  if (!existing && recordCanonicalProductBindings) {
+    const bindings = planOriginalBindings(association.id, input);
+    await applyOriginalBindings(tx, bindings);
+  }
   if (input.originalOrder) {
     const observation = await recordSourceOrderObservation(
       tx,
@@ -963,19 +828,15 @@ async function recordImportSourceAssociation(
             ?.productId ?? null,
       })) ?? [],
     );
-    await tx
-      .update(importSourceOrder)
-      .set({ acceptedObservationId: observation.id })
-      .where(eq(importSourceOrder.id, association.id));
+    await applyAcceptedObservation(tx, {
+      associationId: association.id,
+      observationId: observation.id,
+    });
   }
-  await tx
-    .update(importSourceClaim)
-    .set({
-      checksum: input.source.checksum,
-      lastRunId: input.runId,
-      updatedAt: new Date(),
-    })
-    .where(eq(importSourceClaim.id, family.root.id));
+  await applyReplayClaim(
+    tx,
+    planReplayClaim(input, family.root.id, new Date()),
+  );
   return ownerId;
 }
 
@@ -1067,8 +928,6 @@ export async function importVendorOrder(
             return options.resolveReversal(index, line);
           },
         );
-  // The callback is the transaction's explicit policy matrix; splitting it
-  // would hide the all-or-nothing write boundary.
   // eslint-disable-next-line complexity
   return withTransaction(db, async (tx) => {
     const identityProposals: Parameters<typeof upsertAgentProductMatch>[1][] =
@@ -1207,7 +1066,7 @@ export async function importVendorOrder(
         },
         candidate.payments,
       );
-      await attachEvidence(tx, purchaseId, input);
+      await applyAttachments(tx, planAttachments(purchaseId, input));
       await recordImportSourceAssociation(
         tx,
         {
@@ -1364,7 +1223,7 @@ export async function importVendorOrder(
         ),
       });
     }
-    await attachEvidence(tx, purchaseId, input);
+    await applyAttachments(tx, planAttachments(purchaseId, input));
 
     const lineMode = planLineMode(
       input,

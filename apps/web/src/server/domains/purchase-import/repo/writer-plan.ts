@@ -5,6 +5,7 @@ import type {
   ImportWriterInput,
 } from "@cubby/schemas/purchase-import";
 import { cents, minorToMoney, moneyToMinor } from "@cubby/shared";
+import { sha256Hex } from "@cubby/shared/sha256";
 import { and, eq, isNull, sql } from "drizzle-orm";
 
 import { notDeleted } from "~/server/db/helpers";
@@ -593,7 +594,7 @@ export function planFallbackExpenses(expenseIds: readonly string[]) {
 }
 
 export function planReplayClaim(
-  input: ImportWriterInput,
+  input: Pick<ImportWriterInput, "source" | "runId">,
   id: typeof import("~/server/db/schema").importSourceClaim.$inferSelect.id,
   updatedAt: Date,
 ) {
@@ -774,4 +775,133 @@ export function planTenderUpdates(
     );
     return !tender || tender === "unknown" ? [] : [{ id: row.id, tender }];
   });
+}
+
+export function planAttachments(
+  purchaseId: typeof purchase.$inferSelect.id,
+  input: ImportWriterInput,
+) {
+  return [
+    input.primaryDocumentImageId
+      ? {
+          entityId: purchaseId,
+          entityKind: "purchase" as const,
+          role: "attachment" as const,
+          imageId: input.primaryDocumentImageId,
+          documentKind: "order_confirmation" as const,
+        }
+      : null,
+    input.screenshotImageId
+      ? {
+          entityId: purchaseId,
+          entityKind: "purchase" as const,
+          role: "attachment" as const,
+          imageId: input.screenshotImageId,
+          documentKind: "other" as const,
+        }
+      : null,
+  ].filter((row): row is NonNullable<typeof row> => row !== null);
+}
+
+export function planSourceAssociation(
+  input: import("./writer").ImportSourceAssociationInput,
+  purchaseId: typeof purchase.$inferSelect.id,
+  outputFingerprint: string,
+  orderKey: string,
+  rootId: typeof import("~/server/db/schema").importSourceClaim.$inferSelect.id,
+  existing: import("./source-claim-family").LiveSourceOrder | null | undefined,
+  updatedAt: Date,
+) {
+  if (existing && existing.purchaseId !== purchaseId)
+    throw new Error(
+      "This source order already belongs to a different Purchase.",
+    );
+  const ownerId = existing?.sourceClaimId ?? rootId;
+  const key = existing?.orderKey ?? orderKey;
+  return {
+    ownerId,
+    orderKey: key,
+    values: {
+      sourceClaimId: ownerId,
+      orderKey: key,
+      purchaseId,
+      checksum: input.source.checksum,
+      outputFingerprint,
+      originalOrder: input.originalOrder ?? null,
+    },
+    set: {
+      purchaseId,
+      checksum: input.source.checksum,
+      outputFingerprint,
+      originalOrder: existing
+        ? existing.originalOrder
+        : (input.originalOrder ?? null),
+      ...(existing ? {} : { acceptedObservationId: null }),
+      updatedAt,
+    },
+  };
+}
+
+export function planOriginalBindings(
+  sourceOrderId: typeof import("~/server/db/schema").importSourceOrder.$inferSelect.id,
+  input: import("./writer").ImportSourceAssociationInput,
+) {
+  if (!input.originalOrder || !input.productBindings?.length) return [];
+  for (const binding of input.productBindings)
+    if (!input.originalOrder.extraction.candidate?.lines[binding.lineIndex])
+      throw new Error(
+        "Import Product binding does not name an original order line.",
+      );
+  return input.productBindings.map((binding) => ({
+    sourceOrderId,
+    lineIndex: binding.lineIndex,
+    productId: binding.productId,
+    expenseId: binding.expenseId,
+  }));
+}
+
+export function planReconciliationFix(
+  input: ImportWriterInput,
+  purchaseId: typeof purchase.$inferSelect.id,
+  orderKey: string,
+  accepted: import("./source-claim-family").LiveSourceOrder | null,
+  observationId: string,
+): Extract<
+  import("@cubby/schemas/purchase-import").ProposedImportFix,
+  { kind: "reconcile_source_order" }
+> {
+  return {
+    kind: "reconcile_source_order",
+    purchaseId,
+    source: input.source,
+    orderKey,
+    acceptedChecksum: accepted?.checksum ?? null,
+    proposedExtraction: input.extraction,
+    observationId,
+    reviewedFingerprint: "0".repeat(64),
+  };
+}
+
+export async function planFinding(
+  input: import("./writer").FindingOrigin,
+  purchaseId: typeof purchase.$inferSelect.id,
+  kind: import("./writer").FindingKind,
+  summary: string,
+  proposedFix:
+    | import("@cubby/schemas/purchase-import").ProposedImportFix
+    | null,
+) {
+  const evidenceFingerprint = await sha256Hex(
+    JSON.stringify({ source: input.source, kind, purchaseId, proposedFix }),
+  );
+  return {
+    runId: input.runId,
+    ledgerPartyId: input.ledgerPartyId,
+    entityKind: "purchase" as const,
+    entityId: purchaseId,
+    kind,
+    summary,
+    proposedFix,
+    evidenceFingerprint,
+  };
 }

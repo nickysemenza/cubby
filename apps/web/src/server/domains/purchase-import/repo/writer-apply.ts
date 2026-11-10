@@ -1,9 +1,12 @@
-import { eq, sql } from "drizzle-orm";
+import { eq, isNotNull, sql } from "drizzle-orm";
 
 import type { DrizzleTransaction } from "~/server/db";
 import {
+  entityAttachment,
   expense,
   importSourceClaim,
+  importSourceOrder,
+  importSourceProduct,
   purchase,
   purchasePaymentEvidence,
 } from "~/server/db/schema";
@@ -113,4 +116,49 @@ export async function applyTenderUpdates(
       .update(purchasePaymentEvidence)
       .set({ tender: row.tender, updatedAt: new Date() })
       .where(eq(purchasePaymentEvidence.id, row.id));
+}
+
+export async function applyAttachments(
+  tx: DrizzleTransaction,
+  plan: ReturnType<typeof import("./writer-plan").planAttachments>,
+) {
+  for (const attachment of plan)
+    await tx.insert(entityAttachment).values(attachment).onConflictDoNothing();
+}
+
+export async function applySourceAssociation(
+  tx: DrizzleTransaction,
+  plan: ReturnType<typeof import("./writer-plan").planSourceAssociation>,
+) {
+  const [association] = await tx
+    .insert(importSourceOrder)
+    .values(plan.values)
+    .onConflictDoUpdate({
+      target: [importSourceOrder.sourceClaimId, importSourceOrder.orderKey],
+      targetWhere: isNotNull(importSourceOrder.purchaseId),
+      set: plan.set,
+    })
+    .returning({ id: importSourceOrder.id });
+  if (!association) throw new Error("Import source order was not persisted");
+  return association;
+}
+
+export async function applyOriginalBindings(
+  tx: DrizzleTransaction,
+  plan: ReturnType<typeof import("./writer-plan").planOriginalBindings>,
+) {
+  if (plan.length) await tx.insert(importSourceProduct).values(plan);
+}
+
+export async function applyAcceptedObservation(
+  tx: DrizzleTransaction,
+  plan: {
+    associationId: typeof importSourceOrder.$inferSelect.id;
+    observationId: typeof importSourceOrder.$inferSelect.acceptedObservationId;
+  },
+) {
+  await tx
+    .update(importSourceOrder)
+    .set({ acceptedObservationId: plan.observationId })
+    .where(eq(importSourceOrder.id, plan.associationId));
 }
