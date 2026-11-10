@@ -30,7 +30,7 @@ const contextualRoutes = new Set([
   "/automatic-decisions",
   "/search",
   "/settings",
-  "/account/connected-apps",
+  "/account",
   "/history",
   "/jobs",
   "/work-queue",

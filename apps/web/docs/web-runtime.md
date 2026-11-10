@@ -224,7 +224,7 @@ loaders split through TanStack Router's `defaultBehavior` alongside components.
   opening is fast and typing-to-edit keeps every keystroke.
 - The JSON viewer uses `browserOnlyLazy`; timeline renderers are lazy;
   exception notes load Markdown only when shown. `AuthUIProvider` wraps only the
-  auth and account views; ordinary session reads use `authClient.useSession()`.
+  `/auth/*` views; ordinary session reads use `authClient.useSession()`.
 - Resolve the page toolbar's header portal target in a layout effect before
   paint; moving the fallback later remounts it and discards a search draft.
 
