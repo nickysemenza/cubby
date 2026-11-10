@@ -179,7 +179,7 @@ export const { definition, readSchemas } = defineEntityModel(
           },
         ],
         links: [
-          { label: "Graph", path: "/recipes/graph" },
+          { label: "Graph", path: "/entities", search: { tab: "recipes" } },
           { label: "Compare", path: "/recipes/compare" },
           { label: "Import", path: "/recipes/import" },
         ],

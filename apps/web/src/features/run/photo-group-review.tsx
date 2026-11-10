@@ -2552,11 +2552,10 @@ function PhotoProductSuggestions({
                     variant="outline"
                     render={
                       <Link
-                        to="/recommendations/workbench"
+                        to="/suggestions"
                         search={{
-                          kind: "product-match",
-                          source: proposal.committedProduct.id,
-                          candidate: candidate.id,
+                          family: "product_pair",
+                          record: `product:${proposal.committedProduct.id}`,
                         }}
                       />
                     }

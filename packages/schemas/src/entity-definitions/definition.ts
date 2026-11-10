@@ -2043,7 +2043,11 @@ const buildMetadataSchemas = () => {
         links: z
           .array(
             z
-              .object({ label: nonEmptyString(), path: nonEmptyString() })
+              .object({
+                label: nonEmptyString(),
+                path: nonEmptyString(),
+                search: z.record(z.string(), z.string()).optional(),
+              })
               .strict(),
           )
           .optional()
