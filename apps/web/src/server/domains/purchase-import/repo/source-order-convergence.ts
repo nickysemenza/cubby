@@ -54,12 +54,10 @@ const CARRIED_FIELDS = [
 ] as const;
 type CarriedField = (typeof CARRIED_FIELDS)[number];
 
-const lineKey = (line: Line) =>
-  JSON.stringify([
-    line.title.trim().replace(/\s+/gu, " ").toLowerCase(),
-    line.amount === null ? null : cents(line.amount),
-    line.lineKind,
-  ]);
+const titleOf = (line: Line) =>
+  line.title.trim().replace(/\s+/gu, " ").toLowerCase();
+const centsOf = (line: Line) =>
+  line.amount === null ? null : cents(line.amount);
 
 async function readLines(
   tx: DrizzleTransaction,
@@ -131,8 +129,8 @@ async function readLines(
 }
 
 /**
- * Pair every duplicate line with one survivor line carrying the same title,
- * amount and role. Product, Project, quantity and party attribution must not
+ * Pair every duplicate line with one survivor line of the same amount,
+ * preferring the same title, role and booking facts. Product, Project, quantity and party attribution must not
  * be lost: a duplicate value has to equal its survivor's or be empty. A
  * booking code, spending category or trade the survivor lacks moves onto it;
  * two different values refuse.
@@ -147,18 +145,29 @@ function pairLines(duplicate: Line[], survivor: Line[]) {
     carry: Partial<Record<CarriedField, string>>;
   }> = [];
   for (const line of duplicate) {
-    // Among identical lines, prefer the one with the same booking facts so a
-    // stable row order cannot pair two different bookings.
-    const sameKey = (candidate: Line) => lineKey(candidate) === lineKey(line);
-    const sameFacts = (candidate: Line) =>
-      JSON.stringify(candidate.carried) === JSON.stringify(line.carried);
-    const exact = unused.findIndex(
-      (candidate) => sameKey(candidate) && sameFacts(candidate),
-    );
-    const index = exact >= 0 ? exact : unused.findIndex(sameKey);
+    // Money pairs by amount; the two documents may title or classify a line
+    // differently. Prefer the closest description so a stable row order cannot
+    // pair two different bookings, and keep the survivor's own description.
+    const preference = (candidate: Line) => {
+      if (centsOf(candidate) !== centsOf(line)) return -1;
+      const sameFacts =
+        JSON.stringify(candidate.carried) === JSON.stringify(line.carried);
+      const sameTitle = titleOf(candidate) === titleOf(line);
+      const sameRole = candidate.lineKind === line.lineKind;
+      return (sameTitle ? 4 : 0) + (sameRole ? 2 : 0) + (sameFacts ? 1 : 0);
+    };
+    let index = -1;
+    let best = -1;
+    for (const [position, candidate] of unused.entries()) {
+      const score = preference(candidate);
+      if (score > best) {
+        best = score;
+        index = position;
+      }
+    }
     if (index < 0)
       return {
-        error: `The duplicate line "${line.title}" has no identical line on the survivor.`,
+        error: `The duplicate line "${line.title}" has no survivor line of the same amount.`,
       };
     const [match] = unused.splice(index, 1);
     const to = match!;

@@ -34,12 +34,13 @@ When two accepted source documents imported one order twice (a pre-payment
 notice and its receipt, both itemizing the same lines), read both originals,
 then call `purchase_import.converge_duplicate_source_order` with the receipt's
 Purchase as survivor. In one transaction it moves the duplicate's accepted
-source orders onto the survivor, binds each duplicate line to the survivor's
-identical line (same title, amount and role) and retires it, then folds the
+source orders onto the survivor, binds each duplicate line to a survivor line of
+the same amount (preferring the same title, role and booking facts; the
+survivor keeps its own description) and retires it, then folds the
 rest through the Purchase merge. A booking code, spending category or trade
 only the duplicate line holds moves onto its survivor line. It refuses
 different Vendors, vendor accounts or order ids; two id-less Purchases whose
-source Emails share no thread and date; unpaired lines; a line whose Product,
+source Emails share no thread and date; lines with no survivor line of the same amount; a line whose Product,
 Project, quantity, party attribution, booking code, category or trade
 conflicts with the survivor's; financially claimed lines; and a duplicate with
 no accepted source. Those stay review work. `already_applied` means this
