@@ -210,9 +210,10 @@ Postgres, so a waiting coordinator opens no database scope.
 - **Turns.** Before an alarm, a dispatch or a member prompt loads the agent,
   its host asks the gate for the Run's turn (10-minute lease) and keeps it
   while pi works, renewing on every entry, on a heartbeat and before database
-  work near the lease's end; the check that confirms pi idle releases it. Three
-  undecidable idle checks in a row stop renewal: database work ends at the
-  current deadline and the coordinator asks again after lease plus grace. One
+  work near the lease's end; the check that confirms pi idle releases it. An
+  idle check that fails or does not answer within 10 s is undecidable; three in
+  a row spanning two heartbeats stop renewal: database work ends at the current
+  deadline and the coordinator asks again after lease plus grace. One
   in-instance step queue orders acquire, renew, idle check and release.
 - **Fence.** pi's Run services refuse database work once the turn is lost
   (`CoordinatorLeaseLostError`, transient), so the Run takes its existing

@@ -68,6 +68,12 @@ const HEARTBEAT_MS = COORDINATOR_TURN_LEASE_MS / 3;
  * turn stops being renewed; quick entries alone never stop it.
  */
 const UNKNOWN_IDLE_LIMIT = 3;
+/**
+ * Opening a cold pi to ask whether it works waits on the agent's lifecycle; a
+ * check that does not answer counts as undecidable instead of holding every
+ * later bookkeeping step.
+ */
+const IDLE_CHECK_TIMEOUT_MS = 10_000;
 const UNKNOWN_IDLE_SPAN_MS = 2 * HEARTBEAT_MS;
 
 /** Doubling from 15 s to 5 min, jittered ±50% so waiting coordinators spread out. */
@@ -199,13 +205,22 @@ export class CoordinatorTurn {
    */
   private async releaseIfIdle() {
     if (this.running > 0 || this.leaseUntil === 0 || this.lapsing()) return;
-    const state = await this.ports.idle().then(
-      (idle) => (idle ? ("idle" as const) : ("working" as const)),
-      (error: UnparsedError) => {
-        this.ports.reportIdleError(error);
-        return "unknown" as const;
-      },
-    );
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timedOut = new Promise<never>((_resolve, reject) => {
+      timer = setTimeout(
+        () => reject(new Error("Coordinator idle check timed out")),
+        IDLE_CHECK_TIMEOUT_MS,
+      );
+    });
+    const state = await Promise.race([this.ports.idle(), timedOut])
+      .finally(() => clearTimeout(timer))
+      .then(
+        (idle) => (idle ? ("idle" as const) : ("working" as const)),
+        (error: UnparsedError) => {
+          this.ports.reportIdleError(error);
+          return "unknown" as const;
+        },
+      );
     if (state === "unknown") {
       if (this.unknownIdleChecks++ === 0) this.unknownIdleSince = Date.now();
       if (

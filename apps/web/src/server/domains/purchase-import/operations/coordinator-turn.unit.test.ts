@@ -200,4 +200,21 @@ describe("coordinator turn", () => {
     expect(work).not.toHaveBeenCalled();
     expect(down.reportGateError).toHaveBeenCalledWith(failure);
   });
+
+  it("never lets an idle check that does not answer hold later bookkeeping", async () => {
+    vi.useFakeTimers();
+    const hung = ports({ idle: vi.fn(() => new Promise<boolean>(() => {})) });
+    const turns = new CoordinatorTurn(hung);
+    const first = turns.turn(async () => "first");
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(await first).toEqual({ ran: true, value: "first" });
+    expect(hung.reportIdleError).toHaveBeenCalledWith(
+      new Error("Coordinator idle check timed out"),
+    );
+    // The step queue moves on: database work and the next entry proceed.
+    await expect(turns.fence()).resolves.toBeUndefined();
+    const second = turns.turn(async () => "second");
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(await second).toEqual({ ran: true, value: "second" });
+  });
 });
