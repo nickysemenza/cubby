@@ -76,6 +76,30 @@ export function creditScopedPage(
   return mailboxCoverage.parse(next);
 }
 
+/**
+ * The page as frozen in `Run.progress`. Its coverage keeps only what the page
+ * advances (its own scoped query, the history lane and the next lane), never
+ * the mailbox's whole query roster: two roster copies made a frozen page
+ * ~850 KB, read and parsed by every step of the page, and the background
+ * Worker ran out of memory. `rebaseMailboxPage` reads nothing else, and the
+ * checkpoint rebases onto the cursor's full coverage.
+ */
+export function frozenMailboxPage(
+  page: MailboxPage,
+  more: boolean,
+): MailboxPage {
+  const slice = (coverage: MailboxCoverage): MailboxCoverage => ({
+    ...coverage,
+    scoped: coverage.scoped.filter((query) => query.key === page.scopedKey),
+  });
+  return {
+    ...page,
+    startCoverage: slice(page.startCoverage),
+    nextCoverage: slice(page.nextCoverage),
+    more,
+  };
+}
+
 /** Preserve intervening lanes while refusing to rewind this page's own position. */
 export function rebaseMailboxPage({
   page,

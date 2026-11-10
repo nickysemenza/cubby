@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   creditScopedPage,
+  frozenMailboxPage,
   initializeMailboxCoverage,
   listGmailPage,
   rebaseMailboxPage,
@@ -341,5 +342,55 @@ describe("durable Gmail page acquisition", () => {
       "charge:finished",
       "merchant:shop",
     ]);
+  });
+
+  // Two copies of a ~2,500-query roster made a frozen page ~850 KB, parsed by
+  // every step, and the background Worker ran out of memory.
+  it("freezes only the coverage a page advances and checkpoints exactly as the full page", async () => {
+    const provider = gmail({
+      listMessages: vi.fn(async () => ({
+        messages: [{ id: "synthetic-message" }],
+        nextPageToken: "synthetic-next",
+      })),
+    });
+    const coverage = await initializeMailboxCoverage(
+      provider,
+      Array.from({ length: 50 }, (_, index) => ({
+        key: `merchant:synthetic-${index}`,
+        query: `"SYNTHETIC ${index}"`,
+      })),
+    );
+    const page = await listGmailPage(
+      provider,
+      "google-subject",
+      coverage,
+      "targeted",
+      ["merchant:synthetic-7"],
+    );
+    const frozen = frozenMailboxPage(page, true);
+    expect(frozen.startCoverage.scoped.map((query) => query.key)).toEqual([
+      "merchant:synthetic-7",
+    ]);
+    expect(frozen.nextCoverage.scoped).toHaveLength(1);
+    expect(frozen.more).toBe(true);
+    // Another pass advanced a different query meanwhile.
+    const cursor = {
+      ...coverage,
+      scoped: coverage.scoped.map((query) =>
+        query.key === "merchant:synthetic-3"
+          ? { ...query, pageToken: "intervening" }
+          : query,
+      ),
+    };
+    const checkpoint = (from: typeof page) => {
+      const rebased = rebaseMailboxPage({
+        page: from,
+        coverage: cursor,
+        restoreScopedQuery: false,
+      });
+      if (!rebased) throw new Error("Expected the page to rebase");
+      return creditScopedPage(rebased, 1, new Date(0));
+    };
+    expect(checkpoint(frozen)).toEqual(checkpoint(page));
   });
 });
