@@ -91,6 +91,17 @@ export function isFinanceReviewEntity<C extends FinanceReviewContext>(
   );
 }
 
+/**
+ * These questions read a saved record beyond their basis: a declared spending
+ * review's finance/vendor context, or a FinancialTransaction's source evidence.
+ */
+export function usesSavedFieldSuggestionContext(entity: string): boolean {
+  return (
+    entity === "financialTransaction" ||
+    declaredFinanceReviews.some((review) => review.entity === entity)
+  );
+}
+
 /** Declared review fields in `context`, across the entities that declare it. */
 export function financeReviewFields<C extends FinanceReviewContext>(
   context: C,

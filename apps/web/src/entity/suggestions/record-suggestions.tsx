@@ -24,10 +24,8 @@ import {
   fieldEnvelopeFor,
   fieldValueOf,
 } from "@cubby/schemas/field-envelope";
-import {
-  usesSavedFieldSuggestionContext,
-  fieldSuggestionResolutionContext,
-} from "@cubby/schemas/field-suggestion";
+import { fieldSuggestionResolutionContext } from "@cubby/schemas/field-suggestion";
+import { usesSavedFieldSuggestionContext } from "@cubby/schemas/field-suggestion-policy";
 import { productCategorySummary } from "@cubby/schemas/product-category-fields";
 import type {
   SuggestionReviewBatchOut,

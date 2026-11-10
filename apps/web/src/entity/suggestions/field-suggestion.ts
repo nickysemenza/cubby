@@ -5,10 +5,8 @@ import type {
 import type { EntityFieldModel } from "@cubby/schemas/entity-fields";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { fieldEnvelopeFor, fieldValueOf } from "@cubby/schemas/field-envelope";
-import {
-  basisValueOf,
-  usesSavedFieldSuggestionContext,
-} from "@cubby/schemas/field-suggestion";
+import { basisValueOf } from "@cubby/schemas/field-suggestion";
+import { usesSavedFieldSuggestionContext } from "@cubby/schemas/field-suggestion-policy";
 import { parseShortcode } from "@cubby/shared";
 import { useQuery, type QueryClient } from "@tanstack/react-query";
 import { z } from "zod";
