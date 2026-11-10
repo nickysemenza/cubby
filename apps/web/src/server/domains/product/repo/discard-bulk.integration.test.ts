@@ -16,6 +16,7 @@ import {
 } from "~/server/testing/repo.fixtures";
 
 import { discardFromInventoryEntries } from "./discard";
+import { getProductWithFood } from "./write/product-writes";
 
 /**
  * The bulk seam only. Everything a single line does — the $0 cost, the negative
@@ -124,6 +125,22 @@ describe("discardFromInventoryEntries", () => {
         inventory: { removed: true, remainingValue: null },
       });
       expect((await loadEntry(full.entry.entityId))?.deletedAt).not.toBeNull();
+
+      // Both Products read their new stock at once, with no background pass.
+      const food = { findFood: async () => null };
+      expect(
+        await getProductWithFood(ctx.db, food, partial.prod.entityId),
+      ).toMatchObject({
+        onHandUnits: 3,
+        quantityLedger: { exitedUnits: 2 },
+      });
+      expect(
+        await getProductWithFood(ctx.db, food, full.prod.entityId),
+      ).toMatchObject({
+        onHandUnits: null,
+        primaryPlacement: null,
+        quantityLedger: { exitedUnits: 2 },
+      });
     },
   );
 

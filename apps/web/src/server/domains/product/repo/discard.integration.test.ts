@@ -8,6 +8,15 @@ import { getDb } from "~/server/db/helpers";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { entityEmbedding, expense, inventoryEntry } from "~/server/db/schema";
 import {
+  deleteExpenses,
+  updateExpense,
+} from "~/server/domains/expense/repo/crud";
+import {
+  bulkMoveInventoryEntries,
+  reconcileLocationSession,
+} from "~/server/domains/inventory/repo/bulk";
+import { deleteInventoryEntries } from "~/server/domains/inventory/repo/crud";
+import {
   createInventoryFixture as createInventoryEntry,
   createLocationFixture as createLocation,
   createProductFixture as createProduct,
@@ -337,5 +346,133 @@ describe("discardProductUnits", () => {
       ),
       // oxlint-disable-next-line vitest/require-to-throw-message -- The rejection itself is contractual; the exact message is intentionally not.
     ).rejects.toThrow();
+  });
+});
+
+// Every stock write a member makes shows on the Product at once, with no
+// background pass: Expense edit/delete, Inventory add/move/remove and recount.
+describe("live Product stock after member writes", () => {
+  const ctx = withTestDb();
+  const food = { findFood: async () => null };
+
+  it("reads each write back immediately", async () => {
+    const shelf = await createLocation(
+      ctx.db,
+      makeLocationInput({ name: "Synthetic live shelf" }),
+      ctx.actor,
+    );
+    const bin = await createLocation(
+      ctx.db,
+      makeLocationInput({ name: "Synthetic live bin" }),
+      ctx.actor,
+    );
+    const prod = await createProduct(
+      ctx.db,
+      makeProductInput({ name: "Synthetic live drill" }),
+      ctx.actor,
+    );
+    const { output: bought } = await createRepoEntity(
+      ctx,
+      "expense",
+      makeExpenseInput({
+        productId: prod.id,
+        date: "2026-01-02",
+        cost: 90,
+        productQuantity: 1,
+        lineKind: "principal",
+      }),
+    );
+    const read = () => getProductWithFood(ctx.db, food, prod.entityId);
+    const liveEntries = () =>
+      getDb(ctx.db)
+        .select({ id: inventoryEntry.id, updatedAt: inventoryEntry.updatedAt })
+        .from(inventoryEntry)
+        .where(
+          and(
+            eq(inventoryEntry.productId, prod.entityId),
+            isNull(inventoryEntry.deletedAt),
+          ),
+        );
+
+    // Inventory add.
+    await createInventoryEntry(
+      ctx.db,
+      {
+        productId: prod.entityId,
+        locationId: shelf.entityId,
+        amount: { value: 1, unit: "each" },
+      },
+      ctx.actor,
+    );
+    expect(await read()).toMatchObject({
+      onHandUnits: 1,
+      primaryPlacement: { locationId: shelf.id },
+      stockStatus: "Located quantity matches records",
+    });
+
+    // Expense edit.
+    await updateExpense(ctx.db, bought.id, { productQuantity: 2 }, ctx.actor);
+    expect(await read()).toMatchObject({
+      quantityLedger: { acquiredUnits: 2, expectedQuantity: 2 },
+      stockStatus: "1 expected item unlocated",
+    });
+
+    // Inventory move.
+    const [onShelf] = await liveEntries();
+    await bulkMoveInventoryEntries(
+      ctx.db,
+      {
+        sourceLocationId: shelf.entityId,
+        targetLocationId: bin.entityId,
+        items: [
+          {
+            inventoryEntryId: onShelf!.id,
+            quantity: { value: 1, unit: "each" },
+          },
+        ],
+      },
+      ctx.actor,
+    );
+    expect((await read()).primaryPlacement).toMatchObject({
+      locationId: bin.id,
+    });
+
+    // Recount.
+    const [inBin] = await liveEntries();
+    await reconcileLocationSession(
+      ctx.db,
+      {
+        locationId: bin.entityId,
+        expectedInventoryEntryIds: [inBin!.id],
+        snapshotUpdatedAt: inBin!.updatedAt,
+        resolutions: [
+          {
+            kind: "adjust",
+            inventoryEntryId: inBin!.id,
+            amount: { value: 2, unit: "each" },
+          },
+        ],
+      },
+      ctx.actor,
+    );
+    expect(await read()).toMatchObject({
+      onHandUnits: 2,
+      stockStatus: "Located quantity matches records",
+    });
+
+    // Inventory remove.
+    await deleteInventoryEntries(ctx.db, [inBin!.id], ctx.actor);
+    expect(await read()).toMatchObject({
+      onHandUnits: null,
+      primaryPlacement: null,
+      stockStatus: "2 expected items unlocated",
+    });
+
+    // Expense delete.
+    await deleteExpenses(ctx.db, [bought.id], ctx.actor);
+    expect(await read()).toMatchObject({
+      quantityLedger: { acquiredUnits: 0, expectedQuantity: 0 },
+      stockStatus: "No inventory recorded",
+    });
   });
 });
