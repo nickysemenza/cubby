@@ -739,13 +739,16 @@ require a new preview.
 Unproven identity blocks automatic acceptance/correction, with money unchanged.
 It creates no new member task for missing source proof. Intake proves an
 unproven owner when an attested provider row carries the same provider
-transaction ID, provider account and amount as every live observation of
-exactly one unproven owner, with no contradicting raw provider claims: that
-owner becomes the provider occurrence in place, ready, keeping its account,
-disposition and history (unresolved history still derives
-`ownership_conflict`). Any disagreement, a second owner, or a second incoming
-row for the same owner creates the provider owner in `identity_conflict` for
-reviewed resolution. Original evidence and
+transaction ID, the same non-null provider account and the same amount as the
+single live observation of exactly one unproven owner, with no contradicting
+raw provider claims and no older observation time than that owner's last: that
+owner becomes the provider occurrence in place, ready, with the attested row as
+its head, keeping its account, disposition, history and original proof
+(unresolved history still derives `ownership_conflict`). A missing provider
+account, any disagreement, a second owner, or a second incoming row for the
+same owner creates the provider owner in `identity_conflict` for reviewed
+resolution. A provider owner already split from its legacy owner still needs
+the reviewed `assign`. Original evidence and
 actionable member review remain. `matchState: held` blocks automatic actions
 for unresolved identity, historical ownership, or a retained accepted
 reservation whose transaction was deleted. Summary splits `heldHistorical` from

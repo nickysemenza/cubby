@@ -506,7 +506,7 @@ Provider credits (Claude and OpenAI API) have no window budget: each runs until
 its provider refuses, and the status reports its standard-cost spend by provider
 under billing reason `subscriber_credit`. Background work (a Run whose lineage
 root was scheduled, discovered or backfilled) draws the ChatGPT plan only
-within its window budget (`PLAN_BUDGET_LIMIT_USD`, at standard cost), because
+within its window budget (`planLimitUsd`, $2 when never set, at standard cost), because
 the household shares the plan with its own use. Past it, `beforePlanRequest`
 returns a `cubby_plan_budget_reached` funding refusal and the ladder moves on;
 an unladdered plan call skips the plan for its paid or subscription-required

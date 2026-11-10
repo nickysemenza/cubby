@@ -186,7 +186,8 @@ export async function runMcpBatch<TItemInput extends z.ZodType, TItemOutput>(
     const elapsed = Date.now() - startedAt;
     if (
       index > 0 &&
-      budgetMs - elapsed < Math.max(BATCH_START_MARGIN_MS, 2 * slowestMs)
+      budgetMs - elapsed <
+        Math.max(Math.min(BATCH_START_MARGIN_MS, budgetMs / 4), 2 * slowestMs)
     ) {
       results.push({ index, status: "not_started" });
       continue;

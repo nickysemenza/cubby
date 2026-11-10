@@ -136,6 +136,8 @@ function decisiveJudgment(judgment: StatementTransactionJudgment) {
     "create.postedDate": create?.postedDate ?? null,
     "create.merchant": create?.merchant ?? null,
     "create.rawDescription": create?.rawDescription ?? null,
+    "create.sourceCategory": create?.sourceCategory ?? null,
+    "create.notes": create?.notes ?? null,
     "create.sourceRef": create?.sourceRef ?? null,
     candidates: judgment.candidates
       .map(({ transactionId, amount, diff }) => ({
@@ -146,11 +148,13 @@ function decisiveJudgment(judgment: StatementTransactionJudgment) {
       .sort((left, right) =>
         left.transactionId.localeCompare(right.transactionId),
       ),
-    supersede: judgment.supersede?.pendingTransactionId ?? null,
-    void: judgment.void?.transactionId ?? null,
+    supersede: judgment.supersede,
+    void: judgment.void,
     matchedTransactionId: judgment.matchedTransactionId ?? null,
     transfer: judgment.transfer,
-    transferPair: judgment.transferPair?.key ?? null,
+    transferPair: judgment.transferPair
+      ? { key: judgment.transferPair.key, clean: judgment.transferPair.clean }
+      : null,
   };
 }
 

@@ -120,6 +120,7 @@ async function adoptionPlan(
   }>,
   byKey: ReadonlyMap<string, typeof sourceOccurrence.$inferSelect>,
   locked: ReadonlyArray<typeof sourceOccurrence.$inferSelect>,
+  observedAt: Date,
 ) {
   const adopted = new Map<string, typeof sourceOccurrence.$inferSelect>();
   const incoming = prepared.filter(
@@ -148,6 +149,19 @@ async function adoptionPlan(
         ),
       ),
     );
+  const ownerSizes = new Map<string, number>();
+  const antecedentOwnerIds = [
+    ...new Set(antecedents.map((record) => record.occurrenceId)),
+  ];
+  if (antecedentOwnerIds.length)
+    for (const record of await query
+      .select({ occurrenceId: sourceTransactionRecord.occurrenceId })
+      .from(sourceTransactionRecord)
+      .where(inArray(sourceTransactionRecord.occurrenceId, antecedentOwnerIds)))
+      ownerSizes.set(
+        record.occurrenceId,
+        (ownerSizes.get(record.occurrenceId) ?? 0) + 1,
+      );
   const targets = new Map<string, number>();
   const plans = incoming.flatMap((row) => {
     const identity = row.identity!;
@@ -164,6 +178,9 @@ async function adoptionPlan(
       owner.deletedAt ||
       owner.withdrawnAt ||
       owner.supersededByOccurrenceId ||
+      owner.lastObservedAt > observedAt ||
+      prior.length !== 1 ||
+      ownerSizes.get(owner.id) !== 1 ||
       prior.some((record) => {
         const claims = providerIdentityClaims(
           z.json().parse(record.providerData),
@@ -175,8 +192,7 @@ async function adoptionPlan(
           claims.accounts.some((id) => id !== row.row.providerAccountId) ||
           String(record.amount) !==
             String(moneyToMinor(-row.row.providerAmount)) ||
-          (record.providerAccountId !== null &&
-            record.providerAccountId !== row.row.providerAccountId)
+          record.providerAccountId !== row.row.providerAccountId
         );
       })
     )
@@ -196,6 +212,7 @@ async function adoptionPlan(
         source,
         account: identity.scope.slice("provider-account:".length),
         provider: identity.providerId!,
+        originalIdentityProof: owner.identityProof,
       },
       reviewState: "ready",
     });
@@ -552,6 +569,7 @@ export async function recordSourceTransactionRecords(
         prepared,
         byKey,
         locked,
+        observedAt,
       );
       for (const [key, owner] of adopted) byKey.set(key, owner);
       if (existingBatch)
