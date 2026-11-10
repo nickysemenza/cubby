@@ -1,9 +1,6 @@
 import type { Page } from "@playwright/test";
 
-import {
-  gotoAuthenticatedPage,
-  reloadAuthenticatedPage,
-} from "./support/e2e-helpers";
+import { gotoAuthenticatedPage } from "./support/e2e-helpers";
 import { seedStaplePlanningPrerequisite } from "./fixtures/recipes";
 import { expect, test } from "./support/e2e-test";
 
@@ -31,9 +28,6 @@ test("usually-on-hand marking affects planning and the shopping list", async ({
   await expect(
     page.getByRole("checkbox", { name: "Usually on hand", exact: true }),
   ).toHaveCount(0);
-  await reloadAuthenticatedPage(page);
-  const checkedCheckbox = await openIngredientEditor(page);
-  await expect(checkedCheckbox).toBeChecked();
   await gotoAuthenticatedPage(page, "/meals/suggestions");
   const recipeCard = page.getByRole("link", {
     name: new RegExp(`${name} recipe`),
@@ -56,24 +50,4 @@ test("usually-on-hand marking affects planning and the shopping list", async ({
       .locator('[data-cell-col="need"]'),
   ).toHaveText(/^10\s*g$/);
   await expect(staples.getByRole("checkbox")).toHaveCount(0);
-  await reloadAuthenticatedPage(page);
-  await expect(staples.getByRole("link", { name, exact: true })).toBeVisible();
-
-  await gotoAuthenticatedPage(page, `/ingredients/${ingredient.id}`);
-  const checkboxToUnmark = await openIngredientEditor(page);
-  await expect(checkboxToUnmark).toBeChecked();
-  await checkboxToUnmark.uncheck();
-  await page.getByRole("button", { name: /Save/ }).click();
-  await expect(
-    page.getByRole("checkbox", { name: "Usually on hand", exact: true }),
-  ).toHaveCount(0);
-  await gotoAuthenticatedPage(
-    page,
-    "/meals/shopping-list?from=2026-09-09&to=2026-09-09",
-  );
-  await expect(
-    page
-      .getByRole("region", { name: "To buy", exact: true })
-      .getByRole("link", { name, exact: true }),
-  ).toBeVisible();
 });

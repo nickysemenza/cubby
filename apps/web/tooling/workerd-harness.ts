@@ -157,6 +157,8 @@ export interface WorkerdHarnessOptions {
   };
   /** Omitted: request pools keep pg-pool's production idle timeout. */
   poolIdleTimeoutMs?: number;
+  /** Called as each startup step finishes, for per-worker boot timings. */
+  onPhase?: (phase: string) => void;
 }
 
 const UNREACHABLE = "http://127.0.0.1:9";
@@ -410,7 +412,9 @@ export function closeOnce(owned: AsyncDisposableStack) {
 export async function startWorkerdHarness(options: WorkerdHarnessOptions) {
   // Released on any throw below; `move()` hands ownership to the caller.
   await using cleanup = new AsyncDisposableStack();
+  const phase = options.onPhase ?? (() => {});
   const harnessOptions = await workerdHarnessOptions(options);
+  phase("harness config");
   cleanup.defer(installDatabaseEnvironment(options.databaseUrl));
   const harness = createTestHarness(harnessOptions);
   const closeWorkerd = harness.close.bind(harness);
@@ -422,6 +426,7 @@ export async function startWorkerdHarness(options: WorkerdHarnessOptions) {
     harness.debug();
     throw error;
   }
+  phase("workerd listen");
   // The release object loads on its first read and rejects reads until it
   // is ready, so a scenario starts only once the seeded release has loaded.
   const env = await harness
@@ -441,6 +446,7 @@ export async function startWorkerdHarness(options: WorkerdHarnessOptions) {
   await waitForUsdaRelease(
     env.USDA_RELEASE.getByName(usdaReleaseObjectName(SYNTHETIC_USDA_RELEASE)),
   );
+  phase("USDA release");
   return Object.assign(harness, { close: closeOnce(cleanup.move()) });
 }
 
