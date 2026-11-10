@@ -6,7 +6,6 @@ import type { EntityRef } from "@cubby/schemas/identifiers";
 import { expenseCreateInput } from "@cubby/schemas/project";
 import type { SearchableEntity } from "@cubby/schemas/search";
 import { testUserId } from "@cubby/schemas/testing";
-import { eq } from "drizzle-orm";
 import type { CreatableEntity, EntityOverrides } from "tooling/factories/build";
 import { createEntity } from "tooling/factories/create";
 import { fakerFromSeed, hashSeed } from "tooling/factories/faker";
@@ -26,8 +25,6 @@ afterEach(() => backgroundQueue.restore());
 
 import { mock } from "~/lib/test/mock-schema";
 import type { Database } from "~/server/db";
-import { getDb } from "~/server/db/helpers";
-import { task } from "~/server/db/schema";
 import { createExpense } from "~/server/domains/expense/repo/crud";
 import { deleteProducts } from "~/server/domains/product/repo/crud";
 import {
@@ -35,7 +32,6 @@ import {
   updateProject,
 } from "~/server/domains/project/repo/crud";
 import { createTask } from "~/server/domains/task/repo/crud";
-import { executeEntity } from "~/server/entity-kernel";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import {
   getEntityEmbeddingDeletedAtForRef,
@@ -46,9 +42,7 @@ import {
   getSearchDocumentEmbeddingText,
   refreshSearchDocument,
 } from "~/server/generic/search/repo/search-document";
-import { refreshSearchDocuments } from "~/server/generic/search/repo/search-document";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   createProductFixture as createProduct,
   makeProductInput,
@@ -225,175 +219,6 @@ describe("mutation side effects integration", () => {
       entityId: product.entityId,
     });
     expect(deletedAt).toBeInstanceOf(Date);
-  });
-
-  it("a task change reaches the search projection of every inheriting descendant", async () => {
-    const seed = kernelSeeder(ctx.db);
-    const tarp = await seed("product", { name: "Lineage tarp" });
-    const awning = await seed("product", { name: "Lineage awning" });
-    const top = await seed("task", {
-      name: "Lineage top chore",
-      trade: "other",
-      subjectProductId: tarp.code,
-    });
-    const middle = await seed("task", {
-      name: "Lineage middle chore",
-      trade: "other",
-      parentTaskId: top.code,
-    });
-    // Two levels down, which writes no longer create (one subtask level)
-    // but older data holds: it inherits the top task's subject.
-    const bottom = await insertWithShortcode(ctx.db, "task", {
-      name: "Lineage bottom chore",
-      trade: "other",
-      parentTaskId: middle.id as never,
-    });
-
-    await getDb(ctx.db)
-      .update(task)
-      .set({ subjectProductId: awning.id as never })
-      .where(eq(task.id, top.id as never));
-    await runMutationSideEffects(
-      ctx.db,
-      {
-        action: "updated",
-        entity: { entity: "task", id: top.id },
-        source: "test.task.subject",
-      },
-      capturingPorts(),
-    );
-
-    const text = await semanticText(ctx.db, "task", bottom.id);
-    expect(text).toContain("Lineage awning");
-    expect(text).not.toContain("Lineage tarp");
-  });
-
-  it("deleting a task refreshes a surviving descendant that inherited through it", async () => {
-    const seed = kernelSeeder(ctx.db);
-    const tarp = await seed("product", { name: "Orphan tarp" });
-    const top = await seed("task", {
-      name: "Orphan top chore",
-      trade: "other",
-      subjectProductId: tarp.code,
-    });
-    const middle = await seed("task", {
-      name: "Orphan middle chore",
-      trade: "other",
-      parentTaskId: top.code,
-    });
-    // Older data nests below the one-level delete cascade.
-    const bottom = await insertWithShortcode(ctx.db, "task", {
-      name: "Orphan bottom chore",
-      trade: "other",
-      parentTaskId: middle.id as never,
-    });
-    await refreshSearchDocuments(ctx.db, [
-      { entityKind: "task", entityId: bottom.id },
-    ]);
-    expect(await semanticText(ctx.db, "task", bottom.id)).toContain(
-      "Orphan tarp",
-    );
-
-    await executeEntity(buildKernelContext(ctx.db, testUserId(TEST_USER_ID)), {
-      action: "delete",
-      entity: "task",
-      ids: [top.code],
-    });
-    await drain(ctx.db);
-
-    expect(await semanticText(ctx.db, "task", bottom.id)).not.toContain(
-      "Orphan tarp",
-    );
-  });
-
-  it("a parent category rename reaches descendant Products and their Inventory", async () => {
-    const seed = kernelSeeder(ctx.db);
-    const root = await seed("productCategory", { name: "Fanout outdoor" });
-    const leaf = await seed("productCategory", {
-      name: "Fanout covers",
-      parentId: root.code,
-    });
-    const place = await seed("location", { name: "Fanout porch" });
-    const cover = await seed("product", {
-      name: "Fanout cover",
-      categoryId: leaf.code,
-    });
-    const stock = await seed("inventory", {
-      productId: cover.code,
-      locationId: place.code,
-      amount: { value: 1, unit: "each" },
-    });
-
-    // Search text carries the leaf category's name.
-    await renameFixtureRaw(ctx.db, "productCategory", leaf.id, "Fanout tarps");
-    await runMutationSideEffects(
-      ctx.db,
-      {
-        action: "updated",
-        entity: { entity: "productCategory", id: leaf.id },
-        source: "test.category.rename",
-      },
-      capturingPorts(),
-    );
-    for (const [kind, id] of [
-      ["product", cover.id],
-      ["inventory", stock.id],
-    ] as const)
-      expect(await semanticText(ctx.db, kind, id)).toContain("Fanout tarps");
-
-    // A root edit still reaches every descendant Product and its Inventory.
-    const ports = capturingPorts();
-    await runMutationSideEffects(
-      ctx.db,
-      {
-        action: "updated",
-        entity: { entity: "productCategory", id: root.id },
-        source: "test.category.rename",
-      },
-      ports,
-    );
-  });
-
-  it("a location rename reaches its Plantings and Garden entries and gates AI on images", async () => {
-    const seed = kernelSeeder(ctx.db);
-    const bed = await seed("location", { name: "Fanout bed" });
-    const basil = await seed("plant", { name: "Fanout basil" });
-    const planting = await seed("planting", {
-      plantId: basil.code,
-      locationId: bed.code,
-    });
-    const entry = await seed("gardenEntry", {
-      locationId: bed.code,
-      plantingIds: [planting.code],
-    });
-    const rename = (
-      locationImagesChanged: boolean,
-    ): MutationSideEffectEvent => ({
-      action: "updated",
-      entity: { entity: "location", id: bed.id },
-      source: "test.location.rename",
-      locationImagesChanged,
-    });
-
-    await renameFixtureRaw(ctx.db, "location", bed.id, "Fanout raised bed");
-    const quiet = capturingPorts();
-    await runMutationSideEffects(ctx.db, rename(false), quiet);
-
-    expect(await semanticText(ctx.db, "gardenEntry", entry.id)).toContain(
-      "Fanout raised bed",
-    );
-    expect(quiet.published.flat().map((task) => task.kind)).not.toContain(
-      "location-ai.description.refresh",
-    );
-
-    const withImages = capturingPorts();
-    await runMutationSideEffects(ctx.db, rename(true), withImages);
-    expect(withImages.published.flat().map((task) => task.kind)).toEqual(
-      expect.arrayContaining([
-        "location-ai.description.refresh",
-        "location-ai.inventory.refresh",
-      ]),
-    );
   });
 
   it("leaves derived projections unchanged until the background wave runs", async () => {

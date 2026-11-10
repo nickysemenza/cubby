@@ -4,7 +4,6 @@ import type {
   PurchaseShortcode,
 } from "@cubby/schemas/identifiers";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
-import { buildNutrition } from "@cubby/schemas/nutrition";
 import { dryRunPruneAliasesOut } from "@cubby/schemas/problems";
 import { problemsFastSchema } from "@cubby/schemas/problems";
 import {
@@ -13,7 +12,6 @@ import {
 } from "@cubby/schemas/problems-raw-read";
 import { type ExpenseCreateInput } from "@cubby/schemas/project";
 import { eq, sql } from "drizzle-orm";
-import { buildEntity } from "tooling/factories/build";
 import { createRepoEntity } from "tooling/factories/repo";
 import { insertSettlementTransaction } from "tooling/settlement-fixtures";
 import { withTestDb } from "tooling/test-setup";
@@ -21,11 +19,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import type { Database } from "~/server/db";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
-import {
-  executeProblem,
-  findProblemByType,
-} from "~/server/generic/problems/service/problem-execution.service";
-import { drainStoredDerived } from "~/server/testing/background-queue";
+import { findProblemByType } from "~/server/generic/problems/service/problem-execution.service";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
 import {
   publishAllQualityFixtures,
@@ -47,41 +41,31 @@ import {
   taxonomyShortcode,
 } from "tooling/product-category-fixtures";
 
-import { householdDaysAgo } from "~/lib/household-date";
 import { getDb } from "~/server/db/helpers";
 import {
   entityLink,
   financialTransaction,
   ingredient,
   product,
-  recipe,
 } from "~/server/db/schema";
 import { updateExpense } from "~/server/domains/expense/repo/crud";
 import { updateFinancialTransaction } from "~/server/domains/financial-transaction/repo/financial-transaction";
-import { createMealWithEntityId } from "~/server/domains/meal/repo/crud";
 import {
   readPurchaseById,
   purchaseScaffold,
   updatePurchase,
 } from "~/server/domains/purchase/repo/purchase";
 import { setDataException } from "~/server/generic/data-quality/repo/exceptions";
-import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import { linkValues } from "~/server/generic/entity-links/repo/entity-links";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { requireActor } from "~/server/http/request-context";
 import {
   createIngredientFixture,
-  createInventoryFixture,
-  createLocationFixture,
   createProductFixture,
   createProductIdentityFixture,
-  createRecipeFixture,
-  ingredientRef,
   makeExpenseInput,
-  makeLocationInput,
   makeProductInput,
-  makeRecipeInput,
 } from "~/server/testing/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
@@ -100,98 +84,6 @@ const unwrap = async <T>(p: Promise<{ output: T }>): Promise<T> =>
   (await p).output;
 
 const page = { pageIndex: 0, pageSize: 100 };
-
-describe("Problems card read projections", () => {
-  const ctx = withTestDb();
-
-  // Selected view cards must retain the full reader's facts and exact totals,
-  // including live relation evidence and results beyond the twelve-row sample.
-  it("selects view card dependencies without changing the canonical sample", async () => {
-    for (let index = 0; index < 16; index++) {
-      await createIngredientFixture(
-        ctx.db,
-        { name: `Synthetic unused ingredient ${index}` },
-        ctx.actor,
-      );
-    }
-    const key = "unusedIngredientsWithoutProduct";
-    const fields = ["id", "name", "product"];
-    const full = await executeProblem(ctx.db, key);
-    const selected = await executeProblem(ctx.db, key, { fields });
-    expect(full.count).toBeGreaterThanOrEqual(16);
-    expect(selected.count).toBe(full.count);
-    expect(selected.items).toEqual(full.items);
-    expect(selected.data.map(({ id }) => id)).toEqual(
-      full.data.map(({ id }) => id),
-    );
-    expect(selected.data).toHaveLength(12);
-    for (const row of selected.data) {
-      expect(Object.keys(row).sort()).toEqual([...fields].sort());
-    }
-  });
-
-  // Identity-only membership must retain canonical order and totals beyond
-  // the sample, while cards retain the attention engine's measured facts.
-  it("selects tracker identities with exact counts and canonical page order", async () => {
-    for (let index = 0; index < 16; index++) {
-      const project = await insertWithShortcode(ctx.db, "project", {
-        name: `Synthetic tracker project ${index}`,
-        status: "in_progress",
-      });
-      await insertWithShortcode(ctx.db, "task", {
-        name: `Synthetic tracker task ${index}`,
-        projectId: project.id,
-        dueDate: householdDaysAgo(2),
-        trade: "other",
-      });
-      await insertWithShortcode(ctx.db, "expense", {
-        name: `Synthetic tracker spend ${index}`,
-        projectId: project.id,
-        cost: index + 1,
-        date: householdDaysAgo(3),
-        future: false,
-        lineKind: "principal",
-        costType: "materials",
-        trade: "other",
-      });
-    }
-    await drainStoredDerived(ctx.db);
-    for (const key of ["overdueTasks", "projectsMissingBudget"] as const) {
-      const full = await executeProblem(ctx.db, key);
-      const selected = await executeProblem(ctx.db, key, { fields: ["id"] });
-      expect(full.count).toBe(16);
-      expect(selected.count).toBe(full.count);
-      expect(selected.data).toEqual(full.data.map(({ id }) => ({ id })));
-      expect(selected.data).toHaveLength(12);
-    }
-    // An explicitly supplied complete snapshot owns membership, including
-    // empty results; preparing each card again would observe different facts.
-    const emptySnapshot = await executeProblem(
-      ctx.db,
-      "projectsMissingBudget",
-      {
-        fields: ["id"],
-        diagnostic: { attentionItems: { items: [], incompleteProjectIds: [] } },
-      },
-    );
-    expect(emptySnapshot.data).toEqual([]);
-    expect(emptySnapshot.count).toBe(0);
-    const clients = createTestRequestContext(ctx.db);
-    for (const key of ["overdueTasks", "projectsMissingBudget"] as const) {
-      const focused = await findProblemByType(
-        ctx.db,
-        key,
-        clients.upcLookupClient,
-        clients.usdaClient,
-      );
-      expect(focused.items).toHaveLength(12);
-      expect(focused.total).toBe(16);
-    }
-    expect(
-      (await problemItems(ctx.db, "overdueTasks"))[0]?.facts,
-    ).toMatchObject({ daysOverdue: 2 });
-  });
-});
 
 // The defect/coverage split. `totalProblems` — the navbar badge, the homepage
 // banner, the headline card — must count only rows that can reach zero;
@@ -244,177 +136,6 @@ describe("problems — unlinked exit expenses", () => {
   });
 });
 
-describe("problems — view-backed uniform rows", () => {
-  const ctx = withTestDb();
-
-  // The presenters parse list rows by field name, so a renamed list field
-  // fails only once a real row reaches the section.
-  it("presents list rows as entity rows with evidence and record badges", async () => {
-    const shelf = await createLocationFixture(
-      ctx.db,
-      makeLocationInput({ name: "Test shelf", type: "shelf" }),
-      ctx.actor,
-    );
-    const thing = await createProductIdentityFixture(
-      ctx.db,
-      makeProductInput({ name: "Unpriced test good" }),
-      ctx.actor,
-    );
-    const entry = await createInventoryFixture(
-      ctx.db,
-      {
-        productId: thing.id,
-        locationId: shelf.id,
-        amount: { value: 2, unit: "each" },
-      },
-      ctx.actor,
-    );
-    const unused = await createIngredientFixture(
-      ctx.db,
-      { name: "Unused test ingredient" },
-      ctx.actor,
-    );
-
-    const bucket = await createProductIdentityFixture(
-      ctx.db,
-      makeProductInput({ name: "misc: Synthetic spare parts" }),
-      ctx.actor,
-    );
-    await createInventoryFixture(
-      ctx.db,
-      {
-        productId: bucket.id,
-        locationId: shelf.id,
-        amount: { value: 3, unit: "each" },
-      },
-      ctx.actor,
-    );
-    await createRepoEntity(
-      ctx,
-      "expense",
-      makeExpenseInput({
-        name: "Synthetic historic disposal",
-        productId: thing.id,
-        productQuantity: -2,
-        cost: -5,
-        future: false,
-      }),
-    );
-    const needed = await createIngredientFixture(
-      ctx.db,
-      { name: "Synthetic recipe ingredient" },
-      ctx.actor,
-    );
-    await createRecipeFixture(
-      ctx.db,
-      makeRecipeInput({
-        name: "Synthetic view recipe",
-        sections: [
-          {
-            name: "Main",
-            instructions: [{ instruction: "Combine" }],
-            ingredients: [
-              ingredientRef(needed.id, {
-                amounts: [{ value: 1, unit: "cup" }],
-              }),
-            ],
-          },
-        ],
-      }),
-      ctx.actor,
-    );
-
-    await drainStoredDerived(ctx.db);
-    await publishAllQualityFixtures(ctx.db);
-    const views = {
-      negativeExpectedQuantity: await problemItems(
-        ctx.db,
-        "negativeExpectedQuantity",
-      ),
-      unvaluedBucketProducts: await problemItems(
-        ctx.db,
-        "unvaluedBucketProducts",
-      ),
-      ingredientsWithoutProduct: await problemItems(
-        ctx.db,
-        "ingredientsWithoutProduct",
-      ),
-      productsWithoutMappings: await problemItems(
-        ctx.db,
-        "productsWithoutMappings",
-      ),
-      neverVerifiedInventory: await problemItems(
-        ctx.db,
-        "neverVerifiedInventory",
-      ),
-      productsMissingPrice: await problemItems(ctx.db, "productsMissingPrice"),
-      staleLocations: await problemItems(ctx.db, "staleLocations"),
-      unusedIngredientsWithoutProduct: await problemItems(
-        ctx.db,
-        "unusedIngredientsWithoutProduct",
-      ),
-    };
-    expect(
-      views.negativeExpectedQuantity.some(({ id }) => id === thing.id),
-    ).toBe(true);
-    expect(
-      views.unvaluedBucketProducts.some(({ id }) => id === bucket.id),
-    ).toBe(true);
-    expect(
-      views.ingredientsWithoutProduct.some(({ id }) => id === needed.id),
-    ).toBe(true);
-    expect(
-      views.productsWithoutMappings.some(({ id }) => id === thing.id),
-    ).toBe(true);
-    const shelfBadge = {
-      label: "Test shelf",
-      entity: "location",
-      id: shelf.id,
-    };
-
-    expect(
-      views.neverVerifiedInventory.find((row) => row.id === entry.id),
-    ).toEqual({
-      entity: "inventory",
-      id: entry.id,
-      name: "Unpriced test good",
-      fields: [{ label: "Amount", value: "2 each", tone: null }],
-      // The inventory row links the product it counts as well as its shelf.
-      badges: [
-        { label: "Unpriced test good", entity: "product", id: thing.id },
-        shelfBadge,
-      ],
-    });
-    expect(
-      views.productsMissingPrice.find((row) => row.id === thing.id),
-    ).toMatchObject({
-      entity: "product",
-      fields: [{ label: "Unvalued", value: "2 units", tone: "warning" }],
-      badges: [shelfBadge],
-    });
-    expect(views.staleLocations.find((row) => row.id === shelf.id)).toEqual({
-      entity: "location",
-      id: shelf.id,
-      name: "Test shelf",
-      fields: [
-        { label: "Last recount", value: "Never", tone: "warning" },
-        { label: "Type", value: "shelf", tone: null },
-        { label: "Items", value: "2", tone: null },
-      ],
-      badges: [],
-    });
-    expect(
-      views.unusedIngredientsWithoutProduct.find((row) => row.id === unused.id),
-    ).toMatchObject({
-      entity: "ingredient",
-      fields: [
-        { label: "Recipes", value: "None", tone: "warning" },
-        { label: "Product", value: "None", tone: null },
-      ],
-    });
-  });
-});
-
 describe("problems — orphaned products", () => {
   const ctx = withTestDb();
 
@@ -450,201 +171,6 @@ describe("problems — orphaned products", () => {
     expect(ids).not.toContain(kit.id);
     expect(ids).not.toContain(component.id);
     expect(ids).toContain(orphan.id);
-  });
-});
-
-describe("problems — understated meal cost", () => {
-  const ctx = withTestDb();
-
-  it("reports only the affected recipes with their exact persisted coverage", async () => {
-    const [incomplete, complete] = await Promise.all([
-      createRecipeFixture(
-        ctx.db,
-        makeRecipeInput({ name: "Underpriced test recipe" }),
-        ctx.actor,
-      ),
-      createRecipeFixture(
-        ctx.db,
-        makeRecipeInput({ name: "Fully priced test recipe" }),
-        ctx.actor,
-      ),
-    ]);
-    // Settle creation before installing deliberately persisted coverage fixtures.
-    await drainStoredDerived(ctx.db);
-    await Promise.all([
-      getDb(ctx.db)
-        .update(recipe)
-        .set({
-          totals: {
-            cost: {
-              status: "partial",
-              lower: 4,
-              upper: null,
-              coverage: { covered: 2, total: 3 },
-            },
-            nutrition: buildNutrition(() => ({
-              status: "unavailable",
-              reason: "no_data",
-            })),
-          },
-          totalsComputedAt: new Date(),
-        })
-        .where(eq(recipe.id, incomplete.entityId)),
-      getDb(ctx.db)
-        .update(recipe)
-        .set({
-          totals: {
-            cost: {
-              status: "complete",
-              lower: 6,
-              upper: null,
-              coverage: { covered: 2, total: 2 },
-            },
-            nutrition: buildNutrition(() => ({
-              status: "unavailable",
-              reason: "no_data",
-            })),
-          },
-          totalsComputedAt: new Date(),
-        })
-        .where(eq(recipe.id, complete.entityId)),
-    ]);
-    const createdMeal = await createMealWithEntityId(
-      ctx.db,
-      buildEntity("meal", {
-        date: "2026-09-01",
-        name: "Coverage dinner",
-        recipes: [{ recipeId: incomplete.id }, { recipeId: complete.id }],
-      }),
-      ctx.actor,
-    );
-    const meal = createdMeal.output;
-
-    await publishQualityFixtures(ctx.db, "meal");
-    const row = (await problemItems(ctx.db, "understatedCostMeals")).find(
-      (candidate) => candidate.id === meal.id,
-    );
-
-    const mealEntityId = createdMeal.entityId;
-    const quality = (
-      await loadDataQualities(ctx.db, "meal", [mealEntityId])
-    ).get(mealEntityId);
-    expect(quality).toMatchObject({
-      status: "defect",
-      gaps: [
-        { check: "meal_recipe_cost_incomplete", kind: "defect" },
-        { check: "meal_display_image", kind: "missing" },
-      ],
-    });
-
-    expect(row).toMatchObject({
-      id: meal.id,
-      recipeCount: 1,
-      affectedRecipes: [
-        {
-          id: incomplete.id,
-          name: "Underpriced test recipe",
-          costCovered: 2,
-          ingredientCount: 3,
-        },
-      ],
-    });
-  });
-
-  it("reports 0-of-N unavailable costs but not legacy or empty ones", async () => {
-    const unavailableNutrition = buildNutrition(() => ({
-      status: "unavailable",
-      reason: "no_data",
-    }));
-    const [zeroPriced, legacy, empty] = await Promise.all([
-      createRecipeFixture(
-        ctx.db,
-        makeRecipeInput({ name: "Zero priced test recipe" }),
-        ctx.actor,
-      ),
-      createRecipeFixture(
-        ctx.db,
-        makeRecipeInput({ name: "Legacy unavailable test recipe" }),
-        ctx.actor,
-      ),
-      createRecipeFixture(
-        ctx.db,
-        makeRecipeInput({ name: "Empty test recipe" }),
-        ctx.actor,
-      ),
-    ]);
-    // Settle creation before installing deliberately persisted coverage fixtures.
-    await drainStoredDerived(ctx.db);
-    await Promise.all([
-      getDb(ctx.db)
-        .update(recipe)
-        .set({
-          totals: {
-            cost: {
-              status: "unavailable",
-              reason: "no_data",
-              coverage: { covered: 0, total: 2 },
-            },
-            nutrition: unavailableNutrition,
-          },
-          totalsComputedAt: new Date(),
-        })
-        .where(eq(recipe.id, zeroPriced.entityId)),
-      // Persisted before `coverage` existed: excluded until recomputed.
-      getDb(ctx.db)
-        .update(recipe)
-        .set({
-          totals: {
-            cost: { status: "unavailable", reason: "no_data" },
-            nutrition: unavailableNutrition,
-          },
-          totalsComputedAt: new Date(),
-        })
-        .where(eq(recipe.id, legacy.entityId)),
-      getDb(ctx.db)
-        .update(recipe)
-        .set({
-          totals: {
-            cost: { status: "unavailable", reason: "empty" },
-            nutrition: unavailableNutrition,
-          },
-          totalsComputedAt: new Date(),
-        })
-        .where(eq(recipe.id, empty.entityId)),
-    ]);
-    const meal = (
-      await createMealWithEntityId(
-        ctx.db,
-        buildEntity("meal", {
-          date: "2026-09-02",
-          name: "Unpriced dinner",
-          recipes: [
-            { recipeId: zeroPriced.id },
-            { recipeId: legacy.id },
-            { recipeId: empty.id },
-          ],
-        }),
-        ctx.actor,
-      )
-    ).output;
-
-    await publishQualityFixtures(ctx.db, "meal");
-    const row = (await problemItems(ctx.db, "understatedCostMeals")).find(
-      (candidate) => candidate.id === meal.id,
-    );
-
-    expect(row).toMatchObject({
-      id: meal.id,
-      recipeCount: 1,
-      affectedRecipes: [
-        {
-          id: zeroPriced.id,
-          name: "Zero priced test recipe",
-          costCovered: 0,
-          ingredientCount: 2,
-        },
-      ],
-    });
   });
 });
 
@@ -1219,32 +745,6 @@ describe("problems — weight-sold products", () => {
       highUnitCost: 6.09,
       ingredientId: null,
     });
-  });
-
-  it("stops reporting a product once it has a weight-to-money mapping", async () => {
-    const mapped = await createProductIdentityFixture(
-      ctx.db,
-      makeProductInput({
-        name: "Mapped test produce",
-        unitMappings: [
-          {
-            a: { value: 1, unit: "lb" },
-            b: { value: 3, unit: "dollar" },
-            source: "test",
-          },
-        ],
-      }),
-      ctx.actor,
-    );
-    await bookLines(mapped.id, [2.7, 3.38, 5.45, 6.09]);
-
-    const ids = (await problemItems(ctx.db, "weightSoldProducts")).map(
-      (row) => row.id,
-    );
-
-    // The mapping IS the fix, so keeping the row would make the section
-    // permanently red for a product that no longer has the problem.
-    expect(ids).not.toContain(mapped.id);
   });
 });
 

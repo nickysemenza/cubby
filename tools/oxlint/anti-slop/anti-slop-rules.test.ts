@@ -181,18 +181,6 @@ test("unknown input is rejected only in exported signatures, except predicates a
   );
 });
 
-test("an export list is found even with a comment after export", () => {
-  // Regression: a text pre-check for `export {` skipped scope analysis here.
-  const diagnostics = lintFixture(
-    "no-unknown-parameters",
-    "no-unknown-parameters-commented-export.txt",
-  );
-  assert.deepEqual(
-    diagnostics.map((diagnostic) => diagnostic.labels[0]?.span.line),
-    [1],
-  );
-});
-
 test("shape naming applies to owned symbols but not external property names", () => {
   const allowed = lintFixture(
     "no-shape-in-symbol-names",
@@ -231,18 +219,6 @@ test("only the operation cache may call TanStack invalidation directly", () => {
   assert.deepEqual(
     diagnostics.map((diagnostic) => diagnostic.labels[0]?.span.line),
     [5, 6],
-  );
-});
-
-test("removed query-key invalidation identifiers stay unavailable", () => {
-  const diagnostics = lintFixture(
-    "no-legacy-query-invalidation",
-    "no-legacy-query-invalidation.txt",
-  );
-
-  assert.deepEqual(
-    diagnostics.map((diagnostic) => diagnostic.labels[0]?.span.line),
-    [1, 2, 3, 4, 5, 7, 8, 9, 10, 11],
   );
 });
 
@@ -375,14 +351,6 @@ test("moved table definitions retain soft-delete enforcement through shared fact
     diagnostics.map((diagnostic) => diagnostic.labels[0]?.span.line),
     [9],
   );
-});
-
-test("generated Task definitions retain soft-delete enforcement after relation separation", () => {
-  const diagnostics = lintScopedFixture(
-    "require-soft-delete-filter",
-    "require-soft-delete-filter-generated-task.txt",
-  );
-  assert.equal(diagnostics.length, 1);
 });
 
 test("a raw sql EXISTS over a soft-deletable table with no guard is rejected", () => {

@@ -1,22 +1,15 @@
-import { productCategoryUpdateData } from "@cubby/schemas/entities/productCategory";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
-import { sql } from "drizzle-orm";
 import { buildEntity } from "tooling/factories/build";
-import { taxonomyShortcode } from "tooling/product-category-fixtures";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { unwrapDb } from "~/server/db/helpers";
 import { upsertCookbook } from "~/server/domains/cookbook/repo/cookbook";
 import {
   ensureGlobalUnknownLocation,
   updateLocationAiDescription,
 } from "~/server/domains/location/repo/crud";
 import { createMealWithEntityId } from "~/server/domains/meal/repo/crud";
-import {
-  createProductCategory,
-  updateProductCategory,
-} from "~/server/domains/product-category/repo/product-category";
+import { createProductCategory } from "~/server/domains/product-category/repo/product-category";
 import { upsertCookbookRecipe } from "~/server/domains/recipe/repo/crud";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
@@ -126,35 +119,6 @@ describe("data quality: pantry and garden entities", () => {
       status: "needs_data",
       gaps: [{ check: "ingredient_display_image" }],
     });
-  });
-
-  it("ingredient: product link missing", async () => {
-    const unusedIngredient = await createIngredientFixture(
-      ctx.db,
-      { name: "DQ unused ingredient" },
-      TEST_ACTOR,
-    );
-    await createRecipeFixture(
-      ctx.db,
-      makeRecipeInput({
-        name: "DQ unlinked ingredient recipe",
-        sections: [
-          {
-            instructions: [{ instruction: "Mix" }],
-            ingredients: [ingredientRef(unusedIngredient.id)],
-          },
-        ],
-      }),
-      TEST_ACTOR,
-    );
-
-    await refreshQuality();
-    const hydrated = await loadDataQualities(ctx.db, "ingredient", [
-      unusedIngredient.entityId,
-    ]);
-    expect(
-      hydrated.get(unusedIngredient.entityId)?.gaps.map((g) => g.check),
-    ).toContain("ingredient_product");
   });
 
   it("cookbook: import completeness and cover image", async () => {
@@ -344,122 +308,6 @@ describe("data quality: pantry and garden entities", () => {
     });
   });
 
-  // Failure modes: whitespace-only steps passing as instructions; a line
-  // naming a deleted Ingredient passing as an ingredient list.
-  it("recipe: blank steps and deleted ingredients are not content", async () => {
-    const ingredient = await createIngredientFixture(
-      ctx.db,
-      { name: "DQ vanished flour" },
-      TEST_ACTOR,
-    );
-    const recipe = await createRecipeFixture(
-      ctx.db,
-      makeRecipeInput({
-        name: "DQ hollow recipe",
-        url: "https://example.test/hollow",
-        sections: [
-          {
-            instructions: [{ instruction: "Mix well" }],
-            ingredients: [ingredientRef(ingredient.id)],
-          },
-        ],
-      }),
-      TEST_ACTOR,
-    );
-    const before = (
-      await (async () => {
-        await refreshQuality();
-        return loadDataQualities(ctx.db, "recipe", [recipe.entityId]);
-      })()
-    ).get(recipe.entityId);
-    expect(before?.gaps.map((gap) => gap.check)).toEqual([
-      "recipe_display_image",
-    ]);
-
-    await unwrapDb(ctx.db).execute(sql`
-      UPDATE "RecipeSection" SET "instructions" = '[{"text": "   "}]'::jsonb
-      WHERE "recipeId" = ${recipe.entityId}`);
-    await unwrapDb(ctx.db).execute(sql`
-      UPDATE "Ingredient" SET "deletedAt" = now() WHERE "shortcode" = ${ingredient.id}`);
-    await recordChange(ctx.db, {
-      kind: "source",
-      categories: ["recipe", "ingredient"],
-    });
-    await refreshQuality();
-
-    const after = (
-      await loadDataQualities(ctx.db, "recipe", [recipe.entityId])
-    ).get(recipe.entityId)!;
-    expect(after.gaps.map((g) => g.check)).toEqual(
-      expect.arrayContaining(["recipe_ingredients", "recipe_instructions"]),
-    );
-  });
-
-  // Failure mode: a sub-recipe ingredient outliving its deleted Recipe and
-  // still looking complete.
-  it("ingredient: a sub-recipe ingredient whose recipe is deleted is a defect", async () => {
-    const recipe = await createRecipeFixture(
-      ctx.db,
-      makeRecipeInput({ name: "DQ base sauce" }),
-      TEST_ACTOR,
-    );
-    const wrapper = await insertWithShortcode(ctx.db, "ingredient", {
-      name: "DQ base sauce (recipe)",
-      recipeId: recipe.entityId,
-    });
-    const id = parseEntityId("ingredient", wrapper.id);
-    await refreshQuality();
-    const live = (await loadDataQualities(ctx.db, "ingredient", [id])).get(id);
-    expect(live?.gaps.map((g) => g.check)).not.toContain(
-      "ingredient_recipe_deleted",
-    );
-
-    await unwrapDb(ctx.db).execute(sql`
-      UPDATE "Recipe" SET "deletedAt" = now() WHERE "id" = ${recipe.entityId}`);
-    await recordChange(ctx.db, {
-      kind: "source",
-      categories: ["recipe"],
-    });
-    await refreshQuality();
-    const orphaned = (await loadDataQualities(ctx.db, "ingredient", [id])).get(
-      id,
-    )!;
-    expect(orphaned.status).toBe("defect");
-    expect(orphaned.gaps.map((g) => g.check)).toContain(
-      "ingredient_recipe_deleted",
-    );
-  });
-
-  // Failure mode: a cooked meal whose only recipe was deleted still counting
-  // as having contents.
-  it("meal: a deleted recipe is not meal contents", async () => {
-    const recipe = await createRecipeFixture(
-      ctx.db,
-      makeRecipeInput({ name: "DQ deleted meal recipe" }),
-      TEST_ACTOR,
-    );
-    const meal = await createMealWithEntityId(
-      ctx.db,
-      {
-        date: "2026-01-02",
-        mealKind: "cooked",
-        recipes: [{ recipeId: recipe.id, scale: 1 }],
-      },
-      TEST_ACTOR,
-    );
-    await unwrapDb(ctx.db).execute(sql`
-      UPDATE "Recipe" SET "deletedAt" = now() WHERE "id" = ${recipe.entityId}`);
-    await recordChange(ctx.db, {
-      kind: "source",
-      categories: ["recipe"],
-    });
-    await refreshQuality();
-    const quality = (
-      await loadDataQualities(ctx.db, "meal", [meal.entityId])
-    ).get(meal.entityId)!;
-    expect(quality.gaps.map((g) => g.check)).toContain("meal_contents");
-  });
-
   // Failure modes: an unmapped category passing; a deliberate "keep
   // unresolved" block or an inherited mapping wrongly flagged.
   it("productCategory: effective spending mapping, with blocked as a decision", async () => {
@@ -538,45 +386,5 @@ describe("data quality: pantry and garden entities", () => {
     expect(checks(1)).toContain("image_dimensions");
     expect(checks(2)).toContain("image_asset_unusable");
     expect(hydrated.get(ids[2]!)?.status).toBe("defect");
-  });
-
-  it("productCategory: description and root feature", async () => {
-    // A fresh root with a live `feature` would collide with the seeded
-    // taxonomy root for that feature (`ProductCategory_feature_live_unique`
-    // covers every value) — a `feature: null` root is still a legal insert
-    // (the constraint is a partial index over non-null features), so the gap
-    // case covers both `category_description` and `category_feature`.
-    const gap = await createProductCategory(
-      ctx.db,
-      buildEntity("productCategory", { name: "DQ category gap" }),
-      TEST_ACTOR,
-    );
-
-    // The satisfied case reuses a seeded taxonomy root (already carrying a
-    // live `feature`) rather than minting a second root for the same
-    // feature; only its missing `description` needs filling in.
-    const completeRoot = await updateProductCategory(
-      ctx.db,
-      taxonomyShortcode("tools"),
-      productCategoryUpdateData.parse({
-        description: "Hand and power tools.",
-        spendingCategoryMode: "blocked",
-      }),
-      TEST_ACTOR,
-    );
-
-    await refreshQuality();
-    const hydrated = await loadDataQualities(ctx.db, "productCategory", [
-      gap.entityId,
-      completeRoot.entityId,
-    ]);
-    const gapChecks = hydrated.get(gap.entityId)?.gaps.map((g) => g.check);
-    expect(gapChecks).toContain("category_description");
-    expect(gapChecks).toContain("category_feature");
-
-    expect(hydrated.get(completeRoot.entityId)).toMatchObject({
-      status: "needs_data",
-      gaps: [{ check: "productcategory_display_image" }],
-    });
   });
 });

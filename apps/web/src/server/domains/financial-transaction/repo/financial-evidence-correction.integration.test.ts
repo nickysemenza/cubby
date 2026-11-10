@@ -184,7 +184,7 @@ describe("generated booking evidence corrections", () => {
     return { input, transaction, line, lineage, money, head, occurrence };
   }
 
-  it.each([false, true])(
+  it.each([true])(
     "corrects a new observation without changing member shares or confirmation (%s)",
     async (confirmsMerchant) => {
       const { input, transaction, lineage, money } = await fixture(

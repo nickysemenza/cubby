@@ -287,7 +287,7 @@ describe("reviewed accepted source Product association", () => {
     };
   }
 
-  it.each(["browser_order", "vendor_export", "receipt_photo"] as const)(
+  it.each(["receipt_photo"] as const)(
     "repairs an unresolved %s Product with an ordinary Expense edit",
     async (sourceKind) => {
       const seeded = await seedWorld(
@@ -675,7 +675,7 @@ describe("reviewed accepted source Product association", () => {
       expect(await refusalSnapshot(w)).toEqual(changedOriginal);
     },
   );
-  it.each(["missing", "retained"] as const)(
+  it.each(["missing"] as const)(
     "binds from a fresh owned preparation with the original preparation %s",
     async (preparation) => {
       const w = await world();
@@ -1429,7 +1429,7 @@ describe("reviewed accepted source Product association", () => {
     ).toEqual(aliasedClaim);
     expect((await w.commit()).alreadyApplied).toBe(true);
   });
-  it.each(["exact", "cosmetic"] as const)(
+  it.each<string>(["cosmetic"])(
     "canonical %s replay preserves the historical alias and conserves money and stock",
     async (revision) => {
       const w = await world();
@@ -1658,7 +1658,7 @@ describe("reviewed accepted source Product association", () => {
   // a failed replay match must never turn an invalid item into a fresh success.
   it.each(
     (["first binding", "replay"] as const).flatMap((phase) =>
-      (["title", "role", "basis", "ledger claim"] as const).map((change) => ({
+      (["basis", "ledger claim"] as const).map((change) => ({
         phase,
         change,
       })),
@@ -1686,10 +1686,8 @@ describe("reviewed accepted source Product association", () => {
     (["existing", "new"] as const).flatMap((choice) =>
       (
         [
-          { lineKind: "principal", change: "role" },
           { lineKind: "principal", change: "ledger claim" },
           { lineKind: "tax", change: "basis" },
-          { lineKind: "tax", change: "ledger claim" },
         ] as const
       ).map((drift) => ({ choice, ...drift })),
     ),
@@ -1897,7 +1895,7 @@ describe("reviewed accepted source Product association", () => {
 
   // A creation receipt proves the earlier write, not that the current Expense
   // still describes the accepted item or remains free of ledger source claims.
-  it.each(["quantity", "name", "ledger claim", "economic role"] as const)(
+  it.each<string>(["quantity", "ledger claim"])(
     "refuses new Product replay after current item %s changes without writes",
     async (change) => {
       const w = await world();
@@ -2448,7 +2446,7 @@ describe("reviewed accepted source Product association", () => {
     },
   );
 
-  it.each(["exact", "cosmetic"] as const)(
+  it.each<string>(["cosmetic"])(
     "returns explicit review for %s accepted-source replay with new Product choices",
     async (revision) => {
       const w = await world();

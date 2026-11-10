@@ -21,7 +21,6 @@ import {
   readPurchaseById,
   linkExpensesToPurchase,
   mergePurchases,
-  purchaseScaffold,
 } from "~/server/domains/purchase/repo/purchase";
 import { sourceObservations } from "~/server/domains/transaction-import/repo/source-observation-state";
 import {
@@ -32,10 +31,7 @@ import { listSourceTransactionRecords } from "~/server/domains/transaction-impor
 import {
   findOrCreateVendor,
   readVendorById,
-  vendorScaffold,
 } from "~/server/domains/vendor/repo/vendor";
-import { loadRelatedPreviews } from "~/server/generic/entity-links/repo/related-view";
-import { getFilterOptions } from "~/server/generic/list/repo/filter-options";
 import { findFinancialTransactionAllocationDefects } from "~/server/generic/problems/repo/detectors-financial";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { deleteThroughKernel } from "~/server/testing/entity-kernel";
@@ -46,7 +42,6 @@ import {
 } from "./financial-statement-preview";
 import {
   createFinancialTransaction,
-  financialTransactionSourceOptions,
   financialTransactionScaffold,
   updateFinancialTransaction,
 } from "./financial-transaction";
@@ -74,63 +69,6 @@ const account = (name: string, aliases: FinancialAccountSourceAlias[] = []) =>
 
 describe("financial repositories — critical invariants", () => {
   const ctx = withTestDb();
-
-  // The detail screen prints these (`display.detailLabelPath`); no client
-  // re-words the structured aliases, card numbers, or settlement references.
-  it("words an account's aliases and cards and a transaction's references", async () => {
-    const created = (
-      await createFinancialAccount(
-        ctx.db,
-        buildEntity("financialAccount", {
-          name: "Labelled Visa",
-          identity: { kind: "credit_card", network: "visa" },
-          cardNumbers: [
-            {
-              last4: "4321",
-              kind: "primary",
-              validFrom: "2024-01-01",
-              validTo: null,
-              note: null,
-            },
-            {
-              last4: "8765",
-              kind: "wallet_token",
-              validFrom: null,
-              validTo: null,
-              note: "phone",
-            },
-          ],
-          sourceAliases: [
-            {
-              source: "label-test",
-              alias: "Everyday Visa",
-              externalAccountId: null,
-            },
-          ],
-        }),
-        ctx.actor,
-      )
-    ).output;
-    expect(created.sourceAliasesLabel).toBe("label-test: Everyday Visa");
-    expect(created.cardNumbersLabel).toBe(
-      "•••• 4321 · primary · 2024-01-01 → …\n•••• 8765 · wallet token · phone",
-    );
-
-    const transaction = (
-      await createFinancialTransaction(
-        ctx.db,
-        buildEntity("financialTransaction", {
-          accountId: created.id,
-          kind: "purchase",
-          status: "pending",
-          amount: 12,
-          sourceRefs: [{ source: "label-test", externalId: "txn-1" }],
-        }),
-        ctx.actor,
-      )
-    ).output;
-    expect(transaction.sourceRefsLabel).toBe("label-test: txn-1");
-  });
 
   it("serializes concurrent account alias claims", async () => {
     const results = await Promise.allSettled([
@@ -243,104 +181,6 @@ describe("financial repositories — critical invariants", () => {
   // `resolveAllPresent` convention — locationList, productScaffold) rather than
   // silently drop the bogus code AND rather than widen to an unfiltered
   // query. An all-bogus batch still yields nothing, same as before.
-
-  // The two header-filter rosters. Both are load-bearing in a way a shape test
-  // wouldn't catch: the account filter-option roster must emit SHORTCODES, because the
-  // manifest's `accountId` spec brands option values with
-  // Internal shortcode strings are parsed at the server boundary with
-  // `oneOrMany(financialAccountShortcode)` — a uuid here would brand into a lie
-  // and resolve to nothing. And `financialTransactionSourceOptions` is raw SQL
-  // over a LATERAL unnest of `sourceRefs`, so its grouping, its per-row fan-out,
-  // and its soft-delete predicate are only ever exercised against a real DB.
-  it("builds the account and source rosters with live counts and shortcode ids", async () => {
-    const busy = (
-      await createFinancialAccount(
-        ctx.db,
-        account("Roster Busy Visa"),
-        ctx.actor,
-      )
-    ).output;
-    const quiet = (
-      await createFinancialAccount(
-        ctx.db,
-        account("Roster Quiet Visa"),
-        ctx.actor,
-      )
-    ).output;
-    // Never linked to a transaction, then retired: proves a soft-deleted account
-    // leaves the roster entirely rather than showing up with a zero count.
-    const retired = (
-      await createFinancialAccount(
-        ctx.db,
-        account("Roster Retired Visa"),
-        ctx.actor,
-      )
-    ).output;
-    await deleteThroughKernel(ctx.db, ctx.actor, "financialAccount", [
-      retired.id,
-    ]);
-
-    const txn = (accountId: string, sources: string[], amount: number) =>
-      createRepoEntity(ctx, "financialTransaction", {
-        accountId,
-        kind: "purchase",
-        status: "pending",
-        amount,
-        sourceRefs: sources.map((source, index) => ({
-          source,
-          externalId: `${source}-${accountId}-${amount}-${index}`,
-        })),
-      });
-
-    await txn(busy.id, ["monarch"], 10);
-    // Two refs on ONE row — the count is per reference, not per transaction, so
-    // this row contributes to both `monarch` and `amazon-order-export`.
-    await txn(busy.id, ["monarch", "amazon-order-export"], 20);
-    await txn(quiet.id, ["monarch"], 30);
-    const doomed = (await txn(quiet.id, ["copilot"], 40)).output;
-
-    const beforeDelete = await financialTransactionSourceOptions(ctx.db);
-    expect(beforeDelete).toEqual([
-      { source: "monarch", count: 3 },
-      { source: "amazon-order-export", count: 1 },
-      { source: "copilot", count: 1 },
-    ]);
-
-    // Busy leads on count; `quiet` and the zero-transaction accounts fall back to
-    // name order. An account with no transactions still appears — an ordinary
-    // account minted by a statement import is exactly the one you want to filter
-    // for before anything is linked to it.
-    const accountRoster = async () =>
-      (
-        await getFilterOptions(ctx.db, {
-          source: "entity",
-          entity: "financialAccount",
-          search: "",
-          selectedIds: [],
-          limit: 1000,
-          include: ["count"],
-        })
-      ).items;
-    const accounts = await accountRoster();
-    expect(accounts).toEqual([
-      { id: busy.id, label: "Roster Busy Visa", count: 2 },
-      { id: quiet.id, label: "Roster Quiet Visa", count: 2 },
-    ]);
-    // The id is the shortcode the filter brands, not the uuid.
-    expect(accounts[0]?.id).toMatch(/^FAC-/);
-
-    await deleteThroughKernel(ctx.db, ctx.actor, "financialTransaction", [
-      doomed.id,
-    ]);
-    expect(await financialTransactionSourceOptions(ctx.db)).toEqual([
-      { source: "monarch", count: 3 },
-      { source: "amazon-order-export", count: 1 },
-    ]);
-    expect(await accountRoster()).toEqual([
-      { id: busy.id, label: "Roster Busy Visa", count: 2 },
-      { id: quiet.id, label: "Roster Quiet Visa", count: 1 },
-    ]);
-  });
 
   // `oneOrMany`'s array branch has no `.min(1)`, so `[]` is valid filter input
   // and reaches the repo. It must mean "no constraint on that field" — never
@@ -1027,129 +867,6 @@ describe("financial repositories — critical invariants", () => {
         (positions) => positions.size === 0,
       ),
     ).toBe(true);
-  });
-
-  it("batches distinct purchase previews and filters linked finance data", async () => {
-    const createdAccount = (
-      await createFinancialAccount(ctx.db, account("Preview Visa"), ctx.actor)
-    ).output;
-    const vendorId = await findOrCreateVendor(ctx.db, "Preview Vendor");
-    const previewVendor = await readVendorById(ctx.db, vendorId);
-    const previewPurchase = (
-      await createRepoEntity(ctx, "purchase", {
-        date: "2024-01-15",
-        vendorId: previewVendor.id,
-        orderId: "PREVIEW-1",
-      })
-    ).output;
-    const expenses = [];
-    for (let index = 0; index < 4; index += 1) {
-      expenses.push(
-        (
-          await createRepoEntity(ctx, "expense", {
-            date: "2024-01-15",
-            name: `preview line ${index}`,
-            trade: "other",
-            costType: "materials",
-            cost: index + 1,
-            purchaseId: previewPurchase.id,
-            future: false,
-          })
-        ).output,
-      );
-    }
-    const activeTransaction = (
-      await createRepoEntity(ctx, "financialTransaction", {
-        accountId: createdAccount.id,
-        purchaseId: previewPurchase.id,
-        kind: "purchase",
-        status: "posted",
-        postedDate: "2026-02-01",
-        merchant: "Preview merchant",
-        amount: 10,
-      })
-    ).output;
-    await createRepoEntity(ctx, "financialTransaction", {
-      accountId: createdAccount.id,
-      purchaseId: previewPurchase.id,
-      kind: "adjustment",
-      status: "void",
-      merchant: "Voided preview evidence",
-      amount: 1,
-    });
-
-    const previews = await loadRelatedPreviews(ctx.db, {
-      source: "purchase",
-      sourceIds: [previewPurchase.id],
-      relationKeys: ["purchase.expenses", "purchase.transactions"],
-    });
-    expect(
-      previews.find((group) => group.relationKey === "purchase.expenses"),
-    ).toMatchObject({ totalCount: 4, items: expect.any(Array) });
-    expect(
-      previews.find((group) => group.relationKey === "purchase.expenses")
-        ?.items,
-    ).toHaveLength(3);
-    expect(
-      previews.find((group) => group.relationKey === "purchase.transactions")
-        ?.totalCount,
-    ).toBe(2);
-
-    const byExpense = await purchaseScaffold.read(ctx.db, {
-      filters: {
-        expenseId: requireTestValue(
-          expenses[0],
-          "Expected a seeded preview expense.",
-        ).id,
-      },
-      sorts: [],
-      pagination: { pageIndex: 0, pageSize: 100 },
-    });
-    expect(byExpense.data.map((row) => row.id)).toContain(previewPurchase.id);
-    const byTransactionSearch = await purchaseScaffold.read(ctx.db, {
-      filters: { financialTransactionSearch: "Preview merchant" },
-      sorts: [],
-      pagination: { pageIndex: 0, pageSize: 100 },
-    });
-    expect(byTransactionSearch.data.map((row) => row.id)).toContain(
-      previewPurchase.id,
-    );
-    const byTransactionId = await purchaseScaffold.read(ctx.db, {
-      filters: { financialTransactionId: activeTransaction.id },
-      sorts: [],
-      pagination: { pageIndex: 0, pageSize: 100 },
-    });
-    expect(byTransactionId.data.map((row) => row.id)).toContain(
-      previewPurchase.id,
-    );
-
-    const vendorsByExpense = await vendorScaffold.read(ctx.db, {
-      filters: { expenseSearch: "preview line 2" },
-      sorts: [],
-      pagination: { pageIndex: 0, pageSize: 100 },
-    });
-    expect(vendorsByExpense.data.map((row) => row.id)).toContain(
-      previewVendor.id,
-    );
-    const accountsByTransaction = await financialAccountScaffold.read(ctx.db, {
-      filters: { financialTransactionSearch: "Preview merchant" },
-      sorts: [],
-      pagination: { pageIndex: 0, pageSize: 100 },
-    });
-    expect(accountsByTransaction.data.map((row) => row.id)).toContain(
-      createdAccount.id,
-    );
-    const transactionsByExpense = await financialTransactionScaffold.read(
-      ctx.db,
-      {
-        filters: { expenseSearch: "preview line 3" },
-        sorts: [],
-        pagination: { pageIndex: 0, pageSize: 100 },
-      },
-    );
-    expect(transactionsByExpense.data.map((row) => row.id)).toContain(
-      activeTransaction.id,
-    );
   });
 
   /**

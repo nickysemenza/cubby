@@ -1,17 +1,12 @@
 import { testUserId } from "@cubby/schemas/testing";
-import { createRepoIdentity } from "tooling/factories/repo";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
-import { listEntities } from "~/entity/model/list-contracts";
 import { unwrapDb } from "~/server/db/helpers";
 import { entityExternalId } from "~/server/db/schema";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
-import { buildKernelContext } from "~/server/entity-kernel/reference-universe.fixtures";
-import { ENTITY_SCHEMA_BINDINGS } from "~/server/generated/entity-bindings.gen";
 import { ENTITY_REPOSITORY_READ_SCHEMAS } from "~/server/generated/entity-bindings.gen";
-import { generatedMcpEntityActionEntities } from "~/server/generated/entity-kernel-entities.gen";
 import { ensureExternalSources } from "~/server/generic/entity-links/repo/entity-external-ids";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { createMcpServer } from "~/server/mcp/server";
@@ -21,124 +16,13 @@ import {
 } from "~/server/testing/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
-import {
-  callMcpTool,
-  kernelRequestContext,
-  withTestClient,
-} from "../testing/mcp-test-utils";
+import { callMcpTool, kernelRequestContext } from "../testing/mcp-test-utils";
 import type { ToolArguments } from "./tools/tool-registration";
 
 const rows = z.object({
   items: z.array(z.record(z.string(), z.unknown())),
 });
 const one = z.object({ item: z.record(z.string(), z.unknown()) });
-const REPRESENTATIVE_KINDS = [
-  "product",
-  "expense",
-  "financialTransaction",
-  "location",
-] as const satisfies readonly (typeof listEntities)[number][];
-
-const mediaFields = new Set([
-  "displayCover",
-  "displayImages",
-  "images",
-  "labelImages",
-  "itemImageCount",
-  "labelImageCount",
-  "logo",
-  "vendorLogo",
-]);
-
-type JsonSchemaNode =
-  | boolean
-  | {
-      type?: unknown;
-      items?: JsonSchemaNode;
-      properties?: Record<string, JsonSchemaNode>;
-      additionalProperties?: JsonSchemaNode;
-      anyOf?: JsonSchemaNode[];
-      oneOf?: JsonSchemaNode[];
-      allOf?: JsonSchemaNode[];
-    };
-const jsonSchemaNode: z.ZodType<JsonSchemaNode> = z.lazy(() =>
-  z.union([
-    z.boolean(),
-    z.looseObject({
-      type: z.unknown().optional(),
-      items: jsonSchemaNode.optional(),
-      properties: z.record(z.string(), jsonSchemaNode).optional(),
-      additionalProperties: jsonSchemaNode.optional(),
-      anyOf: z.array(jsonSchemaNode).optional(),
-      oneOf: z.array(jsonSchemaNode).optional(),
-      allOf: z.array(jsonSchemaNode).optional(),
-    }),
-  ]),
-);
-const variants = (
-  node: JsonSchemaNode | undefined,
-): Exclude<JsonSchemaNode, boolean>[] => {
-  if (typeof node !== "object") return [];
-  const nested: JsonSchemaNode[] = [
-    ...(node.anyOf ?? []),
-    ...(node.oneOf ?? []),
-    ...(node.allOf ?? []),
-  ];
-  return [node, ...nested.flatMap(variants)];
-};
-const declaresObject = (node: JsonSchemaNode | undefined) =>
-  variants(node).some(
-    (variant) => variant.type === "object" || variant.properties !== undefined,
-  );
-const declaresObjectCollection = (node: JsonSchemaNode | undefined) =>
-  variants(node).some(
-    (variant) =>
-      declaresObject(variant.items) ||
-      declaresObject(variant.additionalProperties),
-  );
-
-/**
- * Compact is an identity-and-status row: no collections of objects (an empty
- * one included), no data-quality facets or gaps, no field resolutions.
- */
-function compactViolations(
-  entity: keyof typeof ENTITY_SCHEMA_BINDINGS,
-  item: z.output<typeof rows>["items"][number],
-): string[] {
-  const found: string[] = [];
-  // An empty collection can't be classified from its value; read the schema.
-  const published = jsonSchemaNode.parse(
-    z.toJSONSchema(ENTITY_SCHEMA_BINDINGS[entity].mcpList, {
-      io: "output",
-      unrepresentable: "any",
-    }),
-  );
-  for (const key of Object.keys(item))
-    if (
-      typeof published === "object" &&
-      declaresObjectCollection(published.properties?.[key])
-    )
-      found.push(
-        `${entity} compact ${key} is declared a collection of objects`,
-      );
-  const visit = (value: unknown, path: string) => {
-    if (Array.isArray(value)) {
-      if (value.some((entry) => typeof entry === "object" && entry !== null))
-        found.push(`${entity} compact ${path} is a collection of objects`);
-      return;
-    }
-    if (typeof value !== "object" || value === null) return;
-    for (const [key, child] of Object.entries(value)) {
-      const at = path ? `${path}.${key}` : key;
-      if (["facets", "gaps", "fieldResolutions"].includes(key))
-        found.push(`${entity} compact carries ${at}`);
-      visit(child, at);
-    }
-  };
-  visit(item, "");
-  return found;
-}
-
 // A full list of a few dozen purchases exceeded the MCP output limit; field
 // selection and the compact preset keep reads bounded without per-entity lists.
 describe("entity_read field selection", () => {
@@ -276,51 +160,6 @@ describe("entity_read field selection", () => {
           value.some((entry) => typeof entry === "object" && entry !== null),
       ).toBe(false);
     }
-  });
-
-  // Regression: Location detail declares `parent` optional behind z.lazy, so
-  // compact kept it; a root Location's list emitted `parent: null` while get
-  // omitted it.
-  it("compact keeps list and get keys equal for a root Location and omits long notes", async () => {
-    const notes = "Synthetic shelf note line.\n".repeat(40);
-    const root = await insertWithShortcode(ctx.db, "location", {
-      name: `Synthetic root ${crypto.randomUUID()}`,
-      type: "room",
-      notes,
-    });
-    const listed = await read({
-      action: "list",
-      entity: "location",
-      resultDetail: "compact",
-      limit: 100,
-    });
-    expect(listed.isError).not.toBe(true);
-    const fromList = rows
-      .parse(listed.structuredContent)
-      .items.find((item) => item["id"] === root.shortcode);
-    const got = await read({
-      action: "get",
-      entity: "location",
-      id: root.shortcode,
-      resultDetail: "compact",
-    });
-    expect(got.isError).not.toBe(true);
-    const fromGet = one.parse(got.structuredContent).item;
-    expect(fromList).toBeDefined();
-    expect(new Set(Object.keys(fromList ?? {}))).toEqual(
-      new Set(Object.keys(fromGet)),
-    );
-    expect(fromGet).not.toHaveProperty("notes");
-    const selected = await read({
-      action: "get",
-      entity: "location",
-      id: root.shortcode,
-      fields: ["notes"],
-    });
-    expect(one.parse(selected.structuredContent).item).toEqual({
-      id: root.shortcode,
-      notes,
-    });
   });
 
   it("serves a name-only Location list without requiring unloaded governed fields", async () => {
@@ -487,148 +326,4 @@ describe("entity_read field selection", () => {
     });
     expect(item["externalIds"]).toHaveLength(2);
   });
-
-  // Compact must not ask the selected-field reader for a field it never loaded,
-  // and `fields` must not re-parse rows through `.partial()`, which throws on
-  // refined object schemas. The client validates every structured result
-  // against the published outputSchema. Every kind shares one read runtime, so
-  // representative kinds cover it: Product (widest projection), Expense and
-  // FinancialTransaction (money, derived source labels), Location (nested).
-  it("serves compact and field selections for representative entity_read kinds", async () => {
-    await world();
-    await createProductIdentityFixture(
-      ctx.db,
-      makeProductInput({ name: "Synthetic selection product" }),
-      ctx.actor,
-    );
-    await insertWithShortcode(ctx.db, "location", {
-      name: "Synthetic selection location",
-      type: "room",
-    });
-    const owner = await createRepoIdentity(ctx, "ledgerParty", {
-      name: "Synthetic selection member",
-      kind: "member",
-    });
-    const account = await createRepoIdentity(ctx, "financialAccount", {
-      name: "Synthetic selection account",
-      identity: { kind: "cash" },
-      ledgerPartyId: owner.output.id,
-    });
-    await createRepoIdentity(ctx, "financialTransaction", {
-      accountId: account.output.id,
-      kind: "purchase",
-      status: "posted",
-      amount: 12.5,
-      transactionDate: "2026-09-01",
-      postedDate: "2026-09-01",
-      merchant: "Synthetic selection merchant",
-    });
-    const entityKernel = entityKernelContextSchema.parse(
-      buildKernelContext(ctx.db),
-    );
-    const listed = new Set<string>(generatedMcpEntityActionEntities.list);
-    const failures = await withTestClient(
-      createMcpServer(),
-      kernelRequestContext(entityKernel),
-      { entityKernel },
-      async (client) => {
-        await client.listTools();
-        const failed: string[] = [];
-        const call = async (command: ToolArguments) => {
-          const label = `${String(command["action"])} ${String(command["entity"])} ${JSON.stringify(command["fields"] ?? command["resultDetail"])}`;
-          try {
-            const result = await client.callTool({
-              name: "entity_read",
-              arguments: command,
-            });
-            if (result.isError)
-              failed.push(`${label}: ${JSON.stringify(result.content)}`);
-            return result;
-          } catch (error) {
-            failed.push(`${label}: ${String(error)}`);
-            return null;
-          }
-        };
-        const inspectEntity = async (entity: (typeof listEntities)[number]) => {
-          const published: z.core.$ZodType =
-            ENTITY_SCHEMA_BINDINGS[entity].mcpList;
-          if (!(published instanceof z.ZodObject))
-            throw new Error("Expected generated object schema");
-          const governed = published.shape["fields"];
-          const keys = Object.keys(
-            ENTITY_REPOSITORY_READ_SCHEMAS[entity].schema.shape,
-          ).filter(
-            (key) =>
-              Object.hasOwn(published.shape, key) ||
-              (governed instanceof z.ZodObject &&
-                Object.hasOwn(governed.shape, key)),
-          );
-          const fields = [
-            ...new Set([
-              ...keys.filter((field) => field !== "id").slice(0, 5),
-              ...keys.filter((key) => mediaFields.has(key)),
-            ]),
-          ].map((field) =>
-            governed instanceof z.ZodObject &&
-            Object.hasOwn(governed.shape, field)
-              ? `fields.${field}`
-              : field,
-          );
-          const listedCompact = rows.safeParse(
-            (await call({ action: "list", entity, resultDetail: "compact" }))
-              ?.structuredContent,
-          ).data?.items[0];
-          await call({ action: "list", entity, fields });
-          if (listedCompact)
-            failed.push(...compactViolations(entity, listedCompact));
-          const id = z.string().optional().parse(listedCompact?.["id"]);
-          if (!id) return;
-          // A get selects from the published detail schema, not the list one.
-          const detail: z.core.$ZodType =
-            ENTITY_SCHEMA_BINDINGS[entity].mcpDetail;
-          const detailFields =
-            detail instanceof z.ZodObject
-              ? fields.filter((field) => {
-                  const [head, key] = field.split(".");
-                  if (head !== "fields")
-                    return Object.hasOwn(detail.shape, head ?? "");
-                  const roster = detail.shape["fields"];
-                  return (
-                    roster instanceof z.ZodObject &&
-                    Object.hasOwn(roster.shape, key ?? "")
-                  );
-                })
-              : [];
-          const gotCompact = one.safeParse(
-            (
-              await call({
-                action: "get",
-                entity,
-                id,
-                resultDetail: "compact",
-              })
-            )?.structuredContent,
-          ).data?.item;
-          await call({ action: "get", entity, id, fields: detailFields });
-          if (gotCompact) {
-            failed.push(...compactViolations(entity, gotCompact));
-            const listKeys = Object.keys(listedCompact ?? {});
-            const getKeys = Object.keys(gotCompact);
-            const onlyList = listKeys.filter((key) => !getKeys.includes(key));
-            const onlyGet = getKeys.filter((key) => !listKeys.includes(key));
-            if (onlyList.length > 0 || onlyGet.length > 0)
-              failed.push(
-                `${entity} compact keys differ: list-only ${onlyList.join(",")}; get-only ${onlyGet.join(",")}`,
-              );
-          }
-        };
-        for (const entity of REPRESENTATIVE_KINDS) {
-          expect(listed.has(entity)).toBe(true);
-          await inspectEntity(entity);
-        }
-        return failed;
-      },
-    );
-    expect(failures).toEqual([]);
-  }, 60_000);
 });

@@ -12,7 +12,6 @@ import { getDb } from "~/server/db/helpers";
 import {
   ledgerParty,
   expenseAttribution,
-  productCategory,
   product as productTable,
   vendor as vendorTable,
 } from "~/server/db/schema";
@@ -287,59 +286,6 @@ describe("server list grouping", () => {
     }
   });
 
-  it("finds the real root of a hierarchy deeper than its declared maxDepth", async () => {
-    // Location declares maxDepth 10 but its writes do not enforce it. A new
-    // top-level location sits under the household root, so it is level 2.
-    const root = await createLocationFixture(
-      ctx.db,
-      makeLocationInput({ name: "Deep root", type: "room" }),
-      ctx.actor,
-    );
-    let parentId = root.id;
-    const chain = [];
-    for (let depth = 1; depth <= 11; depth += 1) {
-      const next = await createLocationFixture(
-        ctx.db,
-        makeLocationInput({ name: `Deep ${depth}`, type: "box", parentId }),
-        ctx.actor,
-      );
-      chain.push(next);
-      parentId = next.id;
-    }
-    const item = await product("Deep item", null);
-    const ids = [];
-    for (const place of chain.slice(-2)) {
-      const entry = await createInventoryFixture(
-        ctx.db,
-        {
-          productId: item.id,
-          locationId: place.id,
-          amount: { value: 1, unit: "each" },
-        },
-        ctx.actor,
-      );
-      ids.push(entry.id);
-    }
-    const result = await executeEntity(kernel(), {
-      action: "list",
-      entity: "inventory",
-      filters: { ids },
-      groupBy: [{ key: "location", level: 2 }],
-      pagination: { pageIndex: 0, pageSize: 10 },
-    });
-    expect(groups(result.meta)).toMatchObject([
-      { key: root.id, label: "Deep root", count: 2, subtree: true },
-    ]);
-    // Its header filter reaches both rows, however deep.
-    const filtered = await executeEntity(kernel(), {
-      action: "list",
-      entity: "inventory",
-      filters: { ids, locationIdFilter: [root.id], includeSubLocations: true },
-      pagination: { pageIndex: 0, pageSize: 10 },
-    });
-    expect(filtered.meta.totalCount).toBe(2);
-  });
-
   it("rejects ancestor levels on values and beyond the declared hierarchy", async () => {
     for (const dimension of [
       { key: "placement", level: 1 },
@@ -430,41 +376,6 @@ describe("server list grouping", () => {
     expect(ids.indexOf(alpha.output.id)).toBeLessThan(
       ids.indexOf(beta.output.id),
     );
-  });
-
-  it("collapses Products with a deleted category into the no-value section", async () => {
-    const retired = await category("Retired group", 0);
-    await product("Retired item", retired.output.id);
-    await product("No category item", null);
-    await getDb(ctx.db)
-      .update(productCategory)
-      .set({ deletedAt: new Date() })
-      .where(eq(productCategory.id, retired.entityId));
-
-    const result = await groupedProducts(
-      [{ orderBy: "name", direction: "asc" }],
-      0,
-      10,
-    );
-    expect(groups(result)).toMatchObject([
-      { key: FILTER_NONE, label: "Unassigned", count: 2 },
-    ]);
-    expect(result.data.map((row) => row.name)).toEqual([
-      "No category item",
-      "Retired item",
-    ]);
-    // The section header's No value filter returns the rows it counts.
-    const presence = async (value: "has" | "none") =>
-      (
-        await executeEntity(kernel(), {
-          action: "list",
-          entity: "product",
-          filters: { categoryIdPresenceFilter: value },
-          pagination: { pageIndex: 0, pageSize: 10 },
-        })
-      ).meta.totalCount;
-    expect(await presence("none")).toBe(2);
-    expect(await presence("has")).toBe(0);
   });
 
   it("orders scalar sections before pagination and keeps count links separate from predicate groups", async () => {

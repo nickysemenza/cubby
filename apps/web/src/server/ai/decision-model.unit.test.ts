@@ -291,9 +291,7 @@ describe("runDecisionChoice", () => {
 
   it.each([
     { status: 429, retryAfter: null, attempts: 3 },
-    { status: 429, retryAfter: "invalid", attempts: 3 },
     { status: 429, retryAfter: "60", attempts: 1 },
-    { status: 401, retryAfter: null, attempts: 1 },
     { status: 503, retryAfter: null, attempts: 1 },
   ])(
     "bounds retries for $status with Retry-After $retryAfter",

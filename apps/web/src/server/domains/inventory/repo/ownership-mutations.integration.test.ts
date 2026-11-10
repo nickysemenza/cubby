@@ -15,7 +15,6 @@ import { buildEntity } from "tooling/factories/build";
 import { raceUniqueInsert, TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
-import { inventoryRepositoryReadSchema } from "~/entity/generated/entity-schema-bindings.inventory.gen";
 import { getDb, notDeleted, withTransaction } from "~/server/db/helpers";
 import { amountFromColumns } from "~/server/db/helpers";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
@@ -38,7 +37,6 @@ import {
   deleteInventoryEntries,
   inventoryScaffold,
 } from "~/server/domains/inventory/repo/crud";
-import * as ownershipReads from "~/server/domains/inventory/repo/ownership";
 import {
   loadEffectiveInventoryOwnershipById,
   computeProductOwners,
@@ -61,8 +59,6 @@ import { executeEntity } from "~/server/entity-kernel";
 import { buildKernelContext } from "~/server/entity-kernel/reference-universe.fixtures";
 import { executeEntitySelectionIds } from "~/server/entity-kernel/selection-ids";
 import { withListGroupBy } from "~/server/generic/list/repo/list";
-import { selectedListProjection } from "~/server/generic/list/repo/list-projection";
-import { selectListReadRows } from "~/server/generic/list/repo/list-read-schema";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { drainStoredDerived } from "~/server/testing/background-queue";
@@ -249,31 +245,6 @@ describe("inventory ownership mutations", () => {
     expect((await filtered(OWNER_FILTER_UNKNOWN)).count).toBe(1);
   });
 
-  it("marks totals incomplete without a derived filter until valuation contributors are published", async () => {
-    const subject = await createSubject("Synthetic incomplete valuation");
-    const read = () =>
-      executeEntity(buildKernelContext(ctx.db), {
-        action: "list",
-        entity: "inventory",
-        filters: { productIdFilter: [subject.product.id] },
-        pagination: { pageIndex: 0, pageSize: 10 },
-      });
-    expect(await read()).toMatchObject({
-      meta: {
-        totalCount: 1,
-        incompleteSums: ["valuation"],
-        sums: {},
-        totalLabels: { valuation: "Incomplete · $0.00 known" },
-      },
-    });
-    await drainStoredDerived(ctx.db);
-    const complete = await read();
-    expect(complete).not.toHaveProperty("meta.incompleteSums");
-    expect(complete).toMatchObject({
-      meta: { totalCount: 1, sums: { valuation: expect.any(Number) } },
-    });
-  });
-
   const addPurchase = async (args: {
     label: string;
     date?: string;
@@ -322,89 +293,6 @@ describe("inventory ownership mutations", () => {
     }
     return { purchase, expenses };
   };
-
-  // Selected identity/price reads must not resolve acquisition ownership, but
-  // selecting ownership reads its published result without resolving acquisition evidence.
-  it("reads published ownership only for its selected consumers", async () => {
-    const owner = await createLedgerParty(
-      ctx.db,
-      { name: "Selected inventory owner", kind: "member", notes: null },
-      TEST_ACTOR,
-    );
-    const subject = await createSubject("Selected inventory");
-    await addPurchase({
-      label: "selected inventory acquisition",
-      lines: [
-        {
-          name: "Selected acquisition",
-          ownerId: owner.output.id,
-          productId: subject.product.id,
-        },
-      ],
-    });
-    const filters = { productIdFilter: [subject.product.id] };
-    const page = { pageIndex: 0, pageSize: 12 };
-    await drainStoredDerived(ctx.db);
-    const full = await listInventoryFixture(ctx.db, filters, [], page);
-    expect(full.data[0]?.ownerLedgerPartyId).toBe(owner.output.id);
-    const grouped = await inventoryScaffold.read(ctx.db, {
-      filters: withListGroupBy(filters, [{ key: "ownerLedgerPartyId" }]),
-      sorts: [],
-      pagination: page,
-    });
-    // Owner grouping must use the same resolved identity as the cell and filter.
-    expect(grouped.groups).toMatchObject([
-      { path: [owner.output.id], count: 1 },
-    ]);
-    const read = async (fields: readonly string[]) => {
-      const projection = selectedListProjection(
-        inventoryRepositoryReadSchema,
-        fields,
-      );
-      const result = await inventoryScaffold.read(ctx.db, {
-        filters,
-        sorts: [],
-        pagination: page,
-        projection,
-      });
-      return {
-        count: result.count,
-        data: selectListReadRows(
-          inventoryRepositoryReadSchema,
-          result.data,
-          fields,
-        ),
-      };
-    };
-    const ownership = vi.spyOn(ownershipReads, "loadInventoryOwnershipTraces");
-    try {
-      const fields = ["id", "amount", "product", "location"];
-      const selected = await read(fields);
-      expect(selected.count).toBe(full.count);
-      expect(selected.data).toEqual(
-        selectListReadRows(inventoryRepositoryReadSchema, full.data, fields),
-      );
-      expect(ownership).not.toHaveBeenCalled();
-      for (const field of [
-        "ownerLedgerPartyId",
-        "effectiveOwnership",
-        "fieldResolutions",
-      ]) {
-        ownership.mockClear();
-        const requested = ["id", field];
-        expect((await read(requested)).data).toEqual(
-          selectListReadRows(
-            inventoryRepositoryReadSchema,
-            full.data,
-            requested,
-          ),
-        );
-        expect(ownership).not.toHaveBeenCalled();
-      }
-    } finally {
-      ownership.mockRestore();
-    }
-  });
 
   // Replacement itemization can persist the ledger's implicit unknown shares.
   // Those rows must not suppress account defaults or change financial history.

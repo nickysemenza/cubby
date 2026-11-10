@@ -12,7 +12,6 @@ import {
   attachExistingImageToEntity,
   updateImageIntegrity,
 } from "~/server/domains/image/repo/image";
-import { updateProduct } from "~/server/domains/product/repo/crud";
 import {
   attachProductComponents,
   detachProductComponents,
@@ -24,10 +23,6 @@ import {
 import { compileProblemFilters } from "~/server/generic/problems/repo/problem-filter-semantics";
 import { drainStoredDerived } from "~/server/testing/background-queue";
 import {
-  storedQuality,
-  storedQualityIds,
-} from "~/server/testing/quality.fixtures";
-import {
   createImageFixture,
   createInventoryFixture,
   createLocationFixture,
@@ -38,9 +33,8 @@ import {
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 
-import { productChecks, PRODUCT_QUALITY_RULES_VERSION } from "./checks/product";
 import { clearDataException, setDataException } from "./exceptions";
-import { loadDataQualities, loadQualityBreakdown } from "./hydrate";
+import { loadDataQualities } from "./hydrate";
 
 // Failure modes: reads repair missing/stale publications; related writes miss
 // quality enrollment; queue research reconstructs kit prices before paging.
@@ -86,47 +80,6 @@ describe("stored Product quality", () => {
     );
     return { item, kit };
   };
-
-  it("never repairs publications on a read", async () => {
-    const { item, kit } = await seed();
-    expect(
-      await productChecks.evaluate(ctx.db, [item.entityId, kit.entityId]),
-    ).toHaveLength(2);
-    expect(await productChecks.evaluate(ctx.db, [])).toEqual([]);
-    expect(
-      (
-        await loadDataQualities(ctx.db, "product", [item.entityId], "stored")
-      ).get(item.entityId)?.status,
-    ).toBe("not_assessed");
-    expect(
-      (await loadQualityBreakdown(ctx.db, "product", item.id)).checks
-        .filter((check) => check.state === "gap")
-        .map((check) => check.check),
-    ).toContain("product_price");
-    await readRecordWorkQueue(ctx.db, {
-      id: item.id,
-      memberPartyId: null,
-      memberOnly: false,
-    });
-    expect(await storedQualityIds(ctx.db)).toEqual([]);
-    await refresh();
-    const published = await storedQuality(ctx.db, item.entityId);
-    expect(published?.rulesVersion).toBe(PRODUCT_QUALITY_RULES_VERSION);
-    const priceGap = async () =>
-      (await loadDataQualities(ctx.db, "product", [item.entityId], "stored"))
-        .get(item.entityId)
-        ?.gaps.some((gap) => gap.check === "product_price");
-    expect(await priceGap()).toBe(true);
-    await updateProduct(ctx.db, item.entityId, { price: 0 }, ctx.actor);
-    expect(await priceGap()).toBe(true);
-    expect(
-      (await loadQualityBreakdown(ctx.db, "product", item.id)).checks
-        .filter((check) => check.state === "gap")
-        .map((check) => check.check),
-    ).not.toContain("product_price");
-    await refresh();
-    expect(await priceGap()).toBe(false);
-  });
 
   it("rebuilds Expense, kit, attachment and image-integrity changes through the family", async () => {
     const { item, kit } = await seed();

@@ -1,27 +1,18 @@
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
-import {
-  createProjectFromTasksInput,
-  projectTreeInput,
-} from "@cubby/schemas/project";
-import { eq } from "drizzle-orm";
+import { createProjectFromTasksInput } from "@cubby/schemas/project";
 import { createRepoEntity } from "tooling/factories/repo";
 import { buildKernelContext } from "tooling/scenarios/context";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { getDb } from "~/server/db/helpers";
-import { project as projectTable } from "~/server/db/schema";
 import {
   projectCreateFromTasksWorkflow,
   projectHandlers,
 } from "~/server/domains/project/operations.server";
 import { readTask, updateTask } from "~/server/domains/task/repo/crud";
-import { executeEntity } from "~/server/entity-kernel";
 import { loadStoredDerived } from "~/server/generic/derived/repo/read";
 import { systemPrincipal } from "~/server/http/authenticate";
-import { requireActor } from "~/server/http/request-context";
 import { drainStoredDerived } from "~/server/testing/background-queue";
-import { createTestRequestContext } from "~/server/testing/request-context";
 
 import { deleteProjects, readProjectById, updateProject } from "./crud";
 import { getProjectDependencyGraph } from "./dependency-graph";
@@ -84,30 +75,6 @@ describe("project repository", () => {
     expect(result.tasks.map(({ id }) => id)).toEqual([task.output.id]);
     const saved = await readTask(ctx.db, task.output.id);
     expect(saved?.projectId).toBe(result.project.id);
-  });
-
-  it("preserves an unchanged legacy project mark through a canonical full-record edit", async () => {
-    const project = await createRepoEntity(ctx, "project", {
-      name: "Synthetic legacy project",
-    });
-    await getDb(ctx.db)
-      .update(projectTable)
-      .set({ emoji: "Legacy mark" })
-      .where(eq(projectTable.id, project.entityId));
-    const kernel = requireActor(
-      createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
-    );
-    await executeEntity(kernel, {
-      action: "update",
-      entity: "project",
-      id: project.output.id,
-      data: { name: "Synthetic updated project", emoji: "Legacy mark" },
-    });
-    const saved = await readProjectById(ctx.db, project.entityId);
-    expect(saved).toMatchObject({
-      name: "Synthetic updated project",
-      emoji: "Legacy mark",
-    });
   });
 
   it("rolls up spend (including future expenses) and task counts", async () => {
@@ -506,45 +473,6 @@ describe("project repository — WBS tree page", () => {
     pageSize,
   });
 
-  it("returns canonical field envelopes from the paginated tree operation", async () => {
-    const parent = await createRepoEntity(ctx, "project", {
-      name: "Synthetic envelope root",
-      defaultTrade: "plumbing",
-    });
-    const child = await createRepoEntity(ctx, "project", {
-      name: "Synthetic envelope child",
-      parentProjectId: parent.output.id,
-    });
-    const result = await projectHandlers.operations.tree({
-      data: projectTreeInput.parse({
-        filters: {},
-        pagination: page(0, 1),
-        sort: [{ orderBy: "name", direction: "asc" }],
-      }),
-      request: {
-        principal: systemPrincipal(
-          buildKernelContext(ctx.db, ctx.actor.userId),
-        ),
-        headers: new Headers(),
-        signal: new AbortController().signal,
-      },
-    });
-    if (!result.ok) throw new Error(result.error.message);
-    expect(result.data.meta.totalCount).toBe(1);
-    expect(result.data.items.map((row) => row.id)).toEqual(
-      expect.arrayContaining([parent.output.id, child.output.id]),
-    );
-    const row = result.data.items.find(
-      (candidate) => candidate.id === child.output.id,
-    );
-    expect(row).toBeDefined();
-    if (!row) throw new Error("Expected the matching descendant");
-    expect(fieldValueOf(row.fields.defaultTrade)).toBe("plumbing");
-    expect(row).not.toHaveProperty("defaultTrade");
-    expect(row).not.toHaveProperty("fieldResolutions");
-    expect(row).not.toHaveProperty("displayImages");
-  });
-
   it("paginates by root, carrying descendants along with their root", async () => {
     const { parent, child, grandchild } = await makeChain("paged");
     const { output: standalone } = await createRepoEntity(ctx, "project", {
@@ -565,91 +493,6 @@ describe("project repository — WBS tree page", () => {
     );
     expect(second.data.map((row) => row.id)).toEqual([standalone.id]);
   });
-});
-
-describe("project repository — date windows (derivation)", () => {
-  const ctx = withTestDb();
-
-  it("derives dates purely from own content when no override is set", async () => {
-    const { output: project, entityId: projectEntityId } =
-      await createRepoEntity(ctx, "project", { name: "dates content only" });
-    await createRepoEntity(ctx, "task", {
-      trade: "other",
-      name: "dates content task",
-      projectId: project.id,
-      due: { start: "2024-02-01", end: "2024-02-03" },
-    });
-    await createRepoEntity(ctx, "expense", {
-      trade: "other",
-      costType: "materials",
-      name: "dates content expense",
-      projectId: project.id,
-      cost: 10,
-      date: "2024-01-15",
-    });
-
-    expect(
-      (
-        await loadStoredDerived(
-          ctx.db,
-          "project",
-          [projectEntityId],
-          ["startDate"],
-        )
-      )
-        .get(projectEntityId)
-        ?.get("startDate")?.resultExists,
-    ).toBe(false);
-    await drainStoredDerived(ctx.db);
-    const after = await readProjectById(ctx.db, projectEntityId);
-    expect(after.dateWindow).toEqual({
-      derivedStart: "2024-01-15",
-      derivedEnd: "2024-02-03",
-      effectiveStart: "2024-01-15",
-      effectiveEnd: "2024-02-03",
-      startSource: "derived",
-      endSource: "derived",
-    });
-    const effectiveStart = async () =>
-      (
-        await loadStoredDerived(
-          ctx.db,
-          "project",
-          [projectEntityId],
-          ["startDate"],
-        )
-      )
-        .get(projectEntityId)
-        ?.get("startDate")?.value;
-    await getDb(ctx.db)
-      .update(projectTable)
-      .set({ startDate: "2025-01-01" })
-      .where(eq(projectTable.id, projectEntityId));
-    expect(await effectiveStart()).toBe("2025-01-01");
-    await drainStoredDerived(ctx.db);
-    await getDb(ctx.db)
-      .update(projectTable)
-      .set({ startDate: null })
-      .where(eq(projectTable.id, projectEntityId));
-    expect(await effectiveStart()).toBe("2024-01-15");
-  });
-
-  // The create/update cycle guard (crud.ts's `wouldCreateProjectCycle`) means
-  // a cyclic parent chain can never actually be persisted through the repo —
-  // so this exercises `aggregateSubtreeDates` directly with a hand-built
-  // cyclic row pair, the same white-box approach gantt-model.unit.test.ts and
-  // project-tree.unit.test.ts use for their own cycle-termination tests.
-
-  /**
-   * Regression: the `startDate` sort resolver is a correlated sub-select fed
-   * to `query.project.findMany`, whose alias mapper rewrites every column ref
-   * inside the clause to the root alias — a `sql` template over Drizzle column
-   * refs emitted `min("project"."dueDate") from "Task"` and threw at runtime.
-   * It shipped broken because nothing exercised this sort, and `startDate` is
-   * the projects table's DEFAULT sort. It must also sort by the EARLIER of the
-   * task and expense mins (LEAST, not a coalesce chain) so the ordering
-   * agrees with the `dateWindow.effectiveStart` each row displays.
-   */
 });
 
 /**

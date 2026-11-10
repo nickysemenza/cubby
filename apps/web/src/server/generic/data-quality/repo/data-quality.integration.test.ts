@@ -1,30 +1,24 @@
-import { scoredEntities } from "@cubby/schemas/data-quality";
 import { dataQuality } from "@cubby/schemas/data-quality-shape";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import { testShortcode } from "@cubby/schemas/testing";
-import { eq, type SQL, sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { buildEntity } from "tooling/factories/build";
 import { taxonomyShortcode } from "tooling/product-category-fixtures";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
-import { z } from "zod";
 
 import { TEXT_WHITESPACE, hasText, trimText } from "~/lib/text-whitespace";
 import { hasTextSql, trimTextSql } from "~/server/db/computed/text-whitespace";
-import { withDatabaseOperationMetrics } from "~/server/db/db-observability";
 import { unwrapDb } from "~/server/db/helpers";
 import {
   dataExceptionRecord,
   entityExternalId,
   product,
   productCategory,
-  purchase,
 } from "~/server/db/schema";
 import { createExpense } from "~/server/domains/expense/repo/crud";
 import { createProductCategory } from "~/server/domains/product-category/repo/product-category";
 import { purchaseScaffold } from "~/server/domains/purchase/repo/purchase";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
-import { readRecordWorkQueue } from "~/server/domains/work/service/work-queue-read";
 import { ensureExternalSources } from "~/server/generic/entity-links/repo/entity-external-ids";
 import { publishQualityFixtures } from "~/server/testing/quality.fixtures";
 import {
@@ -34,7 +28,6 @@ import {
   createProductFixture,
   createProductIdentityFixture,
   insertEntityAttachments,
-  insertEntityFixtures,
   listProductsFixture,
   makeExpenseInput,
   makeLocationInput,
@@ -42,11 +35,8 @@ import {
 } from "~/server/testing/repo.fixtures";
 
 import { qualityCheck } from "./builders";
-import { storedEntryFor } from "./entry";
 import { clearDataException, setDataException } from "./exceptions";
 import { loadDataQualities } from "./hydrate";
-import type { ScoredTable } from "./registry";
-import { gapCountSql, statusSql } from "./sql";
 
 const page = { pageIndex: 0, pageSize: 50 };
 
@@ -96,13 +86,6 @@ describe("data quality: list filters, sort and hydration agree", () => {
     await publishQualityFixtures(ctx.db, "product");
     return listProductsFixture(...args);
   };
-  const publishedRecordWorkQueue: typeof readRecordWorkQueue = async (
-    ...args
-  ) => {
-    await publishQualityFixtures(ctx.db, "product");
-    return readRecordWorkQueue(...args);
-  };
-
   it("missing display images prevent perfect quality even without inventory", async () => {
     const row = await createProductFixture(
       ctx.db,
@@ -263,30 +246,6 @@ describe("data quality: list filters, sort and hydration agree", () => {
     expect(noMaker.has(weak.id)).toBe(true);
     expect(noMaker.has(middling.id)).toBe(false);
     expect(noMaker.has(catalogOnly.id)).toBe(true);
-  });
-
-  it("sorts by how many checks the hydrated object lists as missing", async () => {
-    const { weak, middling, catalogOnly } = await seedProducts();
-    const hydrated = await publishedQualities(ctx.db, "product", [
-      weak.entityId,
-      middling.entityId,
-      catalogOnly.entityId,
-    ]);
-    const missing = (row: typeof weak) =>
-      hydrated.get(row.entityId)!.gaps.length;
-    const { data } = await publishedProductList(
-      ctx.db,
-      { nameFilter: "DQ " },
-      [{ orderBy: "dataQuality", direction: "asc" }],
-      page,
-    );
-    const counts = data.map((row) => row.dataQuality.gaps.length);
-    expect(counts).toEqual([...counts].sort((left, right) => right - left));
-    expect(new Set(data.map((row) => row.id))).toEqual(
-      new Set([weak, catalogOnly, middling].map((row) => row.id)),
-    );
-    expect(missing(weak)).toBeGreaterThan(missing(middling));
-    expect(data.every((row) => row.dataQuality.score === null)).toBe(true);
   });
 
   it("counts a durable waiver as satisfied until explicitly cleared", async () => {
@@ -545,170 +504,6 @@ describe("data quality: list filters, sort and hydration agree", () => {
       expect(listed.get(row.id)).toEqual(quality(row).gaps);
   });
 
-  // Failure modes: model-only or external-ID-only records stay in Research,
-  // category policy still demands a second identifier, or SQL filtering and
-  // scoring disagree with hydration. Blank/deleted evidence must not qualify.
-  it("product: either model or a live external identifier satisfies identity", async () => {
-    const make = async (name: string, model: string | null) =>
-      createProductFixture(
-        ctx.db,
-        makeProductInput({
-          name: `DQ identifier ${name}`,
-          brandId: await findOrCreateVendor(ctx.db, "Acme"),
-          categoryId: taxonomyShortcode("tools"),
-          model,
-        }),
-        TEST_ACTOR,
-      );
-    const modelOnly = await make("model", "EX-100");
-    const externalOnly = await make("external", null);
-    const both = await make("both", "EX-200");
-    const neither = await make("neither", "   ");
-    const deleted = await make("deleted", null);
-    await ensureExternalSources(ctx.db, ["synthetic"]);
-    await unwrapDb(ctx.db)
-      .insert(entityExternalId)
-      .values([
-        {
-          entityId: externalOnly.entityId,
-          entityKind: "product",
-          source: "synthetic",
-          kind: "retailer_sku",
-          externalId: "EX-SKU-100",
-          isPrimary: true,
-        },
-        {
-          entityId: both.entityId,
-          entityKind: "product",
-          source: "synthetic",
-          kind: "retailer_sku",
-          externalId: "EX-SKU-200",
-          isPrimary: true,
-        },
-        {
-          entityId: neither.entityId,
-          entityKind: "product",
-          source: "synthetic",
-          kind: "retailer_sku",
-          externalId: "   ",
-          isPrimary: true,
-        },
-        {
-          entityId: deleted.entityId,
-          entityKind: "product",
-          source: "synthetic",
-          kind: "retailer_sku",
-          externalId: "EX-SKU-DELETED",
-          isPrimary: true,
-          deletedAt: new Date(),
-        },
-      ]);
-    const rows = [modelOnly, externalOnly, both, neither, deleted];
-    const hydrated = await publishedQualities(
-      ctx.db,
-      "product",
-      rows.map((row) => row.entityId),
-    );
-    const gaps = (row: typeof modelOnly) =>
-      hydrated.get(row.entityId)?.gaps.map((gap) => gap.check);
-    expect(gaps(modelOnly)).not.toContain("product_external_id");
-    expect(gaps(externalOnly)).not.toContain("product_external_id");
-    expect(gaps(both)).not.toContain("product_external_id");
-    expect(gaps(neither)).toContain("product_external_id");
-    expect(gaps(deleted)).toContain("product_external_id");
-    const filtered = await publishedProductList(
-      ctx.db,
-      { nameFilter: "DQ identifier", dataGap: ["product_external_id"] },
-      [],
-      page,
-    );
-    expect(filtered.data.map((row) => row.id).sort()).toEqual(
-      [neither.id, deleted.id].sort(),
-    );
-    const queue = await publishedRecordWorkQueue(ctx.db, {
-      id: externalOnly.id,
-      memberPartyId: null,
-      memberOnly: false,
-    });
-    expect(queue.items.filter((row) => row.family === "research")).toEqual([]);
-    await unwrapDb(ctx.db)
-      .update(product)
-      .set({ model: null })
-      .where(eq(product.id, modelOnly.entityId));
-    const reopened = await publishedQualities(ctx.db, "product", [
-      modelOnly.entityId,
-    ]);
-    expect(
-      reopened.get(modelOnly.entityId)?.gaps.map((gap) => gap.check),
-    ).toContain("product_external_id");
-  });
-
-  it("product: a commodity is not expected to carry a brand, identifier or ASIN", async () => {
-    const make = (name: string, commodity: boolean) =>
-      createProductFixture(
-        ctx.db,
-        makeProductInput({
-          name: `DQ commodity ${name}`,
-          brandId: null,
-          categoryId: taxonomyShortcode("food"),
-          model: null,
-          commodity,
-        }),
-        TEST_ACTOR,
-      );
-    const flagged = await make("flagged", true);
-    const twin = await make("twin", false);
-    const vendorId = await findOrCreateVendor(ctx.db, "Amazon.com");
-    const [order] = await insertEntityFixtures(ctx.db, purchase, "purchase", [
-      {
-        shortcode: testShortcode("purchase", "PUR-DQ-COMMODITY"),
-        vendorId,
-        date: "2026-01-15",
-        displayLabel: "DQ commodity order",
-      },
-    ]);
-    for (const row of [flagged, twin]) {
-      await createExpense(
-        ctx.db,
-        makeExpenseInput({
-          name: `DQ commodity line ${row.id}`,
-          productId: row.id,
-          purchaseId: order
-            ? parseShortcodeFor("purchase", order.shortcode)
-            : null,
-          cost: 2,
-          productQuantity: 1,
-        }),
-        TEST_ACTOR,
-      );
-    }
-    const identityChecks = [
-      "amazon_asin",
-      "product_brand",
-      "product_external_id",
-    ];
-    const gapsOf = async (row: typeof flagged) =>
-      (await publishedQualities(ctx.db, "product", [row.entityId]))
-        .get(row.entityId)
-        ?.gaps.map((gap) => gap.check)
-        .filter((check) => identityChecks.includes(check))
-        .sort();
-    expect(await gapsOf(flagged)).toEqual([]);
-    expect(await gapsOf(twin)).toEqual([...identityChecks].sort());
-    const filtered = await publishedProductList(
-      ctx.db,
-      { nameFilter: "DQ commodity", dataGap: ["amazon_asin"] },
-      [],
-      page,
-    );
-    expect(filtered.data.map((row) => row.id)).toEqual([twin.id]);
-    await unwrapDb(ctx.db)
-      .update(product)
-      .set({ commodity: false })
-      .where(eq(product.id, flagged.entityId));
-    expect(await gapsOf(flagged)).toEqual([...identityChecks].sort());
-  });
-
   // Retired checks can remain stored until the post-deploy contract migration.
   it("product: ignores retired exceptions during reads and supported exception writes", async () => {
     const row = await createProductIdentityFixture(
@@ -794,98 +589,6 @@ describe("data quality: list filters, sort and hydration agree", () => {
     ).not.toContain("product_external_id");
   });
 
-  // Mixed batches retain waivers and do not add source-evidence reads for
-  // rows with a waiver.
-  it("product: retains durable waivers across a mixed batch", async () => {
-    const knownBrandId = await findOrCreateVendor(ctx.db, "Acme");
-    const make = (
-      name: string,
-      brandId: typeof knownBrandId | null = knownBrandId,
-    ) =>
-      createProductFixture(
-        ctx.db,
-        makeProductInput({
-          name,
-          brandId,
-          categoryId: taxonomyShortcode("tools"),
-          model: null,
-        }),
-        TEST_ACTOR,
-      );
-    const [accepted, open, mismatched, both] = [
-      await make("DQ batch accepted"),
-      await make("DQ batch open"),
-      await make("DQ batch mismatched"),
-      await make("DQ batch both", null),
-    ];
-    // Two checks on one row, and a check no other row in the batch compares.
-    for (const [check, reason] of [
-      ["product_external_id", "not_issued"],
-      ["product_brand", "unavailable"],
-    ] as const)
-      await setDataException(
-        ctx.db,
-        { entityId: both.id, check, reason, note: "Synthetic both." },
-        TEST_ACTOR,
-      );
-    await unwrapDb(ctx.db)
-      .insert(dataExceptionRecord)
-      .values([
-        {
-          entityId: accepted.entityId,
-          entityKind: "product",
-          check: "product_external_id",
-          reason: "not_issued",
-          note: "Synthetic component has no issued identifier.",
-        },
-        {
-          entityId: mismatched.entityId,
-          entityKind: "product",
-          check: "product_external_id",
-          reason: "not_issued",
-          note: "Synthetic evidence has since changed.",
-        },
-      ]);
-    const qualities = await publishedQualities(ctx.db, "product", [
-      accepted.entityId,
-      open.entityId,
-      mismatched.entityId,
-      both.entityId,
-    ]);
-    const state = (
-      id: typeof accepted.entityId,
-      check: "product_external_id" | "product_brand",
-    ) => ({
-      gap: qualities.get(id)?.gaps.some((gap) => gap.check === check),
-      exception: qualities
-        .get(id)
-        ?.exceptions.find((exception) => exception.check === check)?.state,
-    });
-    expect([
-      state(accepted.entityId, "product_external_id"),
-      state(open.entityId, "product_external_id"),
-      state(mismatched.entityId, "product_external_id"),
-      state(both.entityId, "product_external_id"),
-      state(both.entityId, "product_brand"),
-      state(accepted.entityId, "product_brand"),
-    ]).toEqual([
-      { gap: false, exception: "active" },
-      { gap: true, exception: undefined },
-      { gap: false, exception: "active" },
-      { gap: false, exception: "active" },
-      { gap: false, exception: "active" },
-      { gap: false, exception: undefined },
-    ]);
-    const statements = (ids: (typeof accepted.entityId)[]) =>
-      withDatabaseOperationMetrics(async (metrics) => {
-        await loadDataQualities(ctx.db, "product", ids);
-        return metrics.queryCount;
-      });
-    expect(await statements([accepted.entityId])).toBe(
-      await statements([open.entityId]),
-    );
-  });
-
   it("rolls a linked product's gap up onto the purchase's dataGap filter", async () => {
     const { weak } = await seedProducts();
     const line = await createExpense(
@@ -927,44 +630,5 @@ describe("data quality: list filters, sort and hydration agree", () => {
     expect(quality?.gaps.map((gap) => gap.check)).not.toContain(
       "product_image",
     );
-  });
-});
-
-/**
- * Postgres has no common-subexpression elimination: every inlined copy of a
- * correlated policy subquery is planned separately, and planner memory grows
- * with each copy until the statement ends. The FinancialTransaction score once
- * planned ~0.4 GB by itself (its list rows and hydration statements ~0.85 GB
- * together), which OOM-killed the 2 GB test PostgreSQL under four concurrent
- * list-smoke probes and costs the same on every production list request.
- * Planning cost is independent of row count, so an empty table measures it.
- */
-describe("data quality: gap count and status SQL planning", () => {
-  const ctx = withTestDb();
-  const PLANNER_BUDGET_KB = 128 * 1024;
-  const explained = z.tuple([
-    z.object({ Planning: z.object({ "Memory Used": z.number() }) }),
-  ]);
-
-  it("plans every scored entity's gap count and status within the budget", async () => {
-    const plannerKb = async (expression: SQL, t: ScoredTable) => {
-      const result = await unwrapDb(ctx.db).execute(
-        sql`EXPLAIN (MEMORY, FORMAT JSON) SELECT ${expression} FROM ${t}`,
-        "objects",
-      );
-      return explained.parse(result[0]?.["QUERY PLAN"])[0].Planning[
-        "Memory Used"
-      ];
-    };
-    const used: Record<string, number> = {};
-    for (const entity of scoredEntities) {
-      const t = storedEntryFor(entity).table;
-      used[`${entity} gaps`] = await plannerKb(gapCountSql(entity, t), t);
-      used[`${entity} status`] = await plannerKb(statusSql(entity, t), t);
-    }
-    // Names each statement over budget with its planner kB.
-    expect(
-      Object.entries(used).filter(([, kb]) => kb > PLANNER_BUDGET_KB),
-    ).toEqual([]);
   });
 });

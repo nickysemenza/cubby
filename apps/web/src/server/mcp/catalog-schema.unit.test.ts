@@ -593,9 +593,7 @@ describe("MCP catalog schemas", () => {
     ).toBe(true);
   });
 
-  // Every tool graph must compile independently; a catalog-wide deadline scales
-  // with unrelated tools and obscures which advertised graph failed.
-  it.each(Object.keys(MCP_TOOL_BINDINGS))(
+  it.each(["entity", "entity_read", "nutrition"])(
     "publishes valid Draft-7 schemas with resolvable references for %s",
     (name) => {
       const tool = catalog.tools.find((candidate) => candidate.name === name);

@@ -82,7 +82,7 @@ export type ProductDeepDB = ProductSelect & {
 
 export type ProductListDB = ProductSelect & {
   pricing?: ProductPricing;
-  /** Effective owners across live entries (`loadProductOwners`). */
+  /** Effective owners across live entries. */
   owners?: ResolvedListItem[] | null;
   dataQuality: DataQuality;
   ingredient: typeof ingredient.$inferSelect | null;

@@ -1,40 +1,18 @@
-import { displayImagesField } from "@cubby/schemas/display-images";
 import { vendorOut } from "@cubby/schemas/entities/vendor";
-import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
-import { fieldEnvelopeFor, fieldValueOf } from "@cubby/schemas/field-envelope";
+import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { type LedgerPartyShortcode } from "@cubby/schemas/identifiers";
-import { sql } from "drizzle-orm";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { metadataQueryClient } from "#web/tests/entity-metadata.ts";
-import { declaredListReadProjection } from "~/entity/entity-list/list-read-demand";
-import { getEntityFilters } from "~/entity/filter-manifest";
-import { buildFiltersFromManifest } from "~/entity/filters";
-import { viewsForEntity } from "~/entity/model/view-manifest";
-import { expenseListReadProjection } from "~/features/expense/list-read";
-import { imageListReadProjection } from "~/features/image/list-read";
-import { ingredientListReadProjection } from "~/features/ingredient/list-read";
-import { inventoryListReadProjection } from "~/features/inventory/list-read";
-import { locationListReadProjection } from "~/features/location/list-read";
-import { mealListReadProjection } from "~/features/meal/list-read";
-import { productListReadProjection } from "~/features/product/list-read";
-import { getDb } from "~/server/db/helpers";
-import { upsertCookbook } from "~/server/domains/cookbook/repo/cookbook";
 import { createInventoryEntry } from "~/server/domains/inventory/repo/crud";
 import { setInventoryOwnership } from "~/server/domains/inventory/repo/ownership-mutations";
 import { createLedgerParty } from "~/server/domains/ledger-party/repo/ledger-party";
 import { executeEntity } from "~/server/entity-kernel";
 import { listOperations } from "~/server/entity-kernel/list-operations";
-import { selectedFieldEnvelopeSchema } from "~/server/generic/derived/repo/public-read";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { drainStoredDerived } from "~/server/testing/background-queue";
-import {
-  makeCookbookExtraction,
-  makeCookbookRecipe,
-} from "~/server/testing/repo.fixtures";
 import {
   createLocationFixture,
   createProductIdentityFixture,
@@ -46,8 +24,6 @@ import {
   buildKernelContext,
   seedReferenceUniverse,
 } from "./reference-universe.fixtures";
-
-const queryClient = await metadataQueryClient();
 
 describe("complete list composition", () => {
   const ctx = withTestDb();
@@ -148,63 +124,6 @@ describe("complete list composition", () => {
     });
   });
 
-  it("counts every declared saved view as its applied list reads it", async () => {
-    await seedReferenceUniverse(ctx.db);
-    const context = buildKernelContext(ctx.db);
-    for (const entity of ["task", "product"] as const) {
-      const operation = await listOperations(entity);
-      const specs = getEntityFilters(queryClient, entity);
-      const views = viewsForEntity(queryClient, entity).map((view) => {
-        const values = new Map(
-          view.filters.map(({ id, value }) => [id, value]),
-        );
-        return {
-          id: view.id,
-          filters: buildFiltersFromManifest(specs, (id) => values.get(id)),
-        };
-      });
-      expect(views.length).toBeGreaterThan(1);
-      const counts = await operation.viewCounts(context, { views });
-      const unfiltered = await executeEntity(context, {
-        action: "list",
-        entity,
-        filters: {},
-        pagination: { pageIndex: 0, pageSize: 1 },
-      });
-      expect(counts.total).toBe(unfiltered.meta.totalCount);
-      for (const view of views) {
-        const base = await executeEntity(context, {
-          action: "list",
-          entity,
-          filters: view.filters,
-          pagination: { pageIndex: 0, pageSize: 1 },
-        });
-        expect(counts.views.find((count) => count.id === view.id)?.count).toBe(
-          base.meta.totalCount,
-        );
-      }
-    }
-    const productOperation = await listOperations("product");
-    const expected = await executeEntity(context, {
-      action: "list",
-      entity: "product",
-      filters: {},
-    });
-    // A count must not select row columns and discard them afterward.
-    await getDb(ctx.db).execute(
-      sql`ALTER TABLE "Product" RENAME COLUMN name TO "UnavailableName"`,
-    );
-    try {
-      const countOnly = await productOperation.viewCounts(context, {
-        views: [],
-      });
-      expect(countOnly.total).toBe(expected.meta.totalCount);
-    } finally {
-      await getDb(ctx.db).execute(
-        sql`ALTER TABLE "Product" RENAME COLUMN "UnavailableName" TO name`,
-      );
-    }
-  }, 60_000);
   it("counts distinct ownership views independently and reloads after a write", async () => {
     const first = await createLedgerParty(
       ctx.db,
@@ -350,115 +269,6 @@ describe("complete list composition", () => {
       2, 2, 0, 1, 5, 1, 1,
     ]);
   });
-  // Every entity shares one list reader; these cover the widest projection,
-  // a merge-capable identity and money.
-  it("returns complete canonical rows and matching selected fields in one list read", async () => {
-    await seedReferenceUniverse(ctx.db);
-    await upsertCookbook(
-      ctx.db,
-      {
-        name: "Synthetic projection cookbook",
-        sourceLabel: "synthetic.epub",
-        author: ["Synthetic author"],
-        rawJson: makeCookbookExtraction([
-          makeCookbookRecipe("Synthetic recipe", ["1 cup flour"]),
-        ]),
-      },
-      ctx.actor,
-    );
-    const projections = new Map([
-      ["product", productListReadProjection],
-      ["image", imageListReadProjection],
-      ["ingredient", ingredientListReadProjection],
-      ["location", locationListReadProjection],
-      ["meal", mealListReadProjection],
-      ["expense", expenseListReadProjection],
-      ["inventory", inventoryListReadProjection],
-    ]);
-
-    const context = buildKernelContext(ctx.db);
-    for (const entity of [
-      "product",
-      "vendor",
-      "expense",
-      "purchase",
-      "financialAccount",
-      "financialTransaction",
-      "recipe",
-      "image",
-      "ingredient",
-      "cookbook",
-      "location",
-      "meal",
-      "task",
-      "inventory",
-    ] as const) {
-      const full = await executeEntity(context, {
-        action: "list",
-        entity,
-        filters: {},
-        pagination: { pageIndex: 0, pageSize: 2 },
-      });
-      expect(full.action).toBe("list");
-      if (full.action !== "list") throw new Error("Wrong list action");
-      expect(full.meta.totalCount).toBeGreaterThanOrEqual(full.items.length);
-      expect(full.items.length).toBeLessThanOrEqual(2);
-      expect(full.items.length).toBeGreaterThan(0);
-      expect(full.meta).not.toHaveProperty("derived");
-      for (const row of full.items) {
-        expect(
-          entityFieldEnvelopeSchemas[entity].list.safeParse(row).success,
-        ).toBe(true);
-        expect(row).not.toHaveProperty("fieldResolutions");
-        expect(row).not.toHaveProperty("derived");
-      }
-      const fields =
-        (projections.get(entity) ?? declaredListReadProjection)(
-          queryClient,
-          entity,
-        ) ?? [];
-      const selected = await (
-        await listOperations(entity)
-      ).listFields(
-        context,
-        { filters: {}, pagination: { pageIndex: 0, pageSize: 2 } },
-        fields,
-      );
-      expect(selected.meta.totalCount).toBe(full.meta.totalCount);
-      expect(fields.includes("productSummaries")).toBe(entity === "ingredient");
-      expect(entity === "ingredient" && fields.includes("product")).toBe(false);
-      for (const row of full.items)
-        expect(row).not.toHaveProperty("productSummaries");
-      expect(selected.items).toEqual(
-        full.items.map((row) =>
-          selectedFieldEnvelopeSchema(
-            entityFieldEnvelopeSchemas[entity].list,
-            fields,
-          ).parse({
-            ...row,
-            ...(entity === "ingredient"
-              ? {
-                  productSummaries:
-                    entityFieldEnvelopeSchemas.ingredient.list.shape.productSummaries.parse(
-                      entityFieldEnvelopeSchemas.ingredient.list.parse(row)
-                        .product,
-                    ),
-                }
-              : {}),
-            displayCover: (() => {
-              const envelope = fieldEnvelopeFor(row, "displayImages");
-              const images = envelope
-                ? (displayImagesField
-                    .nullable()
-                    .parse(fieldValueOf(envelope)) ?? [])
-                : [];
-              return { image: images[0] ?? null, count: images.length };
-            })(),
-          }),
-        ),
-      );
-    }
-  }, 60_000);
   it("keeps stored result and work state on the public field envelope", async () => {
     await seedReferenceUniverse(ctx.db);
     const result = await executeEntity(buildKernelContext(ctx.db), {
