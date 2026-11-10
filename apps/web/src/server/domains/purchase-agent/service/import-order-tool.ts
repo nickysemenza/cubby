@@ -28,6 +28,7 @@ export const extractedOrderInput = z
     vendorId: orderFields.vendorId,
     vendor: orderFields.vendor,
     targetPurchaseId: orderFields.targetPurchaseId,
+    distinctFromPurchases: orderFields.distinctFromPurchases,
     defaultTrade: commitPurchaseImportInput.shape.defaultTrade,
     defaultProjectId: commitPurchaseImportInput.shape.defaultProjectId,
     extraction: orderFields.extraction,
@@ -178,6 +179,7 @@ export function importExtractedOrderTool(
           vendorId: args.vendorId,
           vendor: args.vendor,
           targetPurchaseId: args.targetPurchaseId,
+          distinctFromPurchases: args.distinctFromPurchases,
           extraction: args.extraction,
         }),
       );
@@ -192,6 +194,7 @@ export function importExtractedOrderTool(
             vendorId: args.vendorId,
             vendor: args.vendor,
             targetPurchaseId: args.targetPurchaseId,
+            distinctFromPurchases: args.distinctFromPurchases,
             stableOrderId,
             itemOperationId: `extract:${identity}:item`,
             source: {

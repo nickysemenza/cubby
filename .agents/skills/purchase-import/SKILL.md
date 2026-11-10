@@ -107,7 +107,14 @@ checksums, replay, money conservation and unresolved-identity review still apply
    shipping, delivery, cancellation and refund mail may link to one Purchase.
    An exact order id helps; a unique supported match can use account, items,
    dates, totals, tracking or thread context together. Sender, thread or model
-   confidence alone does not establish that match. Shipping mail can establish
+   confidence alone does not establish that match. One order arriving as two
+   Emails (a pre-payment notice and its receipt) or as a statement booking and
+   a later receipt stays one Purchase: order ids compare without labels, case
+   or a leading `#` (`Trip ID: X` is `x`), and an import beside a same-thread
+   or unitemized statement Purchase without that id names it as
+   `targetPurchaseId` or, after review, in `distinctFromPurchases`. A receipt
+   targeting a statement lump files the reviewed lump replacement rather than
+   adding lines. Shipping mail can establish
    an incomplete identified Purchase while itemization stays unknown. What an
    Email cannot establish (a logged-in order page, the exact variant, an
    image) waits in the Research queue for a member's Claude or Codex session.

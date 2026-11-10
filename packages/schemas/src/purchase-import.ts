@@ -590,6 +590,22 @@ export const commitAcceptedSourceOrderReconciliationOut = z.object({
   alreadyApplied: z.boolean(),
 });
 
+/** Converge one order that two source documents imported as two Purchases. */
+export const convergeDuplicateSourceOrderInput = z.object({
+  survivorPurchaseId: purchaseShortcode.describe(
+    "The Purchase to keep, normally the one from the paid receipt.",
+  ),
+  duplicatePurchaseId: purchaseShortcode.describe(
+    "The Purchase the other source document created for the same order.",
+  ),
+});
+export const convergeDuplicateSourceOrderOut = z.object({
+  status: z.enum(["applied", "already_applied"]),
+  survivorPurchaseId: purchaseShortcode,
+  retiredExpenseIds: z.array(expenseShortcode),
+  movedSourceOrders: z.number().int().nonnegative(),
+});
+
 export const proposedImportFix = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("reconcile_source_order"),
@@ -808,6 +824,13 @@ const preparedImportOrderInput = z
         "The seller as the source names it. Cubby reuses the Vendor its exact sender proves, the one Vendor whose website domain sent the Email (shared mail, storefront, payment and relay domains never count), or an exact name/alias; a new Vendor beside a similar-name or same-domain candidate needs distinctFrom.",
       ),
     targetPurchaseId: purchaseShortcode.nullable().optional(),
+    distinctFromPurchases: z
+      .array(purchaseShortcode)
+      .max(10)
+      .optional()
+      .describe(
+        "Reviewed existing-order candidates (the claim's known.existingOrders) this order is not, after reading their identifiers, lines, totals and dates. A mail order with a candidate needs targetPurchaseId or this.",
+      ),
     stableOrderId: stableImportItemId,
     itemOperationId: importItemOperationId,
     source: importSourceIdentity.extend({

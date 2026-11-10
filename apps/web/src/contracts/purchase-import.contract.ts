@@ -29,6 +29,8 @@ import {
   commitAcceptedSourceOrderReconciliationOut,
   commitPurchaseImportInput,
   commitPurchaseImportOut,
+  convergeDuplicateSourceOrderInput,
+  convergeDuplicateSourceOrderOut,
   importOperationStatusInput,
   importOperationStatusOut,
   preparePurchaseImportInput,
@@ -50,6 +52,14 @@ export const purchaseImportContract = defineContract(
       input: commitAcceptedSourceOrderReconciliationInput,
       output: commitAcceptedSourceOrderReconciliationOut,
       invalidates: ["expense", "product", "purchase", "runOnly"],
+    }),
+    convergeDuplicateSourceOrder: mutation({
+      description:
+        "Converge one order two source documents imported as two Purchases (a pre-payment notice and its receipt) after reading both originals: the duplicate's accepted source orders move onto the survivor, each duplicate line is retired onto the survivor's identical line (same title, amount and role; Product, Project, quantity and party attribution kept), and the rest of the duplicate folds in through the Purchase merge. Refuses different Vendors, vendor accounts or order ids, unmatched lines, financially claimed lines, and a duplicate with no accepted source. One transaction; a repeat returns already_applied.",
+      command: { label: "Converge duplicate order", confirmation: null },
+      input: convergeDuplicateSourceOrderInput,
+      output: convergeDuplicateSourceOrderOut,
+      invalidates: ["expense", "purchase", "email"],
     }),
     correctEmailRelevance: mutation({
       description:
