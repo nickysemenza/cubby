@@ -78,7 +78,7 @@ function writeCause(row: PendingAuditRow, field: string): FieldAutomationCause {
   if (row.authority === "released" && row.changes && field in row.changes)
     return { kind: "released" };
   if (row.userId === systemActor().userId && row.runId)
-    return { kind: "import", ref: row.runId };
+    return { kind: "import" };
   return { kind: row.action === "create" ? "new_record" : "evidence_changed" };
 }
 
@@ -105,7 +105,7 @@ async function processRow(db: Database, row: PendingAuditRow) {
         targets.push({
           recordId,
           field: field.key,
-          cause: { kind: "correction", ref: `${entity}:${row.entityId}` },
+          cause: { kind: "correction" },
         });
     }
   for (const field of fields) {

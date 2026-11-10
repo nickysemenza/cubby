@@ -264,7 +264,10 @@ function EditableEntityEditor<TId extends string>({
                 ])}
                 // SAFETY: the guess id is one of the pinned rows above, all
                 // records of this picker's entity.
-                enterPicks={guess.ids[0] as TId | undefined}
+                // Enter fills an empty field with the guess; it never replaces a value.
+                enterPicks={
+                  selected ? undefined : (guess.ids[0] as TId | undefined)
+                }
                 onSearchChange={onSearchChange}
                 isLoading={isLoading}
                 value={selected}

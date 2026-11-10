@@ -772,7 +772,8 @@ function EditableSelectEditor({
       <div className="inline-flex items-center gap-1">
         <Picker
           options={pinned}
-          enterPicks={guess.ids[0]}
+          // Enter fills an empty field with the guess; it never replaces a value.
+          enterPicks={value == null || value === "" ? guess.ids[0] : undefined}
           value={value}
           onValueChange={(next) => void handlePick(next)}
           label={placeholder}

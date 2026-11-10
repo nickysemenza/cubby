@@ -9,6 +9,7 @@ import {
 import { suggestionReviewFamilies } from "@cubby/schemas/suggestion-review-family";
 import { sql } from "drizzle-orm";
 
+import { fieldAuthority } from "~/server/generic/suggestions/repo/field-authority";
 import { type SuggestionFamilyDeclaration } from "~/server/generic/suggestions/repo/suggestion-family-declaration";
 import {
   stamps,
@@ -49,6 +50,34 @@ export const fieldFamily: SuggestionFamilyDeclaration<"field"> = {
     const listed = rows.filter(
       (row) => filters.status !== "pending" || row.automaticRule === null,
     );
+    // Cubby revising a value it holds is not a Disagreement. The same
+    // authority owner as the gate decides; a kept value is a person's.
+    const cubbyHeld = new Set(
+      (
+        await Promise.all(
+          listed
+            .filter(
+              (row) =>
+                row.kind === "correction" &&
+                row.recordId !== null &&
+                row.confidence >= HIGH_CONFIDENCE_PROBABILITY &&
+                !row.answered,
+            )
+            .map(async (row) =>
+              (
+                await fieldAuthority(
+                  db,
+                  shortcodeEntity.parse(row.entity),
+                  String(row.recordId),
+                  row.field,
+                )
+              ).holder === "cubby"
+                ? [row.id]
+                : [],
+            ),
+        )
+      ).flat(),
+    );
     return listed.flatMap((row) => {
       const entity = shortcodeEntity.parse(row.entity);
       const kind = fieldKind.parse(row.kind);
@@ -58,7 +87,10 @@ export const fieldFamily: SuggestionFamilyDeclaration<"field"> = {
       // confident answer for a field only a member applies. Every other
       // pending answer is a guess the field's picker offers.
       const disposition =
-        kind === "correction" && confident && !row.answered && !row.cubbyHeld
+        kind === "correction" &&
+        confident &&
+        !row.answered &&
+        !cubbyHeld.has(row.id)
           ? "disagreement"
           : confident &&
               // Removals (prune) never apply automatically, like review fields.

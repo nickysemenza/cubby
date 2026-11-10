@@ -78,6 +78,14 @@ export async function applyFieldAuthorityAction(
     }
     if (authority.holder !== "cubby")
       throw new Error("This value was not set by Cubby");
+    // A row names the value it shows; a later write is a different value.
+    if (
+      input.suggestionId !== undefined &&
+      input.suggestionId !== authority.suggestionId
+    )
+      throw new Error(
+        "Cubby has changed this value since; review the newer one",
+      );
     // Keep on a handed-back value takes it back as the member's.
     if (authority.suggestionId === null) {
       if (input.action !== "keep")
@@ -85,11 +93,6 @@ export async function applyFieldAuthorityAction(
       await markPerson(undefined);
       return { holder: "person" };
     }
-    // A row names the value it shows; a later revision is a different value.
-    if (input.suggestionId && input.suggestionId !== authority.suggestionId)
-      throw new Error(
-        "Cubby has changed this value since; review the newer one",
-      );
     const suggestionId = authority.suggestionId;
     if (input.action === "keep") {
       await recordFeedback(tx, {
