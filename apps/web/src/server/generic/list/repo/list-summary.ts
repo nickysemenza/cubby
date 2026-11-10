@@ -12,16 +12,14 @@ import { sha256CanonicalJson } from "~/server/lib/canonical-json";
 const log = createLogger("list-summary");
 
 /**
- * A read after this age republishes, which bounds background-only changes
- * (imports, derived passes); member writes mark publications dirty instead.
- * At two minutes nearly every sparse production read recomputed the
- * population after its response.
+ * A read after this age republishes, which bounds writes that bypass
+ * `recordChange`; recorded commits mark publications dirty instead.
  */
 const LIST_SUMMARY_MAX_AGE_MS = 10 * 60_000;
 /** A population nobody has read for this long is dropped at the next publish. */
 const LIST_SUMMARY_RETENTION = "7 days";
 
-export const listSummaryValueSchema = z.object({
+const listSummaryValueSchema = z.object({
   totals: z
     .object({
       sums: z.record(z.string(), z.number()),
@@ -53,12 +51,12 @@ export const listSummaryKey = (input: {
   reader: string;
 }) => sha256CanonicalJson(JSON.parse(JSON.stringify(input)));
 
-/** Missing publication, older than a member write it has not read, or past its age. */
-const stale = (
-  row: { publishedAt: Date; dirtyAt: Date | null },
-  now = new Date(),
-) =>
-  (row.dirtyAt !== null && row.dirtyAt > row.publishedAt) ||
+/** A member write committed after this publication: its totals must show it. */
+const dirty = (row: { publishedAt: Date; dirtyAt: Date | null }) =>
+  row.dirtyAt !== null && row.dirtyAt > row.publishedAt;
+
+/** Past its age: background-only changes may have landed since. */
+const aged = (row: { publishedAt: Date }, now = new Date()) =>
   now.getTime() - row.publishedAt.getTime() > LIST_SUMMARY_MAX_AGE_MS;
 
 /**
@@ -91,10 +89,10 @@ async function storeListSummary(
 
 /**
  * Whole-population totals and metrics for a list page, read from the last
- * publication. A stale one is still served and replaced after the response as
- * a tracked `waitUntil` task; only the first read of a population computes
- * before answering. A member write or ten minutes of age makes the next read
- * republish.
+ * publication. A commit since that publication computes live, so the next
+ * read shows it; a publication past its age is still served and
+ * replaced after the response as a tracked `waitUntil` task. A live read
+ * publishes after the response.
  */
 export async function readPublishedListSummary(
   db: Db,
@@ -111,22 +109,20 @@ export async function readPublishedListSummary(
     .where(
       and(eq(listSummary.entity, input.entity), eq(listSummary.key, input.key)),
     );
-  const republish = async () => {
-    const publishedAt = new Date();
-    const value = await compute();
-    await storeListSummary(db, { ...input, publishedAt }, value);
-    return value;
-  };
-  if (row) {
-    if (stale(row))
+  if (row && !dirty(row)) {
+    if (aged(row))
       await afterResponse(
-        republish().then(
-          () => undefined,
-          (error: unknown) => {
-            // SILENT: the previous summary keeps serving; the next read retries.
-            log.error("list summary republish failed", { error });
-          },
-        ),
+        (async () => {
+          const publishedAt = new Date();
+          await storeListSummary(
+            db,
+            { ...input, publishedAt },
+            await compute(),
+          );
+        })().catch((error: unknown) => {
+          // SILENT: the previous summary keeps serving; the next read retries.
+          log.error("list summary republish failed", { error });
+        }),
       );
     return listSummaryValueSchema.parse(row.summary);
   }
@@ -143,7 +139,7 @@ export async function readPublishedListSummary(
   return value;
 }
 
-/** A committed member write: every published population re-reads it next time. */
+/** Any committed change: every published population computes live next time. */
 export async function markListSummariesDirty(db: Database): Promise<void> {
   const now = new Date();
   await unwrapDb(db)

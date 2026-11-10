@@ -527,11 +527,12 @@ Browser page reads take ungrouped totals and evidence metrics, and
 row for the entity, filters (or views) and member
 (`generic/list/repo/list-summary.ts`) rather than aggregating the whole
 population per page. The first read of a population computes live and publishes
-after the response. A committed member write marks every publication dirty, so
-the next read still serves the previous summary and republishes through
-`waitUntil`. A read more than ten minutes after the last publication also
-republishes, which bounds background-only changes. Grouped reads, Pivot, MCP,
-Apple and internal reads compute live.
+after the response. Every `recordChange` commit, including background and
+derived ones, marks every publication dirty, so the next read computes live and
+shows it. A publication more than ten minutes old is still served and
+republished through `waitUntil`, which bounds writes that bypass
+`recordChange`. Grouped reads, Pivot, MCP, Apple and internal reads
+compute live.
 
 ### Images and enrichment
 

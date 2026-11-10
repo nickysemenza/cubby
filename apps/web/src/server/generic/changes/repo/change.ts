@@ -45,10 +45,12 @@ export async function recordChange(
     await repositoryTransaction(db, (tx) => recordChange(tx, change));
     return;
   }
+  // Totals and view counts also move with background and derived commits that
+  // ring no tab: the next browser read computes them live.
+  await repositoryAfterCommit(db, markListSummariesDirty);
   if (change.ringFromBackground || inHttpRequest()) {
-    // The member's next Work read and list summaries republish from this write's results.
+    // The member's next Work read republishes from this write's results.
     await repositoryAfterCommit(db, markWorkPublicationDirty);
-    await repositoryAfterCommit(db, markListSummariesDirty);
     await recordCommittedChanges(
       db,
       Object.fromEntries(
