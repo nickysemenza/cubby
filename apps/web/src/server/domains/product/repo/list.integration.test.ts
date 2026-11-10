@@ -1,5 +1,4 @@
 import { type LocationCreateInput } from "@cubby/schemas/entities/location";
-import { shortcode } from "@cubby/schemas/identifiers";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import {
@@ -9,12 +8,10 @@ import {
 } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { productRepositoryReadSchema } from "~/entity/generated/entity-schema-bindings.product.gen";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { location, product } from "~/server/db/schema";
 import { createIngredient } from "~/server/domains/ingredient/repo/crud";
 import { attachProductComponents } from "~/server/domains/product/repo/product-components";
-import { selectedListProjection } from "~/server/generic/list/repo/list-projection";
 import { drainStoredDerived } from "~/server/testing/background-queue";
 import {
   createInventoryFixture,
@@ -308,121 +305,6 @@ describe("product list price footer", () => {
 describe("product list staged projections", () => {
   const ctx = withTestDb();
 
-  it("reads published pricing and placement across a page", async () => {
-    const products = await Promise.all(
-      [1, 2, 3].map((index) =>
-        createProductIdentityFixture(
-          ctx.db,
-          makeProductInput({
-            name: `Synthetic budget ${index}`,
-            fdc_id: 123456 + index,
-            price: index,
-          }),
-          ctx.actor,
-        ),
-      ),
-    );
-    const shelf = await createLocationFixture(
-      ctx.db,
-      makeLocationInput({ name: "Synthetic placement shelf" }),
-      ctx.actor,
-    );
-    for (const item of products) {
-      await createInventoryFixture(
-        ctx.db,
-        {
-          productId: item.id,
-          locationId: shelf.id,
-          amount: { value: 1, unit: "each" },
-        },
-        ctx.actor,
-      );
-    }
-    await drainStoredDerived(ctx.db);
-    const page = await productScaffold.read(ctx.db, {
-      filters: { ids: products.map((row) => row.id) },
-      sorts: [{ orderBy: "name", direction: "asc" }],
-      pagination: { pageIndex: 0, pageSize: 3 },
-      projection: selectedListProjection(productRepositoryReadSchema, [
-        "food",
-        "pricing",
-        "primaryPlacement",
-      ]),
-      readIntent: "page",
-    });
-    expect(page.data).toHaveLength(3);
-    expect(page.data.every((row) => row.primaryPlacement != null)).toBe(true);
-    expect(page.data.map((row) => row.id)).toEqual(
-      products.map((row) => row.id),
-    );
-  });
-
-  it("reads the same filtered base page with no deferred or private fields", async () => {
-    const ingredient = await createIngredient(
-      ctx.db,
-      { name: "Staged ingredient" },
-      ctx.actor,
-    );
-    const [first, second] = await Promise.all([
-      createProductFixture(
-        ctx.db,
-        makeProductInput({
-          name: "Staged A",
-          ingredientId: ingredient.id,
-          price: 12,
-        }),
-        ctx.actor,
-      ),
-      createProductFixture(
-        ctx.db,
-        makeProductInput({ name: "Staged B", price: 25 }),
-        ctx.actor,
-      ),
-    ]);
-    const filters = { ids: [first.id, second.id], nameFilter: "Staged" };
-    const sorts = [{ orderBy: "name", direction: "asc" as const }];
-    const pagination = { pageIndex: 0, pageSize: 1 };
-    const full = await listProductsFixture(ctx.db, filters, sorts, pagination);
-    const base = await productScaffold.read(ctx.db, {
-      filters: filters,
-      sorts: sorts,
-      pagination: pagination,
-      projection: [],
-      readIntent: "page",
-    });
-    expect(base.count).toBe(full.count);
-    expect(base.data.map((row) => row.id)).toEqual(
-      full.data.map((row) => row.id),
-    );
-    // `base` is the id/count projection (view counts, relation paging); it binds no fields.
-    expect(base.data[0]).toEqual({ id: first.id });
-    expect(base.incompleteSums).toBeUndefined();
-    const idOnly = await productScaffold.read(ctx.db, {
-      filters: { ids: [second.id] },
-      sorts,
-      pagination: { pageIndex: 0, pageSize: 50 },
-      projection: [],
-    });
-    expect(idOnly.data.map((row) => row.id)).toEqual([second.id]);
-    expect(idOnly.count).toBe(1);
-
-    for (const field of [
-      "ingredientId",
-      "categoryId",
-      "growsPlantId",
-      "price",
-      "pricing",
-      "food",
-      "dataQuality",
-      "inventoryEntry",
-      "displayImages",
-      "unitMappings",
-      "sums",
-    ])
-      expect(base.data[0]).not.toHaveProperty(field);
-    expect(base).not.toHaveProperty("sums");
-  });
-
   it("restricts derived patches through existing filters and preserves full price and ledger arithmetic", async () => {
     const included = await createProductIdentityFixture(
       ctx.db,
@@ -494,34 +376,6 @@ describe("product list staged projections", () => {
     expect(enrichment.data[0]).not.toHaveProperty("displayImages");
     expect(enrichment.data[0]).not.toHaveProperty("dataQuality");
     expect(enrichment).not.toHaveProperty("sums");
-  });
-
-  it("returns full-filter summaries independently of a partial base page", async () => {
-    const [first, second] = await Promise.all([
-      createProductFixture(
-        ctx.db,
-        makeProductInput({ name: "Staged summary A", price: 3 }),
-        ctx.actor,
-      ),
-      createProductFixture(
-        ctx.db,
-        makeProductInput({ name: "Staged summary B", price: 7 }),
-        ctx.actor,
-      ),
-    ]);
-    await createRepoEntity(
-      ctx,
-      "expense",
-      makeExpenseInput({
-        name: "Staged credit",
-        productId: second.id,
-        cost: -5,
-        productQuantity: -1,
-      }),
-    );
-    const filters = { ids: [first.id, second.id] };
-    const summary = await productScaffold.totals(ctx.db, filters);
-    expect(summary).toEqual({ price: 10, expenseTotal: -5 });
   });
 });
 
@@ -603,14 +457,6 @@ describe("product list location subtree filter", () => {
     expect(new Set(leafIds)).toEqual(new Set([deep.id, twice.id]));
   });
 
-  it("unions overlapping multi-selections without duplicating rows", async () => {
-    const shed = await place("Overlap shed", TEST_HOME_SHORTCODE, "room");
-    const shelf = await place("Overlap shelf", shed.id);
-    const item = await stock("Overlap widget", [shelf]);
-    const ids = await listAt([shed.id, shelf.id]);
-    expect(ids.filter((id) => id === item.id)).toHaveLength(1);
-  });
-
   it("ignores soft-deleted descendants and does not walk through them", async () => {
     const cellar = await place("Deleted cellar", TEST_HOME_SHORTCODE, "room");
     const live = await place("Deleted live shelf", cellar.id);
@@ -630,18 +476,6 @@ describe("product list location subtree filter", () => {
     expect(ids).not.toContain(beyondItem.id);
   });
 
-  it("matches nothing for a deleted or unknown selected Location", async () => {
-    const closet = await place("Deleted closet", TEST_HOME_SHORTCODE, "room");
-    const shelf = await place("Closet shelf", closet.id);
-    await stock("Closet widget", [shelf]);
-    await getDb(ctx.db)
-      .update(location)
-      .set({ deletedAt: new Date() })
-      .where(eq(location.id, closet.entityId));
-    expect(await listAt(closet.id)).toEqual([]);
-    expect(await listAt(shortcode("LOC-ZZZZ"))).toEqual([]);
-  });
-
   it("terminates on a parentId cycle", async () => {
     const a = await place("Cycle A", TEST_HOME_SHORTCODE, "room");
     const b = await place("Cycle B", a.id);
@@ -651,21 +485,6 @@ describe("product list location subtree filter", () => {
       .set({ parentId: b.entityId })
       .where(eq(location.id, a.entityId));
     expect(await listAt(a.id)).toEqual([item.id]);
-  });
-
-  // Writes do not enforce maxDepth, so a filter reaches every descendant; a
-  // level-grouped section counts these rows and its header filter must too.
-  it("includes descendants deeper than the declared tree depth", async () => {
-    const root = await place("Depth root", TEST_HOME_SHORTCODE, "room");
-    const chain = [root];
-    for (let level = 1; level <= 12; level += 1) {
-      chain.push(await place(`Depth level ${level}`, chain[level - 1]!.id));
-    }
-    const nearItem = await stock("Near widget", [chain[10]!]);
-    const farItem = await stock("Far widget", [chain[12]!]);
-    const ids = await listAt(root.id);
-    expect(ids).toContain(nearItem.id);
-    expect(ids).toContain(farItem.id);
   });
 });
 

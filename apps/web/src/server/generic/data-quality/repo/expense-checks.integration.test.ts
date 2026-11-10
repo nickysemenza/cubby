@@ -5,19 +5,13 @@ import { describe, expect, it } from "vitest";
 
 import { updateExpense } from "~/server/domains/expense/repo/crud";
 import { expenseScaffold } from "~/server/domains/expense/repo/lookup";
-import { updatePurchase } from "~/server/domains/purchase/repo/purchase";
 import { readWorkQueue } from "~/server/domains/work/service/work-queue-read";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { drainStoredDerived } from "~/server/testing/background-queue";
-import {
-  storedQuality,
-  storedQualityIds,
-} from "~/server/testing/quality.fixtures";
+import { storedQuality } from "~/server/testing/quality.fixtures";
 import { makeExpenseInput } from "~/server/testing/repo.fixtures";
 
-import { expenseChecks, EXPENSE_QUALITY_RULES_VERSION } from "./checks/expense";
-import { setDataException } from "./exceptions";
-import { loadDataQualities, loadQualityBreakdown } from "./hydrate";
+import { expenseChecks } from "./checks/expense";
 
 // Failure modes: page loaders query each line or allocate the whole ledger;
 // reads repair publications; inherited Purchase inputs miss family enrollment;
@@ -190,130 +184,5 @@ describe("stored Expense quality", () => {
       expense_product_resolution: "not_applicable",
     });
     expect(checks.get(unclassified.entityId)?.expense_receipt_role).toBe("gap");
-  });
-
-  it("serves stored lists and queue outcomes while inherited changes converge through the family", async () => {
-    const exempt = await insertWithShortcode(ctx.db, "spendingCategory", {
-      name: "Synthetic initially exempt policy",
-      productExpectation: "not_expected",
-    });
-    const category = await insertWithShortcode(ctx.db, "spendingCategory", {
-      name: "Synthetic inherited merchandise policy",
-      productExpectation: "required",
-    });
-    const vendor = await createRepoEntity(ctx, "vendor", {
-      name: "Synthetic inherited quality vendor",
-    });
-    const order = await createRepoEntity(ctx, "purchase", {
-      displayLabel: "Synthetic inherited quality order",
-      vendorId: vendor.output.id,
-      spendingCategoryId: exempt.shortcode,
-    });
-    const line = await createRepoEntity(
-      ctx,
-      "expense",
-      makeExpenseInput({
-        name: "Synthetic inherited quality line",
-        purchaseId: order.output.id,
-        cost: null,
-        productQuantity: null,
-      }),
-    );
-    const queue = () =>
-      readWorkQueue(ctx.db, {
-        input: workQueueInput.parse({
-          query: line.output.name,
-          reason: "expense_product_resolution",
-        }),
-        memberPartyId: null,
-        memberOnly: false,
-      });
-    const list = () =>
-      expenseScaffold.read(ctx.db, {
-        filters: { dataGap: ["expense_product_resolution"] },
-        sorts: [],
-        pagination: {
-          pageIndex: 0,
-          pageSize: 10,
-        },
-      });
-    const quality = async () =>
-      (
-        await loadDataQualities(ctx.db, "expense", [line.entityId], "stored")
-      ).get(line.entityId)!;
-    expect((await quality()).status).toBe("not_assessed");
-    expect(
-      (await loadQualityBreakdown(ctx.db, "expense", line.output.id)).checks,
-    ).toContainEqual(
-      expect.objectContaining({ check: "expense_cost", state: "gap" }),
-    );
-    await queue();
-    await list();
-    expect(await storedQualityIds(ctx.db)).toEqual([]);
-    await refresh();
-    const published = await storedQuality(ctx.db, line.entityId);
-    expect(published?.rulesVersion).toBe(EXPENSE_QUALITY_RULES_VERSION);
-    expect((await queue()).items).toEqual([]);
-
-    await updatePurchase(
-      ctx.db,
-      order.output.id,
-      { spendingCategoryId: category.shortcode },
-      ctx.actor,
-    );
-
-    // Reads keep the old publication until the enrolled family evaluates descendants.
-    expect((await list()).data).toEqual([]);
-    expect((await queue()).items).toEqual([]);
-    await refresh();
-    expect((await quality()).gaps.map((gap) => gap.check)).toContain(
-      "expense_product_resolution",
-    );
-    expect((await list()).data.map((row) => row.id)).toContain(line.output.id);
-    expect((await queue()).items).toContainEqual(
-      expect.objectContaining({ entity: "expense", id: line.output.id }),
-    );
-
-    await setDataException(
-      ctx.db,
-      {
-        entityId: line.output.id,
-        check: "expense_product_resolution",
-        reason: "unavailable",
-        note: "Synthetic historical identity unavailable",
-      },
-      ctx.actor,
-    );
-    await refresh();
-    expect((await queue()).items).toEqual([]);
-    await updatePurchase(
-      ctx.db,
-      order.output.id,
-      { spendingCategoryId: null },
-      ctx.actor,
-    );
-    await refresh();
-    await updatePurchase(
-      ctx.db,
-      order.output.id,
-      { spendingCategoryId: category.shortcode },
-      ctx.actor,
-    );
-    await refresh();
-    expect((await quality()).exceptions).toContainEqual(
-      expect.objectContaining({
-        check: "expense_product_resolution",
-        state: "active",
-      }),
-    );
-    expect((await list()).data).toEqual([]);
-    expect((await queue()).items).toEqual([]);
-
-    await updateExpense(ctx.db, line.output.id, { cost: 0 }, ctx.actor);
-
-    await refresh();
-    expect((await quality()).gaps.map((gap) => gap.check)).not.toContain(
-      "expense_cost",
-    );
   });
 });

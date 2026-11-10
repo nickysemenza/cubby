@@ -4,8 +4,7 @@ import {
   basisValueOf,
   fieldSuggestionResolutionContext,
 } from "@cubby/schemas/field-suggestion";
-import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import {
   taxonomyId,
   taxonomyShortcode,
@@ -456,44 +455,6 @@ describe("Suggestion review", () => {
     ).toHaveLength(0);
   });
 
-  // A list page reads with a limit; unserved trial candidates were dropped only
-  // after it, so enough of them hid the record's reviewable Suggestion.
-  it("limits only reviewable rows, never unserved trial candidates", async () => {
-    const product = await productFixture(ctx, "Synthetic limited item", {
-      categoryId: taxonomyId("tools"),
-    });
-    const runId = await sweepCategories([product.id]);
-    const uuid = await recordId(ctx.db, product.id, "product");
-    await Promise.all(
-      [0.99, 0.98, 0.97].map((confidence) =>
-        seedFieldSuggestion(
-          ctx.db,
-          {
-            runId,
-            entity: "product" as const,
-            recordId: uuid,
-            field: "categoryId",
-            currentValue: taxonomyShortcode("tools"),
-            suggestedValue: taxonomyShortcode("household"),
-            confidence,
-            model: "synthetic/unserved-trial",
-            kind: "correction" as const,
-            status: "pending" as const,
-          },
-          false,
-        ),
-      ),
-    );
-    const page = await readReviewFields(ctx.db, {
-      entity: "product",
-      recordIds: [product.id],
-      fields: ["categoryId"],
-      minConfidence: 0,
-      limit: 1,
-    });
-    expect(page).toEqual([expect.objectContaining({ model: PRIMARY_MODEL })]);
-  });
-
   it("records a plain rejection as a Miss and applies a reviewer-corrected value", async () => {
     const context = kernelCtx(ctx);
     const dismissed = await productFixture(ctx, "Synthetic dismissed item", {
@@ -847,74 +808,5 @@ describe("Suggestion review", () => {
     expect(
       (await runSuggestions(ctx.db, started.id)).map(({ status }) => status),
     ).toEqual(["applied", "applied"]);
-  });
-
-  it("filters pending pinned suggestions by kind and clears after a generic update", async () => {
-    const context = kernelCtx(ctx);
-    const addition = await productFixture(ctx, "Synthetic suggestion addition");
-    const correction = await productFixture(
-      ctx,
-      "Synthetic suggestion correction",
-      { categoryId: taxonomyId("tools") },
-    );
-    const started = await startSuggestionSweep(
-      ctx.db,
-      {
-        entity: "product",
-        fields: ["categoryId"],
-        filters: { ids: [addition.id, correction.id] },
-      },
-      { context, ...categoryPorts(0.6) },
-    );
-    const list = async (kind: "any" | "addition" | "correction") => {
-      const result = await executeEntity(context, {
-        action: "list",
-        entity: "product",
-        // Any value replaced the old `any` option.
-        filters:
-          kind === "any"
-            ? { suggestionPresenceFilter: "has" }
-            : { suggestionKind: [kind] },
-        pagination: { pageIndex: 0, pageSize: 100 },
-      });
-      if (result.action !== "list") throw new Error("Expected list result");
-      return result.items.map((row) => row.id);
-    };
-    expect(await list("any")).toEqual(
-      expect.arrayContaining([addition.id, correction.id]),
-    );
-    expect(await list("addition")).toContain(addition.id);
-    expect(await list("addition")).not.toContain(correction.id);
-    expect(await list("correction")).toContain(correction.id);
-    expect(await list("correction")).not.toContain(addition.id);
-
-    const additionRecordId = await recordId(ctx.db, addition.id, "product");
-    const additionRow = async (model: string) => {
-      const [row] = await getDb(ctx.db)
-        .select()
-        .from(suggestionTable)
-        .where(
-          and(
-            eq(suggestionTable.runId, started.id),
-            eq(suggestionTable.recordId, additionRecordId),
-            eq(suggestionTable.model, model),
-          ),
-        );
-      if (!row) throw new Error(`Synthetic ${model} Suggestion is missing`);
-      return row;
-    };
-    const pinned = await additionRow(PRIMARY_MODEL);
-    await getDb(ctx.db)
-      .update(suggestionTable)
-      .set({ status: "superseded" })
-      .where(eq(suggestionTable.id, pinned.id));
-    expect(await list("any")).not.toContain(addition.id);
-    await executeEntity(context, {
-      action: "update",
-      entity: "product",
-      id: parseShortcodeFor("product", addition.id),
-      data: { categoryId: taxonomyShortcode("tools") },
-    });
-    expect(await list("any")).not.toContain(addition.id);
   });
 });

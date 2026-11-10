@@ -32,7 +32,7 @@ import { createTestRequestContext } from "~/server/testing/request-context";
 // exercised below; only the seed step is skipped. A `Map` rather than a
 // dictionary object, since only entity keys that actually opt out belong
 // here.
-export const SKIPPED_ENTITIES = new Map<EntityKernelEntity, string>([
+const SKIPPED_ENTITIES = new Map<EntityKernelEntity, string>([
   [
     "image",
     "createInput is null — image creation is an upload workflow, not a kernel create",
@@ -41,7 +41,7 @@ export const SKIPPED_ENTITIES = new Map<EntityKernelEntity, string>([
 
 export type JsonPath = Array<string | number>;
 
-export const SHORTCODE_PATTERN = /^[A-Z]{2,}-[A-Za-z0-9]+$/;
+const SHORTCODE_PATTERN = /^[A-Z]{2,}-[A-Za-z0-9]+$/;
 export const prefixOf = (code: string): string | undefined =>
   /^([A-Z]{2,}-)/.exec(code)?.[1];
 

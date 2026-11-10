@@ -15,7 +15,6 @@ import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import {
   inventoryOwnershipMode,
   storedInventoryOwnership,
-  storedProductOwnership,
   type EffectiveInventoryOwnership,
 } from "@cubby/schemas/inventory-ownership";
 import { ledgerPartyKind } from "@cubby/schemas/ledger-party";
@@ -1255,23 +1254,6 @@ export async function loadStoredInventoryOwnershipTraces(
         observed: [],
       },
     });
-  }
-  return out;
-}
-
-/** The published Product collection is shared by ordinary reads and SQL membership. */
-export async function loadProductOwners(
-  db: Database | DrizzleTransaction,
-  productIds: readonly ProductId[],
-): Promise<Map<ProductId, ResolvedListItem[]>> {
-  const reads = await loadStoredDerived(db, "product", productIds, [
-    "ownership",
-  ]);
-  const out = new Map<ProductId, ResolvedListItem[]>();
-  for (const id of productIds) {
-    const read = reads.get(id)?.get("ownership");
-    const parsed = storedProductOwnership.safeParse(read?.value);
-    if (read?.resultExists && parsed.success) out.set(id, parsed.data.owners);
   }
   return out;
 }

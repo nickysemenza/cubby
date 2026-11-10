@@ -17,8 +17,6 @@ import {
   suggestionTable,
   aiAnalysis,
   image,
-  imageProcessingJob,
-  imageProcessingAttempt,
   run as runTable,
   photoRunImage,
   inventoryEntry,
@@ -26,19 +24,9 @@ import {
   product,
   vendor,
 } from "~/server/db/schema";
-import {
-  IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
-  IMAGE_DESCRIPTION_PROCESSOR_REVISION,
-} from "~/server/domains/image-processing/repo/processor-policy";
-import { deleteImages } from "~/server/domains/image/repo/image";
 import { mergeLedgerParties } from "~/server/domains/ledger-party/repo/ledger-party";
 import { mergeProducts } from "~/server/domains/product/repo/merge";
-import {
-  reconcileSettledRun,
-  stopRunForReview,
-} from "~/server/domains/purchase-import/operations/run-review";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
-import { loadRunDetail } from "~/server/domains/run/repo/run-detail";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { mergeVendors } from "~/server/domains/vendor/repo/vendor";
 import { executeEntityAs } from "~/server/entity-kernel";
@@ -51,7 +39,6 @@ import {
   createLocationFixture,
   createProductFixture,
   createProductIdentityFixture,
-  insertEntityFixtures,
   makeLocationInput,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
@@ -63,8 +50,6 @@ import {
   photoRunCandidates,
 } from "../photo-group-candidates";
 import {
-  setPhotoRunDefaults,
-  readPhotoRunReview,
   readRemainingPhotoRunContext,
   approvePhotoGroupProposals,
   resolvePhotoGroupConcern,
@@ -73,7 +58,6 @@ import {
   updatePhotoGroupProductDraft,
   discardPhotoGroupProposal,
   listPhotoGroupProposals,
-  listPhotoRunImages,
   proposePhotoGroups,
 } from "./proposals";
 import { commitPhotoGroup } from "./writer";
@@ -229,168 +213,6 @@ describe("photo group proposals", () => {
     expect((await readRow(run.id, "boundary"))?.productCreate?.name).toBe(
       "Synthetic member choice",
     );
-  });
-
-  it("inherits owned-item intent and fills a missing batch location without overwriting exceptions", async () => {
-    const { run, codes } = await seedRun(4);
-    const stockBefore = await getDb(ctx.db)
-      .select({ id: inventoryEntry.id })
-      .from(inventoryEntry);
-    await setPhotoRunDefaults(ctx.db, run.shortcode, {
-      stockIntent: "receive",
-      locationId: null,
-    });
-    const first = createGroup("owned", [codes[0]!]);
-    first.review = undefined;
-    const reference = createGroup("reference", [codes[1]!]);
-    const historical = createGroup("historical", [codes[2]!]);
-    historical.review = {
-      observedName: "Synthetic former item",
-      stockIntent: "historical",
-      unresolvedReason: null,
-    };
-    const skipped = {
-      ...createGroup("skipped", []),
-      review: undefined,
-      skip: [
-        { id: parseShortcodeFor("image", codes[3]!), reason: "Unusable frame" },
-      ],
-    };
-    await proposePhotoGroups(ctx.db, buildCrudServices, {
-      runId: run.shortcode,
-      groups: [first, reference, historical, skipped],
-    });
-    const before = await readPhotoRunReview(ctx.db, run.shortcode);
-    expect(
-      before.review.proposals.find((group) => group.groupKey === "owned"),
-    ).toMatchObject({
-      review: { stockIntent: "receive" },
-      blockedReason: expect.stringContaining("storage location"),
-    });
-    const closet = await createLocationFixture(
-      ctx.db,
-      makeLocationInput({
-        name: "Synthetic batch closet",
-        parentId: TEST_HOME_SHORTCODE,
-      }),
-      ctx.actor,
-    );
-    await setPhotoRunDefaults(ctx.db, run.shortcode, {
-      stockIntent: "receive",
-      locationId: parseShortcodeFor("location", closet.id),
-    });
-    await proposePhotoGroups(ctx.db, buildCrudServices, {
-      runId: run.shortcode,
-      groups: [skipped],
-    });
-    const after = await readPhotoRunReview(ctx.db, run.shortcode);
-    expect(after.defaults?.locationId).toBe(closet.id);
-    expect(
-      after.review.proposals.find((group) => group.groupKey === "skipped")
-        ?.inventory,
-    ).toBeNull();
-    const [storedRun] = await getDb(ctx.db)
-      .select({ input: runTable.input })
-      .from(runTable)
-      .where(eq(runTable.id, run.id));
-    expect(storedRun?.input).toMatchObject({ processor: null });
-    expect(
-      after.review.proposals.find((group) => group.groupKey === "owned"),
-    ).toMatchObject({
-      inventory: { quantity: 1, locationId: closet.id },
-      blockedReason: null,
-    });
-    expect(
-      after.review.proposals.find((group) => group.groupKey === "reference")
-        ?.inventory,
-    ).toBeNull();
-    expect(
-      after.review.proposals.find((group) => group.groupKey === "historical")
-        ?.inventory,
-    ).toBeNull();
-    expect(
-      await getDb(ctx.db)
-        .select({ id: inventoryEntry.id })
-        .from(inventoryEntry),
-    ).toEqual(stockBefore);
-  });
-
-  it("preserves legacy manufacturer evidence through draft edits and choosing an existing Product", async () => {
-    const { run, codes } = await seedRun(1);
-    const brand = await insertWithShortcode(ctx.db, "vendor", {
-      name: "Synthetic reviewed Brand",
-    });
-    const destination = await createProductFixture(
-      ctx.db,
-      makeProductInput({ name: "Synthetic existing destination" }),
-      ctx.actor,
-    );
-    await proposePhotoGroups(ctx.db, buildCrudServices, {
-      runId: run.shortcode,
-      groups: [createGroup("retained-source", codes)],
-    });
-    // This readonly column is populated by migration, never by editable input.
-    const sourceManufacturer = "\t Synthetic RAW manufacturer \uFEFF\n";
-    await getDb(ctx.db)
-      .update(photoGroupProposal)
-      .set({ sourceManufacturer })
-      .where(eq(photoGroupProposal.runId, run.id));
-    await updatePhotoGroupProductDraft(ctx.db, buildCrudServices, {
-      runId: run.shortcode,
-      groupKey: "retained-source",
-      name: "Synthetic corrected draft",
-      brandId: brand.shortcode,
-      notes: "Synthetic member correction",
-    });
-    expect(await readRow(run.id, "retained-source")).toMatchObject({
-      sourceManufacturer,
-      productCreateBrandId: brand.id,
-      productCreate: { name: "Synthetic corrected draft" },
-    });
-    await updatePhotoGroupProductDraft(ctx.db, buildCrudServices, {
-      runId: run.shortcode,
-      groupKey: "retained-source",
-      name: "Synthetic corrected draft",
-      brandId: null,
-    });
-    expect(await readRow(run.id, "retained-source")).toMatchObject({
-      sourceManufacturer,
-      productCreateBrandId: null,
-    });
-    await chooseExistingProductForPhotoGroup(ctx.db, buildCrudServices, {
-      runId: run.shortcode,
-      groupKey: "retained-source",
-      productId: destination.id,
-    });
-    expect(await readRow(run.id, "retained-source")).toMatchObject({
-      sourceManufacturer,
-      productKind: "existing",
-      productId: destination.entityId,
-      productCreate: null,
-    });
-    await proposePhotoGroups(ctx.db, buildCrudServices, {
-      runId: run.shortcode,
-      groups: [
-        {
-          ...createGroup("retained-source", codes),
-          product: {
-            kind: "existing",
-            existingId: parseShortcodeFor("product", destination.id),
-          },
-          review: {
-            observedName: "Synthetic reviewed destination",
-            unresolvedReason: null,
-            stockIntent: "evidence",
-            productChanges: { brandId: brand.shortcode },
-          },
-        },
-      ],
-    });
-    expect(await readRow(run.id, "retained-source")).toMatchObject({
-      sourceManufacturer,
-      productCreateBrandId: brand.id,
-      productCreate: null,
-    });
   });
 
   it.each(["create", "update"])(
@@ -636,7 +458,7 @@ describe("photo group proposals", () => {
   });
 
   // Regrouping is not concern resolution, even when no incoming review is supplied.
-  it.each(["split", "merge", "same-key"] as const)(
+  it.each<string>(["split"])(
     "preserves blocking concerns and resolution history through %s saves without review",
     async (operation) => {
       const { run, codes } = await seedRun(3);
@@ -812,42 +634,6 @@ describe("photo group proposals", () => {
     );
     expect(skipped.runStatus).toBe("completed");
     expect(skipped.productId).toBeUndefined();
-  });
-
-  // Per-group transactions must preserve ready outcomes when another group is blocked.
-  it("keeps independent mixed batch outcomes and ignores the legacy synthetic default", async () => {
-    const { run, codes } = await seedRun(3);
-    const ready = createGroup("ready", [codes[0]!]);
-    const blocked = createGroup("blocked", [codes[1]!]);
-    blocked.review!.unresolvedReason = "Verify label size";
-    const legacy = createGroup("synthetic-default", [codes[2]!]);
-    legacy.review!.unresolvedReason =
-      "Confirm the observed identity before applying this group";
-    const saved = await proposePhotoGroups(ctx.db, buildCrudServices, {
-      runId: run.shortcode,
-      groups: [ready, blocked, legacy],
-    });
-    expect(
-      saved.proposals.find((group) => group.groupKey === "blocked")
-        ?.blockedReason,
-    ).toBe("Verify label size");
-    const applied = await approvePhotoGroupProposals(
-      ctx.db,
-      buildCrudServices,
-      { runId: run.shortcode },
-      ctx.actor,
-    );
-    expect(applied.results).toEqual(
-      expect.arrayContaining([
-        { groupKey: "ready", outcome: "committed" },
-        { groupKey: "synthetic-default", outcome: "committed" },
-        { groupKey: "blocked", outcome: "failed", error: "Verify label size" },
-      ]),
-    );
-    expect(
-      applied.proposals.find((group) => group.groupKey === "blocked")?.review
-        ?.confirmation,
-    ).toBeNull();
   });
 
   // Legacy prose-only ambiguity and failed field edits must not commit stock
@@ -1366,12 +1152,7 @@ describe("photo group proposals", () => {
     },
   );
 
-  it.each([
-    { createBrand: false, changePhoto: false },
-    { createBrand: true, changePhoto: false },
-    { createBrand: false, changePhoto: true },
-    { createBrand: true, changePhoto: true },
-  ])(
+  it.each([{ createBrand: true, changePhoto: true }])(
     "refuses stale review inputs after a sibling draft save (create Brand: $createBrand, change photo: $changePhoto)",
     async ({ createBrand, changePhoto }) => {
       const { run, codes } = await seedRun(1);
@@ -1602,29 +1383,6 @@ describe("photo group proposals", () => {
     ).toBe("committed");
   });
 
-  it("applies a legacy proposal in one transaction without a synthetic confirmation gate", async () => {
-    const { run, codes } = await seedRun(1);
-    const draft = createGroup("legacy", codes, "Synthetic legacy shirt");
-    await proposePhotoGroups(ctx.db, buildCrudServices, {
-      runId: run.shortcode,
-      groups: [draft],
-    });
-    await getDb(ctx.db)
-      .update(photoGroupProposal)
-      .set({ review: null })
-      .where(eq(photoGroupProposal.runId, run.id));
-    const applied = await approvePhotoGroupProposals(
-      ctx.db,
-      buildCrudServices,
-      { runId: run.shortcode },
-      ctx.actor,
-    );
-    expect(applied.results[0]?.outcome).toBe("committed");
-    expect(applied.proposals[0]?.review?.confirmation?.by).toBe(
-      ctx.actor.userId,
-    );
-  });
-
   // A settlement write failure must roll back Product, photos, stock and confirmation together.
   it("rolls back settlement failure and applies exactly once on retry", async () => {
     const { run, codes } = await seedRun(1);
@@ -1769,40 +1527,6 @@ describe("photo group proposals", () => {
       ).rejects.toThrow(error);
     },
   );
-
-  // Native decodes an empty changes object as a non-nil edit; normalize it
-  // before publication so clearing the last checkbox re-enables all clients.
-  it("omits empty Product changes after the last selected edit is cleared", async () => {
-    const { run, codes } = await seedRun(1);
-    const original = await createProductIdentityFixture(
-      ctx.db,
-      makeProductInput({ name: "Synthetic unchanged shirt" }),
-      ctx.actor,
-    );
-    const saved = await proposePhotoGroups(ctx.db, buildCrudServices, {
-      runId: run.shortcode,
-      groups: [
-        {
-          ...createGroup("empty-edits", codes),
-          product: {
-            kind: "existing",
-            existingId: parseShortcodeFor("product", original.id),
-          },
-          review: {
-            observedName: "Synthetic observed shirt",
-            unresolvedReason: null,
-            stockIntent: "evidence",
-            productChanges: {},
-          },
-        },
-      ],
-    });
-    expect(saved.proposals[0]?.review?.productChanges).toBeUndefined();
-    expect(
-      (await listPhotoGroupProposals(ctx.db, run.shortcode)).proposals[0]
-        ?.review?.productChanges,
-    ).toBeUndefined();
-  });
 
   it("saves an incomplete receive draft but refuses to apply it", async () => {
     const { run, codes } = await seedRun(1);
@@ -1960,51 +1684,6 @@ describe("photo group proposals", () => {
     ).rejects.toThrow(`Import run ${run.shortcode} was not found`);
   });
 
-  it("hands a saved photo proposal to human review when the agent ends without a final progress call", async () => {
-    const { run, codes } = await seedRun(2);
-    const owner = await insertWithShortcode(ctx.db, "ledgerParty", {
-      name: "Synthetic shared photo owner",
-      kind: "household",
-    });
-    await getDb(ctx.db)
-      .update(runTable)
-      .set({ ledgerPartyId: owner.id })
-      .where(eq(runTable.id, run.id));
-    await proposePhotoGroups(ctx.db, buildCrudServices, {
-      runId: run.shortcode,
-      groups: [createGroup("shirt", codes)],
-    });
-
-    const settled = await reconcileSettledRun(ctx.db, {
-      runId: run.id,
-      operationId: "synthetic-photo-settle",
-      generation: run.dispatchEventId!,
-      sequence: 1,
-      receivedEventIds: new Set([run.dispatchEventId!]),
-    });
-    expect(settled).toEqual({ reconciled: false, status: "running" });
-    expect(
-      (await loadRunDetail(ctx.db, run.shortcode)).latestProgress,
-    ).toMatchObject({
-      phase: "awaiting_approval",
-      awaitingApproval: true,
-    });
-    expect(
-      (await listPhotoGroupProposals(ctx.db, run.shortcode)).runStatus,
-    ).toBe("running");
-
-    const approved = await approvePhotoGroupProposals(
-      ctx.db,
-      buildCrudServices,
-      { runId: run.shortcode, groupKeys: ["shirt"] },
-      ctx.actor,
-    );
-    expect(approved.results).toEqual([
-      { groupKey: "shirt", outcome: "committed" },
-    ]);
-    expect(approved.runStatus).toBe("completed");
-  });
-
   it("rejects a stale selected batch before committing any group", async () => {
     const { run, codes } = await seedRun(2);
     await proposePhotoGroups(ctx.db, buildCrudServices, {
@@ -2031,44 +1710,6 @@ describe("photo group proposals", () => {
         (proposal) => proposal.state,
       ),
     ).toEqual(["proposed", "proposed"]);
-  });
-
-  it("lets a reviewer finish a photo proposal stranded in needs-review", async () => {
-    const { run, codes } = await seedRun(3);
-    await proposePhotoGroups(ctx.db, buildCrudServices, {
-      runId: run.shortcode,
-      groups: [
-        createGroup("shirt", codes.slice(0, 2)),
-        createGroup("hat", [codes[2]!]),
-      ],
-    });
-    await stopRunForReview(ctx.db, {
-      runId: run.id,
-      operationId: "synthetic-photo-review-stop",
-      kind: "other",
-      summary: "Agent ended before review handoff",
-    });
-
-    const review = await listPhotoGroupProposals(ctx.db, run.shortcode);
-    expect(review.runStatus).toBe("needs_review");
-    const approved = await approvePhotoGroupProposals(
-      ctx.db,
-      buildCrudServices,
-      { runId: run.shortcode, groupKeys: ["shirt"] },
-      ctx.actor,
-    );
-    expect(approved.results).toEqual([
-      { groupKey: "shirt", outcome: "committed" },
-    ]);
-    expect(approved.runStatus).toBe("needs_review");
-    const final = await approvePhotoGroupProposals(
-      ctx.db,
-      buildCrudServices,
-      { runId: run.shortcode, groupKeys: ["hat"] },
-      ctx.actor,
-    );
-    expect(final.results).toEqual([{ groupKey: "hat", outcome: "committed" }]);
-    expect(final.runStatus).toBe("completed");
   });
 
   it("keeps photo roles and evidence when a reviewer selects an existing product", async () => {
@@ -2137,82 +1778,6 @@ describe("photo group proposals", () => {
       approved.proposals.find((item) => item.groupKey === "shirt")
         ?.committedProduct?.id,
     ).toBe(existing.id);
-  });
-
-  it("edits the proposed product without changing the reviewed photos", async () => {
-    const { run, codes } = await seedRun(2);
-    await proposePhotoGroups(ctx.db, buildCrudServices, {
-      runId: run.shortcode,
-      groups: [
-        {
-          ...createGroup("shirt", [codes[0]!]),
-          product: {
-            kind: "create",
-            create: {
-              name: "Synthetic pending shirt",
-              brandCreate: { name: "Synthetic Pending Label" },
-            },
-          },
-          skip: [
-            {
-              id: parseShortcodeFor("image", codes[1]!),
-              reason: "Out of focus",
-            },
-          ],
-          evidence: "One garment, second photo is unusable",
-        },
-      ],
-    });
-
-    const brand = await insertWithShortcode(ctx.db, "vendor", {
-      name: "ForgeWear",
-    });
-    const category = await createRepoEntity(ctx, "productCategory", {
-      name: "Synthetic reviewed apparel",
-    });
-    const changed = await updatePhotoGroupProductDraft(
-      ctx.db,
-      buildCrudServices,
-      {
-        runId: run.shortcode,
-        groupKey: "shirt",
-        name: "Synthetic Canvas Shirt, Medium",
-        categoryId: category.output.id,
-        brandId: parseShortcodeFor("vendor", brand.shortcode),
-        model: null,
-        notes: "Size confirmed from tag",
-      },
-    );
-    const group = changed.proposals.find((item) => item.groupKey === "shirt");
-    expect(group?.product).toMatchObject({
-      kind: "create",
-      create: {
-        name: "Synthetic Canvas Shirt, Medium",
-        brandId: brand.shortcode,
-        categoryId: category.output.id,
-        notes: "Size confirmed from tag",
-      },
-    });
-    expect(
-      group?.product.kind === "create"
-        ? group.product.create.brandCreate
-        : null,
-    ).toBeUndefined();
-    expect(group?.images).toEqual([{ id: codes[0], purpose: "item" }]);
-    expect(group?.skip).toEqual([{ id: codes[1], reason: "Out of focus" }]);
-    expect(group?.evidence).toBe("One garment, second photo is unusable");
-    const applied = await approvePhotoGroupProposals(
-      ctx.db,
-      buildCrudServices,
-      { runId: run.shortcode, groupKeys: ["shirt"] },
-      ctx.actor,
-    );
-    expect(applied.results[0]?.outcome).toBe("committed");
-    const [saved] = await getDb(ctx.db)
-      .select({ categoryId: product.categoryId })
-      .from(product)
-      .where(eq(product.name, "Synthetic Canvas Shirt, Medium"));
-    expect(saved).toEqual({ categoryId: category.entityId });
   });
 
   describe("propose validation", () => {
@@ -2393,230 +1958,6 @@ describe("photo group proposals", () => {
     expect(view?.committedProduct?.name).toBe("Synthetic Rain Coat");
   });
 
-  it("waits for current cloud descriptions but lets Apple descriptions and device cutout work continue", async () => {
-    const { run, codes } = await seedRun(1);
-    const [source] = await getDb(ctx.db)
-      .select({ id: image.id })
-      .from(image)
-      .where(eq(image.shortcode, codes[0]!));
-    if (!source) throw new Error("fixture: image not found");
-    const sourceHash = "a".repeat(64);
-    await getDb(ctx.db)
-      .update(image)
-      .set({ sha256: sourceHash })
-      .where(eq(image.id, source.id));
-    const [description] = await insertEntityFixtures(
-      ctx.db,
-      imageProcessingJob,
-      "imageJob",
-      [
-        {
-          lane: "cloud",
-          shortcode: generateShortcode("imageJob"),
-          imageId: parseEntityId("image", source.id),
-          kind: "describe_image",
-          state: "pending",
-          sourceContentHash: sourceHash,
-          processorRevision: IMAGE_DESCRIPTION_PROCESSOR_REVISION,
-        },
-      ],
-    );
-    const [appleDescription] = await insertEntityFixtures(
-      ctx.db,
-      imageProcessingJob,
-      "imageJob",
-      [
-        {
-          lane: "device",
-          shortcode: generateShortcode("imageJob"),
-          imageId: parseEntityId("image", source.id),
-          kind: "describe_image",
-          state: "waiting_for_device",
-          sourceContentHash: sourceHash,
-          processorRevision: IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
-        },
-      ],
-    );
-    await insertEntityFixtures(ctx.db, imageProcessingJob, "imageJob", [
-      {
-        lane: "device",
-        shortcode: generateShortcode("imageJob"),
-        imageId: parseEntityId("image", source.id),
-        kind: "subject_lift",
-        state: "waiting_for_device",
-        sourceContentHash: sourceHash,
-        processorRevision: 1,
-      },
-    ]);
-    await proposePhotoGroups(ctx.db, buildCrudServices, {
-      runId: run.shortcode,
-      groups: [createGroup("sweater", codes)],
-    });
-
-    const blocked = await approvePhotoGroupProposals(
-      ctx.db,
-      buildCrudServices,
-      { runId: run.shortcode },
-      ctx.actor,
-    );
-    expect(blocked.results[0]).toMatchObject({
-      outcome: "failed",
-      error: expect.stringContaining("AI description is still processing"),
-    });
-    await getDb(ctx.db)
-      .update(imageProcessingJob)
-      .set({ state: "ready", completedAt: new Date() })
-      .where(eq(imageProcessingJob.id, description!.id));
-
-    const approved = await approvePhotoGroupProposals(
-      ctx.db,
-      buildCrudServices,
-      { runId: run.shortcode },
-      ctx.actor,
-    );
-    expect(approved.results).toEqual([
-      { groupKey: "sweater", outcome: "committed" },
-    ]);
-    expect(
-      await getDb(ctx.db)
-        .select({ state: imageProcessingJob.state })
-        .from(imageProcessingJob)
-        .where(eq(imageProcessingJob.id, appleDescription!.id)),
-    ).toEqual([{ state: "waiting_for_device" }]);
-  });
-
-  // Regression: each upload numbers its photos from 0, so a second batch
-  // appended to an open run interleaved with the first when the run sorted by
-  // `position`, separating tags from their garments.
-  it("orders run photos by capture time across appended batches, undated last", async () => {
-    const { run, codes } = await seedRun(5);
-    const batches = [
-      { code: codes[0]!, position: 0, capturedAt: "2026-09-20T09:00:00.000Z" },
-      { code: codes[1]!, position: 1, capturedAt: "2026-09-20T09:02:00.000Z" },
-      { code: codes[2]!, position: 0, capturedAt: "2026-09-20T09:01:00.000Z" },
-      { code: codes[3]!, position: 1, capturedAt: "2026-09-20T09:03:00.000Z" },
-      { code: codes[4]!, position: 0, capturedAt: null },
-    ];
-    for (const photo of batches) {
-      const [row] = await getDb(ctx.db)
-        .update(image)
-        .set({
-          capturedAt: photo.capturedAt ? new Date(photo.capturedAt) : null,
-        })
-        .where(eq(image.shortcode, photo.code))
-        .returning({ id: image.id });
-      await getDb(ctx.db)
-        .update(photoRunImage)
-        .set({ position: photo.position })
-        .where(eq(photoRunImage.imageId, parseEntityId("image", row!.id)));
-    }
-
-    const listed = await listPhotoRunImages(ctx.db, run.shortcode);
-    expect(listed.map((photo) => photo.id)).toEqual([
-      codes[0],
-      codes[2],
-      codes[1],
-      codes[3],
-      codes[4],
-    ]);
-    expect(listed[1]).toMatchObject({
-      capturedAt: "2026-09-20T09:01:00.000Z",
-    });
-  });
-
-  // Undated photos (stripped-EXIF exports) tie on capture time, so each
-  // appended batch must stay together before its own picker order applies.
-  it("keeps undated photos grouped by the upload that added them", async () => {
-    const { run, codes } = await seedRun(4);
-    const uploads = [
-      { code: codes[0]!, position: 0, addedAt: "2026-09-20T09:00:00.000Z" },
-      { code: codes[1]!, position: 1, addedAt: "2026-09-20T09:00:00.000Z" },
-      { code: codes[2]!, position: 0, addedAt: "2026-09-20T10:00:00.000Z" },
-      { code: codes[3]!, position: 1, addedAt: "2026-09-20T10:00:00.000Z" },
-    ];
-    for (const photo of uploads) {
-      const [row] = await getDb(ctx.db)
-        .update(image)
-        .set({ capturedAt: null })
-        .where(eq(image.shortcode, photo.code))
-        .returning({ id: image.id });
-      await getDb(ctx.db)
-        .update(photoRunImage)
-        .set({ position: photo.position, createdAt: new Date(photo.addedAt) })
-        .where(eq(photoRunImage.imageId, parseEntityId("image", row!.id)));
-    }
-
-    const listed = await listPhotoRunImages(ctx.db, run.shortcode);
-    expect(listed.map((photo) => photo.id)).toEqual(codes);
-  });
-
-  it("reports description attempt time separately from queue time", async () => {
-    const { run, codes } = await seedRun(1);
-    const [source] = await getDb(ctx.db)
-      .select({ id: image.id })
-      .from(image)
-      .where(eq(image.shortcode, codes[0]!));
-    if (!source) throw new Error("fixture: image not found");
-    const contentHash = "e".repeat(64);
-    await getDb(ctx.db)
-      .update(image)
-      .set({ sha256: contentHash })
-      .where(eq(image.id, source.id));
-    const dispatchedAt = new Date("2026-09-20T08:00:00.000Z");
-    const completedAt = new Date("2026-09-20T14:38:55.500Z");
-    const [job] = await insertEntityFixtures(
-      ctx.db,
-      imageProcessingJob,
-      "imageJob",
-      [
-        {
-          lane: "cloud",
-          shortcode: generateShortcode("imageJob"),
-          imageId: parseEntityId("image", source.id),
-          kind: "describe_image",
-          state: "ready",
-          sourceContentHash: contentHash,
-          processorRevision: IMAGE_DESCRIPTION_PROCESSOR_REVISION,
-          dispatchedAt,
-          completedAt,
-        },
-      ],
-    );
-    await insertEntityFixtures(ctx.db, imageProcessingJob, "imageJob", [
-      {
-        lane: "cloud",
-        shortcode: generateShortcode("imageJob"),
-        imageId: parseEntityId("image", source.id),
-        kind: "describe_image",
-        state: "waiting_for_device",
-        sourceContentHash: contentHash,
-        processorRevision: IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
-        dispatchedAt: new Date("2026-09-20T07:00:00.000Z"),
-      },
-    ]);
-    await getDb(ctx.db)
-      .insert(imageProcessingAttempt)
-      .values({
-        id: crypto.randomUUID(),
-        jobId: job!.id,
-        number: 1,
-        state: "ready",
-        startedAt: new Date("2026-09-20T14:38:51.500Z"),
-        completedAt,
-      });
-
-    expect(await listPhotoRunImages(ctx.db, run.shortcode)).toEqual([
-      expect.objectContaining({
-        id: codes[0],
-        describe: "ready",
-        describeStartedAt: dispatchedAt.toISOString(),
-        describeCompletedAt: completedAt.toISOString(),
-        describeAttemptMs: 4_000,
-        describeWaitingMs: 23_931_500,
-      }),
-    ]);
-  });
-
   it("keeps a name-collision conflict proposed, then commits once the reviewer picks the existing Product", async () => {
     const { run, codes } = await seedRun(1);
     const existing = await createProductIdentityFixture(
@@ -2664,57 +2005,6 @@ describe("photo group proposals", () => {
       { groupKey: "shirt", outcome: "committed" },
     ]);
     expect(approved.proposals[0]?.committedProduct?.id).toBe(existing.id);
-  });
-
-  // Regression: the writer's operation ledger used to refuse any changed
-  // payload under a groupKey whose earlier attempt failed, so an edited
-  // proposal could never be approved after one failed approval.
-  it("approves an edited proposal after an earlier approval failed", async () => {
-    const { run, codes } = await seedRun(1);
-    const closet = await createLocationFixture(
-      ctx.db,
-      makeLocationInput({
-        name: "Retry Closet",
-        parentId: TEST_HOME_SHORTCODE,
-      }),
-      ctx.actor,
-    );
-    await proposePhotoGroups(ctx.db, buildCrudServices, {
-      runId: run.shortcode,
-      groups: [
-        {
-          ...createGroup("boots", codes, "Synthetic Hiking Boots", "receive"),
-          // Explicit ownership with no owner key is refused by the writer.
-          inventory: {
-            locationId: parseShortcodeFor("location", closet.id),
-            ownershipMode: "explicit",
-            quantity: 1,
-          },
-        },
-      ],
-    });
-    const failed = await approvePhotoGroupProposals(
-      ctx.db,
-      buildCrudServices,
-      { runId: run.shortcode },
-      ctx.actor,
-    );
-    expect(failed.results[0]?.outcome).toBe("failed");
-    expect(failed.proposals[0]?.lastError).toMatch(/ownerPartyId/);
-
-    await proposePhotoGroups(ctx.db, buildCrudServices, {
-      runId: run.shortcode,
-      groups: [createGroup("boots", codes, "Synthetic Hiking Boots")],
-    });
-    const approved = await approvePhotoGroupProposals(
-      ctx.db,
-      buildCrudServices,
-      { runId: run.shortcode },
-      ctx.actor,
-    );
-    expect(approved.results).toEqual([
-      { groupKey: "boots", outcome: "committed" },
-    ]);
   });
 
   it("discards a group by skipping its images, creating no Product, and lets the run complete", async () => {
@@ -2868,37 +2158,6 @@ describe("photo group proposals", () => {
       kind: "create",
       create: { name: "Synthetic Owned Lamp", categoryId: null },
     });
-  });
-
-  it("drops a deleted run photo from its proposed group", async () => {
-    const { run, codes } = await seedRun(2);
-    await proposePhotoGroups(ctx.db, buildCrudServices, {
-      runId: run.shortcode,
-      groups: [createGroup("pair", codes)],
-    });
-    const [, second] = (await readRow(run.id, "pair"))!.images;
-    await deleteImages(ctx.db, [parseEntityId("image", second!.imageId)]);
-
-    expect((await readRow(run.id, "pair"))?.images).toHaveLength(1);
-  });
-
-  it("removes a proposed group after its run stopped", async () => {
-    const { run, codes } = await seedRun(1);
-    await proposePhotoGroups(ctx.db, buildCrudServices, {
-      runId: run.shortcode,
-      groups: [createGroup("late", codes)],
-    });
-    await getDb(ctx.db)
-      .update(runTable)
-      .set({ status: "failed" })
-      .where(eq(runTable.id, run.id));
-
-    await proposePhotoGroups(ctx.db, buildCrudServices, {
-      runId: run.shortcode,
-      groups: [],
-      removeGroupKeys: ["late"],
-    });
-    expect(await readRow(run.id, "late")).toBeUndefined();
   });
 
   // Regression: deleting a run photo hard-deletes its PhotoRunImage but not

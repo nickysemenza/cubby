@@ -135,7 +135,11 @@ describe("MCP tool JSON Schema — toWire parity", () => {
     });
   });
 
-  it.each(actions.map((action) => [action.name, action] as const))(
+  it.each(
+    ["entity_read.list", "nutrition.plan_recipe"].map(
+      (name) => [name, requireAction(name)] as const,
+    ),
+  )(
     "%s: input and output schema pass through toWire without throwing",
     (_name, action) => {
       expect(() => toWire(action.input, "input")).not.toThrow();

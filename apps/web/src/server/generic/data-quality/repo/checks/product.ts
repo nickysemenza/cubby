@@ -92,7 +92,7 @@ const hasLiveCategory = (t: Product) => sql`EXISTS (
 )`;
 
 /** Bump when the rules or their declared scoring metadata change. */
-export const PRODUCT_QUALITY_RULES_VERSION = 2;
+const PRODUCT_QUALITY_RULES_VERSION = 2;
 
 type ProductQualityRecord = Awaited<
   ReturnType<typeof loadProductQualityRecords>

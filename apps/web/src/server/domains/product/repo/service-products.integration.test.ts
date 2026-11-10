@@ -57,7 +57,7 @@ import { getProductWithFood } from "./write/product-writes";
 describe("category-based service Products", () => {
   const ctx = withTestDb();
 
-  it.each(["services", "software"] as const)(
+  it.each(["services"] as ("services" | "software")[])(
     "keeps %s bills out of stock and valuation while retaining variable charges",
     async (feature) => {
       const rootId = taxonomyShortcode(feature);

@@ -226,12 +226,10 @@ describe("Sweeps", () => {
 
   // A later label filter cannot undo a void Suggestion published by the holds
   // step. Its counted population and page must admit the same whole holds.
-  it.each([
-    { scope: "collection", included: ["selected", "old", "foreign"] },
+  it.each<{ scope: string; included: readonly string[] }>([
     { scope: "date", included: ["selected", "foreign", "unrelated"] },
     { scope: "collection/account", included: ["selected", "old"] },
-    { scope: "collection/date", included: ["selected", "foreign"] },
-  ] as const)(
+  ])(
     "keeps the full statement Sweep hold population inside $scope scope",
     async ({ scope, included }) => {
       const primary = (

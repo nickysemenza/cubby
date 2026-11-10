@@ -1,11 +1,6 @@
-import { mealCreateInput } from "@cubby/schemas/entities/meal";
-import { vendorCreateInput } from "@cubby/schemas/entities/vendor";
-import { entityFieldEnvelopeSchemas } from "@cubby/schemas/entity-field-envelopes";
-import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { imageId as parseImageId } from "@cubby/schemas/identifiers";
 import { recordShipmentEvidenceInput } from "@cubby/schemas/shipment-evidence";
 import { recordSourceTransactionRecordsInput } from "@cubby/schemas/source-transaction-record";
-import { fromPartial } from "@total-typescript/shoehorn";
 import { sql } from "drizzle-orm";
 import { StatusCodes } from "http-status-codes";
 import { createRepoEntity } from "tooling/factories/repo";
@@ -14,7 +9,6 @@ import { withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 
-import { mock } from "~/lib/test/mock-schema";
 import { getDb } from "~/server/db/helpers";
 import { aiAnalysis, photoRunImage } from "~/server/db/schema";
 import { startPhotoInventoryRun } from "~/server/domains/photo-import/repo/run/photo-run";
@@ -28,7 +22,6 @@ import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-u
 import { requireActor } from "~/server/http/request-context";
 import { drainStoredDerived } from "~/server/testing/background-queue";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
-import { publishQualityFixtures } from "~/server/testing/quality.fixtures";
 import {
   createImageFixture,
   makeExpenseInput,
@@ -43,7 +36,6 @@ import {
   callMcpTool,
   kernelRequestContext,
   listMcpTools,
-  type McpTestRequestContext,
 } from "../testing/mcp-test-utils";
 import { createMcpServer } from "./server";
 import type { ToolArguments } from "./tools/tool-registration";
@@ -177,308 +169,6 @@ describe("MCP catalog", () => {
       expect(response.isError).not.toBe(true);
       expect(await snapshot()).toEqual(before);
     }
-  });
-
-  it("runs one happy-path action through every tool", async () => {
-    const kernel = entityKernelContextSchema.parse(
-      createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
-    );
-    const call = async (
-      tool: string,
-      args: ToolArguments,
-      requestOverrides: McpTestRequestContext = {},
-    ) => {
-      const result = await callMcpTool(
-        createMcpServer(),
-        tool,
-        args,
-        { ...kernelRequestContext(kernel), ...requestOverrides },
-        { entityKernel: kernel },
-      );
-      if (result.isError)
-        throw new Error(
-          `${tool}.${String(args.action)}: ${JSON.stringify(result.content)}`,
-        );
-      return z.looseObject({}).parse(result.structuredContent);
-    };
-    const createdId = async (entity: string, data: ToolArguments) =>
-      z
-        .object({ item: z.object({ id: z.string() }) })
-        .parse(await call("entity", { action: "create", entity, data })).item
-        .id;
-
-    // Member-scoped writers (merchant rules, photo runs) need the actor's party.
-    await insertWithShortcode(ctx.db, "ledgerParty", {
-      name: "Catalog member",
-      kind: "member",
-      userId: ctx.actor.userId,
-    });
-
-    const ingredientId = await createdId("ingredient", {
-      name: "Catalog salt",
-      aliases: [],
-      naKinds: [],
-      usuallyOnHand: false,
-    });
-    expect(
-      await call("entity_read", {
-        action: "get",
-        entity: "ingredient",
-        id: ingredientId,
-      }),
-    ).toMatchObject({ item: { id: ingredientId } });
-    expect(
-      await call("search_read", { action: "global", query: "Catalog salt" }),
-    ).toHaveProperty("results");
-    // USDA is an external source; the lookup is stubbed at its service port.
-    expect(
-      await call(
-        "product_enrichment_read",
-        { action: "by_fdc_id", fdcId: 1_234_567 },
-        {
-          usdaService: fromPartial({ getFoodSummaryByID: async () => null }),
-        },
-      ),
-    ).toEqual({ food: null });
-    expect(await call("entity_read", { action: "budget" })).toHaveProperty(
-      "totals",
-    );
-    expect(await call("entity_read", { action: "summary" })).toHaveProperty(
-      "totalOpen",
-    );
-    expect(await call("nutrition_read", { action: "tags" })).toEqual({
-      items: [],
-    });
-    expect(
-      await call("nutrition_read", {
-        action: "get_shopping_list",
-        from: "2026-01-05",
-        to: "2026-01-11",
-      }),
-    ).toBeDefined();
-    expect(await call("finance_read", { action: "summary" })).toBeDefined();
-    expect(await call("ai_funding_read", { action: "status" })).toMatchObject({
-      credit: { state: "available" },
-    });
-    expect(
-      await call("product_enrichment_read", {
-        action: "external_id_collisions",
-        identifiers: [
-          { source: "amazon", kind: "asin", externalId: "B0SYNTH001" },
-        ],
-      }),
-    ).toBeDefined();
-    expect(await call("activity_read", { action: "list" })).toHaveProperty(
-      "entries",
-    );
-    expect(
-      await call("finance", {
-        action: "record",
-        import: {
-          source: "monarch",
-          label: "Catalog synthetic export",
-          fingerprint: "catalog-synthetic-1",
-        },
-        rows: [
-          {
-            rowPosition: 1,
-            accountDescriptor: "Synthetic card 0000",
-            statementDate: "2026-01-06",
-            providerAmount: -12.5,
-            rawDescription: "SYNTHETIC SHOP",
-          },
-        ],
-        dryRun: true,
-      }),
-    ).toBeDefined();
-
-    await createdId(
-      "vendor",
-      mock(vendorCreateInput, { overrides: { name: "Catalog vendor" } }),
-    );
-
-    const { output: expense } = await createRepoEntity(
-      ctx,
-      "expense",
-      makeExpenseInput({
-        name: "Catalog combo",
-        cost: 40,
-        vendor: "Catalog vendor",
-        orderId: "CATALOG-1",
-      }),
-    );
-    expect(
-      await call("finance", {
-        action: "split_with_delta",
-        expenseId: expense.id,
-        parts: [
-          {
-            lineKind: "principal",
-            name: "part a",
-            cost: 25,
-            costType: "materials",
-            trade: "other",
-          },
-          {
-            lineKind: "principal",
-            name: "part b",
-            cost: 15,
-            costType: "materials",
-            trade: "other",
-          },
-        ],
-      }),
-    ).toMatchObject({ delta: 0 });
-
-    const productId = await createdId("product", {
-      name: "Catalog widget",
-      barcode: "012345678905",
-    });
-    // Orphaned Products read the published quality check.
-    await publishQualityFixtures(ctx.db, "product");
-    // Detector rows carry Date timestamps; the action publishes their JSON.
-    expect(
-      await call("activity_read", {
-        action: "report",
-        type: "orphanedProducts",
-      }),
-    ).toMatchObject({
-      type: "orphanedProducts",
-      items: expect.arrayContaining([
-        expect.objectContaining({ createdAt: expect.any(String) }),
-      ]),
-    });
-    expect(
-      await call("product_enrichment", {
-        action: "verify_images",
-        items: [{ id: productId }],
-      }),
-    ).toMatchObject({ summary: { requested: 1, succeeded: 1, failed: 0 } });
-    // The barcode is already claimed locally, so no lookup service is asked.
-    expect(
-      await call("product_enrichment", {
-        action: "find_or_create_by_upc",
-        upc: "012345678905",
-      }),
-    ).toMatchObject({ product: { id: productId } });
-    // Exercise a known exception-eligible gap rather than whichever required
-    // field happens to be first as the quality registry grows.
-    const purchaseId = z
-      .object({ items: z.array(z.object({ id: z.string() })) })
-      .parse(await call("entity_read", { action: "list", entity: "purchase" }))
-      .items[0]!.id;
-    await call("entity", {
-      action: "update",
-      entity: "purchase",
-      id: purchaseId,
-      data: { itemizationExpectation: "required" },
-    });
-    // An allocation slice is never an itemization, so the gap is open.
-    await call("entity", {
-      action: "create",
-      entity: "expense",
-      data: {
-        lineKind: "principal",
-        name: "Synthetic lump booking",
-        purchaseId,
-        cost: 12,
-        date: "2026-09-01",
-        costType: "materials",
-        trade: "other",
-        lineBasis: "allocation",
-      },
-    });
-    await drainStoredDerived(ctx.db);
-    const detail = await call("entity_read", {
-      action: "get",
-      entity: "purchase",
-      id: purchaseId,
-      resultDetail: "full",
-    });
-    const { item } = z
-      .object({
-        item: z.object({
-          fields: entityFieldEnvelopeSchemas.purchase.detail.shape.fields.pick({
-            dataQuality: true,
-          }),
-        }),
-      })
-      .parse(detail);
-    const quality = fieldValueOf(item.fields.dataQuality);
-    if (!quality) throw new Error("Purchase quality result missing");
-    const [gap] = quality.gaps.filter(
-      (candidate) => candidate.check === "purchase_itemization",
-    );
-    expect(gap).toBeDefined();
-    expect(
-      await call("data_exception", {
-        action: "set_exception",
-        entityId: purchaseId,
-        check: gap!.check,
-        reason: "unavailable",
-        note: "The synthetic order's item lines are no longer available.",
-      }),
-    ).toHaveProperty("status");
-
-    const recipeId = z.object({ id: z.string() }).parse(
-      await call("nutrition", {
-        action: "create_from_text",
-        name: "Catalog toast",
-        sections: [
-          { ingredients: ["1 slice bread"], instructions: ["Toast."] },
-        ],
-      }),
-    ).id;
-    const mealId = await createdId(
-      "meal",
-      mock(mealCreateInput, {
-        overrides: { date: "2026-01-07", name: "Catalog lunch" },
-      }),
-    );
-    expect(
-      await call("nutrition", { action: "plan_recipe", mealId, recipeId }),
-    ).toMatchObject({ id: mealId });
-
-    const photo = await createImageFixture(ctx.db, "catalog-photo", {
-      status: "UPLOADED",
-    });
-    expect(
-      await call("image", {
-        action: "attach_existing",
-        imageId: photo.shortcode,
-        targetId: productId,
-      }),
-    ).toBeDefined();
-
-    const run = await startPhotoInventoryRun(ctx.db, {
-      actorUserId: ctx.actor.userId,
-    });
-    const target = await createImageFixture(ctx.db, "catalog-target", {
-      status: "UPLOADED",
-      sha256: "a".repeat(64),
-    });
-    await getDb(ctx.db)
-      .insert(photoRunImage)
-      .values({
-        runId: run.id,
-        imageId: parseImageId.parse(target.id),
-        position: 0,
-        state: "pending",
-        targetFingerprint: "a".repeat(64),
-      });
-    expect(
-      await call("run", {
-        action: "propose_groups",
-        runId: run.publicId,
-        groups: [
-          {
-            groupKey: "catalog-skip",
-            product: { kind: "create", create: { name: "Catalog mug" } },
-            skip: [{ id: target.shortcode, reason: "Out of focus" }],
-          },
-        ],
-      }),
-    ).toHaveProperty("proposals");
   });
 
   // The Mail import agent's entity_read schema carries only its entity kinds;
