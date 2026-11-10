@@ -5,11 +5,12 @@ import { describe, expect, it, vi } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
 import * as databaseHelpers from "~/server/db/helpers";
-import { aiUsage, run } from "~/server/db/schema";
+import { aiEvaluation, aiUsage, run } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { readAiBudget, setAiBudget } from "./budget";
+import { wakeFundingWaitingEvaluations } from "./evaluation/repo/ai-evaluation-work";
 import { isBackgroundRun, readChatGptPlanAvailability } from "./funding";
 
 describe("AI budget admission", () => {
@@ -180,4 +181,51 @@ describe("AI funding availability", () => {
       );
     },
   );
+
+  // Failure mode: after a member funds a source, evaluations parked for
+  // funding keep waiting until the six-hour window ends.
+  it("wakes evaluations waiting for funding, and only those", async () => {
+    const later = new Date(Date.now() + 60 * 60_000);
+    const row = (waitCause: string) => ({
+      executionKind: "ai_refresh" as const,
+      feature: "field-suggestion",
+      workKey: crypto.randomUUID(),
+      target: {
+        kind: "field" as const,
+        entity: "product",
+        recordId: crypto.randomUUID(),
+        field: "name",
+        suggestionIds: [],
+      },
+      provenance: {
+        dependencies: [],
+        inputFingerprint: "synthetic",
+        optionFingerprint: "synthetic",
+        model: null,
+      },
+      snapshot: {},
+      state: "queued" as const,
+      runAt: later,
+      waitCause,
+    });
+    const [funding, provider] = await getDb(ctx.db)
+      .insert(aiEvaluation)
+      .values([row("ai_funding_window"), row("provider_capacity")])
+      .returning({ id: aiEvaluation.id });
+    expect(await wakeFundingWaitingEvaluations(ctx.db)).toBe(1);
+    const read = async (id: string) =>
+      (
+        await getDb(ctx.db)
+          .select({
+            runAt: aiEvaluation.runAt,
+            waitCause: aiEvaluation.waitCause,
+          })
+          .from(aiEvaluation)
+          .where(eq(aiEvaluation.id, id))
+      )[0];
+    const woken = await read(funding!.id);
+    expect(woken?.waitCause).toBeNull();
+    expect(woken?.runAt?.getTime()).toBeLessThanOrEqual(Date.now());
+    expect((await read(provider!.id))?.waitCause).toBe("provider_capacity");
+  });
 });
