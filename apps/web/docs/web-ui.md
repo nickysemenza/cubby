@@ -174,7 +174,8 @@ the picker's appearance.
   parent dialog. Test dismissal through the real dialog.
 - The picker frame owns its focus ring; the nested input suppresses its own.
   Invisible hit areas must not cover neighbouring controls. A field's guess is
-  the picker's pinned first group, never selected.
+  the picker's pinned first group, never selected; Enter with an empty search
+  and no highlighted row picks it (`enterPicks`).
 
 ## Record identity
 

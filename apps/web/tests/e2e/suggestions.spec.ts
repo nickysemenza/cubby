@@ -629,7 +629,8 @@ test("Cubby's values read as plain values, edits persist, and the picker offers 
   await expect(
     page.getByRole("option", { name: /Cubby's guess, 21% sure/ }),
   ).toBeVisible();
-  await guess.click();
+  // With an empty search, Enter picks Cubby's guess.
+  await page.keyboard.press("Enter");
   await expect.poll(brandOf(openId)).toBe(guessedId);
 });
 

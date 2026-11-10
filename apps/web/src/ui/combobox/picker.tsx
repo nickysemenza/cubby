@@ -96,6 +96,11 @@ interface PickerCommonProps<TId extends string> {
   footer?: React.ReactNode;
   /** Segmented mode: icon-only segments on phones, labels kept accessible. */
   iconOnlyOnPhone?: boolean;
+  /**
+   * With an empty query and no highlighted row, Enter picks this row (a
+   * field's pinned guess). It is never shown as selected.
+   */
+  enterPicks?: TId;
 }
 
 /**
@@ -1117,9 +1122,11 @@ function SearchPicker<TId extends string>({
   className,
   header,
   footer,
+  enterPicks,
 }: ResolvedPickerProps<TId>) {
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState("");
+  const [highlighted, setHighlighted] = React.useState<TId>();
   const [debouncedQuery] = useDebouncedValue(query, { wait: 150 });
   const anchorRef = React.useRef<HTMLDivElement>(null);
   const inputRef = React.useRef<HTMLInputElement>(null);
@@ -1230,6 +1237,22 @@ function SearchPicker<TId extends string>({
     <ComboboxPrimitive.Input
       id={inputId}
       ref={setInputRef}
+      onKeyDown={(event) => {
+        if (
+          event.key !== "Enter" ||
+          enterPicks === undefined ||
+          multiple ||
+          query.trim() !== "" ||
+          highlighted !== undefined
+        )
+          return;
+        const guess = orderedItems.find((item) => item.id === enterPicks);
+        if (!guess) return;
+        event.preventDefault();
+        setValues([guess]);
+        setQuery("");
+        changeOpen(false);
+      }}
       aria-label={ariaLabel}
       aria-describedby={ariaDescribedBy}
       placeholder={
@@ -1344,6 +1367,8 @@ function SearchPicker<TId extends string>({
     openOnInputClick: true,
     modal: false,
     autoHighlight: query.trim() !== "",
+    onItemHighlighted: (item: ComboboxItem<TId> | undefined) =>
+      setHighlighted(item?.id),
     disabled: gate.disabled,
   } as const;
 

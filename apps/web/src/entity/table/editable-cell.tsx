@@ -772,6 +772,7 @@ function EditableSelectEditor({
       <div className="inline-flex items-center gap-1">
         <Picker
           options={pinned}
+          enterPicks={guess.ids[0]}
           value={value}
           onValueChange={(next) => void handlePick(next)}
           label={placeholder}

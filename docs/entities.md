@@ -3686,7 +3686,8 @@ authority disappears with the Image.
 Cells and fact rows show one saved state: a value looks the same whoever set it, and lists ask no
 model. A below-bar answer for an empty or Cubby-held field is a guess: `suggestion.fieldGuess` returns
 the active pending Suggestion whose live input fingerprint still matches, and the field's picker shows
-it as a pinned "Cubby's guess" group (with the runner-up when stored), never selected. Choosing the guess accepts that Suggestion; choosing another value is an ordinary edit,
+it as a pinned "Cubby's guess" group (with the runner-up when stored), never selected; Enter with an
+empty search picks it. Choosing the guess accepts that Suggestion; choosing another value is an ordinary edit,
 recorded as the correction. A person-held field has no guess.
 
 Edit forms ask live on their unsaved basis. A live decline (`none`) or `no_signal` answer is remembered
