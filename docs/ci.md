@@ -347,10 +347,8 @@ containers.
 Each Vitest shard runs the `vitest-ci` target: one Vitest run of every
 merge-gate project (`unit`, `mcp-contract`, `ui`, `capability`, `scripts`,
 `packages`, `integration` and `workers`), split by file with
-`CUBBY_VITEST_SHARD`. `tooling/vitest-sequencer.ts` assigns each project's
-files largest-first to the lightest shard by source size, which tracks duration
-far better than Vitest's default path hash. Project groups run in order within
-a shard, so PostgreSQL forks never start beside
+`CUBBY_VITEST_SHARD`. Vitest assigns files by path hash, not duration. Project
+groups run in order within a shard, so PostgreSQL forks never start beside
 workerd. No Vitest project uses the built Worker, so Vitest shards skip the web
 build; integration tests inject bindings with `setCfEnv`. Shard 2 also runs the
 `db-check` migration drift check against disposable scratch databases, even

@@ -10,7 +10,6 @@ import wasm from "vite-plugin-wasm";
 import { defineConfig, type TestProjectConfiguration } from "vitest/config";
 import { readR2PublicUrl } from "./tooling/cloudflare-public-config.ts";
 import { testShuffleSeed } from "./tooling/test-seed.ts";
-import { SizeBalancedSequencer } from "./tooling/vitest-sequencer.ts";
 import { testWorker } from "./tooling/workers-test.cloudflare.config.ts";
 
 // Generated output and the @cubby/recipebridge WASM are never committed; bring
@@ -278,7 +277,6 @@ export default defineConfig({
     sequence: {
       shuffle: { files: true, tests: false },
       seed: sharedIsolationSeed,
-      sequencer: SizeBalancedSequencer,
     },
     projects: (
       [
