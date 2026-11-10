@@ -71,16 +71,19 @@ export async function loadSuggestionRowCounts(
         suggestionIds: fieldIds,
       })
     : [];
-  const excluded = new Set(
+  // The default queue lists field keys that are not guesses; rows the keys
+  // drop (an Automatic rule will apply them) are not listed either.
+  const listed = new Set(
     keys
-      .filter((key) => key.columns.disposition === "guess")
+      .filter((key) => key.columns.disposition !== "guess")
       .map((key) => key.suggestionId),
   );
+  const field = new Set(fieldIds);
   for (const row of rows)
     if (row.recordId)
       counts.set(
         row.recordId,
-        row.ids.filter((id) => !excluded.has(id)).length,
+        row.ids.filter((id) => !field.has(id) || listed.has(id)).length,
       );
   return counts;
 }

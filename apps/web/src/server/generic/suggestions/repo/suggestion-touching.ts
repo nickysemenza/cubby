@@ -166,9 +166,14 @@ function referenceMatches(
     const needles = (scope.records ?? [])
       .filter((record) => !scope.entity || record.entity === scope.entity)
       .flatMap((record) =>
-        [record.id, record.code, ...set.keysOf(record)].map((id) =>
-          JSON.stringify([{ entity: record.entity, id }]),
-        ),
+        // Containment is exact, so probe each key in both cases stored references use.
+        [
+          ...new Set(
+            [record.id, record.code, ...set.keysOf(record)].flatMap((key) =>
+              key ? [key, key.toLowerCase()] : [],
+            ),
+          ),
+        ].map((id) => JSON.stringify([{ entity: record.entity, id }])),
       );
     if (!needles.length) return undefined;
     const indexed = alias(suggestionTable, "retained_indexed");
