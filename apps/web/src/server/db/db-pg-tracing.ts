@@ -367,7 +367,57 @@ const traceClient = <T extends pg.ClientBase>(
   return client;
 };
 
-export const tracePool = (pool: pg.Pool, role: RequestDbRole): pg.Pool => {
+/**
+ * Autocommit statements share one pipelined client: pg writes each statement
+ * with its own Sync without waiting for earlier results, so reads a request
+ * issues together pay one round trip rather than one each. Statements stay
+ * independent implicit transactions; transactions still take an exclusive
+ * pool client. A broken socket fails its in-flight statements and the next
+ * statement reconnects.
+ */
+export const pipelinedAutocommit = (
+  create: () => pg.Client,
+  role: RequestDbRole,
+) => {
+  let lane: Promise<QueryBridge> | undefined;
+  let client: pg.Client | undefined;
+  const reset = (owner: pg.Client) => {
+    if (client !== owner) return;
+    lane = undefined;
+    client = undefined;
+  };
+  const open = (): Promise<QueryBridge> => {
+    if (lane) return lane;
+    const next = create();
+    client = next;
+    next.on("error", () => reset(next));
+    lane = next.connect().then(
+      () => traceQuery(queryBridge(next.query.bind(next)), () => false, role),
+      (error: unknown) => {
+        reset(next);
+        throw error;
+      },
+    );
+    return lane;
+  };
+  return {
+    acquire: async (): Promise<AcquiredPgQueryClient> => ({
+      query: await open(),
+      release: () => {},
+    }),
+    end: async () => {
+      const open = client;
+      if (open) reset(open);
+      await open?.end();
+    },
+  };
+};
+
+export const tracePool = (
+  pool: pg.Pool,
+  role: RequestDbRole,
+  autocommit?: () => Promise<AcquiredPgQueryClient>,
+): pg.Pool => {
   const rawQuery = queryBridge(pool.query.bind(pool));
   const rawConnect = connectBridge(pool.connect.bind(pool));
 
@@ -415,13 +465,14 @@ export const tracePool = (pool: pg.Pool, role: RequestDbRole): pg.Pool => {
 
   const queryImplementation = createPoolQueryAdapter(
     queryImplementationFor(rawQuery),
-    async (inTransaction) => {
-      const client = await acquire(inTransaction);
-      return {
-        query: queryBridge(client.query.bind(client)),
-        release: () => client.release(),
-      };
-    },
+    autocommit ??
+      (async (inTransaction) => {
+        const client = await acquire(inTransaction);
+        return {
+          query: queryBridge(client.query.bind(client)),
+          release: () => client.release(),
+        };
+      }),
   );
   pool.query = queryBridge(queryImplementation);
 

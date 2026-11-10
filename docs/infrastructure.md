@@ -175,7 +175,12 @@ startup, origin admission and SQL execution separately. Telemetry concurrency
 remains 1.
 
 Each HTTP invocation lazily opens at most two strong and two cached database
-sockets, so ordinary browser reads can overlap page enrichment. Its pools close
+sockets, so ordinary browser reads can overlap page enrichment. One cached
+socket is a pipelined lane (`pipelinedAutocommit` in `db-pg-tracing.ts`):
+pg writes every autocommit statement, each with its own Sync, without waiting
+for earlier results, so a read's concurrent statements share one round trip.
+The other cached socket serves transactions; strong sockets do not pipeline,
+because writes and their transactions use them. Its pools close
 once the response body finishes (or the handler throws, without delaying the
 error) and every `waitUntil` task it registered has settled (`withRequestDb`);
 an upgraded socket keeps pg's idle timeout. Four database sockets leave two of

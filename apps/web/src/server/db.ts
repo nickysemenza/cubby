@@ -20,6 +20,7 @@ import {
 import { createDatabaseClientConstructor } from "./db/db-pg-client";
 import {
   acquireTracedConnection,
+  pipelinedAutocommit,
   type RequestDbRole,
   tracePool,
 } from "./db/db-pg-tracing";
@@ -44,8 +45,9 @@ const runtimeForClient = (client: DatabaseClient): DatabaseRuntime => ({
 const runtimeForPool = (
   pool: pg.Pool,
   role: RequestDbRole,
+  autocommit?: ReturnType<typeof pipelinedAutocommit>,
 ): DatabaseRuntime => {
-  const tracedPool = tracePool(pool, role);
+  const tracedPool = tracePool(pool, role, autocommit?.acquire);
   const client = drizzleNodePostgres({
     client: tracedPool,
     relations: relationalSchema,
@@ -53,7 +55,9 @@ const runtimeForPool = (
   });
   return {
     client,
-    close: () => pool.end(),
+    close: async () => {
+      await Promise.all([pool.end(), autocommit?.end()]);
+    },
     withConnection: async (fn) => {
       const connection = await acquireTracedConnection(tracedPool, false);
       try {
@@ -77,16 +81,29 @@ const createPoolRuntime = (
   role: RequestDbRole,
   nextClientOrdinal?: () => number,
   idleTimeoutMillis?: number,
-): DatabaseRuntime =>
-  runtimeForPool(
+): DatabaseRuntime => {
+  const Client = createDatabaseClientConstructor(role, nextClientOrdinal);
+  // Browser reads ride bounded-stale and are autocommit: one of its sockets
+  // becomes the pipelined lane, so a read's independent statements share round
+  // trips. Strong keeps both sockets for writes and their transactions.
+  const autocommit =
+    role === "bounded-stale"
+      ? pipelinedAutocommit(
+          () => new Client({ connectionString, pipeline: true }),
+          role,
+        )
+      : undefined;
+  return runtimeForPool(
     new pg.Pool({
       connectionString,
-      max,
+      max: autocommit ? max - 1 : max,
       ...(idleTimeoutMillis !== undefined && { idleTimeoutMillis }),
-      Client: createDatabaseClientConstructor(role, nextClientOrdinal),
+      Client,
     }),
     role,
+    autocommit,
   );
+};
 
 async function closeScope(holder: RequestDatabaseRuntimeScope) {
   holder.closed = true;
