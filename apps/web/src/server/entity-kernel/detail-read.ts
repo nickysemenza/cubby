@@ -68,16 +68,19 @@ export function defineEntityGet<
       })
       .call("media", async ({ context }, { found }) => {
         if (found.item === null) return null;
-        const [item] = await withUniversalEntityMedia(
-          context.db,
-          binding.entity,
-          [found.item],
-          true,
-        );
-        const breadcrumb =
-          item === undefined
+        // The breadcrumb reads reference and placement fields, which media
+        // never changes, so both start together and share round trips.
+        const [[item], breadcrumb] = await Promise.all([
+          withUniversalEntityMedia(
+            context.db,
+            binding.entity,
+            [found.item],
+            true,
+          ),
+          found.item === undefined
             ? undefined
-            : await detailBreadcrumb(context.db, binding.entity, item);
+            : detailBreadcrumb(context.db, binding.entity, found.item),
+        ]);
         return {
           ...item,
           ...(breadcrumb === undefined ? {} : { breadcrumb }),
