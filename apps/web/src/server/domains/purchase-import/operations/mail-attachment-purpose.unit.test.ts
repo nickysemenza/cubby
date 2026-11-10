@@ -5,10 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { DecisionPort } from "~/server/ai/decision-model";
 
-import {
-  shouldPromoteMailAttachment,
-  shouldPromoteMailAttachments,
-} from "./mail-attachment-purpose";
+import { shouldPromoteMailAttachments } from "./mail-attachment-purpose";
 
 const mail = {
   sender: "orders@shop.example",
@@ -31,12 +28,10 @@ const usage = {
 };
 
 describe("mail attachment purpose", () => {
-  // A batch must preserve each attachment's evidence and positional decision,
-  // including rejected oversized inputs, without changing singleton prompts.
-  it("keeps batch and singleton attachment evidence identical", async () => {
-    const inputs: unknown[] = [];
-    const port = vi.fn<DecisionPort>(async (input) => {
-      inputs.push(input);
+  // A batch must preserve each attachment's positional decision, including
+  // rejected oversized inputs.
+  it("keeps each attachment's positional decision", async () => {
+    const port = vi.fn<DecisionPort>(async () => {
       return {
         answers: {
           selection: {
@@ -55,11 +50,6 @@ describe("mail attachment purpose", () => {
     expect(
       await shouldPromoteMailAttachments(mail, attachments, usage, port),
     ).toEqual([true, true]);
-    const batchedInputs = [...inputs];
-    inputs.length = 0;
-    for (const file of attachments)
-      await shouldPromoteMailAttachment(mail, file, usage, port);
-    expect(inputs).toEqual(batchedInputs);
     expect(
       await shouldPromoteMailAttachments(
         { ...mail, content: { ...mail.content, bodyText: "x".repeat(40_000) } },
@@ -68,7 +58,7 @@ describe("mail attachment purpose", () => {
         port,
       ),
     ).toEqual([false, false]);
-    expect(port).toHaveBeenCalledTimes(4);
+    expect(port).toHaveBeenCalledTimes(2);
   });
   it.each([
     { choice: "c0", probability: 0.98, promote: true },
@@ -93,31 +83,18 @@ describe("mail attachment purpose", () => {
         },
       }));
       expect(
-        await shouldPromoteMailAttachment(mail, attachment, usage, port),
-      ).toBe(promote);
+        await shouldPromoteMailAttachments(mail, [attachment], usage, port),
+      ).toEqual([promote]);
       expect(port).toHaveBeenCalledOnce();
     },
   );
-
-  it("retains oversized evidence without invoking a model", async () => {
-    const port: DecisionPort = vi.fn();
-    expect(
-      await shouldPromoteMailAttachment(
-        { ...mail, content: { ...mail.content, bodyText: "x".repeat(40_000) } },
-        attachment,
-        usage,
-        port,
-      ),
-    ).toBe(false);
-    expect(port).not.toHaveBeenCalled();
-  });
 
   it("propagates model failure without a filename fallback", async () => {
     const port: DecisionPort = vi.fn(async () => {
       throw new Error("Synthetic Decision outage");
     });
     await expect(
-      shouldPromoteMailAttachment(mail, attachment, usage, port),
+      shouldPromoteMailAttachments(mail, [attachment], usage, port),
     ).rejects.toThrow("Synthetic Decision outage");
   });
 });

@@ -8,6 +8,7 @@ import { job, run } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import type { BackgroundDrain } from "~/server/generic/background/drains";
 import { addJobAiCost, countDrainItems } from "~/server/generic/jobs/context";
+import { seedJobs } from "~/server/generic/jobs/jobs.fixtures";
 import {
   runPermit,
   runRecovery,
@@ -16,7 +17,7 @@ import {
 import type { JobHandlers } from "~/server/generic/jobs/types";
 import { reconcileWorkflowRuns } from "~/server/workflows/runs/lifecycle";
 
-import { enqueueJob, enqueueJobs } from "./producer";
+import { enqueueJob } from "./producer";
 import { claimJob, dueUnits } from "./queue";
 
 describe("durable Job selection", () => {
@@ -57,8 +58,8 @@ describe("durable Job selection", () => {
     }));
     // One statement per slice: a 10k-row insert overflows drizzle's builder.
     for (let start = 0; start < flood.length; start += 1_000)
-      await enqueueJobs(ctx.db, flood.slice(start, start + 1_000));
-    const others = await enqueueJobs(
+      await seedJobs(ctx.db, flood.slice(start, start + 1_000));
+    const others = await seedJobs(
       ctx.db,
       [0, 1, 2].map((index) => ({
         key: `synthetic.fairness.other.${index}`,

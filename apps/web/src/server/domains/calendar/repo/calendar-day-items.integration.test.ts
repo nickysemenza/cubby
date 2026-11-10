@@ -15,8 +15,15 @@ import {
   insertEntityAttachments,
 } from "~/server/testing/repo.fixtures";
 
-import { renderIcs } from "../service/ics";
+import { createIcsDocument, type IcsOptions } from "../service/ics";
 import { getCalendarRange, visitCalendarFeedItems } from "./calendar";
+
+/** Render one document the way the feed snapshot does. */
+const renderIcs = (items: CalendarItem[], opts: IcsOptions): string => {
+  const document = createIcsDocument(opts);
+  document.append(items);
+  return document.finish();
+};
 
 describe("calendar day membership", () => {
   const ctx = withTestDb();

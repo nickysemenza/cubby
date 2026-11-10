@@ -26,7 +26,7 @@ import {
   rebuildDerived,
   DerivedRebuildBusyError,
 } from "~/server/generic/derived/service/rebuild";
-import { claimJob, releaseJobClaim } from "~/server/generic/jobs/jobs.fixtures";
+import { claimJob, updateJobs } from "~/server/generic/jobs/jobs.fixtures";
 import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 import { readRebuildObservation as readDerivedRebuildStatus } from "~/server/generic/jobs/repo/observation";
 import { advanceJob } from "~/server/generic/jobs/service/jobs";
@@ -338,6 +338,17 @@ export async function withJobFixtureExecution<T>(
   } finally {
     // Completed fixture work can free admission capacity. Multi-step fence
     // fixtures retain their token by default; borrowed claims stay with their caller.
-    if (options.releaseClaim && !existing) await releaseJobClaim(db, claim);
+    if (options.releaseClaim && !existing)
+      await updateJobs(
+        db,
+        { id: claim.id },
+        {
+          state: "queued",
+          waitReason: null,
+          leaseToken: null,
+          leaseExpiresAt: null,
+          availableAt: new Date(),
+        },
+      );
   }
 }

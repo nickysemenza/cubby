@@ -65,7 +65,7 @@ import {
 } from "~/server/domains/work/service/work-queue-read";
 import { currentJobExecution } from "~/server/generic/jobs/context";
 import { JobDeferredError } from "~/server/generic/jobs/errors";
-import { renewJob } from "~/server/generic/jobs/jobs.fixtures";
+import { updateJobs } from "~/server/generic/jobs/jobs.fixtures";
 import { cancelJob } from "~/server/generic/jobs/repo/operator";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import * as automaticRuleRuntime from "~/server/generic/suggestions/repo/automatic-application";
@@ -3378,8 +3378,16 @@ describe("statement Transaction suggestions", () => {
         throw new Error("Expected real Job publications");
       // Held publications take the Job row lock only at commit, so the
       // heartbeat renews while all four still wait.
-      renewal = databaseHelpers.withTransactionDatabase(ctx.db, (tx) =>
-        renewJob(tx, owner),
+      renewal = databaseHelpers.withTransactionDatabase(
+        ctx.db,
+        async (tx) =>
+          (
+            await updateJobs(
+              tx,
+              { id: owner.id },
+              { leaseExpiresAt: new Date(Date.now() + 60_000) },
+            )
+          ).length === 1,
       );
       expect(await renewal).toBe(true);
       renewalQueued = true;

@@ -218,15 +218,6 @@ const measureParsed = (request: ModelRequest) =>
     ? measureResponses(request.body)
     : measureMessages(request.body);
 
-/**
- * Serialized sizes of an OpenAI Responses or Anthropic Messages request body.
- * Model settings outside the prompt (model id, reasoning effort) are ignored.
- */
-export function measureRequestContext(text: string): ContextSections {
-  const request = parseModelRequest(text);
-  return request ? measureParsed(request) : emptySections();
-}
-
 const FIXED_KEYS = [
   "instructions",
   "agentToolSchemas",

@@ -90,16 +90,6 @@ export async function prepareEntityConnectionEvidence(
   return prepared;
 }
 
-/** Immediate callers still capture their basis before entering publication locks. */
-export async function publishEntityConnection(
-  db: Database,
-  raw: ConnectionCandidate,
-): Promise<ConnectionProposal> {
-  const prepared = await prepareEntityConnectionEvidence(db, [raw]);
-  const [proposal] = await publishPreparedEntityConnections(db, prepared);
-  return proposal!;
-}
-
 /** Locked evidence, eligibility, immutable publications and supersession share a chunk. */
 export async function publishPreparedEntityConnections(
   db: Database,

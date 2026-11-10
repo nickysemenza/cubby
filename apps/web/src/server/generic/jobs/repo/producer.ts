@@ -10,10 +10,7 @@ import {
 } from "@cubby/schemas/job";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
-import type { Database } from "~/server/db/database";
 import {
-  repositoryQueries,
-  repositoryTransactionDatabase,
   repositoryTransactionOn,
   type RepositoryQueryInput,
 } from "~/server/db/repository-access.boundary";
@@ -96,53 +93,5 @@ export async function enqueueJob(
         `Job key ${input.key} belongs to ${row.kind}, not ${input.kind}`,
       );
     return row;
-  });
-}
-
-/** Insert fresh keyed Jobs and identities in sets. Invalidation stays with enqueueJob. */
-export async function enqueueJobs(
-  db: Database,
-  submitted: readonly EnqueueJobInput[],
-): Promise<JobRow[]> {
-  const inputs = [
-    ...new Map(
-      submitted.map((value) => {
-        const input = enqueueJobInput.parse(value);
-        return [input.key, input] as const;
-      }),
-    ).values(),
-  ];
-  if (!inputs.length) return [];
-  if (inputs.some((input) => input.invalidate))
-    throw new Error("Batch Job enrollment does not invalidate existing Jobs");
-  return repositoryTransactionDatabase(db, async (tx) => {
-    await repositoryQueries(tx)
-      .insert(job)
-      .values(
-        [...inputs]
-          .sort((a, b) => a.key.localeCompare(b.key))
-          .map((input) => rowValues(input)),
-      )
-      .onConflictDoNothing({ target: job.key });
-    const rows = await repositoryQueries(tx)
-      .select()
-      .from(job)
-      .where(
-        inArray(
-          job.key,
-          inputs.map((input) => input.key),
-        ),
-      )
-      .orderBy(job.id)
-      .for("update");
-    if (
-      rows.some((row) =>
-        inputs.some(
-          (input) => input.key === row.key && input.kind !== row.kind,
-        ),
-      )
-    )
-      throw new Error("Job key belongs to a different kind");
-    return rows;
   });
 }

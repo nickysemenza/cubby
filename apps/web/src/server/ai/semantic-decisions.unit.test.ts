@@ -4,11 +4,9 @@ import { describe, expect, it, vi } from "vitest";
 import type { Database } from "~/server/db";
 
 import type { DecisionPort } from "./decision-model";
-import { withAiInputs } from "./evaluation-inputs";
 import { IMAGE_PROVENANCE_CLASSIFICATION_FEATURE } from "./policy/features";
 import {
   decideImageProvenanceWithEvidence,
-  decideProductVariantComparison,
   decideProductVariantComparisons,
   decideUpcOfferComparability,
 } from "./semantic-decisions";
@@ -39,21 +37,6 @@ const portFor = (choiceIndex: number, probability: number): DecisionPort =>
   });
 
 describe("semantic decision adapters", () => {
-  it("keeps singleton and batch routing identical for the same complete pair", async () => {
-    const pair = {
-      firstTitle: "Synthetic red hat",
-      secondTitle: "Synthetic blue hat",
-    };
-    const single = await withAiInputs(true, () =>
-      decideProductVariantComparison({ ...pair, usage }),
-    );
-    const batch = await withAiInputs(true, () =>
-      decideProductVariantComparisons({ comparisons: [pair], usage }),
-    );
-    expect(single.inputs).toHaveLength(1);
-    expect(batch.inputs).toEqual(single.inputs);
-  });
-
   it("records the injected port's actual model in image provenance", async () => {
     const result = await decideImageProvenanceWithEvidence({
       input: {
@@ -73,24 +56,6 @@ describe("semantic decision adapters", () => {
     });
     expect(result.model).toBe(IMAGE_PROVENANCE_CLASSIFICATION_FEATURE.model);
   });
-  it("maps closed choices to their typed variant relations", async () => {
-    const result = await decideProductVariantComparison({
-      firstTitle: "Synthetic boots, size 7",
-      secondTitle: "Synthetic boots, size 9",
-      usage,
-      port: portFor(4, 0.95),
-    });
-
-    expect(result).toEqual({
-      color: { relation: "different" },
-      size: { relation: "different" },
-      evidence: {
-        firstTitle: "Synthetic boots, size 7",
-        secondTitle: "Synthetic boots, size 9",
-      },
-    });
-  });
-
   it("keeps batch positions and full evidence when an intervening pair abstains", async () => {
     const port = portFor(0, 0.95);
     const comparisons = [
@@ -162,19 +127,5 @@ describe("semantic decision adapters", () => {
     });
     expect(port).toHaveBeenCalledTimes(1);
     expect(results[0]?.color.relation).toBe("same");
-  });
-
-  it("abstains before model invocation when bounded source text is truncated", async () => {
-    const port = portFor(0, 0.99);
-    const result = await decideProductVariantComparison({
-      firstTitle: "x".repeat(4_001),
-      secondTitle: "Synthetic product",
-      usage,
-      port,
-    });
-
-    expect(result.color.relation).toBe("unknown");
-    expect(result.size.relation).toBe("unknown");
-    expect(port).not.toHaveBeenCalled();
   });
 });
