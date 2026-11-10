@@ -254,6 +254,10 @@ Watch for the margin running out:
   (with `.holders`, `.position`, `.retry_ms`) on `purchase-agent.alarm` and
   `.dispatch` spans and as a Sentry tag, the `purchase-agent.turn` log, and
   deferred `purchase.dispatch` Jobs (`Job.lastExecution.outcome = 'deferred'`).
+  The gate's own state is its `status()` RPC on
+  `env.COORDINATOR_GATE.getByName("household")`: the Run ids holding a turn and
+  those queued, in order (the same read stale-Run expiry uses); its storage holds
+  the full queue under the `gate` key.
 
 Raise `max_concurrency` only with the origin cap, and only after measuring pool
 waits.
