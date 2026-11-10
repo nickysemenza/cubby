@@ -76,7 +76,9 @@ sub-scale and need no marker.
 - List thumbnails come from the row's server-resolved `displayImages`
   (`createImageColumn`); the policy is in
   `server/entity-kernel/repo/entity-display-image.ts`. Clicking a table
-  thumbnail opens its display-image source chain.
+  thumbnail opens its display-image source chain, so the image column takes
+  no explanation rail and never spills. Covers under 48px omit the "+N"
+  extra-image count.
 
 ## Dates and times
 
