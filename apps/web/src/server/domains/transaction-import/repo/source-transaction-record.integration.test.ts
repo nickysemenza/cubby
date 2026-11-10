@@ -1777,6 +1777,9 @@ describe("statement row ledger", () => {
       fingerprint: "synthetic-export-duplicates",
     });
     expect(await getDb(ctx.db).select().from(sourceOccurrence)).toHaveLength(3);
+    await expect(
+      record([rowInput()], { fingerprint: "synthetic-export-two" }),
+    ).resolves.toMatchObject({ alreadyInThisBatch: 1, inserted: 0 });
   });
 
   it("converges a Monarch id without account across collections and holds a conflicting account", async () => {

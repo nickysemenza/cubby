@@ -332,6 +332,9 @@ export async function lockAndLoadSourceIntake(
       ).rows
     : [];
   const aliasOwnerIds = aliasMatches.map((match) => match.owner);
+  const memberOwnerIds = members.map(
+    (member) => member.observation.occurrenceId,
+  );
   const possibleOwners = await query
     .select()
     .from(sourceOccurrence)
@@ -339,8 +342,8 @@ export async function lockAndLoadSourceIntake(
       and(
         eq(sourceOccurrence.source, source),
         or(
-          aliasOwnerIds.length
-            ? sql`${sourceOccurrence.id} = ANY(${uuidArrayParam(aliasOwnerIds)})`
+          aliasOwnerIds.length || memberOwnerIds.length
+            ? sql`${sourceOccurrence.id} = ANY(${uuidArrayParam([...aliasOwnerIds, ...memberOwnerIds])})`
             : undefined,
           scopes.length
             ? inArray(sourceOccurrence.identityScope, scopes)
@@ -372,7 +375,8 @@ export async function lockAndLoadSourceIntake(
       prepared.some((row) => row.key === identityKey(storedIdentity(owner))) ||
       input.confirmedWithdrawals.includes(owner.providerIdentity ?? "") ||
       redirectIds.includes(owner.id) ||
-      aliasOwnerIds.includes(owner.id),
+      aliasOwnerIds.includes(owner.id) ||
+      memberOwnerIds.includes(owner.id),
   );
   await lockFinancialEvidenceKeys(
     tx,
@@ -437,6 +441,18 @@ export async function lockAndLoadSourceIntake(
         );
       byKey.set(identityKey(storedIdentity(reservation)), survivor);
     }
+  }
+  // A retained membership remains authoritative even if later exports make its alias ambiguous.
+  for (const incoming of positioned) {
+    const member = members.find(
+      (item) => item.membership.rowPosition === incoming.identity?.position,
+    );
+    const owner =
+      member &&
+      locked.find(
+        (candidate) => candidate.id === member.observation.occurrenceId,
+      );
+    if (owner) byKey.set(incoming.key, owner);
   }
   for (const match of aliasMatches) {
     const owner = locked.find((candidate) => candidate.id === match.owner);
