@@ -1,23 +1,24 @@
 import type { RunId } from "@cubby/schemas/identifiers";
+import { jobWaitReason } from "@cubby/schemas/job";
 import {
   aiBudgetSettings,
   type AiBudgetSettings,
   type AiBudgetStatus,
   storedAiBudgetSettings,
 } from "@cubby/schemas/mail-import-settings";
-import {
-  isGatewayBalanceEmpty,
-  isOpenAiCreditRefusal,
-} from "@cubby/shared/ai/gateway-request";
+import { paidFundingRefusal } from "@cubby/shared/ai/funding-refusal";
 import { AI_MODELS } from "@cubby/shared/ai/models";
 import { and, gte, inArray, sql } from "drizzle-orm";
 
+import { findErrorCause } from "~/lib/error-diagnostics";
+import type { UnparsedError } from "~/lib/error-utils";
 import { roundTo } from "~/lib/round-to";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
 import { aiUsage, appSettings } from "~/server/db/schema";
+import { JobDeferredError } from "~/server/generic/jobs/errors";
 
-import { aiBudgetWindow } from "./budget-window";
+import { aiBudgetWindow, fundingResumeAt } from "./budget-window";
 
 /**
  * Household caps on frontier chat-model spend per fixed six-hour UTC window
@@ -44,17 +45,33 @@ export const aiBudgetCovers = (model: string) =>
 
 export const budgetUsd = (value: number) => `$${roundTo(value, 4)}`;
 
-export class AiBudgetExhaustedError extends Error {
+/**
+ * The funding ladder is exhausted: the window budget is spent or the paid rung
+ * cannot answer. It is the one funding wait every Job, drain and Run step
+ * recognizes, resuming at {@link fundingResumeAt} without spending an attempt.
+ */
+export class AiBudgetExhaustedError extends JobDeferredError {
   constructor(
     readonly status: AiBudgetStatus,
     message = `AI budget reached: ${budgetUsd(status.paid.spentUsd)} of $${status.paid.limitUsd} paid since ${status.windowStart}; paid work resumes at ${status.windowEnd}.`,
-    /** When the stopped work should try again. */
-    readonly resumeAt = status.windowEnd,
   ) {
-    super(message);
+    super(
+      message,
+      fundingResumeAt(status.windowEnd),
+      jobWaitReason.enum.ai_funding_window,
+    );
     this.name = "AiBudgetExhaustedError";
   }
 }
+
+/** The funding wait anywhere in a failure's cause chain, if it has one. */
+export const findFundingWait = (error: UnparsedError) =>
+  findErrorCause(
+    error,
+    (cause): cause is JobDeferredError =>
+      cause instanceof JobDeferredError &&
+      cause.reason === jobWaitReason.enum.ai_funding_window,
+  );
 
 export async function setAiBudget(
   db: Database,
@@ -133,28 +150,17 @@ export async function assertAiBudget(db: Database, allowanceUsd = 0) {
 /**
  * A funding stop names its source, why it refused and when the Run retries,
  * keeping the provider's raw text. The window budget itself was not reached.
- * `<why>` is a missing BYOK credential, an empty AI Gateway balance, or an
- * exhausted provider credit balance.
+ * `<why>` is a missing BYOK credential or an empty AI Gateway balance; a stop
+ * the paid rung did not refuse is the provider credit that ended the ladder.
  */
-function namesExhaustedProviderCredit(raw: string): boolean {
-  if (isOpenAiCreditRefusal(raw)) return true;
-  // Settlement wraps the provider body after a coordinator prefix.
-  const embedded = /\{[\s\S]*\}/u.exec(raw)?.[0];
-  if (embedded && embedded !== raw && isOpenAiCreditRefusal(embedded))
-    return true;
-  return /(?:^|\n|:\s*)(?:unknown:\s*)?You have no credits remaining\b|OpenAI credit refused\b|(?:Error Code )?(?:credit_balance_exhausted|insufficient_quota):/u.test(
-    raw,
-  );
-}
-
 export function paidFundingStopMessage(raw: string, status: AiBudgetStatus) {
-  const why = /has no BYOK credential/u.test(raw)
-    ? "the AI Gateway has no BYOK credential"
-    : isGatewayBalanceEmpty(raw)
-      ? "AI Gateway balance empty"
-      : namesExhaustedProviderCredit(raw)
-        ? "exhausted provider credit balance"
-        : "AI Gateway balance empty";
+  const kind = paidFundingRefusal(raw)?.kind;
+  const why =
+    kind === "byok_missing"
+      ? "the AI Gateway has no BYOK credential"
+      : kind === "gateway_balance_empty"
+        ? "AI Gateway balance empty"
+        : "exhausted provider credit balance";
   return `Paid models unavailable: ${why} (${raw.trim()}); retrying at ${status.windowEnd}.`;
 }
 

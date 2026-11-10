@@ -41,9 +41,16 @@ export async function emailsWithSuggestedPurchases(
 const cursorNextAt = sql`(SELECT ((${appSettings.metadata}->>'nextAt')::timestamptz AT TIME ZONE 'UTC')
   FROM ${appSettings} WHERE ${appSettings.id} = ${CURSOR_ID}::uuid)`;
 
-/** Permit selection: the pass takes a page unless its cursor waits for a later hour. */
+const cursorUpdatedAt = sql`(SELECT ${appSettings.updatedAt} FROM ${appSettings} WHERE ${appSettings.id} = ${CURSOR_ID}::uuid)`;
+
+/**
+ * Permit selection: the pass takes a page unless its cursor waits for a later
+ * hour. It is owed since that hour, else since its last page; a pass that never
+ * ran has no cursor to date it.
+ */
 export const emailPurchaseDiscoveryDue = (unit: string) =>
-  sql`SELECT ${unit}::text AS unit, false AS demand, now()::timestamp AS since
+  sql`SELECT ${unit}::text AS unit, false AS demand,
+      coalesce(${cursorNextAt}, ${cursorUpdatedAt}, now()::timestamp) AS since
     WHERE coalesce(${cursorNextAt} <= now() AT TIME ZONE 'UTC', true)`;
 export const emailPurchaseDiscoveryNext = () =>
   sql`SELECT coalesce(${cursorNextAt}, now() AT TIME ZONE 'UTC')`;

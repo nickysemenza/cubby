@@ -5,13 +5,13 @@ import {
   gatewayForwardOut,
 } from "@cubby/schemas/import-recipe";
 import { getErrorMessage } from "@cubby/shared";
+import { classifyFundingRefusal } from "@cubby/shared/ai/funding-refusal";
 import {
   gatewayBaseURL,
   type InferenceFunding,
   type GatewayResponseInfo,
   gatewayResponseInfo,
   creditFundingFor,
-  isInferenceFundingRefusal,
 } from "@cubby/shared/ai/gateway-request";
 import { gatewayProviderSchema } from "@cubby/shared/ai/models";
 import { createParser } from "eventsource-parser";
@@ -209,7 +209,13 @@ const responsesEvent = z.looseObject({
   error: z.unknown().optional(),
 });
 function subscriptionCapacityRefusal(body: string): boolean {
-  return isInferenceFundingRefusal(400, body, "subscription");
+  return (
+    classifyFundingRefusal({
+      status: 400,
+      text: body,
+      funding: "subscription",
+    }) !== null
+  );
 }
 
 /** Terminal Responses roots preserve truncation output/usage for Rust recovery. */
@@ -256,7 +262,11 @@ async function foldResponsesStream(response: Response): Promise<Response> {
     return new Response(body, {
       status:
         subscriptionCapacityRefusal(body) ||
-        isInferenceFundingRefusal(429, body, "openai_credit")
+        classifyFundingRefusal({
+          status: 429,
+          text: body,
+          funding: "openai_credit",
+        }) !== null
           ? 429
           : 502,
       headers,
@@ -281,7 +291,13 @@ export async function forwardGatewayRequest(
   const funding = creditFundingFor(provider) ?? "paid";
   let response = await forwardGatewayAttempt(request, opts, port, funding);
   if (funding === "openai_credit") {
-    if (!isInferenceFundingRefusal(response.status, response.body, funding))
+    if (
+      !classifyFundingRefusal({
+        status: response.status,
+        text: response.body,
+        funding,
+      })
+    )
       return response;
     response = await forwardGatewayAttempt(request, opts, port, "subscription");
   }

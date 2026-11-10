@@ -9,15 +9,12 @@ import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { findErrorCause } from "~/lib/error-diagnostics";
-import { AiBudgetExhaustedError } from "~/server/ai/budget";
+import { findFundingWait } from "~/server/ai/budget";
 import { GatewayProviderStopError } from "~/server/ai/gateway-egress-client";
 import { getDb } from "~/server/db/helpers";
 import { run } from "~/server/db/retained-tables";
 import { readRun } from "~/server/domains/run/repo/ai-work-state";
-import {
-  fundingResumeAt,
-  fundingResumeInput,
-} from "~/server/domains/run/repo/execution-context";
+import { fundingResumeInput } from "~/server/domains/run/repo/execution-context";
 import { JobPausedError, JobDeferredError } from "~/server/generic/jobs/errors";
 import { readJobs } from "~/server/generic/jobs/repo/job-reads";
 import { defineJobHandler } from "~/server/generic/jobs/service/jobs";
@@ -191,41 +188,33 @@ export const runJobHandler = defineJobHandler(
         };
       },
     ).catch(async (error: unknown) => {
-      const budget = findErrorCause(
-        error,
-        (cause): cause is AiBudgetExhaustedError =>
-          cause instanceof AiBudgetExhaustedError,
-      );
+      const funding = findFundingWait(error);
+      if (funding && execution === "mail_discovery")
+        return fundingWait(
+          input.runId,
+          claim.cursor,
+          funding.until,
+          error instanceof Error ? error.message : funding.message,
+          error,
+        );
       const provider = findErrorCause(
         error,
         (cause): cause is GatewayProviderStopError =>
           cause instanceof GatewayProviderStopError,
       );
-      if (budget && execution === "mail_discovery")
-        return fundingWait(
-          input.runId,
-          claim.cursor,
-          fundingResumeAt(budget.status.windowEnd),
-          error instanceof Error ? error.message : budget.message,
-          error,
-        );
-      const deferred = budget
+      const wait = funding ?? provider;
+      const deferred = wait
         ? new JobDeferredError(
-            error instanceof Error ? error.message : budget.message,
-            fundingResumeAt(budget.status.windowEnd),
-            "ai_funding_window",
+            error instanceof Error ? error.message : wait.message,
+            wait.until,
+            wait.reason,
           )
-        : provider
-          ? new JobDeferredError(
-              error instanceof Error ? error.message : provider.message,
-              new Date(provider.retryAt),
-              "provider_capacity",
-            )
-          : execution === "mail_discovery"
-            ? mailDiscoveryBackpressure(error)
-            : undefined;
+        : execution === "mail_discovery"
+          ? mailDiscoveryBackpressure(error)
+          : undefined;
       if (!deferred) throw error;
-      if (provider && !budget)
+      // A provider stop names itself on the Run; a budget stop already paused it.
+      if (provider && wait === provider)
         await context.fenced(async (tx) => {
           await getDb(tx)
             .update(run)

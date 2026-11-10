@@ -1,5 +1,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 
+import { jobWaitReason } from "@cubby/schemas/job";
+
 import type { UnparsedError } from "~/lib/error-utils";
 import { JobDeferredError } from "~/server/generic/jobs/errors";
 
@@ -27,6 +29,12 @@ export function aiWorkDeferral(
   const seen = new Set<unknown>();
   while (error instanceof Error && !seen.has(error)) {
     if (error instanceof AiWorkDeferredError) return error;
+    // A funding wait is not shared capacity: it stops the work for the window.
+    if (
+      error instanceof JobDeferredError &&
+      error.reason === jobWaitReason.enum.ai_funding_window
+    )
+      return null;
     // Cache contention uses the Job control signal; item isolation must retain the wait.
     if (error instanceof JobDeferredError) {
       const deferred = new AiWorkDeferredError(error.until.getTime());

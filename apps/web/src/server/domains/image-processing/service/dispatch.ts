@@ -11,7 +11,6 @@ import { providerFor } from "@cubby/shared/ai/models";
 
 import { findErrorCause } from "~/lib/error-diagnostics";
 import type { UnparsedError } from "~/lib/error-utils";
-import { AiBudgetExhaustedError } from "~/server/ai/budget";
 import { IMAGE_DESCRIPTION_FEATURE } from "~/server/ai/policy/features";
 import {
   generatePresignedDownloadUrl,
@@ -172,7 +171,7 @@ export async function dispatchImageProcessingWakeup(
 }
 
 /**
- * A typed provider wait (`JobDeferredError`) or exhausted AI money is a wait,
+ * A typed wait (`JobDeferredError`: a provider or funding wait) is a wait,
  * never an attempt: the claim is released until the wait ends. Returns
  * whether `error` was such a wait. Every cloud provider call shares this,
  * including the description of a device-normalized AVIF.
@@ -192,20 +191,6 @@ export async function deferCloudAttemptForTypedWait(
       until: deferred.until,
       reason: deferred.message,
       waitReason: deferred.reason,
-    });
-    return true;
-  }
-  const exhausted = findErrorCause(
-    error,
-    (cause): cause is AiBudgetExhaustedError =>
-      cause instanceof AiBudgetExhaustedError,
-  );
-  if (exhausted) {
-    await deferImageProcessingJob(db, {
-      ...attempt,
-      until: new Date(exhausted.resumeAt),
-      reason: exhausted.message,
-      waitReason: jobWaitReason.enum.ai_funding_window,
     });
     return true;
   }

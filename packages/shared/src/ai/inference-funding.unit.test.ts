@@ -4,13 +4,21 @@ import {
   type GatewayQuery,
   creditRefusedResponse,
   inferenceFundingHeaders,
-  isInferenceFundingRefusal,
-  isInferenceStreamFundingRefusal,
-  isOpenAiCreditRefusal,
   runProviderGateway,
   gatewayFetchThrough,
   type InferenceFunding,
 } from "./gateway-request";
+import { classifyFundingRefusal } from "./funding-refusal";
+
+const fundingRefused = (
+  status: number,
+  text: string,
+  funding: InferenceFunding,
+) => classifyFundingRefusal({ status, text, funding }) !== null;
+const terminalRefused = (text: string, funding: InferenceFunding) =>
+  classifyFundingRefusal({ text, funding }) !== null;
+const openAiCreditRefused = (text: string) =>
+  terminalRefused(text, "openai_credit");
 
 // A missing credit key must not silently spend Unified Billing. Only capacity
 // refusal advances funding; malformed requests, bad keys and outages stay errors.
@@ -136,22 +144,22 @@ describe("inference funding", () => {
 
   it("advances past the plan's bare rate limit", () => {
     const body = JSON.stringify({ detail: "Rate limit exceeded" });
-    expect(isInferenceFundingRefusal(429, body, "subscription")).toBe(true);
-    expect(isInferenceFundingRefusal(429, body, "openai_credit")).toBe(false);
+    expect(fundingRefused(429, body, "subscription")).toBe(true);
+    expect(fundingRefused(429, body, "openai_credit")).toBe(false);
   });
 
   it.each(["credit_balance_exhausted", "insufficient_quota"])(
     "recognizes OpenAI credit exhaustion %s without treating rate limits as exhausted credit",
     (code) => {
       expect(
-        isInferenceFundingRefusal(
+        fundingRefused(
           429,
           JSON.stringify({ error: { code } }),
           "openai_credit",
         ),
       ).toBe(true);
       expect(
-        isInferenceFundingRefusal(
+        fundingRefused(
           429,
           JSON.stringify({ error: { code: "rate_limit_exceeded" } }),
           "openai_credit",
@@ -166,9 +174,9 @@ describe("inference funding", () => {
     const message =
       "You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.";
     const body = JSON.stringify({ error: { message } });
-    expect(isInferenceFundingRefusal(429, body, "openai_credit")).toBe(true);
+    expect(fundingRefused(429, body, "openai_credit")).toBe(true);
     expect(
-      isInferenceFundingRefusal(
+      fundingRefused(
         429,
         JSON.stringify({
           error: {
@@ -180,36 +188,30 @@ describe("inference funding", () => {
         "openai_credit",
       ),
     ).toBe(true);
-    expect(isInferenceFundingRefusal(500, message, "openai_credit")).toBe(
-      false,
-    );
-    expect(isInferenceFundingRefusal(429, message, "subscriber_credit")).toBe(
-      false,
-    );
-    expect(isInferenceStreamFundingRefusal(message, "openai_credit")).toBe(
-      true,
-    );
+    expect(fundingRefused(500, message, "openai_credit")).toBe(false);
+    expect(fundingRefused(429, message, "subscriber_credit")).toBe(false);
+    expect(terminalRefused(message, "openai_credit")).toBe(true);
+    expect(terminalRefused(`unknown: ${message}`, "openai_credit")).toBe(true);
     expect(
-      isInferenceStreamFundingRefusal(`unknown: ${message}`, "openai_credit"),
-    ).toBe(true);
-    expect(
-      isInferenceStreamFundingRefusal(
+      terminalRefused(
         `Error Code credit_balance_exhausted: ${message}`,
         "openai_credit",
       ),
     ).toBe(true);
-    expect(isInferenceStreamFundingRefusal(message, "subscriber_credit")).toBe(
-      false,
-    );
-    expect(isOpenAiCreditRefusal(message)).toBe(true);
-    expect(isOpenAiCreditRefusal("429 Too Many Requests")).toBe(false);
+    expect(terminalRefused(message, "subscriber_credit")).toBe(false);
+    expect(openAiCreditRefused(message)).toBe(true);
+    // pi's HTTP-error form carries the body with no code.
     expect(
-      isOpenAiCreditRefusal(
-        `Mail discovery quoted a billing email: ${message}`,
+      openAiCreditRefused(
+        `OpenAI API error (429): ${JSON.stringify({ message })}`,
       ),
+    ).toBe(true);
+    expect(openAiCreditRefused("429 Too Many Requests")).toBe(false);
+    expect(
+      openAiCreditRefused(`Mail discovery quoted a billing email: ${message}`),
     ).toBe(false);
     expect(
-      isOpenAiCreditRefusal(
+      openAiCreditRefused(
         JSON.stringify({
           input: [{ content: message }],
           error: { message: "The model produced no output" },
@@ -221,10 +223,10 @@ describe("inference funding", () => {
       reason: "Synthetic provider limit",
     };
     expect(
-      isOpenAiCreditRefusal(await creditRefusedResponse(refusal).text()),
+      openAiCreditRefused(await creditRefusedResponse(refusal).text()),
     ).toBe(false);
     expect(
-      isOpenAiCreditRefusal(
+      openAiCreditRefused(
         await creditRefusedResponse(refusal, "openai").text(),
       ),
     ).toBe(true);
@@ -340,7 +342,7 @@ describe("inference funding", () => {
     const body = await refused.text();
     expect(refused.status).toBe(429);
     expect(body).toContain("cubby_plan_budget_reached");
-    expect(isInferenceFundingRefusal(429, body, "subscription")).toBe(true);
+    expect(fundingRefused(429, body, "subscription")).toBe(true);
     expect(sent).toEqual([]);
     expect((await send(undefined)).status).toBe(200);
     expect(sent).toEqual(["paid"]);
@@ -362,9 +364,7 @@ describe("inference funding", () => {
       '{"error":{"type":"rate_limit_error","message":"enforced_spend_limit_reached"}}',
     ],
   ])("advances credit funding on capacity refusal %s", (status, body) => {
-    expect(isInferenceFundingRefusal(status, body, "subscriber_credit")).toBe(
-      true,
-    );
+    expect(fundingRefused(status, body, "subscriber_credit")).toBe(true);
   });
 
   it.each([
@@ -377,14 +377,43 @@ describe("inference funding", () => {
     ],
     [500, "Your credit balance is too low"],
   ])("preserves non-funding failure %s", (status, body) => {
-    expect(isInferenceFundingRefusal(status, body, "subscriber_credit")).toBe(
-      false,
-    );
+    expect(fundingRefused(status, body, "subscriber_credit")).toBe(false);
+  });
+
+  it("names when a refusal lifts and whether Cubby answered it", () => {
+    const now = Date.parse("2026-10-20T00:00:00Z");
+    expect(
+      classifyFundingRefusal(
+        {
+          status: 400,
+          text: "Your credit balance is too low. You will regain access on 2026-11-01 at 00:00 UTC.",
+          funding: "subscriber_credit",
+        },
+        now,
+      ),
+    ).toEqual({
+      funding: "subscriber_credit",
+      kind: "credit_exhausted",
+      local: false,
+      until: Date.parse("2026-11-01T00:00:00Z"),
+    });
+    expect(
+      classifyFundingRefusal({
+        text: '{"error":{"type":"cubby_plan_budget_reached"}}',
+        funding: "subscription",
+      }),
+    ).toMatchObject({ kind: "plan_budget", local: true });
+    expect(
+      classifyFundingRefusal({
+        text: "Insufficient unified billing balance",
+        funding: "paid",
+      }),
+    ).toMatchObject({ kind: "gateway_balance_empty", local: false });
   });
 
   it("recognizes subscription exhaustion without retrying the paid stage", () => {
     const body = '{"error":{"code":"usage_limit_reached"}}';
-    expect(isInferenceFundingRefusal(429, body, "subscription")).toBe(true);
-    expect(isInferenceFundingRefusal(429, body, "paid")).toBe(false);
+    expect(fundingRefused(429, body, "subscription")).toBe(true);
+    expect(fundingRefused(429, body, "paid")).toBe(false);
   });
 });

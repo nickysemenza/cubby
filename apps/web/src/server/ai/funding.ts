@@ -1,4 +1,6 @@
+import { aiEvaluationState } from "@cubby/schemas/ai-evaluation";
 import type { RunId } from "@cubby/schemas/identifiers";
+import { jobWaitReason } from "@cubby/schemas/job";
 import type {
   AiBudgetStatus,
   AiFundingStatus,
@@ -6,18 +8,42 @@ import type {
   FundingAvailability,
   FundingRefusalSource,
 } from "@cubby/schemas/mail-import-settings";
+import { runStatus } from "@cubby/schemas/run-fields";
+import { classifyFundingRefusal } from "@cubby/shared/ai/funding-refusal";
 import { CUBBY_AI_GATEWAY_ID } from "@cubby/shared/ai/gateway-metadata";
-import { isInferenceStreamFundingRefusal } from "@cubby/shared/ai/gateway-request";
-import { and, desc, eq, gte } from "drizzle-orm";
+import {
+  and,
+  count as countRows,
+  desc,
+  eq,
+  gt,
+  gte,
+  inArray,
+  isNotNull,
+  isNull,
+  sql,
+  type SQL,
+} from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 
 import { getAiGatewayEgress } from "~/server/cf-env";
 import type { Database } from "~/server/db";
-import { getDb } from "~/server/db/helpers";
-import { aiUsage, run } from "~/server/db/schema";
+import { getDb, notDeleted } from "~/server/db/helpers";
+import {
+  aiEvaluation,
+  aiUsage,
+  imageProcessingJob,
+  run,
+  searchDocument,
+} from "~/server/db/schema";
 import { readPaidGrant } from "~/server/domains/run/repo/paid-grant";
 
 import { budgetUsd, readAiBudget } from "./budget";
-import { AI_BUDGET_WINDOW_MS, aiBudgetWindow } from "./budget-window";
+import {
+  AI_BUDGET_WINDOW_MS,
+  aiBudgetWindow,
+  fundingResumeAt,
+} from "./budget-window";
 import type { CreditRefusal } from "./gateway-egress-contract";
 
 /*
@@ -36,20 +62,6 @@ export async function planBudgetRefusal(db: Database): Promise<string | null> {
 }
 
 const RECENT_MS = AI_BUDGET_WINDOW_MS;
-// The plan codes `isInferenceFundingRefusal` treats as exhausted quota.
-const PLAN_QUOTA =
-  /usage_limit_reached|rate_limit_exceeded|subscription_sharing_usage_limit_exceeded/u;
-
-/** Only OpenAI can supply a plan quota reset; Cubby's window is a probe deadline. */
-function planResetAt(failure: string, refusedAt: Date): Date | null {
-  const absolute = /"resets_at"\s*:\s*(\d{9,})/u.exec(failure);
-  if (absolute) return new Date(Number(absolute[1]) * 1000);
-  const relative = /"resets_in_seconds"\s*:\s*(\d+)/u.exec(failure);
-  if (relative)
-    return new Date(refusedAt.getTime() + Number(relative[1]) * 1000);
-  return null;
-}
-
 export interface FundingStatusPorts {
   now?: Date;
   /** The household plan connection; null where no plan storage exists. */
@@ -109,15 +121,17 @@ export async function readChatGptPlanAvailability(
     )
     .orderBy(desc(aiUsage.createdAt))
     .limit(1);
-  // The SDK's message-only quota terminal must pause status as well as the ladder.
-  const quotaRefused =
-    !!latest?.failure &&
-    (PLAN_QUOTA.test(latest.failure) ||
-      isInferenceStreamFundingRefusal(latest.failure, "subscription"));
+  // Only an exhausted quota pauses status; only OpenAI can supply its reset, and
+  // Cubby's window is a probe deadline.
+  const refusal = latest?.failure
+    ? classifyFundingRefusal(
+        { text: latest.failure, funding: "subscription" },
+        latest.createdAt.getTime(),
+      )
+    : null;
+  const quotaRefused = refusal?.kind === "plan_quota";
   const until =
-    quotaRefused && latest?.failure
-      ? planResetAt(latest.failure, latest.createdAt)
-      : null;
+    quotaRefused && refusal.until !== null ? new Date(refusal.until) : null;
   const probeAt =
     until ?? (latest ? aiBudgetWindow(latest.createdAt).end : null);
   return quotaRefused && probeAt && probeAt > now
@@ -178,6 +192,54 @@ const PLAN_BLOCKER = {
   FundingAvailability["blocker"]
 >;
 
+/** What the funding wake (`resumeFundingPausedRuns`) would bring back now. */
+async function readFundingWaits(db: Database) {
+  const funding = jobWaitReason.enum.ai_funding_window;
+  const count = async (table: PgTable, where: SQL | undefined) =>
+    (await getDb(db).select({ n: countRows() }).from(table).where(where))[0]
+      ?.n ?? 0;
+  const [runs, evaluations, embeddings, images] = await Promise.all([
+    count(
+      run,
+      and(
+        eq(run.status, runStatus.enum.paused_auth),
+        eq(run.failureCode, "execution_limit"),
+        notDeleted(run),
+        isNull(run.retiredAt),
+      ),
+    ),
+    count(
+      aiEvaluation,
+      and(
+        eq(aiEvaluation.waitCause, funding),
+        inArray(aiEvaluation.state, [
+          aiEvaluationState.enum.queued,
+          aiEvaluationState.enum.result_ready,
+        ]),
+        gt(aiEvaluation.runAt, sql`now()`),
+      ),
+    ),
+    count(
+      searchDocument,
+      and(
+        gt(searchDocument.embeddingDueAt, sql`now()`),
+        isNull(searchDocument.embeddingFailingSince),
+        isNotNull(searchDocument.embeddingError),
+        notDeleted(searchDocument),
+      ),
+    ),
+    count(
+      imageProcessingJob,
+      and(
+        eq(imageProcessingJob.state, "pending"),
+        eq(imageProcessingJob.waitReason, funding),
+        gt(imageProcessingJob.runAt, sql`now()`),
+      ),
+    ),
+  ]);
+  return { runs, work: evaluations + embeddings + images };
+}
+
 export async function readAiFundingStatus(
   db: Database,
   ports: FundingStatusPorts = {},
@@ -188,18 +250,20 @@ export async function readAiFundingStatus(
       (await egress()?.creditRefusal(undefined, "openai")) ?? null,
     paidRefusal = async () => (await egress()?.paidRefusal()) ?? null,
   } = ports;
-  const [budget, plan, refusal, openaiRefusal, paidRefused]: [
+  const [budget, plan, refusal, openaiRefusal, paidRefused, waits]: [
     AiBudgetStatus,
     ChatGptPlanAvailability,
     CreditRefusal | null,
     CreditRefusal | null,
     CreditRefusal | null,
+    { runs: number; work: number },
   ] = await Promise.all([
     readAiBudget(db, ports.now),
     readChatGptPlanAvailability(db, ports),
     creditRefusal(),
     openaiCreditRefusal(),
     paidRefusal(),
+    readFundingWaits(db),
   ]);
   const credit = refusalState(refusal);
   const openaiCredit = refusalState(openaiRefusal);
@@ -211,6 +275,13 @@ export async function readAiFundingStatus(
   ) => (state.state === "refused" ? { blocker, until: state.until } : null);
   return {
     ...budget,
+    waiting: {
+      ...waits,
+      resumeAt:
+        waits.runs || waits.work
+          ? fundingResumeAt(budget.windowEnd).toISOString()
+          : null,
+    },
     credit: {
       ...budget.credit,
       ...credit,

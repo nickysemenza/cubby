@@ -11,7 +11,7 @@ import { cloudImageDrain } from "~/server/domains/image-processing/service/cloud
 import { deliverPurchaseDispatch } from "~/server/domains/purchase-agent/service/dispatch";
 import type { PurchaseDispatchEnvironment } from "~/server/domains/purchase-agent/service/environment";
 import {
-  failedCoordinatorDispatchesExist,
+  failedCoordinatorDispatchesSince,
   reconcileCoordinatorDispatches,
 } from "~/server/domains/run/repo/coordinator-dispatch";
 import { fundingResumeInput } from "~/server/domains/run/repo/execution-context";
@@ -40,7 +40,7 @@ import { wakeAt, wakeJobs } from "~/server/workflows/background-tasks/publish";
 import { runJobHandler } from "~/server/workflows/runs/job-execution";
 import {
   reconcileWorkflowRuns,
-  workflowRunsToReconcile,
+  workflowRunsToReconcileSince,
 } from "~/server/workflows/runs/lifecycle";
 
 import { derivedComputes } from "./derived-computes";
@@ -144,8 +144,9 @@ const derivedRebuildDrain: BackgroundDrain = {
 const reconcileDrain: BackgroundDrain = {
   name: "reconcile",
   due: () =>
-    sql`SELECT 'reconcile'::text AS unit, false AS demand, now()::timestamp AS since
-      WHERE ${failedCoordinatorDispatchesExist()} OR ${workflowRunsToReconcile()}`,
+    sql`SELECT 'reconcile'::text AS unit, false AS demand, owed.since
+      FROM (SELECT least(${failedCoordinatorDispatchesSince()}, ${workflowRunsToReconcileSince()})::timestamp AS since) owed
+      WHERE owed.since IS NOT NULL`,
   next: () => null,
   page: async (db) => ({ claimed: await reconcileStoppedWork(db) }),
 };

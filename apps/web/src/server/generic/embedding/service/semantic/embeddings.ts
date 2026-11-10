@@ -1,13 +1,14 @@
 import type { RunId } from "@cubby/schemas/identifiers";
 import {
-  gatewayBaseURL,
-  isOpenAiCreditRefusal,
-} from "@cubby/shared/ai/gateway-request";
+  classifyFundingRefusal,
+  paidFundingRefusal,
+} from "@cubby/shared/ai/funding-refusal";
+import { gatewayBaseURL } from "@cubby/shared/ai/gateway-request";
 import { LRUCache } from "lru-cache";
 import { z } from "zod";
 
 import { cachedCall } from "~/server/ai/adapters";
-import { aiBudgetWindow } from "~/server/ai/budget-window";
+import { fundingResumeAt } from "~/server/ai/budget-window";
 import {
   markPreparationIncomplete,
   preparingWithoutProviders,
@@ -51,6 +52,7 @@ export interface EmbeddingPorts {
   readonly fetchFor: (
     metadata: GatewayMetadata,
     observers: EmbeddingObservers,
+    funding: "openai_credit" | "paid",
   ) => typeof fetch;
   /** Provider reachability only; `embedTexts` guards on this alone. */
   readonly configured: () => boolean;
@@ -63,11 +65,11 @@ const productionEmbeddingPorts: EmbeddingPorts = {
   // misses; caching only ever short-circuits an identical (model, input)
   // pair, which is deterministic. Repeat search queries were paying the full
   // provider round-trip (p50 ~940ms) without this.
-  fetchFor: (metadata, observers) =>
+  fetchFor: (metadata, observers, funding) =>
     gatewayFetch("openai", {
       ...cachedCall({ metadata }),
       ...observers,
-      funding: "openai_credit",
+      funding,
     }),
   configured: gatewayConfigured,
   vectorStore: productionVectorStore,
@@ -83,10 +85,9 @@ const pendingQueryEmbeddings = new Map<string, Promise<number[] | null>>();
 
 /**
  * The one gate every semantic consumer asks. An embedding is only useful if
- * there is somewhere to store and search it: on the vite Node dev server the
- * gateway may be reachable via AI_GATEWAY_API_KEY while the Vectorize binding
- * is absent, and reporting "configured" there would let the Problems detector
- * flag the whole corpus as missing with no way to clear it.
+ * there is somewhere to store and search it: a runtime that reaches the
+ * gateway without the Vectorize binding must not report "configured", or the
+ * Problems detector flags the whole corpus as missing with no way to clear it.
  */
 export function semanticEmbeddingsConfigured(
   ports: EmbeddingPorts = productionEmbeddingPorts,
@@ -116,7 +117,7 @@ export async function embedTexts(
   if (texts.length === 0) return [];
   if (!ports.configured()) {
     throw new Error(
-      "Semantic embeddings are not configured. Set AI_GATEWAY_API_KEY so Cubby can call Cloudflare AI Gateway.",
+      "Semantic embeddings are not configured: this runtime has no AI_GATEWAY_EGRESS binding.",
     );
   }
   const operation = opts?.operation ?? "embeddings";
@@ -138,10 +139,14 @@ export async function embedTexts(
         dimensions: config.dimensions,
         cache: ports === productionEmbeddingPorts,
         embed: async (batch, observers) => {
-          const fetchThroughGateway = ports.fetchFor(metadata, observers);
-          const response = await fetchThroughGateway(
-            `${gatewayBaseURL("openai")}/embeddings`,
-            {
+          // OpenAI credit first, then paid Unified Billing with no window
+          // budget: embeddings are cheap and never wait while paid can answer.
+          const request = (funding: "openai_credit" | "paid") =>
+            ports.fetchFor(
+              metadata,
+              observers,
+              funding,
+            )(`${gatewayBaseURL("openai")}/embeddings`, {
               method: "POST",
               headers: { "content-type": "application/json" },
               body: JSON.stringify({
@@ -149,29 +154,58 @@ export async function embedTexts(
                 input: batch,
                 dimensions: config.dimensions,
               }),
-            },
-          );
+            });
+          let funding: "openai_credit" | "paid" = "openai_credit";
+          let response = await request(funding);
+          if (!response.ok) {
+            const body = await response.clone().text();
+            if (
+              classifyFundingRefusal({
+                status: response.status,
+                text: body,
+                funding,
+              })
+            ) {
+              funding = "paid";
+              response = await request(funding);
+            }
+          }
           if (!response.ok) {
             const body = await response.text();
             const failure = `Embeddings request failed (HTTP ${response.status} ${response.statusText}): ${body}`;
-            // No OpenAI credit: wait for the funding window (or a reset) instead of failing.
-            if (isOpenAiCreditRefusal(body))
+            if (funding === "paid" && paidFundingRefusal(body)) {
+              // A member's search fails readably; background work waits for funding.
+              if (opts?.interactive)
+                throw new Error(
+                  `Semantic search is unavailable: OpenAI credit and paid AI are both unavailable. ${failure}`,
+                );
               throw new JobDeferredError(
                 failure,
-                aiBudgetWindow().end,
+                fundingResumeAt(),
                 "ai_funding_window",
               );
+            }
             throw new Error(failure);
           }
-          const body = embeddingsResponseSchema.parse(await response.json());
+          const json: unknown = await response.json();
+          // Paid `/ai/run` wraps the provider answer in `result`.
+          const body = embeddingsResponseSchema.parse(
+            funding === "paid" &&
+              json &&
+              typeof json === "object" &&
+              "result" in json
+              ? json.result
+              : json,
+          );
           return {
-            ...(ports === productionEmbeddingPorts && {
-              costEvidence: {
-                standard: null,
-                charged: null,
-                billingReason: "subscriber_credit" as const,
-              },
-            }),
+            ...(ports === productionEmbeddingPorts &&
+              funding === "openai_credit" && {
+                costEvidence: {
+                  standard: null,
+                  charged: null,
+                  billingReason: "subscriber_credit" as const,
+                },
+              }),
             embeddings: body.data.map((item) => ({
               index: item.index,
               vector: item.embedding,

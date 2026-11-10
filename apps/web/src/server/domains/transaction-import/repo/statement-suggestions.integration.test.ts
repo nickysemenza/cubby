@@ -3362,7 +3362,7 @@ describe("statement Transaction suggestions", () => {
       }),
     ).toMatchObject({
       labelled: 1,
-      paused: { reason: paused.message, until: paused.resumeAt },
+      paused: { reason: paused.message, until: paused.until.toISOString() },
     });
   });
 

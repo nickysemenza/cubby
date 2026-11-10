@@ -519,7 +519,7 @@ lets that Run and the imports its discovery starts pay past the paid budget by
 the confirmed `paidOverBudgetUsd` for the granting window.
 
 **Credit refusals are held, not retried.** When a credit response is a funding
-refusal `isInferenceFundingRefusal` recognizes (a Console spend limit, a spent
+refusal `classifyFundingRefusal` recognizes (a Console spend limit, a spent
 balance), the `AI_GATEWAY_EGRESS` Durable Object records it with the raw body
 until the date Anthropic names ("You will regain access on â€¦"), else the end of
 the current six-hour window. While it holds, credit admission answers at once
@@ -530,11 +530,15 @@ refusal, another refusal records it again. "Retry Claude credit now" (Settings â
 AI funding, MCP `ai_funding.reset_funding_refusal` with `source: "credit"`)
 clears it and resumes funding-paused Runs. `ai_funding_read.status` and the AI
 funding card report it as `credit.state` `refused`, with `until` and `reason`.
-Refusals that arrive only inside a stream are not recorded.
+A streamed response settles its hold when the stream ends, not when its 2xx
+headers arrive: a stream that ends in a terminal funding refusal (an SSE
+`error` or `response.failed` frame) records it, a clean end clears it, and an
+aborted or broken stream leaves the hold as it was.
 
 **The paid gateway balance is held the same way.** When a paid Unified Billing
 response (400, 402 or 403; Workers AI bills separately and is never gated)
-carries an empty-balance refusal (`isGatewayBalanceEmpty`; a missing BYOK
+carries an empty-balance refusal (`classifyFundingRefusal` kind
+`gateway_balance_empty`; a missing BYOK
 credential is one provider's setup failure and is never recorded), the egress
 object records it as `paid:gateway` with the raw body until the window end.
 While it holds, paid admission answers at once with a 402 replaying that raw
@@ -584,9 +588,10 @@ named keys off the paid gateway.
 Credit uses native provider passthrough with both `cf-aig-byok-alias:
 subscriber-credit` and `cf-aig-no-wholesale: true`. Explicit alias or
 no-wholesale intent is never removed to select paid routing. Other provider
-protocols keep native routing. The shared transport owner serves coordinated
-Worker egress and the Node fallback, preserving controls, metadata, query
-suffixes and streaming. Dedicated REST authenticates with `Authorization:
+protocols keep native routing. Every runtime sends every
+gateway request through the `AI_GATEWAY_EGRESS` Durable Object, which
+preserves controls, metadata, query suffixes and streaming; there is no
+binding-free path. Dedicated REST authenticates with `Authorization:
 Bearer` and scopes requests with `cf-aig-gateway-id`; native passthrough uses
 `cf-aig-authorization`. Both use the `AI_GATEWAY_API_KEY` Worker secret (a
 Cloudflare inference token with Workers AI Read, not a provider key). Jev BYOK
@@ -624,12 +629,14 @@ OpenAI refusals without a reset date last until the six-hour window ends;
 resetting API credit refusals clears both providers and permits fresh attempts.
 
 Semantic embeddings use the same named OpenAI-credit transport through shared
-egress. They keep their fixed embedding model and do not try ChatGPT or managed
-credentials after a refusal. A failed request leaves semantic evidence
-unavailable and durable refresh work owed. Embedding models remain outside the
-frontier-model budget caps; response caching and usage accounting still apply.
-Usage keeps the standard API cost comparison and records the subscriber-credit
-zero-charge evidence; cache hits keep their cache reason.
+egress, and on a credit refusal retry once as paid Unified Billing: `/ai/run`
+on `cubby-testing` with the model's catalog id (`openai/text-embedding-3-small`),
+whose answer arrives wrapped in `result`. They keep their fixed embedding model,
+never try the ChatGPT plan, and have no window budget. When paid refuses too, a
+member's search fails with a readable error and background refresh waits for
+funding with its work owed. Response caching and usage accounting apply;
+credit usage records the subscriber-credit zero-charge evidence, paid usage
+its standard cost, and cache hits keep their cache reason.
 
 OpenAI applies free credits before purchased credits, and unused subscription
 credits expire each billing cycle. An API key does not distinguish promotional

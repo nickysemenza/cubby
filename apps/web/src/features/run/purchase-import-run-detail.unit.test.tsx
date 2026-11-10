@@ -167,6 +167,7 @@ beforeEach(() => {
         data: {
           windowStart: "2026-09-20T12:00:00.000Z",
           windowEnd: "2026-09-20T18:00:00.000Z",
+          waiting: { resumeAt: null, runs: 0, work: 0 },
           credit: {
             spentUsd: 5,
             state: "available",

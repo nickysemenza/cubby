@@ -5,7 +5,12 @@ import {
   CUBBY_PAID_AI_GATEWAY_ID,
   type AiGatewayMetadata,
 } from "./gateway-metadata";
-import { getChatModelConfig, supportedChatModelSchema } from "./models";
+import {
+  getChatModelConfig,
+  getEmbeddingModelConfig,
+  supportedChatModelSchema,
+  supportedEmbeddingModelSchema,
+} from "./models";
 
 /**
  * Pure request-shaping helpers shared by every AI Gateway `fetch` shim (web
@@ -490,51 +495,6 @@ export function inferenceFundingHeaders(
     : {};
 }
 
-/** Provider capacity refusals only; never hide bad keys, invalid prompts or outages. */
-export function isInferenceFundingRefusal(
-  status: number,
-  body: string,
-  funding: InferenceFunding,
-): boolean {
-  if (funding === "paid" || ![400, 402, 429].includes(status)) return false;
-  if (funding === "subscription")
-    return (
-      [400, 429].includes(status) &&
-      // The plan also rate limits with a bare `{"detail":"Rate limit exceeded"}`.
-      /"(?:code|type)"\s*:\s*"(?:usage_limit_reached|rate_limit_exceeded|subscription_sharing_usage_limit_exceeded|subscription_sharing_unsupported_capability|subscription_unavailable|cubby_plan_budget_reached)"|"detail"\s*:\s*"Rate limit exceeded"/u.test(
-        body,
-      )
-    );
-  if (funding === "openai_credit") return isOpenAiCreditRefusal(body);
-  return /credit balance is too low|reached your specified[^\n]*API usage limits|enforced_spend_limit_reached|cubby_credit_refused/iu.test(
-    body,
-  );
-}
-
-/**
- * A funding refusal Cubby answered itself, before any provider call: a
- * recorded credit refusal (`creditRefusedResponse`) or the plan's spent window
- * budget.
- */
-export const isLocalFundingRefusal = (body: string) =>
-  /"type"\s*:\s*"cubby_(?:credit_refused|plan_budget_reached)"/u.test(body);
-
-/**
- * The gateway account itself has no balance: every paid provider fails alike,
- * unlike a missing BYOK credential, which is one provider's setup problem.
- */
-export const isGatewayBalanceEmpty = (failure: string) =>
-  /Insufficient unified billing balance|Insufficient balance; add money to your gateway or use BYOK/u.test(
-    failure,
-  );
-
-/**
- * The paid rung has no money or no credential: no later attempt can answer until
- * someone changes that, so the caller waits for funding rather than failing.
- */
-export const isPaidFundingUnavailable = (failure: string) =>
-  isGatewayBalanceEmpty(failure) || /has no BYOK credential/u.test(failure);
-
 /**
  * The egress Durable Object's answer while a recorded provider credit refusal
  * holds: a provider error envelope, so every credit caller
@@ -563,90 +523,13 @@ export function creditRefusedResponse(
 /**
  * The egress Durable Object's answer while a recorded paid-gateway funding
  * refusal holds: the gateway's own raw body, so every paid caller pauses for
- * funding exactly as it does on the gateway's refusal (`isPaidFundingUnavailable`).
+ * funding exactly as it does on the gateway's refusal (`paidFundingRefusal`).
  */
 export function paidRefusedResponse(refusal: { reason: string }): Response {
   return new Response(refusal.reason, {
     status: 402,
     headers: { "content-type": "application/json" },
   });
-}
-
-/**
- * OpenAI's prepaid-balance refusal. The Responses envelope carries
- * `error.code` / `error.type` (`credit_balance_exhausted`, sometimes still
- * `insufficient_quota`); pi-ai then prefixes that code. A body or terminal
- * message with neither falls back to OpenAI's billing sentence, read from the
- * provider `error.message` when the text is JSON. Claude's recorded
- * `cubby_credit_refused` uses the same type and is not this refusal.
- */
-const OPENAI_CREDIT_CODE =
-  /"(?:code|type)"\s*:\s*"(?:credit_balance_exhausted|insufficient_quota)"/u;
-const OPENAI_CREDIT_STREAM_CODE =
-  /^(?:Error Code )?(?:credit_balance_exhausted|insufficient_quota):/u;
-const OPENAI_CREDIT_SENTENCE = /^You have no credits remaining\b/u;
-const OPENAI_RECORDED_CREDIT = /^OpenAI credit refused\b/u;
-
-function objectMessage(value: unknown): string | undefined {
-  if (!value || typeof value !== "object" || !("message" in value))
-    return undefined;
-  return typeof value.message === "string" ? value.message : undefined;
-}
-
-function providerErrorMessage(text: string): string | undefined {
-  try {
-    const parsed: unknown = JSON.parse(text);
-    if (!parsed || typeof parsed !== "object") return undefined;
-    const direct = "error" in parsed ? objectMessage(parsed.error) : undefined;
-    if (direct) return direct;
-    if (!("response" in parsed) || !parsed.response) return undefined;
-    return typeof parsed.response === "object" && "error" in parsed.response
-      ? objectMessage(parsed.response.error)
-      : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-/** pi prefixes a codeless terminal error with `unknown:`. */
-function terminalOpenAiCreditMessage(text: string): string {
-  const trimmed = text.trim();
-  return /^unknown:\s*(.*)$/u.exec(trimmed)?.[1] ?? trimmed;
-}
-
-export function isOpenAiCreditRefusal(text: string): boolean {
-  if (OPENAI_CREDIT_CODE.test(text) || OPENAI_CREDIT_STREAM_CODE.test(text))
-    return true;
-  const field = providerErrorMessage(text);
-  // A JSON envelope that is not the provider error must not match prompt text
-  // echoed elsewhere in the body.
-  if (field === undefined && text.trim().startsWith("{")) return false;
-  const message = field ?? terminalOpenAiCreditMessage(text);
-  return (
-    OPENAI_CREDIT_SENTENCE.test(message) || OPENAI_RECORDED_CREDIT.test(message)
-  );
-}
-
-/** Verified pi-ai terminal formats for structured provider SSE quota errors. */
-export function isInferenceStreamFundingRefusal(
-  message: string,
-  funding: InferenceFunding,
-): boolean {
-  if (funding === "subscription") {
-    // pi-ai exposes only the provider message for a named SSE error frame.
-    return (
-      /^(?:Error Code )?(?:usage_limit_reached|rate_limit_exceeded|subscription_sharing_usage_limit_exceeded):/u.test(
-        message,
-      ) ||
-      message ===
-        "The ChatGPT user has reached their Subscription Sharing usage limit. Ask the user to try again after their usage limit resets or use an API key instead."
-    );
-  }
-  if (funding === "openai_credit") return isOpenAiCreditRefusal(message);
-  return (
-    funding === "subscriber_credit" &&
-    /credit balance is too low|enforced_spend_limit_reached/iu.test(message)
-  );
 }
 
 const subscriptionQuotaCode = z.object({
@@ -1323,12 +1206,25 @@ export async function runProviderGateway(args: {
     !headers.has("cf-aig-byok-alias") &&
     !headers.has("cf-aig-no-wholesale") &&
     ((args.provider === "openai" &&
-      (path === "responses" || path === "chat/completions")) ||
+      (path === "responses" ||
+        path === "chat/completions" ||
+        path === "embeddings")) ||
       (args.provider === "anthropic" && path === "v1/messages"));
   const query = await args.request.query();
   let body = query;
   let url = gatewayProviderUrl({ ...args, endpoint: args.request.endpoint });
-  if (paid) {
+  const rest = `https://api.cloudflare.com/client/v4/accounts/${args.accountId}/ai`;
+  if (paid && path === "embeddings") {
+    // Unified Billing has no OpenAI embeddings path; `/ai/run` takes the
+    // catalog id with the model's own input and wraps its answer in `result`.
+    const { model, ...input } = query;
+    body = {
+      model: getEmbeddingModelConfig(supportedEmbeddingModelSchema.parse(model))
+        .unifiedModelId,
+      input,
+    };
+    url = `${rest}/run`;
+  } else if (paid) {
     const model = getChatModelConfig(
       supportedChatModelSchema.parse(query.model),
     );
@@ -1338,7 +1234,9 @@ export async function runProviderGateway(args: {
       );
     body = { ...query, model: model.unifiedModelId };
     const paidPath = path === "v1/messages" ? "messages" : path;
-    url = `https://api.cloudflare.com/client/v4/accounts/${args.accountId}/ai/v1/${paidPath}${endpoint.search}`;
+    url = `${rest}/v1/${paidPath}${endpoint.search}`;
+  }
+  if (paid) {
     headers.delete("cf-aig-authorization");
     headers.set("authorization", `Bearer ${args.token}`);
     // Paid Unified Billing uses the keyless gateway; see CUBBY_PAID_AI_GATEWAY_ID.

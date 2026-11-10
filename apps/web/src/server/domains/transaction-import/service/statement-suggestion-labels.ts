@@ -13,7 +13,7 @@ import { JOB_PAGE_LIMITS } from "@cubby/shared/job-page-limits";
 import { createLogger } from "@cubby/worker-tracing";
 
 import { forEachConcurrently } from "~/lib/concurrency-limiter";
-import { AiBudgetExhaustedError } from "~/server/ai/budget";
+import { findFundingWait } from "~/server/ai/budget";
 import {
   AiWorkDeferredError,
   aiWorkDeferral,
@@ -75,6 +75,7 @@ import {
 } from "~/server/domains/transaction-import/repo/statement-suggestions";
 import { decideStatementKind } from "~/server/domains/transaction-import/repo/statement-transaction-kind";
 import { withJobPhase } from "~/server/generic/jobs/context";
+import type { JobDeferredError } from "~/server/generic/jobs/errors";
 import type { PageWork } from "~/server/generic/jobs/page-work";
 import { applyAutomaticRulesForCharge } from "~/server/generic/suggestions/repo/automatic-application";
 import {
@@ -849,7 +850,7 @@ async function runStatementLabelBatch(
   const labelled = new Set<string>();
   const completed = new Set<string>();
   const labels = { reused: 0, generated: 0 };
-  const pauses: AiBudgetExhaustedError[] = [];
+  const pauses: JobDeferredError[] = [];
   const admitTargets = async () => {
     const scope = input.scope;
     if (!scope || !(scope.importId || scope.since || scope.accountIds?.length))
@@ -1128,10 +1129,10 @@ async function runStatementLabelBatch(
           }
           if (!result.complete || result.errors.length) {
             if (result.errors.length) {
-              const pause = result.errors.find(
-                (error) => error instanceof AiBudgetExhaustedError,
-              );
-              if (pause instanceof AiBudgetExhaustedError) {
+              const pause = result.errors
+                .map(findFundingWait)
+                .find((wait) => wait !== undefined);
+              if (pause) {
                 pauses.push(pause);
                 retainUnfinished(target.row);
               } else
@@ -1177,8 +1178,9 @@ async function runStatementLabelBatch(
         } catch (error) {
           if (isWorkflowInterrupted(error)) throw error;
           // The budget pauses the whole pass; any other failure is this charge's.
-          if (error instanceof AiBudgetExhaustedError) {
-            pauses.push(error);
+          const pause = findFundingWait(error);
+          if (pause) {
+            pauses.push(pause);
             retainUnfinished(target.row);
           } else fail(current.charge, error);
         }
@@ -1299,7 +1301,7 @@ async function runStatementLabelBatch(
     active: true,
     waitingUntil,
     paused: pauses[0]
-      ? { reason: pauses[0].message, until: pauses[0].resumeAt }
+      ? { reason: pauses[0].message, until: pauses[0].until.toISOString() }
       : null,
   };
 }

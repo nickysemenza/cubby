@@ -11,7 +11,11 @@ import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-u
 
 import { readAiBudget, setAiBudget } from "./budget";
 import { wakeFundingWaitingEvaluations } from "./evaluation/repo/ai-evaluation-work";
-import { isBackgroundRun, readChatGptPlanAvailability } from "./funding";
+import {
+  isBackgroundRun,
+  readAiFundingStatus,
+  readChatGptPlanAvailability,
+} from "./funding";
 
 describe("AI budget admission", () => {
   const ctx = withTestDb();
@@ -212,6 +216,12 @@ describe("AI funding availability", () => {
       .insert(aiEvaluation)
       .values([row("ai_funding_window"), row("provider_capacity")])
       .returning({ id: aiEvaluation.id });
+    // The funding page names what the wake brings back and when it retries.
+    expect((await readAiFundingStatus(ctx.db)).waiting).toEqual({
+      resumeAt: expect.any(String),
+      runs: 0,
+      work: 1,
+    });
     expect(await wakeFundingWaitingEvaluations(ctx.db)).toBe(1);
     const read = async (id: string) =>
       (

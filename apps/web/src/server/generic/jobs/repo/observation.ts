@@ -967,8 +967,7 @@ function drainUnitItems({
     });
   }
   // A drain whose `due` rows report work that has waited out the stuck window
-  // with no successful page in it. Units with a stream are judged there, and
-  // a unit whose `since` is the read time cannot show how long it has waited.
+  // with no successful page in it. Units with a stream are judged there.
   const recordOf = new Map(drains.map((record) => [record.unit, record]));
   for (const [unit, since] of owed) {
     const page = recordOf.get(unit)?.lastExecution;

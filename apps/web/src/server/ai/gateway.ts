@@ -5,33 +5,22 @@ import {
   type AiGatewayMetadata,
   aiGatewayEnvironment,
   aiGatewayMetadataSchema,
-  CF_ACCOUNT_ID,
   aiGatewayId,
+  CUBBY_AI_GATEWAY_ID,
 } from "@cubby/shared/ai/gateway-metadata";
 import {
   type GatewayControls,
-  type GatewayFetchRequest,
   type GatewayFetchRoutes,
   gatewayFetchThrough,
   type GatewayResponseObservers,
-  runProviderGateway,
-  type WorkersAiRunGateway,
-  workersAiModel,
-  workersAiRunRequest,
 } from "@cubby/shared/ai/gateway-request";
 import type { GatewayProvider } from "@cubby/shared/ai/models";
 
 import { env } from "~/env";
 import { chatGptInference } from "~/server/ai/chatgpt/client";
-import {
-  getAi,
-  getAiGateway,
-  getTestAiGateway,
-  getAiGatewayEgress,
-} from "~/server/cf-env";
+import { getTestAiGateway, getAiGatewayEgress } from "~/server/cf-env";
 
 import { coordinatedGatewayRequest } from "./gateway-egress-client";
-import { isByokJevEndpoint } from "./gateway-egress-contract";
 
 /**
  * A call's gateway labels (`feature`, `operation`, optional `entityKind`);
@@ -123,62 +112,15 @@ export function gatewayEnvironment(): AiGatewayEnvironment {
   });
 }
 
-function requiredApiKey(): string {
-  if (!env.AI_GATEWAY_API_KEY) {
-    throw new Error(
-      "AI_GATEWAY_API_KEY is not configured. Add it to your .env file.",
-    );
-  }
-  return env.AI_GATEWAY_API_KEY;
-}
-
-/**
- * A Workers AI model call, scoped to the gateway: `AI.run` with `gateway.id`
- * on the binding (it posts to the binding's gateway-scoped run endpoint,
- * workerd `ai-api.ts`), else the REST twin. Never Universal `gateway.run` or
- * the gateway's provider route, which the account's `default` gateway logs a
- * second time (see `workersAiRunRequest`).
- */
-async function workersAiFetch(
-  request: GatewayFetchRequest,
-  gateway: WorkersAiRunGateway,
-): Promise<Response> {
-  const { signal } = request;
-  const model = workersAiModel(request.endpoint);
-  const input = await request.query();
-  const ai = getAi();
-  if (!ai) {
-    const run = workersAiRunRequest({
-      accountId: CF_ACCOUNT_ID,
-      token: requiredApiKey(),
-      model,
-      input,
-      gateway,
-      signal,
-    });
-    return fetch(run.url, run.init);
-  }
-  const response = await ai.run(model, input, {
-    gateway,
-    returnRawResponse: true,
-    signal,
-  });
-  // `returnRawResponse` resolves to the HTTP Response; the unknown-model
-  // overload's declared return type does not model that option.
-  if (response instanceof Response) return response;
-  throw new Error(`Workers AI binding returned no raw Response for ${model}`);
-}
-
 /**
  * The one AI Gateway transport: a `fetch` any provider SDK can be handed.
  *
- * Workers AI models use `AI.run` scoped to the `cubby` gateway. Third-party
- * chat models use the same transport owner inside coordinated Worker egress
- * and the Node fallback. Credit uses native passthrough with its named alias
- * and no-wholesale control. Paid OpenAI/Anthropic chat uses dedicated /ai/v1
- * REST with explicit Cloudflare catalog ids, authenticated by the existing
- * AI_GATEWAY_API_KEY (Workers AI Read). Native paid fallback still hit BYOK
- * alias resolution errors. Other provider protocols retain native routing.
+ * Every request goes through the coordinated egress Durable Object, which
+ * runs Workers AI models with `AI.run` scoped to the `cubby` gateway. Credit
+ * uses native passthrough with its named alias and no-wholesale control.
+ * Paid OpenAI/Anthropic chat uses Unified Billing `/ai/v1` and paid OpenAI
+ * embeddings `/ai/run`, both with explicit Cloudflare catalog ids. Other
+ * provider protocols retain native routing.
  *
  * Every branch returns the gateway's `Response` untouched, so streaming bodies
  * pass straight through to the SDK.
@@ -245,45 +187,27 @@ export function gatewayFetch(
         );
       };
     },
+    // Every runtime binds the egress object; it owns admission and holds.
     gateway: async (request) => {
       const egress = getAiGatewayEgress(
         aiGatewayId(controls.metadata.environment),
       );
-      if (egress) {
-        return coordinatedGatewayRequest(egress, provider, request, controls);
-      }
-      if (isByokJevEndpoint(provider, request.endpoint))
-        throw new Error("Jev BYOK requires the shared egress binding");
-      if (provider === "workers-ai")
-        return workersAiFetch(request, {
-          id: aiGatewayId(controls.metadata.environment),
-          ...controls,
-        });
-      return runProviderGateway({
-        accountId: CF_ACCOUNT_ID,
-        gatewayId: aiGatewayId(controls.metadata.environment),
-        token: requiredApiKey(),
-        provider,
-        request,
-        controls,
-      });
+      if (!egress)
+        throw new Error("AI Gateway requires the AI_GATEWAY_EGRESS binding");
+      return coordinatedGatewayRequest(egress, provider, request, controls);
     },
   });
 }
 
 /**
- * Whether {@link gatewayFetch} can reach the gateway at all.
- *
- * A test peer, Workers AI binding or REST token supplies a reachable transport.
- * Third-party sends still require `AI_GATEWAY_API_KEY`. Callers that
- * degrade instead of failing (semantic search hides itself when embeddings are
- * unavailable) ask here rather than re-deriving the rule, which is how the old
- * embeddings client came to treat a bindingless prod Worker as unconfigured.
+ * Whether {@link gatewayFetch} can reach the gateway at all: a test peer or
+ * the egress binding every Worker runtime has. Callers that degrade instead
+ * of failing (semantic search hides itself when embeddings are unavailable)
+ * ask here rather than re-deriving the rule.
  */
 export function gatewayConfigured(): boolean {
   return (
     getTestAiGateway() !== undefined ||
-    getAiGateway() !== undefined ||
-    !!env.AI_GATEWAY_API_KEY
+    getAiGatewayEgress(CUBBY_AI_GATEWAY_ID) !== undefined
   );
 }

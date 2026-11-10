@@ -30,6 +30,7 @@
     "./background-queue": "./src/background-queue.ts",
     "./ai/models": "./src/ai/models.ts",
     "./ai/pricing": "./src/ai/pricing.ts",
+    "./ai/funding-refusal": "./src/ai/funding-refusal.ts",
     "./ai/gateway-request": "./src/ai/gateway-request.ts",
     "./ai/gateway-metadata": "./src/ai/gateway-metadata.ts",
     "./ai/pi-providers": "./src/ai/pi-providers.ts",

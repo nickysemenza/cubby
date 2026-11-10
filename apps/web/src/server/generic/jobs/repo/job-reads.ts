@@ -176,9 +176,9 @@ export const stoppedRunExecutions = (
     .orderBy(asc(job.id))
     .limit(limit);
 
-/** Permit selection: whether any stopped `run.execute` Job's Run matches `runWhere`. */
-export const stoppedRunExecutionsExist = (runWhere: SQL) =>
-  sql`EXISTS (SELECT 1 FROM ${job} JOIN ${run} ON ${run.id} = ${job.runId}
+/** Permit selection: when the earliest stopped `run.execute` Job whose Run matches `runWhere` stopped; null when none has. */
+export const stoppedRunExecutionsSince = (runWhere: SQL) =>
+  sql`(SELECT min(${job.updatedAt}) FROM ${job} JOIN ${run} ON ${run.id} = ${job.runId}
     WHERE ${job.kind} = 'run.execute' AND ${inArray(job.state, STOPPED)} AND ${runWhere})`;
 
 /**

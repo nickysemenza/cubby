@@ -2,8 +2,8 @@ import type { RunId } from "@cubby/schemas/identifiers";
 import type { AiUsageTransport } from "@cubby/schemas/telemetry";
 import { getErrorMessage } from "@cubby/shared";
 import { prepareEmbeddingText } from "@cubby/shared/ai/embedding-input";
+import { paidFundingRefusal } from "@cubby/shared/ai/funding-refusal";
 import {
-  isPaidFundingUnavailable,
   type GatewayResponseFailure,
   type GatewayResponseInfo,
   type GatewayResponseWire,
@@ -1030,7 +1030,7 @@ export async function runStructuredFeature<T>(
       );
       // ADR 0027: a paid rung with no balance or no key waits for the next
       // window. Failing would release the Run's Emails to a pass that fails too.
-      if (ctx.db && isPaidFundingUnavailable(failure.message))
+      if (ctx.db && paidFundingRefusal(failure.message))
         throw await paidFundingStop(ctx.db, ctx.runId, failure.message);
       throw failure;
     }

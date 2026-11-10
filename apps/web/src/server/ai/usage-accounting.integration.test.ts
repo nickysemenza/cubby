@@ -38,6 +38,7 @@ import { getDb } from "~/server/db/helpers";
 import { aiUsage, run } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { gatewayEgressEnv } from "~/server/testing/ai-gateway-egress";
 import {
   createLocationFixture,
   makeLocationInput,
@@ -222,8 +223,10 @@ describe("AiUsage accounting", () => {
   });
 
   it("records one row for one embeddings call", async () => {
-    vi.stubEnv("AI_GATEWAY_API_KEY", "test-gateway-key");
     vi.resetModules();
+    (await import("~/server/cf-env")).setCfEnv(
+      fromPartial<Env>(gatewayEgressEnv()),
+    );
     stubInferenceFetch(() =>
       Promise.resolve(
         new Response(

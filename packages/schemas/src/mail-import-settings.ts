@@ -115,6 +115,16 @@ const withAvailability = { availability: fundingAvailability };
  * when background work waits.
  */
 export const aiFundingStatus = aiBudgetStatus.extend({
+  /**
+   * Background work waiting for funding: funding-paused Runs and the
+   * evaluations, embeddings and image jobs the funding wake brings back.
+   * `resumeAt` is when they retry on their own, null when nothing waits.
+   */
+  waiting: z.strictObject({
+    resumeAt: z.iso.datetime().nullable(),
+    runs: z.number().int().nonnegative(),
+    work: z.number().int().nonnegative(),
+  }),
   credit: creditUse.extend(fundingRefusalState.shape).extend(withAvailability),
   openaiCredit: creditUse
     .extend(fundingRefusalState.shape)

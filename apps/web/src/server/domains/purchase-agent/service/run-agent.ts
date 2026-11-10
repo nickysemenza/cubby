@@ -21,11 +21,11 @@ import {
   type RunProgressStamp,
 } from "@cubby/schemas/run-fields";
 import type { AiUsageTransport } from "@cubby/schemas/telemetry";
-import type { GatewayResponseInfo } from "@cubby/shared/ai/gateway-request";
 import {
-  isOpenAiCreditRefusal,
-  isPaidFundingUnavailable,
-} from "@cubby/shared/ai/gateway-request";
+  classifyFundingRefusal,
+  paidFundingRefusal,
+} from "@cubby/shared/ai/funding-refusal";
+import type { GatewayResponseInfo } from "@cubby/shared/ai/gateway-request";
 import {
   storedChatModelSchema,
   type SupportedChatModel,
@@ -766,9 +766,12 @@ export class PurchaseImportRunAgent
     this.writeState(
       STATE_KEYS.fundingUnavailable,
       message.stopReason === "error" &&
-        (isPaidFundingUnavailable(errorText) ||
+        (paidFundingRefusal(errorText) !== null ||
           (message.provider !== "anthropic" &&
-            isOpenAiCreditRefusal(errorText)))
+            classifyFundingRefusal({
+              text: errorText,
+              funding: "openai_credit",
+            }) !== null))
         ? (this.readState(STATE_KEYS.latestSubmission) ?? "")
         : "",
     );

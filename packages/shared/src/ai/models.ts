@@ -59,6 +59,8 @@ interface EmbeddingModelDeclaration extends ModelDeclaration {
   provider: "openai";
   dimensions: number;
   maxInputTokens: number;
+  /** Cloudflare catalog id for the paid `/ai/run` Unified Billing route. */
+  unifiedModelId: string;
 }
 
 /**
@@ -131,6 +133,7 @@ export const AI_MODELS = {
     role: "embedding",
     provider: "openai",
     catalogProvider: "openai",
+    unifiedModelId: "openai/text-embedding-3-small",
     dimensions: 1536,
     maxInputTokens: 8191,
   },
@@ -197,7 +200,9 @@ export const storedChatModelSchema = z
   .string()
   .transform((id) => supportedChatModelSchema.safeParse(id).data);
 
-const supportedEmbeddingModelSchema = z.enum(idsWhere({ role: "embedding" }));
+export const supportedEmbeddingModelSchema = z.enum(
+  idsWhere({ role: "embedding" }),
+);
 export type SupportedEmbeddingModel = z.infer<
   typeof supportedEmbeddingModelSchema
 >;

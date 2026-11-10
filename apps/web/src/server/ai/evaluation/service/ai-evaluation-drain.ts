@@ -11,7 +11,6 @@ import { findErrorCause, scrubErrorMessage } from "~/lib/error-diagnostics";
  * execution arrive through `AiEvaluationExecution`; `rowDrain` owns publication,
  * attempts and backoff.
  */
-import { AiBudgetExhaustedError } from "~/server/ai/budget";
 import { aiWorkDeferral } from "~/server/ai/cooperative-work";
 import {
   AiEvaluationAttemptObsoleteError,
@@ -40,10 +39,7 @@ import type {
   EvaluationPagePublication,
   EvaluationPageTarget,
 } from "~/server/ai/evaluation/repo/evaluation-page";
-import {
-  gatewayAdmissionWait,
-  GatewayProviderStopError,
-} from "~/server/ai/gateway-egress-client";
+import { gatewayAdmissionWait } from "~/server/ai/gateway-egress-client";
 import {
   compiledRefreshManifest,
   dependenciesCurrent,
@@ -125,13 +121,9 @@ function evaluationDeferral(error: unknown) {
   const is = <E extends Error>(type: abstract new (...args: never[]) => E) =>
     findErrorCause(error, (cause): cause is E => cause instanceof type);
   const message = errorMessage(error);
-  const budget = is(AiBudgetExhaustedError);
-  if (budget)
-    return new JobDeferredError(
-      message,
-      new Date(budget.resumeAt),
-      "ai_funding_window",
-    );
+  // Funding and provider stops are typed waits; each keeps its own reason.
+  const wait = is(JobDeferredError);
+  if (wait) return new JobDeferredError(message, wait.until, wait.reason);
   const capacity = aiWorkDeferral(error);
   if (capacity)
     return new JobDeferredError(
@@ -145,13 +137,6 @@ function evaluationDeferral(error: unknown) {
       message,
       new Date(admission.retryAt),
       "rate_limit",
-    );
-  const provider = is(GatewayProviderStopError);
-  if (provider)
-    return new JobDeferredError(
-      message,
-      new Date(provider.retryAt),
-      "provider_capacity",
     );
   return undefined;
 }

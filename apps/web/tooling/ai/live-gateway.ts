@@ -3,9 +3,9 @@ import {
   CUBBY_AI_GATEWAY_ID,
   proxiedAiGatewayMetadata,
 } from "@cubby/shared/ai/gateway-metadata";
+import { classifyFundingRefusal } from "@cubby/shared/ai/funding-refusal";
 import {
   gatewayProviderUrl,
-  isInferenceFundingRefusal,
   strippedHeaders,
   workersAiModel,
   workersAiRunRequest,
@@ -126,11 +126,12 @@ async function reportEvaluationFailure(
   let refused = false;
   try {
     if (upstream && (route === "openai" || route === "anthropic"))
-      refused = isInferenceFundingRefusal(
-        upstream.status,
-        await upstream.clone().text(),
-        route === "openai" ? "openai_credit" : "subscriber_credit",
-      );
+      refused =
+        classifyFundingRefusal({
+          status: upstream.status,
+          text: await upstream.clone().text(),
+          funding: route === "openai" ? "openai_credit" : "subscriber_credit",
+        }) !== null;
   } finally {
     await fetch(env.EVAL_BUDGET_URL, {
       method: "POST",

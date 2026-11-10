@@ -65,10 +65,23 @@ recovery: a failed audit surfaces instead of buying a paid Opus retry.
   and cookbook frontier models.
 - **Refusal holds.** The `AI_GATEWAY_EGRESS` Durable Object records a provider
   credit refusal until the date the provider names or the window end, answers
-  credit admission locally while it holds, and probes once per window. A
-  refusal Cubby answers itself (`cubby_credit_refused`,
-  `cubby_plan_budget_reached`) made no provider call and is not recorded as a
-  usage row.
+  credit admission locally while it holds, and probes once per window. It is
+  the only owner of holds, and a streamed response settles its hold when the
+  stream ends: a terminal funding refusal records it, a clean end clears it.
+  One shared classifier (`classifyFundingRefusal`) names every funding
+  refusal, HTTP or terminal, by source and kind. A refusal Cubby answers
+  itself (`cubby_credit_refused`, `cubby_plan_budget_reached`) made no
+  provider call and is not recorded as a usage row.
+- **Two waits.** When no source can fund background work it waits for funding
+  (`ai_funding_window`) until the window end plus 60 seconds, including a
+  missing paid BYOK credential; a provider configuration stop waits 15 minutes
+  as `provider_capacity`. One funding wake brings every funding wait forward
+  at a window boundary, a member reset, or a raised budget.
+- **Embeddings.** Embeddings use OpenAI credit first, then paid Unified Billing
+  (`/ai/run` with the model's catalog id) with no window budget: they are
+  cheap, and semantic work never waits while paid can answer. A member's
+  search fails with a readable error when both refuse; background embeddings
+  wait for funding.
 
 ## Credits have no window budget
 
