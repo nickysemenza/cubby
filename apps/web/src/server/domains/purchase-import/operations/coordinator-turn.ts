@@ -2,7 +2,8 @@
  * A coordinator's side of the household turn cap (`./coordinator-gate.ts`).
  * Every entry point that loads the agent (alarm, dispatch, a member prompt)
  * runs inside `turn`: it takes or renews the Run's turn first and, when none
- * is free, runs nothing and reports how long to wait. pi keeps working in
+ * is free, or the gate cannot be reached, runs nothing and reports how long
+ * to wait. pi keeps working in
  * memory after an entry returns, so the turn is kept until pi is confirmed
  * idle; an idle check that fails keeps it too, until the lease lapses.
  *
@@ -23,11 +24,20 @@ export type CoordinatorTurnPorts = {
   /** Whether pi has no work running; throws when that cannot be decided. */
   idle(): Promise<boolean>;
   reportIdleError(error: UnparsedError): void;
+  /** The gate did not answer; the entry waits as if refused. */
+  reportGateError(error: UnparsedError): void;
 };
 
 export type CoordinatorTurnResult<T> =
   | { ran: true; value: T }
-  | { ran: false; position: number; holders: number; retryAfterMs: number };
+  | {
+      ran: false;
+      position: number;
+      holders: number;
+      retryAfterMs: number;
+      /** The gate could not be asked. */
+      unavailable?: true;
+    };
 
 /** Raised by `fence`; the message reads as transient to settlement. */
 export class CoordinatorLeaseLostError extends Error {
@@ -66,7 +76,21 @@ export class CoordinatorTurn {
 
   async turn<T>(work: () => Promise<T>): Promise<CoordinatorTurnResult<T>> {
     const refused = await this.step(async () => {
-      const grant = await this.renew();
+      let grant: CoordinatorTurnGrant;
+      try {
+        grant = await this.renew();
+      } catch (error) {
+        // An unreachable gate is a wait like a full one, never a failure.
+        this.ports.reportGateError(error);
+        this.waits++;
+        return {
+          ran: false as const,
+          position: 0,
+          holders: 0,
+          retryAfterMs: coordinatorTurnBackoffMs(this.waits),
+          unavailable: true as const,
+        };
+      }
       if (!grant.held) {
         this.waits++;
         return {

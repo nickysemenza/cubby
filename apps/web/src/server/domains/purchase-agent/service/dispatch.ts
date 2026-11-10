@@ -11,7 +11,7 @@ export async function deliverPurchaseDispatch(
   | "dispatched"
   | "fenced"
   | "acknowledged_by_peer"
-  | { waiting: { holders: number } }
+  | { waiting: { holders: number; unavailable?: true } }
 > {
   const services = env.run(event.runId);
   if (await services.coordinatorRetired()) return "fenced";

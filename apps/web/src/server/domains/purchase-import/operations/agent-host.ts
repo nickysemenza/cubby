@@ -247,6 +247,13 @@ class PurchaseImportRunAgentHost
         });
         Sentry.captureException(error);
       },
+      reportGateError: (error) => {
+        turnLog.error("coordinator gate unavailable; waiting", {
+          runId,
+          error,
+        });
+        Sentry.captureException(error);
+      },
     });
     return this.turn;
   }
@@ -257,18 +264,22 @@ class PurchaseImportRunAgentHost
     entry: "alarm" | "dispatch" | "fetch",
   ) {
     annotateActiveSpan({
-      "cubby.coordinator.turn": "waiting",
+      "cubby.coordinator.turn": refused.unavailable ? "unavailable" : "waiting",
       "cubby.coordinator.turn.holders": refused.holders,
       "cubby.coordinator.turn.position": refused.position,
       "cubby.coordinator.turn.retry_ms": refused.retryAfterMs,
     });
-    Sentry.getCurrentScope().setTag("cubby.coordinator.turn", "waiting");
+    Sentry.getCurrentScope().setTag(
+      "cubby.coordinator.turn",
+      refused.unavailable ? "unavailable" : "waiting",
+    );
     turnLog.info("coordinator turn wait", {
       runId: this.runId(),
       entry,
       holders: refused.holders,
       position: refused.position,
       retryAfterMs: refused.retryAfterMs,
+      unavailable: refused.unavailable ?? false,
     });
   }
 
@@ -495,7 +506,13 @@ class PurchaseImportRunAgentHost
           if (turn.ran) return turn.value;
           this.turnWaited(turn, "dispatch");
           await this.ctx.storage.put(PENDING_DISPATCH, true);
-          return { accepted: false, waiting: { holders: turn.holders } };
+          return {
+            accepted: false,
+            waiting: {
+              holders: turn.holders,
+              ...(turn.unavailable && { unavailable: true }),
+            },
+          };
         }, refused),
       {
         "cubby.workload": "rpc",

@@ -18,6 +18,7 @@ const ports = (overrides: Partial<CoordinatorTurnPorts> = {}) => ({
   release: vi.fn<CoordinatorTurnPorts["release"]>(async () => undefined),
   idle: vi.fn<CoordinatorTurnPorts["idle"]>(async () => true),
   reportIdleError: vi.fn<CoordinatorTurnPorts["reportIdleError"]>(),
+  reportGateError: vi.fn<CoordinatorTurnPorts["reportGateError"]>(),
   ...overrides,
 });
 
@@ -145,5 +146,17 @@ describe("coordinator turn", () => {
     await expect(turns.fence()).rejects.toBeInstanceOf(
       CoordinatorLeaseLostError,
     );
+  });
+
+  it("waits, without failing the entry, when the gate cannot be asked", async () => {
+    const failure = new Error("Synthetic gate outage");
+    const down = ports({ acquire: vi.fn(() => Promise.reject(failure)) });
+    const work = vi.fn(async () => "ran");
+    expect(await new CoordinatorTurn(down).turn(work)).toMatchObject({
+      ran: false,
+      unavailable: true,
+    });
+    expect(work).not.toHaveBeenCalled();
+    expect(down.reportGateError).toHaveBeenCalledWith(failure);
   });
 });

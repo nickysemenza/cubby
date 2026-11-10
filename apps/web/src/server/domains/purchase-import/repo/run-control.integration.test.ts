@@ -201,6 +201,23 @@ describe("purchase import run admission", () => {
         coordinator: () => fromPartial<PurchaseImportRunAgentRpc>({ dispatch }),
       })),
     };
+    // A gate that cannot answer is the same wait: no attempt is spent.
+    dispatch.mockResolvedValueOnce({
+      accepted: false,
+      waiting: { holders: 0, unavailable: true },
+    });
+    expect(await advanceJob(ctx.db, intent.id, handlers)).toBe("deferred");
+    const [unanswered] = await readJobs(ctx.db, { runId: subject.id });
+    expect(unanswered).toMatchObject({
+      state: "queued",
+      attempts: 0,
+      waitReason: "provider_capacity",
+    });
+    await bringRunWaitingJobForward(ctx.db, {
+      runId: subject.id,
+      kind: "purchase.dispatch",
+      waitReason: "provider_capacity",
+    });
     expect(await advanceJob(ctx.db, intent.id, handlers)).toBe("deferred");
     const [deferred] = await readJobs(ctx.db, { runId: subject.id });
     expect(deferred).toMatchObject({
@@ -229,7 +246,7 @@ describe("purchase import run admission", () => {
     expect(woken).toMatchObject({ state: "queued", waitReason: null });
     expect(woken!.availableAt.getTime()).toBeLessThanOrEqual(Date.now());
     expect(await advanceJob(ctx.db, intent.id, handlers)).toBe("succeeded");
-    expect(dispatch).toHaveBeenCalledTimes(2);
+    expect(dispatch).toHaveBeenCalledTimes(3);
   });
 
   it("retains queued automatic imports while a controlled Vendor waits for active work, until manual resume", async () => {
