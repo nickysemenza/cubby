@@ -39,7 +39,11 @@ import { repositoryQueries as getDb } from "~/server/db/repository-access.bounda
 import { job, run } from "~/server/db/retained-tables";
 import { appleFailureCoveredByCloudDescriptionSql } from "~/server/domains/image-processing/repo/processor-policy";
 import { INTERNAL_JOB_KINDS } from "~/server/generic/jobs/kind-policy";
-import { DRAIN_RECORD_KIND, jobDue } from "~/server/generic/jobs/repo/queue";
+import {
+  DRAIN_RECORD_KIND,
+  jobDue,
+  type DrainDue,
+} from "~/server/generic/jobs/repo/queue";
 
 /** Completions and failures are counted over these recent windows. */
 const RECENT_MINUTES = {
@@ -69,6 +73,8 @@ type StreamRow = {
   lastFailedAt?: string | null;
   diagnostic?: string | null;
   oldestDueAt: string | null;
+  /** Job kinds only: the start of the oldest run of deferrals still re-polling. */
+  deferringSince?: string | null;
   runs: string[] | null;
 };
 
@@ -275,9 +281,10 @@ type QueueJobRow = Pick<
  * What the queue did per Job kind and drain unit. `Job.lastExecution` keeps
  * only each row's latest execution, so outcomes count rows, never executions.
  * It reads live Jobs, Jobs updated within the window and the drain record
- * rows, so its cost follows current work.
+ * rows, so its cost follows current work. `drains` are the registered drains'
+ * `due` rows: a unit one reports is owed now, whatever its record row says.
  */
-async function readQueue(db: Database, now: Date) {
+async function readQueue(db: Database, now: Date, drains: readonly DrainDue[]) {
   const at = sql`${now.toISOString()}::timestamp`;
   const since = sql`${at} - ${RECENT_MINUTES.outcome} * interval '1 minute'`;
   const live = sql`"Job".state IN (${jobState.enum.queued}, ${jobState.enum.retry_wait}, ${jobState.enum.running}, ${jobState.enum.paused})`;
@@ -335,9 +342,19 @@ async function readQueue(db: Database, now: Date) {
     })
     .from(job)
     .where(eq(job.kind, DRAIN_RECORD_KIND));
+  const owed = drains.length
+    ? await getDb(db).execute<{ unit: string; since: string }>(sql`
+        SELECT reported.unit, min(reported.since) AS since FROM (${sql.join(
+          drains.map(({ due }) => sql`(SELECT unit, since FROM (${due}) due)`),
+          sql` UNION ALL `,
+        )}) reported GROUP BY reported.unit`)
+    : { rows: [] };
   return {
     kinds: kinds.rows,
     waits: waits.rows,
+    owed: new Map(
+      owed.rows.map((row) => [row.unit, new Date(`${row.since}Z`)]),
+    ),
     drains: records.map(({ key, ...record }): DrainRecord => ({
       ...record,
       unit: key.slice("drain:".length),
@@ -347,12 +364,19 @@ async function readQueue(db: Database, now: Date) {
 
 /**
  * Owed and recently blocked AI evaluations by feature and state. It also
- * reports, per feature, answers that are paid for but not published: a
- * `result_ready` row no page holds, since its failing streak began.
+ * reports, per feature, answers that are paid for, owed and not published: a
+ * `result_ready` row no page holds that is due, or that waits out a failed
+ * publication's backoff. A row parked (`runAt` null), postponed, or held by a
+ * funding or provider wait (`waitCause`) until a later `runAt` is waiting on
+ * purpose and is not counted. A row counts from its failing streak's start,
+ * else from when it fell due.
  */
 async function readAiEvaluationBacklog(db: Database, now: Date) {
   const at = sql`${now.toISOString()}::timestamp`;
   const { queued, result_ready, blocked } = aiEvaluationState.enum;
+  const unpublished = sql`e.state = ${result_ready} AND e."runAt" IS NOT NULL
+    AND NOT coalesce(e."leaseUntil" > ${at}, false)
+    AND (e."runAt" <= ${at} OR (e."failingSince" IS NOT NULL AND e."waitCause" IS NULL))`;
   const rows = await getDb(db).execute<{
     feature: string;
     state: AiEvaluationBacklog["state"];
@@ -366,9 +390,9 @@ async function readAiEvaluationBacklog(db: Database, now: Date) {
       -- Stored errors are cause chains; the first cause's name is the class.
       mode() WITHIN GROUP (ORDER BY coalesce(substring(e.error from '"name":"([^"]+)"'), left(e.error, 80)))
         FILTER (WHERE e.error IS NOT NULL) AS "errorClass",
-      count(*) FILTER (WHERE e.state = ${result_ready} AND NOT coalesce(e."leaseUntil" > ${at}, false))::int AS unpublished,
-      min(coalesce(e."failingSince", e."updatedAt"))
-        FILTER (WHERE e.state = ${result_ready} AND NOT coalesce(e."leaseUntil" > ${at}, false)) AS "unpublishedSince"
+      count(*) FILTER (WHERE ${unpublished})::int AS unpublished,
+      min(CASE WHEN e."waitCause" IS NULL THEN coalesce(e."failingSince", e."runAt") ELSE e."runAt" END)
+        FILTER (WHERE ${unpublished}) AS "unpublishedSince"
     FROM "AiEvaluation" e
     -- Every execution kind, spelled out so the (executionKind, state) index serves the read.
     WHERE e."executionKind" IN (${sql.join(
@@ -467,12 +491,17 @@ function describeQueue(activity: WorkActivity): string {
 export async function readWorkActivity(
   db: Database,
   now = new Date(),
+  drains: readonly DrainDue[] = [],
 ): Promise<WorkActivity> {
-  return (await observeWork(db, now)).activity;
+  return (await observeWork(db, now, drains)).activity;
 }
 
 /** The activity read plus the drain and publication facts only the status verdict uses. */
-async function observeWork(db: Database, now: Date) {
+async function observeWork(
+  db: Database,
+  now: Date,
+  drains: readonly DrainDue[],
+) {
   const at = sql`${now.toISOString()}::timestamp`;
   const since = (minutes: number) =>
     sql`${at} - ${minutes} * interval '1 minute'`;
@@ -508,6 +537,11 @@ async function observeWork(db: Database, now: Date) {
       max("Job"."updatedAt") FILTER (WHERE "Job".state = ${jobState.enum.completed}) AS "lastCompletedAt",
       min(CASE WHEN "Job".state = ${jobState.enum.running} THEN "Job"."leaseExpiresAt" ELSE "Job"."availableAt" END)
         FILTER (WHERE ${waiting}) AS "oldestDueAt",
+      -- A Job parked past the stuck window is a timer, not a poll.
+      min(("Job"."lastExecution"->>'deferringSince')::timestamptz AT TIME ZONE 'UTC')
+        FILTER (WHERE "Job".state = ${jobState.enum.queued}
+          AND "Job"."lastExecution"->>'outcome' = ${jobExecution.shape.outcome.enum.deferred}
+          AND "Job"."availableAt" <= ${at} + ${STUCK_WINDOW_MINUTES} * interval '1 minute') AS "deferringSince",
       ARRAY(
         SELECT r.shortcode FROM activity_jobs stream
         JOIN "Run" r ON r.id = stream."runId"
@@ -524,7 +558,14 @@ async function observeWork(db: Database, now: Date) {
   `);
   const iso = (value: string | null) =>
     value === null ? null : new Date(`${value}Z`).toISOString();
-  const queue = await readQueue(db, now);
+  const queue = await readQueue(db, now, drains);
+  const deferring = new Map(
+    rows.rows.flatMap((row) =>
+      row.deferringSince
+        ? [[row.kind, new Date(`${row.deferringSince}Z`)] as const]
+        : [],
+    ),
+  );
   const evaluations = await readAiEvaluationBacklog(db, now);
   const streams = [
     ...rows.rows,
@@ -561,9 +602,11 @@ async function observeWork(db: Database, now: Date) {
   const windowStart = minutesAgo(now, RECENT_MINUTES.outcome);
   const streamOf = new Map(streams.map((stream) => [stream.kind, stream]));
   const recordOf = new Map(queue.drains.map((record) => [record.unit, record]));
-  // A drain unit that never ran has no record row; its stream still names it.
+  // A drain unit that never ran has no record row; its stream or its drain's
+  // `due` rows still name it.
   const drainUnits = new Set([
     ...recordOf.keys(),
+    ...queue.owed.keys(),
     ...streams.flatMap((stream) => streamDrainUnit(stream.kind) ?? []),
   ]);
   const activity: WorkActivity = {
@@ -604,7 +647,8 @@ async function observeWork(db: Database, now: Date) {
         const claimed = Boolean(
           record?.lastClaimedAt && record.lastClaimedAt > windowStart,
         );
-        if (!claimed && !stream) return [];
+        const owedSince = queue.owed.get(unit);
+        if (!claimed && !stream && !owedSince) return [];
         const finished = (outcome: JobExecution["outcome"]) =>
           page?.outcome === outcome && new Date(page.finishedAt) > windowStart
             ? 1
@@ -619,7 +663,8 @@ async function observeWork(db: Database, now: Date) {
             deferred: finished("deferred"),
             failed: finished("failed"),
             lastClaimedAt: record?.lastClaimedAt?.toISOString() ?? null,
-            oldestDueAt: stream?.oldestDueAt ?? null,
+            oldestDueAt:
+              stream?.oldestDueAt ?? owedSince?.toISOString() ?? null,
             leased: stream?.running ?? 0,
             expiredLeases: 0,
             lastExecution: page,
@@ -641,6 +686,8 @@ async function observeWork(db: Database, now: Date) {
   return {
     activity,
     drains: queue.drains,
+    owed: queue.owed,
+    deferring,
     unpublished: evaluations.flatMap((row) =>
       row.unpublishedSince
         ? [
@@ -657,7 +704,9 @@ async function observeWork(db: Database, now: Date) {
 }
 
 /**
- * Due work with no completion for this long is stuck. A drain sleeps between
+ * Owed work with no completion for this long is stuck. Owed is due work, or
+ * work that keeps deferring: a Job that re-polls every few seconds is due only
+ * for an instant, so its age is its deferral run's (`deferringSince`). A drain sleeps between
  * bursts and its pages finish within minutes, so half an hour of silence is not
  * a pause; it is also half the one-hour lag members were promised, so the alarm
  * shows before that promise breaks.
@@ -672,6 +721,8 @@ const DRAIN_RETRY_MINUTES = 120;
 /** Due work this old that is still finishing reads as catching up, not stuck. */
 const BEHIND_MINUTES = 15;
 const MINUTE_MS = 60_000;
+
+export type { DrainDue };
 
 const minutesAgo = (now: Date, minutes: number) =>
   new Date(now.getTime() - minutes * MINUTE_MS);
@@ -840,11 +891,125 @@ async function readFailedWork(db: Database, now: Date) {
   }));
 }
 
-export async function readBackgroundWorkStatus(db: Database, now = new Date()) {
-  const [{ activity, drains, unpublished }, failures] = await Promise.all([
-    observeWork(db, now),
-    readFailedWork(db, now),
-  ]);
+/**
+ * Stuck rows for drain units, from their record rows and their drains' `due`
+ * rows. `stuck` holds the rows already raised, which these never repeat.
+ */
+function drainUnitItems({
+  now,
+  activity,
+  drains,
+  owed,
+  stuck,
+  queueDiagnostic,
+}: {
+  now: Date;
+  activity: WorkActivity;
+  drains: readonly DrainRecord[];
+  owed: ReadonlyMap<string, Date>;
+  stuck: readonly WorkStuckItem[];
+  queueDiagnostic: () => string;
+}): WorkStuckItem[] {
+  const items: WorkStuckItem[] = [];
+  const stuckWindow = minutesAgo(now, STUCK_WINDOW_MINUTES);
+  const unitOf = new Map(activity.queue.map((unit) => [unit.unit, unit]));
+  // A drain unit has no failed-work row of its own: without this, a unit whose
+  // every page throws or defers stops silently (its record row is the only
+  // evidence). One deferral is a wait; pages that deferred across the stuck
+  // window with none succeeding between are work that is not finishing.
+  const covered = (unit: string) =>
+    [...stuck, ...items].some(
+      (item) =>
+        item.key === drainStreamKind(unit) ||
+        item.key === `${drainStreamKind(unit)}:failing` ||
+        item.key.startsWith(`drain:${unit}:`) ||
+        (unit === "derived-rebuild" && item.key.startsWith("derived-rebuild")),
+    );
+  for (const record of drains) {
+    const page = record.lastExecution;
+    if (!page) continue;
+    const finished = new Date(page.finishedAt);
+    if (finished <= minutesAgo(now, DRAIN_RETRY_MINUTES)) continue;
+    const failingSince =
+      page.outcome === "failed" &&
+      record.failingSince &&
+      record.failingSince <= stuckWindow
+        ? record.failingSince
+        : null;
+    const deferringSince =
+      page.deferringSince &&
+      finished.getTime() - new Date(page.deferringSince).getTime() >=
+        STUCK_WINDOW_MINUTES * MINUTE_MS
+        ? new Date(page.deferringSince)
+        : null;
+    const since = failingSince ?? deferringSince;
+    // A failing unit is named beside its stream; the rebuild has its own row.
+    const rebuildShown =
+      record.unit === "derived-rebuild" &&
+      stuck.some((item) => item.key.startsWith("derived-rebuild"));
+    if (!since || rebuildShown || (!failingSince && covered(record.unit)))
+      continue;
+    const age = formatStuckAge(now.getTime() - since.getTime());
+    items.push({
+      key: `drain:${record.unit}:${failingSince ? "failing" : "deferring"}`,
+      title: `${drainUnitLabel(record.unit)} keeps ${failingSince ? "failing" : "waiting"}`,
+      body: failingSince
+        ? `Every pass has failed for ${age}, so this work isn't running.`
+        : `Every pass has deferred for ${age}, so this work isn't finishing.`,
+      since: since.toISOString(),
+      action: { type: "none" },
+      diagnostic: [
+        `${record.unit}: ${page.errorClass ?? page.outcome} at ${page.finishedAt}`,
+        failingSince ? record.error : queueDiagnostic(),
+      ]
+        .filter(Boolean)
+        .join("\n"),
+    });
+  }
+  // A drain whose `due` rows report work that has waited out the stuck window
+  // with no successful page in it. Units with a stream are judged there, and
+  // a unit whose `since` is the read time cannot show how long it has waited.
+  const recordOf = new Map(drains.map((record) => [record.unit, record]));
+  for (const [unit, since] of owed) {
+    const page = recordOf.get(unit)?.lastExecution;
+    if (
+      since > stuckWindow ||
+      activity.streams.some(
+        (stream) => stream.kind === drainStreamKind(unit),
+      ) ||
+      (page?.outcome === "succeeded" &&
+        new Date(page.finishedAt) > stuckWindow) ||
+      covered(unit)
+    )
+      continue;
+    const queued = unitOf.get(unit);
+    items.push({
+      key: `drain:${unit}`,
+      title: `${drainUnitLabel(unit)} stopped`,
+      body: [
+        queued ? stoppedCause(queued, now) : null,
+        `Its work has waited ${formatStuckAge(now.getTime() - since.getTime())}.`,
+      ]
+        .filter(Boolean)
+        .join(" "),
+      since: since.toISOString(),
+      action: { type: "none" },
+      diagnostic: queueDiagnostic(),
+    });
+  }
+  return items;
+}
+
+export async function readBackgroundWorkStatus(
+  db: Database,
+  now = new Date(),
+  drainDues: readonly DrainDue[] = [],
+) {
+  const [{ activity, drains, owed, deferring, unpublished }, failures] =
+    await Promise.all([
+      observeWork(db, now, drainDues),
+      readFailedWork(db, now),
+    ]);
   const rebuild = activity.rebuild;
   const stuck: WorkStuckItem[] = [...failures];
   const stuckWindow = minutesAgo(now, STUCK_WINDOW_MINUTES);
@@ -884,16 +1049,21 @@ export async function readBackgroundWorkStatus(db: Database, now = new Date()) {
       continue;
     }
     if (stuck.some((item) => item.key === `${stream.kind}:failing`)) continue;
+    const deferringSince = deferring.get(stream.kind);
+    const owedSince =
+      due && deferringSince
+        ? new Date(Math.min(due.getTime(), deferringSince.getTime()))
+        : (due ?? deferringSince);
     if (
-      due &&
-      due <= minutesAgo(now, STUCK_WINDOW_MINUTES) &&
-      (!completed || completed <= minutesAgo(now, STUCK_WINDOW_MINUTES))
+      owedSince &&
+      owedSince <= stuckWindow &&
+      (!completed || completed <= stuckWindow)
     ) {
       const unit = unitOf.get(streamDrainUnit(stream.kind) ?? stream.kind);
       stuck.push(
         stoppedItem(
           stream.kind,
-          due,
+          owedSince,
           now,
           unit ? stoppedCause(unit, now) : null,
           queueDiagnostic(),
@@ -901,33 +1071,16 @@ export async function readBackgroundWorkStatus(db: Database, now = new Date()) {
       );
     } else if (due && due <= minutesAgo(now, BEHIND_MINUTES)) behind = true;
   }
-  // A drain unit has no failed-work row of its own: without this, a unit whose
-  // every page throws stops silently (its record row is the only evidence).
-  for (const record of drains) {
-    const page = record.lastExecution;
-    if (
-      page?.outcome !== "failed" ||
-      !record.failingSince ||
-      record.failingSince > stuckWindow ||
-      new Date(page.finishedAt) <= minutesAgo(now, DRAIN_RETRY_MINUTES) ||
-      (record.unit === "derived-rebuild" &&
-        stuck.some((item) => item.key.startsWith("derived-rebuild")))
-    )
-      continue;
-    stuck.push({
-      key: `drain:${record.unit}:failing`,
-      title: `${drainUnitLabel(record.unit)} keeps failing`,
-      body: `Every pass has failed for ${formatStuckAge(now.getTime() - record.failingSince.getTime())}, so this work isn't running.`,
-      since: record.failingSince.toISOString(),
-      action: { type: "none" },
-      diagnostic: [
-        `${record.unit}: ${page.errorClass ?? "failed"} at ${page.finishedAt}`,
-        record.error,
-      ]
-        .filter(Boolean)
-        .join("\n"),
-    });
-  }
+  stuck.push(
+    ...drainUnitItems({
+      now,
+      activity,
+      drains,
+      owed,
+      stuck,
+      queueDiagnostic,
+    }),
+  );
   for (const pile of unpublished) {
     const kind = `ai.evaluation:${pile.feature}`;
     if (

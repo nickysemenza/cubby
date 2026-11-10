@@ -369,7 +369,11 @@ drain unit.
 
 Only the latest execution of each row is stored; there is no execution log.
 Reads that summarize a window therefore count rows by their latest execution,
-never executions.
+never executions. A deferred execution also records `deferringSince`, the
+start of the row's unbroken run of deferrals: the next deferral keeps it, an
+execution that claimed nothing keeps it, and any other outcome drops it. A row
+that re-polls every few seconds is due only for an instant, so this is the
+only stored measure of how long it has been deferring.
 
 A record is written only when the execution ends, so an invocation the
 runtime kills (exceeded memory or CPU) leaves none. Each permit therefore names
@@ -840,8 +844,10 @@ failure count alone does not establish uninterrupted execution.
   Jobs by wait reason and Run purpose, each with a one-sentence summary and up
   to three Runs from the head of the kind's claim order; `retry` is a failure
   backoff and `turn` is plain queued work. A drain unit reports its latest
-  page and reads its oldest due item and leased items from its stream. A unit
-  that never ran has no record row and appears through its stream.
+  page and reads its oldest due item and leased items from its stream. A
+  non-stream drain unit reads its oldest due item from its drain's `due` rows.
+  A unit that never ran has no record row and appears through its stream or
+  those `due` rows, for as long as it is owed.
 - `job.activity` (`evaluations`): `AiEvaluation` rows by feature and state:
   `queued` and `result_ready` whenever present, `blocked` when blocked in the
   last 7 days. Each carries its count, its oldest row's creation time and the
@@ -1033,8 +1039,11 @@ execution's error class with the stored error.
 Stuck is decided on the server from completions over a window, never from a
 snapshot of what is running, which reads as stopped between a drain's bursts:
 
-- A drain or Job kind has work due for 30 minutes with no completion in those
-  30 minutes. Retained tickets the drain never claims are not owed work. A
+- A drain or Job kind has work owed for 30 minutes with no completion in those
+  30 minutes. Owed is work that has been due that long, or Jobs whose run of
+  deferrals (`deferringSince`) is that old and that fall due again within 30
+  minutes: Jobs that defer every 15 seconds are never due for long. A Job
+  parked further ahead is a timer and is not counted. Retained tickets the drain never claims are not owed work. A
   drain's completions are published `DerivedValue` rows and its Job's latest
   page result. Thirty minutes outlasts the gaps between bursts and is half the
   one-hour lag members are promised, so the alarm shows before that breaks.
@@ -1048,10 +1057,24 @@ snapshot of what is running, which reads as stopped between a drain's bursts:
   (`failingSince` on its record row) and its last page is under two hours old,
   so it is still being tried. Its Technical details hold the page's error
   class and stored error. Retry is withheld.
-- An AI feature has `result_ready` evaluations that no page holds and whose
-  failing streak (or last update) began 30 minutes ago: paid answers are not
-  being published. The row counts them and names the most common error; it is
-  omitted while the feature already shows failed work.
+- A drain unit keeps deferring: its last page is under two hours old and came
+  30 minutes or more after its run of deferrals began. One deferral is a
+  funding or provider wait and raises nothing. The row is omitted while the
+  unit's stream already shows stopped or failed work.
+- A drain unit without a stream is owed and not progressing: its drain's `due`
+  rows report work with a `since` 30 minutes old and its record row has no
+  successful page in those 30 minutes. A unit whose `since` is the read time
+  (`reconcile`, `field-automation:policy`, Email purchase discovery) cannot
+  show how long it has waited, so only its failing and deferring pages raise
+  it.
+- An AI feature has `result_ready` evaluations that are owed, that no page
+  holds, and that have gone unpublished for 30 minutes: due since then, or
+  waiting out a failed publication's backoff on a failing streak that old.
+  Paid answers are not being published. An evaluation that is parked,
+  postponed, or held to a later `runAt` by a funding or provider wait
+  (`waitCause`) is waiting on purpose and is not counted. The row counts the
+  unpublished answers and names the most common error; it is omitted while the
+  feature already shows failed work.
 - A kind keeps failing: failed in the last 7 days with no later completion, or
   live with `JOB_NEEDS_ATTENTION_ATTEMPTS` failures. A drain item in that state
   counts, but Retry is withheld because retrying its Job does not move the

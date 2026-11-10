@@ -159,6 +159,12 @@ export const jobExecution = z.object({
     })
     .optional(),
   finishedAt: z.iso.datetime(),
+  /**
+   * When the row's unbroken run of deferred executions began. A deferred
+   * execution sets it and one that claimed nothing keeps it; any other
+   * outcome drops it.
+   */
+  deferringSince: z.iso.datetime().optional(),
 });
 export type JobExecution = z.infer<typeof jobExecution>;
 

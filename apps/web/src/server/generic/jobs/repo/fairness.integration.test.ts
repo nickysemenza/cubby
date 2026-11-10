@@ -268,6 +268,29 @@ describe("durable Job selection", () => {
       "Synthetic page failure after one publication",
     );
     expect(record?.failingSince).toBeInstanceOf(Date);
+
+    // Only the latest page is stored, so a run of deferrals keeps its start.
+    const deferrals = [];
+    for (const _page of [1, 2]) {
+      await runPermit({
+        db: ctx.db,
+        handlers: {},
+        drains: [
+          { ...drain, page: async () => ({ claimed: 1, outcome: "deferred" }) },
+        ],
+        ports: { send: async () => {}, captureException: () => {} },
+      });
+      const [row] = await getDb(ctx.db)
+        .select({ lastExecution: job.lastExecution })
+        .from(job)
+        .where(eq(job.key, "drain:synthetic-events"));
+      deferrals.push(row?.lastExecution);
+    }
+    expect(deferrals[0]?.deferringSince).toBe(deferrals[0]?.finishedAt);
+    expect(deferrals[1]).toMatchObject({
+      outcome: "deferred",
+      deferringSince: deferrals[0]?.finishedAt,
+    });
   });
 
   it("walks past a locked reconciliation page and revisits skipped Runs on a later pass", async () => {

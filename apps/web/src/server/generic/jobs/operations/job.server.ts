@@ -28,6 +28,12 @@ export const jobHandlers = implementOperationDomain(jobContract, {
     ),
   }),
   deviceBacklog: (context) => readDeviceBacklog(context.db),
-  activity: (context) => readWorkActivity(context.db),
+  activity: async (context) =>
+    readWorkActivity(
+      context.db,
+      new Date(),
+      // Loaded on demand: the drain registry imports every background handler.
+      (await import("~/server/workflows/jobs")).productionDrainDues(),
+    ),
   logs: (context, input) => readJobLogs(context.db, input.jobId),
 });

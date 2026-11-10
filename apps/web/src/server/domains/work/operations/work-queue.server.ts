@@ -8,7 +8,13 @@ import { readWorkStatus } from "~/server/domains/work/service/work-status";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
 
 export const workQueueHandlers = implementOperationDomain(workQueueContract, {
-  status: async (context) => readWorkStatus(context.db),
+  status: async (context) =>
+    readWorkStatus(
+      context.db,
+      new Date(),
+      // Loaded on demand: the drain registry imports every background handler.
+      (await import("~/server/workflows/jobs")).productionDrainDues(),
+    ),
   // An agent reads its own member's queue live: shared work and work routed
   // only to it. The household web reads the last publication.
   queue: async (context, input) => {

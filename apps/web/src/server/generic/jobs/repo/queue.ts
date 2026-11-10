@@ -191,6 +191,10 @@ export async function nextDueAt(
  * its record row keeps a failed page's raw error and the start of the failing
  * streak; a page that succeeded or deferred ends the streak, and a page that
  * claimed nothing leaves it as it was.
+ *
+ * Only the latest execution is stored, so a row that defers every few seconds
+ * would otherwise never show how long it has been deferring: the record
+ * carries `deferringSince` from the first deferral of the run to the latest.
  */
 export async function recordJobExecution(
   db: RepositoryQueryInput,
@@ -200,10 +204,20 @@ export async function recordJobExecution(
   execution: JobExecution,
 ) {
   const failed = execution.outcome === "failed";
+  const deferred = execution.outcome === "deferred";
+  const record = JSON.stringify(
+    deferred
+      ? { ...execution, deferringSince: execution.finishedAt }
+      : execution,
+  );
   await repositoryQueries(db)
     .update(job)
     .set({
-      lastExecution: execution,
+      lastExecution:
+        deferred || execution.outcome === "skipped"
+          ? sql`${record}::jsonb || CASE WHEN ${job.lastExecution}->>'deferringSince' IS NULL THEN '{}'::jsonb
+              ELSE jsonb_build_object('deferringSince', ${job.lastExecution}->'deferringSince') END`
+          : execution,
       ...("unit" in target &&
         execution.outcome !== "skipped" && {
           error: failed

@@ -7,15 +7,17 @@ import { readStoppedRuns } from "~/server/generic/jobs/repo/job-queue";
 import {
   readBackgroundWorkStatus,
   STUCK_WINDOW_MINUTES,
+  type DrainDue,
 } from "~/server/generic/jobs/repo/observation";
 
 /** The one server rule for what is stuck: the sidebar and the Work page share it. */
 export async function readWorkStatus(
   db: Database,
   now = new Date(),
+  drains: readonly DrainDue[] = [],
 ): Promise<WorkStatus> {
   const [background, device, runs] = await Promise.all([
-    readBackgroundWorkStatus(db, now),
+    readBackgroundWorkStatus(db, now, drains),
     readDeviceBacklog(db, now),
     readStoppedRuns(db, now),
   ]);
