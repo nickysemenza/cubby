@@ -442,8 +442,8 @@ export function pendingPostedMatch(
 async function siblingsFor(
   db: Database,
   proposals: readonly { charge: ChargeRef; observations: Observation[] }[],
-): Promise<Map<string, string[]>> {
-  const result = new Map<string, string[]>();
+): Promise<Map<string, ChargeRef[]>> {
+  const result = new Map<string, ChargeRef[]>();
   if (!proposals.length) return result;
   const values = sql.join(
     proposals.map(({ charge, observations }) => {
@@ -500,7 +500,20 @@ async function siblingsFor(
   `,
     "objects",
   );
-  for (const row of rows) result.set(row.key, row.siblings.map(String));
+  const sources = new Map(
+    proposals.map(({ charge }) => [chargeId(charge), charge.source]),
+  );
+  for (const row of rows) {
+    const source = sources.get(row.key);
+    if (source)
+      result.set(
+        row.key,
+        row.siblings.map((chargeKey) => ({
+          source,
+          chargeKey: String(chargeKey),
+        })),
+      );
+  }
   return result;
 }
 

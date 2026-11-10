@@ -244,13 +244,7 @@ export async function applyStatementTransactionSuggestion(
   if (judgment.siblings.length)
     await runAfterCommit(db, async (committed) => {
       try {
-        await regenerateCharges(
-          committed,
-          judgment.siblings.map((chargeKey) => ({
-            source: charge.source,
-            chargeKey,
-          })),
-        );
+        await regenerateCharges(committed, judgment.siblings);
       } catch (error) {
         // SILENT: advisory refresh only; the apply committed and the sibling's
         // own accept rechecks evidence, so the next Refresh repairs it.
