@@ -30,7 +30,10 @@ const decisionsOf = async (ctx: Ctx, id: string) =>
 
 const drainEvents = async (ctx: Ctx) => {
   for (let page = 0; page < 5; page += 1)
-    if ((await fieldAutomationDrain.page(ctx.db, "events")).claimed === 0)
+    if (
+      (await fieldAutomationDrain.page(ctx.db, "field-automation:events"))
+        .claimed === 0
+    )
       return;
 };
 

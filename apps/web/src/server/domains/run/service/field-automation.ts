@@ -190,14 +190,18 @@ async function policyPage(db: Database) {
  * changes, corrections, hand-backs) and policy revisions. Page views schedule
  * nothing, and no periodic pass exists.
  */
+// Permits route a unit to the drain whose name it equals or prefixes.
+const EVENTS_UNIT = "field-automation:events";
+const POLICY_UNIT = "field-automation:policy";
+
 export const fieldAutomationDrain: BackgroundDrain = {
   name: "field-automation",
   due: () => sql`
-    SELECT ${"events"}::text AS unit, false AS demand, min("createdAt")::timestamp AS since
+    SELECT ${EVENTS_UNIT}::text AS unit, false AS demand, min("createdAt")::timestamp AS since
     FROM "AuditLog" WHERE "automationPending"
     HAVING count(*) > 0
     UNION ALL
-    SELECT ${"policy"}::text, false, now()::timestamp
+    SELECT ${POLICY_UNIT}::text, false, now()::timestamp
     FROM "AppSettings"
     WHERE id = ${AI_DISCOVERY_SETTINGS_ID}::uuid
       AND NOT COALESCE((metadata->>${"fieldDone"})::boolean, false)
@@ -207,7 +211,7 @@ export const fieldAutomationDrain: BackgroundDrain = {
     sql`SELECT min("createdAt")::timestamp FROM "AuditLog" WHERE "automationPending"`,
   async page(db, unit) {
     try {
-      return unit === "policy" ? await policyPage(db) : await eventsPage(db);
+      return unit === POLICY_UNIT ? await policyPage(db) : await eventsPage(db);
     } catch (error) {
       log.warn("Field automation page failed", {
         unit,
