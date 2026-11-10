@@ -1,4 +1,5 @@
 import { suggestionStatus } from "@cubby/schemas/ai";
+import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
 import {
   suggestionFamily,
   type SuggestionFamily,
@@ -9,10 +10,12 @@ import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import { unwrapDb } from "~/server/db/helpers";
+import { notDeleted } from "~/server/db/helpers/predicates";
 import { outer, type RelatedColumns } from "~/server/db/helpers/related";
 import { requested, textArrayParam } from "~/server/db/helpers/requested";
 import { suggestionTable, run } from "~/server/db/schema";
 import { financialSourceReferenceRows } from "~/server/domains/financial-transaction/repo/financial-source-evidence";
+import { SHORTCODE_TABLE } from "~/server/generated/shortcode-tables.gen";
 import { type SuggestionRecordSelection } from "~/server/generic/suggestions/repo/pending-admission";
 import { suggestionFamilies as reviewFamilyDeclarations } from "~/server/generic/suggestions/repo/suggestion-family-declarations";
 import {
@@ -225,6 +228,19 @@ function referenceMatches(
         (set && !set.entities.has(entity)))
     )
       return undefined;
+    if (
+      ref.kind !== "primary" &&
+      ref.kind !== "contains" &&
+      ref.resolve &&
+      typeof entity === "string"
+    ) {
+      const parsed = z.enum(shortcodeEntities).safeParse(entity);
+      if (!parsed.success) return undefined;
+      const table = SHORTCODE_TABLE[parsed.data];
+      return sql`EXISTS (SELECT 1 FROM ${table} ref_record WHERE ref_record.shortcode = ${token}
+        AND ${notDeleted("ref_record")}
+        AND ${set ? set.match({ entity, id: sql`ref_record.id` }) : sql`true`})`;
+    }
     return and(
       scope.entity && typeof entity !== "string"
         ? eq(entity, scope.entity)

@@ -265,6 +265,7 @@ export type Reference =
       kind: "value";
       at: JsonPath;
       entity: string | JsonPath;
+      resolve?: boolean;
       guard?: ReferenceGuard;
     }
   | {
@@ -273,6 +274,7 @@ export type Reference =
       entity: string | JsonPath;
       idPath?: readonly string[];
       scalar?: boolean;
+      resolve?: boolean;
       guard?: ReferenceGuard;
     }
   | { kind: "contains"; at: JsonPath; guard?: ReferenceGuard };

@@ -2273,16 +2273,19 @@ export const statementSuggestions: SuggestionFamilyDeclaration<"statement_transa
         kind: "value",
         at: { column: "judgment", path: ["spending", "vendorId"] },
         entity: "vendor",
+        resolve: true,
       },
       {
         kind: "value",
         at: { column: "judgment", path: ["spending", "spendingCategoryId"] },
         entity: "spendingCategory",
+        resolve: true,
       },
       {
         kind: "elements",
         at: { column: "judgment", path: ["spending", "candidates"] },
         entity: "purchase",
+        resolve: true,
         idPath: ["purchaseId"],
       },
       {
