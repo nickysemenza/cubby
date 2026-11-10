@@ -6,13 +6,22 @@ import {
   type SearchableEntityRef,
   type SemanticCoverageGap,
 } from "@cubby/schemas/search";
-import { and, eq, inArray, isNotNull, isNull, or, type SQL } from "drizzle-orm";
+import {
+  and,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  sql,
+  type SQL,
+} from "drizzle-orm";
 import { chunk } from "es-toolkit";
 import { z } from "zod";
 
 import { normalizeSearchText } from "~/lib/search-normalization";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
+import { requested } from "~/server/db/helpers/requested";
 import {
   entityEmbedding,
   entityIdentity,
@@ -291,14 +300,12 @@ export async function findSimilarEntitiesPage(
       ...(await currentArtifacts(
         db,
         options.config,
-        or(
-          ...batch.map((seed) =>
-            and(
-              eq(entityEmbedding.entityKind, seed.entityKind),
-              eq(entityEmbedding.entityId, seed.entityId),
-            ),
-          ),
-        ),
+        requested(
+          batch.map((seed) => ({ entity: seed.entityKind, id: seed.entityId })),
+        ).match({
+          entity: sql`${entityEmbedding.entityKind}`,
+          id: sql`${entityEmbedding.entityId}`,
+        }),
       )),
     );
   const byRef = new Map(

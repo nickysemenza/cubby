@@ -61,7 +61,8 @@ environment variable, a tool outside the workspace) must add it to its inputs,
 or a cached pass can hide a regression ([CI](../ci.md#cache-keys-and-the-remote-cache)).
 
 Oxlint's project rules protect unsafe identifier boundaries and soft-delete
-filters. The SQL vocabulary rule reads every schema enum, including diagnostic
+filters. The record-set query rule requires array-backed requested relations;
+shrink its baseline as existing expansions are removed. The SQL vocabulary rule reads every schema enum, including diagnostic
 fixture enums outside database declarations: adding a value can expose literals
 in otherwise unchanged consumers. Run the full lint gate after adding any schema
 enum value and shrink its baseline when replacing existing literals. Keep

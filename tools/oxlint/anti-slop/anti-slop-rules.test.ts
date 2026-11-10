@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { test } from "vitest";
@@ -162,6 +168,33 @@ test("raw enum values in Drizzle SQL are rejected", () => {
     diagnostics.map((diagnostic) => diagnostic.labels[0]?.span.line),
     [2],
   );
+});
+
+test("record-set query expansion is rejected in repositories", () => {
+  const root = join(repoRoot, "apps", "web", "src", "server");
+  const directory = mkdtempSync(join(root, ".lint-fixture-"));
+  const repo = join(directory, "repo");
+  mkdirSync(repo);
+  const fixture = join(repo, "fixture.ts");
+  writeFileSync(
+    fixture,
+    readFileSync(
+      join(fixtureDirectory, "no-record-set-query-expansion.txt"),
+      "utf8",
+    ),
+  );
+  try {
+    const diagnostics = runOxlint(fixture).filter(
+      (diagnostic) =>
+        diagnostic.code === "cubby(no-record-set-query-expansion)",
+    );
+    assert.deepEqual(
+      diagnostics.map((diagnostic) => diagnostic.labels[0]?.span.line),
+      [2, 3],
+    );
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
 });
 
 test("unknown input is rejected only in exported signatures, except predicates and decoder seams", () => {

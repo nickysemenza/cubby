@@ -31,6 +31,7 @@ import {
 import { senderAddress, distinctSenderDomain } from "~/lib/vendor/domains";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { notDeleted, unwrapDb } from "~/server/db/helpers";
+import { requestedRows } from "~/server/db/helpers/requested";
 import {
   expense,
   product,
@@ -477,13 +478,14 @@ const coverageScope = listPrepare(async (db) => {
       ...(address ? (vendorsByTerm.get(address) ?? []) : []),
       ...(domain ? (vendorsByTerm.get(domain) ?? []) : []),
     ]);
-    return sender
-      ? [...ids].map((id) => sql`(${sender}::text, ${id}::uuid)`)
-      : [];
+    return sender ? [...ids].map((id) => ({ sender, vendor: id })) : [];
   });
-  return candidates.length
-    ? sql`VALUES ${sql.join(candidates, sql`, `)}`
-    : sql`SELECT NULL::text, NULL::uuid WHERE false`;
+  const rows = requestedRows(
+    candidates,
+    { sender: "text", vendor: "uuid" },
+    "candidates",
+  );
+  return sql`SELECT candidates.sender, candidates.vendor FROM ${rows.from}`;
 });
 
 export const emailScaffold = listScaffold("email", emailTable, {
