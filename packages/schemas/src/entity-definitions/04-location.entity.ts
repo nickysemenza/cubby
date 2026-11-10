@@ -253,13 +253,9 @@ export const { definition, readSchemas } = defineEntityModel(
               { id: "inventoryEntries", value: "none" },
               { id: "children", value: "none" },
             ],
-            problem: {
-              key: "emptyLocations",
-              title: "Empty locations",
-              description:
-                "Leaf locations holding no stock — either not yet itemized, or genuinely empty.",
-              emptyMessage: "No empty locations.",
-            },
+            // Deliberately not a Problem: an empty shelf or bin is a valid
+            // state, and nothing distinguishes "not itemized yet" from
+            // "intentionally empty", so there is no concrete action to take.
             layout: {
               columnVisibility: { children: true, inventoryEntries: true },
             },

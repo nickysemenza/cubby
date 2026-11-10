@@ -11,10 +11,7 @@ import {
 } from "@cubby/schemas/entity-definitions/problems/problem-registry";
 import type { SortParams } from "@cubby/schemas/pagination";
 import type { ProblemKey, ProblemItem } from "@cubby/schemas/problems-raw-read";
-import {
-  emptyLocationSchema,
-  productWithoutMappingsSchema,
-} from "@cubby/schemas/problems-raw-read";
+import { productWithoutMappingsSchema } from "@cubby/schemas/problems-raw-read";
 import { getMiscDisplayName } from "@cubby/shared";
 import { countLabel } from "@cubby/shared/pluralize";
 import { z } from "zod";
@@ -212,10 +209,6 @@ const locationDescriptionCardSchema = refSchema.extend({
   images: z.array(z.unknown()),
 });
 
-const emptyLocationCardSchema = emptyLocationSchema
-  .omit({ firstImageId: true, firstImageUrl: true })
-  .extend({ images: z.array(z.object({ id: z.string(), url: z.string() })) });
-
 const negativeQuantityCardSchema = refSchema.extend({
   brandName: z.string().nullable(),
   quantityLedger: z.object({
@@ -274,9 +267,6 @@ const PROBLEM_ROW_PRESENTERS = {
     locationDescriptionCardSchema,
     (row) => toLocationWithoutAiDescription(row),
   ),
-  emptyLocations: selectedProblemCard(emptyLocationCardSchema, (row) =>
-    toEmptyLocation(row),
-  ),
   negativeExpectedQuantity: selectedProblemCard(
     negativeQuantityCardSchema,
     (row) => toNegativeExpectedQuantity(row),
@@ -306,10 +296,7 @@ const PROBLEM_ROW_PRESENTERS = {
       present: (
         row: unknown,
         context: unknown,
-      ) =>
-        | ProblemRowInput
-        | ProblemItem<"emptyLocations">
-        | ProblemItem<"productsWithoutMappings">;
+      ) => ProblemRowInput | ProblemItem<"productsWithoutMappings">;
     }
   >
 >;
@@ -405,24 +392,6 @@ const toLocationWithoutAiDescription = (
     r.type ? field("Type", r.type) : null,
     field("Photos", countLabel(r.images.length, "photo")),
   ]);
-};
-
-const toEmptyLocation = (
-  r: z.output<typeof emptyLocationCardSchema>,
-): ProblemItem<"emptyLocations"> => {
-  // The list's `images` relation is `imageOrder`-first, so this is the cover.
-  // Display-only — every count comes from `sectionTotals`.
-  const cover = r.images[0];
-  return {
-    id: r.id,
-    name: r.name,
-    type: r.type,
-    createdAt: r.createdAt,
-    lastBulkInventory: r.lastBulkInventory,
-    aiDescription: r.aiDescription,
-    firstImageUrl: cover?.url ?? null,
-    firstImageId: cover?.id ?? null,
-  };
 };
 
 const toNegativeExpectedQuantity = (

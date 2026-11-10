@@ -81,14 +81,6 @@ export const problemActionCapabilities = {
       destructive: true,
     }),
   ],
-  emptyLocations: [
-    action({
-      id: "add-inventory",
-      label: "Add inventory",
-      scope: "item",
-      target: "item",
-    }),
-  ],
   staleLocations: [
     action({
       id: "start-recount",

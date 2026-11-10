@@ -48,8 +48,8 @@ export function FeaturesSection() {
 
         <Section headingAs="h3" compact title="Problems dashboard">
           <p className="text-muted-foreground">
-            Find duplicate products, missing inventory, invalid UPCs, products
-            without unit mappings, and empty locations.
+            Find duplicate products, missing inventory, invalid UPCs, and
+            products without unit mappings.
           </p>
         </Section>
       </Grid>
