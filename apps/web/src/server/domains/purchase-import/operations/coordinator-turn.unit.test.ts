@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { COORDINATOR_TURN_LEASE_MS } from "./coordinator-gate";
+import {
+  COORDINATOR_TURN_GRACE_MS,
+  COORDINATOR_TURN_LEASE_MS,
+} from "./coordinator-gate";
 import {
   CoordinatorLeaseLostError,
   CoordinatorTurn,
@@ -146,6 +149,41 @@ describe("coordinator turn", () => {
     await expect(turns.fence()).rejects.toBeInstanceOf(
       CoordinatorLeaseLostError,
     );
+  });
+
+  // Review regression (Sol, #3927): an idle check that never decides must not
+  // renew the turn forever.
+  it("stops renewing a turn whose idleness stays undecidable, then lets the gate reclaim it", async () => {
+    vi.useFakeTimers();
+    const acquire = vi.fn<CoordinatorTurnPorts["acquire"]>(granted);
+    const unknown = ports({
+      acquire,
+      idle: vi.fn(() =>
+        Promise.reject(new Error("Synthetic inspection failure")),
+      ),
+    });
+    const turns = new CoordinatorTurn(unknown);
+    for (let check = 0; check < 3; check++)
+      expect((await turns.turn(async () => "ran")).ran).toBe(true);
+    expect(unknown.reportIdleError).toHaveBeenCalledTimes(3);
+    expect(unknown.release).not.toHaveBeenCalled();
+    const asked = acquire.mock.calls.length;
+    // No renewal: entries wait without asking the gate, the heartbeat stops,
+    // and database work continues only until the current deadline.
+    expect(await turns.turn(async () => "ran")).toMatchObject({
+      ran: false,
+      unavailable: true,
+    });
+    await expect(turns.fence()).resolves.toBeUndefined();
+    await vi.advanceTimersByTimeAsync(COORDINATOR_TURN_LEASE_MS);
+    expect(acquire).toHaveBeenCalledTimes(asked);
+    await expect(turns.fence()).rejects.toBeInstanceOf(
+      CoordinatorLeaseLostError,
+    );
+    // After the gate's lease plus grace the coordinator asks afresh.
+    await vi.advanceTimersByTimeAsync(COORDINATOR_TURN_GRACE_MS);
+    expect((await turns.turn(async () => "ran")).ran).toBe(true);
+    expect(acquire).toHaveBeenCalledTimes(asked + 1);
   });
 
   it("waits, without failing the entry, when the gate cannot be asked", async () => {
