@@ -94,11 +94,17 @@ import { createAppError } from "~/server/errors/app-error";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
+import { readExistingOrderCandidates } from "../repo/existing-order-candidates";
 import { ensureMailVendorAccount } from "../repo/gmail/mail-account";
 import {
   importVendorCandidates,
   resolveImportVendor,
 } from "../repo/import-vendor";
+import {
+  canonicalOrderId,
+  normalizedOrderIdSql,
+  normalizeOrderKey,
+} from "../repo/order-identity";
 import { importVendorOrder, lineIdentifierRequests } from "../repo/writer";
 import { chooseLineStage } from "../service/line-stage";
 import { attachOrderLineThumbnails } from "./line-thumbnails";
@@ -253,6 +259,70 @@ async function soleLinkedPurchase(
   return target?.vendorId === vendorId
     ? { id: only.id, shortcode: only.shortcode }
     : null;
+}
+
+/**
+ * A mail order with no target must not silently become a second Purchase of
+ * an order Cubby already holds. When no Purchase carries its order id, every
+ * existing-order candidate the claim showed (a Purchase from the same thread
+ * whose order id does not differ, or a statement lump of the printed total)
+ * must be the target or named in `distinctFromPurchases`. Candidacy alone
+ * never chooses the target.
+ */
+async function assertExistingOrdersReviewed(
+  db: Database,
+  input: {
+    mail: RetainedMailSource | null;
+    vendorId: VendorId;
+    orderId: string | null;
+    total: number | null;
+    distinctFrom: readonly string[];
+  },
+) {
+  const { mail } = input;
+  if (!mail) return;
+  const orderId = canonicalOrderId(input.orderId);
+  if (orderId) {
+    const [ordered] = await getDb(db)
+      .select({ id: purchase.id })
+      .from(purchase)
+      .where(
+        and(
+          eq(purchase.vendorId, input.vendorId),
+          eq(
+            normalizedOrderIdSql(purchase.orderId),
+            normalizeOrderKey(orderId),
+          ),
+          notDeleted(purchase),
+        ),
+      )
+      .limit(1);
+    if (ordered) return;
+  }
+  const candidates = await readExistingOrderCandidates(db, {
+    ledgerPartyId: mail.ledgerPartyId,
+    vendorId: input.vendorId,
+    mailboxId: mail.mailboxId,
+    messageId: mail.messageId,
+    threadId: mail.threadId,
+    receivedAt: mail.receivedAt,
+  });
+  const distinct = new Set(input.distinctFrom);
+  const unreviewed = candidates.filter(
+    (candidate) =>
+      !distinct.has(candidate.id) &&
+      (candidate.basis === "thread"
+        ? candidate.orderId === null ||
+          orderId === null ||
+          normalizeOrderKey(candidate.orderId) === normalizeOrderKey(orderId)
+        : input.total !== null &&
+          candidate.amount !== null &&
+          Math.round(candidate.amount * 100) === Math.round(input.total * 100)),
+  );
+  if (unreviewed.length)
+    throw new Error(
+      `${unreviewed.map((candidate) => `${candidate.id} (${candidate.basis === "thread" ? "same Email thread" : "statement booking"})`).join(", ")} may already hold this order. Compare identifiers, lines, totals and dates, then set targetPurchaseId to the same order or name each in distinctFromPurchases.`,
+    );
 }
 
 /** Each order's verified retained Email, checked before any write. */
@@ -763,6 +833,17 @@ export async function preparePurchaseImport(
                 order.targetPurchaseId,
               )
             : (linkedTarget?.id ?? null);
+          if (!targetPurchaseId)
+            await assertExistingOrdersReviewed(transactionDb, {
+              mail: retainedMail.get(order) ?? null,
+              vendorId,
+              orderId: candidate.orderId,
+              total:
+                candidate.currency === "USD"
+                  ? candidate.printedGrandTotal
+                  : null,
+              distinctFrom: order.distinctFromPurchases ?? [],
+            });
           const targetFingerprint = await computeTargetFingerprint(
             transactionDb,
             {

@@ -124,6 +124,10 @@ import { syncChangedEffectivePrices } from "~/server/domains/product/repo/price-
 import { loadEffectiveProductPricesById } from "~/server/domains/product/repo/pricing";
 import { linkExactOrderEmails } from "~/server/domains/purchase-import/repo/email-purchase-decision";
 import {
+  canonicalOrderId,
+  normalizeOrderKey,
+} from "~/server/domains/purchase-import/repo/order-identity";
+import {
   purchaseCoverageSql,
   purchaseEvidenceFieldResolutionsSql,
 } from "~/server/domains/purchase/repo/purchase-evidence-policy";
@@ -2162,7 +2166,10 @@ export const foldChargeInto = async (
   });
 };
 
-/** Refuses cross-vendor merges and sets containing multiple non-null order IDs. */
+/**
+ * Refuses cross-vendor merges and sets carrying more than one order identity.
+ * Order ids compare normalized, so `Trip ID: X` and `x` are one identity.
+ */
 
 type PurchaseMergeViolation =
   | { kind: "cross-vendor"; offendingIds: PurchaseId[] }
@@ -2183,7 +2190,12 @@ const checkPurchaseMergeSet = (
   }
 
   const orderIdBearers = rows.filter((r) => r.orderId !== null);
-  if (orderIdBearers.length > 1) {
+  const orderIdentities = new Set(
+    orderIdBearers.flatMap((row) =>
+      row.orderId === null ? [] : [normalizeOrderKey(row.orderId)],
+    ),
+  );
+  if (orderIdentities.size > 1) {
     violations.push({
       kind: "order-collision",
       offendingIds: orderIdBearers.map((r) => r.id),
@@ -2256,6 +2268,9 @@ export const mergePurchases = async (
     }
 
     const orderIdBearers = rows.filter((r) => r.orderId !== null);
+    const survivingOrderId = canonicalOrderId(
+      keeper.orderId ?? orderIdBearers[0]?.orderId ?? null,
+    );
     // Plan from original rows so repeated donor notes cannot be appended twice by sequential folds.
     const notes = mergeNotes(
       keeper.notes,
@@ -2273,11 +2288,10 @@ export const mergePurchases = async (
     await validateProductPolicy(tx, { purchaseId: keepId });
     mergedCount = losers.length;
 
-    const adopted = orderIdBearers[0];
-    if (adopted && adopted.id !== keepId) {
+    if (survivingOrderId !== keeper.orderId) {
       await tx
         .update(purchase)
-        .set({ orderId: adopted.orderId })
+        .set({ orderId: survivingOrderId })
         .where(eq(purchase.id, keepId));
     }
     await logAuditEntries(tx, actor, [

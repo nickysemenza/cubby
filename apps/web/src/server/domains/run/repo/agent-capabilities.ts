@@ -61,6 +61,7 @@ const actionCapability = {
   "shipments.edit_observation": "member_decision",
   "shipments.merge": "member_decision",
   "purchase_import.email_purchase_decide": "member_decision",
+  "purchase_import.converge_duplicate_source_order": "member_decision",
   "purchase_import.prepare": "prepare",
   "purchase_import.prepare_reconciliation": "prepare",
   "purchase_import.commit": "commit_purchase_import",

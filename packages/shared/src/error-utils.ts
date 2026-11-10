@@ -165,6 +165,9 @@ export const AppErrors = {
   // A merge must stay within one vendor — re-pointing a charge across vendors
   // would silently rewrite who was paid.
   PURCHASE_MERGE_VENDOR_MISMATCH: "BAD_REQUEST",
+  // A duplicate source order converges only when every line, account and order
+  // identity agrees with the survivor; anything else stays for review.
+  PURCHASE_SOURCE_CONVERGENCE_REFUSED: "PRECONDITION_FAILED",
   // Two products stocked in the SAME location can't both survive a merge (the
   // partial-unique (productId, locationId) index), so their entries are summed
   // — which is only meaningful when the two amounts share a unit. "2 box" plus

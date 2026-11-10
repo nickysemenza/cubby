@@ -108,11 +108,10 @@ import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-u
 
 import { mailReadContent } from "./gmail/read-content";
 import {
-  normalizedOrderIdSql,
-  normalizeOrderKey,
   readEmailMailKeys,
   readMailRuleCandidates,
 } from "./mail-rule-evidence";
+import { normalizedOrderIdSql, normalizeOrderKey } from "./order-identity";
 
 const CLASSIFICATION_RUN_PURPOSES: (typeof run.$inferSelect.purpose)[] = [
   "mail_discovery",

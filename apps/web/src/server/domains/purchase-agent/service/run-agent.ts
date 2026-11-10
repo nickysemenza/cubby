@@ -1115,6 +1115,7 @@ async function extractionIdentity(
           vendorId: order.vendorId,
           vendor: order.vendor,
           targetPurchaseId: order.targetPurchaseId,
+          distinctFromPurchases: order.distinctFromPurchases,
           extraction: order.extraction,
         })),
       ),

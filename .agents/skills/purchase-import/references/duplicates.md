@@ -24,7 +24,22 @@ legs. A Purchase merge moves expenses and
 settlement allocations; it does not deduplicate booked money. If both Purchases
 book the same money, settle the duplicate expenses through the rule below and
 verify allocations before proceeding. Honor cross-vendor and order-identity
-refusals rather than changing identifiers to force a merge.
+refusals rather than changing identifiers to force a merge. Order ids compare
+normalized (label, case and leading `#` removed), so `Trip ID: X` and `x` are
+one identity and merge to the canonical `X`.
+
+When two accepted source documents imported one order twice (a pre-payment
+notice and its receipt, both itemizing the same lines), read both originals,
+then call `purchase_import.converge_duplicate_source_order` with the receipt's
+Purchase as survivor. In one transaction it moves the duplicate's accepted
+source orders onto the survivor, binds each duplicate line to the survivor's
+identical line (same title, amount and role) and retires it, then folds the
+rest through the Purchase merge. It refuses different Vendors, vendor accounts
+or order ids, unpaired lines, a line whose Product, Project, quantity or party
+attribution the survivor lacks, financially claimed lines and a duplicate with
+no accepted source; those stay review work. A repeat returns
+`already_applied`, and replaying the duplicate's Email reaches the survivor
+without new spending.
 
 When owned originals explicitly connect a draft invoice to its paid order,
 follow the [invoice identity correction contract](../../../../docs/import-evidence-convergence.md#invoice-to-paid-order-identity-correction).

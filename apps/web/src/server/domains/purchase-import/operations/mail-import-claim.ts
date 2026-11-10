@@ -44,6 +44,10 @@ import { readMailRunSources } from "~/server/domains/purchase-import/repo/mail-r
 import { recordShipmentEvidence } from "~/server/domains/shipment/repo/evidence";
 import { AppError } from "~/server/errors/app-error";
 
+import {
+  readExistingOrderCandidates,
+  type ExistingOrderCandidate,
+} from "../repo/existing-order-candidates";
 import { mailReadContent } from "../repo/gmail/read-content";
 import { senderProofVendor } from "../repo/import-vendor";
 import {
@@ -74,7 +78,10 @@ const KNOWN_PURCHASES_MAX = 5;
  * What Cubby already established for the claimed Email, so the coordinator
  * does not spend model calls on the Vendor and Purchase lookups most Emails
  * otherwise start with: the Vendor its sender proves, the order identifiers
- * it prints, and the live Purchases holding one of those order ids.
+ * it prints, the live Purchases holding one of those order ids, and
+ * `existingOrders`: Purchases from this Email's thread or an unitemized
+ * statement booking that may be the same order. An existing order is the
+ * prepare target, never a second Purchase.
  */
 type KnownForEmail = {
   products: MailProductEvidence;
@@ -87,6 +94,7 @@ type KnownForEmail = {
     date: string | null;
     imported: boolean;
   }>;
+  existingOrders: ExistingOrderCandidate[];
 };
 
 /**
@@ -430,6 +438,16 @@ async function settleByRule(
         orderKeys: keys.orderKeys,
       })
     : [];
+  const existingOrders = proof
+    ? await readExistingOrderCandidates(db, {
+        ledgerPartyId: mail.ledgerPartyId,
+        vendorId: proof.vendor.id,
+        mailboxId: mail.mailboxId,
+        messageId: mail.messageId,
+        threadId: mail.threadId,
+        receivedAt: mail.receivedAt,
+      })
+    : [];
   const known: Omit<KnownForEmail, "products"> = {
     senderVendor: proof
       ? { id: proof.vendor.shortcode, name: proof.vendor.name }
@@ -442,15 +460,17 @@ async function settleByRule(
       date: candidate.date,
       imported: candidate.importedSource,
     })),
+    existingOrders,
   };
-  const attemptContext = JSON.stringify(
-    candidates
+  const attemptContext = JSON.stringify([
+    ...candidates
       .map((candidate) => [
         candidate.purchaseId,
         candidate.acceptedSourceFingerprint,
       ])
       .sort(),
-  );
+    ...existingOrders.map((candidate) => [candidate.basis, candidate.id]),
+  ]);
   const knownForCoordinator = async (): Promise<KnownForEmail> => ({
     ...known,
     products: await readMailProductCandidates(db, {

@@ -100,6 +100,11 @@ import {
   PurchaseProductExternalIdCollisionError,
 } from "./external-id-learning";
 import {
+  canonicalOrderId,
+  normalizedOrderIdSql,
+  normalizeOrderKey,
+} from "./order-identity";
+import {
   acceptedSourceExtraction,
   recordSourceOrderObservation,
   promoteHistoricalAcceptedObservation,
@@ -225,20 +230,35 @@ async function findPurchase(
   orderId: string | null,
 ) {
   if (!orderId) return null;
-  return tx.query.purchase.findFirst({
+  // Labels, case and a leading `#` vary between a vendor's Emails for one order.
+  const matches = await tx.query.purchase.findMany({
     where: {
       RAW: (table: PgTable) =>
         relationalSql(
           table,
           and(
             eq(purchase.vendorId, vendorId),
-            eq(purchase.orderId, orderId),
+            eq(
+              normalizedOrderIdSql(purchase.orderId),
+              normalizeOrderKey(orderId),
+            ),
             notDeleted(purchase),
           ),
         ),
     },
+    limit: 2,
   });
+  if (matches.length > 1)
+    throw new Error(
+      "Several Purchases of this Vendor carry this order id. Review them before importing.",
+    );
+  return matches[0];
 }
+
+const sameOrderId = (left: string | null, right: string | null) =>
+  left !== null &&
+  right !== null &&
+  normalizeOrderKey(left) === normalizeOrderKey(right);
 
 /**
  * Tender is excluded from `sourceFinancialFacts`, so a re-read that only
@@ -1437,7 +1457,8 @@ export async function importVendorOrder(
     const vendorAccountId = input.vendorAccountId
       ? parseEntityId("vendorAccount", input.vendorAccountId)
       : null;
-    const ordered = await findPurchase(tx, vendorId, candidate.orderId);
+    const orderId = canonicalOrderId(candidate.orderId);
+    const ordered = await findPurchase(tx, vendorId, orderId);
     const selectedId = input.targetPurchaseId;
     const chosen = selectedId
       ? await tx.query.purchase.findFirst({
@@ -1459,8 +1480,8 @@ export async function importVendorOrder(
       chosen &&
       (chosen.vendorId !== vendorId ||
         (chosen.orderId !== null &&
-          chosen.orderId !== candidate.orderId &&
-          !(candidate.orderId === null && input.targetPurchaseId)))
+          !sameOrderId(chosen.orderId, orderId) &&
+          !(orderId === null && input.targetPurchaseId)))
     )
       throw new Error(
         "The reviewed Purchase target has a different vendor or order identity.",
@@ -1655,7 +1676,7 @@ export async function importVendorOrder(
           ? parseEntityId("project", input.defaultProjectId)
           : null,
         runId: input.runId,
-        orderId: candidate.orderId,
+        orderId,
         displayLabel: candidate.merchant,
         date: orderDate,
         statedTotal:
@@ -1691,7 +1712,7 @@ export async function importVendorOrder(
       await tx
         .update(purchase)
         .set({
-          orderId: target.orderId ?? candidate.orderId,
+          orderId: target.orderId ?? orderId,
           date: target.date ?? orderDate,
           vendorAccountId: target.vendorAccountId ?? vendorAccountId,
           defaultTrade:

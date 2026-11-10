@@ -321,7 +321,12 @@ type PreparedOrder = PreparePurchaseImportInput["orders"][number];
  */
 export type MemberImportOrder = Pick<
   PreparedOrder,
-  "stableOrderId" | "vendorId" | "vendor" | "targetPurchaseId" | "source"
+  | "stableOrderId"
+  | "vendorId"
+  | "vendor"
+  | "targetPurchaseId"
+  | "distinctFromPurchases"
+  | "source"
 > &
   Partial<Pick<PreparedOrder, "primaryDocumentImageId">> & {
     extraction: PreparedOrder["extraction"];
@@ -358,6 +363,7 @@ export async function prepareMemberImport(
         vendorId: order.vendorId,
         vendor: order.vendor,
         targetPurchaseId: order.targetPurchaseId,
+        distinctFromPurchases: order.distinctFromPurchases,
         source: order.source,
         evidenceChecksum: order.source.checksum,
         extractionRevision: "synthetic@1",

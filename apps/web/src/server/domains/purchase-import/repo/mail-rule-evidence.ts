@@ -8,15 +8,7 @@ import {
   type ShortcodeFor,
   type VendorId,
 } from "@cubby/schemas/identifiers";
-import {
-  and,
-  eq,
-  inArray,
-  isNotNull,
-  or,
-  sql,
-  type SQLWrapper,
-} from "drizzle-orm";
+import { and, eq, inArray, isNotNull, or, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
@@ -50,6 +42,7 @@ import {
 import { wasm } from "~/server/wasm";
 
 import { mailReadContent } from "./gmail/read-content";
+import { normalizedOrderIdSql, normalizeOrderKey } from "./order-identity";
 import { lineIdentifierRequests } from "./writer";
 
 const IDENTIFIER = /^[A-Za-z0-9][A-Za-z0-9_/-]{2,39}$/u;
@@ -60,17 +53,6 @@ export type MailKeys = {
   trackingKeys: EmailTrackingKeys;
 };
 type Carrier = EmailTrackingKeys[number]["carrier"];
-
-/**
- * An order number as keys and Purchase lookups compare it: trimmed, leading
- * `#` removed, upper-cased. Hyphens and suffixes stay, so an Amazon
- * `NNN-NNNNNNN-NNNNNNN` id or a split-shipment `-2` remains its own key.
- */
-export const normalizeOrderKey = (value: string) =>
-  value.trim().replace(/^#+/u, "").trim().toUpperCase();
-/** `normalizeOrderKey` for a stored order id column. */
-export const normalizedOrderIdSql = (column: SQLWrapper) =>
-  sql<string>`upper(btrim(regexp_replace(btrim(${column}), '^#+', '')))`;
 
 const ONTRAC_IN_TEXT = /\b[CD]\d{14}\b/gu;
 const FEDEX_LENGTHS = new Set([12, 15, 20, 22]);

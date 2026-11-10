@@ -15,6 +15,7 @@ import { decideEmailPurchase } from "~/server/domains/purchase-import/repo/email
 import { correctEmailRelevance } from "~/server/domains/purchase-import/repo/gmail/relevance-correction";
 import { prepareSourceOrderReconciliation } from "~/server/domains/purchase-import/repo/reconciliation";
 import { commitAcceptedSourceOrderReconciliation } from "~/server/domains/purchase-import/repo/reconciliation-accepted";
+import { convergeDuplicateSourceOrder } from "~/server/domains/purchase-import/repo/source-order-convergence";
 import {
   previewMailTriage,
   reclassifyEmails,
@@ -34,6 +35,8 @@ export const purchaseImportHandlers = implementOperationDomain(
         input,
         context.actorContext,
       ),
+    convergeDuplicateSourceOrder: (context, input) =>
+      convergeDuplicateSourceOrder(context.db, input, context.actorContext),
     emailImport: (context, input) =>
       startEmailImport(context.db, input, context.actorContext),
     emailPurchaseDecide: (context, input) =>

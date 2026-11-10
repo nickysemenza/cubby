@@ -32,7 +32,15 @@ Claude or Codex session researches it later through the Research queue.
    `orderIds`, the order identifiers Cubby recognized in the Email, with
    `imported` true when an import already itemized it. Use them instead of
    repeating those lookups; look up only what they lack, such as an order id
-   Cubby did not recognize. `known.products` contains bounded identity candidates
+   Cubby did not recognize. `known.existingOrders` lists Purchases of the
+   sender's Vendor that may already be this order: `basis: "thread"` when
+   another Email in this Gmail thread produced or links it, and
+   `basis: "statement_lump"` when a card or bank booking holds it as one
+   unitemized line near this Email's date. Candidacy is not proof. Compare the
+   identifier, lines, total and date in this Email with each candidate: the
+   same order is the import's target Purchase, never a second Purchase; an
+   order you confirm is different goes in `distinctFromPurchases`. Without a
+   matching order id, an import beside an unreviewed candidate is refused. `known.products` contains bounded identity candidates
    from exact printed link identifiers and matching own-account order history.
    Compare their recorded facts with the source before reusing one; a candidate
    or shared identifier never resolves a variant contradiction. `omitted: true`
@@ -41,6 +49,11 @@ Claude or Codex session researches it later through the Research queue.
    arguments before extracting again. This recovers an uncertain writer outcome;
    changed extraction is mechanically blocked until that result is known.
 3. Decide what the Email is:
+   - **A pre-payment notice** that says it is not a receipt and that a
+     receipt follows (a charge summary, payment pending): resolve it
+     `unresolved` with category `source_held` naming the receipt it waits for.
+     When `known.existingOrders` already holds that order's receipt Purchase,
+     `linked` it there instead. Never import the notice as its own Purchase.
    - **An order with priced lines** (confirmation, receipt, invoice): import it.
      Check the receipt's printed seller against `known.senderVendor` before
      using that mapping. If clear seller evidence names someone else, resolve
@@ -52,7 +65,9 @@ Claude or Codex session researches it later through the Research queue.
      the Email names the seller.
      For an ordinary complete Email body without attachments or omitted content,
      call `import_extracted_order` once with `mail` (the claim's mailboxId,
-     messageId and read checksum), the Vendor, optional known target Purchase,
+     messageId and read checksum), the Vendor, the target Purchase when
+     `known.purchases` or `known.existingOrders` holds this order (otherwise
+     `distinctFromPurchases` for each reviewed candidate it is not),
      `extraction` and `products`. Include `candidate.sourceReferences`: literal
      excerpts for the order ID, order date, printed total, and one per line and
      payment in order. Use null when the corresponding optional fact is absent.
