@@ -1,13 +1,20 @@
 import { z } from "zod";
 
 import { fieldSuggestionsInput } from "./ai";
+import { anyShortcodeSchema, nonEmptyTuple } from "./identifier-fields";
+import { suggestionChildHandle } from "./suggestion-reference";
+
+/** A suggested field's record, by any suggestable entity's shortcode. */
+const suggestableRecordId = anyShortcodeSchema(
+  nonEmptyTuple(fieldSuggestionsInput.shape.entity.options),
+);
 
 /** Who holds a field: nobody, Cubby (it may revise), or a person (never overwritten). */
 const fieldHolder = z.enum(["open", "cubby", "person"]);
 
 export const fieldAuthorityActionInput = z.object({
   entity: fieldSuggestionsInput.shape.entity,
-  id: z.string().min(1),
+  id: suggestableRecordId,
   field: z.string().min(1),
   /**
    * `keep`: a member confirms Cubby's value, which then counts as theirs.
@@ -17,7 +24,7 @@ export const fieldAuthorityActionInput = z.object({
    */
   action: z.enum(["keep", "clear", "release"]),
   /** The Suggestion a Changes by Cubby row shows; refused once Cubby revised it. */
-  suggestionId: z.string().optional(),
+  suggestionId: suggestionChildHandle.optional(),
 });
 export const fieldAuthorityActionOut = z.object({ holder: fieldHolder });
 
@@ -34,7 +41,7 @@ export type FieldGuess = z.infer<typeof fieldGuess>;
 
 export const fieldGuessInput = z.object({
   entity: fieldAuthorityActionInput.shape.entity,
-  id: z.string().min(1),
+  id: suggestableRecordId,
   field: z.string().min(1),
 });
 export const fieldGuessOut = z.object({ guess: fieldGuess.nullable() });

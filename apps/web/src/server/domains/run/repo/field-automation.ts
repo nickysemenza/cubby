@@ -44,6 +44,7 @@ export const pendingAuditRow = z.object({
   changes: z.record(z.string(), z.unknown()).nullable(),
   authority: z.enum(["automatic", "released"]).nullable(),
   userId: z.string(),
+  runId: z.string().nullable(),
   createdAt: z.coerce.date(),
 });
 export type PendingAuditRow = z.infer<typeof pendingAuditRow>;
@@ -192,7 +193,7 @@ export async function claimAutomationRows(
       (
         await getDb(tx).execute<z.input<typeof pendingAuditRow>>(sql`
           SELECT id::text, "entityKind", "entityId"::text, action, changes,
-            authority, "userId", "createdAt"
+            authority, "userId", "runId"::text AS "runId", "createdAt"
           FROM "AuditLog"
           WHERE "automationPending"
           ORDER BY "createdAt", id

@@ -500,6 +500,7 @@ export async function executeAiRefreshTarget(
         predecessorIds: target.suggestionIds,
         evaluationId: id,
         provenance: saved.provenance,
+        ...(target.cause && { cause: target.cause }),
       },
       entry
         ? [

@@ -56,21 +56,44 @@ function dayLabel(day: string, today: string) {
   );
 }
 
-/** Consecutive rows of one household day; a page boundary may repeat a day. */
-function byDay(rows: readonly AutomaticDecisionRow[]) {
-  const days: { day: string; rows: AutomaticDecisionRow[] }[] = [];
+type Cause = NonNullable<AutomaticDecisionRow["cause"]>;
+
+/** What one group of Cubby's changes says it did; the count follows it. */
+const CAUSE_LABEL = {
+  new_record: "New records",
+  import: "Import",
+  evidence_changed: "After records changed",
+  correction: "Because you corrected a similar value",
+  policy_revision: "Model update",
+  released: "You let Cubby decide",
+} satisfies Record<Cause["kind"], string>;
+
+/**
+ * Consecutive rows that share a cause (and its Run or revision), or a
+ * household day for rows recorded before causes were; a page boundary may
+ * repeat a header.
+ */
+function byCause(rows: readonly AutomaticDecisionRow[], today: string) {
+  const groups: { key: string; label: string; rows: AutomaticDecisionRow[] }[] =
+    [];
   for (const row of rows) {
     const day = householdLocalDate(new Date(row.createdAt));
-    const last = days.at(-1);
-    if (last?.day === day) last.rows.push(row);
-    else days.push({ day, rows: [row] });
+    const key = row.cause
+      ? `${row.cause.kind}:${row.cause.ref ?? day}`
+      : `day:${day}`;
+    const label = row.cause
+      ? `${CAUSE_LABEL[row.cause.kind]}, ${dayLabel(day, today)}`
+      : dayLabel(day, today);
+    const last = groups.at(-1);
+    if (last?.key === key) last.rows.push(row);
+    else groups.push({ key, label, rows: [row] });
   }
-  return days;
+  return groups;
 }
 
 /**
  * Changes by Cubby: values Cubby set on its own, newest first, grouped by
- * day. Each field change offers Keep and "Wrong, clear it"; mail and
+ * why Cubby asked (a new record, an import, a correction, a model update). Each field change offers Keep and "Wrong, clear it"; mail and
  * statement decisions keep their own row content and feedback.
  */
 export function AutomaticDecisions({
@@ -124,12 +147,9 @@ export function AutomaticDecisions({
           state={loading ? { status: "pending" } : { status: "success" }}
           empty="Cubby hasn't changed anything yet. Values it fills in on its own are listed here."
         >
-          {byDay(query.data?.items ?? []).map((group) => (
-            <Fragment key={`${group.day}:${group.rows[0]?.id}`}>
-              <RecordHeading
-                label={dayLabel(group.day, today)}
-                count={group.rows.length}
-              />
+          {byCause(query.data?.items ?? [], today).map((group) => (
+            <Fragment key={`${group.key}:${group.rows[0]?.id}`}>
+              <RecordHeading label={group.label} count={group.rows.length} />
               {group.rows.map((row) =>
                 row.field ? (
                   <FieldChange key={row.id} row={row} change={row.field} />

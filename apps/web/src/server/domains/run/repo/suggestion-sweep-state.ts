@@ -1,4 +1,5 @@
 import type { FieldSuggestionsInput } from "@cubby/schemas/ai";
+import type { FieldAutomationCause } from "@cubby/schemas/ai-evaluation";
 import { entityFieldEnvelopeFields } from "@cubby/schemas/entity-field-envelopes";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { RunId } from "@cubby/schemas/identifiers";
@@ -80,6 +81,8 @@ export async function saveSweepSuggestions(
     provenance?: import("@cubby/schemas/ai-evaluation").AiProvenance;
     /** The field's decision policy prunes an unordered set. */
     unordered: boolean;
+    /** Why field automation asked; Changes by Cubby groups by it. */
+    cause?: FieldAutomationCause;
   },
   entries: readonly SweepSuggestion[],
   financeReviewFingerprint: string | null,
@@ -332,6 +335,7 @@ export async function saveSweepSuggestions(
             data: {
               liveInputFingerprint,
               reviewKey: entry.reviewKey ?? null,
+              ...(input.cause && { cause: input.cause }),
             },
             status: "pending",
           }),

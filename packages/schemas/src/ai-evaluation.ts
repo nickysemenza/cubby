@@ -77,6 +77,24 @@ export const aiExecutionKind = z.enum([
 ]);
 export type AiExecutionKind = z.infer<typeof aiExecutionKind>;
 const aiEvaluationTargetKind = z.enum(["field", "email"]);
+/**
+ * Why field automation evaluated a field, carried from scheduling to the
+ * published Suggestion so Changes by Cubby can group by it. `ref` names the
+ * Run, corrected record (`entity:uuid`) or activation revision.
+ */
+export const fieldAutomationCause = z.object({
+  kind: z.enum([
+    "new_record",
+    "import",
+    "evidence_changed",
+    "correction",
+    "policy_revision",
+    "released",
+  ]),
+  ref: z.string().optional(),
+});
+export type FieldAutomationCause = z.infer<typeof fieldAutomationCause>;
+
 export const aiEvaluationTarget = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal(aiEvaluationTargetKind.enum.field),
@@ -84,6 +102,7 @@ export const aiEvaluationTarget = z.discriminatedUnion("kind", [
     recordId: z.uuid(),
     field: z.string(),
     suggestionIds: z.array(suggestionChildHandle),
+    cause: fieldAutomationCause.optional(),
   }),
   z.object({
     kind: z.literal(aiEvaluationTargetKind.enum.email),

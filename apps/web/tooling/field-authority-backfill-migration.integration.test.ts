@@ -9,7 +9,7 @@ it("stamps exactly the audit rows an automatic field receipt lists and retires s
   await withMigrationDatabase(async (client) => {
     const db = drizzle({ client: client, paramsInErrors: true });
     await migrateDatabase(db, {
-      through: "20261110012126_retire_coordinator_turns",
+      through: "20261110021115_drop_run_approval",
     });
     const product = "00000000-0000-4000-8000-000000000a01";
     const task = "00000000-0000-4000-8000-000000000a02";
@@ -47,7 +47,7 @@ it("stamps exactly the audit rows an automatic field receipt lists and retires s
       ],
     );
     await migrateDatabase(db, {
-      through: "20261110024122_cubby_acts_first",
+      through: "20261110042454_cubby_acts_first",
     });
     expect(
       (

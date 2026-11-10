@@ -1,3 +1,5 @@
+import type { FieldAutomationCause } from "@cubby/schemas/ai-evaluation";
+import { systemActor } from "@cubby/schemas/context";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import {
   type ShortcodeEntity,
@@ -61,20 +63,34 @@ async function scheduleField(
   entity: ShortcodeEntity,
   recordId: string,
   field: string,
+  cause: FieldAutomationCause,
 ) {
   const authority = await fieldAuthority(db, entity, recordId, field);
   if (authority.holder === "person") return "unchanged";
   return schedule(
-    { kind: "field", entity, recordId, field, suggestionIds: [] },
+    { kind: "field", entity, recordId, field, suggestionIds: [], cause },
     { populated: authority.holder === "cubby" },
   );
+}
+
+/** Why a write owes evaluation: an import's Run, a hand-back, a new record or new evidence. */
+function writeCause(row: PendingAuditRow, field: string): FieldAutomationCause {
+  if (row.authority === "released" && row.changes && field in row.changes)
+    return { kind: "released" };
+  if (row.userId === systemActor().userId && row.runId)
+    return { kind: "import", ref: row.runId };
+  return { kind: row.action === "create" ? "new_record" : "evidence_changed" };
 }
 
 async function processRow(db: Database, row: PendingAuditRow) {
   const entity = shortcodeEntity.parse(row.entityKind);
   const fields = automatedFields(entity);
   const changed = new Set(Object.keys(row.changes ?? {}));
-  const targets: { recordId: string; field: string }[] = [];
+  const targets: {
+    recordId: string;
+    field: string;
+    cause: FieldAutomationCause;
+  }[] = [];
   if (row.action === "update" && row.authority === null)
     for (const field of fields) {
       if (!changed.has(field.key)) continue;
@@ -86,14 +102,23 @@ async function processRow(db: Database, row: PendingAuditRow) {
         field.key,
         corrected.wrongValue,
       ))
-        targets.push({ recordId, field: field.key });
+        targets.push({
+          recordId,
+          field: field.key,
+          cause: { kind: "correction", ref: `${entity}:${row.entityId}` },
+        });
     }
   for (const field of fields) {
     const owed =
       row.action === "create" ||
       [...changed].some((key) => key !== field.key && field.inputs.has(key)) ||
       (row.authority === "released" && changed.has(field.key));
-    if (owed) targets.push({ recordId: row.entityId, field: field.key });
+    if (owed)
+      targets.push({
+        recordId: row.entityId,
+        field: field.key,
+        cause: writeCause(row, field.key),
+      });
   }
   return targets;
 }
@@ -108,6 +133,7 @@ async function eventsPage(db: Database) {
         shortcodeEntity.parse(row.entityKind),
         target.recordId,
         target.field,
+        target.cause,
       );
       if (result === "deferred") return "deferred";
     }
@@ -139,6 +165,7 @@ async function policyPage(db: Database) {
         entity,
         row.recordId,
         row.field,
+        { kind: "policy_revision", ref: String(cursor.revision) },
       );
       if (result === "deferred") {
         deferred = true;

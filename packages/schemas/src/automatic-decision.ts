@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { suggestionReviewRowSchema } from "./ai";
+import { fieldAutomationCause } from "./ai-evaluation";
 import {
   suggestionFamily,
   suggestionChildHandle,
@@ -40,6 +41,8 @@ export const automaticDecisionRow = z.object({
   reviewedAt: z.iso.datetime().nullable(),
   /** A field decision's record, field, old and new value, for Keep and Wrong, clear it. */
   field: suggestionReviewRowSchema.nullable().optional(),
+  /** Why Cubby evaluated the field; absent on decisions made before it was recorded. */
+  cause: fieldAutomationCause.nullable().optional(),
   /** Retained for explicit suggestion-review clients; the web audit records feedback only. */
   correction: z
     .object({

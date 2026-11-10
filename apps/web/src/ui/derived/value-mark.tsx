@@ -110,11 +110,7 @@ export function FieldValueMark({
         </span>
       ) : null}
       <span className="min-w-0 truncate">
-        {missing ? (
-          <MissingFieldValue interactive={interactive} />
-        ) : (
-          children
-        )}
+        {missing ? <MissingFieldValue interactive={interactive} /> : children}
       </span>
       {!missing && stale ? (
         <UpdatingDot label="Stale result" active={false} />

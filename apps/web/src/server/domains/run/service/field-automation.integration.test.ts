@@ -104,6 +104,17 @@ describe("field automation drain", () => {
     expect(pending.rows[0]?.count).toBe(0);
   });
 
+  it("schedules a new record's fields with the cause Changes by Cubby groups by", async () => {
+    const { item } = await cubbyValue("Synthetic new record cause");
+    const causes = await getDb(ctx.db).execute<{ cause: string | null }>(
+      sql`SELECT e.target->${"cause"}->>${"kind"} AS cause FROM "AiEvaluation" e
+        JOIN "Product" p ON p.id::text = e.target->>${"recordId"}
+        WHERE p.shortcode = ${item.id}`,
+    );
+    // The member-started Sweep's own evaluation carries no cause.
+    expect(causes.rows.map((row) => row.cause)).toContain("new_record");
+  });
+
   it("treats an import's replacement as evidence, not a member's grade", async () => {
     const { item, suggestionId } = await cubbyValue("Synthetic imported value");
     await write(item.id, systemActor());

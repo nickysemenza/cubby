@@ -382,8 +382,9 @@ counts only actionable proposals; its Fields view lists Disagreements and
 needs-you rows, reading "Cubby would pick X · 93% sure" against the current
 value with Use X and Keep Y, and a Needs filter (Disagreement, Needs you,
 Guess) that leaves guesses out by default. Changes by Cubby lists values
-Cubby set on its own, newest first under day headings (Today, Yesterday, the
-date): record, field, old → new, confidence in Geist Mono secondary ink, and
+Cubby set on its own, newest first, under one heading per cause and day (New
+records, Import, After records changed, Because you corrected a similar value,
+Model update, You let Cubby decide; older rows by day): record, field, old → new, confidence in Geist Mono secondary ink, and
 date, with Keep and "Wrong, clear it" named for the value and record. A
 result line stays after either action. Mail and statement decisions keep
 their summary, evidence and Report incorrect. Empty, it reads "Cubby hasn't

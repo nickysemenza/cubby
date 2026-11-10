@@ -1,7 +1,5 @@
 import type { StoredFieldDecision } from "@cubby/schemas/derived-value";
-import type {
-  ReadableFieldEnvelope,
-} from "@cubby/schemas/field-envelope";
+import type { ReadableFieldEnvelope } from "@cubby/schemas/field-envelope";
 import { z } from "zod";
 
 /** Batch read facts without importing database or hydration implementations. */

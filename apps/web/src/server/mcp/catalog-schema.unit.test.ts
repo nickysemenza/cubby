@@ -752,6 +752,8 @@ describe("MCP catalog schemas", () => {
       "suggestions.review.suggestionId",
       "suggestions.review_batch.items[].operationId",
       "suggestions.review_batch.items[].suggestionId",
+      // A Changes by Cubby row names the same opaque Suggestion handle.
+      "suggestions.field_authority.suggestionId",
     ]);
     const freeTextIds = new Set([
       "orderId",
