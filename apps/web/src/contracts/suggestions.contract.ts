@@ -1,8 +1,6 @@
 import {
   automaticDecisionListInput,
   automaticDecisionListOut,
-  suggestionRecordCountsInput,
-  suggestionRecordCountsOut,
 } from "@cubby/schemas/automatic-decision";
 import {
   acceptCleanSuggestionsInput,
@@ -25,15 +23,6 @@ export const suggestionsContract = defineContract(
       input: automaticDecisionListInput,
       output: automaticDecisionListOut,
       cache: { tags: [["suggestions"]] },
-    }),
-    recordCounts: query({
-      exposure: "view",
-      note: "Per-row counts; agents read scoped suggestions_read.list rows",
-      input: suggestionRecordCountsInput,
-      output: suggestionRecordCountsOut,
-      cache: {
-        tags: [["suggestions"], ["sourceTransactionRecord"], ["connections"]],
-      },
     }),
     list: query({
       description:

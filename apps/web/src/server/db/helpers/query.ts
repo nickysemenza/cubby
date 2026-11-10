@@ -484,7 +484,8 @@ export async function assertNoDependents<TId extends string>(opts: {
  * when the whole point is to avoid a parameter per id, and they cannot target
  * an aliased table inside a hand-written UNION.
  *
- * This is the only sanctioned way to write `= ANY(...)` in raw SQL; the small
+ * With `textArrayParam` (`requested.ts`), this is the only sanctioned way to
+ * write `= ANY(...)` in raw SQL; record sets bind through `requested()`. The small
  * SQL-safety check rejects direct JS-array interpolation elsewhere. The trap is
  * avoided by calling this helper directly at each interpolation boundary,
  * where that check can verify it rather than following an intermediate SQL alias.

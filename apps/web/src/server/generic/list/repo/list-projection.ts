@@ -249,7 +249,28 @@ export function listReadPlan<Row>(
   );
   const modelFields: EntityFieldModel["fields"] =
     entityFieldModels[entity].fields;
-  const declaredBindings = options.bindings?.(bind) ?? [];
+  const suggestionCounts = bind.ids(async (page) => {
+    const { loadSuggestionRowCounts } =
+      await import("~/server/generic/suggestions/repo/suggestion-row-counts");
+    return loadSuggestionRowCounts(page.db, entity, page.ids);
+  });
+  const declaredBindings = [
+    ...(Object.hasOwn(schema.shape, "pendingSuggestionCount")
+      ? [
+          suggestionCounts.fields(
+            z.object({
+              pendingSuggestionCount: z.number().int().nonnegative(),
+            }),
+            (row, counts) => ({
+              pendingSuggestionCount:
+                counts.get(sourceIdentity.parse(row).id) ?? 0,
+            }),
+            { scope: "explicit" },
+          ),
+        ]
+      : []),
+    ...(options.bindings?.(bind) ?? []),
+  ];
   const projections = modelFields.filter(
     (field) =>
       field.storedPath &&

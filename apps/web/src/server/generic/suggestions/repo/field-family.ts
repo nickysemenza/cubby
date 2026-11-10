@@ -9,7 +9,7 @@ import {
 import { suggestionReviewFamilies } from "@cubby/schemas/suggestion-review-family";
 import { sql } from "drizzle-orm";
 
-import { fieldAuthority } from "~/server/generic/suggestions/repo/field-authority";
+import { cubbyHeldFields } from "~/server/generic/suggestions/repo/field-authority";
 import { type SuggestionFamilyDeclaration } from "~/server/generic/suggestions/repo/suggestion-family-declaration";
 import {
   stamps,
@@ -23,10 +23,9 @@ import {
   fieldKind,
 } from "~/server/generic/suggestions/repo/suggestion-presentation";
 import {
-  fieldReferenceMatch,
   fieldRecords,
+  referenceFields,
   declareAffectedRecords,
-  primaryRecordMatch,
 } from "~/server/generic/suggestions/repo/suggestion-record-discovery";
 import {
   fieldSuggestionKeys,
@@ -52,31 +51,23 @@ export const fieldFamily: SuggestionFamilyDeclaration<"field"> = {
     );
     // Cubby revising a value it holds is not a Disagreement. The same
     // authority owner as the gate decides; a kept value is a person's.
-    const cubbyHeld = new Set(
-      (
-        await Promise.all(
-          listed
-            .filter(
-              (row) =>
-                row.kind === "correction" &&
-                row.recordId !== null &&
-                row.confidence >= HIGH_CONFIDENCE_PROBABILITY &&
-                !row.answered,
-            )
-            .map(async (row) =>
-              (
-                await fieldAuthority(
-                  db,
-                  shortcodeEntity.parse(row.entity),
-                  String(row.recordId),
-                  row.field,
-                )
-              ).holder === "cubby"
-                ? [row.id]
-                : [],
-            ),
-        )
-      ).flat(),
+    const cubbyHeld = await cubbyHeldFields(
+      db,
+      listed.flatMap((row) =>
+        row.kind === "correction" &&
+        row.recordId !== null &&
+        row.confidence >= HIGH_CONFIDENCE_PROBABILITY &&
+        !row.answered
+          ? [
+              {
+                id: row.id,
+                entity: shortcodeEntity.parse(row.entity),
+                recordId: String(row.recordId),
+                field: row.field,
+              },
+            ]
+          : [],
+      ),
     );
     return listed.flatMap((row) => {
       const entity = shortcodeEntity.parse(row.entity);
@@ -185,7 +176,18 @@ export const fieldFamily: SuggestionFamilyDeclaration<"field"> = {
   ...declareAffectedRecords({
     roles: ["subject", "current", "proposed"],
     forward: fieldRecords,
-    reverse: (scope) => [primaryRecordMatch(scope), fieldReferenceMatch(scope)],
+    references: [
+      { kind: "primary" },
+      ...referenceFields.flatMap(({ entity, field, target }) =>
+        (["suggestedValue", "currentValue"] as const).map((column) => ({
+          kind: "elements" as const,
+          at: { column },
+          entity: target,
+          scalar: true,
+          guard: { entity, field },
+        })),
+      ),
+    ],
   }),
   actionable: sql`true`,
   summarize: (value: unknown) =>

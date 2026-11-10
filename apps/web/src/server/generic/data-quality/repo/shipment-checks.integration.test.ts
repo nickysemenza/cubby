@@ -19,10 +19,10 @@ import {
 import { shipmentScaffold } from "~/server/domains/shipment/repo/entity-repository";
 import {
   associateShipment,
-  canonicalShipment,
   editShipmentObservation,
   recordShipmentEvidence,
 } from "~/server/domains/shipment/repo/evidence";
+import { canonicalShipment } from "~/server/domains/shipment/repo/evidence-internal";
 import {
   readShipmentTimeline,
   shipmentEventSummary,

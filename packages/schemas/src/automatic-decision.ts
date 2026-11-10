@@ -57,12 +57,3 @@ export const automaticDecisionListOut = z.object({
   totalCount: z.number().int().nonnegative(),
   nextOffset: z.number().int().nullable(),
 });
-export const suggestionRecordCountsInput = z.object({
-  recordIds: z.array(z.string().min(1)).max(SUGGESTION_RECORD_IDS_MAX),
-});
-export const suggestionRecordCountsOut = z.object({
-  records: z.array(
-    z.object({ id: z.string(), pending: z.number().int().nonnegative() }),
-  ),
-  /** Counts describe known publications; coverage never turns unknown extent into zero. */
-});

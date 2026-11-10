@@ -71,6 +71,6 @@ export const sourceTransactionRecordSearch = {
       SELECT 'sourceTransactionRecord', r.id::text, r.shortcode,
         COALESCE(NULLIF(r."rawDescription", ''), r.merchant, r."accountDescriptor"), r."accountDescriptor",
         r.source, ARRAY[r."externalId"]::text[], ARRAY[r.merchant, r."sourceCategory", r.notes]::text[]
-      FROM ${sourceObservations} r WHERE ${notDeleted(alias(searchTablesourceTransactionRecord, "r"))} AND 'sourceTransactionRecord' IN (${types}) AND ${requested(sql`r.id`)} AND ${bounded(sql`r."createdAt"`)}`,
+      FROM ${sourceObservations} r WHERE ${notDeleted(alias(searchTablesourceTransactionRecord, "r"))} AND 'sourceTransactionRecord' IN (${types}) AND ${requested?.match({ entity: "sourceTransactionRecord", id: sql`r.id` }) ?? sql`TRUE`} AND ${bounded(sql`r."createdAt"`)}`,
   embedding: loadEmbeddingText,
 } satisfies SearchReadPort;

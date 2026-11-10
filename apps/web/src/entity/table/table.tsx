@@ -13,7 +13,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { entities, EntityIcon, isBrowserRoutedEntity } from "~/entity/entities";
 import { usePageIdentity, usePageWorkbenchTarget } from "~/entity/page/page";
-import { ProposalCountProvider } from "~/entity/suggestions/proposal-counts";
 import type { QueryTiming } from "~/lib/query-timing";
 import { CellEditorRetentionContext } from "~/ui/data-table/cell-editor-retention";
 import { ColumnMarkContext } from "~/ui/data-table/column-presentation";
@@ -1662,114 +1661,106 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
   };
 
   return (
-    <ProposalCountProvider
-      entity={entity}
-      viewportOnly
-      records={
-        isLoading || isTransitioning ? [] : rows.map((row) => row.original)
-      }
-    >
-      <EntityDisplayImagesProvider refs={entityMediaRefs}>
-        <TableInspectorLayout
-          inspector={
-            inspector
-              ? {
-                  ...inspector,
-                  content: inspector.content ? (
-                    <TableRowStepContext.Provider value={stepRow}>
-                      {inspector.content}
-                    </TableRowStepContext.Provider>
-                  ) : null,
-                }
-              : undefined
-          }
-        >
-          <Stack>
-            {/* Without a toolbar, header Filter… opens beside the header. */}
-            {showToolbar ? null : (
-              <HeaderFilterEditor
-                table={table}
-                entity={entity}
-                optionHints={filterOptionHints}
-              />
-            )}
-            <DesktopTableView
-              table={table}
-              isLoading={isLoading || !hydrated}
-              error={error}
-              controller={controller}
-              entity={entity}
-              embedded={embedded}
-              rowInspectorOpen={Boolean(inspector?.content || desktopInspector)}
-              desktopInspector={
-                desktopInspector ? (
+    <EntityDisplayImagesProvider refs={entityMediaRefs}>
+      <TableInspectorLayout
+        inspector={
+          inspector
+            ? {
+                ...inspector,
+                content: inspector.content ? (
                   <TableRowStepContext.Provider value={stepRow}>
-                    {desktopInspector}
+                    {inspector.content}
                   </TableRowStepContext.Provider>
-                ) : undefined
+                ) : null,
               }
-              externalToolbar={externalToolbar}
-              desktopToolbar={desktopToolbar}
-              showToolbar={showToolbar}
-              infiniteScroll={infiniteScroll}
-              showPagination={showPagination}
-              showCellSelectionStats={showCellSelectionStats}
-              timing={timing}
-              ariaLabel={ariaLabel}
-              cellSelectionEnabled={cellSelectionEnabled}
-              statusContent={statusContent}
-              hasStatusContent={hasStatusContent}
-              tableBody={renderTableBody()}
-              footerContent={footerContent}
-              rowContextMenu={rowContextMenu}
+            : undefined
+        }
+      >
+        <Stack>
+          {/* Without a toolbar, header Filter… opens beside the header. */}
+          {showToolbar ? null : (
+            <HeaderFilterEditor
+              table={table}
+              entity={entity}
+              optionHints={filterOptionHints}
             />
+          )}
+          <DesktopTableView
+            table={table}
+            isLoading={isLoading || !hydrated}
+            error={error}
+            controller={controller}
+            entity={entity}
+            embedded={embedded}
+            rowInspectorOpen={Boolean(inspector?.content || desktopInspector)}
+            desktopInspector={
+              desktopInspector ? (
+                <TableRowStepContext.Provider value={stepRow}>
+                  {desktopInspector}
+                </TableRowStepContext.Provider>
+              ) : undefined
+            }
+            externalToolbar={externalToolbar}
+            desktopToolbar={desktopToolbar}
+            showToolbar={showToolbar}
+            infiniteScroll={infiniteScroll}
+            showPagination={showPagination}
+            showCellSelectionStats={showCellSelectionStats}
+            timing={timing}
+            ariaLabel={ariaLabel}
+            cellSelectionEnabled={cellSelectionEnabled}
+            statusContent={statusContent}
+            hasStatusContent={hasStatusContent}
+            tableBody={renderTableBody()}
+            footerContent={footerContent}
+            rowContextMenu={rowContextMenu}
+          />
 
-            {/* Mobile List View. Also rendered pre-hydration (see the desktop
+          {/* Mobile List View. Also rendered pre-hydration (see the desktop
           wrapper's breakpoint comment) so a phone's first paint is the
           shape-matched skeleton rather than a clipped desktop table. */}
-            {(isMobile || !hydrated) && (
-              <MobileListScreen
-                table={table}
-                entity={entity}
-                getDetailsHref={getMobileDetailsHref}
-                disableDetailsHref={disableMobileDetailsHref}
-                renderRowFooter={renderMobileRowFooter}
-                onRowClick={onRowClick}
-                additionalToolbarContent={additionalToolbarContent}
-                actions={actions}
-                bulkActionBar={bulkActionBar}
-                isLoading={isLoading}
-                error={error}
-                infiniteScroll={infiniteScroll}
-                refreshControls={refreshControls}
-                groupConfig={groupConfig}
-                presentationSwitches={presentationSwitches(nestToggle)}
-                isTransitioning={isTransitioning}
-                rowContentVersion={rowContentVersion}
-                portalWorkbenchUtilities={externalToolbar}
-                showToolbar={showToolbar}
-                showViewOptions={showMobileViewOptions({
-                  embedded,
-                  showColumnMenu,
-                  externalToolbar,
-                })}
-                toolbarVariant={tableChromeVariant(embedded)}
-                emptyState={emptyState}
-              />
-            )}
+          {(isMobile || !hydrated) && (
+            <MobileListScreen
+              table={table}
+              entity={entity}
+              getDetailsHref={getMobileDetailsHref}
+              disableDetailsHref={disableMobileDetailsHref}
+              renderRowFooter={renderMobileRowFooter}
+              onRowClick={onRowClick}
+              additionalToolbarContent={additionalToolbarContent}
+              actions={actions}
+              bulkActionBar={bulkActionBar}
+              isLoading={isLoading}
+              error={error}
+              infiniteScroll={infiniteScroll}
+              refreshControls={refreshControls}
+              groupConfig={groupConfig}
+              presentationSwitches={presentationSwitches(nestToggle)}
+              isTransitioning={isTransitioning}
+              rowContentVersion={rowContentVersion}
+              portalWorkbenchUtilities={externalToolbar}
+              showToolbar={showToolbar}
+              showViewOptions={showMobileViewOptions({
+                embedded,
+                showColumnMenu,
+                externalToolbar,
+              })}
+              toolbarVariant={tableChromeVariant(embedded)}
+              emptyState={emptyState}
+            />
+          )}
 
-            {/* Mobile keeps the inline pager, hidden when infinite scroll is active */}
-            {isMobile && table.getPageCount() > 1 && !infiniteScroll && (
-              <DataTablePagination
-                table={table}
-                timing={timing}
-                variant={tableChromeVariant(embedded)}
-              />
-            )}
-          </Stack>
-        </TableInspectorLayout>
-      </EntityDisplayImagesProvider>
-    </ProposalCountProvider>
+          {/* Mobile keeps the inline pager, hidden when infinite scroll is active */}
+          {isMobile && table.getPageCount() > 1 && !infiniteScroll && (
+            <DataTablePagination
+              table={table}
+              timing={timing}
+              variant={tableChromeVariant(embedded)}
+            />
+          )}
+        </Stack>
+      </TableInspectorLayout>
+    </EntityDisplayImagesProvider>
   );
 }
 

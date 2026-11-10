@@ -1,6 +1,7 @@
 import { and, asc, eq, exists, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 import { alias } from "drizzle-orm/pg-core";
+import { seedFieldSuggestion } from "tooling/shared-suggestion-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -12,6 +13,7 @@ import { emailScaffold } from "~/server/domains/email/repo/email";
 import { projectScaffold } from "~/server/domains/project/repo/lookup";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { loadSuggestionRowCounts } from "~/server/generic/suggestions/repo/suggestion-row-counts";
 import { publishQualityFixtures } from "~/server/testing/quality.fixtures";
 
 import { listScaffold } from "./list";
@@ -155,6 +157,23 @@ describe("list selection and relation loading", () => {
       page.data.map((row) => row.id),
     );
     expect(qualities.size).toBe(1);
+    const listed = page.data[0];
+    if (!listed) throw new Error("Missing synthetic task");
+    await seedFieldSuggestion(ctx.db, {
+      entity: "task",
+      recordId: listed.id,
+      field: "name",
+      suggestedValue: "Synthetic guess",
+      confidence: 0.1,
+      model: "synthetic",
+      kind: "addition",
+      status: "pending",
+    });
+    expect(
+      (await loadSuggestionRowCounts(ctx.db, "task", [listed.id])).get(
+        listed.id,
+      ),
+    ).toBe(0);
   });
 
   it("keeps quality aliases and exact totals when loading an ordered page", async () => {

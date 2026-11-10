@@ -19,6 +19,7 @@ export function createEntityReadMedia<ImageFields extends z.ZodRawShape>(
   const listMediaFields = z.object({
     displayImages: displayImagesField,
     displayCover: displayCoverField.optional(),
+    pendingSuggestionCount: z.number().int().nonnegative().optional(),
   });
   const detailMediaFields = z.object({
     displayImages: displayImagesField,

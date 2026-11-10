@@ -10,22 +10,14 @@ import {
   rawProductOutput,
 } from "@cubby/schemas/product-raw-read";
 import { type FoodLookupParam, foodLookupParam } from "@cubby/usda";
-import {
-  and,
-  eq,
-  ilike,
-  inArray,
-  isNotNull,
-  or,
-  type SQL,
-  sql,
-} from "drizzle-orm";
+import { and, eq, ilike, inArray, isNotNull, type SQL, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 import { match } from "ts-pattern";
 
 import type { Database } from "~/server/db";
 import { escapeLike, getDb, notDeleted } from "~/server/db/helpers";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
+import { requestedRows } from "~/server/db/helpers/requested";
 import { inventoryEntry, product, vendor } from "~/server/db/schema";
 import {
   attachInventoryValuations,
@@ -73,16 +65,25 @@ const productMatchesFoodLookup = (
     })
     .exhaustive();
 
-const productFoodLinkCondition = (lookups: readonly FoodLookupParam[]) =>
-  or(
-    ...lookups.map((lookup) =>
-      match(lookup)
-        .with({ kind: "upc" }, (value) => productHasGtin(value.gtin_upc))
-        .with({ kind: "fdc" }, (value) => eq(product.fdc_id, value.fdc_id))
-        .with({ kind: "ndb" }, () => sql`false`)
-        .exhaustive(),
-    ),
+const productFoodLinkCondition = (lookups: readonly FoodLookupParam[]) => {
+  const wanted = requestedRows(
+    lookups.flatMap<{ fdc: number | null; gtin: string | null }>((lookup) => {
+      if (lookup.kind === "fdc") return [{ fdc: lookup.fdc_id, gtin: null }];
+      if (lookup.kind === "upc") {
+        const gtin = normalizeGtin(lookup.gtin_upc);
+        return gtin === null ? [] : [{ fdc: null, gtin }];
+      }
+      return [];
+    }),
+    { fdc: "int", gtin: "text" },
+    "wanted_food",
   );
+  return sql`EXISTS (SELECT 1 FROM ${wanted.from} WHERE wanted_food.fdc = ${product.fdc_id} OR EXISTS (
+    SELECT 1 FROM "EntityExternalId" pei WHERE pei."entityId" = ${product.id}
+      AND pei."source" = ${GTIN_SOURCE} AND pei."kind" = ${GTIN_KIND}
+      AND ${notDeleted("pei")} AND pei."externalId" = wanted_food.gtin
+  ))`;
+};
 
 /** Live Product records by internal id, in id order, through the declared read. */
 const readProductRecords = async (

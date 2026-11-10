@@ -1,3 +1,4 @@
+export { requestedRows as searchRequestedRows } from "~/server/db/helpers/requested";
 import { embeddingArtifactState } from "@cubby/schemas/derived-refresh";
 import { entityRefKey } from "@cubby/schemas/entity";
 import { entityMembership } from "@cubby/schemas/entity-manifest";
@@ -23,6 +24,7 @@ import {
   withTransactionOn,
 } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
+import { requested as requestedRecords } from "~/server/db/helpers/requested";
 import { loadSelectedDescriptions } from "~/server/domains/image/repo/image-description-selection";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { getEmbeddingTextsForRefs } from "~/server/generic/embedding/repo/entity-embedding-refresh";
@@ -194,24 +196,16 @@ async function searchDocumentSourceSql(
     entityKinds.map((entityKind) => sql`${entityKind}`),
     sql`, `,
   );
-  // ONE bind parameter for the whole id set, not one per id: a Postgres array
-  // literal bound as text and cast in SQL, via the only constructor the
-  // `hand-rolled-any-array` guard accepts. It is deliberately NOT a JS array
-  // interpolated into `sql` — drizzle renders that as a row constructor — and
-  // not `eqAny`/`inArray`, which emit `IN ($1, …, $n)`: this is raw SQL over
-  // independently aliased branches, and a parameter per id is the cost being removed.
-  const hasIds = entityIds != null;
-
-  /**
-   * The shared id gate — an absent set means "no gate", not "match nothing".
-   *
-   * `= ANY` and not `IN (SELECT unnest(...))` over a CTE: with a BOUND
-   * parameter the planner cannot see into the subquery, so that form degrades
-   * every arm to a hashed SubPlan over a full table scan. Measured on
-   * production, fetching one row by uuid: 270 buffers against 3.
-   */
-  const requested = (column: SQL) =>
-    hasIds ? sql`${column} = ANY(${uuidArrayParam(entityIds)})` : sql`TRUE`;
+  // An absent set means no gate; an empty set matches nothing. The
+  // per-entity ANY probe keeps the single-row index lookup shape.
+  const requested =
+    entityIds === undefined
+      ? undefined
+      : requestedRecords(
+          selectedKinds.flatMap((entity) =>
+            entityIds.map((id) => ({ entity, id })),
+          ),
+        );
   const createdBefore = page?.createdBefore;
   /** The same cutoff gates the paged rows and the pass's frozen COUNT. */
   const bounded = (column: SQL) =>

@@ -94,6 +94,6 @@ export const inventorySearch = {
                   WHERE pei."entityId" = p."id" AND pei."source" = 'gtin' AND ${notDeleted(alias(searchTableentityExternalId, "pei"))}),
                  ARRAY[]::text[])
       FROM "InventoryEntry" ie JOIN "Product" p ON p."id" = ie."productId" AND ${notDeleted(alias(searchTableproduct, "p"))} JOIN "Location" l ON l."id" = ie."locationId" AND ${notDeleted(alias(searchTablelocation, "l"))}
-      WHERE ${notDeleted(alias(searchTableinventoryEntry, "ie"))} AND ${entitySchema.enum.inventory} IN (${types}) AND ${requested(sql`ie."id"`)} AND ${bounded(sql`ie."createdAt"`)}`,
+      WHERE ${notDeleted(alias(searchTableinventoryEntry, "ie"))} AND ${entitySchema.enum.inventory} IN (${types}) AND ${requested?.match({ entity: "inventory", id: sql`ie."id"` }) ?? sql`TRUE`} AND ${bounded(sql`ie."createdAt"`)}`,
   embedding: loadEmbeddingText,
 } satisfies SearchReadPort;

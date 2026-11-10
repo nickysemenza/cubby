@@ -97,6 +97,6 @@ export const financialTransactionSearch = {
   document: ({ types, requested, bounded }) => sql`
       SELECT ${entitySchema.enum.financialTransaction}, ft."id"::text, ft."shortcode", COALESCE(NULLIF(ft."merchant", ''), NULLIF(ft."rawDescription", ''), ft."kind"), fa."name", ft."status", ARRAY[]::text[], ARRAY[ft."sourceCategory", ft."transactionDate"::text, ft."postedDate"::text]::text[]
       FROM "FinancialTransaction" ft JOIN "FinancialAccount" fa ON fa."id" = ft."accountId" AND ${notDeleted(alias(searchTablefinancialAccount, "fa"))}
-      WHERE ${notDeleted(alias(searchTablefinancialTransaction, "ft"))} AND ${entitySchema.enum.financialTransaction} IN (${types}) AND ${requested(sql`ft."id"`)} AND ${bounded(sql`ft."createdAt"`)}`,
+      WHERE ${notDeleted(alias(searchTablefinancialTransaction, "ft"))} AND ${entitySchema.enum.financialTransaction} IN (${types}) AND ${requested?.match({ entity: "financialTransaction", id: sql`ft."id"` }) ?? sql`TRUE`} AND ${bounded(sql`ft."createdAt"`)}`,
   embedding: loadEmbeddingText,
 } satisfies SearchReadPort;

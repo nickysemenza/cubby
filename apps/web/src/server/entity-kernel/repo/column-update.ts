@@ -9,7 +9,7 @@ import type {
   ShortcodeEntity,
 } from "@cubby/schemas/entity-manifest";
 import { getErrorMessage } from "@cubby/shared";
-import { and, eq, getTableColumns, isNull, or } from "drizzle-orm";
+import { and, getTableColumns, sql } from "drizzle-orm";
 import {
   getTableConfig,
   type PgTable,
@@ -18,6 +18,7 @@ import {
 import { z } from "zod";
 
 import { getDb, notDeleted } from "~/server/db/helpers";
+import { requestedRows } from "~/server/db/helpers/requested";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { isShortcodeEntity } from "~/server/entity-kernel/repo/entity-identity";
 import { findPgError } from "~/server/errors/db-errors";
@@ -108,6 +109,29 @@ export async function updateColumns<
     const projected = before.map((row) => ({ ...row, ...input }));
     const identity = (row: ColumnSnapshot) =>
       JSON.stringify(keys.map(({ key }) => row[key]));
+    const rowColumns = Object.fromEntries(
+      keys.map((_, index) => [`key_${index}`, "text" as const]),
+    );
+    const wanted = requestedRows(
+      projected.map((row) =>
+        Object.fromEntries(
+          keys.map(({ key, column }, index) => {
+            const value = row[key];
+            if (value === null || value === undefined)
+              return [`key_${index}`, null];
+            const mapped = column.mapToDriverValue(value);
+            return [
+              `key_${index}`,
+              typeof mapped === "object"
+                ? JSON.stringify(mapped)
+                : String(mapped),
+            ];
+          }),
+        ),
+      ),
+      rowColumns,
+      "wanted",
+    );
     // The column writer's savepoint has rolled back. Compare intended values
     // both within the selection and against surviving rows; never infer the
     // offending subset by parsing PostgreSQL's human-readable key tuple.
@@ -118,15 +142,13 @@ export async function updateColumns<
         .where(
           and(
             notDeleted(table),
-            or(
-              ...projected.map((row) =>
-                and(
-                  ...keys.map(({ key, column }) =>
-                    row[key] === null ? isNull(column) : eq(column, row[key]),
-                  ),
-                ),
+            sql`EXISTS (SELECT 1 FROM ${wanted.from} WHERE ${sql.join(
+              keys.map(
+                ({ column }, index) =>
+                  sql`${column} IS NOT DISTINCT FROM ${wanted.col(`key_${index}`)}::${sql.raw(column.getSQLType())}`,
               ),
-            ),
+              sql` AND `,
+            )})`,
           ),
         )
     ).map((row) => z.record(z.string(), z.unknown()).parse(row));

@@ -16,6 +16,7 @@ import {
   isTransaction,
   notDeleted,
 } from "~/server/db/helpers";
+import { requestedRows } from "~/server/db/helpers/requested";
 import { entityAttachment, image, project } from "~/server/db/schema";
 import { displayableImageWhere } from "~/server/domains/image/repo/image-displayability";
 import { withProjectExternalUrls } from "~/server/domains/project/repo/external-links";
@@ -97,12 +98,17 @@ export const projectScaffold = listScaffold("project", project, {
     attentionItems: projectAttention.rows(({ items }) => {
       const rows = items.flatMap((item) => {
         const filter = attentionFilterOf(item.type);
-        return filter === undefined ? [] : [sql`(${item.entityId}, ${filter})`];
+        return filter === undefined
+          ? []
+          : [{ code: item.entityId, type: filter }];
       });
-      return rows.length === 0
-        ? sql`SELECT NULL::uuid AS "owner", NULL::text AS "type" WHERE false`
-        : sql`SELECT p."id" AS "owner", item."type"
-          FROM (VALUES ${sql.join(rows, sql`, `)}) item("code", "type")
+      const itemRows = requestedRows(
+        rows,
+        { code: "text", type: "text" },
+        "item",
+      );
+      return sql`SELECT p."id" AS "owner", item."type"
+          FROM ${itemRows.from}
           JOIN "Project" p ON p."shortcode" = item."code"`;
     }),
   },

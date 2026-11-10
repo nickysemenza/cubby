@@ -244,6 +244,11 @@ const traceQuery = (
             "db.namespace": DB_NAMESPACE,
             "db.operation.name": operation,
             "db.query.text": sql,
+            "db.query.parameter_count":
+              (
+                args[1] ??
+                (typeof args[0] === "string" ? undefined : args[0].values)
+              )?.length ?? 0,
             "db.query.transaction": getTransaction(),
             "cubby.db.binding_role": role,
             "cubby.db.caller": caller,
