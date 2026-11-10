@@ -509,12 +509,6 @@ const partialCoverageAction = lazy(() =>
 const islandedMappingsAction = lazy(() =>
   named(import("~/features/units/coverage-actions"), "IslandedMappingsAction"),
 );
-const addInventoryAction = lazy(() =>
-  named(
-    import("~/features/location/location-problem-actions"),
-    "AddInventoryAction",
-  ),
-);
 const analyzeLocationsAction = lazy(() =>
   named(
     import("~/features/location/location-problem-actions"),
@@ -556,7 +550,6 @@ const workActions: WorkActionTable = {
       "repair-coverage": partialCoverageAction,
     },
     productsWithIslandedMappings: { "add-conversion": islandedMappingsAction },
-    emptyLocations: { "add-inventory": addInventoryAction },
     locationsWithoutAiDescription: { "analyze-all": analyzeLocationsAction },
     staleLocations: { "start-recount": startRecountAction },
     neverVerifiedInventory: { "start-recount": startRecountAction },

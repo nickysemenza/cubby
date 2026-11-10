@@ -1,36 +1,10 @@
-import { locationShortcode } from "@cubby/schemas/identifiers";
-
 import {
-  WorkActionDialogTrigger,
   WorkActionLink,
   WorkActionTrigger,
   type WorkActionProps,
 } from "~/entity/work-queue/work-actions";
-import { AddInventoryDialog } from "~/features/inventory/add-inventory-dialog";
 import { useBackfill } from "~/features/maintenance/backfill-button";
 import { BACKFILL } from "~/features/maintenance/backfill-registry";
-
-/** `emptyLocations:add-inventory`: itemize the row's Location. */
-export function AddInventoryAction({
-  action,
-  target,
-}: WorkActionProps<"item">) {
-  const parsed = locationShortcode.safeParse(target.row.id);
-  if (!parsed.success) return null;
-  return (
-    <WorkActionDialogTrigger action={action}>
-      {(close) => (
-        <AddInventoryDialog
-          open
-          onOpenChange={(open) => !open && close()}
-          locationId={parsed.data}
-          locationName={target.row.name}
-          onSuccess={() => undefined}
-        />
-      )}
-    </WorkActionDialogTrigger>
-  );
-}
 
 /** `locationsWithoutAiDescription:analyze-all`: enqueue photo analysis. */
 export function AnalyzeLocationsAction(props: WorkActionProps) {

@@ -10,10 +10,6 @@ import {
   cookbookPublicReadFields,
 } from "./generated/entity-field-envelope-fields.cookbook.gen";
 import {
-  locationFieldEnvelopeFields,
-  locationPublicReadFields,
-} from "./generated/entity-field-envelope-fields.location.gen";
-import {
   purchaseFieldEnvelopeFields,
   purchasePublicReadFields,
 } from "./generated/entity-field-envelope-fields.purchase.gen";
@@ -41,7 +37,6 @@ import {
   financialTransactionShortcode,
   imageShortcode,
   ingredientShortcode,
-  locationShortcode,
   mealShortcode,
   productShortcode,
   projectShortcode,
@@ -286,26 +281,6 @@ export const ingredientWithUnusedAliasesSchema = z.object({
   aliases: z.array(z.string()),
   unusedAliases: z.array(z.string()),
 });
-
-export const rawEmptyLocationSchema = z.object({
-  id: locationShortcode,
-  name: z.string(),
-  type: z.string().nullable(),
-  createdAt: dateTime,
-  lastBulkInventory: dateTime.nullable(),
-  aiDescription: z.string().nullable(),
-  firstImageUrl: z.string().nullable(),
-  firstImageId: z.string().nullable(),
-});
-
-export const emptyLocationSchema = withFieldEnvelopes(
-  rawEmptyLocationSchema,
-  {
-    type: locationFieldEnvelopeFields.type,
-    aiDescription: locationFieldEnvelopeFields.aiDescription,
-  },
-  locationPublicReadFields,
-);
 
 // --- Recount staleness (tenet 1: inventory truth is restored only by a
 // deliberate recount, so an uncounted bin is unverified, not accurate). ---
@@ -997,14 +972,6 @@ export const rawProblemDetectors = {
     "neverVerifiedInventory",
   ),
   locationsWithoutAiDescription: detector("views", "defect", problemRowSchema),
-  // Meter denominator: live leaf locations — the only ones that can hold
-  // inventory directly.
-  emptyLocations: detector(
-    "views",
-    "coverage",
-    rawEmptyLocationSchema,
-    "emptyLocations",
-  ),
   // Recorded exits exceed recorded acquisitions, but acquisition history is
   // intentionally incomplete for goods owned before Cubby's ledger began.
   // Keep the arithmetic visible as coverage without claiming that an inferred
@@ -1057,10 +1024,6 @@ export const problemDetectors = {
     ...rawProblemDetectors.partiallyImportedCookbooks,
     item: partiallyImportedCookbookSchema,
   },
-  emptyLocations: {
-    ...rawProblemDetectors.emptyLocations,
-    item: emptyLocationSchema,
-  },
   purchasesNotReconciling: {
     ...rawProblemDetectors.purchasesNotReconciling,
     item: purchaseNotReconcilingSchema,
@@ -1107,7 +1070,6 @@ export const problemLiveReadProjections = {
     entity: "cookbook",
     schema: partiallyImportedCookbookSchema,
   },
-  emptyLocations: { entity: "location", schema: emptyLocationSchema },
   purchasesNotReconciling: {
     entity: "purchase",
     schema: purchaseNotReconcilingSchema,

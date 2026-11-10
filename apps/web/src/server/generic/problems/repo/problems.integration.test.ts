@@ -113,45 +113,20 @@ describe("Problems card read projections", () => {
         { name: `Synthetic unused ingredient ${index}` },
         ctx.actor,
       );
-      await createLocationFixture(
-        ctx.db,
-        makeLocationInput({
-          name: `Synthetic empty shelf ${index}`,
-          type: "shelf",
-        }),
-        ctx.actor,
-      );
     }
-    for (const { key, fields } of [
-      {
-        key: "unusedIngredientsWithoutProduct",
-        fields: ["id", "name", "product"],
-      },
-      {
-        key: "emptyLocations",
-        fields: [
-          "id",
-          "name",
-          "type",
-          "createdAt",
-          "lastBulkInventory",
-          "aiDescription",
-          "images",
-        ],
-      },
-    ] as const) {
-      const full = await executeProblem(ctx.db, key);
-      const selected = await executeProblem(ctx.db, key, { fields });
-      expect(full.count).toBeGreaterThanOrEqual(16);
-      expect(selected.count).toBe(full.count);
-      expect(selected.items).toEqual(full.items);
-      expect(selected.data.map(({ id }) => id)).toEqual(
-        full.data.map(({ id }) => id),
-      );
-      expect(selected.data).toHaveLength(12);
-      for (const row of selected.data) {
-        expect(Object.keys(row).sort()).toEqual([...fields].sort());
-      }
+    const key = "unusedIngredientsWithoutProduct";
+    const fields = ["id", "name", "product"];
+    const full = await executeProblem(ctx.db, key);
+    const selected = await executeProblem(ctx.db, key, { fields });
+    expect(full.count).toBeGreaterThanOrEqual(16);
+    expect(selected.count).toBe(full.count);
+    expect(selected.items).toEqual(full.items);
+    expect(selected.data.map(({ id }) => id)).toEqual(
+      full.data.map(({ id }) => id),
+    );
+    expect(selected.data).toHaveLength(12);
+    for (const row of selected.data) {
+      expect(Object.keys(row).sort()).toEqual([...fields].sort());
     }
   });
 
