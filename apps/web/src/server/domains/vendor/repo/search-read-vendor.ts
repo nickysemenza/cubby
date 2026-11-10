@@ -52,6 +52,6 @@ async function loadEmbeddingText(
 export const vendorSearch = {
   document: ({ types, requested, bounded }) => sql`
       SELECT ${entitySchema.enum.vendor}, v."id"::text, v."shortcode", v."name", v."website", NULL, ARRAY[]::text[], ARRAY[v."website"]::text[]
-      FROM "Vendor" v WHERE ${notDeleted(alias(searchTablevendor, "v"))} AND ${entitySchema.enum.vendor} IN (${types}) AND ${requested(sql`v."id"`)} AND ${bounded(sql`v."createdAt"`)}`,
+      FROM "Vendor" v WHERE ${notDeleted(alias(searchTablevendor, "v"))} AND ${entitySchema.enum.vendor} IN (${types}) AND ${requested?.match({ entity: "vendor", id: sql`v."id"` }) ?? sql`TRUE`} AND ${bounded(sql`v."createdAt"`)}`,
   embedding: loadEmbeddingText,
 } satisfies SearchReadPort;

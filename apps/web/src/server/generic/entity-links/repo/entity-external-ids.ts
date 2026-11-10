@@ -14,13 +14,14 @@ import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
  */
 import type { EntityExternalIdKind } from "@cubby/schemas/external-id";
 import { parseEntityId } from "@cubby/schemas/identifiers";
-import { and, asc, eq, inArray, isNull, or, type SQL, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, type SQL, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 
 import { entityIdentity } from "~/server/db/entity-identity-schema";
 import { entityExternalId } from "~/server/db/external-identifier-tables";
 import { product } from "~/server/db/generated/identity-storage-tables.gen";
 import { notDeleted } from "~/server/db/helpers/predicates";
+import { requested, requestedRows } from "~/server/db/helpers/requested";
 import {
   repositoryQueries,
   type RepositoryQueryInput,
@@ -62,14 +63,15 @@ export async function lockExternalIdentifierParents(
     .where(
       and(
         notDeleted(entityIdentity),
-        or(
-          ...uniqueOwners.map((owner) =>
-            and(
-              eq(entityIdentity.id, owner.entityId),
-              eq(entityIdentity.kind, owner.entityKind),
-            ),
-          ),
-        ),
+        requested(
+          uniqueOwners.map((owner) => ({
+            entity: owner.entityKind,
+            id: owner.entityId,
+          })),
+        ).match({
+          entity: sql`${entityIdentity.kind}`,
+          id: sql`${entityIdentity.id}`,
+        }),
       ),
     )
     .orderBy(asc(entityIdentity.id))
@@ -89,13 +91,15 @@ export async function ensureExternalSources(
 ): Promise<void> {
   const wanted = uniq([...slugs]);
   if (wanted.length === 0) return;
+  const rows = requestedRows(
+    wanted.map((slug) => ({ slug })),
+    { slug: "text" },
+    "s",
+  );
   await repositoryQueries(db).execute(sql`
     INSERT INTO "ExternalSource" ("slug", "label")
     SELECT s.slug, s.slug
-    FROM (VALUES ${sql.join(
-      wanted.map((slug) => sql`(${slug}::text)`),
-      sql`, `,
-    )}) AS s(slug)
+    FROM ${rows.from}
     ON CONFLICT ("slug") DO NOTHING
   `);
 }

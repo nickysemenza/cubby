@@ -1,12 +1,13 @@
 import type { ProductShortcode } from "@cubby/schemas/identifiers";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import { and, eq, or, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { groupBy } from "es-toolkit";
 
 import type { Database } from "~/server/db/database";
 import { entityExternalId } from "~/server/db/external-identifier-tables";
 import { product } from "~/server/db/generated/identity-storage-tables.gen";
 import { notDeleted } from "~/server/db/helpers/predicates";
+import { requestedRows } from "~/server/db/helpers/requested";
 import { repositoryQueries } from "~/server/db/repository-access.boundary";
 
 const externalIdKey = (value: {
@@ -32,6 +33,11 @@ export const findProductExternalIdCollisions = async (
     ...identifier,
     source: identifier.source.trim().toLowerCase(),
   }));
+  const wanted = requestedRows(
+    identifiers,
+    { source: "text", kind: "text", externalId: "text" },
+    "wanted",
+  );
   const rows = await repositoryQueries(db)
     .select({
       source: entityExternalId.source,
@@ -48,15 +54,7 @@ export const findProductExternalIdCollisions = async (
     .where(
       and(
         notDeleted(entityExternalId),
-        or(
-          ...identifiers.map((identifier) =>
-            and(
-              eq(entityExternalId.source, identifier.source),
-              sql`${entityExternalId.kind} = ${identifier.kind}`,
-              eq(entityExternalId.externalId, identifier.externalId),
-            ),
-          ),
-        ),
+        sql`EXISTS (SELECT 1 FROM ${wanted.from} WHERE wanted.source = ${entityExternalId.source} AND wanted.kind = ${entityExternalId.kind} AND wanted."externalId" = ${entityExternalId.externalId})`,
       ),
     );
   const owners = groupBy(rows, externalIdKey);

@@ -53,6 +53,6 @@ export const imageSearch = {
       SELECT ${entitySchema.enum.image}::text AS "entityKind", i."id"::text AS "entityId", i."shortcode",
         i.filename AS title, NULL::text AS subtitle, ${entitySchema.enum.image}::text AS "typeHint",
         ARRAY[]::text[] AS aliases, ARRAY[i."contentType"]::text[] AS keywords
-      FROM "Image" i WHERE ${notDeleted(alias(searchTableimage, "i"))} AND ${entitySchema.enum.image} IN (${types}) AND ${requested(sql`i."id"`)} AND ${bounded(sql`i."createdAt"`)}`,
+      FROM "Image" i WHERE ${notDeleted(alias(searchTableimage, "i"))} AND ${entitySchema.enum.image} IN (${types}) AND ${requested?.match({ entity: "image", id: sql`i."id"` }) ?? sql`TRUE`} AND ${bounded(sql`i."createdAt"`)}`,
   embedding: loadEmbeddingText,
 } satisfies SearchReadPort;

@@ -1,0 +1,11 @@
+{
+  "apps/web/src/server/domains/financial-transaction/repo/financial-statement-preview.ts": 5,
+  "apps/web/src/server/domains/purchase-import/repo/mail-import-run.ts": 2,
+  "apps/web/src/server/domains/purchase-import/repo/mail-run-membership.ts": 1,
+  "apps/web/src/server/domains/shipment/repo/evidence.ts": 1,
+  "apps/web/src/server/domains/transaction-import/repo/source-intake.ts": 2,
+  "apps/web/src/server/domains/transaction-import/repo/statement-suggestions.ts": 2,
+  "apps/web/src/server/generic/suggestions/repo/suggestion-list.ts": 1,
+  "apps/web/src/server/generic/suggestions/repo/suggestion-record-discovery.ts": 2,
+  "apps/web/src/server/generic/suggestions/repo/suggestion-reference-resolution.ts": 1
+}

@@ -57,6 +57,6 @@ async function loadEmbeddingText(
 export const cookbookSearch = {
   document: ({ types, requested, bounded }) => sql`
       SELECT 'cookbook', c."id"::text, c."shortcode", c."name", NULLIF(array_to_string(c."author", ', '), ''), NULL, ARRAY[]::text[], c."subjects"
-      FROM "Cookbook" c WHERE ${notDeleted(alias(searchTablecookbook, "c"))} AND 'cookbook' IN (${types}) AND ${requested(sql`c."id"`)} AND ${bounded(sql`c."createdAt"`)}`,
+      FROM "Cookbook" c WHERE ${notDeleted(alias(searchTablecookbook, "c"))} AND 'cookbook' IN (${types}) AND ${requested?.match({ entity: "cookbook", id: sql`c."id"` }) ?? sql`TRUE`} AND ${bounded(sql`c."createdAt"`)}`,
   embedding: loadEmbeddingText,
 } satisfies SearchReadPort;

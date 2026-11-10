@@ -102,6 +102,6 @@ export const productSearch = {
         COALESCE((SELECT array_agg(pei."externalId") FROM "EntityExternalId" pei
                   WHERE pei."entityId" = p."id" AND pei."source" = 'gtin' AND ${notDeleted(alias(searchTableentityExternalId, "pei"))}),
                  ARRAY[]::text[]) || ARRAY[p."model", ${productBrandNameSql(sql`p."brandId"`)}]::text[] AS keywords
-      FROM "Product" p WHERE ${notDeleted(alias(searchTableproduct, "p"))} AND ${entitySchema.enum.product} IN (${types}) AND ${requested(sql`p."id"`)} AND ${bounded(sql`p."createdAt"`)}`,
+      FROM "Product" p WHERE ${notDeleted(alias(searchTableproduct, "p"))} AND ${entitySchema.enum.product} IN (${types}) AND ${requested?.match({ entity: "product", id: sql`p."id"` }) ?? sql`TRUE`} AND ${bounded(sql`p."createdAt"`)}`,
   embedding: loadEmbeddingText,
 } satisfies SearchReadPort;

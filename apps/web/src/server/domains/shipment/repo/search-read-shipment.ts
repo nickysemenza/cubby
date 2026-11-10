@@ -56,6 +56,6 @@ export const shipmentSearch = {
   document: ({ types, requested, bounded }) => sql`
       SELECT ${entitySchema.enum.shipment}, s.id::text, s.shortcode, s.name, s."trackingNumber",
         s.purpose, ARRAY[]::text[], ARRAY[s.notes]::text[]
-      FROM "Shipment" s WHERE ${notDeleted(alias(searchTableshipment, "s"))} AND ${entitySchema.enum.shipment} IN (${types}) AND ${requested(sql`s.id`)} AND ${bounded(sql`s."createdAt"`)}`,
+      FROM "Shipment" s WHERE ${notDeleted(alias(searchTableshipment, "s"))} AND ${entitySchema.enum.shipment} IN (${types}) AND ${requested?.match({ entity: "shipment", id: sql`s.id` }) ?? sql`TRUE`} AND ${bounded(sql`s."createdAt"`)}`,
   embedding: loadEmbeddingText,
 } satisfies SearchReadPort;

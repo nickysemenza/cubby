@@ -1,0 +1,5 @@
+import { or, sql } from "drizzle-orm";
+const first = or(...records.map((record) => sql`${record.id}`));
+const second = sql`SELECT * FROM (VALUES ${sql.join(records.map((record) => sql`(${record.id})`), sql`, `)}) r(id)`;
+const fixed = or(...MILESTONES.map((column) => sql`${column}`));
+const safe = requested(records).match({ entity: "product", id: column });

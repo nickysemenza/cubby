@@ -69,6 +69,6 @@ async function loadEmbeddingText(
 export const recipeSearch = {
   document: ({ types, requested, bounded }) => sql`
       SELECT ${entitySchema.enum.recipe}, r."id"::text, r."shortcode", r."name", NULL, NULL, ARRAY[]::text[], ARRAY[]::text[]
-      FROM "Recipe" r WHERE ${notDeleted(alias(searchTablerecipe, "r"))} AND ${entitySchema.enum.recipe} IN (${types}) AND ${requested(sql`r."id"`)} AND ${bounded(sql`r."createdAt"`)}`,
+      FROM "Recipe" r WHERE ${notDeleted(alias(searchTablerecipe, "r"))} AND ${entitySchema.enum.recipe} IN (${types}) AND ${requested?.match({ entity: "recipe", id: sql`r."id"` }) ?? sql`TRUE`} AND ${bounded(sql`r."createdAt"`)}`,
   embedding: loadEmbeddingText,
 } satisfies SearchReadPort;

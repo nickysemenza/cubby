@@ -6,11 +6,12 @@ import {
   type SearchableEntity,
   type SearchableEntityRef,
 } from "@cubby/schemas/search";
-import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, inArray, isNull, sql } from "drizzle-orm";
 
 import { normalizeSearchText } from "~/lib/search-normalization";
 import type { Database } from "~/server/db";
 import { entityIdentity } from "~/server/db/entity-identity-schema";
+import { requested } from "~/server/db/helpers/requested";
 import { repositoryQueries as getDb } from "~/server/db/repository-access.boundary";
 import { entityEmbedding } from "~/server/db/retained-tables";
 import { recordChange } from "~/server/generic/changes/repo/change";
@@ -569,14 +570,15 @@ export async function publishEmbeddingDrainSelections(
     .where(
       and(
         isNull(entityEmbedding.deletedAt),
-        or(
-          ...selected.map(({ ref }) =>
-            and(
-              eq(entityEmbedding.entityKind, ref!.entityKind),
-              eq(entityEmbedding.entityId, ref!.entityId),
-            ),
-          ),
-        ),
+        requested(
+          selected.map(({ ref }) => ({
+            entity: ref!.entityKind,
+            id: ref!.entityId,
+          })),
+        ).match({
+          entity: sql`${entityEmbedding.entityKind}`,
+          id: sql`${entityEmbedding.entityId}`,
+        }),
       ),
     );
   await getDb(tx)

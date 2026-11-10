@@ -129,6 +129,6 @@ export const gardenEntrySearch = {
         ge."kind", ARRAY[]::text[], ARRAY[l."name", ge."harvestAmount"]::text[]
       FROM "GardenEntry" ge
       JOIN "Location" l ON l."id" = ge."locationId" AND ${notDeleted(alias(searchTablelocation, "l"))}
-      WHERE ${notDeleted(alias(searchTablegardenEntry, "ge"))} AND 'gardenEntry' IN (${types}) AND ${requested(sql`ge."id"`)} AND ${bounded(sql`ge."createdAt"`)}`,
+      WHERE ${notDeleted(alias(searchTablegardenEntry, "ge"))} AND 'gardenEntry' IN (${types}) AND ${requested?.match({ entity: "gardenEntry", id: sql`ge."id"` }) ?? sql`TRUE`} AND ${bounded(sql`ge."createdAt"`)}`,
   embedding: loadEmbeddingText,
 } satisfies SearchReadPort;

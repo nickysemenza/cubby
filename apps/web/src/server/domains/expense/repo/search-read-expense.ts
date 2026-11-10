@@ -75,7 +75,7 @@ export const expenseSearch = {
       SELECT ${entitySchema.enum.expense}, e."id"::text, e."shortcode", e."name", names."projectNames", CASE WHEN e."lineKind" = ${expenseLineKindSchema.enum.principal} THEN e."costType" ELSE e."lineKind" END, ARRAY[]::text[], ARRAY[e."lineKind", ${effectiveExpenseTradeSql("e")}, e."costType", e."notes"]::text[]
       FROM "Expense" e
       LEFT JOIN (${expenseDerivedReadSql("names", { expenseIds: expenseNameIds })}) names ON names."expenseId" = e."id"
-      WHERE ${notDeleted(alias(searchTableexpense, "e"))} AND ${entitySchema.enum.expense} IN (${types}) AND ${requested(sql`e."id"`)} AND ${bounded(sql`e."createdAt"`)}`;
+      WHERE ${notDeleted(alias(searchTableexpense, "e"))} AND ${entitySchema.enum.expense} IN (${types}) AND ${requested?.match({ entity: "expense", id: sql`e."id"` }) ?? sql`TRUE`} AND ${bounded(sql`e."createdAt"`)}`;
   },
   embedding: loadEmbeddingText,
 } satisfies SearchReadPort;

@@ -110,6 +110,6 @@ export const financialAccountSearch = {
         ) || ARRAY(
           SELECT card->>'last4' FROM jsonb_array_elements(fa."cardNumbers") card
         )
-      FROM "FinancialAccount" fa WHERE ${notDeleted(alias(searchTablefinancialAccount, "fa"))} AND ${"financialAccount"}::text IN (${types}) AND ${requested(sql`fa."id"`)} AND ${bounded(sql`fa."createdAt"`)}`,
+      FROM "FinancialAccount" fa WHERE ${notDeleted(alias(searchTablefinancialAccount, "fa"))} AND ${"financialAccount"}::text IN (${types}) AND ${requested?.match({ entity: "financialAccount", id: sql`fa."id"` }) ?? sql`TRUE`} AND ${bounded(sql`fa."createdAt"`)}`,
   embedding: loadEmbeddingText,
 } satisfies SearchReadPort;
