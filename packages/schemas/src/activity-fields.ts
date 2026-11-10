@@ -70,6 +70,14 @@ export type RunKindDeclaration = {
   execution?: "steps" | "ai_work" | "mail_discovery";
   /** AI work the Run owns directly (`AiEvaluation.runId`) or requested by reference. */
   aiWork?: "owned" | "requested";
+  /**
+   * How the AI-work driver reads an `ai_work` Run's progress: the refresh
+   * summary, a per-Email reclassification roster (which must exist), or the
+   * owned evaluation tally.
+   */
+  aiWorkProgress?: "refresh" | "reclassification" | "tally";
+  /** Presents import report blocks (presentation only; not an execution capability). */
+  importReport?: true;
   /** Where list and detail progress counts come from. */
   progress:
     | "targets"
@@ -102,6 +110,7 @@ export const RUN_KINDS = {
       recovery:
         "Inspect retained outcomes; use the current purchase workflow for new work.",
     },
+    importReport: true,
     label: "Account sync",
     description: "A vendor account's order history sync.",
     trigger: "agent",
@@ -119,6 +128,7 @@ export const RUN_KINDS = {
       recovery:
         "Inspect each target and its evidence; continue or retry through the owning purchase workflow.",
     },
+    importReport: true,
     label: "Purchase research",
     description: "An agent researching purchases from Email and accounts.",
     trigger: "agent",
@@ -134,6 +144,7 @@ export const RUN_KINDS = {
       recovery:
         "Inspect retained findings; use current purchase review for new work.",
     },
+    importReport: true,
     label: "Purchase validation",
     description: "An agent validating imported purchases.",
     trigger: "agent",
@@ -150,6 +161,7 @@ export const RUN_KINDS = {
       recovery:
         "Use the current Research work queue for unresolved Product facts.",
     },
+    importReport: true,
     label: "Product enrichment",
     description: "An agent enriching Product identity facts.",
     trigger: "agent",
@@ -212,6 +224,7 @@ export const RUN_KINDS = {
     description: "AI evaluations whose inputs or policy changed.",
     trigger: "system",
     execution: "ai_work",
+    aiWorkProgress: "refresh",
     aiWork: "owned",
     progress: "checkpoint",
   },
@@ -245,6 +258,7 @@ export const RUN_KINDS = {
       recovery:
         "Inspect the imported results and source evidence; resolve outstanding work in the owning import flow.",
     },
+    importReport: true,
     label: "File import",
     description: "A member's receipt, order Email or vendor export import.",
     trigger: "member",
@@ -302,6 +316,7 @@ export const RUN_KINDS = {
     description: "A member's reclassification of selected Emails.",
     trigger: "member",
     execution: "ai_work",
+    aiWorkProgress: "reclassification",
     aiWork: "requested",
     progress: "checkpoint",
   },
@@ -322,6 +337,7 @@ export const RUN_KINDS = {
     trigger: "scheduled",
     routine: true,
     execution: "ai_work",
+    aiWorkProgress: "tally",
     aiWork: "owned",
     progress: "checkpoint",
   },
@@ -676,18 +692,11 @@ export const runStepDeclaration = (
     : undefined;
 
 /** Report presentation only; agent execution and discovery purposes are separate capabilities. */
-export const IMPORT_REPORT_RUN_PURPOSES = [
-  "account_sync",
-  "mail_import",
-  "purchase_validation",
-  "product_enrichment",
-  "file_import",
-] as const satisfies readonly RunPurpose[];
-const importReportPurposes: ReadonlySet<RunPurpose> = new Set(
-  IMPORT_REPORT_RUN_PURPOSES,
+export const IMPORT_REPORT_RUN_PURPOSES = purposesWhere((kind) =>
+  Boolean(kind.importReport),
 );
 export const hasImportRunReports = (purpose: RunPurpose): boolean =>
-  importReportPurposes.has(purpose);
+  IMPORT_REPORT_RUN_PURPOSES.includes(purpose);
 
 export const imageProcessingJobKind = z.enum([
   "subject_lift",

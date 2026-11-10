@@ -389,6 +389,7 @@ describe("rendered column fit", () => {
 
   it("retains fit during editing and measures the returning display", async () => {
     await page.viewport(1440, 900);
+    await document.fonts.ready;
     const view = render(<FitFixture />);
     await waitFor(() =>
       expect(width(view.getByTestId("location"))).toBeLessThan(100),
@@ -474,6 +475,7 @@ describe("rendered column fit", () => {
 
   it("counts visible icons within editable values", async () => {
     await page.viewport(1440, 900);
+    await document.fonts.ready;
     const view = render(<FitFixture icon location="Workshop" />);
     await waitFor(() =>
       expect(width(view.getByTestId("location"))).toBeLessThan(184),
@@ -497,6 +499,7 @@ describe("rendered column fit", () => {
   // record's column shrank to its header and clipped the chip to "S…".
   it("fits a chip cluster to its first chip", async () => {
     await page.viewport(1440, 900);
+    await document.fonts.ready;
     const view = render(<FitFixture chips={["Synthetic workshop bench"]} />);
     await waitFor(() =>
       expect(width(view.getByTestId("location"))).toBeLessThan(184),

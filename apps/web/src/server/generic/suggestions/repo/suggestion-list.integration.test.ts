@@ -45,6 +45,7 @@ import {
   readWorkQueueWith,
   readRecordWorkQueueWith,
 } from "~/server/generic/work-queue/repo/work-queue";
+import { buildCrudServices } from "~/server/http/request-context";
 import {
   createProductFixture,
   makeProductInput,
@@ -130,6 +131,7 @@ const generate = async (ctx: Ctx) => {
   >[1]["after"];
   for (;;) {
     const page = await generateStatementSuggestionPage(ctx.db, {
+      servicesFor: buildCrudServices,
       after,
       runId: null,
     });

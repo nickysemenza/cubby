@@ -56,7 +56,7 @@ import {
 } from "~/server/ai/decision-model";
 import {
   normalizeSuggestionDraft,
-  resolveSuggestionDraft,
+  resolveFieldSuggestionDraft,
 } from "~/server/ai/field-suggest/draft-policy";
 import {
   fieldSuggestSpecFor,
@@ -74,7 +74,6 @@ import {
 import { type AiSelectionUsage, runAiSelection } from "~/server/ai/selection";
 import type { Database } from "~/server/db";
 import { loadFinanceSuggestionContext } from "~/server/domains/financial-transaction/repo/finance-suggestion-context";
-import { resolveDraftEvidenceFields } from "~/server/domains/purchase/repo/purchase-evidence-policy";
 import { classificationAllowsField } from "~/server/domains/spending-category/repo/classification-field-policy";
 import { classificationRefusesField } from "~/server/domains/spending-category/repo/classification-field-policy";
 import { loadVendorSuggestionContext } from "~/server/domains/vendor/repo/vendor-suggestion-context";
@@ -175,20 +174,18 @@ async function resolveSuggestionInheritance(
     )?.resolution;
     const mode = resolution?.inheritMode;
     const explicit = mode && resolution?.none?.[mode.field];
-    if (input.entity === "task" && mode && typeof explicit === "string") {
+    // Each field's declared mode keeps the draft's inheritance choice; only
+    // entities with a draft policy (draft-policy.ts) read it.
+    if (mode && typeof explicit === "string") {
       draft[mode.field] =
         assignment?.kind === "inherit" ? mode.inherit : explicit;
     }
   }
-  const inheritance = resolveSuggestionDraft(db, input.entity, draft);
-  if (inheritance) return inheritance;
-  if (input.entity === "purchase" || input.entity === "financialTransaction")
-    return resolveDraftEvidenceFields(db, {
-      entity: input.entity,
-      entityId: input.entityId,
-      basis: draft,
-    });
-  return {};
+  return resolveFieldSuggestionDraft(db, {
+    entity: input.entity,
+    entityId: input.entityId,
+    draft,
+  });
 }
 
 function fieldResolutionContext(

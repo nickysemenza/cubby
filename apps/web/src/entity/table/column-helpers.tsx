@@ -5,7 +5,11 @@ import {
   entityRefKey,
 } from "@cubby/schemas/entity";
 import type { EntityFieldProvenance } from "@cubby/schemas/entity-fields";
-import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
+import {
+  entityMembership,
+  shortcodeEntities,
+  type ShortcodeEntity,
+} from "@cubby/schemas/entity-manifest";
 import { entityRoster } from "@cubby/schemas/entity-roster";
 import { fieldEnvelope, fieldValueOf } from "@cubby/schemas/field-envelope";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
@@ -1399,6 +1403,8 @@ interface SingleEntityEditableConfig<T> {
   suggest?: { entity: ShortcodeEntity; field: string };
 }
 
+const hasShortcodes = entityMembership(shortcodeEntities);
+
 export function createSingleEntityInlineLinkColumn<
   TEntity extends SingleEntityColumnData["entity"],
   K extends PropertyKey,
@@ -1428,25 +1434,25 @@ export function createSingleEntityInlineLinkColumn<
     const parsed = singleEntitySchemas[entity].safeParse(value);
     return parsed.success ? parsed.data : null;
   };
-  // usda-food has no generic picker, so it's never copy/pasteable here.
-  const cellData =
-    entity === "usda-food"
-      ? undefined
-      : entityCellData<T, string>(
-          entity,
-          (value) => parseShortcodeFor(entity, value),
-          (row) => {
-            const item = valueFor(row);
-            if (!item) return null;
-            return buildSingleEntityItem(queryClient, entity, item);
-          },
-          editableConfig
-            ? (row, id) => editableConfig.onSave(id, row)
-            : undefined,
-          editableConfig?.clearable
-            ? (row) => editableConfig.onSave(null, row)
-            : undefined,
-        );
+  // An entity without shortcodes has no generic picker or reference, so it is
+  // never copy/pasteable, editable or a counted reference here.
+  const cellData = !hasShortcodes.has(entity)
+    ? undefined
+    : entityCellData<T, string>(
+        entity,
+        (value) => parseShortcodeFor(entity, value),
+        (row) => {
+          const item = valueFor(row);
+          if (!item) return null;
+          return buildSingleEntityItem(queryClient, entity, item);
+        },
+        editableConfig
+          ? (row, id) => editableConfig.onSave(id, row)
+          : undefined,
+        editableConfig?.clearable
+          ? (row) => editableConfig.onSave(null, row)
+          : undefined,
+      );
 
   return columnHelper.accessor(valueFor, {
     id: String(accessor),
@@ -1462,7 +1468,7 @@ export function createSingleEntityInlineLinkColumn<
       linksTo: entity,
       entityRefs: (row) => {
         const item = valueFor(row);
-        return entity === "usda-food" || !item || !("id" in item)
+        return !hasShortcodes.has(entity) || !item || !("id" in item)
           ? []
           : [{ entityKind: entity, entityId: item.id }];
       },
@@ -1473,7 +1479,7 @@ export function createSingleEntityInlineLinkColumn<
 
       if (
         editable &&
-        entity !== "usda-food" &&
+        hasShortcodes.has(entity) &&
         (editable.isEditable?.(info.row.original) ?? true)
       ) {
         const SearchProvider = singleEntityAdapters[entity].SearchProvider;
@@ -1518,8 +1524,8 @@ export function createSingleEntityInlineLinkColumn<
               // Keep the real inline link while the display matches the row
               // data; a transient optimistic value renders as plain text
               // until the invalidated query restores the relation summary.
-              // (`id in item` is a type guard only — usda-food, the one
-              // id-less member, can't reach the editable branch.)
+              // (`id in item` is a type guard only — an id-less entity has no
+              // shortcodes, so it can't reach the editable branch.)
               const currentItem = item
                 ? buildSingleEntityItem(queryClient, entity, item)
                 : null;

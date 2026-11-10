@@ -1,3 +1,4 @@
+import { buildCrudServices } from "~/server/http/request-context";
 import { relationalSchema } from "~/server/db/schema";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { execFileSync } from "node:child_process";
@@ -280,6 +281,7 @@ it.each(sizes)(
       >[1]["after"] = null;
       do {
         const generated = await generateStatementSuggestionPage(db, {
+          servicesFor: buildCrudServices,
           after,
           runId: null,
           limit: 128,

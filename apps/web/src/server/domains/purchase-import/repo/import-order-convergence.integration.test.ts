@@ -58,6 +58,7 @@ import { updateSourceTransactionRecords } from "~/server/domains/transaction-imp
 import { recordSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
 import { executeEntity } from "~/server/entity-kernel";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { buildCrudServices } from "~/server/http/request-context";
 import {
   captureBackgroundQueue,
   drainStoredDerived,
@@ -320,7 +321,7 @@ async function createConvergenceHarness(ctx: TestDbContext) {
     );
 
     await readProduct();
-    await proposePhotoGroups(db, {
+    await proposePhotoGroups(db, buildCrudServices, {
       runId,
       groups: [
         shirtGroup(names, finalized, productCode, {
@@ -334,6 +335,7 @@ async function createConvergenceHarness(ctx: TestDbContext) {
     const loaded = await listPhotoGroupProposals(db, runId);
     const approved = await approvePhotoGroupProposals(
       db,
+      buildCrudServices,
       {
         runId,
         groupKeys: ["shirt"],

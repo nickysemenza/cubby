@@ -240,15 +240,21 @@ and retain their behavior checks; passing the helper's own tests proves only tha
   (`@cubby/shared/base64`); `capitalize`, `pascalCase`, `humanize`,
   `screamingSnake` (`@cubby/shared/text-case`). Never hand-roll
   `crypto.subtle.digest` + hex or `btoa` alphabet swaps.
-- Run purpose behavior: `server/domains/run/repo/purpose-policy.ts` declares
-  each purpose's capabilities, who may control it, which retained mail its
-  writers read and whether a successor keeps its parent. Agent-coordinated
+- Run purpose behavior: `RUN_KINDS` (`@cubby/schemas/activity-fields`) declares
+  each kind's presentation and execution flags (`importReport`, `execution`,
+  `aiWork`, `aiWorkProgress`, steps); server code reads those flags instead of
+  comparing purpose literals. `server/domains/run/repo/purpose-policy.ts`
+  declares each purpose's capabilities, who may control it, which retained mail
+  its writers read and whether a successor keeps its parent. Agent-coordinated
   purposes implement `RunPurposeLifecycle` in their own domain (Mail import in
   `purchase-import/repo/mail-run-lifecycle.ts`, photo inventory in
   `photo-import/repo/run/photo-run.ts`), registered in
   `run/repo/purpose-lifecycle.ts`: roster targets, successor handoff, retry
-  input, and the cancel, failure, dispatch-failure and admission hooks.
-  Generic Run control calls these instead of comparing purpose literals.
+  input, and the cancel, failure, dispatch-failure and admission hooks. Keep
+  that registry out of `purpose-policy.ts`: the policy module sits in the
+  Worker environment's type graph, and depending on the domain lifecycle
+  modules there collapses `Env` inference. Generic Run control calls these
+  instead of comparing purpose literals.
 - Run lifecycle scope and member-controller snapshots:
   `server/domains/run/repo/control-scope.ts`. Generic control and stale expiry
   must not require a purchase-agent session. Import business-write transactions

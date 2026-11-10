@@ -45,6 +45,15 @@ export interface EntityKernelContext {
   caldavHooks?: { meal?: MealMutationHooks; task?: TaskMutationHooks };
 }
 
+/**
+ * Builds kernel services bound to one database handle. Repos that run kernel
+ * commands take this from their caller so they can bind it to their own
+ * transaction without importing the request layer.
+ */
+export type KernelServicesFor = (
+  db: Database,
+) => Omit<EntityKernelContext, "actorContext">;
+
 const isEntityKernelContext = (value: unknown): value is EntityKernelContext =>
   typeof value === "object" &&
   value !== null &&

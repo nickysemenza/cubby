@@ -212,11 +212,21 @@ export const importRunAgentManifest = {
   },
 } as const satisfies Record<AgentImportRunPurpose, ImportRunAgentConfig>;
 
-/** The model a run row records as its coordinator. */
+/** The model an agent-coordinated run row records as its coordinator. */
 export function coordinatorModelFor(
-  purpose: string,
+  purpose: AgentImportRunPurpose,
 ): ImportRunAgentConfig["model"] {
+  return importRunAgentManifest[purpose].model;
+}
+
+/**
+ * The coordinator model a restarted or redispatched Run records: the agent's
+ * current model, or the Run's own value when no agent coordinates it.
+ */
+export function successorCoordinatorModel(
+  purpose: string,
+  current: string,
+): string {
   const parsed = agentImportRunPurpose.safeParse(purpose);
-  return importRunAgentManifest[parsed.success ? parsed.data : "mail_import"]
-    .model;
+  return parsed.success ? coordinatorModelFor(parsed.data) : current;
 }

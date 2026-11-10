@@ -224,6 +224,13 @@ validates and clones each segment.
 
 Suggestion previews use the shared suggestion context keys and draft inheritance
 policy, which also owns expense line classification for suggestion preparation.
+`server/ai/field-suggest/draft-policy.ts` is the single owner of draft
+inheritance: which entities resolve a draft (expense, task), their extra
+preview context keys, whether a create must resolve a trade, and the
+evidence-backed draft resolution for purchases and financial transactions. A
+field suggestion's draft keeps each field's declared inherit mode for every
+entity; only entities with a draft policy read it, so a project, product
+category or financial account mode has no draft effect until one is declared.
 
 Reset previews use the field's declared `resolution.resetSource` or inheritance
 chain and apply its ordinary reset patch without writing. Expense Project uses
@@ -818,8 +825,8 @@ capability) and `slot` (the one per-platform hand-written fill, rendered
 only where a registry provides it — `DetailSlotId<E>` / `ListSlotId<E>` in
 `entity-manifest.ts` type those registries). A loaded relation's heading carries its list total (`Photos · 12`) from the first page's `meta.totalCount`; at zero the section collapses to one quiet row showing the declared `empty` copy or `Title · 0`, and its create action stays reachable. Full-detail visibility and folding flags are absent from the declaration and generated catalogs. Pagination and show-more behavior remain declaration-owned.
 
-Run import report eligibility comes from `IMPORT_REPORT_RUN_PURPOSES` in the
-shared Run schema, including `mail_import`. Web and server use its shared
+Run import report eligibility comes from each Run kind's `importReport` flag in
+`RUN_KINDS`, derived as `IMPORT_REPORT_RUN_PURPOSES`, including `mail_import`. Web and server use its shared
 predicate; Swift reads its generated constant. This is presentation, not
 execution authority: agent-coordinated purposes include photo inventory and
 exclude historical file imports, while discovery and the Imports saved view

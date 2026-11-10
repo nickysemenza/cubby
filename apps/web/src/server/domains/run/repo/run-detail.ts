@@ -435,6 +435,7 @@ export async function loadRunDetail(
     detail: event.detail,
     createdAt: event.createdAt,
   }));
+  const agentPurpose = agentImportRunPurpose.safeParse(header.purpose);
   return {
     publicId,
     status: header.status,
@@ -485,12 +486,11 @@ export async function loadRunDetail(
     // What `restart` writes to its successor: this run's settings and targets.
     // An erased Run has nothing left to copy.
     restartInputs:
-      agentImportRunPurpose.safeParse(header.purpose).success &&
-      !runInputsErased(run.retirementReason)
+      agentPurpose.success && !runInputsErased(run.retirementReason)
         ? {
             purpose: header.purpose,
             trigger: "manual",
-            coordinatorModel: coordinatorModelFor(header.purpose),
+            coordinatorModel: coordinatorModelFor(agentPurpose.data),
             vendor: header.vendorId,
             vendorAccount: header.vendorAccountId,
             input: restartInputSummary(run.input, header.vendorId),

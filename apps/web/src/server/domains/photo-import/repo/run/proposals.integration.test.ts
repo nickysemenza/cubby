@@ -43,6 +43,7 @@ import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixture
 import { mergeVendors } from "~/server/domains/vendor/repo/vendor";
 import { executeEntityAs } from "~/server/entity-kernel";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { buildCrudServices } from "~/server/http/request-context";
 import { deleteThroughKernel } from "~/server/testing/entity-kernel";
 import {
   createImageFixture,
@@ -162,6 +163,7 @@ describe("photo group proposals", () => {
     const { run, codes } = await seedRun(4);
     await proposePhotoGroups(
       ctx.db,
+      buildCrudServices,
       {
         runId: run.shortcode,
         groups: [
@@ -178,6 +180,7 @@ describe("photo group proposals", () => {
     await expect(
       proposePhotoGroups(
         ctx.db,
+        buildCrudServices,
         {
           runId: run.shortcode,
           groups: [createGroup("invalid", [codes[0]!])],
@@ -192,6 +195,7 @@ describe("photo group proposals", () => {
     ).toBe("boundary");
     await proposePhotoGroups(
       ctx.db,
+      buildCrudServices,
       {
         runId: run.shortcode,
         groups: [createGroup("boundary", [codes[1]!, codes[2]!])],
@@ -206,6 +210,7 @@ describe("photo group proposals", () => {
     expect(continued.images.map((entry) => entry.id)).toEqual(codes.slice(3));
     await proposePhotoGroups(
       ctx.db,
+      buildCrudServices,
       {
         runId: run.shortcode,
         groups: [
@@ -251,7 +256,7 @@ describe("photo group proposals", () => {
         { id: parseShortcodeFor("image", codes[3]!), reason: "Unusable frame" },
       ],
     };
-    await proposePhotoGroups(ctx.db, {
+    await proposePhotoGroups(ctx.db, buildCrudServices, {
       runId: run.shortcode,
       groups: [first, reference, historical, skipped],
     });
@@ -274,7 +279,7 @@ describe("photo group proposals", () => {
       stockIntent: "receive",
       locationId: parseShortcodeFor("location", closet.id),
     });
-    await proposePhotoGroups(ctx.db, {
+    await proposePhotoGroups(ctx.db, buildCrudServices, {
       runId: run.shortcode,
       groups: [skipped],
     });
@@ -320,7 +325,7 @@ describe("photo group proposals", () => {
       makeProductInput({ name: "Synthetic existing destination" }),
       ctx.actor,
     );
-    await proposePhotoGroups(ctx.db, {
+    await proposePhotoGroups(ctx.db, buildCrudServices, {
       runId: run.shortcode,
       groups: [createGroup("retained-source", codes)],
     });
@@ -330,7 +335,7 @@ describe("photo group proposals", () => {
       .update(photoGroupProposal)
       .set({ sourceManufacturer })
       .where(eq(photoGroupProposal.runId, run.id));
-    await updatePhotoGroupProductDraft(ctx.db, {
+    await updatePhotoGroupProductDraft(ctx.db, buildCrudServices, {
       runId: run.shortcode,
       groupKey: "retained-source",
       name: "Synthetic corrected draft",
@@ -342,7 +347,7 @@ describe("photo group proposals", () => {
       productCreateBrandId: brand.id,
       productCreate: { name: "Synthetic corrected draft" },
     });
-    await updatePhotoGroupProductDraft(ctx.db, {
+    await updatePhotoGroupProductDraft(ctx.db, buildCrudServices, {
       runId: run.shortcode,
       groupKey: "retained-source",
       name: "Synthetic corrected draft",
@@ -352,7 +357,7 @@ describe("photo group proposals", () => {
       sourceManufacturer,
       productCreateBrandId: null,
     });
-    await chooseExistingProductForPhotoGroup(ctx.db, {
+    await chooseExistingProductForPhotoGroup(ctx.db, buildCrudServices, {
       runId: run.shortcode,
       groupKey: "retained-source",
       productId: destination.id,
@@ -363,7 +368,7 @@ describe("photo group proposals", () => {
       productId: destination.entityId,
       productCreate: null,
     });
-    await proposePhotoGroups(ctx.db, {
+    await proposePhotoGroups(ctx.db, buildCrudServices, {
       runId: run.shortcode,
       groups: [
         {
@@ -421,7 +426,7 @@ describe("photo group proposals", () => {
           productChanges: { brandId: brand.shortcode },
         };
       }
-      await proposePhotoGroups(ctx.db, {
+      await proposePhotoGroups(ctx.db, buildCrudServices, {
         runId: run.shortcode,
         groups: [group],
       });
@@ -487,7 +492,7 @@ describe("photo group proposals", () => {
             sql`SELECT pg_backend_pid() AS pid`,
           );
           const pid = connection.rows[0]!.pid;
-          saveOutcome = proposePhotoGroups(ctx.db, {
+          saveOutcome = proposePhotoGroups(ctx.db, buildCrudServices, {
             runId: run.shortcode,
             groups: [group],
           }).catch((error: unknown) => error);
@@ -536,7 +541,7 @@ describe("photo group proposals", () => {
       makeProductInput({ name: "Synthetic canvas boot" }),
       ctx.actor,
     );
-    await proposePhotoGroups(ctx.db, {
+    await proposePhotoGroups(ctx.db, buildCrudServices, {
       runId: run.shortcode,
       groups: [
         createGroup("first", [codes[0]!]),
@@ -553,7 +558,7 @@ describe("photo group proposals", () => {
       },
       kernelCtx(ctx),
     );
-    let saved = await proposePhotoGroups(ctx.db, {
+    let saved = await proposePhotoGroups(ctx.db, buildCrudServices, {
       runId: run.shortcode,
       removeGroupKeys: ["first", "second"],
       groups: [
@@ -569,7 +574,7 @@ describe("photo group proposals", () => {
     ).toEqual([
       { id: rejected.id, name: "Synthetic canvas boot", rejected: true },
     ]);
-    saved = await proposePhotoGroups(ctx.db, {
+    saved = await proposePhotoGroups(ctx.db, buildCrudServices, {
       runId: run.shortcode,
       removeGroupKeys: ["combined"],
       groups: [
@@ -637,7 +642,7 @@ describe("photo group proposals", () => {
       const { run, codes } = await seedRun(3);
       const source = createGroup("source", codes.slice(0, 2));
       source.review!.unresolvedReason = "Check the printed width";
-      await proposePhotoGroups(ctx.db, {
+      await proposePhotoGroups(ctx.db, buildCrudServices, {
         runId: run.shortcode,
         groups: [source],
       });
@@ -656,7 +661,7 @@ describe("photo group proposals", () => {
           : "Check the printed size";
       const destination = createGroup("destination", [codes[2]!]);
       destination.review!.unresolvedReason = "Check the brandName";
-      await proposePhotoGroups(ctx.db, {
+      await proposePhotoGroups(ctx.db, buildCrudServices, {
         runId: run.shortcode,
         groups: [source, destination],
       });
@@ -670,7 +675,7 @@ describe("photo group proposals", () => {
             ? [createGroup("destination", codes)]
             : [createGroup("source", codes.slice(0, 2))];
       for (const draft of drafts) delete draft.review;
-      const saved = await proposePhotoGroups(ctx.db, {
+      const saved = await proposePhotoGroups(ctx.db, buildCrudServices, {
         runId: run.shortcode,
         groups: drafts,
         removeGroupKeys: operation === "same-key" ? [] : ["source"],
@@ -696,6 +701,7 @@ describe("photo group proposals", () => {
       }
       const applied = await approvePhotoGroupProposals(
         ctx.db,
+        buildCrudServices,
         {
           runId: run.shortcode,
           groupKeys: drafts.map((draft) => draft.groupKey),
@@ -719,8 +725,11 @@ describe("photo group proposals", () => {
     const { run, codes } = await seedRun(1);
     const draft = createGroup("concern-history", codes);
     draft.review!.unresolvedReason = "Label size needs checking";
-    await proposePhotoGroups(ctx.db, { runId: run.shortcode, groups: [draft] });
-    await updatePhotoGroupProductDraft(ctx.db, {
+    await proposePhotoGroups(ctx.db, buildCrudServices, {
+      runId: run.shortcode,
+      groups: [draft],
+    });
+    await updatePhotoGroupProductDraft(ctx.db, buildCrudServices, {
       runId: run.shortcode,
       groupKey: draft.groupKey,
       name: "Synthetic size 10 shoe",
@@ -747,6 +756,7 @@ describe("photo group proposals", () => {
     ]);
     const applied = await approvePhotoGroupProposals(
       ctx.db,
+      buildCrudServices,
       { runId: run.shortcode },
       ctx.actor,
     );
@@ -757,6 +767,7 @@ describe("photo group proposals", () => {
     );
     const replay = await approvePhotoGroupProposals(
       ctx.db,
+      buildCrudServices,
       {
         runId: run.shortcode,
         groupKeys: [draft.groupKey],
@@ -782,12 +793,14 @@ describe("photo group proposals", () => {
     await expect(
       commitPhotoGroup(
         ctx.db,
+        buildCrudServices,
         { ...draft, review: undefined, runId: run.shortcode },
         ctx.actor,
       ),
     ).rejects.toThrow("review intent");
     const skipped = await commitPhotoGroup(
       ctx.db,
+      buildCrudServices,
       {
         ...draft,
         review: undefined,
@@ -810,7 +823,7 @@ describe("photo group proposals", () => {
     const legacy = createGroup("synthetic-default", [codes[2]!]);
     legacy.review!.unresolvedReason =
       "Confirm the observed identity before applying this group";
-    const saved = await proposePhotoGroups(ctx.db, {
+    const saved = await proposePhotoGroups(ctx.db, buildCrudServices, {
       runId: run.shortcode,
       groups: [ready, blocked, legacy],
     });
@@ -820,6 +833,7 @@ describe("photo group proposals", () => {
     ).toBe("Verify label size");
     const applied = await approvePhotoGroupProposals(
       ctx.db,
+      buildCrudServices,
       { runId: run.shortcode },
       ctx.actor,
     );
@@ -861,12 +875,21 @@ describe("photo group proposals", () => {
         },
       },
     };
-    await proposePhotoGroups(ctx.db, { runId: run.shortcode, groups: [draft] });
+    await proposePhotoGroups(ctx.db, buildCrudServices, {
+      runId: run.shortcode,
+      groups: [draft],
+    });
     await expect(
-      commitPhotoGroup(ctx.db, { ...draft, runId: run.shortcode }, ctx.actor),
+      commitPhotoGroup(
+        ctx.db,
+        buildCrudServices,
+        { ...draft, runId: run.shortcode },
+        ctx.actor,
+      ),
     ).rejects.toThrow("Choose the size");
     const blocked = await approvePhotoGroupProposals(
       ctx.db,
+      buildCrudServices,
       { runId: run.shortcode },
       ctx.actor,
     );
@@ -884,6 +907,7 @@ describe("photo group proposals", () => {
     );
     const applied = await approvePhotoGroupProposals(
       ctx.db,
+      buildCrudServices,
       { runId: run.shortcode },
       ctx.actor,
     );
@@ -907,6 +931,7 @@ describe("photo group proposals", () => {
     expect(states).toContainEqual({ status: "applied", active: false });
     const replay = await approvePhotoGroupProposals(
       ctx.db,
+      buildCrudServices,
       { runId: run.shortcode, groupKeys: [draft.groupKey] },
       ctx.actor,
     );
@@ -928,6 +953,7 @@ describe("photo group proposals", () => {
     }));
     const saved = await proposePhotoGroups(
       ctx.db,
+      buildCrudServices,
       { runId: run.shortcode, groups },
       "member",
     );
@@ -942,6 +968,7 @@ describe("photo group proposals", () => {
     ).toHaveLength(0);
     const applied = await approvePhotoGroupProposals(
       ctx.db,
+      buildCrudServices,
       { runId: run.shortcode },
       ctx.actor,
     );
@@ -1020,12 +1047,14 @@ describe("photo group proposals", () => {
       };
       let saved = await proposePhotoGroups(
         ctx.db,
+        buildCrudServices,
         { runId: run.shortcode, groups: [draft] },
         "external_agent",
       );
       if (ambiguous)
         saved = await proposePhotoGroups(
           ctx.db,
+          buildCrudServices,
           {
             runId: run.shortcode,
             groups: [
@@ -1054,6 +1083,7 @@ describe("photo group proposals", () => {
       expect(pending).toEqual({ active: false, status: "pending" });
       await proposePhotoGroups(
         ctx.db,
+        buildCrudServices,
         {
           runId: run.shortcode,
           groups: [
@@ -1076,6 +1106,7 @@ describe("photo group proposals", () => {
       expect(await readSuggestionDecisions(ctx.db, suggestion!.id)).toEqual([]);
       await proposePhotoGroups(
         ctx.db,
+        buildCrudServices,
         {
           runId: run.shortcode,
           groups: [
@@ -1100,6 +1131,7 @@ describe("photo group proposals", () => {
       await expect(
         proposePhotoGroups(
           ctx.db,
+          buildCrudServices,
           { runId: run.shortcode, groups: [draft] },
           "external_agent",
           run.dispatchEventId!,
@@ -1117,6 +1149,7 @@ describe("photo group proposals", () => {
       expect(unchanged?.brandId).toBeNull();
       const reselected = await proposePhotoGroups(
         ctx.db,
+        buildCrudServices,
         {
           runId: run.shortcode,
           groups: [
@@ -1143,6 +1176,7 @@ describe("photo group proposals", () => {
       expect(newSuggestion?.id).not.toBe(suggestion?.id);
       const approved = await approvePhotoGroupProposals(
         ctx.db,
+        buildCrudServices,
         { runId: run.shortcode },
         ctx.actor,
       );
@@ -1188,6 +1222,7 @@ describe("photo group proposals", () => {
         });
       const saved = await proposePhotoGroups(
         ctx.db,
+        buildCrudServices,
         {
           runId: run.shortcode,
           groups: [
@@ -1251,6 +1286,7 @@ describe("photo group proposals", () => {
       await expect(
         proposePhotoGroups(
           ctx.db,
+          buildCrudServices,
           {
             runId: run.shortcode,
             groups: [
@@ -1271,11 +1307,13 @@ describe("photo group proposals", () => {
       ).rejects.toThrow("Choose an existing Brand or create one, not both");
       await proposePhotoGroups(
         ctx.db,
+        buildCrudServices,
         { runId: run.shortcode, groups: [draft] },
         "member",
       );
       const approved = await approvePhotoGroupProposals(
         ctx.db,
+        buildCrudServices,
         { runId: run.shortcode },
         ctx.actor,
       );
@@ -1319,6 +1357,7 @@ describe("photo group proposals", () => {
       expect(photoReceipt?.receipt).toMatchObject({ fieldSuggestions: refs });
       const replay = await approvePhotoGroupProposals(
         ctx.db,
+        buildCrudServices,
         { runId: run.shortcode, groupKeys: [draft.groupKey] },
         ctx.actor,
       );
@@ -1379,6 +1418,7 @@ describe("photo group proposals", () => {
       };
       const first = await proposePhotoGroups(
         ctx.db,
+        buildCrudServices,
         { runId: run.shortcode, groups: [draft] },
         "member",
       );
@@ -1412,6 +1452,7 @@ describe("photo group proposals", () => {
       }
       const saved = await proposePhotoGroups(
         ctx.db,
+        buildCrudServices,
         {
           runId: run.shortcode,
           groups: [
@@ -1443,6 +1484,7 @@ describe("photo group proposals", () => {
       );
       const applied = await approvePhotoGroupProposals(
         ctx.db,
+        buildCrudServices,
         { runId: run.shortcode },
         ctx.actor,
       );
@@ -1515,9 +1557,13 @@ describe("photo group proposals", () => {
         quantity: 1,
       },
     };
-    await proposePhotoGroups(ctx.db, { runId: run.shortcode, groups: [draft] });
+    await proposePhotoGroups(ctx.db, buildCrudServices, {
+      runId: run.shortcode,
+      groups: [draft],
+    });
     const failed = await approvePhotoGroupProposals(
       ctx.db,
+      buildCrudServices,
       { runId: run.shortcode },
       ctx.actor,
     );
@@ -1538,7 +1584,7 @@ describe("photo group proposals", () => {
       .from(photoRunImage)
       .where(eq(photoRunImage.runId, run.id));
     expect(target).toMatchObject({ state: "pending", receipt: null });
-    await proposePhotoGroups(ctx.db, {
+    await proposePhotoGroups(ctx.db, buildCrudServices, {
       runId: run.shortcode,
       groups: [
         { ...draft, inventory: { ...draft.inventory!, ownerPartyId: null } },
@@ -1548,6 +1594,7 @@ describe("photo group proposals", () => {
       (
         await approvePhotoGroupProposals(
           ctx.db,
+          buildCrudServices,
           { runId: run.shortcode },
           ctx.actor,
         )
@@ -1558,13 +1605,17 @@ describe("photo group proposals", () => {
   it("applies a legacy proposal in one transaction without a synthetic confirmation gate", async () => {
     const { run, codes } = await seedRun(1);
     const draft = createGroup("legacy", codes, "Synthetic legacy shirt");
-    await proposePhotoGroups(ctx.db, { runId: run.shortcode, groups: [draft] });
+    await proposePhotoGroups(ctx.db, buildCrudServices, {
+      runId: run.shortcode,
+      groups: [draft],
+    });
     await getDb(ctx.db)
       .update(photoGroupProposal)
       .set({ review: null })
       .where(eq(photoGroupProposal.runId, run.id));
     const applied = await approvePhotoGroupProposals(
       ctx.db,
+      buildCrudServices,
       { runId: run.shortcode },
       ctx.actor,
     );
@@ -1597,7 +1648,10 @@ describe("photo group proposals", () => {
         quantity: 2,
       },
     };
-    await proposePhotoGroups(ctx.db, { runId: run.shortcode, groups: [draft] });
+    await proposePhotoGroups(ctx.db, buildCrudServices, {
+      runId: run.shortcode,
+      groups: [draft],
+    });
     const database = getDb(ctx.db);
     await database.execute(
       sql.raw(`CREATE FUNCTION test_failed_proposal_settlement() RETURNS trigger AS $$
@@ -1615,6 +1669,7 @@ describe("photo group proposals", () => {
     try {
       const failed = await approvePhotoGroupProposals(
         ctx.db,
+        buildCrudServices,
         { runId: run.shortcode },
         ctx.actor,
       );
@@ -1645,12 +1700,14 @@ describe("photo group proposals", () => {
       ).toHaveLength(0);
       const retry = await approvePhotoGroupProposals(
         ctx.db,
+        buildCrudServices,
         { runId: run.shortcode },
         ctx.actor,
       );
       expect(retry.results[0]?.outcome).toBe("committed");
       const replay = await approvePhotoGroupProposals(
         ctx.db,
+        buildCrudServices,
         { runId: run.shortcode, groupKeys: ["settlement"] },
         ctx.actor,
       );
@@ -1697,10 +1754,18 @@ describe("photo group proposals", () => {
       const { run, codes } = await seedRun(1);
       const group = { ...createGroup("intent", codes), product, review };
       await expect(
-        proposePhotoGroups(ctx.db, { runId: run.shortcode, groups: [group] }),
+        proposePhotoGroups(ctx.db, buildCrudServices, {
+          runId: run.shortcode,
+          groups: [group],
+        }),
       ).rejects.toThrow(error);
       await expect(
-        commitPhotoGroup(ctx.db, { ...group, runId: run.shortcode }, ctx.actor),
+        commitPhotoGroup(
+          ctx.db,
+          buildCrudServices,
+          { ...group, runId: run.shortcode },
+          ctx.actor,
+        ),
       ).rejects.toThrow(error);
     },
   );
@@ -1714,7 +1779,7 @@ describe("photo group proposals", () => {
       makeProductInput({ name: "Synthetic unchanged shirt" }),
       ctx.actor,
     );
-    const saved = await proposePhotoGroups(ctx.db, {
+    const saved = await proposePhotoGroups(ctx.db, buildCrudServices, {
       runId: run.shortcode,
       groups: [
         {
@@ -1747,13 +1812,14 @@ describe("photo group proposals", () => {
       "Synthetic incomplete receive",
       "receive",
     );
-    const saved = await proposePhotoGroups(ctx.db, {
+    const saved = await proposePhotoGroups(ctx.db, buildCrudServices, {
       runId: run.shortcode,
       groups: [draft],
     });
     expect(saved.proposals[0]?.review?.stockIntent).toBe("receive");
     const applied = await approvePhotoGroupProposals(
       ctx.db,
+      buildCrudServices,
       { runId: run.shortcode },
       ctx.actor,
     );
@@ -1762,7 +1828,12 @@ describe("photo group proposals", () => {
       error: expect.stringMatching(/receive decision requires Inventory/i),
     });
     await expect(
-      commitPhotoGroup(ctx.db, { ...draft, runId: run.shortcode }, ctx.actor),
+      commitPhotoGroup(
+        ctx.db,
+        buildCrudServices,
+        { ...draft, runId: run.shortcode },
+        ctx.actor,
+      ),
     ).rejects.toThrow(/receive decision requires Inventory/i);
     expect((await readRow(run.id, "incomplete"))?.state).toBe("proposed");
   });
@@ -1804,7 +1875,7 @@ describe("photo group proposals", () => {
       },
       ctx.actor,
     );
-    await proposePhotoGroups(ctx.db, {
+    await proposePhotoGroups(ctx.db, buildCrudServices, {
       runId: run.shortcode,
       groups: [
         {
@@ -1828,20 +1899,28 @@ describe("photo group proposals", () => {
         },
       ],
     });
-    const same = await chooseExistingProductForPhotoGroup(ctx.db, {
-      runId: run.shortcode,
-      groupKey: "variant",
-      productId: first.id,
-    });
+    const same = await chooseExistingProductForPhotoGroup(
+      ctx.db,
+      buildCrudServices,
+      {
+        runId: run.shortcode,
+        groupKey: "variant",
+        productId: first.id,
+      },
+    );
     expect(same.proposals[0]?.review?.productChanges).toEqual({
       notes: "Reviewed first variant",
     });
     expect(same.proposals[0]?.inventory?.existingEntryId).toBe(stock.id);
-    const changed = await chooseExistingProductForPhotoGroup(ctx.db, {
-      runId: run.shortcode,
-      groupKey: "variant",
-      productId: second.id,
-    });
+    const changed = await chooseExistingProductForPhotoGroup(
+      ctx.db,
+      buildCrudServices,
+      {
+        runId: run.shortcode,
+        groupKey: "variant",
+        productId: second.id,
+      },
+    );
     expect(changed.proposals[0]?.review).toMatchObject({
       observedName: "Synthetic observed variant",
       stockIntent: "receive",
@@ -1853,6 +1932,7 @@ describe("photo group proposals", () => {
       (
         await approvePhotoGroupProposals(
           ctx.db,
+          buildCrudServices,
           { runId: run.shortcode },
           ctx.actor,
         )
@@ -1890,7 +1970,7 @@ describe("photo group proposals", () => {
       .update(runTable)
       .set({ ledgerPartyId: owner.id })
       .where(eq(runTable.id, run.id));
-    await proposePhotoGroups(ctx.db, {
+    await proposePhotoGroups(ctx.db, buildCrudServices, {
       runId: run.shortcode,
       groups: [createGroup("shirt", codes)],
     });
@@ -1915,6 +1995,7 @@ describe("photo group proposals", () => {
 
     const approved = await approvePhotoGroupProposals(
       ctx.db,
+      buildCrudServices,
       { runId: run.shortcode, groupKeys: ["shirt"] },
       ctx.actor,
     );
@@ -1926,7 +2007,7 @@ describe("photo group proposals", () => {
 
   it("rejects a stale selected batch before committing any group", async () => {
     const { run, codes } = await seedRun(2);
-    await proposePhotoGroups(ctx.db, {
+    await proposePhotoGroups(ctx.db, buildCrudServices, {
       runId: run.shortcode,
       groups: [
         createGroup("shirt", [codes[0]!]),
@@ -1943,7 +2024,7 @@ describe("photo group proposals", () => {
     };
 
     await expect(
-      approvePhotoGroupProposals(ctx.db, request, ctx.actor),
+      approvePhotoGroupProposals(ctx.db, buildCrudServices, request, ctx.actor),
     ).rejects.toThrow("Photo group review changed");
     expect(
       (await listPhotoGroupProposals(ctx.db, run.shortcode)).proposals.map(
@@ -1954,7 +2035,7 @@ describe("photo group proposals", () => {
 
   it("lets a reviewer finish a photo proposal stranded in needs-review", async () => {
     const { run, codes } = await seedRun(3);
-    await proposePhotoGroups(ctx.db, {
+    await proposePhotoGroups(ctx.db, buildCrudServices, {
       runId: run.shortcode,
       groups: [
         createGroup("shirt", codes.slice(0, 2)),
@@ -1972,6 +2053,7 @@ describe("photo group proposals", () => {
     expect(review.runStatus).toBe("needs_review");
     const approved = await approvePhotoGroupProposals(
       ctx.db,
+      buildCrudServices,
       { runId: run.shortcode, groupKeys: ["shirt"] },
       ctx.actor,
     );
@@ -1981,6 +2063,7 @@ describe("photo group proposals", () => {
     expect(approved.runStatus).toBe("needs_review");
     const final = await approvePhotoGroupProposals(
       ctx.db,
+      buildCrudServices,
       { runId: run.shortcode, groupKeys: ["hat"] },
       ctx.actor,
     );
@@ -1995,7 +2078,7 @@ describe("photo group proposals", () => {
       makeProductInput({ name: "Synthetic Canvas Shirt" }),
       ctx.actor,
     );
-    await proposePhotoGroups(ctx.db, {
+    await proposePhotoGroups(ctx.db, buildCrudServices, {
       runId: run.shortcode,
       groups: [
         {
@@ -2016,11 +2099,15 @@ describe("photo group proposals", () => {
       ],
     });
 
-    const chosen = await chooseExistingProductForPhotoGroup(ctx.db, {
-      runId: run.shortcode,
-      groupKey: "shirt",
-      productId: existing.id,
-    });
+    const chosen = await chooseExistingProductForPhotoGroup(
+      ctx.db,
+      buildCrudServices,
+      {
+        runId: run.shortcode,
+        groupKey: "shirt",
+        productId: existing.id,
+      },
+    );
     const group = chosen.proposals.find((item) => item.groupKey === "shirt");
     expect(group?.product.kind).toBe("existing");
     expect(group?.images).toEqual([{ id: codes[0], purpose: "item" }]);
@@ -2039,6 +2126,7 @@ describe("photo group proposals", () => {
     );
     const approved = await approvePhotoGroupProposals(
       ctx.db,
+      buildCrudServices,
       { runId: run.shortcode, groupKeys: ["shirt"] },
       ctx.actor,
     );
@@ -2053,7 +2141,7 @@ describe("photo group proposals", () => {
 
   it("edits the proposed product without changing the reviewed photos", async () => {
     const { run, codes } = await seedRun(2);
-    await proposePhotoGroups(ctx.db, {
+    await proposePhotoGroups(ctx.db, buildCrudServices, {
       runId: run.shortcode,
       groups: [
         {
@@ -2082,15 +2170,19 @@ describe("photo group proposals", () => {
     const category = await createRepoEntity(ctx, "productCategory", {
       name: "Synthetic reviewed apparel",
     });
-    const changed = await updatePhotoGroupProductDraft(ctx.db, {
-      runId: run.shortcode,
-      groupKey: "shirt",
-      name: "Synthetic Canvas Shirt, Medium",
-      categoryId: category.output.id,
-      brandId: parseShortcodeFor("vendor", brand.shortcode),
-      model: null,
-      notes: "Size confirmed from tag",
-    });
+    const changed = await updatePhotoGroupProductDraft(
+      ctx.db,
+      buildCrudServices,
+      {
+        runId: run.shortcode,
+        groupKey: "shirt",
+        name: "Synthetic Canvas Shirt, Medium",
+        categoryId: category.output.id,
+        brandId: parseShortcodeFor("vendor", brand.shortcode),
+        model: null,
+        notes: "Size confirmed from tag",
+      },
+    );
     const group = changed.proposals.find((item) => item.groupKey === "shirt");
     expect(group?.product).toMatchObject({
       kind: "create",
@@ -2111,6 +2203,7 @@ describe("photo group proposals", () => {
     expect(group?.evidence).toBe("One garment, second photo is unusable");
     const applied = await approvePhotoGroupProposals(
       ctx.db,
+      buildCrudServices,
       { runId: run.shortcode, groupKeys: ["shirt"] },
       ctx.actor,
     );
@@ -2168,6 +2261,7 @@ describe("photo group proposals", () => {
       if (committed) {
         await commitPhotoGroup(
           ctx.db,
+          buildCrudServices,
           {
             runId: run.shortcode,
             groupKey: "direct",
@@ -2185,7 +2279,7 @@ describe("photo group proposals", () => {
         );
       }
       await expect(
-        proposePhotoGroups(ctx.db, {
+        proposePhotoGroups(ctx.db, buildCrudServices, {
           runId: run.shortcode,
           groups: groups(codes, foreign.shortcode),
         }),
@@ -2195,12 +2289,12 @@ describe("photo group proposals", () => {
 
     it("refuses an image already held by another live proposed group", async () => {
       const { run, codes } = await seedRun(2);
-      await proposePhotoGroups(ctx.db, {
+      await proposePhotoGroups(ctx.db, buildCrudServices, {
         runId: run.shortcode,
         groups: [createGroup("a", [codes[0]!])],
       });
       await expect(
-        proposePhotoGroups(ctx.db, {
+        proposePhotoGroups(ctx.db, buildCrudServices, {
           runId: run.shortcode,
           groups: [createGroup("b", [codes[0]!, codes[1]!])],
         }),
@@ -2209,7 +2303,7 @@ describe("photo group proposals", () => {
 
     it("replaces a proposed group by groupKey but leaves a committed one untouched", async () => {
       const { run, codes } = await seedRun(3);
-      await proposePhotoGroups(ctx.db, {
+      await proposePhotoGroups(ctx.db, buildCrudServices, {
         runId: run.shortcode,
         groups: [
           createGroup("a", [codes[0]!], "Synthetic Jacket"),
@@ -2218,12 +2312,13 @@ describe("photo group proposals", () => {
       });
       await approvePhotoGroupProposals(
         ctx.db,
+        buildCrudServices,
         { runId: run.shortcode, groupKeys: ["a"] },
         ctx.actor,
       );
       const committedBefore = await readRow(run.id, "a");
 
-      const result = await proposePhotoGroups(ctx.db, {
+      const result = await proposePhotoGroups(ctx.db, buildCrudServices, {
         runId: run.shortcode,
         groups: [
           createGroup("a", [codes[2]!], "Rewritten Jacket"),
@@ -2252,7 +2347,7 @@ describe("photo group proposals", () => {
       }),
       ctx.actor,
     );
-    await proposePhotoGroups(ctx.db, {
+    await proposePhotoGroups(ctx.db, buildCrudServices, {
       runId: run.shortcode,
       groups: [
         {
@@ -2267,11 +2362,13 @@ describe("photo group proposals", () => {
 
     const first = await approvePhotoGroupProposals(
       ctx.db,
+      buildCrudServices,
       { runId: run.shortcode },
       ctx.actor,
     );
     const second = await approvePhotoGroupProposals(
       ctx.db,
+      buildCrudServices,
       { runId: run.shortcode, groupKeys: ["coat"] },
       ctx.actor,
     );
@@ -2351,13 +2448,14 @@ describe("photo group proposals", () => {
         processorRevision: 1,
       },
     ]);
-    await proposePhotoGroups(ctx.db, {
+    await proposePhotoGroups(ctx.db, buildCrudServices, {
       runId: run.shortcode,
       groups: [createGroup("sweater", codes)],
     });
 
     const blocked = await approvePhotoGroupProposals(
       ctx.db,
+      buildCrudServices,
       { runId: run.shortcode },
       ctx.actor,
     );
@@ -2372,6 +2470,7 @@ describe("photo group proposals", () => {
 
     const approved = await approvePhotoGroupProposals(
       ctx.db,
+      buildCrudServices,
       { runId: run.shortcode },
       ctx.actor,
     );
@@ -2525,13 +2624,14 @@ describe("photo group proposals", () => {
       makeProductInput({ name: "Synthetic Linen Shirt" }),
       ctx.actor,
     );
-    await proposePhotoGroups(ctx.db, {
+    await proposePhotoGroups(ctx.db, buildCrudServices, {
       runId: run.shortcode,
       groups: [createGroup("shirt", codes, "synthetic linen shirt")],
     });
 
     const conflicted = await approvePhotoGroupProposals(
       ctx.db,
+      buildCrudServices,
       { runId: run.shortcode },
       ctx.actor,
     );
@@ -2542,7 +2642,7 @@ describe("photo group proposals", () => {
     expect(view?.state).toBe("proposed");
     expect(view?.conflict?.map((entry) => entry.id)).toEqual([existing.id]);
 
-    await proposePhotoGroups(ctx.db, {
+    await proposePhotoGroups(ctx.db, buildCrudServices, {
       runId: run.shortcode,
       groups: [
         {
@@ -2556,6 +2656,7 @@ describe("photo group proposals", () => {
     });
     const approved = await approvePhotoGroupProposals(
       ctx.db,
+      buildCrudServices,
       { runId: run.shortcode },
       ctx.actor,
     );
@@ -2578,7 +2679,7 @@ describe("photo group proposals", () => {
       }),
       ctx.actor,
     );
-    await proposePhotoGroups(ctx.db, {
+    await proposePhotoGroups(ctx.db, buildCrudServices, {
       runId: run.shortcode,
       groups: [
         {
@@ -2594,18 +2695,20 @@ describe("photo group proposals", () => {
     });
     const failed = await approvePhotoGroupProposals(
       ctx.db,
+      buildCrudServices,
       { runId: run.shortcode },
       ctx.actor,
     );
     expect(failed.results[0]?.outcome).toBe("failed");
     expect(failed.proposals[0]?.lastError).toMatch(/ownerPartyId/);
 
-    await proposePhotoGroups(ctx.db, {
+    await proposePhotoGroups(ctx.db, buildCrudServices, {
       runId: run.shortcode,
       groups: [createGroup("boots", codes, "Synthetic Hiking Boots")],
     });
     const approved = await approvePhotoGroupProposals(
       ctx.db,
+      buildCrudServices,
       { runId: run.shortcode },
       ctx.actor,
     );
@@ -2616,7 +2719,7 @@ describe("photo group proposals", () => {
 
   it("discards a group by skipping its images, creating no Product, and lets the run complete", async () => {
     const { run, codes } = await seedRun(2);
-    await proposePhotoGroups(ctx.db, {
+    await proposePhotoGroups(ctx.db, buildCrudServices, {
       runId: run.shortcode,
       groups: [
         createGroup("keep", [codes[0]!], "Synthetic Keeper"),
@@ -2625,12 +2728,14 @@ describe("photo group proposals", () => {
     });
     await approvePhotoGroupProposals(
       ctx.db,
+      buildCrudServices,
       { runId: run.shortcode, groupKeys: ["keep"] },
       ctx.actor,
     );
 
     const result = await discardPhotoGroupProposal(
       ctx.db,
+      buildCrudServices,
       { runId: run.shortcode, groupKey: "junk" },
       ctx.actor,
     );
@@ -2671,7 +2776,7 @@ describe("photo group proposals", () => {
       makeProductInput({ name: "Synthetic Tote" }),
       ctx.actor,
     );
-    await proposePhotoGroups(ctx.db, {
+    await proposePhotoGroups(ctx.db, buildCrudServices, {
       runId: run.shortcode,
       groups: [
         {
@@ -2716,7 +2821,7 @@ describe("photo group proposals", () => {
       name: "Synthetic Proposal Category",
       sortOrder: 0,
     });
-    await proposePhotoGroups(ctx.db, {
+    await proposePhotoGroups(ctx.db, buildCrudServices, {
       runId: run.shortcode,
       groups: [
         {
@@ -2767,7 +2872,7 @@ describe("photo group proposals", () => {
 
   it("drops a deleted run photo from its proposed group", async () => {
     const { run, codes } = await seedRun(2);
-    await proposePhotoGroups(ctx.db, {
+    await proposePhotoGroups(ctx.db, buildCrudServices, {
       runId: run.shortcode,
       groups: [createGroup("pair", codes)],
     });
@@ -2779,7 +2884,7 @@ describe("photo group proposals", () => {
 
   it("removes a proposed group after its run stopped", async () => {
     const { run, codes } = await seedRun(1);
-    await proposePhotoGroups(ctx.db, {
+    await proposePhotoGroups(ctx.db, buildCrudServices, {
       runId: run.shortcode,
       groups: [createGroup("late", codes)],
     });
@@ -2788,7 +2893,7 @@ describe("photo group proposals", () => {
       .set({ status: "failed" })
       .where(eq(runTable.id, run.id));
 
-    await proposePhotoGroups(ctx.db, {
+    await proposePhotoGroups(ctx.db, buildCrudServices, {
       runId: run.shortcode,
       groups: [],
       removeGroupKeys: ["late"],
@@ -2801,7 +2906,7 @@ describe("photo group proposals", () => {
   // breaking the review page, approve-all, and discard.
   it("tolerates a proposal photo deleted after proposing: lists, approves and discards without it", async () => {
     const { run, codes } = await seedRun(4);
-    await proposePhotoGroups(ctx.db, {
+    await proposePhotoGroups(ctx.db, buildCrudServices, {
       runId: run.shortcode,
       groups: [
         createGroup("kept", [codes[0]!, codes[1]!], "Synthetic Lamp"),
@@ -2825,6 +2930,7 @@ describe("photo group proposals", () => {
 
     const approved = await approvePhotoGroupProposals(
       ctx.db,
+      buildCrudServices,
       { runId: run.shortcode, groupKeys: ["kept", "gone"] },
       ctx.actor,
     );
@@ -2840,11 +2946,13 @@ describe("photo group proposals", () => {
 
     await discardPhotoGroupProposal(
       ctx.db,
+      buildCrudServices,
       { runId: run.shortcode, groupKey: "gone" },
       ctx.actor,
     );
     const done = await discardPhotoGroupProposal(
       ctx.db,
+      buildCrudServices,
       { runId: run.shortcode, groupKey: "rest" },
       ctx.actor,
     );
@@ -2861,7 +2969,7 @@ describe("photo group proposals", () => {
   it("rechecks the proposal revision under the domain write lock and preserves a concurrent edit", async () => {
     const { run, codes } = await seedRun(2);
     const original = createGroup("hat", [codes[0]!], "Synthetic original hat");
-    const initial = await proposePhotoGroups(ctx.db, {
+    const initial = await proposePhotoGroups(ctx.db, buildCrudServices, {
       runId: run.shortcode,
       groups: [original],
     });
@@ -2885,6 +2993,7 @@ describe("photo group proposals", () => {
           .for("update");
         approval = approvePhotoGroupProposals(
           ctx.db,
+          buildCrudServices,
           {
             runId: run.shortcode,
             groupKeys: ["hat"],
@@ -2907,7 +3016,7 @@ describe("photo group proposals", () => {
             { timeout: 5_000, interval: 20 },
           )
           .toBe(1);
-        await proposePhotoGroups(holder, {
+        await proposePhotoGroups(holder, buildCrudServices, {
           runId: run.shortcode,
           groups: [createGroup("hat", codes, "Synthetic edited hat")],
         });
@@ -2945,6 +3054,7 @@ describe("photo group proposals", () => {
       .proposals[0]!;
     const retry = await approvePhotoGroupProposals(
       ctx.db,
+      buildCrudServices,
       {
         runId: run.shortcode,
         groupKeys: ["hat"],

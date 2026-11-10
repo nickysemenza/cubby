@@ -47,7 +47,10 @@ domains between `src/app/` and `src/features/` under different names.
   declarations (feature identities, prompt builders, field-suggest rules,
   catalog field rows and the AI refresh manifest) that repos read to stamp
   and check decision provenance. `ai/policy/` value-imports only itself and
-  packages, so no repo reaches model code. A service value-imports nothing from `db/` but
+  packages, so no repo reaches model code. `repo` never value-imports `http/`:
+  a repo that runs kernel commands takes a db-bound `KernelServicesFor`
+  factory (`entity-kernel/adapter.ts`) from its caller and binds it to its own
+  transaction. A service value-imports nothing from `db/` but
   `db/freshness/`, and never imports `db/helpers` or a `db/*schema*` file,
   even for types; it reaches tables through a repo, and computed SQL lives
   in `db/computed/`. Other platform code and `generic/*` never import a

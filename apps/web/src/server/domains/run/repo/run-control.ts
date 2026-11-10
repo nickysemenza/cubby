@@ -8,7 +8,7 @@ import {
 } from "@cubby/schemas/identifiers";
 import {
   agentImportRunPurpose,
-  coordinatorModelFor,
+  successorCoordinatorModel,
   importRunAgentIdentity,
 } from "@cubby/schemas/import-run-agent";
 import { paidOverBudgetUsd } from "@cubby/schemas/mail-import-settings";
@@ -553,6 +553,7 @@ export async function controlRun(
         parentRunId: runTable.parentRunId,
         notes: runTable.notes,
         input: runTable.input,
+        coordinatorModel: runTable.coordinatorModel,
         skillRevision: runTable.skillRevision,
         runtimeRevision: runTable.runtimeRevision,
         dispatchEventId: runTable.dispatchEventId,
@@ -611,7 +612,10 @@ export async function controlRun(
         trigger: "manual",
         notes: locked.notes,
         input: locked.input,
-        coordinatorModel: coordinatorModelFor(locked.purpose),
+        coordinatorModel: successorCoordinatorModel(
+          locked.purpose,
+          locked.coordinatorModel,
+        ),
         skillRevision: locked.skillRevision,
         runtimeRevision: locked.runtimeRevision,
         dispatchEventId,
@@ -673,7 +677,10 @@ export async function controlRun(
           endedAt: null,
           dispatchEventId,
           dispatchError: null,
-          coordinatorModel: coordinatorModelFor(locked.purpose),
+          coordinatorModel: successorCoordinatorModel(
+            locked.purpose,
+            locked.coordinatorModel,
+          ),
           updatedAt: new Date(),
         })
         .where(eq(runTable.id, scope.runId));
@@ -749,7 +756,10 @@ export async function controlRun(
         trigger: locked.trigger,
         input: successorInput,
         dispatchEventId,
-        coordinatorModel: coordinatorModelFor(locked.purpose),
+        coordinatorModel: successorCoordinatorModel(
+          locked.purpose,
+          locked.coordinatorModel,
+        ),
         skillRevision: locked.skillRevision,
         runtimeRevision: locked.runtimeRevision,
         decisionRevision: locked.decisionRevision + 1,

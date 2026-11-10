@@ -78,6 +78,7 @@ import {
 } from "~/server/generic/suggestions/repo/suggestion-list";
 import { transitionSuggestionStates } from "~/server/generic/suggestions/repo/suggestion-state";
 import * as suggestionStateRepo from "~/server/generic/suggestions/repo/suggestion-state";
+import { buildCrudServices } from "~/server/http/request-context";
 import { canonicalJson, jsonSnapshot } from "~/server/lib/canonical-json";
 import {
   captureBackgroundQueue,
@@ -271,6 +272,7 @@ const generate = async (ctx: Ctx) => {
   let published = 0;
   for (;;) {
     const page = await generateStatementSuggestionPage(ctx.db, {
+      servicesFor: buildCrudServices,
       after,
       runId: null,
     });
@@ -1467,6 +1469,7 @@ describe("statement Transaction suggestions", () => {
     ).toContain(receipt.output.id);
     expect(view(batch)).toEqual(view(single));
     const generated = await generateStatementSuggestionPage(ctx.db, {
+      servicesFor: buildCrudServices,
       after: null,
       runId: null,
     });
@@ -1659,6 +1662,7 @@ describe("statement Transaction suggestions", () => {
       await statementSuggestionsRepo.countUnmatchedCharges(ctx.db, {}),
     ).toBe(2);
     const first = await generateStatementSuggestionPage(ctx.db, {
+      servicesFor: buildCrudServices,
       runId: null,
       after: null,
       limit: 1,
@@ -1669,6 +1673,7 @@ describe("statement Transaction suggestions", () => {
       next: { source: rows[2]!.source, chargeKey: rows[2]!.chargeKey },
     });
     const second = await generateStatementSuggestionPage(ctx.db, {
+      servicesFor: buildCrudServices,
       runId: null,
       after: first.next,
       limit: 1,
@@ -1680,6 +1685,7 @@ describe("statement Transaction suggestions", () => {
     });
     expect(
       await generateStatementSuggestionPage(ctx.db, {
+        servicesFor: buildCrudServices,
         runId: null,
         after: second.next,
         limit: 1,
@@ -1891,6 +1897,7 @@ describe("statement Transaction suggestions", () => {
     );
     try {
       const first = await generateStatementSuggestionPage(ctx.db, {
+        servicesFor: buildCrudServices,
         after: null,
         runId: null,
         limit: 5,
@@ -1907,6 +1914,7 @@ describe("statement Transaction suggestions", () => {
         "Synthetic statement publication failure",
       );
       const repeated = await generateStatementSuggestionPage(ctx.db, {
+        servicesFor: buildCrudServices,
         after: null,
         runId: null,
         limit: 5,
@@ -1920,6 +1928,7 @@ describe("statement Transaction suggestions", () => {
       });
       expect(repeated.failed).toHaveLength(1);
       const later = await generateStatementSuggestionPage(ctx.db, {
+        servicesFor: buildCrudServices,
         after: first.next,
         runId: null,
         limit: 5,
@@ -1935,6 +1944,7 @@ describe("statement Transaction suggestions", () => {
         sql`DELETE FROM "SyntheticStatementPublicationFailure"`,
       );
       const recovered = await retryStatementGenerationRefs(ctx.db, {
+        servicesFor: buildCrudServices,
         runId: null,
         refs: first.failed.flatMap((failure) =>
           failure.ref ? [failure.ref] : [],
@@ -1949,6 +1959,7 @@ describe("statement Transaction suggestions", () => {
       });
       expect(
         await retryStatementGenerationRefs(ctx.db, {
+          servicesFor: buildCrudServices,
           runId: null,
           refs: first.failed.flatMap((failure) =>
             failure.ref ? [failure.ref] : [],
@@ -1956,6 +1967,7 @@ describe("statement Transaction suggestions", () => {
         }),
       ).toMatchObject({ done: 1, skipped: 0, failed: [] });
       const missing = await retryStatementGenerationRefs(ctx.db, {
+        servicesFor: buildCrudServices,
         runId: null,
         refs: ["charge:synthetic:missing"],
       });
@@ -1978,7 +1990,11 @@ describe("statement Transaction suggestions", () => {
   it("recovers missed retirement even when settled transfer evidence produces no proposal", async () => {
     const account = (await card(ctx)).output;
     await record(ctx, [rowInput()]);
-    await generateStatementSuggestionPage(ctx.db, { after: null, runId: null });
+    await generateStatementSuggestionPage(ctx.db, {
+      servicesFor: buildCrudServices,
+      after: null,
+      runId: null,
+    });
     const [pending] = await readPendingStatements(ctx);
     const [observation] = (await listSourceTransactionRecords(ctx.db, {})).data;
     if (!pending || !observation)
@@ -2021,6 +2037,7 @@ describe("statement Transaction suggestions", () => {
       sourceAliases: [],
     });
     const outside = await retryStatementGenerationRefs(ctx.db, {
+      servicesFor: buildCrudServices,
       runId: null,
       scope: {
         accountIds: [
@@ -2043,6 +2060,7 @@ describe("statement Transaction suggestions", () => {
     ).toEqual([{ active: true }]);
     expect(
       await retryStatementGenerationRefs(ctx.db, {
+        servicesFor: buildCrudServices,
         runId: null,
         refs: [`charge:${charge.source}:${charge.chargeKey}`],
       }),
@@ -2187,7 +2205,11 @@ describe("statement Transaction suggestions", () => {
       ],
       { fingerprint: "fp-later" },
     );
-    await generateStatementSuggestionPage(ctx.db, { after: null, runId: null });
+    await generateStatementSuggestionPage(ctx.db, {
+      servicesFor: buildCrudServices,
+      after: null,
+      runId: null,
+    });
     expect(
       (await readPendingStatements(ctx)).filter(
         (row) => row.recommended === "void",
@@ -2873,6 +2895,7 @@ describe("statement Transaction suggestions", () => {
       },
     );
     const regenerated = await generateStatementSuggestionPage(ctx.db, {
+      servicesFor: buildCrudServices,
       after: null,
       runId: null,
     });
@@ -4547,6 +4570,7 @@ describe("statement Transaction suggestions", () => {
       { fingerprint: "fp-later-import" },
     );
     const page = await generateStatementSuggestionPage(ctx.db, {
+      servicesFor: buildCrudServices,
       after: null,
       runId: null,
       scope: { importId: later.batchId },
