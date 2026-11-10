@@ -1,7 +1,11 @@
 import { suggestionStatus } from "@cubby/schemas/ai";
 import { sourceTransactionRecordDisposition } from "@cubby/schemas/source-transaction-record";
-import { statementTransactionAction } from "@cubby/schemas/statement-suggestion";
+import {
+  statementTransactionAction,
+  type StatementTransactionJudgment,
+} from "@cubby/schemas/statement-suggestion";
 import { suggestionFamily } from "@cubby/schemas/suggestion";
+import { cents } from "@cubby/shared";
 import { type SQL, sql } from "drizzle-orm";
 
 import { notDeleted } from "~/server/db/helpers/predicates";
@@ -39,6 +43,30 @@ export const CHARGE_STATE = chargeStateOf(sql`true`);
 
 export const OCCURRENCE_IDENTITY_REVIEW =
   "This observation has no ready, proven source occurrence. Automatic financial actions remain blocked; retain its evidence and money unchanged.";
+
+/**
+ * Attach is withheld when every candidate is a different amount and the model
+ * is confident each is a different charge. Labels only withhold the
+ * recommendation; the candidates stay listed and attachable.
+ */
+export function recommendedWithLabels(
+  judgment: StatementTransactionJudgment,
+): StatementTransactionJudgment["recommended"] {
+  const create = judgment.create;
+  if (
+    judgment.recommended === "attach" &&
+    create &&
+    judgment.candidates.length > 0 &&
+    judgment.candidates.every(
+      (candidate) =>
+        cents(candidate.amount) !== cents(create.amount) &&
+        candidate.label?.same === "different" &&
+        candidate.label.confidence === "high",
+    )
+  )
+    return "create";
+  return judgment.recommended;
+}
 
 /** Membership and equal bank facts cannot establish an independent occurrence. */
 export function hasStatementOccurrence(row: {

@@ -1,3 +1,4 @@
+import type { FinancialSpendingPlan } from "@cubby/schemas/financial-booking";
 import type { FinancialTransactionUpdateData } from "@cubby/schemas/financial-transaction";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import {
@@ -17,8 +18,16 @@ import {
   SOURCE_HELD_REASON,
   statementSuggestionSourceHeld,
 } from "~/server/domains/transaction-import/repo/source-observation-state";
+import { recommendedWithLabels } from "~/server/domains/transaction-import/repo/statement-charge";
+import {
+  statementCandidateSubject,
+  statementLabelSubject,
+} from "~/server/domains/transaction-import/repo/statement-label-input";
+import { prepareStatementSpending } from "~/server/domains/transaction-import/repo/statement-spending";
+import { decideStatementKind } from "~/server/domains/transaction-import/repo/statement-transaction-kind";
 import { createAppError } from "~/server/errors/app-error";
 import type { SuggestionStateRow } from "~/server/generic/suggestions/repo/suggestion-state";
+import { canonicalJson } from "~/server/lib/canonical-json";
 
 import {
   buildChargeProposals,
@@ -29,7 +38,6 @@ export const refuseStatementApplication = (message: string) =>
   createAppError("CONSTRAINT_VIOLATION", message);
 
 const projection = z.object({
-  evidenceFingerprint: z.string(),
   refs: z.array(z.string()),
 });
 
@@ -68,13 +76,121 @@ export async function loadStatementApplication(
   };
 }
 
+/**
+ * The rebuilt proposal is label-free. Carry the reviewed model labels onto it
+ * while their inputs still agree, as label publication does, so the kind and
+ * candidates compare like for like.
+ */
+function withPublishedLabels(
+  current: StatementTransactionJudgment,
+  published: StatementTransactionJudgment,
+): StatementTransactionJudgment {
+  const judgment = structuredClone(current);
+  for (const candidate of judgment.candidates)
+    candidate.label =
+      published.candidates.find(
+        (saved) =>
+          saved.transactionId === candidate.transactionId &&
+          canonicalJson(statementCandidateSubject(saved)) ===
+            canonicalJson(statementCandidateSubject(candidate)),
+      )?.label ?? null;
+  if (
+    judgment.create &&
+    published.create &&
+    canonicalJson(statementLabelSubject(judgment)) ===
+      canonicalJson(statementLabelSubject(published))
+  )
+    Object.assign(
+      judgment.create,
+      decideStatementKind({
+        amount: judgment.create.amount,
+        votes: {
+          ...judgment.create.votes,
+          label: published.create.votes.label,
+        },
+        counterparty: {
+          ...judgment.create.counterparty,
+          label: published.create.counterparty.label,
+        },
+        transfer: judgment.transfer,
+      }),
+    );
+  judgment.recommended = recommendedWithLabels(judgment);
+  return judgment;
+}
+
+/**
+ * What the member reviewed: the action, the money and dates it writes and the
+ * transactions it may touch. Account history, sibling and snapshot drift is
+ * not here: selection is recomputed at apply, and the booking outcome is
+ * compared separately.
+ */
+function decisiveJudgment(judgment: StatementTransactionJudgment) {
+  const create = judgment.create;
+  return {
+    recommended: judgment.recommended,
+    accountId: judgment.accountId,
+    statementDate: judgment.statementDate,
+    providerStatus: judgment.providerStatus,
+    "create.kind": create?.kind ?? null,
+    "create.amount": create?.amount ?? null,
+    "create.status": create?.status ?? null,
+    "create.transactionDate": create?.transactionDate ?? null,
+    "create.postedDate": create?.postedDate ?? null,
+    "create.merchant": create?.merchant ?? null,
+    "create.rawDescription": create?.rawDescription ?? null,
+    "create.sourceCategory": create?.sourceCategory ?? null,
+    "create.notes": create?.notes ?? null,
+    "create.sourceRef": create?.sourceRef ?? null,
+    candidates: judgment.candidates
+      .map(({ transactionId, amount, diff, claimed }) => ({
+        transactionId,
+        amount,
+        diff,
+        claimed,
+      }))
+      .sort((left, right) =>
+        left.transactionId.localeCompare(right.transactionId),
+      ),
+    supersede: judgment.supersede,
+    // Any covering import proves the vanish; only the voided hold was reviewed.
+    void: judgment.void?.transactionId ?? null,
+    matchedTransactionId: judgment.matchedTransactionId ?? null,
+    transfer: judgment.transfer,
+    transferPair: judgment.transferPair
+      ? { key: judgment.transferPair.key, clean: judgment.transferPair.clean }
+      : null,
+  };
+}
+
+const reviewedBooking = (plan: FinancialSpendingPlan | null | undefined) =>
+  plan?.status === "ready"
+    ? {
+        status: plan.status,
+        effect: plan.effect,
+        purchaserId: plan.purchaserId,
+        vendorId: plan.vendorId,
+        spendingCategoryId: plan.spendingCategoryId,
+        purchaseId: plan.purchaseId,
+      }
+    : { status: plan?.status ?? null };
+
+function changedFields<T extends object>(reviewed: T, current: T) {
+  const now = new Map(Object.entries(current));
+  const changed = Object.entries(reviewed).flatMap(([key, value]) =>
+    canonicalJson(value) === canonicalJson(now.get(key) ?? null) ? [] : [key],
+  );
+  return changed.includes("status") ? ["status"] : changed;
+}
+
 /** Rebuild from retained evidence, never the published spending plan or client source. */
 export async function currentStatementApplication(
   db: Database,
   input: Awaited<ReturnType<typeof loadStatementApplication>>,
+  application: StatementTransactionApplication,
 ) {
-  const { subject, published, stored } = input;
-  const current =
+  const { subject, published } = input;
+  const rebuilt =
     published.recommended === "void"
       ? (await buildHoldVoidProposals(db, [published.accountId])).find(
           (proposal) =>
@@ -86,13 +202,43 @@ export async function currentStatementApplication(
             { source: subject.source, chargeKey: subject.chargeKey },
           ])
         )[0];
-  if (!current || current.evidenceFingerprint !== stored.evidenceFingerprint)
+  if (!rebuilt)
     throw refuseStatementApplication(
-      "The statement or transaction evidence changed since this suggestion was made. Refresh suggestions and review again.",
+      "This charge no longer has a Transaction suggestion. Refresh suggestions and review again.",
     );
-  if (current.judgment.reviewReason)
-    throw refuseStatementApplication(current.judgment.reviewReason);
-  return current;
+  if (rebuilt.judgment.reviewReason)
+    throw refuseStatementApplication(rebuilt.judgment.reviewReason);
+  const judgment = withPublishedLabels(rebuilt.judgment, published);
+  const changed = changedFields(
+    decisiveJudgment(published),
+    decisiveJudgment(judgment),
+  );
+  // The reviewed ready booking applies as shown unless the member chose
+  // another action, kind or booking, which is replanned at apply.
+  if (
+    !changed.length &&
+    published.spending?.status === "ready" &&
+    application.action === published.recommended &&
+    !application.kindOverride &&
+    !application.booking
+  )
+    changed.push(
+      ...changedFields(
+        reviewedBooking(published.spending),
+        reviewedBooking(
+          await prepareStatementSpending(
+            db,
+            judgment,
+            published.spending.request.advice ?? null,
+          ),
+        ),
+      ).map((key) => `spending.${key}`),
+    );
+  if (changed.length)
+    throw refuseStatementApplication(
+      `The suggestion changed since review: ${changed.join(", ")}. Refresh suggestions and review again.`,
+    );
+  return { ...rebuilt, judgment };
 }
 
 /** Preview and apply share selection gates before either projects any effects. */

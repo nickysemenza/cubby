@@ -118,14 +118,9 @@ export const { definition, readSchemas } = defineEntityModel({
           kind: "fields",
           id: "overview",
           title: "Record",
-          fields: [
-            "spendingProfile",
-            "defaultSpendingCategoryId",
-            "itemizationExpectation",
-            "name",
-            "website",
-            "notes",
-          ],
+          // Spending profile and default category move history, so the
+          // spending-classification slot owns their preview and apply.
+          fields: ["itemizationExpectation", "name", "website", "notes"],
         },
         {
           kind: "fields",
@@ -340,6 +335,7 @@ export const { definition, readSchemas } = defineEntityModel({
           ],
         },
         display: {
+          detail: false,
           columnGroup: "Purchasing",
           columnLabel: "Profile",
           optionRole: "category",
@@ -366,7 +362,11 @@ export const { definition, readSchemas } = defineEntityModel({
             financeReview: { context: "vendor" },
           },
         },
-        display: { columnGroup: "Purchasing", columnLabel: "Category" },
+        display: {
+          detail: false,
+          columnGroup: "Purchasing",
+          columnLabel: "Category",
+        },
         validation: {
           read: spendingCategoryShortcode.nullable().default(null),
           create: spendingCategoryShortcode.nullable().default(null),

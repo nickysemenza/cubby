@@ -314,7 +314,7 @@ describe("statement spending review and re-import", () => {
           stale: async () => {
             await expect(
               reviewSuggestion(ctx.db, kernelCtx(ctx), command),
-            ).rejects.toThrow(/statement or transaction evidence changed/i);
+            ).rejects.toThrow(/changed since review: spending\./i);
             expect(builds).toBe(2);
             expect(await read()).toEqual({
               ...before,
@@ -451,7 +451,7 @@ describe("statement spending review and re-import", () => {
       sql`UPDATE "SourceTransactionRecord" SET "rawDescription" = 'SYNTHETIC CHANGED EVIDENCE'`,
     );
     await expect(previewStatementSuggestion(ctx.db, input)).rejects.toThrow(
-      /evidence changed/i,
+      /changed since review: create.rawDescription/i,
     );
   });
   it("replans draft kind and booking without writing transactions, vendors, aliases, or suggestion state", async () => {

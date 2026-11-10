@@ -285,7 +285,7 @@ describe("MCP catalog", () => {
     const recoverySchema = z.object({
       recovery: z.literal("input_schema"),
       action: z.string(),
-      inputSchema: z.record(z.string(), z.json()),
+      instruction: z.string(),
     });
     const recovery = result.content
       .filter((block) => block.type === "text")
@@ -300,10 +300,9 @@ describe("MCP catalog", () => {
     expect(recovery).toMatchObject({
       recovery: "input_schema",
       action: "record",
-      inputSchema: { type: "object" },
-    });
-    expect(recovery?.inputSchema).toMatchObject({
-      properties: { shipments: { type: "array" } },
+      instruction: expect.stringContaining(
+        'call describe with input.actions ["record"]',
+      ),
     });
   });
 

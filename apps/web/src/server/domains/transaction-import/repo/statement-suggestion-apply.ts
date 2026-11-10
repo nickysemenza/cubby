@@ -55,6 +55,8 @@ const log = createLogger("statement-suggestions");
 
 const refused = (message: string) =>
   createAppError("CONSTRAINT_VIOLATION", message);
+const CORRECTION_REVIEW =
+  'Review it with verdict "wrong" and correction {present:true, value:<the full application>}.';
 
 /** Apply revalidates authoritative evidence under its keys, independently of background retirement. */
 export async function applyStatementTransactionSuggestion(
@@ -71,12 +73,16 @@ export async function applyStatementTransactionSuggestion(
   const { application } = input;
   if (!input.corrected && application.action !== published.recommended)
     throw refused(
-      "Accepting a suggestion as is applies its recommended action; review a different choice as a correction.",
+      `Accepting a suggestion as is applies its recommended action; a different choice is a correction. ${CORRECTION_REVIEW}`,
     );
   if (!input.corrected && application.kindOverride)
-    throw refused("Changing the kind is a correction to the suggestion.");
+    throw refused(
+      `Changing the kind is a correction to the suggestion. ${CORRECTION_REVIEW}`,
+    );
   if (!input.corrected && application.booking)
-    throw refused("Changing the booking is a correction to the suggestion.");
+    throw refused(
+      `Changing the booking is a correction to the suggestion. ${CORRECTION_REVIEW}`,
+    );
 
   if (
     published.transferPair &&
@@ -131,7 +137,7 @@ export async function applyStatementTransactionSuggestion(
   });
 
   const charge = { source: subject.source, chargeKey: subject.chargeKey };
-  const current = await currentStatementApplication(db, loaded);
+  const current = await currentStatementApplication(db, loaded, application);
   const judgment = current.judgment;
   const { accountCode, codeOf, targetId } = await statementApplicationSelection(
     db,

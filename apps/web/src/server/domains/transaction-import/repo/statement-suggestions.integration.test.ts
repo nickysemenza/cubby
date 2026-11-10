@@ -1351,7 +1351,9 @@ describe("statement Transaction suggestions", () => {
       rawDescription: "EXAMPLE GROCER 0001",
       sourceRefs: [],
     });
-    await expect(accept(ctx, suggestion!)).rejects.toThrow(/evidence changed/);
+    await expect(accept(ctx, suggestion!)).rejects.toThrow(
+      /changed since review: recommended, candidates/,
+    );
     expect(await stateOf(ctx, suggestion!.suggestionId)).toMatchObject({
       status: "pending",
     });
@@ -3359,7 +3361,7 @@ describe("statement Transaction suggestions", () => {
     });
     expect(await readPendingStatements(ctx)).toEqual([]);
     await expect(accept(ctx, suggestion!)).rejects.toThrow(
-      /evidence changed|stale/,
+      /changed since review|stale/,
     );
     // Republication, not a scanner, replaces the stale advice.
     expect(await generate(ctx)).toBe(1);

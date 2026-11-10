@@ -2,7 +2,10 @@ import { mcpResultDetail } from "@cubby/schemas/mcp-detail";
 import type { purchaseImportRunExecution } from "@cubby/schemas/purchase-import";
 import { z } from "zod";
 
-import type { Principal } from "~/server/http/authenticate";
+import {
+  MCP_TOOL_DEADLINE_MS,
+  type Principal,
+} from "~/server/http/authenticate";
 import { executePurchaseAgentMutation } from "~/server/mcp/purchase-agent-protocol";
 
 import {
@@ -17,9 +20,14 @@ import {
  * result reports every index. A trusted purchase agent runs each mutation item
  * through its own stable operation id, so approval, replay, and the Run audit
  * trail stay per item.
+ *
+ * The whole batch spends one MCP budget. Items still running at the deadline
+ * keep committing after the answer, so the batch stops starting new items
+ * while it can still answer and reports them as not started.
  */
 
 const DEFAULT_BATCH_MAX_ITEMS = 50;
+const BATCH_START_MARGIN_MS = 30_000;
 
 type BatchResultDetail = "summary" | "full";
 
@@ -61,6 +69,8 @@ export function batchOutputSchema<TItemOutput extends z.ZodType>(
       requested: z.number().int().nonnegative(),
       succeeded: z.number().int().nonnegative(),
       failed: z.number().int().nonnegative(),
+      /** Present only when the budget stopped the batch early. */
+      notStarted: z.number().int().positive().optional(),
     }),
     results: z.array(
       z.discriminatedUnion("status", [
@@ -74,6 +84,10 @@ export function batchOutputSchema<TItemOutput extends z.ZodType>(
           index: z.number().int().nonnegative(),
           status: z.literal("failed"),
           error: toolErrorDetailSchema,
+        }),
+        z.object({
+          index: z.number().int().nonnegative(),
+          status: z.literal("not_started"),
         }),
       ]),
     ),
@@ -137,7 +151,8 @@ type BatchSuccess<TItem> = {
 };
 type BatchResult<TItem> =
   | BatchSuccess<TItem>
-  | { index: number; status: "failed"; error: ToolErrorDetail };
+  | { index: number; status: "failed"; error: ToolErrorDetail }
+  | { index: number; status: "not_started" };
 
 export async function runMcpBatch<TItemInput extends z.ZodType, TItemOutput>(
   config: McpBatchConfig<TItemInput, TItemOutput>,
@@ -164,7 +179,20 @@ export async function runMcpBatch<TItemInput extends z.ZodType, TItemOutput>(
       );
   }
   const results: Array<BatchResult<TItemOutput>> = [];
+  const startedAt = Date.now();
+  const budgetMs = MCP_TOOL_DEADLINE_MS[config.mutation ? "write" : "read"];
+  let slowestMs = 0;
   for (const [index, item] of input.items.entries()) {
+    const elapsed = Date.now() - startedAt;
+    if (
+      index > 0 &&
+      budgetMs - elapsed <
+        Math.max(Math.min(BATCH_START_MARGIN_MS, budgetMs / 4), 2 * slowestMs)
+    ) {
+      results.push({ index, status: "not_started" });
+      continue;
+    }
+    const itemStartedAt = Date.now();
     let stage: "run" | "output" = "run";
     try {
       const produced = trusted
@@ -218,16 +246,18 @@ export async function runMcpBatch<TItemInput extends z.ZodType, TItemOutput>(
           stage,
         ),
       });
+    } finally {
+      slowestMs = Math.max(slowestMs, Date.now() - itemStartedAt);
     }
   }
-  const succeeded = results.filter(
-    (result) => result.status === "succeeded",
-  ).length;
+  const count = (status: BatchResult<TItemOutput>["status"]) =>
+    results.filter((result) => result.status === status).length;
   return {
     summary: {
       requested: results.length,
-      succeeded,
-      failed: results.length - succeeded,
+      succeeded: count("succeeded"),
+      failed: count("failed"),
+      ...(count("not_started") > 0 && { notStarted: count("not_started") }),
     },
     results,
   };

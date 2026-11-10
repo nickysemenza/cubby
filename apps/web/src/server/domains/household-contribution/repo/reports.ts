@@ -133,8 +133,9 @@ function attributionGaps(rows: ExpenseAllocationRow[]): Gap[] {
       (row) => row.basis === "recorded" || row.basis === "unknown",
     );
     const nullRows = attributable.filter((row) => !row.ledgerPartyId);
-    if (nullRows.length > 0) {
-      const nullCents = sum(nullRows.map((row) => row.cents));
+    const nullCents = sum(nullRows.map((row) => row.cents));
+    // A zero-cost line (e.g. a free-tier usage line) has nothing to attribute.
+    if (nullCents !== 0n) {
       const unknown = nullRows.some((row) => row.basis === "unknown");
       gaps.push({
         code:

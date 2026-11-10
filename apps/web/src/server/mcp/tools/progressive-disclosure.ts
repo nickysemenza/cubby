@@ -125,8 +125,9 @@ export function withProgressiveDisclosure(
       },
       extra,
     );
-    // Compact tools hide action fields until describe. An input refusal must
-    // give the caller that contract rather than forcing schema guesses.
+    // Compact tools hide action fields until describe. An input refusal points
+    // at describe; the validation causes already name the failing paths, and
+    // inlining the whole input schema buried them.
     if (!result.isError || !action || !tool.actions.has(action)) return result;
     const error = publicOperationErrorSchema.safeParse(
       result._meta?.["cubby/error"],
@@ -139,7 +140,6 @@ export function withProgressiveDisclosure(
       return result;
     const visible = await visibleActions?.(extra);
     if (visible && !visible.has(tool.actions.get(action)!.name)) return result;
-    const contract = describeMcpActions(tool, [action], visible).actions[0]!;
     return {
       ...result,
       content: [
@@ -148,10 +148,8 @@ export function withProgressiveDisclosure(
           type: "text",
           text: JSON.stringify({
             recovery: "input_schema",
-            instruction:
-              "Correct the input using this action contract, then retry. Missing source facts stay unknown; do not invent them or escalate a schema error.",
+            instruction: `Correct the input from the validation causes, or call describe with input.actions ["${action}"] for the full contract, then retry. Missing source facts stay unknown; do not invent them or escalate a schema error.`,
             action,
-            inputSchema: contract.inputSchema,
           }),
         },
       ],

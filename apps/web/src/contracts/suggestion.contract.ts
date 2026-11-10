@@ -18,7 +18,7 @@ export const suggestionContract = defineContract(
   {
     review: mutation({
       description:
-        "Review immutable evidence as correct, wrong, uncertain or a presentation dismissal. Draft review does not apply; saved application is revalidated.",
+        "Review immutable evidence as correct, wrong, uncertain or a presentation dismissal. Draft review does not apply; saved application is revalidated. Applying anything other than the recommendation as is (another action, kind or booking) is a correction: verdict wrong with correction {present:true, value:<the full application>}, where value equals the application sent.",
       input: suggestionReviewInput,
       output: suggestionReviewOut,
       invalidates: [

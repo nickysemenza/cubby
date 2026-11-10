@@ -30,11 +30,6 @@ import { aiBudgetWindow, fundingResumeAt } from "./budget-window";
  * `aiBudgetCovers`.
  */
 export const AI_BUDGET_LIMIT_USD = 1;
-/**
- * Cubby's slice of the household ChatGPT plan, whose quota the members' own
- * coding shares.
- */
-export const PLAN_BUDGET_LIMIT_USD = 2;
 const SETTINGS_ID = "00000000-0000-4000-8000-000000000077";
 /** Chat models and cookbook's pinned frontier models, which spend the same credit. */
 const FRONTIER_MODELS: readonly string[] = Object.entries(AI_MODELS)

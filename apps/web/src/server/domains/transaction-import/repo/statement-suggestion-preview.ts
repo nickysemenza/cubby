@@ -50,7 +50,11 @@ export async function previewStatementSuggestion(
       "Suggestion evidence fingerprint changed. Refresh suggestions and review again.",
     );
   const loaded = await loadStatementApplication(db, state);
-  const current = await currentStatementApplication(db, loaded);
+  const current = await currentStatementApplication(
+    db,
+    loaded,
+    input.application,
+  );
   const { judgment } = current;
   const { application } = input;
   const { accountCode, codeOf, targetId } = await statementApplicationSelection(

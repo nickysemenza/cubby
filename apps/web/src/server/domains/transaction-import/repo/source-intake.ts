@@ -38,6 +38,7 @@ import { canonicalJson, jsonSnapshot } from "~/server/lib/canonical-json";
 import { auditEvidenceRows } from "./intake-audit";
 
 const consolidatedProof = z.object({ kind: z.literal("consolidated") });
+const OBSERVED_AT_SKEW_MS = 5 * 60_000;
 
 type Identity = {
   kind: "provider" | "positioned";
@@ -100,6 +101,123 @@ function provenIdentity(
       position: row.rowPosition,
     };
   return null;
+}
+
+/**
+ * An attested provider row whose transaction id, provider account and amount
+ * equal every live observation of exactly one unproven owner proves that
+ * owner's identity: it becomes the provider occurrence in place, keeping its
+ * account, disposition and history. Any disagreement, a second owner or a
+ * second incoming row leaves the ordinary identity conflict for review.
+ */
+async function adoptionPlan(
+  query: ReturnType<typeof unwrapDb>,
+  source: string,
+  prepared: ReadonlyArray<{
+    key: string;
+    identity: Identity | null;
+    row: RecordSourceTransactionRecordsInput["rows"][number];
+  }>,
+  byKey: ReadonlyMap<string, typeof sourceOccurrence.$inferSelect>,
+  locked: ReadonlyArray<typeof sourceOccurrence.$inferSelect>,
+  observedAt: Date,
+) {
+  const adopted = new Map<string, typeof sourceOccurrence.$inferSelect>();
+  const incoming = prepared.filter(
+    (row) =>
+      row.identity?.kind === "provider" &&
+      row.identity.providerId &&
+      !byKey.has(row.key),
+  );
+  if (!incoming.length) return adopted;
+  const antecedents = await query
+    .select({
+      occurrenceId: sourceTransactionRecord.occurrenceId,
+      providerTransactionId: sourceTransactionRecord.providerTransactionId,
+      providerAccountId: sourceTransactionRecord.providerAccountId,
+      amount: sourceTransactionRecord.amount,
+      providerData: sourceTransactionRecord.providerData,
+      deletedAt: sourceTransactionRecord.deletedAt,
+    })
+    .from(sourceTransactionRecord)
+    .where(
+      and(
+        eq(sourceTransactionRecord.source, source),
+        inArray(
+          sourceTransactionRecord.providerTransactionId,
+          incoming.map((row) => row.identity!.providerId!),
+        ),
+      ),
+    );
+  const ownerSizes = new Map<string, number>();
+  const antecedentOwnerIds = [
+    ...new Set(antecedents.map((record) => record.occurrenceId)),
+  ];
+  if (antecedentOwnerIds.length)
+    for (const record of await query
+      .select({ occurrenceId: sourceTransactionRecord.occurrenceId })
+      .from(sourceTransactionRecord)
+      .where(inArray(sourceTransactionRecord.occurrenceId, antecedentOwnerIds)))
+      ownerSizes.set(
+        record.occurrenceId,
+        (ownerSizes.get(record.occurrenceId) ?? 0) + 1,
+      );
+  const targets = new Map<string, number>();
+  const plans = incoming.flatMap((row) => {
+    const identity = row.identity!;
+    const prior = antecedents.filter(
+      (record) => record.providerTransactionId === identity.providerId,
+    );
+    const ownerIds = new Set(prior.map((record) => record.occurrenceId));
+    const owner = locked.find((candidate) => ownerIds.has(candidate.id));
+    if (
+      ownerIds.size !== 1 ||
+      !owner ||
+      owner.source !== source ||
+      owner.identityKind !== "unproven" ||
+      owner.deletedAt ||
+      owner.withdrawnAt ||
+      owner.supersededByOccurrenceId ||
+      owner.lastObservedAt > observedAt ||
+      prior.length !== 1 ||
+      ownerSizes.get(owner.id) !== 1 ||
+      prior.some((record) => {
+        const claims = providerIdentityClaims(
+          z.json().parse(record.providerData),
+        );
+        return (
+          record.deletedAt !== null ||
+          claims.malformed ||
+          claims.providerIds.some((id) => id !== identity.providerId) ||
+          claims.accounts.some((id) => id !== row.row.providerAccountId) ||
+          String(record.amount) !==
+            String(moneyToMinor(-row.row.providerAmount)) ||
+          record.providerAccountId !== row.row.providerAccountId
+        );
+      })
+    )
+      return [];
+    targets.set(owner.id, (targets.get(owner.id) ?? 0) + 1);
+    return [{ key: row.key, identity, owner }];
+  });
+  for (const { key, identity, owner } of plans) {
+    if (targets.get(owner.id) !== 1) continue;
+    adopted.set(key, {
+      ...owner,
+      identityKind: "provider",
+      identityScope: identity.scope,
+      providerIdentity: identity.providerId,
+      identityProof: {
+        kind: "raw_provider_ids",
+        source,
+        account: identity.scope.slice("provider-account:".length),
+        provider: identity.providerId!,
+        originalIdentityProof: owner.identityProof,
+      },
+      reviewState: "ready",
+    });
+  }
+  return adopted;
 }
 
 /** Frozen tuple for fact equality only; the migration emits these exact JSON bytes independently. */
@@ -258,6 +376,13 @@ export async function recordSourceTransactionRecords(
       const observedAt = input.import.observedAt
         ? new Date(input.import.observedAt)
         : (existingBatch?.observedAt ?? new Date());
+      // A future observation time would make every later real observation
+      // compare as older. Retained collections replay their stored time.
+      const now = Date.now();
+      if (!existingBatch && observedAt.getTime() > now + OBSERVED_AT_SKEW_MS)
+        constraintViolation(
+          `observedAt ${observedAt.toISOString()} is later than server time ${new Date(now).toISOString()}; send when the evidence was observed.`,
+        );
       if (
         existingBatch &&
         (existingBatch.observedAt.getTime() !== observedAt.getTime() ||
@@ -301,6 +426,15 @@ export async function recordSourceTransactionRecords(
           prepared.flatMap((row) => (row.identity ? [row.identity.scope] : [])),
         ),
       ];
+      const adoptableIds = [
+        ...new Set(
+          prepared.flatMap((row) =>
+            row.identity?.kind === "provider" && row.identity.providerId
+              ? [row.identity.providerId]
+              : [],
+          ),
+        ),
+      ];
       const possibleOwners = await query
         .select()
         .from(sourceOccurrence)
@@ -313,6 +447,26 @@ export async function recordSourceTransactionRecords(
                 : undefined,
               providerIds.length
                 ? inArray(sourceOccurrence.providerIdentity, providerIds)
+                : undefined,
+              adoptableIds.length
+                ? and(
+                    eq(sourceOccurrence.identityKind, "unproven"),
+                    inArray(
+                      sourceOccurrence.id,
+                      query
+                        .select({ id: sourceTransactionRecord.occurrenceId })
+                        .from(sourceTransactionRecord)
+                        .where(
+                          and(
+                            eq(sourceTransactionRecord.source, source),
+                            inArray(
+                              sourceTransactionRecord.providerTransactionId,
+                              adoptableIds,
+                            ),
+                          ),
+                        ),
+                    ),
+                  )
                 : undefined,
             ) ?? sql`false`,
           ),
@@ -342,7 +496,8 @@ export async function recordSourceTransactionRecords(
             (row) => row.key === identityKey(storedIdentity(owner)),
           ) ||
           input.confirmedWithdrawals.includes(owner.providerIdentity ?? "") ||
-          redirectIds.includes(owner.id),
+          redirectIds.includes(owner.id) ||
+          owner.identityKind === "unproven",
       );
       await lockFinancialEvidenceKeys(
         tx,
@@ -408,6 +563,15 @@ export async function recordSourceTransactionRecords(
           byKey.set(identityKey(storedIdentity(reservation)), survivor);
         }
       }
+      const adopted = await adoptionPlan(
+        query,
+        source,
+        prepared,
+        byKey,
+        locked,
+        observedAt,
+      );
+      for (const [key, owner] of adopted) byKey.set(key, owner);
       if (existingBatch)
         await query
           .select({ id: transactionImport.id })
@@ -587,6 +751,22 @@ export async function recordSourceTransactionRecords(
           observedAt,
           coverage: input.import.coverage ?? null,
         }));
+      for (const owner of adopted.values())
+        await query
+          .update(sourceOccurrence)
+          .set({
+            identityKind: owner.identityKind,
+            identityScope: owner.identityScope,
+            providerIdentity: owner.providerIdentity,
+            identityProof: owner.identityProof,
+            reviewState: owner.reviewState,
+          })
+          .where(
+            and(
+              eq(sourceOccurrence.id, owner.id),
+              eq(sourceOccurrence.identityKind, "unproven"),
+            ),
+          );
       const fresh = chosen.filter(
         (row) => !row.owner && row.incoming.identity !== null,
       );
@@ -704,19 +884,29 @@ export async function recordSourceTransactionRecords(
           owner.currentObservationId !== observation.id &&
           retained.find((saved) => saved.id === owner.currentObservationId)
             ?.factFingerprint !== row.incoming.factFingerprint;
-        const currentObservationId = !row.owner
-          ? observation.id
-          : differentFacts &&
-              owner.withdrawnAt === null &&
-              owner.reviewState === "ready"
+        const adoption = adopted.has(row.incoming.key);
+        // Adoption proves identity, not revision order: differing facts wait
+        // for the same head review as any provider owner.
+        const currentObservationId = adoption
+          ? differentFacts
             ? null
-            : owner.currentObservationId;
+            : observation.id
+          : !row.owner
+            ? observation.id
+            : differentFacts &&
+                owner.withdrawnAt === null &&
+                owner.reviewState === "ready"
+              ? null
+              : owner.currentObservationId;
         const failedProviderProof =
           !!row.incoming.row.providerTransactionId &&
           row.incoming.identity?.kind !== "provider";
-        const reviewState =
-          owner.reviewState !== "ready" &&
-          owner.reviewState !== "revision_order_unknown"
+        const reviewState = adoption
+          ? differentFacts
+            ? "revision_order_unknown"
+            : owner.reviewState
+          : owner.reviewState !== "ready" &&
+              owner.reviewState !== "revision_order_unknown"
             ? owner.reviewState
             : overlapKeys.has(row.incoming.key) || failedProviderProof
               ? "identity_conflict"
@@ -726,9 +916,10 @@ export async function recordSourceTransactionRecords(
                   ? "revision_order_unknown"
                   : owner.reviewState;
         const semantic =
-          row.owner !== undefined &&
-          (currentObservationId !== owner.currentObservationId ||
-            reviewState !== owner.reviewState);
+          adoption ||
+          (row.owner !== undefined &&
+            (currentObservationId !== owner.currentObservationId ||
+              reviewState !== owner.reviewState));
         const lastObservedAt =
           owner.lastObservedAt < observedAt ? observedAt : owner.lastObservedAt;
         if (

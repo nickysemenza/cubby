@@ -68,6 +68,7 @@ import { type FinancialTransactionDollars } from "~/server/domains/financial-tra
 import {
   sourceObservations,
   sourceObservationIdentities,
+  statementChargeSourceHeld,
 } from "~/server/domains/transaction-import/repo/source-observation-state";
 import { PROVIDER_IDENTITY_REVIEW } from "~/server/domains/transaction-import/repo/source-transaction-record-identity";
 import {
@@ -75,6 +76,7 @@ import {
   chargeStateOf,
   hasStatementOccurrence,
   OCCURRENCE_IDENTITY_REVIEW,
+  recommendedWithLabels,
   pendingSuggestion,
   sourceSuggestionAutomaticEligible,
   suggestionField,
@@ -679,7 +681,7 @@ const diffFor = (
 /**
  * Current proposals for these charges, computed from the ledger and the
  * transactions as they stand. Generation publishes them; apply recomputes them
- * and refuses when the fingerprint moved.
+ * and refuses when a reviewed field moved.
  */
 function sourceCorrectionReason(
   priorTransaction:
@@ -1359,8 +1361,12 @@ async function finishProposal(
 /** Model labels ride on the evidence fingerprint rather than replacing it. */
 export async function labelledProposal(
   proposal: ChargeProposal,
-  judgment: StatementTransactionJudgment,
+  labelled: StatementTransactionJudgment,
 ): Promise<ChargeProposal> {
+  const judgment = {
+    ...labelled,
+    recommended: recommendedWithLabels(labelled),
+  };
   suggestionJudgments.statement_transaction.parse(judgment);
   return {
     ...proposal,
@@ -1572,6 +1578,43 @@ const isSettledBooking = (judgment: StatementTransactionJudgment) =>
   !judgment.reviewReason &&
   judgment.recommended === "book" &&
   judgment.spending?.status === "already_booked";
+
+/**
+ * Held source identity has one review surface, Source identity review. Its
+ * charges publish no Transaction advice, and pending advice already published
+ * for them is superseded: the rows, paid labels and member decisions remain,
+ * and a later proven occurrence publishes again.
+ */
+async function publishableCharges(
+  db: Database,
+  charges: readonly ChargeRef[],
+  accountIds: readonly string[] | undefined,
+): Promise<ChargeRef[]> {
+  if (!charges.length) return [];
+  const held = await unwrapDb(db).execute<ChargeRef>(
+    sql`SELECT c.source, c."chargeKey" FROM (VALUES ${tuples(charges)}) c(source, "chargeKey")
+      WHERE ${statementChargeSourceHeld(sql`c.source`, sql`c."chargeKey"`)}`,
+    "objects",
+  );
+  if (!held.length) return [...charges];
+  await transitionSuggestionStates(
+    db,
+    sql`${pendingStatementState}
+      AND ${suggestionField("recommended", STATE)} <> ${statementTransactionAction.enum.void}
+      AND (${suggestionField("source", STATE)}, ${suggestionField("chargeKey", STATE)}) IN (${tuples(held)})
+      ${
+        accountIds?.length
+          ? sql`AND (${suggestionField("accountId", STATE)})::uuid IN (${sql.join(
+              accountIds.map((id) => sql`${id}::uuid`),
+              sql`, `,
+            )})`
+          : sql``
+      }`,
+    { active: false, status: "superseded" },
+  );
+  const skipped = new Set(held.map(chargeId));
+  return charges.filter((charge) => !skipped.has(chargeId(charge)));
+}
 
 /** Complete a previously committed publication's missed retirement check, even without a new proposal. */
 async function retireSettledChargeAdvice(db: Database, charge: ChargeRef) {
@@ -2759,9 +2802,13 @@ export async function regenerateCharges(
       : null;
   for (const proposal of await buildChargeProposals(
     db,
-    admitted
-      ? charges.filter((charge) => admitted.has(chargeId(charge)))
-      : charges,
+    await publishableCharges(
+      db,
+      admitted
+        ? charges.filter((charge) => admitted.has(chargeId(charge)))
+        : charges,
+      scope?.accountIds,
+    ),
   )) {
     if (
       scope?.accountIds?.length &&
@@ -2931,7 +2978,11 @@ async function publishStatementGenerationPage(
     phase: "preparation",
     charges: charges.length,
   });
-  const built = await prepareStatementGenerationPage(db, charges, failed);
+  const built = await prepareStatementGenerationPage(
+    db,
+    await publishableCharges(db, charges, accountIds),
+    failed,
+  );
   const preparedAt = performance.now();
   const proposals = accountIds?.length
     ? built.filter((proposal) =>

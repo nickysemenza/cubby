@@ -93,11 +93,15 @@ const commandsInput = z.object({
   ),
 });
 const commandsOutput = z.object({
-  summary: z.object({ succeeded: z.number(), failed: z.number() }),
+  summary: z.object({
+    succeeded: z.number(),
+    failed: z.number(),
+    notStarted: z.number().optional(),
+  }),
   results: z.array(
     z.object({
       index: z.number(),
-      status: z.enum(["succeeded", "failed"]),
+      status: z.enum(["succeeded", "failed", "not_started"]),
       reference: z.string().optional(),
       error: z.object({ message: z.string() }).optional(),
     }),
@@ -113,7 +117,7 @@ const entityCommands: ToolRenderer = {
       ...new Set(commands.map((c) => `${c.action} ${c.entity}`)),
     ].join(", ");
     const outcome = result
-      ? ` · ${result.summary.succeeded} ok${result.summary.failed ? ` · ${result.summary.failed} failed` : ""}`
+      ? ` · ${result.summary.succeeded} ok${result.summary.failed ? ` · ${result.summary.failed} failed` : ""}${result.summary.notStarted ? ` · ${result.summary.notStarted} not started` : ""}`
       : "";
     return `${countLabel(commands.length, "command")} (${truncate(kinds)})${outcome}`;
   },
@@ -133,13 +137,18 @@ const entityCommands: ToolRenderer = {
               // Commands are positional; the index is their identity.
               // oxlint-disable-next-line react/no-array-index-key
               key={index}
-              ok={outcome ? outcome.status === "succeeded" : undefined}
+              ok={
+                outcome && outcome.status !== "not_started"
+                  ? outcome.status === "succeeded"
+                  : undefined
+              }
               primary={`${command.action} ${command.entity}`}
               secondary={[
                 outcome?.reference ?? command.id,
                 name ? JSON.stringify(truncate(name)) : null,
                 command.data ? Object.keys(command.data).join(", ") : null,
                 outcome?.error?.message,
+                outcome?.status === "not_started" ? "not started" : null,
               ]}
             />
           );

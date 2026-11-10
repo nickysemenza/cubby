@@ -1971,14 +1971,14 @@ Rules:
             byValue: { principal: "unknown" },
             otherwise: "not_allowed",
             refusal:
-              "Resolve the receipt role first. Only a principal item or service line may have a Spending category.",
+              "Only a principal item or service line may have a Spending category. Fee, discount, tax and credit lines follow their items' category; leave them out of category assignments, or resolve an unclassified line's receipt role first.",
           },
           {
             field: "projectId",
             byValue: { principal: "unknown" },
             otherwise: "not_allowed",
             refusal:
-              "Resolve the receipt role first. Only a principal item or service line may be assigned to a Project.",
+              "Only a principal item or service line may be assigned to a Project. Fee, discount, tax and credit lines follow their items' Project; leave them out of Project assignments, or resolve an unclassified line's receipt role first.",
           },
         ],
       },

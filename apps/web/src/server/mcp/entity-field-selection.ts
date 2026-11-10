@@ -278,15 +278,22 @@ export function readSelection(command: {
       const miss = published
         ? unknownSegment(published, path)
         : { path: path.join("."), expected: [] };
-      return miss ? [miss] : [];
+      if (!miss) return [];
+      // Field-envelope values are addressed under `fields.`, unlike filters.
+      const enveloped =
+        published &&
+        path[0] !== "fields" &&
+        !unknownSegment(published, ["fields", ...path]);
+      return [{ ...miss, enveloped }];
     });
     if (unknown.length > 0)
       throw createAppError(
         "MCP_FIELD_UNKNOWN",
         unknown
-          .map(
-            (miss) =>
-              `Unknown ${command.entity} field "${miss.path}"; expected one of ${miss.expected.join(", ")}`,
+          .map((miss) =>
+            miss.enveloped
+              ? `Unknown ${command.entity} field "${miss.path}"; select it as "fields.${miss.path}"`
+              : `Unknown ${command.entity} field "${miss.path}"; expected one of ${miss.expected.join(", ")}`,
           )
           .join("; "),
       );
