@@ -135,7 +135,11 @@ type Pair = {
 };
 
 /** One duplicate line onto one survivor line, or why that pairing would lose a fact. */
-function pairOne(line: Line, to: Line): Pair | { error: string } {
+function pairOne(
+  line: Line,
+  to: Line,
+  survivor: readonly Line[],
+): Pair | { error: string } {
   const keeps = (from: unknown, into: unknown) =>
     from === null || from === into;
   if (
@@ -157,6 +161,18 @@ function pairOne(line: Line, to: Line): Pair | { error: string } {
       };
     carry[field] = value;
   }
+  // A booking code another survivor line already holds would book one charge twice.
+  if (
+    carry.bookingTransactionCode &&
+    survivor.some(
+      (other) =>
+        other.id !== to.id &&
+        other.carried.bookingTransactionCode === carry.bookingTransactionCode,
+    )
+  )
+    return {
+      error: `The duplicate line "${line.title}" carries a booking another survivor line already holds.`,
+    };
   // Only principal lines carry a spending category.
   if (carry.spendingCategoryId && to.lineKind !== "principal")
     return {
@@ -165,12 +181,16 @@ function pairOne(line: Line, to: Line): Pair | { error: string } {
   return { from: line, to, carry };
 }
 
-/** Booking facts outrank title, title outranks role. */
+/**
+ * Booking-fact matches outrank title matches, which outrank role matches,
+ * across a whole assignment: each tier's weight exceeds the most any lower
+ * tier can add for a group of at most PAIRING_GROUP_MAX lines.
+ */
 const pairScore = (pair: Pair) =>
   (JSON.stringify(pair.from.carried) === JSON.stringify(pair.to.carried)
-    ? 4
+    ? 100
     : 0) +
-  (titleOf(pair.from) === titleOf(pair.to) ? 2 : 0) +
+  (titleOf(pair.from) === titleOf(pair.to) ? 10 : 0) +
   (pair.from.lineKind === pair.to.lineKind ? 1 : 0);
 
 /** The best complete assignment found so far for one amount. */
@@ -226,7 +246,7 @@ function pairLines(duplicate: Line[], survivor: Line[]) {
       }
       for (const [position, candidate] of to.entries()) {
         if (used.has(position)) continue;
-        const pair = pairOne(from[index]!, candidate);
+        const pair = pairOne(from[index]!, candidate, survivor);
         if ("error" in pair) {
           state.firstError ??= pair.error;
           continue;
