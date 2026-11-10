@@ -22,6 +22,7 @@ import { shiftPlainDate } from "~/lib/household-date";
 import { minorToDollarsSql } from "~/server/db/computed/money";
 import { type Database } from "~/server/db/database";
 import { notDeleted } from "~/server/db/helpers/predicates";
+import { requestedRows } from "~/server/db/helpers/requested";
 import { repositoryQueries as unwrapDb } from "~/server/db/repository-access.boundary";
 import {
   financialAccount,
@@ -180,13 +181,11 @@ async function sameFilePositions(
   // Install every pending scope before awaiting, so overlapping previews share
   // both observations and known misses without sharing duplicate admission.
   for (const batch of chunk(missing, 512)) {
-    const requested = sql`(VALUES ${sql.join(
-      batch.map(
-        (scope) =>
-          sql`(${scope.fingerprint}::text, ${scope.source}::text, ${scope.externalId}::text)`,
-      ),
-      sql`, `,
-    )}) AS requested(fingerprint, source, "externalId")`;
+    const requested = requestedRows(
+      batch,
+      { fingerprint: "text", source: "text", externalId: "text" },
+      "requested",
+    );
     const loaded = unwrapDb(db)
       .select({
         source: sourceObservationColumns.source,
@@ -196,7 +195,7 @@ async function sameFilePositions(
       })
       .from(sourceObservationFrom)
       .innerJoin(
-        requested,
+        requested.from,
         sql`requested.source = ${sourceObservationColumns.source} AND requested."externalId" = ${sourceObservationColumns.chargeKey}`,
       )
       .innerJoin(
@@ -269,25 +268,35 @@ export async function previewFinancialTransactionImport(
   const legacyIds = await Promise.all(
     input.rows.map((row) => sourceTransactionRecordExternalId(row)),
   );
+  const retainedRows = requestedRows(
+    input.rows.map((row) => ({
+      key: row.key,
+      source: row.source,
+      fingerprint: row.importFingerprint ?? null,
+      position: row.rowPosition ?? null,
+      provider: row.providerTransactionId ?? null,
+      account: row.providerAccountId ?? null,
+    })),
+    {
+      key: "text",
+      source: "text",
+      fingerprint: "text",
+      position: "int",
+      provider: "text",
+      account: "text",
+    },
+    "requested",
+  );
   const retainedOccurrences = input.rows.length
     ? await unwrapDb(db).execute<{ key: string; shortcode: string }>(sql`
-    WITH requested AS (SELECT * FROM (VALUES ${sql.join(
-      input.rows.map(
-        (row) => sql`(
-      ${row.key}::text, ${row.source}::text, ${row.importFingerprint ?? null}::text,
-      ${row.rowPosition ?? null}::integer, ${row.providerTransactionId ?? null}::text, ${row.providerAccountId ?? null}::text
-    )`,
-      ),
-      sql`, `,
-    )}) value(key, source, fingerprint, position, provider, account))
-    SELECT requested.key, owner.shortcode FROM requested
+    SELECT requested.key, owner.shortcode FROM ${retainedRows.from}
     JOIN "TransactionImport" collection ON collection.source = requested.source AND collection.fingerprint = requested.fingerprint
     JOIN ${transactionImportRecord} membership ON membership."importId"=collection.id AND membership."rowPosition"=requested.position
     JOIN "SourceTransactionRecord" observation ON observation.id=membership."statementRowId"
     JOIN "SourceOccurrence" owner ON owner.id = observation."occurrenceId"
     WHERE ${notDeleted("owner")} AND ${notDeleted("observation")} AND owner."reviewState" = ${sqlEnumConstant(sourceOccurrenceReviewState, sourceOccurrenceReviewState.enum.ready)}
     UNION
-    SELECT requested.key, owner.shortcode FROM requested
+    SELECT requested.key, owner.shortcode FROM ${retainedRows.from}
     JOIN "SourceOccurrence" owner ON owner.source = requested.source AND owner."identityKind" = ${sqlEnumConstant(sourceOccurrenceIdentityKind, sourceOccurrenceIdentityKind.enum.provider)}
       AND owner."identityScope" = 'provider-account:' || requested.account AND owner."providerIdentity" = requested.provider
     WHERE ${notDeleted("owner")} AND owner."reviewState" = ${sqlEnumConstant(sourceOccurrenceReviewState, sourceOccurrenceReviewState.enum.ready)}`)
@@ -321,7 +330,18 @@ export async function previewFinancialTransactionImport(
       ),
     ),
   );
-  const providerPairs = input.rows.filter((row) => row.providerTransactionId);
+  const providerPairs = uniqBy(
+    input.rows.filter((row) => row.providerTransactionId),
+    (row) => pairKey(row.source, row.providerTransactionId!),
+  );
+  const requestedProviders = requestedRows(
+    providerPairs.map((row) => ({
+      source: row.source,
+      provider: row.providerTransactionId,
+    })),
+    { source: "text", provider: "text" },
+    "requested_provider",
+  );
   const observations = providerPairs.length
     ? await unwrapDb(db)
         .select({
@@ -331,23 +351,17 @@ export async function previewFinancialTransactionImport(
           externalId: sourceObservationColumns.chargeKey,
         })
         .from(sourceObservationFrom)
+        .innerJoin(
+          requestedProviders.from,
+          sql`requested_provider.source = ${sourceObservationColumns.source}
+            AND requested_provider.provider = ${sourceObservationColumns.providerTransactionId}`,
+        )
         .where(
           and(
             notDeleted(sourceTransactionRecord),
             sql`EXISTS (SELECT 1 FROM "SourceOccurrence" owner
               WHERE owner.id = ${sourceObservationColumns.occurrenceId} AND owner."identityKind" = ${sqlEnumConstant(sourceOccurrenceIdentityKind, sourceOccurrenceIdentityKind.enum.provider)}
                 AND owner."reviewState" = ${sqlEnumConstant(sourceOccurrenceReviewState, sourceOccurrenceReviewState.enum.ready)} AND ${notDeleted("owner")})`,
-            or(
-              ...providerPairs.map((row) =>
-                and(
-                  eq(sourceObservationColumns.source, row.source),
-                  eq(
-                    sourceObservationColumns.providerTransactionId,
-                    row.providerTransactionId,
-                  ),
-                ),
-              ),
-            ),
           ),
         )
     : [];
@@ -363,29 +377,32 @@ export async function previewFinancialTransactionImport(
     ],
     (pair) => `${pair.source}\0${pair.externalId}`,
   );
+  const requestedPairs = requestedRows(
+    pairs.map((pair) => ({ source: pair.source, code: pair.externalId })),
+    { source: "text", code: "text" },
+    "requested",
+  );
+  const requestedAliases = requestedRows(
+    input.rows.flatMap((row, index) =>
+      [sourceRefIds[index]!, legacyIds[index]!].map((value) => ({
+        source: row.source,
+        value,
+      })),
+    ),
+    { source: "text", value: "text" },
+    "requested",
+  );
   const sourceRefLookup =
     pairs.length === 0
       ? undefined
       : sql`${financialTransaction.id} IN (
     SELECT owner."acceptedTransactionId" FROM "SourceOccurrence" owner
-    JOIN (VALUES ${sql.join(
-      pairs.map(
-        (pair) => sql`(${pair.source}::text, ${pair.externalId}::text)`,
-      ),
-      sql`, `,
-    )}) requested(source, code)
+    JOIN ${requestedPairs.from}
       ON owner.source = requested.source AND owner.shortcode = requested.code
     WHERE owner."acceptedTransactionId" IS NOT NULL
     UNION
     SELECT alias."historicalTransactionId" FROM "FinancialEvidenceAlias" alias
-    JOIN (VALUES ${sql.join(
-      input.rows.flatMap((row, index) =>
-        [sourceRefIds[index]!, legacyIds[index]!].map(
-          (value) => sql`(${row.source}::text, ${value}::text)`,
-        ),
-      ),
-      sql`, `,
-    )}) requested(source, value)
+    JOIN ${requestedAliases.from}
       ON alias.source = requested.source AND alias.value = requested.value
     WHERE alias."historicalTransactionId" IS NOT NULL
   )`;
