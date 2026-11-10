@@ -117,9 +117,6 @@
                         },
                         "provenance": null
                       }
-                    },
-                    "work": {
-                      "kind": "idle"
                     }
                   },
                   "tags": {
@@ -154,9 +151,6 @@
                           }
                         }
                       }
-                    },
-                    "work": {
-                      "kind": "idle"
                     }
                   },
                   "source": {
@@ -180,9 +174,6 @@
                           "kind": "computed"
                         }
                       }
-                    },
-                    "work": {
-                      "kind": "idle"
                     }
                   }
                 }
@@ -392,9 +383,6 @@
                       "kind": "computed"
                     }
                   }
-                },
-                "work": {
-                  "kind": "idle"
                 }
               },
               "totals": {
@@ -407,9 +395,6 @@
                 },
                 "result": {
                   "kind": "missing"
-                },
-                "work": {
-                  "kind": "idle"
                 }
               }
             }

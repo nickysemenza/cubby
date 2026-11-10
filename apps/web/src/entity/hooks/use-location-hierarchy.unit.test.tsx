@@ -43,7 +43,7 @@ it("retains current counts without inventing a missing valuation or pricing coun
   });
 });
 
-it("keeps a real cached zero and its raw refresh failure in the hierarchy model", async () => {
+it("keeps a real cached stale zero in the hierarchy model", async () => {
   const value = locationValuation.parse({
     directValuation: 0,
     totalValuation: 0,
@@ -52,7 +52,6 @@ it("keeps a real cached zero and its raw refresh failure in the hierarchy model"
     direct: { priced: 1, missingPricing: 0, miscNoPrice: 0 },
     total: { priced: 1, missingPricing: 0, miscNoPrice: 0 },
   });
-  const error = "Synthetic SQLSTATE 40001: location valuation refresh failed";
   const valuation = infLocation.shape.fields.shape.valuation.parse({
     current: {
       assignment: null,
@@ -67,7 +66,6 @@ it("keeps a real cached zero and its raw refresh failure in the hierarchy model"
         provenance: { kind: "computed" },
       },
     },
-    work: { kind: "failed", error, retryAt: null },
   });
   const root = locationReadFixture({
     id: testShortcode("location", "LOC-2222"),
@@ -87,7 +85,6 @@ it("keeps a real cached zero and its raw refresh failure in the hierarchy model"
     totalPricingStatus: { priced: { count: 1 } },
     valuation: {
       result: { kind: "cached", freshness: "stale" },
-      work: { kind: "failed", error },
     },
   });
 });
