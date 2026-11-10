@@ -113,7 +113,7 @@ describe("Claude credit refusal", () => {
         .spyOn(globalThis, "fetch")
         .mockResolvedValueOnce(stream(refusedFrame))
         .mockResolvedValueOnce(
-          stream('event: message_stop\ndata: {"type":"message_stop"}\n\n'),
+          stream('data: {"choices":[]}\n\ndata: [DONE]\n\n'),
         );
       try {
         const probe = async () => {

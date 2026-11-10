@@ -75,10 +75,12 @@ const refusalUntil = (refusal: FundingRefusal, now: number) =>
 /**
  * The terminal error frame of a streamed answer, if it ended in one: a
  * provider funding refusal can arrive after 2xx headers. Only an `error` or
- * `response.failed` frame classifies, so model output never does.
+ * `response.failed` frame classifies, so model output never does. Undefined
+ * when the last frame cannot be read (cut off by the tail, or not JSON), so
+ * the hold stays as it was.
  */
-function terminalStreamError(tail: string): string | null {
-  let last: string | null = null;
+function terminalStreamError(tail: string): string | null | undefined {
+  let last: string | null | undefined = null;
   for (const frame of tail.split(/\r?\n\r?\n/u)) {
     const lines = frame.split(/\r?\n/u);
     const event = lines
@@ -90,6 +92,11 @@ function terminalStreamError(tail: string): string | null {
       .map((line) => line.slice(5).trim())
       .join("\n");
     if (!data) continue;
+    // Chat Completions ends a clean stream with a non-JSON sentinel.
+    if (data === "[DONE]") {
+      last = null;
+      continue;
+    }
     let type: unknown;
     try {
       const parsed: unknown = JSON.parse(data);
@@ -98,7 +105,8 @@ function terminalStreamError(tail: string): string | null {
           ? parsed.type
           : undefined;
     } catch {
-      // SILENT: a partial leading frame of the tail is not a terminal error.
+      // SILENT: unreadable; a later frame still decides.
+      last = undefined;
       continue;
     }
     last =
@@ -574,9 +582,11 @@ export class AiGatewayEgressDurableObject extends DurableObject<Env> {
       // Only a stream that ends settles its hold; an abort or read failure
       // leaves it as it was.
       const settleStream = () => {
-        if (!streamed) return;
+        // A cancelled read can resolve as done; it is not a clean end.
+        if (!streamed || controller.signal.aborted) return;
         tail += decoder.decode();
         const error = terminalStreamError(tail);
+        if (error === undefined) return;
         const now = Date.now();
         try {
           if (credit)
