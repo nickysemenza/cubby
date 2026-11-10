@@ -3,7 +3,7 @@ import { z } from "zod";
 
 import { projectShortcode, taskShortcode } from "./identifiers";
 
-export const projectGraphNodeId = z.union([projectShortcode, taskShortcode]);
+const projectGraphNodeId = z.union([projectShortcode, taskShortcode]);
 
 const projectGraphNodeSchema = z.object({
   id: projectGraphNodeId,

@@ -9,7 +9,7 @@ import { z } from "zod";
  */
 const tokenCount = z.number().int().nonnegative();
 
-export const contextSectionsSchema = z.object({
+const contextSectionsSchema = z.object({
   instructions: tokenCount,
   agentToolSchemas: tokenCount,
   mcpToolSchemas: tokenCount,
@@ -18,7 +18,7 @@ export const contextSectionsSchema = z.object({
   toolResults: z.record(z.string(), tokenCount),
 });
 
-export const contextCallSchema = z.object({
+const contextCallSchema = z.object({
   model: z.string().optional(),
   /** Reported input tokens, including cached ones. */
   inputTokens: tokenCount,

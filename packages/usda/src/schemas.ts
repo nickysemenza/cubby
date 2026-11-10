@@ -3,7 +3,7 @@ import { barcodeDigits } from "@cubby/shared/upc";
 import { z } from "zod";
 
 // Re-exported so importers that also need USDA schemas keep one import.
-export { BARCODE_RE, upc } from "@cubby/shared/upc";
+export { upc } from "@cubby/shared/upc";
 
 // NDB (Nutrient Data Bank) number - USDA-specific identifier
 export const ndb = z.number().max(99999).min(1000).describe("USDA NDB number");
@@ -18,9 +18,9 @@ export const fdcId = z
   .int()
   .positive()
   .describe("USDA FoodData Central id (universal food primary key)");
-export type FdcId = z.infer<typeof fdcId>;
 
 // select distinct unit_name from nutrient;
+/** @public Names a generated native model. */
 export const nutrient_unit_name = z.enum([
   "MG_ATE",
   "kJ",
@@ -88,21 +88,6 @@ export const DATA_TYPE_PRIORITY = {
   experimental_food: 4,
 } as const satisfies Record<DataType, number>;
 
-//select distinct serving_size_unit from branded_food;
-export const branded_food_serving_size_unit = z.enum([
-  "g",
-  "GM",
-  "GRM",
-  "IU",
-  "MC",
-  "MG",
-  "ml",
-  "MLT",
-]);
-export type BrandedFoodServingSizeUnit = z.infer<
-  typeof branded_food_serving_size_unit
->;
-
 export const nutrientSummary = z
   .object({
     amount: z.number(),
@@ -151,15 +136,7 @@ export const foodPortion = z.object({
 export const legacyFoodInfo = z.object({
   ndb_number: ndb,
 });
-export type LegacyFoodInfo = z.infer<typeof legacyFoodInfo>;
 
-export const brandedFoodRaw = z.object({
-  fdc_id: fdcId,
-  serving_size: z.number().nullable(),
-  serving_size_unit: z.string().nullable(),
-  household_serving_fulltext: z.string().nullable(),
-});
-export type BrandedFoodRaw = z.infer<typeof brandedFoodRaw>;
 export const foodSummary = z.object({
   fdc_id: fdcId,
   brandedFoodInfo: brandedFoodInfo.nullable(),
@@ -170,7 +147,6 @@ export const foodSummary = z.object({
 });
 export type BrandedFoodInfo = z.infer<typeof brandedFoodInfo>;
 export type NutrientSummary = z.infer<typeof nutrientSummary>;
-export type FoodInfo = z.infer<typeof foodInfo>;
 export type FoodSummary = z.infer<typeof foodSummary>;
 
 /**
@@ -180,6 +156,7 @@ export type FoodSummary = z.infer<typeof foodSummary>;
  * most of a 133KB `entity get ingredient`. The compact `nutrientsPer100`
  * beside it carries the same tier-1 nutrients keyed by code, and a single-food
  * read still returns the whole table for the one food a caller settles on.
+ * @public Names a generated native model.
  */
 export const foodSummaryCompact = foodSummary.extend({
   nutritionInfo: nutritionInfo.omit({ nutrientSummary: true }),

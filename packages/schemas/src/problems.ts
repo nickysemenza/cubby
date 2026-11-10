@@ -58,7 +58,7 @@ const publicEntityIdSchema = anyShortcodeSchema(
   nonEmptyTuple<ShortcodeEntity>(shortcodeEntities),
 );
 
-export { baseKind, type BaseKind } from "./codec";
+export { baseKind } from "./codec";
 
 const problemRowEntity = z.enum(
   nonEmptyTuple<ShortcodeEntity>(shortcodeEntities),
@@ -92,7 +92,6 @@ export const problemRowSchema = z.object({
   fields: z.array(problemRowFieldSchema),
   badges: z.array(problemRowBadgeSchema),
 });
-export type ProblemRow = z.infer<typeof problemRowSchema>;
 
 const productProblemFields = {
   id: productShortcode,
@@ -104,7 +103,7 @@ const coverageFields = {
   applicable: z.array(baseKind),
 };
 
-export const rawDuplicateUniqueProductSchema = z.object({
+const rawDuplicateUniqueProductSchema = z.object({
   ...productProblemFields,
   expectedQuantity: z.number().nullable(),
   locations: z.array(locationRefOut),
@@ -116,18 +115,18 @@ export const duplicateUniqueProductSchema = withFieldEnvelopes(
   productPublicReadFields,
 );
 
-export const rawOrphanedProductSchema = z.object({
+const rawOrphanedProductSchema = z.object({
   ...productProblemFields,
   createdAt: dateTime,
 });
 
-export const orphanedProductSchema = withFieldEnvelopes(
+const orphanedProductSchema = withFieldEnvelopes(
   rawOrphanedProductSchema,
   { brandName: productFieldEnvelopeFields.brandName },
   productPublicReadFields,
 );
 
-export const rawPartiallyImportedCookbookSchema = z.object({
+const rawPartiallyImportedCookbookSchema = z.object({
   id: cookbookShortcode,
   name: z.string(),
   sourceRecipeCount: z.number().int().nonnegative(),
@@ -135,7 +134,7 @@ export const rawPartiallyImportedCookbookSchema = z.object({
   missingRecipeCount: z.number().int().positive(),
 });
 
-export const partiallyImportedCookbookSchema = withFieldEnvelopes(
+const partiallyImportedCookbookSchema = withFieldEnvelopes(
   rawPartiallyImportedCookbookSchema.extend({
     observation: rawPartiallyImportedCookbookSchema.pick({
       sourceRecipeCount: true,
@@ -171,7 +170,7 @@ export const partiallyImportedCookbookSchema = withFieldEnvelopes(
  * The fix is a weight-to-money unit mapping; `price` is the wrong shape here
  * and setting it papers over the gap.
  */
-export const rawWeightSoldProductSchema = z.object({
+const rawWeightSoldProductSchema = z.object({
   ...productProblemFields,
   /** Priced principal expense lines behind the verdict. */
   lineCount: z.number().int().positive(),
@@ -183,7 +182,7 @@ export const rawWeightSoldProductSchema = z.object({
   ingredientId: ingredientShortcode.nullable(),
 });
 
-export const weightSoldProductSchema = withFieldEnvelopes(
+const weightSoldProductSchema = withFieldEnvelopes(
   rawWeightSoldProductSchema,
   { brandName: productFieldEnvelopeFields.brandName },
   productPublicReadFields,
@@ -200,7 +199,7 @@ export const weightSoldProductSchema = withFieldEnvelopes(
 // always "detach": a tool bought before the ledger's coverage of it begins
 // looks acquired-late, in which case the missing acquisition Expense is the
 // real defect. Both dates ride along so the row says which.
-export const rawToolUsedOutsideOwnershipSchema = z.object({
+const rawToolUsedOutsideOwnershipSchema = z.object({
   ...productProblemFields,
   projectId: projectShortcode,
   projectName: z.string(),
@@ -209,7 +208,7 @@ export const rawToolUsedOutsideOwnershipSchema = z.object({
   projectBoundary: plainDate,
 });
 
-export const toolUsedOutsideOwnershipSchema = withFieldEnvelopes(
+const toolUsedOutsideOwnershipSchema = withFieldEnvelopes(
   rawToolUsedOutsideOwnershipSchema,
   { brandName: productFieldEnvelopeFields.brandName },
   productPublicReadFields,
@@ -240,7 +239,7 @@ export const productWithoutMappingsSchema = withFieldEnvelopes(
  * human act: titles that carry a pack count are refused upstream precisely
  * because they parse to a per-each size 6-12x too small.
  */
-export const rawProductWithTitleDerivableSizeSchema = z.object({
+const rawProductWithTitleDerivableSizeSchema = z.object({
   ...productProblemFields,
   category: z.string().nullable(),
   // `amount` — the Rust title grammar that produces `proposed` always parses
@@ -250,7 +249,7 @@ export const rawProductWithTitleDerivableSizeSchema = z.object({
   token: z.string(),
 });
 
-export const productWithTitleDerivableSizeSchema = withFieldEnvelopes(
+const productWithTitleDerivableSizeSchema = withFieldEnvelopes(
   rawProductWithTitleDerivableSizeSchema,
   { brandName: productFieldEnvelopeFields.brandName },
   productPublicReadFields,
@@ -297,12 +296,7 @@ const labelVariantFields = {
   canonicalCount: z.number().int(),
 };
 
-export const labelVariantSchema = z.object({
-  ...labelVariantFields,
-  sampleId: productShortcode,
-});
-
-export const duplicateVendorSchema = z.object({
+const duplicateVendorSchema = z.object({
   ...labelVariantFields,
   sampleId: vendorShortcode,
   canonicalSampleId: vendorShortcode,
@@ -330,7 +324,7 @@ export const productWithIslandedMappingsSchema = withFieldEnvelopes(
 // is missing from storage, or extraction kept failing. Terminal so it leaves
 // the maintenance backlog; the raw error stays for diagnosis, and the
 // maintenance step's "Retry failed" is its re-admit.
-export const imageMetadataOutcomeProblemSchema = z.object({
+const imageMetadataOutcomeProblemSchema = z.object({
   id: imageShortcode,
   name: z.string(),
   outcome: imageMetadataOutcome,
@@ -348,7 +342,7 @@ export const imageMetadataOutcomeProblemSchema = z.object({
 // already reports it in the maintenance card with a Fix button. This one does
 // not self-heal: the meal's cost stays understated until an ingredient gets a
 // price path, and `recipe-totals-gaps.ts` already ranks those fixes.
-export const understatedCostMealSchema = z.object({
+const understatedCostMealSchema = z.object({
   id: mealShortcode,
   name: z.string().nullable(),
   date: plainDate,
@@ -382,7 +376,7 @@ export const staleIngredientParseSchema = z.object({
   modifierDrift: z.boolean(),
 });
 
-export const rawProductWithBetterUpcDataSchema = z.object({
+const rawProductWithBetterUpcDataSchema = z.object({
   ...productProblemFields,
   upc: z.string(),
   // Each field is set only when a fresh lookup would fill it (stored value empty
@@ -395,7 +389,7 @@ export const rawProductWithBetterUpcDataSchema = z.object({
   }),
 });
 
-export const productWithBetterUpcDataSchema = withFieldEnvelopes(
+const productWithBetterUpcDataSchema = withFieldEnvelopes(
   rawProductWithBetterUpcDataSchema,
   { brandName: productFieldEnvelopeFields.brandName },
   productPublicReadFields,
@@ -415,7 +409,7 @@ export const productWithBetterUpcDataSchema = withFieldEnvelopes(
  * deliberately NOT a field — `reconciliationDelta` already derives it from these
  * two numbers for the list column and the detail cue.
  */
-export const rawPurchaseNotReconcilingSchema = z.object({
+const rawPurchaseNotReconcilingSchema = z.object({
   id: purchaseShortcode,
   /** Through the join; null only if the vendor was soft-deleted. */
   vendorName: z.string().nullable(),
@@ -437,7 +431,7 @@ export const rawPurchaseNotReconcilingSchema = z.object({
   postedRefundTotal: financialReconciliationFields.postedRefundTotal,
 });
 
-export const purchaseNotReconcilingSchema = withFieldEnvelopes(
+const purchaseNotReconcilingSchema = withFieldEnvelopes(
   rawPurchaseNotReconcilingSchema.extend({
     observation: rawPurchaseNotReconcilingSchema.pick({
       vendorId: true,
@@ -453,7 +447,7 @@ export const purchaseNotReconcilingSchema = withFieldEnvelopes(
   purchasePublicReadFields,
 );
 
-export const rawPurchaseFinancialSettlementMismatchSchema = z.object({
+const rawPurchaseFinancialSettlementMismatchSchema = z.object({
   id: purchaseShortcode,
   vendorName: z.string().nullable(),
   vendorId: vendorShortcode.nullable(),
@@ -472,7 +466,7 @@ export const rawPurchaseFinancialSettlementMismatchSchema = z.object({
   }),
 });
 
-export const purchaseFinancialSettlementMismatchSchema = withFieldEnvelopes(
+const purchaseFinancialSettlementMismatchSchema = withFieldEnvelopes(
   rawPurchaseFinancialSettlementMismatchSchema.extend({
     financialReconciliation: financialReconciliationSummary,
     observation: rawPurchaseFinancialSettlementMismatchSchema.pick({
@@ -490,7 +484,7 @@ export const purchaseFinancialSettlementMismatchSchema = withFieldEnvelopes(
   purchasePublicReadFields,
 );
 
-export const rawDuplicateSpendCandidateSchema = z.object({
+const rawDuplicateSpendCandidateSchema = z.object({
   id: expenseShortcode,
   expenseName: z.string(),
   cost: money,
@@ -511,7 +505,7 @@ export const rawDuplicateSpendCandidateSchema = z.object({
   alternateMatchCount: z.number().int(),
 });
 
-export const duplicateSpendCandidateSchema = withFieldEnvelopes(
+const duplicateSpendCandidateSchema = withFieldEnvelopes(
   rawDuplicateSpendCandidateSchema.extend({
     observation: rawDuplicateSpendCandidateSchema.pick({ purchaseId: true }),
   }),
@@ -523,7 +517,7 @@ export const DUPLICATE_SPEND_NAME_SIMILARITY = 0.15;
 
 export const DUPLICATE_SPEND_DAY_WINDOW = 7;
 
-export const duplicateFinancialTransactionSourceRefSchema = z.object({
+const duplicateFinancialTransactionSourceRefSchema = z.object({
   source: z.string(),
   externalId: z.string(),
   transactionIds: z.array(financialTransactionShortcode),
@@ -538,7 +532,7 @@ export const duplicateFinancialTransactionSourceRefSchema = z.object({
  * putting it here would make `activity_read.report` unusable. Unmatched rows are read
  * through `finance_read.source_transaction_records({matchState:"unmatched"})` instead.
  */
-export const incompleteTransactionImportSchema = z.object({
+const incompleteTransactionImportSchema = z.object({
   source: z.string(),
   label: z.string(),
   fingerprint: z.string(),
@@ -546,7 +540,7 @@ export const incompleteTransactionImportSchema = z.object({
   rowCountStored: z.number().int(),
 });
 
-export const duplicateFinancialAccountSourceAliasSchema = z.object({
+const duplicateFinancialAccountSourceAliasSchema = z.object({
   source: z.string(),
   externalAccountId: z.string(),
   accountIds: z.array(financialAccountShortcode),
@@ -554,7 +548,7 @@ export const duplicateFinancialAccountSourceAliasSchema = z.object({
 
 /** Product identifiers a Vendor owns under a source that is not its issuer:
  * exact lookups and import fences read only the issuer, so they miss these. */
-export const productIdentifierOutsideIssuerSchema = z.object({
+const productIdentifierOutsideIssuerSchema = z.object({
   vendorId: vendorShortcode,
   vendorName: z.string(),
   source: z.string(),
@@ -568,7 +562,7 @@ export const productIdentifierOutsideIssuerSchema = z.object({
  * mechanical cause and a definite right answer, so this is a `defect`, not a
  * judgment call like `purchaseFinancialSettlementMismatches`.
  */
-export const financialTransactionAllocationDefectReason = z.enum([
+const financialTransactionAllocationDefectReason = z.enum([
   /** Allocations exist but do not sum to the transaction's own amount. */
   "sum-mismatch",
   "non-settlement-kind",
@@ -577,7 +571,7 @@ export const financialTransactionAllocationDefectReason = z.enum([
   "allocation-sign-mismatch",
 ]);
 
-export const financialTransactionAllocationDefectSchema = z.object({
+const financialTransactionAllocationDefectSchema = z.object({
   id: financialTransactionShortcode,
   /**
    * How the transaction identifies itself to a person — merchant, else its raw
@@ -594,7 +588,7 @@ export const financialTransactionAllocationDefectSchema = z.object({
   purchaseIds: z.array(purchaseShortcode),
 });
 
-export const invalidFinancialJsonSchema = z.discriminatedUnion("entity", [
+const invalidFinancialJsonSchema = z.discriminatedUnion("entity", [
   z.object({
     entity: z.literal("financialAccount"),
     id: financialAccountShortcode,
@@ -617,8 +611,7 @@ export const invalidFinancialJsonSchema = z.discriminatedUnion("entity", [
 // parse-sweeps (stale parses, unused aliases) are NOT here — they re-parse every
 // recipe line and blew the CPU/memory budget on the request path, so they live as
 // manual dry-run/fix-all actions in Settings → Maintenance instead.
-export const sectionTotalsSchema = z.record(z.string(), z.number().int());
-export type SectionTotals = z.infer<typeof sectionTotalsSchema>;
+const sectionTotalsSchema = z.record(z.string(), z.number().int());
 
 export const runFindingProblemSchema = z.object({
   id: z.uuid(),
@@ -1132,7 +1125,7 @@ export const problemsFastSchema = z.object({
  * the list filters fail closed in that case, so reporting it as fresh would
  * turn a partial result into a healthy-looking empty Problem.
  */
-export const conversionCoverageFreshnessSchema = z.object({
+const conversionCoverageFreshnessSchema = z.object({
   state: z.enum(["fresh", "stale", "unavailable"]),
   computedAt: dateTime.nullable(),
   expectedEngineVersion: z.string(),
@@ -1145,17 +1138,11 @@ export type ProductConversionCoverageFreshness = z.infer<
   typeof conversionCoverageFreshnessSchema
 >;
 
-export const problemsCoverageSchema = z.object({
-  ...problemsCoverageFields,
-  sectionTotals: sectionTotalsSchema,
-  /** Exact list filters read this persisted projection, not the card scan. */
-  freshness: conversionCoverageFreshnessSchema,
-});
 /**
  * The UPC provider is advisory. Its status is part of the wire contract so an
  * outage cannot masquerade as a healthy empty proposal list.
  */
-export const upcEnrichmentFreshnessSchema = z.object({
+const upcEnrichmentFreshnessSchema = z.object({
   status: z.enum(["fresh", "stale", "unavailable"]),
   checkedAt: dateTime,
   oldestFetchedAt: dateTime.nullable(),
@@ -1165,18 +1152,7 @@ export type UpcEnrichmentFreshness = z.infer<
   typeof upcEnrichmentFreshnessSchema
 >;
 
-export const problemsUpcSchema = z.object({
-  ...problemsUpcFields,
-  sectionTotals: sectionTotalsSchema,
-  freshness: upcEnrichmentFreshnessSchema,
-});
-export const problemsViewsSchema = z.object({
-  ...problemsViewsFields,
-  /** True population per key; the page above is only what the card shows. */
-  sectionTotals: sectionTotalsSchema,
-});
-export type ProblemsViewsOut = z.infer<typeof problemsViewsSchema>;
-export const problemsTrackerSchema = z.object({
+const problemsTrackerSchema = z.object({
   incompleteProjectIds: z.array(projectShortcode),
   ...problemsTrackerFields,
   sectionTotals: sectionTotalsSchema,
@@ -1233,27 +1209,9 @@ const referentialLivenessViolationMcpOut =
     sourceId: true,
   });
 
-/** MCP problem catalog with storage-only diagnostic identifiers removed. */
-export const allProblemsMcpSchema = allProblemsSchema.extend({
-  referentialLivenessViolations: z.array(referentialLivenessViolationMcpOut),
-});
-
 export const referentialLivenessViolationsMcpOut = z.array(
   referentialLivenessViolationMcpOut,
 );
-
-export const EMPTY_SECTION_TOTALS: SectionTotals = Object.freeze({});
-
-/**
- * How many rows a section really covers: its declared total when it reports a
- * sample, else the rows it returned. The single definition, so a caller can't
- * accidentally count a page.
- */
-export const sectionSize = (
-  key: string | undefined,
-  items: readonly unknown[],
-  totals: SectionTotals | undefined,
-): number => (key ? (totals?.[key] ?? items.length) : items.length);
 
 // SAFETY: every detector keyed by name with its own declared class.
 const problemClasses = mapDetectors(
@@ -1262,34 +1220,11 @@ const problemClasses = mapDetectors(
 ) as { [K in ProblemKey]: Detectors[K]["problemClass"] };
 export { problemClasses as PROBLEM_CLASS };
 
-export type CoverageProblemKey = {
+type CoverageProblemKey = {
   [K in ProblemKey]: Detectors[K]["problemClass"] extends "coverage"
     ? K
     : never;
 }[ProblemKey];
-
-const isDefectKey = (key: string): boolean =>
-  detectorEntries.some(
-    ([candidate, entry]) =>
-      candidate === key && entry.problemClass === "defect",
-  );
-
-/**
- * Sum only the `defect` sections: the single definition of "how many problems
- * are there".
- */
-export const sumProblemSections = (
-  sections: Record<string, readonly unknown[]>,
-  problemClass: "defect" | "coverage",
-  totals?: SectionTotals,
-): number =>
-  Object.entries(sections).reduce(
-    (n, [key, items]) =>
-      isDefectKey(key) === (problemClass === "defect")
-        ? n + sectionSize(key, items, totals)
-        : n,
-    0,
-  );
 
 export type DefectProblemKey = Exclude<ProblemKey, CoverageProblemKey>;
 
@@ -1303,34 +1238,6 @@ export type DefectProblemKey = Exclude<ProblemKey, CoverageProblemKey>;
 export const AUTO_FIX_PROBLEM_KEYS = [
   "locationsWithoutAiDescription",
 ] as const satisfies readonly DefectProblemKey[];
-export type AutoFixProblemKey = (typeof AUTO_FIX_PROBLEM_KEYS)[number];
-
-export const isAutoFixProblemKey = (key: string): key is AutoFixProblemKey =>
-  AUTO_FIX_PROBLEM_KEYS.some((candidate) => candidate === key);
-
-/**
- * True population behind a set of detector keys. A Problems section is sized by
- * its declared keys through this, never by its rendered rows, so the section
- * counts sum to the headline figures exactly.
- */
-export const problemKeysSize = (
-  sections: Partial<Record<ProblemKey, readonly unknown[]>>,
-  keys: readonly ProblemKey[],
-  totals: SectionTotals | undefined,
-): number =>
-  keys.reduce((n, key) => n + sectionSize(key, sections[key] ?? [], totals), 0);
-
-/** Defects split by who resolves them; the two parts sum to every defect. */
-export const splitDefects = (
-  sections: Record<string, readonly unknown[]>,
-  totals: SectionTotals | undefined,
-) => {
-  const autoFix = problemKeysSize(sections, AUTO_FIX_PROBLEM_KEYS, totals);
-  return {
-    needsYou: sumProblemSections(sections, "defect", totals) - autoFix,
-    autoFix,
-  };
-};
 
 // SAFETY: one `z.number()` per detector key.
 const byTypeFields = mapDetectors(
@@ -1351,35 +1258,8 @@ export const problemsCountSchema = z.object({
   byType: z.object(byTypeFields),
 });
 
-/**
- * Denominators for the coverage meters — the "M" in "N of M photographed".
- *
- * Every detector returns only its failing rows, so a percentage needs a
- * population count that nothing else computes. Keyed by each detector's
- * declared `meter`, so a meter can't be wired to the wrong denominator.
- *
- * Deliberately its OWN schema and procedure rather than a field on
- * `problemsFastShape`: `allProblemArrayFields` must stay arrays-only, or the
- * mechanically-derived `byTypeShape` breaks on a non-array key. `unvaluedBucketProducts` is absent on purpose — a misc bucket
- * has no meaningful population to be a fraction of, so it renders as a plain
- * list.
- */
-export const coverageTotalsSchema = z.object(
-  // SAFETY: keyed by each metered detector's declared `meter` name.
-  Object.fromEntries(
-    detectorEntries.flatMap(([, entry]) =>
-      entry.meter ? [[entry.meter, z.number()]] : [],
-    ),
-  ) as {
-    [K in ProblemKey as NonNullable<Detectors[K]["meter"]>]: z.ZodNumber;
-  },
-);
-export type CoverageTotals = z.infer<typeof coverageTotalsSchema>;
-
 export type AllProblems = z.infer<typeof allProblemsSchema>;
 export type ProblemsFast = z.infer<typeof problemsFastSchema>;
-export type ProblemsCoverage = z.infer<typeof problemsCoverageSchema>;
-export type ProblemsUpc = z.infer<typeof problemsUpcSchema>;
 export type ProblemsCount = z.infer<typeof problemsCountSchema>;
 
 // Per-detector item types — the canonical shapes the problems repo's find*
@@ -1437,17 +1317,6 @@ export const problemsPruneAliasesEventSchema = z.discriminatedUnion("type", [
     result: z.object({ pruned: z.number() }),
   }),
 ]);
-
-export const recipeUsageByProductInput = z.object({
-  productShortcodes: z.array(productShortcode),
-});
-
-/**
- * Keyed by product SHORTCODE, matching the input — the caller (a problem card)
- * only ever holds the public id, so a uuid-keyed map here would never match and
- * the "used in N recipes" signal would silently vanish from every card.
- */
-export const recipeUsageByProductOut = z.record(z.string(), z.number());
 
 export const deleteUnusedIngredientsInput = z
   .object({

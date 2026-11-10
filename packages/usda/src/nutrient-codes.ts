@@ -34,7 +34,7 @@ export const TIER1_NUTRIENTS = {
 
 export type NutrientKey = keyof typeof TIER1_NUTRIENTS;
 
-export type NutrientInfo = (typeof TIER1_NUTRIENTS)[NutrientKey];
+type NutrientInfo = (typeof TIER1_NUTRIENTS)[NutrientKey];
 export type NutrientCode = NutrientInfo["code"];
 
 export const TIER1_CODES: readonly string[] = Object.values(
@@ -90,21 +90,13 @@ export function getNutrientDisplayName(code: string): string {
   return CODE_TO_NUTRIENT[code]?.displayName ?? getNutrientKey(code);
 }
 
-export function getNutrientInfo(code: string): NutrientInfo | undefined {
-  return CODE_TO_NUTRIENT[code];
-}
-
 export function isTier1Nutrient(code: string): code is NutrientCode {
   return code in CODE_TO_NUTRIENT;
 }
 
 export type { NutrientsPer100 } from "./schemas";
 
-export function createEmptyNutrients(): NutrientsPer100 {
-  return {};
-}
-
-export function getNutrientValue(
+function getNutrientValue(
   nutrients: NutrientsPer100,
   code: string,
 ): number | undefined {

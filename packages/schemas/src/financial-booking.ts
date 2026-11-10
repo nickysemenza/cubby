@@ -181,7 +181,7 @@ export type FinancialConvergenceInput = z.infer<
   typeof financialConvergenceInput
 >;
 
-export const financialWorkPreview = z.object({
+const financialWorkPreview = z.object({
   transactionId: financialTransactionShortcode,
   canApplyAutomatically: z.boolean(),
   blocker: z.string().nullable(),

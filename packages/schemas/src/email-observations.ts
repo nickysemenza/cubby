@@ -55,7 +55,7 @@ export const emailOriginalCapture = z.discriminatedUnion("status", [
 export type EmailOriginalCapture = z.infer<typeof emailOriginalCapture>;
 
 /** Declared logical requests, not answering-model or provider-wire attestations. */
-export const emailLogicalInputCapture = z.object({
+const emailLogicalInputCapture = z.object({
   version: z.literal("gmail-logical-inputs-v1"),
   inputs: z.array(capturedFieldInput).min(1),
 });
@@ -93,7 +93,7 @@ export type EmailClassificationApplication =
   | "applied"
   | "unverified";
 
-export const emailClassificationOperation = z.enum([
+const emailClassificationOperation = z.enum([
   "mailbox-triage",
   "mailbox-relevance",
 ]);
@@ -102,7 +102,7 @@ export type EmailClassificationOperation = z.infer<
 >;
 
 /** A prediction that disagrees with protected evidence: an accepted Purchase or the member's own review. */
-export const emailClassificationConflict = z.discriminatedUnion("kind", [
+const emailClassificationConflict = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("accepted_unrelated") }).strict(),
   z
     .object({

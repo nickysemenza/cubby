@@ -32,7 +32,10 @@ export type StatementTransactionAction = z.infer<
   typeof statementTransactionAction
 >;
 
-/** Which source chose the proposed kind; agreement, not the source, decides `clean`. */
+/**
+ * Which source chose the proposed kind; agreement, not the source, decides `clean`.
+ * @public Names a generated native model.
+ */
 export const statementTransactionKindSource = z.enum(["rule", "model", "sign"]);
 
 /**
@@ -40,6 +43,7 @@ export const statementTransactionKindSource = z.enum(["rule", "model", "sign"]);
  * at least two votes name it and none names another; `null` abstains and
  * `mixed` (merchant history of several kinds) disagrees with every kind.
  * Defaults carry judgments published before the votes were recorded.
+ * @public Names a generated native model.
  */
 export const statementKindVotes = z.object({
   /** The provider-category rule, or an own-account move the descriptor names. */
@@ -67,7 +71,7 @@ export const statementCounterparty = z.object({
 export type StatementCounterparty = z.infer<typeof statementCounterparty>;
 
 /** The member's own balance account a cash-out or funding descriptor names. */
-export const statementOwnAccountMove = z.object({
+const statementOwnAccountMove = z.object({
   /** Null when several of the member's accounts fit the descriptor. */
   accountId: z.uuid().nullable(),
   /** The accounts have different owners: a LedgerTransfer is also owed. */
@@ -82,7 +86,10 @@ const transactionFields = ["amount", "postedDate", "status"] as const;
 /** Fields an attach or supersede may copy from the statement onto the transaction. */
 export const statementTransactionField = z.enum(transactionFields);
 
-/** Advisory model reading of one candidate; it never authorizes an action. */
+/**
+ * Advisory model reading of one candidate; it never authorizes an action.
+ * @public Names a generated native model.
+ */
 export const statementCandidateLabel = z.object({
   same: z.enum(["same", "different", "insufficient"]),
   confidence: z.enum(["low", "medium", "high"]),
@@ -90,7 +97,7 @@ export const statementCandidateLabel = z.object({
 });
 
 /** Judgments hold internal ids; public reads map them to shortcodes. */
-export const statementTransactionCandidate = z.object({
+const statementTransactionCandidate = z.object({
   transactionId: z.uuid(),
   amount: z.number(),
   status,
@@ -108,7 +115,7 @@ export type StatementTransactionCandidate = z.infer<
   typeof statementTransactionCandidate
 >;
 
-export const statementTransactionCreate = z.object({
+const statementTransactionCreate = z.object({
   kind,
   kindSource: statementTransactionKindSource,
   votes: statementKindVotes.default({ rule: null, label: null, history: null }),
@@ -220,19 +227,6 @@ export const statementSuggestionPreviewOut = z.object({
 });
 export type StatementSuggestionPreviewOut = z.infer<
   typeof statementSuggestionPreviewOut
->;
-
-export const statementSuggestionFilters = z.object({
-  accountId: financialAccountShortcode.optional(),
-  month: z
-    .string()
-    .regex(/^\d{4}-\d{2}$/)
-    .optional(),
-  action: statementTransactionAction.optional(),
-  clean: z.boolean().optional(),
-});
-export type StatementSuggestionFilters = z.infer<
-  typeof statementSuggestionFilters
 >;
 
 const publicCandidate = statementTransactionCandidate

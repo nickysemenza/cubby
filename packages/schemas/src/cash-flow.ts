@@ -51,7 +51,7 @@ const ledgerFilter = z.record(z.string(), z.string());
 /** The Irregular row's key in grouped mode. */
 export const CASH_FLOW_IRREGULAR_KEY = "irregular";
 
-export const cashFlowBaselineRow = z.object({
+const cashFlowBaselineRow = z.object({
   /** Root SPC- code, `uncategorized`, `unclassified`, or `irregular`. */
   key: z.string(),
   label: z.string(),
@@ -77,19 +77,19 @@ const projectRef = {
   endDate: plainDate.nullable(),
 };
 
-export const cashFlowEnvelope = z.object({
+const cashFlowEnvelope = z.object({
   ...projectRef,
   /** Remaining spread over months after the horizon ends. */
   beyondHorizon: money,
 });
 export type CashFlowEnvelope = z.infer<typeof cashFlowEnvelope>;
 
-export const cashFlowUnscheduled = z.object({
+const cashFlowUnscheduled = z.object({
   ...projectRef,
 });
 export type CashFlowUnscheduled = z.infer<typeof cashFlowUnscheduled>;
 
-export const cashFlowMonth = z.object({
+const cashFlowMonth = z.object({
   month,
   baseline: z.array(z.object({ key: z.string(), amount: money })),
   envelopes: z.array(z.object({ id: projectShortcode, amount: money })),

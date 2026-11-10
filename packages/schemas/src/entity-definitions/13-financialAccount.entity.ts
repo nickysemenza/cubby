@@ -21,6 +21,7 @@ import {
   vendorShortcode,
 } from "../identifier-fields.js";
 import { z } from "zod";
+/** @public The shortcode registry generator parses this module's `definition` and `readSchemas`. */
 export const { definition, readSchemas } = defineEntityModel({
   key: "financialAccount",
   names: { singular: "Financial Account", plural: "Accounts" },

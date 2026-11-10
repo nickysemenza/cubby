@@ -9,11 +9,7 @@ export const aiGatewayId = (_environment: AiGatewayEnvironment): string =>
 /** Cubby's Cloudflare account, which owns that gateway and Workers AI. */
 export const CF_ACCOUNT_ID = "9f10f078d35d86c78dedece2300a6b88";
 
-export const aiGatewayEnvironmentSchema = z.enum([
-  "production",
-  "ci",
-  "development",
-]);
+const aiGatewayEnvironmentSchema = z.enum(["production", "ci", "development"]);
 export type AiGatewayEnvironment = z.infer<typeof aiGatewayEnvironmentSchema>;
 
 /**

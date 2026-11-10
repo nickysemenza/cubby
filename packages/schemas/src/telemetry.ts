@@ -15,10 +15,7 @@ const telemetryEnvelope = {
 export const mcpToolCallOutcomeSchema = z.enum(["success", "error"]);
 export type McpToolCallOutcome = z.infer<typeof mcpToolCallOutcomeSchema>;
 
-export const mcpToolCallSurfaceSchema = z.enum([
-  "external_mcp",
-  "in_app_agent",
-]);
+const mcpToolCallSurfaceSchema = z.enum(["external_mcp", "in_app_agent"]);
 export type McpToolCallSurface = z.infer<typeof mcpToolCallSurfaceSchema>;
 
 /**
@@ -81,7 +78,7 @@ export const AI_USAGE_TRANSPORT_LABELS = {
   unknown: "Unknown transport",
 } as const satisfies Record<AiUsageTransport, string>;
 
-export const aiUsageTelemetrySchema = z.strictObject({
+const aiUsageTelemetrySchema = z.strictObject({
   ...telemetryEnvelope,
   type: z.literal("ai_usage"),
   feature: z.string().min(1),
@@ -135,7 +132,7 @@ export const mcpTelemetryIdentitySchema = z.strictObject({
 });
 export type McpTelemetryIdentity = z.infer<typeof mcpTelemetryIdentitySchema>;
 
-export const mcpUsageWindowSchema = z.union([
+const mcpUsageWindowSchema = z.union([
   z.literal(7),
   z.literal(30),
   z.literal(90),
@@ -144,7 +141,7 @@ export const mcpUsageWindowSchema = z.union([
 ]);
 export type McpUsageWindow = z.infer<typeof mcpUsageWindowSchema>;
 
-export const mcpToolUsageStatusSchema = z.enum([
+const mcpToolUsageStatusSchema = z.enum([
   "active",
   "inactive",
   "never",
@@ -236,7 +233,7 @@ const usageBreakdownSchema = z.strictObject({
   count: z.number().int().nonnegative(),
 });
 
-export const mcpUsageDashboardOut = z.strictObject({
+const mcpUsageDashboardOut = z.strictObject({
   window: mcpUsageWindowSchema,
   observationStartedAt: dateTime.nullable(),
   observationComplete: z.boolean(),

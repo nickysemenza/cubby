@@ -37,21 +37,16 @@ import {
   rawProductCategorySummary,
   rawPurchasedCategorySummary,
 } from "./product-category-fields";
-import {
-  aiUsageTransport,
-  aiUsageTransportValues,
-  type AiUsageTransport,
-} from "./telemetry";
+import { aiUsageTransport, type AiUsageTransport } from "./telemetry";
 import { usdaFoodListRow } from "./usda";
 
 // Confidence level values - single source of truth
-export const confidenceValues = ["high", "medium", "low"] as const;
+const confidenceValues = ["high", "medium", "low"] as const;
 
 export const confidence = z.enum(confidenceValues);
 
 export type Confidence = z.infer<typeof confidence>;
 
-export { HIGH_CONFIDENCE_PROBABILITY } from "./ai-evaluation";
 const MEDIUM_CONFIDENCE_PROBABILITY = 0.6;
 
 /** Buckets a decision model's calibrated probability into the public
@@ -89,7 +84,7 @@ export const aiLocationIdInput = z.object({
   locationId: locationShortcode,
 });
 
-export const MAX_DETECTION_IMAGE_IDS = 5;
+const MAX_DETECTION_IMAGE_IDS = 5;
 
 export const detectInventoryItemsInput = aiLocationIdInput.extend({
   /** Analyze only these attached images (a native photo just committed); omitted means the location's first images. */
@@ -106,11 +101,9 @@ export const locationDescriptionSchema = z.object({
 });
 export type LocationDescription = z.infer<typeof locationDescriptionSchema>;
 
-export {
-  aiAnalysisEntityKind,
-  type AiAnalysisEntityKind,
-} from "./ai-analysis-fields";
+export { type AiAnalysisEntityKind } from "./ai-analysis-fields";
 
+/** @public Names a generated native model. */
 export const aiCacheStatus = z.enum(["hit", "miss"]);
 export type AiCacheStatus = z.infer<typeof aiCacheStatus>;
 
@@ -137,6 +130,7 @@ const detectedInventoryItemFields = {
   isMisc: z.boolean(),
 };
 
+/** @public Names a generated native model. */
 export const detectedInventoryItemSchema = z.object(
   detectedInventoryItemFields,
 );
@@ -144,7 +138,7 @@ export type DetectedInventoryItem = z.infer<typeof detectedInventoryItemSchema>;
 
 export const MAX_DETECTED_INVENTORY_ITEMS = 20;
 
-export const rawDetectedProductMatchSchema = z.object({
+const rawDetectedProductMatchSchema = z.object({
   id: productShortcode,
   name: z.string(),
   brandName: z.string().nullable(),
@@ -157,14 +151,13 @@ export const detectedProductMatchSchema = withFieldEnvelopes(
   { brandName: productFieldEnvelopeFields.brandName },
   productPublicReadFields,
 );
-export type DetectedProductMatch = z.infer<typeof detectedProductMatchSchema>;
 
+/** @public Names a generated native model. */
 export const detectedItemSchema = z.object({
   ...detectedInventoryItemFields,
   matchedProduct: detectedProductMatchSchema.nullable(),
 });
-export type DetectedItem = z.infer<typeof detectedItemSchema>;
-export const rawDetectedItemSchema = detectedItemSchema.extend({
+const rawDetectedItemSchema = detectedItemSchema.extend({
   matchedProduct: rawDetectedProductMatchSchema.nullable(),
 });
 export type RawDetectedItem = z.infer<typeof rawDetectedItemSchema>;
@@ -182,8 +175,7 @@ export const detectedInventorySchema = z.object({
   summary: z.string(),
   cache: aiCacheMetadataSchema,
 });
-export type DetectedInventory = z.infer<typeof detectedInventorySchema>;
-export const rawDetectedInventorySchema = detectedInventorySchema.extend({
+const rawDetectedInventorySchema = detectedInventorySchema.extend({
   items: z.array(rawDetectedItemSchema),
 });
 export type RawDetectedInventory = z.infer<typeof rawDetectedInventorySchema>;
@@ -245,7 +237,7 @@ export const usdaFoodSuggestionBatchOut = z.array(
   z.object({ ...usdaFoodSuggestionFields, name: z.string() }),
 );
 
-export const ingredientMergeSuggestionItem = z.object({
+const ingredientMergeSuggestionItem = z.object({
   id: ingredientShortcode,
   name: z.string().min(1),
 });
@@ -335,10 +327,9 @@ export const aiEnrichmentProposalEventSchema = z.discriminatedUnion("type", [
   }),
 ]);
 
-export const aiUsageCacheStatus = z.enum(["hit", "miss", "none"]);
-export type AiUsageCacheStatus = z.infer<typeof aiUsageCacheStatus>;
+const aiUsageCacheStatus = z.enum(["hit", "miss", "none"]);
 
-export { aiUsageTransport, aiUsageTransportValues, type AiUsageTransport };
+export { type AiUsageTransport };
 
 export const aiUsageStatus = z.enum(["succeeded", "failed"]);
 
@@ -374,7 +365,7 @@ const aiUsageGroupFields = {
   transport: aiUsageTransport,
 };
 
-export const aiUsageEntrySchema = z.object({
+const aiUsageEntrySchema = z.object({
   id: z.string(),
   ...aiUsageGroupFields,
   inputTokens: z.number().int().nullable(),
@@ -457,7 +448,7 @@ export const aiUsageSummaryInput = z.object({
   days: z.number().int().min(1).max(90).default(7),
 });
 
-export const aiUsageSummaryRowSchema = z.object({
+const aiUsageSummaryRowSchema = z.object({
   day: z.string(),
   ...aiUsageGroupFields,
   inputTokens: z.number().int(),
@@ -489,6 +480,7 @@ export type AiUsageSummaryRow = z.infer<typeof aiUsageSummaryRowSchema>;
  * `entity.field` composites — `entity` already scopes them); `basis` values
  * are shortcodes for reference fields and plain text otherwise, `null` when
  * unset/unknown. `provided` mode never uses another target's proposal as evidence.
+ * @public Names a generated native model.
  */
 export const suggestionPurchaseEvidenceSchema = z.object({
   principalLineCount: z.number().int(),
@@ -612,7 +604,7 @@ export type SuggestionReviewRow = z.infer<typeof suggestionReviewRowSchema>;
  * cannot drift from what the model sees; a live roster's choices come from
  * household records and are shown by Try instead.
  */
-export const decisionCatalogRowSchema = z.object({
+const decisionCatalogRowSchema = z.object({
   /** `entity.field` for a suggest field, the feature id otherwise. */
   key: z.string(),
   entity: z.enum(shortcodeEntities).nullable(),
@@ -665,6 +657,7 @@ export type DecisionCatalogRow = z.infer<typeof decisionCatalogRowSchema>;
  * A runner-up from the decision model's calibrated distribution over every choice, so a
  * picker can pin the top few candidates instead of only the winner. Empty on
  * the roster-overflow path (a chat-tier pick has no distribution).
+ * @public Names a generated native model.
  */
 export const fieldSuggestionAlternativeSchema = z.object({
   value: z.string(),
@@ -676,7 +669,10 @@ export type FieldSuggestionAlternative = z.infer<
   typeof fieldSuggestionAlternativeSchema
 >;
 
-/** One entry a `remove` suggestion proposes dropping from a text-array target. */
+/**
+ * One entry a `remove` suggestion proposes dropping from a text-array target.
+ * @public Names a generated native model.
+ */
 export const fieldSuggestionRemovalSchema = z.object({
   value: z.string(),
   probability: z.number().min(0).max(1),
@@ -751,7 +747,7 @@ export const SETTLED_SUGGESTION_QUESTION_MAX = 50;
  * names the saved record a `preview` read looks up; `verified` reads ignore
  * it, so a remembered decline answers every record sharing the basis.
  */
-export const settledSuggestionQuestion = fieldSuggestionsInput
+const settledSuggestionQuestion = fieldSuggestionsInput
   .pick({ entityId: true, basisMode: true, basis: true })
   .extend({ field: z.string().min(1) });
 export type SettledSuggestionQuestion = z.infer<
@@ -792,7 +788,7 @@ export type SettledSuggestionPreview = z.infer<typeof settledSuggestionPreview>;
  * authoritative — a client shows it while the live ask runs, and accepts,
  * rejects or applies nothing until that ask returns.
  */
-export const settledSuggestionAnswer = z.object({
+const settledSuggestionAnswer = z.object({
   outcome: fieldSuggestionOutcomeSchema.nullable(),
   revision: z.string().nullable(),
   preview: settledSuggestionPreview.nullable().optional(),
@@ -817,7 +813,6 @@ export const externalIdKindSuggestionInput = z.object({
  * the existing hint UI (`FieldSuggestionHint`) consumes it unchanged. `null`
  * only when the identifier carries no usable signal at all. */
 export const suggestExternalIdKindOut = fieldSuggestionSchema.nullable();
-export type SuggestExternalIdKindOut = z.infer<typeof suggestExternalIdKindOut>;
 
 export type ExternalIdKindSuggestionInput = z.infer<
   typeof externalIdKindSuggestionInput

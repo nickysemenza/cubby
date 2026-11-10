@@ -13,24 +13,22 @@ export const mailImportGapCategory = z.enum([
   "unknown",
 ]);
 
-export { EMAIL_RELATIONSHIP_INPUTS } from "./entity-definitions/email-relationship-inputs";
-
 /** Retained content never grants import authorization. Historical policy stays unknown. */
 export const emailExecutionPolicy = z.enum(["classification_only", "import"]);
 export type EmailExecutionPolicy = z.infer<typeof emailExecutionPolicy>;
 
 /** Search-cache expiry is explicit, independent of unrelated metadata updates. */
-export const emailSearchOrigin = z.enum(["member_search", "discovery"]);
+const emailSearchOrigin = z.enum(["member_search", "discovery"]);
 export type EmailSearchOrigin = z.infer<typeof emailSearchOrigin>;
 
 /**
  * Normalized order numbers an Email prints (trimmed, leading `#` removed,
  * upper-cased), never a tracking number (`mail-rule-evidence.ts`).
  */
-export const emailOrderKeys = z.array(z.string().min(1));
+const emailOrderKeys = z.array(z.string().min(1));
 export type EmailOrderKeys = z.infer<typeof emailOrderKeys>;
 /** Carrier tracking numbers an Email prints, upper-cased without whitespace. */
-export const emailTrackingKeys = z.array(
+const emailTrackingKeys = z.array(
   z.object({
     carrier: z.enum(["UPS", "FedEx", "USPS", "OnTrac"]).nullable(),
     number: z.string().min(1),
@@ -114,7 +112,6 @@ export const emailImportOutcome = z.enum([
   "failed",
   "not_imported",
 ]);
-export type EmailImportOutcome = z.infer<typeof emailImportOutcome>;
 
 /** One (Email, Purchase) pair as an Email list or detail read shows it. */
 export const emailPurchaseLink = z

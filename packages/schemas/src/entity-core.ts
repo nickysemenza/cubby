@@ -10,7 +10,7 @@ import { ENTITY_KEYS } from "@cubby/shared/entity-keys";
 export const entitySchema = z.enum(ENTITY_KEYS);
 export type Entity = z.infer<typeof entitySchema>;
 
-export const entityRefFields = {
+const entityRefFields = {
   entityKind: entitySchema,
   entityId: z.string(),
 };

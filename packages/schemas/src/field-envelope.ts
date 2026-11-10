@@ -133,23 +133,21 @@ export const fieldResult = shareSchema(<V extends z.ZodType>(value: V) =>
   ]),
 );
 
-export const fieldResetPreview = shareSchema(
-  <V extends z.ZodType>(value: V) => {
-    const result = fieldResult(value);
-    return z.discriminatedUnion("kind", [
-      z.object({ kind: z.literal("not_loaded") }),
-      z.object({
-        kind: z.literal("ready"),
-        result: z.discriminatedUnion("kind", [
-          result.options[1],
-          result.options[2].extend({ freshness: z.literal("fresh") }),
-        ]),
-      }),
-    ]);
-  },
-);
+const fieldResetPreview = shareSchema(<V extends z.ZodType>(value: V) => {
+  const result = fieldResult(value);
+  return z.discriminatedUnion("kind", [
+    z.object({ kind: z.literal("not_loaded") }),
+    z.object({
+      kind: z.literal("ready"),
+      result: z.discriminatedUnion("kind", [
+        result.options[1],
+        result.options[2].extend({ freshness: z.literal("fresh") }),
+      ]),
+    }),
+  ]);
+});
 
-export const fieldControls = shareSchema(<V extends z.ZodType>(value: V) =>
+const fieldControls = shareSchema(<V extends z.ZodType>(value: V) =>
   z.discriminatedUnion("kind", [
     z.object({
       kind: z.literal("readonly"),

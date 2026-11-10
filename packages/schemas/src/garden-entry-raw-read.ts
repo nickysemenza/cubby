@@ -8,6 +8,3 @@ export const rawGardenEntryListItemOut = withEntityListMedia(
   definitionSchemas.list,
 );
 export type RawGardenEntryOut = z.output<typeof rawGardenEntryOut>;
-export type RawGardenEntryListItemOut = z.output<
-  typeof rawGardenEntryListItemOut
->;

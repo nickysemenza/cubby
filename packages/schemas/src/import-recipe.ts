@@ -98,9 +98,6 @@ export const cookbookBundleMetadataSchema = z
         problem(`Bundle is missing matching image evidence for ${photo.path}`);
     }
   });
-export type CookbookBundleMetadata = z.infer<
-  typeof cookbookBundleMetadataSchema
->;
 
 // Times arrive twice over: the prose string is verbatim what the source printed,
 // the `*_minutes` count is the same duration as a number. A present string does
@@ -201,7 +198,7 @@ const publicRecipeImageUrl = z
 
 // A scraped recipe's image is always a public URL. Cookbook photos
 // live in the EPUB archive and are attached by source recipe id instead.
-export const recipeImageSourceSchema = z.discriminatedUnion("kind", [
+const recipeImageSourceSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("url"), url: publicRecipeImageUrl }),
 ]);
 
@@ -222,8 +219,6 @@ export const importRecipeSchema = z.object({
   image: importedImageSource.optional(),
 });
 export type ImportRecipe = z.infer<typeof importRecipeSchema>;
-
-export const importRecipesSchema = z.array(importRecipeSchema);
 
 export const scrapeRecipeInput = z.url();
 
@@ -426,7 +421,7 @@ export const gatewayForwardOut = z.object({
   body: z.string(),
 });
 
-export const mcpRecipeCreateFromTextSection = z.object({
+const mcpRecipeCreateFromTextSection = z.object({
   name: z
     .string()
     .optional()

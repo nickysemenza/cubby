@@ -1,15 +1,12 @@
 import { z } from "zod";
 import { money } from "./money";
 
-export const financialReconciliationStatus = z.enum([
+const financialReconciliationStatus = z.enum([
   "unknown",
   "pending",
   "match",
   "mismatch",
 ]);
-export type FinancialReconciliationStatus = z.infer<
-  typeof financialReconciliationStatus
->;
 
 /**
  * The reconciliation numbers, as a field map so other contract modules can

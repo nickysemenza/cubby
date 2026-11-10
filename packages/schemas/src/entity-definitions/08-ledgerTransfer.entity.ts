@@ -15,6 +15,7 @@ import {
 } from "@cubby/schemas/ledger-transfer-fields";
 import { wholeCentAmount } from "@cubby/schemas/money";
 import { z } from "zod";
+/** @public The shortcode registry generator parses this module's `definition` and `readSchemas`. */
 export const { definition, readSchemas } = defineEntityModel({
   key: "ledgerTransfer",
   names: { singular: "Ledger Transfer", plural: "Transfers" },

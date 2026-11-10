@@ -2,7 +2,7 @@ import { z } from "zod";
 import { amount } from "./codec";
 import { ingredientShortcode, recipeShortcode } from "./identifiers";
 
-export const equivalenceExampleSchema = z.object({
+const equivalenceExampleSchema = z.object({
   recipeId: recipeShortcode,
   recipeName: z.string(),
   rawLine: z.string().nullable(),
@@ -16,7 +16,7 @@ export type EquivalenceExample = z.infer<typeof equivalenceExampleSchema>;
 // cup↔g density, can↔oz). Aggregated across every recipe line that expressed it.
 // `unitA`/`unitB` are the canonical (sorted) unit pair; `medianRatio` is b per 1 a.
 // Read-only for now — a future pass promotes accepted candidates into a live edge.
-export const candidateEquivalenceSchema = z.object({
+const candidateEquivalenceSchema = z.object({
   ingredientId: ingredientShortcode,
   ingredientName: z.string(),
   unitA: z.string(),

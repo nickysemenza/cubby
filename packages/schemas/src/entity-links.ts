@@ -23,12 +23,12 @@ import type { EdgeLiveness, EdgeRole } from "./entity-integrity";
  *   otherwise refuse the merge rather than invent or destroy units.
  * - `sumQuantity`: add the loser's quantity onto the survivor's link.
  */
-export type LinkMergeCollision =
+type LinkMergeCollision =
   | "dropLoser"
   | "dedupeEqualQuantityElseRefuse"
   | "sumQuantity";
 
-export interface LinkEndSemantics {
+interface LinkEndSemantics {
   /** The meaning of this link as an incoming edge of the entity at this end. */
   readonly role: EdgeRole;
   readonly label: string;

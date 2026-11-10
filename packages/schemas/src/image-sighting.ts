@@ -13,16 +13,7 @@ import {
   imageSightingSourceType,
 } from "./image-sighting-fields";
 
-export {
-  imageSightingOut,
-  type ImageSightingOut,
-} from "./image-sighting-fields";
-export type {
-  ImageSightingCamera,
-  ImageSightingLocation,
-  ImageSightingMatchKind,
-  ImageSightingSourceType,
-} from "./image-sighting-fields";
+export { type ImageSightingOut } from "./image-sighting-fields";
 
 const optionalText = z.string().trim().min(1).nullable().optional();
 
@@ -58,7 +49,10 @@ export type ImageSightingReportFields = z.infer<
   typeof imageSightingReportFields
 >;
 
-/** One sighting of one Image: a report plus who saw it and on which device. */
+/**
+ * One sighting of one Image: a report plus who saw it and on which device.
+ * @public Names a generated native model.
+ */
 export const imageSightingRecordItem = imageSightingReportFields.extend({
   imageId: imageShortcode,
   /** Omitted: the acting login's linked member party. */
@@ -80,7 +74,10 @@ export const imageRecordSightingsInput = z.object({
 export const imageRecordSightingsOut = z.object({
   processed: z.number().int().nonnegative(),
   created: z.number().int().nonnegative(),
-  /** One entry per input item, in order. */
+  /**
+   * One entry per input item, in order.
+   * @public Names a generated native model.
+   */
   sightings: z.array(
     z.object({
       imageId: imageShortcode,

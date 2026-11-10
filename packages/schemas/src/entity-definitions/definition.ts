@@ -85,7 +85,6 @@ export const entityFieldControlKinds = [
   "number",
   "specialized",
 ] as const;
-export type EntityFieldControlKind = (typeof entityFieldControlKinds)[number];
 
 /** Database-default strategies supported by declared storage columns. */
 const entityStorageDefaultKinds = [
@@ -219,9 +218,6 @@ export type CompiledEntityPresentation = Omit<
       | null;
   };
 };
-export type EntityDetailSection = NonNullable<
-  EntityPresentation["detail"]["sections"]
->[number];
 export type EntityListView = EntityPresentation["list"]["views"][number];
 export type EntitySlotListView = Extract<EntityListView, { kind: "slot" }>;
 export type EntityBoardListView = Extract<EntityListView, { kind: "board" }>;
@@ -252,7 +248,7 @@ export const listPresentationLabel = (id: string): string | null =>
  * - `resolvedList`: `resolvedListSchema` items, comma-joined, each linking its
  *   record and marked when only inherited.
  */
-export const displayFormats = [
+const displayFormats = [
   "currency",
   "signedCurrency",
   "plainDate",
@@ -266,10 +262,9 @@ export const displayFormats = [
   "count",
   "resolvedList",
 ] as const;
-export type DisplayFormat = (typeof displayFormats)[number];
 
 /** Built-in string renderers; configured renderers carry their own discriminant. */
-export const BUILT_IN_LIST_VIEWS = ["table", "shelf", "timeline"] as const;
+const BUILT_IN_LIST_VIEWS = ["table", "shelf", "timeline"] as const;
 export const isSlotListView = (
   view: EntityListView,
 ): view is EntitySlotListView =>
@@ -3157,7 +3152,6 @@ let metadataSchemaCache: ReturnType<typeof buildMetadataSchemas> | undefined;
 const metadataSchemas = () => (metadataSchemaCache ??= buildMetadataSchemas());
 
 type EntityMetadataSchemas = ReturnType<typeof buildMetadataSchemas>;
-export type EntityStorageMetadata = z.output<EntityMetadataSchemas["storage"]>;
 /** The declared display block, with every default applied. */
 export const defaultFieldDisplay = () =>
   metadataSchemas().fieldDisplay.parse({});
@@ -3181,52 +3175,6 @@ const valueIsMissingAt = (value: unknown, path: readonly PropertyKey[]) => {
   }
   return current === undefined;
 };
-
-/**
- * Preserve declaration-local diagnostic paths while centralizing strict shape
- * validation and metadata defaults. Semantic roster and storage checks remain
- * in the compiler because they require the complete entity declaration.
- */
-export function parseEntityFieldModelMetadata(
-  // oxlint-disable-next-line anti-slop/no-unknown-parameters -- compiler parser boundary
-  value: unknown,
-  context: string,
-): EntityFieldModelMetadata | null {
-  if (value === undefined) return null;
-  const parsed = metadataSchemas().fieldModel.safeParse(value);
-  if (parsed.success) return parsed.data;
-
-  const issue = parsed.error.issues[0];
-  if (issue === undefined) throw new Error(`${context} metadata is invalid.`);
-  if (issue.code === "unrecognized_keys") {
-    const key = issue.keys[0];
-    throw new Error(`${pathAt(context, issue.path)}.${key} is not allowed.`);
-  }
-  const path = pathAt(context, issue.path);
-  if (issue.code === "invalid_type" && valueIsMissingAt(value, issue.path)) {
-    throw new Error(`${path} is required.`);
-  }
-  const field = issue.path.at(-1);
-  if (
-    field === "nullable" ||
-    field === "nullableOverride" ||
-    field === "multiple" ||
-    field === "list" ||
-    field === "detail"
-  )
-    throw new Error(`${path} must be a boolean.`);
-  if (field === "read" || field === "create" || field === "update")
-    throw new Error(`${path} must be a Zod schema.`);
-  if (
-    field === "label" ||
-    field === "key" ||
-    field === "entity" ||
-    field === "columnId" ||
-    field === "sectionOverride"
-  )
-    throw new Error(`${path} must be a non-empty string.`);
-  throw new Error(`${path} ${issue.message}.`);
-}
 
 /** Parse an executable declaration once before compiler-only semantic checks. */
 export function parseEntityDeclarationMetadata(
@@ -3294,7 +3242,7 @@ type ValidDeclaration<T> = T &
     : { invalidReferenceField: InvalidReferenceFields<NoInfer<T>> });
 
 /** Own check ids are shared with canonical projections and the generated global catalog. */
-export function ownDataCheckSchema<
+function ownDataCheckSchema<
   const D extends Pick<EntityDeclaration, "key" | "capabilities">,
 >(declaration: D): ReadSchemaFacts<D>["ownDataCheck"] {
   const quality = declaration.capabilities.dataQuality;
@@ -3630,3 +3578,10 @@ export function readFieldSchemas<const D extends ReadableDeclaration>(
   // SAFETY: only output fields enter the map; every field retains its declared read schema.
   return Object.fromEntries(entries) as ReadFieldSchemas<D>;
 }
+
+/** @public Re-exported by generated modules. */
+export type EntityDetailSection = NonNullable<
+  EntityPresentation["detail"]["sections"]
+>[number];
+
+export type EntityFieldControlKind = (typeof entityFieldControlKinds)[number];

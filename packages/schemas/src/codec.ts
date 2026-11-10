@@ -78,7 +78,6 @@ export const sanitizeSectionName = (
 };
 
 export const baseKind = z.enum(["weight", "volume", "money", "calories"]);
-export type BaseKind = z.infer<typeof baseKind>;
 
 export const ingredientApplicabilityKey = z.enum([
   ...baseKind.options,

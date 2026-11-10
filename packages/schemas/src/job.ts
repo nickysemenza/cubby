@@ -13,7 +13,7 @@ export const jobState = z.enum([
 ]);
 export type JobState = z.infer<typeof jobState>;
 
-export const jobWaitReasons = [
+const jobWaitReasons = [
   "provider_capacity",
   "ai_funding_window",
   "device",
@@ -25,10 +25,10 @@ export type JobWaitReason = z.infer<typeof jobWaitReason>;
 /**
  * Why a derived value's stored refresh metadata reports an attempt-free wait.
  */
-export const workWaitCauses = ["search_coverage"] as const;
-export const workWaitCause = z.enum(workWaitCauses);
-export type WorkWaitCause = z.infer<typeof workWaitCause>;
-export const WORK_WAIT_CAUSE_TEXT = {
+const workWaitCauses = ["search_coverage"] as const;
+const workWaitCause = z.enum(workWaitCauses);
+type WorkWaitCause = z.infer<typeof workWaitCause>;
+const WORK_WAIT_CAUSE_TEXT = {
   search_coverage: "Waiting for search indexing",
 } as const satisfies Record<WorkWaitCause, string>;
 
@@ -112,7 +112,7 @@ export type JobWaitingOnReason = z.infer<typeof jobWaitingOnReason>;
 /** Failures after which never-exhausting work also shows as needing attention. */
 export const JOB_NEEDS_ATTENTION_ATTEMPTS = 5;
 
-export const jobPayload = z.json();
+const jobPayload = z.json();
 export type JobPayload = z.infer<typeof jobPayload>;
 
 export const enqueueJobInput = z.object({
@@ -179,7 +179,7 @@ export const JOB_LANE_LABEL = {
   external: "External services",
 } as const satisfies Record<JobLane, string>;
 
-export const JOB_WAITING_ON_LABEL = {
+const JOB_WAITING_ON_LABEL = {
   due: "Due",
   waiting_device: "Waiting for any Apple device",
   waiting_funding: "Waiting for AI funding",

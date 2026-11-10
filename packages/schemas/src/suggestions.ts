@@ -30,6 +30,3 @@ export const makeableRecipesOut = z.object({
   truncated: z.boolean(),
   candidateCap: z.number().int().positive(),
 });
-
-export type RecipeAvailabilityInput = z.infer<typeof recipeAvailabilityInput>;
-export type MakeableRecipesInput = z.infer<typeof makeableRecipesInput>;

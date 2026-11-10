@@ -23,7 +23,7 @@ const searchableEntitySchema = z.enum(searchableEntities);
  * Brand the ref once at the queue ingress seam so handlers receive typed ids
  * and the `ref` needed by the search-document repositories.
  */
-export const entityEmbeddingRefreshTaskSchema = z
+const entityEmbeddingRefreshTaskSchema = z
   .object({
     kind: z.literal("entity-embedding.refresh"),
     ...taskEnvelopeFields,
@@ -95,7 +95,7 @@ export type BackgroundTaskInput = z.input<typeof backgroundTaskSchema>;
  * What an explicit enqueue action reports back: how many tasks durable admission
  * accepted. A queue wake is optional and does not own execution.
  */
-export const backgroundTaskReceiptSchema = z.object({
+const backgroundTaskReceiptSchema = z.object({
   count: z.number().int().nonnegative(),
 });
 export type BackgroundTaskReceipt = z.infer<typeof backgroundTaskReceiptSchema>;

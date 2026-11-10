@@ -10,14 +10,11 @@ import {
 import { ledgerPartyKind } from "./ledger-party";
 import { money } from "./money";
 
-export const ledgerReportPartyOut = z.object({
+const ledgerReportPartyOut = z.object({
   id: ledgerPartyShortcode,
   kind: ledgerPartyKind,
   name: z.string(),
 });
-export type LedgerReportPartyOut = z.infer<typeof ledgerReportPartyOut>;
-
-export type LedgerPartyRefOut = LedgerReportPartyOut;
 
 export const householdContributionLedgerInput = z.object({
   asOf: plainDate.optional(),
@@ -26,7 +23,7 @@ export type HouseholdContributionLedgerInput = z.infer<
   typeof householdContributionLedgerInput
 >;
 
-export const expenseContributionGapCode = z.enum([
+const expenseContributionGapCode = z.enum([
   "missing_beneficiaries",
   "missing_funders",
   "partial_beneficiaries",
@@ -53,7 +50,7 @@ export const expenseContributionGapCode = z.enum([
    */
   "funder_not_yet_paid",
 ]);
-export const householdContributionGapCode = z.union([
+const householdContributionGapCode = z.union([
   expenseContributionGapCode,
   z.literal("transfer_evidence_one_sided"),
 ]);
@@ -61,7 +58,7 @@ export type HouseholdContributionGapCode = z.infer<
   typeof householdContributionGapCode
 >;
 
-export const householdContributionGapOut = z.object({
+const householdContributionGapOut = z.object({
   code: householdContributionGapCode,
   amount: money.optional(),
   /**
@@ -76,15 +73,12 @@ export type HouseholdContributionGapOut = z.infer<
 >;
 
 /** Project reports contain Expense attribution gaps, never household transfers. */
-export const projectContributionGapOut = z.object({
+const projectContributionGapOut = z.object({
   code: expenseContributionGapCode,
   amount: money.optional(),
   count: z.number().int().positive().optional(),
   targetIds: z.array(expenseShortcode),
 });
-export type ProjectContributionGapOut = z.infer<
-  typeof projectContributionGapOut
->;
 
 export const householdContributionLedgerOut = z.object({
   asOf: plainDate,

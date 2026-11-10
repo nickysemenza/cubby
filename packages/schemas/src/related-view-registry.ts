@@ -1,4 +1,3 @@
-import type { Entity } from "./entity";
 import { connectedPathVariants } from "./connected-views";
 import type { RelatedViewDefinition } from "./related-view";
 import { relatedViewRegistry } from "./generated/related-views.gen";
@@ -17,10 +16,3 @@ export const relatedViewPaths = (
     (variant) => variant.steps,
   );
 };
-
-type RegisteredRelatedView = (typeof relatedViewRegistry)[number];
-
-export const relatedViewsFor = (
-  entity: Entity,
-): readonly RegisteredRelatedView[] =>
-  relatedViewRegistry.filter((view) => view.source === entity);

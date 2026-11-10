@@ -51,6 +51,7 @@ export const entityGraphNodeSchema = entityRefSchema.extend({
 });
 export type EntityGraphNode = z.infer<typeof entityGraphNodeSchema>;
 
+/** @public Names a generated native model. */
 export const entityGraphEdgeSchema = relationshipWitnessSchema.extend({
   /** Stable physical-path identity, shared by forward and inverse expansions. */
   id: z.string(),
@@ -59,6 +60,7 @@ export const entityGraphEdgeSchema = relationshipWitnessSchema.extend({
 });
 export type EntityGraphEdge = z.infer<typeof entityGraphEdgeSchema>;
 
+/** @public Names a generated native model. */
 export const entityGraphBranchSchema = z.object({
   root: entityRefSchema,
   relationshipKey: z.string(),
@@ -73,8 +75,11 @@ export const entityGraphBranchSchema = z.object({
 });
 export type EntityGraphBranch = z.infer<typeof entityGraphBranchSchema>;
 
+/** @public Names a generated native model. */
 export const entityGraphNodesSchema = z.array(entityGraphNodeSchema);
+/** @public Names a generated native model. */
 export const entityGraphEdgesSchema = z.array(entityGraphEdgeSchema);
+/** @public Names a generated native model. */
 export const entityGraphBranchesSchema = z.array(entityGraphBranchSchema);
 
 export const entityGraphOutputSchema = z.object({
@@ -95,6 +100,7 @@ export type EntityGraphExploreInput = z.input<
   typeof entityGraphExploreInputSchema
 >;
 
+/** @public Names a generated native model. */
 export const entityGraphExploreCompletionSchema = z.object({
   status: z.enum([
     "exhausted",
@@ -105,9 +111,6 @@ export const entityGraphExploreCompletionSchema = z.object({
   requestedDepth: z.number().int().min(1).max(4),
   reachedDepth: z.number().int().min(0).max(4),
 });
-export type EntityGraphExploreCompletion = z.infer<
-  typeof entityGraphExploreCompletionSchema
->;
 
 export const entityGraphPathsInputSchema = z.object({
   start: entityGraphRootSchema,
@@ -115,6 +118,7 @@ export const entityGraphPathsInputSchema = z.object({
 });
 export type EntityGraphPathsInput = z.infer<typeof entityGraphPathsInputSchema>;
 
+/** @public Names a generated native model. */
 export const entityGraphPathSchema = z.object({
   /** Ordered from start through destination, inclusive. */
   nodeRefs: z.array(entityRefSchema).min(1).max(9),

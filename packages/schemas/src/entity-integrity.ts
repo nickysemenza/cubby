@@ -6,10 +6,6 @@ import {
   relationshipProvenanceSchema,
   entityRelationSourceMetadataSchema as relationshipSourceSchema,
 } from "./entity-definitions/relationship-shape";
-export {
-  relationshipPathStepSchema,
-  relationshipProvenanceSchema,
-} from "./entity-definitions/relationship-shape";
 
 /**
  * Serializable shapes for the entity-integrity system.
@@ -23,9 +19,6 @@ export {
  * Constants elsewhere are written `as const satisfies <inferred type>` and
  * `.parse()`d in drift tests. Nothing here parses on client import.
  */
-
-export { relationshipEdgeKeySchema as edgeKeySchema } from "./entity-definitions/relationship-shape";
-export type EdgeKey = z.infer<typeof edgeKeySchema>;
 
 /**
  * What an incoming edge *means*, independent of what any one operation does
@@ -58,7 +51,7 @@ export type EdgeRole = z.infer<typeof edgeRoleSchema>;
  * referential-liveness auditor checks. An `allow-target-deleted` edge must say
  * why, because it opts a real FK out of that audit permanently.
  */
-export const edgeLivenessSchema = z.discriminatedUnion("kind", [
+const edgeLivenessSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("must-target-live") }),
   z.object({
     kind: z.literal("allow-target-deleted"),
@@ -67,7 +60,7 @@ export const edgeLivenessSchema = z.discriminatedUnion("kind", [
 ]);
 export type EdgeLiveness = z.infer<typeof edgeLivenessSchema>;
 
-export const edgeSemanticsSchema = z.object({
+const edgeSemanticsSchema = z.object({
   role: edgeRoleSchema,
   label: z.string().min(1),
   description: z.string().min(1),
@@ -175,14 +168,13 @@ export const entityLifecycleSchema = z.object({
     .nullable(),
   merge: z.boolean(),
 });
-export type EntityLifecycle = z.infer<typeof entityLifecycleSchema>;
 
 /**
  * One physical incoming edge, flattened for the wire. `INCOMING_EDGES` holds
  * Drizzle column objects, which cannot be serialized or validated — this is the
  * projection of them the client actually gets.
  */
-export const physicalEdgeSchema = z.object({
+const physicalEdgeSchema = z.object({
   edgeKey: edgeKeySchema,
   targetEntity: entitySchema,
   sourceTable: z.string().min(1),
@@ -193,7 +185,7 @@ export const physicalEdgeSchema = z.object({
 });
 export type PhysicalEdge = z.infer<typeof physicalEdgeSchema>;
 
-export const lifecycleOperationSchema = z.object({
+const lifecycleOperationSchema = z.object({
   entity: entitySchema,
   operation: z.enum(["delete", "merge"]),
   owner: z.enum(["kernel", "workflow"]),
@@ -237,7 +229,7 @@ export type IntegrityCatalog = z.infer<typeof integrityCatalogSchema>;
  * edge, and absent for consequences that aren't edges at all (a recompute, a
  * cache invalidation, an audit entry).
  */
-export const impactItemSchema = z.object({
+const impactItemSchema = z.object({
   code: z.string().min(1),
   effect: operationEffectSchema,
   edgeKey: edgeKeySchema.optional(),

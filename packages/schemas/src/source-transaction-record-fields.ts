@@ -2,7 +2,6 @@ import { z } from "zod";
 import { financialTransactionProviderStatus } from "./financial-transaction-fields";
 
 export const statementDateKind = z.enum(["posted", "transaction", "unknown"]);
-export type StatementDateKind = z.infer<typeof statementDateKind>;
 
 export const sourceTransactionRecordDisposition = z.enum(["open", "ignored"]);
 export type SourceTransactionRecordDisposition = z.infer<

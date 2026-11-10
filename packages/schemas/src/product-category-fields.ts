@@ -48,11 +48,11 @@ export const isServiceProductFeature = (
   feature: ProductCategoryFeature | null | undefined,
 ): boolean => feature != null && SERVICE_PRODUCT_FEATURES.includes(feature);
 
+/** @public Names a generated native model. */
 export const productCategoryPathNode = z.object({
   id: productCategoryShortcode,
   name: z.string().min(1),
 });
-export type ProductCategoryPathNode = z.infer<typeof productCategoryPathNode>;
 
 /** The compact tree projection embedded in Product reads. */
 export const rawProductCategorySummary = z.object({
@@ -83,7 +83,10 @@ export const rawPurchasedCategorySummary = z.object({
   distinctPurchaseCount: z.number().int(),
 });
 
-/** Current Vendor category reads retain usage evidence beside authoritative category emoji. */
+/**
+ * Current Vendor category reads retain usage evidence beside authoritative category emoji.
+ * @public Names a generated native model.
+ */
 export const purchasedCategorySummary = rawPurchasedCategorySummary
   .omit({ emoji: true })
   .extend({

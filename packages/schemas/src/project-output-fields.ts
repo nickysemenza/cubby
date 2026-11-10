@@ -3,7 +3,6 @@ import { plainDate } from "./base-entity";
 import { money, moneyNullable } from "./money";
 
 export const projectDateSourceSchema = z.enum(["explicit", "derived", "none"]);
-export type ProjectDateSource = z.infer<typeof projectDateSourceSchema>;
 
 export const projectDateWindow = z.object({
   derivedStart: plainDate.nullable(),
@@ -56,4 +55,3 @@ export const projectRollupResult = z.object({
     contentEnd: plainDate.nullable(),
   }),
 });
-export type ProjectRollupResult = z.infer<typeof projectRollupResult>;

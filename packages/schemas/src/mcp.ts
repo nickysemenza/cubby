@@ -12,51 +12,16 @@ import {
 } from "@cubby/usda";
 import { upc } from "@cubby/shared/upc";
 import { recipeAvailabilityListOut } from "./availability";
-import { deletedCountOut } from "./common";
-import {
-  ingredientMcpListOut,
-  ingredientMcpOut,
-  type IngredientMcpOut,
-} from "./ingredient";
-import { ingredientUpdateData } from "@cubby/schemas/entities/ingredient";
-import { locationUpdateData } from "@cubby/schemas/entities/location";
-import { mealAddRecipeInput, shoppingListOut } from "./meal";
-import { mealCreateInput, mealUpdateData } from "@cubby/schemas/entities/meal";
 import { createPaginatedResponseSchema } from "./pagination";
-import {
-  allProblemsMcpSchema,
-  allProblemsSchema,
-  problemsCountSchema,
-} from "./problems";
 
 import { measureEstimate } from "./nutrition";
-import {
-  recipeCostingExplain,
-  recipeIdOut,
-  recipesUsingIngredientOut,
-} from "./recipe";
+import { recipeCostingExplain } from "./recipe";
 import {
   searchHitsOut,
   searchQueryInputFields,
-  similarEntitiesInputSchema,
   similarEntitiesOut,
 } from "./search";
-import { type McpUnitMappingInput, mcpUnitMappingInput } from "./unitmapping";
 import { importRecipeSchema } from "./import-recipe";
-
-export { type McpUnitMappingInput, mcpUnitMappingInput };
-
-export {
-  ingredientUpdateData,
-  locationUpdateData,
-  mealAddRecipeInput,
-  mealCreateInput,
-  mealUpdateData,
-};
-
-export { ingredientMcpOut as mcpIngredientOut };
-
-export type { IngredientMcpOut as McpIngredientOut };
 
 const mcpBrandedServingOut = z.object({
   serving_size: z.number().nullable(),
@@ -85,7 +50,6 @@ export const mcpUsdaFoodOut = z.object({
   ...usdaFoodSharedFields,
   nutrientSummary: z.array(nutrientSummary),
 });
-export type McpUsdaFoodOut = z.infer<typeof mcpUsdaFoodOut>;
 
 /**
  * Search-result shape: the detail shape minus `nutrientSummary`.
@@ -100,25 +64,12 @@ export type McpUsdaFoodOut = z.infer<typeof mcpUsdaFoodOut>;
  * settled on.
  */
 export const mcpUsdaFoodListItemOut = z.object(usdaFoodSharedFields);
-export type McpUsdaFoodListItemOut = z.infer<typeof mcpUsdaFoodListItemOut>;
 
 export const usdaFoodMcpListOut = createPaginatedResponseSchema(
   mcpUsdaFoodListItemOut,
 );
 
 export const usdaFoodMcpOut = mcpUsdaFoodOut.nullable();
-
-export {
-  ingredientMcpOut,
-  ingredientMcpListOut,
-  recipesUsingIngredientOut,
-  recipeIdOut,
-  shoppingListOut,
-  deletedCountOut,
-  problemsCountSchema,
-  allProblemsSchema,
-  allProblemsMcpSchema,
-};
 
 export const globalSearchMcpInputSchema = z.object({
   ...searchQueryInputFields,
@@ -136,8 +87,6 @@ export const globalSearchMcpOut = z.object({
 
 export const similarEntitiesMcpOut = similarEntitiesOut;
 
-export { similarEntitiesInputSchema };
-
 export const recipeAvailabilityMcpOut = z.object({
   recipes: recipeAvailabilityListOut,
 });
@@ -145,9 +94,6 @@ export const recipeAvailabilityMcpOut = z.object({
 export const scrapeRecipeMcpOut = importRecipeSchema;
 
 export const recipeCostingExplainDetail = z.enum(["full", "lines"]);
-export type RecipeCostingExplainDetail = z.infer<
-  typeof recipeCostingExplainDetail
->;
 
 /**
  * `nutrition_read.costing_explanation` with `detail: "lines"`: the per-line diagnostics
@@ -155,7 +101,7 @@ export type RecipeCostingExplainDetail = z.infer<
  * are what `entity get recipe` already returns; an agent chasing "which line
  * is uncovered" only needs the diagnostics plus a coverage headline.
  */
-export const recipeCostingExplainLinesOut = z.object({
+const recipeCostingExplainLinesOut = z.object({
   detail: z.literal("lines"),
   persisted: recipeCostingExplain.shape.persisted.omit({ totals: true }),
   computed: recipeCostingExplain.shape.computed.omit({ totals: true }),
@@ -164,9 +110,6 @@ export const recipeCostingExplainLinesOut = z.object({
     kcal: measureEstimate,
   }),
 });
-export type RecipeCostingExplainLinesOut = z.infer<
-  typeof recipeCostingExplainLinesOut
->;
 
 export const recipeCostingExplainMcpOut = z.union([
   recipeCostingExplain.extend({ detail: z.literal("full").optional() }),

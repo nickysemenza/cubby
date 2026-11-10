@@ -48,7 +48,7 @@ export const entityRelationSourceMetadataSchema = z.strictObject({
 });
 const sourceRef = z.strictObject({ module: text, export: text });
 /** Curated list presentation belongs to the relation whose records it displays. */
-export const relationshipViewMetadataSchema = z.strictObject({
+const relationshipViewMetadataSchema = z.strictObject({
   /** Override only to preserve an established view ID when the relation key differs. */
   key: text.optional(),
   columnGroup: text.optional(),

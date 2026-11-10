@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 /** A source-specific, intentionally non-prescriptive planting recommendation. */
-export const gardenGuideMethod = z.enum([
+const gardenGuideMethod = z.enum([
   "sow",
   "direct-sow",
   "transplant",
@@ -14,7 +14,7 @@ export const gardenGuideMethod = z.enum([
 ]);
 export type GardenGuideMethod = z.infer<typeof gardenGuideMethod>;
 
-export const gardenGuideMicroclimate = z.enum([
+const gardenGuideMicroclimate = z.enum([
   "sunny",
   "foggy",
   "bay-area",
@@ -22,13 +22,12 @@ export const gardenGuideMicroclimate = z.enum([
 ]);
 export type GardenGuideMicroclimate = z.infer<typeof gardenGuideMicroclimate>;
 
-export const gardenGuideMonthPart = z.enum(["weeks-1-2", "weeks-3-4"]);
-export type GardenGuideMonthPart = z.infer<typeof gardenGuideMonthPart>;
+const gardenGuideMonthPart = z.enum(["weeks-1-2", "weeks-3-4"]);
 
 const guideKey = z.string().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
 const month = z.number().int().min(1).max(12);
 
-export const gardenGuideSource = z.object({
+const gardenGuideSource = z.object({
   id: guideKey,
   name: z.string().min(1),
   url: z.url(),
@@ -39,9 +38,8 @@ export const gardenGuideSource = z.object({
   basedOn: z.array(z.string().min(1)),
   notes: z.string().min(1).nullable(),
 });
-export type GardenGuideSource = z.infer<typeof gardenGuideSource>;
 
-export const gardenGuideWindow = z.object({
+const gardenGuideWindow = z.object({
   sourceId: guideKey,
   microclimate: gardenGuideMicroclimate,
   method: gardenGuideMethod,
@@ -52,14 +50,13 @@ export const gardenGuideWindow = z.object({
 });
 export type GardenGuideWindow = z.infer<typeof gardenGuideWindow>;
 
-export const gardenGuide = z.object({
+const gardenGuide = z.object({
   key: guideKey,
   name: z.string().min(1),
   aliases: z.array(z.string().min(1)),
   windows: z.array(gardenGuideWindow).min(1),
   notes: z.string().min(1).nullable(),
 });
-export type GardenGuide = z.infer<typeof gardenGuide>;
 
 export const gardenGuidesDocument = z
   .object({
@@ -109,6 +106,5 @@ export const gardenGuidesDocument = z
       }
     }
   });
-export type GardenGuidesDocument = z.infer<typeof gardenGuidesDocument>;
 /** The unparsed input shape — checked with `satisfies` by `garden-guides.ts` at compile time. */
 export type GardenGuidesDocumentInput = z.input<typeof gardenGuidesDocument>;

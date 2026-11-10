@@ -65,6 +65,7 @@ export function classifyProductOnHand({
   return units === null ? { state: "mixed" } : { state: "counted", units };
 }
 
+/** @public Names a generated native model. */
 export const productIngredientOut = z.object({
   id: ingredientShortcode,
   name: z.string().meta({ mock: "food.ingredient" }),
@@ -94,20 +95,20 @@ const productLocationAncestorOut = z.object({
   displayImage: imageUrlSummary.nullable(),
 });
 
+/** @public Names a generated native model. */
 export const productCookbookRefOut = z.object({
   id: cookbookShortcode,
   name: z.string(),
 });
-export type ProductCookbookRefOut = z.infer<typeof productCookbookRefOut>;
 
-export const productLocationRefOut = z.object({
+const productLocationRefOut = z.object({
   ...locationPathRefFields,
   displayImage: imageUrlSummary.nullable(),
   ancestors: z.array(productLocationAncestorOut),
 });
 
 /** A bounded live Inventory row; its holding Location is identity only. */
-export const rawProductInventoryWithLocationOut = z.object({
+const rawProductInventoryWithLocationOut = z.object({
   ...productInventoryFields,
   location: locationListRefOut.pick({ id: true, name: true }),
 });
@@ -117,8 +118,6 @@ export const productPrimaryPlacement = z.object({
   path: z.string(),
   onHand: z.number(),
 });
-
-export type ProductPrimaryPlacement = z.infer<typeof productPrimaryPlacement>;
 
 export const productQuantityFields = {
   primaryPlacement: productPrimaryPlacement.nullable(),
@@ -135,10 +134,12 @@ export type RawProductListInventoryEntryOut = z.output<
   typeof rawProductInventoryWithLocationOut
 >;
 
+/** @public Names a generated native model. */
 export const productUnitPriceMappings = z
   .array(unitMappingWithMetadata)
   .default([]);
 
+/** @public Names a generated native model. */
 export const productOwnershipEvidenceOut = z.object({
   state: z.enum(["owned", "exited", "uncertain"]),
   acquiredAt: plainDate.nullable(),
@@ -284,3 +285,6 @@ export function productReadSchemas<
   });
   return { output, list, detail };
 }
+
+/** @public Read through `import()` type queries. */
+export type ProductPrimaryPlacement = z.infer<typeof productPrimaryPlacement>;

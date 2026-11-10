@@ -7,6 +7,7 @@ import { productExpectation } from "../purchase-evidence-policy";
 import { defineEntity, defineEntityModel } from "./definition";
 
 const expectation = z.enum(["unknown", "required", "not_expected"]);
+/** @public The shortcode registry generator parses this module's `definition` and `readSchemas`. */
 export const { definition, readSchemas } = defineEntityModel({
   key: "spendingCategory",
   names: { singular: "Spending Category", plural: "Spending Categories" },

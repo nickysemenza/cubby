@@ -1,11 +1,7 @@
 import { z } from "zod";
 
 import { dateBound, dateRangeFields } from "./base-entity";
-import { createPaginatedResponseSchema } from "./pagination";
-import {
-  plantingFilterFields as plantingBaseFilterFields,
-  plantingListItemOut,
-} from "@cubby/schemas/entities/planting";
+import { plantingFilterFields as plantingBaseFilterFields } from "@cubby/schemas/entities/planting";
 
 export const plantingFilterFields = {
   ...plantingBaseFilterFields,
@@ -20,6 +16,3 @@ export const plantingFilterFields = {
   }),
 };
 export const plantingFiltersSchema = z.object(plantingFilterFields);
-export type PlantingFilters = z.infer<typeof plantingFiltersSchema>;
-export const plantingListOut =
-  createPaginatedResponseSchema(plantingListItemOut);

@@ -58,8 +58,7 @@ export const dataExceptionReasonLabel = {
   confirmed_tender: "Confirmed payment method",
 } as const satisfies Record<DataExceptionReason, string>;
 
-export const dataQualityGapKind = dataQualityCheckKind;
-export type DataQualityGapKind = z.infer<typeof dataQualityGapKind>;
+const dataQualityGapKind = dataQualityCheckKind;
 
 export const dataQualityGap = z.object({
   check: z.string(),
@@ -83,16 +82,19 @@ export const dataQualityException = z.object({
 });
 export type DataQualityException = z.infer<typeof dataQualityException>;
 
+/** @public Names a generated native model. */
 export const dataQualityFacet = z.object({
   name: dataQualityFacetName,
   status: dataQualityStatus,
   gaps: z.array(dataQualityGap),
 });
-export type DataQualityFacet = z.infer<typeof dataQualityFacet>;
 
 export const dataQuality = z.object({
   status: dataQualityStatus,
-  /** Always null. Shipped native builds decode this key; `gaps` is the content. */
+  /**
+   * Always null. Shipped native builds decode this key; `gaps` is the content.
+   * @public Names a generated native model.
+   */
   score: z.number().min(0).max(100).nullable(),
   facets: z.array(dataQualityFacet),
   gaps: z.array(dataQualityGap),

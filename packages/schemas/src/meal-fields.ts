@@ -22,11 +22,10 @@ export const mealRecipeInput = z.object({
 });
 export type MealRecipeInput = z.infer<typeof mealRecipeInput>;
 
-export const scaledTotals = nutritionTotals;
-export type ScaledTotals = z.infer<typeof scaledTotals>;
+const scaledTotals = nutritionTotals;
 
 /** A recipe as summarized inside a meal (no ingredient graph). */
-export const rawMealRecipeSummary = rawRecipeTopLevel
+const rawMealRecipeSummary = rawRecipeTopLevel
   .pick({
     id: true,
     name: true,
@@ -54,7 +53,6 @@ export const rawMealRecipeOut = z.object({
 export type RawMealRecipeOut = z.infer<typeof rawMealRecipeOut>;
 
 export const mealTotals = nutritionTotals;
-export type MealTotals = z.infer<typeof mealTotals>;
 
 import { displayImagesField } from "./display-images";
 import { listLabel } from "./entity-definitions/label-field";

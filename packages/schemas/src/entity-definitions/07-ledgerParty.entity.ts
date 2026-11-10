@@ -4,6 +4,7 @@ import { selectControlOptions } from "./select-control-options.js";
 import { ledgerPartyShortcode } from "../identifier-fields.js";
 import { ledgerPartyKind } from "@cubby/schemas/ledger-party-fields";
 import { z } from "zod";
+/** @public The shortcode registry generator parses this module's `definition` and `readSchemas`. */
 export const { definition, readSchemas } = defineEntityModel({
   key: "ledgerParty",
   names: { singular: "Ledger Party", plural: "Ledger Parties" },

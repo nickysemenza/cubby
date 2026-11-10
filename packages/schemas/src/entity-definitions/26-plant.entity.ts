@@ -54,6 +54,7 @@ const derivedText = <const K extends string>(
   validation: readOnly(z.string().nullable()),
 });
 
+/** @public The shortcode registry generator parses this module's `definition` and `readSchemas`. */
 export const { definition, readSchemas } = defineEntityModel({
   key: "plant",
   names: { singular: "Plant", plural: "Plants" },

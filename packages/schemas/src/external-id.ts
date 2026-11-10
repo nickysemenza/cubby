@@ -259,8 +259,6 @@ const externalIdValueFields = {
   isPrimary: z.boolean().optional(),
 };
 
-export const externalIdValueInput = z.object(externalIdValueFields);
-
 export const externalIdInput = z.object({
   ...externalIdValueFields,
   id: z.uuid().optional(),
@@ -350,7 +348,7 @@ const externalIdAttributes = z.strictObject({
  * a remove must name the live identifier exactly, and
  * removing a primary promotes the slot's oldest secondary.
  */
-export const externalIdPatch = keyedCollectionPatch(
+const externalIdPatch = keyedCollectionPatch(
   "ExternalIdPatch",
   externalIdKey,
   externalIdAttributes,
@@ -400,7 +398,6 @@ export const externalIdUpdate = z.union([
   uniqueExternalIdSlots(externalIdInput.strict()),
   externalIdPatch,
 ]);
-export const externalIdValues = uniqueExternalIdSlots(externalIdValueInput);
 
 export const externalIdOut = z.object({
   id: z.uuid(),
@@ -421,8 +418,6 @@ export const externalIdOut = z.object({
   createdAt: dateTime,
   updatedAt: dateTime,
 });
-
-export type ExternalIdOut = z.infer<typeof externalIdOut>;
 
 /**
  * Every identifier kind the generic `EntityExternalId` table accepts, and the

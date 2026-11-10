@@ -37,8 +37,7 @@ const columnClassificationPolicies = {
     target: { entity: "expense", field: "productId" },
   },
 } as const;
-export type ColumnClassificationPolicyId =
-  keyof typeof columnClassificationPolicies;
+type ColumnClassificationPolicyId = keyof typeof columnClassificationPolicies;
 type ColumnPolicyId = ColumnClassificationPolicyId;
 
 export type ClassificationPolicyId =

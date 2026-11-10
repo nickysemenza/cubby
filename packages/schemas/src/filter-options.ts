@@ -8,7 +8,7 @@ import { plainDate } from "./base-entity";
 import { expenseShortcode } from "./identifiers";
 import { ledgerPartyKind } from "./ledger-party-fields";
 
-export const filterOptionKind = z.enum([
+const filterOptionKind = z.enum([
   "ingredientWithProduct",
   "locationIdentityProduct",
   "locationWithInventory",
@@ -27,7 +27,7 @@ const filterOptionRequest = z.object({
 });
 const isShortcodeEntity = (entity: Entity): entity is ShortcodeEntity =>
   shortcodeEntities.some((candidate) => candidate === entity);
-export const filterOptionEntity = entitySchema.refine(
+const filterOptionEntity = entitySchema.refine(
   isShortcodeEntity,
   "must identify an entity with public shortcodes",
 );
@@ -91,7 +91,7 @@ export const filterOptionsInput = z.union([
 ]);
 export type FilterOptionsInput = z.infer<typeof filterOptionsInput>;
 
-export const filterOptionItem = z.object({
+const filterOptionItem = z.object({
   id: z.string(),
   label: z.string(),
   detail: z.string().optional(),

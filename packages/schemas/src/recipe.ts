@@ -12,8 +12,6 @@ import { rawRecipeGraph } from "./recipe-raw-read";
 import { withFieldEnvelopes } from "./field-envelope";
 
 import { z } from "zod";
-import { batchProgressEvent } from "./batch";
-import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
 import { auditDateFilterFields, numericRangeFields } from "./base-entity";
 import { mutationSideEffectsSchema } from "./mutation-side-effects";
 import {
@@ -29,7 +27,6 @@ import {
 import { presenceFilter } from "./pagination";
 import { rawRecipeTopLevel, recipeRefOut } from "./recipe-shared";
 import { recipeIngredientInput } from "./recipe-fields";
-export { sectionLineFields, recipeSectionFields } from "./recipe-fields";
 
 export {
   recipeIngredientInput,
@@ -37,12 +34,9 @@ export {
   recipeLineAsInput,
   type RecipeSectionLineRead,
   recipeSectionInput,
-  recipeSectionsInput,
 } from "./recipe-fields";
 
 export * from "./recipe-shared";
-
-export type RecipeSortField = GeneratedEntitySortField<"recipe">;
 
 export type RecipeRef = z.infer<typeof recipeRefOut>;
 export const recipeTopLevel = withFieldEnvelopes(
@@ -50,29 +44,19 @@ export const recipeTopLevel = withFieldEnvelopes(
   recipeFieldEnvelopeFields,
   recipePublicReadFields,
 );
-export type RecipeTopLevel = z.output<typeof recipeTopLevel>;
 
 // One row per RecipeSectionIngredient — the same recipe repeats when it uses the
 // ingredient in multiple sections. Carries the per-usage provenance (raw imported
 // line, parser-derived modifier) and amounts so ingredient/product detail pages
 // can show usage and surface parser drift.
-export {
-  recipeUsageOut,
-  recipeUsageMcpEntityOut,
-  type RecipeUsage,
-} from "./recipe-fields";
-export const recipeSectionOut =
+export { recipeUsageOut, type RecipeUsage } from "./recipe-fields";
+const recipeSectionOut =
   recipeFieldEnvelopeSchemas.output.shape.sections.element;
 export const sectionIngredientOut = recipeSectionOut.shape.ingredients.element;
-export const recipeSectionMcpEntityOut =
-  recipeFieldEnvelopeSchemas.mcpOutput.shape.sections.element;
-export const sectionIngredientMcpEntityOut =
-  recipeSectionMcpEntityOut.shape.ingredients.element;
 
 export type SectionIngredient = z.infer<typeof sectionIngredientOut>;
 
 export type SectionIngredientOut = z.infer<typeof sectionIngredientOut>;
-export type RecipeSectionOut = z.infer<typeof recipeSectionOut>;
 
 export const recipeGraphOut = withFieldEnvelopes(
   rawRecipeGraph,
@@ -96,11 +80,6 @@ export const recipeRecomputeAllOut = z.object({
   processed: z.number().int().nonnegative(),
 });
 
-export const recipeRecomputeDurableEventSchema = z.discriminatedUnion("type", [
-  batchProgressEvent,
-  z.object({ type: z.literal("done"), result: z.unknown() }),
-]);
-
 export const recipeDryRunRecomputeTotalsOut = z.object({
   wouldChange: z.number().int().nonnegative(),
   total: z.number().int().nonnegative(),
@@ -116,10 +95,6 @@ export const cookbookUpdateInput = z.object(
   generatedCookbookFieldSchemas.update,
 );
 export type CookbookUpdateInput = z.infer<typeof cookbookUpdateInput>;
-
-export type SectionIngredientType = z.infer<
-  typeof sectionIngredientOut
->["type"];
 
 export type RecipeIngredientInput = z.infer<typeof recipeIngredientInput>;
 
@@ -152,15 +127,6 @@ export const recipeFilterFields = {
 
 export const recipeFiltersSchema = z.object(recipeFilterFields);
 
-/** MCP list_recipes filters — name substring only. */
-export const recipeListFilterFields = {
-  nameFilter: recipeFilterFields.nameFilter,
-};
-
-export const recipeShortcodeInput = z.object({
-  shortcode: recipeShortcode,
-});
-
 export const recipeIdsInput = z.object({
   ids: z.array(recipeShortcode),
 });
@@ -181,7 +147,7 @@ export const recipeIdInput = z.object({
   id: recipeShortcode,
 });
 
-export const recipeUsageMcpOut = z.object({
+const recipeUsageMcpOut = z.object({
   // RecipeSectionIngredient row id — declared exception. Recipe section/line
   // ids have no shortcode and stay uuid across the MCP boundary.
   lineId: z.uuid(),
@@ -202,5 +168,3 @@ export const recipesUsingIngredientOut = z.object({
   count: z.number().int().nonnegative(),
   recipes: z.array(recipeWithUsagesMcpOut),
 });
-
-export const recipeIdOut = z.object({ id: recipeShortcode });

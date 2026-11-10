@@ -457,7 +457,7 @@ async function observeGatewayResponse(
 }
 
 /** What carried a model request: the household ChatGPT plan or the gateway. */
-export type GatewayTransport = "gateway" | "chatgpt";
+type GatewayTransport = "gateway" | "chatgpt";
 
 export type InferenceFunding =
   | "subscriber_credit"

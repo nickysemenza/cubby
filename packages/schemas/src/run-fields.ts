@@ -19,10 +19,8 @@ export {
   isExecutedRunPurpose,
   isStepRunPurpose,
   OWNED_AI_WORK_PURPOSES,
-  ROUTINE_RUN_PURPOSES,
   RUN_KINDS,
   runStepDeclaration,
-  runStepInputMode,
   STEP_RUN_PURPOSES,
   ATTENTION_RUN_PURPOSES,
   VISIBLE_RUN_PURPOSES,
@@ -37,7 +35,6 @@ export {
 export {
   RUN_PURPOSE_LABEL,
   runPurpose,
-  IMPORT_REPORT_RUN_PURPOSES,
   hasImportRunReports,
 } from "./activity-fields";
 export type { RunPurpose } from "./activity-fields";
@@ -98,7 +95,6 @@ export const runTargetEntityKind = z.enum([
   "image",
   "run",
 ]);
-export type RunTargetEntityKind = z.infer<typeof runTargetEntityKind>;
 /** Permanent retirement prevents disposed coordinator history from being recreated. */
 export const runRetirementReason = z.enum(["unrelated_source", "settled"]);
 /**
@@ -136,10 +132,10 @@ export const runCause = z.enum([
 export type RunCause = z.infer<typeof runCause>;
 
 /** Bounded acquisition and independent full/scoped mailbox coverage. */
-export const mailDiscoveryRunInput = mailboxDiscoveryInput;
-export type MailDiscoveryRunInput = z.infer<typeof mailDiscoveryRunInput>;
+const mailDiscoveryRunInput = mailboxDiscoveryInput;
+type MailDiscoveryRunInput = z.infer<typeof mailDiscoveryRunInput>;
 export const mailDiscoveryRunProgress = mailboxDiscoveryProgress;
-export type MailDiscoveryRunProgress = z.infer<typeof mailDiscoveryRunProgress>;
+type MailDiscoveryRunProgress = z.infer<typeof mailDiscoveryRunProgress>;
 /**
  * Admission freezes at most 50 targets; supporting originals a notice needs
  * append beyond them up to this backstop, so a full batch never strands a
@@ -168,7 +164,7 @@ export const mailResearchRunInput = z.object({
     .regex(/^[a-f0-9]{64}$/)
     .optional(),
 });
-export type MailResearchRunInput = z.infer<typeof mailResearchRunInput>;
+type MailResearchRunInput = z.infer<typeof mailResearchRunInput>;
 export const productResearchRunInput = z.object({
   kind: z.literal("product_research"),
   instructionRevision: z.number().int().positive(),
@@ -182,7 +178,7 @@ export const productResearchRunInput = z.object({
     .min(1)
     .max(50),
 });
-export type ProductResearchRunInput = z.infer<typeof productResearchRunInput>;
+type ProductResearchRunInput = z.infer<typeof productResearchRunInput>;
 /** Purchase validation freezes recorded context and optional original-source preference. */
 export const purchaseValidationResearchRunInput = z.strictObject({
   kind: z.literal("purchase_validation_research"),
@@ -204,11 +200,11 @@ export const purchaseValidationResearchRunInput = z.strictObject({
     .min(1)
     .max(50),
 });
-export type PurchaseValidationResearchRunInput = z.infer<
+type PurchaseValidationResearchRunInput = z.infer<
   typeof purchaseValidationResearchRunInput
 >;
 /** One saved placement confirmation a mail import run is assigned. */
-export const orderMailImportOrder = z.object({
+const orderMailImportOrder = z.object({
   eventId: z.uuid(),
   evidenceChecksum: z.string().min(1),
   orderId: z.string().min(1),
@@ -255,7 +251,7 @@ export const orderBackfillRunInput = z
     message: "Backfill range must start on or before its end",
     path: ["from"],
   });
-export type OrderBackfillRunInput = z.infer<typeof orderBackfillRunInput>;
+type OrderBackfillRunInput = z.infer<typeof orderBackfillRunInput>;
 /**
  * `Run.input` of a retired browser run over selected charge hunts. Only
  * historical Runs carry it; it stays parseable so their detail still reads.
@@ -270,7 +266,7 @@ const researchDateRange = z.strictObject({
 });
 
 /** Host-frozen objectives; source identity is never supplied by the researcher. */
-export const researchObjective = z.discriminatedUnion("kind", [
+const researchObjective = z.discriminatedUnion("kind", [
   z.strictObject({
     kind: z.literal("vendor_purchases"),
     vendorId: z.uuid(),
@@ -308,15 +304,14 @@ export const researchObjectivesRunInput = z.strictObject({
   instructionRevision: z.number().int().positive(),
   objectives: z.array(researchObjective).min(1).max(50),
 });
-export type ResearchObjectivesRunInput = z.infer<
-  typeof researchObjectivesRunInput
->;
+type ResearchObjectivesRunInput = z.infer<typeof researchObjectivesRunInput>;
 
 /**
  * What a restart copies from `Run.input`, by public values only: a mail
  * import's order ids, a backfill's range, or how many charges a charge run
  * carries, or a retained mail source count. Source, mail-event and hunt ids
  * are private and never cross it.
+ * @public Names a generated native model.
  */
 export const runRestartOrderMailInput = z
   .object({
@@ -324,6 +319,7 @@ export const runRestartOrderMailInput = z
     orderIds: z.array(z.string()),
   })
   .meta({ id: "RunRestartOrderMailInput" });
+/** @public Names a generated native model. */
 export const runRestartOrderBackfillInput = z
   .object({
     kind: z.literal("order_backfill"),
@@ -331,15 +327,18 @@ export const runRestartOrderBackfillInput = z
     to: z.iso.date(),
   })
   .meta({ id: "RunRestartOrderBackfillInput" });
+/** @public Names a generated native model. */
 export const runRestartChargeHuntsInput = z
   .object({
     kind: z.literal("charge_hunts"),
     chargeCount: z.number().int().positive(),
   })
   .meta({ id: "RunRestartChargeHuntsInput" });
+/** @public Names a generated native model. */
 export const runRestartVendorPurchasesInput = researchObjective.options[0]
   .extend({ vendorId: z.string().min(1) })
   .meta({ id: "RunRestartVendorPurchasesInput" });
+/** @public Names a generated native model. */
 export const runRestartMailResearchInput = mailResearchRunInput
   .pick({ kind: true })
   .extend({
@@ -428,7 +427,7 @@ export type SweepFamily = SweepFamilyScope["family"];
  * them as non-executable history: they parse and display as retired, never plan
  * steps and never run. Their scopes are not interpreted.
  */
-export const retiredSweepFamilyScope = z.discriminatedUnion("family", [
+const retiredSweepFamilyScope = z.discriminatedUnion("family", [
   z.object({
     family: z.literal("transfer_pair"),
     scope: z.record(z.string(), z.json()).default({}),
@@ -444,7 +443,7 @@ export const RETIRED_SWEEP_FAMILY_LABEL = {
   recommendation: "Connections",
 } as const satisfies Record<RetiredSweepFamilyScope["family"], string>;
 /** A stored Sweep input's family: executable or retired history. */
-export const storedSweepFamilyScope = z.discriminatedUnion("family", [
+const storedSweepFamilyScope = z.discriminatedUnion("family", [
   ...sweepFamilyScope.options,
   ...retiredSweepFamilyScope.options,
 ]);
@@ -461,33 +460,30 @@ export const sweepRunInput = z.strictObject({
   kind: z.literal("sweep"),
   families: z.array(storedSweepFamilyScope).min(1).max(4),
 });
-export type SweepRunInput = z.infer<typeof sweepRunInput>;
-export const maintenanceRunInput = z.strictObject({
+type SweepRunInput = z.infer<typeof sweepRunInput>;
+const maintenanceRunInput = z.strictObject({
   kind: z.literal("maintenance"),
 });
-export type MaintenanceRunInput = z.infer<typeof maintenanceRunInput>;
+type MaintenanceRunInput = z.infer<typeof maintenanceRunInput>;
 /** The derived data families a routine refresh pass covers, one per Run. */
-export const derivedRefreshFamily = z.enum(
+const derivedRefreshFamily = z.enum(
   // SAFETY: the declared steps are a non-empty literal list of these keys.
   RUN_KINDS.derived_refresh.steps.map((step) => step.key) as [
     (typeof RUN_KINDS.derived_refresh.steps)[number]["key"],
     ...(typeof RUN_KINDS.derived_refresh.steps)[number]["key"][],
   ],
 );
-export type DerivedRefreshFamily = z.infer<typeof derivedRefreshFamily>;
-export const derivedRefreshRunInput = z.strictObject({
+const derivedRefreshRunInput = z.strictObject({
   kind: z.literal("derived_refresh"),
   family: derivedRefreshFamily,
 });
-export type DerivedRefreshRunInput = z.infer<typeof derivedRefreshRunInput>;
+type DerivedRefreshRunInput = z.infer<typeof derivedRefreshRunInput>;
 /** The routine connection discovery pass, under the AI refresh generation it ran for. */
-export const connectionDiscoveryRunInput = z.strictObject({
+const connectionDiscoveryRunInput = z.strictObject({
   kind: z.literal("connection_discovery"),
   activation: aiRefreshActivation,
 });
-export type ConnectionDiscoveryRunInput = z.infer<
-  typeof connectionDiscoveryRunInput
->;
+type ConnectionDiscoveryRunInput = z.infer<typeof connectionDiscoveryRunInput>;
 
 export type RunInput =
   | SweepRunInput

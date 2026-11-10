@@ -3,21 +3,16 @@ import {
   locationDetailOut as infLocation,
   locationFilterFields as locationBaseFilterFields,
 } from "@cubby/schemas/entities/location";
-import {
-  locationFieldEnvelopeSchemas,
-  locationDetailNode,
-} from "./generated/entity-field-envelopes.location.gen";
-import { withFieldEnvelopes, type fieldValueOf } from "./field-envelope";
+import { locationDetailNode } from "./generated/entity-field-envelopes.location.gen";
+import { withFieldEnvelopes } from "./field-envelope";
 import {
   locationFieldEnvelopeFields,
   locationPublicReadFields,
 } from "./generated/entity-field-envelope-fields.location.gen";
 import { rawLocationPickerReference } from "./location-raw-read";
 import { z } from "zod";
-import type { GeneratedEntitySortField } from "./generated/entity-sort.gen";
 import { numericRangeFields } from "./base-entity";
 import { money } from "./money";
-import { mutationSideEffectsSchema } from "./mutation-side-effects";
 import { locationShortcode } from "./identifiers";
 import { imageOut } from "./image";
 import { presenceFilter } from "./pagination";
@@ -31,8 +26,6 @@ import {
 export { locationType, locationValuation } from "./location-fields";
 
 export type LocationType = z.infer<typeof locationType>;
-
-export { locationTypeValues } from "@cubby/shared";
 
 export const locationFilterFields = {
   ...locationBaseFilterFields,
@@ -64,9 +57,6 @@ export const locationFilterFields = {
 };
 
 export const locationFiltersSchema = z.object(locationFilterFields);
-export type LocationFiltersInput = z.infer<typeof locationFiltersSchema>;
-
-export type LocationSortField = GeneratedEntitySortField<"location">;
 
 /**
  * What the picker endpoint can actually order by. Narrower than the
@@ -102,38 +92,11 @@ export type LocationValuationSummaryOut = z.infer<
   typeof locationValuationSummaryOut
 >;
 
-/**
- * The SKU a location IS, embedded on every location read.
- *
- * Carries `category` for the linked location’s category glyph. Canonical
- * display images own the location thumbnail. `price` is
- * what the container-valuation bucket rolls up.
- */
-export type LocationIdentityProductOut = NonNullable<
-  ReturnType<
-    typeof fieldValueOf<
-      z.output<typeof locationFieldEnvelopeSchemas.output>["fields"]["product"]
-    >
-  >
->;
-
 export { locationListRefOut } from "./location-fields";
 export type LocationListRefOut = z.infer<typeof locationListRefOut>;
 
-/**
- * One rung of a location's ancestor chain. Ordered root-first and never
- * includes the location itself, so a dropdown row can disambiguate the many
- * legitimately-repeated names in the tree ("shelf 1" exists in four rooms).
- */
-export const locationAncestorFields = locationListRefOut.shape;
-export const locationAncestorOut = locationListRefOut;
+const locationAncestorOut = locationListRefOut;
 export type LocationAncestorOut = z.infer<typeof locationAncestorOut>;
-
-export const locationPathRefFields = locationListRefOut.shape;
-export const locationPathRefOut = locationListRefOut.extend({
-  ancestors: z.array(locationAncestorOut),
-});
-export type LocationPathRefOut = z.infer<typeof locationPathRefOut>;
 
 /** A deliberately lean inventory-count tree for the location drill-down. */
 export type LocationInventoryBreakdownOut = {
@@ -153,22 +116,6 @@ export const locationInventoryBreakdownOut: z.ZodType<LocationInventoryBreakdown
       children: z.array(locationInventoryBreakdownOut),
     }),
   );
-
-/**
- * Breadcrumb-only roster row — scalar columns plus the ancestor chain that
- * tells repeated names apart ("shelf 1" exists in four rooms).
- *
- * Deliberately NOT `locationListItemOut` — that shape carries every inventory
- * entry, its full product embed, and a batched pricing pass that a picklist
- * discards. Same split as `productPickerItemOut`.
- */
-const locationOptionItemFields = {
-  ...locationListRefOut.shape,
-  aliases: z.array(z.string()).default([]),
-  ancestors: z.array(locationAncestorOut),
-};
-
-export const locationOptionItemOut = z.object(locationOptionItemFields);
 
 /**
  * A roster row for a surface that also draws a thumbnail.
@@ -195,12 +142,10 @@ export type LocationPickerItemOut = z.infer<typeof locationPickerItemOut>;
 export const locationWithParentNameOut = locationOut.extend({
   parentName: z.string().nullable(),
 });
-export type LocationWithParentNameOut = z.infer<
-  typeof locationWithParentNameOut
->;
 
 export const locationsWithParentNameOut = z.array(locationWithParentNameOut);
 
+/** @public Names a generated native model. */
 export const locationTreeNodeOut = locationDetailNode;
 export type LocationTreeNode = z.output<typeof locationTreeNodeOut>;
 export const inventoryItemForTree =
@@ -209,18 +154,6 @@ export type InventoryItemForTree = z.output<typeof inventoryItemForTree>;
 
 export const infLocationListOut = z.array(infLocation);
 
-export const infLocationWithSideEffects = infLocation.and(
-  z.object({ sideEffects: mutationSideEffectsSchema }),
-);
-
-export const locationIdInput = z.object({
-  id: locationShortcode,
-});
-
 export const locationShortcodesInput = z.object({
   shortcodes: z.array(locationShortcode),
-});
-
-export const locationShortcodeInput = z.object({
-  shortcode: locationShortcode,
 });

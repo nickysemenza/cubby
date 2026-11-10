@@ -23,6 +23,8 @@ export const relationSectionPlanSchema = z.object({
   backReferenceColumn: z.string().nullable(),
   derived: z.boolean(),
 });
+
+/** @public Read through `import()` type queries. */
 export type CompiledRelationSectionPlan = z.infer<
   typeof relationSectionPlanSchema
 >;

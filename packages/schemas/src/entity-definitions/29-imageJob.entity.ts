@@ -77,6 +77,7 @@ const stateOptions = [
  * for one Image source and processor revision. Postgres is authoritative; the
  * Worker queue and the Apple companion only claim and complete these rows, so
  * every client reads them through the generic list and detail.
+ * @public The shortcode registry generator parses this module's `definition` and `readSchemas`.
  */
 export const { definition, readSchemas } = defineEntityModel({
   key: "imageJob",

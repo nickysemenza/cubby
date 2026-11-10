@@ -36,7 +36,7 @@ const isEntity = (value: string): value is Entity =>
   entitySchema.safeParse(value).success;
 
 /** A view that also declares a Problems section, paired with its entity. */
-export interface ViewProblemDeclaration {
+interface ViewProblemDeclaration {
   entity: Entity;
   viewId: string;
   sort: EntityProblemSource["sort"];
@@ -51,7 +51,7 @@ export interface ViewProblemDeclaration {
  * hand-listed, so declaring a view IS declaring the section — there is no
  * second place to register it and therefore no way for the two to disagree.
  */
-export function viewProblemDeclarations(): ViewProblemDeclaration[] {
+function viewProblemDeclarations(): ViewProblemDeclaration[] {
   const declarations = Object.entries(viewManifest).flatMap(([entity, views]) =>
     !isEntity(entity)
       ? []

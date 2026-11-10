@@ -3,7 +3,7 @@ import { amount } from "./codec";
 import { ingredientShortcode, recipeShortcode } from "./identifiers";
 import { moneyNullable } from "./money";
 
-export const ingredientAvailabilityStatus = z.enum([
+const ingredientAvailabilityStatus = z.enum([
   "ok",
   "short",
   "missing",
@@ -30,11 +30,10 @@ export const AVAILABILITY_STATUS_LABELS = {
 } as const satisfies Record<IngredientAvailabilityStatus, string>;
 
 /** Whether planning coverage comes from counted stock or a staple assumption. */
-export const availabilitySource = z.enum(["inventory", "assumed"]);
-export type AvailabilitySource = z.infer<typeof availabilitySource>;
+const availabilitySource = z.enum(["inventory", "assumed"]);
 
 /** Incomplete authored recipe information that must remain visible. */
-export const quantityIssue = z.enum(["missingAmount", "incompatibleNeedUnits"]);
+const quantityIssue = z.enum(["missingAmount", "incompatibleNeedUnits"]);
 export type QuantityIssue = z.infer<typeof quantityIssue>;
 
 /** Why a sub-recipe's ingredients are absent. Mirrors `WNeedsBlockReason`. */
@@ -53,7 +52,7 @@ export const needViaOut = z.object({
 });
 export type NeedVia = z.infer<typeof needViaOut>;
 
-export const ingredientAvailabilityOut = z.object({
+const ingredientAvailabilityOut = z.object({
   ingredientId: ingredientShortcode.nullable(),
   name: z.string(),
   need: amount.nullable(),
@@ -105,7 +104,7 @@ export const aggregatedNeedOut = z.object({
 });
 export type AggregatedNeed = z.infer<typeof aggregatedNeedOut>;
 
-export const blockedSubRecipeOut = z.object({
+const blockedSubRecipeOut = z.object({
   recipeId: recipeShortcode,
   name: z.string(),
   reason: subRecipeBlockReason,

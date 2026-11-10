@@ -68,7 +68,6 @@ const measureDiagnostic = z.discriminatedUnion("ok", [
   z.object({ ok: z.literal(true), value: z.number(), unit: z.string() }),
   diagnosticFailure,
 ]);
-export type MeasureDiagnosticOut = z.infer<typeof measureDiagnostic>;
 
 const nutrientDiagnostic = z.discriminatedUnion("ok", [
   z.object({
@@ -78,7 +77,6 @@ const nutrientDiagnostic = z.discriminatedUnion("ok", [
   }),
   diagnosticFailure,
 ]);
-export type NutrientDiagnosticOut = z.infer<typeof nutrientDiagnostic>;
 
 const rowMissing = z.object({
   price: z.boolean(),
@@ -86,7 +84,7 @@ const rowMissing = z.object({
   nutrients: z.boolean(),
 });
 
-export const conversionStep = z.object({
+const conversionStep = z.object({
   from_unit: z.string(),
   to_unit: z.string(),
   factor: z.number(),
@@ -208,7 +206,7 @@ export const recipeMeta = z
   .nullable();
 export type RecipeMeta = z.infer<typeof recipeMeta>;
 
-export const recipeStoredMeta = z.object({
+const recipeStoredMeta = z.object({
   times: z.object({ ...recipeTimeProse, ...recipeStoredMinutes }).nullish(),
   equipment: z.array(z.string()).nullish(),
   page: z.string().nullish(),

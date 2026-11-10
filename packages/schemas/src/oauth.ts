@@ -3,7 +3,7 @@ import { dateTime } from "./codec";
 
 export const revokeConnectedAppInput = z.object({ consentId: z.string() });
 
-export const connectedAppOut = z.object({
+const connectedAppOut = z.object({
   consentId: z.string(),
   clientId: z.string(),
   name: z.string().nullable(),

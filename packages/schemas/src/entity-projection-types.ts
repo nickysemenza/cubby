@@ -4,8 +4,8 @@ import type { RelationshipPathStep } from "./entity-integrity";
 import type {
   EntityDeclarationMetadata,
   CompiledEntityPresentation,
-  EntityFieldKind,
   EntityFieldControlKind,
+  EntityFieldKind,
   EntityFieldModelMetadata,
 } from "./entity-definitions/definition";
 
@@ -53,8 +53,8 @@ type CompiledFieldDisplay = Omit<
   itemsPath?: string;
 };
 
+/** @public Re-exported by generated modules. */
 export type GeneratedEntityFieldKind = EntityFieldKind;
-export type GeneratedEntityFieldControlKind = EntityFieldControlKind;
 
 type GeneratedEntityFieldResolutionValue =
   | string
@@ -142,7 +142,7 @@ export type GeneratedEntityFieldModel<E extends string = Entity> = {
  * terminal stored column a `sum`/`min`/`max` reads (null for `count`);
  * `absent` lists terminal columns that must be NULL.
  */
-export type GeneratedRollup<E extends string = Entity> = {
+type GeneratedRollup<E extends string = Entity> = {
   readonly aggregate: "count" | "sum" | "min" | "max";
   readonly path: string;
   readonly steps: readonly RelationshipPathStep[];
@@ -356,7 +356,10 @@ export type GeneratedGroupChoice<E extends string = Entity> = {
         readonly kind: "record";
         readonly steps: readonly RelationshipPathStep[];
         readonly target: E;
-        /** Null reads the canonical repository title instead of a physical column. */
+        /**
+         * Null reads the canonical repository title instead of a physical column.
+         * @public Re-exported by generated modules.
+         */
         readonly titleColumn: string | null;
       }
     | {
@@ -534,3 +537,6 @@ type EntityFilterDescriptorMetadata = {
 type EntityPortSourceRoster = ReadonlyMetadata<
   EntityDeclarationMetadata["extensions"]["ports"]
 >;
+
+/** @public Re-exported by generated modules. */
+export type GeneratedEntityFieldControlKind = EntityFieldControlKind;

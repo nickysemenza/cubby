@@ -56,10 +56,7 @@ export type RawProductWithMappingsAndFood = z.output<
   typeof rawProductWithMappingsAndFood
 >;
 
-export {
-  rawProductInventoryWithLocationOut,
-  type RawProductListInventoryEntryOut,
-} from "./product-read-fields";
+export { type RawProductListInventoryEntryOut } from "./product-read-fields";
 
 /** Scalar search inputs retain private pricing/quantity hydration. */
 export const rawProductResolveCandidate = z.object({

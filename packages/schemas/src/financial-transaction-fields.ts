@@ -103,7 +103,7 @@ export const financialTransactionAllocations = z.array(
  * other verdict: a charge that is one of several on a purchase (installments,
  * combined orders) is never compared to that purchase's lines.
  */
-export const financialTransactionItemizationValues = [
+const financialTransactionItemizationValues = [
   "bare",
   "lump",
   "itemized_match",

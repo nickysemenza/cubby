@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const runWorkItems = z.object({
+const runWorkItems = z.object({
   phase: z.string(),
   label: z.string(),
   unit: z.string(),
@@ -36,7 +36,7 @@ export const runWorkSamples = z.object({
 });
 export type RunWorkSamples = z.infer<typeof runWorkSamples>;
 
-export const runWorkPhase = runWorkSample.extend({
+const runWorkPhase = runWorkSample.extend({
   state: z.enum(["running", "waiting", "paused", "completed", "failed"]),
   etaSeconds: z.number().int().nonnegative().nullable(),
   estimateState: z.enum(["current", "paused", "stale"]).nullable(),

@@ -59,6 +59,7 @@ export type FieldResolutions = z.infer<typeof fieldResolutionsSchema>;
  * One value of a rollup over several resolutions (a Product's owners across
  * its Inventory): what to show, the record it names, and whether it is only
  * inherited somewhere. The `resolvedList` display format renders it.
+ * @public Names a generated native model.
  */
 export const resolvedListItemSchema = z.object({
   label: z.string(),
@@ -69,7 +70,7 @@ export const resolvedListItemSchema = z.object({
 export const resolvedListSchema = z.array(resolvedListItemSchema);
 export type ResolvedListItem = z.infer<typeof resolvedListItemSchema>;
 
-export const projectAllocationSchema = z.object({
+const projectAllocationSchema = z.object({
   projectId: projectShortcode.nullable(),
   projectName: z.string().nullable(),
   amount: z.number().nullable(),
@@ -81,7 +82,10 @@ export const projectAllocationsSchema = z.array(projectAllocationSchema);
 export const optionalProjectAllocationsSchema =
   projectAllocationsSchema.optional();
 
-/** Public review snapshots carry source shortcodes; internal resolution may still use UUIDs. */
+/**
+ * Public review snapshots carry source shortcodes; internal resolution may still use UUIDs.
+ * @public Names a generated native model.
+ */
 const publicResolutionSource = fieldResolutionSourceSchema.extend({
   entityId: anyShortcodeSchema(
     nonEmptyTuple(fieldResolutionSourceSchema.shape.entityKind.options),

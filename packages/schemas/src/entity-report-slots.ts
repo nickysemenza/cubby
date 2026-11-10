@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const reportSlots = [
+const reportSlots = [
   "task.briefing",
   "shipment.tracking",
   "email.review",

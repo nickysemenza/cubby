@@ -132,7 +132,10 @@ const importOutcomeOptions = [
   glyph?: import("@cubby/shared/enum-palette").EnumIcon;
 }[];
 
-/** The promoted processing ledger owns identity and headers; retained content is optional. */
+/**
+ * The promoted processing ledger owns identity and headers; retained content is optional.
+ * @public The shortcode registry generator parses this module's `definition` and `readSchemas`.
+ */
 export const { definition, readSchemas } = defineEntityModel({
   key: "email",
   names: { singular: "Email", plural: "Emails" },

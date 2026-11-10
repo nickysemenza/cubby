@@ -13,7 +13,6 @@ export const MAX_LOCATION_TREE_DEPTH = 10;
 export const locationType = z
   .enum(locationTypeValues)
   .describe("type of location (room, container, etc)");
-export type LocationType = z.infer<typeof locationType>;
 
 /** Location identity for stock, scan, and recommendation responses. */
 export const locationRefOut = z.object({
@@ -30,6 +29,7 @@ const pricingCounts = z.object({
   miscNoPrice: z.number().int().nonnegative(),
 });
 
+/** @public Names a generated native model. */
 export const locationValuationTotals = z.object({
   directValuation: money,
   totalValuation: money,
@@ -43,7 +43,6 @@ export const locationValuation = locationValuationTotals.extend({
   installed: locationValuationTotals.optional(),
   container: locationValuationTotals.optional(),
 });
-export type LocationValuation = z.infer<typeof locationValuation>;
 
 export const locationIdentityProductOut = z.object({
   id: productShortcode,
@@ -65,6 +64,7 @@ import { timestampedFields } from "./base-entity";
 import { amount } from "./codec";
 import { displayImagesField } from "./display-images";
 import { listLabel } from "./entity-definitions/label-field";
+/** @public Names a generated native model. */
 export const inventoryItemForTree = z.object({
   id: inventoryShortcode,
   amount,

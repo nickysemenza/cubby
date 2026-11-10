@@ -7,8 +7,6 @@ import { rawInventoryDetailProduct } from "./inventory-fields";
 import { externalIdOut } from "./external-id";
 import { unitMappingOut } from "./unitmapping";
 
-/** Repository/compiler projections; public Inventory reads use generated envelopes. */
-export const rawInventoryOutput = definitionSchemas.output;
 export const rawInventoryList = definitionSchemas.list;
 export const rawInventoryDetail = definitionSchemas.detail;
 export const rawInventoryMcpDetail = rawInventoryDetail.extend({

@@ -34,7 +34,10 @@ export function createEntityReadMedia<ImageFields extends z.ZodRawShape>(
     return schema;
   };
 
-  /** Public read decorators; repository schemas remain domain-shaped internally. */
+  /**
+   * Public read decorators; repository schemas remain domain-shaped internally.
+   * @public Names a generated native model.
+   */
   function withEntityListMedia<Fields extends z.ZodRawShape>(
     schema: z.ZodObject<Fields>,
   ): z.ZodObject<

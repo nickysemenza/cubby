@@ -659,10 +659,6 @@ export const isExecutedRunPurpose = (
 ): purpose is ExecutedRunPurpose =>
   EXECUTED_RUN_PURPOSES.some((candidate) => candidate === purpose);
 
-/** Routine kinds the default Runs list hides; clearing the filter shows them. */
-export const ROUTINE_RUN_PURPOSES = purposesWhere((kind) =>
-  Boolean(kind.routine),
-);
 export const VISIBLE_RUN_PURPOSES = purposesWhere((kind) => !kind.routine);
 
 /**

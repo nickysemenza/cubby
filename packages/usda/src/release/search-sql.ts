@@ -75,7 +75,7 @@ export function matchQualityBindings(term: string): Array<string | number> {
 // market_acquisition, sample_food, sub_sample_food, experimental_food) are the
 // Foundation sampling pipeline + research records — provenance, not pickable
 // foods — which USDA FDC itself doesn't surface in food search.
-export const FOOD_DATA_TYPES = [
+const FOOD_DATA_TYPES = [
   "branded_food",
   "foundation_food",
   "sr_legacy_food",

@@ -22,6 +22,7 @@ import {
   vendorEmailSenderAssignments,
   vendorOrderEvidence,
 } from "../vendor-import-fields.js";
+/** @public The shortcode registry generator parses this module's `definition` and `readSchemas`. */
 export const { definition, readSchemas } = defineEntityModel({
   key: "vendor",
   names: { singular: "Vendor", plural: "Vendors" },

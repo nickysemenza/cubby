@@ -18,7 +18,6 @@ const relationshipCatalog: RelationshipCatalog = allEntities.map((key) => ({
   relationships: entityManifest[key].relationships,
 }));
 export const connectionCatalog = createConnectionCatalog(relationshipCatalog);
-export type { ConnectedView } from "./connected-view-definitions";
 
 export interface ConnectedPathVariant {
   steps: readonly RelationshipPathStep[];
@@ -71,45 +70,4 @@ export function connectedPathVariants(
     current = relationship.target;
   }
   return [...variants];
-}
-
-/** Validate the catalog in generation and tests, before any page can request it. */
-export function validateConnectedViews(): void {
-  for (const source of allEntities) {
-    const seen = new Set<string>();
-    for (const view of [
-      ...connectionCatalog.views(source),
-      ...connectionCatalog.views(source, "context"),
-    ]) {
-      if (seen.has(view.key))
-        throw new Error(`Duplicate connected view ${source}.${view.key}`);
-      seen.add(view.key);
-      for (const route of view.routes) {
-        if (
-          route.length <
-          (("evidence" in view && view.evidence) ||
-          view.key.startsWith("entity:")
-            ? 1
-            : 2)
-        )
-          throw new Error(
-            `Indirect view ${source}.${view.key} needs at least two relationships`,
-          );
-        const variants = connectedPathVariants(source, route);
-        if (
-          variants.length === 0 ||
-          variants.some((variant) => variant.target !== view.target)
-        ) {
-          throw new Error(
-            `Connected view ${source}.${view.key} does not reach ${view.target}`,
-          );
-        }
-      }
-      if (entityManifest[view.target].dbTable === null) {
-        throw new Error(
-          `Connected view ${source}.${view.key} has no local target`,
-        );
-      }
-    }
-  }
 }

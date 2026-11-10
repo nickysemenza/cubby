@@ -15,7 +15,7 @@ export const shipmentEventSummarySchema = z.object({
 export const shipmentPurpose = z.enum(["incoming", "outgoing", "unknown"]);
 export type ShipmentPurpose = z.infer<typeof shipmentPurpose>;
 
-export const shipmentExtraTrackingNumber = z.object({
+const shipmentExtraTrackingNumber = z.object({
   carrierId: shortcodeSchema("vendor").nullable(),
   carrierName: z.string().nullable(),
   trackingNumber: z.string().min(1),

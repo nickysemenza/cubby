@@ -36,7 +36,6 @@ import {
   financialTransactionShortcode,
 } from "./identifier-fields";
 
-export { vendorOrderEvidence } from "./vendor-import-fields";
 /** The Source of a Distinct-from decision: its url and quoted difference. */
 export const distinctFromSource = z.object({
   url: z.url().max(DISTINCT_FROM_URL_MAX),
@@ -156,7 +155,7 @@ export const extractedPurchaseLine = z.object({
 });
 export type ExtractedPurchaseLine = z.infer<typeof extractedPurchaseLine>;
 
-export const paymentTenderValues = ["card", "stored_value", "unknown"] as const;
+const paymentTenderValues = ["card", "stored_value", "unknown"] as const;
 export const paymentTender = z
   .enum(paymentTenderValues)
   .describe(
@@ -164,6 +163,7 @@ export const paymentTender = z
   );
 export type PaymentTender = z.infer<typeof paymentTender>;
 
+/** @public Names a generated native model. */
 export const extractedPaymentEvidence = z.object({
   amount: money,
   chargedAt: z.iso.datetime().optional(),
@@ -176,6 +176,7 @@ export const extractedPaymentEvidence = z.object({
 });
 export type ExtractedPaymentEvidence = z.infer<typeof extractedPaymentEvidence>;
 
+/** @public Names a generated native model. */
 export const extractedOrderDate = z
   .union([
     // A refinement, not `.pipe(z.iso.date())`: a pipe advertises its output
@@ -382,7 +383,7 @@ export const runFindingEntity = z.enum([
   "run",
   "email",
 ]);
-export const runFindingKind = z.enum([
+const runFindingKind = z.enum([
   "wrong_product",
   "duplicate_product",
   "sum_mismatch",
@@ -430,8 +431,11 @@ export const replacementLineAttribution = z.object({
   weight: z.number().int().positive().safe(),
 });
 
-/** The public reviewed split: a LedgerParty by shortcode, unlike the stored
- * `replacementLineAttribution` whose uuid joins the aggregate approval. */
+/**
+ * The public reviewed split: a LedgerParty by shortcode, unlike the stored
+ * `replacementLineAttribution` whose uuid joins the aggregate approval.
+ * @public Names a generated native model.
+ */
 export const sourceOrderReconciliationAttribution = replacementLineAttribution
   .omit({ partyId: true, partyCode: true })
   .extend({ partyId: ledgerPartyShortcode.nullable() });
@@ -464,6 +468,7 @@ const sourceReconciliationLineBinding = z.object({
     })
     .optional(),
 });
+/** @public Names a generated native model. */
 export const sourceOrderReconciliationResolution = z.discriminatedUnion(
   "kind",
   [
@@ -543,9 +548,6 @@ export const sourceOrderReconciliationReview = z.object({
   ),
   attributions: z.array(sourceOrderReconciliationAttribution),
 });
-export type SourceOrderReconciliationReview = z.infer<
-  typeof sourceOrderReconciliationReview
->;
 export const prepareSourceOrderReconciliationOut = z.union([
   z.object({ id: z.uuid(), ...sourceOrderReconciliationReview.shape }),
   z.object({
@@ -653,7 +655,7 @@ export const storedImportFix = z
   ])
   .nullable();
 
-export const browserCapture = z.object({
+const browserCapture = z.object({
   url: z.url(),
   title: z.string().max(500),
   text: z.string().max(24 * 1_024),
@@ -673,7 +675,7 @@ export const browserCapture = z.object({
 });
 export type BrowserCapture = z.infer<typeof browserCapture>;
 
-export const orderMailClassification = z.object({
+const orderMailClassification = z.object({
   event: z.enum(["placed", "shipped", "delivered", "refunded", "other"]),
   orderId: z.string().trim().min(1).max(300).nullable(),
   amount: money.nullable(),
@@ -683,9 +685,6 @@ export const orderMailClassification = z.object({
 export const orderMailMessageClassification = z.object({
   events: z.array(orderMailClassification).max(50),
 });
-export type OrderMailMessageClassification = z.infer<
-  typeof orderMailMessageClassification
->;
 
 const agentEventBase = z.object({
   version: z.literal(1),
@@ -736,7 +735,6 @@ export const runScope = z.object({
   dispatchError: z.string().nullable(),
   coordinatorStartedAt: z.iso.datetime().nullable(),
 });
-export type RunScope = z.infer<typeof runScope>;
 
 export const importWriterInput = z.object({
   orderLocator: z.string().trim().min(1).max(128).optional(),
@@ -905,7 +903,7 @@ export const preparedProductCandidate = z.object({
 });
 
 /** An existing Vendor an order's named seller might be (see `vendor.distinctFrom`). */
-export const preparedVendorCandidate = z.object({
+const preparedVendorCandidate = z.object({
   vendorId: vendorShortcode,
   name: z.string(),
   website: z.string().nullable(),
@@ -1013,7 +1011,7 @@ export const importOperationStatusOut = z.object({
   completedAt: z.iso.datetime().nullable(),
 });
 
-export const importAuditFinding = z.object({
+const importAuditFinding = z.object({
   kind: runFindingKind,
   targetPurchaseId: entityIdSchema("purchase"),
   summary: z.string().trim().min(1).max(1_000),
@@ -1024,7 +1022,7 @@ export const importAuditFinding = z.object({
 // Model-output schemas carry no array bounds: Anthropic structured outputs
 // reject `maxItems`/`minItems` outright. The writer re-parses lines against
 // the bounded `extractedOrderCandidate` before anything is stored.
-export const importAuditOutput = z.object({
+const importAuditOutput = z.object({
   findings: z.array(importAuditFinding),
 });
 export type ImportAuditOutput = z.infer<typeof importAuditOutput>;

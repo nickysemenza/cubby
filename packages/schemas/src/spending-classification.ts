@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import { spendingCategoryShortcode } from "./identifier-fields";
 
-export const spendingCategoryMappingModeValues = [
+const spendingCategoryMappingModeValues = [
   "inherit",
   "mapped",
   "blocked",
@@ -10,7 +10,7 @@ export const spendingCategoryMappingModeValues = [
 export const spendingCategoryMappingMode = z.enum(
   spendingCategoryMappingModeValues,
 );
-export const vendorSpendingProfileValues = [
+const vendorSpendingProfileValues = [
   "unspecified",
   "mixed_retail",
   "food_retail",

@@ -9,6 +9,7 @@ import { defineEntity, defineEntityModel } from "./definition.js";
 import { cookbookProductSummary } from "@cubby/schemas/cookbook-fields";
 import { cookbookShortcode } from "../identifier-fields.js";
 import { z } from "zod";
+/** @public The shortcode registry generator parses this module's `definition` and `readSchemas`. */
 export const { definition, readSchemas } = defineEntityModel(
   {
     key: "cookbook",

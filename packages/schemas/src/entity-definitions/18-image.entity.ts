@@ -32,12 +32,7 @@ export const generatedImageStorageStatusValues = [
   "missing",
   "metadata_mismatch",
 ] as const;
-export const imageSourceValues = [
-  "own",
-  "catalog",
-  "unknown",
-  "screenshot",
-] as const;
+const imageSourceValues = ["own", "catalog", "unknown", "screenshot"] as const;
 export const { definition, readSchemas } = defineEntityModel(
   {
     key: "image",

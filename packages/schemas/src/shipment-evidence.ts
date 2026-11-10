@@ -4,6 +4,7 @@ import { plainDate } from "./base-entity";
 import { shipmentPurpose } from "./shipment-fields";
 
 const text = z.string().trim().min(1);
+/** @public Names a generated native model. */
 export const shipmentEventKind = z.enum([
   "label_created",
   "vendor_shipped",
@@ -19,7 +20,7 @@ export const shipmentEventKind = z.enum([
 ]);
 
 // Local timestamps remain evidence; they are never silently interpreted in the server timezone.
-export const shipmentEventTime = z.union([
+const shipmentEventTime = z.union([
   z.strictObject({
     kind: z.literal("instant"),
     value: z.iso.datetime({ offset: true }),
@@ -46,6 +47,7 @@ export const datedShipmentEventTime = shipmentEventTime.refine(
       z.iso.datetime({ local: true }).safeParse(time.value).success),
   "Every shipment event needs a calendar date. Use the source notification date when no separate event date is stated.",
 );
+/** @public Names a generated native model. */
 export const shipmentTimeBasis = z.enum([
   "stated_event",
   "notification_received",
@@ -66,13 +68,14 @@ export const shipmentObservationInput = z.strictObject({
   trackingNumber: text.max(300).nullable(),
 });
 export type ShipmentObservationInput = z.infer<typeof shipmentObservationInput>;
-export const newShipmentObservationInput = shipmentObservationInput.extend({
+const newShipmentObservationInput = shipmentObservationInput.extend({
   timeBasis: shipmentTimeBasis.describe(
     "stated_event for a completed event's stated date; notification_received when using the notification's date instead; estimate for forecast wording, which never proves completed delivery.",
   ),
 });
 
 // Optional on historical extractions: never default or rewrite fingerprinted JSON.
+/** @public Names a generated native model. */
 export const shipmentCarrierClaim = z.strictObject({
   trackingNumber: text.max(300),
   carrierName: text.max(300),
@@ -178,7 +181,7 @@ const smsExportSource = z.strictObject({
     ),
 });
 
-export const shipmentEvidenceSource = z.union([
+const shipmentEvidenceSource = z.union([
   z.strictObject({
     kind: z.literal("email"),
     emailId: shortcodeSchema("email"),
@@ -307,7 +310,7 @@ const shipmentTimelineSource = z.union([
   shipmentEvidenceSource.options[1].omit({ content: true }),
   smsExportSource.omit({ content: true }),
 ]);
-export const shipmentTimelineObservation = shipmentObservationInput.extend({
+const shipmentTimelineObservation = shipmentObservationInput.extend({
   observationId: z.string().uuid(),
   sourceCaptureId: z.string().uuid(),
   sourcePackageId: z.string().uuid(),

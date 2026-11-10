@@ -43,7 +43,7 @@ const creditUse = z.strictObject({ spentUsd: z.number().nonnegative() });
  * `openaiCredit` and `plan` sum standard API cost separately for the two
  * provider credit pools and ChatGPT plan; `paid` sums charged cost.
  */
-export const aiBudgetStatus = z.strictObject({
+const aiBudgetStatus = z.strictObject({
   windowStart: z.iso.datetime(),
   windowEnd: z.iso.datetime(),
   credit: creditUse,
@@ -58,7 +58,7 @@ export type AiBudgetStatus = z.infer<typeof aiBudgetStatus>;
  * `paused` after a recorded quota refusal until its reset (`until`);
  * `reason` keeps the raw refusal or connection diagnostic.
  */
-export const chatGptPlanAvailability = z.strictObject({
+const chatGptPlanAvailability = z.strictObject({
   state: z.enum([
     "available",
     "paused",
@@ -76,7 +76,7 @@ export type ChatGptPlanAvailability = z.infer<typeof chatGptPlanAvailability>;
  * Gateway balance) until the date it names or the window end (`until`), probed
  * once per window; `reason` keeps the provider's raw refusal.
  */
-export const fundingRefusalState = z.strictObject({
+const fundingRefusalState = z.strictObject({
   state: z.enum(["available", "refused"]),
   until: z.iso.datetime().nullable(),
   reason: z.string().nullable(),
@@ -91,7 +91,7 @@ export type FundingRefusalSource = z.infer<typeof fundingRefusalSource>;
  * from its window budget and recorded refusal or connection state. `blocker`
  * names why not; `until` is when it recovers by itself, if known.
  */
-export const fundingAvailability = z.strictObject({
+const fundingAvailability = z.strictObject({
   usable: z.boolean(),
   blocker: z
     .enum([

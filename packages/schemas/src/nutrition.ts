@@ -69,7 +69,10 @@ export const storedNutritionTotals = z.object({
 });
 export type StoredNutritionTotals = z.infer<typeof storedNutritionTotals>;
 
-/** The four everyday macros, each an honest estimate; `partial` when any is only partly known. */
+/**
+ * The four everyday macros, each an honest estimate; `partial` when any is only partly known.
+ * @public Names a generated native model.
+ */
 export const macroSummary = z.object({
   calories: measureEstimate,
   protein: measureEstimate,
@@ -84,7 +87,7 @@ export const nutritionTotals = storedNutritionTotals.extend({
 });
 export type NutritionTotals = z.infer<typeof nutritionTotals>;
 
-export const macrosOf = (nutrition: NutritionEstimate): MacroSummary => {
+const macrosOf = (nutrition: NutritionEstimate): MacroSummary => {
   const macros = {
     calories: nutrition.kcal,
     protein: nutrition.protein,
@@ -191,7 +194,10 @@ export const productLabelNutrition = z
     nutrients: z.partialRecord(nutrientKey, z.number().nonnegative()),
     inferredZeroNutrients: z.array(nutrientKey).optional(),
     inferenceEvidence: z.string().trim().min(1).nullable().optional(),
-    /** Provenance note, e.g. "Hero package label". */
+    /**
+     * Provenance note, e.g. "Hero package label".
+     * @public Names a generated native model.
+     */
     source: z.string().nullable(),
   })
   .refine(

@@ -22,10 +22,10 @@ export const inventoryOwnershipModeValues = ["inherit", "explicit"] as const;
 export const inventoryOwnershipMode = z.enum(inventoryOwnershipModeValues);
 export type InventoryOwnershipMode = z.infer<typeof inventoryOwnershipMode>;
 
+/** @public Names a generated native model. */
 export const inventoryOwner = ledgerPartyPersonSummary;
-export type InventoryOwner = z.infer<typeof inventoryOwner>;
 
-export const inventoryOwnershipSourceValues = [
+const inventoryOwnershipSourceValues = [
   "explicit",
   "household",
   "inherited_beneficiary",
@@ -33,9 +33,10 @@ export const inventoryOwnershipSourceValues = [
   "inherited_payment_account",
   "unresolved",
 ] as const;
+/** @public Names a generated native model. */
 export const inventoryOwnershipSource = z.enum(inventoryOwnershipSourceValues);
-export type InventoryOwnershipSource = z.infer<typeof inventoryOwnershipSource>;
 
+/** @public Names a generated native model. */
 export const inventoryOwnershipEvidence = z.object({
   purchaseId: purchaseShortcode.nullable(),
   expenseIds: z.array(expenseShortcode),

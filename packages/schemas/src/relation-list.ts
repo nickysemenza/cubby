@@ -50,14 +50,14 @@ export interface RelationFilter {
   readonly range?: "number" | "date";
 }
 
-export interface RelationSort {
+interface RelationSort {
   readonly key: string;
   readonly label: string;
   readonly column?: string;
 }
 
 /** A named filter set the list counts and offers as a tab (ADR 0022). */
-export interface RelationView<K extends string = string> {
+interface RelationView<K extends string = string> {
   readonly key: K;
   readonly label: string;
   readonly filters: Readonly<Record<string, string | readonly string[]>>;
@@ -139,7 +139,7 @@ export interface RelationFilterSpec {
 }
 
 /** The server compiler's descriptor (`DeclaredFilterDescriptor`). */
-export interface RelationFilterDescriptor {
+interface RelationFilterDescriptor {
   readonly columnId: string;
   readonly field: string | null;
   readonly kind: string;
@@ -421,12 +421,3 @@ export function defineRelationList<
       ),
   };
 }
-
-export type RelationList = ReturnType<typeof defineRelationList>;
-
-/** A filter's static options, for cell labels and pickers. */
-export const relationFilterOptions = (
-  list: Pick<RelationListDeclaration, "filters">,
-  columnId: string,
-): Options =>
-  list.filters.find((filter) => filter.columnId === columnId)?.options ?? [];

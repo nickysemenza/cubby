@@ -293,7 +293,7 @@ export function createAiModelPricing(options: AiModelPricingOptions) {
   };
 }
 
-export const aiPricingRatesSchema = z.object({
+const aiPricingRatesSchema = z.object({
   input: z.number().nonnegative(),
   output: z.number().nonnegative(),
   cache_read: z.number().nonnegative().optional(),

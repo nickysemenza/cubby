@@ -9,6 +9,7 @@ import { sortDirection } from "./pagination";
  * query string), `ids` narrows to specific records (a detail page mounts the
  * timeline with `ids: [record.id]`), `from`/`to` bound the window, and the
  * input's `pagination` (beside the window) selects one page of records.
+ * @public Names a generated native model.
  */
 export const entityTimelineOrder = sortDirection;
 export type EntityTimelineOrder = z.infer<typeof entityTimelineOrder>;
@@ -21,7 +22,7 @@ export const entityTimelineWindowFor = <Id extends z.ZodType<string>>(id: Id) =>
     order: entityTimelineOrder.default("desc"),
   });
 /** Timeline pages are bounded like list pages; a page is a set of records (rows). */
-export const ENTITY_TIMELINE_MAX_PAGE_SIZE = 500;
+const ENTITY_TIMELINE_MAX_PAGE_SIZE = 500;
 export const ENTITY_TIMELINE_DEFAULT_PAGE_SIZE = 200;
 
 /**
@@ -44,16 +45,16 @@ export type EntityTimelinePagination = z.output<
   typeof entityTimelinePagination
 >;
 
-/** The window with unbranded ids; the generated per-entity inputs brand them. */
-export const entityTimelineWindow = entityTimelineWindowFor(z.string().min(1));
-export type EntityTimelineWindow = z.infer<typeof entityTimelineWindow>;
-
-/** Where an event or row links to: an entity record, or a bare path. */
+/**
+ * Where an event or row links to: an entity record, or a bare path.
+ * @public Names a generated native model.
+ */
 export const entityTimelineLink = z.object({
   entity: z.string().min(1),
   id: z.string().min(1),
 });
 
+/** @public Names a generated native model. */
 export const entityTimelineEvent = z.object({
   id: z.string().min(1),
   /** `audit:<action>`, `field:<key>`, or a custom implementation's own kind. */
@@ -66,6 +67,7 @@ export const entityTimelineEvent = z.object({
 });
 export type EntityTimelineEvent = z.infer<typeof entityTimelineEvent>;
 
+/** @public Names a generated native model. */
 export const entityTimelineGroup = z.object({
   key: z.string().min(1),
   date: plainDate.nullable(),
@@ -75,7 +77,10 @@ export const entityTimelineGroup = z.object({
 });
 export type EntityTimelineGroup = z.infer<typeof entityTimelineGroup>;
 
-/** One record's lifecycle: intervals it was "live" plus dated markers. */
+/**
+ * One record's lifecycle: intervals it was "live" plus dated markers.
+ * @public Names a generated native model.
+ */
 export const entityTimelineRow = z.object({
   id: z.string().min(1),
   name: z.string(),
@@ -100,12 +105,14 @@ export const entityTimelineRow = z.object({
 });
 export type EntityTimelineRow = z.infer<typeof entityTimelineRow>;
 
+/** @public Names a generated native model. */
 export const entityTimelineStat = z.object({
   key: z.string().min(1),
   label: z.string().min(1),
   value: z.string(),
 });
 
+/** @public Names a generated native model. */
 export const entityTimelineMeta = z.object({
   /** Records in scope across every page. */
   totalCount: z.number().int().nonnegative(),
