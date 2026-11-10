@@ -61,10 +61,10 @@ export const locationSearch = {
       SELECT ${entitySchema.enum.location}, l."id"::text, l."shortcode", l."name",
         (SELECT string_agg(path.name, ' › ' ORDER BY path.depth DESC) FROM location_path path WHERE path."rootId" = l.id AND path.depth > 0),
         l."type", l."aliases", ARRAY[l."type"]::text[]
-      FROM "Location" l WHERE ${notDeleted(alias(searchTablelocation, "l"))} AND ${entitySchema.enum.location} IN (${types}) AND ${requested(sql`l."id"`)} AND ${bounded(sql`l."createdAt"`)}`,
+      FROM "Location" l WHERE ${notDeleted(alias(searchTablelocation, "l"))} AND ${entitySchema.enum.location} IN (${types}) AND ${requested?.match({ entity: "location", id: sql`l."id"` }) ?? sql`TRUE`} AND ${bounded(sql`l."createdAt"`)}`,
   prefix: ({ types, requested }) => sql`WITH RECURSIVE location_path AS (
  SELECT l.id AS "rootId", l.id, l."parentId", l.name, 0 AS depth FROM "Location" l
- WHERE ${entitySchema.enum.location} IN (${types}) AND ${requested(sql`l."id"`)} AND ${notDeleted(alias(searchTablelocation, "l"))}
+ WHERE ${entitySchema.enum.location} IN (${types}) AND ${requested?.match({ entity: "location", id: sql`l."id"` }) ?? sql`TRUE`} AND ${notDeleted(alias(searchTablelocation, "l"))}
  UNION ALL SELECT child."rootId", parent.id, parent."parentId", parent.name, child.depth + 1 FROM "Location" parent JOIN location_path child ON child."parentId" = parent.id WHERE ${notDeleted(alias(searchTablelocation, "parent"))}
  )`,
   embedding: loadEmbeddingText,

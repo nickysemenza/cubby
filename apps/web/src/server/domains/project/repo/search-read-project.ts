@@ -73,6 +73,6 @@ async function loadEmbeddingText(
 export const projectSearch = {
   document: ({ types, requested, bounded }) => sql`
       SELECT ${entitySchema.enum.project}, p."id"::text, p."shortcode", p."name", concat_ws(' · ', p."kind", p."status"), p."emoji", ARRAY[]::text[], ARRAY[p."kind", p."status"]::text[] || ${effectiveFieldSql("project", "locations", "p")}
-      FROM "Project" p WHERE ${notDeleted(alias(searchTableproject, "p"))} AND ${entitySchema.enum.project} IN (${types}) AND ${requested(sql`p."id"`)} AND ${bounded(sql`p."createdAt"`)}`,
+      FROM "Project" p WHERE ${notDeleted(alias(searchTableproject, "p"))} AND ${entitySchema.enum.project} IN (${types}) AND ${requested?.match({ entity: "project", id: sql`p."id"` }) ?? sql`TRUE`} AND ${bounded(sql`p."createdAt"`)}`,
   embedding: loadEmbeddingText,
 } satisfies SearchReadPort;

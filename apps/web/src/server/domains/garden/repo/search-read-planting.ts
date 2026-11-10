@@ -72,6 +72,6 @@ export const plantingSearch = {
       FROM "Planting" pl
       LEFT JOIN "Plant" p ON p."id" = pl."plantId" AND ${notDeleted(alias(searchTableplant, "p"))}
       LEFT JOIN "Location" l ON l."id" = pl."locationId" AND ${notDeleted(alias(searchTablelocation, "l"))}
-      WHERE ${notDeleted(alias(searchTableplanting, "pl"))} AND ${entitySchema.enum.planting} IN (${types}) AND ${requested(sql`pl."id"`)} AND ${bounded(sql`pl."createdAt"`)}`,
+      WHERE ${notDeleted(alias(searchTableplanting, "pl"))} AND ${entitySchema.enum.planting} IN (${types}) AND ${requested?.match({ entity: "planting", id: sql`pl."id"` }) ?? sql`TRUE`} AND ${bounded(sql`pl."createdAt"`)}`,
   embedding: loadEmbeddingText,
 } satisfies SearchReadPort;

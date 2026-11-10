@@ -17,7 +17,10 @@ import type { Database } from "~/server/db";
 import { inventoryScaffold } from "~/server/domains/inventory/repo/crud";
 import { resolveEntityDisplayImages } from "~/server/entity-kernel/repo/entity-display-image";
 import { publicFieldEnvelopeRows } from "~/server/generic/derived/repo/public-read";
-import { executeSearchDocumentSql } from "~/server/generic/search/repo/search-document";
+import {
+  executeSearchDocumentSql,
+  searchRequestedRows,
+} from "~/server/generic/search/repo/search-document";
 import {
   findLexicalSearchCandidates,
   findRelatedSearchCandidates,
@@ -70,18 +73,16 @@ async function loadCandidateRelations(
   candidates: InternalSearchCandidate[],
 ) {
   if (candidates.length === 0) return [];
-  const values = sql.join(
-    candidates.map(
-      (candidate, ordinal) =>
-        sql`(${candidate.entityKind}::text, ${candidate.entityId}::uuid, ${ordinal}::integer)`,
-    ),
-    sql`, `,
+  const refs = searchRequestedRows(
+    candidates.map((candidate, ordinal) => ({ ...candidate, ordinal })),
+    { entityKind: "text", entityId: "uuid", ordinal: "int" },
+    "refs",
   );
   return executeSearchDocumentSql(
     db,
     candidateRelationSchema,
     sql`
-      WITH refs("entityKind", "entityId", ordinal) AS (VALUES ${values})
+      WITH refs AS (SELECT * FROM ${refs.from})
       SELECT refs."entityKind", refs."entityId"::text AS "entityId", refs.ordinal,
         CASE refs."entityKind"
           WHEN 'product' THEN (
@@ -129,15 +130,16 @@ async function loadCandidateRelations(
 async function loadProductPlacements(db: Database, productIds: string[]) {
   if (productIds.length === 0)
     return new Map<string, SearchInventoryPlacement[]>();
-  const values = sql.join(
-    productIds.map((productId) => sql`(${productId}::uuid)`),
-    sql`, `,
+  const requested = searchRequestedRows(
+    productIds.map((productId) => ({ productId })),
+    { productId: "uuid" },
+    "requested_rows",
   );
   const rows = await executeSearchDocumentSql(
     db,
     placementRowSchema,
     sql`
-      WITH RECURSIVE requested("productId") AS (VALUES ${values}),
+      WITH RECURSIVE requested AS (SELECT * FROM ${requested.from}),
       live_placements AS (
         SELECT ie.id, ie.shortcode, ie."productId", ie."locationId",
           jsonb_build_object('value', ie."amountValue", 'unit', ie."amountUnit") AS amount,
@@ -203,15 +205,16 @@ async function loadComponentPlacements(
 ) {
   if (parentProductIds.length === 0)
     return new Map<string, SearchComponentPlacement[]>();
-  const values = sql.join(
-    parentProductIds.map((productId) => sql`(${productId}::uuid)`),
-    sql`, `,
+  const requested = searchRequestedRows(
+    parentProductIds.map((productId) => ({ productId })),
+    { productId: "uuid" },
+    "requested_rows",
   );
   const edges = await executeSearchDocumentSql(
     db,
     componentEdgeSchema,
     sql`
-      WITH requested("productId") AS (VALUES ${values})
+      WITH requested AS (SELECT * FROM ${requested.from})
       SELECT pc."fromEntityId"::text AS "parentProductId",
         pc."toEntityId"::text AS "componentProductId",
         pc.quantity AS "componentQuantity"

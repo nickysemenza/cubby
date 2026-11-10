@@ -854,7 +854,7 @@ spans do not replace the semantic owner. Jobs use the execution context's kind
 and selected step (`job.<kind>.<step>`) in preference to the span stack,
 including when no native span is recording. Other traced work falls back to its
 nearest non-database span; untraced work omits the attribute. This supplements
-`db.query.text`, binding role and returned-row count for caller-level query
+`db.query.text`, `db.query.parameter_count`, binding role and returned-row count for caller-level query
 comparisons without exporting record identifiers or arguments.
 
 Serialization failures also emit `db-transaction` structured logs

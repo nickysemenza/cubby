@@ -5,6 +5,7 @@ import type { PgTable } from "drizzle-orm/pg-core";
 import { normalizeSearchText } from "~/lib/search-normalization";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { unwrapDb, notDeleted } from "~/server/db/helpers";
+import type { Requested } from "~/server/db/helpers/requested";
 
 export type SearchableEntityText = {
   entityKind: SearchableEntity;
@@ -16,7 +17,7 @@ export type EmbeddingLoadOptions = { ids?: string[]; limit?: number };
 
 type SearchDocumentContext = {
   types: SQL;
-  requested: (column: SQL) => SQL;
+  requested: Requested | undefined;
   bounded: (column: SQL) => SQL;
   entityIds?: readonly string[];
   page?: {
@@ -71,7 +72,7 @@ export function storedSearchRead({
           sql`, `,
         )}]::text[]
       FROM ${table} WHERE ${notDeleted(table)} AND ${entity} IN (${types})
-        AND ${requested(sql`${table.id}`)} AND ${bounded(sql`${table.createdAt}`)}`,
+        AND ${requested?.match({ entity, id: sql`${table.id}` }) ?? sql`TRUE`} AND ${bounded(sql`${table.createdAt}`)}`,
     embedding: async (db, options = {}) => {
       const query = unwrapDb(db)
         .select({
