@@ -3566,8 +3566,7 @@ immutable evidence loads only in the family action that consumes it, so generic 
 plumbing never transfer large snapshots. Canonical fingerprint serialization traverses validated JSON
 directly, sorting object keys and keeping array order and scalar encoding, without revalidating
 subtrees; normalize dates and optional values at the input boundary. Stored-family outcome counts use
-one status query scoped by family and optional Run. Suggestion lists resolve record scope once through
-family discovery and pass matched ids to family readers. Review uses family subject and projection
+one status query scoped by family and optional Run. Suggestion lists resolve record scope once through family discovery and pass matched ids to family readers. Families declare primary records and JSON reference paths, with guards for the stored field or scope; the touching reader binds requested records and owns reverse discovery. Statement settlement graph discovery is the only graph exception. Review uses family subject and projection
 schemas, the common verdict set and transaction-bound application by default; families keep explicit
 exceptions.
 

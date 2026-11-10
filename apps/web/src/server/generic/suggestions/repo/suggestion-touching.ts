@@ -189,19 +189,23 @@ export function statementGraph(
   return { matches, query };
 }
 
-const json = (at: JsonPath, text = false) => {
-  const column = sql` s.${sql.identifier(at.column)}`;
+const json = (at: JsonPath, text = false, name = "s"): SQL<string> => {
+  const column = sql<string>`${sql.identifier(name)}.${sql.identifier(at.column)}`;
   if (!at.path?.length) return text ? sql<string>`${column} #>> '{}'` : column;
   const path = sql`ARRAY[${sql.join(
     at.path.map((part) => sql`${part}`),
     sql`, `,
   )}]::text[]`;
-  return text ? sql<string>`${column} #>> ${path}` : sql`${column} #> ${path}`;
+  return text
+    ? sql<string>`${column} #>> ${path}`
+    : sql<string>`${column} #> ${path}`;
 };
 
 function referenceMatches(
   ref: Reference,
   scope: SuggestionRecordScope,
+  family: ReviewFamily,
+  admission: (alias?: string) => SQL | undefined,
 ): SQL | undefined {
   const set = scope.records ? requested(scope.records) : undefined;
   const guard = ref.guard;
@@ -253,18 +257,29 @@ function referenceMatches(
     );
     if (!needles.length) return undefined;
     const indexed = alias(suggestionTable, "retained_indexed");
-    const indexedPath = sql`${indexed.evidence}->'records'`;
+    const indexedPath =
+      ref.at.path?.length === 1
+        ? sql`${sql.identifier("retained_indexed")}.${sql.identifier(ref.at.column)}->${ref.at.path[0]}`
+        : json(ref.at, false, "retained_indexed");
     const probe = reviewQueryBuilder
       .select({ id: indexed.id })
       .from(indexed)
-      .where(sql`${indexedPath} @> n.value::jsonb`);
+      .where(
+        and(
+          eq(indexed.family, family),
+          admission("retained_indexed"),
+          sql`${indexedPath} @> n.value::jsonb`,
+        ),
+      );
     const ids = sql`SELECT hit.id FROM unnest(${textArrayParam(needles)}) n(value) JOIN LATERAL (${probe.getSQL()} OFFSET 0) hit ON true WHERE ${set.match({ entity: sql`n.value::jsonb->0->>'entity'`, token: sql<string>`n.value::jsonb->0->>'id'` })}`;
     return and(guardSql, sql`${reviewSuggestion.id} IN (${ids})`);
   }
   const entity =
     typeof ref.entity === "string" ? ref.entity : json(ref.entity, true);
-  if (ref.kind === "value")
-    return and(guardSql, match(entity, json(ref.at, true)));
+  if (ref.kind === "value") {
+    const condition = match(entity, json(ref.at, true));
+    return condition ? and(guardSql, condition) : undefined;
+  }
   const value = json(ref.at);
   const elements = ref.scalar
     ? sql`CASE WHEN jsonb_typeof(${value}) = 'array' THEN ${value} ELSE jsonb_build_array(${value}) END`
@@ -285,7 +300,10 @@ function referenceMatches(
 }
 
 /** Scope identities before expensive automatic receipts; retain a statement-local barrier. */
-function touchingSuggestionQuery(db: Database, scope: SuggestionRecordScope) {
+export function touchingSuggestionQuery(
+  db: Database,
+  scope: SuggestionRecordScope,
+) {
   const client = unwrapDb(db);
   const s = reviewSuggestion;
   const families =
@@ -312,7 +330,9 @@ function touchingSuggestionQuery(db: Database, scope: SuggestionRecordScope) {
     const graph = declaration.graph?.(db, scope, admission);
     const settlement = graph?.query;
     const matches = [
-      ...declaration.references.map((ref) => referenceMatches(ref, scope)),
+      ...declaration.references.map((ref) =>
+        referenceMatches(ref, scope, family, admission),
+      ),
       ...(graph?.matches ?? []),
     ];
     const direct = matches.flatMap((match) =>
