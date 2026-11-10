@@ -109,9 +109,11 @@ checksums, replay, money conservation and unresolved-identity review still apply
    dates, totals, tracking or thread context together. Sender, thread or model
    confidence alone does not establish that match. One order arriving as two
    Emails (a pre-payment notice and its receipt) or as a statement booking and
-   a later receipt stays one Purchase: order ids compare without labels, case
-   or a leading `#` (`Trip ID: X` is `x`), and an import beside a same-thread
-   or unitemized statement Purchase without that id names it as
+   a later receipt stays one Purchase: a Purchase stores the order id without
+   its `<words> ID:`/`number:`/`#` label (case kept) and lookups ignore case
+   and a leading `#`, so `Trip ID: X` and `x` are one order; `No. X` without
+   `:` or `#` is not a label. An untargeted mail import beside a same-thread or
+   unitemized statement Purchase without that id names it as
    `targetPurchaseId` or, after review, in `distinctFromPurchases`. A receipt
    targeting a statement lump files the reviewed lump replacement rather than
    adding lines. Shipping mail can establish

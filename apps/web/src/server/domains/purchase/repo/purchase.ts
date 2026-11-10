@@ -2268,6 +2268,27 @@ export const mergePurchases = async (
     }
 
     const orderIdBearers = rows.filter((r) => r.orderId !== null);
+    // Equal normalized ids are one order, but folding two line sets would keep
+    // both: a Purchase pair that each still books lines converges instead.
+    if (orderIdBearers.length > 1) {
+      const lined = await tx
+        .selectDistinct({ purchaseId: expense.purchaseId })
+        .from(expense)
+        .where(
+          and(
+            inArray(
+              expense.purchaseId,
+              orderIdBearers.map((row) => row.id),
+            ),
+            notDeleted(expense),
+          ),
+        );
+      if (lined.length > 1)
+        throw createAppError(
+          "PURCHASE_MERGE_ORDER_COLLISION",
+          `Purchases carrying the same order id (${orderIdBearers.flatMap((row) => (row.orderId === null ? [] : [row.orderId])).join(", ")}) each hold lines; a merge would keep both. Use purchase_import.converge_duplicate_source_order.`,
+        );
+    }
     const survivingOrderId = canonicalOrderId(
       keeper.orderId ?? orderIdBearers[0]?.orderId ?? null,
     );

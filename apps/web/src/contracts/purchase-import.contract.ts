@@ -55,7 +55,7 @@ export const purchaseImportContract = defineContract(
     }),
     convergeDuplicateSourceOrder: mutation({
       description:
-        "Converge one order two source documents imported as two Purchases (a pre-payment notice and its receipt) after reading both originals: the duplicate's accepted source orders move onto the survivor, each duplicate line is retired onto the survivor's identical line (same title, amount and role; Product, Project, quantity and party attribution kept), and the rest of the duplicate folds in through the Purchase merge. Refuses different Vendors, vendor accounts or order ids, unmatched lines, financially claimed lines, and a duplicate with no accepted source. One transaction; a repeat returns already_applied.",
+        "Converge one order two source documents imported as two Purchases (a pre-payment notice and its receipt) after reading both originals: the duplicate's accepted source orders move onto the survivor, each duplicate line is retired onto a survivor line of the same amount (preferring the same title, role and booking facts; Product, Project, quantity, party attribution, booking code, category and trade kept or carried), and the rest of the duplicate folds in through the Purchase merge. Refuses different Vendors, vendor accounts or order ids, unmatched lines, financially claimed lines, and a duplicate with no accepted source. One transaction; a repeat returns already_applied.",
       command: { label: "Converge duplicate order", confirmation: null },
       input: convergeDuplicateSourceOrderInput,
       output: convergeDuplicateSourceOrderOut,

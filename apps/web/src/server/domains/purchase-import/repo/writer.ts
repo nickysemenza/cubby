@@ -228,6 +228,7 @@ async function findPurchase(
   tx: DrizzleTransaction,
   vendorId: ReturnType<typeof parseEntityId<"vendor">>,
   orderId: string | null,
+  targetPurchaseId?: string | null,
 ) {
   if (!orderId) return null;
   // Labels, case and a leading `#` vary between a vendor's Emails for one order.
@@ -246,12 +247,29 @@ async function findPurchase(
           ),
         ),
     },
-    limit: 2,
   });
-  if (matches.length > 1)
+  if (matches.length > 1) {
+    const reviewed = matches.find((row) => row.id === targetPurchaseId);
+    // A reviewed target settles the ambiguity only while no other match books
+    // lines; inserting onto an empty twin would book the order twice.
+    const lined = await tx
+      .selectDistinct({ purchaseId: expense.purchaseId })
+      .from(expense)
+      .where(
+        and(
+          inArray(
+            expense.purchaseId,
+            matches.map((row) => row.id),
+          ),
+          notDeleted(expense),
+        ),
+      );
+    if (reviewed && !lined.some((row) => row.purchaseId !== reviewed.id))
+      return reviewed;
     throw new Error(
-      "Several Purchases of this Vendor carry this order id. Review them before importing.",
+      `Several Purchases of this Vendor carry this order id (${matches.map((row) => row.shortcode).join(", ")}). Name one as targetPurchaseId, or converge them with purchase_import.converge_duplicate_source_order.`,
     );
+  }
   return matches[0];
 }
 
@@ -1458,7 +1476,14 @@ export async function importVendorOrder(
       ? parseEntityId("vendorAccount", input.vendorAccountId)
       : null;
     const orderId = canonicalOrderId(candidate.orderId);
-    const ordered = await findPurchase(tx, vendorId, orderId);
+    const ordered = await findPurchase(
+      tx,
+      vendorId,
+      orderId,
+      input.targetPurchaseId
+        ? parseEntityId("purchase", input.targetPurchaseId)
+        : null,
+    );
     const selectedId = input.targetPurchaseId;
     const chosen = selectedId
       ? await tx.query.purchase.findFirst({

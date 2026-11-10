@@ -45,6 +45,7 @@ import { recordShipmentEvidence } from "~/server/domains/shipment/repo/evidence"
 import { AppError } from "~/server/errors/app-error";
 
 import {
+  EXISTING_ORDER_CANDIDATES_MAX,
   readExistingOrderCandidates,
   type ExistingOrderCandidate,
 } from "../repo/existing-order-candidates";
@@ -439,14 +440,18 @@ async function settleByRule(
       })
     : [];
   const existingOrders = proof
-    ? await readExistingOrderCandidates(db, {
-        ledgerPartyId: mail.ledgerPartyId,
-        vendorId: proof.vendor.id,
-        mailboxId: mail.mailboxId,
-        messageId: mail.messageId,
-        threadId: mail.threadId,
-        receivedAt: mail.receivedAt,
-      })
+    ? await readExistingOrderCandidates(
+        db,
+        {
+          ledgerPartyId: mail.ledgerPartyId,
+          vendorId: proof.vendor.id,
+          mailboxId: mail.mailboxId,
+          messageId: mail.messageId,
+          threadId: mail.threadId,
+          receivedAt: mail.receivedAt,
+        },
+        { limit: EXISTING_ORDER_CANDIDATES_MAX },
+      )
     : [];
   const known: Omit<KnownForEmail, "products"> = {
     senderVendor: proof

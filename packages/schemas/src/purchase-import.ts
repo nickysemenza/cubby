@@ -826,7 +826,7 @@ const preparedImportOrderInput = z
     targetPurchaseId: purchaseShortcode.nullable().optional(),
     distinctFromPurchases: z
       .array(purchaseShortcode)
-      .max(10)
+      .max(50)
       .optional()
       .describe(
         "Reviewed existing-order candidates (the claim's known.existingOrders) this order is not, after reading their identifiers, lines, totals and dates. A mail order with a candidate needs targetPurchaseId or this.",
