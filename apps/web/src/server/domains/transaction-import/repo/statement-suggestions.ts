@@ -119,6 +119,7 @@ import {
   importOnlyStatementRuleStamps,
   matchStatementRules,
 } from "~/server/generic/suggestions/repo/automatic-policy";
+import { statementGraph } from "~/server/generic/suggestions/repo/statement-settlement-graph";
 import {
   publishSuggestion as publishStoredSuggestion,
   publishSuggestions,
@@ -155,7 +156,6 @@ import {
 } from "~/server/generic/suggestions/repo/suggestion-record-discovery";
 import { suggestionStateData as stateData } from "~/server/generic/suggestions/repo/suggestion-state";
 import { transitionSuggestionStates } from "~/server/generic/suggestions/repo/suggestion-state";
-import { statementGraph } from "~/server/generic/suggestions/repo/suggestion-touching";
 import { canonicalJson, jsonSnapshot } from "~/server/lib/canonical-json";
 import {
   assertWorkflowEffect,
