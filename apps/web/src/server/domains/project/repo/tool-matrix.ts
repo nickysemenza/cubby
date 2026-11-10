@@ -119,7 +119,7 @@ const completionProjectIds = (
     .map((row) => row.id);
 };
 
-export async function loadToolMatrixPage(
+async function loadToolMatrixPage(
   db: Database,
   filters: ProjectToolMatrixFilters,
 ) {
@@ -220,7 +220,7 @@ export type ToolMatrixPageLoaded = Awaited<
   ReturnType<typeof loadToolMatrixPage>
 >;
 
-export async function loadToolMatrix(
+async function loadToolMatrix(
   db: Database,
   filters: ProjectToolMatrixFilters,
   options: { today?: string } = {},

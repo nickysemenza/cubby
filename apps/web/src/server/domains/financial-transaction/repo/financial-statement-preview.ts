@@ -205,7 +205,7 @@ async function sameFilePositions(
  * Preview only: client-parsed rows become a decision worklist. It intentionally
  * does not create accounts/transactions or infer any Purchase link.
  */
-export async function loadFinancialPreview(
+async function loadFinancialPreview(
   db: Database,
   input: FinancialTransactionImportPreviewInput,
   options: FinancialStatementPreviewOptions = {},

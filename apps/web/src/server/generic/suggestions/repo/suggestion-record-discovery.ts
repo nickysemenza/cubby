@@ -253,7 +253,7 @@ export type JsonPath = {
     | "currentValue";
   path?: readonly string[];
 };
-export type ReferenceGuard = {
+type ReferenceGuard = {
   entity?: string;
   field?: string;
   scope?: string;

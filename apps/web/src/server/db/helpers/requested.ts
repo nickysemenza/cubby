@@ -28,7 +28,7 @@ export type RequestedRecord = {
  * Where a record reference lives: a uuid column, or stored text naming a
  * record by UUID, shortcode or legacy-prefix alias in any case.
  */
-export type RecordRef =
+type RecordRef =
   | { entity: string | SQL; id: SQL | SQL.Aliased }
   | { entity: string | SQL; token: SQL<string> | SQL<string | null> };
 
