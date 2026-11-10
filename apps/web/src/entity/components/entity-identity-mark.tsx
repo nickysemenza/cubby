@@ -26,7 +26,8 @@ const MARK_SIZE = {
 const containedEntities = new Set<Entity>(["product", "vendor", "cookbook"]);
 
 /**
- * Progressive image-or-icon identity shared by entity record links.
+ * Progressive identity shared by entity record links: the record's own emoji,
+ * else its image, else its icon.
  *
  * The box is stable before image data arrives, while the image downloads, and
  * after a failure. Text therefore never shifts when a cover replaces its mark.
@@ -70,17 +71,18 @@ export function EntityIdentityMark({
               : undefined
         }
       />
+    ) : emoji || !fallback ? (
+      <RecordEmoji
+        entity={entity}
+        emoji={emoji}
+        size={size === "compact" ? 10 : size === "inline" || fluid ? 12 : 16}
+      />
     ) : (
-      (fallback ?? (
-        <RecordEmoji
-          entity={entity}
-          emoji={emoji}
-          size={size === "compact" ? 10 : size === "inline" || fluid ? 12 : 16}
-        />
-      ))
+      fallback
     );
 
-  if (!displayImage) {
+  // A chosen emoji replaces any image, own or borrowed.
+  if (!displayImage || emoji) {
     return (
       <span
         aria-hidden

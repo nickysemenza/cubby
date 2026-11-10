@@ -167,10 +167,17 @@ export type CompiledEditSection = {
   collapsed: boolean;
 };
 
+/** Option value → glyph pair, resolved from the declared enum options. */
+export type CompiledRecordGlyph = {
+  field: string;
+  glyphs: Readonly<Record<string, { phosphor: string; sfSymbol: string }>>;
+};
+
 export type CompiledEntityPresentation = Omit<
   EntityPresentation,
-  "detail" | "list" | "edit"
+  "detail" | "list" | "edit" | "recordGlyph"
 > & {
+  recordGlyph: CompiledRecordGlyph | null;
   edit: Omit<EntityPresentation["edit"], "sections"> & {
     /** Every controlled roster field, each in exactly one section. */
     sections: readonly CompiledEditSection[];
@@ -1596,6 +1603,11 @@ const buildMetadataSchemas = () => {
     recordEmojiField: orNull(fieldKey),
     /** Read projection naming the entity whose standard glyph represents this record. */
     recordIconEntityField: orNull(fieldKey),
+    /**
+     * A record without an emoji or image takes the glyph of the `options`
+     * enum option whose value the readable `field` holds.
+     */
+    recordGlyph: orNull(z.strictObject({ field: fieldKey, options: fieldKey })),
     icons: z
       .object({
         /** A `@phosphor-icons/react` export name; the browser registry resolves it. */

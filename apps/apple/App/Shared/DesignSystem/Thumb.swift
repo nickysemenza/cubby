@@ -3,8 +3,9 @@ import Nuke
 import NukeUI
 import SwiftUI
 
-/// A cover image in a 6pt rounded rect with a hairline. The placeholder is inset tone plus the
-/// entity's own glyph, so a row without a photo still says what kind of record it is.
+/// A cover image in a 6pt rounded rect with a hairline. A record's own emoji replaces any cover;
+/// otherwise the placeholder is inset tone plus the entity's own glyph, so a row without a photo
+/// still says what kind of record it is.
 ///
 /// Every cover URL is a public R2 URL (`EntityRow.imageURL`'s doc comment) — no auth header, so
 /// Nuke's default `DataLoader` (its own ephemeral `URLSession`, not `URLSession.cubbyShared`)
@@ -24,7 +25,9 @@ struct Thumb: View {
         RoundedRectangle(cornerRadius: FieldGuideTokens.radiusControl)
             .fill(FieldGuideTokens.inset)
             .overlay {
-                if let url {
+                if let emoji, !emoji.isEmpty {
+                    glyph
+                } else if let url {
                     LazyImage(request: request(for: url, transformed: !useCanonicalURL)) { state in
                         if let image = state.image {
                             image.resizable().scaledToFill()
@@ -44,7 +47,7 @@ struct Thumb: View {
             .overlay(
                 RoundedRectangle(cornerRadius: FieldGuideTokens.radiusControl)
                     .strokeBorder(
-                        url == nil
+                        url == nil || emoji?.isEmpty == false
                             ? FieldGuideTokens.hairline
                             : (colorScheme == .dark ? Color.white : Color.black).opacity(0.1),
                         lineWidth: 1 / displayScale)

@@ -34,7 +34,11 @@ import {
   EntityRefLink,
   EntityRouteLink,
 } from "~/entity/components/entity-ref-link";
-import { RecordEmoji } from "~/entity/components/record-emoji";
+import {
+  RecordEmoji,
+  recordEmojiOf,
+  recordGlyphOf,
+} from "~/entity/components/record-emoji";
 import { ListRefLink } from "~/entity/components/ref-link/list";
 import type { EntityDetailParams, EntityDetailRoute } from "~/entity/entities";
 import {
@@ -115,7 +119,6 @@ import { EditableEntityCell } from "./editable-entity-cell";
 import { ImageThumbnail } from "./image-thumbnail";
 
 const optionalBooleanSchema = z.boolean().nullish();
-const recordEmojiSchema = z.object({ emoji: z.string().nullable().optional() });
 
 type UnitMapping = Parameters<typeof UnitMappingDisplay>[0]["mappings"][number];
 
@@ -271,17 +274,13 @@ export function createNameColumn<T extends BaseRow>(
         options?.emptyLabel,
       );
       const suffix = options?.nameSuffix?.(info.row.original);
-      const recordEmoji = recordEmojiSchema.parse(info.row.original).emoji;
-      const prefix =
-        recordEmoji || entityRoster[entity].recordIconEntityField ? (
-          <RecordEmoji
-            entity={entity}
-            emoji={recordEmoji}
-            record={info.row.original}
-          />
-        ) : (
-          options?.namePrefix?.(info.row.original)
-        );
+      // The record's emoji and option glyph lead the image column; only a
+      // record that names another entity's glyph repeats it beside the name.
+      const prefix = entityRoster[entity].recordIconEntityField ? (
+        <RecordEmoji entity={entity} record={info.row.original} />
+      ) : (
+        options?.namePrefix?.(info.row.original)
+      );
       const link = rowLink(info.row.original);
       // A row that names nothing openable still has to be readable, so the
       // unlinked branch keeps the truncation and the full-name tooltip.
@@ -566,18 +565,33 @@ export function createImageColumn<T extends object>(
     // before the images query resolved.
     cell: (info) => {
       const ref = options.imageRef?.(info.row.original);
+      const row = info.row.original;
+      const markEntity = rowEntity(row);
+      // A chosen emoji replaces the cover; an option glyph replaces the
+      // generic type icon when there is no cover.
+      const emoji = markEntity ? recordEmojiOf(markEntity, row) : null;
+      const glyph =
+        markEntity && !emoji ? recordGlyphOf(markEntity, row) : null;
       const thumbnail = ref ? (
         <RefImageThumbnail imageRef={ref} />
       ) : (
         <ImageThumbnail
-          images={getImages(info.row.original)}
+          images={emoji ? [] : getImages(row)}
           imageCount={
-            options.getImages
-              ? undefined
-              : rowDisplayCover(info.row.original).count
+            options.getImages || emoji ? undefined : rowDisplayCover(row).count
           }
           alt="Image"
-          entity={rowEntity(info.row.original)}
+          entity={markEntity}
+          fallback={
+            markEntity && (emoji || glyph) ? (
+              <RecordEmoji
+                entity={markEntity}
+                emoji={emoji}
+                record={row}
+                size={16}
+              />
+            ) : undefined
+          }
         />
       );
       const imageEntity = ref?.entityKind ?? rowEntity(info.row.original);

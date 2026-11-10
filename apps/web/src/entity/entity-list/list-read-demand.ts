@@ -64,6 +64,13 @@ export const declaredListReadProjection: ListReadProjection = (
   // Standard columns also inject Quality without a declared entity field.
   if (visibility.dataQuality !== false && readable.has("dataQuality"))
     wanted.add("dataQuality");
+  // The record mark leads the locked image column, so it is read with every
+  // row although the emoji field itself is not a list column.
+  for (const mark of [
+    metadata.summary.recordEmojiField,
+    metadata.summary.recordGlyph?.field,
+  ])
+    if (mark && readable.has(mark)) wanted.add(mark);
   for (const field of metadata.fields.fields) {
     if (!field.display.list) continue;
     const column = field.display.columnId ?? field.key;

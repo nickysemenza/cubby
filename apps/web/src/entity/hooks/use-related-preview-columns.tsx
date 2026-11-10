@@ -8,7 +8,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { type UseQueryResult, useQueries } from "@tanstack/react-query";
 import { type RefObject, useMemo, useRef } from "react";
 
-import { getSortableFields } from "~/entity/entities";
+import { getSortableFields, isBrowserRoutedEntity } from "~/entity/entities";
+import { entityListHref } from "~/entity/entity-list-href";
 import { manifestFilterConfig } from "~/entity/filter-manifest";
 import { entityMetadata, listFieldPresentation } from "~/entity/metadata";
 import { RelatedPreviewCell } from "~/entity/table/related-preview-cell";
@@ -103,6 +104,13 @@ export function useRelatedPreviewColumnDefs<TData extends { id: string }>({
             return (
               <RelatedPreviewCell
                 source={entity}
+                listHref={
+                  view.listFilter && isBrowserRoutedEntity(view.target)
+                    ? entityListHref(queryClient, view.target, {
+                        filters: [{ id: view.listFilter, value: [sourceId] }],
+                      })
+                    : undefined
+                }
                 relationship={
                   view.relationship &&
                   entityMetadata(

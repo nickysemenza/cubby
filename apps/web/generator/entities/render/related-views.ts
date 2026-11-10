@@ -11,6 +11,14 @@ export const compileRelatedViews = (entities: readonly CompiledEntity[]) => {
     entity.relations.flatMap((relation) => {
       const view = relation.view;
       if (view === undefined) return [];
+      // The detail relation table already resolved the target filter that
+      // scopes this relation to one source record.
+      const section = entity.inspector.detail.sections.find(
+        (candidate) =>
+          candidate.kind === "relation" && candidate.relation === relation.key,
+      );
+      const listFilter =
+        section?.kind === "relation" ? section.filter.descriptor : undefined;
       return [
         {
           key: `${entity.key}.${view.key ?? relation.key}`,
@@ -29,6 +37,7 @@ export const compileRelatedViews = (entities: readonly CompiledEntity[]) => {
           ...(view.inverseKey === undefined
             ? {}
             : { inverseKey: view.inverseKey }),
+          ...(listFilter === undefined ? {} : { listFilter }),
           filter: view.filter !== false,
         },
       ];

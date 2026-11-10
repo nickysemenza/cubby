@@ -34,7 +34,15 @@ public struct EntityRow: Identifiable, Sendable, Hashable {
 }
 
 extension EntityDescriptor {
+    /// The glyph for a record without an emoji or image: a declared option glyph (a product
+    /// category's family), then the entity named by `recordIconEntityField`, then the type's own.
     public func recordSymbol(in row: EntityRow) -> String {
+        if let glyph = recordGlyph,
+            let value = row.raw.recordValue(glyph.field)?.stringValue,
+            let symbol = glyph.symbols[value]
+        {
+            return symbol
+        }
         guard let field = recordIconEntityField,
             let value = row.raw.recordValue(field)?.stringValue,
             let entity = EntityKey(rawValue: value)

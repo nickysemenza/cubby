@@ -26,9 +26,10 @@ export function EntityPill({
   emoji?: string | null;
   fallback?: ReactNode;
 }) {
+  // An emoji replaces the image, so the pill never joins the image batch.
   const resolvedImage = useEntityDisplayImage(
     { entityKind: entity, entityId: id },
-    displayImage ?? undefined,
+    emoji ? null : (displayImage ?? undefined),
   );
   return (
     <RecordPill

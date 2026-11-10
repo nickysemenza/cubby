@@ -27,6 +27,8 @@ import { relatedViewPaths, relatedViewRegistry } from "./related-view-registry";
 
 import { vendorFilterFields } from "./vendor";
 import { vendorAccountFilterFields } from "@cubby/schemas/entities/vendorAccount";
+import { productCategoryFilterFields } from "@cubby/schemas/entities/productCategory";
+import { spendingCategoryFilterFields } from "@cubby/schemas/entities/spendingCategory";
 
 const declaredLocalEdges = new Set(
   relatedViewRegistry.flatMap((view) =>
@@ -195,6 +197,8 @@ describe("relatedViewRegistry", () => {
       expense: expenseFilterFields,
       financialAccount: financialAccountFilterFields,
       financialTransaction: financialTransactionFilterFields,
+      productCategory: productCategoryFilterFields,
+      spendingCategory: spendingCategoryFilterFields,
     } as const;
     for (const view of relatedViewRegistry) {
       const prefix = relatedFilterPrefix(view);

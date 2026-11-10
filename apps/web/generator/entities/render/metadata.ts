@@ -460,6 +460,7 @@ export const renderEntityMetadataArtifacts = (
                 titleField: entity.inspector.titleField,
                 recordIconEntityField: entity.inspector.recordIconEntityField,
                 recordEmojiField: entity.inspector.recordEmojiField,
+                recordGlyph: entity.inspector.recordGlyph,
                 merge: entity.operationOwners.merge === "kernel",
                 mergeFlow: entity.mergeFlow,
                 graph:

@@ -582,6 +582,14 @@ declarations (`detail.sections`, `list.views`, `list.totals`, `route.list`, `rou
 plain name. The generator compiles each override without it and refuses one that changes nothing,
 so the Schema tab's override table lists only live deviations.
 
+A record's mark is, in order: its emoji (`presentation.recordEmojiField`), its display image (own
+or borrowed), its `recordGlyph` option glyph, then its icon. A set emoji replaces any image in list
+image cells, reference pills, detail headers and native thumbnails; a record's own gallery stays in
+the detail hero. Web list reads request the emoji and glyph fields with every row, and the name
+cell does not repeat a mark the image cell draws. `presentation.recordGlyph: { field, options }`
+reads `field` and draws the glyph that the `options` enum field declares for that value (a Product
+Category's effective family).
+
 `presentation.recordIconEntityField` names a read-only projection holding an entity key. Generic web
 and Apple record surfaces resolve that entity's declared icon, falling back to the record's own
 icon for missing or unknown keys; record emoji and real media keep precedence, and navigation keeps
@@ -664,7 +672,9 @@ declares a `brandRef`, so URL values stay shortcode-native and related-view filt
 back-filters. Curated related list views belong on their relation's `.named` options as `view`;
 source, target, label and path are inferred; `key` overrides only the persisted view suffix and
 `filterPrefix` only the filter prefix. Rows default to alphabetical order; preview columns follow
-relation declaration order. The generator emits the literal related-view registry and per-entity
+relation declaration order. A preview's "View all" opens the target list filtered to the row, through
+the same target filter the source's detail relation table uses; a relation without one opens
+Connections. The generator emits the literal related-view registry and per-entity
 id, presence and search schemas; LedgerParty filters keep `@me`; `filter: false` keeps a
 presentation-only view. Explicit `inverseKey` values must name reciprocal views with matching
 endpoints.

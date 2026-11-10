@@ -25,7 +25,7 @@ import {
 import { type ComponentProps, lazy, Suspense, useState } from "react";
 import { z } from "zod";
 
-import { RecordEmoji } from "~/entity/components/record-emoji";
+import { RecordEmoji, recordEmojiOf } from "~/entity/components/record-emoji";
 import { heroChipLabel } from "~/entity/display/enum-field-display";
 import { detailEditRequest } from "~/entity/editing/editor-requests";
 import {
@@ -657,18 +657,21 @@ function FullEntityDetail<E extends GenericDetailEntity>({
   // A local gallery is not the canonical cover: logos and related-record
   // fallbacks are resolved at this page boundary, just as for record pills.
   const imageRef = { entityKind: entity, entityId: bag.id };
+  // A chosen emoji is the record's mark: it replaces the canonical cover, while
+  // the record's own gallery stays in the hero.
+  const emoji = recordEmojiOf(entity, record);
   const displayImages = useEntityDisplayImages(
     entityMetadata(queryClient, entity).descriptor.displayImages &&
-      !heroImages?.length
+      !heroImages?.length &&
+      !emoji
       ? [imageRef]
       : [],
     undefined,
     operations.displayImages,
   );
-  const heroDisplayImage = displayImages[entityDisplayImageKey(imageRef)];
-  const emoji = z
-    .looseObject({ emoji: z.string().nullish() })
-    .parse(record).emoji;
+  const heroDisplayImage = emoji
+    ? undefined
+    : displayImages[entityDisplayImageKey(imageRef)];
   const declaredRelations = detail.sections.flatMap((section) =>
     section.kind === "relation" &&
     onDetailSurface(section, "web") &&

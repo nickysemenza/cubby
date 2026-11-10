@@ -14,6 +14,7 @@ import { listViewId } from "@cubby/schemas/entity-definitions/definition";
 import { relationSectionPlanSchema } from "@cubby/schemas/entity-definitions/relation-plan";
 import type {
   CompiledEditSection,
+  CompiledRecordGlyph,
   EntityDeclarationMetadata,
   EntityPresentation,
 } from "@cubby/schemas/entity-definitions/definition";
@@ -964,6 +965,28 @@ function checkRecordEmoji(
   }
 }
 
+/** The fallback mark reads one value and maps it through declared option glyphs. */
+function compileRecordGlyph(
+  presentation: EntityPresentation,
+  lookup: FieldLookup,
+  context: string,
+): CompiledRecordGlyph | null {
+  const declared = presentation.recordGlyph;
+  if (!declared) return null;
+  lookup.read(declared.field, "recordGlyph.field");
+  const options = lookup.edit(declared.options, "recordGlyph.options");
+  const glyphs = Object.fromEntries(
+    (options.control?.options ?? []).flatMap((option) =>
+      option.glyph ? [[option.value, option.glyph] as const] : [],
+    ),
+  );
+  if (options.kind !== "enum" || Object.keys(glyphs).length === 0)
+    throw new EntityDeclarationError(
+      `${context}.recordGlyph.options must name an enum field whose options declare glyphs.`,
+    );
+  return { field: declared.field, glyphs };
+}
+
 export const compilePresentation = (
   presentation: EntityPresentation,
   facts: PresentationFacts,
@@ -1152,6 +1175,7 @@ export const compilePresentation = (
   const shelfSubtitle = list.shelf?.subtitle ?? mobileSubtitle;
   return {
     ...presentation,
+    recordGlyph: compileRecordGlyph(presentation, lookup, context),
     edit,
     detail: {
       summary: detail.summary,

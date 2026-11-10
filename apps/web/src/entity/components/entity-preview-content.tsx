@@ -7,7 +7,7 @@ import { useEffect } from "react";
 import { z } from "zod";
 
 import type { EntityActionRow } from "~/entity/actions/entity-actions";
-import { RecordEmoji } from "~/entity/components/record-emoji";
+import { RecordEmoji, recordEmojiOf } from "~/entity/components/record-emoji";
 import { entityPreviewFacts } from "~/entity/display/entity-display";
 import { heroChipLabel } from "~/entity/display/enum-field-display";
 import {
@@ -120,7 +120,7 @@ export function manifestPreviewCard<E extends ManifestPreviewEntity>(
       <RecordEmoji
         entity={entity}
         record={data}
-        emoji={z.looseObject({ emoji: z.string().nullish() }).parse(data).emoji}
+        emoji={recordEmojiOf(entity, data)}
         size={14}
       />
     ),

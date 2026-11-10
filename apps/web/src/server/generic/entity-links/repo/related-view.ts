@@ -199,6 +199,15 @@ const SQL_RELATED_VIEWS = {
     `t."date"`,
   ),
   "ledgerParty.recipesEaten": named(),
+  "productCategory.products": named(),
+  "spendingCategory.transactions": dated(
+    `COALESCE(NULLIF(t."merchant", ''), NULLIF(t."rawDescription", ''), t."shortcode")`,
+    `COALESCE(t."postedDate", t."transactionDate", ${householdDaySqlText('t."createdAt"')})`,
+  ),
+  "spendingCategory.purchases": dated(
+    `COALESCE(NULLIF(t."orderId", ''), t."shortcode")`,
+    `COALESCE(t."date"::timestamp, t."createdAt")`,
+  ),
 } as const satisfies Record<RelatedViewKey, RelatedViewSqlPresentation>;
 
 /** The view's own restriction as an ANDable clause, or nothing. */
