@@ -56,6 +56,7 @@ export const declaredListReadProjection: ListReadProjection = (
     "id",
     metadata.summary.titleField,
     "displayCover",
+    "pendingSuggestionCount",
   ]);
   const readable = new Set<string>([
     ...metadata.fields.output,

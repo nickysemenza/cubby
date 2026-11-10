@@ -240,6 +240,7 @@ describe("list projection group execution", () => {
           entity,
           visible,
         );
+        expect(demand).toContain("pendingSuggestionCount");
         expect(() =>
           selectedListProjection(
             ENTITY_REPOSITORY_READ_SCHEMAS[entity],
