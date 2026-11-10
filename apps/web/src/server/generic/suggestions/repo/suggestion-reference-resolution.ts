@@ -2,7 +2,7 @@ import { entityRefKey } from "@cubby/schemas/entity";
 import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
 import { parseEntityRef } from "@cubby/schemas/identifiers";
 import { suggestionRecordRef } from "@cubby/schemas/suggestion-list";
-import { parseShortcode } from "@cubby/shared";
+import { LEGACY_SHORTCODE_PREFIX, parseShortcode } from "@cubby/shared";
 import { sql } from "drizzle-orm";
 import { z } from "zod";
 
@@ -20,7 +20,6 @@ const storedRef = z.object({
 export async function readSuggestionRecordRefs(
   db: Database,
   ids: readonly string[],
-  entities?: readonly string[],
 ) {
   if (!ids.length)
     return new Map<string, z.infer<typeof suggestionRecordRef>[]>();
@@ -29,7 +28,7 @@ export async function readSuggestionRecordRefs(
     refs: unknown;
   }>(
     sql`
-    SELECT s.id, ${suggestionRecordsSql(entities)} AS refs FROM "Suggestion" s
+    SELECT s.id, ${suggestionRecordsSql()} AS refs FROM "Suggestion" s
     WHERE s.id = ANY(${uuidArrayParam(ids)})`,
     "objects",
   );
@@ -37,11 +36,30 @@ export async function readSuggestionRecordRefs(
 }
 
 /**
+ * The keys a stored reference may name a record by, as `parseShortcode` and the
+ * UUID lookup resolve them: its UUID, its code and any legacy-prefix alias of
+ * that code (`P-4K7M` names `PRD-4K7M`), all upper-cased.
+ */
+function recordKeys(record: { entity: string; id: string; code: string }) {
+  const code = record.code.trim().toUpperCase();
+  const dash = code.indexOf("-");
+  const legacy = Object.entries(LEGACY_SHORTCODE_PREFIX).flatMap(
+    ([prefix, entity]) =>
+      entity === record.entity && dash > 0
+        ? [`${prefix}${code.slice(dash + 1)}`]
+        : [],
+  );
+  return [...new Set([record.id.toUpperCase(), code, ...legacy])];
+}
+
+/**
  * Pending counts per requested record, counted where the references are built.
  * A Suggestion counts once per record its declared references name, by UUID or
  * by shortcode, as `readSuggestionRecordRefs` would resolve them. Settlement
  * references repeat per allocation and line, so shipping every reference to
- * the Worker to count a page of badges exhausted its memory.
+ * the Worker to count a page of badges exhausted its memory. Each Suggestion's
+ * references collapse to distinct normalized keys first, so the requested set
+ * joins on one hashable equality.
  */
 export async function countSuggestionRecordRefs(
   db: Database,
@@ -51,20 +69,24 @@ export async function countSuggestionRecordRefs(
   if (!ids.length || !records.length) return new Map<string, number>();
   const rows = await unwrapDb(db).execute<{ code: string; pending: number }>(
     sql`
-    WITH requested(entity, uuid, code) AS (VALUES ${sql.join(
-      records.map(
-        (record) =>
-          sql`(${record.entity}::text, ${record.id}::text, ${record.code}::text)`,
+    WITH requested(entity, key, code) AS (VALUES ${sql.join(
+      records.flatMap((record) =>
+        recordKeys(record).map(
+          (key) =>
+            sql`(${record.entity}::text, ${key}::text, ${record.code}::text)`,
+        ),
       ),
       sql`, `,
     )})
     SELECT requested.code, count(DISTINCT s.id)::int AS pending
     FROM "Suggestion" s
-    CROSS JOIN LATERAL jsonb_array_elements(${suggestionRecordsSql([
-      ...new Set(records.map((record) => record.entity)),
-    ])}) ref
-    JOIN requested ON ref->>'entity' = requested.entity
-      AND (ref->>'id' = requested.uuid OR upper(btrim(ref->>'id')) = requested.code)
+    CROSS JOIN LATERAL (
+      SELECT DISTINCT ref->>'entity' AS entity, upper(btrim(ref->>'id')) AS key
+      FROM jsonb_array_elements(${suggestionRecordsSql([
+        ...new Set(records.map((record) => record.entity)),
+      ])}) ref
+    ) named
+    JOIN requested ON requested.entity = named.entity AND requested.key = named.key
     WHERE s.id = ANY(${uuidArrayParam(ids)})
     GROUP BY requested.code`,
     "objects",
