@@ -168,9 +168,11 @@ export async function bringRunWaitingJobForward(
   db: RepositoryQueryInput,
   input: { runId: RunId; kind: string; waitReason: JobWaitReason },
 ): Promise<boolean> {
+  // Claims compare availableAt with the Worker clock at millisecond precision;
+  // a microsecond `now()` here could leave the woken Job undue to an immediate claim.
   const woken = await repositoryQueries(db)
     .update(job)
-    .set({ availableAt: sql`now()`, waitReason: null })
+    .set({ availableAt: new Date(), waitReason: null })
     .where(
       and(
         eq(job.runId, input.runId),
