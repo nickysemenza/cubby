@@ -11,7 +11,6 @@ import {
 } from "~/server/generic/derived/repo/read";
 import type {
   CurrentReadFacts,
-  CurrentFieldOwnership,
   StoredDerivedRead,
   PageFieldReadContexts,
 } from "~/server/generic/derived/repo/read-context";
@@ -19,7 +18,6 @@ import {
   compileReadDemand,
   type ReadDemand,
 } from "~/server/generic/list/repo/read-demand";
-import { loadCurrentFieldOwnership } from "~/server/generic/suggestions/repo/automatic-fields";
 
 const identitySchema = z.object({ id: z.string(), shortcode: z.string() });
 const rowValues = z.record(z.string(), z.unknown());
@@ -32,13 +30,11 @@ export async function withPageFields<Row>(
   hydrate: () => Promise<Row[]> | Row[],
   {
     stored: started,
-    ownership: startedOwnership,
     projection,
     demand: suppliedDemand,
   }: {
     /** The page's stored meta, when the caller started it with the page ids. */
     stored?: Promise<PageStoredMeta>;
-    ownership?: ReturnType<typeof loadCurrentFieldOwnership>;
     projection?: readonly string[];
     demand?: ReadDemand;
   } = {},
@@ -54,17 +50,13 @@ export async function withPageFields<Row>(
   const ids = identities.map((identity) => identity.internalId);
   const demand = suppliedDemand ?? compileReadDemand(entity, projection);
   const shortcodeEntity = z.enum(shortcodeEntities).safeParse(entity);
-  const [data, storedRows, ownership, assignments] = await Promise.all([
+  const [data, storedRows, assignments] = await Promise.all([
     hydrate(),
     demand.facts
       ? (started ?? loadStoredDerived(db, entity, ids, demand.facts.stored))
       : Promise.resolve(
           new Map<string, ReadonlyMap<string, StoredDerivedRead>>(),
         ),
-    demand.facts && demand.facts.ownership.length
-      ? (startedOwnership ??
-        loadCurrentFieldOwnership(db, entity, ids, demand.facts.ownership))
-      : Promise.resolve(new Map<string, CurrentFieldOwnership>()),
     demand.facts && shortcodeEntity.success
       ? loadCurrentAssignmentFacts(
           db,
@@ -137,7 +129,6 @@ export async function withPageFields<Row>(
           covered: demand.envelope,
           raw: { ...identity.raw, ...assignments.get(identity.internalId) },
           stored: stored.get(identity.internalId) ?? new Map(),
-          ownership: ownership.get(identity.internalId) ?? {},
         },
       ]),
     ),

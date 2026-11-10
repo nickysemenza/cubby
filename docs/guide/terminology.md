@@ -748,12 +748,39 @@ The contradictory facts need resolving before deciding whether records are
 duplicates.
 
 **Suggestion**:
-A classification, field value or record change that has been computed but not
-yet accepted by the household. It changes data only when accepted, or when an
-explicit Automatic rule authorizes its application. One table holds every
-family. A replaced Suggestion nobody decided on is deleted rather than kept as
-history, and an explicit correction that was never applied stays visible in Work.
+A classification, field value or record change Cubby computed. A confident field
+answer for an open or Cubby-held field is saved by its Automatic rule; anything
+else waits: a Guess in the field's picker, a Disagreement, or a member action in
+the queue. One table holds every family. A replaced Suggestion nobody decided on
+is deleted rather than kept as history.
 _Avoid_: proposal, Jev suggestion, recommendation
+
+**Cubby-set**:
+A field value Cubby's Automatic rule wrote that no member has kept. Cubby may
+revise it on new evidence, a correction or a model update. A value a member, an
+import or an agent wrote is never revised; a member may hand it back with Let
+Cubby decide.
+_Avoid_: auto, automatic value
+
+**Guess**:
+A below-bar answer for a field. It is never shown in a table cell; it is the
+first, active (not selected) row of the field's picker, labelled "Cubby's guess".
+_Avoid_: suggested chip, leaning
+
+**Disagreement**:
+A confident answer that differs from a value a person set. It is listed once in
+the Suggestions page; Keep rules the value out for that field for good.
+_Avoid_: correction (the member's own fix)
+
+**Precedent**:
+A value a person set for the same field on a similar record, shown to the
+decision model as evidence. Corrections of Cubby come first; Cubby-set values
+are never precedents.
+
+**Changes by Cubby**:
+The list of values Cubby set on its own, with Keep and "Wrong, clear it" on each
+row. Editing a value there is a correction.
+_Avoid_: automation history
 
 **Automatic decision**:
 A classification or change already acted on without waiting for household
@@ -801,6 +828,11 @@ say "decision"; the record's model names which one answered.
 _Avoid_: Jev (when Clef may have answered an image question)
 
 **Correction**:
+A member's fix of a Cubby-set value, recorded from the edit itself as a Miss with
+the right value. It rechecks up to 25 similar Cubby-set values. A Suggestion
+whose value differs from the current one is a Change (stored kind `correction`).
+
+**Change**:
 A Suggestion whose value differs from the record's current value.
 
 **Addition**:
@@ -821,10 +853,11 @@ whose families contribute Run steps; its evaluations are not child Runs.
 _Avoid_: backfill (when the work produces Suggestions rather than derived data)
 
 **Suggestions page**:
-The one place to review pending Suggestions of every family without opening
-each record, with each family's evidence beside its review actions. A listed
-Suggestion may have gone stale since it was made. Accepting it rechecks current
-evidence, and a stale one is refused rather than applied.
+The one place to review what needs a member: Disagreements, fields only a member
+applies, and the manual families (statement attach, Product merges, placement).
+Guesses are not listed. A listed Suggestion may have gone stale since it was
+made. Accepting it rechecks current evidence, and a stale one is refused rather
+than applied.
 _Avoid_: inbox, review queue
 
 **Strength**:
@@ -838,12 +871,12 @@ What a Suggestion would resolve if accepted, listed as the data-quality checks
 its family says acceptance closes. It is a list, not a number.
 
 **Automatic rule**:
-A named, versioned rule that applies matching Suggestions without review: fill
-an empty field at high confidence with a clear winner, and book clean spending
-from imports. Attaching a charge to an existing transaction always needs review.
-A member can pause clean spending booking. Every change a rule makes stays
-visible as applied automatically and can be marked Wrong.
-_Avoid_: auto-apply threshold, confidence cutoff
+A fixed, always-on, versioned code rule that applies matching Suggestions without
+review: save a field answer at 85% or more for an open or Cubby-set field of an
+`apply: "auto"` field, and book clean spending from imports. Attaching a charge
+to an existing transaction always needs review. Every field change a rule makes
+is listed in Changes by Cubby and can be kept or cleared.
+_Avoid_: auto-apply threshold, confidence cutoff, member switch
 
 ## Purchase research
 

@@ -1,3 +1,5 @@
+import { HIGH_CONFIDENCE_PROBABILITY } from "@cubby/schemas/ai-evaluation";
+import { suggestApplyPolicy } from "@cubby/schemas/field-suggestion-policy";
 import { suggestionJudgments } from "@cubby/schemas/suggestion";
 import {
   fieldSuggestionRow,
@@ -41,11 +43,26 @@ export const fieldFamily: SuggestionFamilyDeclaration<"field"> = {
       runId: query.filters.runId,
       suggestionIds: query.suggestionIds,
     });
-    return rows.map((row) => {
+    // Rows an Automatic rule will apply, and (by default) plain guesses, are
+    // dropped before paging so totals count exactly what a page can return.
+    const listed = rows.filter(
+      (row) => filters.status !== "pending" || row.automaticRule === null,
+    );
+    return listed.flatMap((row) => {
       const entity = shortcodeEntity.parse(row.entity);
       const kind = fieldKind.parse(row.kind);
       const strength = fieldStrength(row.confidence);
-      return {
+      const confident = row.confidence >= HIGH_CONFIDENCE_PROBABILITY;
+      // What needs a person: Cubby disagreeing with a person's value, or a
+      // confident answer for a field only a member applies. Every other
+      // pending answer is a guess the field's picker offers.
+      const disposition =
+        kind === "correction" && confident && !row.answered
+          ? "disagreement"
+          : confident && suggestApplyPolicy(entity, row.field) === "review"
+            ? "needs_you"
+            : "guess";
+      const key = {
         family: "field" as const,
         suggestionId: row.id,
         status: filters.status,
@@ -66,8 +83,16 @@ export const fieldFamily: SuggestionFamilyDeclaration<"field"> = {
           field: row.field,
           kind,
           confidence: row.confidence,
+          disposition,
         },
       };
+      if (
+        filters.status === "pending" &&
+        filters.disposition === undefined &&
+        disposition === "guess"
+      )
+        return [];
+      return [key];
     });
   },
   rows: async (db, keys) => {
@@ -129,7 +154,7 @@ export const fieldFamily: SuggestionFamilyDeclaration<"field"> = {
   summarize: (value: unknown) =>
     `Set field to ${JSON.stringify(suggestionJudgments.field.parse(value).value)}`,
   apply: async (db, context, state, input, automatic) => {
-    // The automatic mode keeps acceptSuggestion's requiresSuggestionReview refusal.
+    // The automatic mode keeps acceptSuggestion's apply-policy refusal.
     if (input.verdict === "correct" && !input.correction.present)
       await acceptSuggestion(
         db,

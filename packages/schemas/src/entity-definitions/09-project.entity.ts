@@ -725,6 +725,7 @@ Rules:
           // `purchase.defaultTrade` — `name`/`notes`/`kind` are the only
           // signal available.
           suggest: {
+            fillOnly: true,
             basis: ["name", "notes", "kind"],
             rules: [TRADE_SUGGEST_RULE],
           },

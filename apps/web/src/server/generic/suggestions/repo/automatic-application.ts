@@ -38,14 +38,9 @@ const ruleStamps = z
   .object({ matchedRules: z.array(z.string()).default([]) })
   .passthrough();
 
-/** Policy is fixed; old attach stamps cannot authorize an automatic application. */
-export async function assertAutomaticRuleOn(
-  _db: Database,
-  key: AutomaticRuleKey,
-  stamp: string,
-  _suggestionId: string | null,
-) {
-  if (key === "statement_transaction.attach" || stamp !== ruleBase(key))
+/** Policy is fixed code; a stamp from another revision cannot authorize an application. */
+export function assertAutomaticRuleOn(key: AutomaticRuleKey, stamp: string) {
+  if (stamp !== ruleBase(key))
     throw new Error("Automatic policy changed; refresh the suggestion");
 }
 
@@ -178,6 +173,9 @@ export async function applyAutomaticRules(
         actorContext: {
           ...systemActor(),
           runId: row.runId ? runEntityId.parse(row.runId) : null,
+          // Only Cubby's own field values are revisable; statement booking is
+          // import evidence and stays protected.
+          ...(row.family === "field" && { authority: "automatic" as const }),
         },
       };
       // Ineligible or stale field work stays reviewable/refreshable without

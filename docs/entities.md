@@ -332,8 +332,8 @@ explicit choices.
 outcome with its matching provenance. Inherit,
 explicit value and explicit None are distinct intents. A successful empty outcome is not a missing
 computation: a missing result renders Updating…, never the
-successful empty state. Automatic ownership comes from current receipts and audit evidence, never a
-cached `automaticFields` value; edits and same-value confirmation end it immediately.
+successful empty state. Who set an own value is not part of the envelope: `fieldAuthority` reads it
+from the audit trail when Why this value or the automatic gate asks.
 
 `packages/schemas/src/field-envelope-presentation.ts` and CubbyKit's
 `FieldEnvelopePresentation.swift` are the twin owners of empty and missing labels and
@@ -3475,11 +3475,15 @@ Shared AI selection sends the entire shown roster to the decision model only whe
 option included); otherwise the fast chat tier selects from the same roster with explicit candidate
 ids, and an unshown id resolves to null.
 
-Mandatory field review is limited to concrete consequential exceptions declared with
-`reviewRequired`: FinancialAccount provider/network and sole purchaser (financial identity and
+A field's `suggest.apply` says who decides a confident answer. `review` is limited to concrete
+consequential exceptions: FinancialAccount provider/network and sole purchaser (financial identity and
 attribution), Expense line kind (accounting role), Cookbook and Device Product links (specific owned
-objects). Ordinary descriptive fields, including record emoji and Vendor spending
-category/itemization, use the common empty-field policy; effective derived itemization values are
+objects), Inventory location (a placement move), ProductCategory feature (it decides which fields a
+subtree carries) and SpendingCategory itemization and Product expectations. `offer` keeps an answer
+as the picker guess and never writes it: Expense project and Product, which move spend or cost basis.
+`fillOnly` fields (Vendor and Purchase defaults, Project trade) are filled when empty but never
+revised, because other records inherit them. Ordinary descriptive fields, including record emoji,
+use the common policy; effective derived itemization values are
 populated and protected. Vendor spending profiles default to `unspecified`, a populated reviewable
 value, never treated as empty.
 
@@ -3585,19 +3589,21 @@ confirmation, and identity conflicts cannot merge.
 
 ### Shared proposal queue and automatic decisions
 
-ADR 0025 fixes automatic application policy: high-confidence eligible field additions and clean
-supported import spending always apply through their domain validation; attaching an existing
-transaction requires review. There are no per-revision member switches or Rules tab.
-Automatic-decision history and its Wrong grade stay available; a Wrong decision prevents unchanged
-work from applying again. A member correction applies to the record it was made on; there is no
-automatic propagation to comparable records. Corrected null stays distinct from no correction, and an
-apply intent alone, a draft or a history-only grade changes nothing.
+Automatic application policy is fixed code ([ADR 0028](adr/0028-cubby-acts-first.md)): confident
+answers for open or Cubby-held `apply: "auto"` fields and clean supported import spending always apply
+through their domain validation; attaching an existing transaction requires review. There are no
+member switches or Rules tab. A Wrong decision prevents unchanged work from applying again. A member
+correction of a Cubby-set value rechecks up to 25 similar Cubby-held values through the decision
+model; nothing is copied. Corrected null stays distinct from no correction, and an apply intent
+alone, a draft or a history-only grade changes nothing.
 
 The review implementation and wire use Suggestion names (`suggestionId`, `suggestionIds`,
 `targetSuggestionId`). Immutable publication keys and receipt kinds keep their original spelling so
 retries and existing decisions keep their identity.
 
-The `/suggestions` page lists actionable proposals from fields, statement transactions, connections
+The `/suggestions` page lists what needs a member from fields (Disagreements and `apply: "review"`
+fields, through the field family's `disposition` column; guesses are listed only when asked for with
+`disposition: ["guess"]`), statement transactions, connections
 and recommendations, Product pairs and transfer pairs on one server-filtered table (`suggestions.list`
 over the family registry): family chips with counts, each family's columns, inline evidence, keyboard
 review (↑/↓, →, A, D), a confirmed "Accept N clean" that re-lists before each chunk, bulk Dismiss and
@@ -3615,7 +3621,7 @@ exclusions. Each family declares filters, sorts and account × month grouping wi
 keys and operation input derive from them, and SQL uses `compileDeclaredFilters`. The single agent
 queue read is `suggestions_read.list`: filters use column names, `<column>Exclude`,
 `<column>Presence` and numeric/date `<column>From`/`<column>To` bounds; confidence bounds are
-percentages; `recordEntity` scopes record kinds independently of the field family's `entity` filter.
+fractions from 0 to 1, the unit rows carry; `recordEntity` scopes record kinds independently of the field family's `entity` filter.
 Exclusions keep rows with no matching value. Only `meta.cleanCount` remains, because it controls bulk
 acceptance. Current family facts are checked before filtering and pagination so stale evidence never
 inflates totals; family freshness and derived facts run through their eligibility reads.
@@ -3630,10 +3636,11 @@ These are live canonical reads; any future stored projection must keep dynamic m
 complete invalidation. Passive record reads never discover or publish advice. Similar-Product
 browsing stays informational; photo-import choices stay in their Run.
 
-The **Automatic decisions** tab is the optional generic audit, newest first, with family and
+The **Changes by Cubby** tab is the generic audit of automatic decisions, newest first, with family and
 review-status filters; `/automatic-decisions` and the older automatic-application URL redirect there,
 preserving record and audit-family scope, and Workbench bookmarks redirect to the queue or the Product
-detail. It also appears on each affected record's detail. Email relevance, automatic Email links,
+detail. Field rows offer Keep and "Wrong, clear it" (`suggestion.fieldAuthority`), and editing a
+value there is the correction. Email relevance, automatic Email links,
 mail-import outcomes and automatic-rule receipts enter through declarations; member-made Email link
 decisions stay ordinary history. Mail decisions read from `EmailClassificationObservation`,
 `EmailPurchaseDecision` and the `target_outcome` RunOperation. Report incorrect records Wrong feedback
@@ -3656,16 +3663,13 @@ that Run; attribution is never reconstructed from review status. Processed RunSt
 units, not distinct entities. Order counts and target review stay in the import journeys; photo
 review stays in its own section.
 
-Ordinary automatic field additions use the same high-confidence boundary shown to members (85% or
-above), with a clear winner and current-evidence and member-intent checks. Only declared fill fields
-qualify; review-required fields and populated member values stay protected. Preview and persisted
-application share the threshold, which does not change financial acceptance rules. Eligibility reads
-only the target and its declared policy basis with their assignment and result envelopes, and
-acceptance repeats the checks under its write fence. Actionable reads batch current automatic-rule
-receipts, Suggestion state, saved values and field audit history; only receipt-bound current
-assignments carry `ownership: { kind: "automatic", receiptId, confidence }`. A member edit, including
-a changed-and-restored value or same-value confirmation, ends that ownership before background work
-runs. There is no `automaticFields` cache or derived target.
+Automatic field writes use the high-confidence boundary shown to members (85% or above) with
+current-evidence checks, and follow [field authority](#field-authority-and-automatic-writes). Only
+declared `mode: "fill"` fields with `apply: "auto"` qualify. Preview and persisted application share
+the threshold, which does not change financial acceptance rules. Eligibility reads only the target and
+its declared policy basis with their assignment and result envelopes, and acceptance repeats the
+checks under its write fence. Reads carry `ownership: { kind: "record" }` for every own value; who set
+it is answered by `fieldExplanation.origin`.
 
 Confirmed image description text, content hash, confirmation time and owner provenance live on the
 Image row. A member correction confirms one Image through `image.confirm_description` (web
@@ -3679,53 +3683,33 @@ authority disappears with the Image.
 
 ### Suggestion cells
 
-Manifest-declared suggestion targets appear as field pills in entity lists. Pending Suggestions and
-confident live answers share one suggestion-mode pill; one tap accepts. Each live question is keyed by
-one target's declared basis, current assignment and relevant resolution context; deferred sibling
-projections and unrelated assignments never restart it. The page-mount Run key attributes calls but
-is not part of the key, so remounts within the cache window reuse answers. A live decline (`none`)
-or `no_signal` answer is remembered per basis and the field's decision-policy stamps, with a
-signature of the inputs it read; a later decline of the same question replaces it. After the stored
-read, the page asks uncovered questions in batches of up to 50 through its database limiter. Each
-remembered question's inputs are re-prepared from saved data without the model or paid providers, so
-a changed roster, linked record or stock tally reopens it like a basis edit; inputs needing a provider
-(a cold query embedding) cannot be verified and are asked live under a fresh revision on every read.
-A reopened question's live ask carries the read's input revision (prefixed by the member review that
-marked the decline a miss, if any), so answers cached for old inputs are not reused. Replacements are
-serialized per question; the newest memory row wins. Outcome variants keep optional `reviewStatus:
-"rejected"` when a member rejection withholds a proposal. First reads return known skipped states
-(`no_signal`, `no_candidates`, `resolved`) without inventing history. Member reviews and writes to
-the entity kinds a question declares recheck mounted questions; a roster reading another kind is
-rechecked on the next page read. Questions with saved finance context (`entityId`), pinned-model
-replays and member-marked misses are always asked again.
+Cells and fact rows show one saved state: a value looks the same whoever set it, and lists ask no
+model. A below-bar answer for an empty or Cubby-held field is a guess: `suggestion.fieldGuess` returns
+the active pending Suggestion whose live input fingerprint still matches, and the field's picker shows
+it as a pinned "Cubby's guess" group (with the runner-up when stored), its first row active but not
+selected. Choosing the guess accepts that Suggestion; choosing another value is an ordinary edit,
+recorded as the correction. A person-held field has no guess.
 
-Every saved-record live answer (`savedRecord` with `entityId`, finance and vendor context included) is
-also remembered after review withholding as a complete preview — proposal, weak pick, decline or
-skipped state — keyed by entity, record, field, basis mode, basis and decision-policy stamps. A
-`read: "preview"` settled read returns `preview` from one policy read and one memory lookup; it
-prepares no inputs, calls no model, schedules nothing and opens no Run, and omits previews whose
-Suggestion was rejected, superseded, rejected through the same served evidence, or marked a miss.
-Pinned replays and form drafts never write previews. A list reads previews for every candidate
-question, so a row waiting on its settled read or live ask shows the cached answer (including
-below-threshold or declined outcomes). A preview is display-only: accept, reject, a different value
-and the suggestion count wait for the live answer, which replaces it; a live failure replaces it with
-the raw error.
+Edit forms ask live on their unsaved basis. A live decline (`none`) or `no_signal` answer is remembered
+per basis and the field's decision-policy stamps, with a signature of the inputs it read; a later
+decline of the same question replaces it. Each remembered question's inputs are re-prepared from
+saved data without the model or paid providers, so a changed roster, linked record or stock tally
+reopens it like a basis edit; inputs needing a provider (a cold query embedding) cannot be verified
+and are asked live under a fresh revision on every read. A reopened question's live ask carries the
+read's input revision (prefixed by the member review that marked the decline a miss, if any), so
+answers cached for old inputs are not reused. Replacements are serialized per question; the newest
+memory row wins. Outcome variants keep optional `reviewStatus: "rejected"` when a member rejection
+withholds a proposal. First reads return known skipped states (`no_signal`, `no_candidates`,
+`resolved`) without inventing history. Questions with saved finance context (`entityId`),
+pinned-model replays and member-marked misses are always asked again.
 
-The page batches stored Suggestion reads and keeps completed rows while an expanded roster loads;
-pending state and read errors belong to the affected field, and refreshes keep usable answers.
-Acceptance immediately shows the proposed value with a saving indicator in that cell, keeps unrelated
-pills, and hands off to the saved projection; the field stays settled for the visit until its
-dependencies or saved value change. Failed writes restore the proposal with the raw diagnostic. Live
-acceptance rechecks authoritative saved inputs, and changed dependencies require a new question; a
-refused finance fingerprint refreshes only that question. Stored acceptance completes after its
-write without awaiting unrelated refreshes. Every field-suggestion surface opens the same body
-(`entity/suggestions/suggestion-body.tsx`): Accept / Reject (with "Use a different value…"),
-confidence as "92% · high" (`formatConfidence`), the runner-up and its probability, the basis fields
-read, and a provenance caption (model, Run, time, AI usage). Jev and Clef return no prose, so those
-facts are the reasoning. A tree suggestion keeps the model's selected category and confidence;
-ancestor probability never substitutes for a leaf decision, and ancestors of the current category
-stay suppressed as corrections. Weaker live proposals stay behind the cell's mark. Percentages
-describe model confidence, not correctness. Suggestions stay available to evaluation after review.
+Every field-suggestion review surface opens the same body (`entity/suggestions/suggestion-body.tsx`):
+Accept / Reject (with "Use a different value…"), confidence as "92% · high" (`formatConfidence`), the
+runner-up and its probability, the basis fields read, and a provenance caption (model, Run, time, AI
+usage). Jev and Clef return no prose, so those facts are the reasoning. A tree suggestion keeps the
+model's selected category and confidence; ancestor probability never substitutes for a leaf decision,
+and ancestors of the current category stay suppressed as corrections. Percentages describe model
+confidence, not correctness. Suggestions stay available to evaluation after review.
 
 Classification suggestions choose existing taxonomy references from metadata and retained
 original-image evidence; confirmed description corrections outrank model text. Taxonomy contents are
@@ -3770,30 +3754,45 @@ confident Emails and member resolutions keep their domain authority. Applied fie
 including inactive saved-form applications and rejected corrections with application receipts, are
 reevaluated when evidence or policy changes.
 
-Automatic field assignments fill only empty effective values on eligible declared fields at
-confidence ≥ 0.95, with supporting basis evidence and a winner at least 0.10 ahead of the runner-up.
-Populated values (inherited values count), saved field decisions (clears and any audited update
-included), rejected values, unserved trials and suppressed proposals never auto-apply. Current input
-fingerprints fence every write; governed read keys never fall back to scalar slots. Automatic
-acceptance also requires complete dependency stamps matching the current executable policy; missing
-or stale provenance requires a new evaluation. Create previews use the same threshold and keep
-populated draft values; a field with declared resolution stays reviewable while its draft resolver
-has not established an empty effective value. The scheduled discovery pass attempts existing pending
-proposals before preparing another evaluation; fresh eligible backlog applies through the same
-audited transaction as new proposals, and stale backlog is reevaluated. Applied and rejected rows
-never re-enter pending application, and unchanged settled inputs skip inference. Below-threshold or
-ambiguous proposals stay reviewable. This field policy needs no measured-rule switch, Sweep model pin
-or audit holdback; statement financial automation keeps its own contracts. Validation and
-inherited/derived resolution still apply; pruning and merging are separate actions.
+#### Field authority and automatic writes
 
-Saved-record list and detail questions opt into canonical background evaluation with `savedRecord`;
-the server prepares evidence from the saved entity, not the client's displayed basis. A finite
-request shares one record read per entity for the union of its questions' context keys under the
-system actor, while each field derives its own basis, evidence, audit identity and fingerprint. A
-failed union retries narrow reads so one question cannot hide another's raw error. Discovery and
-execution always re-read fresh inputs. Interactive form predictions stay inactive and never schedule
-automatic writes. Admission deferrals keep interactive answers available, and the next live question
-retries scheduling once activation matches the executable policy.
+`AuditLog.authority` records who holds a field after a write: `automatic` for an Automatic rule's
+field write, `released` for a member's Let Cubby decide, null for a member, import or agent write.
+`fieldAuthority` reads the newest update audit row naming the field: no row and an empty stored value
+is `open`; `released` is `open` or `cubby`; `automatic` whose `to` equals the stored value and whose
+applied Suggestion no member kept (a member `correct` decision) is `cubby`; anything else, including a
+value set at creation, a timestamp tie or an out-of-band write, is `person`.
+
+The automatic gate saves an answer at 85% or more for an `apply: "auto"` fill field with supporting
+basis evidence, complete current dependency stamps and a current input fingerprint, when the holder is
+`open` and the effective value is empty, or the holder is `cubby`. Cubby never writes a `person`
+field, an explicit None, a value rejected for that record and field, or a `fillOnly` field it already
+filled. A replacement of a Cubby value needs a 0.20 lead over the runner-up, and a value Cubby already
+replaced is never applied again. `apply: "review"` answers wait for a member; `apply: "offer"` answers
+wait as the field's picker guess. Fields are asked only where their classification admits them: an
+unclassified record is not asked a field its classification refuses by default.
+
+An edit of a Cubby-set value is the correction: the field-automation drain records a `wrong` decision
+with the right value on the applied Suggestion and rejects it. An import or cron replacing it records
+nothing. `suggestion.fieldAuthority` keeps a Cubby value (it becomes the member's), clears a wrong
+one (the field empties as `released`, the value is ruled out) or releases a person's value.
+
+#### Field automation triggers
+
+Field evaluation follows events only. Every create and update audit row of an entity with automated
+fields is written with `automationPending`; the `field-automation` drain reads them oldest first,
+records corrections, rechecks up to 25 similar Cubby-held values after a signed-in member's
+correction (records holding the value Cubby got wrong first), and schedules evaluation of open or
+Cubby-held fields whose basis or backing keys changed, every such field of a created record, and a
+released field. A row Cubby wrote never re-triggers its own field. A full automatic backlog leaves the
+remaining rows pending. After an activation revision the drain's policy unit re-asks every pending
+guess and Cubby-held value once, paging by record and field. Page views schedule nothing and there is
+no periodic pass. Records nobody writes are evaluated by a member-started Sweep.
+
+Saved-record evaluations prepare evidence from the saved entity and carry up to eight precedents:
+values a person set for the same field on records sharing a reference-valued basis key, corrections
+of Cubby first. Cubby-set values are never precedents. Interactive form predictions ask live on the
+unsaved basis, stay inactive and never schedule automatic writes.
 
 A Suggestion's mutable columns keep the latest evaluation's input and policy beside its application
 metadata whenever nothing replaces it, including when an exact wrong review or value suppression

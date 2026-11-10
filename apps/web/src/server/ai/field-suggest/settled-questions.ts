@@ -2,10 +2,7 @@ import {
   fieldSuggestionOutcomeSchema,
   type FieldSuggestionOutcome,
   type FieldSuggestionsInput,
-  settledSuggestionPreview,
-  suggestionStatus,
   type SettledSuggestionAnswer,
-  type SettledSuggestionPreview,
   type SettledSuggestionQuestion,
   type SettledSuggestionQuestionsInput,
 } from "@cubby/schemas/ai";
@@ -32,8 +29,7 @@ import { producingAiManifest } from "~/server/ai/repo/ai-refresh";
 import type { Database } from "~/server/db";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
-import { aiAnalysis, suggestionTable } from "~/server/db/schema";
-import { memberRejectedSql } from "~/server/generic/suggestions/repo/suggestion-decisions";
+import { aiAnalysis } from "~/server/db/schema";
 import { canonicalJson } from "~/server/lib/canonical-json";
 import { settleBatch } from "~/server/workflows/settle-batch";
 
@@ -68,7 +64,6 @@ const rememberedSchema = z.object({
   outcome: fieldSuggestionOutcomeSchema,
   signature: z.string(),
 });
-const rememberedPreviewSchema = z.object({ preview: settledSuggestionPreview });
 
 type FieldQuestion = Pick<FieldSuggestionsInput, "basisMode" | "basis"> & {
   entity: string;
@@ -81,25 +76,6 @@ export const fieldQuestionKey = (
 ) =>
   sha256Hex(
     canonicalJson({
-      entity: question.entity,
-      field: question.field,
-      basisMode: question.basisMode,
-      basis: question.basis,
-      dependencies: dependencyStamps(
-        manifest,
-        fieldDependencyKeys(question.entity, question.field),
-      ),
-    }),
-  );
-
-/** A saved record's preview key; distinct from every `fieldQuestionKey`. */
-export const savedAnswerKey = (
-  question: FieldQuestion & { entityId: string },
-  manifest: AiRefreshManifest,
-) =>
-  sha256Hex(
-    canonicalJson({
-      savedRecord: question.entityId,
       entity: question.entity,
       field: question.field,
       basisMode: question.basisMode,
@@ -159,19 +135,6 @@ export const rememberSettledQuestions = (
     entries.map(({ key, outcome, signature }) => ({
       key,
       result: rememberedSchema.parse({ outcome, signature }),
-    })),
-  );
-
-/** Replaces each saved record's preview with its newest live answer. */
-export const rememberSavedAnswers = (
-  db: Database,
-  entries: readonly { key: string; preview: SettledSuggestionPreview }[],
-) =>
-  rememberRows(
-    db,
-    entries.map(({ key, preview }) => ({
-      key,
-      result: rememberedPreviewSchema.parse({ preview }),
     })),
   );
 
@@ -273,7 +236,6 @@ export async function readSettledQuestions(
   input: SettledSuggestionQuestionsInput,
   ports: SettledPorts = {},
 ) {
-  if (input.read === "preview") return readSavedAnswerPreviews(db, input);
   const manifest = await producingAiManifest(db);
   const keys = await Promise.all(
     input.questions.map((question) =>
@@ -363,110 +325,5 @@ export async function readSettledQuestions(
       },
       { concurrency: 1 },
     ),
-  );
-}
-
-/**
- * One policy read and one memory lookup for a page batch, nothing else: no
- * preparation, model call, scheduling or Run. A preview whose answer a review
- * withheld — the answer's own rejection or supersession, a rejection of the
- * same served evidence, or a member's miss — is not returned, so the live ask
- * decides it again.
- */
-async function readSavedAnswerPreviews(
-  db: Database,
-  input: SettledSuggestionQuestionsInput,
-) {
-  const manifest = await producingAiManifest(db);
-  const keys = await Promise.all(
-    input.questions.map(({ entityId, ...question }) =>
-      entityId
-        ? savedAnswerKey(
-            { ...question, entity: input.entity, entityId },
-            manifest,
-          )
-        : null,
-    ),
-  );
-  const lookups = [
-    ...new Set(keys.filter((key): key is string => key !== null)),
-  ];
-  const preview = sql`${aiAnalysis.result}->${"preview"}::text`;
-  const answerSuggestionText = sql`coalesce(
-    ${preview}->${"outcome"}::text->>${"suggestionId"}::text,
-    ${preview}->${"suggestion"}::text->>${"suggestionId"}::text
-  )`;
-  // Stored legacy previews may lack a valid suggestion handle. Cast the
-  // lookup value, preserving the UUID index on Suggestion.
-  const answerSuggestion = sql`CASE
-    WHEN ${answerSuggestionText} ~ ${"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"}
-    THEN (${answerSuggestionText})::uuid
-    ELSE NULL
-  END`;
-  const { rejected, superseded } = suggestionStatus.enum;
-  const rows = lookups.length
-    ? await getDb(db)
-        .select({
-          key: aiAnalysis.inputFingerprint,
-          result: aiAnalysis.result,
-          withheld: sql<boolean>`(
-            EXISTS (
-              SELECT 1 FROM ${suggestionTable} AS "answer"
-              WHERE "answer"."id" = ${answerSuggestion}
-                AND (
-                  "answer"."status" IN (${rejected}, ${superseded})
-                  OR EXISTS (
-                    SELECT 1 FROM ${suggestionTable} AS "sibling"
-                    WHERE "sibling"."family" = ${"field"}
-                      AND "sibling"."status" = ${rejected}
-                      AND "sibling"."data"->>${"reviewKey"}::text
-                        = "answer"."data"->>${"reviewKey"}::text
-                  )
-                )
-            )
-            OR EXISTS (
-              SELECT 1 FROM ${suggestionTable} AS "reviewed"
-              WHERE "reviewed"."id" = ${answerSuggestion}
-                AND ${memberRejectedSql(sql`"reviewed"."decisions"`, { dismissed: false })}
-            )
-          )`,
-        })
-        .from(aiAnalysis)
-        .where(
-          and(
-            eq(aiAnalysis.entityKind, SETTLED_QUESTION.entityKind),
-            isNull(aiAnalysis.entityId),
-            eq(aiAnalysis.feature, SETTLED_QUESTION.feature),
-            eq(aiAnalysis.model, SETTLED_QUESTION.model),
-            eq(aiAnalysis.promptVersion, SETTLED_QUESTION.promptVersion),
-            inArray(aiAnalysis.inputFingerprint, lookups),
-            isNull(aiAnalysis.deletedAt),
-          ),
-        )
-        .orderBy(desc(aiAnalysis.updatedAt), desc(aiAnalysis.id))
-    : [];
-  const byKey = new Map<string, SettledSuggestionPreview | null>();
-  for (const row of rows) {
-    if (byKey.has(row.key)) continue;
-    const parsed = rememberedPreviewSchema.safeParse(row.result);
-    if (!parsed.success) continue;
-    byKey.set(
-      row.key,
-      row.withheld || parsed.data.preview.outcome.reviewStatus === "rejected"
-        ? null
-        : parsed.data.preview,
-    );
-  }
-  return settleBatch(
-    input.questions,
-    async (_question, index): Promise<SettledSuggestionAnswer> => {
-      const key = keys[index];
-      return {
-        outcome: null,
-        revision: null,
-        preview: key ? (byKey.get(key) ?? null) : null,
-      };
-    },
-    { concurrency: 1 },
   );
 }

@@ -1,4 +1,6 @@
 import { z } from "zod";
+
+import { fieldOrigin } from "./field-authority";
 import {
   fieldDecisionStep,
   fieldExplanationSource,
@@ -141,6 +143,8 @@ export const fieldExplanationOutput = z.object({
   /** Current member decisions and available controls, separate from published score evidence. */
   currentQualityControls: qualityBreakdown.shape.checks.optional(),
   imageChain: imageChainExplanation.optional(),
+  /** Who set a suggested field's value, and Cubby's guess when it has one. */
+  origin: fieldOrigin.optional(),
   rule: z.object({
     id: z.string(),
     revision: z.number().int(),

@@ -437,7 +437,21 @@ const buildMetadataSchemas = () => {
             rules: z.array(nonEmptyString()).optional(),
             allowNone: z.boolean().optional().default(false),
             mode: z.enum(["fill", "prune"]).optional().default("fill"),
-            reviewRequired: z.boolean().optional().default(false),
+            /**
+             * Who decides once Cubby is confident. `auto`: Cubby saves it.
+             * `review`: it waits in the queue for a member. `offer`: it waits
+             * as the picker's guess and is never written automatically.
+             */
+            apply: z
+              .enum(["auto", "review", "offer"])
+              .optional()
+              .default("auto"),
+            /**
+             * Other records inherit this value, so Cubby fills it when empty
+             * but never replaces its own earlier value: one flip would move
+             * every inheriting record at once.
+             */
+            fillOnly: z.boolean().optional().default(false),
             /**
              * Saved-record spending review: the proposal carries an evidence
              * fingerprint and applies through the fenced finance writer.

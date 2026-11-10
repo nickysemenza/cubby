@@ -3,7 +3,6 @@ import type { drizzle } from "drizzle-orm/node-postgres";
 
 import {
   vendor,
-  automaticRule,
   entityIdentity,
   location,
   productCategory,
@@ -36,16 +35,6 @@ export const BASE_HOME_SHORTCODE = testShortcode("location", "LOC-HM3E");
 type InsertClient = Pick<ReturnType<typeof drizzle>, "transaction">;
 
 /** Insert the starting rows. Idempotent: a re-seed is a no-op. */
-/**
- * The current rule revisions the synthetic world seeds. Literal because the global test
- * setup loads this file before the test environment exists, so it cannot
- * import the rule declarations; `automatic-rules.unit.test.ts` keeps them equal.
- */
-export const SEEDED_RULE_REVISIONS = {
-  "field.addition": "2026-10-24.1",
-  "statement_transaction.attach": "2026-10-21.1/2026-10-24.1",
-} as const;
-
 export async function seedBaseWorld(db: InsertClient): Promise<void> {
   await db.transaction(async (tx) => {
     const createdAt = new Date();
@@ -110,27 +99,6 @@ export async function seedBaseWorld(db: InsertClient): Promise<void> {
     await tx
       .insert(productCategory)
       .values(taxonomyRootFixtures.map((row) => ({ ...row, createdAt })))
-      .onConflictDoNothing();
-    await tx
-      .insert(automaticRule)
-      .values([
-        {
-          family: "field",
-          ruleKey: "field.addition",
-          revision: SEEDED_RULE_REVISIONS["field.addition"],
-          enabled: true,
-          enabledAt: new Date(),
-          enabledReason: "Synthetic base world: as migrated",
-        },
-        {
-          family: "statement_transaction",
-          ruleKey: "statement_transaction.attach",
-          revision: SEEDED_RULE_REVISIONS["statement_transaction.attach"],
-          enabled: false,
-          disabledAt: new Date(),
-          disabledReason: "Synthetic base world: as migrated",
-        },
-      ])
       .onConflictDoNothing();
   });
 }

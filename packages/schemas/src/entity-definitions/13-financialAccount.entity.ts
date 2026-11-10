@@ -257,7 +257,7 @@ export const { definition, readSchemas } = defineEntityModel({
             backedBy: [{ column: "identity" }],
             allowNone: true,
             // Financial identity controls statement/account matching.
-            reviewRequired: true,
+            apply: "review",
             rules: [
               "Choose a payment network only from explicit network evidence in the account name, identity, saved notes or statement evidence. An issuer name or card tier does not establish a network. Choose none for missing, conflicting or ambiguous evidence; never use Other to mean unknown. Preserve the saved identity until reviewed and applied; never change the account kind.",
             ],
@@ -321,7 +321,7 @@ export const { definition, readSchemas } = defineEntityModel({
           renderer: "entity-select",
           suggest: {
             basis: ["name", "identity", "notes", "sourceAliases"],
-            reviewRequired: true,
+            apply: "review",
           },
         },
         display: { columnGroup: "Account", columnLabel: "Provider" },
@@ -377,7 +377,7 @@ export const { definition, readSchemas } = defineEntityModel({
               "fundingPeriods",
             ],
             // Assigns who made purchases outside authorized-user periods.
-            reviewRequired: true,
+            apply: "review",
           },
         },
         display: { columnGroup: "People" },

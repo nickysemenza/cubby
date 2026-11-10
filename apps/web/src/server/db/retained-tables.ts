@@ -9,7 +9,12 @@ import {
 } from "@cubby/schemas/ai-analysis-fields";
 import type { AuditEntityKind, AuditFieldChange } from "@cubby/schemas/audit";
 import type { Amount } from "@cubby/schemas/codec";
-import { auditChannelSchema, type AuditChannel } from "@cubby/schemas/context";
+import {
+  auditAuthoritySchema,
+  auditChannelSchema,
+  type AuditAuthority,
+  type AuditChannel,
+} from "@cubby/schemas/context";
 import { embeddingArtifactState } from "@cubby/schemas/derived-refresh";
 import {
   type EntityAttachmentRole,
@@ -789,9 +794,32 @@ export const auditLog = pgTable(
         name: "AuditLog_runId_Run_id_fk",
         onDelete: "set null",
       }),
+    // Null for a person, import or agent write, which Cubby never overwrites.
+    authority: text("authority").$type<AuditAuthority>(),
+    // Set in the writer's transaction for rows field automation must read;
+    // the field-automation drain clears it. Exact and restart-safe, unlike a
+    // createdAt cursor, which a long transaction commits behind.
+    automationPending: boolean("automationPending").notNull().default(false),
     createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
   },
   (table) => [
+    index("AuditLog_automationPending_idx")
+      .on(table.createdAt, table.id)
+      .where(sql`${table.automationPending}`),
+    index("AuditLog_automatic_createdAt_idx")
+      .on(table.createdAt.desc())
+      .where(
+        sql`${table.authority} = ${sqlEnumConstant(auditAuthoritySchema, "automatic")}`,
+      ),
+    check(
+      "AuditLog_authority_check",
+      sql`${table.authority} IN (${sql.join(
+        auditAuthoritySchema.options.map((authority) =>
+          sqlEnumConstant(auditAuthoritySchema, authority),
+        ),
+        sql`, `,
+      )})`,
+    ),
     // NULLS FIRST is Postgres's own `DESC` default: it matches the feed's
     // `ORDER BY "createdAt" DESC, id DESC` and the index production carries.
     // Drizzle's bare `.desc()` would declare NULLS LAST, which that ORDER BY

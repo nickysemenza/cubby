@@ -13,7 +13,6 @@ public struct FieldEnvelope: Sendable, Hashable {
 
     public enum Ownership: Sendable, Hashable {
         case record
-        case automatic(receiptID: String, confidence: Double)
         case unsupported(String)
     }
 
@@ -143,14 +142,6 @@ public struct FieldEnvelope: Sendable, Hashable {
         return false
     }
 
-    /// The own value is a current automatic assignment, not a person's choice.
-    public var isAutomatic: Bool {
-        guard case .own(.automatic(let publishedReceipt, _)) = decision?.provenance,
-            case .value(_, .automatic(let currentReceipt, _)) = assignment
-        else { return false }
-        return publishedReceipt == currentReceipt
-    }
-
     public var isAllocated: Bool {
         if case .allocated = decision?.provenance { return true }
         return false
@@ -220,11 +211,6 @@ public struct FieldEnvelope: Sendable, Hashable {
         guard let value else { return .unsupported("missing ownership") }
         switch value["kind"]?.stringValue {
         case "record": return .record
-        case "automatic":
-            guard let receipt = value["receiptId"]?.stringValue,
-                let confidence = value["confidence"]?.doubleValue
-            else { return .unsupported("automatic") }
-            return .automatic(receiptID: receipt, confidence: confidence)
         default: return .unsupported(kind(value))
         }
     }

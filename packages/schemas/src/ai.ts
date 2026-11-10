@@ -533,8 +533,10 @@ export type FinanceCategoryApplyInput = z.infer<
 
 export const fieldSuggestionsInput = z.object({
   entityId: z.string().min(1).optional(),
-  /** Record surfaces request canonical automatic work; form drafts remain interactive. */
+  /** Saved finance and vendor context; it schedules nothing. */
   savedRecord: z.boolean().optional(),
+  /** False replays a saved record's question without household precedents. */
+  precedents: z.boolean().optional(),
   basisMode: z.enum(["provided", "suggested"]),
   entity: z.enum(shortcodeEntities),
   targets: z.array(z.string().min(1)).min(1),
@@ -632,7 +634,10 @@ const decisionCatalogRowSchema = z.object({
     })
     .nullable(),
   rules: z.string(),
-  reviewRequired: z.boolean(),
+  /** Who decides a confident answer: Cubby, the queue, or the picker. */
+  apply: z.enum(["auto", "review", "offer"]),
+  /** Cubby fills it when empty but never replaces its own earlier value. */
+  fillOnly: z.boolean().optional(),
   prompt: z.object({ subject: z.string(), input: z.json() }),
   /** Stored Suggestion outcomes; null for decisions that store none. */
   counts: z
@@ -743,9 +748,8 @@ export type FieldSuggestionOutcome = z.infer<
 /** The most questions one settled read prepares; a list page batches up to it. */
 export const SETTLED_SUGGESTION_QUESTION_MAX = 50;
 /**
- * A single-field `suggestFields` question a list already asked. `entityId`
- * names the saved record a `preview` read looks up; `verified` reads ignore
- * it, so a remembered decline answers every record sharing the basis.
+ * A single-field `suggestFields` question a form already asked. A remembered
+ * decline answers every record sharing the basis.
  */
 const settledSuggestionQuestion = fieldSuggestionsInput
   .pick({ entityId: true, basisMode: true, basis: true })
@@ -759,13 +763,6 @@ export const settledSuggestionQuestionsInput = z.object({
     .array(settledSuggestionQuestion)
     .min(1)
     .max(SETTLED_SUGGESTION_QUESTION_MAX),
-  /**
-   * `verified` (the default) re-prepares remembered decision inputs and
-   * returns only answers they still match. `preview` returns each saved
-   * record's last complete live answer for display while its live ask runs;
-   * it prepares nothing, calls no model and opens no Run.
-   */
-  read: z.enum(["verified", "preview"]).optional(),
 });
 export type SettledSuggestionQuestionsInput = z.infer<
   typeof settledSuggestionQuestionsInput
@@ -777,21 +774,9 @@ export type SettledSuggestionQuestionsInput = z.infer<
  * live. A reopened question also names the `inputRevision` its live ask
  * carries, so a cached answer to the old inputs is never reused.
  */
-export const settledSuggestionPreview = z.object({
-  suggestion: fieldSuggestionSchema.nullable(),
-  outcome: fieldSuggestionOutcomeSchema,
-});
-export type SettledSuggestionPreview = z.infer<typeof settledSuggestionPreview>;
-/**
- * A `preview` read answers only `preview`: the saved record's last live answer
- * under the same basis and decision policy, or null. It is never
- * authoritative — a client shows it while the live ask runs, and accepts,
- * rejects or applies nothing until that ask returns.
- */
 const settledSuggestionAnswer = z.object({
   outcome: fieldSuggestionOutcomeSchema.nullable(),
   revision: z.string().nullable(),
-  preview: settledSuggestionPreview.nullable().optional(),
 });
 export type SettledSuggestionAnswer = z.infer<typeof settledSuggestionAnswer>;
 /** Positional with `questions`; one failed question never fails its siblings. */
@@ -829,12 +814,6 @@ export const fieldSuggestionsOut = z.object({
   outcomes: z.record(z.string(), fieldSuggestionOutcomeSchema).optional(),
 });
 export type FieldSuggestionsOut = z.infer<typeof fieldSuggestionsOut>;
-
-export const FIELD_SUGGESTIONS_BATCH_MAX = 25;
-export const fieldSuggestionsBatchInput = z.object({
-  items: z.array(fieldSuggestionsInput).min(1).max(FIELD_SUGGESTIONS_BATCH_MAX),
-});
-export const fieldSuggestionsBatchOut = batchOutSchema(fieldSuggestionsOut);
 
 /** Swift keeps nullable object properties, but drops nullable dictionary values. */
 /** JSON-safe provider runtime details, independent of any feature result schema. */

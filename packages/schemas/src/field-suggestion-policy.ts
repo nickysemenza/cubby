@@ -1,16 +1,36 @@
 import { type EntityFieldModel, entityFieldModels } from "./entity-fields";
 import type { ShortcodeEntity } from "./entity-manifest";
 
-/** Every automatic assignment path obeys the target's declared review policy. */
-export function requiresSuggestionReview(
+export type SuggestApplyPolicy = "auto" | "review" | "offer";
+
+/** Who decides a confident proposal: Cubby (`auto`), the queue, or the picker. */
+export function suggestApplyPolicy(
   entity: ShortcodeEntity,
   field: string,
-): boolean {
-  return Boolean(
+): SuggestApplyPolicy {
+  return (
     entityFieldModels[entity].fields.find((item) => item.key === field)?.control
-      ?.suggest?.reviewRequired,
+      ?.suggest?.apply ?? "auto"
   );
 }
+
+/** Entities with at least one field Cubby may evaluate after a write. */
+const automatedEntities = new Set<string>(
+  Object.entries(entityFieldModels).flatMap(([entity, model]) =>
+    model.fields.some(
+      (field: EntityFieldModel["fields"][number]) =>
+        field.control?.suggest &&
+        field.control.suggest.mode !== "prune" &&
+        field.control.suggest.apply !== "review",
+    )
+      ? [entity]
+      : [],
+  ),
+);
+
+/** Whether a create or update of `entity` owes field automation a look. */
+export const fieldAutomationWatches = (entity: string) =>
+  automatedEntities.has(entity);
 
 type FieldModels = typeof entityFieldModels;
 

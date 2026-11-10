@@ -13,10 +13,13 @@ import { fieldEnvelopeFor, fieldValueOf } from "@cubby/schemas/field-envelope";
 import { basisValueOf } from "@cubby/schemas/field-suggestion";
 import {
   financeReviewContext,
-  requiresSuggestionReview,
+  suggestApplyPolicy,
 } from "@cubby/schemas/field-suggestion-policy";
 import { parseEntityRef } from "@cubby/schemas/identifiers";
-import { suggestionChildHandle } from "@cubby/schemas/suggestion";
+import {
+  suggestionChildHandle,
+  suggestionFamily,
+} from "@cubby/schemas/suggestion";
 import { suggestionFieldCount } from "@cubby/schemas/suggestion-list";
 import { type SQL, and, eq, inArray, isNotNull, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -47,8 +50,8 @@ import { entityCommandSchema } from "~/server/entity-kernel/contracts";
 import { readSelectedEntityRecords } from "~/server/entity-kernel/selected-read";
 import { SHORTCODE_TABLE } from "~/server/generated/shortcode-tables.gen";
 import { withAuditReceipts } from "~/server/generic/audit-log/repo/audit-receipts";
-import { latestFieldWrite } from "~/server/generic/audit-log/repo/field-write";
 import { lookupShortcodes } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { fieldAuthority } from "~/server/generic/suggestions/repo/field-authority";
 import {
   fieldInputFingerprint,
   fieldInputFingerprintIfLive,
@@ -275,6 +278,15 @@ export async function fieldSuggestionKeys(
       createdAt: suggestionTable.createdAt,
       matchedRules: matchedRulesOf(sql`${suggestionTable.data}`),
       automaticRule: automaticApplicationRule(sql`${suggestionTable.id}`),
+      // A Disagreement the member already answered is never listed again.
+      answered: sql<boolean>`EXISTS (
+        SELECT 1 FROM "Suggestion" earlier
+        WHERE earlier.family = ${suggestionFamily.enum.field} AND earlier.entity = ${suggestionTable.entity}
+          AND earlier."recordId" = ${suggestionTable.recordId}
+          AND earlier.field = ${suggestionTable.field}
+          AND earlier.status = ${suggestionStatus.enum.rejected}
+          AND earlier."suggestedValue" = ${suggestionTable.suggestedValue}
+      )`,
     })
     .from(suggestionTable)
     .leftJoin(runTable, eq(runTable.id, suggestionTable.runId))
@@ -403,8 +415,19 @@ async function applySuggestionValue(
   return receipt;
 }
 
-/** Automatic fill never turns a proposal into authority over a member decision. */
-async function automaticFieldFillRefusal(
+/**
+ * A replacement of Cubby's own value must win by this much. Decision-model
+ * probabilities sum to 1, so at a bar of 0.60 or more the winner already leads
+ * every other answer by this margin; it stays as the conservative statement of
+ * "beats the current value".
+ */
+const REPLACEMENT_MARGIN = 0.2;
+
+/**
+ * Cubby fills an open field and revises a value it set itself; it never
+ * overwrites a value a member, an import or an agent decided.
+ */
+async function automaticFieldRefusal(
   db: Database,
   context: EntityKernelContext,
   row: SuggestionStateRow,
@@ -416,14 +439,10 @@ async function automaticFieldFillRefusal(
   if (
     !row.active ||
     row.suppression ||
-    row.kind !== "addition" ||
     policy?.mode !== "fill" ||
-    requiresSuggestionReview(entity, row.field) ||
+    suggestApplyPolicy(entity, row.field) !== "auto" ||
     row.confidence < HIGH_CONFIDENCE_PROBABILITY ||
-    !empty(row.currentValue) ||
-    empty(row.suggestedValue) ||
-    (row.runnerUpConfidence !== null &&
-      row.confidence - row.runnerUpConfidence < 0.1)
+    empty(row.suggestedValue)
   )
     return `Field ${row.entity}.${row.field} is not eligible for automatic fill`;
   const [saved] = await getDb(db)
@@ -457,18 +476,6 @@ async function automaticFieldFillRefusal(
   if (!live) return "Automatic fill subject no longer exists";
   const governed = (key: string) =>
     Object.hasOwn(entityFieldEnvelopeFields[entity], key);
-  const envelope = fieldEnvelopeFor(live, row.field);
-  // Local intent is independent of the effective result: explicit None is a saved decision.
-  const assignment = envelope?.current.assignment;
-  if (assignment?.kind === "none" || assignment?.kind === "value")
-    return "Automatic fill preserves an existing field decision";
-  if (governed(row.field) && (!envelope || envelope.result.kind === "missing"))
-    return "Automatic fill requires an available current field result";
-  const effective = governed(row.field)
-    ? envelope && fieldValueOf(envelope)
-    : live[row.field];
-  if (!empty(effective))
-    return "Automatic fill preserves populated effective values";
   if (
     !policy.basis.some((key) => {
       const source = fieldEnvelopeFor(live, key);
@@ -477,11 +484,35 @@ async function automaticFieldFillRefusal(
     })
   )
     return "Automatic fill requires supporting field evidence";
-  // A saved clear is intentional too; unchanged saves advance the fingerprint.
-  if (await latestFieldWrite(db, entity, recordId, row.field))
+  const authority = await fieldAuthority(db, entity, recordId, row.field);
+  if (authority.holder === "person")
+    return "Automatic fill preserves a person's value";
+  const envelope = fieldEnvelopeFor(live, row.field);
+  // Explicit None set at creation has no update audit row; it is a decision.
+  if (envelope?.current.assignment?.kind === "none")
     return "Automatic fill preserves an existing field decision";
-  const rejected = await getDb(db)
-    .select({ value: suggestionTable.suggestedValue })
+  if (governed(row.field) && (!envelope || envelope.result.kind === "missing"))
+    return "Automatic fill requires an available current field result";
+  const effective = governed(row.field)
+    ? envelope && fieldValueOf(envelope)
+    : live[row.field];
+  if (authority.holder === "open" && !empty(effective))
+    return "Automatic fill preserves populated effective values";
+  const sameValue = (value: unknown) =>
+    canonicalJson(z.json().parse(value)) ===
+    canonicalJson(z.json().parse(row.suggestedValue));
+  if (authority.holder === "cubby" && !empty(effective)) {
+    if (policy.fillOnly)
+      return "Other records inherit this field; Cubby only fills it";
+    if (row.confidence - (row.runnerUpConfidence ?? 0) < REPLACEMENT_MARGIN)
+      return "A replacement must clearly beat Cubby's current value";
+  }
+  const previous = await getDb(db)
+    .select({
+      value: suggestionTable.suggestedValue,
+      status: suggestionTable.status,
+      receipt: suggestionTable.acceptanceReceipt,
+    })
     .from(suggestionTable)
     .where(
       and(
@@ -489,17 +520,26 @@ async function automaticFieldFillRefusal(
         eq(suggestionTable.entity, row.entity),
         eq(suggestionTable.recordId, recordId),
         eq(suggestionTable.field, row.field),
-        eq(suggestionTable.status, "rejected"),
+        inArray(suggestionTable.status, ["rejected", "superseded", "applied"]),
       ),
     );
   if (
-    rejected.some(
-      (previous) =>
-        canonicalJson(z.json().parse(previous.value)) ===
-        canonicalJson(z.json().parse(row.suggestedValue)),
+    previous.some(
+      (earlier) => earlier.status === "rejected" && sameValue(earlier.value),
     )
   )
     return "Automatic fill preserves a rejected value";
+  // A value Cubby replaced is never applied again, so two answers cannot flap.
+  if (
+    authority.holder === "cubby" &&
+    previous.some(
+      (earlier) =>
+        sameValue(earlier.value) &&
+        suggestionAcceptanceReceipt.safeParse(earlier.receipt).data?.mode ===
+          "automatic",
+    )
+  )
+    return "Cubby already replaced this value once";
   return null;
 }
 
@@ -530,7 +570,7 @@ export async function canAutomaticallyFillField(
       ))
   )
     return false;
-  return (await automaticFieldFillRefusal(db, context, row)) === null;
+  return (await automaticFieldRefusal(db, context, row)) === null;
 }
 
 export async function acceptSuggestion(
@@ -569,11 +609,7 @@ export async function acceptSuggestion(
         "Suggestion inputs changed; evaluate this field again before applying",
       );
     if (automatic) {
-      const refusal = await automaticFieldFillRefusal(
-        transactionDb,
-        context,
-        row,
-      );
+      const refusal = await automaticFieldRefusal(transactionDb, context, row);
       if (refusal) throw new Error(refusal);
     }
     // The shared write path excludes this row by status while superseding its

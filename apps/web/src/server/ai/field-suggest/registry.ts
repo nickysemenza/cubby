@@ -516,14 +516,6 @@ const FIELD_SUGGEST_OVERRIDES = {
     detailOf: (c) => c.subtitle,
     renderLine: renderProductCandidate,
   } satisfies ReferenceSuggestSpec<InternalSearchCandidate>,
-  "task.subjectProductId": {
-    ...FIELD_SUGGEST_DECISIONS["task.subjectProductId"],
-    roster: (db, basis) => lexicalProductCandidates(db, basis.name ?? null),
-    idOf: (c) => c.id,
-    labelOf: (c) => c.title,
-    detailOf: (c) => c.subtitle,
-    renderLine: renderProductCandidate,
-  } satisfies ReferenceSuggestSpec<InternalSearchCandidate>,
   "expense.projectId": {
     ...FIELD_SUGGEST_DECISIONS["expense.projectId"],
     roster: expenseProjectRoster,

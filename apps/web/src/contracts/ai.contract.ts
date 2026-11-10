@@ -18,8 +18,6 @@ import {
   financeCategoryApplyOut,
   fieldSuggestionsInput,
   fieldSuggestionsOut,
-  fieldSuggestionsBatchInput,
-  fieldSuggestionsBatchOut,
   settledSuggestionQuestionsInput,
   settledSuggestionQuestionsOut,
   decisionCatalogOut,
@@ -134,10 +132,6 @@ export const aiContract = defineContract(
       modelBacked: true,
       input: fieldSuggestionsInput,
       output: fieldSuggestionsOut,
-    }),
-    suggestFieldsBatch: query({
-      input: fieldSuggestionsBatchInput,
-      output: fieldSuggestionsBatchOut,
     }),
     settledSuggestionQuestions: query({
       note: "List pages skip re-asking declined suggestion questions",

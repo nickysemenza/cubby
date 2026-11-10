@@ -1,0 +1,191 @@
+import { entityFieldModels } from "@cubby/schemas/entity-fields";
+import {
+  type ShortcodeEntity,
+  shortcodeEntities,
+} from "@cubby/schemas/entity-manifest";
+import { suggestApplyPolicy } from "@cubby/schemas/field-suggestion-policy";
+import { createLogger } from "@cubby/worker-tracing";
+import { sql } from "drizzle-orm";
+import { z } from "zod";
+
+import { scrubErrorMessage } from "~/lib/error-diagnostics";
+import {
+  AI_DISCOVERY_SETTINGS_ID,
+  readAiDiscoveryCursor,
+  saveAiDiscoveryCursor,
+} from "~/server/ai/repo/ai-refresh";
+import type { Database } from "~/server/db";
+import {
+  captureFieldCorrection,
+  claimAutomationRows,
+  correctionRecheckRecords,
+  type PendingAuditRow,
+  POLICY_PAGE,
+  policyPassSlots,
+} from "~/server/domains/run/repo/field-automation";
+import { fieldEvaluationScheduler } from "~/server/domains/run/service/ai-refresh";
+import type { BackgroundDrain } from "~/server/generic/background/drains";
+import { fieldAuthority } from "~/server/generic/suggestions/repo/field-authority";
+
+const log = createLogger("field-automation");
+const shortcodeEntity = z.enum(shortcodeEntities);
+
+type AutomatedField = {
+  key: string;
+  /** Keys whose change can move this field's answer. */
+  inputs: ReadonlySet<string>;
+};
+
+/** Fields Cubby evaluates on its own: filled answers it saves or offers. */
+const automatedFields = (entity: string): readonly AutomatedField[] => {
+  const known = shortcodeEntity.safeParse(entity);
+  if (!known.success) return [];
+  return entityFieldModels[known.data].fields.flatMap((field) => {
+    const suggest = field.control?.suggest;
+    if (!suggest || suggest.mode !== "fill") return [];
+    if (suggestApplyPolicy(known.data, field.key) === "review") return [];
+    const backed =
+      "backedBy" in suggest && Array.isArray(suggest.backedBy)
+        ? suggest.backedBy.map((source: { column: string }) => source.column)
+        : [];
+    return [{ key: field.key, inputs: new Set([...suggest.basis, ...backed]) }];
+  });
+};
+
+type Schedule = ReturnType<typeof fieldEvaluationScheduler>;
+
+/** Evaluate a field only while nobody but Cubby holds it. */
+async function scheduleField(
+  db: Database,
+  schedule: Schedule,
+  entity: ShortcodeEntity,
+  recordId: string,
+  field: string,
+) {
+  const authority = await fieldAuthority(db, entity, recordId, field);
+  if (authority.holder === "person") return "unchanged";
+  return schedule(
+    { kind: "field", entity, recordId, field, suggestionIds: [] },
+    { populated: authority.holder === "cubby" },
+  );
+}
+
+async function processRow(db: Database, row: PendingAuditRow) {
+  const entity = shortcodeEntity.parse(row.entityKind);
+  const fields = automatedFields(entity);
+  const changed = new Set(Object.keys(row.changes ?? {}));
+  const targets: { recordId: string; field: string }[] = [];
+  if (row.action === "update" && row.authority === null)
+    for (const field of fields) {
+      if (!changed.has(field.key)) continue;
+      const corrected = await captureFieldCorrection(db, row, field.key);
+      if (!corrected) continue;
+      for (const recordId of await correctionRecheckRecords(
+        db,
+        row,
+        field.key,
+        corrected.wrongValue,
+      ))
+        targets.push({ recordId, field: field.key });
+    }
+  for (const field of fields) {
+    const owed =
+      row.action === "create" ||
+      [...changed].some((key) => key !== field.key && field.inputs.has(key)) ||
+      (row.authority === "released" && changed.has(field.key));
+    if (owed) targets.push({ recordId: row.entityId, field: field.key });
+  }
+  return targets;
+}
+
+async function eventsPage(db: Database) {
+  const claimed = await claimAutomationRows(db, async (tx, rows) => {
+    const finished: string[] = [];
+    const schedule = fieldEvaluationScheduler(tx, []);
+    for (const row of rows) {
+      let deferred = false;
+      for (const target of await processRow(tx, row)) {
+        const result = await scheduleField(
+          tx,
+          schedule,
+          shortcodeEntity.parse(row.entityKind),
+          target.recordId,
+          target.field,
+        );
+        if (result === "deferred") deferred = true;
+      }
+      // A full backlog stops the page; unfinished rows stay owed.
+      if (deferred) break;
+      finished.push(row.id);
+    }
+    return finished;
+  });
+  return { claimed };
+}
+
+/**
+ * After a model, prompt or policy revision: re-ask every open guess and every
+ * value Cubby still holds. The activation resets this cursor on each revision.
+ */
+async function policyPage(db: Database) {
+  const cursor = await readAiDiscoveryCursor(db);
+  if (cursor.fieldDone) return { claimed: 0 };
+  const rows = await policyPassSlots(db, cursor.field);
+  const schedule = fieldEvaluationScheduler(db, []);
+  let last = cursor.field;
+  let deferred = false;
+  for (const row of rows) {
+    const entity = shortcodeEntity.parse(row.entity);
+    if (automatedFields(entity).some((field) => field.key === row.field)) {
+      const result = await scheduleField(
+        db,
+        schedule,
+        entity,
+        row.recordId,
+        row.field,
+      );
+      if (result === "deferred") {
+        deferred = true;
+        break;
+      }
+    }
+    last = row;
+  }
+  await saveAiDiscoveryCursor(db, {
+    ...cursor,
+    field: last,
+    fieldDone: !deferred && rows.length < POLICY_PAGE,
+  });
+  return { claimed: Math.max(1, rows.length) };
+}
+
+/**
+ * The only automatic trigger for field work: audited writes (creates, input
+ * changes, corrections, hand-backs) and policy revisions. Page views schedule
+ * nothing, and no periodic pass exists.
+ */
+export const fieldAutomationDrain: BackgroundDrain = {
+  name: "field-automation",
+  due: () => sql`
+    SELECT ${"events"}::text AS unit, false AS demand, min("createdAt")::timestamp AS since
+    FROM "AuditLog" WHERE "automationPending"
+    HAVING count(*) > 0
+    UNION ALL
+    SELECT ${"policy"}::text, false, now()::timestamp
+    FROM "AppSettings"
+    WHERE id = ${AI_DISCOVERY_SETTINGS_ID}::uuid
+      AND NOT COALESCE((metadata->>${"fieldDone"})::boolean, false)
+  `,
+  next: () => null,
+  async page(db, unit) {
+    try {
+      return unit === "policy" ? await policyPage(db) : await eventsPage(db);
+    } catch (error) {
+      log.warn("Field automation page failed", {
+        unit,
+        error: scrubErrorMessage(String(error)),
+      });
+      throw error;
+    }
+  },
+};

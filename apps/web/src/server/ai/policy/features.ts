@@ -164,7 +164,8 @@ export const FIELD_SUGGESTION_FEATURE = defineFeature({
   feature: "field-suggestion",
   tier: "decision",
   cache: true,
-  promptVersion: "2026-10-15.2",
+  // Household precedents joined the prompt.
+  promptVersion: "2026-11-09.1",
 }) satisfies AiDecisionFeature;
 
 /**

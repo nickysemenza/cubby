@@ -112,10 +112,6 @@ it.each([
       VALUES ('synthetic-index-job','run.execute',$2::jsonb,$1,'retry_wait',2,'Synthetic interrupted execution')`,
         [runId, JSON.stringify({ runId })],
       );
-      const paused =
-        await client.query(`UPDATE "AutomaticRule" SET enabled=false
-      WHERE family='statement_transaction' AND "ruleKey"='statement_transaction.attach'`);
-      expect(paused.rowCount).toBe(1);
       await client.query(
         `INSERT INTO "AppSettings" (metadata) VALUES ('{"syntheticBudgetUsd":1}')`,
       );
@@ -130,7 +126,6 @@ it.each([
           "Run",
           "RunStep",
           "Job",
-          "AutomaticRule",
           "AppSettings",
         ]) {
           const result = await client.query<{ records: unknown }>(

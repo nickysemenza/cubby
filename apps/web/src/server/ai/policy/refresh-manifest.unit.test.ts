@@ -14,16 +14,16 @@ describe("field refresh policy fingerprints", () => {
     if (!row) throw new Error("Synthetic category policy is unavailable");
     const ordinary = await fieldPolicyFingerprint({
       ...row,
-      reviewRequired: false,
+      apply: "auto",
     });
-    expect(
-      await fieldPolicyFingerprint({ ...row, reviewRequired: true }),
-    ).not.toBe(ordinary);
+    expect(await fieldPolicyFingerprint({ ...row, apply: "review" })).not.toBe(
+      ordinary,
+    );
     expect(
       await fieldPolicyFingerprint({
         ...row,
         mode: "prune",
-        reviewRequired: false,
+        apply: "auto",
       }),
     ).not.toBe(ordinary);
   });

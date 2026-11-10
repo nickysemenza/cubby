@@ -37,7 +37,8 @@ const suggestControlSchema = z
   .object({
     basis: z.array(z.string()),
     mode: z.enum(["fill", "prune"]),
-    reviewRequired: z.boolean().default(false),
+    apply: z.enum(["auto", "review", "offer"]).default("auto"),
+    fillOnly: z.boolean().default(false),
   })
   .passthrough();
 
@@ -146,7 +147,8 @@ function fieldRow(key: (typeof suggestFieldKeys)[number]): CatalogRow {
           ? { entity: null, maxCandidates: spec.maxCandidates }
           : null,
     rules: prompt.rules,
-    reviewRequired: suggest.reviewRequired,
+    apply: suggest.apply,
+    fillOnly: suggest.fillOnly,
     prompt: rendered(prompt),
   };
 }

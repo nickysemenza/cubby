@@ -5,7 +5,7 @@ import {
   basisValueOf,
   fieldSuggestionContextKeys,
 } from "@cubby/schemas/field-suggestion";
-import { requiresSuggestionReview } from "@cubby/schemas/field-suggestion-policy";
+import { suggestApplyPolicy } from "@cubby/schemas/field-suggestion-policy";
 import { z } from "zod";
 
 import {
@@ -177,14 +177,11 @@ async function applyPreviewSuggestions(args: {
       const currentValue = args.proposed[field];
       const applied =
         basisMode === "suggested" &&
-        !requiresSuggestionReview(args.entity, field) &&
+        suggestApplyPolicy(args.entity, field) === "auto" &&
         args.explicit[field] === undefined &&
         (currentValue == null || currentValue === "") &&
         probability !== null &&
         probability >= HIGH_CONFIDENCE_PROBABILITY &&
-        suggestion.alternatives.every(
-          (other) => probability - other.probability >= 0.1,
-        ) &&
         // A declared resolution needs an authoritative draft result before
         // preview can establish that the effective value is empty.
         (!fieldModel?.resolution ||

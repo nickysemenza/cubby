@@ -586,7 +586,7 @@ export const { definition, readSchemas } = defineEntityModel({
             basis: [...EXPENSE_LINE_ROLE_EVIDENCE_FIELDS],
             allowNone: true,
             // Changes which line contributes principal versus fee/tax accounting.
-            reviewRequired: true,
+            apply: "review",
             rules: [EXPENSE_LINE_ROLE_RULES],
           },
         },
@@ -762,7 +762,11 @@ Rules:
         control: {
           kind: "specialized",
           renderer: "entity-select",
-          suggest: { basis: ["name", "vendor", "productId", "date"] },
+          // Moves spend into a Project: a guess, never written automatically.
+          suggest: {
+            basis: ["name", "vendor", "productId", "date"],
+            apply: "offer",
+          },
         },
         display: {
           columnGroup: "Links",
@@ -810,7 +814,8 @@ Rules:
         control: {
           kind: "specialized",
           renderer: "entity-select",
-          suggest: { basis: ["name", "vendor"] },
+          // Sets a Product's cost basis from name and vendor alone: a guess only.
+          suggest: { basis: ["name", "vendor"], apply: "offer" },
         },
         display: {
           columnGroup: "Links",

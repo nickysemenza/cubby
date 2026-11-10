@@ -95,10 +95,10 @@ function suggestionKeyFacts(key: SuggestionKey) {
             : value,
       ]),
     ),
-    // The UI's confidence bounds are percentages, as its cells are.
+    // One unit everywhere: the 0 to 1 probability rows carry.
     confidence:
       typeof key.columns.confidence === "number"
-        ? key.columns.confidence * 100
+        ? key.columns.confidence
         : null,
   };
 }

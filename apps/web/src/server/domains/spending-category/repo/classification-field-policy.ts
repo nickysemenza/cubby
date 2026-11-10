@@ -141,6 +141,30 @@ export async function classificationRefusesField(
   return false;
 }
 
+/**
+ * Whether Cubby should ask about `field` at all. Stricter than write
+ * admission: an unclassified record is not asked a field its classification
+ * would refuse by default (an uncategorised Product is not asked which plant
+ * it grows), while a write carrying that evidence still classifies it.
+ */
+export async function classificationAdmitsSuggestion(
+  db: Db,
+  entity: string,
+  field: string,
+  basis: Readonly<Record<string, string | null | undefined>>,
+): Promise<boolean> {
+  if (await classificationRefusesField(db, entity, field, basis)) return false;
+  for (const id of declaredPoliciesGoverning(entity, field)) {
+    const referenceField = classificationReference(id);
+    if (referenceField === null || basis[referenceField]) continue;
+    const declaration = declaredClassificationPolicies[id].fields.find(
+      (candidate) => candidate.field === field,
+    );
+    if (declaration?.otherwise === "not_allowed") return false;
+  }
+  return true;
+}
+
 /** Enforce every same-record, database-enforced classification policy. */
 export function assertClassificationPolicies(
   entity: string,

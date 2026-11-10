@@ -25,6 +25,7 @@ const taxonomyFeatures = [
   "supplies",
   "apparel",
   "music",
+  "planting",
 ] as const satisfies readonly ProductCategoryFeature[];
 
 const categoryNames = {
@@ -42,6 +43,7 @@ const categoryNames = {
   household: "Household",
   supplies: "Supplies",
   apparel: "Apparel",
+  planting: "Planting stock",
 } as const satisfies Record<ProductCategoryFeature, string>;
 
 const categoryCodes = {
@@ -59,6 +61,7 @@ const categoryCodes = {
   household: "CAT-2233",
   supplies: "CAT-2234",
   apparel: "CAT-2235",
+  planting: "CAT-2238",
 } as const satisfies Record<ProductCategoryFeature, string>;
 
 export const taxonomyId = (

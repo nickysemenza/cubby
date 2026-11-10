@@ -69,6 +69,7 @@ import { withFieldExplanationSnapshot } from "~/server/generic/field-explanation
 import { inheritedResetPreview } from "~/server/generic/field-explanation/repo/inherited-reset-preview";
 import { loadFieldResolutionEvidence } from "~/server/generic/field-explanation/repo/resolution-contributors";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { describeFieldOrigin } from "~/server/generic/suggestions/repo/field-authority";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
 
 import { interpretFieldValue } from "./field-explanation-interpretation";
@@ -1250,12 +1251,19 @@ export async function explainField(
     ...source,
     value: linkedValues[index] ?? source.value,
   }));
+  const origin = await explainFieldOrigin(
+    context,
+    entity,
+    input.entityId,
+    field,
+  );
   return fieldExplanationOutput.parse({
     subject,
     field: field.key,
     label: field.label,
     envelope,
     evaluatedAt: new Date().toISOString(),
+    ...(origin && { origin }),
     interpretation,
     rule: {
       id: explanation.ruleId,
@@ -1272,6 +1280,29 @@ export async function explainField(
     ].some(Boolean),
     actions,
   });
+}
+
+/** Suggested fields name who holds their value; other fields have no origin. */
+async function explainFieldOrigin(
+  context: Parameters<typeof explainField>[0],
+  entity: string,
+  entityId: string,
+  field: {
+    key: string;
+    control?: { suggest?: { mode?: string } | null } | null;
+  },
+) {
+  const shortcodeEntity = shortcodeEntities.find(
+    (candidate) => candidate === entity,
+  );
+  if (!shortcodeEntity || field.control?.suggest?.mode !== "fill") return null;
+  const recordId = await resolveLiveShortcode(
+    context.db,
+    entityId,
+    shortcodeEntity,
+  );
+  if (!recordId) return null;
+  return describeFieldOrigin(context.db, shortcodeEntity, recordId, field.key);
 }
 
 /** Display images grouped into precedence levels, the chosen cover first. */

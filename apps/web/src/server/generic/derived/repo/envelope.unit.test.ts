@@ -55,7 +55,6 @@ describe("canonical field reads", () => {
         },
         {
           raw: {},
-          ownership: {},
           stored: new Map([["relationshipFacts", root]]),
         },
       );
@@ -95,7 +94,6 @@ describe("canonical field reads", () => {
       {
         raw: {},
         stored: new Map([["eventSummary", published]]),
-        ownership: {},
       },
     );
     expect(row.fields.eventCount.result).toMatchObject({
@@ -121,7 +119,6 @@ describe("canonical field reads", () => {
       {
         raw: {},
         stored: new Map([["eventSummary", { ...published, value: {} }]]),
-        ownership: {},
       },
     );
     expect(missing.fields.eventCount.result).toEqual({ kind: "missing" });
@@ -138,7 +135,6 @@ describe("canonical field reads", () => {
       { id: "SHIP-EXAMPLE", eventCount: null },
       {
         raw: {},
-        ownership: {},
         stored: new Map([
           ["eventSummary", cached({ value: { eventCount: 0 } })],
         ]),
@@ -166,7 +162,6 @@ describe("canonical field reads", () => {
       {
         raw: { lineKind: "unclassified", spendingCategoryId: null },
         stored: new Map(),
-        ownership: {},
       },
     );
     expect(row.fields.spendingCategoryId.current.controls).toEqual({
@@ -203,7 +198,7 @@ describe("canonical field reads", () => {
           },
         },
       },
-      { raw: { price: 2 }, stored: new Map(), ownership: {} },
+      { raw: { price: 2 }, stored: new Map() },
     );
     expect(row.fields.price.current.assignment).toMatchObject({
       kind: "value",
@@ -228,7 +223,6 @@ describe("canonical field reads", () => {
       {
         raw: {},
         stored: new Map([["valuationRollup", snapshot]]),
-        ownership: {},
       },
     );
     expect(row.fields.valuation.result).toEqual({
@@ -262,7 +256,6 @@ describe("canonical field reads", () => {
         {
           raw: { price },
           stored: new Map([["price", snapshot]]),
-          ownership: {},
         },
       );
     const snapshot = cached({ value: 8 });
@@ -343,7 +336,6 @@ describe("canonical field reads", () => {
       {
         raw: { assigneeMode: "explicit", assigneeId: null },
         stored: new Map(),
-        ownership: {},
       },
     );
     expect(row.fields.assigneeId.current.assignment).toEqual({ kind: "none" });

@@ -41,29 +41,25 @@ struct FieldValueStatus: View {
     }
 }
 
-/// Where the shown value came from, per the result's own provenance: an automatic own value, or
-/// the inherited/default source as a link when the server names one.
+/// Where the shown value came from, per the result's own provenance: the inherited/default source
+/// as a link when the server names one.
 struct FieldProvenanceCaption: View {
     let raw: JSONValue
     let field: FieldDescriptor
 
     var body: some View {
         if let envelope = FieldEnvelope.of(raw, field: field) {
-            if envelope.isAutomatic {
-                Text("Automatic").font(.caption).foregroundStyle(.secondary)
-            } else {
-                switch envelope.decision?.provenance {
-                case .inherited(let source)?:
-                    sourceLine("Inherited from", source: source)
-                case .default(let source)?:
-                    if let source {
-                        sourceLine("Default from", source: source)
-                    } else {
-                        Text("Default").font(.caption).foregroundStyle(.secondary)
-                    }
-                default:
-                    EmptyView()
+            switch envelope.decision?.provenance {
+            case .inherited(let source)?:
+                sourceLine("Inherited from", source: source)
+            case .default(let source)?:
+                if let source {
+                    sourceLine("Default from", source: source)
+                } else {
+                    Text("Default").font(.caption).foregroundStyle(.secondary)
                 }
+            default:
+                EmptyView()
             }
         }
     }
@@ -233,10 +229,40 @@ struct WhyThisValueView: View {
     // MARK: Content
 
     @ViewBuilder
+    /// One line naming who set a suggested field's value, or Cubby's guess for an empty one.
+    static func originLine(_ origin: FieldOrigin) -> String? {
+        let when = origin.at.map { " · \($0.formatted(.dateTime.day().month(.abbreviated)))" } ?? ""
+        switch origin.holder {
+        case .cubby:
+            let sure = origin.confidence.map { " · \(Int(($0 * 100).rounded()))% sure" } ?? ""
+            return "Set by Cubby\(when)\(sure)"
+        case .person:
+            if let kept = origin.keptAt {
+                return "Set by Cubby · kept by you \(kept.formatted(.dateTime.day().month(.abbreviated)))"
+            }
+            switch origin.writer?.kind {
+            case .agent?: return "Set by an agent\(when)"
+            case .import?: return "Set by an import\(when)"
+            case .member?: return "Set by \(origin.writer?.name ?? "you")\(when)"
+            default: return "Set here"
+            }
+        case .open:
+            guard let guess = origin.guess else { return "Not set." }
+            let sure = Int((guess.confidence * 100).rounded())
+            return "Not set. Cubby's guess is \(sure)% sure; it saves on its own at 85%."
+        case .unrecognized:
+            return nil
+        }
+    }
+
     private func content(_ explanation: FieldExplanationOutput) -> some View {
         let envelope = (try? JSONValue(encoding: explanation.envelope)).flatMap(FieldEnvelope.init)
         if let envelope {
             effectiveResult(envelope)
+            if let origin = explanation.origin, let line = Self.originLine(origin) {
+                Text(line).font(.caption).foregroundStyle(.secondary)
+                    .accessibilityIdentifier("field.explanation.origin")
+            }
             choice(envelope)
             if case .cached = envelope.result {
                 Text(
@@ -424,8 +450,6 @@ struct WhyThisValueView: View {
             let text = valueText(value) ?? "Set here"
             switch ownership {
             case .record: return text
-            case .automatic(_, let confidence):
-                return "\(text) · Automatic, \(Int((confidence * 100).rounded()))% confidence"
             case .unsupported(let kind): return "\(text) · Unsupported ownership: \(kind)"
             }
         case .unsupported(let kind)?: return "Unsupported choice: \(kind)"

@@ -24,7 +24,7 @@ public struct FieldAssignmentAction: Sendable, Hashable, Identifiable {
 /// The state marker beside a value, in the one vocabulary the web popover uses.
 public struct FieldValueState: Sendable, Equatable {
     public enum Tone: Sendable, Equatable {
-        case set, automatic, redundant, none, inherit, fallback, allocated, computed, missing, unsupported
+        case set, redundant, none, inherit, fallback, allocated, computed, missing, unsupported
     }
 
     /// The shared marker for a value inherited rather than set here (web `InheritedMarker`).
@@ -137,9 +137,6 @@ extension FieldEnvelope {
         case .computed?:
             return .init(tone: .computed, label: "Calculated", systemImage: "function")
         case .own?:
-            if isAutomatic {
-                return .init(tone: .automatic, label: "Automatic", systemImage: "sparkles")
-            }
             if field.resolution?.redundancy == "eligible", case .value(let stored, _) = assignment,
                 resetPreview?.value == stored
             {

@@ -484,10 +484,11 @@ export const { definition, readSchemas } = defineEntityModel({
         kind: "identifier",
         nullable: true,
         reference: { entity: "product" },
+        // Not suggested: a title shares words with materials, not with the
+        // one Product a task is about.
         control: {
           kind: "specialized",
           renderer: "entity-select",
-          suggest: { basis: ["name"] },
         },
         display: {
           columnGroup: "Assignment",

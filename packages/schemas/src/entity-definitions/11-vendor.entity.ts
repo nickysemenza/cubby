@@ -361,6 +361,7 @@ export const { definition, readSchemas } = defineEntityModel({
           kind: "specialized",
           renderer: "entity-select",
           suggest: {
+            fillOnly: true,
             basis: ["name", "website", "notes", "spendingProfile"],
             financeReview: { context: "vendor" },
           },
@@ -379,6 +380,7 @@ export const { definition, readSchemas } = defineEntityModel({
         control: {
           kind: "select",
           suggest: {
+            fillOnly: true,
             basis: ["name", "website", "notes"],
             rules: [
               `Suggest whether the household expects these purchases to be itemized: recorded as the order's own item lines, each goods line naming its Product. Online orders with retrievable order history (Amazon, Home Depot) are expected (required). Restaurant meals, groceries, in-store shops whose receipts are usually not kept, one-amount services, subscriptions and friend reimbursements are not_expected. No policy ever requires a receipt document. Use the actual purchase/source description when available; broad or mixed vendor/category evidence without a clear purpose remains unknown. Never overwrite explicit decisions or effective values derived from order evidence.`,

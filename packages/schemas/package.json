@@ -261,6 +261,7 @@
     "./emoji": "./src/emoji.ts",
     "./email-actions": "./src/email-actions.ts",
     "./ai-evaluation": "./src/ai-evaluation.ts",
+    "./field-authority": "./src/field-authority.ts",
     "./suggestion": "./src/suggestion.ts",
     "./decision-step": "./src/decision-step.ts",
     "./entity-mutation": "./src/entity-mutation.ts",

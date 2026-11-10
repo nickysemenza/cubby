@@ -18,7 +18,6 @@ export function projectProductFieldEnvelopes({
   entity,
   row,
   stored,
-  ownership,
   assignments,
   built,
 }: Parameters<FieldEnvelopeProjector>[0]): ReturnType<FieldEnvelopeProjector> {
@@ -42,7 +41,6 @@ export function projectProductFieldEnvelopes({
         entity,
         row,
         stored,
-        ownership,
         assignments,
       }),
       "price",

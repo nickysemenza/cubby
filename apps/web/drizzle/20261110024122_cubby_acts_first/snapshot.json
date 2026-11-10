@@ -1,0 +1,321 @@
+{
+  "type": "diff",
+  "version": "9",
+  "dialect": "postgres",
+  "id": "2aac95f5-a9d5-4d1f-b710-68a943ba3d21",
+  "prevIds": [
+    "0d808538-33f3-4937-b053-3b80e64b1ecd"
+  ],
+  "footprints": [
+    {
+      "statementType": "drop_table",
+      "statementTarget": [
+        "table",
+        "public",
+        "AutomaticRule"
+      ],
+      "writes": [
+        "s|tbl|public.AutomaticRule",
+        "n|tbl|public.AutomaticRule",
+        "e|tbl|public.AutomaticRule",
+        "n|rel|public.AutomaticRule",
+        "n|type|public.AutomaticRule"
+      ],
+      "reads": [
+        "n|sch|public"
+      ]
+    },
+    {
+      "statementType": "add_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "AuditLog",
+        "authority"
+      ],
+      "writes": [
+        "s|col|public.AuditLog.authority",
+        "n|col|public.AuditLog.authority",
+        "e|col|public.AuditLog.authority"
+      ],
+      "reads": [
+        "n|tbl|public.AuditLog",
+        "n|sch|public"
+      ]
+    },
+    {
+      "statementType": "add_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "AuditLog",
+        "automationPending"
+      ],
+      "writes": [
+        "s|col|public.AuditLog.automationPending",
+        "n|col|public.AuditLog.automationPending",
+        "e|col|public.AuditLog.automationPending"
+      ],
+      "reads": [
+        "n|tbl|public.AuditLog",
+        "n|sch|public"
+      ]
+    },
+    {
+      "statementType": "create_index",
+      "statementTarget": [
+        "index",
+        "public",
+        "AuditLog",
+        "AuditLog_automationPending_idx"
+      ],
+      "writes": [
+        "s|idx|public.AuditLog_automationPending_idx",
+        "n|idx|public.AuditLog_automationPending_idx",
+        "e|idx|public.AuditLog_automationPending_idx",
+        "n|rel|public.AuditLog_automationPending_idx"
+      ],
+      "reads": [
+        "n|tbl|public.AuditLog",
+        "n|sch|public",
+        "n|col|public.AuditLog.createdAt",
+        "n|col|public.AuditLog.id"
+      ]
+    },
+    {
+      "statementType": "create_index",
+      "statementTarget": [
+        "index",
+        "public",
+        "AuditLog",
+        "AuditLog_automatic_createdAt_idx"
+      ],
+      "writes": [
+        "s|idx|public.AuditLog_automatic_createdAt_idx",
+        "n|idx|public.AuditLog_automatic_createdAt_idx",
+        "e|idx|public.AuditLog_automatic_createdAt_idx",
+        "n|rel|public.AuditLog_automatic_createdAt_idx"
+      ],
+      "reads": [
+        "n|tbl|public.AuditLog",
+        "n|sch|public",
+        "n|col|public.AuditLog.createdAt"
+      ]
+    },
+    {
+      "statementType": "add_check",
+      "statementTarget": [
+        "table",
+        "public",
+        "AuditLog"
+      ],
+      "writes": [
+        "s|ck|public.AuditLog.AuditLog_authority_check",
+        "n|ck|public.AuditLog.AuditLog_authority_check",
+        "e|ck|public.AuditLog.AuditLog_authority_check",
+        "n|con|public.AuditLog.AuditLog_authority_check"
+      ],
+      "reads": [
+        "n|tbl|public.AuditLog",
+        "n|sch|public",
+        "n|col|public.AuditLog.authority"
+      ]
+    },
+    {
+      "statementType": "alter_check",
+      "statementTarget": [
+        "table",
+        "public",
+        "ProductCategory"
+      ],
+      "writes": [
+        "s|ck|public.ProductCategory.ProductCategory_feature_check"
+      ],
+      "reads": [
+        "n|tbl|public.ProductCategory",
+        "n|sch|public",
+        "n|col|public.ProductCategory.feature",
+        "e|col|public.ProductCategory.feature"
+      ],
+      "sqlHash": "27f79d4f37d245dc"
+    }
+  ],
+  "deltas": [
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "AuditLog",
+        "name": "authority",
+        "type": "text",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "AuditLog",
+        "name": "automationPending",
+        "type": "boolean",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "false",
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "AuditLog",
+        "name": "AuditLog_automationPending_idx",
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "createdAt",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          },
+          {
+            "value": "id",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": "\"automationPending\"",
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "entityType": "indexes"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "AuditLog",
+        "name": "AuditLog_automatic_createdAt_idx",
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "createdAt",
+            "isExpression": false,
+            "asc": false,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": "\"authority\" = 'automatic'",
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "entityType": "indexes"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "AuditLog",
+        "name": "AuditLog_authority_check",
+        "value": "\"authority\" IN ('automatic', 'released')",
+        "entityType": "checks"
+      }
+    },
+    {
+      "op": "drop",
+      "key": "tables\u0000[\"public\",\"AutomaticRule\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"AutomaticRule\",\"id\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"AutomaticRule\",\"family\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"AutomaticRule\",\"ruleKey\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"AutomaticRule\",\"revision\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"AutomaticRule\",\"enabled\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"AutomaticRule\",\"enabledAt\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"AutomaticRule\",\"enabledByUserId\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"AutomaticRule\",\"enabledReason\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"AutomaticRule\",\"disabledAt\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"AutomaticRule\",\"disabledReason\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"AutomaticRule\",\"createdAt\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"AutomaticRule\",\"updatedAt\"]"
+    },
+    {
+      "op": "drop",
+      "key": "indexes\u0000[\"public\",\"AutomaticRule_family_key\"]"
+    },
+    {
+      "op": "drop",
+      "key": "fks\u0000[\"public\",\"AutomaticRule\",\"AutomaticRule_enabledByUserId_user_id_fk\"]"
+    },
+    {
+      "op": "drop",
+      "key": "pks\u0000[\"public\",\"AutomaticRule\",\"AutomaticRule_pkey\"]"
+    },
+    {
+      "op": "drop",
+      "key": "checks\u0000[\"public\",\"AutomaticRule\",\"AutomaticRule_family_check\"]"
+    },
+    {
+      "op": "drop",
+      "key": "checks\u0000[\"public\",\"AutomaticRule\",\"AutomaticRule_key_check\"]"
+    },
+    {
+      "op": "alter",
+      "key": "checks\u0000[\"public\",\"ProductCategory\",\"ProductCategory_feature_check\"]",
+      "set": {
+        "value": "\"feature\" IS NULL OR \"feature\" IN ('food', 'books', 'music', 'tools', 'tool-consumables', 'tool-accessories', 'storage', 'hardware', 'electronics', 'software', 'services', 'household', 'supplies', 'apparel', 'planting')"
+      }
+    }
+  ]
+}

@@ -42,8 +42,6 @@ import {
 } from "~/server/domains/transaction-import/repo/source-observation-state";
 import { isBlockedRefusal } from "~/server/errors/app-error";
 import { recordChange } from "~/server/generic/changes/repo/change";
-import { assertAutomaticRuleOn } from "~/server/generic/suggestions/repo/automatic-application";
-import { ruleBase } from "~/server/generic/suggestions/repo/automatic-policy";
 
 import {
   bookingGraph,
@@ -167,23 +165,6 @@ async function retireGeneratedExpense(
     // The supported delete's savepoint has rolled back before returning review.
     if (isBlockedRefusal(error))
       return review(error instanceof Error ? error.message : String(error));
-    throw error;
-  }
-}
-
-async function correctionAuthority(
-  db: Database,
-): Promise<EvidenceVerification> {
-  const key = "statement_transaction.book_spending";
-  try {
-    await assertAutomaticRuleOn(db, key, ruleBase(key), null);
-    return { status: "verified" };
-  } catch (error) {
-    if (
-      error instanceof Error &&
-      error.message === `Automatic rule ${key} is off; review the suggestion`
-    )
-      return review(error.message);
     throw error;
   }
 }
@@ -465,8 +446,6 @@ export async function reconcileFinancialEvidenceCorrection(
         return { status: "unchanged", reason: "already_current" };
       }
 
-      const authority = await correctionAuthority(txDb);
-      if (authority.status === "review") return authority;
       const expenseCode = parseShortcodeFor("expense", line.shortcode);
       if (input.amount === null) {
         // The supported delete preserves tombstones, attribution history and audit;

@@ -8,10 +8,6 @@ enum FieldEnvelopeFixture {
     static let own: JSONValue = ["kind": "own", "ownership": record]
     static let idle: JSONValue = ["kind": "idle"]
 
-    static func automatic(_ confidence: Double = 0.85) -> JSONValue {
-        ["kind": "automatic", "receiptId": "RCPT-4K7M", "confidence": .number(confidence)]
-    }
-
     static func value(_ value: JSONValue, ownership: JSONValue = record) -> JSONValue {
         ["kind": "value", "value": value, "ownership": ownership]
     }

@@ -317,7 +317,8 @@ export const { definition, readSchemas } = defineEntityModel(
           control: {
             kind: "specialized",
             renderer: "entity-select",
-            suggest: { basis: ["productId"] },
+            // A placement move: never automatic (README tenet 1).
+            suggest: { basis: ["productId"], apply: "review" },
           },
           display: { list: false },
           validation: {

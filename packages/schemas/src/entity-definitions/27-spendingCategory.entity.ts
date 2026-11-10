@@ -224,6 +224,7 @@ export const { definition, readSchemas } = defineEntityModel({
           kind: "select",
           suggest: {
             basis: ["name", "parentId"],
+            apply: "review",
             rules: [
               `Suggest whether the household expects these purchases to be itemized: recorded as the order's own item lines, each goods line naming its Product. Online orders with retrievable order history (Amazon, Home Depot) are expected (required). Restaurant meals, groceries, in-store shops whose receipts are usually not kept, one-amount services, subscriptions and friend reimbursements are not_expected. No policy ever requires a receipt document. Use the actual purchase/source description when available; broad or mixed vendor/category evidence without a clear purpose remains unknown. Return a reviewed proposal only; never overwrite explicit decisions.`,
             ],
@@ -277,6 +278,7 @@ export const { definition, readSchemas } = defineEntityModel({
           kind: "select",
           suggest: {
             basis: ["name", "parentId"],
+            apply: "review",
             rules: [
               `Suggest Product expectation independently from itemization expectation using the spending category and parent context. Durable goods such as tools, furniture, clothing and tracked software require Product records (required). Groceries, services and friend reimbursements do not require one but may link one (not_expected). Restaurant meals, event tickets, rides and donations can never be a Product (not_allowed); choose not_allowed only when every Expense in the category is such spending. A mixed or unclear category must remain unknown. Do not infer that every itemized purchase requires Products. Return a reviewed proposal only; never overwrite explicit decisions.`,
             ],

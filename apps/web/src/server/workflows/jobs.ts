@@ -16,6 +16,7 @@ import {
 } from "~/server/domains/run/repo/coordinator-dispatch";
 import { fundingResumeInput } from "~/server/domains/run/repo/execution-context";
 import { runAiEvaluationExecution } from "~/server/domains/run/service/ai-evaluation-execution";
+import { fieldAutomationDrain } from "~/server/domains/run/service/field-automation";
 import type { BackgroundDrain } from "~/server/generic/background/drains";
 import {
   derivedRebuildDue,
@@ -165,6 +166,7 @@ const productionDrains = (): readonly BackgroundDrain[] => [
   aiEvaluationDrain(runAiEvaluationExecution()),
   derivedRebuildDrain,
   emailPurchaseDiscoveryDrain,
+  fieldAutomationDrain,
   reconcileDrain,
 ];
 

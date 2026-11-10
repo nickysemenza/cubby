@@ -577,6 +577,7 @@ export const { definition, readSchemas } = defineEntityModel({
           kind: "specialized",
           renderer: "entity-select",
           suggest: {
+            fillOnly: true,
             basis: ["displayLabel", "vendorId", "notes"],
             financeReview: { context: "finance" },
           },
@@ -698,7 +699,10 @@ export const { definition, readSchemas } = defineEntityModel({
         control: {
           kind: "specialized",
           renderer: "entity-select",
-          suggest: { basis: ["displayLabel", "vendorId", "notes"] },
+          suggest: {
+            basis: ["displayLabel", "vendorId", "notes"],
+            fillOnly: true,
+          },
         },
         display: { list: false },
         validation: {
@@ -717,6 +721,7 @@ export const { definition, readSchemas } = defineEntityModel({
           // Purchase has no "name" field — `displayLabel` is its closest
           // equivalent (the operator-facing text for the purchase).
           suggest: {
+            fillOnly: true,
             basis: ["displayLabel", "vendorId", "notes"],
             rules: [TRADE_SUGGEST_RULE],
           },

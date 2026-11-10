@@ -336,6 +336,9 @@ export function WorkPage({ fromRetiredJobs }: { fromRetiredJobs: boolean }) {
         className="flex flex-wrap items-center gap-x-3.5 gap-y-1 border-t border-border pt-2 [&>a]:text-link [&>a]:hover:underline [&>a]:max-md:inline-flex [&>a]:max-md:min-h-11 [&>a]:max-md:items-center"
       >
         <Link to="/suggestions">Suggestions</Link>
+        <Link to="/suggestions" search={{ status: "automatic" }}>
+          Changes by Cubby
+        </Link>
         <Link to="/work-queue" search={{ family: "research" }}>
           Missing facts
         </Link>

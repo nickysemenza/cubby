@@ -19,6 +19,15 @@ export const AUDIT_CHANNELS = [
 export const auditChannelSchema = z.enum(AUDIT_CHANNELS);
 export type AuditChannel = z.infer<typeof auditChannelSchema>;
 
+/**
+ * Who holds a field after this write. `automatic`: Cubby's Automatic rule wrote
+ * the value and may revise it. `released`: a member handed the field back to
+ * Cubby. Null: a person, an import or an agent wrote it, and Cubby never
+ * overwrites it.
+ */
+export const auditAuthoritySchema = z.enum(["automatic", "released"]);
+export type AuditAuthority = z.infer<typeof auditAuthoritySchema>;
+
 export interface ActorAttribution {
   oauthClientId: string | null;
   deviceId: DeviceId | null;
@@ -28,6 +37,8 @@ export interface ActorAttribution {
 export interface ActorContext extends ActorAttribution {
   userId: UserId;
   channel: AuditChannel;
+  /** Field authority this actor's audit rows record; see `auditAuthoritySchema`. */
+  authority?: AuditAuthority;
 }
 
 export function buildActorContext(
