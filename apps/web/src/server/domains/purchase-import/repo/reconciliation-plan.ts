@@ -178,7 +178,7 @@ export function originalExpenseQuantity(
 }
 
 /** Prepare the Expense write once Product resolution has completed. */
-export function planReconciledExpense(
+function planReconciledExpense(
   state: ReconciliationState,
   line: ExtractedPurchaseLine,
   existing: typeof expense.$inferSelect | null,
@@ -334,7 +334,7 @@ export async function planReconciliationBindings(
   return { detached, bindings };
 }
 
-export function partyIdForShortcode(
+function partyIdForShortcode(
   state: Pick<ReconciliationState, "parties">,
   shortcode: string,
 ) {

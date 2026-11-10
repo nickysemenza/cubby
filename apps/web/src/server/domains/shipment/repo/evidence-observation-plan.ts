@@ -8,7 +8,7 @@ import { canonical, canonicalDigest } from "./evidence-internal";
 type Observation = typeof shipmentObservation.$inferSelect;
 
 /** Select a retained revision using the same ordering for replay and admission. */
-export function planObservationRevision(input: {
+function planObservationRevision(input: {
   versions: readonly Observation[];
   current: Observation | undefined;
   fingerprint: string;
