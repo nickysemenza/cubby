@@ -1,396 +1,496 @@
 # Web UI contracts
 
-Reference labels read their declared title field through `readRecordField`,
-including derived values in field envelopes. Report rows that already resolve
-related labels include them in the batch rather than fetching each label from
-a mounted cell. A Vendor Account's title is derived from Vendor and member;
-it has no editable account name.
+This file owns which shared component renders what, and the implementation rules
+behind it. [DESIGN.md](../DESIGN.md) owns appearance and interaction;
+[web runtime rules](web-runtime.md) own hooks, loading and caching. Load the
+heading for the surface you are changing.
 
-Historical date filters share `historicalDateRangePresets` in the date-range
-schema module and `resolveDateRange` in `lib/date-range-presets.ts`. Tables and
-charts consuming those filters use the same preset keys, labels and inclusive
-household-day arithmetic; saved record filters retain relative keys. Timeline
-viewing windows and imports use `DateRangeShortcuts` and freeze the resolved
-bounds when a shortcut is selected. Past month and 12 months use
-calendar months with month-end clamping, rather than fixed day counts. Clearing
-a historical range removes both bounds. Deadline editors keep their future
-date semantics and do not inherit historical shortcuts.
+## Tokens, icons and badges
 
-Plain-date editors use `DatePickerInput`: typed calendar dates and English
-expressions such as `1 year ago`, with a calendar alternative. Relative days,
-months and years resolve at commit time in local calendar time; month ends and
-leap days clamp to a valid day. Invalid or out-of-bound drafts remain visible
-without replacing the committed value.
-Keep selected inspector values with the page's selection owner when responsive
-layouts move an editor between a sidebar and sheet; the layout change must not
-reset action parameters.
+- Components never hardcode colors (hex/oklch). Shared palette and semantic
+  primitives (`--positive`, `--warning`, `--destructive`, …) live in
+  `packages/design-tokens/brand.css`; web-only derivations such as the chart
+  ramp (`--chart-1..8`) live in `apps/web/src/styles.css`. Map green to
+  `positive`, red to `destructive`, amber to `warning`. Canvas paint,
+  `theme-color` and chart-library fallbacks are the usual exceptions; this is a
+  review rule, not a lint.
+- A new semantic color gets its primitive in `brand.css` and a `--color-*`
+  mirror in `styles.css`'s `@theme inline` when Tailwind utilities need it.
+  Composite shadow tokens (`--shadow-overlay`, `--shadow-pin-*`,
+  `--text-shadow-chart`, …) need no mirror; use `shadow-[var(--token)]`. Never
+  inline `rgba()` shadows; add a token.
+- Icons use the `size-N` shorthand, never `h-N w-N`: `size-3.5` for inline and
+  navigation glyphs, `size-5` for card, tile and hero icons, `size-3` for
+  micro-indicators. Interactive primitives (Button, DropdownMenu, Command, Tabs,
+  Toggle) already size their icon slot to `size-3.5`.
+- `Badge` is the categorical chip, sentence case by default; don't hand-roll
+  pill styling.
 
-All human record dates, timestamps, and declared date ranges render through
-`DateDisplay` (`ui/values/date-display.tsx`): outside tables the absolute date
-includes the year and, for an instant, its clock time, followed by a muted
-relative distance separated by a middle dot ("Oct 13, 2026, 11:50 AM · 2 minutes
-ago"). The instant is formatted in the household zone. Plain days never convert
-through UTC; their distance compares household calendar days, including DST.
-Today, yesterday, tomorrow, and ongoing ranges retain those labels. Fully ended
-ranges use their end for relative context; future ranges use their start.
+## Spacing and layout primitives
 
-Shared report record rows can opt into inline relative age
-with `showRelativeTime`; Shipment tracking timelines use this full date display.
-Inside desktop tables, the component stacks the month/day over a muted
-compact distance ("Oct 13" / "3 min ago"). Minutes use `min`, months use `mo`,
-with a space before both, so neither can read as the other. Another year leads
-the compact distance line ("’25 · 1y ago"). Timestamp tooltips on hover and
-keyboard focus expose exact seconds and the household timezone offset.
-`DenseCellContext` selects the table form; static tables opt in with `stacked`.
-Full labels wrap rather than clip on narrow screens. Date columns start at
-96px and declared spans at 320px; shared rendered-content fitting preserves
-readable labels.
-Native table columns own desktop widths. Width variables stay on their colgroup;
-only widths used by sticky offsets inherit from the table into rows. Changing an
-unrelated fitted column must not invalidate inherited variables across every
-cell. Group totals resolve the same width values directly, and deliberate
-resizing and pinning retain their existing layout owner.
-If another start-pinned column follows the identity, its offset inherits the
-identity's width. Fitting an unrelated column can change the identity's share of
-pane slack and still trigger a broad inherited-width update in that layout.
-Within a query scope, unchanged rendered cells retain their measured contribution;
-content changes invalidate only the affected cell. New cells and font readiness
-receive fresh measurements, and a new query scope resets the fit.
-Within one offscreen batch, identical normalized cell markup, including resolved
-typography, shares one mounted measurement clone. This reuse ends with the batch;
-font readiness and content changes retain their existing fresh measurements.
-Mutations without an eligible unmeasured cell skip geometry reads as well as
-offscreen cloning, so unrelated enrichment cannot force a fitting layout.
+Spacing utilities normally use Tailwind steps `{0, 1, 2, 4, 6}` plus
+`{8, 12, 16, 20}` for wide gutters, touch targets and large clearance. Deviations
+are a visual-review decision. `src/ui/primitives/**` keeps its registry padding.
+A genuinely dense sub-scale padding or margin is marked `/* tight */`; prefer a
+component that encapsulates the density over scattering the marker. `gap-*` is
+for flex and grid siblings; `space-y-*` is for plain block stacks.
 
-Desktop table cells containing `DateDisplay`'s open-overdue marker use the
-destructive surface tint across the cell. Keep the overdue text as a second
-signal, and let the shared date/status logic clear both when work is settled.
-The deadline tint stays visible through row hover and selection; selected cells
-retain a ring outline so selection does not depend on the background.
+Pages compose `Row`, `Stack`, `Grid` and `Section` from `~/ui/layout` when the
+layout repeats or encodes a real decision. Their variants live in
+`src/ui/layout/layouts.ts` and share one named scale read from the design-token
+spacing steps: `tight` 2px, `xs` 4px, `snug` 6px, `sm` 8px, `md` 12px (default
+for `Stack` and `Grid`), `lg` 16px. `tight` and `snug` are the sanctioned dense
+sub-scale and need no marker.
 
-Mounted record labels share `useDisplayNow`, refreshing once per minute and on
-focus/visibility changes, including household midnight and sleep/wake; they do
-not depend on a query refetch. `formatTimestamp` and `formatDateSpan` supply the
-same full label for string-only captions. Keep dates absolute in record names,
-persisted evidence, or narrative sentences that already describe their relative
-context (overdue/quiet periods or uncertain/open chart intervals); relative ages
-must not enter AI evidence or be repeated mid-sentence. Task summaries pass the optional end
-so an ongoing window cannot collapse to a past start day. Browser checks verify
-unclipped labels rather than only matching DOM text. `formatCalendarDay` and
-`formatInstant` remain absolute primitives for editable date inputs,
-calendar/chart axes and headings, month labels, and fixed-format diagnostics.
+- **`Stack`** is `flex flex-col` with `space-y-*` margins, so inline children
+  still break onto separate lines. It replaces `<div className="space-y-N">`.
+  A child that is `inline-flex` with no width (a bare `Button`) stretches to the
+  stack width.
+- **`Row`** is `flex` with no defaults; `align`, `justify`, `wrap` and `gap` are
+  opt-in.
+- **`Grid`** takes `cols` presets (`pair`, `cards3`, `thumbs`, `images`,
+  `summary`) and `gap`; custom `grid-cols-[…]` stays raw.
+- **`Section`** renders a semantic `<section>` with an optional heading; its
+  presentation is in [DESIGN.md](../DESIGN.md#page-building-blocks).
+- `Row`, `Stack` and `Grid` are polymorphic through `as`; they take no `href` or
+  router props, so `<a>` and `<Link>` stay raw.
+- Don't wrap a one-off `flex`, a plain `flex-col`, a responsive
+  `flex-col sm:flex-row` switch or an `inline-flex`. Sizing, color, position,
+  radius and typography stay inline through `className`.
 
-Use style tokens—never component hardcoded colors. Semantic color additions get
-both `:root` and `@theme inline` mirrors. Use `size-N` icon sizing (inline/nav
-`size-3.5`, card/tile `size-5`) and the `Badge` primitive for categorical chips.
-A declared enum field renders as an `EnumPill` through one roster: the
-option's compiled `role` picks `StatusValue` (glyph, tone surface, full ink)
-or `CategoryValue` (quiet option-tinted surface, foreground label, colored glyph), and
-booleans render as `BooleanValue` (check / muted dash). The roster is
-`enumFieldOptions`/`enumFieldLabel` (`apps/web/src/entity/display/enum-field-display.tsx`), on
-every surface — generic list cell, embedded relation table, detail value, hero
-chip, previews — and is inline-editable wherever the entity has an update
-command. Never read `control.options` directly for a label, and never add a
-hand-written column for an enum: declare shared labels/colors in
-`control.options` or `display.valueOptions`, including each option's `glyph`
-(Phosphor name + SF Symbol; the web map is `ui/media/option-glyph.tsx`), and
-declare width/mobile on the field instead. `ENTITY_SELECT_OPTIONS` holds only
-web editor sentinels.
-Every `<Image>` declares `displayWidth` as the box's true maximum rendered CSS
-width (widest breakpoint), never a guess or a rung: the helper fetches 2× and
-snaps up to 128/640/2048, so declaring 400 for a ~225px card fetches the 2048
-rung. Prefer image wrappers. Shared identity thumbnails and image-view tiles
-contain the whole image in their frame rather than cropping it. `Image` owns
-lazy hover previews for non-decorative images below 256px declared display width; use
-`preview={false}` for decorative images, existing preview content, or a custom
-trigger that already owns the popup. Missing and failed images never preview. Table thumbnails
-and image-view tiles reuse the drawer’s lazy enlarged hover preview; clicking a
-table thumbnail still opens its display-image source chain.
+## Images
 
-Use the guarded spacing scale and `Row`, `Stack`, `Grid`, `Section` when the
-layout repeats or encodes a real decision. `gap` is for flex/grid siblings;
-`space-y` is for plain block stacks. Dense exceptions are rare `/* tight */`.
+- Every `<Image>` declares `displayWidth` as the box's true maximum rendered CSS
+  width at its widest breakpoint, or opts out with `unoptimized`; the
+  `ImageProps` union enforces this. `transformedImageUrl` (`src/lib/image-url.ts`)
+  requests 2× and snaps up to `IMAGE_WIDTHS` 128/640/2048, so small placements
+  share one URL and cache entry, and overstating a width fetches a larger rung.
+  There is no `srcSet`. The native app mints identical URLs
+  (`CubbyKit/Media/ImageTransform.swift`); change the ladder in both or neither.
+  Non-bucket URLs pass through unchanged, so the rule has no allowlist.
+- `Image` owns lazy hover previews below 256px declared width through the shared
+  `ImagePreviewPopup`. `EntityCover`, `ImageThumbnail`, table thumbnails and
+  image-view tiles reuse it. Pass `preview={false}` for decorative images,
+  existing preview content or a trigger that owns its popup. Missing and failed
+  images never preview. Identity thumbnails contain the whole image.
+- List thumbnails come from the row's server-resolved `displayImages`
+  (`createImageColumn`); the policy is in
+  `server/entity-kernel/repo/entity-display-image.ts`. Clicking a table
+  thumbnail opens its display-image source chain.
 
-Every value choice renders through the one `Picker`
-(`ui/combobox/picker.tsx`); `PickerField` (`entity/forms/picker-field.tsx`) is
-its only react-hook-form binding. Native `<select>` (`cubby/no-native-select`)
-and raw Base UI combobox/select/toggle-group or the toggle-group primitive
-(`cubby/no-raw-value-control`) are banned outside it. Choose the mode
-explicitly: `search` (text input, filter or server search, create) for records
-and long lists; `choose` (Base UI `Select`: arrows, Home/End, letter typeahead,
-no soft keyboard) for a short fixed list; `segmented` (inline button group) for
-a handful of view modes or formats; `suggest` keeps the typed string as its value, with suggestions that fill it. `multiple` keeps several values as chips;
-`footer` pins Clear/Apply for a draft filter. String choices pass `options`
-(`PickerOption`); records pass `items` with an `entity`, built by
-`combobox-builders.tsx` from the manifest — `displayImages[0]` is the picture
-and the phone-row projection (`display.mobile` `subtitle` and `trailing` slots)
-supplies the secondary/status and trailing columns, so declare those slots
-rather than hand-building row content. Each mode and `PickerField` store keeps
-its own value, empty value, focus, and search contract. A picker never displays
-or announces a shortcode: a stored code resolves to its record through
-`useSelectedPickerItems`, showing a loading state meanwhile. `DropdownMenu`
-and the `cmdk` command menu are for navigation and actions, never a value.
-Reference displays whose projection omits the name use the shared by-id
-resolver instead of rendering the stored identifier. Pending reads show loading;
-missing records and failed reads remain explicit, with raw error diagnostics.
-Inventory and cookbook shortcodes retain their individual detail destinations;
-legacy UUID audit references keep their unlinked/index fallback.
-Visual rules live in [DESIGN.md](../DESIGN.md#controls-and-suggestions).
-Suggestion proposals, alternatives, and correction evidence use the canonical
-suggested-field renderer on detail pages and in table reviews. References keep
-their record links and domain pills; plain text and explicit None retain their
-own presentation. Proposed values never borrow the current record's resolved
-values, reference labels, or allocations. Declared enum options retain their
-canonical labels and pills even when a suggestion supplies a display label.
-Acceptance controls keep their existing interaction; linked review values navigate
-to their records.
-Record picker builders add up to two declared metadata values as a searchable
-secondary line. Trailing picker figures use their content width, capped at
-7.5rem, so compact counts do not reserve a full metadata column and squeeze
-inline filter labels.
-The check and name weight indicate selection; the row fill
-indicates pointer or keyboard highlight. Desktop record popups show keyboard
-hints when a caller has not supplied a footer.
-The picker's frame owns its focus ring. Its nested search input suppresses
-the standalone input shadow and border so focus never stacks two outlines.
-On phones, inline suggestion marks reserve their 44px target in layout.
-Invisible hit-area expansion must not cover adjacent edit or relation controls.
+## Dates and times
 
-Search-mode empty results use the mounted Base UI `Combobox.Empty` part,
-with conditional children for loading and errors. A plain empty-state element
-does not register the popup's empty state and lets Escape close its parent
-dialog. Keep the library's live region mounted and test dismissal through the
-real dialog journey.
+- Every human record date, timestamp and declared date range renders through
+  `DateDisplay` (`ui/values/date-display.tsx`). Outside tables it shows the
+  absolute date with year (and clock time for an instant) followed by a muted
+  relative distance: "Oct 13, 2026, 11:50 AM · 2 minutes ago". Instants format in
+  the household zone; plain days never convert through UTC and compare
+  household calendar days. Today, yesterday, tomorrow and ongoing ranges keep
+  those labels; ended ranges take relative context from their end, future ranges
+  from their start. Shipment tracking timelines use this full form.
+- Inside desktop tables (`DenseCellContext`; static tables opt in with
+  `stacked`) the month/day and a compact distance share the cell: "Oct 13 · 3 min
+  ago". Minutes are `min` and months `mo` with a space, and another year leads
+  ("’25 · 1y ago"). Tooltips on hover and focus give exact seconds and the
+  household offset. Date columns start at 96px and declared spans at 320px.
+- Mounted labels share `useDisplayNow`, refreshing each minute and on focus or
+  visibility change, independent of refetches. `formatTimestamp` and
+  `formatDateSpan` give the same label for string captions; `formatCalendarDay`
+  and `formatInstant` stay absolute for inputs, axes, headings and diagnostics.
+  Keep dates absolute in record names, persisted evidence and sentences that
+  already state relative context; relative ages never enter AI evidence.
+- Historical date filters share `historicalDateRangePresets` and
+  `resolveDateRange` (`lib/date-range-presets.ts`), with the same keys, labels
+  and inclusive household-day arithmetic in tables and charts; saved filters
+  keep relative keys. Past month and 12 months are calendar months with month-end
+  clamping. Clearing a range removes both bounds. Timeline windows and imports
+  use `DateRangeShortcuts` and freeze resolved bounds. Deadline editors keep
+  future semantics.
+- Plain-date editors use `DatePickerInput`: typed dates and English expressions
+  such as `1 year ago`, resolved at commit in local calendar time with month-end
+  and leap-day clamping. Invalid drafts stay visible without replacing the
+  committed value.
+- Desktop cells with `DateDisplay`'s open-overdue marker take the destructive
+  tint across the cell, through hover and selection (selected cells keep a ring);
+  the overdue text stays as a second signal and shared status logic clears both.
 
-Use `RTable` for interactive lists and review queues, and `StaticTable` for
-simple read-only summaries, reports, comparisons, and form previews. Links and
-bounded form actions may live in static cells; search, filters, sorting, row
-navigation, and inspection belong to `RTable`, not a second list implementation.
-Bounded non-entity lists use `useLocalTable` for client-side search/filter/sort
-and the shared column layout. Its search accessor may include evidence absent
-from displayed columns; table metadata declares that search to the shared
-filter controls. Complete local data may supply result and opted-in facet
-counts; a server page must never masquerade as the full result set. The local
-table's `totalCount` identifies truncated source reads and suppresses those
-counts; its caller labels the loaded scope. The table does not read or write
-the page's URL state.
+## Values, enums and references
 
-Declared `display.columnGroup` labels form quiet desktop header bands above
-the ordinary sortable/filterable column headers. Shared identity columns stay
-outside the bands. Columns in a band remain contiguous: reorder members within
-their band, move whole bands earlier/later in Columns, and pin/unpin all members
-together. Group Show/Hide changes the member columns' visibility; individual
-visibility controls still work. A group with no visible members has no header.
-Layout application also repairs interleaved groups and split pin regions.
-These controls use the existing session-only column layout and Restore defaults.
-Phone cards keep their existing composition; Columns offers the same groups.
-Related-preview columns declare the same `columnGroup` in the related-view
-presentation registry; their data loading remains with the existing shared
-related-preview pipeline.
+- Reference labels read their declared title field through `readRecordField`,
+  including derived values. Report rows that already resolve related labels
+  include them rather than fetching from a mounted cell. A Vendor Account's title
+  derives from Vendor and member.
+- A declared enum field renders as `EnumPill` through one roster,
+  `enumFieldOptions`/`enumFieldLabel`
+  (`entity/display/enum-field-display.tsx`), on every surface, and is
+  inline-editable wherever the entity has an update command. The option's
+  compiled `role` picks `StatusValue` or `CategoryValue`; booleans render as
+  `BooleanValue`. Never read `control.options` directly for a label or
+  hand-write an enum column: declare labels, colors and each option's `glyph`
+  (Phosphor name plus SF Symbol; web map in `ui/media/option-glyph.tsx`) in
+  `control.options` or `display.valueOptions`, and width/mobile on the field.
+  `ENTITY_SELECT_OPTIONS` holds only web editor sentinels.
+- Reference displays whose projection omits the name use the shared by-id
+  resolver, never the stored identifier. Pending reads show loading; missing
+  records and failed reads stay explicit with raw diagnostics.
+- Suggestion proposals, alternatives and correction evidence use the canonical
+  suggested-field renderer on detail pages and in table reviews. Proposed values
+  never borrow the current record's resolved values, labels or allocations;
+  declared enum options keep their canonical labels.
 
-Every entity list declares its thematic bands with its own fields. Catalog and
-stock facts, purchasing and settlement, work and dependencies, and execution
-and results stay distinct. Custom relation columns join the same bands through
-the shared column helpers. Identity, quality, images, and audit timestamps remain
-outside thematic bands; narrow lists may have just one band. Embedded entity
-tables inherit the target fields' bands for the columns they expose.
-
-`display.columnBar` supplements a numeric cell with absolute magnitude against
-the largest absolute value across the table's loaded, filtered rows, before
-pagination. Loading more rows can change this scale. The signed, formatted value
-and clipboard data remain authoritative; refunds are never clamped to zero.
-Zero and unavailable values have no bar, and non-table values keep plain text.
-The scale and loaded scope are available on hover and to assistive technology.
-Opt in for comparable monetary values, counts, durations, calories, or file sizes.
-Do not compare quantities with different units or fabricate trend samples,
-targets, or coverage denominators from a scalar total. A bar is magnitude, not
-completion or a judgment that a larger value is better.
-
-Inventory relation cells keep location and quantity in the two-line dense row
-budget. Supplemental stock context is available as hover and accessible text
-when a location is present; outside dense tables, or without a location, it
-remains visible. A third status line must not overlap the next row.
-
-`RTable`'s `inspector` composes the shared `SidePanelLayout`: a right column at
-wide widths and the shared sheet below, including embedded detail sections.
-Its content receives table row stepping over the filtered/sorted row model;
-domain presenters own evidence and actions. `desktopInspector` remains the
-docked slot for entity-list hosts whose shared inspection owner already
-handles responsive presentation and navigation. Bulk selection and the
-inspector's current row remain independent.
-An open inspector owns Escape before the grid resets cell selection. Nested
-links, buttons, and ARIA controls own their clicks and keys, including SVG
-icon targets; they must not also activate the row. A phone row's own
-`role=button` is the row activation surface, not a nested control.
-
-An opt-in `printable` RTable renders its filtered/sorted loaded rows and open
-row details through `StaticTable`, outside the virtualized screen pane. This
-preserves shopping-list printing; it does not fetch unloaded server pages.
-
-`StaticTable` shares the table atoms with `RTable`, including accessible native
-table attributes. Use its columns, conditional visibility, row headers,
-row styling, and cell props for static reports rather than hand-writing a
-body. Spanning cells may return null cell props for covered cells. `rowDetail`
-renders a full-width row under its parent (a disclosed raw diagnostic); the
-caller owns its open state and toggle. Do not add filtering, navigation, or
-inspection state to `StaticTable`.
-
-Table primitives/raw tables remain for actual matrices, spanning dependency
-grids, authored document tables, and loading skeletons. Debug reports use
-`StaticTable` too; being diagnostic is not an exception. `useTableColumnLayout` owns
-table order/pinning/visibility/sizing. Grid wrappers around tables use a
-zero-minimum track (`grid-cols-1`) so wide columns scroll inside the table
-instead of expanding the page. Decorated cells render through
-`CellFrame`; don't append icons beside a cell value by hand. Hover-only
-controls (explanation, relation workbench, resolution marks) use `CellFrame
-overlay` and reserve no width; they mount only in the hovered or focused cell
-and stand aside (transparent, click-through) over clipped text, where the cell
-spill draws them after the full value. Missing derived values use the shared
-`MissingFieldValue` icon with a focusable explanation: idle means “Not calculated yet”, queued and waiting work use a clock,
-only an observed current execution spins, and failures retain their unavailable
-label and error control. Explanation buttons retain 44px targets on phones and
-coarse pointers. Status explanations use the body font even in numeric columns. Retain existing values
-during refreshes. A derived value reads muted and
-suggestion marks stay in flow. Rich reference cells put their edit pencil in
-that same `CellFrame overlay` rail so it cannot intercept a category link or
-`ChipCluster` overflow control. One-line chip lists use `ChipCluster
-lines={1}` (first chip, "+N" with a tooltip naming the rest). Table headers paint a field's `display.columnLabel`, count icon
-(`entity/column-header.ts`), or linked entity's icon (`meta.linksTo`). Two-line
-cell content uses `StackedValue`, `ChipCluster`, or a shared component's dense
-form (`DenseCellContext`), and clipped codes use `MiddleTruncate`. Rendered entity names are linked and
-readable: use `EntityRefLink` (all record links, one component with variants), a titled truncated link, or `createNameColumn`
-in RTable. Audit history can retain retired entity kinds; icon lookup tolerates
-absent metadata and leaves those references unlinked. Pages use the `Page`
-shell; detail bodies use `DetailSections`. Repeated read-only fact and record rows use `ui/records/ledger.tsx`; preserve their native description/list semantics and keep interactions with the caller. Scalar captions wrap within the value slot and actions stay in the trailing rail. An empty portaled table toolbar leaves no border or spacing above the records.
-
-Record lists fill their available width, including inside a flex fact value;
-their size-contained ledger must not rely on intrinsic width from its children.
-Record ledgers without leading media keep prose in the capped identity track,
-leaving readable space for secondary evidence and next actions; narrow containers
-stack that evidence beneath the identity. A list whose rows carry several
-labelled values declares `columns`: its own `columns` ledger variant places each
-fact explicitly from inline custom properties, gives the identity a
-`minmax(8rem, 1fr)` track instead of the 16rem cap, and keeps its labels in
-each row's `dt` (visually hidden beside the header) so phones and assistive
-tech read them.
-
-Every RTable identity/name cell contains one line of name text, never a caption,
-subtitle, account pill, or other content below it. Put secondary facts in their
-own columns or review evidence. `createNameColumn` has no caption option;
-the desktop identity-cell context suppresses shared stacked secondary values
-and record-link metadata. Custom identity renderers follow the same rule.
-Shelf cards retain their declared subtitles; the native `list.titleSubtitle`
-setting does not affect web tables.
-
-Column factories reuse module-level render components for selection controls:
-`flexRender` treats callbacks as React component types, so refreshing column
-metadata must not remount a focused row or header checkbox.
-Standard editable cell renderers also retain their identity when filter rosters
-or related-column metadata refresh; open drafts and focus survive those reads.
-Presentation preferences that change independently of row data reach cell
-renderers through React context. Recreating column closures alone does not
-update memoized desktop rows; do not remount the table to refresh its visuals.
-
-Component traps that typecheck cannot catch: `DropdownMenuLabel` crashes at
-runtime unless wrapped in `DropdownMenuGroup` (Base UI, not Radix). A column
-`cell` that depends on separately-fetched data must read `row.original` in the
-renderer, never `info.getValue()` — TanStack Table freezes accessor results in
-`row._valuesCache` and rebuilds rows only on data changes. Every entity
-hovercard renders through one `ManifestCard`; an image appears only when the
-entity's `toXCard` spec pushes a `{kind: "thumb"}` block.
-Base UI `useRender` wrappers retain their default tag's prop types; put
-button-only props on the button supplied through `render`.
-
-For component-level exceptions and examples, load the relevant heading in [the
-preserved web UI reference](web-ui-reference.md).
-
-## Technical representations
+### Technical representations
 
 Use `InspectableValue` (`ui/values/inspectable-value.tsx`) for explicitly chosen
-readable/raw pairs. Keep the readable label visible with a dotted underline;
-hover or keyboard focus reveals the exact raw value, and click/tap keeps the
-popover open for selection and Copy. Escape and outside interaction dismiss it.
-Pass the exact technical string rather than reconstructing it from display text.
-Do not hide essential facts, wrap existing buttons/links, or automatically make
-every field inspectable. Run types and run timeline reason, phase and input-mode
-labels use this shared component; standalone technical facts remain visible.
+readable/raw pairs: the readable label stays visible with a dotted underline,
+hover or focus reveals the exact raw value, and click keeps the popover open for
+selection and Copy. Pass the exact technical string. Do not hide essential facts,
+wrap existing buttons or links, or make every field inspectable. Run types and
+run timeline reason, phase and input-mode labels use it.
+
+## Value pickers
+
+Every value choice renders through `Picker` (`ui/combobox/picker.tsx`);
+`PickerField` (`entity/forms/picker-field.tsx`) is its only react-hook-form
+binding. Native `<select>` (`cubby/no-native-select`) and raw Base UI
+combobox/select/autocomplete/toggle-group (`cubby/no-raw-value-control`) are
+banned outside it. `DropdownMenu` and the `cmdk` command menu are for navigation
+and actions, never values. [DESIGN.md](../DESIGN.md#controls-and-suggestions) owns
+the picker's appearance.
+
+- Choose the mode explicitly: `search` for records and long lists, `choose`
+  (Base UI `Select`) for a short fixed list, `segmented` for a handful of view
+  modes, `suggest` when the typed string is the value. `multiple` keeps several
+  values as chips; `footer` pins Clear/Apply for a draft filter. Each mode keeps
+  its own value, empty value, focus and search contract.
+- String choices pass `options` (`PickerOption`). Records pass `items` built by
+  `entity/picker/combobox-builders.tsx` from the manifest: `displayImages[0]` is
+  the picture and the `display.mobile` `subtitle` and `trailing` slots supply
+  secondary and trailing columns, plus up to two declared metadata values as a
+  searchable line. Declare those slots rather than hand-building rows.
+- A picker never displays or announces a shortcode: stored codes resolve through
+  `useSelectedPickerItems` with a loading state.
+- Search-mode empty results use the mounted `Combobox.Empty` part with
+  conditional loading and error children; a plain element lets Escape close the
+  parent dialog. Test dismissal through the real dialog.
+- The picker frame owns its focus ring; the nested input suppresses its own.
+  On phones inline suggestion marks reserve their 44px target, and invisible hit
+  areas must not cover neighbouring controls.
+
+## Record identity
+
+Every entity has a detail route, so a rendered entity name is never plain
+truncated text. Use `EntityRefLink` (all record links; variants `inline`, `chip`,
+`list`, `byId`, `preview`, `table`, `audit`, `filter`, `order`), which links to
+the detail route with a hover preview, passing the entity's real title field
+(`displayName` for financial transactions, `filename` for images). Where the
+inline variant doesn't fit (chart axes, tree rows, calendar chips), use a
+truncated link with `title={name}`, unlinked only when an ancestor `<a>` owns the
+click or the row has no id. Inside `RTable` use `createNameColumn` (width,
+truncation, tooltip, `table` link, optional rename; `header` relabels embedded
+tables, `nameSuffix` adds an affordance). An embedded table also links its own
+rows' entity, not only their relations. Audit history may name retired entity
+kinds; icon lookup tolerates absent metadata and leaves them unlinked. Inventory
+and cookbook shortcodes keep their own detail destinations.
 
 ### Record link appearance
 
-`EntityRefLink` renders a record pill by default. Use `bare` for table name
-columns. The shared pill owns image size, text, fallback marks and wrapping;
-entity declarations own labels and identity data. Candidate filter rows reuse
-the same noninteractive identity, with detail and counts outside the pill.
-Resolve canonical display images in batches at collection boundaries and pass
-them through the display-image provider, including transitive images. Never
-start an image or record-mark metadata query from a cell or option row. Use
-identity metadata already supplied by the owner; a missing mark falls back to
-the canonical entity mark.
-
-Detail identity headers use the canonical display-image resolver when the local
-gallery is empty, including Vendor logos and inherited Product Brand images.
-Resolve that cover at the page boundary, not from the thumbnail. Eligibility
-follows image storage and display bindings, including logo storage; the legacy
-`hasImages` gallery/cover trait does not gate identity imagery. Keep the Images
-section limited to the record's own gallery; borrowed covers do not become
-attachments. A header with a thumbnail omits its duplicate generic title mark.
+`EntityRefLink` renders a record pill by default; table name columns use `bare`.
+The pill owns image size, text, fallback marks and wrapping; declarations own
+labels and identity data. Candidate filter rows reuse the noninteractive pill.
+Never start an image or record-mark query from a cell or option row; a missing
+mark falls back to the canonical entity mark.
 
 ### Record pill display images
 
-Grouping labels use `GroupValueLabel` for the same canonical image-or-entity
-mark beside their existing text. `GroupLabelsProvider` batches record-valued
-group identities from the loaded summaries, including nested dimensions;
-labels never fetch imagery or metadata themselves. Pivot row, column and
-sub-row headers, grouped table/card/shelf sections and board headings share
-this presentation. Marks keep a compact, stable footprint without adding record
-links or changing sort, disclosure, filtering or drag behavior. Missing images
-retain the canonical entity mark; no-value, date and scalar groups stay text.
+All record identity imagery uses the canonical display-image resolver. Raw
+galleries, Product image summaries and direct logo/cover joins never select a
+second identity image; URL-only picker projections serialize canonical results.
 
-`EntityPill` uses the shared canonical display-image context, including borrowed
-images along declared relationship paths. Collection owners prepare image refs
-for their loaded rows through `EntityDisplayImagesProvider`; audit feeds do this
-for all loaded entries. The shared app provider collects otherwise-uncovered
-mounted references into the same chunked resolver. Pills register references,
-never own a query. Explicit collection batches retain ownership and seeded null
-results remain authoritative. Records with no eligible image retain their mark.
+- Collection owners batch image refs for their loaded rows through
+  `EntityDisplayImagesProvider`, including transitive images along declared
+  relationship paths. The shared app provider collects otherwise-uncovered
+  mounted references into the same chunked resolver. Pills register references
+  and never own a query; explicit batches and seeded null results stay
+  authoritative. `useEntityDisplayImage` accepts a known seed.
+- Grouping labels use `GroupValueLabel`; `GroupLabelsProvider` batches
+  record-valued group identities, including nested dimensions, for pivots,
+  grouped tables, cards, shelves and boards. Scalar, date and empty groups stay
+  text.
+- Detail headers use the canonical resolver when the local gallery is empty,
+  including Vendor logos and inherited Brand images, resolved at the page
+  boundary. The Images section shows only the record's own gallery.
+- Calendar grids, span chips, agenda rows and the day sheet share one provider
+  seeded from the range response's `displayImages`; the day sheet makes no
+  separate image query.
+- Location trees carry canonical media for the whole loaded tree; child photo
+  contact sheets are compartment evidence, never a parent fallback. Native
+  consumers follow the same contract.
 
-Home Meals and record-backed work rows use `EntityRefLink` pills with collection-owned
-image batches. Queue review links retain their Suggestions destination. Source
-transaction records borrow canonical images through accepted transaction evidence.
-A unique supported merchant suggestion supplies a later decorative Vendor logo
-fallback; ambiguous and insufficient history retain the semantic mark.
+## Tables
 
-Calendar grids, span chips, agenda rows and the day sheet share one display-image
-provider for the loaded range. The server resolves `displayImages` for every item type in one range batch.
-The month grid uses compact single-line pills, identity marks and desktop
-controls with caption-sized labels. Its lane CSS variables also drive placement
-and drag geometry; density changes never scale painted chips separately from
-their slots. Phone navigation keeps the shared touch-target floor.
-The grid and day sheet seed the shared context from that response.
-Compact span rows show a small thumbnail when available; missing images retain
-the kind icon. Opening the day sheet does not create a separate image query.
-Calendar spending rows convey refunds through their negative amounts without a
-separate Refund badge.
+Interactive record work uses `RTable` (`entity/table/table.tsx`): search,
+filters, sorting, selection, grouping, row navigation and inspection belong
+there, not in a second list implementation. `cubby/no-raw-table` rejects raw
+`<table>` outside exempted files.
 
-All record identity imagery uses the canonical resolver. Raw attachment galleries,
-Product image summaries, nested identity-product photos, and direct logo/cover
-joins must not select a second identity image. URL-only picker projections remain
-serializers of canonical results. Location trees carry canonical media for the
-whole loaded tree; child photo contact sheets remain explicit compartment evidence
-and never become a parent identity fallback. Recipe heroes and comparisons, Arrange, tools, and Location contents use the same image context.
-`useEntityDisplayImage` accepts a known canonical seed so a projected image or
-explicit no-image result does not register another request with the shell batch.
+- **`StaticTable`** renders simple read-only summaries, reports, comparisons,
+  form previews and debug reports. It shares `RTable`'s table atoms and native
+  attributes: columns, conditional visibility, row headers, row styling and cell
+  props (covered spanning cells return null). `rowDetail` renders a full-width
+  row under its parent with caller-owned open state. Never add filtering,
+  navigation or inspection to it.
+- **`Table` primitives** (`~/ui/primitives/table`) are styling over a native
+  table for embedded static data: they own borders, padding, hover and header
+  type, and pass `rowSpan`/`colSpan` through. `Table` is `table-fixed` and
+  `TableCell` `whitespace-nowrap`; pass `table-auto` or `whitespace-normal` for
+  content-sized or prose cells, `border-b-0` to drop a divider.
+- **Raw `<table>`** is for matrices and cross-tabs (`CrossTabTable`,
+  `RecipeCompareGrid`), spanning dependency grids and authored document tables
+  (`markdown.tsx`), each exempted by path in `.oxlintrc.json`.
+- **`useLocalTable`** gives bounded non-entity lists client-side
+  search/filter/sort and the shared column layout. Its search accessor may cover
+  evidence outside visible columns. Only complete local data supplies result and
+  facet counts; `totalCount` marks a truncated source and suppresses them. It
+  never touches URL state.
+- Grid wrappers around tables use a zero-minimum track (`grid-cols-1`) so wide
+  columns scroll inside the table.
 
-The same contract applies to native typed consumers: Location lists read the
-tree’s canonical media, and recount Products receive canonical media in the
-shared inventory read batch. Neither client reconstructs identity from galleries.
+### Keyboard, selection and copy
 
-### Activity work feed
+Arrows move between cells; Cmd/Ctrl+arrow jumps to the data edge; Home/End go to
+the first/last column and Cmd/Ctrl+Home/End to the first/last cell; PageUp/Down
+move one viewport; Shift extends a range; Tab wraps at row boundaries. Editors
+keep their own keys; J/K step rows and Cmd/Ctrl+Enter opens the record. Nested
+links, buttons and ARIA controls (including SVG icon targets) own their clicks and
+keys and never also activate the row; a phone row's own `role=button` is the row
+surface. An open inspector owns Escape before the grid resets selection. Bulk
+selection and the inspector's current row stay independent.
 
-Now owns current work state, pace and watchdog explanations. Internal Job kinds
-stay out of the member-facing stream list; derived drain health attaches to
-Derived values. Raw watchdog evidence is collapsed under Watchdog details.
-The live header dot is static for reduced motion; an idle feed reads All quiet.
-Run codes are spaced, capped at three with a +N remainder, and share a command
-line below the secondary text on phone. Run evaluation bars compose ProgressLabel
-and ProgressValue; inactive Runs show paused bars without a rate or ETA.
+Highlighted text uses native copy. Cell selection copies the complete value even
+when clipped. Scalar columns share `createEditableAccessorColumn`: one
+row-parametrized clipboard descriptor supplies range operations and the editor.
+Columns without a typed clipboard declaration copy as read-only text.
+
+### Row height
+
+`RTable` rows have one fixed height (`--table-row-height`, read by `ROW_DENSITY`
+in `ui/data-table/density.ts`): 24px on a fine-pointer desktop, 32px on coarse
+pointers and hosted native workspaces. The virtualizer places rows at that
+height, so a taller painted row makes scrolling jump; section headers match it.
+`DesktopDataRow` clips every cell to the height.
+
+- At 24px every cell is one line: `StackedValue` lays its parts on one line and
+  `ChipCluster` fits one line of chips and counts the rest as "+N" (at 32px both
+  keep two lines). The first named chip stays visible, truncating beside the
+  count; a populated cell never collapses to only "+1".
+- A value in a desktop cell takes its dense form through `DenseCellContext`
+  (set by `DesktopDataRow`; other surfaces pass `stacked`). Add dense forms to
+  the shared component, not a table-only twin. Clipped codes use
+  `MiddleTruncate`.
+- Enum values read as a dot and text at `md` and above (`table.css`, keyed off
+  `data-enum-tone`); only `status`-role warning and destructive options keep a
+  filled pill. The choice reads the declared role and tone, never the spelling.
+- Inventory relation cells keep location and quantity in the two-line dense
+  budget; supplemental stock context moves to hover and accessible text. A third
+  line never overlaps the next row.
+
+### Table chrome
+
+- The toolbar is search, `Filter`, `Display` and `Actions`. `DisplayMenu` holds
+  layout, sort, group and columns, each keeping its owner (URL `view` and
+  `groupBy`, table sorting, column layout); a dot marks a non-default
+  arrangement. Views without a table get it from `ListWorkbenchMenus`. `Actions`
+  holds saved views and Find suggestions.
+- `TableFooterBar` is always visible on a page list, one row tall. It prints the
+  record count ("20+ products" while uncounted), declared totals, unresolved
+  membership, suggestion status and "+N empty". Column sums print only when the
+  list declares no totals, marked "(loaded)" while pages remain. Prior values
+  stay dimmed during transitions; "Unavailable" means a failed read or a missing
+  total.
+- A counted page reports `unresolvedCount` only under a result filter, so
+  `useEntityList` counts any list with an active non-search filter; an absent
+  count shows nothing.
+- Right-click on a desktop row opens its `meta.rowMenu` at the pointer;
+  modified clicks, text selections and inputs keep the native menu.
+- Group headers are sticky one-row bands with metrics under their columns
+  (`columnTotals`).
+- Generic lists hide Created and Updated unless sorted by them. Custom list
+  projections return both audit timestamps; tree child rows use their own
+  entity's timestamps.
+- An opt-in `printable` table renders its loaded filtered rows and open details
+  through `StaticTable` outside the virtualized pane; it never fetches unloaded
+  pages.
+
+### Column widths
+
+- `useTableColumnLayout` seeds order, pinning, visibility and size; TanStack
+  holds them in session state and reloading restores declared defaults. Do not
+  add browser or account persistence for column layouts.
+- `moveColumn` is the one writer of user layout changes and `applyColumnLayout`
+  replaces a whole layout (`ui/data-table/column-layout.ts`). Pinned order lives
+  only in `columnPinning`, center order in `columnOrder`, and every surface reads
+  regions through `columnsByRegion`.
+- Widths are TanStack numeric `size`/`minSize`/`maxSize`; the platform publishes
+  matching CSS variables on the colgroup, and only sticky offsets inherit into
+  rows. Tailwind width classes on `meta.className` are normalized legacy input.
+- An undeclared width comes from the cell kind (`defaultColumnSize`).
+  Read-only enum, boolean, date and timestamp fields carry their own kind so
+  they size like editable twins. A field declares `display.width` only when its
+  longest label outgrows the kind default.
+- Rendered-content fitting samples headers, aggregate footers and at most 36
+  painted body rows in one offscreen batch, skipping skeletons and `aria-busy`
+  placeholders. Fits grow within a query scope and reset with it; unchanged cells
+  keep their measurement, editors keep the previous fit and manual sizes win.
+  Fits stop at the kind's cap (`columnFitMax`); spare pane width goes only to
+  the identity column, up to 240px.
+- Header labels (`HeaderLabel`) hold one line and paint their short form
+  (`display.columnLabel`, or the entity icon for a count; `entity/column-header.ts`),
+  keeping the full label as accessible name and tooltip.
+- Empty columns leave the painted grid (`emptyColumnIds`) until the footer's
+  "+N empty" brings them back; cell selection skips them.
+- Clipped values spill over neighbours instead of widening (`useCellSpill`,
+  `[data-cell-spill]`); `data-cell-spill-off` exempts a control. Spills forward
+  presses to their source cell and copy rail controls.
+- Select (32px), Image and the identity are structural leading columns, kept
+  visible and start-pinned; Actions is the structural trailing column. The
+  trailing gutter cell stays `w-0`.
+
+### Cells
+
+- Decorated cells render through `CellFrame`; never append icons beside a value
+  by hand. Hover-only controls (explanation, relation workbench, resolution
+  marks, rich-reference edit pencils) use `CellFrame overlay`, reserve no width,
+  mount only in the hovered or focused row and step aside over clipped text.
+  Explanation buttons keep 44px targets on phones and coarse pointers, and status
+  text uses the body font even in numeric columns.
+- A missing derived value uses `MissingFieldValue` with a focusable explanation.
+  An inherited value keeps `InheritedMarker` visible; suggestion marks stay in
+  flow.
+- One-line chip lists use `ChipCluster lines={1}`; two-line content uses
+  `StackedValue`, `ChipCluster` or a shared dense form.
+- Every identity cell holds one line of name text: no caption, subtitle or pill
+  beneath. `createNameColumn` has no caption option. Shelf cards keep declared
+  subtitles; `list.titleSubtitle` does not affect web tables.
+- `display.columnBar` adds magnitude against the largest absolute loaded,
+  filtered value (`CellMagnitudeBar`); loading more can rescale it. The signed
+  value and clipboard stay authoritative; zero and unavailable values get no bar.
+  Opt in for comparable money, counts, durations, calories or sizes; never mix
+  units or fabricate targets. A bar is magnitude, not completion.
+- Declared `display.columnGroup`s are metadata for the Columns menu: bands stay
+  contiguous, move and pin as a unit, and Show/Hide toggles members. Every entity
+  list declares its own thematic groups; identity, quality, images and audit
+  timestamps stay outside them. Related-preview columns declare the same groups.
+
+### Inspector
+
+`RTable`'s `inspector` composes `SidePanelLayout`: a right column at wide widths
+and the shared sheet below, with row stepping over the filtered, sorted model.
+`desktopInspector` is the docked slot for hosts whose inspection owner already
+handles responsive presentation. Responsive layouts that move an editor between
+sidebar and sheet keep selected values with the page's selection owner.
+
+### Renderer stability
+
+- Column factories reuse module-level render components for selection
+  controls: `flexRender` treats callbacks as component types, so refreshed
+  metadata must not remount a focused checkbox. Standard editable cells keep
+  their identity across roster and metadata refreshes.
+- Preferences that change independently of row data reach cells through React
+  context; recreating column closures does not update memoized rows, and do not
+  remount the table.
+- A `cell` depending on separately fetched data reads `row.original`, never
+  `info.getValue()`: TanStack freezes accessor results in `row._valuesCache`.
+- Unchanged rendered cells keep their measured width contribution within a query
+  scope, and mutations without an unmeasured eligible cell skip geometry reads.
+
+### Component traps
+
+`DropdownMenuLabel` crashes unless wrapped in `DropdownMenuGroup` (Base UI, not
+Radix). Base UI `useRender` wrappers keep their default tag's prop types; put
+button-only props on the `render` button. Every entity hovercard renders through
+`ManifestCard`; it shows an image only when the entity's `toXCard` spec pushes a
+`{kind: "thumb"}` block.
+
+## Detail ledgers
+
+Repeated read-only facts use `ui/records/ledger.tsx`; read-only record lists use
+`RecordList` and its `Record*` parts (`ui/records/record-list.tsx`), which render
+a records `Ledger`. `cubby/no-hand-rolled-record-list` rejects hand-rolled
+divided lists.
+
+- `Ledger` chooses facts (`dl`) or records (`ul`); compose `LedgerRow` with
+  `LedgerCell` slots for leading identity, primary, secondary, trailing,
+  actions and expanded details. A `LedgerRow` outside a `Ledger` throws in
+  development because subgrid rows lose their columns.
+- The container owns column adaptation through inline-size containment, so it
+  must stretch in any parent and never rely on child intrinsic width.
+- Layout stays in the ledger; links, commands, choices, mutation state and raw
+  diagnostics stay with the caller.
+- Only a form or `data-ledger-expanded` content moves actions below the record;
+  compact controls stay in the rail. Expanded forms and full-width prose span a
+  lower row.
+- A list whose rows carry several labelled values declares `columns`; each row
+  keeps its labels in `dt` (visually hidden beside the header) for phones and
+  assistive tech.
+- Pinned selected cells use an opaque mixed surface; never apply a translucent
+  background over it.
+- Tests select the semantic facts ledger and assert real labels. Browser
+  readability checks compare painted text against clipping bounds.
+
+## Page shell
+
+Every list and detail page renders through `Page` (`~/entity/page/page`), whose
+props are a discriminated union: `variant="detail"` requires `entity`. Pages
+never call `PageWrapper` directly. Detail bodies use `DetailSections`
+(`~/entity/table/detail-page`) as children. Headings and disclosure follow
+[shared headings](../DESIGN.md#shared-headings-and-actions). An empty portaled
+table toolbar leaves no border or spacing. Run detail owns the shared agent
+controls, transcript and progress presentation.
+
+### Ordinary overlays
+
+Use [`Overlay`](../src/ui/overlays/overlay.tsx) for modal workflows and workspace
+panels; [DESIGN.md](../DESIGN.md#component-sources-and-boundaries) owns its
+presentation and submission lifetime. Pass actions directly from the owner;
+forms use a shared native form id. Command, photo and modeless inspector
+surfaces keep their own engines.
+
+## Work page
+
+`/activity` is the Work page: a health line, a Stuck section only when something
+is stuck, the Needs you queue, then links to Suggestions, Missing facts, All work
+and History (`/history`, Run history and recorded Changes). It answers whether
+background work is healthy and what needs a member, with no scheduler or queue
+vocabulary (wakes, leases, tickets, deadlines, pace, refresh counts); telemetry
+belongs to `/jobs`, Run and Job pages, and MCP.
+
+- The health line states Healthy, Catching up, Stuck or Unknown, never a count of
+  internal work, percentage or ETA. A failed read says the page cannot tell, with
+  raw diagnostics and Try again, and never claims all clear.
+- Stuck rows show an outcome title, one sentence on consequence or remedy, at
+  most one action, and a closed Technical details disclosure with the raw
+  failure and Copy. Eight rows show first; Show more reveals the rest in place. A
+  retry rereads every 10 seconds for two minutes, then stops.
+- Needs you is the embedded `WorkQueue` grouped by Reason over
+  `NEEDS_YOU_FILTERS`, the same population as the sidebar and Home. Empty, it
+  reads `Nothing needs you.`; with incomplete inputs it shows the known-work
+  notice instead, because an unknown source cannot be claimed empty. Source and
+  Problem keys never reach the member.
+- When the published queue's last republish failed or its rows are over ten
+  minutes old, Home, Work and the full queue add one line: "Needs you last
+  updated <relative time>", "; the latest update failed" when it did, a closed
+  Technical details disclosure with Copy, and Retry. The rows stay.
+- The sidebar Work row shows the needs-you count and, only when something is
+  stuck or the count is behind, a static warning glyph; the collapsed rail shows
+  one dot with the same label. Healthy work shows nothing at any backlog size, a
+  failed read stays silent, and the read never polls.
+- Run types is the "What does each Run do?" reference: targets, exclusions,
+  effects, dependencies, cost and recovery, with ordered steps reusing
+  declaration labels. Static definitions forecast; Run and Job evidence stays
+  canonical. Execution details sit behind a technical disclosure, and Job/Run
+  headers link to their definitions.
+- Settings → Maintenance keeps the daily pass and repair tools behind a closed
+  disclosure, so opening Settings reads no maintenance status. Recipe re-parsing
+  and alias pruning require a successful preview before Apply; each
+  Current/Proposed sample states its coverage, and the server rechecks
+  eligibility at Apply. Repair comparisons span the width below the description.

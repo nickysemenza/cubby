@@ -29,6 +29,6 @@ silently fails to fire a React `onClick`, try a coordinate click.
 Native owns fieldwork: barcode/QR scanning, recount, sweep, and the location
 photo pass live in `apps/apple`, and the web app is not an installable PWA. Do
 not add camera scanning, a recount/sweep/photo-pass screen, a manifest, or
-install prompts here; the old `/scan`, `/inventory/session`, and
-`/locations/photo-pass` URLs are deliberately 404. Keep the scan/reconcile
+install prompts here; `/scan`, `/inventory/session`, and
+`/locations/photo-pass` stay 404. Keep the scan/reconcile
 server operations the app calls ([inventory audit](../../docs/inventory-audit.md)).

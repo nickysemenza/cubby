@@ -1,825 +1,230 @@
 # Production migrations
 
-The GitHub production deployment applies pending committed migrations before
-deploying the already-built Worker. A migration failure stops deployment. The
-runner uses only `PRODUCTION_DIRECT_DATABASE_URL` for production; it never
-falls back to `DATABASE_URL`. Default to one preserving migration followed by the
-matching Worker deploy. Old requests and Job attempts may fail; compatibility
-rollouts, timed retirement waits and feature-specific release procedures are not
-the default. There is no daily whole-population consistency pass. A newly declared target
-enrolls only records missing its publication, using its declared source and
-publication owner in the migration. Existing publications and tickets stay
-intact; a changed rule does not re-enroll the entire population. Use an explicit
-scoped repair when a demonstrated defect requires recomputation. Temporary stale
-quality badges do not justify a staged cutover.
-Preserve source data, money and member decisions, verify with synthetic predecessor
-data before merge, then read back production data and schema after release. See the
+Merging to `main` deploys production. The Deploy workflow applies every pending
+committed migration in `apps/web/drizzle/`, then deploys the already-built
+Worker. A migration failure stops the deployment. The runner uses only
+`PRODUCTION_DIRECT_DATABASE_URL`; it never falls back to `DATABASE_URL`. See
+[CI](../ci.md#deployment) for workflow execution and retries and the
 [domain rules](../agents/domain-rules.md#production-changes) for preservation
-requirements and [CI](../ci.md#deployment) for workflow execution and retries.
+requirements.
+
 Do not run production migrations by hand while a Deploy run is queued or
 running; Actions serialization does not cover operator shells.
 
-## Historical investigation
+## Non-graceful cutover (default)
 
-For Neon snapshot readback, pass `finalize: false` explicitly to
-`restore_snapshot`, omit `target_branch_id`, and use a separate endpoint on the
-returned branch. `finalize: true` can replace the source branch's production
-endpoint and default designation even when the restore creates a new branch;
-it is a production cutover, not an isolated copy. Before querying, verify both
-branch IDs and endpoint assignments: the production hostname and default branch
-must still point to the original production branch. Retain any unexpected
-branch writes for reconciliation before removing an investigation branch.
+Ship one preserving migration with the matching Worker and clients in one PR.
+Merging applies the migration and deploys the code. Downtime is acceptable: old
+web, native, MCP, cron and queue requests may fail during or after the switch.
+No writer hold, maintenance window, rehearsal, compatibility rollout, timed wait
+or feature-specific release procedure is required.
 
-## Staged and breaking cutovers
+Preservation is still required:
 
-One exclusive operator owns a staged cutover, including Actions and local
-applications. Before merging a migration history containing an unsafe contraction, set
-the `cloudflare` GitHub Environment variable `PRODUCTION_MIGRATION_THROUGH` to
-the exact last compatible migration tag. Actions passes this inclusive boundary
-to the existing runner, then deploys the matching code. Leave it set until the
-operator applies and verifies the contraction after deployment; then delete the
-variable before the next release. A boundary behind the applied database fails
-closed. If no new migration is safe before deploy, use the last already-applied
-tag. Never guess compatibility from a migration's name or SQL keywords.
-From setting the boundary or applying an unmerged expansion until the staged
-PR merges, admit no other `main` merge or Deploy retry: that revision lacks the
-new migration folder name and fails closed. Merge the staged PR next.
+- Transform existing rows in the same migration that changes their shape.
+- Lock every copy source and destination against writes before reading them,
+  hold those locks through the copy and drop, and refuse a contraction unless
+  all retained content has a verified destination.
+- Preserve source data, money, member decisions and unfinished paid or
+  member-requested work. Queued work whose only durable copy is a queue message
+  needs a destination before its consumer changes.
+- Cover the migration with synthetic predecessor data before merge
+  (`apps/web/tooling/*-migration.integration.test.ts`).
+- After release, read back the transformed data and schema, and check that
+  ordinary household writes work. A temporary failure during the switch does
+  not justify skipping the read-back.
 
-For a breaking cutover that cannot use this sequence, establish its documented
-writer barrier and apply the authorized migrations manually before merge; the
-deployment runner will verify that applied prefix. Keep the barrier until the
-matching deployment and preservation readback succeed. No other release or
-operator may overlap this cutover.
+Derived data needs no migration-time backfill; its owner is
+[Background derived data](../entities.md#background-derived-data). Temporary
+stale badges do not justify a staged cutover.
 
-For authorized household deployments, use a non-graceful cutover with writers
-enabled by default. No writer hold or maintenance window is required. The normal
-Actions migration-before-deploy sequence may apply the preserving contraction
-before the matching Worker deploys. Old requests and
-Workflow attempts may fail during or after that cutover. Lock every retired
-copy source and destination against writes before reading them, hold those
-locks through the copy/drop commit, and refuse contraction unless all retained
-content has a verified destination. Verify preservation and deployment after
-release; do not overlap a manual schema application with Actions.
+## Staged destructive migration (rare)
 
-For an expand/contract rollout, choose the exact last expand folder from
-`apps/web/drizzle/`, excluding the contract migration. Set
-`PRODUCTION_MIGRATION_THROUGH` to that tag before merge, then let Actions apply
-the expansion and deploy. To apply the same expansion manually before merge,
-first ensure no Deploy run can overlap, then run:
+Use this only when a destructive step must wait until the Worker that stops
+reading and writing the retired shape is deployed and verified, and a combined
+migration-plus-deploy would lose data. One operator owns the whole sequence,
+including Actions and local applications.
 
-```sh
-pnpm --filter @cubby/web db:migrate --target=production --through=EXACT_LAST_EXPAND_TAG
-```
+1. Set the `cloudflare` GitHub Environment variable
+   `PRODUCTION_MIGRATION_THROUGH` to the exact last compatible migration folder
+   name. If no new migration is safe before deploy, use the last applied one.
+   Actions passes it to the runner as the inclusive `--through` boundary.
+2. Merge the PR. Actions applies migrations through the boundary and deploys the
+   Worker. Admit no other `main` merge or Deploy retry until the sequence ends:
+   a revision that lacks the new migration folder fails closed.
+3. Verify the deployed Worker, then take a named snapshot (see
+   [Dropping a table](#dropping-a-table-or-deleting-retained-rows)).
+4. Apply the destructive migration from the matching checkout:
 
-Replace the placeholder with the complete timestamped folder name.
-`--through` is inclusive: every pending predecessor runs, and no later entry
-runs. Unknown folder names and unknown, duplicate or changed-hash receipts refuse
-before any migration SQL. A database already beyond the
-requested tag also refuses without mutation; this command never rolls back
-applied migrations. The runner has no dry-run mode.
+   ```sh
+   pnpm --filter @cubby/web db:migrate --target=production --through=EXACT_FOLDER_NAME
+   ```
 
-Verify the applied bookkeeping ends at the expand boundary and read back the
-preserved data. If expansion was manual, keep the environment boundary set
-while merging and deploying the code that stops reading or writing the retired
-shape. Only after that deployment finishes, apply through the chosen contract tag:
+5. Read back the data and schema, then delete `PRODUCTION_MIGRATION_THROUGH` in
+   the same task.
 
-```sh
-pnpm --filter @cubby/web db:migrate --target=production --through=EXACT_LAST_CONTRACT_TAG
-```
+`--through` takes the complete timestamped folder name and is inclusive: every
+pending predecessor runs and no later entry runs. Unknown folder names and
+unknown, duplicate or changed-hash receipts refuse before any SQL. A database
+already beyond the requested boundary refuses without mutation, and so does a
+boundary behind the applied database. The runner never rolls back applied
+migrations and has no dry-run mode. Omitting `--through` applies every pending
+migration.
 
-Read back the transformed data and schema again, then delete the environment
-boundary. A boundary does not identify
-which SQL is compatible with the deployed code; the owner must review that
-boundary before execution. Omitting `--through` retains the usual behavior of
-applying every pending migration and is unsuitable for a staged rollout
-whose journal already contains an undeployed contract.
+A boundary does not prove which SQL is compatible with the deployed code; the
+operator reviews it. Never infer compatibility from a migration's name or SQL
+keywords.
 
-## Dropping a table
+## Locks
+
+Take every lock a migration needs at its start, in a fixed order, so contention
+fails in seconds instead of after a long copy. Dropping a foreign key also locks
+the referenced table. A wide copy can hold `ACCESS EXCLUSIVE` for many minutes;
+the Deploy job's 25-minute timeout bounds the whole run.
+
+An ordinary migration runs in one transaction. The runner retries the whole
+transaction on deadlock (`40P01`) or lock timeout (`55P03`), up to six attempts
+15 seconds apart; each attempt rolls back whole, including other pending
+migrations in that transaction. Any other error, or a sixth failure, stops the
+Deploy with the migration unapplied.
+
+A migration that takes `ACCESS EXCLUSIVE` on many tables can deadlock against
+the running Worker's queue traffic on every attempt. Stop background work first
+if locks contend.
+
+## Migration runner opt-ins
+
+`-- cubby:transaction-per-statement` makes the runner commit each statement
+separately. Ordinary migrations keep Drizzle's transaction behavior. Every
+opted-in statement must be idempotent: committed statements can replay after a
+failure before the final journal receipt. Each statement has a 2-second lock
+timeout, and the runner retries a statement that hits a lock timeout or deadlock
+whole, for about two minutes, then stops the deployment. Everything committed so
+far must stay compatible with the running Worker, because the next Deploy
+resumes from there. One statement can hold several commands in one transaction,
+so a copy and its retirement stay atomic.
+
+- `-- cubby:repeat-batch` repeats a statement whose result is
+  `{ remaining: boolean }`.
+- `-- cubby:outside-transaction` is reserved for concurrent index creation or
+  drop.
+
+The same migration name and hash checks and deployment serialization apply.
+
+## Foreign-key indexes
+
+Check foreign-key indexes before applying SQL that deletes or rekeys many rows.
+An index restricted to live rows cannot support checks against every referring
+row; for example, `SearchDocument`'s live-row identity index does not cover
+tombstones. The operator may create a temporary full index before the
+transaction, drop it after the preservation read-back, and confirm the schema
+matches the committed journal. Never overlap this with an Actions deploy.
+
+## Money unit changes
+
+When a monetary column changes units, give the physical minor-unit column a new
+name. Keeping a numeric predecessor column name can silently accept an old
+Worker's whole-dollar value as cents. Old writers must fail at the database
+boundary; downtime does not authorize wrong-unit writes. Keep client
+dollar-number fields at the checked output boundary, compare every converted row
+by ID, and verify a predecessor write refuses after the cutover.
+
+## Archive schema
+
+Preimages that a migration must retain move to the `archive` schema with their
+foreign keys, triggers and nonessential indexes removed. `db:check` covers only
+`public`. Archived money preimages are retained evidence; drop one only on the
+owner's request.
+
+## Dropping a table or deleting retained rows
 
 A table with no member facts, money, evidence, decisions or unfinished paid or
-member-requested work may be dropped without an archive. Deploy the Worker with its
-readers and writers removed and verify it first, and run one destructive migration
-at a time. Immediately before the migration:
+member-requested work may be dropped without an archive. Deploy and verify the
+Worker with its readers and writers removed first, and run one destructive
+migration at a time. Immediately before the migration, take a named manual
+snapshot and record its id in the PR:
 
 ```sh
 neon snapshots create --name drop-<table>-<date>
 ```
 
-Record the snapshot id and keep the snapshot until the owner deletes it. To recover,
-export the table from an unfinalized restored branch and load it into production:
+Keep the snapshot until the final report, which lists it for the owner to
+delete. To recover, restore to a new branch, export the table from there and
+load it into production:
 
 ```sh
 neon snapshots restore <id> --name verify-<table>
 ```
 
-Never pass `--finalize`, never run `snapshots finalize`, and never reset or restore
-onto the production branch. If table-level recovery would not be enough, do not drop
-the table.
+Never pass `--finalize`, never run `snapshots finalize`, and never reset or
+restore onto the production branch. If table-level recovery would not be enough,
+do not drop the table; stop and report.
 
-`20261105104924_0081_drop_assessment_read` drops `AssessmentReadPublication`,
-`AssessmentReadMembership`, `AssessmentReadDependency` and `AssessmentReadStage`
-this way, and aborts if any holds a row.
+## Snapshot investigation
 
-## Suggestion table (0080)
-
-`20261105100922_0080_suggestion_table` moved `Assessment`, `AssessmentState` and `Feedback` to the
-`archive` schema with their foreign keys, triggers and secondary indexes removed. The
-archive stays until the owner decides otherwise; `db:check` covers only `public`.
-
-Its transaction ran for 15.6 minutes in production, holding ACCESS EXCLUSIVE on Run,
-LedgerParty and AiEvaluation for the wide copy, against a 10-minute estimate. The
-deploy job took 17.5 minutes in all, which is why `deploy.yaml` allows 25. Budget a
-similar copy from this, and take every lock before it, so contention fails in seconds:
-dropping a foreign key also locks the referenced table.
-
-## Mail decision owners (0074)
-
-`20261105072143_0074_mail_decision_owners` moves `email_link`, `email_relevance`,
-`mail_import_outcome` and `run_finding` out of the Assessment ledgers. It runs in
-one transaction with `lock_timeout` 10s per lock. It first takes the
-`email-evidence-write` gate, then locks, in order: Run, LedgerParty, OrderMail,
-OrderMailEvent, Email, EmailClassificationObservation (ACCESS EXCLUSIVE, for its
-new columns), RunOperation, Assessment, AssessmentState, Feedback. Those are held
-through commit and block their writers; only the observation table also blocks
-reads. Each LOCK is a separate acquisition, and deployed mail writers touch
-Assessment and Email in both orders, so a deadlock or timeout is possible. The
-runner makes up to six attempts on `40P01` and `55P03`, 15 seconds apart; each
-attempt rolls back whole, including other pending migrations in that transaction.
-Any other error, or a sixth failure, stops the Deploy with this migration unapplied. Use the normal Actions
-migration-before-deploy sequence: no environment boundary, writer hold or waiting
-period. Production duration at 2 CU is unmeasured.
-
-It creates `EmailPurchaseDecision`, `EmailReview` and `RunFinding`, keeping old
-ids, and adds `mailOutcome` to each outcome's `target_outcome` receipt plus
-`application` and `publication` to EmailClassificationObservation. An outcome pairs
-with the receipt its settling transaction wrote: same Run, Email, checksum and
-transaction timestamp. No match or two matches abort. Pending `email_relevance`
-State rows carry no member input and do not migrate. Those updates disable the two
-derived capture triggers, so they enroll nothing. It compares row-hash multisets
-for every copied review, decisions, Emails with an accepted association, member
-labels, current member classification, protecting events per Email, findings,
-finding resolutions with payloads, outcomes with their operation, and prediction
-application, and raises on any difference. Every Feedback row of the four families
-must be copied or fall in a named category, or the migration aborts: projection
-events, independent `email_accuracy` grades and prediction routing receipts stay
-in the ledger.
-
-The unknown-authority `legacy-decision` link apply events (750 on 2026-11-05) are
-not proven to be member decisions. Their current values and `unknown` authority
-are copied to `EmailPurchaseDecision`; the events are excluded from `EmailReview`,
-stay in Feedback for the later archive, and must never be discarded.
-
-Ledger rows stay untouched; a later migration archives them. New triggers refuse
-new Assessment, State and Feedback rows in these families, so a stale Worker's
-write fails instead of committing where nothing reads it. A stale read of
-`AssessmentEmailLink` also fails until the matching Worker serves.
-
-After release, read back the row counts below. A difference from the pre-release
-source aggregate is a blocker: the migration should already have refused it.
-
-```sql
-SELECT count(*), count(*) FILTER (WHERE active) FROM "EmailPurchaseDecision";
-SELECT authority, verdict, count(*) FROM "EmailReview" GROUP BY 1, 2;
-SELECT status, count(*) FROM "RunFinding" GROUP BY 1;
-SELECT count(*) FROM "RunOperation" WHERE (result->'mailOutcome') IS NOT NULL;
-SELECT application, count(*) FROM "EmailClassificationObservation" GROUP BY 1;
-```
-
-The synthetic predecessor fixture is
-`apps/web/tooling/mail-decision-owners-migration.integration.test.ts`.
-
-## Large identity retirements
-
-Check foreign-key indexes before applying SQL. An index restricted to live rows
-cannot support checks against every referring row; `SearchDocument`'s live-row
-identity index does not cover tombstones. For a one-time populated cutover, the
-exclusive operator may create a temporary full index on
-`SearchDocument ("entityId", "entityKind")` before the retirement transaction, then
-drop it after preservation readback and confirm the schema matches the committed
-journal. Never overlap this sequence with an Actions deploy.
-
-## Locks against live queue traffic
-
-A migration that takes `ACCESS EXCLUSIVE` on many tables can deadlock against the
-running Worker's queue traffic on every attempt, as `20261025215135_0037_derived_values` did. Stop
-background work first if locks contend.
-
-## Migration runner opt-ins
-
-`20261025205221_0036_job_entity_identity` uses the migration runner's explicit
-`-- cubby:transaction-per-statement` opt-in. Ordinary migrations retain Drizzle's
-transaction behavior. Every opted-in statement must be idempotent: committed
-statements/batches can replay after a failure before the final journal receipt.
-`-- cubby:repeat-batch` repeats a statement whose result is `{ remaining: boolean }`;
-`-- cubby:outside-transaction` is reserved here for concurrent index creation/drop.
-The same migration name/hash checks and deployment serialization still apply.
-Each statement has a 2-second lock timeout, and the runner retries a statement that
-hits a lock timeout or deadlock whole, about two minutes in all, then stops the
-deployment. Everything committed so far must stay compatible with the running Worker,
-because the next Deploy resumes from there. One statement can hold several commands
-in one transaction, so a cutover's copy and retirement stay atomic.
-
-## Remaining derived retirement gates
-
-The typed reader/writer removal must deploy before destructive retirement.
-The parent serializes all migration merges. Until deployment and live coverage
-readback, retain every derived ticket and trigger: test output and a frozen copy
-comparison are insufficient. ProductConversionCoverage remains its typed table.
-
-After three full Worker rebuilds, record their durations against 15 minutes;
-require each full pass under 45 minutes and inspect CPU/memory termination logs.
-Take the manual snapshot and record its id immediately before each table drop,
-following the recovery procedure in this runbook. Replace derived_mark with a
-no-op first, then use a separate transaction-per-statement migration with
-idempotent table-specific trigger drops and 2-second lock timeout. Catalog
-verification must inspect pg_proc function bodies and pg_trigger, because
-PostgreSQL does not track plpgsql table dependencies. Retire tickets only for
-proven replacement kinds and only where drain = 'derived:drain'.
-
-Before DerivedValue drops, recheck decidedBy legacy counts by key, require zero
-for any key without current replacement output, hand trace FKs/native/MCP and
-identity cleanup, and confirm the deployed Worker has no reader or writer. A
-snapshot restore is unfinalized on a separate verify branch; export that one
-table and load it back if needed. Never finalize or reset production. Retain
-snapshot ids through the final report for the owner to delete.
-
-## Hourly deterministic pass
-
-The Worker cutover adds one DerivedRebuild cursor row and switches execution off
-per-value tickets. Retained tickets stay in place. Before retiring a target's
-tickets, verify replacement output coverage. Retirement always filters
-`drain = 'derived:drain'`; paid and member-directed work belongs to its owner.
-
-Use maintenance.rebuildDerived to start or resume a Worker pass and
-maintenance.derivedRebuildStatus for aggregate progress and the last three
-wall-clock timings. Record three full corpus timings against 15 minutes;
-separately require completion under 45 minutes and inspect Worker logs for CPU
-or memory-limit terminations. A target miss is reported, never hidden by clearing
-retained work. Trigger retirement, catalog checks and DerivedValue drop remain
-separate deployed-reader-first steps under ADR 0025.
-
-## Retiring derived source triggers
-
-Deploy and verify the Worker with the ticket engine and explicit SQL admission
-callers removed first and require per-kind replacement coverage. Record pass
-timings and safety in issue #3662; timing misses do not block this recoverable
-marker/trigger retirement. Retained tickets are not a completion counter and
-are not deleted by this migration.
-
-In one retirement PR and deployment, first replace the shared
-`derived_mark(text, uuid[], text)` function with a no-op preserving its signature
-and default. The same migration then discovers wrapper triggers through `pg_trigger`,
-`pg_proc` and `pg_depend`, then retires them table by table and
-finally removes the shared marker. There is no intervening deployment or timed
-wait. The migration uses transaction-per-statement and a 2-second lock timeout;
-the trigger migration refuses a marker that still writes retained work. Each
-existing repeat-batch transaction locks just one source table and verifies the
-removed trigger count against that transaction's live catalog count. Discovery
-uses the reserved wrapper-function name, including empty wrapper bodies; a
-source-text search or frozen table census cannot establish coverage. Before any
-function drop, require zero wrapper triggers and zero other functions referencing
-the shared marker. Repeat the guard after wrapper-function removal, before
-dropping the shared marker. On refusal, the shared no-op remains installed.
-
-Take a named manual snapshot immediately before this combined retirement, record
-its id, and retain it through the final report. Every drop is idempotent,
-including after partial commits/retry. After deployment, verify source edits
-still commit and replacement reads remain available. Verify `pg_trigger` has no
-remaining derived-mark trigger and `pg_proc` has no body referring to retained
-work tables before B1 drops them. B1 still owns those work tables. Keep
-ProductConversionCoverage; only its ticket trigger retires.
-The separate DerivedValue drop still requires its full consumer
-trace, legacy count by key, production preservation proof and immediately named
-manual snapshot under the table-drop procedure.
-
-## Retiring DerivedValue
-
-After the reader/writer-removal Worker and source-trigger retirement are deployed,
-refresh the complete consumer trace and production catalog. Report by key the
-count of `decidedBy ? 'legacy'` rows and current replacement publication coverage,
-including successful empty results. The contraction refuses any remaining legacy
-annotation, incoming foreign key, source trigger or public function reference;
-its check and table drop hold the same lock/transaction. It never uses CASCADE.
-
-Take `neon snapshots create --name drop-DerivedValue-<date>` immediately before
-the migration and record the id in the PR and final report. Follow the separate,
-unfinalized one-table recovery procedure above; never finalize/reset production.
-The table contains retired computed output only. Keep QualitySnapshot, domain
-read snapshots, ProductConversionCoverage, Recipe totals and SearchDocument, and
-preserve WorkItem/JobInvalidationCapture for B1. Read back that DerivedValue is
-absent, retained source/snapshot/work aggregates match, and generic field/list,
-quality, ownership, valuation, Email links and identity writes still work.
-
-## Typed domain read snapshots
-
-The read snapshot cutover copies each declared result into named, typed columns
-on ProductReadSnapshot, InventoryReadSnapshot, LocationReadSnapshot,
-ProjectReadSnapshot, ExpenseReadSnapshot, EmailReadSnapshot and
-ShipmentReadSnapshot. It preserves the complete decision/evidence JSON, scalar
-sort and publication time. A frozen bidirectional EXCEPT ALL comparison aborts
-on any mismatch; it is copy evidence, not a production rebuild timing. SQL NULL
-publication payloads normalize to JSON null in that comparison, matching the
-reader contract while retaining decisions and publication presence. The populated
-predecessor fixture is `apps/web/tooling/typed-read-snapshots-migration.integration.test.ts`. Foreign
-keys are validated after the copy. The 2-second lock timeout rolls back on
-contention. Retain DerivedValue and tickets until the replacement Worker has
-rebuilt every kind and production coverage is verified.
-
-After deployment, request a Worker rebuild and require all live legacy identities
-for each converted key to have a replacement publication (including successful
-empty output). Investigate missing rows against current sources: deleted or
-inapplicable results may correctly disappear. Keep the scoped 16-minute repair
-procedure below for predecessor invocations. ProductConversionCoverage is unchanged.
-
-## WorkItem, JobInvalidationCapture and PhotoGroupSourceEvidence drop
-
-Deploy the Worker that stops reading and writing them first, and read it back. The migration
-is one transaction: it locks all three tables, checks, then drops, so a lock timeout rolls
-everything back for the runner to retry, and a rerun after a lost receipt is a no-op. Nothing
-reads the tickets, and the hourly pass or a SQL view recomputes every declared target regardless,
-so it needs no finished pass. It refuses a ticket of another drain or an undeclared target, a
-capture of another Job, and any `PhotoGroupSourceEvidence` row. A refusal changes nothing. Take
-the snapshot just before merging, under the drop sequence above. After deploy, confirm the three
-tables and the `WorkTicket` sequence are gone.
-
-## Quality snapshot cutover
-
-The quality cutover adds `QualitySnapshot` and copies every `dataQuality` row's
-identity, kind, rules version, check states and publication time from
-`DerivedValue`. It takes a source SHARE lock with a 2-second lock timeout. The
-foreign key is validated **after** the copy/comparison, taking a short
-SHARE ROW EXCLUSIVE lock on `Entity` at the end of the transaction. A lock
-failure rolls everything back; one rerun after checking contention is reasonable.
-The `EXCEPT ALL` assertion verifies the frozen copy, not live state after commit.
-No legacy rows or waivers are deleted. The matching Worker publishes only the
-typed snapshot and reads it for browse, gap filters/sorts, Work admission and
-field explanations. Quality's snapshot source is declared on its capability,
-so its field envelope retains cached revision, missing and pending states.
-
-Freeze other migration merges from this migration's merge through its deploy.
-When the hourly pass is deployed, request maintenance.rebuildDerived instead of
-marking tickets below. The old Worker can publish only to DerivedValue between migration and deploy,
-including in-flight invocations. At least 16 minutes after the deployed Worker
-is verified (past the 15-minute consumer wall limit), admit the scoped cutover
-repair through the authorized production maintenance procedure:
-
-```sql
-SELECT derived_mark(d.kind || '.dataQuality', array_agg(d."entityId"), 'Quality cutover repair')
-FROM "DerivedValue" d LEFT JOIN "QualitySnapshot" q USING ("entityId")
-WHERE d.key = 'dataQuality' AND (q."entityId" IS NULL OR
-  (d."computedAt" > q."computedAt" AND
-   (d.value->'checks', (d.value->>'rulesVersion')::integer)
-     IS DISTINCT FROM (q.checks, q."rulesVersion")))
-GROUP BY d.kind;
-```
-
-Read back that the same missing-or-different predicate reaches zero after the
-drain, and verify the quality journey. Stable snapshots deliberately retain
-their last content-publication time: a newer legacy timestamp with identical
-checks/version needs no repair and cannot reach timestamp-only equality under
-`IS DISTINCT FROM` publication. Repair never copies old output over new output;
-it recomputes current evidence and waivers. If current source changes produce a
-different result from the old publication, verify it against the current live
-calculation rather than repeatedly re-enrolling the old value. Record aggregates
-and any unresolved difference. Do not infer production preservation from the
-migration comparison alone.
-
-The pair-review input keeps its existing fanout index, now watching
-QualitySnapshot. Its new trigger is installed **after** the bulk copy. The old
-DerivedValue source trigger becomes a no-op until its separate retirement.
-Old quality rows stay until deployed all-reader removal and the separate
-DerivedValue drop. This is not permission to retire tickets before the hourly
-pass proves replacement output.
-
-## Unified Job cutover
-
-This migration replaces the old job tables and removes business triggers. Use
-the non-graceful migration-before-deploy sequence above for an authorized
-deployment; old web, native, MCP, cron and Workflow requests may fail during
-the switch. The migration locks retired sources and destinations before copying
-them. Verify retained data after deploying the matching Worker and clients.
-
-If an earlier operator left the Deploy workflow disabled or pinned
-`PRODUCTION_MIGRATION_THROUGH=0003_explicit_field_publication`, verify no other
-migration owner is active, clear that boundary, and release the matching
-deployment. A boundary at `0003` cannot serve the new Worker, which requires
-the Job table. Do not run a manual migration concurrently with Actions.
-
-Before replacing the old queue consumers, verify and record that legacy messages
-in the queue, its dead-letter queue, and requests already being processed have
-finished or have a verified durable destination in the new model. This
-includes location descriptions and inventory requests: their only durable copy
-may be the old queue message, so the database migration cannot recreate them.
-Resolve failures with the old Worker or preserve their complete work intent
-before proceeding; do not discard messages to make the queue empty. New code
-accepts only Job wake messages, so database preservation alone does not establish
-preservation of legacy queue work. This is a data-preservation check, not a
-requirement to hold household writers.
-
-The migration creates Jobs before removing old scheduling fields. It carries
-pending AI results forward for application without another provider call,
-retains image-processing attempt tokens as historical receipts, and keeps
-embedding IDs and upload receipts. Review history retains who or what made each
-decision. Currently selected embeddings and authoritative household facts are
-preserved. Retired embeddings keep separate history keys; deleted image work is
-cancelled. Historical failed Runs remain available only through explicit retry.
-Terminal AI retry/lease counters are discarded; domain state, raw errors, paid
-usage, results and receipts remain in their owning records.
-
-Run the populated predecessor migration test before release. During the switch,
-record counts and retained receipts for each transformed source, verify the new
-Jobs before dropping their old tables, and confirm the database has no business
-triggers afterward. Resume queue messages only after the new handlers are
-deployed. Then verify a save updates its derived data, cron repairs a missed
-queue message, and failed or manually paused Jobs remain visible without being
-automatically restarted. The migration runner owns the transaction; do not run
-it alongside Actions or another operator.
-
-## Financial evidence cutover
-
-`20261022045556_0005_thin_blink` follows the unified-Jobs migration and shares its data and
-legacy-queue preservation requirements above. Deploy the matching Worker and updated
-clients together: financial CSV upload operations are removed. Agents parse
-exports with the `financial-evidence-import` skill and submit normalized rows.
-Use the authorized non-graceful cutover; no writer hold is required.
-
-Rehearse both migrations on an isolated production copy. Compare complete
-preexisting FinancialTransaction, allocation, Expense, attribution, and external
-reference payloads before and after; totals alone do not prove preservation.
-Verify one current head per explicit source charge, retained first-import
-memberships, migrated Suggestion suppression ownership, and no invented
-completed account windows. Retained ID-less observations stay independent;
-equal amount/date/description is only a reconciliation candidate.
-
-Historical file coverage requires a physical occurrence mapping, including
-zero rows, source bytes, parsed metadata, signed totals, and preserved legacy
-memberships. Registered fingerprints or membership counts alone are insufficient
-where previous imports were partial or accumulated overlapping memberships.
-Rehearse any one-off evidence repair and require unchanged preexisting rows and
-financial lineage inside its transaction. Do not call an export a completed
-provider window or create Expenses merely to close its count discrepancy.
-
-After deployment, start an existing Sweep for `statement_transaction` and
-`transfer_pair` over the retained historical accounts without a recent-date
-filter. Exact evidence replay deliberately schedules no new work, so a
-historical data-only repair needs this explicit discovery pass. Follow its Run
-and budget state, review ambiguous identities against existing Expenses, and
-report unmatched/unbooked work by year. Evidence coverage alone does not satisfy
-historical spending reconciliation.
-
-After deployment, verify a normalized intake and exact replay, a fresh source
-revision, paused automatic spending, and visible correction review. Confirm
-pending or unknown evidence stays honestly labeled. Withdrawals require a
-completed, all-visibility account window plus persisted source recheck; a limited
-Monarch response cannot authorize them. Check ordinary household writes after
-deployment; a temporary failure during the switch does not justify skipping
-these checks.
+For Neon snapshot read-back through MCP, pass `finalize: false` explicitly to
+`restore_snapshot`, omit `target_branch_id`, and use a separate endpoint on the
+returned branch. `finalize: true` can replace the source branch's production
+endpoint and default designation even when the restore creates a new branch; it
+is a production cutover, not an isolated copy. Before querying, verify both
+branch IDs and endpoint assignments: the production hostname and default branch
+must still point to the original production branch. Retain any unexpected branch
+writes for reconciliation before removing an investigation branch.
 
 ## Baseline consolidation
 
 Neon is the only persistent application database; dev and CI databases are
-synthetic and disposable. The current baseline replaces the retired series
-through `0103_statement_charge_history`. Fresh databases apply
-`20261020233250_0000_baseline/migration.sql`, including derived DDL, optional Neon diagnostics, and
-fresh-install Automatic rule defaults. `db:check` compares the resulting
-catalog with `schema.ts` plus desired-state derived DDL.
+synthetic and disposable. Fresh databases apply
+`20261020233250_0000_baseline/migration.sql`, including derived DDL, optional
+Neon diagnostics and fresh-install Automatic rule defaults. `db:check` compares
+the resulting catalog with `schema.ts` plus desired-state derived DDL.
 
-`baseline.json` pins the baseline SQL hash and the count and SHA-256
-fingerprint of the complete retired ledger. The fingerprint hashes the ordered
-`created_at:hash\n` rows (decimal timestamps, original SQL SHA-256 hashes).
-On encountering that exact ledger, the normal runner transactionally replaces
-only `drizzle.__drizzle_migrations` rows with the baseline record, then applies
-any post-baseline migrations. It never executes baseline SQL on that database,
-changes application data, or resets the database. Partial, edited, extra, or
+`baseline.json` pins the baseline SQL hash and the count and SHA-256 fingerprint
+of the complete retired ledger. The fingerprint hashes the ordered
+`created_at:hash\n` rows (decimal timestamps, original SQL SHA-256 hashes). On
+encountering that exact ledger, the runner transactionally replaces only
+`drizzle.__drizzle_migrations` rows with the baseline record, then applies any
+post-baseline migrations. It never executes baseline SQL on that database,
+changes application data or resets the database. Partial, edited, extra or
 unknown histories fail closed. An interrupted transaction retains the old
-ledger; rerunning after successful adoption follows the ordinary named-history path.
-The baseline hash is immutable after adoption.
+ledger; rerunning after adoption follows the ordinary named-history path. The
+baseline hash is immutable after adoption.
 
-Before merging a consolidation, serialize with production deployment and verify
-that Neon has applied the complete retired journal, including any staged
-contractions. Clear any obsolete `PRODUCTION_MIGRATION_THROUGH` boundary before
-the new baseline deploy; retired tags are deliberately rejected. Compare a
-fresh baseline catalog with production using `db:check --against-production`
-and record the retired ledger fingerprint read-only. After deployment, verify
-one baseline bookkeeping row and unchanged application data/schema. No reset or
-manual deletion of production bookkeeping is part of this procedure. If Neon
-is behind, apply its missing original migrations from the preceding revision
-before deploying the consolidation. Retired SQL and its preservation tests
-remain in Git history: remove tests that locate or replay retired SQL in the
-consolidation PR, while retaining domain write/readback coverage for current
-invariants. New migrations get populated-predecessor coverage.
+A new consolidation needs explicit authorization. Before merging it, serialize
+with production deployment and verify that Neon has applied the complete retired
+journal. Clear any `PRODUCTION_MIGRATION_THROUGH` boundary first; retired tags
+are rejected. Compare a fresh baseline catalog with production using
+`db:check --against-production` and record the retired ledger fingerprint
+read-only. After deployment, verify one baseline bookkeeping row and unchanged
+application data and schema. No reset or manual deletion of production
+bookkeeping is part of this procedure. If Neon is behind, apply its missing
+original migrations from the preceding revision before deploying the
+consolidation. Remove tests that locate or replay retired SQL in the
+consolidation PR, and keep domain write and read-back coverage for current
+invariants.
 
 ### Drizzle v1 history
 
-Migrations live in timestamped folders with immutable `migration.sql` bytes.
-The v1 cutover preserved all 118 PostgreSQL SQL files and each SQLite store's
-SQL. PostgreSQL's previously pruned snapshots are represented by one converted
-format-9 generation baseline at `20261106180850_0116_adr25-l2f-image/snapshot.json`.
-The retained baseline uses v1 serialization after fresh replay and model-built
-catalogs were verified equal, avoiding formatting-only index/check rebuilds.
-The incoming `20261106235744_0117_background-work-recovery` data-only migration
-retains its SQL unchanged and a native v1 custom snapshot after that baseline.
-Earlier SQL folders remain executable history; that generation baseline is not
-an instruction to replay or squash them. Keep every snapshot generated after
-this boundary: format 9 reconstructs later state from the complete graph.
+Each migration lives in `<UTC timestamp>_<name>/migration.sql`, whose bytes are
+immutable once merged. The snapshot graph starts at the format-9 generation
+baseline `20261106180850_0116_adr25-l2f-image/snapshot.json`; keep every
+snapshot after it, because v1 reconstructs later state from the complete graph.
+Earlier SQL folders remain executable history.
 
-The runner validates applied SQL hashes before allowing Drizzle to add `name`
-and `applied_at` to legacy bookkeeping. Existing timestamps and hashes remain
-intact; new receipts use full folder names. The exact retired-ledger baseline
-adoption above remains available through `baseline.json`. SQLite stores use
-Drizzle's in-place ledger upgrade under their initialization transaction and
-retain object names, bindings and stored rows.
-
-`--through` requires the exact timestamped folder name. Check any production
-`PRODUCTION_MIGRATION_THROUGH` boundary before merging this cutover; an old
-numbered tag must be deliberately translated or cleared by its operator.
-`db:check` checks the snapshot graph against the generated model and compares
-fresh replay with a model-built catalog. Run `drizzle-kit check` for branch
-conflicts. Never run `generate --fix-conflicts` against history a durable
+The runner validates applied SQL hashes before Drizzle adds `name` and
+`applied_at` to legacy bookkeeping; new receipts use full folder names. SQLite
+stores use Drizzle's in-place ledger upgrade under their initialization
+transaction. `db:check` checks the snapshot graph against the generated model
+and compares fresh replay with a model-built catalog. Run `drizzle-kit check` for
+branch conflicts. Never run `generate --fix-conflicts` against history a durable
 database has applied: that repair may delete migrations and demand a reset.
 
 ### Declared views during a table reshape
 
 A view follows its source table's OID when `ALTER TABLE ... SET SCHEMA archive`
 moves it. Creating a replacement public table does not rebind that view. Any
-reshape of a declared view's source must recreate the view against the new public
-table in the same migration. Regenerate it from `renderDeclaredDerivedViews` and
-verify its values before retiring the old source. `db:check`, including
-`--against-production`, rejects public views and materialized views with catalog
-dependencies on `archive`; the populated catalog journey covers this exact move.
-
-## Dropping a table or deleting retained rows
-
-Do this only after the Worker with its readers and writers removed is deployed and read
-back. Run one destructive migration at a time. Immediately before merging it, take a
-named manual snapshot and record its id in the PR:
-
-```sh
-neon snapshots create --name drop-<table>-<date>
-```
-
-Keep it until the final report, which lists it for the owner to delete. To recover,
-restore to a new branch, export the table from there and load it into production:
-
-```sh
-neon snapshots restore <id> --name verify-<table>
-```
-
-Never pass `--finalize`, never run `snapshots finalize`, and never reset or restore onto
-the production branch. If table-level recovery would not be enough, stop and report.
-
-## Source-claim minor units
-
-`20261105170357_0096_source_claim_minor_units` is a direct contract cutover. The running statement planner and label application read LedgerSourceClaim through booking-lineage checks. Label application also reaches LedgerTransfer through canonical FinancialTransaction read-back. A zero-row result does not establish table independence, so these refresh gates remain until the retained steps are terminal. The release owner
-must wait for the active financial refresh's generation and subsequent statement
-steps to reach terminal outcomes before merging it. No writer hold, branch-copy
-rehearsal or dual writer is required. Parent owns merge sequencing with other
-migration lanes; reconcile its snapshot graph on current main before release.
-The migration takes a short `RunStep` share lock and refuses unfinished financial
-steps in any running Run or the latest statement Run, including a failed Run
-awaiting recovery. A failed parent status does not prove its continuation finished.
-
-The migration locks the claim table and its FK endpoints with a two-second lock
-timeout. It refuses unrepresentable money and unhandled view dependencies before
-changing storage. It moves the complete original table to
-`archive.LedgerSourceClaim_dollar_preimage`, creates the replacement with signed
-bigint `targetAmountMinor`, and compares complete row-level hash multisets, including nulls
-and tombstones, against the exact allowed conversion. Original rows are checked
-again unchanged. An independent ID join also requires every archived dollar
-double to equal converted cents divided by 100 in IEEE arithmetic; this catches
-noise hidden by PostgreSQL's rounded `float8::numeric` cast. It rebinds incoming/outgoing FKs and current triggers, then
-removes archived outgoing FKs, triggers and nonessential indexes. The archive is
-retained indefinitely in this goal; no table or original source JSON is dropped.
-
-Run the populated-predecessor source-claim migration regression and `db:check`
-before merge. Parent's independent reviewer must examine signed conversion,
-full-row preservation, FK/trigger rebinding, archive inertness and the unchanged
-native dollar-number boundary. After deployment, independently compare retained
-claim IDs, source keys, decisions, normalized evidence and timestamps; verify
-target cents exactly match archived dollars × 100 and that Expense/transfer
-reads still return dollar numbers. Verify live source-claim replacement and
-exact replay through supported commands. A successful migration alone proves
-neither runtime acceptance nor completed historical reconciliation.
-
-When a monetary column changes units, give the physical minor-unit column a
-new name. Keeping a numeric predecessor column name can silently accept an old
-Worker's whole-dollar integer as cents, especially on a reviewed mismatch.
-Old writers must fail at the database boundary; downtime does not authorize
-wrong-unit writes. Keep client dollar-number fields at the checked output
-boundary. Verify a predecessor write refuses after the cutover.
-
-Financial cutover gates recognize only done steps or an ended failed Run with failureCode user_cancelled and no nonterminal Job. Run, Job and RunStep share locks close admission races. A cancelled parent with queued, running, retry_wait or paused execution remains blocked; every other failure still blocks the existing active/latest-refresh scope. Old running step cursors and counters remain unchanged by the gate exception. No nonexistent RunStep cancelled state is assumed.
-
-## Ledger-transfer minor units
-
-`20261105170357_0097_ledger_transfer_minor_units` follows the source-claim migration. Each
-money cutover releases separately after terminal financial refresh and independent
-money review; the applied migration prefix is immutable.
-It preserves original transfer rows under `archive.LedgerTransfer_dollar_preimage`
-and compares full-row hash multisets against exactly `amount` → `amountMinor`
-and dollars × 100, including parties, notes, dates and tombstones. Money
-also passes independent IEEE round-trip equality by ID, and the same
-RunStep release refusal protects a refresh started between stack deployments.
-Incoming FinancialTransaction/source-claim references and outgoing party/identity FKs
-are rebound to the replacement; archived rows retain no live FKs or triggers.
-
-Run the populated-predecessor transfer migration regression, ledger/transfer
-journeys and household contribution report coverage, then check catalog parity.
-After deployment, independently verify retained transfers and claims, party
-positions, attached evidence, exact archived-dollar/current-cent equality, number
-outputs and refusal of predecessor `amount` writes. Include kernel create/update `item.amount`
-responses in the unit audit: mutation receipts patch client caches directly.
-Stored bigint cents must be converted before constructing receipt JSON. Note-only
-transfer edits preserve omitted evidence; fresh or changed evidence must reject
-noisy amounts through the financial constraint boundary. Migration completion is not
-historical financial acceptance. No transfer is reclassified as Expense spend.
-
-## Receipt-payment evidence minor units
-
-The receipt-payment cutover follows reviewed source/booking/closure contracts;
-the parent assigns its number at the front of the migration queue. It takes the
-same Run/Job/RunStep terminal gate and locks PurchasePaymentEvidence before copying
-its full dollar preimage to archive and renaming the public amount column.
-Independent IEEE equality by ID and complete equality of every other field must
-pass. Negative and zero lines, source ownership, timestamps and PK/FKs survive.
-A two-second lock timeout rolls back; the release owner retries after contention.
-
-After deployment verify the archived-dollar/current-cent mapping, catalog parity,
-source relationships, dollar-shaped audit and review outputs, retained reconciliation
-fingerprints and refusal of old-column writes. Preserve original receipt payloads
-and successful operation receipts. This migration does not convert Expense costs,
-reclassify issuer credits, finish historical reconciliation or enable recurrence.
-
-## Source occurrence ownership (0098)
-
-`20261105170357_0098_source_occurrence_ownership` follows both minor-unit money migrations.
-It is a direct cutover, with the same RunStep gate: all retained financial refresh steps must be terminal.
-
-Retain `archive.SourceTransactionRecord_occurrence_preimage`,
-`archive.TransactionImportRecord_occurrence_preimage` and
-`archive.EntityExternalId_financial_preimage`. They preserve complete original
-rows, including tombstones and original source judgments. The migration rebuilds
-public facts, annotations, aliases and memberships, reconstructs every removed
-field independently, and refuses any mismatch. Exact source money must pass
-independent IEEE round-trip comparison. Incoming/outgoing FKs and row triggers
-are rebound; archives retain no live FK, trigger or nonessential index.
-
-Retain pending review rows in place: no pending Suggestion, paid label, suppression or member decision is retired by the cutover. Existing held work remains visible in review; automatic eligibility is a separate current-identity check. Historical transaction links are labelled evidence, never accepted ownership. Failed Run steps retain their errors, counters and metadata. Their old source-key cursors are archived in `archive.RunStep_occurrence_cursor_preimage` and cleared; retry resolves retained aliases into current independent source handles before planning, with one progress unit per original failure ref. Held identities keep a specific review-required failure until explicitly resolved and retried.
-
-The exact migration predicates prove **22,057 identities covering 22,057 of 56,208 observations**: 169 attested provider observations and 21,888 original physical positions; 34,151 remain unresolved. This supersedes the initial 22,139-candidate estimate: 271 flat Monarch rows fail raw scope agreement. Never turn a sole alias owner into accepted identity. The migration promotes acceptance only with a ready proven occurrence, direct v2/v3 binding, complete unique retained binding closure, live target and exact account/amount agreement. Otherwise money stays unchanged. No new review task is generated merely for missing proof.
-
-SourceRecord's existing audited update accepts an explicit `identityResolution`: confirm a distinct event, accept a named existing transaction, or assign an unresolved observation to a reviewed occurrence. It requires the exact observation fingerprint, owner version, accepted owner and complete live historical transaction set that were reviewed, plus account, explicit open/ignored judgment and decision note. It preserves ignore judgments and original evidence, records resolved historical bindings without deleting them, and never runs from intake or automatic rules. Missing proof alone is not a member task. Use this only for an actual explicit financial judgment; do not invent one to drain historical work.
-
-Before release, independently review identity partitions, current-pointer and
-replacement membership FKs, all lock classes and stale receipts, money and
-relationship conservation, inert archives, and every retired alias/folding caller.
-After deploy, read back counts and full-row preservation aggregates and verify
-representative member reads/writes before historical booking or a Monarch pull.
-Do not run the SQL manually. Native installation remains unverified.
-
-## Contracting the old Project start-date snapshot
-
-ProjectStartDateView reads the live Project override or the retained
-rollups.dateWindow.derivedStart. Its four predecessor startDate columns in
-ProjectReadSnapshot have no remaining read or writer. Keep the typed table,
-rollups, completion year, diagnostics and the authored Project.startDate.
-
-The live reader has already moved to ProjectStartDateView. The generic publisher
-writes only each declaration's explicit columns and skips view declarations; it
-never selects or returns this table's full schema. No runtime caller imports the
-ProjectReadSnapshot Drizzle table. Removing the four unused schema declarations
-therefore adds no reader cutover or migration pin. Verify the deployed view and
-zero old-column readers/writers, take a named manual snapshot immediately before
-merge, then apply this contraction through Actions. Record zero legacy-decision
-and catalog-dependency counts, live view coverage and preservation read-back.
-Keep the typed table and authored dates. This separate column contraction does
-not authorize a table or retained-work drop.
-
-## Source judgment-owner cutover
-
-`20261106041138_0107_source_judgment_owner_cutover` gives each previously ownerless bank record a
-singleton `unproven` owner, copies its original financial decisions and lifecycle,
-and makes occurrence membership mandatory. It uses the retained financial RunStep
-gate and locks copy sources/destinations before transformation. Independent full-row
-checks preserve bank records, aliases, original annotations, existing owners,
-collection membership and money. No records are accepted or spending created.
-Old annotation financial columns remain historical evidence; active writes go only
-to the owner. Notes and exact reviewed replacement selections remain local.
-
-Inactive or unmappable financial presentation suppressions are cleared; an active
-fingerprinted recommendation keeps its exact-revision dismissal. Explicit ignore,
-account, accepted-money and attribution decisions remain unchanged. New MCP input
-states require a reconnect because tools/list is cached per session. A local
-migration fixture does not establish deployment, connector refresh or reconciliation
-completion. Production application and readback require separate authorization.
-
-## Suggestion review wire cutover (ADR 0025 L2)
-
-`20261106172113_0111_adr25-l2-suggestions` changes declared review-reference keys on
-`AiEvaluation.target`, paid field-result outputs, publication receipts, and field
-Suggestion proposal/outcome envelopes. It locks both owners before reading,
-checks each transformed value by reversing the rename, and compares each full
-row after writing. Conflicting old/new keys abort. Input snapshots and provenance
-fingerprints, immutable archive ledgers, member decisions, publication identities
-and queued/paid work remain unchanged. The migration does not traverse arbitrary
-member values or frozen source evidence. Apple writes require 2.71.0, matching the
-new review inputs. The parent renumbers the migration during integration.
-
-## Suggestion served flag retirement (ADR 0025 L2b)
-
-0112 locks Suggestion and retires every unserved row (trial output that was
-never a member review candidate or automatic decision) as inactive history. It
-verifies row by row that only `active` changed, including retained evaluation
-decisions on trials, then rebuilds the three partial reference indexes without
-the obsolete flag and drops the column.
-Publication, evidence and decisions remain unchanged. The two connection scope
-indexes also drop their served predicate in desired-state DDL.
-
-## CorrectionLock retirement (ADR 0025 L2d)
-
-0112 removes the last CorrectionLock writers and drops its key-only table under
-an exclusive lock. Keys contain no member facts, money, evidence, decisions or
-unfinished work. Image intent uses its Image row, Suggestion review its Suggestion
-row, and Email mutations their existing domain rows and serializable retries.
-There is no household-wide Email evidence gate.
-
-## Field sweep consolidation (ADR 0025 L2e)
-
-Migration `20261106180849_0115_adr25-l2e-sweep` locks Runs, steps, Jobs and evaluation demand
-before copying its verification witnesses. It converts `suggestion_sweep` Runs
-in place to a single field family under `sweep`, updates the execution Job's
-purpose, and records roster/evaluate steps. Run progress and every Job state,
-generation, cursor and result remain intact; the evaluate step also retains
-the old progress as diagnostic JSON text. Evaluation targets, requests, results,
-receipts and model fingerprints stay intact. Frozen input drops the legacy kind
-and paused flag and moves its pinned model to `model`.
-
-The migration compares every retained row and row count before contracting the
-Run purpose check. Malformed scopes, conflicting ledgers or Job purposes, and
-unfinished pre-roster progress without durable targets refuse atomically; they
-need evidence reconciliation rather than replaying already completed paid work.
-After deployment verify the converted Run's field scope, steps, original status
-and Job checkpoint, then resume through `run.control` when appropriate.
-
-## Image description ownership (ADR 0025 L2f)
-
-`adr25-l2f-image` is one breaking migration with matching clients. It locks
-Suggestion and Image against writes through commit, archives every image-description
-Suggestion exactly in `archive.Suggestion_image_description`, and checks archive
-JSON against every source row. Each live confirmation (active, current content
-hash, undeleted Image, valid owner) copies its text, source hash, confirmation time
-(the latest application decision time, otherwise the retained update time) and
-owner provenance into Image, read back with null-safe comparisons. For a live
-confirmation, non-text, subject/target mismatch or unequal copy raises an
-exception. Historical rows, including those for since-deleted Images, remain only
-in archive; the latest live confirmation owns the Image columns. Only after verification are live family rows deleted.
-There is no database family enum or CHECK to contract; the schema union removes
-the family. No history is reconstructed.
-
-Before integration, run the migration in a transaction on synthetic predecessor
-data, verify text/hash/time/provenance and full archived JSON, exercise refusal,
-and roll back. After the matching deployment, verify the four Image columns,
-archive parity, absence of live family rows, selected description reads and
-`image.confirm_description`. Old Suggestion review requests for images are unsupported.
-
-## Retiring cut features (`20261109191634_retire_cut_features`, #3899)
-
-One staged, non-graceful cutover. The migration deletes undecided machinery
-output, retires Wish and drops the archived review ledgers. It keeps every
-decided or applied Suggestion, every `Run` (AiUsage cost evidence), every failed
-Job of a mail or member-requested Run, and every `archive` money preimage. It
-deletes, and cannot undo:
-
-- undecided, unapplied `Suggestion` rows of `product_pair`, `transfer_pair`,
-  `product.tag-propagation` and `connection.*` except `connection.email-purchase`;
-- `AiEvaluation` rows (and their requests) with `connection`, `product` or
-  `product_pair` targets; queued or blocked Email evaluations of `ai_refresh`
-  Runs become `obsolete`;
-- failed `run.execute` Jobs of scheduled, failed `ai_refresh` Runs;
-- every Wish `Entity`, its `Wish` row, links, audit rows, search documents and
-  embeddings (AiUsage keeps its row with the attribution cleared);
-- `archive."Feedback"`, `"AssessmentState"` and `"Assessment"`;
-- the retired connection-discovery cursor in `AppSettings`.
-
-Sequence:
-
-1. Set the `cloudflare` Environment variable `PRODUCTION_MIGRATION_THROUGH` to
-   `20261109072002_run_finding_conflict_payload`, then merge. Actions applies
-   nothing newer and deploys the Worker that no longer reads or writes the cut
-   features. Admit no other `main` merge or Deploy retry until the cutover ends.
-2. Snapshot Neon: `neon snapshots create --name retire-cut-features-<date>`.
-   The archive drop and Wish deletion are not reversible otherwise.
-3. Apply through the new tag from the matching checkout with the production
-   migration runner, `through: "20261109191634_retire_cut_features"`.
-4. Read back: no `Entity` row of kind `wish` and no `Wish` table; no `Suggestion`
-   of `product_pair`/`transfer_pair` with an empty `decisions` and a status other
-   than `applied`; no `recommendation` scope except `connection.email-purchase`
-   without a decision or application; no `AiEvaluation` with a `connection`,
-   `product` or `product_pair` target; the `Run` and `AiUsage` counts equal the
-   pre-migration counts; `archive` holds no `Feedback`, `Assessment` or
-   `AssessmentState` and still holds every `*_preimage` table.
-5. Delete `PRODUCTION_MIGRATION_THROUGH` before the next release and confirm one
-   `email-purchase-discovery` drain pass completes.
-
-`apps/web/tooling/retire-cut-features-migration.integration.test.ts` pins the
-keep/delete rules on synthetic rows.
+reshape of a declared view's source must recreate the view against the new
+public table in the same migration. Regenerate it from
+`renderDeclaredDerivedViews` and verify its values before retiring the old
+source. `db:check`, including `--against-production`, rejects public views and
+materialized views with catalog dependencies on `archive`.

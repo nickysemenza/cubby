@@ -63,8 +63,7 @@ resolves concepts whose names differ across layers.
   transaction settled one Purchase. Evidence only: its amount never enters spend.
   A transaction has either no allocations (unlinked evidence) or a set that sums
   to its amount exactly and shares its sign. Recording a split as two _posted
-  transactions_ instead is what this replaced — that made the database assert
-  card events that never occurred.
+  transactions_ instead would assert card events that never occurred.
 
 ---
 
@@ -162,6 +161,12 @@ House  →  Room  →  Shelf  →  Bin
 - Each location has a printable QR **shortcode** (`LOC-XXXXX` for new codes).
   Existing four-character codes and legacy `L-XXXX` labels remain accepted on
   input, so previously printed labels still resolve.
+- A **Location name** identifies a known physical place or the recorded contents
+  of an existing container.
+- A **Bulk storage location** holds additional supplies separately from
+  everyday access or active use, including while temporarily empty.
+  [Backstock](#domain-language) is the Inventory a member keeps there or
+  elsewhere of a Product that is not stock-tracked.
 
 ---
 
@@ -217,7 +222,7 @@ House  →  Room  →  Shelf  →  Bin
 
 ## Project tracker (Project / Task / Expense)
 
-The household project tracker (migrated from Notion) is a self-contained module:
+The household project tracker is a self-contained module:
 
 - **Project** — groups Tasks and Expenses. `projectDependency` links are
   blocked-by edges between projects ("blocking" is the reverse read).
@@ -229,6 +234,10 @@ The household project tracker (migrated from Notion) is a self-contained module:
   Kind follows the work: standalone home maintenance, repair, and replacement
   are Household; remodeling a room or structure is Renovation. A room name
   alone does not make maintenance a renovation.
+  A **Standing household project** is an ongoing Project for routine
+  consumption. Its scope is separate from
+  [automatic Expense project routing](how-values-are-determined.md), which
+  decides which Expenses default to it.
 - **Task** — `task.projectId` is nullable by design; project-less top-level
   open tasks are the Inbox saved filter on `/tasks?view=list` (plus
   promote-to-project).
@@ -392,21 +401,6 @@ FinancialAccount ──< FinancialTransaction >──< Allocation >──< Purch
     ancillary amount earns its own typed Expense; no tax rate or reconciliation
     difference is used to estimate one.
 
-**API shape vs. columns.** `expense.vendor` and `expense.orderId` are no longer
-columns, but `expenseOut` still exposes both (resolved through
-`expense.purchaseId → Purchase → Vendor`) and adds `purchaseId` + `vendorId`.
-Create/update inputs still **accept `vendor` as a plain name string** plus
-`orderId`, and the repo resolves them via `findOrCreateVendor` +
-`findOrCreatePurchase` inside the caller's transaction — which is what keeps MCP,
-quick-add, and the purchase-import skill unchanged across the split. The ledger's
-vendor _filter_, by contrast, is now `vendorId`-based, not a free-text match.
-
-**Operations** (`domains/purchase/repo/purchase.ts`): `linkExpensesToPurchase` (one invoice
-spanning trades), `splitExpense` (replaces the old `(combo, saw portion)` row-name
-convention), `mergePurchases` (groups the order-less singletons the backfill
-couldn't join; refuses across vendors and refuses when both sides carry a
-non-null order id).
-
 ---
 
 ## Recipe / Section / MealRecipe
@@ -464,11 +458,11 @@ Three verbs that all _bring data in_ but mean different things:
   Product with USDA nutrition or running portion data through WASM. Enrichment
   never owns the row; it adds to it.
 
-| Verb    | Direction                       | Owns the row?    | Typical trigger               |
-| ------- | ------------------------------- | ---------------- | ----------------------------- |
-| Capture | user → DB                       | yes (creates it) | barcode scan, quick add       |
-| Import  | external source → DB            | yes (creates it) | recipe scrape / EPUB / Notion |
-| Enrich  | external/derived → existing row | no (decorates)   | USDA link, WASM conversion    |
+| Verb    | Direction                       | Owns the row?    | Typical trigger            |
+| ------- | ------------------------------- | ---------------- | -------------------------- |
+| Capture | user → DB                       | yes (creates it) | barcode scan, quick add    |
+| Import  | external source → DB            | yes (creates it) | recipe scrape / EPUB       |
+| Enrich  | external/derived → existing row | no (decorates)   | USDA link, WASM conversion |
 
 ---
 
@@ -483,7 +477,6 @@ a tagged provenance union for the API. Values:
 | ------------ | ------------------------------ | ----------------------------------------------------- |
 | `Website`    | Scraped/imported from a URL    | `sourceUrl`                                           |
 | `Book`       | Extracted from a cookbook EPUB | `cookbookId` (FK → `Cookbook`); `sourceLabel` if none |
-| `Notion`     | Synced from a Notion page      | an `EntityExternalId` (`source` notion, `kind` page)  |
 | `Other`      | No identifiable source         | nothing                                               |
 
 A `Book` recipe's title is its Cookbook's name, so the recipe stores no copy of
@@ -507,10 +500,6 @@ it; `sourceLabel` holds the title only for a book with no Cookbook row.
 
 Each term names one concept; the _Avoid_ line lists names that blur it.
 
-**Read declaration**:
-The `read` option a repository passes to `listScaffold`: the SQL for read-schema keys the entity declaration cannot compile, the bindings that load the rest, and the repository's ports. Every page, record and writer read-back goes through it ([ADR 0024](../adr/0024-repository-read-declaration.md)).
-_Avoid_: reader, mapper, `dbXToAPI`
-
 **AI standard cost**:
 The equivalent published API price for AI work before plan coverage or billing discounts, respecting published rates for its token classes, including prompt caching. A comparison may be unavailable when no equivalent price can be established.
 _Avoid_: charged cost, household expense, uncached price
@@ -528,10 +517,9 @@ A durable record of coordinated work, identified by `RUN-`, with a purpose, trig
 _Avoid_: image processing job, individual attempt, search job
 
 **Run kind**:
-A Run purpose declared once in `RUN_KINDS`: its label, trigger, whether it is
-routine or historical, how it executes, and its ordered steps. Routine kinds
-(connection discovery; historical derived refresh passes) are hidden from the Runs list by
-default and create their Run only when a pass has work.
+A Run purpose with its label, trigger, whether it is routine or historical, how
+it executes, and its ordered steps. Routine kinds are hidden from the Runs list
+by default and create their Run only when a pass has work.
 _Avoid_: workflow purpose, step-run purpose
 
 **Run step**:
@@ -543,34 +531,10 @@ percentage or ETA. A step that has not started reads "Not started".
 _Avoid_: phase (a progress sample), child Run
 
 **Job**:
-The durable unit of execution: one keyed Postgres row with a lease, cursor,
-attempts and generation. A `run.execute` Job pages a Run. Jobs are coarse: a Job is not one household record.
+One unit of background work with its own attempts and status, shown under
+Background work. A Run's work executes as a Job. A Job is not one household
+record.
 _Avoid_: task, workflow instance
-
-**Drain Job**:
-Bounded pages over items a domain's own rows owe, with no Job row per item, publishing
-their results. It sleeps until its next item is due.
-_Avoid_: batch Job, page claim, per-item Job
-
-**Work item**:
-One record a drain still owes, held on the row that owes it, with scheduling state such as a
-ticket, readiness, attempts and last error.
-_Avoid_: dirty mark (its derived-value origin), Job, task
-
-**Wake**:
-A Queue message that makes the drain look for due work sooner. It holds no state, and the
-hourly cron recovers a lost one.
-_Avoid_: invalidation, restart
-
-**External claim**:
-A Job lease held by an executor outside the server drain, such as an Apple
-device pull, settling through the same fences as the server.
-_Avoid_: device lease, side channel
-
-**Queue**:
-Transport that wakes the Job drain. A delivered or lost message never
-completes or loses work; the Job rows hold it.
-_Avoid_: Job, backlog
 
 **Image processing job**:
 One image operation, identified by `IPR-`, with its own kind, state, attempts, and diagnostics. The stored `ready` state means successfully completed work; clients display it as Completed. A skipped operation retains its reason and does not imply successful processing. It may belong to a Run or stand alone. Its cost is a component of a parent Run total when both are shown, not an additional household expense.
@@ -652,7 +616,7 @@ A named pairing of two entities with no meaning beyond the pairing: the Products
 _Avoid_: join row, edge table
 
 **External Identifier**:
-A name an outside system gave an entity — a retailer's product number, a barcode, a Notion page, a card statement's order reference — recorded with the source it came from. One identifier from one source names at most one live entity.
+A name an outside system gave an entity — a retailer's product number, a barcode, a card statement's order reference — recorded with the source it came from. One identifier from one source names at most one live entity.
 _Avoid_: source ref, foreign id
 
 **Image Sighting**:
@@ -733,41 +697,47 @@ A value from a fixed or household-edited vocabulary that sorts a record, such
 as a Product Category's feature or a Spending Category.
 _Avoid_: tag (Tags are free-form labels, not classifications)
 
+**Product Category**:
+A classification of what a Product is, independent of why it was purchased.
+Each category's description in the app defines what belongs in it.
+_Avoid_: Spending Category, tag
+
+**Spending Category**:
+A classification of what an Expense's money was spent on, including an explicit
+purpose such as Gifts. It can be known even when individual Products are
+unknown, and it is the grouping spending analytics use.
+_Avoid_: Product Category
+
+**Compatibility tag**:
+A free-form Product tag naming a compatibility or ecosystem, such as a battery
+platform. Like every tag it is a label, not a classification.
+_Avoid_: Product Category
+
 **Classification policy**:
 What a classification value implies about another field on the classified
 record: the field is required, not expected, unknown, or not allowed.
 _Avoid_: field rule, expectation (when meaning the whole policy)
 
-**Assessment**:
-The retired name for a stored computed judgment. Code and wire fields such as
-`assessmentId` still use it for a Suggestion's id. The old `Assessment`,
-`AssessmentState` and `Feedback` rows stay in the `archive` schema.
-_Avoid_: for anything new; say Suggestion
-
-**Connection candidate**:
+**Connection**:
 A proposed, specifically named relationship between existing records, with
 evidence and an explicit effect of acceptance. It is a Suggestion, not a generic
-similarity link. [Connection discovery](entity-connections.md) owns
-discovery and review behavior.
+similarity link, and a new one always needs review. Today Cubby proposes Email
+to Purchase links; [Entity connections](entity-connections.md) owns discovery
+and review behavior.
 
-**Acquisition candidate**:
-A Connection candidate proposing that a particular Purchase or Expense
-acquired a Product. Repeat purchases of the same exact variant are separate
-acquisition events; item cost and quantity can remain unknown.
-
-**Feedback**:
-The household's review of a Suggestion, including its verdict and any corrected
-value, reason or supporting evidence. Each one is kept as a decision on the
-Suggestion, beside automatic application receipts, and a regenerated candidate
-never overwrites it.
+**Review decision**:
+The household's verdict on a Suggestion, with any corrected value, reason or
+supporting evidence. It is kept on the Suggestion beside automatic application
+receipts, and a regenerated candidate never overwrites it.
+_Avoid_: Feedback, Assessment
 
 **Dismissal**:
 A preference to stop presenting a candidate, without asserting whether the
-underlying judgment is correct. Confirming distinct Products is Feedback,
-not a Dismissal.
+underlying judgment is correct. Confirming distinct Products is a Review
+decision, not a Dismissal.
 
 **Email review**:
-Feedback about Email: a member's relevance label, a relevance resolution, a
+A Review decision about Email: a member's relevance label, a relevance resolution, a
 link decision or a grade of a mail import outcome. Email reviews are retained
 with the Email they judged and decide whether unattended work may reopen it.
 
@@ -804,11 +774,11 @@ disagrees, and the counterparty is not a person.
 _Avoid_: statement proposal, auto-match
 
 **Transfer pair suggestion**:
-A Suggestion, in the `transfer_pair` family, that two opposite
-money movements on different accounts are one Ledger Transfer or Internal move.
-Accepting it creates any missing leg and pairs both; dismissing it suppresses
-that pair. Clean, cash-leg and overlap policy lives in
-[ADR 0016](../adr/0016-shared-assessments-and-feedback.md#transfer-pair-suggestions-2026-10-19).
+A Suggestion, in the `transfer_pair` family, that two opposite money movements
+on different accounts are one Ledger Transfer or Internal move. Accepting it
+creates any missing leg and pairs both; dismissing it suppresses that pair.
+Sweeps do not create them. Statement transfer creates and pairs share the
+[opposite-leg clean policy](../household-contribution-ledger.md#opposite-leg-clean-policy).
 _Avoid_: transfer match, auto-pair
 
 **Suggestion family**:
@@ -826,9 +796,8 @@ _Avoid_: bucket, key (alone)
 
 **Decision model**:
 The closed-set classifier behind every Suggestion and Mail triage: Jev for
-text, Clef only for questions with images. The model is a constant
-(`DECISION_MODEL`), not a traffic split. Stored stages and user-facing text
-say "decision"; the record's `model` names which one answered.
+text, Clef only for questions with images. Stored stages and user-facing text
+say "decision"; the record's model names which one answered.
 _Avoid_: Jev (when Clef may have answered an image question)
 
 **Correction**:
@@ -846,12 +815,10 @@ _Avoid_: dismissal (a presentation preference, not a correctness verdict)
 
 **Sweep**:
 A bulk pass that computes Suggestions across a filtered set of records. A
-member's "Find suggestions" starts one Sweep across every Suggestion family in
-scope, with one part per family; automatic passes are Sweeps too. A Sweep is
-a Run kind whose families contribute Run steps; its evaluations are
-`ai.evaluation` Jobs the Sweep owns or requests, not child Runs.
-_Avoid_: backfill (when the work produces Suggestions rather than derived data),
-discovery (outside the connection code path)
+member's "Find suggestions" starts one Sweep across the field and statement
+Suggestion families in scope, with one part per family. A Sweep is a Run kind
+whose families contribute Run steps; its evaluations are not child Runs.
+_Avoid_: backfill (when the work produces Suggestions rather than derived data)
 
 **Suggestions page**:
 The one place to review pending Suggestions of every family without opening
@@ -871,15 +838,12 @@ What a Suggestion would resolve if accepted, listed as the data-quality checks
 its family says acceptance closes. It is a list, not a number.
 
 **Automatic rule**:
-A named, versioned family rule that applies matching Suggestions without
-review. A member turns it on only after reviewed matches show it is precise
-enough. It turns itself off when audit reviews show its precision dropping.
-Every change it makes stays visible as applied automatically.
+A named, versioned rule that applies matching Suggestions without review: fill
+an empty field at high confidence with a clear winner, and book clean spending
+from imports. Attaching a charge to an existing transaction always needs review.
+A member can pause clean spending booking. Every change a rule makes stays
+visible as applied automatically and can be marked Wrong.
 _Avoid_: auto-apply threshold, confidence cutoff
-
-**Audit sample**:
-The share of an Automatic rule's matches held for review instead of applied,
-so the rule's precision stays measured.
 
 ## Purchase research
 
@@ -954,14 +918,6 @@ _Avoid_: lane, assignee
 **Work owner**:
 The members who can act on a Work queue row, from the authority its Work source needs. Shared work lists every member, so filtering by a member (including Me) includes it; Unresolved means no current member holds that authority. It follows the source, never inventory ownership.
 _Avoid_: waiting for, assignee, Either
-
-**Declared list**:
-A list surface whose filters, sorts, Group by choices and saved views are declared once, with its URL codec, filter options, server predicates and input schema derived from that declaration. Entity lists, the Work queue and each Suggestion family are declared lists.
-_Avoid_: hand-wired filters, view filters
-
-**Relation list**:
-A Declared list over a SQL relation rather than one entity table, such as the Work queue's union of Work sources or a Suggestion family's rows. It shares the entity lists' filter codec and predicate compiler.
-_Avoid_: source list, virtual list
 
 **Burn-down**:
 A member's Claude or Codex session working through the Research queue with ordinary writes that retain research in notes.

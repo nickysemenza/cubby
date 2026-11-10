@@ -377,7 +377,7 @@
     },
     {
       // The purchase agent reads untrusted content; it reaches Cubby only
-      // through its narrowed environment (docs/infrastructure.md#purchase-agent).
+      // through its narrowed environment (apps/web/src/server/domains/purchase-import/service/README.md#trust-boundary).
       "files": ["apps/web/src/server/domains/purchase-agent/**/*.ts"],
       "excludeFiles": ["**/*.test.ts"],
       "rules": {

@@ -22,9 +22,8 @@ proposal, uncertainty and outcome. Redirected aliases can resolve to one Product
 deduplicate by canonical identity before assigning disjoint lanes. Preserve both
 codes for accounting rather than treating redirects as missing or duplicate work.
 
-Preserve the member's model and speed choice for research workers under
-[model routing](../../../../docs/agents/model-routing.md). Assign explicit,
-disjoint candidates and permitted source tools; read-only workers return
+Preserve the member's model and speed choice for research workers. Assign
+explicit, disjoint candidates and permitted source tools; read-only workers return
 proposals and hand mutating searches to the main agent. The main agent reviews
 uncertain identities and verifies every write. A worker completion report must
 name its persisted artifact and confirm it exists, parses, and accounts for its

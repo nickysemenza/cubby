@@ -108,5 +108,6 @@ its own positive estimate, no estimated ancestor, and subtree spend below 10%
 of the estimate. It means spend was recorded elsewhere or the estimate is
 wrong, and never scales a forecast.
 
-Transfer-pair acceptance and internal moves belong to the
-[household contribution ledger](household-contribution-ledger.md).
+Transfer pairs and internal moves are not spend; the
+[household contribution ledger](household-contribution-ledger.md#transfer-pairs)
+owns pairing and acceptance.

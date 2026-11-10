@@ -46,7 +46,7 @@ reuses the exact Vendor only inside the approved Product transaction. Multiple
 exact matches require the member to choose one. Rejections follow photo lineage;
 an agent cannot replace a member-edited group or regroup its images.
 
-Selected changes to an existing Product publish inactive shared field Assessments:
+Selected changes to an existing Product publish inactive field Suggestions:
 they retain evidence and review identity without entering automatic application.
 Approval writes the selected fields and records the generic `saved_field`
 acceptance receipt in the same transaction. Rejecting a linked Brand proposal
@@ -109,19 +109,7 @@ flowchart LR
 ```
 
 A registered identifier has one Product owner. Accepted order lines retain
-their actual Product bindings. A raw receipt SKU establishes association; its variant granularity remains unknown. Explicit ASINs can support exact identity. A raw SKU stays a ranking clue even when current Sources corroborate matching size, color and pack: other relevant dimensions can differ. A shared model/style identifier stays a ranking clue. The existing durable Product identity Decision selects literal color, size and pack spans from retained Sources, then judges each relation as same, different or unknown. Each side carries its actual Source and Product IDs, current field fingerprint, exact quote and UTF-16 span offsets. Stored receipts retain the exact Decision requests and outcomes, actual model and policy dependencies. Validation checks those bindings and currentness; the semantic relation remains a source-grounded model judgment. A quote containing several possible variants stays unknown unless selected-variant evidence explicitly binds the chosen literal. There is no title keyword classifier or inferred pack default.
-
-Product evaluation pages load candidate edges, accepted identifier claims,
-photos and canonical pair history in sets. Each source and pair retains its own
-evidence digest; issuer and activation changes invalidate every affected digest.
-Preparation holds no transaction across inference. Publication chunks contain at
-most 25 outcomes, take pair locks in stable order and publish immutable evidence
-in sets. Repeated requests for a pair share one publication while retaining their
-own execution receipts. Supersession and activation write replayable projection
-Feedback, carrying member suppression forward and leaving historical conflicts
-as verification guards. Publication preserves the caller's explicit actionability
-judgment; ordinary detector evaluation makes only exact identity actionable.
-Similarity alone never makes a pair actionable.
+their actual Product bindings. A raw receipt SKU establishes association; its variant granularity remains unknown. Explicit ASINs can support exact identity. A raw SKU stays a ranking clue even when current Sources corroborate matching size, color and pack: other relevant dimensions can differ. A shared model/style identifier stays a ranking clue. Retained source-grounded variant judgments (color, size and pack, each same, different or unknown with its exact quote) remain evidence on the pair; a quote containing several possible variants stays unknown unless it explicitly binds the chosen literal. There is no title keyword classifier or inferred pack default.
 
 Preparation, review reads, Problems, proposals and merges consume stored evidence without model calls. Every Product merge entry point checks all pairs among the combined Products, including loser-to-loser pairs, after acquiring Product and identifier parent locks and before mutation. Inference exclusions never bypass merge safety. Source or Product edits retire current pair actions. A historical grounded contradiction remains a verification guard after its support changes or disappears: a new agent proposal or exact-identifier outage fallback cannot clear it. Fresh current grounded evidence must address the conflicting dimensions and acknowledge the prior conflict lineage before merging can proceed. Partial or uncertain grounding leaves that guard pending. A recorded contradiction between structured model values also stays pending when a supporting Source disappears; current Source-bound agreeing model values clear only that model-specific reason. Exact identifier admission remains separate from semantic variant evidence. A confirmed variant contradiction under an exact claim exposes a conflict
 without assigning the identifier twice. Shared URLs and partial variant words
@@ -182,7 +170,7 @@ latest three purchase lines and total count, vendor and price, Ordered Purchase
 date or Paid standalone Expense date, on-hand quantities/locations, and own
 photos with capture times.
 
-Not this one writes ADR 0016 Wrong Feedback with explicit suppression. The
+Not this one records a Wrong decision with explicit suppression. The
 recommendation subject is the Run, scoped to each constituent photo and candidate
 Product key, so rejections follow photos through combine/split. Rejected Products
 are returned separately and excluded from suggestions.
@@ -195,10 +183,10 @@ with their selected analysis provenance; member-corrected prose has no model
 claims, and missing current-source evidence is explicit. Retained analyses hydrate
 older Runs without rewriting them. Unfinished edits remain after scrolling away. Approved and discarded details stay collapsed until opened.
 
-Proposal values name their last recorded writer. Photo field proposals reuse
-shared Assessment/Feedback history without a model confidence score; they are
+Proposal values name their last recorded writer. Photo field proposals use the
+shared Suggestion decision history without a model confidence score; they are
 not Jev/Clef model judgments. Photo review exposes their opaque child handles
-for provenance; Product, Vendor and Image references remain shortcodes. Product identity detection reads every live Product through durable AI refresh work; the review queue reads at most 200 open stored pair Assessments after suppression and focus filters, with agent proposals ordered before that limit. Problems reads all current actionable pairs, so dismissed rows and weak recommendations cannot hide a later actionable pair. A nonexact model verdict of distinct variants resolves its assessment without universal suppression; revised evidence or policy remains assessable. Retained Source URLs and matching nonempty selected variants retrieve ranking candidates even across different names or URLs; neither establishes exact identity by itself. Migrated pair records with unknown fingerprints remain immutable history. Those with unknown producers or agent provenance can remain visible read-only; rows carrying obsolete rule or model policies stay outside current queues until reassessed under the current policy. Exact identifiers and stored source-grounded variant judgments carry the decision evidence. The Workbench match card reads each pair's stored `signals.variantEvidence` for its colour and size relations, showing Unknown only when no grounded evidence was stored. Its suggested keeper is the purchase side, then the higher Product data-quality score, then the older record. A disabled Review merge states its reason beneath the actions and as the button's description: an identity conflict quotes the stored conflicting verified models or variant literals (falling back to the stored evidence text), and a missing fingerprint says a side has no current identity snapshot. Related pairs can share a group, but review applies one independently assessed pair at a time. Older proposals whose
+for provenance; Product, Vendor and Image references remain shortcodes. Product pairs come from deterministic import-time matching and agent proposals (`product_enrichment` propose); no model scans the catalogue for duplicates. The review queue reads at most 200 open stored pair Suggestions after suppression and focus filters, with agent proposals ordered before that limit. Problems reads all current actionable pairs, so dismissed rows and weak recommendations cannot hide a later actionable pair. Retained Source URLs and matching nonempty selected variants retrieve ranking candidates even across different names or URLs; neither establishes exact identity by itself. Pair records with unknown fingerprints remain immutable history; rows carrying obsolete rule or model policies stay outside current queues. Exact identifiers and stored source-grounded variant judgments carry the decision evidence. The Workbench match card reads each pair's stored `signals.variantEvidence` for its colour and size relations, showing Unknown only when no grounded evidence was stored. Its suggested keeper is the purchase side, then the higher Product data-quality score, then the older record. A disabled Review merge states its reason beneath the actions and as the button's description: an identity conflict quotes the stored conflicting verified models or variant literals (falling back to the stored evidence text), and a missing fingerprint says a side has no current identity snapshot. Related pairs can share a group, but review applies one pair at a time. Older proposals whose
 writer was not recorded say so. Manufacturer is text on a Product, not a
 separate record; existing-name counts help reuse the catalogue's spelling.
 Category and destination pickers show the selected record's representative

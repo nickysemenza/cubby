@@ -19,15 +19,6 @@ include overlapping waits and must not be added as elapsed-time savings.
 
 ## Start and discover
 
-### Cursor Cloud
-
-The Cloud Agent environment starts Docker and `pnpm dev` on boot. Readiness is
-`http://localhost:3000/__dev/ready`; sign in at `http://localhost:3000/__dev/login`.
-On this Linux image the dev server accepts `localhost` (IPv6) and refuses
-`127.0.0.1`. Development and tests share container PostgreSQL and IntegreSQL.
-Local commands start them on first use ([development](development.md)); CI uses
-its externally managed service pair.
-
 ### Checkout runtime
 
 Install dependencies with `pnpm install`. On macOS, local development defaults

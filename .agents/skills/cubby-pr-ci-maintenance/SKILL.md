@@ -39,12 +39,10 @@ for current commands, cheap Git operations, and local versus hosted gates.
    the validation policy. Require passing GitHub checks on the final PR head
    before merge (a replayed cache hit for the same content counts); if hosted verification is requested, wait for results on
    that commit. Report local and hosted evidence separately.
-7. When monitoring is requested, use the host's supported automation and update
-   an existing matching monitor where possible. Keep it quiet while the state
-   is unchanged; otherwise use one bounded wait instead of repeatedly streaming
-   the same check state. Notify on a meaningful result or required action.
-   Verify the requested completion condition before closing the matching
-   monitor. Merge only when the user has requested it.
+7. When monitoring is requested, rely on the host's check and review
+   completion notifications; never poll. Verify the requested completion
+   condition on the current head before reporting it. Merge only when the user
+   has requested it.
 
 ## Handoff
 

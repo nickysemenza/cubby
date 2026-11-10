@@ -1,7 +1,8 @@
 # ADR 0021: Derived values
 
-Status: Engine superseded in place by ADR 0025; unified field
-contract and editing experience in #3324. Amends
+Status: Engine superseded in place by
+[ADR 0025](0025-radical-simplification-of-background-work.md); the unified field
+contract stands. Amends
 [ADR 0015](0015-unified-durable-work-coordination.md): the `refresh.family`
 passes and `derived_refresh` Runs it coordinates are retired.
 
@@ -147,27 +148,23 @@ and turned one Product save into a 115–147 second rollback; #2855 removed them
 - **Keep inherited values and valuations live**: always fresh, but the measured
   list exceptions and the whole-inventory pre-pass remain.
 - **Application change registration**: writers forget to register and no-op
-  saves register anyway (#3281, #3287).
+  saves register anyway.
 - **Keep effective values beside a metadata sidecar**: this leaves the
   relationship between a value and its provenance implicit. Extending that
   sidecar with the old edit object also lets cached metadata obscure current
-  assignment intent. #3324 chooses concrete field envelopes despite the larger
+  assignment intent. Concrete field envelopes win despite the larger
   cross-client migration.
 
 ## Consequences
 
 The `refresh.family` passes, `derived_refresh` Runs, family enrollment in
 `recordChange`, quality publication, fingerprint supersession, read-time
-valuation preparation and progressive list loading are removed by the engine
-work. #3324 completes the separately tracked field contract migration, removing
-`fieldResolutions`, the `derived` sidecar and their duplicate presentation
-adapters. Stored results can lag a save and show an updating indicator; sorts
-and filters use the same effective result, including decisive current own
-intent. Correctness depends on declared inputs, which the read-set check and
-reconciliation guard. #3338 extends materialization to ownership, beneficiary
-seeds, Project and Shipment folds, and reusable Email facts. Task inheritance
-continues to use generated live resolution declarations. Financial allocation,
-write validation and household-date comparisons remain authoritative live policy.
-Detailed query/latency and catch-up measurement follows the functional cutover
-in #3420; the five-second dependent-publication target is not established by
-functional tests. Image list loading optimization remains #3325.
+valuation preparation and progressive list loading are removed. The field
+contract replaces `fieldResolutions`, the `derived` sidecar and their duplicate
+presentation adapters. Stored results can lag a save; sorts and filters use the
+same effective result, including decisive current own intent. Correctness
+depends on declared inputs, which the read-set check and reconciliation guard.
+Materialization covers ownership, beneficiary seeds, Project and Shipment folds,
+and reusable Email facts. Task inheritance continues to use generated live
+resolution declarations. Financial allocation, write validation and
+household-date comparisons remain authoritative live policy.

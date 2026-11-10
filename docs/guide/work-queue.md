@@ -71,7 +71,7 @@ warnings remain visible in every layout.
 ## Review a Run
 
 Run detail leads with its purpose, recorded outcomes and actionable work. Photo
-review, purchase findings, prepared orders and Assessment review keep their own
+review, purchase findings, prepared orders and Suggestion review keep their own
 domain tools within the same record workspace. Items and outcomes is an inline
 searchable table: a row opens evidence beside the list (a sheet on phones),
 while its record name opens the source record. Input-target status, published
@@ -106,7 +106,7 @@ does not create another copy of the underlying problem.
 
 Keep durable evidence, decisions and execution in their existing owners:
 entity declarations and data-quality checks describe missing facts; findings
-and Assessments retain unresolved decisions; Runs record execution; domain
+and Suggestions retain unresolved decisions; Runs record execution; domain
 commands own writes. Add a Work source in the owning domain rather than
 introducing another task ledger, workflow engine, or entity-specific queue
 state. Queue reads explain current work without launching inference or
@@ -126,8 +126,8 @@ Purchase amounts are the sum of live Expense costs, including credits; other
 records carry their own amount and calendar date. Planned purchases are deferred
 across every family before counting or paging.
 
-The queue is a [Declared list](terminology.md) over its sources' union, so its
-filters behave as entity list filters do: Type, Owner, Family, Executor and
+The queue is declared over its sources' union, so its filters behave as entity
+list filters do: Type, Owner, Family, Executor and
 Reason each accept their `Exclude` input, Type and Owner accept No value, and
 Owner accepts Me. The Reason filter selects stable `reasonKeys`: data-check
 keys, Problem keys and source keys such as `reconciliation:purchase-unsettled`.

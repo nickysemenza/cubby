@@ -27,10 +27,9 @@ those calls into the current host's subagent operations.
 1. Announce that the full audit uses delegated agents and can take time.
 2. Fan out only the workflow's independent audit lanes, respecting the host's
    concurrency limit. Invoking this skill explicitly authorizes this
-   delegation. Translate each workflow lane through
-   `docs/agents/model-routing.md`: use the workflow's declared Claude model and
-   effort on Claude, or its matching explicit Codex model and effort on Codex.
-   Do not blanket-inherit the current model.
+   delegation. Use each lane's declared Claude model and effort on Claude, or
+   the matching explicit Codex model and effort on Codex; do not
+   blanket-inherit the current model.
 3. Require every lane to return the workflow's `FINDINGS_SCHEMA`. Preserve an
    empty findings list rather than padding weak observations.
 4. The root runs `pnpm check` once and `cargo fmt --all -- --check` once, then supplies concise pass/fail and

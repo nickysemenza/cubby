@@ -49,10 +49,9 @@ resume …) through the shared member-owned controls; cancel refuses a Run that
 already ended. Spending and review decisions (`run.set_mail_import`,
 `run.discover_mail`, `run.controlled_mail_import`, `run.resume_controlled_mail_import`, `run.commit_prepared`, `activity.resolve_run_finding`) are
 callable, but only on the member's explicit instruction; never infer one.
-Per-operation approvals no longer exist. Runs that were approval-paused are now
-member `paused`, and their never-run operations are `failed` ("Approval pause
-retired before the operation ran"). Replaying a failed operation id is refused;
-after the member resumes the Run, re-issue that work under a new operation id.
+There are no per-operation approvals. Replaying a failed operation id is
+refused; after the member resumes the Run, re-issue that work under a new
+operation id.
 Respect an explicit member pause: do
 not retry or restart until imports are resumed. Follow the returned successor;
 the preceding attempt remains immutable.
@@ -148,7 +147,7 @@ same outcome without prescribing an agent runtime.
 
 - `SUM(Expense.cost)` is the only spend ledger. A Purchase describes an order;
   a FinancialTransaction is settlement evidence.
-- One order or receipt is one Purchase ([naming policy](../../../docs/guide/terminology.md#naming-policy)).
+- One order or receipt is one Purchase.
   Separate charges at one venue or event (each festival stand, each bar tab)
   are separate Purchases grouped by their Project, never one event Purchase:
   funders derive per Purchase, so grouping blends every card into every line.
@@ -374,8 +373,9 @@ missing sources or unresolved facts. A missing saved snapshot is a context gap,
 not proof the email or account lacks exact links. An order thumbnail remains
 provisional until exact-variant research verifies a representative image.
 
-For every exact merchant descriptor observed on that member's statement, call
-`purchase_import.confirm_merchant_vendor` after the human/vendor mapping is known.
+Statement Vendor matching derives from confirmed booking history: booking a
+statement charge to its Vendor teaches that merchant descriptor. There is no
+separate merchant confirmation call.
 
 ## Settlement
 

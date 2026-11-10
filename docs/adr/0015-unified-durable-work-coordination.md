@@ -1,6 +1,7 @@
 # ADR 0015: Unified durable execution and broad refresh
 
-Status: Accepted.
+Status: Superseded by [ADR 0025](0025-radical-simplification-of-background-work.md),
+which keeps the `Job` table as the durable form of retryable work.
 
 ## Context
 

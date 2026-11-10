@@ -16,8 +16,7 @@ deduplication are dependency maintenance, not validation gates.
   bindings and typecheck when changing either; the workspace owns the accepted range.
 - Sentry's bundler plugin requires Babel 7; its package extension supplies that
   major separately from Vite's Babel 8 dependency.
-- Build-only `@esbuild-kit/*`, OpenTelemetry's `glob`, and transitive `uuid`
-  dependencies remain upstream maintenance concerns. A blanket override can
+- OpenTelemetry's `glob` and transitive `uuid` dependencies remain upstream maintenance concerns. A blanket override can
   replace an API with an incompatible major inside another package.
 
 Renovate continues proposing upstream updates; pins do not excuse stale metadata.

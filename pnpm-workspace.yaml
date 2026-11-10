@@ -154,8 +154,6 @@ addMissingPeerTypes: true
 permissions:
   "@mongodb-js/zstd":
     build: false
-  "@tanstack/devtools-vite":
-    skills: true
   "@tanstack/react-start":
     skills: true
   "@tanstack/react-table":

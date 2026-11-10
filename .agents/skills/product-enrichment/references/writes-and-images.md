@@ -46,10 +46,11 @@ which demotes without deleting the old primary. Remove targets the exact
 source/kind/externalId `key`; changing identity is an atomic remove-old/add-new
 patch. `expect` contains baseline attributes such as `isPrimary`, never the old
 identifier tuple. Include a URL expectation only when its stored value is known;
-an ASIN's canonical display link is derived. Follow the
-[identifier write contract](../../../../docs/entities.md#collection-changes)
-for normalization and preconditions. Full-array replacement is deliberate:
-preserve every intended ID and remove MCP-only timestamps first.
+an ASIN's canonical display link is derived. Cubby checks every precondition
+before changing anything, normalizes barcode kinds to canonical GTIN-14, keeps
+other identifier values as written, and refuses an identifier another record
+already owns. Full-array replacement is deliberate: preserve every intended ID
+and remove MCP-only timestamps first.
 
 For settled attachments, call `image.attach_file({items})`; every item supplies an
 `entityId`, one `url` or `uploadId`, its idempotency key, a `source` (`own`,

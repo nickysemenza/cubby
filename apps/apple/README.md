@@ -36,9 +36,7 @@ direct Xcode build. Low-level Nx build targets expect artifacts prepared by
 Native similarity reads use the generic `relatedness.forEntity` contract and render its
 readiness, entity references and evidence. The native manifest derives `hasRelatedness`
 from declared signals; both Apple layouts show the same generic related-records rail
-for eligible entities. Connection application uses Suggestion review;
-removed expense-project and inventory-placement recommendation proposals have no native
-acceptance path.
+for eligible entities. Connection application uses Suggestion review.
 
 The native typed-record keep-list retains schemas still decoded from generic kernel
 rows. The [native model pipeline](CubbyKit/Sources/CubbyAPI/README.md) owns generation

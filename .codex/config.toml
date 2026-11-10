@@ -4,15 +4,14 @@
 # folder has no CLAUDE.md. One canonical rules file, shared by both, no drift —
 # do not add a CLAUDE.md pointer, it would shadow AGENTS.md for Claude Code.
 # Keep the main model user/session-owned. Low effort overrides the user-level
-# effort default for this repo; explicit session choices and the escalation
-# rules in model-routing.md win.
+# effort default for this repo; explicit session choices win.
 model_reasoning_effort = "low"
 
 # Filter before returning output; retain full logs in ignored artifacts/ for
 # targeted read-back. This history cap is a fallback, not a diagnostic summary.
 tool_output_token_limit = 24000
 
-# Subagents are for parallel, read-heavy work; see docs/agents/model-routing.md.
+# Subagents are for parallel, read-heavy work; AGENTS.md owns delegation and review.
 [agents]
 enabled = true
 max_concurrent_threads_per_session = 3
