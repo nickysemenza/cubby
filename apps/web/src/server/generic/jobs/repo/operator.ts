@@ -2,19 +2,9 @@
  * The operator interface: member and Run controls over durable Jobs. Manual
  * pause, cancellation and exhausted failure stay stopped until one of these.
  */
-import { parseEntityId } from "@cubby/schemas/identifiers";
+import { parseEntityId, type RunId } from "@cubby/schemas/identifiers";
 import { jobState, type JobWaitReason } from "@cubby/schemas/job";
-import {
-  and,
-  asc,
-  eq,
-  gt,
-  inArray,
-  is,
-  isNotNull,
-  SQL,
-  sql,
-} from "drizzle-orm";
+import { and, eq, gt, inArray, is, isNotNull, SQL, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db/database";
 import {
@@ -173,34 +163,23 @@ export async function bringQueuedJobsForward(db: Database, now: Date) {
     .returning({ id: job.id });
 }
 
-/**
- * Bring the oldest Job of `kind` waiting on `waitReason` forward to now: one
- * per freed capacity unit, so a long wait does not wake every waiter at once.
- */
-export async function bringOldestWaitingJobForward(
+/** Bring a Run's Job of `kind` waiting on `waitReason` forward to now. */
+export async function bringRunWaitingJobForward(
   db: RepositoryQueryInput,
-  kind: string,
-  waitReason: JobWaitReason,
+  input: { runId: RunId; kind: string; waitReason: JobWaitReason },
 ): Promise<boolean> {
-  const queries = repositoryQueries(db);
-  const oldest = queries
-    .select({ id: job.id })
-    .from(job)
+  const woken = await repositoryQueries(db)
+    .update(job)
+    .set({ availableAt: sql`now()`, waitReason: null })
     .where(
       and(
-        eq(job.kind, kind),
+        eq(job.runId, input.runId),
+        eq(job.kind, input.kind),
         inArray(job.state, ["queued", "retry_wait"]),
-        eq(job.waitReason, waitReason),
+        eq(job.waitReason, input.waitReason),
         gt(job.availableAt, sql`now()`),
       ),
     )
-    .orderBy(asc(job.createdAt))
-    .limit(1)
-    .for("update", { skipLocked: true });
-  const woken = await queries
-    .update(job)
-    .set({ availableAt: sql`now()`, waitReason: null })
-    .where(inArray(job.id, oldest))
     .returning({ id: job.id });
   return woken.length > 0;
 }

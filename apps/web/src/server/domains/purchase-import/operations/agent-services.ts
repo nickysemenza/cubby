@@ -23,7 +23,6 @@ import {
 import { supportedChatModelSchema } from "@cubby/shared/ai/models";
 import { retryWithBackoff } from "@cubby/shared/retry";
 import { sha256Uuid } from "@cubby/shared/sha256";
-import { createLogger } from "@cubby/worker-tracing";
 import { z } from "zod";
 
 import { runWithExecutionCtx, withCfEnv } from "~/server/cf-env";
@@ -34,13 +33,12 @@ import type {
 import { assertNotInMaintenance } from "~/server/http/maintenance";
 import { getAuthSecret } from "~/server/lib/auth-configuration";
 
-import type { CoordinatorTurnPorts } from "./coordinator-turn";
+import { CoordinatorLeaseLostError } from "./coordinator-turn";
 
 /** The MCP endpoint the delegation bearer's audience names. */
 const MCP_URL = "https://cubby.internal/api/mcp";
 
 type HostContext = { waitUntil(promise: Promise<unknown>): void };
-const turnLog = createLogger("purchase-agent.turn");
 
 /** One database scope with this Worker's bindings. */
 function withHostDatabase<T>(
@@ -99,6 +97,12 @@ export async function admissionRead<T>(
       },
     });
   } catch (error: unknown) {
+    // A lost coordinator turn is a transport fault pi retries, never a
+    // final admission refusal.
+    if (error instanceof CoordinatorLeaseLostError)
+      throw new Error(`${ADMISSION_DATABASE_FAULT} ${error.message}`, {
+        cause: error,
+      });
     const pg = findPgError(error);
     if (!(error instanceof Error)) throw error;
     // A budget or executability refusal is a plain Error and stays final.
@@ -120,32 +124,29 @@ export async function admissionRead<T>(
 }
 
 /**
- * The host's side of the coordinator turn cap: one short transaction per
- * hold or release, in its own scope. Not a Run service, so the agent cannot
- * hold or release turns itself.
+ * Bring this Run's `purchase.dispatch` forward once the gate reserved it a
+ * turn; it deferred when none was free. Host-only: the agent never calls it.
  */
-export function coordinatorTurnPorts(
+export function wakeWaitingDispatch(
   env: Env,
   ctx: HostContext,
   rawRunId: string,
-): Pick<CoordinatorTurnPorts, "hold" | "release"> {
+) {
   const runId = runEntityId.parse(rawRunId);
-  return {
-    hold: (token) =>
-      withHostDatabase(env, ctx, async (db) => {
-        const { holdCoordinatorTurn } =
-          await import("~/server/domains/run/repo/coordinator-turns");
-        return holdCoordinatorTurn(db, { runId, token });
-      }),
-    release: (token) =>
-      withHostDatabase(env, ctx, async (db) => {
-        const { releaseCoordinatorTurn } =
-          await import("~/server/domains/run/repo/coordinator-turns");
-        await releaseCoordinatorTurn(db, { runId, token });
-      }).catch((error: unknown) => {
-        turnLog.error("coordinator turn release failed", { runId, error });
-      }),
-  };
+  return withHostDatabase(env, ctx, async (db) => {
+    const [{ bringRunWaitingJobForward }, { wakeJobs }] = await Promise.all([
+      import("~/server/generic/jobs/repo/operator"),
+      import("~/server/workflows/background-tasks/publish"),
+    ]);
+    if (
+      await bringRunWaitingJobForward(db, {
+        runId,
+        kind: "purchase.dispatch",
+        waitReason: "provider_capacity",
+      })
+    )
+      await wakeJobs({ source: "coordinator-turn.reserved" });
+  });
 }
 
 /** Retirement of a legacy coordinator, named by its stored session id. */
@@ -181,11 +182,20 @@ export function runServicesFor(
   env: Env,
   ctx: HostContext,
   rawRunId: string,
+  {
+    fence,
+  }: {
+    /** pi's services: refuse database work once the coordinator lost its turn. */
+    fence?: () => Promise<void>;
+  } = {},
 ): RunServices {
   const runId = runEntityId.parse(rawRunId);
-  const withDatabase = <T>(
+  const withDatabase = async <T>(
     fn: Parameters<typeof withHostDatabase<T>>[2],
-  ): Promise<T> => withHostDatabase(env, ctx, fn);
+  ): Promise<T> => {
+    await fence?.();
+    return withHostDatabase(env, ctx, fn);
+  };
 
   const requireAgentScope = async (
     db: typeof import("~/server/db").db,

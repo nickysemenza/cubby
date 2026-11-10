@@ -2,6 +2,7 @@ import { systemActor } from "@cubby/schemas/context";
 import { createLogger } from "@cubby/worker-tracing";
 
 import {
+  getCoordinatorGateNamespace,
   getPurchaseImportRunAgentNamespace,
   isCloudflareRuntime,
 } from "~/server/cf-env";
@@ -65,11 +66,24 @@ export async function recoverMissedWork(
 
 /** Expires stale import Runs and projects terminal Job outcomes; every Run is kept. */
 export async function maintainRunHistory(db: Database) {
-  const [{ expireStaleRuns }, { reconcileWorkflowRuns }] = await Promise.all([
+  const [
+    { expireStaleRuns },
+    { reconcileWorkflowRuns },
+    { COORDINATOR_GATE_NAME },
+  ] = await Promise.all([
     import("~/server/domains/purchase-import/operations/run-review"),
     import("~/server/workflows/runs/lifecycle"),
+    import("~/server/domains/purchase-import/operations/coordinator-gate"),
   ]);
-  const stale = await expireStaleRuns(db);
+  // A coordinator queued for a household turn is waiting, not stale. Without
+  // the gate's answer nothing is expired.
+  const gate = getCoordinatorGateNamespace();
+  if (!gate && isCloudflareRuntime())
+    throw new Error("COORDINATOR_GATE binding is unavailable");
+  const waiting = gate
+    ? await gate.getByName(COORDINATOR_GATE_NAME).waiting()
+    : [];
+  const stale = await expireStaleRuns(db, new Date(), { waiting });
   const reconciled = await reconcileWorkflowRuns(db);
   return { ...stale, reconciled: reconciled.reconciled };
 }

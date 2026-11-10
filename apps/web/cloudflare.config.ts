@@ -192,6 +192,10 @@ export const productionWorker = defineWorker({
       worker: "cubby",
       exportName: "UsdaReleaseDurableObject",
     }),
+    COORDINATOR_GATE: bindings.durableObject({
+      worker: "cubby",
+      exportName: "CoordinatorGateDurableObject",
+    }),
     AI: bindings.ai({}),
     CF_VERSION_METADATA: bindings.versionMetadata(),
   },
@@ -220,6 +224,9 @@ export const productionWorker = defineWorker({
       storage: "sqlite",
     }),
     PurchaseImportRunAgent: exports.durableObject({
+      storage: "sqlite",
+    }),
+    CoordinatorGateDurableObject: exports.durableObject({
       storage: "sqlite",
     }),
   },

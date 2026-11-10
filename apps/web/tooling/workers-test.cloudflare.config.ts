@@ -41,6 +41,10 @@ export const testWorker = defineWorker({
       worker: "cubby-calendar-test",
       exportName: "PurchaseImportRunAgent",
     }),
+    COORDINATOR_GATE: bindings.durableObject({
+      worker: "cubby-calendar-test",
+      exportName: "CoordinatorGateDurableObject",
+    }),
   },
   exports: {
     AiGatewayEgressDurableObject: { type: "durable-object", storage: "sqlite" },
@@ -53,6 +57,7 @@ export const testWorker = defineWorker({
     ChatGptPlanDurableObject: { type: "durable-object", storage: "sqlite" },
     UsdaReleaseDurableObject: { type: "durable-object", storage: "sqlite" },
     PurchaseImportRunAgent: { type: "durable-object", storage: "sqlite" },
+    CoordinatorGateDurableObject: { type: "durable-object", storage: "sqlite" },
   },
 });
 

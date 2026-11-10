@@ -260,7 +260,9 @@ in process through the MCP handler with a run-bound delegation
 `.agents/skills/purchase-import/references/mail-import.md` via
 `server/domains/purchase-agent/service/import-run-workflows.ts`. The host runs
 every alarm, dispatch and prompt inside a household coordinator turn
-(`coordinator-turn.ts`); without a free turn it loads nothing and waits
+(`coordinator-turn.ts`) granted by the `COORDINATOR_GATE` Durable Object
+(`coordinator-gate.ts`); without a free turn it loads nothing and waits in the
+gate's queue, and pi's services refuse database work once the turn is lost
 ([budget](../../../../../../../docs/infrastructure.md#background-connection-budget)).
 
 Memoized claims publish host-owned progress, heartbeat and work samples.

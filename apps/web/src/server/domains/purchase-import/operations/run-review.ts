@@ -29,7 +29,6 @@ import {
   isNull,
   lt,
   ne,
-  not,
   notInArray,
   or,
   sql,
@@ -62,7 +61,6 @@ import {
   readMailSourceTransfers,
   releaseUnsettledMailRunSources,
 } from "~/server/domains/purchase-import/repo/mail-run-membership";
-import { coordinatorTurnLive } from "~/server/domains/run/repo/coordinator-turns";
 import { pauseForFunding } from "~/server/domains/run/repo/execution-context";
 import {
   loadRunScope,
@@ -405,8 +403,6 @@ function staleRunWhere(cutoff: Date) {
     // Raw Date parameters use the host offset; stored timestamps are UTC wall time.
     sql`NOT EXISTS (SELECT 1 FROM ${runOperation} WHERE ${runOperation.runId} = ${runTable.id} AND ${runOperation.startedAt} >= ${cutoff.toISOString()}::timestamp)`,
     or(isNull(runTable.heartbeatAt), lt(runTable.heartbeatAt, cutoff)),
-    // A coordinator waiting for a household turn is alive, however long the wait.
-    not(coordinatorTurnLive(runTable.id)),
   );
 }
 
@@ -429,7 +425,16 @@ async function staleRunStillEligible(
  * Agent settlement retains its Mail/photo review behavior; other abandoned
  * Runs fail without requiring an agent session or removing committed writes.
  */
-export async function expireStaleRuns(db: Database, now = new Date()) {
+export async function expireStaleRuns(
+  db: Database,
+  now = new Date(),
+  {
+    waiting = [],
+  }: {
+    /** Runs queued at the coordinator gate: alive however long they wait. */
+    waiting?: readonly string[];
+  } = {},
+) {
   const cutoff = new Date(now.getTime() - STALE_RUN_MS);
   const stale = await getDb(db)
     .select({
@@ -438,7 +443,17 @@ export async function expireStaleRuns(db: Database, now = new Date()) {
       agentSessionId: runTable.agentSessionId,
     })
     .from(runTable)
-    .where(staleRunWhere(cutoff));
+    .where(
+      and(
+        staleRunWhere(cutoff),
+        waiting.length
+          ? notInArray(
+              runTable.id,
+              waiting.map((id) => runEntityId.parse(id)),
+            )
+          : undefined,
+      ),
+    );
   let expired = 0;
   const failures: Array<{ runId: RunId; error: string }> = [];
   for (const run of stale) {

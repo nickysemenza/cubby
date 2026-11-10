@@ -9,7 +9,6 @@ import {
 } from "@cubby/schemas/job";
 import { sql } from "drizzle-orm";
 import {
-  boolean,
   check,
   index,
   integer,
@@ -99,18 +98,3 @@ export const job = pgTable(
     ),
   ],
 );
-
-/**
- * Coordinator work turns: one row per Run whose coordinator holds a turn
- * (`held`) or last asked for one, capped household-wide on held rows
- * (`domains/run/repo/coordinator-turns.ts`). Not an entity and not linked: a
- * deleted Run's row lapses with its lease.
- */
-export const coordinatorTurn = pgTable("CoordinatorTurn", {
-  runId: uuid("runId").$type<RunId>().primaryKey(),
-  held: boolean("held").notNull(),
-  leaseToken: uuid("leaseToken").notNull(),
-  leaseExpiresAt: timestamp("leaseExpiresAt", { mode: "date" }).notNull(),
-  /** When this row was created: the first ask, kept when a waiter becomes a holder. */
-  askedAt: timestamp("askedAt", { mode: "date" }).notNull().defaultNow(),
-});
