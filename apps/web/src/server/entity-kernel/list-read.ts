@@ -21,6 +21,10 @@ import { withListGroupBy } from "~/server/generic/list/repo/list";
 import { listTotalLabels } from "~/server/generic/list/repo/list-display-labels";
 import { selectedListProjection } from "~/server/generic/list/repo/list-projection";
 import { validateListReadRows } from "~/server/generic/list/repo/list-read-schema";
+import {
+  listSummaryKey,
+  readPublishedListSummary,
+} from "~/server/generic/list/repo/list-summary";
 import { withListReadTracing } from "~/server/observability/list-read-tracing";
 import { withTrace } from "~/server/observability/tracing";
 
@@ -245,26 +249,47 @@ export function defineListOperations<
           unresolvedCount: result.unresolvedCount,
         };
       };
-      const [total, ...counts] = await withTrace(
-        "entity.list.viewCounts",
-        () =>
-          Promise.all([
-            countOf({}),
-            ...views.map((view) => countOf(view.filters)),
-          ]),
-        { "entity.kind": binding.entity },
-      );
-      return {
-        entity: binding.entity,
-        total: total?.count ?? 0,
-        views: views.map((view, index) => ({
-          id: view.id,
-          count: counts[index]?.count ?? 0,
-          ...(counts[index]?.unresolvedCount === undefined
-            ? {}
-            : { unresolvedCount: counts[index]?.unresolvedCount }),
-        })),
+      const counted = async () => {
+        const [total, ...counts] = await withTrace(
+          "entity.list.viewCounts",
+          () =>
+            Promise.all([
+              countOf({}),
+              ...views.map((view) => countOf(view.filters)),
+            ]),
+          { "entity.kind": binding.entity },
+        );
+        return {
+          total: total?.count ?? 0,
+          views: views.map((view, index) => ({
+            id: view.id,
+            count: counts[index]?.count ?? 0,
+            ...(counts[index]?.unresolvedCount === undefined
+              ? {}
+              : { unresolvedCount: counts[index]?.unresolvedCount }),
+          })),
+        };
       };
+      // A browser reads the last published counts for its views (`list-summary`).
+      const browser =
+        context.actorContext.channel === "web" ? context.actorContext : null;
+      const result = browser
+        ? (
+            await readPublishedListSummary(
+              context.db,
+              {
+                entity: binding.entity,
+                key: await listSummaryKey({
+                  summary: "viewCounts",
+                  filters: { views },
+                  reader: browser.userId,
+                }),
+              },
+              async () => ({ viewCounts: await counted() }),
+            )
+          ).viewCounts
+        : undefined;
+      return { entity: binding.entity, ...(result ?? (await counted())) };
     },
   };
 }

@@ -29,14 +29,26 @@ export const listSummaryValueSchema = z.object({
     })
     .optional(),
   metrics: z.record(z.string(), listGroupMetricSchema).optional(),
+  viewCounts: z
+    .object({
+      total: z.number(),
+      views: z.array(
+        z.object({
+          id: z.string(),
+          count: z.number(),
+          unresolvedCount: z.number().optional(),
+        }),
+      ),
+    })
+    .optional(),
 });
 export type ListSummaryValue = z.infer<typeof listSummaryValueSchema>;
 
 type Db = Database | DrizzleTransaction;
 
-/** The population inputs: the summary kind, the list's filters (with scope) and its reader. */
+/** The population inputs: the summary kind, the list's filters (with scope, or the saved views) and its reader. */
 export const listSummaryKey = (input: {
-  summary: "metrics" | "totals";
+  summary: "metrics" | "totals" | "viewCounts";
   filters: object;
   reader: string;
 }) => sha256CanonicalJson(JSON.parse(JSON.stringify(input)));
