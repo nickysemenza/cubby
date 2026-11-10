@@ -225,8 +225,13 @@ class PurchaseImportRunAgentHost
     const gate = () =>
       this.env.COORDINATOR_GATE.getByName(COORDINATOR_GATE_NAME);
     this.turn ??= new CoordinatorTurn({
-      acquire: (token) =>
-        gate().acquire({ runId, agent: this.ctx.id.name ?? "", token }),
+      acquire: (token, options) =>
+        gate().acquire({
+          runId,
+          agent: this.ctx.id.name ?? "",
+          token,
+          ...(options && { queue: options.queue }),
+        }),
       release: (token) =>
         gate()
           .release({ runId, token })
@@ -346,8 +351,10 @@ class PurchaseImportRunAgentHost
       // A member's stop never waits for a turn.
       if (request.method === "POST" && pathname === "/abort")
         return (await this.loaded()).fetch(request);
-      const turn = await this.turns().turn(async () =>
-        (await this.loaded()).fetch(request),
+      // A prompt answers 503 at once rather than joining the gate's queue.
+      const turn = await this.turns().turn(
+        async () => (await this.loaded()).fetch(request),
+        { queue: false },
       );
       if (turn.ran) return turn.value;
       this.turnWaited(turn, "fetch");

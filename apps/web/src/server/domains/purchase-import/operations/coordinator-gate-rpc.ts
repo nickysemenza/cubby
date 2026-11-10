@@ -9,6 +9,8 @@ export type CoordinatorGateRequest = {
   runId: string;
   agent: string;
   token: string;
+  /** False: take a free turn now or refuse without joining the queue. */
+  queue?: boolean;
 };
 
 /** Runs holding a turn and runs queued for one, in queue order. */

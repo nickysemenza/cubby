@@ -142,4 +142,26 @@ describe("coordinator gate", () => {
     // b renews; a's lapse frees a slot, reserved for c and woken.
     expect(ask(gate, "b", lapsed).notify).toEqual(["agent-c"]);
   });
+
+  it("lets a caller that will not wait take only a truly free turn, leaving no queue entry", () => {
+    const gate = new CoordinatorGateQueue(undefined, 1);
+    const prompt = (run: string, now: number) =>
+      gate.acquire(
+        {
+          runId: run,
+          agent: `agent-${run}`,
+          token: `token-${run}`,
+          queue: false,
+        },
+        now,
+      );
+    expect(prompt("a", 0).grant.held).toBe(true);
+    expect(prompt("b", 1).grant).toMatchObject({ held: false, position: 0 });
+    expect(gate.state.waiters).toEqual([]);
+    // A freed slot reserved for a queued waiter is not free for a prompt.
+    ask(gate, "c", 2);
+    gate.release({ runId: "a", token: "token-a" }, 3);
+    expect(prompt("b", 4).grant.held).toBe(false);
+    expect(gate.status(5).status).toEqual({ holders: [], waiting: ["c"] });
+  });
 });

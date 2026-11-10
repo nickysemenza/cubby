@@ -228,7 +228,8 @@ Postgres, so a waiting coordinator opens no database scope.
   attempt while its coordinator keeps polling on the same alarm backoff, and
   brings the Job forward when reserved a turn (fallback
   re-poll 8–12 minutes, 1–2 minutes when the gate cannot be asked); a prompt
-  answers 503 with `Retry-After`. A member's stop never waits.
+  takes only a turn free beyond every reservation and otherwise answers 503
+  with `Retry-After` without joining the queue. A member's stop never waits.
 - **Runs.** The cap starts, resumes, retries, cancels and reassigns nothing.
   Stale-Run expiry skips Runs holding or queued for a turn (the gate's
   `status()`), so a just-granted Run is exempt until its lease plus grace

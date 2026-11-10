@@ -25,7 +25,10 @@ import {
 import type { CoordinatorTurnGrant } from "./coordinator-gate-rpc";
 
 export type CoordinatorTurnPorts = {
-  acquire(token: string): Promise<CoordinatorTurnGrant>;
+  acquire(
+    token: string,
+    options?: { queue: boolean },
+  ): Promise<CoordinatorTurnGrant>;
   release(token: string): Promise<void>;
   /** Whether pi has no work running; throws when that cannot be decided. */
   idle(): Promise<boolean>;
@@ -96,7 +99,11 @@ export class CoordinatorTurn {
 
   constructor(private readonly ports: CoordinatorTurnPorts) {}
 
-  async turn<T>(work: () => Promise<T>): Promise<CoordinatorTurnResult<T>> {
+  /** `queue: false` asks once without joining the gate's queue (a member prompt). */
+  async turn<T>(
+    work: () => Promise<T>,
+    { queue = true }: { queue?: boolean } = {},
+  ): Promise<CoordinatorTurnResult<T>> {
     const refused = await this.step(async () => {
       if (this.lapsing())
         return {
@@ -108,7 +115,7 @@ export class CoordinatorTurn {
         };
       let grant: CoordinatorTurnGrant;
       try {
-        grant = await this.renew();
+        grant = await this.renew(queue);
       } catch (error) {
         // An unreachable gate is a wait like a full one, never a failure.
         this.ports.reportGateError(error);
@@ -173,9 +180,11 @@ export class CoordinatorTurn {
     return run;
   }
 
-  private async renew(): Promise<CoordinatorTurnGrant> {
+  private async renew(queue = true): Promise<CoordinatorTurnGrant> {
     const asked = Date.now();
-    const grant = await this.ports.acquire(this.token);
+    const grant = await (queue
+      ? this.ports.acquire(this.token)
+      : this.ports.acquire(this.token, { queue }));
     if (grant.held) {
       this.leaseUntil = asked + COORDINATOR_TURN_LEASE_MS - LEASE_SAFETY_MS;
       this.gateLeaseUntil = grant.leaseUntil;

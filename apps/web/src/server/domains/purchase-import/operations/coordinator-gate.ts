@@ -88,6 +88,33 @@ export class CoordinatorGateQueue {
     let waiter = this.state.waiters.find(
       (entry) => entry.runId === request.runId,
     );
+    // A caller that will not wait (a member prompt) takes a turn only when one
+    // is free beyond every reservation, and otherwise leaves no entry behind.
+    if (!waiter && request.queue === false) {
+      const notify = this.reserve(now);
+      const reserved = this.state.waiters.filter(
+        (entry) => entry.reservedUntil !== null,
+      ).length;
+      if (this.state.holders.length + reserved < this.cap) {
+        const leaseUntil = now + COORDINATOR_TURN_LEASE_MS;
+        this.state.holders.push({
+          runId: request.runId,
+          agent: request.agent,
+          token: request.token,
+          leaseUntil,
+        });
+        return { grant: { held: true, leaseUntil }, notify };
+      }
+      return {
+        grant: {
+          held: false,
+          position: 0,
+          holders: this.state.holders.length,
+          waiting: this.state.waiters.length,
+        },
+        notify,
+      };
+    }
     if (!waiter) {
       waiter = {
         runId: request.runId,
