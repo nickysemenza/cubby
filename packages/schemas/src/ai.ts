@@ -7,6 +7,10 @@ import {
   suggestionSupersessionReceipt,
 } from "./ai-evaluation";
 import { vendorSpendingProfile } from "./spending-classification";
+import type {
+  FinanceReviewEntity,
+  FinanceReviewField,
+} from "./field-suggestion-policy";
 import { supportedDecisionModelSchema } from "@cubby/shared/ai/models";
 import { z } from "zod";
 import { dateTime } from "./codec";
@@ -493,18 +497,31 @@ export const suggestionPurchaseEvidenceSchema = z.object({
   truncated: z.boolean(),
   categories: z.array(rawPurchasedCategorySummary),
 });
+/** A literal wire tuple that must list every member of `U`, so declarations cannot drift from it. */
+const wireValues =
+  <U extends string>() =>
+  <const T extends readonly U[]>(
+    values: T & ([U] extends [T[number]] ? unknown : never),
+  ) =>
+    values;
+/**
+ * Wire order is fixed here; field declarations own membership. FinancialTransaction
+ * reads its saved review but declares no reviewed field, so it never applies here.
+ */
+const financeReviewEntityValues = wireValues<
+  FinanceReviewEntity | "financialTransaction"
+>()(["financialTransaction", "purchase", "expense", "vendor"]);
+const financeReviewFieldValues = wireValues<FinanceReviewField>()([
+  "spendingCategoryId",
+  "defaultSpendingCategoryId",
+  "spendingProfile",
+]);
 export const financeCategoryReviewSchema = z.object({
   evidence: suggestionPurchaseEvidenceSchema.optional(),
-  entity: z.enum(["financialTransaction", "purchase", "expense", "vendor"]),
+  entity: z.enum(financeReviewEntityValues),
   entityId: z.string().min(1),
   fingerprint: z.string().regex(/^[a-f0-9]{64}$/),
-  field: z
-    .enum([
-      "spendingCategoryId",
-      "defaultSpendingCategoryId",
-      "spendingProfile",
-    ])
-    .optional(),
+  field: z.enum(financeReviewFieldValues).optional(),
 });
 export const financeCategoryApplyInput = financeCategoryReviewSchema
   .omit({ evidence: true })

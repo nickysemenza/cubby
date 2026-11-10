@@ -93,7 +93,7 @@ export function fieldSuggestionBasisFromRecord<TRecord extends object>(
   const entityId = financeSuggestionEntityId(entity, record);
   if (
     entityId &&
-    targets.targets.some((target) => target.key === "spendingCategoryId")
+    targets.targets.some((target) => target.financeReview === "finance")
   )
     basis.__financeEntityId = entityId;
   const referenceLabels: Record<string, { id: string; name: string | null }> =
@@ -137,10 +137,7 @@ export function isBasisSufficient(
   if (targets.targets.length === 0) return false;
   if (
     (entityId ?? basis.__financeEntityId) &&
-    ["financialTransaction", "purchase", "expense", "vendor"].includes(
-      entity,
-    ) &&
-    targets.targets.some((target) => target.key === "spendingCategoryId")
+    targets.targets.some((target) => target.financeReview === "finance")
   )
     return true;
   const onlyProductReferenceTargets = targets.targets.every(

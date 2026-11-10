@@ -576,7 +576,10 @@ export const { definition, readSchemas } = defineEntityModel({
         control: {
           kind: "specialized",
           renderer: "entity-select",
-          suggest: { basis: ["displayLabel", "vendorId", "notes"] },
+          suggest: {
+            basis: ["displayLabel", "vendorId", "notes"],
+            financeReview: { context: "finance" },
+          },
         },
         // Empty on most rows; the expense categories column carries the booking.
         display: {

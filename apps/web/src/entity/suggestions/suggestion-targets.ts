@@ -1,6 +1,7 @@
 import type { EntityFieldModel } from "@cubby/schemas/entity-fields";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { fieldSuggestionContextKeys } from "@cubby/schemas/field-suggestion";
+import type { FinanceReviewContext } from "@cubby/schemas/field-suggestion-policy";
 import type { QueryClient } from "@tanstack/react-query";
 
 import { entityMetadata } from "~/entity/metadata";
@@ -17,6 +18,8 @@ interface SuggestTarget {
   /** `"fill"` proposes a value; `"prune"` (text-array only) proposes
    * removing entries that restate a `basis` field. */
   readonly mode: "fill" | "prune";
+  /** Declared saved-record spending review, which reads saved evidence. */
+  readonly financeReview: FinanceReviewContext | null;
 }
 
 export interface SuggestTargets {
@@ -62,6 +65,8 @@ export function suggestTargetsFor(
       reference: field.reference,
       basis: suggest.basis,
       mode: suggest.mode,
+      financeReview:
+        "financeReview" in suggest ? suggest.financeReview.context : null,
     });
     for (const basisKey of suggest.basis) basisKeys.add(basisKey);
     // A prune target judges its own current entries, so it is an implicit

@@ -350,3 +350,25 @@ extension ImageAnalysisOutputValue {
                 filename: analysis.provenance.filename))
     }
 }
+
+// MARK: - Finance review
+
+/// Saved-record spending review writes name their manifest-declared field keys, so the composed
+/// body and its read-back follow the server's declarations rather than a native field roster.
+extension FinanceCategoryApplyInput {
+    init(review: FinanceCategoryReview, field: String?, values: [String: String]) throws {
+        var body: [String: JSONValue] = [
+            "entity": .string(review.entity.rawValue), "entityId": .string(review.entityId),
+            "fingerprint": .string(review.fingerprint),
+        ]
+        if let field { body["field"] = .string(field) }
+        for (key, value) in values { body[key] = .string(value) }
+        self = try JSONValue.object(body).decoded()
+    }
+}
+
+extension FinanceCategoryApplyOut {
+    func reviewedValue(_ key: String) throws -> String? {
+        try JSONValue(encoding: self).objectValue?[key]?.stringValue
+    }
+}

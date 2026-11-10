@@ -4,6 +4,10 @@ import {
   type FinanceCategoryApplyInput,
   financeCategoryReviewSchema,
 } from "@cubby/schemas/ai";
+import {
+  financeReviewFields,
+  isFinanceReviewEntity,
+} from "@cubby/schemas/field-suggestion-policy";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { sql } from "drizzle-orm";
 import { z } from "zod";
@@ -35,11 +39,6 @@ const financeTables = {
   expense: "Expense",
 } as const;
 type FinanceEntity = keyof typeof financeTables;
-export function isFinanceCategoryEntity(
-  entity: string,
-): entity is FinanceEntity {
-  return entity === "purchase" || entity === "expense";
-}
 const rootFields = {
   financialTransaction: [
     "shortcode",
@@ -270,7 +269,10 @@ export async function applyFinanceCategorySuggestion(
   input: FinanceCategoryApplyInput,
 ) {
   const review = financeCategoryReviewSchema.parse(input);
-  if (review.entity === "vendor") {
+  const suppliedFields = financeCategoryReviewSchema.shape.field
+    .unwrap()
+    .options.filter((key) => input[key] !== undefined);
+  if (isFinanceReviewEntity(review.entity, "vendor")) {
     return withSnapshotWriteDatabase(
       context.db,
       async (db) => {
@@ -280,8 +282,9 @@ export async function applyFinanceCategorySuggestion(
             "CONSTRAINT_VIOLATION",
             "Vendor purchase evidence or saved defaults changed; request a fresh suggestion before applying.",
           );
+        const vendorFields: readonly string[] = financeReviewFields("vendor");
         const patch = Object.fromEntries(
-          ["defaultSpendingCategoryId", "spendingProfile"]
+          vendorFields
             .filter((key) => Object.hasOwn(input, key))
             .map((key) => [
               key,
@@ -290,7 +293,7 @@ export async function applyFinanceCategorySuggestion(
         );
         if (
           Object.keys(patch).length === 0 ||
-          input.spendingCategoryId !== undefined
+          suppliedFields.some((key) => !vendorFields.includes(key))
         )
           throw createAppError(
             "CONSTRAINT_VIOLATION",
@@ -313,16 +316,17 @@ export async function applyFinanceCategorySuggestion(
       { isolationLevel: "repeatable read" },
     );
   }
+  const financeFields: readonly string[] = financeReviewFields("finance");
   if (
     !input.spendingCategoryId ||
-    input.spendingProfile !== undefined ||
-    input.defaultSpendingCategoryId !== undefined
+    suppliedFields.some((key) => !financeFields.includes(key))
   )
     throw createAppError(
       "CONSTRAINT_VIOLATION",
       "Review an Expense category or Purchase fallback.",
     );
-  if (!isFinanceCategoryEntity(review.entity))
+  // FinancialTransaction declares no reviewed field: it carries source evidence only.
+  if (!isFinanceReviewEntity(review.entity, "finance"))
     throw createAppError(
       "CONSTRAINT_VIOLATION",
       "Classify Expense lines or review the Purchase fallback; transactions carry source evidence only.",

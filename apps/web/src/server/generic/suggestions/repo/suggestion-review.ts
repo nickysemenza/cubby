@@ -11,7 +11,10 @@ import { entityFieldEnvelopeFields } from "@cubby/schemas/entity-field-envelopes
 import { entityFieldByKey } from "@cubby/schemas/entity-fields";
 import { fieldEnvelopeFor, fieldValueOf } from "@cubby/schemas/field-envelope";
 import { basisValueOf } from "@cubby/schemas/field-suggestion";
-import { requiresSuggestionReview } from "@cubby/schemas/field-suggestion-policy";
+import {
+  financeReviewContext,
+  requiresSuggestionReview,
+} from "@cubby/schemas/field-suggestion-policy";
 import { parseEntityRef } from "@cubby/schemas/identifiers";
 import { suggestionChildHandle } from "@cubby/schemas/suggestion";
 import { suggestionFieldCount } from "@cubby/schemas/suggestion-list";
@@ -329,34 +332,17 @@ async function writeSuggestionValue(
     .where(eq(sql`${table.id}`, row.recordId))
     .limit(1);
   if (!record) throw new Error(`Suggestion record not found: ${row.recordId}`);
-  const reviewedField =
-    ((entity === "expense" || entity === "purchase") &&
-      row.field === "spendingCategoryId") ||
-    (entity === "vendor" &&
-      (row.field === "defaultSpendingCategoryId" ||
-        row.field === "spendingProfile"));
-  if (reviewedField) {
+  if (financeReviewContext(entity, row.field)) {
     if (!row.financeReviewFingerprint)
       throw new Error(
         "Suggestion is missing its finance review fingerprint; request a fresh suggestion.",
       );
-    const financeField = z
-      .enum([
-        "spendingCategoryId",
-        "defaultSpendingCategoryId",
-        "spendingProfile",
-      ])
-      .parse(row.field);
     const financeInput = financeCategoryApplyInput.parse({
       entity,
       entityId: record.shortcode,
       fingerprint: row.financeReviewFingerprint,
-      field: financeField,
-      ...(financeField === "spendingCategoryId"
-        ? { spendingCategoryId: typedValue }
-        : financeField === "defaultSpendingCategoryId"
-          ? { defaultSpendingCategoryId: typedValue }
-          : { spendingProfile: typedValue }),
+      field: row.field,
+      [row.field]: typedValue,
     });
     await applyFinanceCategorySuggestion(context, financeInput);
     return;

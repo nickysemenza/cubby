@@ -113,9 +113,11 @@ export const manifestWire = {
       backedBy: "Json?",
       mode: "string~",
       rules: "[string]?",
+      financeReview: "FieldFinanceReview?",
     },
     { conformances: codable },
   ),
+  FieldFinanceReview: record({ context: "string" }, { conformances: codable }),
   FieldResolutionDescriptor: record(
     {
       reset: "[string:Json]",

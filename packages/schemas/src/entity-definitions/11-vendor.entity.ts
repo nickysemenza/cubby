@@ -300,6 +300,7 @@ export const { definition, readSchemas } = defineEntityModel({
           kind: "select",
           suggest: {
             basis: ["name", "website", "notes"],
+            financeReview: { context: "vendor" },
             rules: [
               `Suggest this vendor's spending profile using saved independent purchase and ProductCategory evidence. Food products alone do not distinguish groceries from restaurant meals. Mixed goods support mixed_retail; ambiguous or truncated evidence supports unspecified. The current profile is a review target, never proof. Preserve existing decisions.`,
             ],
@@ -360,6 +361,7 @@ export const { definition, readSchemas } = defineEntityModel({
           renderer: "entity-select",
           suggest: {
             basis: ["name", "website", "notes", "spendingProfile"],
+            financeReview: { context: "vendor" },
           },
         },
         display: { columnGroup: "Purchasing", columnLabel: "Category" },
