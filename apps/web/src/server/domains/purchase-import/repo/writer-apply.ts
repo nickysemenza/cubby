@@ -13,10 +13,19 @@ import {
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import type {
+  planAggregateExpense,
+  planAttachments,
   planExpenseProductBinding,
+  planFallbackExpenses,
   planImportedExpense,
+  planOriginalBindings,
   planPaymentEvidence,
   planPurchaseHeader,
+  planPurchaseNote,
+  planReplayClaim,
+  planRunCounter,
+  planSourceAssociation,
+  planTenderUpdates,
 } from "./writer-plan";
 
 export async function applyPurchaseHeader(
@@ -56,16 +65,14 @@ export async function applyExpenseProductBinding(
 
 export async function applyAggregateExpense(
   tx: DrizzleTransaction,
-  plan: NonNullable<
-    ReturnType<typeof import("./writer-plan").planAggregateExpense>
-  >,
+  plan: NonNullable<ReturnType<typeof planAggregateExpense>>,
 ) {
   return insertWithShortcode(tx, "expense", plan);
 }
 
 export async function applyFallbackExpenses(
   tx: DrizzleTransaction,
-  plan: ReturnType<typeof import("./writer-plan").planFallbackExpenses>,
+  plan: ReturnType<typeof planFallbackExpenses>,
 ) {
   return tx
     .update(expense)
@@ -76,7 +83,7 @@ export async function applyFallbackExpenses(
 
 export async function applyReplayClaim(
   tx: DrizzleTransaction,
-  plan: ReturnType<typeof import("./writer-plan").planReplayClaim>,
+  plan: ReturnType<typeof planReplayClaim>,
 ) {
   await tx
     .update(importSourceClaim)
@@ -86,9 +93,7 @@ export async function applyReplayClaim(
 
 export async function applyPurchaseNote(
   tx: DrizzleTransaction,
-  plan: NonNullable<
-    ReturnType<typeof import("./writer-plan").planPurchaseNote>
-  >,
+  plan: NonNullable<ReturnType<typeof planPurchaseNote>>,
 ) {
   await tx
     .update(purchase)
@@ -100,7 +105,7 @@ export async function applyPurchaseNote(
 
 export async function applyRunCounter(
   tx: DrizzleTransaction,
-  plan: ReturnType<typeof import("./writer-plan").planRunCounter>,
+  plan: ReturnType<typeof planRunCounter>,
 ) {
   await tx.execute(
     sql`UPDATE "Run" SET "ordersSeen" = "ordersSeen" + 1, ${plan.created ? sql`"imported" = "imported" + 1` : sql`"updated" = "updated" + 1`}, "updatedAt" = now() WHERE "id" = ${plan.runId}`,
@@ -109,7 +114,7 @@ export async function applyRunCounter(
 
 export async function applyTenderUpdates(
   tx: DrizzleTransaction,
-  plan: ReturnType<typeof import("./writer-plan").planTenderUpdates>,
+  plan: ReturnType<typeof planTenderUpdates>,
 ) {
   for (const row of plan)
     await tx
@@ -120,7 +125,7 @@ export async function applyTenderUpdates(
 
 export async function applyAttachments(
   tx: DrizzleTransaction,
-  plan: ReturnType<typeof import("./writer-plan").planAttachments>,
+  plan: ReturnType<typeof planAttachments>,
 ) {
   for (const attachment of plan)
     await tx.insert(entityAttachment).values(attachment).onConflictDoNothing();
@@ -128,7 +133,7 @@ export async function applyAttachments(
 
 export async function applySourceAssociation(
   tx: DrizzleTransaction,
-  plan: ReturnType<typeof import("./writer-plan").planSourceAssociation>,
+  plan: ReturnType<typeof planSourceAssociation>,
 ) {
   const [association] = await tx
     .insert(importSourceOrder)
@@ -145,7 +150,7 @@ export async function applySourceAssociation(
 
 export async function applyOriginalBindings(
   tx: DrizzleTransaction,
-  plan: ReturnType<typeof import("./writer-plan").planOriginalBindings>,
+  plan: ReturnType<typeof planOriginalBindings>,
 ) {
   if (plan.length) await tx.insert(importSourceProduct).values(plan);
 }

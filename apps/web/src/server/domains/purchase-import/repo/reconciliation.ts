@@ -671,7 +671,7 @@ export async function prepareSourceOrderReconciliation(
   });
 }
 
-export async function retainUnresolvedProductFinding(
+async function retainUnresolvedProductFinding(
   tx: DrizzleTransaction,
   state: ReconciliationState,
   ownerId: typeof ledgerParty.$inferSelect.id,

@@ -1,8 +1,11 @@
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import type {
   ExtractedOrderCandidate,
+  ExtractedPaymentEvidence,
   ExtractedPurchaseLine,
   ImportWriterInput,
+  PaymentTender,
+  ProposedImportFix,
 } from "@cubby/schemas/purchase-import";
 import { cents, minorToMoney, moneyToMinor } from "@cubby/shared";
 import { sha256Hex } from "@cubby/shared/sha256";
@@ -11,8 +14,14 @@ import { and, eq, isNull, sql } from "drizzle-orm";
 import { notDeleted } from "~/server/db/helpers";
 import { requested } from "~/server/db/helpers/requested";
 import { expense, purchase } from "~/server/db/schema";
+import type {
+  importSourceClaim,
+  importSourceOrder,
+  ledgerParty,
+} from "~/server/db/schema";
 import { effectiveExpenseTradeSql } from "~/server/domains/expense/repo/expense-inheritance";
 import { financialEvidenceAmountMinor } from "~/server/domains/financial-transaction/repo/financial-evidence";
+import type { LiveSourceOrder } from "~/server/domains/purchase-import/repo/source-claim-family";
 import { sourceOrderKey } from "~/server/domains/purchase-import/repo/source-order-key";
 import {
   decideLineWrite,
@@ -23,12 +32,19 @@ import {
 } from "~/server/domains/purchase-import/repo/writer-policy";
 
 import { normalizeOrderKey } from "./order-identity";
-import type { LineIdentityDecision } from "./writer";
 import type {
-  loadAcceptedProductChoices,
+  FindingKind,
+  FindingOrigin,
+  ImportSourceAssociationInput,
+  LineIdentityDecision,
+} from "./writer";
+import type { LineMutation } from "./writer-lines";
+import type {
   loadAcceptedPaymentFacts,
-  loadOriginalLineBindings,
+  loadAcceptedProductChoices,
   loadOrderedPurchases,
+  loadOriginalLineBindings,
+  loadRetainedTender,
   loadTargetReviewFacts,
 } from "./writer-load";
 
@@ -318,7 +334,7 @@ export function planAcceptedPaymentReview(
 
 export function planSourceIdentity(
   input: ImportWriterInput,
-  partyId: typeof import("~/server/db/schema").ledgerParty.$inferSelect.id,
+  partyId: typeof ledgerParty.$inferSelect.id,
 ) {
   return {
     ledgerPartyId: partyId,
@@ -352,10 +368,7 @@ export function planSourceKey(input: ImportWriterInput) {
 export function planSourceOrder(
   input: ImportWriterInput,
   orderKey: string,
-  existingOrder:
-    | import("~/server/domains/purchase-import/repo/source-claim-family").LiveSourceOrder
-    | null
-    | undefined,
+  existingOrder: LiveSourceOrder | null | undefined,
 ) {
   if (
     input.targetPurchaseId &&
@@ -371,7 +384,7 @@ export function planSourceOrder(
 export function planPaymentEvidence(
   candidate: ExtractedOrderCandidate,
   purchaseId: typeof purchase.$inferSelect.id,
-  sourceClaimId: typeof import("~/server/db/schema").importSourceClaim.$inferSelect.id,
+  sourceClaimId: typeof importSourceClaim.$inferSelect.id,
 ) {
   return candidate.currency === "USD"
     ? candidate.payments.map((payment, evidenceIndex) => ({
@@ -595,7 +608,7 @@ export function planFallbackExpenses(expenseIds: readonly string[]) {
 
 export function planReplayClaim(
   input: Pick<ImportWriterInput, "source" | "runId">,
-  id: typeof import("~/server/db/schema").importSourceClaim.$inferSelect.id,
+  id: typeof importSourceClaim.$inferSelect.id,
   updatedAt: Date,
 ) {
   return {
@@ -692,7 +705,7 @@ export function planRunWrites(
   purchaseId: typeof purchase.$inferSelect.id,
   created: boolean,
   usedFallbackNote: boolean,
-  mutations: import("./writer-lines").LineMutation[],
+  mutations: LineMutation[],
 ) {
   return [
     {
@@ -735,12 +748,9 @@ const tenderFactKey = (payment: {
   `${cents(payment.amount)}|${payment.chargedAt ?? ""}|${payment.cardLastFour ?? ""}`;
 
 export function planLearnedTender(
-  proposed: readonly import("@cubby/schemas/purchase-import").ExtractedPaymentEvidence[],
+  proposed: readonly ExtractedPaymentEvidence[],
 ) {
-  const learned = new Map<
-    string,
-    import("@cubby/schemas/purchase-import").PaymentTender | null
-  >();
+  const learned = new Map<string, PaymentTender | null>();
   for (const payment of proposed) {
     const tender = payment.tender ?? "unknown";
     const key = tenderFactKey({
@@ -760,9 +770,7 @@ export function planLearnedTender(
 
 export function planTenderUpdates(
   learned: NonNullable<ReturnType<typeof planLearnedTender>>,
-  retained: Awaited<
-    ReturnType<typeof import("./writer-load").loadRetainedTender>
-  >,
+  retained: Awaited<ReturnType<typeof loadRetainedTender>>,
 ) {
   return retained.flatMap((row) => {
     if (row.tender !== "unknown") return [];
@@ -804,15 +812,12 @@ export function planAttachments(
 }
 
 export function planSourceAssociation(
-  input: import("./writer").ImportSourceAssociationInput,
+  input: ImportSourceAssociationInput,
   purchaseId: typeof purchase.$inferSelect.id,
   outputFingerprint: string,
   orderKey: string,
-  rootId: typeof import("~/server/db/schema").importSourceClaim.$inferSelect.id,
-  existing:
-    | import("~/server/domains/purchase-import/repo/source-claim-family").LiveSourceOrder
-    | null
-    | undefined,
+  rootId: typeof importSourceClaim.$inferSelect.id,
+  existing: LiveSourceOrder | null | undefined,
   updatedAt: Date,
 ) {
   if (existing && existing.purchaseId !== purchaseId)
@@ -846,8 +851,8 @@ export function planSourceAssociation(
 }
 
 export function planOriginalBindings(
-  sourceOrderId: typeof import("~/server/db/schema").importSourceOrder.$inferSelect.id,
-  input: import("./writer").ImportSourceAssociationInput,
+  sourceOrderId: typeof importSourceOrder.$inferSelect.id,
+  input: ImportSourceAssociationInput,
 ) {
   if (!input.originalOrder || !input.productBindings?.length) return [];
   for (const binding of input.productBindings)
@@ -867,14 +872,9 @@ export function planReconciliationFix(
   input: ImportWriterInput,
   purchaseId: typeof purchase.$inferSelect.id,
   orderKey: string,
-  accepted:
-    | import("~/server/domains/purchase-import/repo/source-claim-family").LiveSourceOrder
-    | null,
+  accepted: LiveSourceOrder | null,
   observationId: string,
-): Extract<
-  import("@cubby/schemas/purchase-import").ProposedImportFix,
-  { kind: "reconcile_source_order" }
-> {
+): Extract<ProposedImportFix, { kind: "reconcile_source_order" }> {
   return {
     kind: "reconcile_source_order",
     purchaseId,
@@ -888,13 +888,11 @@ export function planReconciliationFix(
 }
 
 export async function planFinding(
-  input: import("./writer").FindingOrigin,
+  input: FindingOrigin,
   purchaseId: typeof purchase.$inferSelect.id,
-  kind: import("./writer").FindingKind,
+  kind: FindingKind,
   summary: string,
-  proposedFix:
-    | import("@cubby/schemas/purchase-import").ProposedImportFix
-    | null,
+  proposedFix: ProposedImportFix | null,
 ) {
   const evidenceFingerprint = await sha256Hex(
     JSON.stringify({ source: input.source, kind, purchaseId, proposedFix }),

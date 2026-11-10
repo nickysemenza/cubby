@@ -31,12 +31,14 @@ import {
   readImportSourceClaimFamily,
   readSourceFamilyOrder,
 } from "~/server/domains/purchase-import/repo/source-claim-family";
+import type { LiveSourceOrder } from "~/server/domains/purchase-import/repo/source-claim-family";
 
 import { normalizedOrderIdSql, normalizeOrderKey } from "./order-identity";
 import {
   acceptedSourceExtraction,
   mergedVendorSourceOrder,
 } from "./reconciliation-observations";
+import type { ImportSourceAssociationInput } from "./writer";
 
 export async function loadOriginalLineBindings(
   tx: DrizzleTransaction,
@@ -65,7 +67,7 @@ export async function loadOriginalLineBindings(
 
 export async function loadAcceptedProductChoices(
   tx: DrizzleTransaction,
-  order: import("~/server/domains/purchase-import/repo/source-claim-family").LiveSourceOrder,
+  order: LiveSourceOrder,
 ) {
   const [observation] = order.acceptedObservationId
     ? await tx
@@ -280,7 +282,7 @@ export async function lockPurchaseExpenses(
 
 export async function loadAcceptedPurchase(
   tx: DrizzleTransaction,
-  order: import("~/server/domains/purchase-import/repo/source-claim-family").LiveSourceOrder,
+  order: LiveSourceOrder,
   vendorId: string,
 ) {
   return tx.query.purchase.findFirst({
@@ -300,7 +302,7 @@ export async function loadAcceptedPurchase(
 
 export async function loadAcceptedPaymentFacts(
   tx: DrizzleTransaction,
-  order: import("~/server/domains/purchase-import/repo/source-claim-family").LiveSourceOrder,
+  order: LiveSourceOrder,
 ) {
   const accepted = await acceptedSourceExtraction(tx, order);
   const retainedPayments = await tx
@@ -401,7 +403,7 @@ export async function loadRetainedTender(
 
 export async function loadAssociationRun(
   tx: DrizzleTransaction,
-  input: import("./writer").ImportSourceAssociationInput,
+  input: ImportSourceAssociationInput,
   partyId: typeof ledgerParty.$inferSelect.id,
 ) {
   const [owned] = await tx
@@ -428,7 +430,7 @@ export async function loadAssociationRun(
 
 export async function loadAssociationTarget(
   tx: DrizzleTransaction,
-  input: import("./writer").ImportSourceAssociationInput,
+  input: ImportSourceAssociationInput,
   purchaseId: PurchaseId,
 ) {
   const [target] = await tx
@@ -447,7 +449,7 @@ export async function loadAssociationTarget(
 
 export async function loadAssociationAccount(
   tx: DrizzleTransaction,
-  input: import("./writer").ImportSourceAssociationInput,
+  input: ImportSourceAssociationInput,
   partyId: typeof ledgerParty.$inferSelect.id,
 ) {
   const [ownedAccount] = await tx
