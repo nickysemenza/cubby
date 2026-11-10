@@ -1,5 +1,4 @@
 import { GearIcon } from "@phosphor-icons/react/dist/csr/Gear";
-import { PlugIcon } from "@phosphor-icons/react/dist/csr/Plug";
 import { SignOutIcon } from "@phosphor-icons/react/dist/csr/SignOut";
 import { UserIcon } from "@phosphor-icons/react/dist/csr/User";
 import { Link } from "@tanstack/react-router";
@@ -67,20 +66,9 @@ export const UserAvatarDropdown = () => {
               </Description>
             </div>
           </DropdownMenuLabel>
-          <DropdownMenuItem
-            render={
-              <Link
-                to="/account/$accountView"
-                params={{ accountView: "settings" }}
-              />
-            }
-          >
+          <DropdownMenuItem render={<Link to="/account" />}>
             <UserIcon />
             <span>Account</span>
-          </DropdownMenuItem>
-          <DropdownMenuItem render={<Link to="/account/connected-apps" />}>
-            <PlugIcon />
-            <span>Connected apps</span>
           </DropdownMenuItem>
           <DropdownMenuItem render={<Link to="/settings" />}>
             <GearIcon />
