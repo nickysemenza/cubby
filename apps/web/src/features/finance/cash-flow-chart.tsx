@@ -1,7 +1,9 @@
 import type { CashFlowProjectionOut } from "@cubby/schemas/cash-flow";
+import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import type { BarCustomLayerProps, BarDatum } from "@nivo/bar";
 import { useMemo } from "react";
 
+import { RecordBucketLabel } from "~/entity/components/record-mark";
 import { monthLabel } from "~/features/project/project-formatting";
 import {
   nivoBarChrome,
@@ -20,6 +22,8 @@ export type CashFlowSegmentTarget =
 type Segment = {
   key: string;
   label: string;
+  /** The bucket's record identity, for its mark; null for a plain series. */
+  mark: { entity: ShortcodeEntity; id: string; emoji: string | null } | null;
   color: string;
   target: CashFlowSegmentTarget | null;
 };
@@ -43,6 +47,11 @@ export const cashFlowSegments = (data: CashFlowProjectionOut): Segment[] => [
   ...data.baseline.map((row, index) => ({
     key: `baseline:${row.key}`,
     label: row.label,
+    mark: {
+      entity: "spendingCategory" as const,
+      id: row.key,
+      emoji: row.emoji,
+    },
     color: BASELINE_COLORS[index % BASELINE_COLORS.length]!,
     target: row.ledgerFilter
       ? ({ kind: "ledger", filter: row.ledgerFilter } as const)
@@ -51,24 +60,32 @@ export const cashFlowSegments = (data: CashFlowProjectionOut): Segment[] => [
   ...data.envelopes.map((envelope) => ({
     key: `envelope:${envelope.id}`,
     label: envelope.name,
+    mark: {
+      entity: "project" as const,
+      id: envelope.id,
+      emoji: envelope.emoji,
+    },
     color: ENVELOPE_COLOR,
     target: { kind: "project", id: envelope.id } as const,
   })),
   {
     key: "committed",
     label: "Committed",
+    mark: null,
     color: COMMITTED_COLOR,
     target: null,
   },
   {
     key: "scenarioOutflow",
     label: "Scenario outflow",
+    mark: null,
     color: SCENARIO_OUT_COLOR,
     target: null,
   },
   {
     key: "scenarioInflow",
     label: "Scenario inflow",
+    mark: null,
     color: SCENARIO_IN_COLOR,
     target: null,
   },
@@ -221,7 +238,14 @@ export function CashFlowChart({
                   className="size-2.5 rounded-full"
                   style={{ backgroundColor: segment?.color }}
                 />
-                <span>{segment?.label ?? id}</span>
+                <RecordBucketLabel
+                  entity={segment?.mark?.entity ?? null}
+                  id={segment?.mark?.id ?? ""}
+                  emoji={segment?.mark?.emoji}
+                  size={12}
+                >
+                  {segment?.label ?? id}
+                </RecordBucketLabel>
                 <strong className="ml-auto tabular-nums">
                   {formatCurrency(Math.abs(value ?? 0))}
                 </strong>

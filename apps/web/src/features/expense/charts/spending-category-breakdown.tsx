@@ -3,6 +3,10 @@ import { TagIcon } from "@phosphor-icons/react/dist/csr/Tag";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 
+import {
+  RecordChartLabel,
+  RecordChartTick,
+} from "~/entity/components/record-mark";
 import { expense } from "~/integrations/tanstack-query/generated/domains/expense.gen";
 import { formatCurrency } from "~/lib/number-format";
 import { RankedBarBreakdown } from "~/ui/charts/kit";
@@ -51,6 +55,16 @@ export function SpendingCategoryBreakdown({
         : [],
     [ready],
   );
+  const identityByKey = useMemo(
+    () =>
+      new Map(
+        ready?.rows.map((row) => [
+          row.key,
+          { name: row.label, emoji: row.emoji },
+        ]) ?? [],
+      ),
+    [ready],
+  );
   const filterByKey = useMemo(
     () => new Map(ready?.rows.map((row) => [row.key, row.filter]) ?? []),
     [ready],
@@ -97,6 +111,21 @@ export function SpendingCategoryBreakdown({
               ? "var(--chart-neutral)"
               : "var(--chart-1)"
         }
+        renderTick={(tick) => (
+          <RecordChartTick
+            entity="spendingCategory"
+            {...tick}
+            identityById={identityByKey}
+          />
+        )}
+        renderLabel={(row) => (
+          <RecordChartLabel
+            entity="spendingCategory"
+            identity={
+              identityByKey.get(row.key) ?? { name: row.label, emoji: null }
+            }
+          />
+        )}
         onClick={(row) => {
           const filter = filterByKey.get(row.key);
           if (filter) onOpenLedger(filter);

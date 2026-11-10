@@ -19,6 +19,7 @@ const ready = {
     {
       key: "electrical",
       label: "Electrical & Lighting",
+      emoji: null,
       filter: { lineKind: "principal", trade: "electrical" },
     },
   ],
@@ -118,6 +119,7 @@ describe("ExpenseAggregateExplorer", () => {
       {
         id: "electrical",
         label: "Electrical & Lighting",
+        emoji: null,
         filter: { lineKind: "principal", trade: "electrical" },
         current: {
           actual: 140,
@@ -209,11 +211,13 @@ describe("ExpenseAggregateExplorer", () => {
         {
           key: "2026-06",
           label: "2026-06",
+          emoji: null,
           filter: { dateFrom: "2026-06-01", dateTo: "2026-06-30" },
         },
         {
           key: "2026-08",
           label: "2026-08",
+          emoji: null,
           filter: { dateFrom: "2026-08-01", dateTo: "2026-08-31" },
         },
       ],

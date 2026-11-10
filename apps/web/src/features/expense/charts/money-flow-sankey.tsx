@@ -75,14 +75,21 @@ export function MoneyFlowSankey({
       data.links.flatMap((link) => [link.source, link.target]),
     );
     const nodeById = new Map(data.nodes.map((node) => [node.id, node]));
-    const labels = new Map(data.nodes.map((node) => [node.id, node.label]));
+    const names = new Map(data.nodes.map((node) => [node.id, node.label]));
+    const labels = new Map(
+      // Nivo paints node labels as SVG text, so the emoji leads the string.
+      data.nodes.map((node) => [
+        node.id,
+        node.emoji ? `${node.emoji} ${node.label}` : node.label,
+      ]),
+    );
     const topLinks = [...data.links]
       .filter((link) => link.source.startsWith("project:"))
       .sort((a, b) => b.value - a.value)
       .slice(0, 5)
       .map(
         (link) =>
-          `${labels.get(link.source)} to ${labels.get(link.target)} ${formatCurrency(link.value)}`,
+          `${names.get(link.source)} to ${names.get(link.target)} ${formatCurrency(link.value)}`,
       );
     return {
       nodeById,

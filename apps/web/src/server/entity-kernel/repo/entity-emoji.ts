@@ -47,6 +47,29 @@ export async function writeRecordEmoji(
   );
 }
 
+/**
+ * Live records' emoji by shortcode in one batched read. Codes that name no
+ * live record (bucket sentinels such as `uncategorized`) are absent.
+ */
+export async function recordEmojiByCode(
+  db: Database | DrizzleTransaction,
+  entity: keyof typeof SHORTCODE_TABLE,
+  codes: Iterable<string>,
+): Promise<Map<string, string | null>> {
+  const field = entityInspectorMetadata[entity].recordEmojiField;
+  const unique = [...new Set(codes)];
+  if (!field || !unique.length) return new Map();
+  const table = SHORTCODE_TABLE[entity];
+  const columns: Record<string, PgColumn> = getTableColumns(table);
+  const column = columns[field];
+  if (!column) throw new Error(`Missing declared emoji column for ${entity}`);
+  const values = await unwrapDb(db)
+    .select({ code: table.shortcode, emoji: sql<string | null>`${column}` })
+    .from(table)
+    .where(and(inArray(table.shortcode, unique), notDeleted(table)));
+  return new Map(values.map((row) => [row.code, row.emoji]));
+}
+
 const identity = z.looseObject({ id: z.string() });
 /** A single batched identity lookup, including readers that select explicit columns. */
 export async function withRecordEmoji<Row>(
@@ -60,16 +83,11 @@ export async function withRecordEmoji<Row>(
   // it by shortcode cost every such page a round trip.
   const carried = z.object({ [field]: z.string().nullable() });
   if (rows.every((row) => carried.safeParse(row).success)) return [...rows];
-  const codes = rows.map((row) => identity.parse(row).id);
-  const table = SHORTCODE_TABLE[entity];
-  const columns: Record<string, PgColumn> = getTableColumns(table);
-  const column = columns[field];
-  if (!column) throw new Error(`Missing declared emoji column for ${entity}`);
-  const values = await unwrapDb(db)
-    .select({ code: table.shortcode, emoji: sql<string | null>`${column}` })
-    .from(table)
-    .where(and(inArray(table.shortcode, codes), notDeleted(table)));
-  const byCode = new Map(values.map((row) => [row.code, row.emoji]));
+  const byCode = await recordEmojiByCode(
+    db,
+    entity,
+    rows.map((row) => identity.parse(row).id),
+  );
   return rows.map((row) => {
     const emoji = byCode.get(identity.parse(row).id) ?? null;
     return Object.assign({}, row, {

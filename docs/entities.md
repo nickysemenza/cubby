@@ -588,7 +588,9 @@ image cells, reference pills, detail headers and native thumbnails; a record's o
 the detail hero. Web list reads request the emoji and glyph fields with every row, and the name
 cell does not repeat a mark the image cell draws. `presentation.recordGlyph: { field, options }`
 reads `field` and draws the glyph that the `options` enum field declares for that value (a Product
-Category's effective family).
+Category's effective family). Aggregate buckets keyed by a marked record's shortcode (analytics rows
+and columns, Sankey nodes, cash-flow baselines and envelopes) carry that record's `emoji`, read in
+one batch per axis; other buckets carry null.
 
 `presentation.recordIconEntityField` names a read-only projection holding an entity key. Generic web
 and Apple record surfaces resolve that entity's declared icon, falling back to the record's own

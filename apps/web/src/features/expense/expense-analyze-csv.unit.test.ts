@@ -27,11 +27,13 @@ const compared = {
     {
       key: "electrical",
       label: 'Electrical, "Lighting"',
+      emoji: null,
       filter: { lineKind: "principal", trade: "electrical" },
     },
     {
       key: "plumbing",
       label: "Plumbing",
+      emoji: null,
       filter: { lineKind: "principal", trade: "plumbing" },
     },
   ],
@@ -39,11 +41,13 @@ const compared = {
     {
       key: "materials",
       label: "Materials\nand fixtures",
+      emoji: null,
       filter: { lineKind: "principal", costType: "materials" },
     },
     {
       key: "services",
       label: "Services",
+      emoji: null,
       filter: { lineKind: "principal", costType: "services" },
     },
   ],
@@ -121,6 +125,7 @@ describe("expense Analyze CSV", () => {
         {
           key: "PRJ-1234",
           label: "Kitchen, phase 2",
+          emoji: null,
           filter: { project: "PRJ-1234" },
         },
       ],

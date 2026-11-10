@@ -595,6 +595,8 @@ export type ExpenseAnalyzeAggregate = z.infer<typeof expenseAnalyzeAggregate>;
 const expenseAnalyzeBucket = z.object({
   key: z.string(),
   label: z.string(),
+  /** The bucket record's emoji (a category or project); null otherwise. */
+  emoji: z.string().nullable(),
   filter: z.record(z.string(), z.string()),
 });
 export type ExpenseAnalyzeBucket = z.infer<typeof expenseAnalyzeBucket>;
@@ -661,6 +663,8 @@ const expenseFlowSankeyNode = z.object({
   id: z.string(),
   column: z.enum(["funder", "project", "spendingCategory"]),
   label: z.string(),
+  /** The project's or root Spending Category's emoji; null otherwise. */
+  emoji: z.string().nullable(),
   /** Null for a grouped bucket (Other projects / Other categories, a funder). */
   filter: expenseFlowLedgerFilter.nullable(),
 });
