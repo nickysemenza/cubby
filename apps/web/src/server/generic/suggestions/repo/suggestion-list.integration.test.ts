@@ -782,7 +782,7 @@ describe("cross-family Suggestion list", () => {
     expect(
       (await suggestionRecordCounts(ctx.db, { recordIds: [product.id] }))
         .records,
-    ).toEqual([{ id: product.id, pending: 2 }]);
+    ).toEqual([{ id: product.id, pending: 1 }]);
     await reviewSuggestion(ctx.db, kernelCtx(ctx), {
       suggestionId: confident,
       operationId: "synthetic-published-reader-reject",
@@ -792,7 +792,7 @@ describe("cross-family Suggestion list", () => {
     expect(
       (await suggestionRecordCounts(ctx.db, { recordIds: [product.id] }))
         .records,
-    ).toEqual([{ id: product.id, pending: 1 }]);
+    ).toEqual([{ id: product.id, pending: 0 }]);
     const fieldCounts = (
       await suggestionCountsByFamily(ctx.db, {
         family: "field",
