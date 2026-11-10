@@ -29,27 +29,36 @@ struct EntityPickerSheet: View {
     let multiple: Bool
     let onPick: ([EntityPick]) -> Void
     let scope: EntityPickerScope?
+    private let injectedSource: EntityListPageSource?
 
     @Environment(AppModel.self) private var appModel
     @Environment(\.dismiss) private var dismiss
     @State private var term = ""
     @State private var selected: [EntityPick]
     @State private var model: GenericEntityListModel?
-    @State private var selectionRows: [String: EntityRow] = [:]
-    @State private var missingSelections: Set<String> = []
-    @State private var selectionErrors: [String: String] = [:]
+    @State private var resolution = RecordSelectionResolver()
+    @State private var revealPending = true
+    @State private var selectionOutsideScope = false
+    @FocusState private var focusedResult: String?
+    @FocusState private var searchFocused: Bool
 
     init(
         target: EntityKey, multiple: Bool = false, selected: [String] = [],
         scope: EntityPickerScope? = nil,
+        source: EntityListPageSource? = nil, resolvedSelections: [EntityRow] = [],
         onPick: @escaping ([EntityPick]) -> Void
     ) {
         self.target = target
         self.multiple = multiple
         self.onPick = onPick
         self.scope = scope
+        self.injectedSource = source
+        let resolution = RecordSelectionResolver()
+        for row in resolvedSelections { resolution.remember(row) }
+        _resolution = State(initialValue: resolution)  // state-init-ok: sheet presentation
         // Every call site presents this via `.sheet(isPresented:)`, not `.sheet(item:)` —
         // dismissing tears the subtree down, so re-presenting rebuilds this seed fresh.
+        _revealPending = State(initialValue: !multiple && !selected.isEmpty)
         _selected = State(initialValue: selected.map { EntityPick(id: $0, title: $0) })  // state-init-ok
     }
 
@@ -69,132 +78,158 @@ struct EntityPickerSheet: View {
 
     var body: some View {
         NavigationStack {
-            List {
-                if !selected.isEmpty {
-                    Section(multiple ? "Selected (\(selected.count))" : "Current selection") {
-                        ForEach(selected, id: \.selectedRowIdentity) { pick in
-                            HStack {
-                                selectedIdentity(pick)
-                                Spacer()
-                                if multiple {
-                                    Button("Remove", systemImage: "xmark.circle.fill") {
+            ScrollViewReader { proxy in
+                List {
+                    if multiple {
+                        Section("Selected (\(selected.count))") {
+                            if selected.isEmpty { Text("No selections").foregroundStyle(.secondary) }
+                            ForEach(selected, id: \.selectedRowIdentity) { pick in
+                                HStack {
+                                    selectionIdentity(pick.id)
+                                    Spacer()
+                                    Button {
                                         selected.removeAll { $0.id == pick.id }
+                                    } label: {
+                                        Image(systemName: "xmark.circle.fill")
+                                            .frame(
+                                                minWidth: selectionActionTarget,
+                                                minHeight: selectionActionTarget
+                                            )
+                                            .contentShape(Rectangle())
                                     }
-                                    .labelStyle(.iconOnly)
                                     .foregroundStyle(.secondary)
                                     .buttonStyle(.borderless)
-                                    .accessibilityLabel("Remove \(selectionTitle(pick.id))")
+                                    .accessibilityLabel(
+                                        "Remove \(resolution.title(pick.id, descriptor: descriptor))")
                                 }
+                                .frame(minHeight: FieldGuideTokens.touchTarget)
                             }
-                            .frame(minHeight: FieldGuideTokens.touchTarget)
+                        }
+                    }
+                    if !multiple, let id = selected.first?.id {
+                        if resolution.missing.contains(id) || resolution.errors[id] != nil {
+                            Section { selectionIdentity(id) }
+                        } else if selectionOutsideScope, resolution.rows[id] != nil {
+                            Section {
+                                Label(
+                                    "\(resolution.title(id, descriptor: descriptor)) is outside the available options",
+                                    systemImage: "info.circle"
+                                )
+                                .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                    Section {
+                        if let model {
+                            if model.isSearching, let search = model.searchModel {
+                                searchRows(search)
+                            } else {
+                                listRows(model)
+                            }
                         }
                     }
                 }
-                Section {
+                .task(id: revealPage) { await revealCurrentSelection(using: proxy) }
+                .onScrollPhaseChange { _, phase in
+                    if phase == .tracking || phase == .interacting { revealPending = false }
+                }
+                .simultaneousGesture(DragGesture(minimumDistance: 2).onChanged { _ in revealPending = false })
+                .listStyle(.plain)
+                .fieldGuideScreen()
+                .searchable(text: $term, prompt: "Search \(descriptor.plural)")
+                .searchFocused($searchFocused)
+                .onChange(of: searchFocused) { _, value in if value { revealPending = false } }
+                .navigationTitle(multiple ? "Choose \(descriptor.plural)" : "Choose \(descriptor.singular)")
+                #if os(iOS)
+                    .navigationBarTitleDisplayMode(.inline)
+                #endif
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
+                    }
+                    if multiple {
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("Done") {
+                                onPick(
+                                    selected.map { pick in
+                                        EntityPick(
+                                            id: pick.id,
+                                            title: resolution.title(pick.id, descriptor: descriptor))
+                                    })
+                                dismiss()
+                            }
+                        }
+                    }
+                }
+                .task(id: scope) {
+                    let source = injectedSource ?? pageSource()
                     if let model {
-                        if model.isSearching, let search = model.searchModel {
-                            searchRows(search)
-                        } else if usesSearchRPC {
-                            Text("Type to search").foregroundStyle(.secondary)
-                        } else {
-                            listRows(model)
-                        }
+                        await model.setSource(source)
+                        await model.loadInitial()
+                    } else {
+                        let fresh = GenericEntityListModel(
+                            descriptor: descriptor, client: appModel.client, source: source)
+                        model = fresh
+                        fresh.setSearchQuery(term)
+                        await fresh.loadInitial()
                     }
                 }
-            }
-            .listStyle(.plain)
-            .fieldGuideScreen()
-            .searchable(text: $term, prompt: "Search \(descriptor.plural)")
-            .navigationTitle(multiple ? "Choose \(descriptor.plural)" : "Choose \(descriptor.singular)")
-            #if os(iOS)
-                .navigationBarTitleDisplayMode(.inline)
-            #endif
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
+                .onChange(of: term) { _, value in
+                    revealPending = false
+                    model?.setSearchQuery(value)
                 }
-                if multiple {
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button("Done") {
-                            onPick(selected)
-                            dismiss()
-                        }
+                .onChange(of: scope) { _, _ in revealPending = false }
+                .onKeyPress(.downArrow) { moveFocus(by: 1) }
+                .onKeyPress(.upArrow) { moveFocus(by: -1) }
+                .onKeyPress(.return) {
+                    guard let id = focusedResult, let row = visibleRows.first(where: { $0.id == id }) else {
+                        return .ignored
                     }
+                    choose(row)
+                    return .handled
+                }
+                .task(id: selected.map(\.id)) {
+                    await resolution.resolve(
+                        selected.map(\.id), descriptor: descriptor, client: appModel.client)
                 }
             }
-            .task(id: scope) {
-                let source = pageSource()
-                if let model {
-                    await model.setSource(source)
-                    await model.loadInitial()
-                } else {
-                    let fresh = GenericEntityListModel(
-                        descriptor: descriptor, client: appModel.client, source: source)
-                    model = fresh
-                    fresh.setSearchQuery(term)
-                    await fresh.loadInitial()
-                }
-            }
-            .onChange(of: term) { _, value in model?.setSearchQuery(value) }
-            .task(id: selected.map(\.id)) { await resolveSelections() }
         }
         .nativeSheet(.picker)
     }
 
-    @ViewBuilder
-    private func selectedIdentity(_ pick: EntityPick) -> some View {
-        if let row = selectionRows[pick.id] {
-            HStack(spacing: FieldGuideTokens.Space.sm) {
-                Thumb(
-                    url: row.imageURL, size: RecordRowMetrics.thumbnail,
-                    symbol: descriptor.recordSymbol(in: row), emoji: descriptor.recordEmoji(in: row))
-                Text(selectionTitle(row.id))
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        } else if missingSelections.contains(pick.id) {
-            Label("\(descriptor.singular) no longer available", systemImage: "questionmark.folder")
-                .foregroundStyle(.secondary)
-        } else if let message = selectionErrors[pick.id] {
-            InlineLoadFailure(message: message) {
-                await resolveSelections(retrying: pick.id)
-            }
-        } else {
-            LoadingIndicator(label: "Loading selection")
+    private var selectionActionTarget: CGFloat {
+        #if os(iOS)
+            FieldGuideTokens.touchTarget
+        #else
+            24
+        #endif
+    }
+
+    private func selectionIdentity(_ id: String) -> some View {
+        RecordSelectionIdentity(id: id, descriptor: descriptor, resolver: resolution) {
+            await resolution.resolve([id], descriptor: descriptor, client: appModel.client, retry: true)
         }
     }
 
-    private func selectionTitle(_ id: String) -> String {
-        guard let row = selectionRows[id], row.title != row.id else {
-            return "Unnamed \(descriptor.singular)"
-        }
-        return row.title
+    // A completed page (including one containing only duplicate ids) advances the opening scan.
+    // Search and member interaction permanently cancel it for this presentation.
+    private var revealPage: Int? {
+        guard revealPending, !multiple, term.isEmpty, model?.phase == .loaded else { return nil }
+        return model?.page
     }
 
-    private func resolveSelections(retrying retryID: String? = nil) async {
-        let ids = retryID.map { [$0] } ?? selected.map(\.id)
-        for id in ids {
-            guard !Task.isCancelled else { return }
-            if retryID == nil && (selectionRows[id] != nil || missingSelections.contains(id)) {
-                continue
-            }
-            selectionErrors[id] = nil
-            do {
-                let row = try await appModel.client.row(descriptor, id: id)
-                try Task.checkCancellation()
-                guard selected.contains(where: { $0.id == id }) else { continue }
-                if let row {
-                    selectionRows[id] = row
-                    if let index = selected.firstIndex(where: { $0.id == id }) {
-                        selected[index] = EntityPick(id: id, title: row.title)
-                    }
-                } else {
-                    missingSelections.insert(id)
-                }
-            } catch {
-                guard !Task.isCancelled else { return }
-                Diagnostics.report(error, context: "picker.selection")
-                selectionErrors[id] = error.userMessage
-            }
+    private func revealCurrentSelection(using proxy: ScrollViewProxy) async {
+        guard revealPending, !multiple, term.isEmpty, let id = selected.first?.id,
+            let model, model.phase == .loaded
+        else { return }
+        if model.rows.contains(where: { $0.id == id }) {
+            revealPending = false
+            proxy.scrollTo(EntityPickerRowIdentity.result(id), anchor: .center)
+        } else if model.hasMore, model.nextPageError == nil {
+            await model.loadNextPage()
+        } else if !model.hasMore {
+            revealPending = false
+            selectionOutsideScope = scope != nil
         }
     }
 
@@ -229,7 +264,10 @@ struct EntityPickerSheet: View {
         case .idle, .loading:
             LoadingIndicator(label: "Loading \(descriptor.plural)")
         case .unavailable(let message), .failed(let message):
-            InlineLoadFailure(message: message) { await model.loadInitial() }
+            InlineLoadFailure(message: message) {
+                revealPending = false
+                await model.loadInitial()
+            }
         case .loaded:
             if model.rows.isEmpty { Text("No matches").foregroundStyle(.secondary) }
             ForEach(model.rows, id: \.entityPickerResultIdentity) { row in
@@ -237,43 +275,49 @@ struct EntityPickerSheet: View {
             }
             if let message = model.refreshError {
                 InlineLoadFailure(message: message, isRetrying: model.activity != .idle) {
+                    revealPending = false
                     await model.refresh()
                 }
             }
             if let message = model.nextPageError {
                 InlineLoadFailure(message: message, isRetrying: model.activity != .idle) {
+                    revealPending = false
                     await model.loadNextPage()
                 }
             }
             if model.hasMore && model.nextPageError == nil {
-                Button("Load more") { Task { await model.loadNextPage() } }
-                    .disabled(model.activity != .idle)
+                Button("Load more") {
+                    revealPending = false
+                    Task { await model.loadNextPage() }
+                }
+                .disabled(model.activity != .idle)
             }
         }
     }
 
     private func pickRow(_ row: EntityRow) -> some View {
-        let pick = EntityPick(id: row.id, title: row.title)
-        let isSelected = selected.contains { $0.id == pick.id }
+        let isSelected = selected.contains { $0.id == row.id }
         return Button {
-            selectionRows[row.id] = row
-            if multiple {
-                if isSelected {
-                    selected.removeAll { $0.id == pick.id }
-                } else {
-                    selected.append(pick)
-                }
-            } else {
-                onPick([pick])
-                dismiss()
-            }
+            choose(row)
         } label: {
             RecordListRow(
-                title: row.title == row.id ? "Unnamed \(descriptor.singular)" : row.title,
+                title: row.title == row.id
+                    || row.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    ? "Unnamed \(descriptor.singular)" : row.title,
                 imageURL: row.imageURL, symbol: descriptor.recordSymbol(in: row),
                 emoji: descriptor.recordEmoji(in: row), titleLineLimit: 2
             ) {
-                if let subtitle = row.subtitle { Text(subtitle) }
+                VStack(alignment: .leading, spacing: 2) {
+                    if let status = EntityRowPresentation.status(descriptor: descriptor, row: row) {
+                        Label(status.text, systemImage: status.option?.glyph?.sfSymbol ?? "circle.fill")
+                            .foregroundStyle(
+                                FieldGuideMetrics.optionColor(status.option?.color) ?? .secondary)
+                    }
+                    if let subtitle = row.subtitle, subtitle != row.id { Text(subtitle) }
+                    let values = EntityRowPresentation.rail(descriptor: descriptor, row: row)
+                        .compactMap { cell in cell.value.map { "\(cell.label): \($0)" } }
+                    if !values.isEmpty { Text(values.joined(separator: " · ")) }
+                }
             } rail: {
                 if isSelected {
                     Image(systemName: "checkmark").foregroundStyle(FieldGuideTokens.interaction)
@@ -283,8 +327,41 @@ struct EntityPickerSheet: View {
             }
         }
         .buttonStyle(.plain)
+        .id(row.entityPickerResultIdentity)
+        .focused($focusedResult, equals: row.id)
         .accessibilityIdentifier("picker.option.\(row.id)")
         .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    private var visibleRows: [EntityRow] {
+        if let model, model.isSearching { return model.searchModel?.rows ?? [] }
+        return model?.rows ?? []
+    }
+
+    private func moveFocus(by offset: Int) -> KeyPress.Result {
+        revealPending = false
+        let rows = visibleRows
+        guard !rows.isEmpty else { return .ignored }
+        let index = focusedResult.flatMap { id in rows.firstIndex(where: { $0.id == id }) }
+        let next = index.map { min(max($0 + offset, 0), rows.count - 1) } ?? (offset > 0 ? 0 : rows.count - 1)
+        focusedResult = rows[next].id
+        return .handled
+    }
+
+    private func choose(_ row: EntityRow) {
+        revealPending = false
+        resolution.remember(row)
+        let pick = EntityPick(id: row.id, title: resolution.title(row.id, descriptor: descriptor))
+        if multiple {
+            if selected.contains(where: { $0.id == row.id }) {
+                selected.removeAll { $0.id == row.id }
+            } else {
+                selected.append(pick)
+            }
+        } else {
+            onPick([pick])
+            dismiss()
+        }
     }
 
     private func pageSource() -> EntityListPageSource {
@@ -304,7 +381,7 @@ struct EntityPickerSheet: View {
         return EntityListPageSource(
             id: scope,
             loadPage: { page in
-                guard ready, !searchRPC else { return emptyPage(page) }
+                guard ready else { return emptyPage(page) }
                 return try await client.list(
                     descriptor, page: page, pageSize: 25, filters: filters)
             },
@@ -312,15 +389,22 @@ struct EntityPickerSheet: View {
                 guard ready else { return emptyPage(page) }
                 if searchRPC {
                     do {
-                        let hits = try await client.search(query, kinds: [target], limit: 25)
+                        let hits = try await client.search(
+                            query, kinds: [target], limit: 25, offset: (page - 1) * 25)
                         let rows = hits.map {
                             EntityRow(
-                                id: $0.id, title: $0.title, subtitle: nil, imageURL: nil, raw: .null)
+                                id: $0.id, title: $0.title, subtitle: $0.context, imageURL: $0.imageURL,
+                                raw: .object([
+                                    "emoji": $0.emoji.valueIfPresent.flatMap { $0 }.map(JSONValue.string)
+                                        ?? .null
+                                ]))
                         }
                         return ListPage(
-                            items: page == 1 ? rows : [],
+                            items: rows,
                             meta: ListPageMeta(
-                                pageIndex: page, pageSize: 25, totalCount: rows.count, hasNextPage: false))
+                                pageIndex: page, pageSize: 25,
+                                totalCount: (page - 1) * 25 + rows.count + (rows.count == 25 ? 1 : 0),
+                                hasNextPage: rows.count == 25))
                     } catch {
                         await MainActor.run { Diagnostics.report(error, context: "picker.search") }
                         throw error
@@ -335,7 +419,48 @@ struct EntityPickerSheet: View {
     }
 }
 
-#Preview("Pick a location") {
-    EntityPickerSheet(target: .location) { _ in }
+/// The production picker and paginator with synthetic reads; no preview network or new renderer.
+private struct EntityPickerPreview: View {
+    var multiple = false
+    private var target: EntityKey { multiple ? .project : .vendor }
+    private var rows: [EntityRow] {
+        let names =
+            multiple
+            ? ["Kitchen refresh", "Spring planting and greenhouse improvements", "Tool maintenance"]
+            : ["Acorn Supply", "Birch Workshop — Tools and Garden Supplies", "Cedar Goods"]
+        return names.enumerated().map { index, title in
+            EntityRow(
+                id: "synthetic-choice-\(index)", title: title,
+                subtitle: multiple ? "Household project" : "Tools and supplies", imageURL: nil,
+                raw: .object(["name": .string(title), "emoji": .string(multiple ? "🌱" : "🧰")]))
+        }
+    }
+
+    var body: some View {
+        let rows = rows
+        EntityPickerSheet(
+            target: target, multiple: multiple,
+            selected: multiple ? Array(rows.prefix(2).map(\.id)) : [rows[1].id],
+            source: EntityListPageSource(id: "picker-preview") { _ in
+                ListPage(
+                    items: rows,
+                    meta: ListPageMeta(pageIndex: 1, pageSize: 25, totalCount: rows.count, hasNextPage: false)
+                )
+            } searchPage: { query, _ in
+                let matches = rows.filter { $0.title.localizedCaseInsensitiveContains(query) }
+                return ListPage(
+                    items: matches,
+                    meta: ListPageMeta(
+                        pageIndex: 1, pageSize: 25, totalCount: matches.count, hasNextPage: false))
+            }, resolvedSelections: rows
+        ) { _ in }
         .environment(PreviewFixtures.signedInModel())
+    }
 }
+
+#Preview("Choose Vendor") { EntityPickerPreview() }
+#Preview("Choose Projects") { EntityPickerPreview(multiple: true) }
+#Preview("Choose Projects — large text") {
+    EntityPickerPreview(multiple: true).dynamicTypeSize(.accessibility3)
+}
+#Preview("Choose Vendor — dark") { EntityPickerPreview().preferredColorScheme(.dark) }
