@@ -41,6 +41,7 @@ import {
 import {
   getDayKey,
   getRangeKey,
+  LONG_BAR_DAYS,
   toZoned,
   zonedStartOfDay,
 } from "~/ui/reui/event-calendar/event-calendar-lib";
@@ -63,9 +64,6 @@ const useIsoLayoutEffect =
   typeof window !== "undefined" ? useLayoutEffect : useEffect;
 
 interface EventCalendarMonthViewProps extends useRender.ComponentProps<"div"> {}
-
-/** A bar crossing at least this many days in one row counts as ongoing. */
-const LONG_BAR_DAYS = 5;
 
 function EventCalendarMonthView({
   className,
@@ -194,10 +192,7 @@ function EventCalendarMonthView({
           role="row"
           data-slot="event-calendar-month-header"
           // @container scopes the narrow-label breakpoint to the header row
-          className={cn(
-            "@container grid border-b",
-            "bg-muted",
-          )}
+          className="@container grid border-b"
           style={{ gridTemplateColumns }}
         >
           {headerDays.map((day) => (
@@ -247,7 +242,9 @@ function EventCalendarMonthView({
               ? `repeat(${weeks.length}, minmax(0, 1fr))`
               : weeks
                   .map((_, index) =>
-                    occupiedWeeks[index] === "1"
+                    slots.weekFit?.[index]
+                      ? `minmax(${slots.weekFit[index].height}px, auto)`
+                      : occupiedWeeks[index] === "1"
                       ? "minmax(var(--ec-month-row-min-h, 8rem), auto)"
                       : "minmax(var(--ec-month-empty-row-min-h, var(--ec-month-row-min-h, 8rem)), auto)",
                   )
@@ -259,7 +256,7 @@ function EventCalendarMonthView({
               key={rowIndex}
               week={week}
               gridTemplateColumns={gridTemplateColumns}
-              cap={resolvedCap}
+              cap={slots.weekFit?.[rowIndex]?.cap ?? resolvedCap}
               autoFit={autoFit}
               // Six month rows read as one continuous grid, so a hairline is
               // the right weight between them. Two fortnight rows are two
@@ -377,6 +374,9 @@ function EventCalendarMonthWeek({
     },
     (_, lane) => {
       const inLane = visibleBars.filter((b) => (b.lane ?? 0) === lane);
+      // The "N ongoing" fold is one line of text, like a crossing bar.
+      if (lane === 0 && ongoing.length > 0)
+        return "var(--ec-month-span-h, var(--ec-month-bar-h, 1.75rem))";
       return inLane.length > 0 && inLane.every((b) => (b.colSpan ?? 1) > 1)
         ? "var(--ec-month-span-h, var(--ec-month-bar-h, 1.75rem))"
         : "var(--ec-month-bar-h, 1.75rem)";
@@ -532,7 +532,7 @@ function EventCalendarMonthWeek({
         <div
           role="gridcell"
           data-slot="event-calendar-month-week-rail"
-          className="min-w-0 border-s bg-sidebar px-2 py-1.5"
+          className="min-w-0 border-s px-2 py-1.5"
         >
           {slots.renderWeekRail(week)}
         </div>
@@ -988,7 +988,6 @@ function EventCalendarMonthCell({
         "group/ec-cell relative flex min-h-0 min-w-0 flex-col overflow-hidden",
         !isLast && "border-e",
         isOutside && !settings.showOutsideDays && "invisible",
-        isToday && "relative border-b-2 border-b-primary/40 bg-primary/3",
         // No drop-target bg fill on move/resize - the dragged bar + not-allowed
         // cursor carry the feedback; a cell-wide color wash is too distracting.
         // data-drop-target stays as an opt-in styling hook.
@@ -1051,7 +1050,7 @@ function EventCalendarMoreIndicator({
         className={cn(
           "cursor-pointer truncate rounded-sm px-1.5 text-start text-muted-foreground hover:text-foreground",
           label &&
-            "block h-[calc(var(--ec-month-bar-h,1.75rem)-0.125rem)] w-full bg-muted leading-[calc(var(--ec-month-bar-h,1.75rem)-0.125rem)] text-foreground",
+            "flex h-[calc(var(--ec-month-span-h,var(--ec-month-bar-h,1.75rem))-0.125rem)] w-full items-center gap-1.5 bg-muted text-foreground",
           // While a dragged chip will land in this overflow bucket, the "+N more"
           // link itself becomes the drop placeholder: dashed, event-tinted, one
           // chip tall, so the drop target is unmistakable.
@@ -1073,6 +1072,9 @@ function EventCalendarMoreIndicator({
         }
         onClick={(e: React.MouseEvent) => {
           e.stopPropagation();
+          // A labelled fold lists its own bars; only day overflow defers to
+          // the consumer's day surface.
+          if (label) return;
           const verdict = settings.onMoreClick?.(
             day,
             segments.map((segment) => segment.occurrence),
@@ -1084,7 +1086,16 @@ function EventCalendarMoreIndicator({
           }
         }}
       >
-        {label ?? settings.i18n.labels.more(count)}
+        {label ? (
+          <>
+            <span className="shrink-0 font-medium">{label}</span>
+            <span className="min-w-0 truncate text-muted-foreground">
+              {segments.map((segment) => segment.occurrence.event.title).join(" · ")}
+            </span>
+          </>
+        ) : (
+          settings.i18n.labels.more(count)
+        )}
       </PopoverTrigger>
       <PopoverContent
         data-slot="event-calendar-more-popover"
@@ -1102,7 +1113,12 @@ function EventCalendarMoreIndicator({
         )}
         onClick={(e: React.MouseEvent) => e.stopPropagation()}
       >
-        <EventCalendarMoreDefaultContent day={day} segments={segments} headerId={headerId} />
+        <EventCalendarMoreDefaultContent
+          day={day}
+          segments={segments}
+          headerId={headerId}
+          heading={label}
+        />
       </PopoverContent>
     </Popover>
   );
@@ -1113,11 +1129,14 @@ function EventCalendarMoreDefaultContent({
   day,
   segments,
   headerId,
+  heading,
 }: {
   day: Date;
   segments: EventCalendarSegment[];
   /** Names the popover dialog: the header IS the list's accessible name. */
   headerId?: string;
+  /** Replaces the day header, for a fold that spans several days. */
+  heading?: string;
 }) {
   const settings = useEventCalendarSettings();
   return (
@@ -1128,11 +1147,12 @@ function EventCalendarMoreDefaultContent({
           "px-1 py-1 font-medium text-muted-foreground text-xs",
         )}
       >
-        {format(
-          toZoned(day, settings.timeZone),
-          settings.i18n.formats.moreDayHeader,
-          { locale: settings.locale },
-        )}
+        {heading ??
+          format(
+            toZoned(day, settings.timeZone),
+            settings.i18n.formats.moreDayHeader,
+            { locale: settings.locale },
+          )}
       </div>
       {/* The scroll region breaks out of the popover's right padding (-me-2)
             so the scrollbar sits flush in the gutter; the list then pads itself
@@ -1154,4 +1174,4 @@ function EventCalendarMoreDefaultContent({
   );
 }
 
-export { EventCalendarMonthView };
+export { EventCalendarMonthView, EventCalendarMoreIndicator };

@@ -270,6 +270,11 @@ interface EventCalendarMonthSlots {
   /** A trailing column per week row; `week` is the row's visible days. */
   renderWeekRail?: (week: Date[]) => ReactNode;
   weekRailLabel?: string;
+  /**
+   * Per week row: the row's height in px and the lanes each day shows before
+   * "+N more". The consumer sizes these to the space it gives the grid.
+   */
+  weekFit?: readonly { height: number; cap: number }[];
 }
 
 const EventCalendarMonthSlotsContext = createContext<EventCalendarMonthSlots>(
@@ -379,11 +384,12 @@ function MonthEventCalendar<TData = unknown>({
   renderDayMeta,
   renderWeekRail,
   weekRailLabel,
+  weekFit,
   ...props
 }: MonthEventCalendarProps<TData>) {
   const slots = useMemo(
-    () => ({ renderDayMeta, renderWeekRail, weekRailLabel }),
-    [renderDayMeta, renderWeekRail, weekRailLabel],
+    () => ({ renderDayMeta, renderWeekRail, weekRailLabel, weekFit }),
+    [renderDayMeta, renderWeekRail, weekRailLabel, weekFit],
   );
   return (
     <EventCalendarRoot {...props} period="month" slot="month-event-calendar">
@@ -399,11 +405,12 @@ function FortnightEventCalendar<TData = unknown>({
   renderDayMeta,
   renderWeekRail,
   weekRailLabel,
+  weekFit,
   ...props
 }: MonthEventCalendarProps<TData>) {
   const slots = useMemo(
-    () => ({ renderDayMeta, renderWeekRail, weekRailLabel }),
-    [renderDayMeta, renderWeekRail, weekRailLabel],
+    () => ({ renderDayMeta, renderWeekRail, weekRailLabel, weekFit }),
+    [renderDayMeta, renderWeekRail, weekRailLabel, weekFit],
   );
   return (
     <EventCalendarRoot

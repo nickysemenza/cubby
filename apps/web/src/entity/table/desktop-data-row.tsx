@@ -42,8 +42,8 @@ import { type CubbyColumnMeta } from "../../ui/data-table/table-meta";
 import { resolveColumnExplanation } from "./column-explanation";
 import { RelationFieldWorkbench } from "./relation-field-workbench";
 
-// Counts, quantities and money read in Geist Mono at the one figure size, so
-// columns align by digit; dates keep Inter with tabular figures.
+// Counts, quantities and money read in mono at the one figure size, so
+// columns align by digit; dates keep the sans with tabular figures.
 const NUMERIC_CELL = "text-right font-mono text-xs tabular-nums";
 const MONO_CELL = "font-mono text-xs";
 const dataRowIdentitySchema = z.object({ id: z.string() });

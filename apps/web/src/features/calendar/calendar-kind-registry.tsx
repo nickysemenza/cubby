@@ -105,6 +105,12 @@ function spendingContextText(item: SpendingItem): string | null {
   );
 }
 
+/** The vendor as context, unless the title already names it. */
+const vendorContext = (item: SpendingItem, vendor: string | null) =>
+  vendor && vendor.trim().toLowerCase() !== item.title.trim().toLowerCase()
+    ? vendor
+    : null;
+
 // Largest spend first within a day, below the priority-10 sources so meals and
 // tasks keep their place in a combined calendar. Bounded to (9, 10).
 const spendingPriority = (cost: number | null) => {
@@ -124,7 +130,7 @@ const calendarKindRegistry = {
       const mealKind = fieldValueOf(item.source.fields.mealKind);
       return [
         mealTypeTimeLabel(mealType),
-        mealType ? MEAL_TYPE_LABELS[mealType] : "Unslotted meal",
+        mealType ? MEAL_TYPE_LABELS[mealType] : null,
         mealKind === "cooked" ? "Cooked" : null,
         ...(fieldValueOf(item.source.fields.recipeNames) ?? []),
       ]
@@ -184,10 +190,15 @@ const calendarKindRegistry = {
       ]
         .filter(Boolean)
         .join(" · "),
-    richBadge: (item) => ({
-      label: TASK_STATUS_LABELS[item.status],
-      variant: statusTone("task", item.status),
-    }),
+    // Not started is every new task's state; only a status that says
+    // something earns a badge.
+    richBadge: (item) =>
+      item.status === "not_started"
+        ? undefined
+        : {
+            label: TASK_STATUS_LABELS[item.status],
+            variant: statusTone("task", item.status),
+          },
     edit: (item) => ({
       mode: "editable",
       entity: "task",
@@ -209,7 +220,7 @@ const calendarKindRegistry = {
     icon: () => KIND_ICONS.expense,
     metadata: (item) =>
       [
-        fieldValueOf(item.source.fields.vendor),
+        vendorContext(item, fieldValueOf(item.source.fields.vendor)),
         spendingCategoryText(item),
         ...(item.spendingContext?.projectNames ?? []),
         item.productName,
@@ -261,7 +272,7 @@ const calendarKindRegistry = {
     metadata: (item) =>
       [
         item.occurrence === "refund" ? "Refund" : null,
-        item.vendor ?? "Purchase",
+        vendorContext(item, item.vendor),
         spendingCategoryText(item),
         ...(item.spendingContext?.projectNames ?? []),
       ]

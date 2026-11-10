@@ -79,17 +79,12 @@
   --brand-ease-cozy: cubic-bezier(0.2, 0, 0, 1);
   --brand-ease-move: cubic-bezier(0.4, 0, 0.2, 1);
   --brand-font-display:
-    "Inter Variable", Inter, system-ui, -apple-system, BlinkMacSystemFont,
-    sans-serif;
+    system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --brand-font-heading:
-    "Inter Variable", Inter, system-ui, -apple-system, BlinkMacSystemFont,
-    sans-serif;
+    system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --brand-font-sans:
-    "Inter Variable", Inter, system-ui, -apple-system, BlinkMacSystemFont,
-    sans-serif;
-  --brand-font-mono:
-    "Geist Mono Variable", "Geist Mono", ui-monospace, "SF Mono", Menlo,
-    monospace;
+    system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --brand-font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   --positive: var(--brand-positive);
   --warning: var(--brand-warning);
   --warning-ink: var(--brand-warning-ink);

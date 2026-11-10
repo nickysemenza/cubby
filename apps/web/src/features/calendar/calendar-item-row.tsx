@@ -1,7 +1,6 @@
 import type { CalendarItem } from "@cubby/schemas/calendar";
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import type { ImageUrlSummary } from "@cubby/schemas/image-summary";
-import { capitalize } from "@cubby/shared";
 import { cn } from "cn";
 import { createContext, useContext } from "react";
 
@@ -12,7 +11,6 @@ import { InheritedMarker } from "~/entity/fields/field-resolution";
 import { formatCurrency } from "~/lib/number-format";
 import { estimateStatusText, formatEstimate } from "~/lib/nutrition-format";
 import { useHouseholdToday } from "~/lib/use-household-today";
-import { FieldRecordValue } from "~/ui/derived/record-value";
 import { FieldValueMark } from "~/ui/derived/value-mark";
 import { Badge } from "~/ui/reui/badge";
 
@@ -108,8 +106,10 @@ function calendarItemCost(item: CalendarItem) {
 
 function MealCalories({ item }: { item: CalendarItem }) {
   if (item.kind !== "meal") return null;
+  // Like the meal's cost, an unavailable kcal figure is left to the
+  // inspector; a pending one still says so.
   const kcal = item.mealTotals.nutrition.kcal;
-  if (kcal.status === "unavailable" && kcal.reason === "empty") return null;
+  if (kcal.status === "unavailable") return null;
   return (
     <span title={estimateStatusText(kcal) ?? undefined}>
       {formatEstimate(kcal, "kcal", "kcal")}
@@ -195,9 +195,13 @@ function CalendarItemCompact({
   return (
     <>
       {multiSource && (
+        // Outside a grid chip (day lists) there is no inherited event color.
         <span
           aria-hidden
-          className="size-1.5 shrink-0 rounded-full bg-(--ec-event-color)"
+          className="size-1.5 shrink-0 rounded-full"
+          style={{
+            backgroundColor: `var(--ec-event-color, ${presentation.event.color})`,
+          }}
         />
       )}
       {image ? (
@@ -228,14 +232,9 @@ function CalendarItemCompact({
             {presentation.compactBadge.label}
           </Badge>
         )}
-        {item.kind === "project" && fieldValueOf(item.source.fields.kind) && (
-          <span className="text-muted-foreground">
-            <FieldRecordValue record={item.source} field="kind">
-              {capitalize(fieldValueOf(item.source.fields.kind) ?? "")}
-            </FieldRecordValue>
-          </span>
-        )}
-        {span && (
+        {/* A project bar's length already shows its dates; it keeps only its
+            name and status. */}
+        {span && item.kind !== "project" && (
           <span className="text-muted-foreground tabular-nums">{span}</span>
         )}
         <CalendarItemAmount item={item} />
@@ -251,68 +250,63 @@ function CalendarItemRich({
 }: {
   item: CalendarItem;
   image: ImageUrlSummary | null;
-  /** Fortnight density: a thumbnail one line of body text tall, tighter gap. */
+  /** Fortnight density: a smaller image and a one-line title. */
   compact?: boolean;
 }) {
   const today = useHouseholdToday();
   const presentation = calendarItemPresentation(item, today);
   const Icon = presentation.icon;
   const { metadata } = presentation;
-  const cost = calendarItemCost(item);
-  const costLabel = cost;
+  // A meal's cost shows unless unavailable; the dash for an unavailable cost
+  // is the inspector's to explain.
+  const mealCost =
+    item.kind === "meal" && item.mealTotals.cost.status !== "unavailable"
+      ? calendarItemCost(item)
+      : null;
   return (
-    <div
-      className={cn(
-        "flex min-w-0 flex-1 items-center",
-        compact ? "gap-1" : "gap-2 py-1",
-      )}
-    >
-      {/* Compact keeps its square only when there IS an image; without one the
-          leading kind icon on the title line already carries the entity, and a
-          placeholder square would eat a quarter of a fortnight column. */}
-      <EntityCover
-        images={image ? [image] : []}
-        entity={presentation.entity}
-        fit="contain"
-        size={compact ? 20 : 36}
-        placeholder="none"
-        alt=""
-      />
+    <div className="flex min-w-0 flex-1 items-start gap-1.5">
+      {/* The image names the record; without one the kind icon leads the
+          title instead of a placeholder square. */}
+      {image ? (
+        <EntityCover
+          images={[image]}
+          entity={presentation.entity}
+          fit="contain"
+          size={compact ? 20 : 28}
+          placeholder="none"
+          alt=""
+        />
+      ) : null}
       <div className="min-w-0 flex-1">
-        <div className="flex min-w-0 items-center gap-1">
-          <Icon className="size-3.5 shrink-0" aria-hidden />
+        <div className="flex min-w-0 items-start gap-1">
+          {!image && <Icon className="mt-px size-3.5 shrink-0" aria-hidden />}
           <span
-            className="min-w-0 flex-1 truncate font-medium"
+            className={cn(
+              "min-w-0 flex-1 leading-4 font-medium",
+              compact ? "truncate" : "line-clamp-2",
+            )}
             title={item.title}
           >
             {item.title}
           </span>
-          {/* A fortnight column is ~150px: money on the title line truncates
-              the name it is meant to price. Compact sends it down to the data
-              line, where the mono numbers already live. */}
-          {!compact && <CalendarItemAmount item={item} />}
-          {!compact && item.kind === "meal" && costLabel && (
-            <span className="shrink-0 font-mono tabular-nums">{costLabel}</span>
-          )}
         </div>
-        <div className="mt-1 flex min-w-0 items-center gap-1 text-2xs text-muted-foreground">
+        <div className="mt-0.5 flex min-w-0 items-center gap-1 text-2xs leading-4 text-muted-foreground">
           {presentation.richBadge && (
             <Badge
               variant={presentation.richBadge.variant}
-              className="h-4 max-w-28 px-1 text-3xs"
+              className="h-3.5 max-w-28 px-1 text-3xs"
             >
               {presentation.richBadge.label}
             </Badge>
           )}
-          <CalendarBeneficiaries item={item} />
+          <CalendarBeneficiaries item={item} compact />
           <span className="min-w-0 flex-1 truncate" title={metadata}>
             {metadata}
           </span>
           <span className="flex shrink-0 items-center gap-1 font-mono tabular-nums">
             <MealCalories item={item} />
-            {compact && costLabel && (
-              <span className="text-foreground">{costLabel}</span>
-            )}
+            {mealCost && <span className="text-foreground">{mealCost}</span>}
+            <CalendarItemAmount item={item} className="text-foreground" />
           </span>
         </div>
       </div>
@@ -329,7 +323,15 @@ const calendarItemTriggerClassName = (item: CalendarItem) =>
     item.kind === "expense" && item.future && "text-warning-ink",
   );
 
+/** A ledger line in a day list: the grid chip's row, a touch target tall on phones. */
+const calendarDayLineClassName = (item: CalendarItem) =>
+  cn(
+    "flex min-h-11 w-full min-w-0 items-center gap-1.5 rounded-sm px-2 text-left text-xs outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-inset md:min-h-7",
+    item.kind === "expense" && item.future && "text-warning-ink",
+  );
+
 export {
+  calendarDayLineClassName,
   CalendarItemAmount,
   CalendarItemPresentation,
   CalendarMultiSourceContext,

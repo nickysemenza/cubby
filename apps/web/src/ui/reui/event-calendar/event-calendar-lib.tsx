@@ -358,19 +358,20 @@ interface EventCalendarWeekLedgerDay<TData = unknown> {
 
 interface EventCalendarWeekLedger<TData = unknown> {
   /**
-   * Occurrences covering every visible day in the week. These live in a
-   * wrapping shelf rather than consuming a seven-column timeline lane.
+   * Bars crossing at least LONG_BAR_DAYS of the week, when two or more do. They
+   * fold into one "N ongoing" lane instead of a timeline lane each.
    */
-  compactSpans: EventCalendarSegment<TData>[];
+  ongoing: EventCalendarSegment<TData>[];
   /** Spans that still communicate their partial-week dates through alignment. */
   spans: EventCalendarSegment<TData>[];
   days: EventCalendarWeekLedgerDay<TData>[];
 }
 
-/** A full visible week has no date alignment left to communicate. */
-function occupiesFullWeek(segment: EventCalendarSegment): boolean {
-  return segment.colStart === 0 && segment.colSpan === 7;
-}
+/** A bar crossing at least this many days of one row counts as ongoing. */
+const LONG_BAR_DAYS = 5;
+
+const isLongBar = (segment: EventCalendarSegment) =>
+  (segment.colSpan ?? 1) >= LONG_BAR_DAYS;
 
 /**
  * Project one indexed week into the focused ledger: multi-day occurrences are
@@ -397,12 +398,13 @@ function buildWeekLedger<TData>(
   const weekBars = (row?.bars ?? []).filter((bar) =>
     spanningKeys.has(bar.occurrence.key),
   );
-  // Only fully week-wide bars trade the date grid for a compact, wrapping
-  // shelf. A partial span's alignment is still meaningful planning data, so
-  // it remains in the seven-column timeline below.
-  const compactSpans = weekBars.filter(occupiesFullWeek);
+  // Long household projects would otherwise take a lane each above every
+  // day. A shorter span's alignment is still planning data, so it keeps its
+  // place in the seven-column timeline.
+  const long = weekBars.filter(isLongBar);
+  const ongoing = long.length >= 2 ? long : [];
   const spans = repackWeekBars(
-    weekBars.filter((bar) => !occupiesFullWeek(bar)),
+    weekBars.filter((bar) => !ongoing.includes(bar)),
   );
   const days = Array.from({ length: 7 }, (_, offset) => {
     const day = zonedStartOfDay(
@@ -417,7 +419,7 @@ function buildWeekLedger<TData>(
       : [];
     return { day, segments };
   });
-  return { compactSpans, spans, days };
+  return { ongoing, spans, days };
 }
 
 interface BuildIndexOptions<TData> {
@@ -534,8 +536,9 @@ export {
   getDayKey,
   getRangeKey,
   getViewDateRange,
+  isLongBar,
+  LONG_BAR_DAYS,
   packWeekRowLanes,
-  occupiesFullWeek,
   stepDate,
   toZoned,
   zonedStartOfDay,
