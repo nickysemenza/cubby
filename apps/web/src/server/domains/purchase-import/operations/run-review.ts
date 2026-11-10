@@ -172,8 +172,9 @@ async function reconcileSettledRunOnce(
     // ADR 0027: with no funding the Run waits for the next window and keeps its
     // Emails. Failing would release them to a discovery pass that fails the same way.
     if (input.fundingUnavailable) {
-      // The agent's last turn found the paid gateway without funding; the
-      // window budget was not reached, so name the refusal it carries.
+      // The agent's last turn found no funding — an empty paid gateway or an
+      // exhausted provider credit balance. The window budget was not reached,
+      // so the pause names the refusal it carries.
       const status = await readAiBudget(db);
       await pauseForFunding(
         db,

@@ -2317,7 +2317,11 @@ time commit together. Reading ids and recording the page attempt share one CTE t
 compute; an enumeration error retries the unchanged cursor. Claims record attempts before compute, so
 isolate terminations count: after three attempts the page halves, down to one record; three failed
 attempts at one record skip it, keep its prior output and record a failure. A thrown compute or
-publication fails only its page, keeps prior output and advances. A provider outage costs one failed
+publication fails only its page, keeps prior output and advances. A transient connection drop — a
+killed statement, SQLSTATE 57P01, or a pool-slot timeout — retries that same cursor instead: the
+release keeps incrementing cursor attempts and records the error, without incrementing failures, so
+one drop does not mark the pass as failing. Repeated drops on that page reach the same shrinking
+bound, which skips or fails the page with the error still visible. A provider outage costs one failed
 call per bounded page.
 
 The last three pass summaries keep processed-record and failed-page counts and duration.

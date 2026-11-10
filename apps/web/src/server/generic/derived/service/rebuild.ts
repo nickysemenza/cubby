@@ -24,13 +24,23 @@ const log = createLogger("derived-rebuild");
 
 /**
  * A dropped connection before a page commits retries the same cursor.
- * `classifyJobFailure` already treats that socket loss as transient, so it
- * must not increment the pass failure count. A committed page failure still
- * records its own error.
+ * The release keeps the cursor-attempt streak and records the error, so page
+ * shrinking and the single-record skip still bound a repeated drop, and it
+ * does not increment failures. A committed page failure still records its own
+ * error and counts.
  */
-function recordedRebuildError(error: unknown): string | null {
-  if (classifyJobFailure(error).kind === "transient") return null;
-  return scrubErrorMessage(JSON.stringify(describeErrorCauses(error)));
+async function releaseRecordedRebuild(
+  db: Database,
+  token: string,
+  error: unknown,
+): Promise<void> {
+  const transient = classifyJobFailure(error).kind === "transient";
+  await releaseRebuild(
+    db,
+    token,
+    scrubErrorMessage(JSON.stringify(describeErrorCauses(error))),
+    { countFailure: !transient },
+  );
 }
 
 /** A transport retry must outlive the single-writer lease after an isolate is terminated. */
@@ -103,7 +113,7 @@ export async function rebuildDerived(
           );
         } catch (error) {
           // Enumeration observed no population: retry the unchanged cursor.
-          await releaseRebuild(db, claim.token, recordedRebuildError(error));
+          await releaseRecordedRebuild(db, claim.token, error);
           return true;
         }
         if (!observed) return false;
@@ -163,8 +173,9 @@ export async function rebuildDerived(
         }
       } catch (error) {
         // A dropped connection never published this page: the outer release
-        // retries the same cursor and does not count it. A real page failure
-        // still advances and counts.
+        // retries the same cursor, keeps the attempt streak and the error,
+        // and does not count a failure. A real page failure still advances
+        // and counts.
         if (classifyJobFailure(error).kind === "transient") throw error;
         // Keep this page's prior output; later IDs must not starve behind one bad record.
         // During an outage this deliberately makes one failed call per bounded page.
@@ -191,7 +202,7 @@ export async function rebuildDerived(
     log.info("pass invocation yielded", { target: current.target });
     return true;
   } catch (error) {
-    await releaseRebuild(db, claim.token, recordedRebuildError(error));
+    await releaseRecordedRebuild(db, claim.token, error);
     throw error;
   }
 }

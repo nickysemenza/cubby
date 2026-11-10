@@ -546,7 +546,9 @@ Status chip per row (green usable, amber recovers by itself, red needs a
 member), with the raw reason behind that row's Details and its recovery action
 on the same row. A funding pause names its source: a paid refusal pauses the
 Run with `Paid models unavailable: <why> (<raw>); retrying at <window end>`,
-while a spent paid budget keeps `AI budget reached: $X of $Y paid…`.
+where `<why>` is an empty AI Gateway balance, a missing BYOK credential, or an
+exhausted provider credit balance, while a spent paid budget keeps
+`AI budget reached: $X of $Y paid…`.
 
 Setup:
 
@@ -605,11 +607,13 @@ source.
 
 OpenAI credit calls use native Gateway passthrough with the named alias and
 `cf-aig-no-wholesale: true`, bypassing ChatGPT OAuth and paid admission. Only
-`credit_balance_exhausted`, `insufficient_quota`, Cubby credit admission
-refusals, or OpenAI's "no credits remaining" message when the envelope has no
-code, advance to the ChatGPT plan; invalid keys, rate limits and unknown
-failures remain errors. A credit refusal that is still the turn's terminal
-error pauses the Run for funding. Credit refusals and cooldowns are isolated by provider.
+`credit_balance_exhausted`, `insufficient_quota`, an OpenAI Cubby credit
+admission refusal, or OpenAI's "no credits remaining" sentence in the provider
+error message when the envelope has no code, advance to the ChatGPT plan;
+invalid keys, rate limits and unknown failures remain errors. An OpenAI credit
+refusal that is still the turn's terminal error pauses the Run and names the
+exhausted provider credit balance. A Claude credit refusal does not park an
+Anthropic-pinned Run. Credit refusals and cooldowns are isolated by provider.
 OpenAI refusals without a reset date last until the six-hour window ends;
 resetting API credit refusals clears both providers and permits fresh attempts.
 

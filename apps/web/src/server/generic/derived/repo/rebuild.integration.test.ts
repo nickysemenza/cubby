@@ -202,7 +202,7 @@ describe("hourly deterministic rebuild", () => {
   });
 
   it("retries a dropped connection on the same cursor without counting a failure", async () => {
-    await createProductIdentityFixture(
+    const product = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Synthetic connection drop" }),
       ctx.actor,
@@ -224,25 +224,47 @@ describe("hourly deterministic rebuild", () => {
         ]),
       ),
     };
+    const start = rebuildDeclarations()[0];
+    if (!start) throw new Error("Expected a rebuild declaration");
     let thrown: unknown;
-    const pageLimit = rebuildDeclarations().length + 1;
-    for (let page = 0; page < pageLimit; page++) {
-      try {
-        if (!(await rebuildDerived(ctx.db, computes, { force: page === 0 })))
-          break;
-      } catch (error) {
-        thrown = error;
-        break;
-      }
+    try {
+      await rebuildDerived(ctx.db, computes, { force: true });
+    } catch (error) {
+      thrown = error;
     }
     expect(thrown).toBe(dropped);
-    const [row] = await getDb(ctx.db).select().from(derivedRebuild);
-    expect(row).toMatchObject({
+    const [once] = await getDb(ctx.db).select().from(derivedRebuild);
+    expect(once).toMatchObject({
+      target: start.target,
+      afterId: null,
+      cursorAttempts: 1,
       failures: 0,
       passFailures: 0,
       failedPages: 0,
-      error: null,
       token: null,
     });
+    expect(once?.error).toContain("Connection terminated unexpectedly");
+    // Batch size 1 skips once attempts exceed 3 * (floor(log2(1)) + 1).
+    const skipAfter = 3 * (Math.floor(Math.log2(1)) + 1);
+    const drops: unknown[] = [];
+    let advanced = false;
+    for (let extra = 0; extra < skipAfter; extra++) {
+      try {
+        advanced = await rebuildDerived(ctx.db, computes);
+        break;
+      } catch (error) {
+        drops.push(error);
+        advanced = false;
+      }
+    }
+    expect(drops.length).toBeGreaterThan(0);
+    expect(drops.every((error) => error === dropped)).toBe(true);
+    expect(advanced).toBe(true);
+    const [bounded] = await getDb(ctx.db).select().from(derivedRebuild);
+    expect(bounded?.afterId).toBe(product.entityId);
+    expect(bounded?.failures).toBe(1);
+    expect(bounded?.error).toContain("repeated isolate termination");
+    // The skip keeps the drop that caused it.
+    expect(bounded?.error).toContain("Connection terminated unexpectedly");
   });
 });

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   type GatewayQuery,
+  creditRefusedResponse,
   inferenceFundingHeaders,
   isInferenceFundingRefusal,
   isInferenceStreamFundingRefusal,
@@ -161,7 +162,7 @@ describe("inference funding", () => {
 
   // The Responses envelope usually carries code and type. When it does not,
   // the billing sentence is the refusal, including pi's terminal text.
-  it("recognizes OpenAI's no-credits sentence when the envelope has no code", () => {
+  it("recognizes OpenAI's no-credits sentence when the envelope has no code", async () => {
     const message =
       "You have no credits remaining. Add credits to continue using the API at https://platform.openai.com/settings/organization/billing/.";
     const body = JSON.stringify({ error: { message } });
@@ -202,6 +203,31 @@ describe("inference funding", () => {
     );
     expect(isOpenAiCreditRefusal(message)).toBe(true);
     expect(isOpenAiCreditRefusal("429 Too Many Requests")).toBe(false);
+    expect(
+      isOpenAiCreditRefusal(
+        `Mail discovery quoted a billing email: ${message}`,
+      ),
+    ).toBe(false);
+    expect(
+      isOpenAiCreditRefusal(
+        JSON.stringify({
+          input: [{ content: message }],
+          error: { message: "The model produced no output" },
+        }),
+      ),
+    ).toBe(false);
+    const refusal = {
+      until: Date.parse("2099-01-01T00:00:00Z"),
+      reason: "Synthetic provider limit",
+    };
+    expect(
+      isOpenAiCreditRefusal(await creditRefusedResponse(refusal).text()),
+    ).toBe(false);
+    expect(
+      isOpenAiCreditRefusal(
+        await creditRefusedResponse(refusal, "openai").text(),
+      ),
+    ).toBe(true);
   });
 
   it("leaves subscription quota refusal to the model owner without internal paid fallback", async () => {

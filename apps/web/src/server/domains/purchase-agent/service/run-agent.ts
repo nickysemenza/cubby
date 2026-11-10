@@ -761,12 +761,14 @@ export class PurchaseImportRunAgent
     // not be written: a later attempt must not inherit this turn's funding stop.
     const errorText = message.errorMessage ?? "";
     // A credit refusal that survives the funding ladder is terminal: park the
-    // Run for funding instead of failing it and releasing its Emails.
+    // Run for funding instead of failing it and releasing its Emails. An
+    // Anthropic turn's Claude credit refusal is a different rung.
     this.writeState(
       STATE_KEYS.fundingUnavailable,
       message.stopReason === "error" &&
         (isPaidFundingUnavailable(errorText) ||
-          isOpenAiCreditRefusal(errorText))
+          (message.provider !== "anthropic" &&
+            isOpenAiCreditRefusal(errorText)))
         ? (this.readState(STATE_KEYS.latestSubmission) ?? "")
         : "",
     );

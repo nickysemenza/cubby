@@ -5,6 +5,10 @@ import {
   type AiBudgetStatus,
   storedAiBudgetSettings,
 } from "@cubby/schemas/mail-import-settings";
+import {
+  isGatewayBalanceEmpty,
+  isOpenAiCreditRefusal,
+} from "@cubby/shared/ai/gateway-request";
 import { AI_MODELS } from "@cubby/shared/ai/models";
 import { and, gte, inArray, sql } from "drizzle-orm";
 
@@ -127,14 +131,30 @@ export async function assertAiBudget(db: Database, allowanceUsd = 0) {
 }
 
 /**
- * A paid funding stop names its source, why it refused and when the Run
- * retries, keeping the provider's raw text (`isPaidFundingUnavailable`); the
- * window budget itself was not reached.
+ * A funding stop names its source, why it refused and when the Run retries,
+ * keeping the provider's raw text. The window budget itself was not reached.
+ * `<why>` is a missing BYOK credential, an empty AI Gateway balance, or an
+ * exhausted provider credit balance.
  */
+function namesExhaustedProviderCredit(raw: string): boolean {
+  if (isOpenAiCreditRefusal(raw)) return true;
+  // Settlement wraps the provider body after a coordinator prefix.
+  const embedded = /\{[\s\S]*\}/u.exec(raw)?.[0];
+  if (embedded && embedded !== raw && isOpenAiCreditRefusal(embedded))
+    return true;
+  return /(?:^|\n|:\s*)(?:unknown:\s*)?You have no credits remaining\b|OpenAI credit refused\b|(?:Error Code )?(?:credit_balance_exhausted|insufficient_quota):/u.test(
+    raw,
+  );
+}
+
 export function paidFundingStopMessage(raw: string, status: AiBudgetStatus) {
   const why = /has no BYOK credential/u.test(raw)
     ? "the AI Gateway has no BYOK credential"
-    : "AI Gateway balance empty";
+    : isGatewayBalanceEmpty(raw)
+      ? "AI Gateway balance empty"
+      : namesExhaustedProviderCredit(raw)
+        ? "exhausted provider credit balance"
+        : "AI Gateway balance empty";
   return `Paid models unavailable: ${why} (${raw.trim()}); retrying at ${status.windowEnd}.`;
 }
 
