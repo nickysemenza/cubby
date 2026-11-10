@@ -11,7 +11,7 @@ import { and, eq, inArray, lt, ne, or, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { runOperation } from "~/server/db/generated/entity-table-definitions.gen";
-import { requested } from "~/server/db/helpers/requested";
+import { requested, textArrayParam } from "~/server/db/helpers/requested";
 import {
   repositoryQueries,
   type RepositoryQueryInput,
@@ -458,12 +458,8 @@ export async function releaseUnsettledMailRunSources(
         lt(run.startedAt, current.startedAt),
         eq(runOperation.state, "completed"),
         inArray(runOperation.kind, ["target_outcome", "claim_next_work"]),
-        or(
-          ...held.map(
-            (source) =>
-              sql`${run.input}->'sources' @> ${JSON.stringify([{ orderMailId: source.orderMailId }])}::jsonb`,
-          ),
-        ),
+        sql`EXISTS (SELECT 1 FROM jsonb_array_elements(${run.input}->'sources') source
+          WHERE source->>'orderMailId' = ANY(${textArrayParam(held.map((source) => source.orderMailId))}))`,
       ),
     )
     .orderBy(runOperation.startedAt, runOperation.id);

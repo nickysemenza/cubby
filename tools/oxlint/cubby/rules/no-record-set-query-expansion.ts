@@ -74,10 +74,10 @@ export const noRecordSetQueryExpansionRule = defineRule({
             callee.property.name !== "map"
           )
             continue;
-          // These are declared columns, checks or milestones, not requested rows.
+          // Declared columns, checks, milestones and keyset sort terms, not requested rows.
           if (
             callee.object.type === "Identifier" &&
-            ["MILESTONES", "admittedChecks", "rest"].includes(
+            ["MILESTONES", "admittedChecks", "rest", "terms"].includes(
               callee.object.name,
             )
           )
@@ -105,6 +105,15 @@ export const noRecordSetQueryExpansionRule = defineRule({
             expression.callee.object.name !== "sql" ||
             expression.callee.property.type !== "Identifier" ||
             expression.callee.property.name !== "join"
+          )
+            continue;
+          // Declared settlement reference paths are static declarations.
+          const joined = expression.arguments[0];
+          if (
+            joined?.type === "CallExpression" &&
+            joined.callee.type === "MemberExpression" &&
+            joined.callee.object.type === "Identifier" &&
+            joined.callee.object.name === "related"
           )
             continue;
           // Work reasons and declared derived-field keys are static declarations.

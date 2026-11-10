@@ -205,6 +205,7 @@ const columnCasts = {
   text: "text",
   int: "int",
   numeric: "numeric",
+  timestamp: "timestamp",
   timestamptz: "timestamptz",
   bool: "bool",
 } as const;
