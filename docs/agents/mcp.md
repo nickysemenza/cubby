@@ -166,8 +166,8 @@ stops AI and upstream fetches but not Postgres queries or kernel verbs. Work
 that settles after the answer is not reported again; a write records freshness
 again when it ends. Narrow a timed-out read. A timed-out
 write may still have committed: re-read the affected records before retrying.
-An operation batch stops starting items once less than 30 s (or twice its
-slowest item) of its budget remains, answering normally with those items as
+An operation batch stops starting items once less than the smaller of 30 s and
+a quarter of its budget (or twice its slowest item) remains, answering normally with those items as
 `not_started` (`summary.notStarted`); resubmit only those.
 
 The HTTP ingress (`apps/web/src/server/mcp/http-handler.ts`) authenticates

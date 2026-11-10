@@ -1,3 +1,4 @@
+import type { FinancialSpendingPlan } from "@cubby/schemas/financial-booking";
 import type { FinancialTransactionUpdateData } from "@cubby/schemas/financial-transaction";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import {
@@ -22,6 +23,7 @@ import {
   statementCandidateSubject,
   statementLabelSubject,
 } from "~/server/domains/transaction-import/repo/statement-label-input";
+import { prepareStatementSpending } from "~/server/domains/transaction-import/repo/statement-spending";
 import { decideStatementKind } from "~/server/domains/transaction-import/repo/statement-transaction-kind";
 import { createAppError } from "~/server/errors/app-error";
 import type { SuggestionStateRow } from "~/server/generic/suggestions/repo/suggestion-state";
@@ -119,8 +121,9 @@ function withPublishedLabels(
 
 /**
  * What the member reviewed: the action, the money and dates it writes and the
- * transactions it may touch. Account history, sibling and spending-snapshot
- * drift is not here: selection and spending are recomputed at apply.
+ * transactions it may touch. Account history, sibling and snapshot drift is
+ * not here: selection is recomputed at apply, and the booking outcome is
+ * compared separately.
  */
 function decisiveJudgment(judgment: StatementTransactionJudgment) {
   const create = judgment.create;
@@ -140,16 +143,18 @@ function decisiveJudgment(judgment: StatementTransactionJudgment) {
     "create.notes": create?.notes ?? null,
     "create.sourceRef": create?.sourceRef ?? null,
     candidates: judgment.candidates
-      .map(({ transactionId, amount, diff }) => ({
+      .map(({ transactionId, amount, diff, claimed }) => ({
         transactionId,
         amount,
         diff,
+        claimed,
       }))
       .sort((left, right) =>
         left.transactionId.localeCompare(right.transactionId),
       ),
     supersede: judgment.supersede,
-    void: judgment.void,
+    // Any covering import proves the vanish; only the voided hold was reviewed.
+    void: judgment.void?.transactionId ?? null,
     matchedTransactionId: judgment.matchedTransactionId ?? null,
     transfer: judgment.transfer,
     transferPair: judgment.transferPair
@@ -158,10 +163,31 @@ function decisiveJudgment(judgment: StatementTransactionJudgment) {
   };
 }
 
+const reviewedBooking = (plan: FinancialSpendingPlan | null | undefined) =>
+  plan?.status === "ready"
+    ? {
+        status: plan.status,
+        effect: plan.effect,
+        purchaserId: plan.purchaserId,
+        vendorId: plan.vendorId,
+        spendingCategoryId: plan.spendingCategoryId,
+        purchaseId: plan.purchaseId,
+      }
+    : { status: plan?.status ?? null };
+
+function changedFields<T extends object>(reviewed: T, current: T) {
+  const now = new Map(Object.entries(current));
+  const changed = Object.entries(reviewed).flatMap(([key, value]) =>
+    canonicalJson(value) === canonicalJson(now.get(key) ?? null) ? [] : [key],
+  );
+  return changed.includes("status") ? ["status"] : changed;
+}
+
 /** Rebuild from retained evidence, never the published spending plan or client source. */
 export async function currentStatementApplication(
   db: Database,
   input: Awaited<ReturnType<typeof loadStatementApplication>>,
+  application: StatementTransactionApplication,
 ) {
   const { subject, published } = input;
   const rebuilt =
@@ -183,11 +209,31 @@ export async function currentStatementApplication(
   if (rebuilt.judgment.reviewReason)
     throw refuseStatementApplication(rebuilt.judgment.reviewReason);
   const judgment = withPublishedLabels(rebuilt.judgment, published);
-  const now = Object.entries(decisiveJudgment(judgment));
-  const changed = Object.entries(decisiveJudgment(published)).flatMap(
-    ([key, value], index) =>
-      canonicalJson(value) === canonicalJson(now[index]![1]) ? [] : [key],
+  const changed = changedFields(
+    decisiveJudgment(published),
+    decisiveJudgment(judgment),
   );
+  // The reviewed ready booking applies as shown unless the member chose
+  // another action, kind or booking, which is replanned at apply.
+  if (
+    !changed.length &&
+    published.spending?.status === "ready" &&
+    application.action === published.recommended &&
+    !application.kindOverride &&
+    !application.booking
+  )
+    changed.push(
+      ...changedFields(
+        reviewedBooking(published.spending),
+        reviewedBooking(
+          await prepareStatementSpending(
+            db,
+            judgment,
+            published.spending.request.advice ?? null,
+          ),
+        ),
+      ).map((key) => `spending.${key}`),
+    );
   if (changed.length)
     throw refuseStatementApplication(
       `The suggestion changed since review: ${changed.join(", ")}. Refresh suggestions and review again.`,

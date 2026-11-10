@@ -137,7 +137,7 @@ export async function applyStatementTransactionSuggestion(
   });
 
   const charge = { source: subject.source, chargeKey: subject.chargeKey };
-  const current = await currentStatementApplication(db, loaded);
+  const current = await currentStatementApplication(db, loaded, application);
   const judgment = current.judgment;
   const { accountCode, codeOf, targetId } = await statementApplicationSelection(
     db,

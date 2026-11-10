@@ -681,7 +681,7 @@ const diffFor = (
 /**
  * Current proposals for these charges, computed from the ledger and the
  * transactions as they stand. Generation publishes them; apply recomputes them
- * and refuses when the fingerprint moved.
+ * and refuses when a reviewed field moved.
  */
 function sourceCorrectionReason(
   priorTransaction:
@@ -1579,7 +1579,6 @@ const isSettledBooking = (judgment: StatementTransactionJudgment) =>
   judgment.recommended === "book" &&
   judgment.spending?.status === "already_booked";
 
-/** Complete a previously committed publication's missed retirement check, even without a new proposal. */
 /**
  * Held source identity has one review surface, Source identity review. Its
  * charges publish no Transaction advice, and pending advice already published
@@ -1589,6 +1588,7 @@ const isSettledBooking = (judgment: StatementTransactionJudgment) =>
 async function publishableCharges(
   db: Database,
   charges: readonly ChargeRef[],
+  accountIds: readonly string[] | undefined,
 ): Promise<ChargeRef[]> {
   if (!charges.length) return [];
   const held = await unwrapDb(db).execute<ChargeRef>(
@@ -1601,13 +1601,22 @@ async function publishableCharges(
     db,
     sql`${pendingStatementState}
       AND ${suggestionField("recommended", STATE)} <> ${statementTransactionAction.enum.void}
-      AND (${suggestionField("source", STATE)}, ${suggestionField("chargeKey", STATE)}) IN (${tuples(held)})`,
+      AND (${suggestionField("source", STATE)}, ${suggestionField("chargeKey", STATE)}) IN (${tuples(held)})
+      ${
+        accountIds?.length
+          ? sql`AND (${suggestionField("accountId", STATE)})::uuid IN (${sql.join(
+              accountIds.map((id) => sql`${id}::uuid`),
+              sql`, `,
+            )})`
+          : sql``
+      }`,
     { active: false, status: "superseded" },
   );
   const skipped = new Set(held.map(chargeId));
   return charges.filter((charge) => !skipped.has(chargeId(charge)));
 }
 
+/** Complete a previously committed publication's missed retirement check, even without a new proposal. */
 async function retireSettledChargeAdvice(db: Database, charge: ChargeRef) {
   return transitionSuggestionStates(
     db,
@@ -2798,6 +2807,7 @@ export async function regenerateCharges(
       admitted
         ? charges.filter((charge) => admitted.has(chargeId(charge)))
         : charges,
+      scope?.accountIds,
     ),
   )) {
     if (
@@ -2970,7 +2980,7 @@ async function publishStatementGenerationPage(
   });
   const built = await prepareStatementGenerationPage(
     db,
-    await publishableCharges(db, charges),
+    await publishableCharges(db, charges, accountIds),
     failed,
   );
   const preparedAt = performance.now();

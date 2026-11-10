@@ -885,8 +885,13 @@ export async function recordSourceTransactionRecords(
           retained.find((saved) => saved.id === owner.currentObservationId)
             ?.factFingerprint !== row.incoming.factFingerprint;
         const adoption = adopted.has(row.incoming.key);
-        const currentObservationId =
-          !row.owner || adoption
+        // Adoption proves identity, not revision order: differing facts wait
+        // for the same head review as any provider owner.
+        const currentObservationId = adoption
+          ? differentFacts
+            ? null
+            : observation.id
+          : !row.owner
             ? observation.id
             : differentFacts &&
                 owner.withdrawnAt === null &&
@@ -897,7 +902,9 @@ export async function recordSourceTransactionRecords(
           !!row.incoming.row.providerTransactionId &&
           row.incoming.identity?.kind !== "provider";
         const reviewState = adoption
-          ? owner.reviewState
+          ? differentFacts
+            ? "revision_order_unknown"
+            : owner.reviewState
           : owner.reviewState !== "ready" &&
               owner.reviewState !== "revision_order_unknown"
             ? owner.reviewState

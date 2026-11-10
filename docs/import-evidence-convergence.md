@@ -742,9 +742,10 @@ unproven owner when an attested provider row carries the same provider
 transaction ID, the same non-null provider account and the same amount as the
 single live observation of exactly one unproven owner, with no contradicting
 raw provider claims and no older observation time than that owner's last: that
-owner becomes the provider occurrence in place, ready, with the attested row as
-its head, keeping its account, disposition, history and original proof
-(unresolved history still derives `ownership_conflict`). A missing provider
+owner becomes the provider occurrence in place, keeping its account,
+disposition, history and original proof (unresolved history still derives
+`ownership_conflict`). Equal facts keep it ready with that head; differing facts
+leave no head in `revision_order_unknown`, like any provider owner. A missing provider
 account, any disagreement, a second owner, or a second incoming row for the
 same owner creates the provider owner in `identity_conflict` for reviewed
 resolution. A provider owner already split from its legacy owner still needs
@@ -1313,9 +1314,12 @@ from retained evidence, carry the reviewed model labels onto it, and refuse,
 naming each field, only when what was reviewed changed: the recommended action,
 the account, statement date and provider status, the created transaction's kind,
 amount, status, dates, merchant, descriptor and source reference, the candidate
-set (id, amount, differing fields), the superseded, voided or matched
-transaction, or the transfer. Merchant history, sibling, claimed-candidate and
-spending-snapshot drift do not refuse; spending is replanned at acceptance.
+set (id, amount, differing fields, claimed by another charge), the superseded,
+voided or matched transaction, or the transfer. Accepting the recommendation as
+reviewed also refuses when a ready booking's effect, purchaser, Vendor,
+category or Purchase moved (`spending.<field>`). Merchant history, sibling and
+snapshot drift that leave those unchanged do not refuse; a correction's own
+action, kind or booking is replanned at acceptance.
 
 Explicit MCP review supplying `booking` or `kindOverride`, or choosing a
 nonrecommended action, uses `verdict: "wrong"` with
@@ -1530,8 +1534,9 @@ force convergence.
 
 ### Source identity review
 
-Unproven observations stay held with unchanged money. Held charges publish no
-Transaction suggestion: Source identity review is their one surface, and
+Unproven observations stay held with unchanged money. Charges with no current
+observation in a ready occurrence publish no Transaction suggestion (a
+withdrawn or superseded head of a ready occurrence keeps its booking review): Source identity review is their one surface, and
 generation supersedes pending advice already published for them (rows, paid
 labels and member decisions remain; a later proven occurrence publishes again).
 Applying held advice not yet superseded returns the held reason. An attested identical provider

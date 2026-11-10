@@ -1795,10 +1795,17 @@ describe("statement row ledger", () => {
         providerAccountId: "synthetic-account",
         providerData: { note: "Retained without raw identity proof" },
       });
-    await record([legacy("synthetic-event"), legacy("synthetic-other")], {
-      fingerprint: "synthetic-legacy-collection",
-      observedAt: "2026-06-03T00:00:00Z",
-    });
+    await record(
+      [
+        legacy("synthetic-event"),
+        legacy("synthetic-other"),
+        legacy("synthetic-dated"),
+      ],
+      {
+        fingerprint: "synthetic-legacy-collection",
+        observedAt: "2026-06-03T00:00:00Z",
+      },
+    );
     const account = await createRepoEntity(ctx, "financialAccount", {
       name: "Synthetic adopted account",
     });
@@ -1837,6 +1844,17 @@ describe("statement row ledger", () => {
             account: { id: "synthetic-account" },
           },
         }),
+        providerRow({
+          providerTransactionId: "synthetic-dated",
+          statementDate: "2026-05-06",
+          providerData: {
+            transaction: {
+              id: "synthetic-dated",
+              account_id: "synthetic-account",
+            },
+            account: { id: "synthetic-account" },
+          },
+        }),
       ],
       {
         fingerprint: "synthetic-provider-collection",
@@ -1857,6 +1875,14 @@ describe("statement row ledger", () => {
       currentObservationId: legacyRows.find(
         (row) => row.providerTransactionId === "synthetic-event",
       )!.id,
+    });
+    // Proven identity with differing facts still needs its head reviewed.
+    expect(
+      owners.find((owner) => owner.id === ownerOf("synthetic-dated")),
+    ).toMatchObject({
+      identityKind: "provider",
+      reviewState: "revision_order_unknown",
+      currentObservationId: null,
     });
     const mismatch = owners.filter(
       (owner) => !before.some((prior) => prior.id === owner.id),
