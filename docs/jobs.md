@@ -176,8 +176,10 @@ due Jobs and every drain's `due` SQL:
 2. Within each class, units take turns: every unit's first candidate, then
    every Job kind's second, least recently served first (a Job kind's latest
    claim from the `(kind, lastClaimedAt)` index, a drain unit's
-   `background.drain` record row); within a kind, priority then age. A flood of
-   one kind therefore never starves another.
+   `background.drain` record row); within a kind, the longest due first, each
+   priority point counting as one minute of head start. Priority never ranks
+   absolutely, so Jobs that defer and fall due again cannot starve a lower
+   priority. A flood of one kind therefore never starves another.
 
 A permit tries up to eight candidates in that order and runs the first it can
 claim (`SKIP LOCKED`; a sibling's held row is skipped, not awaited). A unit

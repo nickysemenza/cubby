@@ -85,8 +85,11 @@ const PER_KIND = 4;
  * One statement chooses what a permit runs: due Jobs and every drain's due
  * units. Member-visible Run work leads; then units take turns, least recently
  * served first (a Job kind's latest claim, a drain unit's record row); within
- * a kind, priority then age. A 100k flood of one kind therefore never starves
- * another, and an idle household answers with no rows.
+ * a kind, the longest due first, each priority point a minute's head start.
+ * Priority is a head start, never an absolute rank: deferred Jobs that fall
+ * due again every few seconds would otherwise hold every candidate slot and
+ * starve a lower priority for good. A 100k flood of one kind therefore never
+ * starves another, and an idle household answers with no rows.
  */
 export async function dueUnits(
   db: Database,
@@ -119,7 +122,8 @@ export async function dueUnits(
       WHERE ${jobDue(now)}
     ), ranked AS (
       SELECT jobs.*, row_number() OVER (
-        PARTITION BY run_owned, kind ORDER BY priority DESC, since, id
+        PARTITION BY run_owned, kind
+        ORDER BY since - priority * interval '1 minute', priority DESC, id
       ) AS position FROM jobs
     ), drain_units AS (${drainRows}), units AS (
       SELECT 'job' AS type, id::text AS ref, kind AS unit, run_owned, priority, since, position

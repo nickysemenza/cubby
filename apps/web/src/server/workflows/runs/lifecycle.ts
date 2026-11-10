@@ -100,8 +100,9 @@ export const recordRunProgress = (
   });
 
 /**
- * A member's launch, resume or retry outranks unattended Run execution:
- * priority orders Jobs within one kind, never across kinds.
+ * A member's launch, resume or retry leads unattended Run execution by this
+ * many minutes of due time: priority orders Jobs within one kind, never
+ * across kinds.
  */
 const MANUAL_RUN_PRIORITY = 10;
 
@@ -477,6 +478,9 @@ export async function resumeClaimedWorkflowRun(
             failureCode: MAIL_DISCOVERY_ADMISSION_WAIT,
             dispatchError:
               "Mail discovery is queued for shared search capacity",
+            // The attempt names the generation that waits: admission counts
+            // a waiter only while its Job is live at that generation, and one
+            // it cannot see has no place in line.
             progress: sql`coalesce(${runTable.progress}, '{}'::jsonb) || ${JSON.stringify(
               {
                 discoveryScope: scope,
@@ -485,7 +489,7 @@ export async function resumeClaimedWorkflowRun(
                   mailboxDiscoveryProgress.parse(mailOwner.progress)
                     .admissionRequestedAt ?? new Date().toISOString(),
               },
-            )}::jsonb`,
+            )}::jsonb || jsonb_build_object('attempt', ${current.claim.generation}::int)`,
           })
           .where(
             and(
