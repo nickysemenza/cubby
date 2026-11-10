@@ -53,39 +53,3 @@ export const projectCookbookImportEvent = async (
     };
   }
 };
-
-type NotionImportEvent =
-  | {
-      readonly pageId: string;
-      readonly ok: true;
-      readonly id: RecipeShortcode;
-      readonly status: "created" | "updated";
-    }
-  | { readonly pageId: string; readonly ok: false; readonly error: string };
-export type NotionImportProjection = {
-  readonly recipeId: RecipeId;
-  readonly event: NotionImportEvent;
-};
-
-export const projectNotionImportEvent = (
-  pageId: string,
-  existing: boolean,
-  imported: UpsertedRecipe,
-): NotionImportProjection => {
-  try {
-    return {
-      recipeId: imported.id,
-      event: {
-        pageId,
-        ok: true,
-        id: parseShortcodeFor("recipe", imported.shortcode),
-        status: existing ? "updated" : "created",
-      },
-    };
-  } catch (error) {
-    return {
-      recipeId: imported.id,
-      event: { pageId, ok: false, error: getErrorMessage(error) },
-    };
-  }
-};

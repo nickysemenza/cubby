@@ -3,7 +3,6 @@ import {
   type ImportRecipe,
 } from "@cubby/schemas/import-recipe";
 import { ArrowCounterClockwiseIcon } from "@phosphor-icons/react/dist/csr/ArrowCounterClockwise";
-import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 import { WarningCircleIcon } from "@phosphor-icons/react/dist/csr/WarningCircle";
 import { Link } from "@tanstack/react-router";
@@ -68,11 +67,9 @@ type RecipeImportCardProps = {
    * The cookbook importer passes the `cookbook` crate's own reading, which the
    * import persists verbatim (along with any sub-recipe link it resolved), so
    * the preview shows what will be stored rather than a second opinion. Absent
-   * for the Notion / scrape path, whose lines are parsed here.
+   * when the caller supplies no reading, in which case lines are parsed here.
    */
   parsedLines?: readonly (readonly ParsedLineRow[])[];
-  /** External source link (e.g. the Notion page); shown as a ↗ in the header. */
-  externalUrl?: string;
 };
 
 /** Cheap structural signature so memoized cards skip re-render unless content changed. */
@@ -110,7 +107,6 @@ export const RecipeImportCard = memo(
     a.photo === b.photo &&
     a.photoPreviewUrl === b.photoPreviewUrl &&
     a.parsedLines === b.parsedLines &&
-    a.externalUrl === b.externalUrl &&
     (a.reasons ?? []).join("|") === (b.reasons ?? []).join("|") &&
     // onToggle is intentionally not compared: its only state-dependent capture
     // (the recipe's identity) changes the memo key too, which already triggers
@@ -131,7 +127,6 @@ function RecipeImportCardImpl({
   photoPreviewUrl,
   onRetryPhoto,
   parsedLines,
-  externalUrl,
 }: RecipeImportCardProps) {
   const existingRecipeRefs = useMemo(
     () =>
@@ -224,17 +219,6 @@ function RecipeImportCardImpl({
             />
           )}
         </Row>
-        {externalUrl && (
-          <a
-            href={externalUrl}
-            target="_blank"
-            rel="noreferrer"
-            className="text-muted-foreground hover:text-foreground"
-            title="Open source"
-          >
-            <ArrowSquareOutIcon className="size-3.5" />
-          </a>
-        )}
         <CopyImportRecipeParseButton recipe={recipe} />
         <CopyJsonButton
           value={recipe}

@@ -69,8 +69,7 @@ export const positiveAmount = amount.refine((a) => a.value > 0, {
 
 // Section names must be 2+ chars to satisfy recipeSectionInput validation
 // downstream; drop anything shorter (or blank) to an unnamed section. Shared by
-// the URL scraper, the EPUB cookbook adapter, and the Notion mapping so they all
-// apply one rule.
+// the URL scraper and the EPUB cookbook adapter so they apply one rule.
 export const sanitizeSectionName = (
   name: string | undefined | null,
 ): string | null => {

@@ -22,11 +22,8 @@ import {
   cookbookImportChunkInput,
   cookbookReprocessChunkInput,
   importCookbookStreamInput,
-  importNotionSyncInput,
   importRecipeSchema,
   mcpRecipeCreateFromTextInput,
-  notionImportEventSchema,
-  notionPreviewOut,
   parseRecipeHtmlInput,
   recipeImportIdOut,
   recipeLineCoverageOut,
@@ -370,11 +367,6 @@ export const recipeContract = defineContract(
       output: cookbookDiffOut,
       cache: { tags: [["cookbook", "diff"]] },
     }),
-    previewNotionSync: query({
-      input: z.undefined(),
-      output: notionPreviewOut,
-      cache: { tags: [["recipe", "notionPreview"]] },
-    }),
     setCookbookProduct: mutation({
       note: "entity.update on the cookbook's product",
       input: setCookbookProductInput,
@@ -458,10 +450,6 @@ export const recipeStreamsContract = defineContract("recipe", {
   importCookbookStream: subscription({
     input: importCookbookStreamInput,
     event: cookbookImportEventSchema,
-  }),
-  importNotionSyncStream: subscription({
-    input: importNotionSyncInput,
-    event: notionImportEventSchema,
   }),
   reprocessCookbook: subscription({
     input: cookbookIdInput,

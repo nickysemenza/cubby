@@ -119,21 +119,3 @@ export const normalizeImportRecipe = (
     })),
   };
 };
-
-export const normalizedImportSignatureContent = (
-  recipe: ImportRecipe,
-  tags?: string[] | null,
-) => {
-  const normalized = normalizeImportRecipe(recipe, tags);
-  return {
-    yield: normalized.yield,
-    servings: normalized.servings,
-    tags: [...(normalized.tags ?? [])].sort(),
-    notes: normalized.notes,
-    sections: normalized.sections.map((section) => ({
-      name: section.name,
-      ingredients: section.ingredients,
-      instructions: section.instructions.map((i) => i.instruction),
-    })),
-  };
-};

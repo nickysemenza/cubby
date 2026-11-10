@@ -154,7 +154,6 @@ function localVars({
       profile === "integrations"
         ? (inherited.CUBBY_DEV_AI_GATEWAY_API_KEY ?? "")
         : "",
-    NOTION_API_KEY: "",
     GOOGLE_CLIENT_ID: "",
     GOOGLE_CLIENT_SECRET: "",
   } satisfies Record<string, string>;
@@ -243,7 +242,7 @@ export function devProcessEnvironment(profile: DevProfile): NodeJS.ProcessEnv {
   const inherited = { ...process.env };
   for (const key of Object.keys(inherited)) {
     if (
-      /^(?:R2_|BETTER_AUTH_|GOOGLE_|NOTION_|AI_GATEWAY_|OPENAI_|ANTHROPIC_|SENTRY_|PRODUCTION_|E2E_)/u.test(
+      /^(?:R2_|BETTER_AUTH_|GOOGLE_|AI_GATEWAY_|OPENAI_|ANTHROPIC_|SENTRY_|PRODUCTION_|E2E_)/u.test(
         key,
       )
     )

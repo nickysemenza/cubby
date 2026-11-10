@@ -1,10 +1,7 @@
 import { testEntityId, testShortcode } from "@cubby/schemas/testing";
 import { describe, expect, it } from "vitest";
 
-import {
-  projectCookbookImportEvent,
-  projectNotionImportEvent,
-} from "./recipe-import-projection";
+import { projectCookbookImportEvent } from "./recipe-import-projection";
 
 describe("recipe import event projection", () => {
   const receipt = {
@@ -25,15 +22,6 @@ describe("recipe import event projection", () => {
         sourceRecipeId: "001.0004",
         ok: false,
         error: "Image state unavailable",
-      },
-    });
-    expect(projectNotionImportEvent("page-4", true, receipt)).toEqual({
-      recipeId: receipt.id,
-      event: {
-        pageId: "page-4",
-        ok: true,
-        id: receipt.shortcode,
-        status: "updated",
       },
     });
   });

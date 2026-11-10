@@ -132,7 +132,7 @@ async function seedTestUser(rawDb: ReturnType<typeof drizzle>) {
  * because it is explicitly torn down. That distinction matters for anything
  * that ISN'T reset here — a true per-worker module singleton (`db.ts`'s
  * `moduleRuntime` pool, `cf-env.ts`, `clients/ai.ts`, `ai/models.ts`,
- * `semantic/embeddings.ts`, `clients/notion.ts`'s LRU caches) now persists
+ * `semantic/embeddings.ts`) now persists
  * across files in the same worker, which is exactly what several suites'
  * global "zero" invariants (`findOrphanedEntityEmbeddings`) and recent-N
  * windows (`listBackgroundBatches`) rely on NOT happening — they stay correct

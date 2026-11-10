@@ -25,8 +25,8 @@ const cardTimes = (
 /**
  * A cookbook tree item, in the shape `RecipeImportCard` renders.
  *
- * The card is shared with the Notion / scrape importer, which still speaks
- * `ImportRecipe`, so this adapter exists rather than a second card. It is a
+ * The card speaks `ImportRecipe`, so this adapter exists rather than a second
+ * card. It is a
  * *view*, not a conversion: nothing here reaches the server. The server is
  * handed the tree itself (`upsertCookbook` stores it, `importCookbookStream`
  * reads it back), so this mapping cannot corrupt the imported data — at worst

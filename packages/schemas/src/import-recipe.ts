@@ -129,7 +129,7 @@ const structuredYield = amount;
 const importRecipeMeta = z.object({
   title: z.string(),
   description: z.string().optional(),
-  // Yield is either a freeform line ("Makes 1 loaf", from EPUB/Notion — re-parsed
+  // Yield is either a freeform line ("Makes 1 loaf", from EPUB — re-parsed
   // at import) or already-structured `{value, unit}` (from the URL scraper). The
   // converter normalizes both; the raw string is what `Cookbook.rawJson` stores
   // so `reprocessCookbook` can re-apply WASM parser upgrades.
@@ -199,7 +199,7 @@ const publicRecipeImageUrl = z
     "Recipe image URL must use HTTP or HTTPS",
   );
 
-// A scraped or Notion recipe's image is always a public URL. Cookbook photos
+// A scraped recipe's image is always a public URL. Cookbook photos
 // live in the EPUB archive and are attached by source recipe id instead.
 export const recipeImageSourceSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("url"), url: publicRecipeImageUrl }),
@@ -215,7 +215,7 @@ const importedImageSource = z
 export const importRecipeSchema = z.object({
   meta: importRecipeMeta,
   sections: z.array(importRecipeSection),
-  // Provenance label (a Notion database, a site); never a cookbook now.
+  // Provenance label (a site); never a cookbook now.
   source: z.string().optional(),
   url: z.string().optional(),
   servings: z.number().optional(),
@@ -378,43 +378,6 @@ export const cookbookDiffOut = z.array(
     hasImage: z.boolean(),
   }),
 );
-
-export const notionPreviewItem = z.object({
-  pageId: z.string(),
-  name: z.string(),
-  notionUrl: z.string(),
-  status: z.enum(["new", "unchanged", "will-update", "needs-formatting"]),
-  existingId: recipeShortcode.nullable(),
-  reasons: z.array(z.string()),
-  recipe: importRecipeSchema,
-});
-
-export const notionPreviewOut = z.array(notionPreviewItem);
-
-export const importNotionSyncInput = z.object({
-  pageIds: z.array(z.string()).min(1),
-});
-
-export const notionImportEventSchema = z.discriminatedUnion("type", [
-  batchProgressEvent.extend({
-    item: z
-      .union([
-        z.object({
-          pageId: z.string(),
-          ok: z.literal(true),
-          id: z.string(),
-          status: z.enum(["created", "updated"]),
-        }),
-        z.object({
-          pageId: z.string(),
-          ok: z.literal(false),
-          error: z.string(),
-        }),
-      ])
-      .optional(),
-  }),
-  recipeImportCompletionEvent,
-]);
 
 export const cookbookSummariesOut = z.array(cookbookSummary);
 

@@ -198,8 +198,7 @@ const integrationProject = {
   // `isolate: false` shares one fork's module graph across a whole
   // worker's share of those 76 files instead: `db.ts`'s
   // `moduleRuntime` pool, `cf-env.ts`, `clients/ai.ts`,
-  // `ai/models.ts`, `semantic/embeddings.ts`, and
-  // `clients/notion.ts`'s LRU caches are the per-worker module
+  // `ai/models.ts`, and `semantic/embeddings.ts` are the per-worker module
   // singletons this exposes — none bind to a per-file database, so a
   // test asserting a cold cache/pool would be the first casualty.
   // `withTestDb()`/`resetTestDb()` still gives every TEST a pristine

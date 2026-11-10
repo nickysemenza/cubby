@@ -6,7 +6,6 @@ import {
 import { entityRefKey } from "@cubby/schemas/entity";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
-import { NOTION_SOURCE } from "@cubby/schemas/external-id";
 import {
   type CookbookId,
   parseEntityId,
@@ -48,7 +47,6 @@ import { relationalSql } from "~/server/db/helpers/relational-sql";
 import { recipeSourceRelations } from "~/server/db/helpers/relations";
 import {
   entityAttachment,
-  entityExternalId,
   image,
   ingredient,
   meal,
@@ -80,10 +78,6 @@ import {
   computeChanges,
   logAuditEntry,
 } from "~/server/generic/audit-log/repo/audit-log";
-import {
-  ensureExternalSources,
-  liveExternalIds,
-} from "~/server/generic/entity-links/repo/entity-external-ids";
 import { loadRecipeMealEvidence } from "~/server/generic/field-explanation/repo/field-explanation-evidence";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import { recipeListLabels } from "~/server/generic/list/repo/list-display-labels";
@@ -306,68 +300,6 @@ export const getCookbookRecipeIdsByTitle = async (
     columns: { id: true, name: true },
   });
   return new Map(rows.map((r) => [normalizeTitle(r.name), r.id]));
-};
-
-const NOTION_PAGE = { source: NOTION_SOURCE, kind: "page" } as const;
-
-/** Live Notion recipes with their page ids. */
-const notionRecipeRows = async (db: Database) => {
-  const rows = await getDb(db)
-    .select({
-      id: recipe.id,
-      shortcode: recipe.shortcode,
-      pageId: entityExternalId.externalId,
-    })
-    .from(recipe)
-    .innerJoin(
-      entityExternalId,
-      and(
-        eq(entityExternalId.entityId, recipe.id),
-        eq(entityExternalId.source, NOTION_SOURCE),
-        liveExternalIds("page"),
-      ),
-    )
-    .where(and(eq(recipe.sourceType, "Notion"), notDeleted(recipe)));
-  return rows;
-};
-
-export const getNotionRecipePageIds = async (db: Database): Promise<string[]> =>
-  (await notionRecipeRows(db)).map((row) => row.pageId);
-
-export const getNotionRecipesForDiff = async (
-  db: Database,
-): Promise<Array<{ id: string; pageId: string; recipe: RecipeGraphOut }>> => {
-  const rows = await notionRecipeRows(db);
-  const recipes = await getRecipesByIDs(
-    db,
-    rows.map((r) => r.id),
-  );
-  const byId = new Map(recipes.map((r) => [r.id, r]));
-  return rows.flatMap((r) => {
-    const full = byId.get(parseShortcodeFor("recipe", r.shortcode));
-    return full ? [{ id: r.id, pageId: r.pageId, recipe: full }] : [];
-  });
-};
-
-/**
- * Record the Notion page a recipe was imported from — its re-import identity.
- * No availability pre-check: a concurrent first import of the same page must
- * fail on the identifier's live unique, which `upsertNotionRecipe` recovers.
- */
-const recordNotionRecipePage = async (
-  tx: DrizzleTransaction,
-  recipeId: RecipeId,
-  pageId: string,
-) => {
-  await ensureExternalSources(tx, [NOTION_PAGE.source]);
-  await tx.insert(entityExternalId).values({
-    entityId: recipeId,
-    entityKind: "recipe",
-    source: NOTION_PAGE.source,
-    kind: NOTION_PAGE.kind,
-    externalId: pageId,
-    isPrimary: true,
-  });
 };
 
 /** A nullable tag array is empty when null or zero-length. */
@@ -638,8 +570,6 @@ const createRecipeReturningId = async (
       ...recipeMetaToColumns(recipeInput.meta),
     });
     const createdRecipeId = createdRecipe.id;
-    if (provenance?.sourceType === "Notion" && provenance.sourceData)
-      await recordNotionRecipePage(tx, createdRecipeId, provenance.sourceData);
 
     for (const [i, section] of recipeInput.sections.entries()) {
       await createSectionWithIngredients(tx, createdRecipeId, section, i);
@@ -725,15 +655,9 @@ export const createRecipe = defineMutationWriter({
  * (unique on `cookbookId, name`) or `Recipe_name_key`
  * (unique on `name` alone, for Website/Other).
  *
- * Notion is the one case that can't carry through. A Notion page id is an
- * `EntityExternalId`, unique among live rows with no name component — it
- * identifies exactly one live recipe, the row
- * `upsertNotionRecipe` re-imports into on every sync. Reusing the source's page
- * id on the duplicate would violate that index outright; the alternative isn't
- * better, since it would hand two rows the same "this IS page X" identity, and
- * the next sync could then land on either one nondeterministically. So a Notion
- * duplicate deliberately drops to a plain, unsynced "Other" copy rather than
- * risk either.
+ * A stored Notion recipe's page id is an `EntityExternalId`, unique among live
+ * rows with no name component, so reusing it on the duplicate would violate
+ * that index. A Notion duplicate drops to a plain "Other" copy.
  */
 const duplicateProvenance = async (
   db: Database,
@@ -963,36 +887,6 @@ export const upsertCookbookRecipe = (
       cookbookId: cookbookRef.id,
     },
     "Recipe_cookbookId_name_key",
-  );
-
-/** Notion identity is page ID, so title changes update the same row. */
-export const upsertNotionRecipe = (
-  input: RecipeCreateInput,
-  pageId: string,
-  db: Database,
-  actor: ActorContext,
-): Promise<UpsertedRecipe> =>
-  upsertRecipeMatching(
-    input,
-    db,
-    actor,
-    and(
-      eq(recipe.sourceType, "Notion"),
-      notDeleted(recipe),
-      sql`EXISTS (
-        SELECT 1 FROM "EntityExternalId" np
-        WHERE np."entityId" = ${recipe.id} AND np."source" = ${NOTION_SOURCE}
-          AND np."kind" = 'page' AND np."externalId" = ${pageId}
-          AND ${notDeleted("np")}
-      )`,
-    ),
-    {
-      sourceType: "Notion",
-      sourceData: pageId,
-    },
-    // A concurrent first import of the same page loses on the identifier's
-    // live unique, then re-selects the winner.
-    "EntityExternalId_source_kind_externalId_key",
   );
 
 export const updateRecipe = defineMutationWriter({
