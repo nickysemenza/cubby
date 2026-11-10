@@ -34,8 +34,8 @@ import {
 } from "~/server/db/schema";
 import { emailPurchaseAssociationsSql } from "~/server/domains/email/repo/email-sql";
 
-/** Most existing-order candidates a claim lists of each kind. */
-const EXISTING_ORDER_CANDIDATES_MAX = 5;
+/** Most existing-order candidates a claim shows of each kind. */
+export const EXISTING_ORDER_CANDIDATES_MAX = 5;
 /** Days before and after an Email that a statement booking may sit. */
 const LUMP_DAYS_BEFORE = 10;
 const LUMP_DAYS_AFTER = 3;
@@ -63,6 +63,8 @@ const line = alias(expense, "candidate_line");
  * Existing-order candidates for one retained Email at its sender-proven
  * Vendor: Purchases linked from other Emails in its thread, and statement
  * lump Purchases near its date. Both are read-only hints for the coordinator.
+ * `limit` bounds only a display; the prepare guard reads every candidate, and
+ * `lumpAmount` keeps only lumps of that exact total before any limit.
  */
 export async function readExistingOrderCandidates(
   db: Database,
@@ -74,7 +76,9 @@ export async function readExistingOrderCandidates(
     threadId: string | null;
     receivedAt: Date | null;
   },
+  options: { limit?: number; lumpAmount?: number | null } = {},
 ): Promise<ExistingOrderCandidate[]> {
+  const limit = options.limit ?? Number.MAX_SAFE_INTEGER;
   const database = getDb(db);
   const ownAccount = or(
     isNull(vendorAccount.id),
@@ -127,93 +131,106 @@ export async function readExistingOrderCandidates(
           ),
         )
         .orderBy(purchase.date, purchase.shortcode)
-        .limit(EXISTING_ORDER_CANDIDATES_MAX)
+        .limit(limit)
     : [];
   const liveLines = and(eq(line.purchaseId, purchase.id), notDeleted(line));
-  const lumps = input.receivedAt
-    ? await database
-        .select({
-          shortcode: purchase.shortcode,
-          orderId: purchase.orderId,
-          date: purchase.date,
-          amount: sql<number | null>`(${database
-            .select({ cost: line.cost })
-            .from(line)
-            .where(liveLines)
-            .limit(1)})`,
-        })
-        .from(purchase)
-        .leftJoin(
-          vendorAccount,
-          and(
-            eq(vendorAccount.id, purchase.vendorAccountId),
-            notDeleted(vendorAccount),
-          ),
-        )
-        .where(
-          and(
-            eq(purchase.vendorId, input.vendorId),
-            notDeleted(purchase),
-            ownAccount,
-            between(
-              purchase.date,
-              shiftPlainDate(
-                householdLocalDate(input.receivedAt),
-                -LUMP_DAYS_BEFORE,
-              ),
-              shiftPlainDate(
-                householdLocalDate(input.receivedAt),
-                LUMP_DAYS_AFTER,
-              ),
+  const lumpAmount =
+    options.lumpAmount === undefined
+      ? undefined
+      : options.lumpAmount === null
+        ? null
+        : Math.round(options.lumpAmount * 100) / 100;
+  const lumps =
+    input.receivedAt && lumpAmount !== null
+      ? await database
+          .select({
+            shortcode: purchase.shortcode,
+            orderId: purchase.orderId,
+            date: purchase.date,
+            amount: sql<number | null>`(${database
+              .select({ cost: line.cost })
+              .from(line)
+              .where(liveLines)
+              .limit(1)})`,
+          })
+          .from(purchase)
+          .leftJoin(
+            vendorAccount,
+            and(
+              eq(vendorAccount.id, purchase.vendorAccountId),
+              notDeleted(vendorAccount),
             ),
-            // Accepted import sources already itemize; only a bare booking qualifies.
-            notExists(
-              database
-                .select({ id: importSourceOrder.id })
-                .from(importSourceOrder)
-                .where(eq(importSourceOrder.purchaseId, purchase.id)),
-            ),
-            exists(
-              database
-                .select({ id: financialTransactionAllocation.id })
-                .from(financialTransactionAllocation)
-                .where(
-                  and(
-                    eq(financialTransactionAllocation.purchaseId, purchase.id),
-                    notDeleted(financialTransactionAllocation),
-                  ),
+          )
+          .where(
+            and(
+              eq(purchase.vendorId, input.vendorId),
+              notDeleted(purchase),
+              ownAccount,
+              between(
+                purchase.date,
+                shiftPlainDate(
+                  householdLocalDate(input.receivedAt),
+                  -LUMP_DAYS_BEFORE,
                 ),
-            ),
-            // Exactly one live line, and it is a productless principal booking.
-            eq(
-              sql`(${database
-                .select({ lines: count() })
-                .from(line)
-                .where(liveLines)})`,
-              1,
-            ),
-            exists(
-              database
-                .select({ id: line.id })
-                .from(line)
-                .where(
-                  and(
-                    liveLines,
-                    eq(line.lineKind, expenseLineKindSchema.enum.principal),
-                    isNull(line.productId),
-                    eq(
-                      line.economicRole,
-                      expenseEconomicRoleSchema.enum.vendor,
+                shiftPlainDate(
+                  householdLocalDate(input.receivedAt),
+                  LUMP_DAYS_AFTER,
+                ),
+              ),
+              // Accepted import sources already itemize; only a bare booking qualifies.
+              notExists(
+                database
+                  .select({ id: importSourceOrder.id })
+                  .from(importSourceOrder)
+                  .where(eq(importSourceOrder.purchaseId, purchase.id)),
+              ),
+              exists(
+                database
+                  .select({ id: financialTransactionAllocation.id })
+                  .from(financialTransactionAllocation)
+                  .where(
+                    and(
+                      eq(
+                        financialTransactionAllocation.purchaseId,
+                        purchase.id,
+                      ),
+                      notDeleted(financialTransactionAllocation),
                     ),
-                    eq(line.future, false),
                   ),
-                ),
+              ),
+              // Exactly one live line, and it is a productless principal booking.
+              eq(
+                sql`(${database
+                  .select({ lines: count() })
+                  .from(line)
+                  .where(liveLines)})`,
+                1,
+              ),
+              exists(
+                database
+                  .select({ id: line.id })
+                  .from(line)
+                  .where(
+                    and(
+                      liveLines,
+                      eq(line.lineKind, expenseLineKindSchema.enum.principal),
+                      isNull(line.productId),
+                      eq(
+                        line.economicRole,
+                        expenseEconomicRoleSchema.enum.vendor,
+                      ),
+                      eq(line.future, false),
+                      lumpAmount === undefined
+                        ? undefined
+                        : sql`round(${line.cost}::numeric, 2) = ${lumpAmount}::numeric`,
+                    ),
+                  ),
+              ),
             ),
-          ),
-        )
-        .orderBy(purchase.date, purchase.shortcode)
-        .limit(EXISTING_ORDER_CANDIDATES_MAX)
-    : [];
+          )
+          .orderBy(purchase.date, purchase.shortcode)
+          .limit(limit)
+      : [];
   return [
     ...thread.map((row) => ({
       id: parseShortcodeFor("purchase", row.shortcode),

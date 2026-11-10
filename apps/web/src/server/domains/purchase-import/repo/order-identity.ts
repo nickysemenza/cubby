@@ -1,8 +1,8 @@
 import { sql, type SQLWrapper } from "drizzle-orm";
 
 // A printed field label before the identifier: `Trip ID: X`, `Order number: X`,
-// `Confirmation No. X:`-style prefixes, or `Order #X`. Only a label ending in an
-// id/number word followed by `:`/`#`, or words followed by `#`, is removed, so
+// `Confirmation No.: X` or `Order #X`. Only a label ending in an id/number word
+// followed by `:`/`#`, or words followed by `#`, is removed, so `No. X` and
 // identifiers that merely contain letters (`INV-123`, `ID-9`) are unchanged.
 const LABEL_WORDS = String.raw`(?:[A-Za-z][A-Za-z.]*\s+){0,3}`;
 const ID_LABEL = String.raw`^\s*${LABEL_WORDS}(?:id|no\.?|number|num)\s*[:#]\s*`;

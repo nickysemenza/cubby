@@ -178,19 +178,22 @@ checksums before any paid attribution or relationship judgment. Admission
 decisions cannot repair altered bytes; the writer repeats those checks and
 requires roster membership inside its transaction.
 
-Purchases store an extracted order id without its printed label, and order
-lookups compare ids normalized (label, case, leading `#`), so one vendor's
-`Trip ID: X` and `x` reach one Purchase. An id-less source cannot converge by
+Purchases store an extracted order id without its printed `<words> ID:`,
+`number:` or `#` label (case kept), and order lookups compare ids normalized
+(label, case, leading `#`), so one vendor's `Trip ID: X` and `x` reach one
+Purchase; `No. X` without `:` or `#` keeps its words. An id-less source cannot converge by
 order id. Its claim therefore lists existing-order candidates: Purchases linked
 from other Emails in the same mailbox thread, and same-Vendor Purchases near
 the Email date whose only line is an unitemized statement booking. Preparation
-refuses an untargeted mail order while a candidate without a conflicting order
-id (or a lump of its printed total) is neither the target nor named in
-`distinctFromPurchases`. Candidates select review; they never merge. A target
+refuses an untargeted mail order while any candidate without a conflicting
+order id (or a lump of its printed total) is not named in
+`distinctFromPurchases`; the guard reads every candidate, not the claim's
+bounded list. A targeted order is not checked against other candidates. Candidates select review; they never merge. A target
 with identical lines replays as no change, different lines file a
 reconciliation finding, and a statement lump of the same total files the
-reviewed aggregate replacement. An order already imported twice converges
-through `purchase_import.converge_duplicate_source_order`
+reviewed aggregate replacement. A Purchase merge refuses two Purchases with the same order identity that
+each still hold lines; an order already imported twice converges through
+`purchase_import.converge_duplicate_source_order`
 ([duplicates](../.agents/skills/purchase-import/references/duplicates.md)).
 
 ## Shipments

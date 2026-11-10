@@ -299,14 +299,19 @@ async function assertExistingOrdersReviewed(
       .limit(1);
     if (ordered) return;
   }
-  const candidates = await readExistingOrderCandidates(db, {
-    ledgerPartyId: mail.ledgerPartyId,
-    vendorId: input.vendorId,
-    mailboxId: mail.mailboxId,
-    messageId: mail.messageId,
-    threadId: mail.threadId,
-    receivedAt: mail.receivedAt,
-  });
+  // Every candidate, not the claim's display: a hidden match must still block.
+  const candidates = await readExistingOrderCandidates(
+    db,
+    {
+      ledgerPartyId: mail.ledgerPartyId,
+      vendorId: input.vendorId,
+      mailboxId: mail.mailboxId,
+      messageId: mail.messageId,
+      threadId: mail.threadId,
+      receivedAt: mail.receivedAt,
+    },
+    { lumpAmount: input.total },
+  );
   const distinct = new Set(input.distinctFrom);
   const unreviewed = candidates.filter(
     (candidate) =>
@@ -315,9 +320,7 @@ async function assertExistingOrdersReviewed(
         ? candidate.orderId === null ||
           orderId === null ||
           normalizeOrderKey(candidate.orderId) === normalizeOrderKey(orderId)
-        : input.total !== null &&
-          candidate.amount !== null &&
-          Math.round(candidate.amount * 100) === Math.round(input.total * 100)),
+        : input.total !== null),
   );
   if (unreviewed.length)
     throw new Error(

@@ -235,4 +235,39 @@ describe("one order from two source documents", () => {
       ),
     ).resolves.toMatchObject({ status: "already_applied" });
   });
+
+  it("refuses to converge two id-less Purchases from different threads", async () => {
+    const { vendor, notice, receipt } = await threadMails("ride-1", "ride-2");
+    const ids = [];
+    for (const [key, mail] of [
+      ["ride-1", notice],
+      ["ride-2", receipt],
+    ] as const)
+      ids.push(
+        (
+          await memberImport(ctx.db, ctx.actor, {
+            key,
+            defaultTrade: "other",
+            orders: [
+              {
+                stableOrderId: key,
+                vendorId: vendor.shortcode,
+                source: mailSource(mail),
+                extraction: { status: "ready", candidate: candidate(null) },
+              },
+            ],
+          })
+        ).committed.items[0]?.purchaseId,
+      );
+    const [first, second] = ids;
+    if (!first || !second) throw new Error("Both rides must commit");
+    await expect(
+      convergeDuplicateSourceOrder(
+        ctx.db,
+        { survivorPurchaseId: first, duplicatePurchaseId: second },
+        ctx.actor,
+      ),
+    ).rejects.toThrow(/may be two orders/);
+    expect(await liveCents()).toBe(2500);
+  });
 });

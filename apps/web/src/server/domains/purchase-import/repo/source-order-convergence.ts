@@ -5,7 +5,7 @@ import {
   type PurchaseId,
 } from "@cubby/schemas/identifiers";
 import { cents } from "@cubby/shared";
-import { and, eq, inArray, isNotNull } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { entityIdentity } from "~/server/db/entity-identity-schema";
@@ -15,8 +15,11 @@ import {
   withTransaction,
 } from "~/server/db/helpers";
 import {
+  auditLog,
+  email as emailTable,
   expense,
   expenseAttribution,
+  importSourceClaim,
   importSourceOrder,
   importSourceProduct,
   ledgerSourceClaim,
@@ -40,7 +43,16 @@ type Line = {
   projectId: string | null;
   productQuantity: number | null;
   attribution: string;
+  /** Booking facts a retired line hands to its survivor when the survivor has none. */
+  carried: Record<CarriedField, string | null>;
 };
+
+const CARRIED_FIELDS = [
+  "bookingTransactionCode",
+  "spendingCategoryId",
+  "trade",
+] as const;
+type CarriedField = (typeof CARRIED_FIELDS)[number];
 
 const lineKey = (line: Line) =>
   JSON.stringify([
@@ -64,6 +76,9 @@ async function readLines(
       projectId: expense.projectId,
       productQuantity: expense.productQuantity,
       economicRole: expense.economicRole,
+      bookingTransactionCode: expense.bookingTransactionCode,
+      spendingCategoryId: expense.spendingCategoryId,
+      trade: expense.trade,
     })
     .from(expense)
     .where(and(eq(expense.purchaseId, purchaseId), notDeleted(expense)))
@@ -107,19 +122,30 @@ async function readLines(
         .map((item) => [item.role, item.ledgerPartyId, item.weight])
         .sort(),
     ),
+    carried: {
+      bookingTransactionCode: row.bookingTransactionCode,
+      spendingCategoryId: row.spendingCategoryId,
+      trade: row.trade,
+    },
   }));
 }
 
 /**
  * Pair every duplicate line with one survivor line carrying the same title,
  * amount and role. Product, Project, quantity and party attribution must not
- * be lost: a duplicate value has to equal its survivor's or be empty.
+ * be lost: a duplicate value has to equal its survivor's or be empty. A
+ * booking code, spending category or trade the survivor lacks moves onto it;
+ * two different values refuse.
  */
 function pairLines(duplicate: Line[], survivor: Line[]) {
   if (duplicate.length !== survivor.length)
     return { error: "The two Purchases hold different numbers of lines." };
   const unused = [...survivor];
-  const pairs: Array<{ from: Line; to: Line }> = [];
+  const pairs: Array<{
+    from: Line;
+    to: Line;
+    carry: Partial<Record<CarriedField, string>>;
+  }> = [];
   for (const line of duplicate) {
     const index = unused.findIndex(
       (candidate) => lineKey(candidate) === lineKey(line),
@@ -141,7 +167,17 @@ function pairLines(duplicate: Line[], survivor: Line[]) {
       return {
         error: `The duplicate line "${line.title}" carries a Product, Project, quantity or attribution the survivor's line does not.`,
       };
-    pairs.push({ from: line, to });
+    const carry: Partial<Record<CarriedField, string>> = {};
+    for (const field of CARRIED_FIELDS) {
+      const value = line.carried[field];
+      if (value === null || value === to.carried[field]) continue;
+      if (to.carried[field] !== null)
+        return {
+          error: `The duplicate line "${line.title}" and its survivor line disagree on ${field}.`,
+        };
+      carry[field] = value;
+    }
+    pairs.push({ from: line, to, carry });
   }
   return { pairs };
 }
@@ -178,7 +214,24 @@ export async function convergeDuplicateSourceOrder(
         "PURCHASE_NOT_FOUND",
         `Purchase not found: ${input.duplicatePurchaseId}`,
       );
-    if (identity.mergedIntoId === survivorId)
+    if (identity.mergedIntoId === survivorId) {
+      // Only this command's own record proves the duplicate lines were retired;
+      // a plain merge into the survivor keeps both line sets.
+      const [converged] = await tx
+        .select({ id: auditLog.id })
+        .from(auditLog)
+        .where(
+          and(
+            eq(auditLog.entityId, survivorId),
+            sql`${auditLog.changes} -> 'convergedSourceOrder' -> 'to' ->> 'duplicate' = ${identity.id}`,
+          ),
+        )
+        .limit(1);
+      if (!converged)
+        throw createAppError(
+          "PURCHASE_SOURCE_CONVERGENCE_REFUSED",
+          `${input.duplicatePurchaseId} was merged into ${input.survivorPurchaseId} without converging its lines; review the survivor's line sets.`,
+        );
       return {
         status: "already_applied" as const,
         survivorPurchaseId: parseShortcodeFor(
@@ -188,6 +241,7 @@ export async function convergeDuplicateSourceOrder(
         retiredExpenseIds: [],
         movedSourceOrders: 0,
       };
+    }
     // SAFETY: the Entity row was looked up by a PUR- shortcode, so its id is a Purchase id.
     const duplicateId = identity.id as PurchaseId;
     if (duplicateId === survivorId)
@@ -236,6 +290,48 @@ export async function convergeDuplicateSourceOrder(
         "PURCHASE_MERGE_ORDER_COLLISION",
         `The Purchases carry different order ids (${survivor.orderId}, ${duplicate.orderId}).`,
       );
+    // Without an order id on either side, only one shared Email thread and the
+    // same date tie the two documents to one order; two identical rides do not.
+    if (survivor.orderId === null && duplicate.orderId === null) {
+      const threads = await tx
+        .selectDistinct({
+          purchaseId: importSourceOrder.purchaseId,
+          thread: sql<string>`${emailTable.mailboxId} || ':' || ${emailTable.threadId}`,
+        })
+        .from(importSourceOrder)
+        .innerJoin(
+          importSourceClaim,
+          eq(importSourceClaim.id, importSourceOrder.sourceClaimId),
+        )
+        .innerJoin(
+          emailTable,
+          and(
+            eq(
+              sql`${emailTable.provider} || ':' || ${emailTable.mailboxId} || ':' || ${emailTable.messageId}`,
+              importSourceClaim.externalKey,
+            ),
+            isNotNull(emailTable.threadId),
+            notDeleted(emailTable),
+          ),
+        )
+        .where(
+          inArray(importSourceOrder.purchaseId, [survivorId, duplicateId]),
+        );
+      const survivorThreads = new Set(
+        threads
+          .filter((row) => row.purchaseId === survivorId)
+          .map((row) => row.thread),
+      );
+      const sharesThread = threads.some(
+        (row) =>
+          row.purchaseId === duplicateId && survivorThreads.has(row.thread),
+      );
+      if (!sharesThread || survivor.date !== duplicate.date)
+        throw createAppError(
+          "PURCHASE_SOURCE_CONVERGENCE_REFUSED",
+          "Neither Purchase carries an order id, and their source Emails share no thread and date; they may be two orders.",
+        );
+    }
     const sourceOrders = await tx
       .select({ id: importSourceOrder.id })
       .from(importSourceOrder)
@@ -291,6 +387,43 @@ export async function convergeDuplicateSourceOrder(
             eq(importSourceProduct.expenseId, from.id),
           ),
         );
+    for (const { to, carry } of paired.pairs) {
+      if (Object.keys(carry).length === 0) continue;
+      await tx
+        .update(expense)
+        .set({
+          ...(carry.bookingTransactionCode
+            ? { bookingTransactionCode: carry.bookingTransactionCode }
+            : {}),
+          ...(carry.spendingCategoryId
+            ? {
+                // SAFETY: copied from a live Expense's own spendingCategoryId column.
+                spendingCategoryId:
+                  carry.spendingCategoryId as typeof expense.$inferInsert.spendingCategoryId,
+              }
+            : {}),
+          ...(carry.trade
+            ? {
+                // SAFETY: copied from a live Expense's own trade column.
+                trade: carry.trade as typeof expense.$inferInsert.trade,
+              }
+            : {}),
+        })
+        .where(eq(expense.id, to.id));
+      await logAuditEntries(tx, actor, [
+        {
+          entityKind: "expense" as const,
+          entityId: to.id,
+          action: "update" as const,
+          changes: Object.fromEntries(
+            Object.entries(carry).map(([field, value]) => [
+              field,
+              { from: null, to: value },
+            ]),
+          ),
+        },
+      ]);
+    }
     const transactionDb = databaseForTransaction(tx);
     if (duplicateLines.length)
       await deleteExpensesWithPurchaseEffects(
