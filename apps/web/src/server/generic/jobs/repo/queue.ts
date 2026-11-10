@@ -70,13 +70,17 @@ export const jobDue = (now: Date) =>
   );
 
 /** The record row a drain unit's executions write: rotation and outcome. */
-const DRAIN_RECORD_KIND =
+export const DRAIN_RECORD_KIND =
   "background.drain" satisfies keyof typeof JOB_KIND_POLICY;
 const drainRecordKey = (unit: string) => `drain:${unit}`;
 
 export type DueUnit =
   | { type: "job"; id: string; unit: string; runOwned: boolean }
-  | { type: "drain"; unit: string; runOwned: boolean };
+  /** `drain` is the registered drain whose `due` SQL reported the unit. */
+  | { type: "drain"; unit: string; drain: string; runOwned: boolean };
+
+/** A registered drain's name and its `due` rows `(unit, demand, since)`. */
+export type DrainDue = { name: string; due: SQL };
 
 /** Candidate Jobs per kind, so a busy head never empties a permit's choice. */
 const PER_KIND = 4;
@@ -90,23 +94,31 @@ const PER_KIND = 4;
  * due again every few seconds would otherwise hold every candidate slot and
  * starve a lower priority for good. A 100k flood of one kind therefore never
  * starves another, and an idle household answers with no rows.
+ *
+ * Each drain unit carries the name of the drain that reported it, so a permit
+ * runs the unit on that drain whatever the unit is called: a unit name is a
+ * label for rotation and telemetry, never a routing key.
  */
 export async function dueUnits(
   db: Database,
-  drains: readonly SQL[],
+  drains: readonly DrainDue[],
   limit: number,
 ): Promise<DueUnit[]> {
   const now = new Date();
   const drainRows = drains.length
     ? sql.join(
-        drains.map((due) => sql`(${due})`),
+        drains.map(
+          ({ name, due }) =>
+            sql`(SELECT ${name}::text AS drain, reported.unit, reported.demand, reported.since FROM (${due}) reported)`,
+        ),
         sql` UNION ALL `,
       )
-    : sql`SELECT NULL::text AS unit, false AS demand, NULL::timestamp AS since WHERE false`;
+    : sql`SELECT NULL::text AS drain, NULL::text AS unit, false AS demand, NULL::timestamp AS since WHERE false`;
   const result = await repositoryQueries(db).execute<{
     type: "job" | "drain";
     ref: string;
     unit: string;
+    drain: string | null;
     run_owned: boolean;
   }>(sql`
     WITH active_runs AS MATERIALIZED (
@@ -126,12 +138,12 @@ export async function dueUnits(
         ORDER BY since - priority * interval '1 minute', priority DESC, id
       ) AS position FROM jobs
     ), drain_units AS (${drainRows}), units AS (
-      SELECT 'job' AS type, id::text AS ref, kind AS unit, run_owned, priority, since, position
+      SELECT 'job' AS type, id::text AS ref, kind AS unit, NULL::text AS drain, run_owned, priority, since, position
       FROM ranked WHERE position <= ${PER_KIND}
       UNION ALL
-      SELECT 'drain', unit, unit, demand, 0, since, 1 FROM drain_units
+      SELECT 'drain', unit, unit, drain, demand, 0, since, 1 FROM drain_units
     )
-    SELECT units.type, units.ref, units.unit, units.run_owned FROM units
+    SELECT units.type, units.ref, units.unit, units.drain, units.run_owned FROM units
     ORDER BY units.run_owned DESC, units.position,
       CASE WHEN units.type = 'job'
         THEN (SELECT max("lastClaimedAt") FROM "Job" WHERE kind = units.unit)
@@ -142,7 +154,12 @@ export async function dueUnits(
   return result.rows.map((row) =>
     row.type === "job"
       ? { type: "job", id: row.ref, unit: row.unit, runOwned: row.run_owned }
-      : { type: "drain", unit: row.unit, runOwned: row.run_owned },
+      : {
+          type: "drain",
+          unit: row.unit,
+          drain: row.drain ?? row.unit,
+          runOwned: row.run_owned,
+        },
   );
 }
 
@@ -168,17 +185,35 @@ export async function nextDueAt(
   return at == null || !Number.isFinite(at) ? null : new Date(at);
 }
 
-/** Record one execution on its Job row (a Job, or a drain unit's record row). */
+/**
+ * Record one execution on its Job row (a Job, or a drain unit's record row).
+ * A Job's failure state is `failJob`'s. A drain unit has no other owner, so
+ * its record row keeps a failed page's raw error and the start of the failing
+ * streak; a page that succeeded or deferred ends the streak, and a page that
+ * claimed nothing leaves it as it was.
+ */
 export async function recordJobExecution(
   db: RepositoryQueryInput,
   target:
     | { id: string; generation: number; claimedAt: Date | null }
-    | { unit: string },
+    | { unit: string; error?: UnparsedError },
   execution: JobExecution,
 ) {
+  const failed = execution.outcome === "failed";
   await repositoryQueries(db)
     .update(job)
-    .set({ lastExecution: execution })
+    .set({
+      lastExecution: execution,
+      ...("unit" in target &&
+        execution.outcome !== "skipped" && {
+          error: failed
+            ? JSON.stringify(describeErrorCauses(target.error))
+            : null,
+          failingSince: failed
+            ? sql`coalesce(${job.failingSince}, ${execution.finishedAt}::timestamp)`
+            : null,
+        }),
+    })
     .where(
       "id" in target
         ? // A superseded executor's late record matches nothing: a newer claim

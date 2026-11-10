@@ -1,5 +1,7 @@
+import type { AiEvaluationBacklog, WorkQueueUnit } from "@cubby/schemas/job";
 import { NEEDS_YOU_FILTERS } from "@cubby/schemas/work-queue";
 import type { WorkStatus, WorkStuckItem } from "@cubby/schemas/work-status";
+import { countLabel } from "@cubby/shared/pluralize";
 import { WarningIcon } from "@phosphor-icons/react/dist/csr/Warning";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
@@ -12,6 +14,7 @@ import {
   type WorkQueueMeta,
 } from "~/features/work-queue/work-queue-page";
 import { ai } from "~/integrations/tanstack-query/generated/domains/ai.gen";
+import { job } from "~/integrations/tanstack-query/generated/domains/job.gen";
 import { workQueue } from "~/integrations/tanstack-query/generated/domains/workQueue.gen";
 import { copyTextWithToast } from "~/lib/clipboard";
 import { formatRelative } from "~/lib/date-format";
@@ -171,6 +174,188 @@ function BackgroundWork({
   );
 }
 
+const AI_STATE_LABEL = {
+  queued: "Queued",
+  result_ready: "Answered, not saved",
+  blocked: "Blocked",
+} as const satisfies Record<AiEvaluationBacklog["state"], string>;
+
+const factClass = "font-mono text-xs text-muted-foreground tabular-nums";
+
+/** One permit unit: its name, what the last hour did with it, and why its work waits. */
+function QueueUnitRow({ unit, now }: { unit: WorkQueueUnit; now: number }) {
+  const page = unit.lastExecution;
+  return (
+    <li className="grid gap-x-4 gap-y-0.5 border-b border-border/60 py-2 md:grid-cols-[minmax(0,14rem)_minmax(0,1fr)]">
+      <div className="min-w-0">
+        <p className="font-medium text-foreground-strong">{unit.label}</p>
+        {unit.label === unit.unit ? null : (
+          <p className={`${factClass} break-all`}>{unit.unit}</p>
+        )}
+      </div>
+      <div className="min-w-0">
+        <p className={factClass}>
+          {formatCount(unit.claimed)} claimed · {formatCount(unit.succeeded)}{" "}
+          finished · {formatCount(unit.deferred)} deferred ·{" "}
+          {formatCount(unit.failed)} failed
+        </p>
+        <p className="text-muted-foreground">
+          {unit.oldestDueAt
+            ? `Oldest waiting work came due ${formatRelative(unit.oldestDueAt, now)}.`
+            : "Nothing is due."}{" "}
+          {unit.leased || unit.expiredLeases
+            ? `${countLabel(unit.leased, "lease")} held${
+                unit.expiredLeases
+                  ? `, ${formatCount(unit.expiredLeases)} more expired`
+                  : ""
+              }.`
+            : "No leases held."}
+        </p>
+        {page ? (
+          <p className="text-muted-foreground">
+            Last pass {page.outcome}
+            {page.errorClass ? ` (${page.errorClass})` : ""}{" "}
+            {formatRelative(page.finishedAt, now)}
+            {page.items
+              ? `: ${formatCount(page.items.claimed)} claimed, ${formatCount(page.items.published)} saved, ${formatCount(page.items.failed)} failed.`
+              : "."}
+          </p>
+        ) : null}
+        {unit.waits.map((wait) => (
+          <p key={`${wait.reason}:${wait.runPurpose}`}>
+            {wait.summary}
+            {wait.runIds.map((id) => {
+              const href: string = `/runs/${id}`;
+              return (
+                <Link
+                  key={id}
+                  to={href}
+                  className="ml-2 font-mono text-xs text-link hover:underline"
+                >
+                  {id}
+                </Link>
+              );
+            })}
+          </p>
+        ))}
+      </div>
+    </li>
+  );
+}
+
+/** AI evaluations waiting or recently blocked, one row per feature. */
+function EvaluationBacklog({
+  rows,
+  now,
+}: {
+  rows: readonly AiEvaluationBacklog[];
+  now: number;
+}) {
+  const features = [...new Set(rows.map((row) => row.feature))];
+  return (
+    <ul>
+      {features.map((feature) => {
+        const states = rows.filter((row) => row.feature === feature);
+        return (
+          <li
+            key={feature}
+            className="grid gap-x-4 gap-y-0.5 border-b border-border/60 py-2 md:grid-cols-[minmax(0,14rem)_minmax(0,1fr)]"
+          >
+            <div className="min-w-0">
+              <p className="font-medium text-foreground-strong">
+                {states[0]?.label}
+              </p>
+              <p className={`${factClass} break-all`}>{feature}</p>
+            </div>
+            <div className="min-w-0">
+              {states.map((row) => (
+                <p key={row.state}>
+                  <span className="font-mono tabular-nums">
+                    {formatCount(row.count)}
+                  </span>{" "}
+                  {AI_STATE_LABEL[row.state].toLowerCase()}
+                  <span className="text-muted-foreground">
+                    , oldest created {formatRelative(row.oldestAt, now)}
+                    {row.errorClass ? `; most common error ` : ""}
+                  </span>
+                  {row.errorClass ? (
+                    <code className="font-mono text-xs break-all">
+                      {row.errorClass}
+                    </code>
+                  ) : null}
+                </p>
+              ))}
+            </div>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+function QueueDetailsBody({ now }: { now: number }) {
+  const activity = useQuery(job.activity.queryOptions(STATUS_INPUT));
+  if (activity.isError && !activity.data)
+    return (
+      <div className="grid gap-1">
+        <p className="text-muted-foreground">Couldn&apos;t read the queue.</p>
+        <TechnicalDetails
+          text={
+            activity.error instanceof Error
+              ? activity.error.message
+              : String(activity.error)
+          }
+        />
+        <div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void activity.refetch()}
+          >
+            Try again
+          </Button>
+        </div>
+      </div>
+    );
+  const data = activity.data;
+  if (!data) return <p className="text-muted-foreground">Reading the queue…</p>;
+  return (
+    <Stack gap="md">
+      <div>
+        <p className="max-w-prose text-muted-foreground">
+          Each kind of background work over the last{" "}
+          {formatCount(data.windows.outcomeMinutes)} minutes. Counts are Jobs by
+          how they last ended, so a Job that deferred many times counts once.
+        </p>
+        {data.queue.length ? (
+          <ul data-testid="queue-units">
+            {data.queue.map((unit) => (
+              <QueueUnitRow key={unit.unit} unit={unit} now={now} />
+            ))}
+          </ul>
+        ) : (
+          <p className="py-2">Nothing ran or waited.</p>
+        )}
+      </div>
+      <Section headingAs="h3" title="AI evaluations">
+        {data.evaluations.length ? (
+          <>
+            <p className="max-w-prose text-muted-foreground">
+              Evaluations still owed, and those blocked in the last{" "}
+              {formatCount(data.windows.blockedDays)} days.
+            </p>
+            <EvaluationBacklog rows={data.evaluations} now={now} />
+          </>
+        ) : (
+          <p className="text-muted-foreground">
+            No evaluations are waiting or recently blocked.
+          </p>
+        )}
+      </Section>
+    </Stack>
+  );
+}
+
 /** Never claims all clear: this page cannot tell whether work stopped. */
 function UnknownStatus({
   error,
@@ -287,7 +472,7 @@ function AutomaticWorkStopped({
   );
 }
 
-/** One verdict and one queue. Diagnostics live in MCP. */
+/** One verdict and one queue; queue telemetry stays behind a closed disclosure. */
 export function WorkPage({ fromRetiredJobs }: { fromRetiredJobs: boolean }) {
   const [watchUntil, setWatchUntil] = useState(0);
   const status = useQuery({
@@ -311,6 +496,10 @@ export function WorkPage({ fromRetiredJobs }: { fromRetiredJobs: boolean }) {
         items={data?.stuck ?? []}
         onRetried={onRetried}
       />
+      {/* Closed by default: the verdict needs no telemetry, and the read runs only once opened. */}
+      <Disclosure summary="Queue details">
+        <QueueDetailsBody now={now} />
+      </Disclosure>
       {fromRetiredJobs ? (
         <p className="max-w-prose text-muted-foreground">
           The Jobs page is gone. Stuck and failed background work shows under

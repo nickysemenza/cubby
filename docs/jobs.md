@@ -47,7 +47,9 @@ The production drain units (`workflows/jobs.ts`) are cloud images
 (`image.cloud`), embedding refresh, embedding cleanup, one unit per AI
 evaluation feature (`ai-evaluation:<feature>`), the resumable derived rebuild
 (`derived-rebuild`, one pass with its own row, not items), Email purchase
-discovery and reconciliation of stopped executions (`reconcile`).
+discovery, field automation (`field-automation:events` and
+`field-automation:policy`) and reconciliation of stopped executions
+(`reconcile`).
 
 Email purchase discovery holds one AppSettings cursor, publishes
 `connection.email-purchase` recommendation Suggestions for Emails whose
@@ -69,8 +71,9 @@ remain until retention prunes them.
 | `calendar-feed.mark-dirty`, `maintenance.purchase-discovery` | Keyed single passes                            | The feed, Vendor or queue     |
 
 Everything else is a drain over its owner's rows and has no row here. There is
-no per-kind queue health or alerting: with a few dozen coarse Jobs, Activity's
-counts and a stalled Run show a stuck queue directly.
+no stored queue health or alert engine: [Work status](#member-facing-work-explanations)
+derives stuck work, and `job.activity` each unit's last hour, from the rows
+above on every read.
 
 ## Kinds and lanes
 
@@ -168,7 +171,10 @@ run ONE unit: one Job page or one page of a named drain. The queue's
 bound; there is no in-isolate admission, page or wall budget.
 
 `dueUnits` (private to `generic/jobs`) chooses the unit in one statement over
-due Jobs and every drain's `due` SQL:
+due Jobs and every drain's `due` SQL. It tags each drain unit with the drain
+that reported it, and the permit runs the unit on that drain. A unit name is
+only the key of the unit's rotation and execution record, so it must be unique
+across drains but never has to match its drain's name:
 
 1. `run.execute`, Jobs whose `runId` is a running, member-visible Run, and
    drain units with member demand (an AI evaluation at priority 0, a Run-owned
@@ -355,8 +361,15 @@ Every execution writes `Job.lastExecution` (`jobExecution` in
 database query count and time, the charged AI cost recorded during it, the
 Worker version and its finish time. A drain unit records the same on its
 `background.drain` row, with its claimed, published and failed item counts.
-Failed Job executions and failed drain pages reach Sentry tagged
-`cubby.background.unit` with the Job kind or drain unit.
+That row also keeps a failed page's raw error and `failingSince`, the start of
+the unit's failing streak: a page that succeeded or deferred ends the streak,
+and a page that claimed nothing leaves it. Failed Job executions and failed
+drain pages reach Sentry tagged `cubby.background.unit` with the Job kind or
+drain unit.
+
+Only the latest execution of each row is stored; there is no execution log.
+Reads that summarize a window therefore count rows by their latest execution,
+never executions.
 
 A record is written only when the execution ends, so an invocation the
 runtime kills (exceeded memory or CPU) leaves none. Each permit therefore names
@@ -820,6 +833,19 @@ failure count alone does not establish uninterrupted execution.
   when nothing was claimed or finished for `RUN_STALL_MS` and no live lease is
   in flight. A Run's demand is the Jobs and image rows it owns by `runId`;
   shared drain units belong to no Run.
+- `job.activity` (`queue`): every Job kind and drain unit that is live or ran
+  in the last hour, with the rows claimed in that hour, rows by latest outcome
+  (succeeded, deferred, failed), the oldest due work, live and expired leases
+  and the last claim. A Job kind lists its three largest groups of waiting
+  Jobs by wait reason and Run purpose, each with a one-sentence summary and up
+  to three Runs from the head of the kind's claim order; `retry` is a failure
+  backoff and `turn` is plain queued work. A drain unit reports its latest
+  page and reads its oldest due item and leased items from its stream. A unit
+  that never ran has no record row and appears through its stream.
+- `job.activity` (`evaluations`): `AiEvaluation` rows by feature and state:
+  `queued` and `result_ready` whenever present, `blocked` when blocked in the
+  last 7 days. Each carries its count, its oldest row's creation time and the
+  most common stored error's first cause name.
 - `job.deviceBacklog`: due Apple-device work, the Runs it holds up, devices
   that started an attempt in the last ten minutes (`Device.lastSeenAt` moves
   only on hello), device attempt starts per minute (reclaims included), and an
@@ -1012,6 +1038,20 @@ snapshot of what is running, which reads as stopped between a drain's bursts:
   drain's completions are published `DerivedValue` rows and its Job's latest
   page result. Thirty minutes outlasts the gaps between bursts and is half the
   one-hour lag members are promised, so the alarm shows before that breaks.
+  The row leads with the cause when the stored rows name one: the largest
+  group of that kind's waiting Jobs that share a wait reason ("115 Mail
+  discovery Runs keep deferring on provider capacity."), or for a drain how
+  long ago it last got a page. Its Technical details hold the whole
+  `job.activity` queue as text, so the units that were served instead are
+  named beside it.
+- A drain unit's every page has failed for 30 minutes
+  (`failingSince` on its record row) and its last page is under two hours old,
+  so it is still being tried. Its Technical details hold the page's error
+  class and stored error. Retry is withheld.
+- An AI feature has `result_ready` evaluations that no page holds and whose
+  failing streak (or last update) began 30 minutes ago: paid answers are not
+  being published. The row counts them and names the most common error; it is
+  omitted while the feature already shows failed work.
 - A kind keeps failing: failed in the last 7 days with no later completion, or
   live with `JOB_NEEDS_ATTENTION_ATTEMPTS` failures. A drain item in that state
   counts, but Retry is withheld because retrying its Job does not move the
@@ -1075,6 +1115,8 @@ recovery. App-open coalesces recovery and mail discovery. Gmail provider push
 is not implemented.
 
 `job.activity` and the status page report what runs, waits and last finished.
+The Work page shows the `job.activity` queue and evaluation backlog behind its
+closed Queue details disclosure.
 
 ### What references a Run
 

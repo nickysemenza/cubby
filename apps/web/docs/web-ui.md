@@ -459,12 +459,12 @@ surfaces keep their own engines.
 ## Work page
 
 `/activity` is the Work page: a health line, a Stuck section only when something
-is stuck, the Needs you queue, then links to Suggestions, Changes by Cubby,
+is stuck, a closed Queue details disclosure, the Needs you queue, then links to Suggestions, Changes by Cubby,
 Missing facts, All work and History (`/history`, Run history and recorded
 Changes). It answers whether
-background work is healthy and what needs a member, with no scheduler or queue
-vocabulary (wakes, leases, tickets, deadlines, pace, refresh counts); telemetry
-belongs to `/jobs`, Run and Job pages, and MCP.
+background work is healthy and what needs a member. Outside Queue details it
+uses no scheduler or queue vocabulary (wakes, leases, tickets, deadlines, pace,
+refresh counts); other telemetry belongs to Run pages and MCP.
 
 - The health line states Healthy, Catching up, Stuck or Unknown, never a count of
   internal work, percentage or ETA. A failed read says the page cannot tell, with
@@ -473,6 +473,17 @@ belongs to `/jobs`, Run and Job pages, and MCP.
   most one action, and a closed Technical details disclosure with the raw
   failure and Copy. Eight rows show first; Show more reveals the rest in place. A
   retry rereads every 10 seconds for two minutes, then stops.
+- A stopped row's sentence leads with the cause when the server names one
+  ("115 Mail discovery Runs keep deferring on provider capacity."), and its
+  Technical details carry the queue as text.
+- Queue details reads `job.activity` only once opened. It lists each Job kind
+  and drain unit as a flat hairline row: member label and stored unit name,
+  then claimed, finished, deferred and failed counts for the last hour, the
+  oldest due work, leases held, a drain's last pass and each group of waiting
+  Jobs with its Run links. AI evaluations follow, one row per feature with its
+  queued, answered-not-saved and blocked counts, oldest age and most common
+  error. Rows put the name beside the facts from 768px and stack below it; no
+  row scrolls sideways. A failed read shows the raw error and Try again.
 - Needs you is the embedded `WorkQueue` grouped by Reason over
   `NEEDS_YOU_FILTERS`, the same population as the sidebar and Home. Empty, it
   reads `Nothing needs you.`; with incomplete inputs it shows the known-work
