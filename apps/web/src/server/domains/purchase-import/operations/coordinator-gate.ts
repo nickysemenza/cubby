@@ -96,7 +96,9 @@ export class CoordinatorGateQueue {
     waiter.seenAt = now;
     waiter.agent = request.agent;
     const notify = this.reserve(now);
-    if (waiter.reservedUntil !== null) {
+    // A reservation is a slot already counted against the cap; admission
+    // converts it to a holder and re-checks the cap all the same.
+    if (waiter.reservedUntil !== null && this.state.holders.length < this.cap) {
       this.state.waiters = this.state.waiters.filter(
         (entry) => entry !== waiter,
       );
@@ -177,16 +179,21 @@ export class CoordinatorGateQueue {
       }
   }
 
-  /** Reserve each free slot for the first eligible waiter without one, in order. */
+  /**
+   * Reserve each free slot for the first eligible waiter without one, in
+   * order. Every live reservation already holds a slot, wherever its waiter
+   * stands, so holders plus reservations never exceed the cap; an earlier
+   * waiter that becomes eligible again waits for the next free slot.
+   */
   private reserve(now: number): string[] {
-    let free = this.cap - this.state.holders.length;
+    let free =
+      this.cap -
+      this.state.holders.length -
+      this.state.waiters.filter((entry) => entry.reservedUntil !== null).length;
     const notify: string[] = [];
     for (const entry of this.state.waiters) {
       if (free <= 0) break;
-      if (entry.reservedUntil !== null) {
-        free--;
-        continue;
-      }
+      if (entry.reservedUntil !== null) continue;
       // Passed over: eligible again once it asks after the lapse.
       if (entry.passedAt !== null && entry.seenAt <= entry.passedAt) continue;
       entry.reservedUntil = now + RESERVATION_MS;

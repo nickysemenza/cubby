@@ -89,4 +89,32 @@ describe("coordinator gate", () => {
     expect(gate.waiting(15 * 60_000)).toEqual(["b"]);
     expect(gate.waiting(15 * 60_000 + 2)).toEqual([]);
   });
+
+  // Review regression (Sol, #3927): a passed-over head that asks again must
+  // not take a fresh reservation while a later waiter's is still live.
+  it("never lets holders and live reservations exceed the cap", () => {
+    const gate = new CoordinatorGateQueue(undefined, 1);
+    const holders = () => gate.state.holders.length;
+    ask(gate, "a", 0);
+    ask(gate, "b", 1);
+    ask(gate, "c", 2);
+    gate.release({ runId: "a", token: "token-a" }, 10);
+    // b's reservation lapses unclaimed; c is reserved.
+    expect(gate.tick(10 + 60_001)).toEqual(["agent-c"]);
+    // b asks again while c's reservation is live: b waits.
+    expect(ask(gate, "b", 10 + 60_002).grant).toMatchObject({
+      held: false,
+      position: 1,
+    });
+    expect(holders()).toBe(0);
+    // c claims its reservation.
+    expect(ask(gate, "c", 10 + 60_003).grant.held).toBe(true);
+    expect(holders()).toBe(1);
+    // b is next once c releases.
+    expect(
+      gate.release({ runId: "c", token: "token-c" }, 10 + 60_004).notify,
+    ).toEqual(["agent-b"]);
+    expect(ask(gate, "b", 10 + 60_005).grant.held).toBe(true);
+    expect(holders()).toBe(1);
+  });
 });
