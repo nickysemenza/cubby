@@ -34,7 +34,6 @@ import {
   isNotNull,
   isNull,
   ne,
-  or,
   sql,
 } from "drizzle-orm";
 import { z } from "zod";
@@ -47,6 +46,7 @@ import {
   withTransactionDatabase,
   withTransaction,
 } from "~/server/db/helpers";
+import { requestedRows } from "~/server/db/helpers/requested";
 import {
   shipment,
   shipmentObservation,
@@ -96,6 +96,7 @@ import {
   deduplicateShipmentTrackingReferences,
   shipmentTrackingReferenceKey,
 } from "./carrier-references";
+import { planObservationRevision } from "./evidence-observation-plan";
 
 const canonical = (value: unknown) => canonicalJson(jsonSnapshot.parse(value));
 // Re-extraction can respell one source's key. Only that same source may match it:
@@ -414,6 +415,13 @@ async function retainedPackageShipment(
   const packages = retainedPackages(input.capture, input.packageKey);
   if (!packages.size) return undefined;
   const spelling = sourcePackageSpelling(input.packageKey);
+  const packageIds = requestedRows(
+    [...packages.values()].map(({ shipmentId }) => ({
+      id: shipmentId.toLowerCase(),
+    })),
+    { id: "text" },
+    "requested_package",
+  );
   const bound = await getDb(db)
     .select({
       id: shipment.id,
@@ -430,17 +438,17 @@ async function retainedPackageShipment(
       shipmentSourceCapture,
       eq(shipmentSourceCapture.sourceKey, shipmentSourcePackage.sourceKey),
     )
+    .innerJoin(
+      sql`LATERAL (SELECT 1 FROM ${packageIds.from} WHERE
+        lower(regexp_replace(${shipmentSourcePackage.packageKey}, '[^[:alnum:]]', '', 'g')) = ${spelling}
+        OR position(${packageIds.col("id")} in lower(${shipmentSourcePackage.packageKey})) > 0
+        LIMIT 1) matched_package`,
+      sql`true`,
+    )
     .where(
       and(
         notDeleted(shipment),
         ne(shipmentSourcePackage.sourceKey, input.capture.sourceKey),
-        or(
-          sql`lower(regexp_replace(${shipmentSourcePackage.packageKey}, '[^[:alnum:]]', '', 'g')) = ${spelling}`,
-          ...[...packages.values()].map(
-            ({ shipmentId }) =>
-              sql`position(${shipmentId.toLowerCase()}::text in lower(${shipmentSourcePackage.packageKey})) > 0`,
-          ),
-        ),
       ),
     );
   const sameParcel = (row: (typeof bound)[number]) =>
@@ -1164,28 +1172,18 @@ async function writeShipmentEvidence(
           .filter((version) => version.occurrenceKey === key.occurrenceKey)
           .sort((a, b) => b.firstSeenAt.getTime() - a.firstSeenAt.getTime());
         const current = versions.find((version) => !version.supersededById);
-        const matching = versions.filter(
-          (version) =>
-            version.fingerprint === key.fingerprint ||
-            (version.event.timeBasis === undefined &&
-              version.fingerprint === key.literalFingerprint),
+        const { keepCurrent } = planObservationRevision({
+          versions,
+          current,
+          fingerprint: key.fingerprint,
+          literalFingerprint: key.literalFingerprint,
+          observedAt,
+          revisesFromSameCapture: key.revisesFromSameCapture,
+        });
+        // Period admission uses the revision replay will retain.
+        effectiveObservations.push(
+          keepCurrent && current ? current.event : observation,
         );
-        const prior =
-          matching.find((version) => version.firstSeenAt <= observedAt) ??
-          matching.at(-1);
-        const restored =
-          prior?.supersededById &&
-          current &&
-          !current.memberReviewed &&
-          observedAt >= current.lastSeenAt &&
-          observedAt > prior.lastSeenAt;
-        // Period admission must use the same retained/reviewed revision replay keeps.
-        const keepCurrent =
-          current &&
-          (current.memberReviewed ||
-            (prior && !restored) ||
-            current.lastSeenAt >= observedAt);
-        effectiveObservations.push(keepCurrent ? current.event : observation);
       }
       const identity = await identityCandidates(
         tdb,
@@ -1563,25 +1561,15 @@ async function writeShipmentEvidence(
           .select()
           .from(shipmentObservation)
           .where(sameOccurrence)
-          .orderBy(desc(shipmentObservation.firstSeenAt))
-          .then((rows) =>
-            rows.filter(
-              (version) =>
-                version.fingerprint === fingerprint ||
-                (version.event.timeBasis === undefined &&
-                  version.fingerprint === literalFingerprint),
-            ),
-          );
-        const prior =
-          versions.find((version) => version.firstSeenAt <= observedAt) ??
-          versions.at(-1);
-        // Source revisions may restore A → B → A, but cannot replace a member-reviewed revision.
-        const restored =
-          prior?.supersededById &&
-          current &&
-          !current.memberReviewed &&
-          observedAt >= current.lastSeenAt &&
-          observedAt > prior.lastSeenAt;
+          .orderBy(desc(shipmentObservation.firstSeenAt));
+        const { prior, restored, canSupersede } = planObservationRevision({
+          versions,
+          current,
+          fingerprint,
+          literalFingerprint,
+          observedAt,
+          revisesFromSameCapture,
+        });
         let retainedId: string;
         if (prior && !restored) {
           await database
@@ -1598,13 +1586,6 @@ async function writeShipmentEvidence(
           repeatedObservations++;
           retainedId = prior.id;
         } else {
-          // A re-read shares its capture's time, so that time cannot mark it stale.
-          const canSupersede =
-            !current ||
-            (!current.memberReviewed &&
-              (revisesFromSameCapture
-                ? current.lastSeenAt <= observedAt
-                : current.lastSeenAt < observedAt));
           const [created] = await database
             .insert(shipmentObservation)
             .values({

@@ -35,6 +35,7 @@ import {
   asc,
   desc,
   gt,
+  getTableColumns,
   eq,
   inArray,
   isNotNull,
@@ -55,6 +56,7 @@ import {
   withTransaction,
   withTransactionDatabase,
 } from "~/server/db/helpers";
+import { requestedRows } from "~/server/db/helpers/requested";
 import {
   ledgerParty,
   importSourceOrder,
@@ -387,23 +389,30 @@ async function partitionOwnership(
   /** Unattended admission of unchanged evidence honours the attempt bound. */
   bounded = false,
 ) {
+  const pairs = requestedRows(
+    [
+      ...new Map(
+        sources.map((source) => [
+          JSON.stringify([source.mailboxId, source.messageId]),
+          { mailbox: source.mailboxId, message: source.messageId },
+        ]),
+      ).values(),
+    ],
+    { mailbox: "text", message: "text" },
+    "requested_mail",
+  );
   const messages = await tx
-    .select()
+    .select(getTableColumns(emailTable))
     .from(emailTable)
-    .where(
+    .innerJoin(
+      pairs.from,
       and(
-        eq(emailTable.ledgerPartyId, partyId),
-        or(
-          ...sources.map((source) =>
-            and(
-              eq(emailTable.mailboxId, source.mailboxId),
-              eq(emailTable.messageId, source.messageId),
-            ),
-          ),
-        ),
+        eq(emailTable.mailboxId, pairs.col("mailbox")),
+        eq(emailTable.messageId, pairs.col("message")),
       ),
     )
-    .for("update");
+    .where(eq(emailTable.ledgerPartyId, partyId))
+    .for("update", { of: emailTable });
   const owners = new Map<string, typeof run.$inferSelect>();
   const fresh: RetainedMail[] = [];
   const transfers = new Map<RunId, RetainedMail[]>();
@@ -770,6 +779,23 @@ export async function admitMailImport(
             result: receipt,
           });
         } else {
+          const selected = requestedRows(
+            admittedSources.map((source) => ({
+              party: source.ledgerPartyId,
+              mailbox: source.mailboxId,
+              message: source.messageId,
+              mail: source.id,
+              checksum: source.rawChecksum,
+            })),
+            {
+              party: "uuid",
+              mailbox: "text",
+              message: "text",
+              mail: "uuid",
+              checksum: "text",
+            },
+            "requested_mail",
+          );
           const assigned = await tx
             .update(emailTable)
             .set({
@@ -777,17 +803,14 @@ export async function admitMailImport(
               runId: id,
               importAttempts: countImportAttempt(senderRevision),
             })
+            .from(selected.from)
             .where(
-              or(
-                ...admittedSources.map((source) =>
-                  and(
-                    eq(emailTable.ledgerPartyId, source.ledgerPartyId),
-                    eq(emailTable.mailboxId, source.mailboxId),
-                    eq(emailTable.messageId, source.messageId),
-                    eq(emailTable.orderMailId, source.id),
-                    eq(emailTable.checksum, source.rawChecksum),
-                  ),
-                ),
+              and(
+                eq(emailTable.ledgerPartyId, selected.col("party")),
+                eq(emailTable.mailboxId, selected.col("mailbox")),
+                eq(emailTable.messageId, selected.col("message")),
+                eq(emailTable.orderMailId, selected.col("mail")),
+                eq(emailTable.checksum, selected.col("checksum")),
               ),
             )
             .returning({ orderMailId: emailTable.orderMailId });
