@@ -24,7 +24,6 @@ import { isGeneratedBrowserCrudEntity } from "~/entity/entity-contracts";
 import { entityDetailFor } from "~/entity/entity-detail";
 import { entityMetadata, useEntityMetadata } from "~/entity/metadata";
 import { PreviewQuery } from "~/entity/preview/preview-query";
-import { RecordSuggestionsProvider } from "~/entity/suggestions/record-suggestions";
 import { RecordWorkQueue } from "~/entity/work-queue/record-work-queue";
 import { Section, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
@@ -131,7 +130,7 @@ function ResolvedInspectorRecord<E extends GenericDetailEntity>({
   onNameResolved: (name: string) => void;
 }) {
   const queryClient = useQueryClient();
-  const metadata = useEntityMetadata(entity);
+  useEntityMetadata(entity);
   const [editing, setEditing] = useState(false);
   const EditOverride = detailEditOverrideFor(entity);
   const editable = presentationEditable(
@@ -170,9 +169,6 @@ function ResolvedInspectorRecord<E extends GenericDetailEntity>({
     );
     return shown.length > 0 ? [{ ...section, fields: shown }] : [];
   });
-  const fields = metadata.fields.fields
-    .filter((field) => field.display.detail)
-    .map((field) => field.key);
   return (
     <>
       {editable && editSlot
@@ -188,55 +184,49 @@ function ResolvedInspectorRecord<E extends GenericDetailEntity>({
           )
         : null}
       <DetailSummary entity={entity} record={record} compact />
-      <RecordSuggestionsProvider
+      <RecordQualityProvider
         entity={entity}
-        records={[record]}
-        fieldKeys={fields}
+        id={record.id}
+        visibleFields={fieldSections.flatMap((section) => section.fields)}
       >
-        <RecordQualityProvider
-          entity={entity}
-          id={record.id}
-          visibleFields={fieldSections.flatMap((section) => section.fields)}
-        >
-          <FactsDensityProvider density="compact">
-            <FactsAddProvider onAdd={editable ? () => setEditing(true) : null}>
-              <Stack gap="md">
-                {/* Work rows are not all warnings: the citron rule is the
+        <FactsDensityProvider density="compact">
+          <FactsAddProvider onAdd={editable ? () => setEditing(true) : null}>
+            <Stack gap="md">
+              {/* Work rows are not all warnings: the citron rule is the
                     sparse needs-input signal, absent with no work. */}
-                <div className="border-s border-signal ps-3 empty:hidden">
-                  <RecordWorkQueue id={record.id} />
-                </div>
-                <InspectorFieldSections
-                  entity={entity}
-                  record={record}
-                  sections={fieldSections}
-                />
-                <InspectorCheckSections
-                  entity={entity}
-                  id={record.id}
-                  fieldSections={fieldSections.map((section) => section.id)}
-                />
-              </Stack>
-            </FactsAddProvider>
-          </FactsDensityProvider>
-          {EditOverride && editing ? (
-            <EditOverride
-              record={
-                // SAFETY: the override registry returns this entity's record editor.
-                record as never
-              }
-              onClose={() => setEditing(false)}
-            />
-          ) : null}
-          {editRequest ? (
-            <EntityEditDialog
-              open
-              onOpenChange={setEditing}
-              request={editRequest}
-            />
-          ) : null}
-        </RecordQualityProvider>
-      </RecordSuggestionsProvider>
+              <div className="border-s border-signal ps-3 empty:hidden">
+                <RecordWorkQueue id={record.id} />
+              </div>
+              <InspectorFieldSections
+                entity={entity}
+                record={record}
+                sections={fieldSections}
+              />
+              <InspectorCheckSections
+                entity={entity}
+                id={record.id}
+                fieldSections={fieldSections.map((section) => section.id)}
+              />
+            </Stack>
+          </FactsAddProvider>
+        </FactsDensityProvider>
+        {EditOverride && editing ? (
+          <EditOverride
+            record={
+              // SAFETY: the override registry returns this entity's record editor.
+              record as never
+            }
+            onClose={() => setEditing(false)}
+          />
+        ) : null}
+        {editRequest ? (
+          <EntityEditDialog
+            open
+            onOpenChange={setEditing}
+            request={editRequest}
+          />
+        ) : null}
+      </RecordQualityProvider>
     </>
   );
 }

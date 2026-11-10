@@ -610,7 +610,7 @@ function rowAriaLabel(item: ComboboxItem) {
     item.secondary,
     presentation?.status?.text,
     item.detail,
-    ...(presentation?.trailing ?? []).map((chip) => chip.text),
+    ...(presentation?.trailing ?? []).map((chip) => chip.spoken ?? chip.text),
     presentation?.disabledReason,
   ]
     .filter(Boolean)
@@ -627,12 +627,15 @@ function PickerRowPreamble({
   previous: ComboboxItem | undefined;
 }) {
   const group = item.presentation?.group;
-  const showGroup = group && group.id !== previous?.presentation?.group?.id;
+  const previousGroup = previous?.presentation?.group;
+  const showGroup = group && group.id !== previousGroup?.id;
+  // Leaving a pinned group for ungrouped rows still divides the two.
+  const leftGroup = previousGroup !== undefined && group === undefined;
   const firstAfterMeta =
     previous?.presentation?.meta === true && !item.presentation?.meta;
   return (
     <>
-      {firstAfterMeta || (showGroup && previous) ? (
+      {firstAfterMeta || leftGroup || (showGroup && previous) ? (
         <div
           role="presentation"
           className="mx-1.5 my-1 border-t border-border"
@@ -1138,8 +1141,14 @@ function SearchPicker<TId extends string>({
   const inputValue = open || multiple ? query : selectedLabelOf(single);
 
   const visibleItems = React.useMemo(() => {
+    // Server search owns the roster, but rows pinned ahead of it (a guess)
+    // still have to match what is typed.
     const roster = onSearchChange
-      ? items
+      ? items.filter(
+          (item) =>
+            (item.presentation?.group?.order ?? 0) >= 0 ||
+            matchesPickerItem(item, query),
+        )
       : items.filter((item) => matchesPickerItem(item, query));
     if (query.trim() !== "") return roster;
     const missing = values.filter(
@@ -1420,8 +1429,14 @@ function InlinePicker<TId extends string>({
     onSearchChange?.(debouncedQuery);
   }, [debouncedQuery, onSearchChange]);
   const visibleItems = React.useMemo(() => {
+    // Server search owns the roster, but rows pinned ahead of it (a guess)
+    // still have to match what is typed.
     const roster = onSearchChange
-      ? items
+      ? items.filter(
+          (item) =>
+            (item.presentation?.group?.order ?? 0) >= 0 ||
+            matchesPickerItem(item, query),
+        )
       : items.filter((item) => matchesPickerItem(item, query));
     if (query.trim() !== "") return roster;
     // A picked record the roster has not loaded still shows, so it can be

@@ -9,14 +9,7 @@ import {
 import { toast } from "sonner";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import {
-  actionableSuggestion,
-  ALTERNATIVE_THRESHOLD,
-  FILL_THRESHOLD,
-  reviewThreshold,
-  SuggestionReview,
-  SuggestionVisitProvider,
-} from "./suggestion-review";
+import { SuggestionReview, SuggestionVisitProvider } from "./suggestion-review";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -83,45 +76,6 @@ describe("inline suggestion review", () => {
       expect(save).toHaveBeenCalledOnce();
     },
   );
-  it.each([
-    [null, 0.849, false],
-    [null, 0.85, true],
-    ["", 0.85, true],
-    ["materials", 0.949, false],
-    ["materials", 0.95, true],
-    ["other", 0.9, false],
-    ["tools", 1, false],
-    [null, null, false],
-  ] as const)(
-    "gates current=%s probability=%s",
-    (current, probability, shown) => {
-      expect(
-        actionableSuggestion({ ...suggestion, probability }, current),
-      ).toBe(shown);
-    },
-  );
-
-  it.each([
-    [0.849, false],
-    [0.85, true],
-    [0.95, true],
-  ] as const)(
-    "a remove (prune) suggestion gates at 0.85, never the 0.95 alternative floor — probability=%s",
-    (probability, shown) => {
-      expect(
-        actionableSuggestion(
-          { ...removeSuggestion, probability },
-          "apparel, jacquemus, mount",
-        ),
-      ).toBe(shown);
-      // `alternative: true` (the "provided" basisMode gate) never raises a
-      // remove op's floor to 0.95.
-      expect(
-        actionableSuggestion({ ...removeSuggestion, probability }, null, true),
-      ).toBe(shown);
-    },
-  );
-
   it("shows a remove proposal's own apply/secondary labels and muted reason", () => {
     const save = vi.fn().mockResolvedValue(undefined);
     render(
@@ -146,15 +100,6 @@ describe("inline suggestion review", () => {
     expect(save).toHaveBeenCalledOnce();
     fireEvent.click(screen.getByText("Review", { exact: true }));
     expect(screen.getByRole("button", { name: "Reject" })).toBeInTheDocument();
-  });
-
-  it("requires 0.95 for a provided alternative even when the stored value is explicit None", () => {
-    expect(
-      actionableSuggestion({ ...suggestion, probability: 0.9 }, null, true),
-    ).toBe(false);
-    expect(
-      actionableSuggestion({ ...suggestion, probability: 0.95 }, null, true),
-    ).toBe(true);
   });
 
   it("shows both values, requires acceptance, and retains the proposal after a failed save", async () => {
@@ -253,78 +198,4 @@ describe("inline suggestion review", () => {
     render(content("first"));
     expect(screen.getByText("Tools")).toBeInTheDocument();
   });
-});
-
-describe("reviewThreshold", () => {
-  it.each([
-    ["", false, FILL_THRESHOLD],
-    [null, false, FILL_THRESHOLD],
-    ["materials", false, ALTERNATIVE_THRESHOLD],
-    [null, true, ALTERNATIVE_THRESHOLD],
-    ["materials", true, ALTERNATIVE_THRESHOLD],
-  ] as const)(
-    "set, current=%s alternative=%s → %s",
-    (current, alternative, expected) => {
-      expect(reviewThreshold(suggestion, current, alternative)).toBe(expected);
-    },
-  );
-
-  it.each([
-    [null, false],
-    ["apparel", false],
-    [null, true],
-  ] as const)(
-    "a remove proposal always gates at the fill threshold, current=%s alternative=%s",
-    (current, alternative) => {
-      expect(
-        reviewThreshold(
-          { ...suggestion, operation: "remove" },
-          current,
-          alternative,
-        ),
-      ).toBe(FILL_THRESHOLD);
-    },
-  );
-});
-
-describe("folded review", () => {
-  // Tables retain stable geometry. The compact phone regression above keeps
-  // evidence collapsed until explicit Review instead of expanding on arrival.
-  it.each([["cell", false]] as const)(
-    "%s surface (phone=%s) keeps children flat and folds the whole review into the mark's popover",
-    async (surface, phone) => {
-      vi.stubGlobal("matchMedia", (media: string) => ({
-        matches: phone,
-        media,
-        addEventListener: vi.fn(),
-        removeEventListener: vi.fn(),
-      }));
-      const save = vi.fn().mockResolvedValue(undefined);
-      render(
-        <SuggestionReview
-          suggestion={suggestion}
-          currentValue="materials"
-          currentLabel="Materials"
-          questionKey="cell"
-          onApply={save}
-          surface={surface}
-        >
-          <span>Materials</span>
-        </SuggestionReview>,
-      );
-      // No inline "Suggested: Tools" text and no visible buttons — the review
-      // lives inside the (closed) popover, not the cell's own flow.
-      expect(screen.getByText("Materials")).toBeInTheDocument();
-      expect(screen.queryByText("Tools")).not.toBeInTheDocument();
-      expect(
-        screen.queryByRole("button", { name: "Accept" }),
-      ).not.toBeInTheDocument();
-
-      fireEvent.click(
-        screen.getByRole("button", { name: "Suggested Tools · 97% · high" }),
-      );
-      fireEvent.click(await screen.findByRole("button", { name: "Accept" }));
-      expect(save).toHaveBeenCalledOnce();
-    },
-  );
 });

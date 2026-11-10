@@ -22,10 +22,6 @@ import {
 
 import { entities, isBrowserRoutedEntity } from "~/entity/entities";
 import { ProposalCount } from "~/entity/suggestions/proposal-counts";
-import {
-  RecordRowSuggestions,
-  RecordSuggestionBoundary,
-} from "~/entity/suggestions/record-suggestions";
 import { useDebug } from "~/ui/hooks/use-debug";
 import {
   type LongPressHandlers,
@@ -573,23 +569,20 @@ function PhoneListRow<TItem extends RowData>({
   };
 
   const content = (
-    <RecordSuggestionBoundary record={row.original}>
-      <RowContent
-        selectionMode={selectionMode}
-        showThumb={showThumb}
-        thumb={thumb}
-        row={row}
-        title={model.title}
-        href={isLink ? model.detailsHref : undefined}
-        longPress={longPress}
-        subtitleParts={subtitleParts}
-        trailingEntries={trailingEntries}
-        rowActions={rowActions}
-      >
-        {children}
-        <RecordRowSuggestions record={row.original} />
-      </RowContent>
-    </RecordSuggestionBoundary>
+    <RowContent
+      selectionMode={selectionMode}
+      showThumb={showThumb}
+      thumb={thumb}
+      row={row}
+      title={model.title}
+      href={isLink ? model.detailsHref : undefined}
+      longPress={longPress}
+      subtitleParts={subtitleParts}
+      trailingEntries={trailingEntries}
+      rowActions={rowActions}
+    >
+      {children}
+    </RowContent>
   );
 
   if (isLink && model.detailsHref) {

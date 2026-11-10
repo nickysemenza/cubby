@@ -764,7 +764,7 @@ _Avoid_: auto, automatic value
 
 **Guess**:
 A below-bar answer for a field. It is never shown in a table cell; it is the
-first, active (not selected) row of the field's picker, labelled "Cubby's guess".
+first row of the field's picker, labelled "Cubby's guess" and never selected.
 _Avoid_: suggested chip, leaning
 
 **Disagreement**:

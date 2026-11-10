@@ -1,4 +1,5 @@
 import type { FieldSuggestion } from "@cubby/schemas/ai";
+import { HIGH_CONFIDENCE_PROBABILITY } from "@cubby/schemas/ai-evaluation";
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useRef } from "react";
@@ -37,7 +38,7 @@ export interface UseAutoFieldSuggestionResult {
    * field whose picker needs a label for an id it just silently wrote (the
    * id alone would otherwise render as a bare shortcode). */
   seedItem: ComboboxItem | null;
-  /** The winner plus every alternative, each carrying a pinned "Suggested"
+  /** The winner plus every alternative, each carrying a pinned "Cubby's guess"
    * `presentation.group` (order -1, ahead of every other group) and a
    * rounded-percent trailing chip — a picker merges these ahead of its own
    * roster so a `suggestField` reference picker always shows the decision model's ranking,
@@ -62,9 +63,9 @@ const NO_SUGGESTION: UseAutoFieldSuggestionResult = {
   seedItems: EMPTY_SEED_ITEMS,
 };
 
-/** "Suggested" pins ahead of every other picker group (`order: -1`, below
- * every real group's `order >= 0`). */
-const SUGGESTED_GROUP = { id: "suggested", label: "Suggested", order: -1 };
+/** "Cubby's guess" pins ahead of every other picker group (`order: -1`,
+ * below every real group's `order >= 0`). */
+export const GUESS_GROUP = { id: "guess", label: "Cubby's guess", order: -1 };
 
 /** A runner-up that rounds to "0%" is a distribution artifact, not a
  * candidate worth pinning; the decision model always returns the full map, so the floor is
@@ -84,7 +85,6 @@ const comboboxItemIdSchema = z.object({ id: z.string() });
 function explicitModeField(entity: string | undefined, field: string) {
   if (entity !== "task") return null;
   if (field === "projectId") return "projectMode";
-  if (field === "subjectProductId") return "subjectProductMode";
   return null;
 }
 
@@ -99,7 +99,7 @@ function suggestionSeedItem(suggestion: FieldSuggestion): ComboboxItem | null {
 }
 
 /** The winner plus every alternative, in the decision model's ranked order, each pinned
- * into the "Suggested" group. `[]` when there is no winner to seed from —
+ * into the "Cubby's guess" group. `[]` when there is no winner to seed from —
  * `alternatives` alone (a stale winner, an unresolved target) is never
  * seeded on its own. */
 function suggestionSeedItems(suggestion: FieldSuggestion): ComboboxItem[] {
@@ -109,7 +109,7 @@ function suggestionSeedItems(suggestion: FieldSuggestion): ComboboxItem[] {
     {
       ...winner,
       presentation: {
-        group: SUGGESTED_GROUP,
+        group: GUESS_GROUP,
         trailing: suggestedConfidence(suggestion.probability),
       },
     },
@@ -121,7 +121,7 @@ function suggestionSeedItems(suggestion: FieldSuggestion): ComboboxItem[] {
         name: alternative.label,
         detail: alternative.detail ?? undefined,
         presentation: {
-          group: SUGGESTED_GROUP,
+          group: GUESS_GROUP,
           trailing: suggestedConfidence(alternative.probability),
         },
       })),
@@ -244,9 +244,9 @@ export function useAutoFieldSuggestion<TFieldValues extends FieldValues>({
       !context ||
       disabled ||
       context.mode !== "create" ||
-      entityMetadata(queryClient, context.entity).fields.fields.find(
+      (entityMetadata(queryClient, context.entity).fields.fields.find(
         (candidate) => candidate.key === field,
-      )?.control?.suggest?.reviewRequired ||
+      )?.control?.suggest?.apply ?? "auto") !== "auto" ||
       suggestion?.financeReview ||
       isDirty ||
       context.isFetching ||
@@ -257,7 +257,7 @@ export function useAutoFieldSuggestion<TFieldValues extends FieldValues>({
         )) ||
       !suggestion?.value ||
       suggestion.probability == null ||
-      suggestion.probability < 0.85 ||
+      suggestion.probability < HIGH_CONFIDENCE_PROBABILITY ||
       applied
     ) {
       return;
@@ -312,9 +312,9 @@ export function useAutoFieldSuggestion<TFieldValues extends FieldValues>({
       !context ||
       disabled ||
       context.mode !== "create" ||
-      entityMetadata(queryClient, context.entity).fields.fields.find(
+      (entityMetadata(queryClient, context.entity).fields.fields.find(
         (candidate) => candidate.key === field,
-      )?.control?.suggest?.reviewRequired ||
+      )?.control?.suggest?.apply ?? "auto") !== "auto" ||
       suggestion?.financeReview ||
       isDirty ||
       context.isFetching ||

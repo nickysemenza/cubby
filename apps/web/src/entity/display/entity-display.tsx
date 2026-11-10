@@ -48,6 +48,7 @@ import { filterUrlKey } from "~/entity/filters";
 import { entityMetadata, listFieldPresentation } from "~/entity/metadata";
 import { referenceEntitySearch } from "~/entity/picker/reference-entity-search";
 import { ShortcodeProse } from "~/entity/prose/shortcode-prose";
+import { fieldGuessSource } from "~/entity/suggestions/field-suggestion";
 import { RecordFieldSuggestion } from "~/entity/suggestions/record-suggestions";
 import {
   createEditableAccessorColumn,
@@ -1384,7 +1385,11 @@ export function EntityBasicInfo<TRecord extends object>({
         // action rail owns the controls regardless of caption wrapping.
         const decoratedValue = field.control?.suggest ? (
           <span className="inline-flex max-w-full min-w-0 items-center gap-1">
-            <RecordFieldSuggestion record={record} field={field.key}>
+            <RecordFieldSuggestion
+              entity={entity}
+              record={record}
+              field={field.key}
+            >
               {rendered.value ?? <NotRecordedValue />}
             </RecordFieldSuggestion>
           </span>
@@ -1827,6 +1832,7 @@ export function editableFieldOverrides<TRecord extends { id: string }, TResult>(
                 label={target}
                 clearable={field.nullable}
                 trigger="pencil"
+                suggest={fieldGuessSource(entity, field, record)}
                 renderValue={() =>
                   renderDetailFieldValue(queryClient, entity, record, field)
                 }
@@ -2059,9 +2065,7 @@ export function createEntityDisplayColumns<TRecord extends object>(
     const usedOverrides = new Set<string>();
     for (const field of selected) {
       const columnId = field.display.columnId ?? field.key;
-      // A suggestable field renders the suggestion mark in the cell rail;
-      // column sizing reserves its slot from this flag. A column headed by
-      // the field's label paints its short form.
+      // A column headed by the field's label paints its short form.
       const headerForm = columnHeaderFor(field);
       const add = <TValue,>(column: CubbyColumnDef<TRecord, TValue>) => {
         const meta = { ...column.meta };
@@ -2085,7 +2089,6 @@ export function createEntityDisplayColumns<TRecord extends object>(
                   : field.control?.kind === "select"
                     ? "enum"
                     : "text";
-        if (field.control?.suggest) meta.suggest = true;
         if (column.header === field.label) {
           if (headerForm.short !== field.label)
             meta.shortHeader = headerForm.short;
@@ -2353,6 +2356,7 @@ export function createEntityDisplayColumns<TRecord extends object>(
                 clearable={field.nullable}
                 trigger="pencil"
                 clipboard={specFromCellData(cellData, row.original)}
+                suggest={fieldGuessSource(entity, field, row.original)}
                 renderValue={(item) => {
                   const original = getItem(row.original);
                   if (item?.id !== original?.id)

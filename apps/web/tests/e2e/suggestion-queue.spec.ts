@@ -1,110 +1,85 @@
+import { seedFieldSuggestion } from "tooling/shared-suggestion-fixtures";
 import { eq, inArray } from "drizzle-orm";
 
 import { getDb } from "~/server/db/helpers";
-import {
-  emailReview,
-  runOperation,
-  product as productTable,
-} from "~/server/db/schema";
+import { product as productTable } from "~/server/db/schema";
 
 import { publishProductPair } from "~/server/domains/product/repo/match/product-match-candidate";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { applyAutomaticRules } from "~/server/generic/suggestions/repo/automatic-application";
+import { buildCrudServices } from "~/server/http/request-context";
 
 import {
+  createEntityFixture,
   createFixtureGraph,
   createEvidenceHarnessContext,
 } from "./fixtures/core";
-import { seedUnimportedOrderMail } from "./fixtures/mail";
 import { gotoAuthenticatedPage, uniqueName } from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
 
-// Failure mode: Report incorrect fails to retain the member's history feedback.
-test("automatic history records the member's incorrect-report feedback", async ({
+// Failure modes: Changes by Cubby omits a value Cubby set on its own, or
+// "Wrong, clear it" leaves the wrong value saved.
+test("Changes by Cubby lists a value Cubby set and Wrong, clear it empties the field", async ({
   page,
 }, testInfo) => {
   test.slow();
   const { db, actor } = await createEvidenceHarnessContext(page);
-  const mail = await seedUnimportedOrderMail(
-    page,
-    uniqueName(testInfo, "Synthetic audit vendor"),
-  );
-  const source = mail.events[0];
-  if (!source) throw new Error("Synthetic Email missing");
+  const categoryName = uniqueName(testInfo, "Synthetic cleared category");
+  const category = await createEntityFixture(page, "productCategory", {
+    name: categoryName,
+  });
+  const productName = uniqueName(testInfo, "Synthetic cleared drill");
+  const item = await createEntityFixture(page, "product", {
+    name: productName,
+  });
+  const itemId = await resolveOrThrow(db, "product", item.id);
   const runId = await ensureRun(db, actor, { purpose: "ai_suggest" });
-  const decision = { id: crypto.randomUUID() };
-  const outcomeAt = new Date().toISOString();
-  await getDb(db)
-    .insert(runOperation)
-    .values({
-      runId,
-      operationId: `synthetic-outcome:${source.emailId}`,
-      kind: "target_outcome",
-      state: "completed",
-      inputFingerprint: "synthetic",
-      completedAt: new Date(outcomeAt),
-      result: {
-        mailOutcome: {
-          id: decision.id,
-          judgment: {
-            kind: "imported",
-            lines: [{ name: "Synthetic packet", cost: 5 }],
-            total: 5,
-          },
-          producer: {
-            kind: "rule",
-            model: null,
-            revision: "synthetic/v1",
-            runId,
-            evaluationId: null,
-          },
-          checksum: source.checksum,
-          fingerprint: source.checksum,
-          createdAt: outcomeAt,
-        },
-        target: {
-          entityKind: "email",
-          entityId: await resolveOrThrow(db, "email", source.emailId),
-          workKey: source.emailId,
-          state: "completed",
-          outcome: "verified",
-          warning: null,
-          diff: null,
-          completedAt: outcomeAt,
-          targetFingerprint: source.checksum,
-        },
-      },
-    });
-  await gotoAuthenticatedPage(page, "/suggestions");
-  await gotoAuthenticatedPage(
-    page,
-    "/automatic-decisions?family=mail_import_outcome",
+  const suggestion = await seedFieldSuggestion(db, {
+    runId,
+    entity: "product",
+    recordId: itemId,
+    field: "categoryId",
+    currentValue: null,
+    suggestedValue: category.id,
+    confidence: 0.97,
+    runnerUpValue: null,
+    runnerUpConfidence: null,
+    model: "typesafe/jev",
+    kind: "addition",
+    status: "pending",
+  });
+  const categoryOf = async () =>
+    (
+      await getDb(db)
+        .select({ categoryId: productTable.categoryId })
+        .from(productTable)
+        .where(eq(productTable.id, itemId))
+    )[0]?.categoryId ?? null;
+  const applied = await applyAutomaticRules(db, [suggestion.id], {
+    context: buildCrudServices,
+  });
+  expect(applied.applied).toHaveLength(1);
+  expect(await categoryOf()).toBe(
+    await resolveOrThrow(db, "productCategory", category.id),
   );
-  const audit = page.getByRole("region", {
-    name: "Automation history",
+
+  await gotoAuthenticatedPage(page, `/automatic-decisions?record=${item.id}`);
+  const feed = page.getByRole("region", {
+    name: "Changes by Cubby",
     exact: true,
   });
-  await expect(audit).toContainText("Synthetic packet");
-  await expect(
-    audit.getByRole("link", { name: /Synthetic itemized confirmation/ }),
-  ).toBeVisible();
-
-  await audit
-    .getByRole("button", { name: "Report incorrect", exact: true })
+  await expect(feed.getByRole("link", { name: productName })).toBeVisible();
+  await expect(feed).toContainText(categoryName);
+  await expect(feed).toContainText("97%");
+  await feed
+    .getByRole("button", { name: /^Wrong, clear it/ })
+    .first()
     .click();
   await expect(
-    audit.getByRole("button", { name: "Report incorrect", exact: true }),
-  ).toBeDisabled();
-  await expect
-    .poll(async () =>
-      (
-        await getDb(db)
-          .select()
-          .from(emailReview)
-          .where(eq(emailReview.subjectId, decision.id))
-      ).some((row) => row.verdict === "wrong" && row.intent === "history"),
-    )
-    .toBe(true);
+    feed.getByText("Cleared. Cubby will try again.", { exact: true }),
+  ).toBeVisible();
+  await expect.poll(categoryOf).toBeNull();
 });
 
 // Identity conflicts cannot merge; matching pairs still require survivor and impact confirmation.

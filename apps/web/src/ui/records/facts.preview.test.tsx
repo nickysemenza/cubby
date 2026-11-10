@@ -58,8 +58,9 @@ it("gives nested funding history the full fact value width", async () => {
 
 it("keeps a short provenance caption inline and aligns fact actions", async () => {
   await page.viewport(1440, 900);
+  // Below 40rem the list stays one column, so every action shares an edge.
   render(
-    <div style={{ width: 680 }}>
+    <div style={{ width: 600 }}>
       <Facts
         layout="list"
         facts={[

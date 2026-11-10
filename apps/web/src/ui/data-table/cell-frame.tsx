@@ -116,9 +116,6 @@ export function CellFrame({
  */
 const FloatingRail = createContext<HTMLElement | null | undefined>(undefined);
 
-/** Width of one rail affordance plus its gap; column sizing reserves this. */
-export const CELL_RAIL_SLOT_PX = 18;
-
 /**
  * Icon-only rail control: 16px square with a 10px glyph, always visible,
  * quiet until hovered. Coarse pointers keep the 44px touch floor.

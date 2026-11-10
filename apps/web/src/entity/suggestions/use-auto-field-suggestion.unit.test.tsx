@@ -1000,6 +1000,7 @@ describe("useAutoFieldSuggestion", () => {
   it.each([
     {
       description: "a plain text basis needs 2 characters",
+      entity: "task" as const,
       target: "projectId",
       short: "a",
       long: "ab",
@@ -1007,19 +1008,20 @@ describe("useAutoFieldSuggestion", () => {
     {
       description:
         "a product-reference target needs 3 (the lexical search floor)",
-      target: "subjectProductId",
+      entity: "expense" as const,
+      target: "productId",
       short: "ab",
       long: "abc",
     },
   ])(
     "does not query below the basis threshold: $description",
-    async ({ target, short, long }) => {
+    async ({ entity, target, short, long }) => {
       const operations = operationsReturning((input) => ({
         suggestions: Object.fromEntries(input.targets.map((t) => [t, null])),
       }));
       render(
         <Harness
-          entity="task"
+          entity={entity}
           mode="create"
           fieldKeys={[target]}
           textFields={["name"]}
@@ -1161,7 +1163,7 @@ describe("useAutoFieldSuggestion", () => {
     expect(calls[0]?.basis.productId).toBe("PRD-1");
   });
 
-  it("seeds the winner and every alternative into a pinned Suggested group", async () => {
+  it("seeds the winner and every alternative into a pinned Cubby's guess group", async () => {
     const operations = operationsReturning(() => ({
       suggestions: {
         projectId: {
@@ -1216,7 +1218,7 @@ describe("useAutoFieldSuggestion", () => {
           id: "PRJ-KITCHEN",
           name: "Kitchen Remodel",
           presentation: {
-            group: { id: "suggested", label: "Suggested", order: -1 },
+            group: { id: "guess", label: "Cubby's guess", order: -1 },
             trailing: [{ text: "92%" }],
           },
         }),
@@ -1224,7 +1226,7 @@ describe("useAutoFieldSuggestion", () => {
           id: "PRJ-DECK",
           name: "Deck Build",
           presentation: {
-            group: { id: "suggested", label: "Suggested", order: -1 },
+            group: { id: "guess", label: "Cubby's guess", order: -1 },
             trailing: [{ text: "5%" }],
           },
         }),

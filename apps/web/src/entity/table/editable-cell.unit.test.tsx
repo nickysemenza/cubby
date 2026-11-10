@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import {
   act,
   fireEvent,
@@ -5,6 +6,7 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react";
+import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import {
@@ -278,6 +280,11 @@ describe("EditableCell select editor (commit-on-pick)", () => {
     { value: "b", label: "Banana" },
   ];
 
+  // The select editor reads Cubby's stored guess through React Query.
+  const queryClient = new QueryClient();
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+  );
   const renderSelect = (value: string | null, onSave: () => Promise<void>) =>
     render(
       <EditableCell
@@ -286,6 +293,7 @@ describe("EditableCell select editor (commit-on-pick)", () => {
         config={{ type: "select", options: OPTIONS }}
         renderValue={(v) => <span data-testid="display">{String(v)}</span>}
       />,
+      { wrapper },
     );
 
   /** Enter edit mode; the shared picker auto-opens ready for selection. */
@@ -348,6 +356,7 @@ describe("EditableCell select editor (commit-on-pick)", () => {
         config={{ type: "select", options: OPTIONS, clearable: true }}
         renderValue={(v) => <span data-testid="display">{String(v)}</span>}
       />,
+      { wrapper },
     );
 
     fireEvent.click(screen.getByRole("button"));
@@ -384,6 +393,7 @@ describe("EditableCell select editor (commit-on-pick)", () => {
           renderValue={(value) => <span data-testid="display">{value}</span>}
         />
       </EditorNotificationContext.Provider>,
+      { wrapper },
     );
 
     await openDropdown();

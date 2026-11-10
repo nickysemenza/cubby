@@ -128,6 +128,7 @@ const PROVIDER_STATUS_OPTIONS = declaredOptions(
   "providerStatus",
 );
 const FIELD_KIND_OPTIONS = declaredOptions("field", "kind");
+const DISPOSITION_OPTIONS = declaredOptions("field", "disposition");
 const RELATION_OPTIONS = declaredOptions("recommendation", "relation");
 const ENTITY_OPTIONS = shortcodeEntities.map((entity) => ({
   value: entity,
@@ -544,10 +545,10 @@ function fieldColumns() {
     add(
       helper.display({
         id: "suggested",
-        header: "Suggested",
+        header: "Cubby would pick",
         size: 200,
         meta: attachCubbyColumnMeta<Row>({
-          mobile: { slot: "subtitle", priority: 0, label: "Suggested" },
+          mobile: { slot: "subtitle", priority: 0, label: "Cubby would pick" },
         }),
         cell: valueCell("suggestedValue"),
       }),
@@ -571,7 +572,7 @@ function fieldColumns() {
         meta: attachCubbyColumnMeta<Row>({
           numeric: true,
           mobile: { slot: "meta", priority: 1, label: "Confidence" },
-          filterConfig: textFilter("Min..max %, e.g. 50.."),
+          filterConfig: textFilter("Min..max, e.g. 0.7.."),
         }),
         cell: ({ row }) => {
           const value = evidence(row.original);
@@ -593,6 +594,24 @@ function fieldColumns() {
           filterConfig: multiFilter("Filter kind", FIELD_KIND_OPTIONS),
         }),
         cell: ({ row }) => humanize(columnText(row.original, "kind") ?? ""),
+      }),
+    );
+    add(
+      helper.accessor((row) => columnText(row, "disposition"), {
+        id: "disposition",
+        header: "Needs",
+        size: 120,
+        meta: attachCubbyColumnMeta<Row>({
+          mobile: { slot: "meta", priority: 2, label: "Needs" },
+          filterConfig: multiFilter("Filter needs", DISPOSITION_OPTIONS),
+        }),
+        cell: ({ row }) => {
+          const value = columnText(row.original, "disposition");
+          return (
+            DISPOSITION_OPTIONS.find((option) => option.value === value)
+              ?.label ?? null
+          );
+        },
       }),
     );
     add(strengthColumn);
@@ -981,7 +1000,7 @@ export function viewColumns(
 export const VIEW_HIDDEN_COLUMNS = {
   // The Strength cell carries the Clean mark in the mixed view.
   all: { clean: false },
-  field: { entity: false, strength: false },
+  field: { entity: false, strength: false, kind: false },
   statement_transaction: {
     kindSource: false,
     providerStatus: false,

@@ -121,7 +121,7 @@ export function fieldSuggestionBasisFromRecord<TRecord extends object>(
  * Any reference-typed basis key that is set (a picked project, a picked
  * product) is sufficient on its own; otherwise any text basis of at least 2
  * characters is — 3 when every target in this request is a product
- * reference (`task.subjectProductId`, `expense.productId`), where the lexical
+ * reference (`expense.productId`), where the lexical
  * candidate search itself only kicks in at 3. One rule, kept here so the
  * client and the two product-reference targets can't drift apart.
  */
@@ -165,7 +165,44 @@ export function financeSuggestionEntityId(
     : undefined;
 }
 
-export function savedSuggestionEntityId(
+/**
+ * The editor source for a saved record's suggest field: only its record and
+ * field are read, to pin Cubby's stored guess in the field's picker.
+ */
+export function fieldGuessSource(
+  entity: string,
+  field: { key: string; control?: { suggest?: unknown } | null },
+  record: unknown,
+): FieldSuggestionSource | undefined {
+  const parsed = suggestionRecordIdentitySchema.safeParse(record);
+  const entityId =
+    field.control?.suggest && parsed.success
+      ? savedSuggestionEntityId(entity, parsed.data)
+      : undefined;
+  if (!entityId) return undefined;
+  // SAFETY: `savedSuggestionEntityId` proved the id is a shortcode of `entity`.
+  const owner = entity as ShortcodeEntity;
+  return {
+    entityId,
+    basisMode: "provided",
+    entity: owner,
+    targets: [field.key],
+    basis: {},
+  };
+}
+
+/** A saved record's own shortcode, for reads keyed by the record. */
+export function savedRecordShortcode(
+  entity: string,
+  record: unknown,
+): string | undefined {
+  const parsed = suggestionRecordIdentitySchema.safeParse(record);
+  return parsed.success
+    ? savedSuggestionEntityId(entity, parsed.data)
+    : undefined;
+}
+
+function savedSuggestionEntityId(
   entity: string,
   record: z.infer<typeof suggestionRecordIdentitySchema>,
 ): string | undefined {
@@ -192,16 +229,13 @@ export interface FieldSuggestionSource {
  * via `.withTransport(...)` without touching the hook itself. */
 export interface EntitySuggestionsOperations {
   suggestFields: typeof ai.suggestFields;
-  suggestFieldsBatch?: typeof ai.suggestFieldsBatch;
   applyFinanceCategorySuggestion?: typeof ai.applyFinanceCategorySuggestion;
 }
 
-export const productionEntitySuggestionsOperations: EntitySuggestionsOperations =
-  {
-    suggestFields: ai.suggestFields,
-    suggestFieldsBatch: ai.suggestFieldsBatch,
-    applyFinanceCategorySuggestion: ai.applyFinanceCategorySuggestion,
-  };
+const productionEntitySuggestionsOperations: EntitySuggestionsOperations = {
+  suggestFields: ai.suggestFields,
+  applyFinanceCategorySuggestion: ai.applyFinanceCategorySuggestion,
+};
 
 /** Never a fresh `{}` — a stable default keeps `suggestions` referentially
  * equal across renders when there is nothing to show (web-ui hook-default rule). */
@@ -209,23 +243,10 @@ const EMPTY_SUGGESTIONS: Record<string, FieldSuggestion | null> = {};
 const EMPTY_FIELD_RESOLUTIONS = {};
 const EMPTY_OUTCOMES: Record<string, FieldSuggestionOutcome> = {};
 
-/** Floors rather than rounds so a value just under a review threshold never
- * prints the same percent as the threshold itself (0.949 reads "94%", not
- * "95%", beside copy that says "needs 95%"). */
+/** Floors rather than rounds so a value just under the confidence bar never
+ * prints the same percent as the bar itself. */
 export function formatProbability(probability: number): string {
   return `${Math.floor(probability * 100)}%`;
-}
-
-const stringLabelSchema = z.string();
-
-/** Every real `currentLabel` caller passes a plain string (see the call
- * sites); the prop stays typed `ReactNode` for the inline review's own JSX
- * fallback, so the outcome mark (which needs a string for its headline
- * sentence) parses down to that domain value here rather than branching on
- * `typeof` at the render site. */
-export function stringLabelOf(value: unknown): string | null {
-  const parsed = stringLabelSchema.safeParse(value);
-  return parsed.success ? parsed.data : null;
 }
 
 /** A schema-valid placeholder input used only while `source` is null, so
@@ -241,8 +262,8 @@ const INACTIVE_SUGGESTION_SOURCE: FieldSuggestionSource = {
 
 /**
  * The one `ai.suggestFields` query behind every suggestion surface —
- * `FieldSuggestionProvider` (one per form) and `FieldSuggestionApply`
- * (non-RHF surfaces) both call this rather than rolling their own `useQuery`.
+ * `FieldSuggestionProvider` (one per form) and `DraftFieldSuggestion`
+ * (non-RHF drafts) both call this rather than rolling their own `useQuery`.
  * The query key **is** the basis, so a response can never be shown against a
  * basis it wasn't asked about. Saved finance evidence also has a server-checked
  * review fingerprint because linked records can change independently.

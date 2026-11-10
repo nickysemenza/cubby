@@ -19,13 +19,14 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
 import { toast } from "sonner";
 
 import type { FieldSuggestionSource } from "~/entity/suggestions/field-suggestion";
-import { FieldSuggestionApply } from "~/entity/suggestions/field-suggestion-apply";
+import { useFieldGuess } from "~/entity/suggestions/field-suggestion-apply";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import { CellEditorPendingContext } from "~/ui/data-table/cell-editor-overlay";
@@ -128,8 +129,8 @@ type EditableSelectConfig = {
    */
   clearable?: boolean;
   /** When the field's `control.suggest` exists — queries only while the
-   * editor is open (`EditableSelectEditor` mounts `FieldSuggestionApply`
-   * beneath the picker), never at rest. */
+   * editor is open (`EditableSelectEditor` pins Cubby's stored guess first
+   * in its picker), never at rest. */
   suggest?: FieldSuggestionSource;
 };
 
@@ -746,8 +747,16 @@ function EditableSelectEditor({
   onCancel: () => void;
   onCommit: (value: string | null) => void;
 }) {
+  const guess = useFieldGuess(suggest);
+  const { isGuess, accept, pinOptions } = guess;
+  const pinned = useMemo(() => pinOptions(options), [pinOptions, options]);
+  // Picking Cubby's guess accepts it; any other value is an ordinary edit.
+  const save = useCallback(
+    (next: string | null) => (isGuess(next) ? accept() : onSave(next)),
+    [isGuess, accept, onSave],
+  );
   const { isPending, commit } = useEditorCommit<string | null>({
-    onSave,
+    onSave: save,
     onCommit,
     onCancel,
   });
@@ -762,7 +771,7 @@ function EditableSelectEditor({
     <div className="flex flex-col gap-1" onClick={(e) => e.stopPropagation()}>
       <div className="inline-flex items-center gap-1">
         <Picker
-          options={options}
+          options={pinned}
           value={value}
           onValueChange={(next) => void handlePick(next)}
           label={placeholder}
@@ -783,15 +792,6 @@ function EditableSelectEditor({
           <XIcon className="size-3.5" />
         </Button>
       </div>
-      {suggest && (
-        <FieldSuggestionApply
-          source={suggest}
-          currentValue={value}
-          onApply={(suggestion) => {
-            if (suggestion.value) void handlePick(suggestion.value);
-          }}
-        />
-      )}
     </div>
   );
 }

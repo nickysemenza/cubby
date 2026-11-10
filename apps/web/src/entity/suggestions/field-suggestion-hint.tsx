@@ -6,11 +6,9 @@ import type { ReactNode } from "react";
 
 import { suggestion as suggestionApi } from "~/integrations/tanstack-query/generated/domains/suggestion.gen";
 
-import { stringLabelOf } from "./field-suggestion";
-import type { SuggestionOutcomeSurface } from "./suggestion-outcome-mark";
-import { SuggestionOutcomeMark } from "./suggestion-outcome-mark";
-import { SuggestionReview } from "./suggestion-review";
+import { SuggestionReview, type SuggestionSurface } from "./suggestion-review";
 
+/** A form field's actionable proposal; nothing renders once it is applied. */
 export function FieldSuggestionHint({
   suggestion,
   applied,
@@ -19,11 +17,8 @@ export function FieldSuggestionHint({
   currentValue = null,
   currentLabel,
   questionKey = "",
-  alternative = false,
   outcome = null,
   surface = "line",
-  autoFilled = false,
-  quiet = false,
   renderValue,
 }: {
   suggestion: FieldSuggestion | null;
@@ -33,31 +28,11 @@ export function FieldSuggestionHint({
   currentValue?: string | null;
   currentLabel?: ReactNode;
   questionKey?: string;
-  alternative?: boolean;
   outcome?: FieldSuggestionOutcome | null;
-  surface?: SuggestionOutcomeSurface;
-  autoFilled?: boolean;
-  /** See `SuggestionReview`'s `quiet`: only an actionable proposal renders. */
-  quiet?: boolean;
+  surface?: SuggestionSurface;
   renderValue?: Parameters<typeof SuggestionReview>[0]["renderValue"];
 }) {
-  if (applied && quiet) return null;
-  if (applied) {
-    // Already applied (auto-filled or manually matched) — no proposal to
-    // review, but the mark still says why: "Filled in"/"Agrees with …".
-    return (
-      <SuggestionOutcomeMark
-        outcome={outcome}
-        suggestion={suggestion}
-        currentValue={currentValue}
-        currentLabel={stringLabelOf(currentLabel)}
-        autoFilled={autoFilled}
-        surface="line"
-        actionable={false}
-      />
-    );
-  }
-  if (!onApply) return null;
+  if (applied || !onApply) return null;
   return (
     <SuggestionReview
       suggestion={suggestion}
@@ -78,11 +53,8 @@ export function FieldSuggestionHint({
           intent: "history",
         });
       }}
-      alternative={alternative}
       outcome={outcome}
       surface={surface}
-      autoFilled={autoFilled}
-      quiet={quiet}
       renderValue={renderValue}
     />
   );

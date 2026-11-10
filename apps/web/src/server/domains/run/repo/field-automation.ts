@@ -27,7 +27,7 @@ type JsonValue = z.infer<ReturnType<typeof z.json>>;
 /** Audit rows one events page reads. */
 const EVENTS_PAGE = 100;
 /** Similar Cubby-held values one member correction rechecks. */
-export const CORRECTION_RECHECK_CAP = 25;
+const CORRECTION_RECHECK_CAP = 25;
 /** Field slots one policy page schedules. */
 export const POLICY_PAGE = 100;
 

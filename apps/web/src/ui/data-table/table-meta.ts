@@ -121,8 +121,6 @@ export interface CubbyColumnMeta<TData = CellData> {
   provenanceWorkbenchHandled?: boolean;
   mobile?: MobileColumnMeta;
   className?: string;
-  /** The field renders an AI suggestion mark in the cell rail. */
-  suggest?: boolean;
   /**
    * The header's painted label when it is shorter than `header` ("Expenses"
    * for "Expense count"). `header` stays the accessible name and tooltip.

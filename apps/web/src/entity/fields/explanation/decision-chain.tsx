@@ -19,6 +19,7 @@ import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/text/description";
 import { DateDisplay } from "~/ui/values/date-display";
 
+import { FieldOriginLine } from "./field-origin";
 import { ExplanationEntityLink, ReadableExplanationValue } from "./why-value";
 
 export function DecisionValue({
@@ -141,12 +142,9 @@ export function DecisionChain({
           <div className="text-xs">
             {data.envelope.current.assignment?.kind === "value" ? (
               <div className="grid gap-1">
-                <span className="text-muted-foreground">
-                  {data.envelope.current.assignment.ownership.kind ===
-                  "automatic"
-                    ? "Automatic assignment"
-                    : "Set here"}
-                </span>
+                {data.origin ? null : (
+                  <span className="text-muted-foreground">Set here</span>
+                )}
                 <DecisionValue
                   entity={data.subject.entityKind}
                   field={data.field}
@@ -161,6 +159,21 @@ export function DecisionChain({
               </span>
             )}
           </div>
+          {data.origin ? (
+            <FieldOriginLine
+              data={data}
+              origin={data.origin}
+              guess={
+                data.origin.guess ? (
+                  <DecisionValue
+                    entity={data.subject.entityKind}
+                    field={data.field}
+                    value={data.origin.guess.value}
+                  />
+                ) : null
+              }
+            />
+          ) : null}
           <div className="flex flex-wrap gap-2">
             {onSet && data.envelope.current.controls.kind === "editable" ? (
               <Button variant="link" size="xs" onClick={onSet}>

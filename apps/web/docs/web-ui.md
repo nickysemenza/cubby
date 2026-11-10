@@ -173,8 +173,8 @@ the picker's appearance.
   conditional loading and error children; a plain element lets Escape close the
   parent dialog. Test dismissal through the real dialog.
 - The picker frame owns its focus ring; the nested input suppresses its own.
-  On phones inline suggestion marks reserve their 44px target, and invisible hit
-  areas must not cover neighbouring controls.
+  Invisible hit areas must not cover neighbouring controls. A field's guess is
+  the picker's pinned first group, never selected.
 
 ## Record identity
 
@@ -364,8 +364,8 @@ height, so a taller painted row makes scrolling jump; section headers match it.
   Explanation buttons keep 44px targets on phones and coarse pointers, and status
   text uses the body font even in numeric columns.
 - A missing derived value uses `MissingFieldValue` with a focusable explanation.
-  An inherited value keeps `InheritedMarker` visible; suggestion marks stay in
-  flow.
+  An inherited value keeps `InheritedMarker` visible. Cells carry no suggestion
+  or automatic-value mark: a value looks the same whoever set it.
 - One-line chip lists use `ChipCluster lines={1}`; two-line content uses
   `StackedValue`, `ChipCluster` or a shared dense form.
 - Every identity cell holds one line of name text: no caption, subtitle or pill
@@ -458,8 +458,9 @@ surfaces keep their own engines.
 ## Work page
 
 `/activity` is the Work page: a health line, a Stuck section only when something
-is stuck, the Needs you queue, then links to Suggestions, Missing facts, All work
-and History (`/history`, Run history and recorded Changes). It answers whether
+is stuck, the Needs you queue, then links to Suggestions, Changes by Cubby,
+Missing facts, All work and History (`/history`, Run history and recorded
+Changes). It answers whether
 background work is healthy and what needs a member, with no scheduler or queue
 vocabulary (wakes, leases, tickets, deadlines, pace, refresh counts); telemetry
 belongs to `/jobs`, Run and Job pages, and MCP.

@@ -78,28 +78,3 @@ export function suggestTargetsFor(
   if (targets.length === 0) return EMPTY_TARGETS;
   return { targets, basisKeys: [...basisKeys] };
 }
-
-/** Visible aliases and canonical field keys share one suggestion admission owner. */
-export function visibleSuggestTargets(
-  queryClient: QueryClient,
-  entity: ShortcodeEntity,
-  fieldKeys: readonly string[],
-) {
-  const visible = new Set(fieldKeys);
-  const updateFields: readonly string[] = entityMetadata(queryClient, entity)
-    .fields.update;
-  return suggestTargetsFor(
-    queryClient,
-    entity,
-    entityMetadata(queryClient, entity)
-      .fields.fields.filter(
-        (field) =>
-          visible.has(field.key) ||
-          (field.reference != null &&
-            visible.has(field.key.replace(/Id$/u, ""))) ||
-          visible.has(field.display.columnId ?? field.key),
-      )
-      .map((field) => field.key)
-      .filter((key) => updateFields.includes(key)),
-  );
-}

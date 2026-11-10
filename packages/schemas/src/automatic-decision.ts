@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { suggestionReviewRowSchema } from "./ai";
 import {
   suggestionFamily,
   suggestionChildHandle,
@@ -37,6 +38,8 @@ export const automaticDecisionRow = z.object({
   automaticRule: z.string().nullable(),
   verdict: feedbackVerdict.nullable(),
   reviewedAt: z.iso.datetime().nullable(),
+  /** A field decision's record, field, old and new value, for Keep and Wrong, clear it. */
+  field: suggestionReviewRowSchema.nullable().optional(),
   /** Retained for explicit suggestion-review clients; the web audit records feedback only. */
   correction: z
     .object({

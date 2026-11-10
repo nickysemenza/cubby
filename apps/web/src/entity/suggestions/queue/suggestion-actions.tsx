@@ -23,6 +23,7 @@ import {
 } from "~/ui/primitives/dropdown-menu";
 import { Textarea } from "~/ui/primitives/textarea";
 
+import { useRenderedText } from "../use-rendered-text";
 import {
   acceptItem,
   dismissItem,
@@ -31,6 +32,7 @@ import {
   wrongItem,
 } from "./suggestion-review";
 import { useSuggestionReview } from "./suggestion-review-context";
+import { FieldValue } from "./suggestion-values";
 
 const stop = (event: { stopPropagation: () => void }) =>
   event.stopPropagation();
@@ -106,6 +108,120 @@ export function SuggestionActionsCell({
 }
 
 export function SuggestionActions({
+  suggestion,
+}: {
+  suggestion: SuggestionListRow;
+}) {
+  return suggestion.family === "field" ? (
+    <FieldSuggestionActions suggestion={suggestion} />
+  ) : (
+    <FamilySuggestionActions suggestion={suggestion} />
+  );
+}
+
+/**
+ * A Disagreement or needs-you field row: Use the proposed value, or Keep the
+ * current one (recorded as Wrong). A row without a current value dismisses.
+ */
+function FieldSuggestionActions({
+  suggestion,
+}: {
+  suggestion: Extract<SuggestionListRow, { family: "field" }>;
+}) {
+  const { review, outcome } = useSuggestionReview();
+  const proposedText = useRenderedText();
+  const currentText = useRenderedText();
+  const state = outcome(suggestion.id);
+  const busy = state?.state === "pending";
+  const run = (build: Parameters<typeof review>[1]) =>
+    void review([suggestion], build);
+  const { evidence } = suggestion;
+  const wrong = wrongItem(suggestion) !== null;
+  const keepsCurrent =
+    wrong && evidence.currentValue !== null && evidence.currentValue !== "";
+  const never = neverSuggestItem(suggestion);
+  const value = (current: boolean) => (
+    <FieldValue
+      entity={evidence.entity}
+      recordId={evidence.recordId}
+      field={evidence.field}
+      value={current ? evidence.currentValue : evidence.suggestedValue}
+    />
+  );
+  return (
+    <div className="flex min-w-0 items-center justify-end gap-1">
+      {/* Button names read the values' rendered labels. */}
+      <span hidden>
+        <span ref={proposedText.ref}>{value(false)}</span>
+        <span ref={currentText.ref}>{value(true)}</span>
+      </span>
+      {state?.state === "failed" ? (
+        <span
+          role="alert"
+          className="min-w-0 truncate text-xs text-destructive"
+          title={state.error}
+        >
+          {state.error}
+        </span>
+      ) : null}
+      {offers(suggestion, "accept") ? (
+        <Button
+          size="xs"
+          variant="outline"
+          disabled={busy}
+          onClick={() => run((target) => acceptItem(target))}
+        >
+          Use {proposedText.text || "this value"}
+        </Button>
+      ) : null}
+      {keepsCurrent ? (
+        <Button
+          size="xs"
+          variant="ghost"
+          disabled={busy}
+          onClick={() => run(wrongItem)}
+        >
+          Keep {currentText.text || "current value"}
+        </Button>
+      ) : (
+        <Button
+          size="xs"
+          variant="ghost"
+          disabled={busy}
+          onClick={() => run(dismissItem)}
+        >
+          Dismiss
+        </Button>
+      )}
+      {never || (wrong && !keepsCurrent) ? (
+        <DropdownMenu>
+          <MoreMenuTrigger
+            disabled={busy}
+            size="icon-xs"
+            aria-label="More review choices"
+          />
+          <DropdownMenuContent align="end" className="min-w-52">
+            {wrong && !keepsCurrent ? (
+              <DropdownMenuItem
+                variant="destructive"
+                onClick={() => run(wrongItem)}
+              >
+                Wrong
+              </DropdownMenuItem>
+            ) : null}
+            {never ? (
+              <DropdownMenuItem onClick={() => run(neverSuggestItem)}>
+                Never suggest this
+              </DropdownMenuItem>
+            ) : null}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      ) : null}
+    </div>
+  );
+}
+
+function FamilySuggestionActions({
   suggestion,
 }: {
   suggestion: SuggestionListRow;

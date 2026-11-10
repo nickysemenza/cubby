@@ -18,6 +18,8 @@ export type PickerTone = "neutral" | "positive" | "warning" | "destructive";
  */
 export interface PickerChip {
   text: string;
+  /** The row's accessible name uses this instead of `text` ("62% sure"). */
+  spoken?: string;
   tone?: PickerTone;
   node?: React.ReactNode;
 }

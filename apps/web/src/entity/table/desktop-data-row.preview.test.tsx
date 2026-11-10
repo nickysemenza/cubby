@@ -47,14 +47,11 @@ it("keeps stock context available without adding a third dense row line", () => 
                       { value: 2, unit: "each" },
                     ),
                   },
-                  location: entityReadFixture(
-                    productListItemOut.shape.inventoryEntry.element.shape
-                      .location,
-                    {
-                      id: testShortcode("location", "LOC-1234"),
-                      name: "Example shelf",
-                    },
-                  ),
+                  // The location projection is a bare reference, not a read.
+                  location: {
+                    id: testShortcode("location", "LOC-1234"),
+                    name: "Example shelf",
+                  },
                 },
               ),
             ]}
@@ -134,6 +131,7 @@ it("keeps a selected pinned cell's surface opaque", async () => {
       focusColumnId: "name",
     }),
   );
+  const harness = createBrowserTestHarness();
   render(
     <table>
       <tbody>
@@ -151,6 +149,7 @@ it("keeps a selected pinned cell's surface opaque", async () => {
         />
       </tbody>
     </table>,
+    { wrapper: harness.wrapper },
   );
   const cell = screen.getByRole("cell");
   expect(cell.hasAttribute("data-cell-selected")).toBe(true);
@@ -158,4 +157,5 @@ it("keeps a selected pinned cell's surface opaque", async () => {
   // CSSOM can serialize rgb/oklab/color(): a slash denotes a translucent alpha.
   expect(color).not.toMatch(/\/\s*0?\.\d+\s*\)/);
   expect(color).not.toMatch(/^rgba\([^)]*,\s*0?\.\d+\)$/);
+  harness.dispose();
 });

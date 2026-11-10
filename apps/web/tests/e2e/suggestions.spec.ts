@@ -1,16 +1,15 @@
 import { seedProductPrerequisite } from "./fixtures/catalog";
 import { seedFieldSuggestion } from "tooling/shared-suggestion-fixtures";
-import { fieldSuggestionsReply } from "./support/field-suggestion-wire";
 import { buildCrudServices } from "~/server/http/request-context";
 import { fieldInputFingerprint } from "~/server/generic/suggestions/repo/field-input-fence";
 import { drainDerivedRefreshFrontier } from "~/server/testing/background-queue";
 import type { Page } from "@playwright/test";
-import { suggestionReviewInput } from "@cubby/schemas/suggestion";
 import {
   recordSourceTransactionRecordsOut,
   recordSourceTransactionRecordsInput,
   type SourceTransactionRecordInput,
 } from "@cubby/schemas/source-transaction-record";
+import { parseEntityId } from "@cubby/schemas/identifiers";
 import { eq, sql } from "drizzle-orm";
 import { financialSpendingAdvice } from "@cubby/schemas/financial-booking";
 import { labelStatementSuggestions } from "~/server/domains/transaction-import/service/statement-suggestion-labels";
@@ -18,7 +17,6 @@ import { answering } from "~/server/domains/transaction-import/repo/statement-de
 import { recordSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
 import { z } from "zod";
 
-import { BROWSER_OPERATION_PATH } from "~/lib/browser-operation-path";
 import { product as productTable } from "~/server/db/schema";
 
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
@@ -26,9 +24,10 @@ import { generateStatementSuggestionPage } from "~/server/domains/transaction-im
 import { publishSuggestion } from "~/server/generic/suggestions/repo/suggestion";
 import { getDb } from "~/server/db/helpers";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { applyAutomaticRules } from "~/server/generic/suggestions/repo/automatic-application";
 import { readSuggestionDecisions } from "~/server/testing/suggestion-decisions.fixtures";
 
-import { dispatchesOperation, unbatchFor } from "./support/dispatch-wire";
+import { dispatchesOperation } from "./support/dispatch-wire";
 import {
   gotoAuthenticatedPage,
   uniqueName,
@@ -98,8 +97,8 @@ const suggestionsTable = (page: Page) =>
   page.getByRole("table", { name: "Suggestions" });
 
 // Failure modes: a family drops out of the page; a record renders as a bare
-// shortcode or a category as the generic grey reference chip; Accept on a
-// field or Confirm on a connection writes nothing.
+// shortcode or a category as the generic grey reference chip; Use on a field
+// Disagreement writes nothing.
 test("Suggestions lists every family with named records and category pills, and reviews fields", async ({
   page,
 }, testInfo) => {
@@ -108,10 +107,14 @@ test("Suggestions lists every family with named records and category pills, and 
   const category = await createEntityFixture(page, "productCategory", {
     name: categoryName,
   });
+  const currentCategory = await createEntityFixture(page, "productCategory", {
+    name: uniqueName(testInfo, "Member category"),
+  });
   const productName = uniqueName(testInfo, "Suggested drill");
+  // A member's value Cubby disagrees with is listed; a plain guess is not.
   const item = await createEntityFixture(page, "product", {
     name: productName,
-    categoryId: null,
+    categoryId: currentCategory.id,
   });
   const itemId = await resolveOrThrow(db, "product", item.id);
   const runId = await ensureRun(db, actor, { purpose: "ai_suggest" });
@@ -143,13 +146,13 @@ test("Suggestions lists every family with named records and category pills, and 
         entity: "product",
         recordId: itemId,
         field: "categoryId",
-        currentValue: null,
+        currentValue: currentCategory.id,
         suggestedValue: category.id,
         confidence: 0.91,
         runnerUpValue: null,
         runnerUpConfidence: null,
         model: "typesafe/jev",
-        kind: "addition",
+        kind: "correction",
         status: "pending",
         data: {
           liveInputFingerprint: await fieldInputFingerprint(
@@ -251,8 +254,10 @@ test("Suggestions lists every family with named records and category pills, and 
         .from(productTable)
         .where(eq(productTable.id, itemId))
     )[0]?.categoryId,
-  ).toBeNull();
-  await field.getByRole("button", { name: "Accept", exact: true }).click();
+  ).toBe(await resolveOrThrow(db, "productCategory", currentCategory.id));
+  await field
+    .getByRole("button", { name: new RegExp(`^Use ${categoryName}`) })
+    .click();
   await expect
     .poll(
       async () =>
@@ -526,128 +531,112 @@ test("Find suggestions estimates a Sweep before it starts, then follows its Step
   ).toBeVisible();
 });
 
-// Acceptance must acknowledge the chosen value before the response arrives,
-// retain other pills throughout the write/refetch, and persist the real value.
-test("list pills accept immediately without unloading another row's suggestion", async ({
+// Failure modes: a value Cubby set wears a mark a member's value does not; an
+// edit of Cubby's value is lost on reload; the empty field's picker hides
+// Cubby's stored guess or marks it selected, or picking it saves something else.
+test("Cubby's values read as plain cells, edits persist, and the picker opens on Cubby's guess", async ({
   page,
 }, testInfo) => {
   const { db, actor } = await createEvidenceHarnessContext(page);
-  const categoryName = uniqueName(testInfo, "Pill category");
-  const category = await createEntityFixture(page, "productCategory", {
-    name: categoryName,
+  const prefix = uniqueName(testInfo, "Plain value");
+  const guessedName = `${prefix} hand tools`;
+  const otherName = `${prefix} garden tools`;
+  const guessed = await createEntityFixture(page, "productCategory", {
+    name: guessedName,
   });
-  const prefix = uniqueName(testInfo, "Pill lifecycle");
-  const names = [`${prefix} first`, `${prefix} second`];
+  const other = await createEntityFixture(page, "productCategory", {
+    name: otherName,
+  });
+  const names = [`${prefix} set by Cubby`, `${prefix} still open`];
   const products = await Promise.all(
-    names.map((name) =>
-      createEntityFixture(page, "product", { name, categoryId: null }),
-    ),
+    names.map((name) => createEntityFixture(page, "product", { name })),
   );
-  const recordIds = await Promise.all(
+  const [setId, openId] = await Promise.all(
     products.map((product) => resolveOrThrow(db, "product", product.id)),
   );
-  const firstRecordId = recordIds[0];
-  if (!firstRecordId) throw new Error("Synthetic first Product is missing");
+  if (!setId || !openId) throw new Error("Synthetic Products are missing");
+  const [guessedId, otherId] = await Promise.all([
+    resolveOrThrow(db, "productCategory", guessed.id),
+    resolveOrThrow(db, "productCategory", other.id),
+  ]);
   const runId = await ensureRun(db, actor, { purpose: "ai_suggest" });
   await drainDerivedRefreshFrontier(db);
-  await Promise.all(
-    recordIds.map(async (recordId) =>
-      seedFieldSuggestion(
-        db,
-        {
-          runId,
-          entity: "product",
-          recordId,
-          field: "categoryId",
-          currentValue: null,
-          suggestedValue: category.id,
-          confidence: 0.97,
-          runnerUpValue: null,
-          runnerUpConfidence: null,
-          model: "typesafe/jev",
-          kind: "addition" as const,
-          status: "pending" as const,
-          data: {
-            liveInputFingerprint: await fieldInputFingerprint(
-              db,
-              "product",
-              recordId,
-              "categoryId",
-            ),
-          },
-        },
-        true,
-      ),
-    ),
-  );
-  const acceptance = Promise.withResolvers<void>();
-  await page.route(`**${BROWSER_OPERATION_PATH}/*`, async (route) => {
-    if (
-      !dispatchesOperation(
-        route.request(),
-        "suggestion.review",
-        (item) =>
-          suggestionReviewInput.safeParse(item.input).data?.intent === "apply",
-      )
-    ) {
-      await route.continue();
-      return;
-    }
-    const response = await route.fetch();
-    await acceptance.promise;
-    await route.fulfill({ response });
+  const seed = (
+    recordId: string,
+    confidence: number,
+    runnerUp: { value: string; confidence: number } | null,
+  ) =>
+    seedFieldSuggestion(db, {
+      runId,
+      entity: "product",
+      recordId,
+      field: "categoryId",
+      currentValue: null,
+      suggestedValue: guessed.id,
+      confidence,
+      runnerUpValue: runnerUp?.value ?? null,
+      runnerUpConfidence: runnerUp?.confidence ?? null,
+      model: "typesafe/jev",
+      kind: "addition",
+      status: "pending",
+    });
+  const automatic = await seed(setId, 0.97, null);
+  const applied = await applyAutomaticRules(db, [automatic.id], {
+    context: buildCrudServices,
   });
-  await gotoAuthenticatedPage(
-    page,
-    `/products?searchQuery=${encodeURIComponent(prefix)}`,
-  );
+  expect(applied.applied).toHaveLength(1);
+  await seed(openId, 0.62, { value: other.id, confidence: 0.21 });
+  const categoryOf = (id: string) => async () =>
+    (
+      await getDb(db)
+        .select({ categoryId: productTable.categoryId })
+        .from(productTable)
+        .where(eq(productTable.id, parseEntityId("product", id)))
+    )[0]?.categoryId ?? null;
+
+  const productsPage = `/products?searchQuery=${encodeURIComponent(prefix)}`;
+  await gotoAuthenticatedPage(page, productsPage);
   const table = page.getByRole("table", { name: /Products table/i });
-  const first = table.getByRole("row").filter({ hasText: names[0] });
-  const second = table.getByRole("row").filter({ hasText: names[1] });
-  const pillName = `Accept suggested value: ${categoryName}`;
-  await expect(first.getByRole("button", { name: pillName })).toBeEnabled();
-  await expect(second.getByRole("button", { name: pillName })).toBeEnabled();
-  // This journey guards acknowledgement and row continuity. Give the category
-  // a readable width through the real resize control before accepting it.
-  const header = table.locator('th[data-column-id="categoryId"]');
-  const grip = await header
-    .getByTitle("Drag to resize · double-click to reset")
-    .boundingBox();
-  if (!grip) throw new Error("Category resize control is not rendered");
-  const x = grip.x + grip.width / 2;
-  const y = grip.y + grip.height / 2;
-  await page.mouse.move(x, y);
-  await page.mouse.down();
-  await page.mouse.move(x + 200, y, { steps: 8 });
-  await page.mouse.up();
-  await expect
-    .poll(async () => (await header.boundingBox())?.width ?? 0)
-    .toBeGreaterThan(180);
-  await first.getByRole("button", { name: pillName }).click();
-  await expect(first.getByRole("button", { name: pillName })).toHaveCount(0);
-  await expect(first.getByText(categoryName, { exact: true })).toBeVisible();
+  const setRow = table.getByRole("row").filter({ hasText: names[0] });
+  const openRow = table.getByRole("row").filter({ hasText: names[1] });
+  // One saved state: Cubby's value is a plain value, and the below-bar guess
+  // stays out of the empty cell.
+  await expect(setRow.getByText(guessedName, { exact: true })).toBeVisible();
+  await expect(setRow.getByLabel("Set automatically")).toHaveCount(0);
   await expect(
-    first.getByRole("status", { name: "Saving suggested value" }),
-  ).toBeVisible();
-  await expect(second.getByRole("button", { name: pillName })).toBeEnabled();
-  await expect
-    .poll(
-      async () =>
-        (
-          await getDb(db)
-            .select({ categoryId: productTable.categoryId })
-            .from(productTable)
-            .where(eq(productTable.id, firstRecordId))
-        )[0]?.categoryId,
-    )
-    .toBe(await resolveOrThrow(db, "productCategory", category.id));
-  acceptance.resolve();
-  await expect(
-    first.getByRole("status", { name: "Saving suggested value" }),
+    setRow.getByRole("button", { name: /^Accept suggested value/ }),
   ).toHaveCount(0);
-  await expect(first.getByText(categoryName, { exact: true })).toBeVisible();
-  await expect(second.getByRole("button", { name: pillName })).toBeEnabled();
+  await expect(openRow).not.toContainText(guessedName);
+
+  // Editing Cubby's value is an ordinary edit; the server records the Miss.
+  await setRow.hover();
+  await setRow
+    .getByRole("button", { name: "Edit product category", exact: true })
+    .click();
+  await page.keyboard.type(otherName);
+  await page.getByRole("option", { name: new RegExp(`^${otherName}`) }).click();
+  await expect.poll(categoryOf(setId)).toBe(otherId);
+  await page.reload();
+  await waitForAppHydration(page);
+  await expect(setRow.getByText(otherName, { exact: true })).toBeVisible();
+
+  // The empty field's picker lists Cubby's guess first, not selected.
+  await openRow.hover();
+  await openRow
+    .getByRole("button", { name: "Edit product category", exact: true })
+    .click();
+  const guess = page.getByRole("option", {
+    name: /Cubby's guess, 62% sure/,
+  });
+  await expect(guess).toBeVisible();
+  await expect(guess).toHaveAttribute("aria-selected", "false");
+  await expect(
+    page.getByRole("option", { name: /Cubby's guess, 21% sure/ }),
+  ).toBeVisible();
+  await guess.click();
+  await expect.poll(categoryOf(openId)).toBe(guessedId);
 });
+
 // Prune acceptance acknowledges the remaining saved tags, not the removed token.
 test("prunes real Product tags and records saved Feedback and its receipt", async ({
   page,
@@ -684,44 +673,12 @@ test("prunes real Product tags and records saved Feedback and its receipt", asyn
       producer: null,
       evidence: null,
     },
-    { active: false, runId },
+    { runId },
   );
-  await page.route(`**${BROWSER_OPERATION_PATH}/*`, async (route) => {
-    if (await unbatchFor(route, ["ai.suggestFields", "ai.suggestFieldsBatch"]))
-      return;
-    if (
-      !dispatchesOperation(route.request(), "ai.suggestFields") &&
-      !dispatchesOperation(route.request(), "ai.suggestFieldsBatch")
-    )
-      return route.continue();
-    await route.fulfill({
-      contentType: "application/json",
-      body: JSON.stringify({
-        ok: true,
-        data: fieldSuggestionsReply(route.request(), {
-          suggestions: {
-            tags: {
-              suggestionId: prediction.id,
-              value: "synthetic-brand",
-              label: "Remove synthetic-brand",
-              confidence: "high",
-              probability: 0.99,
-              detail: "Restates brandName",
-              reasoning: "Synthetic retained pruning",
-              alternatives: [],
-              operation: "remove",
-              removals,
-            },
-          },
-        }),
-      }),
-    });
-  });
-  // Pruning is an explicit record evaluation; published-only tables do not
-  // generate transient field proposals.
+  // The detail fact lists the stored proposal beneath the field.
   await gotoAuthenticatedPage(page, `/products/${product.id}`);
-  await expect(page.getByText(/^Remove synthetic-brand/)).toBeVisible();
-  await page.getByRole("button", { name: "Accept", exact: true }).click();
+  await expect(page.getByText("Cubby would remove")).toBeVisible();
+  await page.getByRole("button", { name: /^Remove synthetic-brand/ }).click();
   await expect
     .poll(
       async () =>

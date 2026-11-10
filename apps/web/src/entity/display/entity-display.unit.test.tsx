@@ -1283,8 +1283,8 @@ describe("generic enum fields", () => {
     const [statusCell, tradeCell] = columns.visit((column) =>
       renderRowCell(column.cell, record),
     );
-    // `trade` declares `control.suggest`, so its open editor mounts the decision model
-    // apply affordance, which queries — hence the harness.
+    // `trade` declares `control.suggest`, so its open editor reads Cubby's
+    // stored guess, which queries — hence the harness.
     const harness = createBrowserTestHarness();
 
     const status = render(<>{statusCell}</>, { wrapper: harness.wrapper });
@@ -1306,17 +1306,16 @@ describe("generic enum fields", () => {
     expect(
       screen.getByRole("button", { name: /^Clear/i, hidden: true }),
     ).toBeInTheDocument();
-    // The open editor asks the decision model for `trade` (declared `control.suggest`, as a
-    // "provided" alternative since a value is stored) and never for `status`
-    // (no `suggest`) — the generic list editor used to omit this entirely.
-    const suggestionTargets = queryClient
-      .getQueryCache()
-      .findAll()
-      .map((query) => JSON.stringify(query.queryKey))
-      .filter((key) => key.includes("suggestFields"));
-    expect(suggestionTargets).toHaveLength(1);
-    expect(suggestionTargets[0]).toContain('"targets":["trade"]');
-    expect(suggestionTargets[0]).toContain('"basisMode":"provided"');
+    // An open list editor never asks the model live; a saved record's guess is
+    // a stored read.
+    expect(
+      harness.queryClient
+        .getQueryCache()
+        .findAll()
+        .filter((query) =>
+          JSON.stringify(query.queryKey).includes("suggestFields"),
+        ),
+    ).toHaveLength(0);
     harness.dispose();
   });
 });

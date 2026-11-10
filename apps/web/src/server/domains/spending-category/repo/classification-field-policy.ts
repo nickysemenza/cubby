@@ -109,7 +109,7 @@ export const classificationPolicySql = <Id extends ClassificationPolicyId>(
  * (`impliedClassification`), so nothing is refused yet. An unresolvable
  * shortcode counts as unclassified.
  */
-export async function classificationRefusesField(
+async function classificationRefusesField(
   db: Db,
   entity: string,
   field: string,
