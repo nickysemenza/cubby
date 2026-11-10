@@ -10,6 +10,7 @@ import type {
 
 import type { DrizzleTransaction } from "~/server/db";
 import { importSourceProduct } from "~/server/db/schema";
+import type { ExistingExpenseSnapshot } from "~/server/domains/purchase-import/repo/writer-policy";
 
 import type { LineIdentityDecision } from "./writer";
 import {
@@ -28,7 +29,6 @@ import {
   type planLineMatch,
   type planLineMode,
 } from "./writer-plan";
-import type { ExistingExpenseSnapshot } from "./writer-policy";
 
 export type LineMutation = {
   targetKind: "expense" | "product";

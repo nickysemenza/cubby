@@ -13,9 +13,16 @@ import { requested } from "~/server/db/helpers/requested";
 import { expense, purchase } from "~/server/db/schema";
 import { effectiveExpenseTradeSql } from "~/server/domains/expense/repo/expense-inheritance";
 import { financialEvidenceAmountMinor } from "~/server/domains/financial-transaction/repo/financial-evidence";
+import { sourceOrderKey } from "~/server/domains/purchase-import/repo/source-order-key";
+import {
+  decideLineWrite,
+  importedLineMatchesExpense,
+  originalItemFacts,
+  sourceFinancialFacts,
+  type ExistingExpenseSnapshot,
+} from "~/server/domains/purchase-import/repo/writer-policy";
 
 import { normalizeOrderKey } from "./order-identity";
-import { sourceOrderKey } from "./source-order-key";
 import type { LineIdentityDecision } from "./writer";
 import type {
   loadAcceptedProductChoices,
@@ -24,13 +31,6 @@ import type {
   loadOrderedPurchases,
   loadTargetReviewFacts,
 } from "./writer-load";
-import {
-  decideLineWrite,
-  importedLineMatchesExpense,
-  originalItemFacts,
-  sourceFinancialFacts,
-  type ExistingExpenseSnapshot,
-} from "./writer-policy";
 
 export function planLineMatch(
   candidate: ExtractedOrderCandidate,
@@ -353,7 +353,7 @@ export function planSourceOrder(
   input: ImportWriterInput,
   orderKey: string,
   existingOrder:
-    | import("./source-claim-family").LiveSourceOrder
+    | import("~/server/domains/purchase-import/repo/source-claim-family").LiveSourceOrder
     | null
     | undefined,
 ) {
@@ -809,7 +809,10 @@ export function planSourceAssociation(
   outputFingerprint: string,
   orderKey: string,
   rootId: typeof import("~/server/db/schema").importSourceClaim.$inferSelect.id,
-  existing: import("./source-claim-family").LiveSourceOrder | null | undefined,
+  existing:
+    | import("~/server/domains/purchase-import/repo/source-claim-family").LiveSourceOrder
+    | null
+    | undefined,
   updatedAt: Date,
 ) {
   if (existing && existing.purchaseId !== purchaseId)
@@ -864,7 +867,9 @@ export function planReconciliationFix(
   input: ImportWriterInput,
   purchaseId: typeof purchase.$inferSelect.id,
   orderKey: string,
-  accepted: import("./source-claim-family").LiveSourceOrder | null,
+  accepted:
+    | import("~/server/domains/purchase-import/repo/source-claim-family").LiveSourceOrder
+    | null,
   observationId: string,
 ): Extract<
   import("@cubby/schemas/purchase-import").ProposedImportFix,

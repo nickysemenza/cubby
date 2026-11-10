@@ -118,6 +118,8 @@ function provenIdentity(
  * account, disposition and history. Any disagreement, a second owner or a
  * second incoming row leaves the ordinary identity conflict for review.
  */
+export type AdoptionFacts = Awaited<ReturnType<typeof loadAdoptionFacts>>;
+
 async function loadAdoptionFacts(
   query: ReturnType<typeof unwrapDb>,
   source: string,

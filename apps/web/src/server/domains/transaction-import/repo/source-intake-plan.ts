@@ -12,6 +12,7 @@ import { providerIdentityClaims } from "~/server/domains/transaction-import/repo
 import { constraintViolation } from "~/server/errors/app-error";
 
 import type { prepareRows } from "./source-intake-stages";
+import type { AdoptionFacts } from "./source-intake-stages";
 
 type Prepared = Awaited<ReturnType<typeof prepareRows>>;
 type Owner = typeof sourceOccurrence.$inferSelect;
@@ -26,9 +27,7 @@ export function planAdoption(
   source: string,
   locked: ReadonlyArray<Owner>,
   observedAt: Date,
-  facts: Awaited<
-    ReturnType<typeof import("./source-intake-stages").loadAdoptionFacts>
-  >,
+  facts: AdoptionFacts,
 ) {
   const { incoming, antecedents, ownerSizes } = facts;
   const adopted = new Map<string, Owner>();

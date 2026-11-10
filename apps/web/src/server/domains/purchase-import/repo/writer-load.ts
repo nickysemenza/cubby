@@ -26,17 +26,17 @@ import {
 } from "~/server/db/schema";
 import { effectiveExpenseTradeSql } from "~/server/domains/expense/repo/expense-inheritance";
 import { zeroCostOwnershipExitExpensePredicate } from "~/server/domains/product/repo/ownership";
+import {
+  lockImportSourceClaimFamily,
+  readImportSourceClaimFamily,
+  readSourceFamilyOrder,
+} from "~/server/domains/purchase-import/repo/source-claim-family";
 
 import { normalizedOrderIdSql, normalizeOrderKey } from "./order-identity";
 import {
   acceptedSourceExtraction,
   mergedVendorSourceOrder,
 } from "./reconciliation-observations";
-import {
-  lockImportSourceClaimFamily,
-  readImportSourceClaimFamily,
-  readSourceFamilyOrder,
-} from "./source-claim-family";
 
 export async function loadOriginalLineBindings(
   tx: DrizzleTransaction,
@@ -65,7 +65,7 @@ export async function loadOriginalLineBindings(
 
 export async function loadAcceptedProductChoices(
   tx: DrizzleTransaction,
-  order: import("./source-claim-family").LiveSourceOrder,
+  order: import("~/server/domains/purchase-import/repo/source-claim-family").LiveSourceOrder,
 ) {
   const [observation] = order.acceptedObservationId
     ? await tx
@@ -280,7 +280,7 @@ export async function lockPurchaseExpenses(
 
 export async function loadAcceptedPurchase(
   tx: DrizzleTransaction,
-  order: import("./source-claim-family").LiveSourceOrder,
+  order: import("~/server/domains/purchase-import/repo/source-claim-family").LiveSourceOrder,
   vendorId: string,
 ) {
   return tx.query.purchase.findFirst({
@@ -300,7 +300,7 @@ export async function loadAcceptedPurchase(
 
 export async function loadAcceptedPaymentFacts(
   tx: DrizzleTransaction,
-  order: import("./source-claim-family").LiveSourceOrder,
+  order: import("~/server/domains/purchase-import/repo/source-claim-family").LiveSourceOrder,
 ) {
   const accepted = await acceptedSourceExtraction(tx, order);
   const retainedPayments = await tx
