@@ -151,7 +151,7 @@ import { productSellerMembershipsSql } from "~/server/domains/product/repo/produ
 import { productSpendingEvidenceSql } from "~/server/domains/product/repo/product-spending";
 import { productSearch as productSearchRead } from "~/server/domains/product/repo/search-read-product";
 import { serviceCategorySql } from "~/server/domains/product/repo/service-category";
-import { loadStoredProductDisplay } from "~/server/domains/product/repo/stored-display";
+import { loadProductDisplay } from "~/server/domains/product/repo/stock-facts";
 import { resolveProductBrand } from "~/server/domains/vendor/repo/product-brand";
 import { externalIdsLabel } from "~/server/entity-kernel/repo/detail-display-labels";
 import { resolveEntityDisplayImages } from "~/server/entity-kernel/repo/entity-display-image";
@@ -164,7 +164,6 @@ import {
   logAuditEntry,
 } from "~/server/generic/audit-log/repo/audit-log";
 import { recordChange } from "~/server/generic/changes/repo/change";
-import { storedDerivedSql } from "~/server/generic/derived/repo/read";
 import {
   ensureExternalSources,
   lockExternalIdentifierParents,
@@ -214,7 +213,8 @@ import {
   resolveProductPricing,
 } from "./pricing";
 import { storedEffectivePrice } from "./pricing";
-import { EMPTY_QUANTITY_LEDGER } from "./quantity-ledger";
+import { expectedQuantitySql, quantityVarianceSql } from "./quantity-ledger";
+import { loadProductStockFacts } from "./stock-facts";
 import { unitMappingColumns } from "./unit-mappings";
 import {
   assertNoCanonicalPriceMapping,
@@ -229,6 +229,7 @@ import {
   productGalleryIntent,
   syncProductUnitMappings,
 } from "./update-helpers";
+import { productWorkFactsSql } from "./work-facts-sql";
 
 const qb = new QueryBuilder();
 
@@ -326,28 +327,22 @@ export const productScaffold = listScaffold<
     // note on the column in app/products/productlist.tsx for why the id is
     // the half that cannot move.
     expenseCount: productExpenseCountFilterSql(product.id),
-    // Ledger filters and sorts use the published typed projections.
-    ledgerExpectedQuantity: storedDerivedSql(
-      "product",
-      "ledgerExpectedQuantity",
-      product.id,
-    ),
-    quantityVariance: storedDerivedSql(
-      "product",
-      "quantityVariance",
-      product.id,
-    ),
-    // Live stock/direct-Expense gates remain; state uses the published variance,
-    // including null for incomparable quantities, without preparing live folds.
+    // Ledger sorts and filters read live Expense and Inventory rows, so a
+    // member's own write moves the row at once.
+    ledgerExpectedQuantity: sql.raw(expectedQuantitySql('"Product"')),
+    quantityVariance: sql.raw(quantityVarianceSql('"Product"')),
+    // Live stock/direct-Expense gates; null variance (incomparable
+    // quantities) has no state.
     quantityVarianceState: sql`CASE WHEN ${and(
       or(
         inArray(product.id, productIdsWithLiveInventory),
         inArray(product.id, productIdsServingAsLocations),
       ),
       inArray(product.id, productIdsWithExpenses),
-    )} THEN CASE ${storedDerivedSql("product", "quantityVariance", product.id)} = 0
+    )} THEN CASE ${sql.raw(quantityVarianceSql('"Product"'))} = 0
         WHEN true THEN ${productQuantityVarianceState.enum.matched}::text
         WHEN false THEN ${productQuantityVarianceState.enum.mismatched}::text END END`,
+    ...productWorkFactsSql('"Product"'),
     // Same fragment the cell renders (relations.ts) and both filters use.
     purchaseDate: productAcquisitionDateFilterSql(product.id),
     upcPresence: inArray(
@@ -553,7 +548,7 @@ export const productScaffold = listScaffold<
           throw new Error(`Product stored input was not loaded: ${key}`);
         return read;
       };
-      const facts = bind.ids(async (page) => {
+      const priceFacts = bind.ids(async (page) => {
         const published = await stored.load(page);
         return new Map(
           page.ids.map((id) => {
@@ -565,9 +560,14 @@ export const productScaffold = listScaffold<
           }),
         );
       });
+      // Stock is read live so a member's own Expense or Inventory write shows
+      // at once; only price facts come from the hourly publication.
+      const facts = bind.ids(({ db, ids }) =>
+        loadProductStockFacts(db, productIds(ids)),
+      );
       const pricing = bind.batch(async (page) => {
         const published = await stored.load(page.idPage);
-        const snapshots = await facts.load(page.idPage);
+        const snapshots = await priceFacts.load(page.idPage);
         return new Map(
           page.rows.map((row) => {
             const saved =
@@ -896,6 +896,9 @@ export const productScaffold = listScaffold<
             fieldResolutions: true,
             quantityLedger: true,
             quantityVariance: true,
+            onHandUnits: true,
+            primaryPlacement: true,
+            stockStatus: true,
             stockStatusItems: true,
             ledgerExpectedQuantityLabel: true,
             quantityVarianceLabel: true,
@@ -905,11 +908,10 @@ export const productScaffold = listScaffold<
             if (!pricing)
               throw new Error("Product stock binding requires pricing");
             const snapshot = loaded.facts.get(row.id);
+            if (!snapshot)
+              throw new Error("Product stock binding requires stock facts");
             const service = isServiceProductCategory(row.categorySummary);
-            // The raw shape needs a ledger; the field envelope keeps a missing
-            // publication unavailable rather than presenting these placeholders.
-            const quantityLedger =
-              snapshot?.quantityLedger ?? EMPTY_QUANTITY_LEDGER;
+            const quantityLedger = snapshot.quantityLedger;
             const fieldResolutions = productFieldResolutions(
               {
                 price: row.price,
@@ -923,14 +925,16 @@ export const productScaffold = listScaffold<
               pricing,
               fieldResolutions,
               quantityLedger,
-              quantityVariance: snapshot?.quantityVariance ?? null,
-              stockStatusItems: snapshot?.stockStatusItems ?? [],
-              ledgerExpectedQuantityLabel:
-                service || !snapshot
-                  ? null
-                  : expectedQuantityLabel(quantityLedger),
+              quantityVariance: snapshot.quantityVariance,
+              onHandUnits: snapshot.onHandUnits,
+              primaryPlacement: snapshot.primaryPlacement,
+              stockStatus: snapshot.stockStatus,
+              stockStatusItems: snapshot.stockStatusItems,
+              ledgerExpectedQuantityLabel: service
+                ? null
+                : expectedQuantityLabel(quantityLedger),
               quantityVarianceLabel: quantityVarianceLabel(
-                snapshot?.quantityVariance ?? null,
+                snapshot.quantityVariance,
               ),
             };
           },
@@ -974,18 +978,14 @@ export const productScaffold = listScaffold<
         facts.fields(
           rawProductDetail.pick({ ownershipEvidence: true }),
           (row, loaded) => {
-            return {
-              ownershipEvidence:
-                loaded.get(row.id)?.ownershipEvidence ??
-                productReadFacts.shape.ownershipEvidence.parse({
-                  state: "uncertain",
-                  acquiredAt: null,
-                  exitedAt: null,
-                  confidenceLostAt: null,
-                }),
-            };
+            const facts = loaded.get(row.id);
+            if (!facts)
+              throw new Error(
+                "Product ownership evidence requires stock facts",
+              );
+            return { ownershipEvidence: facts.ownershipEvidence };
           },
-          { scope: "detail", storedKeys: ["readFacts"] },
+          { scope: "detail" },
         ),
         covers.fields(
           rawProductDetail.pick({ coverImageUrl: true }),
@@ -1258,7 +1258,7 @@ export const productSearch = async (
   const resultIds = page.data.map((result) => result.id);
   const [categories, display, coverImageUrls] = await Promise.all([
     loadCategorySummaries(db),
-    loadStoredProductDisplay(db, resultIds),
+    loadProductDisplay(db, resultIds),
     getProductCoverImageUrlsByProductIds(db, resultIds),
   ]);
   return {
@@ -1328,7 +1328,7 @@ export const getProductPickerItemsByIds = async (
   const categories = await loadCategorySummaries(db);
   const rowIds = rows.map((row) => row.id);
   const [display, coverImageUrls] = await Promise.all([
-    loadStoredProductDisplay(db, rowIds),
+    loadProductDisplay(db, rowIds),
     getProductCoverImageUrlsByProductIds(db, rowIds),
   ]);
   const byId = new Map(

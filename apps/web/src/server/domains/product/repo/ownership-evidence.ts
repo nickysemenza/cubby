@@ -60,6 +60,20 @@ export function productOwnershipEvidence(
   directExpectedQuantity: number,
   hasKitContributions = false,
 ): ProductOwnershipEvidenceOut {
+  // Dated acquisitions followed only by undated quantified exits that bring
+  // the balance to zero: the item is gone, on a date nobody recorded.
+  if (
+    !hasKitContributions &&
+    directExpectedQuantity === 0 &&
+    timeline.undatedExits &&
+    timeline.acquiredAt !== null
+  )
+    return {
+      state: "exited",
+      acquiredAt: timeline.acquiredAt,
+      exitedAt: null,
+      confidenceLostAt: timeline.confidenceLostAt,
+    };
   const certain =
     !hasKitContributions &&
     directExpectedQuantity >= 0 &&

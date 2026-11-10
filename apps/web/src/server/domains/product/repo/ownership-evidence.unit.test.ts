@@ -21,4 +21,21 @@ describe("productOwnershipEvidence", () => {
       productOwnershipEvidence({ ...timeline, intervals: [] }, 0).state,
     ).toBe("uncertain");
   });
+
+  it("reads an undated exit to zero as exited on an unknown date", () => {
+    const undated = {
+      acquiredAt: "2021-01-01",
+      intervals: [{ start: "2021-01-01", end: "2021-01-01" }],
+      confidenceLostAt: "2021-01-01",
+      undatedExits: true,
+    };
+    expect(productOwnershipEvidence(undated, 0)).toEqual({
+      state: "exited",
+      acquiredAt: "2021-01-01",
+      exitedAt: null,
+      confidenceLostAt: "2021-01-01",
+    });
+    expect(productOwnershipEvidence(undated, 1).state).toBe("uncertain");
+    expect(productOwnershipEvidence(undated, 0, true).state).toBe("uncertain");
+  });
 });

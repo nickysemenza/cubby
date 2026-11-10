@@ -64,20 +64,6 @@ export type DerivedCompute = {
   readonly preparationBatchSize?: number;
 };
 
-/** One immutable authoritative input set, shared only by a preparation page. */
-export const sharedDerivedPreparation =
-  <Prepared>(
-    prepare: (db: Database, ids: readonly string[]) => Promise<Prepared>,
-  ) =>
-  (
-    project: (
-      prepared: Prepared,
-      ids: readonly string[],
-    ) => ReadonlyMap<string, DerivedComputed>,
-  ): DerivedCompute =>
-  async (db: Database, ids: readonly string[]) =>
-    project(await prepare(db, ids), ids);
-
 /**
  * An adapter whose output lives in its own table (search documents, recipe
  * totals, conversion coverage) rather than `DerivedValue`. `prepare` runs

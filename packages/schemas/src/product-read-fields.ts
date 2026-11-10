@@ -124,7 +124,6 @@ export const productQuantityFields = {
   stockStatus: z.string().nullish(),
   stockStatusItems: displayItems,
   quantityLedger: productQuantityLedgerOut,
-  /** The public envelope takes this scalar from its own stored publication. */
   ledgerExpectedQuantity: z.number().nullish(),
   onHandUnits: z.number().nullable(),
   quantityVariance: z.number().nullable(),
@@ -155,28 +154,30 @@ export const productDisplayFactsState = z.object({
   available: z.boolean(),
   stale: z.boolean(),
 });
-export const productReadFacts = z.object({
-  workFacts: z
-    .object({
-      priced: z.boolean(),
-      accountedKits: z.number().nullable(),
-      unknownAcquisition: z.boolean(),
-      kitAccounting: z.boolean(),
-      ownershipReconciliation: z.boolean(),
-      unknownQuantityLines: z.boolean(),
-    })
-    .optional(),
+/** Request-time stock facts; every member reads current Expense and Inventory rows. */
+export const productStockFacts = z.object({
+  workFacts: z.object({
+    accountedKits: z.number().nullable(),
+    unknownAcquisition: z.boolean(),
+    kitAccounting: z.boolean(),
+    ownershipReconciliation: z.boolean(),
+    unknownQuantityLines: z.boolean(),
+  }),
   ...productQuantityFields,
-  pricing: productPricingOut,
   ownershipEvidence: productOwnershipEvidenceOut,
   pickerOnHand: productPickerOnHandOut,
-  stockEvidence: z
-    .object({
-      inventoryAmounts: z.array(amount),
-      stockTracked: z.boolean().nullable(),
-      service: z.boolean(),
-    })
-    .optional(),
+  stockEvidence: z.object({
+    inventoryAmounts: z.array(amount),
+    stockTracked: z.boolean().nullable(),
+    service: z.boolean(),
+  }),
+});
+export type ProductStockFacts = z.infer<typeof productStockFacts>;
+
+/** The hourly Product price publication; stock facts are read live. */
+export const productReadFacts = z.object({
+  workFacts: z.object({ priced: z.boolean() }).optional(),
+  pricing: productPricingOut,
 });
 
 /**

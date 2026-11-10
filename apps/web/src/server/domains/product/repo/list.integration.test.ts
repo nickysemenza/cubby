@@ -519,7 +519,6 @@ describe("product list display labels", () => {
         productQuantity: null,
       }),
     );
-    await drainStoredDerived(ctx.db);
     const { data } = await listProductsFixture(
       ctx.db,
       { ids: [product.id] },

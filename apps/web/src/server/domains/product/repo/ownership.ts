@@ -130,26 +130,39 @@ export async function loadProductOwnershipTimelines(
   const today = options.today ?? householdLocalDate();
   for (const productId of productIds) {
     const productRows = rowsByProduct.get(productId) ?? [];
-    if (productRows.some((row) => row.expenseDate === null)) continue;
+    const markers = productRows.map((row) => ({
+      // A line without its own date is undated even on a dated Purchase, as
+      // in the movement timeline; dated lines take their Purchase's date.
+      date:
+        row.expenseDate === null ? null : (row.purchaseDate ?? row.expenseDate),
+      signedQuantity: classifyProductMovement(row.cost, row.quantity)
+        .signedQuantity,
+    }));
+    // Only undated quantified exits leave the dated history provable.
+    if (
+      markers.some(
+        (marker) =>
+          marker.date === null &&
+          (marker.signedQuantity === null || marker.signedQuantity >= 0),
+      )
+    )
+      continue;
     const acquisitionDates = productRows.flatMap((row) =>
-      row.cost !== null && row.cost > 0 && row.lineKind === "principal"
+      row.cost !== null &&
+      row.cost > 0 &&
+      row.lineKind === "principal" &&
+      row.expenseDate !== null
         ? [row.purchaseDate ?? row.expenseDate]
         : [],
     );
     acquisitionDates.sort();
 
-    const ownership = buildConfidentOwnershipIntervals(
-      productRows.map((row) => ({
-        date: row.purchaseDate ?? row.expenseDate,
-        signedQuantity: classifyProductMovement(row.cost, row.quantity)
-          .signedQuantity,
-      })),
-      today,
-    );
+    const ownership = buildConfidentOwnershipIntervals(markers, today);
     result.set(productId, {
       acquiredAt: acquisitionDates[0] ?? ownership.intervals[0]?.start ?? null,
       intervals: ownership.intervals,
       confidenceLostAt: ownership.confidenceLostAt,
+      ...(ownership.undatedExits ? { undatedExits: true } : {}),
     });
   }
 

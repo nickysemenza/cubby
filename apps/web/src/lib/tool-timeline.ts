@@ -46,6 +46,8 @@ export type ProductOwnershipTimeline = {
   intervals: Array<{ start: string; end: string }>;
   /** From this date onward the ledger cannot prove an ownership balance. */
   confidenceLostAt: string | null;
+  /** Confidence was lost only to undated quantified exits; conflict checks ignore it. */
+  undatedExits?: boolean;
 };
 
 export const UNKNOWN_OWNERSHIP: ProductOwnershipTimeline = {

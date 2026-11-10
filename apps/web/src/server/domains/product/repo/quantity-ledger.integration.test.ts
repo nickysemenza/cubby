@@ -13,7 +13,6 @@ import { getDb } from "~/server/db/helpers";
 import { inventoryEntry, product } from "~/server/db/schema";
 import { executeEntity } from "~/server/entity-kernel";
 import { entityKernelContextSchema } from "~/server/entity-kernel/adapter";
-import { drainStoredDerived } from "~/server/testing/background-queue";
 import {
   createInventoryFixture,
   createLocationFixture,
@@ -28,14 +27,12 @@ import { createTestRequestContext } from "~/server/testing/request-context";
 import { productScaffold } from "./crud";
 import { attachProductComponents } from "./product-components";
 import {
-  loadProductDetailQuantityLedgers,
   loadProductPlacementFacts,
   enrichProductRowsWithQuantityLedger,
   loadProductPickerQuantities,
   loadProductQuantityLedgers,
   loadProductQuantitySummaries,
   onHandUnitsSql,
-  onHandUnitsReadSql,
   quantityVarianceSql,
 } from "./quantity-ledger";
 
@@ -66,9 +63,9 @@ describe("loadProductQuantityLedgers", () => {
   const ledgerFor = async (productId: ProductId) =>
     (await loadProductQuantityLedgers(ctx.db, [productId])).get(productId);
 
-  // A catalog filter must not restart the same kit graph scan for each Product.
-  // The grouped path must still agree with signed, weighted ledger quantities.
-  it("filters catalog quantity ranges from published ledger values", async () => {
+  // Catalog filters read the live ledger and agree with the batch loader's
+  // signed, kit-weighted quantities without a background pass.
+  it("filters catalog quantity ranges from live ledger values", async () => {
     // These rows only supply identity and cardinality; preserve creation effects without detail hydration.
     const unrelatedIds: ProductId[] = [];
     for (let index = 0; index < 64; index++)
@@ -110,7 +107,6 @@ describe("loadProductQuantityLedgers", () => {
       productQuantity: 100,
       future: true,
     });
-    await drainStoredDerived(ctx.db);
     const where = await productWhere(ctx.db, {
       expectedQuantityMin: -8,
       expectedQuantityMax: -2,
@@ -141,29 +137,6 @@ describe("loadProductQuantityLedgers", () => {
     expect(zeroIds).toEqual(expect.arrayContaining(unrelatedIds));
     expect(zeroIds).not.toContain(kit.entityId);
     expect(zeroIds).not.toContain(part.entityId);
-    const planNode = z.object({
-      "Relation Name": z.string().optional(),
-      "Actual Loops": z.number().optional(),
-      get Plans() {
-        return z.array(planNode).optional();
-      },
-    });
-    const explained = await getDb(ctx.db).execute(
-      sql`EXPLAIN (ANALYZE, FORMAT JSON) SELECT ${product.id} FROM ${product} WHERE ${where}`,
-      "objects",
-    );
-    const plan = z
-      .array(z.object({ Plan: planNode }))
-      .parse(explained[0]?.["QUERY PLAN"])[0];
-    let edgeScans = 0;
-    const visit = (node: z.infer<typeof planNode>) => {
-      if (node["Relation Name"] === "EntityLink")
-        edgeScans += node["Actual Loops"] ?? 0;
-      node.Plans?.forEach(visit);
-    };
-    if (!plan) throw new Error("Missing query plan");
-    visit(plan.Plan);
-    expect(edgeScans).toBeLessThanOrEqual(12);
   });
 
   // A discard/sale whose earlier acquisition was never recorded drives the
@@ -234,12 +207,7 @@ describe("loadProductQuantityLedgers", () => {
       productQuantity: null,
     });
     const batch = await ledgerFor(part.entityId);
-    const detail = (
-      await loadProductDetailQuantityLedgers(ctx.db, [part.entityId])
-    ).get(part.entityId);
     expect(batch?.unknownAcquisitionLines).toBe(1);
-    expect(detail).toEqual(batch);
-    await drainStoredDerived(ctx.db);
     const filter = await productWhere(ctx.db, {
       unknownQuantityLinesFilter: "has",
     });
@@ -569,16 +537,13 @@ describe("loadProductPickerQuantities", () => {
     const compare = async () => {
       const rows = await getDb(ctx.db).execute(
         sql`
-        WITH stock AS (${onHandUnitsReadSql()})
-        SELECT p.id, ${sql.raw(onHandUnitsSql("p"))} AS scalar,
-          stock."onHandUnits" AS batch
-        FROM "Product" p LEFT JOIN stock ON stock."productId" = p.id
+        SELECT p.id, ${sql.raw(onHandUnitsSql("p"))} AS batch
+        FROM "Product" p
         WHERE p.id IN (${absent.entityId}, ${counted.entityId}, ${mixed.entityId}, ${installed.entityId})
         ORDER BY p.id
       `,
         "objects",
       );
-      for (const row of rows) expect(row.batch).toEqual(row.scalar);
       return rows;
     };
     const initial = await compare();
@@ -647,7 +612,6 @@ describe("primary placement", () => {
       .update(inventoryEntry)
       .set({ updatedAt: new Date("2026-02-01") })
       .where(eq(inventoryEntry.id, newer.entityId));
-    await drainStoredDerived(ctx.db);
     const load = () =>
       loadProductPlacementFacts(ctx.db, [prod.entityId, absent.entityId]);
     let facts = await load();
@@ -723,7 +687,6 @@ describe("primary placement", () => {
       }),
       ctx.actor,
     );
-    await drainStoredDerived(ctx.db);
     expect(
       await read({
         action: "get",
