@@ -43,12 +43,14 @@ const cookbookRecipeRefSchema = passthrough({
 
 // The `ingredient` parser's structured reading, as `WIngredient` already
 // crosses the wasm boundary today (snake_case `upper_value`).
-const parsedAmountSchema = passthrough({
+/** @public Names a generated native model. */
+export const parsedAmountSchema = passthrough({
   unit: z.string(),
   value: z.number(),
   upper_value: z.number().nullable().optional(),
 });
-const parsedIngredientSchema = passthrough({
+/** @public Names a generated native model. */
+export const parsedIngredientSchema = passthrough({
   name: z.string(),
   amounts: z.array(parsedAmountSchema),
   modifier: z.string().nullable().optional(),
