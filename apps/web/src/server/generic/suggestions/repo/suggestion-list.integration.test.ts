@@ -50,7 +50,6 @@ import { automaticApplicationRule, recordFeedback } from "./suggestion";
 import {
   acceptCleanSuggestions,
   listSuggestionPage,
-  suggestionRecordCounts,
   suggestionCountsByFamily,
 } from "./suggestion-list";
 
@@ -267,9 +266,6 @@ describe("cross-family Suggestion list", () => {
         recordIds: [record],
       });
       expect(page.items.map((row) => row.suggestionId)).toEqual([id]);
-      expect(
-        (await suggestionRecordCounts(ctx.db, { recordIds: [record] })).records,
-      ).toEqual([{ id: record, pending: 1 }]);
     }
   });
 
@@ -303,13 +299,7 @@ describe("cross-family Suggestion list", () => {
       account.id,
       ...candidates.map((candidate) => candidate.id),
     ];
-    expect(
-      (await suggestionRecordCounts(ctx.db, { recordIds: affected })).records,
-    ).toEqual(affected.map((id) => ({ id, pending: 1 })));
     for (const id of affected) {
-      expect(
-        (await suggestionRecordCounts(ctx.db, { recordIds: [id] })).records,
-      ).toEqual([{ id, pending: 1 }]);
       expect(
         (
           await listSuggestionPage(ctx.db, {
@@ -493,10 +483,6 @@ describe("cross-family Suggestion list", () => {
       expect(await scoped([ref, unrelatedRef])).toContain(
         proposal.suggestionId,
       );
-      expect(
-        (await suggestionRecordCounts(ctx.db, { recordIds: [ref.code] }))
-          .records,
-      ).toEqual([{ id: ref.code, pending: 1 }]);
     }
     const expanded = await readSuggestionRecordRefs(ctx.db, [
       proposal.suggestionId,
@@ -506,13 +492,6 @@ describe("cross-family Suggestion list", () => {
         settlementRefs.map(({ entity, code }) => ({ entity, id: code })),
       ),
     );
-    expect(
-      (
-        await suggestionRecordCounts(ctx.db, {
-          recordIds: settlementRefs.map((ref) => ref.code),
-        })
-      ).records,
-    ).toEqual(settlementRefs.map((ref) => ({ id: ref.code, pending: 1 })));
 
     const purchaseId = await resolveOrThrow(
       ctx.db,
@@ -822,17 +801,7 @@ describe("cross-family Suggestion list", () => {
         relevant: row.fingerprint !== "fp-list-unrelated",
       })),
     ];
-    const batched = await suggestionRecordCounts(ctx.db, {
-      recordIds: affected.map((ref) => ref.code),
-    });
-    expect(batched.records).toEqual(
-      affected.map((ref) => ({ id: ref.code, pending: 1 })),
-    );
     for (const ref of affected) {
-      expect(
-        (await suggestionRecordCounts(ctx.db, { recordIds: [ref.code] }))
-          .records,
-      ).toEqual([{ id: ref.code, pending: 1 }]);
       const filters = {
         family: "statement_transaction" as const,
         recordEntity: ref.entity,
@@ -864,12 +833,15 @@ describe("cross-family Suggestion list", () => {
         data: sql`jsonb_set(${suggestionTable.data}, '{chargeKey}', to_jsonb(${previous.shortcode}::text))`,
       })
       .where(eq(suggestionTable.id, current.suggestionId));
-    expect(
-      (
-        await suggestionRecordCounts(ctx.db, {
-          recordIds: affected.map((ref) => ref.code),
-        })
-      ).records,
-    ).toEqual(batched.records);
+    for (const ref of affected)
+      expect(
+        (
+          await listSuggestionPage(ctx.db, {
+            family: "statement_transaction",
+            recordEntity: ref.entity,
+            recordIds: [ref.code],
+          })
+        ).items,
+      ).toHaveLength(1);
   });
 });
