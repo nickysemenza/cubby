@@ -356,6 +356,13 @@ Worker version and its finish time. A drain unit records the same on its
 Failed Job executions and failed drain pages reach Sentry tagged
 `cubby.background.unit` with the Job kind or drain unit.
 
+A record is written only when the execution ends, so an invocation the
+runtime kills (exceeded memory or CPU) leaves none. Each permit therefore names
+its unit before any work: a `permit claimed` log line with the unit, kind and,
+for a Job, its id, key, Run and generation, and the same
+`cubby.background.unit`/`.kind`, `cubby.job.id` and `cubby.run.id` attributes
+on the invocation span. Join a killed invocation to its unit through that line.
+
 Retry now (`job.retryNow`, `retryJobsNow`) makes a filtered set due at once:
 backoff and provider waits clear, prior errors stay, failed and cancelled Jobs
 reopen with a fresh budget and generation, and running or member-paused Jobs
