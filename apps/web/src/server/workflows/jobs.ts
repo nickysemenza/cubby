@@ -56,14 +56,24 @@ export const purchaseDispatchHandler = (
       }),
     );
     await Promise.all(pending);
-    // A full coordinator cap is a capacity wait, not a failed attempt; the
-    // next released turn brings this Job forward before the fallback time.
+    // A full coordinator cap is a capacity wait, not a failed attempt. The
+    // coordinator keeps its place at the gate and brings this Job forward when
+    // a turn is reserved for it; the fallback re-polls well inside the gate's
+    // waiter lifetime.
+    // An unreachable gate is the same wait, re-polled sooner: nothing will
+    // wake this Job.
     if (typeof outcome === "object")
-      throw new JobDeferredError(
-        `Waiting for a coordinator turn (${outcome.waiting.holders} running)`,
-        new Date(Date.now() + 120_000 + Math.random() * 120_000),
-        jobWaitReason.enum.provider_capacity,
-      );
+      throw outcome.waiting.unavailable
+        ? new JobDeferredError(
+            "Waiting for the coordinator gate to answer",
+            new Date(Date.now() + 60_000 + Math.random() * 60_000),
+            jobWaitReason.enum.provider_capacity,
+          )
+        : new JobDeferredError(
+            `Waiting for a coordinator turn (${outcome.waiting.holders} running)`,
+            new Date(Date.now() + 8 * 60_000 + Math.random() * 4 * 60_000),
+            jobWaitReason.enum.provider_capacity,
+          );
     return { page: { done: true, result: { outcome } } };
   });
 

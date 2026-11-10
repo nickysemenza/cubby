@@ -53,13 +53,17 @@ export type DispatchInput = {
 export interface PurchaseImportRunAgentRpc {
   /**
    * `waiting` when no coordinator turn was free: nothing ran, and the
-   * dispatch should wait for one (`domains/run/repo/coordinator-turns.ts`).
+   * dispatch should wait for one (`purchase-import/operations/coordinator-gate.ts`).
    */
-  dispatch(
-    input: DispatchInput,
-  ): Promise<{ accepted: boolean; waiting?: { holders: number } }>;
+  dispatch(input: DispatchInput): Promise<{
+    accepted: boolean;
+    /** `unavailable` when the gate could not be asked at all. */
+    waiting?: { holders: number; unavailable?: true };
+  }>;
   /** Destroy a settled Run's transcript; never enters a model turn. */
   retire(): Promise<{ disposed: boolean }>;
+  /** The household gate reserved this coordinator a turn; it takes it next alarm. */
+  turnReady(): Promise<void>;
 }
 
 /** A service result: the host's JSON answer, or null when there is none. */

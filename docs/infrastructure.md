@@ -117,7 +117,11 @@ latency is mostly outside this profile: production traces carry
 The purchase agent coordinates import Runs inside Worker `cubby`. Its
 checked-in configuration in `apps/web/cloudflare.config.ts` is the SQLite
 Durable Object class `PurchaseImportRunAgent` (binding `PURCHASE_IMPORT_RUN`,
-one instance per Run) plus the `purchase.dispatch` Job handler. Runtime
+one instance per Run), the SQLite Durable Object class
+`CoordinatorGateDurableObject` (binding `COORDINATOR_GATE`, one instance named
+`household`) that queues their work turns
+([budget](#background-connection-budget)), and the `purchase.dispatch` Job
+handler. Runtime
 behavior, model context, observation and the agent's **trust boundary** (no
 `env`, Run-bound services, delegated MCP, the `cubby/purchase-agent-boundary`
 lint rule) are in the
@@ -197,23 +201,36 @@ cron runs its backstop and the daily pass one after the other, so 2 more. That
 leaves 20 sockets for Durable Object requests.
 
 Purchase coordinators (one `PurchaseImportRunAgent` per import Run) share a
-household-wide cap of `COORDINATOR_TURN_CAP` = 6 concurrent work turns
-(`domains/run/repo/coordinator-turns.ts`): about 12 sockets, leaving room for
-the CalendarFeed object's rebuilds and other Durable Object requests, which are
-bounded only by their own traffic. Before an alarm, a dispatch or a member
-prompt loads the agent, its host takes or renews the Run's turn in one short
-transaction (a `CoordinatorTurn` row under one advisory lock) and keeps it
-while pi has work running; the entry that finds pi idle releases it. A crashed
-holder's turn lapses after its 16-minute lease, longer than an alarm can run. A
-refused coordinator's row (`held = false`) records that it is alive and
-waiting, so stale-Run expiry never ends a Run for waiting its turn. Without a
-turn, nothing loads: an alarm re-arms itself 15 s–5 min later (doubling,
-jittered), a `purchase.dispatch` Job defers with `provider_capacity` (no
-attempt spent) until a released turn brings the oldest one forward, and a
-prompt answers 503 with `Retry-After`. A member's stop never waits for a turn.
-The cap neither starts, resumes, retries nor cancels a Run: a running
-coordinator simply waits its turn. Each coordinator still opens a pool per
-service call within its turn.
+household-wide cap of 6 concurrent work turns, about 12 sockets, leaving room
+for CalendarFeed rebuilds and other Durable Object requests, which are bounded
+only by their own traffic. The singleton `CoordinatorGateDurableObject`
+(`purchase-import/operations/coordinator-gate.ts`) admits them without
+Postgres, so a waiting coordinator opens no database scope.
+
+- **Turns.** Before an alarm, a dispatch or a member prompt loads the agent,
+  its host asks the gate for the Run's turn (10-minute lease) and keeps it
+  while pi works, renewing on every entry, on a heartbeat and before database
+  work near the lease's end; the check that confirms pi idle releases it. Three
+  undecidable idle checks in a row stop renewal: database work ends at the
+  current deadline and the coordinator asks again after lease plus grace. One
+  in-instance step queue orders acquire, renew, idle check and release.
+- **Fence.** pi's Run services refuse database work once the turn is lost
+  (`CoordinatorLeaseLostError`, transient), so the Run takes its existing
+  transient path.
+- **Queue.** Refused coordinators wait in one FIFO list and keep their place
+  across polls. A freed slot is reserved 60 s for the first eligible waiter,
+  which the gate wakes (`turnReady`); holders plus live reservations never
+  exceed the cap, and a later waiter overtakes only while the head leaves its
+  reservation unclaimed. Unpolled waiters leave after 15 minutes; a lapsed
+  holder's slot is re-granted only after its lease plus a 5-minute grace.
+- **Waiting.** Nothing loads: an alarm re-arms 15 s–5 min later besides the
+  gate's wake; a `purchase.dispatch` defers with `provider_capacity` and no
+  attempt, and its coordinator brings it forward when reserved a turn (fallback
+  re-poll 8–12 minutes, 1–2 minutes when the gate cannot be asked); a prompt
+  answers 503 with `Retry-After`. A member's stop never waits.
+- **Runs.** The cap starts, resumes, retries, cancels and reassigns nothing.
+  Stale-Run expiry skips Runs queued at the gate and expires nothing when the
+  gate cannot answer.
 
 Past the budget, Hyperdrive queues for an origin slot and then fails the query
 with SQLSTATE 58000 "Timed out while waiting for an open slot in the pool".
@@ -229,12 +246,10 @@ Watch for the margin running out:
 - Long `db.acquire` spans on queue, cron and Durable Object traces.
 - The background configuration's origin connection count in the Hyperdrive
   dashboard approaching 40.
-- Coordinator turn waits: `cubby.coordinator.turn = waiting` (with `.holders`
-  and `.retry_ms`) on `purchase-agent.alarm`/`.dispatch` spans and as a Sentry
-  tag, the `purchase-agent.turn` log, and `purchase.dispatch` Jobs deferred with
-  "Waiting for a coordinator turn" (`Job.lastExecution.outcome = 'deferred'`).
-  `SELECT held, count(*) FROM "CoordinatorTurn" WHERE "leaseExpiresAt" > now()
-  GROUP BY held` counts turns held and coordinators waiting now.
+- Coordinator turn waits: `cubby.coordinator.turn = waiting | unavailable`
+  (with `.holders`, `.position`, `.retry_ms`) on `purchase-agent.alarm` and
+  `.dispatch` spans and as a Sentry tag, the `purchase-agent.turn` log, and
+  deferred `purchase.dispatch` Jobs (`Job.lastExecution.outcome = 'deferred'`).
 
 Raise `max_concurrency` only with the origin cap, and only after measuring pool
 waits.

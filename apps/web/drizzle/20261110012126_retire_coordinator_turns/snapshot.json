@@ -1,0 +1,59 @@
+{
+  "type": "diff",
+  "version": "9",
+  "dialect": "postgres",
+  "id": "0d808538-33f3-4937-b053-3b80e64b1ecd",
+  "prevIds": [
+    "fbae7cad-3cfc-4f70-b38d-b892e97eb11c"
+  ],
+  "footprints": [
+    {
+      "statementType": "drop_table",
+      "statementTarget": [
+        "table",
+        "public",
+        "CoordinatorTurn"
+      ],
+      "writes": [
+        "s|tbl|public.CoordinatorTurn",
+        "n|tbl|public.CoordinatorTurn",
+        "e|tbl|public.CoordinatorTurn",
+        "n|rel|public.CoordinatorTurn",
+        "n|type|public.CoordinatorTurn"
+      ],
+      "reads": [
+        "n|sch|public"
+      ]
+    }
+  ],
+  "deltas": [
+    {
+      "op": "drop",
+      "key": "tables\u0000[\"public\",\"CoordinatorTurn\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"CoordinatorTurn\",\"runId\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"CoordinatorTurn\",\"held\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"CoordinatorTurn\",\"leaseToken\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"CoordinatorTurn\",\"leaseExpiresAt\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"CoordinatorTurn\",\"askedAt\"]"
+    },
+    {
+      "op": "drop",
+      "key": "pks\u0000[\"public\",\"CoordinatorTurn\",\"CoordinatorTurn_pkey\"]"
+    }
+  ]
+}

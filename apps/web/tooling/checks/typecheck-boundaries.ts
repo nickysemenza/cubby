@@ -26,6 +26,7 @@ const sharedServerModules = new Set([
   "domains/image-processing/operations/rpc.ts",
   "domains/purchase-agent/service/signals.ts",
   "domains/purchase-agent/service/environment.ts",
+  "domains/purchase-import/operations/coordinator-gate-rpc.ts",
   "domains/usda-release/operations/rpc.ts",
   "workflows/runs/contract.ts",
   "ai/gateway-egress-contract.ts",

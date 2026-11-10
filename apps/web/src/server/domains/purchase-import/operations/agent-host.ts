@@ -42,10 +42,11 @@ import { testDurationOverrideMs } from "~/server/testing/test-duration-override"
 
 import {
   authorizeLegacyRetirement,
-  coordinatorTurnPorts,
   purchaseAgentMcpTools,
   runServicesFor,
+  wakeWaitingDispatch,
 } from "./agent-services";
+import { COORDINATOR_GATE_NAME } from "./coordinator-gate";
 import {
   CoordinatorTurn,
   type CoordinatorTurnResult,
@@ -63,6 +64,7 @@ function purchaseAgentEnvironment(
   env: Env,
   ctx: HostContext,
   runId: string,
+  fence: () => Promise<void>,
 ): PurchaseAgentEnvironment {
   // SAFETY: the workerd harness adds this service binding to the Worker; it
   // is deliberately absent from cloudflare.config.ts, so production never has it.
@@ -97,7 +99,8 @@ function purchaseAgentEnvironment(
         run: (data, options) => gateway.run(data, options),
       };
     },
-    services: runServicesFor(env, ctx, runId),
+    // pi's database work runs only under a live coordinator turn.
+    services: runServicesFor(env, ctx, runId, { fence }),
     mcpTools: purchaseAgentMcpTools,
     ...(testModel && { testModel }),
     ...(testModel &&
@@ -117,6 +120,10 @@ function purchaseAgentEnvironment(
 }
 
 const RETIREMENT_FENCE = "cubby_retirement_fence";
+/** A dispatch was refused a turn; its Job waits for this coordinator to wake it. */
+const PENDING_DISPATCH = "cubby_pending_dispatch";
+/** How long a woken dispatch keeps the turn it was reserved before it arrives. */
+const DISPATCH_HANDOFF_MS = 2 * 60_000;
 
 type RunAgent =
   import("~/server/domains/purchase-agent/service/run-agent").PurchaseImportRunAgent;
@@ -150,6 +157,8 @@ class PurchaseImportRunAgentHost
   private liveUntil = 0;
   private readonly admitted = new Set<Promise<unknown>>();
   private turn: CoordinatorTurn | undefined;
+  /** Until when the turn waits for a woken dispatch to arrive. */
+  private dispatchExpectedUntil = 0;
 
   /** Run `work` unless retirement began, tracked so `retire` can drain it. */
   private admit<T>(work: () => Promise<T>, refused: T): Promise<T> {
@@ -207,11 +216,43 @@ class PurchaseImportRunAgentHost
    * still works after the entry returns.
    */
   private turns(): CoordinatorTurn {
+    const runId = this.runId();
+    const gate = () =>
+      this.env.COORDINATOR_GATE.getByName(COORDINATOR_GATE_NAME);
     this.turn ??= new CoordinatorTurn({
-      ...coordinatorTurnPorts(this.env, this.ctx, this.runId()),
+      acquire: (token) =>
+        gate().acquire({ runId, agent: this.ctx.id.name ?? "", token }),
+      release: (token) =>
+        gate()
+          .release({ runId, token })
+          .then(
+            () => undefined,
+            (error: unknown) => {
+              turnLog.error("coordinator turn release failed", {
+                runId,
+                error,
+              });
+            },
+          ),
       idle: async () => {
+        if (this.dispatchExpectedUntil > Date.now()) return false;
+        // An agent that failed to load runs nothing; that is decidably idle.
         const agent = await this.agent?.catch(() => undefined);
         return !agent || !(await agent.working());
+      },
+      reportIdleError: (error) => {
+        turnLog.error("coordinator idle check failed; keeping its turn", {
+          runId,
+          error,
+        });
+        Sentry.captureException(error);
+      },
+      reportGateError: (error) => {
+        turnLog.error("coordinator gate unavailable; waiting", {
+          runId,
+          error,
+        });
+        Sentry.captureException(error);
       },
     });
     return this.turn;
@@ -223,16 +264,22 @@ class PurchaseImportRunAgentHost
     entry: "alarm" | "dispatch" | "fetch",
   ) {
     annotateActiveSpan({
-      "cubby.coordinator.turn": "waiting",
+      "cubby.coordinator.turn": refused.unavailable ? "unavailable" : "waiting",
       "cubby.coordinator.turn.holders": refused.holders,
+      "cubby.coordinator.turn.position": refused.position,
       "cubby.coordinator.turn.retry_ms": refused.retryAfterMs,
     });
-    Sentry.getCurrentScope().setTag("cubby.coordinator.turn", "waiting");
+    Sentry.getCurrentScope().setTag(
+      "cubby.coordinator.turn",
+      refused.unavailable ? "unavailable" : "waiting",
+    );
     turnLog.info("coordinator turn wait", {
       runId: this.runId(),
       entry,
       holders: refused.holders,
+      position: refused.position,
       retryAfterMs: refused.retryAfterMs,
+      unavailable: refused.unavailable ?? false,
     });
   }
 
@@ -241,7 +288,9 @@ class PurchaseImportRunAgentHost
       .then(({ PurchaseImportRunAgent }) => {
         return new PurchaseImportRunAgent(
           this.ctx,
-          purchaseAgentEnvironment(this.env, this.ctx, this.runId()),
+          purchaseAgentEnvironment(this.env, this.ctx, this.runId(), () =>
+            this.turns().fence(),
+          ),
         );
       })
       .catch((error) => {
@@ -399,17 +448,23 @@ class PurchaseImportRunAgentHost
       () =>
         this.admit(async () => {
           if (await this.fenced()) return;
-          const turn = await this.turns().turn(async () =>
-            (await this.loaded()).alarm(),
-          );
+          const turn = await this.turns().turn(async () => {
+            // The gate reserved this turn for a dispatch that was refused one:
+            // bring its Job forward and keep the turn until it arrives.
+            if (await this.ctx.storage.get<boolean>(PENDING_DISPATCH)) {
+              await this.ctx.storage.delete(PENDING_DISPATCH);
+              this.dispatchExpectedUntil = Date.now() + DISPATCH_HANDOFF_MS;
+              await this.alarmAt(this.dispatchExpectedUntil);
+              await wakeWaitingDispatch(this.env, this.ctx, this.runId());
+              return;
+            }
+            await (await this.loaded()).alarm();
+          });
           if (turn.ran) return;
           this.turnWaited(turn, "alarm");
-          // No agent code ran, so its due Lifecycle jobs stay due; the next
-          // alarm runs them once a turn is free.
-          const at = Date.now() + turn.retryAfterMs;
-          const current = await this.ctx.storage.getAlarm();
-          if (current === null || current > at)
-            await this.ctx.storage.setAlarm(at);
+          // No agent code ran, so its due Lifecycle jobs stay due. The gate
+          // wakes this object when it reserves a turn; this is the fallback.
+          await this.alarmAt(Date.now() + turn.retryAfterMs);
         }, undefined),
       {
         "cubby.workload": "alarm",
@@ -417,6 +472,18 @@ class PurchaseImportRunAgentHost
           importRunIdFromAgentIdentity(this.ctx.id.name) ?? undefined,
       },
     );
+  }
+
+  /** The gate reserved a turn for this coordinator: take it on the next alarm. */
+  async turnReady(): Promise<void> {
+    if (isMaintenanceMode(this.env)) return;
+    await this.alarmAt(Date.now());
+  }
+
+  /** Arm the alarm for `at` unless one is already due sooner. */
+  private async alarmAt(at: number) {
+    const current = await this.ctx.storage.getAlarm();
+    if (current === null || current > at) await this.ctx.storage.setAlarm(at);
   }
 
   async dispatch(
@@ -431,13 +498,21 @@ class PurchaseImportRunAgentHost
         this.admit(async () => {
           if (await this.fenced()) return refused;
           const turn = await this.turns().turn(async () => {
+            this.dispatchExpectedUntil = 0;
             const agent = await this.loaded();
             await agent.__unsafe_ensureInitialized();
             return agent.dispatch(input);
           });
           if (turn.ran) return turn.value;
           this.turnWaited(turn, "dispatch");
-          return { accepted: false, waiting: { holders: turn.holders } };
+          await this.ctx.storage.put(PENDING_DISPATCH, true);
+          return {
+            accepted: false,
+            waiting: {
+              holders: turn.holders,
+              ...(turn.unavailable && { unavailable: true }),
+            },
+          };
         }, refused),
       {
         "cubby.workload": "rpc",
