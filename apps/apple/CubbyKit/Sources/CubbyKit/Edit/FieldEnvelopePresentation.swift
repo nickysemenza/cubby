@@ -122,9 +122,7 @@ extension FieldEnvelope {
                 tone: .unsupported, label: "Unsupported: \(kind)", systemImage: "exclamationmark.triangle")
         }
         if isMissing {
-            return failure == nil
-                ? .init(tone: .missing, label: "Updating", systemImage: "clock")
-                : .init(tone: .missing, label: "Unavailable", systemImage: "exclamationmark.triangle")
+            return .init(tone: .missing, label: "Updating", systemImage: "clock")
         }
         if case .empty(.explicitNone) = decision?.outcome {
             return .init(tone: .none, label: Self.noneLabel(field: field), systemImage: "nosign")
