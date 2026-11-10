@@ -26,9 +26,13 @@ import {
   loadAliasBindings,
   loadRetiredPackage,
 } from "./evidence-packet-load";
-import { planSourceBinding, planAliasBinding } from "./evidence-packet-plan";
+import {
+  planSourceBinding,
+  planAliasBinding,
+  planPrimaryCarrier,
+  planExtraCarrier,
+} from "./evidence-packet-plan";
 import type { PacketContext, PacketState } from "./evidence-packet-stage";
-// oxlint-disable-next-line complexity -- Source bindings and carrier references are revalidated under the shipment lock.
 export async function prepareShipmentPacket(
   tdb: Database,
   context: PacketContext,
@@ -69,16 +73,11 @@ export async function prepareShipmentPacket(
   const suggestion = await assessCarrierPacket(tdb, packet, sourceEvidence);
   // Explicit source attribution wins over extraction; normal extracted Vendor names
   // still populate a new/missing carrier without a separate proof ledger.
-  let carrier = suggestion.primary.carrier
-    ? await carrierReference(tdb, suggestion.primary.carrier.code, null)
-    : packet.carrierClaims?.some(
-          (claim) =>
-            claim.role === "intermediary" &&
-            normalizeTrackingNumber(claim.trackingNumber) ===
-              normalizeTrackingNumber(packet.trackingNumber ?? ""),
-        )
-      ? { id: null, code: null }
-      : await carrierReference(tdb, packet.carrierId, packet.carrierName);
+  const primary = planPrimaryCarrier(packet, suggestion);
+  let carrier =
+    primary.kind === "resolve"
+      ? await carrierReference(tdb, primary.code, primary.name)
+      : { id: null, code: null };
   const number = packet.trackingNumber
     ? normalizeTrackingNumber(packet.trackingNumber)
     : null;
@@ -154,46 +153,22 @@ export async function prepareShipmentPacket(
     };
   const extraTrackingNumbers = [];
   for (const extra of packet.extraTrackingNumbers) {
-    const number = normalizeTrackingNumber(extra.trackingNumber);
-    const supported = suggestion.forReference(number).carrier;
-    const retained =
-      binding && row
-        ? [
-            ...(row.trackingNumber &&
-            normalizeTrackingNumber(row.trackingNumber) === number &&
-            boundCarrier
-              ? [
-                  {
-                    carrierId: parseShortcodeFor("vendor", boundCarrier.code),
-                    carrierName: boundCarrier.name,
-                  },
-                ]
-              : []),
-            ...row.extraTrackingNumbers.filter(
-              (ref) =>
-                normalizeTrackingNumber(ref.trackingNumber) === number &&
-                ref.carrierId,
-            ),
-          ]
-        : [];
-    const known = [...new Set(retained.map((ref) => ref.carrierId))];
-    const intermediary = packet.carrierClaims?.some(
-      (claim) =>
-        claim.role === "intermediary" &&
-        normalizeTrackingNumber(claim.trackingNumber) === number,
-    );
-    const reference = supported
-      ? await carrierReference(tdb, supported.code, null)
-      : retained.length
-        ? { code: known.length === 1 ? (known[0] ?? null) : null }
-        : intermediary
-          ? { code: null }
-          : await carrierReference(tdb, extra.carrierId, extra.carrierName);
+    const plan = planExtraCarrier({
+      extra,
+      packet,
+      suggestion,
+      row,
+      bound: Boolean(binding),
+      boundCarrier,
+    });
+    const reference =
+      plan.request.kind === "resolve"
+        ? await carrierReference(tdb, plan.request.code, plan.request.name)
+        : plan.request;
     extraTrackingNumbers.push({
       carrierId: reference.code,
-      carrierName:
-        supported?.name ?? retained[0]?.carrierName ?? extra.carrierName,
-      trackingNumber: number,
+      carrierName: plan.carrierName,
+      trackingNumber: plan.number,
     });
   }
   const primaryCarrierCode =

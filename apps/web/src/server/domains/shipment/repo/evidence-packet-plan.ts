@@ -1,3 +1,4 @@
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { ShipmentEvidence } from "@cubby/schemas/shipment-evidence";
 import { SHIPMENT_IDENTITY_PERIOD_DAYS } from "@cubby/schemas/shipment-fields";
 import { z } from "zod";
@@ -279,5 +280,97 @@ export function planCarrierProjection(input: {
     trackingNumber: row.trackingNumber ?? number,
     carrierId: adoptedCarrier,
     extraTrackingNumbers: refs,
+  };
+}
+
+type CarrierSuggestion = Awaited<
+  ReturnType<
+    typeof import("~/server/domains/shipment/repo/carrier-evidence").assessCarrierPacket
+  >
+>;
+type Packet =
+  import("./evidence-input").ShipmentWriterInput["shipments"][number];
+
+export function planPrimaryCarrier(
+  packet: Packet,
+  suggestion: CarrierSuggestion,
+) {
+  if (suggestion.primary.carrier)
+    return {
+      kind: "resolve" as const,
+      code: suggestion.primary.carrier.code,
+      name: null,
+    };
+  const intermediary = packet.carrierClaims?.some(
+    (claim) =>
+      claim.role === "intermediary" &&
+      normalizeTrackingNumber(claim.trackingNumber) ===
+        normalizeTrackingNumber(packet.trackingNumber ?? ""),
+  );
+  return intermediary
+    ? { kind: "empty" as const }
+    : {
+        kind: "resolve" as const,
+        code: packet.carrierId,
+        name: packet.carrierName,
+      };
+}
+
+export function planExtraCarrier(input: {
+  extra: Packet["extraTrackingNumbers"][number];
+  packet: Packet;
+  suggestion: CarrierSuggestion;
+  row: typeof shipment.$inferSelect | undefined;
+  bound: boolean;
+  boundCarrier: { code: string; name: string } | undefined;
+}) {
+  const { extra, packet, suggestion, row, bound, boundCarrier } = input;
+  const number = normalizeTrackingNumber(extra.trackingNumber);
+  const supported = suggestion.forReference(number).carrier;
+  const retained =
+    bound && row
+      ? [
+          ...(row.trackingNumber &&
+          normalizeTrackingNumber(row.trackingNumber) === number &&
+          boundCarrier
+            ? [
+                {
+                  carrierId: parseShortcodeFor("vendor", boundCarrier.code),
+                  carrierName: boundCarrier.name,
+                },
+              ]
+            : []),
+          ...row.extraTrackingNumbers.filter(
+            (ref) =>
+              normalizeTrackingNumber(ref.trackingNumber) === number &&
+              ref.carrierId,
+          ),
+        ]
+      : [];
+  const known = [...new Set(retained.map((ref) => ref.carrierId))];
+  const intermediary = packet.carrierClaims?.some(
+    (claim) =>
+      claim.role === "intermediary" &&
+      normalizeTrackingNumber(claim.trackingNumber) === number,
+  );
+  const request = supported
+    ? { kind: "resolve" as const, code: supported.code, name: null }
+    : retained.length
+      ? {
+          kind: "known" as const,
+          code: known.length === 1 ? (known[0] ?? null) : null,
+        }
+      : intermediary
+        ? { kind: "known" as const, code: null }
+        : {
+            kind: "resolve" as const,
+            code: extra.carrierId,
+            name: extra.carrierName,
+          };
+  return {
+    request,
+    number,
+    carrierName:
+      supported?.name ?? retained[0]?.carrierName ?? extra.carrierName,
   };
 }
