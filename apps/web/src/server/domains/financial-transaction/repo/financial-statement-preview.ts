@@ -1,20 +1,14 @@
 import {
-  type FinancialAccountCardNumber,
-  type FinancialAccountIdentity,
   financialAccountCardNumbers,
   financialAccountIdentity,
   financialAccountSourceAliases,
 } from "@cubby/schemas/financial-account";
 import {
   type FinancialTransactionImportPreviewInput,
-  type FinancialTransactionImportRow,
   type RawFinancialTransactionImportPreviewOut as FinancialTransactionImportPreviewOut,
-  financialTransactionStatus,
 } from "@cubby/schemas/financial-transaction";
-import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { sourceOccurrenceIdentityKind } from "@cubby/schemas/source-occurrence-fields";
 import { sourceOccurrenceReviewState } from "@cubby/schemas/source-occurrence-fields";
-import { cents } from "@cubby/shared";
 import { and, eq, inArray, or, sql } from "drizzle-orm";
 import { chunk, uniq, uniqBy } from "es-toolkit";
 
@@ -22,6 +16,7 @@ import { shiftPlainDate } from "~/lib/household-date";
 import { minorToDollarsSql } from "~/server/db/computed/money";
 import { type Database } from "~/server/db/database";
 import { notDeleted } from "~/server/db/helpers/predicates";
+import { requestedRows } from "~/server/db/helpers/requested";
 import { repositoryQueries as unwrapDb } from "~/server/db/repository-access.boundary";
 import {
   financialAccount,
@@ -41,64 +36,16 @@ import {
   sourceTransactionRecordExternalId,
   sourceTransactionRecordOccurrenceId,
 } from "~/server/domains/transaction-import/repo/source-transaction-record-identity";
-import {
-  merchantVendorInferences,
-  normalizeMerchant,
-} from "~/server/domains/vendor/repo/merchant-vendor-inference";
+import { merchantVendorInferences } from "~/server/domains/vendor/repo/merchant-vendor-inference";
 
-/**
- * Deliberately *not* the identity module's canonicalizer, despite being the
- * same two lines: this one only sniffs a descriptor for a network name or last
- * four, so it must stay free to change. Sharing it would let a
- * descriptor-matching tweak silently re-hash every stored source ref.
- */
-const canonical = (value: string) =>
-  value.normalize("NFKC").trim().replace(/\s+/g, " ").toLowerCase();
+import {
+  projectFinancialCandidates,
+  projectFinancialRows,
+  finishFinancialPreview,
+} from "./financial-statement-projection";
+
 const pairKey = (source: string, identity: string) =>
   JSON.stringify([source, identity]);
-
-const networkFromDescriptor = (descriptor: string) => {
-  const normalized = canonical(descriptor);
-  if (normalized.includes("visa")) return "visa" as const;
-  if (normalized.includes("mastercard")) return "mastercard" as const;
-  if (normalized.includes("amex") || normalized.includes("american express"))
-    return "amex" as const;
-  if (normalized.includes("discover")) return "discover" as const;
-  return null;
-};
-
-const last4FromDescriptor = (descriptor: string) => {
-  const match = descriptor.match(/(\d{4})(?!.*\d)/);
-  return match?.[1] ?? null;
-};
-
-const newAccountFor = (
-  row: FinancialTransactionImportPreviewInput["rows"][number],
-) => {
-  const last4 = last4FromDescriptor(row.account);
-  const network = networkFromDescriptor(row.account);
-  const identity: FinancialAccountIdentity =
-    last4 || network
-      ? { kind: "credit_card", network: network ?? "other" }
-      : { kind: "other" };
-  // A statement labels the account with its current card, so the digits it
-  // carries are the primary card as of today, not a dated historical one.
-  const cardNumbers: FinancialAccountCardNumber[] = last4
-    ? [{ last4, kind: "primary", validFrom: null, validTo: null, note: null }]
-    : [];
-  return {
-    name: row.account.trim(),
-    identity,
-    cardNumbers,
-    sourceAliases: [
-      {
-        source: row.source,
-        alias: row.account.trim(),
-        externalAccountId: null,
-      },
-    ],
-  };
-};
 
 export type FinancialStatementPreviewOptions = {
   /**
@@ -180,13 +127,11 @@ async function sameFilePositions(
   // Install every pending scope before awaiting, so overlapping previews share
   // both observations and known misses without sharing duplicate admission.
   for (const batch of chunk(missing, 512)) {
-    const requested = sql`(VALUES ${sql.join(
-      batch.map(
-        (scope) =>
-          sql`(${scope.fingerprint}::text, ${scope.source}::text, ${scope.externalId}::text)`,
-      ),
-      sql`, `,
-    )}) AS requested(fingerprint, source, "externalId")`;
+    const requested = requestedRows(
+      batch,
+      { fingerprint: "text", source: "text", externalId: "text" },
+      "requested",
+    );
     const loaded = unwrapDb(db)
       .select({
         source: sourceObservationColumns.source,
@@ -196,7 +141,7 @@ async function sameFilePositions(
       })
       .from(sourceObservationFrom)
       .innerJoin(
-        requested,
+        requested.from,
         sql`requested.source = ${sourceObservationColumns.source} AND requested."externalId" = ${sourceObservationColumns.chargeKey}`,
       )
       .innerJoin(
@@ -260,34 +205,43 @@ async function sameFilePositions(
  * Preview only: client-parsed rows become a decision worklist. It intentionally
  * does not create accounts/transactions or infer any Purchase link.
  */
-export async function previewFinancialTransactionImport(
+export async function loadFinancialPreview(
   db: Database,
   input: FinancialTransactionImportPreviewInput,
   options: FinancialStatementPreviewOptions = {},
-): Promise<FinancialTransactionImportPreviewOut> {
-  const suggestionPolicy = options.candidatePolicy === "suggestion";
+) {
   const legacyIds = await Promise.all(
     input.rows.map((row) => sourceTransactionRecordExternalId(row)),
   );
+  const retainedRows = requestedRows(
+    input.rows.map((row) => ({
+      key: row.key,
+      source: row.source,
+      fingerprint: row.importFingerprint ?? null,
+      position: row.rowPosition ?? null,
+      provider: row.providerTransactionId ?? null,
+      account: row.providerAccountId ?? null,
+    })),
+    {
+      key: "text",
+      source: "text",
+      fingerprint: "text",
+      position: "int",
+      provider: "text",
+      account: "text",
+    },
+    "requested",
+  );
   const retainedOccurrences = input.rows.length
     ? await unwrapDb(db).execute<{ key: string; shortcode: string }>(sql`
-    WITH requested AS (SELECT * FROM (VALUES ${sql.join(
-      input.rows.map(
-        (row) => sql`(
-      ${row.key}::text, ${row.source}::text, ${row.importFingerprint ?? null}::text,
-      ${row.rowPosition ?? null}::integer, ${row.providerTransactionId ?? null}::text, ${row.providerAccountId ?? null}::text
-    )`,
-      ),
-      sql`, `,
-    )}) value(key, source, fingerprint, position, provider, account))
-    SELECT requested.key, owner.shortcode FROM requested
+    SELECT requested.key, owner.shortcode FROM ${retainedRows.from}
     JOIN "TransactionImport" collection ON collection.source = requested.source AND collection.fingerprint = requested.fingerprint
     JOIN ${transactionImportRecord} membership ON membership."importId"=collection.id AND membership."rowPosition"=requested.position
     JOIN "SourceTransactionRecord" observation ON observation.id=membership."statementRowId"
     JOIN "SourceOccurrence" owner ON owner.id = observation."occurrenceId"
     WHERE ${notDeleted("owner")} AND ${notDeleted("observation")} AND owner."reviewState" = ${sqlEnumConstant(sourceOccurrenceReviewState, sourceOccurrenceReviewState.enum.ready)}
     UNION
-    SELECT requested.key, owner.shortcode FROM requested
+    SELECT requested.key, owner.shortcode FROM ${retainedRows.from}
     JOIN "SourceOccurrence" owner ON owner.source = requested.source AND owner."identityKind" = ${sqlEnumConstant(sourceOccurrenceIdentityKind, sourceOccurrenceIdentityKind.enum.provider)}
       AND owner."identityScope" = 'provider-account:' || requested.account AND owner."providerIdentity" = requested.provider
     WHERE ${notDeleted("owner")} AND owner."reviewState" = ${sqlEnumConstant(sourceOccurrenceReviewState, sourceOccurrenceReviewState.enum.ready)}`)
@@ -322,6 +276,17 @@ export async function previewFinancialTransactionImport(
     ),
   );
   const providerPairs = input.rows.filter((row) => row.providerTransactionId);
+  const requestedProviders = requestedRows(
+    uniqBy(
+      providerPairs.map((row) => ({
+        source: row.source,
+        provider: row.providerTransactionId ?? null,
+      })),
+      (row) => pairKey(row.source, row.provider!),
+    ),
+    { source: "text", provider: "text" },
+    "requested_provider",
+  );
   const observations = providerPairs.length
     ? await unwrapDb(db)
         .select({
@@ -331,23 +296,17 @@ export async function previewFinancialTransactionImport(
           externalId: sourceObservationColumns.chargeKey,
         })
         .from(sourceObservationFrom)
+        .innerJoin(
+          requestedProviders.from,
+          sql`requested_provider.source = ${sourceObservationColumns.source}
+            AND requested_provider.provider = ${sourceObservationColumns.providerTransactionId}`,
+        )
         .where(
           and(
             notDeleted(sourceTransactionRecord),
             sql`EXISTS (SELECT 1 FROM "SourceOccurrence" owner
               WHERE owner.id = ${sourceObservationColumns.occurrenceId} AND owner."identityKind" = ${sqlEnumConstant(sourceOccurrenceIdentityKind, sourceOccurrenceIdentityKind.enum.provider)}
                 AND owner."reviewState" = ${sqlEnumConstant(sourceOccurrenceReviewState, sourceOccurrenceReviewState.enum.ready)} AND ${notDeleted("owner")})`,
-            or(
-              ...providerPairs.map((row) =>
-                and(
-                  eq(sourceObservationColumns.source, row.source),
-                  eq(
-                    sourceObservationColumns.providerTransactionId,
-                    row.providerTransactionId,
-                  ),
-                ),
-              ),
-            ),
           ),
         )
     : [];
@@ -363,29 +322,32 @@ export async function previewFinancialTransactionImport(
     ],
     (pair) => `${pair.source}\0${pair.externalId}`,
   );
+  const requestedPairs = requestedRows(
+    pairs.map((pair) => ({ source: pair.source, code: pair.externalId })),
+    { source: "text", code: "text" },
+    "requested",
+  );
+  const requestedAliases = requestedRows(
+    input.rows.flatMap((row, index) =>
+      [sourceRefIds[index]!, legacyIds[index]!].map((value) => ({
+        source: row.source,
+        value,
+      })),
+    ),
+    { source: "text", value: "text" },
+    "requested",
+  );
   const sourceRefLookup =
     pairs.length === 0
       ? undefined
       : sql`${financialTransaction.id} IN (
     SELECT owner."acceptedTransactionId" FROM "SourceOccurrence" owner
-    JOIN (VALUES ${sql.join(
-      pairs.map(
-        (pair) => sql`(${pair.source}::text, ${pair.externalId}::text)`,
-      ),
-      sql`, `,
-    )}) requested(source, code)
+    JOIN ${requestedPairs.from}
       ON owner.source = requested.source AND owner.shortcode = requested.code
     WHERE owner."acceptedTransactionId" IS NOT NULL
     UNION
     SELECT alias."historicalTransactionId" FROM "FinancialEvidenceAlias" alias
-    JOIN (VALUES ${sql.join(
-      input.rows.flatMap((row, index) =>
-        [sourceRefIds[index]!, legacyIds[index]!].map(
-          (value) => sql`(${row.source}::text, ${value}::text)`,
-        ),
-      ),
-      sql`, `,
-    )}) requested(source, value)
+    JOIN ${requestedAliases.from}
       ON alias.source = requested.source AND alias.value = requested.value
     WHERE alias."historicalTransactionId" IS NOT NULL
   )`;
@@ -421,385 +383,45 @@ export async function previewFinancialTransactionImport(
       ),
   ]);
 
-  const fingerprintCounts = new Map<string, number>();
-  for (const ref of sourceRefIds)
-    fingerprintCounts.set(ref, (fingerprintCounts.get(ref) ?? 0) + 1);
-
-  const parsedAccounts = preparation.accounts;
   for (const transaction of transactions)
     preparation.ids.set(transaction.shortcode, transaction.id);
   const refsByTransaction = await financialSourceRefsFor(
     db,
     transactions.map((transaction) => transaction.id),
   );
-  const parsedTransactions = transactions.map((transaction) => ({
-    ...transaction,
-    sourceRefs: refsByTransaction.get(transaction.id) ?? [],
-  }));
-  // Preserve ledger order and every competitor while avoiding a full-ledger
-  // scan for each input row. Reference identity stays source-scoped.
-  const transactionsByAccount = new Map<string, typeof parsedTransactions>();
-  const transactionsByRef = new Map<string, typeof parsedTransactions>();
-  const transactionsByAlias = new Map<string, typeof parsedTransactions>();
-  for (const transaction of parsedTransactions) {
-    const accountRows = transactionsByAccount.get(transaction.accountId) ?? [];
-    accountRows.push(transaction);
-    transactionsByAccount.set(transaction.accountId, accountRows);
-    for (const key of new Set(
-      transaction.sourceRefs
-        .filter((ref) => ref.externalId.startsWith("SOC-"))
-        .map((ref) => pairKey(ref.source, ref.externalId)),
-    )) {
-      const refRows = transactionsByRef.get(key) ?? [];
-      refRows.push(transaction);
-      transactionsByRef.set(key, refRows);
-    }
-  }
-  for (const transaction of parsedTransactions)
-    for (const ref of transaction.sourceRefs) {
-      const key = pairKey(ref.source, ref.externalId);
-      transactionsByAlias.set(key, [
-        ...(transactionsByAlias.get(key) ?? []),
-        transaction,
-      ]);
-    }
-  const observationsByProvider = new Map<string, typeof observations>();
-  for (const observation of observations) {
-    if (!observation.providerTransactionId) continue;
-    const key = pairKey(observation.source, observation.providerTransactionId);
-    const matching = observationsByProvider.get(key) ?? [];
-    matching.push(observation);
-    observationsByProvider.set(key, matching);
-  }
-  const providerObservations = (row: FinancialTransactionImportRow) =>
-    row.providerTransactionId
-      ? (observationsByProvider.get(
-          pairKey(row.source, row.providerTransactionId),
-        ) ?? [])
-      : [];
-  const providerInputKey = (row: FinancialTransactionImportRow) =>
-    JSON.stringify([
-      row.source,
-      row.providerTransactionId,
-      row.providerAccountId ?? canonical(row.account),
-    ]);
-  const providerInputCounts = new Map<string, number>();
-  for (const row of providerPairs) {
-    const key = providerInputKey(row);
-    providerInputCounts.set(key, (providerInputCounts.get(key) ?? 0) + 1);
-  }
-
-  const accountFor = (row: FinancialTransactionImportRow) => {
-    const hinted = options.accountHints?.get(row.key);
-    if (hinted) {
-      const stored = parsedAccounts.find((account) => account.id === hinted);
-      if (stored) return stored;
-    }
-    if (row.providerAccountId) {
-      const scoped = parsedAccounts.filter((account) =>
-        account.sourceAliases.some(
-          (alias) =>
-            alias.source === row.source &&
-            alias.externalAccountId === row.providerAccountId,
-        ),
-      );
-      if (scoped.length) return scoped.length === 1 ? scoped[0] : undefined;
-      // Descriptor fallback cannot overrule a known provider account scope.
-      const conflictingAlias = parsedAccounts.some((account) =>
-        account.sourceAliases.some(
-          (alias) =>
-            alias.source === row.source &&
-            canonical(alias.alias) === canonical(row.account) &&
-            alias.externalAccountId !== null &&
-            alias.externalAccountId !== row.providerAccountId,
-        ),
-      );
-      const conflictingRecord = providerObservations(row).some(
-        (observation) =>
-          observation.providerAccountId !== null &&
-          observation.providerAccountId !== row.providerAccountId,
-      );
-      if (conflictingAlias || conflictingRecord) return undefined;
-    }
-    const descriptor = canonical(row.account);
-    const aliasMatches = parsedAccounts.filter((account) =>
-      account.sourceAliases.some(
-        (alias) =>
-          alias.source === row.source && canonical(alias.alias) === descriptor,
-      ),
-    );
-    const last4 = last4FromDescriptor(row.account);
-    const network = networkFromDescriptor(row.account);
-    const identityMatches =
-      aliasMatches.length === 0 && last4
-        ? parsedAccounts.filter((account) => {
-            // Any card the account has carried, not just the current one: a
-            // provider that froze an older label still names this account.
-            const identity = account.identity;
-            return (
-              identity.kind === "credit_card" &&
-              account.cardNumbers.some((card) => card.last4 === last4) &&
-              (network === null || identity.network === network)
-            );
-          })
-        : [];
-    const accountMatches =
-      aliasMatches.length > 0 ? aliasMatches : identityMatches;
-    if (accountMatches.length > 0)
-      return accountMatches.length === 1 ? accountMatches[0] : null;
-    const settledAccount = options.settlementAccountHints?.get(row.key);
-    return settledAccount
-      ? (parsedAccounts.find((account) => account.id === settledAccount) ??
-          null)
-      : null;
+  return {
+    sourceRefIds,
+    legacyIds,
+    observations,
+    preparation,
+    transactions,
+    refsByTransaction,
   };
-  const statusFor = (
-    row: FinancialTransactionImportRow,
-    externalId: string,
-    recorded: number,
-    account: boolean,
-    possible: number,
-  ): FinancialTransactionImportPreviewOut["rows"][number]["status"] =>
-    // Rows keyed by the legacy ref (no fingerprint or no row position) share it
-    // when identical, so creating both would drop one real charge.
-    ((!row.importFingerprint || row.rowPosition === undefined) &&
-      (fingerprintCounts.get(externalId) ?? 0) > 1) ||
-    Boolean(
-      row.providerTransactionId &&
-      (providerInputCounts.get(providerInputKey(row)) ?? 0) > 1,
-    )
-      ? "indistinguishable_duplicate"
-      : recorded > 0
-        ? "already_recorded"
-        : !account
-          ? "unresolved_account"
-          : possible > 0
-            ? "possible_existing"
-            : "ready_to_create";
+}
 
-  const candidateRows = input.rows.map((row, index) => {
-    const sourceRef = { source: row.source, externalId: sourceRefIds[index]! };
-    const normalizedAmount = -row.amount;
-    const account = accountFor(row);
-    const exactOccurrence = (
-      transactionsByRef.get(pairKey(sourceRef.source, sourceRef.externalId)) ??
-      []
-    ).filter(
-      (transaction) =>
-        !row.providerAccountId ||
-        (account && transaction.accountId === account.id),
-    );
-    const providerTransactionIds = new Set(
-      providerObservations(row)
-        .filter(
-          (observation) =>
-            row.providerAccountId !== undefined &&
-            row.providerAccountId !== null &&
-            observation.providerAccountId === row.providerAccountId,
-        )
-        .flatMap(
-          (observation) =>
-            transactionsByRef.get(
-              pairKey(observation.source, observation.externalId),
-            ) ?? [],
-        )
-        .map((transaction) => transaction.id),
-    );
-    const providerMatches =
-      account && row.providerTransactionId
-        ? (transactionsByAccount.get(account.id) ?? []).filter((transaction) =>
-            providerTransactionIds.has(transaction.id),
-          )
-        : [];
-    const legacyMatches = (
-      transactionsByAlias.get(pairKey(row.source, legacyIds[index]!)) ?? []
-    ).filter((transaction) => account && transaction.accountId === account.id);
-    const nearbyMatches = account
-      ? (transactionsByAccount.get(account.id) ?? []).filter((transaction) => {
-          const sameAmount =
-            cents(Number(transaction.amount)) === cents(normalizedAmount);
-          if (
-            transaction.accountId !== account.id ||
-            (!sameAmount &&
-              Math.sign(cents(Number(transaction.amount))) !==
-                Math.sign(cents(normalizedAmount)))
-          )
-            return false;
-          const nearbyDate = [
-            transaction.transactionDate,
-            transaction.postedDate,
-          ].some(
-            (date) =>
-              date !== null &&
-              Math.abs(Date.parse(date) - Date.parse(row.date)) <= 3 * 86400000,
-          );
-          if (!nearbyDate) return false;
-          if (suggestionPolicy && transaction.status === "void") return false;
-          // Providers such as Monarch MCP supply no statement text or merchant;
-          // two empty values are absent evidence, not a match (#3396).
-          const description = canonical(row.originalStatement);
-          const merchant = row.merchant ? normalizeMerchant(row.merchant) : "";
-          return (
-            // A settled tip or other amount correction without a provider ID
-            // is a review candidate only with matching source description.
-            ((!row.importFingerprint || suggestionPolicy) && sameAmount) ||
-            (description !== "" &&
-              canonical(transaction.rawDescription ?? "") === description) ||
-            (merchant !== "" &&
-              transaction.merchant !== null &&
-              normalizeMerchant(transaction.merchant) === merchant)
-          );
-        })
-      : [];
-    return {
-      account,
-      exactOccurrence,
-      providerMatches,
-      legacyMatches,
-      nearbyMatches,
-    };
-  });
-  const scopes = uniqBy(
-    input.rows.flatMap((row, index) => {
-      if (!row.importFingerprint) return [];
-      const candidates = candidateRows[index]!;
-      // Suggestion admission only consults occurrence positions for its
-      // single-provider same-facts fallback; exact occurrences take precedence.
-      const checked = suggestionPolicy
-        ? candidates.exactOccurrence.length === 0 &&
-          candidates.providerMatches.length === 1
-          ? candidates.providerMatches
-          : []
-        : [
-            ...candidates.providerMatches,
-            ...candidates.legacyMatches,
-            ...candidates.nearbyMatches,
-          ];
-      return checked.flatMap((transaction) =>
-        transaction.sourceRefs
-          .filter((ref) => ref.source === row.source)
-          .map((ref) => ({
-            fingerprint: row.importFingerprint!,
-            source: ref.source,
-            externalId: ref.externalId,
-          })),
-      );
-    }),
-    (scope) =>
-      JSON.stringify([scope.fingerprint, scope.source, scope.externalId]),
-  );
+export type FinancialPreviewLoaded = Awaited<
+  ReturnType<typeof loadFinancialPreview>
+>;
+
+export async function previewFinancialTransactionImport(
+  db: Database,
+  input: FinancialTransactionImportPreviewInput,
+  options: FinancialStatementPreviewOptions = {},
+): Promise<FinancialTransactionImportPreviewOut> {
+  const loaded = await loadFinancialPreview(db, input, options);
+  const candidates = projectFinancialCandidates(input, options, loaded);
   const filePositions = await sameFilePositions(
     db,
-    scopes,
-    preparation.sameFiles,
+    candidates.scopes,
+    loaded.preparation.sameFiles,
   );
-  const rows = input.rows.map((row, index) => {
-    const externalId = sourceRefIds[index]!;
-    const sourceRef = { source: row.source, externalId };
-    const normalizedAmount = -row.amount;
-    const kind = row.kind ?? (normalizedAmount > 0 ? "purchase" : "refund");
-    const proposed: FinancialTransactionImportPreviewOut["rows"][number]["proposed"] =
-      {
-        sourceRef,
-        amount: normalizedAmount,
-        kind,
-        status: row.providerStatus ?? "observed",
-        transactionDate: row.providerStatus === "posted" ? null : row.date,
-        postedDate: row.providerStatus === "posted" ? row.date : null,
-        merchant: row.merchant,
-        rawDescription: row.originalStatement,
-        sourceCategory: row.category,
-        notes: row.notes,
-      };
-    const {
-      account,
-      exactOccurrence,
-      providerMatches,
-      legacyMatches,
-      nearbyMatches,
-    } = candidateRows[index]!;
-    const occurrencePositions = row.importFingerprint
-      ? filePositions.get(row.importFingerprint)
-      : undefined;
-    const belongsToAnotherOccurrence = (
-      transaction: (typeof parsedTransactions)[number],
-    ) =>
-      Boolean(
-        occurrencePositions &&
-        transaction.sourceRefs.some(
-          (ref) =>
-            ref.source === row.source &&
-            [
-              ...(occurrencePositions.get(
-                pairKey(ref.source, ref.externalId),
-              ) ?? []),
-            ].some((position) => position !== row.rowPosition),
-        ),
-      );
-    const sameFacts = (transaction: (typeof parsedTransactions)[number]) =>
-      cents(Number(transaction.amount)) === cents(normalizedAmount) &&
-      transaction.status === "posted" &&
-      transaction.postedDate === row.date;
-    const alreadyRecorded = exactOccurrence.length
-      ? exactOccurrence
-      : providerMatches.length === 1 &&
-          sameFacts(providerMatches[0]!) &&
-          !belongsToAnotherOccurrence(providerMatches[0]!)
-        ? providerMatches
-        : [];
-    const possibleExisting = (
-      providerMatches.length
-        ? providerMatches
-        : uniqBy(
-            [...legacyMatches, ...nearbyMatches],
-            (transaction) => transaction.id,
-          )
-    ).filter(
-      (transaction) =>
-        // Historical collections can retain surplus or mispositioned membership.
-        // Discovery must keep a claimed settlement visible for identity review.
-        (suggestionPolicy || !belongsToAnotherOccurrence(transaction)) &&
-        !(suggestionPolicy && transaction.status === "void"),
-    );
-
-    const existingTransactionIds = (
-      alreadyRecorded.length ? alreadyRecorded : possibleExisting
-    ).map((transaction) =>
-      parseShortcodeFor("financialTransaction", transaction.shortcode),
-    );
-    const status = statusFor(
-      row,
-      externalId,
-      alreadyRecorded.length,
-      Boolean(account),
-      possibleExisting.length,
-    );
-
-    return {
-      key: row.key,
-      status,
-      accountId: account
-        ? parseShortcodeFor("financialAccount", account.shortcode)
-        : null,
-      accountName: account?.name ?? null,
-      newAccount: account ? null : newAccountFor(row),
-      proposed,
-      existingTransactionIds,
-      existingTransactions: (alreadyRecorded.length
-        ? alreadyRecorded
-        : possibleExisting
-      ).map((transaction) => ({
-        id: parseShortcodeFor("financialTransaction", transaction.shortcode),
-        amount: Number(transaction.amount),
-        status: financialTransactionStatus.parse(transaction.status),
-        postedDate: transaction.postedDate,
-        transactionDate: transaction.transactionDate,
-        merchant: transaction.merchant,
-        rawDescription: transaction.rawDescription,
-      })),
-    };
-  });
-
+  const rows = projectFinancialRows(
+    input,
+    options,
+    loaded,
+    candidates,
+    filePositions,
+  );
   const eligibleRows = rows.filter(
     (row) =>
       row.proposed.merchant &&
@@ -813,29 +435,5 @@ export async function previewFinancialTransactionImport(
           row.proposed.merchant ? [row.proposed.merchant] : [],
         ),
   );
-  const enrichedRows = rows.map((row) => ({
-    ...row,
-    vendorInference:
-      options.includeVendorInference !== false &&
-      row.proposed.merchant &&
-      (row.status === "ready_to_create" || row.status === "unresolved_account")
-        ? (inferences.get(normalizeMerchant(row.proposed.merchant)) ?? {
-            status: "none" as const,
-            candidates: [],
-          })
-        : null,
-  }));
-  const count = (status: (typeof rows)[number]["status"]) =>
-    rows.filter((row) => row.status === status).length;
-  return {
-    rows: enrichedRows,
-    summary: {
-      rowsIn: rows.length,
-      alreadyRecorded: count("already_recorded"),
-      readyToCreate: count("ready_to_create"),
-      possibleExisting: count("possible_existing"),
-      unresolvedAccount: count("unresolved_account"),
-      indistinguishableDuplicate: count("indistinguishable_duplicate"),
-    },
-  };
+  return finishFinancialPreview(rows, options, inferences);
 }
