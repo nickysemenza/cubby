@@ -1,3 +1,6 @@
+import { HIGH_CONFIDENCE_PROBABILITY } from "@cubby/schemas/ai-evaluation";
+import { entityFieldByKey } from "@cubby/schemas/entity-fields";
+import { suggestApplyPolicy } from "@cubby/schemas/field-suggestion-policy";
 import { suggestionJudgments } from "@cubby/schemas/suggestion";
 import {
   fieldSuggestionRow,
@@ -6,6 +9,7 @@ import {
 import { suggestionReviewFamilies } from "@cubby/schemas/suggestion-review-family";
 import { sql } from "drizzle-orm";
 
+import { fieldAuthority } from "~/server/generic/suggestions/repo/field-authority";
 import { type SuggestionFamilyDeclaration } from "~/server/generic/suggestions/repo/suggestion-family-declaration";
 import {
   stamps,
@@ -41,11 +45,61 @@ export const fieldFamily: SuggestionFamilyDeclaration<"field"> = {
       runId: query.filters.runId,
       suggestionIds: query.suggestionIds,
     });
-    return rows.map((row) => {
+    // Rows an Automatic rule will apply, and (by default) plain guesses, are
+    // dropped before paging so totals count exactly what a page can return.
+    const listed = rows.filter(
+      (row) => filters.status !== "pending" || row.automaticRule === null,
+    );
+    // Cubby revising a value it holds is not a Disagreement. The same
+    // authority owner as the gate decides; a kept value is a person's.
+    const cubbyHeld = new Set(
+      (
+        await Promise.all(
+          listed
+            .filter(
+              (row) =>
+                row.kind === "correction" &&
+                row.recordId !== null &&
+                row.confidence >= HIGH_CONFIDENCE_PROBABILITY &&
+                !row.answered,
+            )
+            .map(async (row) =>
+              (
+                await fieldAuthority(
+                  db,
+                  shortcodeEntity.parse(row.entity),
+                  String(row.recordId),
+                  row.field,
+                )
+              ).holder === "cubby"
+                ? [row.id]
+                : [],
+            ),
+        )
+      ).flat(),
+    );
+    return listed.flatMap((row) => {
       const entity = shortcodeEntity.parse(row.entity);
       const kind = fieldKind.parse(row.kind);
       const strength = fieldStrength(row.confidence);
-      return {
+      const confident = row.confidence >= HIGH_CONFIDENCE_PROBABILITY;
+      // What needs a person: Cubby disagreeing with a person's value, or a
+      // confident answer for a field only a member applies. Every other
+      // pending answer is a guess the field's picker offers.
+      const disposition =
+        kind === "correction" &&
+        confident &&
+        !row.answered &&
+        !cubbyHeld.has(row.id)
+          ? "disagreement"
+          : confident &&
+              // Removals (prune) never apply automatically, like review fields.
+              (suggestApplyPolicy(entity, row.field) === "review" ||
+                entityFieldByKey(entity, row.field)?.control?.suggest?.mode ===
+                  "prune")
+            ? "needs_you"
+            : "guess";
+      const key = {
         family: "field" as const,
         suggestionId: row.id,
         status: filters.status,
@@ -66,8 +120,16 @@ export const fieldFamily: SuggestionFamilyDeclaration<"field"> = {
           field: row.field,
           kind,
           confidence: row.confidence,
+          disposition,
         },
       };
+      if (
+        filters.status === "pending" &&
+        filters.disposition === undefined &&
+        disposition === "guess"
+      )
+        return [];
+      return [key];
     });
   },
   rows: async (db, keys) => {
@@ -129,7 +191,7 @@ export const fieldFamily: SuggestionFamilyDeclaration<"field"> = {
   summarize: (value: unknown) =>
     `Set field to ${JSON.stringify(suggestionJudgments.field.parse(value).value)}`,
   apply: async (db, context, state, input, automatic) => {
-    // The automatic mode keeps acceptSuggestion's requiresSuggestionReview refusal.
+    // The automatic mode keeps acceptSuggestion's apply-policy refusal.
     if (input.verdict === "correct" && !input.correction.present)
       await acceptSuggestion(
         db,

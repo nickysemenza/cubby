@@ -18,7 +18,6 @@ import { WhyValue } from "~/entity/fields/explanation/why-value";
 import { isInspectableFieldProvenance } from "~/entity/fields/field-provenance";
 import { fieldResolutionFor } from "~/entity/fields/field-resolution";
 import { ProposalCount } from "~/entity/suggestions/proposal-counts";
-import { RecordFieldSuggestion } from "~/entity/suggestions/record-suggestions";
 import { FieldRecordValue } from "~/ui/derived/record-value";
 import { Button } from "~/ui/primitives/button";
 import { TableCell, TableRow } from "~/ui/primitives/table";
@@ -230,13 +229,7 @@ function DesktopDataCell<TItem extends RowData>({
               }}
             >
               <ProposalCount record={cell.row.original} field={cell.column.id}>
-                <RecordFieldSuggestion
-                  record={cell.row.original}
-                  field={cell.column.id}
-                  surface="cell"
-                >
-                  {explained}
-                </RecordFieldSuggestion>
+                {explained}
               </ProposalCount>
             </DenseCellContext>
           </CellKeyProvider>

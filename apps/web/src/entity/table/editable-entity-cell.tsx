@@ -8,8 +8,9 @@ import { useCallback, useState } from "react";
 
 import { entityLabel } from "~/entity/entities";
 import { Picker } from "~/entity/picker/picker";
+import { useSelectedPickerItems } from "~/entity/picker/selected-items";
 import type { FieldSuggestionSource } from "~/entity/suggestions/field-suggestion";
-import { FieldSuggestionApply } from "~/entity/suggestions/field-suggestion-apply";
+import { useFieldGuess } from "~/entity/suggestions/field-suggestion-apply";
 import { Button } from "~/ui/primitives/button";
 import { useDenseCell } from "~/ui/values/stacked-value";
 
@@ -29,6 +30,8 @@ import {
 import { useRowActive } from "../../ui/data-table/row-activity";
 import type { SearchProviderProps } from "../picker/with-search-hook";
 import { useCellEditState, useEditorCommit } from "./editable-cell";
+
+const NO_ITEMS: readonly ComboboxItem[] = [];
 
 export interface EditableEntityCellProps<TId extends string> {
   /** Current related entity as a combobox item (null = unset). */
@@ -55,9 +58,8 @@ export interface EditableEntityCellProps<TId extends string> {
   trigger?: "wrap" | "pencil";
   /** Enable cmd-C / cmd-V on the focused trigger. */
   clipboard?: CellClipboardSpec<ComboboxItem<TId> | null>;
-  /** When the field's `control.suggest` exists — queries only while the
-   * editor is open (mirrors `EditableSelectEditor`'s `FieldSuggestionApply`),
-   * never at rest. */
+  /** When the field's `control.suggest` exists — Cubby's stored guess is read
+   * only while the editor is open and pinned first in its picker. */
   suggest?: FieldSuggestionSource;
 }
 
@@ -205,9 +207,14 @@ function EditableEntityEditor<TId extends string>({
   // pointer-events gate on the wrapper below is the visual affordance;
   // useEditorCommit's pendingRef is the hard guard (CSS pointer-events isn't
   // enforced by keyboard interaction or jsdom).
+  const guess = useFieldGuess(suggest);
+  const { isGuess, accept, pinItems } = guess;
+  const guessRows = useSelectedPickerItems(label, guess.ids, NO_ITEMS);
+  // Picking Cubby's guess accepts it; any other record is an ordinary edit.
   const saveId = useCallback(
-    (next: ComboboxItem<TId> | null) => onSave(next?.id ?? null),
-    [onSave],
+    (next: ComboboxItem<TId> | null) =>
+      isGuess(next?.id) ? accept() : onSave(next?.id ?? null),
+    [isGuess, accept, onSave],
   );
   const { isPending, commit } = useEditorCommit<ComboboxItem<TId> | null>({
     onSave: saveId,
@@ -250,7 +257,17 @@ function EditableEntityEditor<TId extends string>({
                 // No `label`: the entity key ("ledgerParty") is not prose;
                 // Picker derives its noun from the entity's display label.
                 entity={label}
-                items={filterItems ? items.filter(filterItems) : items}
+                items={pinItems([
+                  // SAFETY: guess rows are records of this picker's entity.
+                  ...(guessRows as ComboboxItem<TId>[]),
+                  ...(filterItems ? items.filter(filterItems) : items),
+                ])}
+                // SAFETY: the guess id is one of the pinned rows above, all
+                // records of this picker's entity.
+                // Enter fills an empty field with the guess; it never replaces a value.
+                enterPicks={
+                  selected ? undefined : (guess.ids[0] as TId | undefined)
+                }
                 onSearchChange={onSearchChange}
                 isLoading={isLoading}
                 value={selected}
@@ -277,22 +294,6 @@ function EditableEntityEditor<TId extends string>({
           <XIcon className="size-3.5" />
         </Button>
       </div>
-      {suggest && (
-        <FieldSuggestionApply
-          source={suggest}
-          currentValue={value?.id ?? null}
-          onApply={(suggestion) => {
-            if (!suggestion.value) return;
-            // SAFETY: `suggest.targets` names one reference field of `TId`'s
-            // entity; the suggestion's `value` is that field's id shape.
-            handlePick({
-              id: suggestion.value as TId,
-              shortcode: suggestion.value,
-              name: suggestion.label ?? suggestion.value,
-            });
-          }}
-        />
-      )}
     </div>
   );
 }

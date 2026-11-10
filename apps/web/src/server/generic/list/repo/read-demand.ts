@@ -16,7 +16,6 @@ export type ReadDemand = Readonly<{
   envelope: readonly string[];
   facts: Readonly<{
     stored: readonly string[];
-    ownership: readonly string[];
     assignments: readonly string[];
   }> | null;
 }>;
@@ -61,7 +60,6 @@ export function compileReadDemand(
   if (supported.has("fieldResolutions")) projection.add("fieldResolutions");
   const assignments = new Set<string>();
   const stored = new Set<string>();
-  const ownership = new Set<string>();
   const assignmentKeys: readonly string[] =
     Object.entries(entityFieldAssignmentKeys).find(
       ([key]) => key === entity,
@@ -90,11 +88,6 @@ export function compileReadDemand(
       )
         stored.add(source);
     }
-    if (
-      field.control?.suggest?.mode === "fill" &&
-      !field.control.suggest.reviewRequired
-    )
-      ownership.add(key);
   }
   return {
     projection: [...projection],
@@ -103,7 +96,6 @@ export function compileReadDemand(
     ),
     facts: {
       stored: [...stored],
-      ownership: [...ownership],
       assignments: [...assignments],
     },
   };

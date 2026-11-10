@@ -124,7 +124,7 @@ const countHint = (count: number | undefined, incomplete: boolean) =>
         : "?"
       : formatCount(count);
 
-/** Pending work, optional audit and automation controls share one workspace. */
+/** Pending work and the changes Cubby made on its own share one workspace. */
 function StatusTabs({
   search,
   onSearch,
@@ -143,7 +143,7 @@ function StatusTabs({
     >
       <TabsList variant="line" aria-label="Suggestion status">
         <TabsTrigger value="pending">Pending</TabsTrigger>
-        <TabsTrigger value="automatic">Automation history</TabsTrigger>
+        <TabsTrigger value="automatic">Changes by Cubby</TabsTrigger>
       </TabsList>
     </Tabs>
   );

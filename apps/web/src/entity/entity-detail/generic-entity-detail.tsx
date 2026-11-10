@@ -10,7 +10,6 @@ import { imageOut, partitionEntityFiles } from "@cubby/schemas/image";
 import { publicImageUrl } from "@cubby/schemas/image-summary";
 import { embeddableEntitySchema } from "@cubby/schemas/search";
 import { ClockIcon } from "@phosphor-icons/react/dist/csr/Clock";
-import { ClockCounterClockwiseIcon } from "@phosphor-icons/react/dist/csr/ClockCounterClockwise";
 import { FileTextIcon } from "@phosphor-icons/react/dist/csr/FileText";
 import { ImageIcon } from "@phosphor-icons/react/dist/csr/Image";
 import { InfoIcon } from "@phosphor-icons/react/dist/csr/Info";
@@ -50,7 +49,6 @@ import { WhyValue } from "~/entity/fields/explanation/why-value";
 import { entityMetadata, useEntityMetadata } from "~/entity/metadata";
 import type { DetailHeroActions } from "~/entity/page/entity-page-header";
 import { Page } from "~/entity/page/page";
-import { RecordSuggestionsProvider } from "~/entity/suggestions/record-suggestions";
 import { RecordWorkQueue } from "~/entity/work-queue/record-work-queue";
 import { entityGraph } from "~/integrations/tanstack-query/generated/domains/entityGraph.gen";
 import { useNativeRunEvidence } from "~/lib/native-workspace";
@@ -109,11 +107,6 @@ const RelatednessRail = lazy(() =>
 const RecordProposals = lazy(() =>
   import("~/entity/suggestions/queue/record-proposals").then((module) => ({
     default: module.RecordProposals,
-  })),
-);
-const AutomaticDecisions = lazy(() =>
-  import("~/entity/suggestions/queue/automatic-decisions").then((module) => ({
-    default: module.AutomaticDecisions,
   })),
 );
 
@@ -747,17 +740,6 @@ function FullEntityDetail<E extends GenericDetailEntity>({
         </Suspense>
       ),
     });
-  sections.push({
-    id: "automatic-decisions",
-    title: "Review automatic decisions",
-    icon: ClockCounterClockwiseIcon,
-    placement: "primary",
-    content: (
-      <Suspense fallback={<SlotFallback />}>
-        <AutomaticDecisions key={bag.id} id={bag.id} />
-      </Suspense>
-    ),
-  });
 
   // Derived from capabilities, never declared: a gallery's photos edit
   // inline; a cover/logo shows what is attached; documents get a viewer.
@@ -942,46 +924,38 @@ function FullEntityDetail<E extends GenericDetailEntity>({
         heroActions={plateActions}
       >
         <FactsAddProvider onAdd={editable ? () => setEditing(true) : null}>
-          <RecordSuggestionsProvider
+          <RecordQualityProvider
             entity={entity}
-            records={[record]}
-            fieldKeys={entityMetadata(queryClient, entity)
-              .fields.fields.filter((field) => field.display.detail)
-              .map((field) => field.key)}
+            id={bag.id}
+            renderedSections={placed.map((section) => section.id)}
+            visibleFields={renderedFields}
           >
-            <RecordQualityProvider
-              entity={entity}
-              id={bag.id}
-              renderedSections={placed.map((section) => section.id)}
-              visibleFields={renderedFields}
-            >
-              <DetailBody
-                sections={placed
-                  .filter((section) => !leadIds.has(section.id))
-                  .map(withQualityChecks)}
-                rawData={record}
-                omitActivity={timeline}
-                leadIndex={[
-                  ...leadSections.map((section) => ({
-                    id: section.id,
-                    title: section.title,
-                  })),
-                  ...(timeline ? [{ id: "history", title: "Activity" }] : []),
-                ]}
-                lead={
-                  <>
-                    <SectionStack sections={leadSections} />
-                    <SectionPair>
-                      <RecordWorkQueue id={bag.id} variant="needs-you" />
-                      {timeline ? (
-                        <DetailActivity entity={entity} id={bag.id} />
-                      ) : null}
-                    </SectionPair>
-                  </>
-                }
-              />
-            </RecordQualityProvider>
-          </RecordSuggestionsProvider>
+            <DetailBody
+              sections={placed
+                .filter((section) => !leadIds.has(section.id))
+                .map(withQualityChecks)}
+              rawData={record}
+              omitActivity={timeline}
+              leadIndex={[
+                ...leadSections.map((section) => ({
+                  id: section.id,
+                  title: section.title,
+                })),
+                ...(timeline ? [{ id: "history", title: "Activity" }] : []),
+              ]}
+              lead={
+                <>
+                  <SectionStack sections={leadSections} />
+                  <SectionPair>
+                    <RecordWorkQueue id={bag.id} variant="needs-you" />
+                    {timeline ? (
+                      <DetailActivity entity={entity} id={bag.id} />
+                    ) : null}
+                  </SectionPair>
+                </>
+              }
+            />
+          </RecordQualityProvider>
         </FactsAddProvider>
         {editable && editing ? (
           EditOverride ? (

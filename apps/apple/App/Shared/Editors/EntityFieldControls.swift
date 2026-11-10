@@ -151,7 +151,7 @@ struct EntityFieldControl: View {
         let state = envelope.state(field: field)
         let shown = envelope.effectiveValue.flatMap(valueText) ?? envelope.emptyLabel(field: field)
         switch state.tone {
-        case .allocated, .automatic:
+        case .allocated:
             return "\(state.label) · \(shown)"
         case .unsupported, .missing, .none, .redundant:
             return state.label

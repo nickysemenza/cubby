@@ -266,10 +266,12 @@ async function currentAiRefreshActivation(db: Database) {
   return current;
 }
 
-/** Live saved-record questions enqueue the same canonical work as discovery.
- * Client draft basis and the inactive interactive prediction never authorize writes.
+/**
+ * Field automation's one scheduler: canonical background evaluations of saved
+ * records, prepared from the saved row. `populated` admits a field whose value
+ * Cubby itself holds; the caller has already established that authority.
  */
-export function savedFieldQuestionScheduler(
+export function fieldEvaluationScheduler(
   db: Database,
   targets: readonly FieldTarget[],
   ports: AiRefreshPorts = {},
@@ -320,9 +322,14 @@ export function savedFieldQuestionScheduler(
     }
     return found;
   }
-  return async (target: FieldTarget) => {
+  return async (
+    target: FieldTarget,
+    options: { populated?: boolean } = {},
+  ): Promise<"scheduled" | "unchanged" | "deferred"> => {
     const current = await (activation ??= currentAiRefreshActivation(db));
-    if (!current) return;
+    // No executable activation (mid-deploy, or automatic AI off): the write
+    // stays owed until one exists, so nothing is consumed unscheduled.
+    if (!current) return "deferred";
     const prepared = await prepareField(db, target, ports, {
       manifest: current.manifest,
       record: async (request) => {
@@ -341,21 +348,23 @@ export function savedFieldQuestionScheduler(
     });
     if (
       !prepared ||
-      (prepared.snapshot.currentValue !== null &&
+      (!options.populated &&
+        prepared.snapshot.currentValue !== null &&
         prepared.snapshot.currentValue !== "")
     )
-      return;
+      return "unchanged";
     // Admission and field-specific fences remain independent, including capacity deferral.
     const result = await scheduleAutomaticEvaluations(db, [
       { target, provenance: prepared.provenance, snapshot: prepared.snapshot },
     ]);
     if (result.kind === "deferred")
-      log.info("Saved field evaluation scheduling deferred", {
+      log.info("Field evaluation scheduling deferred", {
         reason: result.reason,
         entity: target.entity,
         recordId: target.recordId,
         field: target.field,
       });
+    return result.kind;
   };
 }
 
@@ -465,12 +474,15 @@ export async function executeAiRefreshTarget(
     const decision = saved.output.suggestions[snapshot.field];
     const model =
       saved.provenance.model ?? snapshot.decisionModelOverride ?? "unknown";
+    const runnerUp = decision?.alternatives[0];
     const entry = decision
       ? makeSweepSuggestion({
           currentValue: snapshot.currentValue,
           decision: {
             value: decision.value,
             confidence: decision.probability ?? 0,
+            runnerUpValue: runnerUp?.value ?? undefined,
+            runnerUpConfidence: runnerUp?.probability,
           },
           model,
         })
@@ -488,6 +500,7 @@ export async function executeAiRefreshTarget(
         predecessorIds: target.suggestionIds,
         evaluationId: id,
         provenance: saved.provenance,
+        ...(target.cause && { cause: target.cause }),
       },
       entry
         ? [

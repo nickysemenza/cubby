@@ -53,7 +53,10 @@ import { fieldResolutionFor } from "~/entity/fields/field-resolution";
 import { multiSelectFilterFn } from "~/entity/filters";
 import { rowDisplayCover } from "~/entity/model/row-display-cover";
 import { readPathValue } from "~/entity/read-path";
-import { fieldSuggestionBasisFromRecord } from "~/entity/suggestions/field-suggestion";
+import {
+  fieldSuggestionBasisFromRecord,
+  savedRecordShortcode,
+} from "~/entity/suggestions/field-suggestion";
 import { suggestTargetsFor } from "~/entity/suggestions/suggestion-targets";
 import { Row } from "~/ui/layout";
 import { MoreMenuTrigger } from "~/ui/navigation/more-menu-trigger";
@@ -1503,8 +1506,12 @@ export function createSingleEntityInlineLinkColumn<
           ? buildSingleEntityItem(queryClient, entity, item)
           : null;
         const suggestConfig = editable.suggest;
+        const suggestRecordId = suggestConfig
+          ? savedRecordShortcode(suggestConfig.entity, row)
+          : undefined;
         const suggest = suggestConfig
           ? {
+              ...(suggestRecordId && { entityId: suggestRecordId }),
               basisMode: "provided" as const,
               entity: suggestConfig.entity,
               targets: [suggestConfig.field],

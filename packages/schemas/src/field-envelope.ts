@@ -72,15 +72,11 @@ export const fieldSource = z.object({
   name: z.string().nullable(),
 });
 
-/** Ownership is current receipt-backed authority, not cached AI confidence. */
-export const fieldAssignmentOwnership = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("record") }),
-  z.object({
-    kind: z.literal("automatic"),
-    receiptId: z.string(),
-    confidence: z.number().min(0).max(1),
-  }),
-]);
+/**
+ * An own value belongs to its record. Who wrote it (a person or Cubby) is not
+ * part of the read; `fieldExplanation.origin` answers it on request.
+ */
+export const fieldAssignmentOwnership = z.object({ kind: z.literal("record") });
 
 export const fieldProvenance = z.discriminatedUnion("kind", [
   z.object({

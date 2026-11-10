@@ -108,7 +108,8 @@ export const manifestWire = {
   FieldSuggestionDescriptor: record(
     {
       allowNone: "boolean~",
-      reviewRequired: "boolean~",
+      apply: "string~",
+      fillOnly: "boolean~",
       basis: "[string]",
       backedBy: "Json?",
       mode: "string~",

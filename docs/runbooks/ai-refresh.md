@@ -44,8 +44,14 @@ outcome receipt and scrubbed error. Run progress reports completed, blocked and
 failed counts. AiUsage/EmailClassificationObservation and Suggestion receipts
 retain inference and actual business-write provenance.
 
-There is no discovery pass for AI refresh. Field evaluations come from
-saved-record questions and Sweeps.
+Field evaluations come from the `field-automation` drain and Sweeps. The drain
+reads audit rows flagged `automationPending` (creates, input changes, member
+corrections and hand-backs) and, after an activation revision, re-asks every
+pending guess and Cubby-held value once through the discovery cursor
+(`fieldDone` marks the pass finished). Page views schedule nothing. To see owed
+work, count `"AuditLog" WHERE "automationPending"`; the automatic AI stop
+defers the drain without clearing rows. Records nobody writes after a deploy
+are evaluated by a member-started Sweep.
 Ordinary refresh execution has two active Run slots across the household,
 including funding/auth pauses. A short scheduling transaction uses a nonblocking
 advisory lock to serialize slot checks, new Run creation and failed-Run
@@ -112,7 +118,7 @@ then considers failed and dispatch-failed Runs oldest first, within its ten-Run 
 exhausted automatic-recovery budgets and member cancellations are excluded before
 the limit, so they cannot starve relaunches. Recovery uses the same two ordinary
 execution slots as Email refresh. Field and Product refresh have no Run and hold no
-slot: a discovery page defers while 1,000 automatic evaluations are owed. Workflow target
+slot: a field-automation page defers while 1,000 automatic evaluations are owed. Workflow target
 steps retry infrastructure failures twice with exponential backoff; an exhausted
 instance records a failed Run for recovery. Nightly and app-open recovery also
 reconcile instances quiet for 30 minutes. Imported or historical Email sources

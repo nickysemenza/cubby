@@ -126,7 +126,8 @@ export async function producingAiManifest(db: Database) {
   );
 }
 
-const DISCOVERY_SETTINGS_ID = "00000000-0000-4000-8000-000000000075";
+/** The field-automation policy pass cursor; activation resets it on each revision. */
+export const AI_DISCOVERY_SETTINGS_ID = "00000000-0000-4000-8000-000000000075";
 const discoveryCursor = z.object({
   /** When this generation's pass finished; the next one starts an hour later. */
   completedAt: z.iso.datetime().nullable().default(null),
@@ -147,7 +148,7 @@ export async function readAiDiscoveryCursor(db: Database) {
   const [row] = await getDb(db)
     .select({ metadata: appSettings.metadata })
     .from(appSettings)
-    .where(eq(appSettings.id, DISCOVERY_SETTINGS_ID));
+    .where(eq(appSettings.id, AI_DISCOVERY_SETTINGS_ID));
   return discoveryCursor.parse(row?.metadata ?? {});
 }
 export async function saveAiDiscoveryCursor(
@@ -164,7 +165,7 @@ export async function saveAiDiscoveryCursor(
     if (current && current.revision !== cursor.revision) return false;
     await getDb(tx)
       .insert(appSettings)
-      .values({ id: DISCOVERY_SETTINGS_ID, metadata: cursor })
+      .values({ id: AI_DISCOVERY_SETTINGS_ID, metadata: cursor })
       .onConflictDoUpdate({
         target: appSettings.id,
         set: { metadata: cursor, updatedAt: new Date() },

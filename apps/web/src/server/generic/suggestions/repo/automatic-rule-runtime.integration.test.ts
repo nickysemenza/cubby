@@ -1,3 +1,4 @@
+import { systemActor } from "@cubby/schemas/context";
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
 import { financialSpendingAdvice } from "@cubby/schemas/financial-booking";
 import { recordSourceTransactionRecordsInput } from "@cubby/schemas/source-transaction-record";
@@ -40,8 +41,9 @@ import { entityCommandSchema } from "~/server/entity-kernel/contracts";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { applyAutomaticRules } from "~/server/generic/suggestions/repo/automatic-application";
 import { listAutomaticDecisions } from "~/server/generic/suggestions/repo/automatic-decisions";
-import { loadCurrentFieldOwnership } from "~/server/generic/suggestions/repo/automatic-fields";
 import { ruleBase } from "~/server/generic/suggestions/repo/automatic-policy";
+import { fieldAuthority } from "~/server/generic/suggestions/repo/field-authority";
+import { applyFieldAuthorityAction } from "~/server/generic/suggestions/repo/field-authority-actions";
 import { reviewSuggestion } from "~/server/generic/suggestions/repo/review";
 import * as suggestionReview from "~/server/generic/suggestions/repo/suggestion-review";
 import {
@@ -357,128 +359,242 @@ describe("automatic field assignments", () => {
     expect((await stateOf(ctx, pending.id)).status).toBe("pending");
     expect(await productCategoryId(ctx.db, untouched.id)).toBeNull();
   });
-  // Failure: receipt-backed provenance survives a member edit, ABA edit, or confirmation.
-  it.each(["edit", "restore", "confirm"] as const)(
-    "clears list auto provenance after member %s",
-    async (action) => {
-      const item = await productFixture(ctx, "Synthetic automatic provenance");
-      const sweep = await startSuggestionSweep(
-        ctx.db,
-        {
-          entity: "product",
-          fields: ["categoryId"],
-          filters: { ids: [item.id] },
+  /** A confident pending answer for one Product's category, as a refresh publishes it. */
+  const confidentCategory = async (
+    recordId: string,
+    current: string | null,
+    proposed: string,
+  ) => {
+    const pending = await seedPending(ctx, {
+      entity: "product",
+      recordId,
+      field: "categoryId",
+      kind: current === null ? "addition" : "correction",
+      currentValue: current,
+      suggestedValue: proposed,
+    });
+    await getDb(ctx.db)
+      .update(suggestionTable)
+      .set({
+        confidence: 0.97,
+        provenance: {
+          dependencies: dependencyStamps(
+            await producingAiManifest(ctx.db),
+            fieldDependencyKeys("product", "categoryId"),
+          ),
+          inputFingerprint: "synthetic",
+          optionFingerprint: "synthetic",
+          model: "typesafe/jev",
         },
-        { context: kernelCtx(ctx), ...categoryPorts(0.9) },
+      })
+      .where(eq(suggestionTable.id, pending.id));
+    return pending.id;
+  };
+  const automaticallyApplied = async (
+    item: { id: string },
+    current: string | null,
+    proposed: string,
+  ) => {
+    const recordId = await resolveOrThrow(ctx.db, "product", item.id);
+    const id = await confidentCategory(recordId, current, proposed);
+    if (!(await canAutomaticallyFillField(ctx.db, kernelCtx(ctx), id)))
+      return false;
+    await applyAutomaticRules(ctx.db, [id], { context: kernelCtx(ctx) });
+    return (await stateOf(ctx, id)).status === "applied";
+  };
+  const holderOf = async (item: { id: string }) =>
+    (
+      await fieldAuthority(
+        ctx.db,
+        "product",
+        await resolveOrThrow(ctx.db, "product", item.id),
+        "categoryId",
+      )
+    ).holder;
+  const writeCategory = (
+    item: { id: string },
+    category: string,
+    actorContext = kernelCtx(ctx).actorContext,
+  ) =>
+    executeEntity(
+      { ...kernelCtx(ctx), actorContext },
+      entityCommandSchema.parse({
+        action: "update",
+        entity: "product",
+        id: item.id,
+        data: { categoryId: category },
+      }),
+    );
+  const sweptCubbyValue = async (name: string) => {
+    const item = await productFixture(ctx, name);
+    await startSuggestionSweep(
+      ctx.db,
+      {
+        entity: "product",
+        fields: ["categoryId"],
+        filters: { ids: [item.id] },
+      },
+      { context: kernelCtx(ctx), ...categoryPorts(0.9) },
+    );
+    expect(await productCategoryId(ctx.db, item.id)).toBe(taxonomyId("food"));
+    expect(await holderOf(item)).toBe("cubby");
+    return item;
+  };
+
+  // Dangerous rule: Cubby never overwrites a value a person, an import or an
+  // agent decided, and revises only values it set and nobody kept.
+  it.each(["member", "agent", "import"] as const)(
+    "never overwrites a value written by a %s",
+    async (writer) => {
+      const item = await productFixture(ctx, `Synthetic ${writer} value`);
+      const base = kernelCtx(ctx).actorContext;
+      await writeCategory(
+        item,
+        taxonomyShortcode("tools"),
+        writer === "member"
+          ? base
+          : writer === "agent"
+            ? { ...base, channel: "mcp" }
+            : systemActor(),
       );
-      const [state] = await getDb(ctx.db)
-        .select()
-        .from(suggestionTable)
-        .where(eq(suggestionTable.runId, sweep.id));
-      expect(state?.status).toBe("applied");
-      if (!state) throw new Error("Missing automatic application");
+      expect(await holderOf(item)).toBe("person");
       expect(
-        (
-          await loadCurrentFieldOwnership(ctx.db, "product", [state.recordId!])
-        ).get(state.recordId!)?.categoryId,
-      ).toEqual({ kind: "automatic", receiptId: state.id, confidence: 0.9 });
-      expect(
-        (
-          await loadCurrentFieldOwnership(
-            ctx.db,
-            "product",
-            [state.recordId!],
-            ["categoryId"],
-          )
-        ).get(state.recordId!)?.categoryId,
-      ).toEqual({ kind: "automatic", receiptId: state.id, confidence: 0.9 });
-      expect(
-        await loadCurrentFieldOwnership(
-          ctx.db,
-          "product",
-          [state.recordId!],
-          ["id"],
+        await automaticallyApplied(
+          item,
+          taxonomyShortcode("tools"),
+          taxonomyShortcode("food"),
         ),
-      ).toEqual(new Map());
-      const list = async () =>
-        executeEntity(kernelCtx(ctx), {
-          action: "list",
-          entity: "product",
-          filters: { ids: [item.id] },
-          pagination: { pageIndex: 0, pageSize: 10 },
-        });
-      expect(await list()).toMatchObject({
+      ).toBe(false);
+      expect(await productCategoryId(ctx.db, item.id)).toBe(
+        taxonomyId("tools"),
+      );
+    },
+  );
+
+  it("treats a value set at creation as a person's", async () => {
+    const item = await productFixture(ctx, "Synthetic created value", {
+      categoryId: taxonomyId("tools"),
+    });
+    expect(await holderOf(item)).toBe("person");
+  });
+
+  it.each(["edit", "restore"] as const)(
+    "a member %s ends Cubby's hold at once",
+    async (action) => {
+      const item = await sweptCubbyValue(`Synthetic member ${action}`);
+      await writeCategory(item, taxonomyShortcode("tools"));
+      if (action === "restore")
+        await writeCategory(item, taxonomyShortcode("food"));
+      expect(await holderOf(item)).toBe("person");
+      const listed = await executeEntity(kernelCtx(ctx), {
+        action: "list",
+        entity: "product",
+        filters: { ids: [item.id] },
+        pagination: { pageIndex: 0, pageSize: 10 },
+      });
+      expect(listed).toMatchObject({
         items: [
           {
             id: item.id,
             fields: {
               categoryId: {
-                current: {
-                  assignment: {
-                    kind: "value",
-                    ownership: { kind: "automatic", confidence: 0.9 },
-                  },
-                },
+                current: { assignment: { ownership: { kind: "record" } } },
               },
             },
           },
         ],
       });
-      expect((await list()).meta).not.toHaveProperty("derived");
-      if (action === "confirm") {
-        await reviewSuggestion(ctx.db, kernelCtx(ctx), {
-          suggestionId: state.id,
-          operationId: "synthetic-auto-confirmation",
-          verdict: "correct",
-          intent: "history",
-        });
-      } else {
-        await executeEntity(
-          kernelCtx(ctx),
-          entityCommandSchema.parse({
-            action: "update",
-            entity: "product",
-            id: item.id,
-            data: { categoryId: taxonomyShortcode("tools") },
-          }),
-        );
-        if (action === "restore")
-          await executeEntity(
-            kernelCtx(ctx),
-            entityCommandSchema.parse({
-              action: "update",
-              entity: "product",
-              id: item.id,
-              data: { categoryId: taxonomyShortcode("food") },
-            }),
-          );
-      }
-      // Authority changes synchronously, without waiting for background work.
-      expect(
-        (
-          await loadCurrentFieldOwnership(ctx.db, "product", [state.recordId!])
-        ).get(state.recordId!)?.categoryId,
-      ).toBeUndefined();
-      const refreshed = await list();
-      expect(refreshed.items).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({
-            id: item.id,
-            fields: expect.objectContaining({
-              categoryId: expect.objectContaining({
-                current: expect.objectContaining({
-                  assignment: expect.objectContaining({
-                    ownership: { kind: "record" },
-                  }),
-                }),
-              }),
-            }),
-          }),
-        ]),
-      );
     },
   );
-  // Failure: stored NULL hides a populated effective value derived from order evidence.
+
+  it("revises its own value, never returns to one it replaced, and stops once kept", async () => {
+    const item = await sweptCubbyValue("Synthetic revisable value");
+    expect(
+      await automaticallyApplied(
+        item,
+        taxonomyShortcode("food"),
+        taxonomyShortcode("tools"),
+      ),
+    ).toBe(true);
+    expect(await productCategoryId(ctx.db, item.id)).toBe(taxonomyId("tools"));
+    expect(await holderOf(item)).toBe("cubby");
+    // No return: the value Cubby replaced is never applied again.
+    expect(
+      await automaticallyApplied(
+        item,
+        taxonomyShortcode("tools"),
+        taxonomyShortcode("food"),
+      ),
+    ).toBe(false);
+    await applyFieldAuthorityAction(ctx.db, kernelCtx(ctx), {
+      entity: "product",
+      id: item.id,
+      field: "categoryId",
+      action: "keep",
+    });
+    expect(await holderOf(item)).toBe("person");
+    expect(
+      await automaticallyApplied(
+        item,
+        taxonomyShortcode("tools"),
+        taxonomyShortcode("household"),
+      ),
+    ).toBe(false);
+  });
+
+  it("clears a wrong value, rules it out, and accepts another", async () => {
+    const item = await sweptCubbyValue("Synthetic wrong value");
+    await applyFieldAuthorityAction(ctx.db, kernelCtx(ctx), {
+      entity: "product",
+      id: item.id,
+      field: "categoryId",
+      action: "clear",
+    });
+    expect(await productCategoryId(ctx.db, item.id)).toBeNull();
+    expect(await holderOf(item)).toBe("open");
+    expect(
+      await automaticallyApplied(item, null, taxonomyShortcode("food")),
+    ).toBe(false);
+    expect(
+      await automaticallyApplied(item, null, taxonomyShortcode("tools")),
+    ).toBe(true);
+  });
+
+  it("revises a member's value only after the member hands it back", async () => {
+    const item = await productFixture(ctx, "Synthetic released value");
+    await writeCategory(item, taxonomyShortcode("tools"));
+    await applyFieldAuthorityAction(ctx.db, kernelCtx(ctx), {
+      entity: "product",
+      id: item.id,
+      field: "categoryId",
+      action: "release",
+    });
+    expect(await holderOf(item)).toBe("cubby");
+    expect(
+      await automaticallyApplied(
+        item,
+        taxonomyShortcode("tools"),
+        taxonomyShortcode("food"),
+      ),
+    ).toBe(true);
+    expect(await productCategoryId(ctx.db, item.id)).toBe(taxonomyId("food"));
+  });
+
+  it("treats a value written after a hand-back without its own audit row as a person's", async () => {
+    const item = await productFixture(ctx, "Synthetic out-of-band value");
+    await writeCategory(item, taxonomyShortcode("tools"));
+    await applyFieldAuthorityAction(ctx.db, kernelCtx(ctx), {
+      entity: "product",
+      id: item.id,
+      field: "categoryId",
+      action: "release",
+    });
+    await getDb(ctx.db).execute(
+      sql`UPDATE "Product" SET "categoryId" = ${taxonomyId("household")} WHERE shortcode = ${item.id}`,
+    );
+    expect(await holderOf(item)).toBe("person");
+  });
+
   it("preserves Vendor itemization inherited from online order evidence", async () => {
     const merchant = (
       await createRepoEntity(ctx, "vendor", {

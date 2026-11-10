@@ -4,6 +4,11 @@ import {
   publishSuggestions,
 } from "~/server/generic/suggestions/repo/suggestion";
 import { fieldInputFingerprint } from "~/server/generic/suggestions/repo/field-input-fence";
+import {
+  dependencyStamps,
+  fieldDependencyKeys,
+} from "~/server/ai/policy/refresh-manifest";
+import { producingAiManifest } from "~/server/ai/repo/ai-refresh";
 import { randomUUID } from "node:crypto";
 
 import { eq, sql } from "drizzle-orm";
@@ -12,6 +17,7 @@ import type { Database } from "~/server/db";
 import {
   emailClassificationObservation,
   emailReview,
+  suggestionTable,
 } from "~/server/db/schema";
 import { getDb } from "~/server/db/helpers";
 import { publishEmailLinkDecision } from "~/server/domains/email/repo/email-link-decision";
@@ -112,4 +118,30 @@ export async function seedFieldSuggestion(
   ]);
   if (!row) throw new Error("Synthetic field publication returned no row");
   return row;
+}
+
+/**
+ * Stamp a seeded field Suggestion with the current executable AI policy, as a
+ * real evaluation would, so the automatic gate can apply it.
+ */
+export async function stampCurrentFieldProvenance(
+  db: Database,
+  suggestion: { id: string },
+  entity: string,
+  field: string,
+) {
+  await getDb(db)
+    .update(suggestionTable)
+    .set({
+      provenance: {
+        dependencies: dependencyStamps(
+          await producingAiManifest(db),
+          fieldDependencyKeys(entity, field),
+        ),
+        inputFingerprint: "synthetic",
+        optionFingerprint: "synthetic",
+        model: "typesafe/jev",
+      },
+    })
+    .where(eq(suggestionTable.id, suggestion.id));
 }

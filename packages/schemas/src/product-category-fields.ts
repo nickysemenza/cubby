@@ -24,6 +24,7 @@ export const productCategoryFeatureValues = [
   "household",
   "supplies",
   "apparel",
+  "planting",
 ] as const;
 
 /** Root, group, and type are the only supported classification levels. */

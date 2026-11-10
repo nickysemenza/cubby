@@ -2,6 +2,7 @@ import type {
   FieldSuggestion,
   FieldSuggestionOutcome,
 } from "@cubby/schemas/ai";
+import { HIGH_CONFIDENCE_PROBABILITY } from "@cubby/schemas/ai-evaluation";
 import {
   createContext,
   useContext,
@@ -15,45 +16,19 @@ import { CategoryLabelById } from "~/entity/presentation/category-label";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { Description } from "~/ui/text/description";
 
-import { CellFrame } from "../../ui/data-table/cell-frame";
-import { formatProbability, stringLabelOf } from "./field-suggestion";
+import { formatProbability } from "./field-suggestion";
 import { SuggestionBody } from "./suggestion-body";
-import type { SuggestionOutcomeSurface } from "./suggestion-outcome-mark";
-import { SuggestionOutcomeMark } from "./suggestion-outcome-mark";
 
-/** An empty-field `set` proposal, and a `remove` (prune) proposal regardless
- * of `alternative` or whether the field already has a value — a prune is
- * never a "replace a value with another guess" alternative, so the stricter
- * `ALTERNATIVE_THRESHOLD` gate doesn't apply to it. */
-export const FILL_THRESHOLD = 0.85;
-/** A `set` proposal replacing a value the field already has, or answering a
- * "provided" (already-populated basis) request. */
-export const ALTERNATIVE_THRESHOLD = 0.95;
+export type SuggestionSurface = "inline" | "line";
 
-/** The probability bar `suggestion` must clear to become actionable — shared
- * by the gate (`actionableSuggestion`) and the outcome mark's "needs NN%"
- * copy so the two can't drift apart. */
-export function reviewThreshold(
-  suggestion: FieldSuggestion,
-  current: string | null,
-  alternative: boolean,
-): typeof FILL_THRESHOLD | typeof ALTERNATIVE_THRESHOLD {
-  if (suggestion.operation === "remove") return FILL_THRESHOLD;
-  return alternative || current?.trim()
-    ? ALTERNATIVE_THRESHOLD
-    : FILL_THRESHOLD;
-}
-
+/** A proposal a person can act on: a different value Cubby is confident in. */
 export function actionableSuggestion(
   suggestion: FieldSuggestion | null,
   current: string | null,
-  alternative = false,
 ): suggestion is FieldSuggestion & { value: string } {
   if (!suggestion?.value || suggestion.value === current) return false;
   if (suggestion.probability == null) return false;
-  return (
-    suggestion.probability >= reviewThreshold(suggestion, current, alternative)
-  );
+  return suggestion.probability >= HIGH_CONFIDENCE_PROBABILITY;
 }
 
 const SuggestionVisitContext = createContext<{
@@ -61,7 +36,7 @@ const SuggestionVisitContext = createContext<{
   dismiss: (key: string) => void;
 } | null>(null);
 
-export const useSuggestionVisit = () => useContext(SuggestionVisitContext);
+const useSuggestionVisit = () => useContext(SuggestionVisitContext);
 
 export function SuggestionVisitProvider({ children }: { children: ReactNode }) {
   const [dismissed, setDismissed] = useState<ReadonlySet<string>>(new Set());
@@ -79,7 +54,7 @@ export function SuggestionVisitProvider({ children }: { children: ReactNode }) {
 }
 
 /** Reject/accept/saving/failure state shared by every review surface. */
-export function useSuggestionActions(
+function useSuggestionActions(
   key: string,
   onApply: () => void | Promise<void>,
   pending: boolean | undefined,
@@ -121,30 +96,8 @@ export function useSuggestionActions(
   return { dismissed, dismiss, apply, saving, failure };
 }
 
-/** A table cell has a fixed width, so its value and mark share one row where
- * the value truncates: the glyph appended as a bare sibling overflowed the
- * cell by its own width once it rendered. Other surfaces keep their flow. */
-function MarkedValue({
-  surface,
-  children,
-  mark,
-}: {
-  surface: SuggestionOutcomeSurface;
-  children: ReactNode;
-  mark: ReactNode;
-}) {
-  if (surface !== "cell")
-    return (
-      <>
-        {children}
-        {mark}
-      </>
-    );
-  return <CellFrame trailing={mark}>{children}</CellFrame>;
-}
-
 /** The key includes the question, current value and answer: new evidence can be reviewed. */
-export function suggestionReviewKey(
+function suggestionReviewKey(
   questionKey: string,
   currentValue: string | null,
   suggestion: FieldSuggestion | null | undefined,
@@ -211,21 +164,14 @@ export function SuggestionReview({
   currentLabel,
   questionKey,
   pending,
-  checking,
-  preview = false,
   onApply,
   onDismiss,
   onUseDifferent,
   basis = [],
   notice,
-  alternative = false,
   outcome = null,
   renderValue,
   surface = "inline",
-  autoFilled = false,
-  prune = false,
-  quiet,
-  error,
   children,
   explain,
 }: {
@@ -236,10 +182,6 @@ export function SuggestionReview({
   currentLabel?: ReactNode;
   questionKey: string;
   pending?: boolean;
-  checking?: boolean;
-  /** A cached answer shown while its live ask runs: displayed like an
-   * answer, but every action waits for the live one. */
-  preview?: boolean;
   onApply: () => void | Promise<void>;
   onDismiss?: () => void | Promise<void>;
   /** Opens an editor whose saved value is recorded as this suggestion's Miss. */
@@ -247,71 +189,30 @@ export function SuggestionReview({
   /** Labels of the manifest basis fields the decision read. */
   basis?: readonly string[];
   notice?: string;
-  alternative?: boolean;
-  /** What the decision model's decision tier did with this field — drives the always-visible
-   * mark even when there's no actionable proposal (or none at all). */
+  /** A rejected proposal stays settled for this visit. */
   outcome?: FieldSuggestionOutcome | null;
   /** One field presentation for the proposal, alternative, and member evidence. */
   renderValue?: (
     value: z.infer<ReturnType<typeof z.json>>,
     label?: string,
   ) => ReactNode;
-  /** `"cell"` folds the whole body into the mark's popover so a dense table
-   * row stays 32px. Inline values show the proposal and Accept, with
-   * evidence expanded only by an explicit Review disclosure. */
-  surface?: SuggestionOutcomeSurface;
-  autoFilled?: boolean;
-  /** Whether the target is a `mode: "prune"` field — changes the mark's
-   * "nothing to remove" copy for a declined removal. */
-  prune?: boolean;
-  /** The suggestion query failed; the mark shows it rather than vanishing. */
-  error?: unknown;
-  /** A form whose status line already reports every checked field: show only
-   * an actionable proposal, never a status-only mark. */
-  quiet?: boolean;
+  /** Inline values show the proposal and Accept, with evidence expanded
+   * only by an explicit Review disclosure. */
+  surface?: SuggestionSurface;
 }) {
   const key = suggestionReviewKey(questionKey, currentValue, suggestion);
   const { dismissed, dismiss, apply, saving, failure } = useSuggestionActions(
     key,
     onApply,
-    pending || preview,
+    pending,
     onDismiss,
   );
-  const markCurrentLabel = stringLabelOf(currentLabel);
-  // Cleared the bar or not is a fact about the proposal itself, independent
-  // of whether the person went on to reject it — a rejected-but-actionable
-  // suggestion still reads "Suggested X", not "Leaning X … needs 85%".
-  const meetsBar =
-    outcome?.reviewStatus !== "rejected" &&
-    actionableSuggestion(suggestion, currentValue, alternative);
-  if (!meetsBar || dismissed) {
-    if (quiet && surface !== "cell") return <>{children}</>;
-    if (currentValue?.trim() && !pending && !error) return <>{children}</>;
-    return (
-      <MarkedValue
-        surface={surface}
-        mark={
-          <SuggestionOutcomeMark
-            outcome={outcome}
-            suggestion={suggestion}
-            currentValue={currentValue}
-            currentLabel={markCurrentLabel}
-            alternative={alternative}
-            autoFilled={autoFilled}
-            surface={surface}
-            actionable={meetsBar}
-            dismissed={dismissed}
-            prune={prune}
-            pending={pending}
-            checking={checking}
-            error={error}
-          />
-        }
-      >
-        {children}
-      </MarkedValue>
-    );
-  }
+  if (
+    outcome?.reviewStatus === "rejected" ||
+    dismissed ||
+    !actionableSuggestion(suggestion, currentValue)
+  )
+    return <>{children}</>;
   const isRemove = suggestion.operation === "remove";
   const runnerUp = suggestion.alternatives[0];
   const body = (
@@ -357,38 +258,13 @@ export function SuggestionReview({
           : notice
       }
       saving={saving}
-      disabled={pending || preview}
+      disabled={pending}
       failure={failure}
       onAccept={() => void apply()}
-      onReject={() => {
-        if (!preview) void dismiss();
-      }}
+      onReject={() => void dismiss()}
       onUseDifferent={onUseDifferent}
     />
   );
-  if (surface === "cell") {
-    return (
-      <MarkedValue
-        surface={surface}
-        mark={
-          <SuggestionOutcomeMark
-            outcome={outcome}
-            suggestion={suggestion}
-            currentValue={currentValue}
-            currentLabel={markCurrentLabel}
-            alternative={alternative}
-            autoFilled={autoFilled}
-            surface={surface}
-            actionable
-            prune={prune}
-            review={body}
-          />
-        }
-      >
-        {children}
-      </MarkedValue>
-    );
-  }
   return (
     <>
       {!isRemove && currentValue?.trim() ? null : children}

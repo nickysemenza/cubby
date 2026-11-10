@@ -80,8 +80,18 @@ const filters = {
       options: options(["correction", "addition"]),
     },
     {
+      columnId: "disposition",
+      label: "Needs",
+      kind: "multiselect",
+      options: [
+        { value: "disagreement", label: "Disagreement" },
+        { value: "needs_you", label: "Needs you" },
+        { value: "guess", label: "Guess" },
+      ],
+    },
+    {
       columnId: "confidence",
-      label: "Confidence",
+      label: "Confidence (0 to 1)",
       kind: "range",
       range: "number",
     },

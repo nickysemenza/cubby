@@ -36,8 +36,11 @@ existing local-secret loader. Keep calls sequential and show sample sizes first.
 1. Sample `suggestions_read.list` across pending, applied, rejected
    and superseded statuses with `family: "field"`. Field rows are the one family
    that keeps replaced opinions; other families delete a replaced row nobody
-   decided on, so grade those from a deliberate fresh sample. Filter by `entity` and
-   `where {field: {in: [...]}}`.
+   decided on, so grade those from a deliberate fresh sample. Filter with
+   `entity: [...]` and `field: [...]`; confidence bounds (`confidenceFrom`,
+   `confidenceTo`) are fractions from 0 to 1. The default lists only what needs a
+   member; pass `disposition: ["guess"]` to read below-bar guesses. Every row
+   carries its runner-up value and probability.
    Luna/Sol may grade any sample independently from its captured evidence.
    Lock the model grade before revealing acceptance or rejection. Keep model
    grades and member labels as separate evidence: automatic application is an
@@ -57,11 +60,50 @@ existing local-secret loader. Keep calls sequential and show sample sizes first.
    labels separately, repeat misses (same
    wrong value as the stored rejection), mean confidence when right vs wrong,
    and how often confidence ≥ 0.85 was wrong.
-4. Option health per field: value counts from `entity_read.list` (or
+4. Wrong grades use `intent: "history"`. Never send `intent: "apply"` with
+   `verdict: "wrong"` and no correction from a grading session: on a field it
+   is refused, and `suggestions.field_authority` `clear` empties the household's
+   value.
+5. Option health per field: value counts from `entity_read.list` (or
    `search`) on the entity, plus rejected `correctValue`s grouped by
    suggested → correct. Pairs that are often confused, never-used values and
    values whose meaning (`entities://catalog` / the Decisions catalog on
    `/ai`) does not distinguish them are consolidation candidates.
+
+## Guess band
+
+Decides whether the automatic bar (`HIGH_CONFIDENCE_PROBABILITY`) can move from
+0.85 to 0.70.
+
+1. Sample about 60 pending guesses with `disposition: ["guess"]`,
+   `confidenceFrom: 0.7`, `confidenceTo: 0.85`, spread across fields.
+2. Grade each blind into right, wrong, or "the field does not apply" (a grocery
+   asked which plant it grows).
+3. Report the three counts per field and overall. Done when the report states
+   whether right is at least 90% of the sample and names the fields that fail;
+   a "does not apply" cluster is a classification-policy fix, not a bar change.
+
+## Accuracy over time
+
+1. Read `suggestions_read.automatic_decisions` for the field family, month by
+   month.
+2. Per field and month, count values Cubby set, how many a person later
+   corrected (a member `wrong` decision with a correction) or cleared, and the
+   commonest wrong → right pairs.
+3. Done when every field with ten or more automatic values has a row. Rising
+   correction rates after a prompt revision name the revision.
+
+## Lever replay
+
+Run before any field prompt, option or policy change ships: a revision re-sets
+every Cubby-held value it disagrees with, without review.
+
+1. Take one graded sample (Guess band or Field decisions).
+2. Replay it through `ai_read.suggest_fields` with `precedents: false`, then
+   with precedents (the default), and with the candidate change.
+3. Report accuracy and how many answers cross the 0.85 bar for each variant.
+   Done when the report says whether the change raises right answers above the
+   bar without raising wrong ones.
 
 ## Email relevance
 

@@ -847,10 +847,9 @@ maintenance Job is enrolled.
   `purchase_validation`, `account_sync`) is pruned after fourteen days. Only Job
   rows are deleted; Runs stay as AiUsage cost evidence, and domain evidence
   stays.
-- Pending field Suggestions older than fourteen days retire when the field is
-  not `reviewRequired` and no member decided them; statement and recommendation
-  Suggestions wait for a member and never expire. A tick expires up to 5,000
-  rows, so a backlog clears within hours.
+- Pending Suggestions never expire: a field guess stays the picker's guess
+  until its inputs change, and statement and recommendation Suggestions wait
+  for a member.
 
 ### Recovery attention
 

@@ -36,14 +36,14 @@ export function suggestionBasisLabels(
   );
 }
 
-export interface SuggestionProvenance {
+interface SuggestionProvenance {
   model: string | null;
   /** The Run's public shortcode, when the suggestion was stored by one. */
   runId: string | null;
   at: Date | string | null;
 }
 
-export interface SuggestionBodyProps {
+interface SuggestionBodyProps {
   /** What the field holds now; null for an addition. */
   current: ReactNode | null;
   /** Inline records keep evidence behind an explicit disclosure. */

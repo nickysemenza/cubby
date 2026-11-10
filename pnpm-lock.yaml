@@ -483,9 +483,6 @@ importers:
       jose:
         specifier: 6.2.12
         version: 6.2.12
-      loading-dev:
-        specifier: 0.3.5
-        version: 0.3.5(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(@types/react@19.3.0)(react@19.3.1))(react@19.3.1)
       lru-cache:
         specifier: ^11.5.3
         version: 11.5.3
@@ -8971,19 +8968,6 @@ packages:
       react: ^16.8.0 || ^17 || ^18 || ^19
     peerDependenciesMeta:
       '@types/react':
-        optional: true
-
-  loading-dev@0.3.5:
-    resolution: {integrity: sha512-N1cykO1KN4aC3hJnZd2EPLVWd3d92YgmAxOsZvC+YBIeujHQcALbaJZNSaMxakFH8g+D+sb68+kWX3kigO5guA==}
-    peerDependencies:
-      '@types/react': '*'
-      '@types/react-dom': '*'
-      react: '>=19.0.0'
-      react-dom: '>=19.0.0'
-    peerDependenciesMeta:
-      '@types/react':
-        optional: true
-      '@types/react-dom':
         optional: true
 
   locate-path@3.0.0:
@@ -18597,14 +18581,6 @@ snapshots:
       react: 19.3.1
     optionalDependencies:
       '@types/react': 19.3.0
-
-  loading-dev@0.3.5(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(@types/react@19.3.0)(react@19.3.1))(react@19.3.1):
-    dependencies:
-      react: 19.3.1
-      react-dom: 19.3.1(@types/react@19.3.0)(react@19.3.1)
-    optionalDependencies:
-      '@types/react': 19.3.0
-      '@types/react-dom': 19.3.0(@types/react@19.3.0)
 
   locate-path@3.0.0:
     dependencies:

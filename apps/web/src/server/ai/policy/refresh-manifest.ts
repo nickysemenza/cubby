@@ -33,7 +33,8 @@ export function fieldPolicyFingerprint(
   return sha256Hex(
     JSON.stringify({
       mode: row.mode,
-      reviewRequired: row.reviewRequired,
+      apply: row.apply,
+      fillOnly: row.fillOnly,
       automaticAssignment: {
         ruleKey: "field.addition",
         revision: FIELD_ASSIGNMENT_REVISION,

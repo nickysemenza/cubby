@@ -475,9 +475,21 @@ export const { definition, readSchemas } = defineEntityModel({
               label: "Apparel",
               description: "Clothing, footwear, and wearable accessories",
             },
+            {
+              value: "planting",
+              glyph: {
+                phosphor: "Plant",
+                sfSymbol: "leaf",
+              },
+              label: "Planting stock",
+              description:
+                "Seeds, starts, bulbs and other stock that grows a Plant",
+            },
           ],
+          // A feature decides which fields a whole subtree of Products may carry.
           suggest: {
             basis: ["name", "parentId"],
+            apply: "review",
             rules: [
               `You are a product-category classification assistant. Given a category's name and its parent category, determine which behavior namespace it belongs to.
 
@@ -836,6 +848,12 @@ Rules:
               "tool-accessories": "unknown",
               software: "unknown",
             },
+            otherwise: "not_allowed",
+          },
+          {
+            // Groceries come from plants too; only planting stock grows one.
+            field: "growsPlantId",
+            byValue: { planting: "unknown" },
             otherwise: "not_allowed",
           },
           {

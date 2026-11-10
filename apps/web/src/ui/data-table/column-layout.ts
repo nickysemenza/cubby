@@ -25,7 +25,6 @@ import {
 } from "~/ui/dnd/accessibility";
 import { useCubbyDndSensors } from "~/ui/dnd/sensors";
 
-import { CELL_RAIL_SLOT_PX } from "./cell-frame";
 import {
   materializeCubbyColumns,
   type CubbyColumnCollection,
@@ -599,8 +598,6 @@ export function emptyColumnIds<TData extends RowData>(
       sized[column.id] !== undefined
     )
       continue;
-    // A column can hold no values and still carry a proposal to accept.
-    if (column.columnDef.meta?.suggest) continue;
     // A deferred value is unknown, not empty; its accessor may not even run.
     const unavailable = column.columnDef.meta?.valueUnavailable;
     if (unavailable && rows.some((row) => unavailable(row.original))) continue;
@@ -818,16 +815,6 @@ function headerFitWidth(label: string) {
   return Math.min(Math.ceil(label.length * 6) + 8, HEADER_FIT_MAX);
 }
 
-/**
- * Width the cell rail reserves for this column's always-visible affordance,
- * an actionable suggestion mark, on top of the value's width. The
- * explanation and relation-workbench controls overlay the active row's cell
- * (`CellFrame overlay`) and reserve nothing.
- */
-function columnRailWidth(meta: CubbyColumnMeta | undefined) {
-  return meta?.suggest ? CELL_RAIL_SLOT_PX : 0;
-}
-
 function normalizedColumnSize<TData extends RowData>(
   definition: MaterializedColumnDef<TData>,
   className: string,
@@ -845,12 +832,13 @@ function normalizedColumnSize<TData extends RowData>(
     const fixed = declared ?? 32;
     return { size: fixed, minSize: fixed, maxSize: fixed };
   }
-  const rail = isLockedRole(role) ? 0 : columnRailWidth(definition.meta);
+  // Cell controls (explanation, relation workbench) overlay the active
+  // row's cell and reserve no width.
   const size =
     declared !== undefined
-      ? declared + rail
+      ? declared
       : Math.max(
-          defaultColumnSize(definition.meta) + rail,
+          defaultColumnSize(definition.meta),
           isNonEmptyColumnHeader(definition.header)
             ? headerFitWidth(definition.meta?.shortHeader ?? definition.header)
             : 0,
@@ -858,7 +846,7 @@ function normalizedColumnSize<TData extends RowData>(
   const minSize =
     definition.minSize ??
     tailwindWidth(className, "min-w") ??
-    Math.min(size, MIN_COLUMN_WIDTH + rail);
+    Math.min(size, MIN_COLUMN_WIDTH);
   // At least the identity fit, so a narrow default (an 88px date)
   // never clips the one-line form it paints outside a desktop row; each
   // kind's fit cap still bounds what measurement may claim.

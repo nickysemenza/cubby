@@ -1,3 +1,4 @@
+import { fieldAutomationCause } from "@cubby/schemas/ai-evaluation";
 import {
   automaticDecisionListInput,
   automaticDecisionListOut,
@@ -27,6 +28,7 @@ import {
   readSuggestionRecordRefs,
   resolveStoredRecordRefs,
 } from "~/server/generic/suggestions/repo/suggestion-reference-resolution";
+import { readFieldSuggestions } from "~/server/generic/suggestions/repo/suggestion-review";
 import { touchingSuggestionIds } from "~/server/generic/suggestions/repo/suggestion-touching";
 import { automaticSuggestionEligibility } from "~/server/generic/suggestions/repo/suggestion-work-tokens";
 
@@ -145,6 +147,28 @@ export async function listAutomaticDecisions(
     .filter((row) => row.refs === null)
     .map((row) => row.id);
   const stored = await readSuggestionRecordRefs(db, suggestionIds);
+  const fieldIds = rows
+    .filter((row) => row.family === suggestionFamily.enum.field)
+    .map((row) => row.id);
+  const fieldRows = new Map(
+    (await readFieldSuggestions(db, fieldIds)).map((row) => [
+      row.suggestionId,
+      row,
+    ]),
+  );
+  const causes = new Map(
+    fieldIds.length
+      ? (
+          await unwrapDb(db).execute<{ id: string; cause: unknown }>(
+            sql`SELECT id::text, data->${"cause"} AS cause FROM "Suggestion"
+              WHERE id = ANY(${uuidArrayParam(fieldIds)})`,
+          )
+        ).rows.flatMap((row) => {
+          const cause = fieldAutomationCause.safeParse(row.cause).data;
+          return cause ? [[row.id, cause] as const] : [];
+        })
+      : [],
+  );
   const mailRefs = await resolveStoredRecordRefs(
     db,
     rows.flatMap((row) =>
@@ -181,6 +205,8 @@ export async function listAutomaticDecisions(
       reviewedAt: row.reviewedAt
         ? new Date(row.reviewedAt).toISOString()
         : null,
+      field: fieldRows.get(row.id) ?? null,
+      cause: causes.get(row.id) ?? null,
       correction:
         row.active &&
         row.status !== "applied" &&

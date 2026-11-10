@@ -71,7 +71,7 @@ function featureRow(
     options: extra.options ?? [],
     roster: extra.roster ?? null,
     rules: prompt.rules,
-    reviewRequired: true,
+    apply: "review",
     prompt: rendered(prompt),
   };
 }

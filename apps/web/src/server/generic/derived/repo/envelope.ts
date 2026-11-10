@@ -20,7 +20,6 @@ import { z } from "zod";
 
 import type {
   FieldReadContext,
-  CurrentFieldOwnership,
   StoredDerivedRead,
 } from "~/server/generic/derived/repo/read-context";
 
@@ -384,7 +383,6 @@ export function buildFieldEnvelopeRow<S extends z.ZodObject>({
   row,
   resolutions: suppliedResolutions,
   stored = new Map(),
-  ownership = {},
   assignments = {},
   currentAssignments = {},
   decisions = {},
@@ -399,7 +397,6 @@ export function buildFieldEnvelopeRow<S extends z.ZodObject>({
   row: FieldReadContext["raw"];
   resolutions?: Readonly<Record<string, FieldResolution>>;
   stored?: ReadonlyMap<string, StoredDerivedRead>;
-  ownership?: CurrentFieldOwnership;
   /** Current public stored values when hydration replaced the ordinary slot. */
   assignments?: FieldReadContext["raw"];
   currentAssignments?: Readonly<
@@ -425,7 +422,7 @@ export function buildFieldEnvelopeRow<S extends z.ZodObject>({
   for (const key of Object.keys(fieldSchemas.shape)) {
     const field = entityFieldByKey(entity, key);
     const resolution = resolutions[key];
-    const owner: Ownership = ownership[key] ?? { kind: "record" };
+    const owner: Ownership = { kind: "record" };
     const read = stored.get(key);
     const allocated = resolution?.mode === "allocated";
     const refused =

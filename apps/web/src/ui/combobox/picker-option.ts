@@ -35,6 +35,8 @@ export interface PickerOption {
    * filters the roster by its counts.
    */
   hint?: string;
+  /** How the row's accessible name reads `hint` ("Cubby's guess, 62% sure"). */
+  hintSpoken?: string;
   /**
    * Second-line prose that DISAMBIGUATES the option — today, a location's
    * ancestor breadcrumb, because "shelf 1" exists in four rooms. Stays out of
@@ -73,7 +75,14 @@ export function pickerOptionItem(option: PickerOption): ComboboxItem {
     ...(option.group && { group: option.group }),
     ...(option.depth != null && { depth: option.depth }),
     ...(option.rowLabel && { rowLabel: option.rowLabel }),
-    ...(option.hint && { trailing: [{ text: option.hint }] }),
+    ...(option.hint && {
+      trailing: [
+        {
+          text: option.hint,
+          ...(option.hintSpoken && { spoken: option.hintSpoken }),
+        },
+      ],
+    }),
     ...(option.meta && { meta: true }),
     ...(option.disabledReason && {
       disabledReason: option.disabledReason,

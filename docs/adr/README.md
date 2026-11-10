@@ -38,3 +38,4 @@ live contract details in place.
 | [0025](0025-radical-simplification-of-background-work.md)     | Shrink Cubby's machinery in place on Workers and Neon                             |
 | [0026](0026-source-occurrence-and-accepted-evidence.md)       | Source occurrence owns accepted bank evidence                                     |
 | [0027](0027-tier-routed-models-on-a-funding-first-ladder.md)  | Tier-routed models on a funding-first ladder                                      |
+| [0028](0028-cubby-acts-first.md)                              | Cubby acts first; members correct                                                 |

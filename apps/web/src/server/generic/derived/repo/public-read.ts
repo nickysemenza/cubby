@@ -294,7 +294,6 @@ export function publicFieldEnvelopeRow(
     entity,
     row,
     stored,
-    ownership: context?.ownership,
     assignments: currentAssignments(entity, row, context?.raw ?? {}),
   } satisfies Parameters<typeof buildFieldEnvelopeRow>[0];
   const project = entityFieldEnvelopeProjectors[entity];

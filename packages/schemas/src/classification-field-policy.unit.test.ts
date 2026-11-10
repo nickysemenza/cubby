@@ -41,9 +41,12 @@ describe("one evaluator for declared and column policies", () => {
     expect(isFieldAllowed("productCategory.feature", null, "fdc_id")).toBe(
       false,
     );
-    // A field the classification does not govern is always allowed.
+    // Only planting stock grows a Plant; groceries come from plants too.
     expect(
-      isFieldAllowed("productCategory.feature", "tools", "growsPlantId"),
+      isFieldAllowed("productCategory.feature", "food", "growsPlantId"),
+    ).toBe(false);
+    expect(
+      isFieldAllowed("productCategory.feature", "planting", "growsPlantId"),
     ).toBe(true);
   });
 

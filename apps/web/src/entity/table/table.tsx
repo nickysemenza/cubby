@@ -14,11 +14,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { entities, EntityIcon, isBrowserRoutedEntity } from "~/entity/entities";
 import { usePageIdentity, usePageWorkbenchTarget } from "~/entity/page/page";
 import { ProposalCountProvider } from "~/entity/suggestions/proposal-counts";
-import {
-  RecordSuggestionsBulkAction,
-  RecordSuggestionsProvider,
-  RecordSuggestionBoundary,
-} from "~/entity/suggestions/record-suggestions";
 import type { QueryTiming } from "~/lib/query-timing";
 import { CellEditorRetentionContext } from "~/ui/data-table/cell-editor-retention";
 import { ColumnMarkContext } from "~/ui/data-table/column-presentation";
@@ -778,42 +773,40 @@ function VirtualSelectionRow<TItem extends RowData>({
   const classes = cn(rowClassName?.(row));
   return (
     <CellEditorRetentionContext value={retainRow}>
-      <RecordSuggestionBoundary record={row.original}>
-        <table.Subscribe
-          source={table.atoms.cellSelection!}
-          selector={selectionProjection}
-        >
-          {(selection) => (
-            <table.Subscribe
-              source={table.atoms.rowSelection!}
-              selector={(selected) => selected[row.id] === true}
-            >
-              {(isSelected) => (
-                <DataRow
-                  row={row}
-                  rowIndex={rowIndex}
-                  isSelected={isSelected}
-                  isCurrent={currentRowId === row.id}
-                  isExpanded={row.getIsExpanded()}
-                  isFocused={selection.focused}
-                  isDebugEnabled={isDebugEnabled}
-                  onRowClick={onRowClick}
-                  onRowHover={onRowHover}
-                  onRowHoverEnd={onRowHoverEnd}
-                  suppressCellRowClick={suppressCellRowClick}
-                  rowClassName={classes}
-                  cellClassName={cellClassName}
-                  columnsKey={columnsKey}
-                  unpaintedColumns={unpaintedColumns}
-                  rowContentVersion={rowContentVersion}
-                  selectionVersion={selection.version}
-                  height={height}
-                />
-              )}
-            </table.Subscribe>
-          )}
-        </table.Subscribe>
-      </RecordSuggestionBoundary>
+      <table.Subscribe
+        source={table.atoms.cellSelection!}
+        selector={selectionProjection}
+      >
+        {(selection) => (
+          <table.Subscribe
+            source={table.atoms.rowSelection!}
+            selector={(selected) => selected[row.id] === true}
+          >
+            {(isSelected) => (
+              <DataRow
+                row={row}
+                rowIndex={rowIndex}
+                isSelected={isSelected}
+                isCurrent={currentRowId === row.id}
+                isExpanded={row.getIsExpanded()}
+                isFocused={selection.focused}
+                isDebugEnabled={isDebugEnabled}
+                onRowClick={onRowClick}
+                onRowHover={onRowHover}
+                onRowHoverEnd={onRowHoverEnd}
+                suppressCellRowClick={suppressCellRowClick}
+                rowClassName={classes}
+                cellClassName={cellClassName}
+                columnsKey={columnsKey}
+                unpaintedColumns={unpaintedColumns}
+                rowContentVersion={rowContentVersion}
+                selectionVersion={selection.version}
+                height={height}
+              />
+            )}
+          </table.Subscribe>
+        )}
+      </table.Subscribe>
     </CellEditorRetentionContext>
   );
 }
@@ -1262,18 +1255,6 @@ function tableChrome<TItem extends RowData>({
   };
 }
 
-function withSuggestionsBulkAction<TItem extends RowData>(
-  bulkActionBar: ReactNode,
-  records: readonly TItem[],
-) {
-  return (
-    <>
-      {bulkActionBar}
-      <RecordSuggestionsBulkAction records={records} />
-    </>
-  );
-}
-
 function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
   const {
     table,
@@ -1338,7 +1319,6 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
   });
   const pageIdentity = usePageIdentity();
   const workbenchTarget = usePageWorkbenchTarget();
-  const statusTarget = useListQuery(entity)?.statusTarget ?? null;
   const {
     colSpan,
     columnsKey,
@@ -1411,13 +1391,6 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
   // The controller separately gates the range engine when its row model is not
   // ready; switching click/clipboard behavior mid-gesture loses editor intent.
   const cellSelectionEnabled = !isMobile;
-  const selectedRecords = table
-    .getSelectedRowModel()
-    .rows.map((row) => row.original);
-  const bulkActionsWithSuggestions = withSuggestionsBulkAction(
-    bulkActionBar,
-    selectedRecords,
-  );
 
   // Embedded tables drop chrome that would carry no information: a toolbar
   // holding only the View menu + page-size control, and a pager for a list that
@@ -1434,7 +1407,7 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
     embedded,
     showColumnMenu,
     actions,
-    bulkActionBar: bulkActionsWithSuggestions,
+    bulkActionBar,
     additionalToolbarContent,
     inspectorToggle,
     toolbarMode,
@@ -1472,7 +1445,7 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
       additionalToolbarContent={additionalToolbarContent}
       nestToggle={nestToggle}
       actions={actions}
-      bulkActionBar={bulkActionsWithSuggestions}
+      bulkActionBar={bulkActionBar}
       bulkActionPreview={bulkActionPreview}
       externalToolbar={externalToolbar}
       isTransitioning={isTransitioning}
@@ -1696,119 +1669,106 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
         isLoading || isTransitioning ? [] : rows.map((row) => row.original)
       }
     >
-      <RecordSuggestionsProvider
-        viewportOnly
-        publishedOnly
-        statusTarget={statusTarget}
-        entity={entity}
-        records={
-          isLoading || isTransitioning ? [] : rows.map((row) => row.original)
-        }
-        fieldKeys={table.getVisibleLeafColumns().map((column) => column.id)}
-      >
-        <EntityDisplayImagesProvider refs={entityMediaRefs}>
-          <TableInspectorLayout
-            inspector={
-              inspector
-                ? {
-                    ...inspector,
-                    content: inspector.content ? (
-                      <TableRowStepContext.Provider value={stepRow}>
-                        {inspector.content}
-                      </TableRowStepContext.Provider>
-                    ) : null,
-                  }
-                : undefined
-            }
-          >
-            <Stack>
-              {/* Without a toolbar, header Filter… opens beside the header. */}
-              {showToolbar ? null : (
-                <HeaderFilterEditor
-                  table={table}
-                  entity={entity}
-                  optionHints={filterOptionHints}
-                />
-              )}
-              <DesktopTableView
-                table={table}
-                isLoading={isLoading || !hydrated}
-                error={error}
-                controller={controller}
-                entity={entity}
-                embedded={embedded}
-                rowInspectorOpen={Boolean(
-                  inspector?.content || desktopInspector,
-                )}
-                desktopInspector={
-                  desktopInspector ? (
+      <EntityDisplayImagesProvider refs={entityMediaRefs}>
+        <TableInspectorLayout
+          inspector={
+            inspector
+              ? {
+                  ...inspector,
+                  content: inspector.content ? (
                     <TableRowStepContext.Provider value={stepRow}>
-                      {desktopInspector}
+                      {inspector.content}
                     </TableRowStepContext.Provider>
-                  ) : undefined
+                  ) : null,
                 }
-                externalToolbar={externalToolbar}
-                desktopToolbar={desktopToolbar}
-                showToolbar={showToolbar}
-                infiniteScroll={infiniteScroll}
-                showPagination={showPagination}
-                showCellSelectionStats={showCellSelectionStats}
-                timing={timing}
-                ariaLabel={ariaLabel}
-                cellSelectionEnabled={cellSelectionEnabled}
-                statusContent={statusContent}
-                hasStatusContent={hasStatusContent}
-                tableBody={renderTableBody()}
-                footerContent={footerContent}
-                rowContextMenu={rowContextMenu}
+              : undefined
+          }
+        >
+          <Stack>
+            {/* Without a toolbar, header Filter… opens beside the header. */}
+            {showToolbar ? null : (
+              <HeaderFilterEditor
+                table={table}
+                entity={entity}
+                optionHints={filterOptionHints}
               />
+            )}
+            <DesktopTableView
+              table={table}
+              isLoading={isLoading || !hydrated}
+              error={error}
+              controller={controller}
+              entity={entity}
+              embedded={embedded}
+              rowInspectorOpen={Boolean(inspector?.content || desktopInspector)}
+              desktopInspector={
+                desktopInspector ? (
+                  <TableRowStepContext.Provider value={stepRow}>
+                    {desktopInspector}
+                  </TableRowStepContext.Provider>
+                ) : undefined
+              }
+              externalToolbar={externalToolbar}
+              desktopToolbar={desktopToolbar}
+              showToolbar={showToolbar}
+              infiniteScroll={infiniteScroll}
+              showPagination={showPagination}
+              showCellSelectionStats={showCellSelectionStats}
+              timing={timing}
+              ariaLabel={ariaLabel}
+              cellSelectionEnabled={cellSelectionEnabled}
+              statusContent={statusContent}
+              hasStatusContent={hasStatusContent}
+              tableBody={renderTableBody()}
+              footerContent={footerContent}
+              rowContextMenu={rowContextMenu}
+            />
 
-              {/* Mobile List View. Also rendered pre-hydration (see the desktop
+            {/* Mobile List View. Also rendered pre-hydration (see the desktop
           wrapper's breakpoint comment) so a phone's first paint is the
           shape-matched skeleton rather than a clipped desktop table. */}
-              {(isMobile || !hydrated) && (
-                <MobileListScreen
-                  table={table}
-                  entity={entity}
-                  getDetailsHref={getMobileDetailsHref}
-                  disableDetailsHref={disableMobileDetailsHref}
-                  renderRowFooter={renderMobileRowFooter}
-                  onRowClick={onRowClick}
-                  additionalToolbarContent={additionalToolbarContent}
-                  actions={actions}
-                  bulkActionBar={bulkActionsWithSuggestions}
-                  isLoading={isLoading}
-                  error={error}
-                  infiniteScroll={infiniteScroll}
-                  refreshControls={refreshControls}
-                  groupConfig={groupConfig}
-                  presentationSwitches={presentationSwitches(nestToggle)}
-                  isTransitioning={isTransitioning}
-                  rowContentVersion={rowContentVersion}
-                  portalWorkbenchUtilities={externalToolbar}
-                  showToolbar={showToolbar}
-                  showViewOptions={showMobileViewOptions({
-                    embedded,
-                    showColumnMenu,
-                    externalToolbar,
-                  })}
-                  toolbarVariant={tableChromeVariant(embedded)}
-                  emptyState={emptyState}
-                />
-              )}
+            {(isMobile || !hydrated) && (
+              <MobileListScreen
+                table={table}
+                entity={entity}
+                getDetailsHref={getMobileDetailsHref}
+                disableDetailsHref={disableMobileDetailsHref}
+                renderRowFooter={renderMobileRowFooter}
+                onRowClick={onRowClick}
+                additionalToolbarContent={additionalToolbarContent}
+                actions={actions}
+                bulkActionBar={bulkActionBar}
+                isLoading={isLoading}
+                error={error}
+                infiniteScroll={infiniteScroll}
+                refreshControls={refreshControls}
+                groupConfig={groupConfig}
+                presentationSwitches={presentationSwitches(nestToggle)}
+                isTransitioning={isTransitioning}
+                rowContentVersion={rowContentVersion}
+                portalWorkbenchUtilities={externalToolbar}
+                showToolbar={showToolbar}
+                showViewOptions={showMobileViewOptions({
+                  embedded,
+                  showColumnMenu,
+                  externalToolbar,
+                })}
+                toolbarVariant={tableChromeVariant(embedded)}
+                emptyState={emptyState}
+              />
+            )}
 
-              {/* Mobile keeps the inline pager, hidden when infinite scroll is active */}
-              {isMobile && table.getPageCount() > 1 && !infiniteScroll && (
-                <DataTablePagination
-                  table={table}
-                  timing={timing}
-                  variant={tableChromeVariant(embedded)}
-                />
-              )}
-            </Stack>
-          </TableInspectorLayout>
-        </EntityDisplayImagesProvider>
-      </RecordSuggestionsProvider>
+            {/* Mobile keeps the inline pager, hidden when infinite scroll is active */}
+            {isMobile && table.getPageCount() > 1 && !infiniteScroll && (
+              <DataTablePagination
+                table={table}
+                timing={timing}
+                variant={tableChromeVariant(embedded)}
+              />
+            )}
+          </Stack>
+        </TableInspectorLayout>
+      </EntityDisplayImagesProvider>
     </ProposalCountProvider>
   );
 }

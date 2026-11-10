@@ -3,8 +3,8 @@ import { createPortal } from "react-dom";
 import { afterEach, beforeEach, expect, it } from "vitest";
 import { page } from "vitest/browser";
 
+import { createEditorBrowserTestHarness as createBrowserTestHarness } from "#web/tests/editor-metadata.fixtures.ts";
 import { usePageWorkbenchTarget } from "~/entity/page/page";
-import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { Button } from "~/ui/primitives/button";
 import { Input } from "~/ui/primitives/input";
 
@@ -49,7 +49,7 @@ for (const width of [402, 900, 1280]) {
     );
     const thumbnail = screen
       .getByTestId("detail-spec-plate")
-      .querySelector(".shrink-0");
+      .querySelector("img");
     expect(thumbnail?.getBoundingClientRect().width).toBe(28);
     expect(thumbnail?.getBoundingClientRect().height).toBe(28);
     const title = screen.getByRole("heading").getBoundingClientRect();

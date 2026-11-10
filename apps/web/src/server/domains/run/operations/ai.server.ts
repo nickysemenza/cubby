@@ -5,7 +5,6 @@ import {
 import type {
   FieldSuggestionsInput,
   enrichmentProposalPrecomputeInput,
-  fieldSuggestionsBatchInput,
 } from "@cubby/schemas/ai";
 import {
   fieldSuggestionSchema,
@@ -23,7 +22,6 @@ import { and, eq, exists, or, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { aiContract, aiStreamsContract } from "~/contracts/ai.contract";
-import { settleDecisionWorkItems } from "~/server/ai/decision-model";
 import {
   suggestIngredientMerge,
   suggestIngredientMergeBatch,
@@ -46,15 +44,10 @@ import {
   fieldQuestionKey,
   isSettledOutcome,
   readSettledQuestions,
-  rememberSavedAnswers,
   rememberSettledQuestions,
-  savedAnswerKey,
   settledSignature,
 } from "~/server/ai/field-suggest/settled-questions";
-import {
-  suggestFields,
-  withFieldSuggestionBatch,
-} from "~/server/ai/field-suggest/suggest-fields";
+import { suggestFields } from "~/server/ai/field-suggest/suggest-fields";
 import { aiCallOwner, type AiCallOwner } from "~/server/ai/policy/call-owner";
 import {
   dependencyStamps,
@@ -66,7 +59,6 @@ import {
   listRecentAiUsage,
   summarizeAiUsage,
 } from "~/server/ai/repo/ai-usage";
-import type { AiSelectionUsage } from "~/server/ai/selection";
 import { afterResponse } from "~/server/cf-env";
 import { getAiClient } from "~/server/clients/ai";
 import type { Database } from "~/server/db";
@@ -78,7 +70,6 @@ import {
   resumeAutomaticAi,
   stopAutomaticAi,
 } from "~/server/domains/run/repo/automatic-ai-stop";
-import type { savedFieldQuestionScheduler } from "~/server/domains/run/service/ai-refresh";
 import { publicFieldEnvelopeBatch } from "~/server/generic/derived/repo/public-read";
 import {
   resolveAllOrThrow,
@@ -232,25 +223,6 @@ export const backfillLocationDescriptionsWorkflow = bindCoordinatorStream(
     signal,
   }),
 );
-function savedFieldTargets(
-  input: FieldSuggestionsInput,
-  recordId: string | null | undefined,
-) {
-  if (
-    input.savedRecord !== true ||
-    !recordId ||
-    input.basisMode !== "suggested" ||
-    input.decisionModel
-  )
-    return [];
-  return input.targets.map((field) => ({
-    kind: "field" as const,
-    entity: input.entity,
-    recordId,
-    field,
-    suggestionIds: [],
-  }));
-}
 
 /** AI reads are authoritative: suggestions must see the row just written. */
 export const inferFieldSuggestions = async (
@@ -260,7 +232,6 @@ export const inferFieldSuggestions = async (
   prepared?: {
     manifest: Awaited<ReturnType<typeof producingAiManifest>>;
     recordId?: Awaited<ReturnType<typeof resolveOrThrow>>;
-    scheduleSavedField?: ReturnType<typeof savedFieldQuestionScheduler>;
   },
 ) => {
   const owner = aiCallOwner(context.actorContext);
@@ -270,22 +241,12 @@ export const inferFieldSuggestions = async (
     ? (prepared?.recordId ??
       (await resolveOrThrow(context.db, input.entity, input.entityId)))
     : null;
-  const targets = savedFieldTargets(input, recordId);
-  if (targets.length) {
-    const schedule =
-      prepared?.scheduleSavedField ??
-      (
-        await import("~/server/domains/run/service/ai-refresh")
-      ).savedFieldQuestionScheduler(context.db, targets, {
-        suggestPorts: ports,
-      });
-    for (const target of targets) await schedule(target);
-  }
   const captured = await withAiInputs(false, () =>
     suggestFields(context.db, owner, input, {
       ...ports,
       ...(recordId ? { recordId } : {}),
       ...(input.decisionModel ? { decisionModel: input.decisionModel } : {}),
+      ...(input.precedents === false ? { precedents: false } : {}),
     }),
   );
   const output = captured.result;
@@ -516,115 +477,8 @@ export const inferFieldSuggestions = async (
         }),
       );
   }
-  // A saved record's complete final answer becomes the preview its list row
-  // shows while the next live ask revalidates it. Withheld answers are stored
-  // too, so a review replaces the older preview rather than leaving it.
-  const savedEntityId = input.savedRecord === true ? input.entityId : undefined;
-  if (savedEntityId && !input.decisionModel) {
-    const previews = await Promise.all(
-      Object.entries(output.outcomes ?? {}).map(async ([field, outcome]) => ({
-        key: await savedAnswerKey(
-          { ...input, field, entityId: savedEntityId },
-          manifest,
-        ),
-        preview: { suggestion: output.suggestions[field] ?? null, outcome },
-      })),
-    );
-    if (previews.length)
-      await afterResponse(
-        rememberSavedAnswers(context.db, previews).catch((error) => {
-          // SILENT: an unremembered preview only means the next visit waits
-          // for its live ask.
-          suggestionLog.error("failed to remember saved answer previews", {
-            error,
-          });
-        }),
-      );
-  }
   return output;
 };
-
-/** A list's finite enrichment set shares setup, vocabularies and decision waves. */
-export async function inferFieldSuggestionsBatch(
-  context: Parameters<typeof inferFieldSuggestions>[0],
-  input: z.output<typeof fieldSuggestionsBatchInput>,
-  ports?: Parameters<typeof suggestFields>[3],
-) {
-  const manifest = await producingAiManifest(context.db);
-  const recordIds = new Map<
-    string,
-    Awaited<ReturnType<typeof resolveOrThrow>>
-  >();
-  for (const entity of new Set(input.items.map((item) => item.entity))) {
-    const codes = input.items.flatMap((item) =>
-      item.entity === entity && item.entityId ? [item.entityId] : [],
-    );
-    if (!codes.length) continue;
-    const resolved = await resolveLiveShortcodes(
-      context.db,
-      [...new Set(codes)],
-      entity,
-    );
-    for (const [code, id] of resolved) recordIds.set(code, id);
-  }
-  const savedTargets = input.items.flatMap((item) =>
-    savedFieldTargets(
-      item,
-      item.entityId ? recordIds.get(item.entityId) : undefined,
-    ),
-  );
-  const scheduleSavedField = savedTargets.length
-    ? (
-        await import("~/server/domains/run/service/ai-refresh")
-      ).savedFieldQuestionScheduler(context.db, savedTargets, {
-        suggestPorts: ports,
-      })
-    : undefined;
-  const usages = new Map<string, AiSelectionUsage>();
-  const results = await withFieldSuggestionBatch(() =>
-    settleDecisionWorkItems(input.items, async (item) => {
-      return inferFieldSuggestions(
-        context,
-        item,
-        {
-          ...ports,
-          usageFor: (operation) => {
-            let usage = usages.get(operation);
-            if (!usage) {
-              usage = {
-                db: ports?.recordUsage === false ? undefined : context.db,
-                ...aiCallOwner(context.actorContext),
-                operation,
-                cacheStatus: "none",
-                force: ports?.force,
-              };
-              usages.set(operation, usage);
-            }
-            return usage;
-          },
-        },
-        {
-          manifest,
-          recordId: item.entityId ? recordIds.get(item.entityId) : undefined,
-          scheduleSavedField,
-        },
-      );
-    }),
-  );
-  return {
-    results: results.map((result) =>
-      result.status === "fulfilled"
-        ? { ok: true as const, value: result.value }
-        : {
-            ok: false as const,
-            message:
-              result.reason instanceof Error
-                ? result.reason.message
-                : String(result.reason),
-          },
-    ),
-  };
-}
 
 export const aiHandlers = implementOperationDomain(aiContract, {
   describeLocation: async (context, input) => {
@@ -749,8 +603,6 @@ export const aiHandlers = implementOperationDomain(aiContract, {
   },
   // Both presentations share the page run grouping and authoritative inference.
   suggestFields: (context, input) => inferFieldSuggestions(context, input),
-  suggestFieldsBatch: (context, input) =>
-    inferFieldSuggestionsBatch(context, input),
   suggestExternalIdKind: async (context, input) =>
     suggestExternalIdKind(input, {
       db: context.db,

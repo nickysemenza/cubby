@@ -96,6 +96,11 @@ interface PickerCommonProps<TId extends string> {
   footer?: React.ReactNode;
   /** Segmented mode: icon-only segments on phones, labels kept accessible. */
   iconOnlyOnPhone?: boolean;
+  /**
+   * With an empty query and no highlighted row, Enter picks this row (a
+   * field's pinned guess). It is never shown as selected.
+   */
+  enterPicks?: TId;
 }
 
 /**
@@ -610,7 +615,7 @@ function rowAriaLabel(item: ComboboxItem) {
     item.secondary,
     presentation?.status?.text,
     item.detail,
-    ...(presentation?.trailing ?? []).map((chip) => chip.text),
+    ...(presentation?.trailing ?? []).map((chip) => chip.spoken ?? chip.text),
     presentation?.disabledReason,
   ]
     .filter(Boolean)
@@ -627,12 +632,15 @@ function PickerRowPreamble({
   previous: ComboboxItem | undefined;
 }) {
   const group = item.presentation?.group;
-  const showGroup = group && group.id !== previous?.presentation?.group?.id;
+  const previousGroup = previous?.presentation?.group;
+  const showGroup = group && group.id !== previousGroup?.id;
+  // Leaving a pinned group for ungrouped rows still divides the two.
+  const leftGroup = previousGroup !== undefined && group === undefined;
   const firstAfterMeta =
     previous?.presentation?.meta === true && !item.presentation?.meta;
   return (
     <>
-      {firstAfterMeta || (showGroup && previous) ? (
+      {firstAfterMeta || leftGroup || (showGroup && previous) ? (
         <div
           role="presentation"
           className="mx-1.5 my-1 border-t border-border"
@@ -851,7 +859,10 @@ function SearchPickerPopup<TId extends string>({
   create,
   header,
   footer,
+  restingId,
 }: {
+  /** The row Enter picks while nothing is highlighted; drawn as active. */
+  restingId?: TId;
   anchorRef: React.RefObject<HTMLDivElement | null>;
   orderedItems: ComboboxItem<TId>[];
   records: boolean;
@@ -990,9 +1001,13 @@ function SearchPickerPopup<TId extends string>({
                   value={item}
                   disabled={item.presentation?.disabledReason != null}
                   aria-label={rowAriaLabel(item)}
-                  className={rowClass(
-                    item.presentation?.meta === true,
-                    renderItem != null,
+                  className={cn(
+                    rowClass(
+                      item.presentation?.meta === true,
+                      renderItem != null,
+                    ),
+                    // Enter picks this row; it reads active, never selected.
+                    item.id === restingId && "bg-accent text-accent-foreground",
                   )}
                   style={rowStyle(item)}
                 >
@@ -1114,9 +1129,11 @@ function SearchPicker<TId extends string>({
   className,
   header,
   footer,
+  enterPicks,
 }: ResolvedPickerProps<TId>) {
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState("");
+  const [highlighted, setHighlighted] = React.useState<TId>();
   const [debouncedQuery] = useDebouncedValue(query, { wait: 150 });
   const anchorRef = React.useRef<HTMLDivElement>(null);
   const inputRef = React.useRef<HTMLInputElement>(null);
@@ -1138,8 +1155,14 @@ function SearchPicker<TId extends string>({
   const inputValue = open || multiple ? query : selectedLabelOf(single);
 
   const visibleItems = React.useMemo(() => {
+    // Server search owns the roster, but rows pinned ahead of it (a guess)
+    // still have to match what is typed.
     const roster = onSearchChange
-      ? items
+      ? items.filter(
+          (item) =>
+            (item.presentation?.group?.order ?? 0) >= 0 ||
+            matchesPickerItem(item, query),
+        )
       : items.filter((item) => matchesPickerItem(item, query));
     if (query.trim() !== "") return roster;
     const missing = values.filter(
@@ -1221,6 +1244,22 @@ function SearchPicker<TId extends string>({
     <ComboboxPrimitive.Input
       id={inputId}
       ref={setInputRef}
+      onKeyDown={(event) => {
+        if (
+          event.key !== "Enter" ||
+          enterPicks === undefined ||
+          multiple ||
+          query.trim() !== "" ||
+          highlighted !== undefined
+        )
+          return;
+        const guess = orderedItems.find((item) => item.id === enterPicks);
+        if (!guess) return;
+        event.preventDefault();
+        setValues([guess]);
+        setQuery("");
+        changeOpen(false);
+      }}
       aria-label={ariaLabel}
       aria-describedby={ariaDescribedBy}
       placeholder={
@@ -1285,6 +1324,14 @@ function SearchPicker<TId extends string>({
 
   const popup = (
     <SearchPickerPopup
+      restingId={
+        enterPicks !== undefined &&
+        !multiple &&
+        query.trim() === "" &&
+        highlighted === undefined
+          ? enterPicks
+          : undefined
+      }
       anchorRef={anchorRef}
       orderedItems={orderedItems}
       records={records != null}
@@ -1335,6 +1382,8 @@ function SearchPicker<TId extends string>({
     openOnInputClick: true,
     modal: false,
     autoHighlight: query.trim() !== "",
+    onItemHighlighted: (item: ComboboxItem<TId> | undefined) =>
+      setHighlighted(item?.id),
     disabled: gate.disabled,
   } as const;
 
@@ -1420,8 +1469,14 @@ function InlinePicker<TId extends string>({
     onSearchChange?.(debouncedQuery);
   }, [debouncedQuery, onSearchChange]);
   const visibleItems = React.useMemo(() => {
+    // Server search owns the roster, but rows pinned ahead of it (a guess)
+    // still have to match what is typed.
     const roster = onSearchChange
-      ? items
+      ? items.filter(
+          (item) =>
+            (item.presentation?.group?.order ?? 0) >= 0 ||
+            matchesPickerItem(item, query),
+        )
       : items.filter((item) => matchesPickerItem(item, query));
     if (query.trim() !== "") return roster;
     // A picked record the roster has not loaded still shows, so it can be

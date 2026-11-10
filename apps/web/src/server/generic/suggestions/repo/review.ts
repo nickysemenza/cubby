@@ -139,12 +139,7 @@ export async function reviewSuggestion(
       await (
         await import("~/server/workflows/runs/execution")
       ).assertWorkflowEffect(transactionDb);
-      await assertAutomaticRuleOn(
-        transactionDb,
-        automatic.rule.key,
-        automatic.rule.stamp,
-        suggestionId,
-      );
+      assertAutomaticRuleOn(automatic.rule.key, automatic.rule.stamp);
       if (automatic.statementScope) {
         const { statementLabelTargetsInScope } =
           await import("~/server/domains/transaction-import/repo/statement-suggestions");

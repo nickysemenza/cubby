@@ -46,14 +46,8 @@ import {
 import {
   actionableSuggestion,
   SuggestionVisitProvider,
-  useSuggestionVisit,
 } from "./suggestion-review";
-import { SuggestionStatus } from "./suggestion-status";
-import {
-  type SuggestTargets,
-  suggestionContextKeys,
-  suggestTargetsFor,
-} from "./suggestion-targets";
+import { suggestionContextKeys, suggestTargetsFor } from "./suggestion-targets";
 import { useFinanceCategoryApply } from "./use-finance-category-apply";
 
 export interface FieldSuggestionContextValue {
@@ -97,8 +91,6 @@ const resolutionRecordSchema = z.looseObject({
 
 function resolutionModeField(entity: ShortcodeEntity, field: string) {
   if (entity === "task" && field === "projectId") return "projectMode";
-  if (entity === "task" && field === "subjectProductId")
-    return "subjectProductMode";
   if (entity === "project" && field === "locations") return "locationsMode";
   return null;
 }
@@ -136,9 +128,8 @@ function isUntouchedUnresolved(args: {
     args.mode === "create" &&
     args.value === null &&
     args.entity === "task" &&
-    ((args.field === "projectId" && args.basis.projectMode === "explicit") ||
-      (args.field === "subjectProductId" &&
-        args.basis.subjectProductMode === "explicit"));
+    args.field === "projectId" &&
+    args.basis.projectMode === "explicit";
   return (
     args.mode === "create" &&
     !args.manuallyChanged &&
@@ -276,8 +267,6 @@ export function FieldSuggestionProvider({
     // field, not a value to auto-fill — its review UI needs PR 3's ChipsInput
     // wiring, so a form-surface provider never requests it, even when the
     // field itself is rendered (and so already present in `fieldKeys`).
-    // Record surfaces (`RecordSuggestionsProvider`) request it directly
-    // instead of mounting this provider (Amendment 3).
     const filtered = declared.targets.filter(
       (target) => target.mode !== "prune",
     );
@@ -596,8 +585,6 @@ export function FieldSuggestionProvider({
   );
   const isFetching = suggestedQuery.isFetching || alternativeQuery.isFetching;
   const settled = JSON.stringify(basis) === JSON.stringify(debouncedBasis);
-  const failures =
-    (suggestedQuery.isError ? 1 : 0) + (alternativeQuery.isError ? 1 : 0);
 
   const applyFinanceCategory = financeApply.apply;
   const refetchSuggested = suggestedQuery.refetch;
@@ -673,11 +660,7 @@ export function FieldSuggestionProvider({
 
   const batch = Object.entries(value.suggestions).flatMap(([key, proposal]) =>
     proposal?.financeReview &&
-    actionableSuggestion(
-      proposal,
-      value.currentValueFor(key),
-      value.isAlternative(key),
-    )
+    actionableSuggestion(proposal, value.currentValueFor(key))
       ? [{ key, proposal }]
       : [],
   );
@@ -741,12 +724,6 @@ export function FieldSuggestionProvider({
   return (
     <SuggestionVisitProvider>
       <FieldSuggestionContext.Provider value={value}>
-        <FieldSuggestionStatusBridge
-          targets={targets}
-          suggestions={value.suggestions}
-          alternativeTargets={alternativeTargets}
-          failures={failures}
-        />
         {children}
         {sameReview && (
           <div className="space-y-2">
@@ -767,66 +744,5 @@ export function FieldSuggestionProvider({
         {batchFailure != null && <ErrorDisplay error={batchFailure} />}
       </FieldSuggestionContext.Provider>
     </SuggestionVisitProvider>
-  );
-}
-
-/**
- * Renders the form's status line. Mounted as a child of `SuggestionVisitProvider`
- * (which `FieldSuggestionProvider` creates as part of its own returned JSX, so
- * it cannot read that provider's own `dismissed` set from its own function
- * body — only a descendant can) — `useSuggestionVisit()` here reads the
- * dismiss state that excludes an already-dismissed field from `count`, the
- * same way `BoundRecordSuggestions` does one tree level up from its own
- * `SuggestionVisitProvider`.
- */
-function FieldSuggestionStatusBridge({
-  targets,
-  suggestions,
-  alternativeTargets,
-  failures,
-}: {
-  targets: SuggestTargets;
-  suggestions: Record<string, FieldSuggestion | null>;
-  alternativeTargets: readonly string[];
-  failures: number;
-}) {
-  const context = useFieldSuggestionContext();
-  const visit = useSuggestionVisit();
-  if (!context) return null;
-  const fields = targets.targets.flatMap((target) => {
-    const outcome = context.outcomeFor(target.key);
-    if (!outcome) return [];
-    return [
-      {
-        label: target.label,
-        outcome,
-        suggestion: suggestions[target.key] ?? null,
-        currentValue: context.currentValueFor(target.key),
-        alternative: alternativeTargets.includes(target.key),
-        autoFilled: context.isAutoFilled(target.key),
-      },
-    ];
-  });
-  const count = targets.targets.filter((target) => {
-    const suggestion = suggestions[target.key] ?? null;
-    const current = context.currentValueFor(target.key);
-    const alternative = alternativeTargets.includes(target.key);
-    const key = JSON.stringify([
-      context.questionKey,
-      current,
-      suggestion?.value,
-    ]);
-    return (
-      actionableSuggestion(suggestion, current, alternative) &&
-      !visit?.dismissed.has(key)
-    );
-  }).length;
-  return (
-    <SuggestionStatus
-      checking={context.isFetching}
-      failures={failures}
-      count={count}
-      fields={fields}
-    />
   );
 }

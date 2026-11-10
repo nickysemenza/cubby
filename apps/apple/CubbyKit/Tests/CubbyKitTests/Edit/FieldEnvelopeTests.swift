@@ -29,14 +29,13 @@ struct FieldEnvelopeTests {
     @Test func parsesEveryKnownVariant() throws {
         let cached = try envelope(
             F.envelope(
-                assignment: F.value("required", ownership: F.automatic(0.5)),
+                assignment: F.value("required"),
                 controls: F.editable(canSetNone: true, canConfirm: true, reset: F.resetNotLoaded),
                 result: F.cached(
                     F.decision("not_expected", provenance: F.inherited("purchase", "PUR-4K7M")),
                     freshness: "stale")))
         #expect(
-            cached.assignment
-                == .value("required", ownership: .automatic(receiptID: "RCPT-4K7M", confidence: 0.5)))
+            cached.assignment == .value("required", ownership: .record))
         #expect(
             cached.controls == .editable(canSetNone: true, canConfirm: true, reset: .available(.notLoaded)))
         #expect(cached.effectiveValue == "not_expected")
@@ -132,24 +131,6 @@ struct FieldEnvelopeTests {
 
     /// An inherited owner offers Keep this value (pin it explicitly) and Set to Household from
     /// current controls, including a usable stale value the member explicitly chooses to keep.
-    @Test func currentFactsDoNotRewriteCachedProvenance() throws {
-        let historicalRecord = try envelope(
-            F.envelope(
-                assignment: F.value("required", ownership: F.automatic()),
-                controls: F.readonly("allocated"),
-                result: F.cached(F.decision("not_expected", provenance: F.own), freshness: "stale")))
-        #expect(!historicalRecord.isAutomatic)
-        #expect(!historicalRecord.isAllocated)
-        let confirmed = try envelope(
-            F.envelope(
-                assignment: F.value("required"),
-                controls: F.editable(),
-                result: F.cached(
-                    F.decision("required", provenance: ["kind": "own", "ownership": F.automatic()]),
-                    freshness: "stale")))
-        #expect(!confirmed.isAutomatic)
-    }
-
     @Test func ownershipActionsFollowCurrentControls() throws {
         let field = try owner()
         let inherited = try envelope(
@@ -232,7 +213,6 @@ struct FieldEnvelopeTests {
         #expect(try state(reset: F.resetNotLoaded).tone == .set)
         #expect(try state(reset: F.resetReady(F.live(F.decision("not_expected")))).tone == .set)
         #expect(try state(reset: F.resetReady(F.live(F.decision("required")))).tone == .redundant)
-        #expect(try state(reset: ["kind": "unavailable"], ownership: F.automatic()).tone == .automatic)
     }
 
     // MARK: Reads

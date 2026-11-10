@@ -6,7 +6,7 @@ import {
 } from "@cubby/schemas/automatic-rule";
 import { entityFieldByKey } from "@cubby/schemas/entity-fields";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
-import { requiresSuggestionReview } from "@cubby/schemas/field-suggestion-policy";
+import { suggestApplyPolicy } from "@cubby/schemas/field-suggestion-policy";
 import type { StatementTransactionJudgment } from "@cubby/schemas/statement-suggestion";
 
 import { STATEMENT_SUGGESTION_REVISION } from "~/server/domains/transaction-import/repo/statement-suggestion-revision";
@@ -27,8 +27,6 @@ type FactsOf = {
 
 /** What an automatic application does, before the family's review input. */
 type RuleApplication = { kind: "accept_as_is" };
-
-type FixedPolicyKey = Exclude<AutomaticRuleKey, "statement_transaction.attach">;
 
 type FamilyOf<K extends AutomaticRuleKey> =
   K extends `${infer F extends AutomaticRuleFamily}.${string}` ? F : never;
@@ -54,13 +52,12 @@ export const AUTOMATIC_RULES = {
     execution: "field_policy",
     family: "field",
     description:
-      "Fill an empty declared assignment field at high confidence with current evidence and a clear winner, preserving member decisions.",
+      "Fill an open field, or revise a value Cubby set itself, at high confidence with current evidence; never overwrite a person's value.",
     revision: () => FIELD_ASSIGNMENT_REVISION,
     match: (facts) =>
-      facts.kind === "addition" &&
       entityFieldByKey(facts.entity, facts.field)?.control?.suggest?.mode ===
         "fill" &&
-      !requiresSuggestionReview(facts.entity, facts.field) &&
+      suggestApplyPolicy(facts.entity, facts.field) === "auto" &&
       facts.confidence >= HIGH_CONFIDENCE_PROBABILITY,
     application: () => ({ kind: "accept_as_is" }),
   },
@@ -76,17 +73,17 @@ export const AUTOMATIC_RULES = {
       judgment.spending?.status === "ready",
     application: () => ({ kind: "accept_as_is" }),
   },
-} satisfies { [K in FixedPolicyKey]: Declaration<FamilyOf<K>> };
+} satisfies { [K in AutomaticRuleKey]: Declaration<FamilyOf<K>> };
 
 export type AutomaticRuleMatch = {
-  key: FixedPolicyKey;
+  key: AutomaticRuleKey;
   revision: string;
   stamp: string;
   application: RuleApplication;
 };
 
 /** `<ruleKey>@<revision>`: the stamp a publication and receipt carry. */
-export const ruleBase = (key: FixedPolicyKey) =>
+export const ruleBase = (key: AutomaticRuleKey) =>
   `${key}@${AUTOMATIC_RULES[key].revision()}`;
 
 /** Unscoped statement sweeps cannot execute these current-revision rules. */
@@ -95,7 +92,7 @@ export const importOnlyStatementRuleStamps = () => [
 ];
 
 function evaluate<F extends AutomaticRuleFamily>(
-  key: FixedPolicyKey,
+  key: AutomaticRuleKey,
   rule: Declaration<F>,
   facts: FactsOf[F],
 ): AutomaticRuleMatch[] {

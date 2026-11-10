@@ -231,14 +231,6 @@ const FIELD_SUGGEST_DECISION_OVERRIDES = {
       "Identify the Product model represented by this Device using any explicit brandName and model in its name and its declared platform. A platform alone does not identify a model. A device label, host name, network address or similar title alone does not prove identity. Conflicting model or brandName requires none. Missing identity stays unknown. Do not infer household ownership or acquisition from network presence. Choose none when evidence is insufficient.",
     subject: (b) => renderSubject("device", b),
   } satisfies ReferenceSuggestDecision,
-  "task.subjectProductId": {
-    kind: "reference",
-    entity: "product",
-    rules:
-      "You are a product-linking assistant. Given a task's name, choose the ONE product it is about, or none if it isn't about a specific product.",
-    maxCandidates: REFERENCE_ROSTER_CAP,
-    subject: (basis) => renderSubject("task", basis),
-  } satisfies ReferenceSuggestDecision,
   // No `trade` in this basis: `expense.trade`'s own basis includes
   // `projectId`, so the reverse edge would make the pair cyclic — rejected
   // by the manifest compiler (step 1).

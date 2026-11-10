@@ -251,7 +251,11 @@ function DecisionDetail({ row }: { row: DecisionCatalogRow }) {
       {row.description ? <p>{row.description}</p> : null}
       <Description size="xs" className="text-muted-foreground">
         {row.feature} · {row.model} · prompt {row.promptVersion}
-        {row.reviewRequired ? " · review required" : ""}
+        {row.apply === "review"
+          ? " · needs review"
+          : row.apply === "offer"
+            ? " · guess only"
+            : ""}
       </Description>
       {row.counts ? (
         <p className="tabular-nums">

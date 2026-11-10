@@ -95,10 +95,10 @@ function suggestionKeyFacts(key: SuggestionKey) {
             : value,
       ]),
     ),
-    // The UI's confidence bounds are percentages, as its cells are.
+    // One unit everywhere: the 0 to 1 probability rows carry.
     confidence:
       typeof key.columns.confidence === "number"
-        ? key.columns.confidence * 100
+        ? key.columns.confidence
         : null,
   };
 }
@@ -454,15 +454,35 @@ export async function suggestionRecordCounts(
     });
   // Discovery already applies family, status and record scope. A badge may count
   // a row whose evidence went stale; opening the row revalidates it.
-  const { touching, records } = await scopedFamilyQuery(
-    db,
-    suggestionListFilters.parse({ recordIds: input.recordIds }),
-  );
-  const counts = await countSuggestionRecordRefs(
-    db,
-    [...(touching ?? [])],
-    records ?? [],
-  );
+  const { touching, matchedFamilies, records, familyScope } =
+    await scopedFamilyQuery(
+      db,
+      suggestionListFilters.parse({ recordIds: input.recordIds }),
+    );
+  // A badge counts what needs a person: field guesses wait in the picker.
+  let counted = [...(touching ?? [])];
+  if (matchedFamilies?.has("field") && counted.length) {
+    const listed = new Set(
+      (
+        await suggestionFamilies.field.keys(db, {
+          filters: familyScope.filters,
+          suggestionIds: counted,
+        })
+      ).map((key) => key.suggestionId),
+    );
+    const guesses = new Set(
+      (
+        await suggestionFamilies.field.keys(db, {
+          filters: { ...familyScope.filters, disposition: ["guess"] },
+          suggestionIds: counted,
+        })
+      )
+        .map((key) => key.suggestionId)
+        .filter((id) => !listed.has(id)),
+    );
+    counted = counted.filter((id) => !guesses.has(id));
+  }
+  const counts = await countSuggestionRecordRefs(db, counted, records ?? []);
   return suggestionRecordCountsOut.parse({
     records: [...new Set(input.recordIds)].map((id) => ({
       id,

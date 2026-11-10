@@ -164,7 +164,7 @@ export const { definition, readSchemas } = defineEntityModel(
             kind: "specialized",
             renderer: "entity-select",
             // The Product link identifies the owned copy of this cookbook.
-            suggest: { basis: ["name", "author"], reviewRequired: true },
+            suggest: { basis: ["name", "author"], apply: "review" },
           },
         },
         { output: false, key: "importedAt", kind: "timestamp" },

@@ -7,6 +7,7 @@ import { z } from "zod";
 import { entityMetadata } from "~/entity/metadata";
 import {
   fieldSuggestionBasisFromRecord,
+  savedRecordShortcode,
   type FieldSuggestionSource,
 } from "~/entity/suggestions/field-suggestion";
 import { suggestTargetsFor } from "~/entity/suggestions/suggestion-targets";
@@ -152,7 +153,9 @@ export function enumFieldSuggestSource<TRecord extends object>(
   // SAFETY: only a shortcode entity reaches an editable surface; `Entity` is
   // the wider display-field plumbing type.
   const shortcodeEntity = entity as ShortcodeEntity;
+  const entityId = savedRecordShortcode(shortcodeEntity, record);
   return {
+    ...(entityId && { entityId }),
     basisMode: "provided",
     entity: shortcodeEntity,
     targets: [field.key],

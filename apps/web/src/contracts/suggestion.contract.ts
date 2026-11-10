@@ -1,11 +1,17 @@
 import {
+  fieldAuthorityActionInput,
+  fieldAuthorityActionOut,
+  fieldGuessInput,
+  fieldGuessOut,
+} from "@cubby/schemas/field-authority";
+import {
   suggestionReviewInput,
   suggestionReviewOut,
   suggestionReviewBatchInput,
   suggestionReviewBatchOut,
 } from "@cubby/schemas/suggestion";
 
-import { defineContract, mutation } from "~/contracts/define";
+import { defineContract, mutation, query } from "~/contracts/define";
 
 export const suggestionContract = defineContract(
   "suggestion",
@@ -38,6 +44,37 @@ export const suggestionContract = defineContract(
         "cookbook",
         "sourceTransactionRecord",
         "financialTransaction",
+      ],
+    }),
+    fieldGuess: query({
+      description:
+        "Cubby's current answer for one field of a saved record, shown first in the field's picker. Null when Cubby has no answer or a person holds the field.",
+      input: fieldGuessInput,
+      output: fieldGuessOut,
+    }),
+    fieldAuthority: mutation({
+      description:
+        "Keep a value Cubby set (it becomes yours), clear a wrong value Cubby set so it can try again, or release your value so Cubby may decide this field.",
+      input: fieldAuthorityActionInput,
+      output: fieldAuthorityActionOut,
+      invalidates: [
+        "product",
+        "expense",
+        "purchase",
+        "vendor",
+        "task",
+        "project",
+        "inventory",
+        "location",
+        "meal",
+        "planting",
+        "gardenEntry",
+        "productCategory",
+        "spendingCategory",
+        "cookbook",
+        "financialAccount",
+        "financialTransaction",
+        "suggestions",
       ],
     }),
     reviewBatch: mutation({

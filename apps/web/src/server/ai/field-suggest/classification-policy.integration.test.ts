@@ -101,9 +101,11 @@ describe("decision targets follow classification field policies", () => {
     expect(result.suggestions.ingredientId?.value).toBe("ING-4K7M");
   });
 
-  it("asks for an unclassified Product, which the link would classify", async () => {
+  // Failure mode: Cubby asks an uncategorised Product a food-only question
+  // and guesses an ingredient for a jacket.
+  it("does not ask an unclassified Product a field its classification refuses by default", async () => {
     const { result, decisionPort } = await suggestIngredient(null);
-    expect(decisionPort).toHaveBeenCalled();
-    expect(result.suggestions.ingredientId?.value).toBe("ING-4K7M");
+    expect(decisionPort).not.toHaveBeenCalled();
+    expect(result.suggestions.ingredientId).toBeNull();
   });
 });

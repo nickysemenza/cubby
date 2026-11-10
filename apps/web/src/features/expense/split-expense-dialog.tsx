@@ -30,7 +30,7 @@ import { useEntityMetadata } from "~/entity/metadata";
 import { Picker } from "~/entity/picker/picker";
 import { useEntityListSource } from "~/entity/picker/with-search-hook";
 import { useTradeOptions } from "~/entity/presentation/trade-options";
-import { FieldSuggestionApply } from "~/entity/suggestions/field-suggestion-apply";
+import { DraftFieldSuggestion } from "~/entity/suggestions/field-suggestion-apply";
 import { purchase } from "~/integrations/tanstack-query/generated/domains/purchase.gen";
 import { formatCurrency } from "~/lib/number-format";
 import { RemoveButton } from "~/ui/forms/remove-button";
@@ -245,7 +245,7 @@ function SplitPartCard({
           </Row>
         )}
       </Row>
-      <FieldSuggestionApply
+      <DraftFieldSuggestion
         source={{
           basisMode: "provided",
           entity: "expense",

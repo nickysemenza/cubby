@@ -150,17 +150,11 @@ explicit review before a standalone refund Purchase is booked.
 
 ### Automatic booking rule
 
-The clean import booking rule is enabled by default and appears in Automatic
-rules. A member can pause it or resume it without a measured-precision
-threshold. Pausing leaves future clean spending suggestions Pending, including
-clean attachments that would book spending through the measured attach rule.
-The pause survives policy revisions and is rechecked inside the application
-transaction. Resuming permits future import processing to book current clean
-plans; it does not immediately apply every Pending suggestion. Optional
-measured-rule switches and withheld audit samples do not gate enabled
-import-clean booking. Each application still uses `suggestions.review` or
+The clean import booking rule is fixed code and always on; there is no member
+switch or audit sample. Each application still uses `suggestions.review` or
 `suggestions.review_batch` and records automatic authority and its policy
-revision in Automatic history. Changing a booking policy never turns an old
+revision in Changes by Cubby. Booking writes are import evidence: they are not
+Cubby-set field values, and field automation never revises them. Changing a booking policy never turns an old
 transaction-only receipt into proof of spending; regenerate and revalidate the
 unbooked work.
 
@@ -954,8 +948,8 @@ candidate only for the same amount, a matching non-empty description or a
 matching non-empty merchant; two missing descriptions are absent evidence, not
 a match. Descriptor/amount/date coincidence is advisory; a different source's
 observation does not become a second charge merely because its text differs.
-Clean-booking and measured attach rules keep their own authority and revalidate
-current evidence before writing.
+The clean-booking rule keeps its own authority and revalidates current
+evidence before writing; attach always waits for review.
 
 ### Statement Sweeps
 
@@ -1016,7 +1010,7 @@ applicable-rule charges stop it. Unscoped passes may complete consecutive
 no-action receipts in bounded transactions: lock the exact receipts, verify
 their charge/evidence, active pending state and absent rule descriptors, then
 clear only the proven prefix through the projection writer. A missing, replaced
-or rule-bearing receipt stops the batch even when its rule is paused (current
+or rule-bearing receipt stops the batch (current
 import-only rules cannot execute outside import admission, so their stamps do
 not). Import-scoped passes regenerate before each admission, since regeneration
 can introduce actionable rules. Statement application and booking request only
@@ -1059,10 +1053,8 @@ references refuse. Account and date filters intersect its retained charge
 membership. Selected charges still use current observations from other
 collections sharing their identity; unrelated charge identities stay excluded.
 This reprocesses retained evidence under the automatic policies, including
-enabled clean spending booking even when the measured attach switch is off. It
-changes no rule switches. Account/date scope alone does not grant import-clean
-authority. A booking pause still holds spending; non-spending attachments remain
-governed by the measured rule. Incomplete collections allow supported positive
+clean spending booking. Account/date scope alone does not grant import-clean
+authority, and attachments wait for review. Incomplete collections allow supported positive
 processing but prove no absence, withdrawal, reconciliation or completion. A
 Sweep changes neither collection coverage nor `completedAt` and records no
 withdrawals.
@@ -1261,8 +1253,8 @@ source coverage or reconciliation, and listing does not refresh or validate an
 application. Preview and acceptance keep their current-evidence guards. Source
 scoping changes no overlap or financial identity decisions.
 
-Suggestions is the reconciliation workspace: Pending proposals, optional
-Automatic decisions audit, and Automatic rules. Source transaction records is
+Suggestions is the reconciliation workspace: pending proposals and the Changes
+by Cubby audit. Source transaction records is
 the generic imported-evidence browser; Transaction imports shows the retained
 collections. Each import's reconciliation report separates retained-observation
 match states from booking coverage for its distinct matched Financial

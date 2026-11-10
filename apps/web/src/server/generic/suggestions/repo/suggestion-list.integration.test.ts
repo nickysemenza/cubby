@@ -170,11 +170,12 @@ async function fieldSuggestion(
       entity: "product",
       recordId: product.entityId,
       field,
-      currentValue: null,
+      // Cubby disagreeing with a person's value is what the queue lists.
+      currentValue: `Synthetic current ${field}`,
       suggestedValue: `Synthetic ${field}`,
       confidence,
       model: "typesafe/jev",
-      kind: "addition",
+      kind: "correction",
       status: "pending",
       createdAt,
     },
@@ -735,7 +736,9 @@ describe("cross-family Suggestion list", () => {
         (row) => row.id,
       ),
     ).toContain(product.id);
-    expect(ids.indexOf(confident)).toBeLessThan(ids.indexOf(unsure));
+    // A below-bar answer is a guess: it waits in the field's picker, not the queue.
+    expect(ids).toContain(confident);
+    expect(ids).not.toContain(unsure);
     const connectionRow = page.items.find(
       (row) => row.id === proposal.review.suggestionId,
     );
@@ -745,7 +748,12 @@ describe("cross-family Suggestion list", () => {
       clean: false,
       strength: "medium",
     });
-    expect(page.items.find((row) => row.id === unsure)).toMatchObject({
+    const guesses = await listSuggestionPage(ctx.db, {
+      family: "field",
+      disposition: ["guess"],
+      limit: 200,
+    });
+    expect(guesses.items.find((row) => row.id === unsure)).toMatchObject({
       clean: false,
       strength: "weak",
     });
@@ -769,12 +777,12 @@ describe("cross-family Suggestion list", () => {
     const fieldsOnly = await listSuggestionPage(ctx.db, {
       family: "field",
     });
-    expect(fieldsOnly.meta.totalCount).toBe(2);
+    expect(fieldsOnly.meta.totalCount).toBe(1);
     expect(fieldsOnly.meta.cleanCount).toBe(0);
     expect(
       (await suggestionRecordCounts(ctx.db, { recordIds: [product.id] }))
         .records,
-    ).toEqual([{ id: product.id, pending: 2 }]);
+    ).toEqual([{ id: product.id, pending: 1 }]);
     await reviewSuggestion(ctx.db, kernelCtx(ctx), {
       suggestionId: confident,
       operationId: "synthetic-published-reader-reject",
@@ -784,17 +792,18 @@ describe("cross-family Suggestion list", () => {
     expect(
       (await suggestionRecordCounts(ctx.db, { recordIds: [product.id] }))
         .records,
-    ).toEqual([{ id: product.id, pending: 1 }]);
+    ).toEqual([{ id: product.id, pending: 0 }]);
     const fieldCounts = (
       await suggestionCountsByFamily(ctx.db, {
         family: "field",
         recordIds: [product.id],
       })
     ).families[0];
-    expect(fieldCounts?.pending).toBe(1);
+    // Nothing left needs a person; the guess waits in the field's picker.
+    expect(fieldCounts?.pending).toBe(0);
     expect(
       fieldCounts?.fields.reduce((total, field) => total + field.pending, 0),
-    ).toBe(1);
+    ).toBe(0);
   });
 
   // Reference pruning must retain both endpoints and mixed scopes without

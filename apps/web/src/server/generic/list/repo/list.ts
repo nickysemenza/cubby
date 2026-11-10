@@ -103,7 +103,6 @@ import {
   lexicalRelevance,
 } from "~/server/generic/search/repo/search-lexical";
 import type { SearchReadPort } from "~/server/generic/search/repo/search-read-port";
-import { loadCurrentFieldOwnership } from "~/server/generic/suggestions/repo/automatic-fields";
 import {
   traceListPageWithCount,
   withListReadTracing,
@@ -1881,9 +1880,6 @@ export function listScaffold<
           }));
       let prefetched: ListPagePrefetch | undefined;
       let storedMeta: Promise<PageStoredMeta> | undefined;
-      let currentOwnership:
-        | ReturnType<typeof loadCurrentFieldOwnership>
-        | undefined;
       // The id/count projection binds no fields, so it carries no envelope.
       const demand = compileReadDemand(entity, projection);
       const withEnvelope = Boolean(spec.derived) && demand.facts !== null;
@@ -1931,15 +1927,6 @@ export function listScaffold<
                 prefetched = spec.prefetch?.(pageIds, projection, storedMeta);
                 // Awaited after hydration; this only keeps an early failure handled.
                 storedMeta?.catch(() => undefined);
-                currentOwnership = withEnvelope
-                  ? loadCurrentFieldOwnership(
-                      db,
-                      entity,
-                      pageIds,
-                      demand.facts?.ownership,
-                    )
-                  : undefined;
-                currentOwnership?.catch(() => undefined);
                 const data = await loadIds(pageIds, projection);
                 span.setAttributes({
                   "db.result_count": data.length,
@@ -2090,7 +2077,6 @@ export function listScaffold<
             const complete = withEnvelope
               ? await withPageFields(db, entity, data, hydrate, {
                   stored: storedMeta,
-                  ownership: currentOwnership,
                   projection,
                   demand,
                 })
