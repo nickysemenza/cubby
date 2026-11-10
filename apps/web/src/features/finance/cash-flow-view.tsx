@@ -11,6 +11,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useId, useState } from "react";
 
+import { RecordBucketLabel } from "~/entity/components/record-mark";
 import {
   CashFlowChart,
   type CashFlowSegmentTarget,
@@ -311,9 +312,18 @@ function Legend({ data }: { data: CashFlowProjectionOut }) {
             style={{ backgroundColor: segment.color }}
             aria-hidden="true"
           />
-          {segment.key.startsWith("envelope:")
-            ? "Project envelopes"
-            : segment.label}
+          {segment.key.startsWith("envelope:") ? (
+            "Project envelopes"
+          ) : (
+            <RecordBucketLabel
+              entity={segment.mark?.entity ?? null}
+              id={segment.mark?.id ?? ""}
+              emoji={segment.mark?.emoji}
+              size={12}
+            >
+              {segment.label}
+            </RecordBucketLabel>
+          )}
         </li>
       ))}
       <li className="flex items-center gap-1.5">
@@ -520,20 +530,26 @@ export function CashFlowView({
                               header: "Category",
                               cell: (row) => (
                                 <>
-                                  {row.ledgerFilter ? (
-                                    <Link
-                                      to="/expenses"
-                                      search={{
-                                        ...row.ledgerFilter,
-                                        view: "table",
-                                      }}
-                                      className="underline-offset-4 hover:underline"
-                                    >
-                                      {row.label}
-                                    </Link>
-                                  ) : (
-                                    row.label
-                                  )}
+                                  <RecordBucketLabel
+                                    entity="spendingCategory"
+                                    id={row.key}
+                                    emoji={row.emoji}
+                                  >
+                                    {row.ledgerFilter ? (
+                                      <Link
+                                        to="/expenses"
+                                        search={{
+                                          ...row.ledgerFilter,
+                                          view: "table",
+                                        }}
+                                        className="underline-offset-4 hover:underline"
+                                      >
+                                        {row.label}
+                                      </Link>
+                                    ) : (
+                                      row.label
+                                    )}
+                                  </RecordBucketLabel>
                                   {row.irregular ? (
                                     <span className="ml-2 text-xs text-muted-foreground">
                                       {row.key === "irregular"
@@ -620,6 +636,7 @@ function ProjectTable({
   rows: ReadonlyArray<{
     id: string;
     name: string;
+    emoji: string | null;
     estimate: number;
     actual: number;
     committed: number;
@@ -642,13 +659,19 @@ function ProjectTable({
               header: "Project",
               cell: (row) => (
                 <>
-                  <Link
-                    to="/projects/$shortcode"
-                    params={{ shortcode: row.id }}
-                    className="underline-offset-4 hover:underline"
+                  <RecordBucketLabel
+                    entity="project"
+                    id={row.id}
+                    emoji={row.emoji}
                   >
-                    {row.name}
-                  </Link>
+                    <Link
+                      to="/projects/$shortcode"
+                      params={{ shortcode: row.id }}
+                      className="underline-offset-4 hover:underline"
+                    >
+                      {row.name}
+                    </Link>
+                  </RecordBucketLabel>
                   {row.note ? (
                     <span className="ml-2 text-xs text-muted-foreground">
                       {row.note}

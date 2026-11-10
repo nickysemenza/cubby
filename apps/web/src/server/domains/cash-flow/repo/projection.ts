@@ -31,6 +31,7 @@ import {
   rootSpendingCategoryLabelSql,
 } from "~/server/domains/expense/repo/spending-category-root";
 import { loadProjectSubtreeRollups } from "~/server/domains/project/repo/subtree";
+import { recordEmojiByCode } from "~/server/entity-kernel/repo/entity-emoji";
 import { createAppError } from "~/server/errors/app-error";
 
 const BASELINE_MONTHS = 12;
@@ -256,7 +257,8 @@ export async function cashFlowProjection(
   categoryRows.sort(
     (a, b) => b.monthlyCents - a.monthlyCents || a.label.localeCompare(b.label),
   );
-  const toRow = (row: (typeof categoryRows)[number]): CashFlowBaselineRow => ({
+  type UnmarkedBaselineRow = Omit<CashFlowBaselineRow, "emoji">;
+  const toRow = (row: (typeof categoryRows)[number]): UnmarkedBaselineRow => ({
     key: row.key,
     label: row.label,
     irregular: row.irregular,
@@ -273,7 +275,7 @@ export async function cashFlowProjection(
     },
   });
   const irregularRows = categoryRows.filter((row) => row.irregular);
-  const baselineRows: CashFlowBaselineRow[] =
+  const baselineRows: UnmarkedBaselineRow[] =
     input.irregular === "separate" || irregularRows.length === 0
       ? categoryRows.map(toRow)
       : [
@@ -317,8 +319,8 @@ export async function cashFlowProjection(
     }
     return false;
   };
-  const envelopes: CashFlowEnvelope[] = [];
-  const unscheduled: CashFlowUnscheduled[] = [];
+  const envelopes: Omit<CashFlowEnvelope, "emoji">[] = [];
+  const unscheduled: Omit<CashFlowUnscheduled, "emoji">[] = [];
   const envelopeCents = new Map<string, Map<string, number>>();
   let beyondHorizonCents = 0;
   for (const row of allRows) {
@@ -432,14 +434,34 @@ export async function cashFlowProjection(
     };
   });
 
+  const [categoryEmoji, projectEmoji] = await Promise.all([
+    recordEmojiByCode(
+      db,
+      "spendingCategory",
+      baselineRows.map((row) => row.key),
+    ),
+    recordEmojiByCode(
+      db,
+      "project",
+      [...envelopes, ...unscheduled].map((row) => row.id),
+    ),
+  ]);
+  const projectMark = <Row extends { id: string }>(row: Row) => ({
+    ...row,
+    emoji: projectEmoji.get(row.id) ?? null,
+  });
+
   return {
     currentMonth,
     baselineWindow,
     irregular: input.irregular,
-    baseline: baselineRows,
-    envelopes,
+    baseline: baselineRows.map((row) => ({
+      ...row,
+      emoji: categoryEmoji.get(row.key) ?? null,
+    })),
+    envelopes: envelopes.map(projectMark),
     months,
-    unscheduled,
+    unscheduled: unscheduled.map(projectMark),
     totals: {
       baselineMonthly: dollars(baselineMonthlyCents),
       horizonOutflow: dollars(horizonOutflowCents),

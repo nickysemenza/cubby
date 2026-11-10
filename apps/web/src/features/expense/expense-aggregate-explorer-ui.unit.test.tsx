@@ -28,6 +28,7 @@ const ready = {
     {
       key: "electrical",
       label: "Electrical",
+      emoji: null,
       filter: { lineKind: "principal", trade: "electrical" },
     },
   ],
@@ -35,6 +36,7 @@ const ready = {
     {
       key: "materials",
       label: "Materials",
+      emoji: null,
       filter: { lineKind: "principal", costType: "materials" },
     },
   ],

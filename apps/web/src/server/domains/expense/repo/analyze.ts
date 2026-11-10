@@ -63,6 +63,7 @@ import {
   expenseAllocationScopeConditionSql,
   type ExpenseAllocationProjectScope,
 } from "~/server/domains/expense/repo/expense-project-allocation";
+import { recordEmojiByCode } from "~/server/entity-kernel/repo/entity-emoji";
 
 import {
   analyticsFilters,
@@ -1091,14 +1092,54 @@ export const loadExpenseAnalysisCauses = async (
     ),
   );
 
+/** Axes whose bucket keys are shortcodes of records that carry an emoji. */
+const markedDimensionEntities = {
+  spendingCategory: "spendingCategory",
+  productCategory: "productCategory",
+  project: "project",
+} as const satisfies Partial<Record<Dimension, string>>;
+
+const isMarkedDimension = (
+  dimension: Dimension | null | undefined,
+): dimension is keyof typeof markedDimensionEntities =>
+  dimension != null && Object.hasOwn(markedDimensionEntities, dimension);
+
+const bucketEmoji = (
+  db: Database,
+  dimension: Dimension | null | undefined,
+  rows: Map<string, BucketRow>,
+) =>
+  isMarkedDimension(dimension)
+    ? recordEmojiByCode(db, markedDimensionEntities[dimension], rows.keys())
+    : Promise.resolve(new Map<string, string | null>());
+
+/** Bucket emoji for the grid's row and column axes, read once per analysis. */
+export const loadAnalysisBucketEmoji = async (
+  db: Database,
+  input: Pick<ExpenseAnalyzeInput, "rowDimension" | "columnDimension">,
+  grid: Pick<
+    ReturnType<typeof buildExpenseAnalysisGrid>,
+    "rowMap" | "columnMap"
+  >,
+) => {
+  const [rows, columns] = await Promise.all([
+    bucketEmoji(db, input.rowDimension, grid.rowMap),
+    bucketEmoji(db, input.columnDimension, grid.columnMap),
+  ]);
+  return { rows, columns };
+};
+type AnalysisBucketEmoji = Awaited<ReturnType<typeof loadAnalysisBucketEmoji>>;
+
 const projectAnalysisBuckets = (
   rows: Map<string, BucketRow>,
   dimension: Dimension,
   rollup: Rollup,
+  emoji: ReadonlyMap<string, string | null>,
 ) =>
   [...rows.values()].map((row) => ({
     key: row.key,
     label: row.label,
+    emoji: emoji.get(row.key) ?? null,
     filter: bucketFilter(dimension, row.key, rollup),
   }));
 
@@ -1215,6 +1256,7 @@ export const readyExpenseAnalysisOutput = (
   grid: ReturnType<typeof buildExpenseAnalysisGrid>,
   currentCauses: ExpenseAnalysisCauses,
   previousCauses: ExpenseAnalysisCauses | null,
+  emoji: AnalysisBucketEmoji,
 ): ExpenseAnalyzeOut => {
   return {
     status: "ready",
@@ -1228,12 +1270,14 @@ export const readyExpenseAnalysisOutput = (
       grid.rowMap,
       input.rowDimension,
       input.spendingCategoryRollup,
+      emoji.rows,
     ),
     columns: input.columnDimension
       ? projectAnalysisBuckets(
           grid.columnMap,
           input.columnDimension,
           input.spendingCategoryRollup,
+          emoji.columns,
         )
       : [],
     cells: grid.cells,

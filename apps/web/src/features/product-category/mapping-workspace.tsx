@@ -5,6 +5,7 @@ import { Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import { RecordBucketLabel } from "~/entity/components/record-mark";
 import type { ListRowOf } from "~/entity/display/list-renderer-types";
 import { entityDetailFor } from "~/entity/entity-detail";
 import { compileEntityListInput } from "~/entity/entity-list";
@@ -178,7 +179,7 @@ export function ProductCategoryConnections({ id }: { id: CategoryRow["id"] }) {
 export function ContributingCategories({
   bucket,
 }: {
-  bucket: ExpenseAnalyzeReadyOut["rows"][number];
+  bucket: Pick<ExpenseAnalyzeReadyOut["rows"][number], "label" | "filter">;
 }) {
   const client = useQueryClient();
   useEntityMetadata("expense");
@@ -229,7 +230,15 @@ export function ContributingCategories({
             {
               id: "productCategory",
               header: "Product category",
-              cell: (row) => row.label,
+              cell: (row) => (
+                <RecordBucketLabel
+                  entity="productCategory"
+                  id={row.key}
+                  emoji={row.emoji}
+                >
+                  {row.label}
+                </RecordBucketLabel>
+              ),
             },
             {
               id: "net",

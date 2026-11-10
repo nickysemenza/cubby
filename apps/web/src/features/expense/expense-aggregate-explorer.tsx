@@ -1,3 +1,4 @@
+import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import type {
   ExpenseAnalyzeAggregate,
   ExpenseAnalyzeColumnDimension,
@@ -17,6 +18,7 @@ import { cn } from "cn";
 import { useId, useMemo, useState } from "react";
 import { toast } from "sonner";
 
+import { RecordBucketLabel } from "~/entity/components/record-mark";
 import RTable from "~/entity/table/table";
 import { expense } from "~/integrations/tanstack-query/generated/domains/expense.gen";
 import { copyText } from "~/lib/clipboard";
@@ -75,6 +77,21 @@ const ROW_DIMENSIONS: readonly {
   { value: "project", label: "Project" },
   { value: "vendor", label: "Vendor" },
 ];
+
+/** Axes whose buckets name records, so their labels lead with the record mark. */
+const BUCKET_ENTITY = {
+  spendingCategory: "spendingCategory",
+  productCategory: "productCategory",
+  project: "project",
+} as const satisfies Partial<
+  Record<ExpenseAnalyzeRowDimension, ShortcodeEntity>
+>;
+const isBucketEntityDimension = (
+  dimension: ExpenseAnalyzeRowDimension | null,
+): dimension is keyof typeof BUCKET_ENTITY =>
+  dimension !== null && Object.hasOwn(BUCKET_ENTITY, dimension);
+const bucketEntity = (dimension: ExpenseAnalyzeRowDimension | null) =>
+  isBucketEntityDimension(dimension) ? BUCKET_ENTITY[dimension] : null;
 
 const COLUMN_DIMENSIONS: readonly {
   value: ExpenseAnalyzeColumnDimension;
@@ -233,6 +250,7 @@ const productionOperations: ExpenseAggregateExplorerOperations = {
 export interface ExpenseAnalyzeTableRow {
   id: string;
   label: string;
+  emoji: string | null;
   filter: Record<string, string>;
   current: ExpenseAnalyzeAggregate;
   previous: ExpenseAnalyzeAggregate | null;
@@ -340,6 +358,7 @@ export function buildExpenseAnalyzeTableRows(
   return data.rows.map((bucket) => ({
     id: bucket.key,
     label: bucket.label,
+    emoji: bucket.emoji,
     filter: bucket.filter,
     current: currentByRow.get(bucket.key) ?? EMPTY_AGGREGATE,
     previous: previousByRow.get(bucket.key) ?? null,
@@ -613,6 +632,15 @@ function ExpenseAnalyzeOneDimension({
       header: "Label",
       size: 260,
       minSize: 160,
+      cell: (info) => (
+        <RecordBucketLabel
+          entity={bucketEntity(data.rowDimension)}
+          id={info.row.original.id}
+          emoji={info.row.original.emoji}
+        >
+          {info.getValue()}
+        </RecordBucketLabel>
+      ),
       footer: () => tailLabel(data),
       enableCellSelection: false,
     });
@@ -791,8 +819,25 @@ function ExpenseAnalyzeCrossTab({
         }))}
         rows={data.rows.map((row) => ({ key: row.key, data: row }))}
         layout={{ rowHeader: 260, column: 124, pinned: 124 }}
-        renderColumnHeader={(column) => column.data.label}
-        renderRowHeader={(row) => row.data.label}
+        renderColumnHeader={(column) => (
+          <RecordBucketLabel
+            entity={bucketEntity(data.columnDimension)}
+            id={column.key}
+            emoji={column.data.emoji}
+            size={12}
+          >
+            {column.data.label}
+          </RecordBucketLabel>
+        )}
+        renderRowHeader={(row) => (
+          <RecordBucketLabel
+            entity={bucketEntity(data.rowDimension)}
+            id={row.key}
+            emoji={row.data.emoji}
+          >
+            {row.data.label}
+          </RecordBucketLabel>
+        )}
         renderCell={(row, column) => {
           const cell = cells.get(`${row.key}:${column.key}`);
           if (!cell) return null;

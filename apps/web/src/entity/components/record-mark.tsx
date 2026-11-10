@@ -1,4 +1,5 @@
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
+import { shortcodeSchema } from "@cubby/schemas/identifiers";
 import { useMemo } from "react";
 
 import { useEntityOptions } from "~/entity/hooks/use-entity-options";
@@ -26,6 +27,38 @@ export function RecordMark({
       size={size}
       className={className}
     />
+  );
+}
+
+/**
+ * An aggregate bucket's label led by its record's mark. A bucket that names
+ * no `entity` record (Uncategorized, Irregular) keeps the mark's width so a
+ * column of labels stays aligned; a null `entity` axis draws no mark.
+ */
+export function RecordBucketLabel({
+  entity,
+  id,
+  emoji,
+  size = 14,
+  children,
+}: {
+  entity: ShortcodeEntity | null;
+  id: string;
+  emoji: string | null | undefined;
+  size?: RecordMarkSize;
+  children: React.ReactNode;
+}) {
+  if (!entity) return <>{children}</>;
+  const record = shortcodeSchema(entity).safeParse(id).success;
+  return (
+    <span className="inline-flex min-w-0 items-center gap-1.5">
+      {record ? (
+        <RecordMark entity={entity} emoji={emoji} size={size} />
+      ) : (
+        <span aria-hidden="true" className="shrink-0" style={{ width: size }} />
+      )}
+      <span className="min-w-0 truncate">{children}</span>
+    </span>
   );
 }
 

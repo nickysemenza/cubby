@@ -18,6 +18,7 @@ import {
 } from "~/server/domains/expense/repo/expense-derived-read";
 import { expenseAllocationScopeConditionSql } from "~/server/domains/expense/repo/expense-project-allocation";
 import { loadExpenseAllocations } from "~/server/domains/household-contribution/repo/allocation";
+import { recordEmojiByCode } from "~/server/entity-kernel/repo/entity-emoji";
 
 import {
   rootSpendingCategoryBucketFilter,
@@ -271,7 +272,13 @@ export async function expenseFlowSankey(
   ): string => {
     const id = `${column}:${bucket.id}`;
     if (!nodes.has(id))
-      nodes.set(id, { id, column, label: bucket.label, filter: bucket.filter });
+      nodes.set(id, {
+        id,
+        column,
+        label: bucket.label,
+        emoji: null,
+        filter: bucket.filter,
+      });
     return id;
   };
   const projectBucket = (key: string | null, label: string | null): Bucket =>
@@ -380,8 +387,26 @@ export async function expenseFlowSankey(
     },
   );
   nonPositivePaths.sort((a, b) => a.net - b.net);
+  const bucketCodes = (column: ExpenseFlowSankeyNode["column"]) =>
+    [...nodes.values()]
+      .filter((entry) => entry.column === column)
+      .map((entry) => entry.id.slice(column.length + 1));
+  const [projectEmoji, categoryEmoji] = await Promise.all([
+    recordEmojiByCode(db, "project", bucketCodes("project")),
+    recordEmojiByCode(db, "spendingCategory", bucketCodes("spendingCategory")),
+  ]);
+  const emojiOf = (entry: ExpenseFlowSankeyNode) => {
+    const code = entry.id.slice(entry.column.length + 1);
+    if (entry.column === "project") return projectEmoji.get(code) ?? null;
+    if (entry.column === "spendingCategory")
+      return categoryEmoji.get(code) ?? null;
+    return null;
+  };
   return {
-    nodes: [...nodes.values()],
+    nodes: [...nodes.values()].map((entry) => ({
+      ...entry,
+      emoji: emojiOf(entry),
+    })),
     links,
     nonPositivePaths,
     totals: {

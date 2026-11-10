@@ -55,6 +55,8 @@ const cashFlowBaselineRow = z.object({
   /** Root SPC- code, `uncategorized`, `unclassified`, or `irregular`. */
   key: z.string(),
   label: z.string(),
+  /** The root Spending Category's emoji; null for other buckets. */
+  emoji: z.string().nullable(),
   irregular: z.boolean(),
   /** Months of the trailing window with nonzero net spend. */
   activeMonths: z.number().int().nonnegative(),
@@ -69,6 +71,7 @@ export type CashFlowBaselineRow = z.infer<typeof cashFlowBaselineRow>;
 const projectRef = {
   id: projectShortcode,
   name: z.string(),
+  emoji: z.string().nullable(),
   status: projectStatusSchema,
   estimate: money,
   actual: money,

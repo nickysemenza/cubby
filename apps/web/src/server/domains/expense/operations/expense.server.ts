@@ -26,6 +26,7 @@ import {
 } from "~/server/domains/expense/repo/analytics";
 import {
   buildExpenseAnalysisGrid,
+  loadAnalysisBucketEmoji,
   loadExpenseAnalysisCauses,
   loadExpenseAnalysisPeriod,
   loadExpenseFacetCounts,
@@ -187,6 +188,9 @@ const expenseAnalyzeDefinition = workflow<Database, ExpenseAnalyzeInput>(
     when: async (_, { grid }) => grid.limitResult === null,
     whenTrue: (branch) =>
       branch
+        .call("emoji", ({ context }, { input }) =>
+          loadAnalysisBucketEmoji(context, input.input, input.grid),
+        )
         .parallel("causes", 2, {
           current: ({ context }, { input }) =>
             loadExpenseAnalysisCauses(
@@ -207,7 +211,7 @@ const expenseAnalyzeDefinition = workflow<Database, ExpenseAnalyzeInput>(
                 )
               : Promise.resolve(null),
         })
-        .output(({ input, causes }) =>
+        .output(({ input, causes, emoji }) =>
           readyExpenseAnalysisOutput(
             input.input,
             input.comparison,
@@ -216,6 +220,7 @@ const expenseAnalyzeDefinition = workflow<Database, ExpenseAnalyzeInput>(
             input.grid,
             causes.current,
             causes.previous,
+            emoji,
           ),
         ),
     whenFalse: (branch) =>
