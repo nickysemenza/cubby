@@ -102,6 +102,7 @@ import {
 } from "~/server/db/helpers";
 import { rankOf } from "~/server/db/helpers/related";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
+import { requestedRows } from "~/server/db/helpers/requested";
 import {
   cookbook,
   device,
@@ -1452,6 +1453,11 @@ const assertExternalIdsAvailable = async (
   exceptProductId?: ProductId,
 ): Promise<void> => {
   if (entries.length === 0) return;
+  const wanted = requestedRows(
+    entries,
+    { source: "text", kind: "text", externalId: "text" },
+    "wanted",
+  );
   const [owner] = await tx
     .select({
       productId: product.id,
@@ -1472,15 +1478,7 @@ const assertExternalIdsAvailable = async (
         exceptProductId
           ? ne(entityExternalId.entityId, exceptProductId)
           : undefined,
-        or(
-          ...entries.map((entry) =>
-            and(
-              eq(entityExternalId.source, entry.source),
-              eq(entityExternalId.kind, entry.kind),
-              eq(entityExternalId.externalId, entry.externalId),
-            ),
-          ),
-        ),
+        sql`EXISTS (SELECT 1 FROM ${wanted.from} WHERE wanted.source = ${entityExternalId.source} AND wanted.kind = ${entityExternalId.kind} AND wanted."externalId" = ${entityExternalId.externalId})`,
       ),
     )
     .limit(1);

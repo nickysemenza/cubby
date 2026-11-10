@@ -6,6 +6,7 @@ import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
+import { requestedRows } from "~/server/db/helpers/requested";
 import { AI_REFRESH_ACTIVATION_SETTINGS_ID } from "~/server/db/retained-tables";
 
 export type ProductIdentityFenceTarget = {
@@ -27,10 +28,15 @@ export async function productIdentityEvidenceFences(
   const unique = new Map(targets.map((target) => [target.key, target]));
   const values = [...unique.values()].map(({ key, productIds }) => {
     const [first, second] = [...productIds].sort();
-    return sql`(${key}::text, ${first}::uuid, ${second ?? null}::uuid)`;
+    return { key, first: first!, second: second ?? null };
   });
+  const rows = requestedRows(
+    values,
+    { key: "text", first: "uuid", second: "uuid" },
+    "target_rows",
+  );
   const result = await getDb(db).execute(sql`
-    WITH targets(key, first, second) AS (VALUES ${sql.join(values, sql`, `)}),
+    WITH targets AS (SELECT * FROM ${rows.from}),
     target_products AS MATERIALIZED (
       SELECT key, first AS id FROM targets UNION SELECT key, second FROM targets WHERE second IS NOT NULL
     ), photos AS MATERIALIZED (

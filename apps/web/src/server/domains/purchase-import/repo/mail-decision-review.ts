@@ -8,10 +8,11 @@ import {
   suggestionSubjects,
   type MailDecisionFamily,
 } from "@cubby/schemas/suggestion";
-import { and, eq, like, sql } from "drizzle-orm";
+import { and, eq, like } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
+import { advisoryXactLock } from "~/server/db/advisory-lock";
 import {
   getDb,
   notDeleted,
@@ -281,9 +282,8 @@ async function applyReview(
     applied: true,
   };
   // Serialize commands without taking row locks ahead of the domain's parents.
-  await getDb(db).execute(
-    sql`SELECT pg_advisory_xact_lock(hashtextextended(${`suggestion-review:${handle.id}`},0))`,
-  );
+  // Same key as generic review, so both commands serialize on one Suggestion.
+  await advisoryXactLock(getDb(db), "suggestion-review", handle.id);
   const prior = await applicationReceipt(db, handle, input.operationId);
   if (prior) {
     const receipt = z

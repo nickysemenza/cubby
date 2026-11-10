@@ -20,7 +20,7 @@ import {
 } from "~/server/db/schema";
 import { canonicalJson, jsonSnapshot } from "~/server/lib/canonical-json";
 
-import { canonicalShipment } from "./evidence";
+import { canonicalShipment } from "./evidence-internal";
 
 export function reconcileShipmentTimeline(
   events: readonly {

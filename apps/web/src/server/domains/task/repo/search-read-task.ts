@@ -62,6 +62,6 @@ export const taskSearch = {
   document: ({ types, requested, bounded }) => sql`
       SELECT ${entitySchema.enum.task}, t."id"::text, t."shortcode", t."name", p."name", ${effectiveFieldSql("task", "trade", "t")}, ARRAY[]::text[], ARRAY[${effectiveFieldSql("task", "trade", "t")}, sp."name"]::text[]
       FROM "Task" t LEFT JOIN "Project" p ON p."id" = ${effectiveFieldSql("task", "projectId", "t")} AND ${notDeleted(alias(searchTableproject, "p"))} LEFT JOIN "Product" sp ON sp."id" = ${effectiveFieldSql("task", "subjectProductId", "t")} AND ${notDeleted(alias(searchTableproduct, "sp"))}
-      WHERE ${notDeleted(alias(searchTabletask, "t"))} AND ${entitySchema.enum.task} IN (${types}) AND ${requested(sql`t."id"`)} AND ${bounded(sql`t."createdAt"`)}`,
+      WHERE ${notDeleted(alias(searchTabletask, "t"))} AND ${entitySchema.enum.task} IN (${types}) AND ${requested?.match({ entity: "task", id: sql`t."id"` }) ?? sql`TRUE`} AND ${bounded(sql`t."createdAt"`)}`,
   embedding: loadEmbeddingText,
 } satisfies SearchReadPort;

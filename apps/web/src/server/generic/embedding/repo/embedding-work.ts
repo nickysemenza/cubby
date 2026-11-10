@@ -18,13 +18,13 @@ import {
   isNotNull,
   isNull,
   lte,
-  or,
   sql,
   type SQL,
 } from "drizzle-orm";
 
 import type { Database } from "~/server/db/database";
 import { uuidArrayParam } from "~/server/db/helpers/query";
+import { requestedRows } from "~/server/db/helpers/requested";
 import {
   repositoryQueries as getDb,
   repositoryAfterCommit,
@@ -101,13 +101,13 @@ export async function postponeEmbeddingRefresh(
       UPDATE "SearchDocument" SET "embeddingDueAt" = ${until.toISOString()}::timestamp, "embeddingError" = CASE WHEN "embeddingFailingSince" IS NULL THEN NULL ELSE "embeddingError" END
       FROM jsonb_to_recordset(${JSON.stringify(page.map((item) => ({ ref: item.ref, ticket: item.ticket })))}::jsonb) AS owed(ref uuid, ticket int)
       WHERE "SearchDocument"."entityId" = owed.ref AND "SearchDocument"."embeddingGeneration" = owed.ticket
-        AND (${or(...page.map((item) => store.current(item)))})`);
+        AND (${store.current(page)})`);
   }
 }
 
 export type EmbeddingRefreshStore = DrainStore & {
   /** The page holds this source's lease and the intent it claimed is still the latest. */
-  current(entry: DrainItem): SQL | undefined;
+  current(entries: readonly DrainItem[]): SQL;
   /** Sources this page still holds, whatever was re-marked since: what its receipts may record. */
   holding(tx: Database, items: readonly DrainItem[]): Promise<DrainItem[]>;
   /** Give up what this page still holds; a re-mark it could not settle is then claimable. */
@@ -119,14 +119,27 @@ const leaseFree = () =>
 
 /** One page's view of the refresh work; its `token` is that page's execution lease. */
 export function embeddingRefreshStore(token: string): EmbeddingRefreshStore {
-  const held = (entry: DrainItem) =>
-    and(
-      eq(searchDocument.entityId, entry.ref),
+  const held = (entries: readonly DrainItem[]) => {
+    const rows = requestedRows(
+      entries.map(({ ref }) => ({ ref })),
+      { ref: "uuid" },
+      "held",
+    );
+    return and(
+      sql`${searchDocument.entityId} = ANY(${uuidArrayParam(entries.map(({ ref }) => ref))})`,
+      sql`EXISTS (SELECT 1 FROM ${rows.from} WHERE held.ref = ${searchDocument.entityId})`,
       eq(searchDocument.embeddingLeaseToken, token),
       isNull(searchDocument.deletedAt),
     );
-  const current = (entry: DrainItem) =>
-    and(held(entry), eq(searchDocument.embeddingGeneration, entry.ticket));
+  };
+  const current = (entries: readonly DrainItem[]) => {
+    const rows = requestedRows(
+      entries.map(({ ref, ticket }) => ({ ref, ticket })),
+      { ref: "uuid", ticket: "int" },
+      "current_rows",
+    );
+    return sql`(${searchDocument.entityId} = ANY(${uuidArrayParam(entries.map(({ ref }) => ref))}) AND ${eq(searchDocument.embeddingLeaseToken, token)} AND ${isNull(searchDocument.deletedAt)} AND EXISTS (SELECT 1 FROM ${rows.from} WHERE current_rows.ref = ${searchDocument.entityId} AND current_rows.ticket = ${searchDocument.embeddingGeneration}))`;
+  };
   const locked = (tx: Database, condition: SQL | undefined) =>
     getDb(tx)
       .select({
@@ -184,13 +197,13 @@ export function embeddingRefreshStore(token: string): EmbeddingRefreshStore {
     },
     lock: async (tx, items) => {
       if (!items.length) return [];
-      const rows = await locked(tx, or(...items.map(current)));
+      const rows = await locked(tx, current(items));
       const live = new Set(rows.map((row) => `${row.ref}\0${row.ticket}`));
       return items.filter((entry) => live.has(`${entry.ref}\0${entry.ticket}`));
     },
     holding: async (tx, items) => {
       if (!items.length) return [];
-      const rows = await locked(tx, or(...items.map(held)));
+      const rows = await locked(tx, held(items));
       const live = new Set(rows.map((row) => row.ref));
       return items.filter((entry) => live.has(entry.ref));
     },
@@ -206,7 +219,7 @@ export function embeddingRefreshStore(token: string): EmbeddingRefreshStore {
           embeddingLeaseToken: null,
           embeddingLeaseUntil: null,
         })
-        .where(or(...items.map(current)));
+        .where(current(items));
     },
     defer: async (tx, items, error, backoff, transient) => {
       if (!items.length) return;
@@ -223,7 +236,7 @@ export function embeddingRefreshStore(token: string): EmbeddingRefreshStore {
             : sql`now() + least(${backoff.maxMs}::bigint,
             ${backoff.baseMs}::bigint * (2 ^ least(${searchDocument.embeddingAttempts}, 20))::bigint) * interval '1 millisecond'`,
         })
-        .where(or(...items.map(current)));
+        .where(current(items));
     },
     // A funding wait spends no attempt and ends any failure streak, so the
     // wait never counts toward the failing limit; its error stays visible
@@ -237,7 +250,7 @@ export function embeddingRefreshStore(token: string): EmbeddingRefreshStore {
           embeddingFailingSince: null,
           embeddingDueAt: until,
         })
-        .where(or(...items.map(current)));
+        .where(current(items));
     },
     release: async (db) => {
       if (!claimed.size) return;

@@ -7,7 +7,6 @@ import {
   acceptCleanSuggestions,
   listSuggestionPage,
   suggestionCountsByFamily,
-  suggestionRecordCounts,
 } from "~/server/generic/suggestions/repo/suggestion-list";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
 
@@ -34,8 +33,6 @@ export const suggestionsHandlers = implementOperationDomain(
   {
     automaticDecisions: (context, input) =>
       suggestionRead(context.db, (db) => listAutomaticDecisions(db, input)),
-    recordCounts: (context, input) =>
-      suggestionRead(context.db, (db) => suggestionRecordCounts(db, input)),
     list: (context, input) =>
       suggestionRead(context.db, (db) => listSuggestionPage(db, input)),
     counts: (context, input) =>

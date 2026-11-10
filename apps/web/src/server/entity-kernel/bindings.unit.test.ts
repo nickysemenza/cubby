@@ -50,7 +50,7 @@ describe("entity kernel bindings", () => {
     if (!source) throw new Error(`Missing search source for ${entity}`);
     const context = {
       types: sql`${entity}`,
-      requested: () => sql`true`,
+      requested: undefined,
       bounded: () => sql`true`,
       page: { pageSize: 5 },
     };

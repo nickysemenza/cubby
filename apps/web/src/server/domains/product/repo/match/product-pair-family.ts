@@ -27,9 +27,7 @@ import {
   entities,
   ref,
   one,
-  relatedRecordMatch,
   declareAffectedRecords,
-  primaryRecordMatch,
 } from "~/server/generic/suggestions/repo/suggestion-record-discovery";
 
 const actionable = sql`s.judgment->'actionable' = 'true'::jsonb`;
@@ -149,13 +147,13 @@ export const product_pairFamily: SuggestionFamilyDeclaration<"product_pair"> = {
     roles: ["subject", "other"],
     forward: () =>
       sql`${one} || jsonb_build_array(${ref(sql`${entities.product}`, sql`s.data->>'otherId'`)})`,
-    reverse: (scope) => [
-      primaryRecordMatch(scope),
-      relatedRecordMatch(
-        scope,
-        entities.product,
-        sql<string>`s.data->>'otherId'`,
-      ),
+    references: [
+      { kind: "primary" },
+      {
+        kind: "value",
+        at: { column: "data", path: ["otherId"] },
+        entity: entities.product,
+      },
     ],
   }),
   actionable,

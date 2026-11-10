@@ -1,15 +1,10 @@
 import {
-  suggestionRecordCountsInput,
-  suggestionRecordCountsOut,
-} from "@cubby/schemas/automatic-decision";
-import {
   acceptCleanSuggestionsInput,
   type acceptCleanSuggestionsOut,
   suggestionCountsInput,
   suggestionCountsOut,
   suggestionGroup,
   suggestionListFamily,
-  suggestionListFilters,
   suggestionListInput,
   suggestionListOut,
   type SuggestionColumnValue,
@@ -47,7 +42,6 @@ import {
   type SuggestionKey,
   emptyPendingCounts,
 } from "~/server/generic/suggestions/repo/suggestion-presentation";
-import { countSuggestionRecordRefs } from "~/server/generic/suggestions/repo/suggestion-reference-resolution";
 import { touchingSuggestionFamilies } from "~/server/generic/suggestions/repo/suggestion-touching";
 import { jsonCursor } from "~/server/lib/json-cursor";
 
@@ -440,55 +434,6 @@ async function scopedFamilyQuery(db: Database, filters: SuggestionListFilters) {
     familyScope,
     records: query.records,
   };
-}
-
-/** Counts use the queue's eligibility and declared subjects, including either endpoint. */
-export async function suggestionRecordCounts(
-  db: Database,
-  raw: z.input<typeof suggestionRecordCountsInput>,
-) {
-  const input = suggestionRecordCountsInput.parse(raw);
-  if (!input.recordIds.length)
-    return suggestionRecordCountsOut.parse({
-      records: [],
-    });
-  // Discovery already applies family, status and record scope. A badge may count
-  // a row whose evidence went stale; opening the row revalidates it.
-  const { touching, matchedFamilies, records, familyScope } =
-    await scopedFamilyQuery(
-      db,
-      suggestionListFilters.parse({ recordIds: input.recordIds }),
-    );
-  // A badge counts what needs a person: field guesses wait in the picker.
-  let counted = [...(touching ?? [])];
-  if (matchedFamilies?.has("field") && counted.length) {
-    const listed = new Set(
-      (
-        await suggestionFamilies.field.keys(db, {
-          filters: familyScope.filters,
-          suggestionIds: counted,
-        })
-      ).map((key) => key.suggestionId),
-    );
-    const guesses = new Set(
-      (
-        await suggestionFamilies.field.keys(db, {
-          filters: { ...familyScope.filters, disposition: ["guess"] },
-          suggestionIds: counted,
-        })
-      )
-        .map((key) => key.suggestionId)
-        .filter((id) => !listed.has(id)),
-    );
-    counted = counted.filter((id) => !guesses.has(id));
-  }
-  const counts = await countSuggestionRecordRefs(db, counted, records ?? []);
-  return suggestionRecordCountsOut.parse({
-    records: [...new Set(input.recordIds)].map((id) => ({
-      id,
-      pending: counts.get(id) ?? 0,
-    })),
-  });
 }
 
 async function hydrate(

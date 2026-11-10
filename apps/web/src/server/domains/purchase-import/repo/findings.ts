@@ -73,11 +73,8 @@ import {
 } from "./aggregate-replacement";
 import { commitSourceOrderReconciliation } from "./reconciliation";
 import { lockFindingSettlement } from "./reconciliation-state";
-import {
-  existingExpenses,
-  resolveLineProduct,
-  receiptProductQuantity,
-} from "./writer";
+import { existingExpenses, resolveLineProduct } from "./writer";
+import { receiptProductQuantity } from "./writer-plan";
 
 /**
  * Refund Expenses of this amount already on the Purchase, and refund mails

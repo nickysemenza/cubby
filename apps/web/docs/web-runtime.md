@@ -450,7 +450,7 @@ field-readiness tracking, enrichment patching or separate summary request.
   its whole binding, so split outputs with different inputs.
 - **Round trips.** Each sequential statement costs a production round trip
   (about 50–75 ms through Hyperdrive). `listScaffold.list` starts id-only loads
-  (quality, display images) beside the row load and awaits display-only prepares
+  (quality, display images, pending suggestion counts) beside the row load and awaits display-only prepares
   at hydration; prepared values a binding projects load with the page
   ([derived-field contract](../../../docs/entities.md#filters-and-search)).
   Production list spans report `db.query.busy_intervals`.
@@ -568,12 +568,9 @@ explicit evaluation and editor flows keep their decision path.
 `RecordSuggestionsProvider` in tables uses the `publishedOnly` policy. Ordinary
 `entity.listEnrichment` reads stay provider-free.
 
-- Proposal badges request counts only for mounted rows (including overscan), in
-  stable batches of 50 that keep cached values offscreen. The count read reads
-  indexed published memberships, decision gates and coverage in one SQL
-  operation and never prepares evidence while browsing. Incomplete coverage keeps
-  known counts visible; a known zero does not claim nothing is unpublished. A
-  batch's error stays with its own records.
+- Proposal badges read pending, active review-family counts from each list row's
+  primary record, excluding field guesses. The count loads with the page; the
+  popover uses `suggestions.list` and can show either endpoint's suggestions.
 - Pending Suggestions lists and bulk selection share published admission and the
   declared filter/order compiler, with totals, payloads and coverage from one
   SQL snapshot. Bulk execution passes every item through its current-evidence

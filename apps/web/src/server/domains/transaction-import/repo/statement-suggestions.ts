@@ -57,6 +57,7 @@ import {
   withSnapshotWriteDatabase,
 } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
+import { requestedRows } from "~/server/db/helpers/requested";
 import { transactionImportRecord } from "~/server/db/retained-tables";
 import { suggestionTable } from "~/server/db/schema";
 import { sqlEnumConstant } from "~/server/db/sql-enum";
@@ -119,6 +120,7 @@ import {
   importOnlyStatementRuleStamps,
   matchStatementRules,
 } from "~/server/generic/suggestions/repo/automatic-policy";
+import { statementGraph } from "~/server/generic/suggestions/repo/statement-settlement-graph";
 import {
   publishSuggestion as publishStoredSuggestion,
   publishSuggestions,
@@ -151,7 +153,6 @@ import {
 } from "~/server/generic/suggestions/repo/suggestion-publication";
 import {
   statementRecords,
-  statementReferenceMatch,
   declareAffectedRecords,
 } from "~/server/generic/suggestions/repo/suggestion-record-discovery";
 import { suggestionStateData as stateData } from "~/server/generic/suggestions/repo/suggestion-state";
@@ -2059,16 +2060,22 @@ async function priorStatementPublications(
   db: Database,
   proposals: readonly ChargeProposal[],
 ) {
-  const roots = proposals.flatMap((proposal) =>
-    proposal.observations.map(
-      (row) => sql`(${chargeId(proposal.charge)}, ${row.id}::uuid)`,
+  const roots = requestedRows(
+    proposals.flatMap((proposal) =>
+      proposal.observations.map((row) => ({
+        owner: chargeId(proposal.charge),
+        observation: row.id,
+      })),
     ),
+    { owner: "text", observation: "uuid" },
+    "roots",
   );
   const result = new Map<string, ChargePublicationHistory[]>();
-  if (!roots.length) return result;
+  if (!proposals.some((proposal) => proposal.observations.length))
+    return result;
   const rows = await getDb(db).execute<SuggestionRow & { owner: string }>(
     sql`
-    WITH roots(owner, observation) AS (VALUES ${sql.join(roots, sql`, `)})
+    WITH roots AS (SELECT owner, observation FROM ${roots.from})
     SELECT DISTINCT roots.owner, s.id::text AS id, s.status, s.active, s.fingerprint, s.suppression, s.data,
       s.data->>'evidenceFingerprint' AS "evidenceFingerprint", to_char(s."createdAt", 'YYYY-MM-DD"T"HH24:MI:SS.US') AS "createdAt", s.producer, s.judgment
     FROM roots JOIN "Suggestion" s ON s.family=${suggestionFamily.enum.statement_transaction}
@@ -2564,7 +2571,48 @@ export const statementSuggestions: SuggestionFamilyDeclaration<"statement_transa
       "settlement",
     ],
     forward: statementRecords,
-    reverse: statementReferenceMatch,
+    references: [
+      {
+        kind: "value",
+        at: { column: "data", path: ["accountId"] },
+        entity: "financialAccount",
+      },
+      ...[
+        ["supersede", "pendingTransactionId"],
+        ["void", "transactionId"],
+        ["matchedTransactionId"],
+      ].map((path) => ({
+        kind: "value" as const,
+        at: { column: "judgment" as const, path },
+        entity: "financialTransaction",
+      })),
+      {
+        kind: "value",
+        at: { column: "judgment", path: ["spending", "vendorId"] },
+        entity: "vendor",
+        resolve: true,
+      },
+      {
+        kind: "value",
+        at: { column: "judgment", path: ["spending", "spendingCategoryId"] },
+        entity: "spendingCategory",
+        resolve: true,
+      },
+      {
+        kind: "elements",
+        at: { column: "judgment", path: ["spending", "candidates"] },
+        entity: "purchase",
+        resolve: true,
+        idPath: ["purchaseId"],
+      },
+      {
+        kind: "elements",
+        at: { column: "judgment", path: ["candidates"] },
+        entity: "financialTransaction",
+        idPath: ["transactionId"],
+      },
+    ],
+    graph: (db, scope, admission) => statementGraph(db, scope, admission),
   }),
   actionable: sql`true`,
   summarize: (value: unknown) => {
@@ -3955,13 +4003,16 @@ export async function suggestionsNeedingLabels(
   if (!selected.length) return [];
   // Account preparation is bounded by cursor candidates; only the filled page
   // hydrates judgments/checkpoints. Exclusions never end a partial scan early.
-  const query = sql`WITH selected(id,"positionAt","positionId") AS (VALUES ${sql.join(
-    selected.map(
-      (row) =>
-        sql`(${row.id}::uuid,${row.createdAt}::timestamp,${row.cursorId}::uuid)`,
-    ),
-    sql`, `,
-  )})
+  const page = requestedRows(
+    selected.map((row) => ({
+      id: row.id,
+      positionAt: row.createdAt,
+      positionId: row.cursorId,
+    })),
+    { id: "uuid", positionAt: "timestamp", positionId: "uuid" },
+    "page",
+  );
+  const query = sql`WITH selected AS (SELECT id,"positionAt","positionId" FROM ${page.from})
   SELECT s.id,to_char(selected."positionAt",'YYYY-MM-DD"T"HH24:MI:SS.US') AS "createdAt",selected."positionId" AS "cursorId",
     s.subject,s.judgment,s.data->'amount' AS amount,
     ${suggestionField("evidenceFingerprint")} AS "evidenceFingerprint",s.data->'labelCheckpoint' AS checkpoint,

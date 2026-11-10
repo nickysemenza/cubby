@@ -1,0 +1,119 @@
+{
+  "type": "diff",
+  "version": "9",
+  "dialect": "postgres",
+  "id": "6498c6d7-ce76-4e74-a176-664a883ff585",
+  "prevIds": [
+    "095012eb-5225-419a-83c9-498ac0099a24"
+  ],
+  "footprints": [
+    {
+      "statementType": "drop_check",
+      "statementTarget": [
+        "table",
+        "public",
+        "SourceOccurrence"
+      ],
+      "writes": [
+        "s|ck|public.SourceOccurrence.SourceOccurrence_unproven_check",
+        "n|ck|public.SourceOccurrence.SourceOccurrence_unproven_check",
+        "e|ck|public.SourceOccurrence.SourceOccurrence_unproven_check",
+        "n|con|public.SourceOccurrence.SourceOccurrence_unproven_check"
+      ],
+      "reads": [
+        "n|tbl|public.SourceOccurrence",
+        "n|sch|public",
+        "e|col|public.SourceOccurrence.identityKind",
+        "e|col|public.SourceOccurrence.reviewState",
+        "e|col|public.SourceOccurrence.acceptedTransactionId"
+      ]
+    },
+    {
+      "statementType": "alter_check",
+      "statementTarget": [
+        "table",
+        "public",
+        "SourceOccurrence"
+      ],
+      "writes": [
+        "s|ck|public.SourceOccurrence.SourceOccurrence_identityKind_check"
+      ],
+      "reads": [
+        "n|tbl|public.SourceOccurrence",
+        "n|sch|public",
+        "n|col|public.SourceOccurrence.identityKind",
+        "e|col|public.SourceOccurrence.identityKind"
+      ],
+      "sqlHash": "41b7ea6b96499be0"
+    },
+    {
+      "statementType": "alter_check",
+      "statementTarget": [
+        "table",
+        "public",
+        "SourceOccurrence"
+      ],
+      "writes": [
+        "s|ck|public.SourceOccurrence.SourceOccurrence_reviewState_check"
+      ],
+      "reads": [
+        "n|tbl|public.SourceOccurrence",
+        "n|sch|public",
+        "n|col|public.SourceOccurrence.reviewState",
+        "e|col|public.SourceOccurrence.reviewState"
+      ],
+      "sqlHash": "8a7c330a3125230f"
+    },
+    {
+      "statementType": "alter_check",
+      "statementTarget": [
+        "table",
+        "public",
+        "SourceOccurrence"
+      ],
+      "writes": [
+        "s|ck|public.SourceOccurrence.SourceOccurrence_identity_check"
+      ],
+      "reads": [
+        "n|tbl|public.SourceOccurrence",
+        "n|sch|public",
+        "n|col|public.SourceOccurrence.identityKind",
+        "n|col|public.SourceOccurrence.providerIdentity",
+        "n|col|public.SourceOccurrence.physicalImportId",
+        "n|col|public.SourceOccurrence.physicalPosition",
+        "e|col|public.SourceOccurrence.identityKind",
+        "e|col|public.SourceOccurrence.providerIdentity",
+        "e|col|public.SourceOccurrence.physicalImportId",
+        "e|col|public.SourceOccurrence.physicalPosition"
+      ],
+      "sqlHash": "c2c953637abe9ff3"
+    }
+  ],
+  "deltas": [
+    {
+      "op": "drop",
+      "key": "checks\u0000[\"public\",\"SourceOccurrence\",\"SourceOccurrence_unproven_check\"]"
+    },
+    {
+      "op": "alter",
+      "key": "checks\u0000[\"public\",\"SourceOccurrence\",\"SourceOccurrence_identityKind_check\"]",
+      "set": {
+        "value": "\"identityKind\" IN ('legacy', 'provider', 'positioned', 'reviewed')"
+      }
+    },
+    {
+      "op": "alter",
+      "key": "checks\u0000[\"public\",\"SourceOccurrence\",\"SourceOccurrence_reviewState_check\"]",
+      "set": {
+        "value": "\"reviewState\" IN ('ready', 'identity_conflict', 'judgment_conflict', 'ownership_conflict', 'revision_order_unknown', 'reappeared')"
+      }
+    },
+    {
+      "op": "alter",
+      "key": "checks\u0000[\"public\",\"SourceOccurrence\",\"SourceOccurrence_identity_check\"]",
+      "set": {
+        "value": "(\"identityKind\" = 'provider' AND \"providerIdentity\" IS NOT NULL AND \"physicalImportId\" IS NULL AND \"physicalPosition\" IS NULL) OR (\"identityKind\" = 'positioned' AND \"providerIdentity\" IS NULL AND \"physicalImportId\" IS NOT NULL AND \"physicalPosition\" > 0) OR (\"identityKind\" IN ('reviewed', 'legacy') AND \"providerIdentity\" IS NULL AND \"physicalImportId\" IS NULL AND \"physicalPosition\" IS NULL)"
+      }
+    }
+  ]
+}

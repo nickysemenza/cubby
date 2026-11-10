@@ -5,6 +5,7 @@ import { eq, sql, type SQL } from "drizzle-orm";
 import { effectiveFieldSql } from "~/server/db/computed/effective-field";
 import type { Database } from "~/server/db/database";
 import { notDeleted } from "~/server/db/helpers/predicates";
+import { requestedRows } from "~/server/db/helpers/requested";
 import { repositoryQueries } from "~/server/db/repository-access.boundary";
 import { financialAccount, ledgerParty } from "~/server/db/retained-tables";
 
@@ -37,7 +38,12 @@ export async function loadAccountPurchaserProofs(
       input,
     ]),
   );
-  const date = sql<string | null>`purchaser_date.date::text`;
+  const dates = requestedRows(
+    [...unique.values()],
+    { accountId: "uuid", date: "text" },
+    "purchaser_date",
+  );
+  const date = sql<string | null>`purchaser_date.date::date::text`;
   const rows = unique.size
     ? await repositoryQueries(db)
         .select({
@@ -51,17 +57,12 @@ export async function loadAccountPurchaserProofs(
           },
           soleAccess: soleCardAccessSql(
             sql`${financialAccount.authorizedUsers}`,
-            sql`purchaser_date.date`,
+            sql`purchaser_date.date::date`,
           ),
         })
         .from(financialAccount)
         .innerJoin(
-          sql`(VALUES ${sql.join(
-            [...unique.values()].map(
-              (input) => sql`(${input.accountId}::uuid, ${input.date}::date)`,
-            ),
-            sql`, `,
-          )}) AS purchaser_date("accountId", date)`,
+          dates.from,
           sql`purchaser_date."accountId" = ${financialAccount.id}`,
         )
         .leftJoin(

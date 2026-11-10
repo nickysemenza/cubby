@@ -147,6 +147,16 @@ test("reviews a field suggestion for a named record", async ({
       true,
     );
   await seedCategoryAdvice();
+  await gotoAuthenticatedPage(page, "/products");
+  const productRow = page.getByRole("row").filter({ hasText: productName });
+  const badge = productRow.getByRole("button", {
+    name: "1 pending suggestion",
+  });
+  await expect(badge).toBeVisible();
+  await badge.click();
+  await expect(
+    page.getByText("Category", { exact: true }).first(),
+  ).toBeVisible();
   await gotoAuthenticatedPage(page, `/suggestions?record=product:${item.id}`);
   const rows = suggestionsTable(page).getByRole("row");
   const field = rows

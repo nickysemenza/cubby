@@ -67,6 +67,6 @@ export const plantSearch = {
         concat_ws(' · ', p."gardenGuideKey", p."verdict"), p."verdict",
         ARRAY[]::text[], ARRAY[p."gardenGuideKey", p."latinName"]::text[]
       FROM "Plant" p
-      WHERE ${notDeleted(alias(searchTableplant, "p"))} AND 'plant' IN (${types}) AND ${requested(sql`p."id"`)} AND ${bounded(sql`p."createdAt"`)}`,
+      WHERE ${notDeleted(alias(searchTableplant, "p"))} AND 'plant' IN (${types}) AND ${requested?.match({ entity: "plant", id: sql`p."id"` }) ?? sql`TRUE`} AND ${bounded(sql`p."createdAt"`)}`,
   embedding: loadEmbeddingText,
 } satisfies SearchReadPort;

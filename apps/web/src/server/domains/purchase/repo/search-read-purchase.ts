@@ -58,6 +58,6 @@ export const purchaseSearch = {
   document: ({ types, requested, bounded }) => sql`
       SELECT ${entitySchema.enum.purchase}, pu."id"::text, pu."shortcode", COALESCE(NULLIF(pu."orderId", ''), concat_ws(' · ', v."name", pu."date"::text)), v."name", NULL, ARRAY[]::text[], ARRAY[pu."orderId", pu."displayLabel", pu."notes", v."name", v."website", pu."date"::text]::text[]
       FROM "Purchase" pu JOIN "Vendor" v ON v."id" = pu."vendorId" AND ${notDeleted(alias(searchTablevendor, "v"))}
-      WHERE ${notDeleted(alias(searchTablepurchase, "pu"))} AND ${entitySchema.enum.purchase} IN (${types}) AND ${requested(sql`pu."id"`)} AND ${bounded(sql`pu."createdAt"`)}`,
+      WHERE ${notDeleted(alias(searchTablepurchase, "pu"))} AND ${entitySchema.enum.purchase} IN (${types}) AND ${requested?.match({ entity: "purchase", id: sql`pu."id"` }) ?? sql`TRUE`} AND ${bounded(sql`pu."createdAt"`)}`,
   embedding: loadEmbeddingText,
 } satisfies SearchReadPort;

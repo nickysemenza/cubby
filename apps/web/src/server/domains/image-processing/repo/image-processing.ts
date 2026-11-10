@@ -66,7 +66,9 @@ import {
   withTransactionDatabase,
   databaseForTransaction,
 } from "~/server/db/helpers";
+import { uuidArrayParam } from "~/server/db/helpers/query";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
+import { requestedRows } from "~/server/db/helpers/requested";
 import {
   imageDerivative,
   imageProcessingOrphan,
@@ -885,6 +887,11 @@ export async function finalizeCompanionImageLeases(
   const now = new Date();
   const expires = new Date(now.getTime() + input.leaseMs);
   if (!input.claims.length) return expires;
+  const claims = requestedRows(
+    input.claims,
+    { jobId: "uuid", attemptId: "uuid" },
+    "claims",
+  );
   const renewed = await getDb(db)
     .update(imageProcessingJob)
     .set({ leaseUntil: expires })
@@ -892,14 +899,8 @@ export async function finalizeCompanionImageLeases(
       and(
         eq(imageProcessingJob.state, "pending"),
         isNotNull(imageProcessingJob.leaseUntil),
-        or(
-          ...input.claims.map((claim) =>
-            and(
-              eq(imageProcessingJob.id, claim.jobId),
-              eq(imageProcessingJob.attemptId, claim.attemptId),
-            ),
-          ),
-        ),
+        sql`${imageProcessingJob.id} = ANY(${uuidArrayParam(input.claims.map((claim) => claim.jobId))})`,
+        sql`EXISTS (SELECT 1 FROM ${claims.from} WHERE claims."jobId" = ${imageProcessingJob.id} AND claims."attemptId" = ${imageProcessingJob.attemptId})`,
       ),
     )
     .returning({ id: imageProcessingJob.id });
