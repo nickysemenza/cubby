@@ -250,11 +250,13 @@ function referenceMatches(
         guardSql,
         sql`EXISTS (SELECT 1 FROM jsonb_array_elements(COALESCE(${array}, '[]'::jsonb)) r WHERE ${match(sql`r->>'entity'`, sql<string>`r->>'id'`)})`,
       );
-    const needles = (scope.records ?? []).flatMap((record) =>
-      [record.id, record.code, ...set.keysOf(record)].map((id) =>
-        JSON.stringify([{ entity: record.entity, id }]),
-      ),
-    );
+    const needles = (scope.records ?? [])
+      .filter((record) => !scope.entity || record.entity === scope.entity)
+      .flatMap((record) =>
+        [record.id, record.code, ...set.keysOf(record)].map((id) =>
+          JSON.stringify([{ entity: record.entity, id }]),
+        ),
+      );
     if (!needles.length) return undefined;
     const indexed = alias(suggestionTable, "retained_indexed");
     const indexedPath =
