@@ -1,11 +1,6 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import { costTypeSchema } from "@cubby/schemas/expense-fields";
 import { cardLastFoursOn } from "@cubby/schemas/financial-account";
-import {
-  parseEntityId,
-  parseShortcodeFor,
-  runEntityId,
-} from "@cubby/schemas/identifiers";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import {
   prepareSourceOrderReconciliationInput,
   prepareSourceOrderReconciliationOut,
@@ -16,9 +11,8 @@ import {
   type PrepareSourceOrderReconciliationOut,
   type SourceOrderReconciliationResolution,
 } from "@cubby/schemas/purchase-import";
-import { tradeSchema } from "@cubby/schemas/task-fields";
-import { moneyToMinor, cents } from "@cubby/shared";
-import { and, asc, eq, inArray, isNotNull, sql } from "drizzle-orm";
+import { cents } from "@cubby/shared";
+import { and, eq } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -27,31 +21,16 @@ import {
   notDeleted,
   withTransaction,
 } from "~/server/db/helpers";
-import { outer } from "~/server/db/helpers/related";
 import { relationalSql } from "~/server/db/helpers/relational-sql";
-import {
-  entityAttachment,
-  expense,
-  expenseAttribution,
-  importSourceClaim,
-  importSourceOrder,
-  importSourceProduct,
-  ledgerParty,
-  purchase,
-  purchasePaymentEvidence,
-  runFinding,
-  sourceOrderObservation,
-} from "~/server/db/schema";
+import { expense, ledgerParty, purchase, runFinding } from "~/server/db/schema";
 import { validateExpenseInheritance } from "~/server/domains/expense/repo/expense-inheritance";
 import { refreshAutomaticBookingFingerprint } from "~/server/domains/financial-transaction/repo/financial-convergence";
-import { financialEvidenceAmountMinor } from "~/server/domains/financial-transaction/repo/financial-evidence";
 import {
   loadExpenseAllocations,
   type ExpenseAllocationRow,
 } from "~/server/domains/household-contribution/repo/allocation";
 import {
   matchCompletePaymentSet,
-  unpricedForeignExpenseSql,
   sourceFinancialFacts,
 } from "~/server/domains/purchase-import/repo/writer-policy";
 import {
@@ -60,22 +39,44 @@ import {
   runFindingStatus,
   updateRunFinding,
 } from "~/server/domains/run/repo/run-finding";
-import { assertClassificationPolicies } from "~/server/domains/spending-category/repo/classification-field-policy";
 import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntries } from "~/server/generic/audit-log/repo/audit-log";
-import { validateProductPolicy } from "~/server/generic/inheritance/repo/inheritance-validation";
 import { cascadeRemoval } from "~/server/generic/removal/repo/core";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { redistributeReplacementAttributions } from "./aggregate-replacement";
 import { prepareAcceptedSourceOrderReconciliation } from "./reconciliation-accepted";
-import { reviewPreparedNewProducts } from "./reconciliation-new-product";
 import {
-  reconciliationFingerprint,
-  recordSourceOrderObservation,
-  sourceObservationIdentitySql,
-} from "./reconciliation-observations";
+  newReconciliationExpenseContext,
+  applyReconciliationLine,
+  applyReconciliationRemovals,
+  applyReconciliationAssociation,
+  applyReconciliationHeader,
+  applyReconciliationSource,
+} from "./reconciliation-apply";
+import {
+  loadReviewedReconciliation,
+  loadReconciliationExpenseValidation,
+  loadFirstReconciliationObservation,
+  loadReconciliationProduct,
+  loadReconciliationObservation,
+  loadReconciliationAssociation,
+} from "./reconciliation-load";
+import { reviewPreparedNewProducts } from "./reconciliation-new-product";
+import { recordSourceOrderObservation } from "./reconciliation-observations";
+import {
+  foreignProductBinding,
+  planSourceOrderReconciliation,
+  planReconciliationOutputFingerprint,
+  planReconciliationBindings,
+  planReconciliationLine,
+  planReconciliationRemovals,
+  planReconciliationFinal,
+  planReconciliationObservation,
+  originalExpenseQuantity,
+  reappliesAcceptedObservation,
+} from "./reconciliation-plan";
+import { resolveReconciliationProduct } from "./reconciliation-product";
 import {
   loadSourceReconciliationState,
   lockFindingSettlement,
@@ -84,65 +85,6 @@ import {
   type ReconciliationState,
 } from "./reconciliation-state";
 import { recordImportedShipmentEvidence } from "./shipment-intake";
-import { receiptProductQuantity, resolveLineProduct } from "./writer";
-
-/**
- * Attach-only review of the current accepted observation is Product-only: its
- * financial facts were accepted already, and payment evidence may be owned by
- * any member of the canonical family, so it is neither re-compared nor
- * rewritten, and the source claim keeps its latest checksum.
- */
-function reappliesAcceptedObservation(
-  state: ReconciliationState,
-  resolution: SourceOrderReconciliationResolution,
-  intent: "financial" | "product_binding",
-) {
-  return (
-    intent === "product_binding" &&
-    (foreignProductBinding(state.observation.extraction.candidate, intent) ||
-      (resolution.kind === "attach_only" &&
-        (state.association?.acceptedObservationId === state.observation.id ||
-          state.currentOriginalReview)))
-  );
-}
-
-function foreignProductBinding(
-  candidate: ReconciliationFix["proposedExtraction"]["candidate"],
-  intent: "financial" | "product_binding",
-) {
-  return (
-    intent === "product_binding" &&
-    candidate?.currency != null &&
-    /^[A-Z]{3}$/.test(candidate.currency) &&
-    candidate.currency !== "USD"
-  );
-}
-
-/** Original supported quantity survives USD evidence that omits a count. */
-function originalExpenseQuantity(
-  state: ReconciliationState,
-  expenseId: string,
-) {
-  const quantities = new Set(
-    state.productBindings.flatMap((binding) => {
-      if (binding.expenseId !== expenseId) return [];
-      const candidate = state.sourceOrders.find(
-        (order) => order.id === binding.sourceOrderId,
-      )?.originalOrder?.extraction.candidate;
-      const quantity = candidate?.lines[binding.lineIndex]?.quantity;
-      return candidate?.currency &&
-        candidate.currency !== "USD" &&
-        quantity !== undefined
-        ? [quantity]
-        : [];
-    }),
-  );
-  if (quantities.size > 1)
-    throw new Error(
-      "Original source quantities disagree; review item correspondence before USD pricing.",
-    );
-  return quantities.values().next().value ?? null;
-}
 
 function partyCentTargets(
   rows: readonly Pick<
@@ -643,15 +585,6 @@ function partyShortcode(
   return party.shortcode;
 }
 
-function partyIdForShortcode(
-  state: Pick<ReconciliationState, "parties">,
-  shortcode: string,
-) {
-  const party = state.parties.find((row) => row.shortcode === shortcode);
-  if (!party) throw new Error("A reviewed attribution party is not live.");
-  return party.id;
-}
-
 export function prepareSourceOrderReconciliation(
   db: Database,
   input: Extract<PrepareSourceOrderReconciliationInput, { id: string }>,
@@ -738,7 +671,7 @@ export async function prepareSourceOrderReconciliation(
   });
 }
 
-async function retainUnresolvedProductFinding(
+export async function retainUnresolvedProductFinding(
   tx: DrizzleTransaction,
   state: ReconciliationState,
   ownerId: typeof ledgerParty.$inferSelect.id,
@@ -758,7 +691,6 @@ async function retainUnresolvedProductFinding(
 }
 
 // Every reviewed effect and conservation assertion shares this transaction.
-// eslint-disable-next-line complexity
 export async function commitSourceOrderReconciliation(
   tx: DrizzleTransaction,
   fix: ReconciliationFix,
@@ -766,575 +698,123 @@ export async function commitSourceOrderReconciliation(
   ownerId: typeof ledgerParty.$inferSelect.id,
   intent: "financial" | "product_binding" = "financial",
 ) {
-  if (!fix.review)
-    throw createAppError(
-      "PURCHASE_IMPORT_REVIEW_STALE",
-      "Review the source-order reconciliation before applying it.",
-    );
-  const state = await loadSourceReconciliationState(tx, fix, ownerId);
-  // Refuse stale state before recalculating a now-invalid attribution correction.
-  if (
-    (await sourceReconciliationStateFingerprint(
-      state,
-      fix,
-      fix.review.resolution,
-    )) !== fix.reviewedFingerprint
-  )
-    throw createAppError(
-      "PURCHASE_IMPORT_REVIEW_STALE",
-      "Reconciliation state changed after review; prepare it again.",
-    );
-  const current = await reviewResolution(
+  const { state, current } = await loadReviewedReconciliation(
     tx,
-    state,
     fix,
-    fix.review.resolution,
+    ownerId,
     intent,
   );
-  if (
-    (await reconciliationFingerprint(current)) !==
-    (await reconciliationFingerprint(fix.review))
-  )
-    throw createAppError(
-      "PURCHASE_IMPORT_REVIEW_STALE",
-      "Reconciliation state changed after review; prepare it again.",
+  const plan = planSourceOrderReconciliation(
+    state,
+    fix,
+    current.resolution,
+    intent,
+  );
+  const applied = newReconciliationExpenseContext();
+  for (const entry of plan.lines) {
+    const productId = await resolveReconciliationProduct(
+      tx,
+      state,
+      entry,
+      applied,
     );
-  const candidate = fix.proposedExtraction.candidate!;
-  const resolution = current.resolution;
-  const foreign = foreignProductBinding(candidate, intent);
-  const audit = [];
-  const reused = new Set<typeof expense.$inferSelect.id>();
-  const resolvedBindings = [];
-  const lineExpenses = new Map<number, typeof expense.$inferSelect.id>();
-  const productsByExternalIdentity = new Map<string, string>();
-  const selected =
-    resolution.kind === "replace_lines"
-      ? state.expenses.filter((row) =>
-          resolution.expenseIds.some((id) => id === row.shortcode),
-        )
-      : [];
-  for (const binding of resolution.lines) {
-    const line = candidate.lines[binding.lineIndex]!;
-    const existing = binding.expenseId
-      ? state.expenses.find((row) => row.shortcode === binding.expenseId)!
-      : null;
-    const distinctFrom = [];
-    for (const distinct of binding.newProduct?.distinctFrom ?? [])
-      distinctFrom.push({
-        ...distinct,
-        productId: await resolveOrThrow(tx, "product", distinct.productId),
-      });
-    const productId = binding.newProduct
-      ? await resolveLineProduct(
-          tx,
-          line,
-          {
-            productId: null,
-            promote: true,
-            variantDoubt: false,
-            unresolvedReason: null,
-            probability: 1,
-            lineKind: "principal",
-            kitKind: "single",
-            reversalKind: null,
-            distinctFrom,
-          },
-          state.target.vendorId,
-          productsByExternalIdentity,
-          {
-            onCreated: (id) =>
-              audit.push({
-                entityKind: "product" as const,
-                entityId: id,
-                action: "create" as const,
-                changes: {
-                  name: { from: null, to: line.title },
-                  notes: { from: null, to: null },
-                },
-              }),
-          },
-        )
-      : binding.productId
-        ? await resolveOrThrow(tx, "product", binding.productId)
-        : null;
-    resolvedBindings.push({ lineIndex: binding.lineIndex, productId });
-    if (resolution.kind === "attach_only") {
-      if (existing) lineExpenses.set(binding.lineIndex, existing.id);
-      if (
-        existing &&
-        ((!existing.productId && productId) || existing.purchaseId === null)
-      ) {
-        await tx
-          .update(expense)
-          .set({
-            purchaseId: state.target.id,
-            productId,
-            productQuantity:
-              existing.productQuantity ??
-              receiptProductQuantity(productId, line, { reversalKind: null }),
-            updatedAt: new Date(),
-          })
-          .where(eq(expense.id, existing.id));
-        audit.push({
-          entityKind: "expense" as const,
-          entityId: existing.id,
-          action: "update" as const,
-          changes: { productId: { from: null, to: productId } },
-        });
-      }
-      if (existing && line.lineKind === "principal" && productId === null)
-        await retainUnresolvedProductFinding(
-          tx,
-          state,
-          ownerId,
-          existing.id,
-          line.title,
-        );
-      continue;
-    }
-    const template = existing ?? selected[0];
-    const principal = line.lineKind === "principal";
-    const fields = {
-      purchaseId: state.target.id,
-      name: line.title,
-      cost: line.amount,
-      lineKind: line.lineKind,
-      lineBasis: "item_line" as const,
-      productId,
-      productQuantity: productId
-        ? (receiptProductQuantity(productId, line, { reversalKind: null }) ??
-          existing?.productQuantity ??
-          (existing &&
-          state.unpricedForeignExpenses.some((row) => row.id === existing.id)
-            ? originalExpenseQuantity(state, existing.id)
-            : null))
-        : null,
-      projectId: principal ? (template?.projectId ?? null) : null,
-      spendingCategoryId: principal
-        ? (template?.spendingCategoryId ?? null)
-        : null,
-      trade: tradeSchema.nullable().parse(template?.trade ?? null),
-      // A source-stated cost type wins; a replaced aggregate's was a placeholder.
-      costType: costTypeSchema.parse(
-        line.costType ?? template?.costType ?? "materials",
-      ),
-      date: template?.date ?? state.target.date,
-      notes: template?.notes ?? null,
-      future: template?.future ?? false,
-      bookingTransactionCode: template?.bookingTransactionCode ?? null,
-      url: line.productUrl ?? template?.url ?? null,
-      economicRole: "vendor" as const,
-    };
-    assertClassificationPolicies("expense", fields);
-    let row;
-    if (existing && !reused.has(existing.id)) {
-      [row] = await tx
-        .update(expense)
-        .set({ ...fields, updatedAt: new Date() })
-        .where(eq(expense.id, existing.id))
-        .returning();
-      reused.add(existing.id);
-      audit.push({
-        entityKind: "expense" as const,
-        entityId: existing.id,
-        action: "update" as const,
-        changes: {
-          cost: { from: existing.cost, to: fields.cost },
-          name: { from: existing.name, to: line.title },
-          productId: { from: existing.productId, to: productId },
-        },
-      });
-      await tx
-        .update(expenseAttribution)
-        .set({ deletedAt: new Date() })
-        .where(
-          and(
-            eq(expenseAttribution.expenseId, existing.id),
-            notDeleted(expenseAttribution),
-          ),
-        );
-    } else {
-      row = await insertWithShortcode(tx, "expense", fields);
-      audit.push({
-        entityKind: "expense" as const,
-        entityId: row.id,
-        action: "create" as const,
-      });
-    }
-    if (!row) throw new Error("The reviewed Expense changed during commit.");
-    lineExpenses.set(binding.lineIndex, row.id);
-    const allocations = current.attributions.filter(
-      (allocation) => allocation.lineIndex === binding.lineIndex,
+    const loadedProductId = await loadReconciliationProduct(tx, productId);
+    const linePlan = planReconciliationLine(
+      state,
+      plan,
+      entry,
+      loadedProductId,
+      applied.reused,
+      current,
     );
-    if (allocations.length)
-      await tx.insert(expenseAttribution).values(
-        allocations.map((allocation) => ({
-          expenseId: row.id,
-          role: allocation.role,
-          ledgerPartyId: allocation.partyId
-            ? partyIdForShortcode(state, allocation.partyId)
-            : null,
-          weight: allocation.weight,
-        })),
-      );
-    await validateExpenseInheritance(tx, row);
-    if (principal && productId === null)
+    const result = await applyReconciliationLine(tx, linePlan, applied);
+    if (result.row) await validateExpenseInheritance(tx, result.row);
+    if (result.findingId)
       await retainUnresolvedProductFinding(
         tx,
         state,
         ownerId,
-        row.id,
-        line.title,
+        result.findingId,
+        entry.line.title,
       );
   }
-  const removed = selected.filter((row) => !reused.has(row.id));
-  if (removed.length) {
-    await tx
-      .update(expense)
-      .set({ deletedAt: new Date() })
-      .where(
-        inArray(
-          expense.id,
-          removed.map((row) => row.id),
-        ),
-      );
+  const removed = planReconciliationRemovals(plan, applied.reused);
+  await applyReconciliationRemovals(tx, removed);
+  if (removed.length)
     await cascadeRemoval(tx, {
       entity: "expense",
-      ids: removed.map((row) => row.id),
-      audit: { into: audit },
+      ids: removed,
+      audit: { into: applied.audit },
     });
-  }
-  await validateProductPolicy(tx, { purchaseId: state.target.id });
-  const [sum] = await tx
-    .select({
-      amount: sql<number>`sum(${expense.cost})::double precision`,
-      unknown: sql<number>`count(*) FILTER (WHERE ${expense.cost} IS NULL AND NOT ${unpricedForeignExpenseSql({ id: outer(expense.id), purchaseId: outer(expense.purchaseId), lineKind: outer(expense.lineKind), cost: outer(expense.cost) })})::int`,
-    })
-    .from(expense)
-    .where(and(eq(expense.purchaseId, state.target.id), notDeleted(expense)));
-  if (
-    current.spend.after !== null &&
-    (sum?.unknown || cents(sum?.amount ?? 0) !== cents(current.spend.after))
-  )
-    throw new Error(
-      "Reconciliation did not conserve the reviewed Expense total.",
-    );
-  if (resolution.kind === "replace_lines" && !foreign) {
-    await tx
-      .update(purchase)
-      .set({
-        statedTotal:
-          candidate.printedGrandTotal === null
-            ? null
-            : moneyToMinor(candidate.printedGrandTotal),
-        updatedAt: new Date(),
-      })
-      .where(eq(purchase.id, state.target.id));
-  }
-  if (state.target.orderId === null && candidate.orderId !== null) {
-    await tx
-      .update(purchase)
-      .set({ orderId: candidate.orderId, updatedAt: new Date() })
-      .where(eq(purchase.id, state.target.id));
-    audit.push({
-      entityKind: "purchase" as const,
-      entityId: state.target.id,
-      action: "update" as const,
-      changes: { orderId: { from: null, to: candidate.orderId } },
-    });
-  }
-  for (const imageId of [
-    state.observation.primaryDocumentImageId,
-    state.observation.screenshotImageId,
-  ])
-    if (imageId)
-      await tx
-        .insert(entityAttachment)
-        .values({
-          entityId: state.target.id,
-          entityKind: "purchase",
-          role: "attachment",
-          imageId,
-          documentKind: "order_confirmation",
-        })
-        .onConflictDoNothing();
-  const outputFingerprint = await reconciliationFingerprint({
-    observation: state.observation.id,
-    reviewedFingerprint: fix.reviewedFingerprint,
-  });
-  // The original is this Purchase's first observation of the order, as the
-  // writer's is its own import; a deleted Purchase's observations stay its own.
-  const [firstObservation] = await tx
-    .select()
-    .from(sourceOrderObservation)
-    .where(
-      and(
-        eq(
-          sourceOrderObservation.sourceClaimId,
-          state.observation.sourceClaimId,
-        ),
-        eq(sourceOrderObservation.orderKey, fix.orderKey),
-        sourceObservationIdentitySql(
-          "purchase",
-          sourceOrderObservation.purchaseId,
-          sql`${state.target.id}`,
-        ),
-      ),
-    )
-    .orderBy(
-      asc(sourceOrderObservation.createdAt),
-      asc(sourceOrderObservation.id),
-    )
-    .limit(1);
-  if (!firstObservation)
-    throw new Error("Reconciliation observation provenance is missing.");
-  const acceptedObservation = await recordSourceOrderObservation(
+  await loadReconciliationExpenseValidation(
     tx,
-    {
-      sourceClaimId: state.observation.sourceClaimId,
-      orderKey: fix.orderKey,
-      purchaseId: state.target.id,
-    },
-    {
-      runId: state.observation.runId,
-      vendorId: state.target.vendorId,
-      source: fix.source,
-      extraction: fix.proposedExtraction,
-      primaryDocumentImageId: state.observation.primaryDocumentImageId,
-      screenshotImageId: state.observation.screenshotImageId,
-    },
-    resolvedBindings,
+    state.target.id,
+    current.spend.after,
   );
-  const [association] = await tx
-    .insert(importSourceOrder)
-    .values({
-      sourceClaimId: state.observation.sourceClaimId,
-      orderKey: fix.orderKey,
-      purchaseId: state.target.id,
-      checksum: fix.source.checksum,
-      outputFingerprint,
-      originalOrder: {
-        checksum: firstObservation.checksum,
-        extraction: firstObservation.extraction,
-      },
-      acceptedObservationId: acceptedObservation.id,
-    })
-    .onConflictDoUpdate({
-      target: [importSourceOrder.sourceClaimId, importSourceOrder.orderKey],
-      // As in the writer: only a live association arbitrates, and until the
-      // live-only key is applied a detached row is taken over instead.
-      targetWhere: isNotNull(importSourceOrder.purchaseId),
-      set: {
-        purchaseId: state.target.id,
-        checksum: fix.source.checksum,
-        acceptedObservationId: acceptedObservation.id,
-        outputFingerprint,
-        ...(state.association
-          ? {}
-          : {
-              originalOrder: {
-                checksum: firstObservation.checksum,
-                extraction: firstObservation.extraction,
-              },
-            }),
-        updatedAt: new Date(),
-      },
-    })
-    .returning();
-  if (!association)
-    throw new Error("Accepted source association was not persisted.");
-  const preservedOriginalExpenses = new Map<
-    number,
-    typeof expense.$inferSelect.id
-  >();
-  if (resolution.kind === "replace_lines") {
-    const selectedIds = new Set(selected.map((row) => row.id));
-    // A reused Expense may now describe a different item. Check every receipt
-    // that referred to it, including sibling sources, before retaining its SKU.
-    for (const prior of state.productBindings) {
-      if (!prior.expenseId || !selectedIds.has(prior.expenseId)) continue;
-      const originalCandidate = state.sourceOrders.find(
-        (order) => order.id === prior.sourceOrderId,
-      )?.originalOrder?.extraction.candidate;
-      const original = originalCandidate?.lines[prior.lineIndex];
-      const replacementIndex = [...lineExpenses].find(
-        ([, id]) => id === prior.expenseId,
-      )?.[0];
-      const replacement =
-        replacementIndex === undefined
-          ? null
-          : candidate.lines[replacementIndex];
-      const foreignHandover = !!(
-        original &&
-        replacement &&
-        originalCandidate?.currency &&
-        originalCandidate.currency !== "USD" &&
-        candidate.currency === "USD" &&
-        original.title === replacement.title &&
-        original.lineKind === replacement.lineKind &&
-        (original.quantity === undefined ||
-          replacement.quantity === undefined ||
-          (original.quantity ?? null) === replacement.quantity)
-      );
-      // The same source's final upsert must retain this explicitly reviewed
-      // acquisition even though its new USD amounts have different fingerprints.
-      if (foreignHandover && prior.sourceOrderId === association.id)
-        preservedOriginalExpenses.set(prior.lineIndex, prior.expenseId);
-      if (
-        !original ||
-        !replacement ||
-        ((await reconciliationFingerprint(original)) !==
-          (await reconciliationFingerprint(replacement)) &&
-          !foreignHandover)
-      )
-        await tx
-          .update(importSourceProduct)
-          .set({ expenseId: null })
-          .where(eq(importSourceProduct.id, prior.id));
-    }
-  }
-  const originalLines = firstObservation.extraction.candidate?.lines ?? [];
-  const originalKeys = await Promise.all(
-    originalLines.map(reconciliationFingerprint),
+  await applyReconciliationHeader(tx, plan, applied);
+  const outputFingerprint = await planReconciliationOutputFingerprint(
+    state,
+    fix,
   );
-  const proposedKeys = await Promise.all(
-    candidate.lines.map(reconciliationFingerprint),
+  const firstObservation = await loadFirstReconciliationObservation(
+    tx,
+    state,
+    fix,
   );
-  const sameRoster =
-    (await reconciliationFingerprint(originalKeys)) ===
-    (await reconciliationFingerprint(proposedKeys));
-  // Only line contents establish correspondence. Header/payment edits cannot
-  // discard unchanged receipt identifiers; ambiguous reordered lines stay unknown.
-  for (const [lineIndex, originalKey] of originalKeys.entries()) {
-    const matches = proposedKeys.flatMap((key, index) =>
-      key === originalKey ? [index] : [],
-    );
-    const proposedIndex = sameRoster
-      ? lineIndex
-      : matches.length === 1 &&
-          originalKeys.filter((key) => key === originalKey).length === 1
-        ? matches[0]
-        : undefined;
-    const expenseId =
-      preservedOriginalExpenses.get(lineIndex) ??
-      (proposedIndex === undefined
-        ? null
-        : (lineExpenses.get(proposedIndex) ?? null));
-    const binding = firstObservation.productBindings.find(
-      (row) => row.lineIndex === lineIndex,
-    );
-    await tx
-      .insert(importSourceProduct)
-      .values({
-        sourceOrderId: association.id,
-        lineIndex,
-        productId: binding?.productId
-          ? parseEntityId("product", binding.productId)
-          : null,
-        expenseId,
-      })
-      .onConflictDoUpdate({
-        target: [
-          importSourceProduct.sourceOrderId,
-          importSourceProduct.lineIndex,
-        ],
-        set: { expenseId },
-      });
-  }
-  const productOnly = reappliesAcceptedObservation(state, resolution, intent);
-  const syncedPayments = productOnly ? [] : candidate.payments;
-  const ownedPayments = productOnly
-    ? []
-    : state.payments.filter(
-        (row) => row.sourceClaimId === state.observation.sourceClaimId,
-      );
-  for (const [evidenceIndex, payment] of syncedPayments.entries()) {
-    const old = ownedPayments.find(
-      (row) => row.evidenceIndex === evidenceIndex,
-    );
-    const values = {
-      amountMinor: financialEvidenceAmountMinor(payment.amount),
-      chargedAt: payment.chargedAt ? new Date(payment.chargedAt) : null,
-      cardLastFour: payment.cardLastFour ?? null,
-      tender: payment.tender ?? "unknown",
-      description: payment.description ?? null,
-    };
-    if (old) {
-      // Cosmetic description changes do not replace an accepted payment row.
-      if (
-        financialEvidenceAmountMinor(old.amount) !== values.amountMinor ||
-        old.chargedAt?.toISOString() !== values.chargedAt?.toISOString() ||
-        old.cardLastFour !== values.cardLastFour ||
-        old.tender !== values.tender
-      )
-        await tx
-          .update(purchasePaymentEvidence)
-          .set({ ...values, updatedAt: new Date() })
-          .where(eq(purchasePaymentEvidence.id, old.id));
-    } else
-      await tx.insert(purchasePaymentEvidence).values({
-        purchaseId: state.target.id,
-        sourceClaimId: state.observation.sourceClaimId,
-        evidenceIndex,
-        ...values,
-      });
-  }
-  const surplus = ownedPayments.filter(
-    (row) => row.evidenceIndex >= syncedPayments.length,
+  const observationPlan = planReconciliationObservation(
+    state,
+    fix,
+    applied.resolvedBindings,
   );
-  if (surplus.length)
-    await tx.delete(purchasePaymentEvidence).where(
-      inArray(
-        purchasePaymentEvidence.id,
-        surplus.map((row) => row.id),
-      ),
-    );
-  // Historical aliases retain their bytes and timestamps; only the canonical
-  // source identity can be refreshed by a reviewed reconciliation.
-  if (!productOnly && state.observation.sourceClaimId === state.family.root.id)
-    await tx
-      .update(importSourceClaim)
-      .set({ checksum: fix.source.checksum, updatedAt: new Date() })
-      .where(eq(importSourceClaim.id, state.family.root.id));
-  if (!productOnly)
+  const observationOutput = await recordSourceOrderObservation(
+    tx,
+    observationPlan.identity,
+    observationPlan.input,
+    observationPlan.bindings,
+  );
+  const acceptedObservation = await loadReconciliationObservation(
+    tx,
+    observationOutput.id,
+  );
+  const associationOutput = await applyReconciliationAssociation(
+    tx,
+    state,
+    fix,
+    firstObservation,
+    acceptedObservation,
+    outputFingerprint,
+  );
+  const association = await loadReconciliationAssociation(
+    tx,
+    associationOutput.id,
+  );
+  const bindingPlan = await planReconciliationBindings(
+    state,
+    plan,
+    firstObservation,
+    association.id,
+    applied.lineExpenses,
+  );
+  const finalPlan = planReconciliationFinal(
+    state,
+    current,
+    plan,
+    acceptedObservation,
+    fix,
+    ownerId,
+  );
+  await applyReconciliationSource(tx, plan, association, bindingPlan);
+  if (finalPlan.shipment)
     await recordImportedShipmentEvidence(
       databaseForTransaction(tx),
-      {
-        source: fix.source,
-        runId: state.observation.runId
-          ? runEntityId.parse(state.observation.runId)
-          : null,
-        ledgerPartyId: ownerId,
-        purchaseId: state.target.id,
-        shipments: candidate.shipments ?? [],
-      },
+      finalPlan.shipment,
       actor,
     );
-  audit.push({
-    entityKind: "purchase" as const,
-    entityId: state.target.id,
-    action: "update" as const,
-    changes: {
-      acceptedObservationId: {
-        from: state.association?.acceptedObservationId ?? null,
-        to: acceptedObservation.id,
-      },
-      spend: { from: current.spend.before, to: current.spend.after },
-    },
-  });
-  await logAuditEntries(tx, actor, audit);
-  if (resolution.kind === "replace_lines" && !foreign) {
-    // The fingerprint covers Purchase identity as well as money and
-    // attribution. Refresh only after every covered write, including a later
-    // source's previously unknown order id, has completed in this transaction.
-    for (const code of new Set(
-      selected.flatMap((row) =>
-        row.bookingTransactionCode ? [row.bookingTransactionCode] : [],
-      ),
-    ))
-      await refreshAutomaticBookingFingerprint(
-        databaseForTransaction(tx),
-        parseShortcodeFor("financialTransaction", code),
-      );
-  }
+  applied.audit.push(finalPlan.audit);
+  await logAuditEntries(tx, actor, applied.audit);
+  for (const code of finalPlan.bookingCodes)
+    await refreshAutomaticBookingFingerprint(
+      databaseForTransaction(tx),
+      parseShortcodeFor("financialTransaction", code),
+    );
 }
