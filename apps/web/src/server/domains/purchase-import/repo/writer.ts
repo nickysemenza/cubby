@@ -54,7 +54,6 @@ import {
   effectiveExpenseTradeSql,
   validateExpenseInheritance,
 } from "~/server/domains/expense/repo/expense-inheritance";
-import { financialEvidenceAmountMinor } from "~/server/domains/financial-transaction/repo/financial-evidence";
 import { readRetainedMail } from "~/server/domains/mail/repo/retained-mail";
 import { amazonAsin } from "~/server/domains/product/repo/amazon-asin";
 import {
@@ -63,7 +62,6 @@ import {
   type ExternalIdPair,
 } from "~/server/domains/product/repo/find-by-external-ids";
 import { upsertAgentProductMatch } from "~/server/domains/product/repo/match/product-match-candidate";
-import { zeroCostOwnershipExitExpensePredicate } from "~/server/domains/product/repo/ownership";
 import { resolveProductIdentifierSource } from "~/server/domains/product/repo/product-identifier-source";
 import {
   findExactProductNameMatches,
@@ -74,7 +72,6 @@ import { manufacturerPartRequests } from "~/server/domains/purchase-import/repo/
 import {
   type LiveSourceOrder,
   lockImportSourceClaimFamily,
-  readImportSourceClaimFamily,
   readSourceFamilyOrder,
 } from "~/server/domains/purchase-import/repo/source-claim-family";
 import { sourceOrderKey } from "~/server/domains/purchase-import/repo/source-order-key";
@@ -112,7 +109,12 @@ import {
 } from "./retained-settlement";
 import { recordRunWrites } from "./run-audit";
 import { recordImportedShipmentEvidence } from "./shipment-intake";
-import { applyPurchaseHeader } from "./writer-apply";
+import {
+  applyExpenseProductBinding,
+  applyImportedExpense,
+  applyPaymentEvidence,
+  applyPurchaseHeader,
+} from "./writer-apply";
 import {
   loadAcceptedProductChoices,
   loadAcceptedPaymentFacts,
@@ -120,6 +122,9 @@ import {
   loadAssignedPurchaseLine,
   loadChosenPurchase,
   loadOrderedPurchases,
+  loadUnlinkedProducts,
+  lockAndLoadSourceFamily,
+  lockAndLoadSourceOrder,
   lockPurchaseTarget,
   lockPurchaseExpenses,
   loadOwnedImportScope,
@@ -129,11 +134,17 @@ import {
 import {
   changedAcceptedProductChoice,
   planLineMatch,
+  planImportedExpense,
+  planExpenseProductBinding,
   planAcceptedPaymentReview,
   planPurchaseHeader,
+  planPaymentEvidence,
   planOrderedPurchase,
   planPurchaseTarget,
   planLockedPurchase,
+  planSourceIdentity,
+  planSourceKey,
+  planSourceOrder,
   planTargetReview,
 } from "./writer-plan";
 
@@ -508,16 +519,7 @@ export async function explicitLineDecisions(
   return decisions;
 }
 
-export function receiptProductQuantity(
-  productId: string | null,
-  line: ExtractedPurchaseLine,
-  decision: Pick<LineIdentityDecision, "reversalKind">,
-): number | null {
-  if (!productId || line.quantity === undefined) return null;
-  if (line.amount >= 0) return Math.abs(line.quantity);
-  if (decision.reversalKind === "return") return -Math.abs(line.quantity);
-  return decision.reversalKind === "concession" ? 0 : null;
-}
+export { receiptProductQuantity } from "./writer-plan";
 
 /**
  * A created Product must not fork an Exact identity match (terminology). An
@@ -1123,51 +1125,17 @@ export async function importVendorOrder(
     if (!ownedScope) {
       throw new Error("Import source is not owned by the authenticated member");
     }
-    const sourceIdentity = {
-      ledgerPartyId: partyId,
-      vendorAccountId: input.vendorAccountId
-        ? parseEntityId("vendorAccount", input.vendorAccountId)
-        : null,
-      kind: input.source.kind,
-      externalKey: input.source.externalKey,
-      checksum: input.source.checksum,
-      firstRunId: input.runId,
-      lastRunId: input.runId,
-    };
-    // The family lock must not advance accepted bytes before reconciliation.
-    const family =
-      (await readImportSourceClaimFamily(tx, sourceIdentity, {
-        lock: "update",
-        writable: true,
-      })) ?? (await lockImportSourceClaimFamily(tx, sourceIdentity));
-    const candidate = input.extraction.candidate;
-    if (!candidate)
-      throw new Error(
-        "Unreadable imports require a typed candidate before writing",
-      );
-    let orderKey = sourceOrderKey({
-      vendorId: input.vendorId,
-      orderId: candidate.orderId,
-      orderLocator: input.orderLocator,
-    });
-    const existingOrder =
-      (await readSourceFamilyOrder(tx, family, orderKey, "update"))
-        ?.association ??
-      (await mergedVendorSourceOrder(
-        tx,
-        family.members.map((row) => row.id),
-        orderKey,
-        parseEntityId("vendor", input.vendorId),
-      ));
-    if (existingOrder) orderKey = existingOrder.orderKey;
-    if (
-      input.targetPurchaseId &&
-      existingOrder &&
-      input.targetPurchaseId !== existingOrder.purchaseId
-    )
-      throw new Error(
-        "This source order already belongs to a different Purchase.",
-      );
+    const sourceIdentity = planSourceIdentity(input, partyId);
+    // The family command preserves accepted bytes before reconciliation.
+    const family = await lockAndLoadSourceFamily(tx, sourceIdentity);
+    const { candidate, orderKey: proposedOrderKey } = planSourceKey(input);
+    const existingOrder = await lockAndLoadSourceOrder(
+      tx,
+      family,
+      proposedOrderKey,
+      input.vendorId,
+    );
+    const orderKey = planSourceOrder(input, proposedOrderKey, existingOrder);
     const acceptedSnapshot = existingOrder
       ? await acceptedSourceExtraction(tx, existingOrder)
       : null;
@@ -1428,23 +1396,7 @@ export async function importVendorOrder(
         ? [parseEntityId("product", resolution.productId)]
         : [],
     );
-    const unlinked = knownProducts.length
-      ? await tx
-          .select({ id: expense.id })
-          .from(expense)
-          .where(
-            and(
-              isNull(expense.purchaseId),
-              inArray(expense.productId, knownProducts),
-              eq(expense.lineKind, "principal"),
-              eq(expense.economicRole, "vendor"),
-              // Unknown values still require review; only a proven discard is excluded.
-              sql`${zeroCostOwnershipExitExpensePredicate()} IS NOT TRUE`,
-              notDeleted(expense),
-            ),
-          )
-          .limit(1)
-      : [];
+    const unlinked = await loadUnlinkedProducts(tx, knownProducts);
     if (unlinked.length) {
       const findingId = await fileSourceReconciliation(
         tx,
@@ -1623,14 +1575,14 @@ export async function importVendorOrder(
             throw new Error(
               "Reviewed item Expense binding changed during import.",
             );
-          if (!row.productId) {
-            const productQuantity =
-              row.productQuantity ??
-              receiptProductQuantity(productId, line, identity);
-            await tx
-              .update(expense)
-              .set({ productId, productQuantity })
-              .where(eq(expense.id, parseEntityId("expense", row.id)));
+          const binding = planExpenseProductBinding(
+            row,
+            line,
+            identity,
+            productId,
+          );
+          if (binding) {
+            await applyExpenseProductBinding(tx, binding);
             rowMutations.push({
               targetKind: "expense",
               targetId: row.id,
@@ -1676,45 +1628,21 @@ export async function importVendorOrder(
                 }),
             },
           );
-          const quantity = receiptProductQuantity(productId, line, identity);
-          const inserted = await insertWithShortcode(tx, "expense", {
+          const expensePlan = planImportedExpense(
             purchaseId,
-            name: line.title,
-            notes: line.seller ? `Seller: ${line.seller}` : null,
-            // The line's product page is where a later enrichment pass starts.
-            url: line.productUrl ?? null,
-            cost: unpricedForeign ? null : line.amount,
-            date: orderDate,
-            lineKind: identity.lineKind,
-            lineBasis: "item_line",
-            // Optional so stored extractions and source snapshots keep their
-            // shape. A principal line resolved without a Product (tickets,
-            // fares, lodging, labor) is a service unless the source says
-            // otherwise; any other unstated line stays materials.
-            costType:
-              line.costType ??
-              (identity.expenseOnly && identity.lineKind === "principal"
-                ? "services"
-                : "materials"),
-            trade: null,
-            economicRole: "vendor",
+            line,
+            identity,
             productId,
-            productQuantity: quantity,
-          });
+            orderDate,
+            unpricedForeign,
+          );
+          const inserted = await applyImportedExpense(tx, expensePlan);
           productLines.push({ lineIndex, productId, expenseId: inserted.id });
           rowMutations.push({
             targetKind: "expense",
             targetId: inserted.id,
             mutationKind: "create",
-            fields: [
-              "name",
-              "cost",
-              "lineKind",
-              "productId",
-              "productQuantity",
-              "purchaseId",
-              ...(line.productUrl ? ["url"] : []),
-            ],
+            fields: expensePlan.fields,
           });
           if (identity.unresolvedReason && identity.lineKind === "principal") {
             findingIds.push(
@@ -1872,18 +1800,12 @@ export async function importVendorOrder(
     // Canonical amounts are USD. Unknown or foreign units remain in the
     // immutable original and cannot replace accepted payments or settle charges.
     if (candidate.currency === "USD") {
-      for (const [evidenceIndex, payment] of candidate.payments.entries()) {
-        await tx.insert(purchasePaymentEvidence).values({
-          purchaseId,
-          sourceClaimId,
-          amountMinor: financialEvidenceAmountMinor(payment.amount),
-          chargedAt: payment.chargedAt ? new Date(payment.chargedAt) : null,
-          cardLastFour: payment.cardLastFour,
-          tender: payment.tender ?? "unknown",
-          description: payment.description,
-          evidenceIndex,
-        });
-      }
+      const payments = planPaymentEvidence(
+        candidate,
+        purchaseId,
+        sourceClaimId,
+      );
+      await applyPaymentEvidence(tx, payments);
       // Settle from the payment lines this order retained, against charges
       // already on the member's statements. Later charges settle through the
       // same function before any hunt opens (retained-settlement.ts).

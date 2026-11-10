@@ -7,8 +7,11 @@ import type {
 import { minorToMoney, moneyToMinor } from "@cubby/shared";
 
 import { purchase } from "~/server/db/schema";
+import { financialEvidenceAmountMinor } from "~/server/domains/financial-transaction/repo/financial-evidence";
 
 import { normalizeOrderKey } from "./order-identity";
+import { sourceOrderKey } from "./source-order-key";
+import type { LineIdentityDecision } from "./writer";
 import type {
   loadAcceptedProductChoices,
   loadAcceptedPaymentFacts,
@@ -306,4 +309,148 @@ export function planAcceptedPaymentReview(
       JSON.stringify(retainedFacts.payments) !==
         JSON.stringify(proposedFacts.payments))
   );
+}
+
+export function planSourceIdentity(
+  input: ImportWriterInput,
+  partyId: typeof import("~/server/db/schema").ledgerParty.$inferSelect.id,
+) {
+  return {
+    ledgerPartyId: partyId,
+    vendorAccountId: input.vendorAccountId
+      ? parseEntityId("vendorAccount", input.vendorAccountId)
+      : null,
+    kind: input.source.kind,
+    externalKey: input.source.externalKey,
+    checksum: input.source.checksum,
+    firstRunId: input.runId,
+    lastRunId: input.runId,
+  };
+}
+
+export function planSourceKey(input: ImportWriterInput) {
+  const candidate = input.extraction.candidate;
+  if (!candidate)
+    throw new Error(
+      "Unreadable imports require a typed candidate before writing",
+    );
+  return {
+    candidate,
+    orderKey: sourceOrderKey({
+      vendorId: input.vendorId,
+      orderId: candidate.orderId,
+      orderLocator: input.orderLocator,
+    }),
+  };
+}
+
+export function planSourceOrder(
+  input: ImportWriterInput,
+  orderKey: string,
+  existingOrder:
+    | import("./source-claim-family").LiveSourceOrder
+    | null
+    | undefined,
+) {
+  if (
+    input.targetPurchaseId &&
+    existingOrder &&
+    input.targetPurchaseId !== existingOrder.purchaseId
+  )
+    throw new Error(
+      "This source order already belongs to a different Purchase.",
+    );
+  return existingOrder?.orderKey ?? orderKey;
+}
+
+export function planPaymentEvidence(
+  candidate: ExtractedOrderCandidate,
+  purchaseId: typeof purchase.$inferSelect.id,
+  sourceClaimId: typeof import("~/server/db/schema").importSourceClaim.$inferSelect.id,
+) {
+  return candidate.currency === "USD"
+    ? candidate.payments.map((payment, evidenceIndex) => ({
+        purchaseId,
+        sourceClaimId,
+        amountMinor: financialEvidenceAmountMinor(payment.amount),
+        chargedAt: payment.chargedAt ? new Date(payment.chargedAt) : null,
+        cardLastFour: payment.cardLastFour,
+        tender: payment.tender ?? ("unknown" as const),
+        description: payment.description,
+        evidenceIndex,
+      }))
+    : [];
+}
+
+export function receiptProductQuantity(
+  productId: string | null,
+  line: ExtractedPurchaseLine,
+  decision: Pick<LineIdentityDecision, "reversalKind">,
+): number | null {
+  if (!productId || line.quantity === undefined) return null;
+  if (line.amount >= 0) return Math.abs(line.quantity);
+  if (decision.reversalKind === "return") return -Math.abs(line.quantity);
+  return decision.reversalKind === "concession" ? 0 : null;
+}
+
+export function planImportedExpense(
+  purchaseId: typeof purchase.$inferSelect.id,
+  line: ExtractedPurchaseLine,
+  identity: LineIdentityDecision,
+  productId: string | null,
+  orderDate: string | null,
+  unpricedForeign: boolean,
+) {
+  const parsedProductId = productId
+    ? parseEntityId("product", productId)
+    : null;
+  return {
+    values: {
+      purchaseId,
+      name: line.title,
+      notes: line.seller ? `Seller: ${line.seller}` : null,
+      url: line.productUrl ?? null,
+      cost: unpricedForeign ? null : line.amount,
+      date: orderDate,
+      lineKind: identity.lineKind,
+      lineBasis: "item_line" as const,
+      costType:
+        line.costType ??
+        (identity.expenseOnly && identity.lineKind === "principal"
+          ? ("services" as const)
+          : ("materials" as const)),
+      trade: null,
+      economicRole: "vendor" as const,
+      productId: parsedProductId,
+      productQuantity: receiptProductQuantity(parsedProductId, line, identity),
+    },
+    fields: [
+      "name",
+      "cost",
+      "lineKind",
+      "productId",
+      "productQuantity",
+      "purchaseId",
+      ...(line.productUrl ? ["url"] : []),
+    ],
+  };
+}
+
+export function planExpenseProductBinding(
+  row: ExistingExpenseSnapshot,
+  line: ExtractedPurchaseLine,
+  identity: LineIdentityDecision,
+  productId: string,
+) {
+  return row.productId
+    ? null
+    : {
+        id: parseEntityId("expense", row.id),
+        values: {
+          productId: parseEntityId("product", productId),
+          productQuantity:
+            row.productQuantity ??
+            receiptProductQuantity(productId, line, identity),
+        },
+      };
 }

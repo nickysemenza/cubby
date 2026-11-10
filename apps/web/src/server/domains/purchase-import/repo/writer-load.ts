@@ -5,7 +5,7 @@ import {
   type PurchaseId,
 } from "@cubby/schemas/identifiers";
 import type { ImportWriterInput } from "@cubby/schemas/purchase-import";
-import { and, eq, isNotNull, or, sql } from "drizzle-orm";
+import { and, eq, isNotNull, isNull, or, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 
 import type { DrizzleTransaction } from "~/server/db";
@@ -25,9 +25,18 @@ import {
   sourceOrderObservation,
 } from "~/server/db/schema";
 import { effectiveExpenseTradeSql } from "~/server/domains/expense/repo/expense-inheritance";
+import { zeroCostOwnershipExitExpensePredicate } from "~/server/domains/product/repo/ownership";
 
 import { normalizedOrderIdSql, normalizeOrderKey } from "./order-identity";
-import { acceptedSourceExtraction } from "./reconciliation-observations";
+import {
+  acceptedSourceExtraction,
+  mergedVendorSourceOrder,
+} from "./reconciliation-observations";
+import {
+  lockImportSourceClaimFamily,
+  readImportSourceClaimFamily,
+  readSourceFamilyOrder,
+} from "./source-claim-family";
 
 export async function loadOriginalLineBindings(
   tx: DrizzleTransaction,
@@ -47,7 +56,7 @@ export async function loadOriginalLineBindings(
         .where(
           ids.match({
             entity: "importSourceOrder",
-            id: importSourceProduct.sourceOrderId,
+            id: sql`${importSourceProduct.sourceOrderId}`,
           }),
         )
     : [];
@@ -85,7 +94,7 @@ export async function loadAcceptedProductChoices(
         .where(
           and(
             eq(entityIdentity.kind, "product"),
-            ids.match({ entity: "product", id: entityIdentity.id }),
+            ids.match({ entity: "product", id: sql`${entityIdentity.id}` }),
           ),
         )
     : [];
@@ -212,7 +221,7 @@ export async function loadOrderedPurchases(
           .from(expense)
           .where(
             and(
-              ids.match({ entity: "purchase", id: expense.purchaseId }),
+              ids.match({ entity: "purchase", id: sql`${expense.purchaseId}` }),
               notDeleted(expense),
             ),
           )
@@ -304,4 +313,57 @@ export async function loadAcceptedPaymentFacts(
       ),
     );
   return { accepted, retainedPayments };
+}
+
+export async function lockAndLoadSourceFamily(
+  tx: DrizzleTransaction,
+  identity: Parameters<typeof lockImportSourceClaimFamily>[1],
+) {
+  return (
+    (await readImportSourceClaimFamily(tx, identity, {
+      lock: "update",
+      writable: true,
+    })) ?? (await lockImportSourceClaimFamily(tx, identity))
+  );
+}
+
+export async function lockAndLoadSourceOrder(
+  tx: DrizzleTransaction,
+  family: Awaited<ReturnType<typeof lockAndLoadSourceFamily>>,
+  orderKey: string,
+  vendorId: string,
+) {
+  return (
+    (await readSourceFamilyOrder(tx, family, orderKey, "update"))
+      ?.association ??
+    (await mergedVendorSourceOrder(
+      tx,
+      family.members.map((row) => row.id),
+      orderKey,
+      parseEntityId("vendor", vendorId),
+    ))
+  );
+}
+
+export async function loadUnlinkedProducts(
+  tx: DrizzleTransaction,
+  productIds: readonly string[],
+) {
+  const ids = requested(productIds.map((id) => ({ entity: "product", id })));
+  return ids.size
+    ? tx
+        .select({ id: expense.id })
+        .from(expense)
+        .where(
+          and(
+            isNull(expense.purchaseId),
+            ids.match({ entity: "product", id: sql`${expense.productId}` }),
+            eq(expense.lineKind, "principal"),
+            eq(expense.economicRole, "vendor"),
+            sql`${zeroCostOwnershipExitExpensePredicate()} IS NOT TRUE`,
+            notDeleted(expense),
+          ),
+        )
+        .limit(1)
+    : [];
 }
