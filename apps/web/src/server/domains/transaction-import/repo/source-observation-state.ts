@@ -209,6 +209,18 @@ export const sourceObservationField = (
 export const SOURCE_HELD_REASON =
   "Source identity or historical ownership needs an explicit review. Retained advice and member decisions are unchanged; money stays unchanged until reviewed.";
 
+/** A charge with no current observation in a ready occurrence publishes no advice. */
+export const statementChargeSourceHeld = (
+  source: SQL,
+  chargeKey: SQL,
+) => sql`NOT EXISTS (
+  SELECT 1 FROM ${sourceObservationFacts} reviewed
+  WHERE reviewed.source=${source} AND reviewed."chargeKey"=${chargeKey}
+    AND reviewed."occurrenceId" IS NOT NULL AND reviewed.current
+    AND reviewed."occurrenceId" IN (${sourceReadyOccurrenceIds})
+    AND reviewed."withdrawnAt" IS NULL AND reviewed."supersededByRowId" IS NULL
+)`;
+
 /** Held advice can be dismissed, but cannot suppress a later proven occurrence. */
 export const statementSuggestionSourceHeld = (alias: string) => sql`NOT EXISTS (
   SELECT 1 FROM ${sourceObservationFacts} reviewed

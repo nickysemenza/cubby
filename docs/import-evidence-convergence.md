@@ -1527,8 +1527,11 @@ force convergence.
 
 ### Source identity review
 
-Unproven observations stay held with unchanged money and retained advice;
-applying held advice returns the held reason. An attested identical provider
+Unproven observations stay held with unchanged money. Held charges publish no
+Transaction suggestion: Source identity review is their one surface, and
+generation supersedes pending advice already published for them (rows, paid
+labels and member decisions remain; a later proven occurrence publishes again).
+Applying held advice not yet superseded returns the held reason. An attested identical provider
 row adopts the unproven owner during intake
 ([holds and identity resolution](#holds-and-identity-resolution)). Reviewed identity decisions can
 use `entity.commands` batches of up to 50 independent SourceRecord updates, each

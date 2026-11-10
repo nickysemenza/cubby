@@ -68,6 +68,7 @@ import { type FinancialTransactionDollars } from "~/server/domains/financial-tra
 import {
   sourceObservations,
   sourceObservationIdentities,
+  statementChargeSourceHeld,
 } from "~/server/domains/transaction-import/repo/source-observation-state";
 import { PROVIDER_IDENTITY_REVIEW } from "~/server/domains/transaction-import/repo/source-transaction-record-identity";
 import {
@@ -1579,6 +1580,34 @@ const isSettledBooking = (judgment: StatementTransactionJudgment) =>
   judgment.spending?.status === "already_booked";
 
 /** Complete a previously committed publication's missed retirement check, even without a new proposal. */
+/**
+ * Held source identity has one review surface, Source identity review. Its
+ * charges publish no Transaction advice, and pending advice already published
+ * for them is superseded: the rows, paid labels and member decisions remain,
+ * and a later proven occurrence publishes again.
+ */
+async function publishableCharges(
+  db: Database,
+  charges: readonly ChargeRef[],
+): Promise<ChargeRef[]> {
+  if (!charges.length) return [];
+  const held = await unwrapDb(db).execute<ChargeRef>(
+    sql`SELECT c.source, c."chargeKey" FROM (VALUES ${tuples(charges)}) c(source, "chargeKey")
+      WHERE ${statementChargeSourceHeld(sql`c.source`, sql`c."chargeKey"`)}`,
+    "objects",
+  );
+  if (!held.length) return [...charges];
+  await transitionSuggestionStates(
+    db,
+    sql`${pendingStatementState}
+      AND ${suggestionField("recommended", STATE)} <> ${statementTransactionAction.enum.void}
+      AND (${suggestionField("source", STATE)}, ${suggestionField("chargeKey", STATE)}) IN (${tuples(held)})`,
+    { active: false, status: "superseded" },
+  );
+  const skipped = new Set(held.map(chargeId));
+  return charges.filter((charge) => !skipped.has(chargeId(charge)));
+}
+
 async function retireSettledChargeAdvice(db: Database, charge: ChargeRef) {
   return transitionSuggestionStates(
     db,
@@ -2764,9 +2793,12 @@ export async function regenerateCharges(
       : null;
   for (const proposal of await buildChargeProposals(
     db,
-    admitted
-      ? charges.filter((charge) => admitted.has(chargeId(charge)))
-      : charges,
+    await publishableCharges(
+      db,
+      admitted
+        ? charges.filter((charge) => admitted.has(chargeId(charge)))
+        : charges,
+    ),
   )) {
     if (
       scope?.accountIds?.length &&
@@ -2936,7 +2968,11 @@ async function publishStatementGenerationPage(
     phase: "preparation",
     charges: charges.length,
   });
-  const built = await prepareStatementGenerationPage(db, charges, failed);
+  const built = await prepareStatementGenerationPage(
+    db,
+    await publishableCharges(db, charges),
+    failed,
+  );
   const preparedAt = performance.now();
   const proposals = accountIds?.length
     ? built.filter((proposal) =>
