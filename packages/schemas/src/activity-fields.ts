@@ -71,11 +71,11 @@ export type RunKindDeclaration = {
   /** AI work the Run owns directly (`AiEvaluation.runId`) or requested by reference. */
   aiWork?: "owned" | "requested";
   /**
-   * How the AI-work driver reads an `ai_work` Run's progress: the refresh
-   * summary, a per-Email reclassification roster (which must exist), or the
-   * owned evaluation tally.
+   * How the AI-work driver reads an `ai_work` Run's progress when it is not
+   * the owned evaluation tally: the refresh summary, or a per-Email
+   * reclassification roster (which must exist).
    */
-  aiWorkProgress?: "refresh" | "reclassification" | "tally";
+  aiWorkProgress?: "refresh" | "reclassification";
   /** Presents import report blocks (presentation only; not an execution capability). */
   importReport?: true;
   /** Where list and detail progress counts come from. */
@@ -337,7 +337,6 @@ export const RUN_KINDS = {
     trigger: "scheduled",
     routine: true,
     execution: "ai_work",
-    aiWorkProgress: "tally",
     aiWork: "owned",
     progress: "checkpoint",
   },

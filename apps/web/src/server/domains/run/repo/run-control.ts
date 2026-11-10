@@ -8,7 +8,7 @@ import {
 } from "@cubby/schemas/identifiers";
 import {
   agentImportRunPurpose,
-  successorCoordinatorModel,
+  coordinatorModelFor,
   importRunAgentIdentity,
 } from "@cubby/schemas/import-run-agent";
 import { paidOverBudgetUsd } from "@cubby/schemas/mail-import-settings";
@@ -553,7 +553,6 @@ export async function controlRun(
         parentRunId: runTable.parentRunId,
         notes: runTable.notes,
         input: runTable.input,
-        coordinatorModel: runTable.coordinatorModel,
         skillRevision: runTable.skillRevision,
         runtimeRevision: runTable.runtimeRevision,
         dispatchEventId: runTable.dispatchEventId,
@@ -612,9 +611,8 @@ export async function controlRun(
         trigger: "manual",
         notes: locked.notes,
         input: locked.input,
-        coordinatorModel: successorCoordinatorModel(
-          locked.purpose,
-          locked.coordinatorModel,
+        coordinatorModel: coordinatorModelFor(
+          agentImportRunPurpose.parse(locked.purpose),
         ),
         skillRevision: locked.skillRevision,
         runtimeRevision: locked.runtimeRevision,
@@ -677,9 +675,8 @@ export async function controlRun(
           endedAt: null,
           dispatchEventId,
           dispatchError: null,
-          coordinatorModel: successorCoordinatorModel(
-            locked.purpose,
-            locked.coordinatorModel,
+          coordinatorModel: coordinatorModelFor(
+            agentImportRunPurpose.parse(locked.purpose),
           ),
           updatedAt: new Date(),
         })
@@ -756,9 +753,8 @@ export async function controlRun(
         trigger: locked.trigger,
         input: successorInput,
         dispatchEventId,
-        coordinatorModel: successorCoordinatorModel(
-          locked.purpose,
-          locked.coordinatorModel,
+        coordinatorModel: coordinatorModelFor(
+          agentImportRunPurpose.parse(locked.purpose),
         ),
         skillRevision: locked.skillRevision,
         runtimeRevision: locked.runtimeRevision,

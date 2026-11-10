@@ -218,15 +218,3 @@ export function coordinatorModelFor(
 ): ImportRunAgentConfig["model"] {
   return importRunAgentManifest[purpose].model;
 }
-
-/**
- * The coordinator model a restarted or redispatched Run records: the agent's
- * current model, or the Run's own value when no agent coordinates it.
- */
-export function successorCoordinatorModel(
-  purpose: string,
-  current: string,
-): string {
-  const parsed = agentImportRunPurpose.safeParse(purpose);
-  return parsed.success ? coordinatorModelFor(parsed.data) : current;
-}
