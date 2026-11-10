@@ -1089,7 +1089,7 @@ describe("statement Transaction suggestions", () => {
       await getSourceTransactionRecordSummary(ctx.db, {
         matchState: "unmatched",
       }),
-    ).toMatchObject({ unmatched: 2, unmatchedCharges: 2 });
+    ).toMatchObject({ unmatchedCharges: 2 });
 
     expect(await generate(ctx)).toBe(2);
     expect(await generate(ctx)).toBe(0);
@@ -1254,21 +1254,17 @@ describe("statement Transaction suggestions", () => {
     ).toEqual([rows[2]!.chargeKey, rows[4]!.chargeKey].sort());
   });
 
-  it("holds overlapping unattested collections without creating member work or changing money", async () => {
+  it("joins a same-source re-export to its occurrence without changing money", async () => {
     await card(ctx);
     const observed = rowInput({ rowPosition: 1 });
     await record(ctx, [observed], { fingerprint: "synthetic-idless-first" });
     await record(ctx, [observed], { fingerprint: "synthetic-idless-second" });
     const retained = (await listSourceTransactionRecords(ctx.db, {})).data;
     expect(retained).toHaveLength(2);
-    expect(new Set(retained.map((row) => row.chargeKey)).size).toBe(2);
+    expect(new Set(retained.map((row) => row.chargeKey)).size).toBe(1);
     await generate(ctx);
     expect(await readPendingStatements(ctx)).toHaveLength(1);
     expect(retained.every((row) => row.transactionId === null)).toBe(true);
-    expect(retained.map((row) => row.matchState).sort()).toEqual([
-      "held",
-      "unmatched",
-    ]);
     expect(await getDb(ctx.db).select().from(financialTransaction)).toEqual([]);
   });
 

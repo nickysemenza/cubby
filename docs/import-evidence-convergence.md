@@ -150,7 +150,8 @@ explicit review before a standalone refund Purchase is booked.
 
 ### Automatic booking rule
 
-The clean import booking rule is fixed code and always on; there is no member
+The clean import booking rule (clean creates, books and supersedes, and
+paired copy attaches) is fixed code and always on; there is no member
 switch or audit sample. Each application still uses `suggestions.review` or
 `suggestions.review_batch` and records automatic authority and its policy
 revision in Changes by Cubby. Booking writes are import evidence: they are not
@@ -698,24 +699,29 @@ transaction records and Transaction imports keep their generated list and
 detail routes. Every bank record (`SourceTransactionRecord`) belongs to one
 `SourceOccurrence`, its read-only judgment owner for current
 account/disposition, selected record, withdrawal and nullable
-`acceptedTransactionId`. Proven owners represent bank events; singleton
-`unproven` owners hold uncertain historical records without proving identity.
-Database checks forbid accepted money or a ready state on an unproven owner.
-Multiple independent occurrences may support one FinancialTransaction; one
-occurrence has at most one accepted owner.
+`acceptedTransactionId`. Every owner represents one bank event within its
+source: a `provider` owner by its Monarch transaction ID, a `positioned` owner
+by its position in one collection, a `legacy` owner by its one record from
+before positions were retained, and a `reviewed` owner by explicit review.
+None needs a provider ID; Copilot, Mint, Apple Card and Monarch CSV rows never
+carry one. Multiple independent occurrences, from any mix of sources, may
+support one FinancialTransaction; one occurrence has at most one accepted
+owner.
 
-`finance.record` keeps immutable normalized observations. Monarch provider
-identity requires matching string IDs in retained raw provider/account evidence;
-all present identity fields must agree. Otherwise an original collection
-fingerprint and positive physical position establish only collection-local
-identity. Neither account descriptors, resolved Cubby accounts, equal facts nor
-aliases fill missing provider scope. A new unpositioned request without
+`finance.record` keeps immutable normalized observations. A Monarch row with a
+provider transaction ID is that event (`provider:monarch` scope): one owner
+per ID, whatever collection or export carried it. The provider account is
+optional evidence; raw provider claims and accounts, when present, must agree,
+and a disagreement holds the owner in `identity_conflict`. Otherwise an
+original collection fingerprint and positive physical position establish
+collection-local identity. Neither account descriptors, resolved Cubby
+accounts nor equal facts merge two owners. A new unpositioned request without
 attestation refuses; a historical request can replay one uniquely retained
 collection member without creating identity or money. Distinct identical
 physical positions stay distinct.
 
 Generic create/merge remain unavailable. Judgment edits resolve to the one
-occurrence for every observation, including unproven records. Observation notes
+occurrence for every observation, including legacy records. Observation notes
 and exact reviewed replacement selections stay local. Preserved historical
 annotations keep every original decision without copying it into new revisions.
 A reviewed replacement names its exact retained observation, with an occurrence
@@ -725,8 +731,8 @@ resolver or charge-key aggregation controls current state.
 Source amounts store exact signed bigint minor units, with checked
 dollar-number reads for shipped clients. `chargeKey` is always the judgment
 owner's opaque `SOC-` handle. `STR-` still addresses the original bank record.
-Find uncertain groups through Source occurrence's `reviewState: unproven` and
-`supersededByOccurrenceIdPresenceFilter: none` filters; retired consolidated
+Find held groups through Source occurrence's `reviewState` (anything but
+`ready`) and `supersededByOccurrenceIdPresenceFilter: none` filters; retired consolidated
 reservations remain readable as history. A non-null owner never grants
 financial authority. Original v1/v2/v3 references remain evidence aliases.
 Fresh source acceptance uses an SOC handle and rechecks its ready state, head,
@@ -736,20 +742,17 @@ require a new preview.
 
 ### Holds and identity resolution
 
-Unproven identity blocks automatic acceptance/correction, with money unchanged.
-It creates no new member task for missing source proof. Intake proves an
-unproven owner when an attested provider row carries the same provider
-transaction ID, the same non-null provider account and the same amount as the
-single live observation of exactly one unproven owner, with no contradicting
-raw provider claims and no older observation time than that owner's last: that
-owner becomes the provider occurrence in place, keeping its account,
-disposition, history and original proof (unresolved history still derives
-`ownership_conflict`). Equal facts keep it ready with that head; differing facts
-leave no head in `revision_order_unknown`, like any provider owner. A missing provider
-account, any disagreement, a second owner, or a second incoming row for the
-same owner creates the provider owner in `identity_conflict` for reviewed
-resolution. A provider owner already split from its legacy owner still needs
-the reviewed `assign`. Original evidence and
+Holds are for real contradictions, not missing proof. Intake joins a row to
+its existing owner when the identity is exact: a Monarch provider ID joins the
+one owner of that ID; a collection row whose original-reference alias matches
+exactly one live owner in another collection of the same source, and occurs
+once in the incoming collection, joins that owner as a re-export. Non-unique
+matches stay separate owners, which booking pairs (see [Matching](#matching)).
+A provider owner whose observations differ only in annotations (category,
+notes, merchant, status) selects the latest observation as head; differing
+amounts or dates leave no head in `revision_order_unknown`. Conflicting
+provider claims or accounts hold the owner in `identity_conflict`; unresolved
+direct history derives `ownership_conflict`. Original evidence and
 actionable member review remain. `matchState: held` blocks automatic actions
 for unresolved identity, historical ownership, or a retained accepted
 reservation whose transaction was deleted. Summary splits `heldHistorical` from
@@ -764,8 +767,9 @@ resolved account, explicit open/ignored judgment and note. Choose `distinct`,
 `accept_existing` or `assign`. The transaction is audited and preserves explicit
 ignore decisions and original aliases.
 
-- `distinct` and `accept_existing` promote an unproven owner in place.
-- `assign` consolidates a complete eligible unproven, positioned or reviewed
+- `distinct` confirms a held owner as its own event; `accept_existing`
+  accepts its exact existing Transaction.
+- `assign` consolidates a complete eligible legacy, positioned or reviewed
   owner into a provider owner, keeping the provider's selected record and
   transaction contents. Both versions, reviewed facts/history, account, amount
   and financial judgments must agree. Conflicting direct historical
@@ -779,7 +783,7 @@ ignore decisions and original aliases.
   reread its version between commands. The survivor keeps the latest
   observation time across both groups.
 
-Deleting the last live record of an unproven group retires that group while
+Deleting the last live record of a legacy group retires that group while
 keeping its original decisions and evidence. See
 [source identity review](#source-identity-review) for the reviewed batch path.
 
@@ -835,8 +839,7 @@ the read-only review projection.
 `entity_read.list` exposes exact stored-value filters for `chargeKey`,
 `providerTransactionId` and `providerAccountId`. Each accepts one value or an
 any-of list; different filters intersect with the `source` filter. Use the
-provider account scope alongside a provider transaction ID when known: the same
-provider ID in distinct accounts does not establish one charge. The `current`
+provider transaction ID alone for Monarch: one ID is one charge. The `current`
 boolean selects current (`true`) or historical (`false`) observations; omitting
 it returns both. Generic lists still exclude soft-deleted observations,
 including deleted heads; they do not promote an older revision or prove
@@ -889,8 +892,7 @@ it does not move accepted money. Older collection replay never advances a head.
 Zero observations remain evidence and cannot create spending.
 
 Cross-collection positioned overlap stays independent and held when retained
-evidence makes its economic identity uncertain. Scoped provider identities in
-distinct accounts stay separate. Aliases may widen candidates or block unsafe
+evidence makes its economic identity uncertain. Aliases may widen candidates or block unsafe
 automatic work; they never establish accepted ownership. Complete retained
 bindings, including tombstones, must support any ownership promotion.
 
@@ -979,7 +981,24 @@ matching non-empty merchant; two missing descriptions are absent evidence, not
 a match. Descriptor/amount/date coincidence is advisory; a different source's
 observation does not become a second charge merely because its text differs.
 The clean-booking rule keeps its own authority and revalidates current
-evidence before writing; attach always waits for review.
+evidence before writing; an attach waits for review unless it is a copy's
+paired attach.
+
+A bank event may reach Cubby through any combination of sources (Monarch CSV,
+Monarch provider pulls, Copilot, Mint, Apple Card); each source keeps its own
+occurrence and every one of them settles the same Transaction. Copies are the
+live charges from any source on one resolved account, at the exact amount,
+within ±3 days, booked or not. When every source in that group holds the same
+number of charges, the k-th charge of each source (by statement date, then
+recording time) is one event. One primary per event books it: a provider row
+before a collection row before a legacy record, then the earliest recorded.
+Transactions its own source's other charges already settle are not its
+candidates. The other copies publish nothing until the primary books, then
+attach to its Transaction; that paired attach is clean without a model label
+when the Transaction is an exact-amount candidate no other charge of the same
+source claims. Booking a primary refreshes every charge in its group. Unequal
+counts cannot tell repeat charges from copies: every member keeps the others
+as `siblings` and waits for review.
 
 ### Statement Sweeps
 
@@ -1376,10 +1395,12 @@ group by group, filtering a group with
    verdict `wrong` with `correction {present: true, value: <the same
    application>}`.
 3. A charge with `siblings` has a same-amount charge from another export: the
-   pair may be one charge whose descriptor firmed up. Supersede the thinner row
-   (generic `entity.update` on `sourceTransactionRecord`, setting
-   `supersededByRowId` to the reviewed successor record ID) before creating
-   either. A `claimed` candidate already settles another charge from the same
+   pair may be one charge whose descriptor firmed up. Within one source,
+   supersede the thinner row (generic `entity.update` on
+   `sourceTransactionRecord`, setting `supersededByRowId` to the reviewed
+   successor record ID) before creating either. Siblings from other sources
+   mean their counts disagree (see [Matching](#matching)): book each real
+   charge once and attach the other sources' copies to it. A `claimed` candidate already settles another charge from the same
    source, so it is never clean: attach only when this row is that charge
    re-exported under a new descriptor; two visits for the same amount are two
    creates.
@@ -1534,13 +1555,13 @@ force convergence.
 
 ### Source identity review
 
-Unproven observations stay held with unchanged money. Charges with no current
-observation in a ready occurrence publish no Transaction suggestion (a
+Charges with no current observation in a ready occurrence publish no
+Transaction suggestion (a
 withdrawn or superseded head of a ready occurrence keeps its booking review): Source identity review is their one surface, and
 generation supersedes pending advice already published for them (rows, paid
 labels and member decisions remain; a later proven occurrence publishes again).
-Applying held advice not yet superseded returns the held reason. An attested identical provider
-row adopts the unproven owner during intake
+Applying held advice not yet superseded returns the held reason. Exact
+identity converges during intake
 ([holds and identity resolution](#holds-and-identity-resolution)). Reviewed identity decisions can
 use `entity.commands` batches of up to 50 independent SourceRecord updates, each
 with its own `expectedDisposition`, fingerprint/version/accepted-owner/history

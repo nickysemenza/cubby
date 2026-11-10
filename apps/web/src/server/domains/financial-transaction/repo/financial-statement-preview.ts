@@ -243,7 +243,7 @@ async function loadFinancialPreview(
     UNION
     SELECT requested.key, owner.shortcode FROM ${retainedRows.from}
     JOIN "SourceOccurrence" owner ON owner.source = requested.source AND owner."identityKind" = ${sqlEnumConstant(sourceOccurrenceIdentityKind, sourceOccurrenceIdentityKind.enum.provider)}
-      AND owner."identityScope" = 'provider-account:' || requested.account AND owner."providerIdentity" = requested.provider
+      AND owner."identityScope" = 'provider:' || requested.source AND owner."providerIdentity" = requested.provider
     WHERE ${notDeleted("owner")} AND owner."reviewState" = ${sqlEnumConstant(sourceOccurrenceReviewState, sourceOccurrenceReviewState.enum.ready)}`)
     : null;
   const occurrenceCandidates = new Map<string, Set<string>>();

@@ -736,7 +736,8 @@ describe("financial repositories — critical invariants", () => {
 
   it("shares retained file observations without mixing fingerprint scopes", async () => {
     const fingerprints = ["fixture-cache-first", "fixture-cache-second"];
-    for (const fingerprint of fingerprints)
+    // Distinct charges: an identical row in a second file is a re-export of the first.
+    for (const [index, fingerprint] of fingerprints.entries())
       await recordSourceTransactionRecords(
         ctx.db,
         recordSourceTransactionRecordsInput.parse({
@@ -752,7 +753,7 @@ describe("financial repositories — critical invariants", () => {
               rowPosition: 1,
               accountDescriptor: "Fixture Cached Visa",
               statementDate: "2026-05-04",
-              providerAmount: -10,
+              providerAmount: -10 - index,
               merchant: "Fixture Shop",
               rawDescription: "FIXTURE SHOP",
             },
@@ -767,7 +768,7 @@ describe("financial repositories — critical invariants", () => {
         source: "monarch",
         account: "Fixture Cached Visa",
         date: "2026-05-04",
-        amount: -10,
+        amount: -10 - index,
         merchant: "Fixture Shop",
         originalStatement: "FIXTURE SHOP",
         importFingerprint: fingerprint,
