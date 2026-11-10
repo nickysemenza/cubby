@@ -9,6 +9,7 @@ import { z } from "zod";
 import type { DrizzleTransaction } from "~/server/db";
 import { unwrapDb } from "~/server/db/helpers";
 import { notDeleted } from "~/server/db/helpers/predicates";
+import { uuidArrayParam } from "~/server/db/helpers/query";
 import { requestedRows } from "~/server/db/helpers/requested";
 import {
   sourceOccurrence,
@@ -305,14 +306,18 @@ export async function lockAndLoadSourceIntake(
   const positioned = prepared.filter(
     (row) => row.identity?.kind === "positioned",
   );
+  const incomingAliases = requestedRows(
+    positioned.map((row) => ({
+      key: row.key,
+      reference: row.legacyExternalId,
+    })),
+    { key: "text", reference: "text" },
+    "incoming",
+  );
   const aliasMatches = positioned.length
     ? (
         await query.execute<{ key: string; owner: string }>(sql`
-    WITH incoming(key, reference) AS (VALUES ${sql.join(
-      positioned.map((row) => sql`(${row.key}, ${row.legacyExternalId})`),
-      sql`, `,
-    )}),
-    unique_incoming AS (SELECT min(key) AS key, reference FROM incoming GROUP BY reference HAVING count(*) = 1),
+    WITH unique_incoming AS (SELECT min(key) AS key, reference FROM ${incomingAliases.from} GROUP BY reference HAVING count(*) = 1),
     candidates AS (
       SELECT i.key, o.id AS owner FROM unique_incoming i
       JOIN "FinancialEvidenceAlias" a ON a.source=${source} AND a.value=i.reference
@@ -335,10 +340,7 @@ export async function lockAndLoadSourceIntake(
         eq(sourceOccurrence.source, source),
         or(
           aliasOwnerIds.length
-            ? sql`${sourceOccurrence.id} IN (${sql.join(
-                aliasOwnerIds.map((id) => sql`${id}::uuid`),
-                sql`, `,
-              )})`
+            ? sql`${sourceOccurrence.id} = ANY(${uuidArrayParam(aliasOwnerIds)})`
             : undefined,
           scopes.length
             ? inArray(sourceOccurrence.identityScope, scopes)

@@ -193,6 +193,7 @@ export function planSourceHeads({
   retained: Observation[];
   observedAt: Date;
 }) {
+  // oxlint-disable-next-line complexity -- Head selection combines evidence, ordering, withdrawal and conflict fences.
   const headChanges = chosen.flatMap((row) => {
     const owner = byKey.get(row.incoming.key);
     if (!owner || row.member) return [];

@@ -153,7 +153,7 @@ BEGIN
         THEN accepted END,
       "reviewState"=CASE WHEN transaction_count>1 OR decision_count>1 OR evidence_conflict THEN 'identity_conflict'
         WHEN fact_count>1 THEN 'revision_order_unknown'
-        WHEN o."reviewState"='unproven' THEN 'ready' ELSE o."reviewState" END,
+        WHEN o."reviewState" IN ('unproven','identity_conflict') THEN 'ready' ELSE o."reviewState" END,
       version=o.version+1,"updatedAt"=now() WHERE o.id=survivor;
   END LOOP;
 END $migration$;
