@@ -124,6 +124,11 @@ const RETIREMENT_FENCE = "cubby_retirement_fence";
 const PENDING_DISPATCH = "cubby_pending_dispatch";
 /** How long a woken dispatch keeps the turn it was reserved before it arrives. */
 const DISPATCH_HANDOFF_MS = 2 * 60_000;
+/**
+ * The refusal reaches the Job before its deferral commits; a wake that finds
+ * no deferred Job looks once more after this.
+ */
+const DISPATCH_RECHECK_MS = 5_000;
 
 type RunAgent =
   import("~/server/domains/purchase-agent/service/run-agent").PurchaseImportRunAgent;
@@ -220,8 +225,13 @@ class PurchaseImportRunAgentHost
     const gate = () =>
       this.env.COORDINATOR_GATE.getByName(COORDINATOR_GATE_NAME);
     this.turn ??= new CoordinatorTurn({
-      acquire: (token) =>
-        gate().acquire({ runId, agent: this.ctx.id.name ?? "", token }),
+      acquire: (token, options) =>
+        gate().acquire({
+          runId,
+          agent: this.ctx.id.name ?? "",
+          token,
+          ...(options && { queue: options.queue }),
+        }),
       release: (token) =>
         gate()
           .release({ runId, token })
@@ -341,8 +351,10 @@ class PurchaseImportRunAgentHost
       // A member's stop never waits for a turn.
       if (request.method === "POST" && pathname === "/abort")
         return (await this.loaded()).fetch(request);
-      const turn = await this.turns().turn(async () =>
-        (await this.loaded()).fetch(request),
+      // A prompt answers 503 at once rather than joining the gate's queue.
+      const turn = await this.turns().turn(
+        async () => (await this.loaded()).fetch(request),
+        { queue: false },
       );
       if (turn.ran) return turn.value;
       this.turnWaited(turn, "fetch");
@@ -453,9 +465,22 @@ class PurchaseImportRunAgentHost
             // bring its Job forward and keep the turn until it arrives.
             if (await this.ctx.storage.get<boolean>(PENDING_DISPATCH)) {
               await this.ctx.storage.delete(PENDING_DISPATCH);
+              const wake = () =>
+                wakeWaitingDispatch(this.env, this.ctx, this.runId());
+              const woken =
+                (await wake()) ||
+                (await new Promise((resolve) =>
+                  setTimeout(resolve, DISPATCH_RECHECK_MS),
+                ).then(wake));
+              // Nothing to wake (the Job settled or its deferral never
+              // committed): run the agent's own alarm, which this alarm may
+              // have replaced, instead of holding the turn idle.
+              if (!woken) {
+                await (await this.loaded()).alarm();
+                return;
+              }
               this.dispatchExpectedUntil = Date.now() + DISPATCH_HANDOFF_MS;
               await this.alarmAt(this.dispatchExpectedUntil);
-              await wakeWaitingDispatch(this.env, this.ctx, this.runId());
               return;
             }
             await (await this.loaded()).alarm();
@@ -498,7 +523,9 @@ class PurchaseImportRunAgentHost
         this.admit(async () => {
           if (await this.fenced()) return refused;
           const turn = await this.turns().turn(async () => {
+            // Admitted by itself: no reserved turn needs to wake this Job.
             this.dispatchExpectedUntil = 0;
+            await this.ctx.storage.delete(PENDING_DISPATCH);
             const agent = await this.loaded();
             await agent.__unsafe_ensureInitialized();
             return agent.dispatch(input);
@@ -506,6 +533,9 @@ class PurchaseImportRunAgentHost
           if (turn.ran) return turn.value;
           this.turnWaited(turn, "dispatch");
           await this.ctx.storage.put(PENDING_DISPATCH, true);
+          // Keep asking, like a refused alarm, so this coordinator keeps its
+          // place in the gate's queue while its Job waits.
+          await this.alarmAt(Date.now() + turn.retryAfterMs);
           return {
             accepted: false,
             waiting: {

@@ -24,7 +24,22 @@ describe("coordinator gate", () => {
     expect(ask(gate, "c", 4).grant).toMatchObject({ held: false, position: 1 });
     expect(ask(gate, "a", 5).grant.held).toBe(true);
     expect(gate.state.holders).toHaveLength(2);
-    expect(gate.waiting(6)).toEqual(["c", "d"]);
+    expect(gate.status(6).status).toEqual({
+      holders: ["a", "b"],
+      waiting: ["c", "d"],
+    });
+  });
+
+  it("reports a holder for stale-Run exemption only while its grant is recent", () => {
+    const gate = new CoordinatorGateQueue(undefined, 1);
+    ask(gate, "a", 0);
+    const recent = COORDINATOR_TURN_LEASE_MS + COORDINATOR_TURN_GRACE_MS;
+    // Renewals keep the turn but not the exemption: a hung holder expires.
+    ask(gate, "a", recent - 1);
+    expect(gate.status(recent - 1).status.holders).toEqual(["a"]);
+    ask(gate, "a", recent);
+    expect(gate.state.holders).toHaveLength(1);
+    expect(gate.status(recent).status.holders).toEqual([]);
   });
 
   it("reserves a freed slot for the head of the queue and wakes it", () => {
@@ -86,8 +101,8 @@ describe("coordinator gate", () => {
     const gate = new CoordinatorGateQueue(undefined, 1);
     ask(gate, "a", 0);
     ask(gate, "b", 1);
-    expect(gate.waiting(15 * 60_000)).toEqual(["b"]);
-    expect(gate.waiting(15 * 60_000 + 2)).toEqual([]);
+    expect(gate.status(15 * 60_000).status.waiting).toEqual(["b"]);
+    expect(gate.status(15 * 60_000 + 2).status.waiting).toEqual([]);
   });
 
   // Review regression (Sol, #3927): a passed-over head that asks again must
@@ -116,5 +131,49 @@ describe("coordinator gate", () => {
     ).toEqual(["agent-b"]);
     expect(ask(gate, "b", 10 + 60_005).grant.held).toBe(true);
     expect(holders()).toBe(1);
+  });
+
+  it("still grants a waiter that asks just after its own reservation lapsed", () => {
+    const gate = new CoordinatorGateQueue(undefined, 1);
+    ask(gate, "a", 0);
+    ask(gate, "b", 1);
+    gate.release({ runId: "a", token: "token-a" }, 10);
+    // Nothing pruned in between: b's own late ask finds the slot free.
+    expect(ask(gate, "b", 10 + 60_001).grant.held).toBe(true);
+  });
+
+  it("reserves capacity a lapsed holder frees, whichever call notices it", () => {
+    const gate = new CoordinatorGateQueue(undefined, 2);
+    ask(gate, "a", 0);
+    ask(gate, "b", 0);
+    ask(gate, "c", 1);
+    const half = COORDINATOR_TURN_LEASE_MS / 2;
+    ask(gate, "b", half);
+    ask(gate, "c", half);
+    const lapsed = COORDINATOR_TURN_LEASE_MS + COORDINATOR_TURN_GRACE_MS + 1;
+    // b renews; a's lapse frees a slot, reserved for c and woken.
+    expect(ask(gate, "b", lapsed).notify).toEqual(["agent-c"]);
+  });
+
+  it("lets a caller that will not wait take only a truly free turn, leaving no queue entry", () => {
+    const gate = new CoordinatorGateQueue(undefined, 1);
+    const prompt = (run: string, now: number) =>
+      gate.acquire(
+        {
+          runId: run,
+          agent: `agent-${run}`,
+          token: `token-${run}`,
+          queue: false,
+        },
+        now,
+      );
+    expect(prompt("a", 0).grant.held).toBe(true);
+    expect(prompt("b", 1).grant).toMatchObject({ held: false, position: 0 });
+    expect(gate.state.waiters).toEqual([]);
+    // A freed slot reserved for a queued waiter is not free for a prompt.
+    ask(gate, "c", 2);
+    gate.release({ runId: "a", token: "token-a" }, 3);
+    expect(prompt("b", 4).grant.held).toBe(false);
+    expect(gate.status(5).status).toEqual({ holders: [], waiting: ["c"] });
   });
 });

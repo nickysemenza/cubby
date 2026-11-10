@@ -1101,7 +1101,7 @@ describe("purchase import run admission", () => {
       .where(inArray(runTable.id, [live.id]));
     // A coordinator queued at the gate is alive however long it waits.
     const outcome = await expireStaleRuns(ctx.db, now, {
-      waiting: [waiting.id],
+      exempt: [waiting.id],
     });
 
     expect(outcome).toEqual({ expired: 1, failures: [] });

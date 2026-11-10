@@ -429,10 +429,10 @@ export async function expireStaleRuns(
   db: Database,
   now = new Date(),
   {
-    waiting = [],
+    exempt = [],
   }: {
-    /** Runs queued at the coordinator gate: alive however long they wait. */
-    waiting?: readonly string[];
+    /** Runs holding or queued for a coordinator turn: alive however long. */
+    exempt?: readonly string[];
   } = {},
 ) {
   const cutoff = new Date(now.getTime() - STALE_RUN_MS);
@@ -446,10 +446,10 @@ export async function expireStaleRuns(
     .where(
       and(
         staleRunWhere(cutoff),
-        waiting.length
+        exempt.length
           ? notInArray(
               runTable.id,
-              waiting.map((id) => runEntityId.parse(id)),
+              exempt.map((id) => runEntityId.parse(id)),
             )
           : undefined,
       ),

@@ -5,7 +5,8 @@
  * is free, runs nothing and reports how long to wait; so does an entry whose
  * gate cannot be reached. pi keeps working in memory after an entry returns,
  * so the turn is kept until pi is confirmed idle. An idle check that fails
- * keeps it too, but only `UNKNOWN_IDLE_LIMIT` times in a row: the turn is
+ * keeps it too, but only while fewer than `UNKNOWN_IDLE_LIMIT` checks in a
+ * row, spanning at least two heartbeats, were undecidable: the turn is
  * then no longer renewed, database work stops at its current deadline, and
  * the coordinator asks again only after the gate's lease plus grace.
  *
@@ -24,7 +25,10 @@ import {
 import type { CoordinatorTurnGrant } from "./coordinator-gate-rpc";
 
 export type CoordinatorTurnPorts = {
-  acquire(token: string): Promise<CoordinatorTurnGrant>;
+  acquire(
+    token: string,
+    options?: { queue: boolean },
+  ): Promise<CoordinatorTurnGrant>;
   release(token: string): Promise<void>;
   /** Whether pi has no work running; throws when that cannot be decided. */
   idle(): Promise<boolean>;
@@ -59,8 +63,18 @@ const LONGEST_WAIT_MS = 5 * 60_000;
 const LEASE_SAFETY_MS = 30_000;
 /** Renew while pi works, well inside the lease. */
 const HEARTBEAT_MS = COORDINATOR_TURN_LEASE_MS / 3;
-/** Consecutive undecidable idle checks before the turn stops being renewed. */
+/**
+ * Consecutive undecidable idle checks, over at least this span, before the
+ * turn stops being renewed; quick entries alone never stop it.
+ */
 const UNKNOWN_IDLE_LIMIT = 3;
+/**
+ * Opening a cold pi to ask whether it works waits on the agent's lifecycle; a
+ * check that does not answer counts as undecidable instead of holding every
+ * later bookkeeping step.
+ */
+const IDLE_CHECK_TIMEOUT_MS = 10_000;
+const UNKNOWN_IDLE_SPAN_MS = 2 * HEARTBEAT_MS;
 
 /** Doubling from 15 s to 5 min, jittered ±50% so waiting coordinators spread out. */
 export const coordinatorTurnBackoffMs = (waits: number, random = Math.random) =>
@@ -79,6 +93,8 @@ export class CoordinatorTurn {
   /** The gate's own deadline for the last grant. */
   private gateLeaseUntil = 0;
   private unknownIdleChecks = 0;
+  /** When the current run of undecidable idle checks began. */
+  private unknownIdleSince = 0;
   /**
    * Set once idleness stayed undecidable: no renewals and no new admissions
    * until the gate's lease plus grace has passed and it reclaimed the slot.
@@ -89,7 +105,11 @@ export class CoordinatorTurn {
 
   constructor(private readonly ports: CoordinatorTurnPorts) {}
 
-  async turn<T>(work: () => Promise<T>): Promise<CoordinatorTurnResult<T>> {
+  /** `queue: false` asks once without joining the gate's queue (a member prompt). */
+  async turn<T>(
+    work: () => Promise<T>,
+    { queue = true }: { queue?: boolean } = {},
+  ): Promise<CoordinatorTurnResult<T>> {
     const refused = await this.step(async () => {
       if (this.lapsing())
         return {
@@ -101,7 +121,7 @@ export class CoordinatorTurn {
         };
       let grant: CoordinatorTurnGrant;
       try {
-        grant = await this.renew();
+        grant = await this.renew(queue);
       } catch (error) {
         // An unreachable gate is a wait like a full one, never a failure.
         this.ports.reportGateError(error);
@@ -166,9 +186,11 @@ export class CoordinatorTurn {
     return run;
   }
 
-  private async renew(): Promise<CoordinatorTurnGrant> {
+  private async renew(queue = true): Promise<CoordinatorTurnGrant> {
     const asked = Date.now();
-    const grant = await this.ports.acquire(this.token);
+    const grant = await (queue
+      ? this.ports.acquire(this.token)
+      : this.ports.acquire(this.token, { queue }));
     if (grant.held) {
       this.leaseUntil = asked + COORDINATOR_TURN_LEASE_MS - LEASE_SAFETY_MS;
       this.gateLeaseUntil = grant.leaseUntil;
@@ -183,15 +205,29 @@ export class CoordinatorTurn {
    */
   private async releaseIfIdle() {
     if (this.running > 0 || this.leaseUntil === 0 || this.lapsing()) return;
-    const state = await this.ports.idle().then(
-      (idle) => (idle ? ("idle" as const) : ("working" as const)),
-      (error: UnparsedError) => {
-        this.ports.reportIdleError(error);
-        return "unknown" as const;
-      },
-    );
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timedOut = new Promise<never>((_resolve, reject) => {
+      timer = setTimeout(
+        () => reject(new Error("Coordinator idle check timed out")),
+        IDLE_CHECK_TIMEOUT_MS,
+      );
+    });
+    const state = await Promise.race([this.ports.idle(), timedOut])
+      .finally(() => clearTimeout(timer))
+      .then(
+        (idle) => (idle ? ("idle" as const) : ("working" as const)),
+        (error: UnparsedError) => {
+          this.ports.reportIdleError(error);
+          return "unknown" as const;
+        },
+      );
     if (state === "unknown") {
-      if (++this.unknownIdleChecks >= UNKNOWN_IDLE_LIMIT) this.lapse();
+      if (this.unknownIdleChecks++ === 0) this.unknownIdleSince = Date.now();
+      if (
+        this.unknownIdleChecks >= UNKNOWN_IDLE_LIMIT &&
+        Date.now() - this.unknownIdleSince >= UNKNOWN_IDLE_SPAN_MS
+      )
+        this.lapse();
       return;
     }
     this.unknownIdleChecks = 0;

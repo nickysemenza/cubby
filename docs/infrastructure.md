@@ -210,9 +210,10 @@ Postgres, so a waiting coordinator opens no database scope.
 - **Turns.** Before an alarm, a dispatch or a member prompt loads the agent,
   its host asks the gate for the Run's turn (10-minute lease) and keeps it
   while pi works, renewing on every entry, on a heartbeat and before database
-  work near the lease's end; the check that confirms pi idle releases it. Three
-  undecidable idle checks in a row stop renewal: database work ends at the
-  current deadline and the coordinator asks again after lease plus grace. One
+  work near the lease's end; the check that confirms pi idle releases it. An
+  idle check that fails or does not answer within 10 s is undecidable; three in
+  a row spanning two heartbeats stop renewal: database work ends at the current
+  deadline and the coordinator asks again after lease plus grace. One
   in-instance step queue orders acquire, renew, idle check and release.
 - **Fence.** pi's Run services refuse database work once the turn is lost
   (`CoordinatorLeaseLostError`, transient), so the Run takes its existing
@@ -225,12 +226,15 @@ Postgres, so a waiting coordinator opens no database scope.
   holder's slot is re-granted only after its lease plus a 5-minute grace.
 - **Waiting.** Nothing loads: an alarm re-arms 15 s–5 min later besides the
   gate's wake; a `purchase.dispatch` defers with `provider_capacity` and no
-  attempt, and its coordinator brings it forward when reserved a turn (fallback
+  attempt while its coordinator keeps polling on the same alarm backoff, and
+  brings the Job forward when reserved a turn (fallback
   re-poll 8–12 minutes, 1–2 minutes when the gate cannot be asked); a prompt
-  answers 503 with `Retry-After`. A member's stop never waits.
+  takes only a turn free beyond every reservation and otherwise answers 503
+  with `Retry-After` without joining the queue. A member's stop never waits.
 - **Runs.** The cap starts, resumes, retries, cancels and reassigns nothing.
-  Stale-Run expiry skips Runs queued at the gate and expires nothing when the
-  gate cannot answer.
+  Stale-Run expiry skips Runs holding or queued for a turn (the gate's
+  `status()`), so a just-granted Run is exempt until its lease plus grace
+  lapses, and expires nothing when the gate cannot answer.
 
 Past the budget, Hyperdrive queues for an origin slot and then fails the query
 with SQLSTATE 58000 "Timed out while waiting for an open slot in the pool".
@@ -250,6 +254,10 @@ Watch for the margin running out:
   (with `.holders`, `.position`, `.retry_ms`) on `purchase-agent.alarm` and
   `.dispatch` spans and as a Sentry tag, the `purchase-agent.turn` log, and
   deferred `purchase.dispatch` Jobs (`Job.lastExecution.outcome = 'deferred'`).
+  The gate's own state is its `status()` RPC on
+  `env.COORDINATOR_GATE.getByName("household")`: the Run ids holding a turn and
+  those queued, in order (the same read stale-Run expiry uses); its storage holds
+  the full queue under the `gate` key.
 
 Raise `max_concurrency` only with the origin cap, and only after measuring pool
 waits.

@@ -163,9 +163,12 @@ describe("coordinator turn", () => {
       ),
     });
     const turns = new CoordinatorTurn(unknown);
-    for (let check = 0; check < 3; check++)
+    // Quick entries alone never stop renewal.
+    for (let check = 0; check < 4; check++)
       expect((await turns.turn(async () => "ran")).ran).toBe(true);
-    expect(unknown.reportIdleError).toHaveBeenCalledTimes(3);
+    expect(unknown.reportIdleError).toHaveBeenCalledTimes(4);
+    // Two heartbeats later the run of unknowns is long enough.
+    await vi.advanceTimersByTimeAsync((2 * COORDINATOR_TURN_LEASE_MS) / 3);
     expect(unknown.release).not.toHaveBeenCalled();
     const asked = acquire.mock.calls.length;
     // No renewal: entries wait without asking the gate, the heartbeat stops,
@@ -196,5 +199,22 @@ describe("coordinator turn", () => {
     });
     expect(work).not.toHaveBeenCalled();
     expect(down.reportGateError).toHaveBeenCalledWith(failure);
+  });
+
+  it("never lets an idle check that does not answer hold later bookkeeping", async () => {
+    vi.useFakeTimers();
+    const hung = ports({ idle: vi.fn(() => new Promise<boolean>(() => {})) });
+    const turns = new CoordinatorTurn(hung);
+    const first = turns.turn(async () => "first");
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(await first).toEqual({ ran: true, value: "first" });
+    expect(hung.reportIdleError).toHaveBeenCalledWith(
+      new Error("Coordinator idle check timed out"),
+    );
+    // The step queue moves on: database work and the next entry proceed.
+    await expect(turns.fence()).resolves.toBeUndefined();
+    const second = turns.turn(async () => "second");
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(await second).toEqual({ ran: true, value: "second" });
   });
 });

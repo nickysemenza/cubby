@@ -9,6 +9,7 @@ import {
 import type {
   CoordinatorGateRequest,
   CoordinatorGateRpc,
+  CoordinatorGateStatus,
   CoordinatorTurnGrant,
 } from "./coordinator-gate-rpc";
 
@@ -52,10 +53,10 @@ export class CoordinatorGateDurableObject
     return { released };
   }
 
-  async waiting(): Promise<string[]> {
-    const runIds = this.queue.waiting(Date.now());
-    await this.commit([]);
-    return runIds;
+  async status(): Promise<CoordinatorGateStatus> {
+    const { status, notify } = this.queue.status(Date.now());
+    await this.commit(notify);
+    return status;
   }
 
   async alarm(): Promise<void> {

@@ -15,6 +15,7 @@
 
 import type {
   CoordinatorGateRequest,
+  CoordinatorGateStatus,
   CoordinatorTurnGrant,
 } from "./coordinator-gate-rpc";
 
@@ -35,6 +36,8 @@ type Holder = {
   agent: string;
   token: string;
   leaseUntil: number;
+  /** When the turn was granted; renewals keep it. Absent on state persisted before it existed. */
+  heldSince?: number;
 };
 type Waiter = {
   runId: string;
@@ -54,6 +57,10 @@ export type CoordinatorGateAcquired = {
   notify: string[];
 };
 export type CoordinatorGateReleased = { released: boolean; notify: string[] };
+export type CoordinatorGateRead = {
+  status: CoordinatorGateStatus;
+  notify: string[];
+};
 
 export class CoordinatorGateQueue {
   constructor(
@@ -74,14 +81,43 @@ export class CoordinatorGateQueue {
       holder.token = request.token;
       holder.agent = request.agent;
       holder.leaseUntil = now + COORDINATOR_TURN_LEASE_MS;
+      // Pruning may have freed another holder's lapsed slot.
       return {
         grant: { held: true, leaseUntil: holder.leaseUntil },
-        notify: [],
+        notify: this.reserve(now),
       };
     }
     let waiter = this.state.waiters.find(
       (entry) => entry.runId === request.runId,
     );
+    // A caller that will not wait (a member prompt) takes a turn only when one
+    // is free beyond every reservation, and otherwise leaves no entry behind.
+    if (!waiter && request.queue === false) {
+      const notify = this.reserve(now);
+      const reserved = this.state.waiters.filter(
+        (entry) => entry.reservedUntil !== null,
+      ).length;
+      if (this.state.holders.length + reserved < this.cap) {
+        const leaseUntil = now + COORDINATOR_TURN_LEASE_MS;
+        this.state.holders.push({
+          runId: request.runId,
+          agent: request.agent,
+          token: request.token,
+          leaseUntil,
+          heldSince: now,
+        });
+        return { grant: { held: true, leaseUntil }, notify };
+      }
+      return {
+        grant: {
+          held: false,
+          position: 0,
+          holders: this.state.holders.length,
+          waiting: this.state.waiters.length,
+        },
+        notify,
+      };
+    }
     if (!waiter) {
       waiter = {
         runId: request.runId,
@@ -108,6 +144,7 @@ export class CoordinatorGateQueue {
         agent: request.agent,
         token: request.token,
         leaseUntil,
+        heldSince: now,
       });
       return {
         grant: { held: true, leaseUntil },
@@ -145,10 +182,29 @@ export class CoordinatorGateQueue {
     return this.reserve(now);
   }
 
-  /** Runs waiting for a turn now; they are alive however long they wait. */
-  waiting(now: number): string[] {
+  /**
+   * Runs holding or waiting for a turn now. Both are alive: a holder until
+   * its lease plus grace lapses, a waiter until it stops asking.
+   */
+  status(now: number): CoordinatorGateRead {
     this.prune(now);
-    return this.state.waiters.map((entry) => entry.runId);
+    const notify = this.reserve(now);
+    return {
+      status: {
+        // Only a recently granted holder is reported: it covers the gap before
+        // its first heartbeat, while a holder hung for longer than lease plus
+        // grace stays subject to stale-Run expiry.
+        holders: this.state.holders
+          .filter(
+            (entry) =>
+              now - (entry.heldSince ?? 0) <
+              COORDINATOR_TURN_LEASE_MS + COORDINATOR_TURN_GRACE_MS,
+          )
+          .map((entry) => entry.runId),
+        waiting: this.state.waiters.map((entry) => entry.runId),
+      },
+      notify,
+    };
   }
 
   /** When a lease, grace, reservation or waiter entry next lapses. */
@@ -174,8 +230,9 @@ export class CoordinatorGateQueue {
     );
     for (const entry of this.state.waiters)
       if (entry.reservedUntil !== null && entry.reservedUntil <= now) {
+        // Passed over as of the lapse, so its own ask after it still counts.
+        entry.passedAt = entry.reservedUntil;
         entry.reservedUntil = null;
-        entry.passedAt = now;
       }
   }
 

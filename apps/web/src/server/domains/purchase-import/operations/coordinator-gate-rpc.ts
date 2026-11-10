@@ -9,7 +9,12 @@ export type CoordinatorGateRequest = {
   runId: string;
   agent: string;
   token: string;
+  /** False: take a free turn now or refuse without joining the queue. */
+  queue?: boolean;
 };
+
+/** Runs holding a turn and runs queued for one, in queue order. */
+export type CoordinatorGateStatus = { holders: string[]; waiting: string[] };
 
 /** The singleton gate's RPC surface (`CoordinatorGateDurableObject`). */
 export interface CoordinatorGateRpc {
@@ -17,6 +22,6 @@ export interface CoordinatorGateRpc {
   release(
     request: Omit<CoordinatorGateRequest, "agent">,
   ): Promise<{ released: boolean }>;
-  /** Runs queued for a turn now (stale-Run expiry skips them). */
-  waiting(): Promise<string[]>;
+  /** Runs holding or queued for a turn now (stale-Run expiry skips them). */
+  status(): Promise<CoordinatorGateStatus>;
 }
