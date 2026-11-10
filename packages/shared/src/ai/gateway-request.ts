@@ -502,10 +502,7 @@ export function isInferenceFundingRefusal(
         body,
       )
     );
-  if (funding === "openai_credit")
-    return /"(?:code|type)"\s*:\s*"(?:credit_balance_exhausted|insufficient_quota|cubby_credit_refused)"/u.test(
-      body,
-    );
+  if (funding === "openai_credit") return isOpenAiCreditRefusal(body);
   return /credit balance is too low|reached your specified[^\n]*API usage limits|enforced_spend_limit_reached|cubby_credit_refused/iu.test(
     body,
   );
@@ -572,6 +569,26 @@ export function paidRefusedResponse(refusal: { reason: string }): Response {
   });
 }
 
+/**
+ * OpenAI's prepaid-balance refusal. The Responses envelope carries
+ * `error.code` / `error.type` (`credit_balance_exhausted`, sometimes still
+ * `insufficient_quota`); pi-ai then prefixes that code. A body or terminal
+ * message with neither falls back to OpenAI's billing sentence.
+ */
+const OPENAI_CREDIT_CODE =
+  /"(?:code|type)"\s*:\s*"(?:credit_balance_exhausted|insufficient_quota|cubby_credit_refused)"/u;
+const OPENAI_CREDIT_STREAM_CODE =
+  /^(?:Error Code )?(?:credit_balance_exhausted|insufficient_quota):/u;
+const OPENAI_CREDIT_MESSAGE = /You have no credits remaining\b/u;
+
+export function isOpenAiCreditRefusal(text: string): boolean {
+  return (
+    OPENAI_CREDIT_CODE.test(text) ||
+    OPENAI_CREDIT_STREAM_CODE.test(text) ||
+    OPENAI_CREDIT_MESSAGE.test(text)
+  );
+}
+
 /** Verified pi-ai terminal formats for structured provider SSE quota errors. */
 export function isInferenceStreamFundingRefusal(
   message: string,
@@ -587,10 +604,7 @@ export function isInferenceStreamFundingRefusal(
         "The ChatGPT user has reached their Subscription Sharing usage limit. Ask the user to try again after their usage limit resets or use an API key instead."
     );
   }
-  if (funding === "openai_credit")
-    return /^(?:Error Code )?(?:credit_balance_exhausted|insufficient_quota):/u.test(
-      message,
-    );
+  if (funding === "openai_credit") return isOpenAiCreditRefusal(message);
   return (
     funding === "subscriber_credit" &&
     /credit balance is too low|enforced_spend_limit_reached/iu.test(message)

@@ -605,9 +605,11 @@ source.
 
 OpenAI credit calls use native Gateway passthrough with the named alias and
 `cf-aig-no-wholesale: true`, bypassing ChatGPT OAuth and paid admission. Only
-`credit_balance_exhausted`, `insufficient_quota`, or Cubby credit admission
-refusals advance to the ChatGPT plan; invalid keys, rate limits and unknown
-failures remain errors. Credit refusals and cooldowns are isolated by provider.
+`credit_balance_exhausted`, `insufficient_quota`, Cubby credit admission
+refusals, or OpenAI's "no credits remaining" message when the envelope has no
+code, advance to the ChatGPT plan; invalid keys, rate limits and unknown
+failures remain errors. A credit refusal that is still the turn's terminal
+error pauses the Run for funding. Credit refusals and cooldowns are isolated by provider.
 OpenAI refusals without a reset date last until the six-hour window ends;
 resetting API credit refusals clears both providers and permits fresh attempts.
 

@@ -22,7 +22,10 @@ import {
 } from "@cubby/schemas/run-fields";
 import type { AiUsageTransport } from "@cubby/schemas/telemetry";
 import type { GatewayResponseInfo } from "@cubby/shared/ai/gateway-request";
-import { isPaidFundingUnavailable } from "@cubby/shared/ai/gateway-request";
+import {
+  isOpenAiCreditRefusal,
+  isPaidFundingUnavailable,
+} from "@cubby/shared/ai/gateway-request";
 import {
   storedChatModelSchema,
   type SupportedChatModel,
@@ -756,10 +759,14 @@ export class PurchaseImportRunAgent
   private async afterResponse(message: AssistantMessage) {
     // Durable and bound to one submission, unlike the usage row below, which may
     // not be written: a later attempt must not inherit this turn's funding stop.
+    const errorText = message.errorMessage ?? "";
+    // A credit refusal that survives the funding ladder is terminal: park the
+    // Run for funding instead of failing it and releasing its Emails.
     this.writeState(
       STATE_KEYS.fundingUnavailable,
       message.stopReason === "error" &&
-        isPaidFundingUnavailable(message.errorMessage ?? "")
+        (isPaidFundingUnavailable(errorText) ||
+          isOpenAiCreditRefusal(errorText))
         ? (this.readState(STATE_KEYS.latestSubmission) ?? "")
         : "",
     );
