@@ -1,8 +1,8 @@
 /**
- * Publishes a merged HTML report directory to the Nx cache Worker, which
- * serves it publicly at /reports/{run}/{attempt}/{kind}/ (apps/nx-cache).
+ * Publishes the merged CI test report directory to the Nx cache Worker, which
+ * serves it publicly at /reports/{run}/{attempt}/ (apps/nx-cache).
  *
- *   node tooling/ci-report/publish.ts <vitest|playwright> <dir> [exclude...]
+ *   node tooling/ci-report/publish.ts <dir>
  *
  * NX_CACHE_URL is the Worker's public origin, not a secret: Actions withholds
  * step outputs that contain a secret. Writes `url=` to GITHUB_OUTPUT. Without
@@ -11,9 +11,8 @@
 import { appendFileSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { extname, join, sep } from "node:path";
 
-const [kind, directory, ...excluded] = process.argv.slice(2);
-if (!["vitest", "playwright"].includes(kind ?? "") || !directory)
-  throw new Error("usage: publish.ts <vitest|playwright> <dir> [exclude...]");
+const [directory] = process.argv.slice(2);
+if (!directory) throw new Error("usage: publish.ts <dir>");
 const { NX_CACHE_URL, NX_CACHE_TOKEN, GITHUB_RUN_ID, GITHUB_OUTPUT } =
   process.env;
 if (!NX_CACHE_URL || !NX_CACHE_TOKEN || !GITHUB_RUN_ID) {
@@ -39,15 +38,10 @@ const types = new Map([
   [".txt", "text/plain; charset=utf-8"],
 ]);
 
-const prefix = `/reports/${GITHUB_RUN_ID}/${process.env.GITHUB_RUN_ATTEMPT ?? "1"}/${kind}/`;
+const prefix = `/reports/${GITHUB_RUN_ID}/${process.env.GITHUB_RUN_ATTEMPT ?? "1"}/`;
 const files = readdirSync(directory, { recursive: true, encoding: "utf8" })
   .map((entry) => entry.split(sep).join("/"))
-  .filter(
-    (entry) =>
-      !excluded.some(
-        (path) => entry === path || entry.startsWith(`${path}/`),
-      ) && statSync(join(directory, entry)).isFile(),
-  );
+  .filter((entry) => statSync(join(directory, entry)).isFile());
 
 // Unbounded parallel PUTs of a media-heavy report make Cloudflare close the
 // HTTP/2 connection (NGHTTP2_ENHANCE_YOUR_CALM); bound them and retry

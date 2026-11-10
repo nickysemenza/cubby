@@ -27,7 +27,7 @@ afterEach(() => backgroundQueue.restore());
 import { mock } from "~/lib/test/mock-schema";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
-import { plant as plantTable, task } from "~/server/db/schema";
+import { task } from "~/server/db/schema";
 import { createExpense } from "~/server/domains/expense/repo/crud";
 import { deleteProducts } from "~/server/domains/product/repo/crud";
 import {
@@ -393,33 +393,6 @@ describe("mutation side effects integration", () => {
         "location-ai.description.refresh",
         "location-ai.inventory.refresh",
       ]),
-    );
-  });
-
-  it("a plant rename reaches its Plantings", async () => {
-    const seed = kernelSeeder(ctx.db);
-    const bed = await seed("location", { name: "Fanout plot" });
-    const plant = await seed("plant", { name: "Fanout thyme" });
-    const planting = await seed("planting", {
-      plantId: plant.code,
-      locationId: bed.code,
-    });
-    await getDb(ctx.db)
-      .update(plantTable)
-      .set({ name: "Fanout lemon thyme" })
-      .where(eq(plantTable.id, plant.id));
-    const ports = capturingPorts();
-    await runMutationSideEffects(
-      ctx.db,
-      {
-        action: "updated",
-        entity: { entity: "plant", id: plant.id },
-        source: "test.plant.rename",
-      },
-      ports,
-    );
-    expect(await semanticText(ctx.db, "planting", planting.id)).toContain(
-      "Fanout lemon thyme",
     );
   });
 

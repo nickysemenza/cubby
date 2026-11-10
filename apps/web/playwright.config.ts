@@ -42,7 +42,7 @@ export default defineConfig<object, { workerdProfile: WorkerdProfile }>({
   reportSlowTests: { max: 10, threshold: 60_000 },
   /* Reporter to use. See https://playwright.dev/docs/test-reporters */
   /* CI shards also write a blob; the CI report job merges them into one HTML
-     report and the combined job summary. */
+     report. */
   reporter: isCI
     ? [
         ["github"],

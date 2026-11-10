@@ -250,8 +250,8 @@ jobs:
         uses: ./.github/actions/setup-node-with-deps
         with:
           wasm: restore
-      - name: Setup Chromium for required component-browser tests
-        if: ${{ matrix.vitest }}
+      # Browser shards and Vitest's component-browser projects both use it.
+      - name: Setup Chromium
         uses: ./.github/actions/setup-playwright
       # Only the browser shards serve the built Worker; Vitest projects do not.
       - name: Restore or build web app
@@ -267,10 +267,9 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: vitest-blob-${{ github.sha }}-${{ matrix.vitest }}
-          path: |
-            apps/web/.vitest/blob/**
-            apps/web/.vitest/attachments/**
-            apps/web/**/__screenshots__/**
+          # One directory: a recursive glob over apps/web walks node_modules
+          # and held every shard's critical path for ~18s.
+          path: apps/web/.vitest/
           include-hidden-files: true
           if-no-files-found: warn
           retention-days: 7
@@ -278,10 +277,16 @@ jobs:
         if: ${{ matrix.browser }}
         env:
           NX_SKIP_REMOTE_CACHE: ${{ (inputs.fresh || inputs.fresh-tests) && 'true' || 'false' }}
-        uses: ./.github/actions/playwright
+        run: ${{ matrix.run }}
+      # The blob carries traces; Test report merges every shard into one report.
+      - name: Upload Playwright blob
+        if: ${{ !cancelled() && matrix.browser }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          command: ${{ matrix.run }}
-          artifact: ${{ matrix.browser }}
+          name: playwright-blob-${{ github.sha }}-${{ matrix.browser }}
+          path: apps/web/blob-report/
+          if-no-files-found: ignore
+          retention-days: 7
       # Keeps its own result even after the shard's tests fail.
       - name: Database schema check
         if: ${{ !cancelled() && steps.setup.outcome == 'success' && matrix.db-check }}
@@ -405,22 +410,18 @@ jobs:
             ${{ needs.plan.outputs.rust != 'true' && 'rust,' || '' }}
             ${{ needs.plan.outputs.apple != 'true' && 'apple-host,apple-simulator,' || '' }}
 
-  # Informative: merges Vitest and Playwright shard evidence into
-  # hosted HTML reports and a combined job summary. Outside `CI passed`, so
-  # merging never delays or fails the gate.
+  # Informative: merges every Vitest and Playwright shard into one published
+  # report. Outside `CI passed`, so merging never delays or fails the gate.
   report:
     name: Test report
     needs: [validation, lanes]
     if: ${{ !cancelled() }}
     runs-on: ubuntu-slim
     timeout-minutes: 10
-    permissions:
-      actions: read
-      contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      # Merging and publishing read blobs and the Vitest config's project
-      # names only; generated contracts are never loaded.
+      # Merging reads blobs and the Vitest config's project names only;
+      # generated contracts are never loaded.
       - uses: ./.github/actions/setup-node-with-deps
         with:
           generate: "false"
@@ -428,7 +429,7 @@ jobs:
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           pattern: vitest-blob-${{ github.sha }}-*
-          path: apps/web
+          path: apps/web/.vitest
           merge-multiple: true
       - name: Download Playwright blobs
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
@@ -436,68 +437,49 @@ jobs:
           pattern: playwright-blob-${{ github.sha }}-desktop-*
           path: apps/web/all-blob-reports
           merge-multiple: true
-      # The merge loads the Vitest config only to match project names: the
-      # generated-output/WASM bootstrap is unnecessary, and the integration
-      # projects must be enabled for their blobs to resolve.
       # Each merge exits nonzero when the merged results contain failures,
-      # after writing its reports; later steps still publish them.
+      # after writing its report. The integration projects must be enabled
+      # for their blobs to resolve; the github-actions reporter writes the
+      # Vitest job summary.
       - name: Merge Vitest reports
-        if: ${{ hashFiles('apps/web/.vitest/blob/*') != '' }}
         continue-on-error: true
         working-directory: apps/web
         env:
           CUBBY_VITEST_ENSURED: "1"
           CUBBY_TEST_INTEGRATION: "1"
-        run: pnpm exec vitest --merge-reports --reporter=html --reporter=./tooling/ci-report/vitest-records-reporter.ts
+        run: pnpm exec vitest --merge-reports --reporter=html --reporter=github-actions
       - name: Merge Playwright reports
-        if: ${{ !cancelled() && hashFiles('apps/web/all-blob-reports/*') != '' }}
         continue-on-error: true
         working-directory: apps/web
-        env:
-          PLAYWRIGHT_HTML_OUTPUT_DIR: playwright-report
-          PLAYWRIGHT_JSON_OUTPUT_FILE: playwright-report/results.json
-        run: pnpm exec playwright merge-reports --reporter html,json ./all-blob-reports
-      # The Nx cache Worker serves published reports publicly
-      # (apps/nx-cache); the artifacts remain the fallback.
-      - name: Publish merged Vitest report
-        id: vitest-hosted
-        if: ${{ !cancelled() && hashFiles('apps/web/.vitest/index.html') != '' }}
+        run: pnpm exec playwright merge-reports --reporter html ./all-blob-reports
+      # The Nx cache Worker serves the published report publicly
+      # (apps/nx-cache); the artifact is the fallback for fork PRs.
+      - name: Assemble report
+        working-directory: apps/web
+        run: |
+          mkdir -p test-report
+          [ ! -f .vitest/index.html ] || { rm -rf .vitest/blob; mv .vitest test-report/vitest; }
+          [ ! -f playwright-report/index.html ] || mv playwright-report test-report/playwright
+          printf '%s\n' '<!doctype html><meta charset="utf-8"><title>Cubby test report</title>' \
+            '<ul><li><a href="vitest/">Vitest</a></li><li><a href="playwright/">Playwright</a></li></ul>' \
+            > test-report/index.html
+      - name: Publish report
+        id: hosted
         continue-on-error: true
         working-directory: apps/web
-        run: node tooling/ci-report/publish.ts vitest .vitest blob records.json
-      - name: Publish merged Playwright report
-        id: playwright-hosted
-        if: ${{ !cancelled() && hashFiles('apps/web/playwright-report/index.html') != '' }}
-        continue-on-error: true
-        working-directory: apps/web
-        run: node tooling/ci-report/publish.ts playwright playwright-report
-      - name: Upload merged Vitest report
-        id: vitest-report
-        if: ${{ !cancelled() && hashFiles('apps/web/.vitest/index.html') != '' }}
+        run: node tooling/ci-report/publish.ts test-report
+      - name: Upload report
+        id: artifact
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: vitest-report-${{ github.sha }}
-          path: |
-            apps/web/.vitest/
-            !apps/web/.vitest/blob/
+          name: test-report-${{ github.sha }}
+          path: apps/web/test-report/
           include-hidden-files: true
           retention-days: 14
-      - name: Upload merged Playwright report
-        id: playwright-report
-        if: ${{ !cancelled() && hashFiles('apps/web/playwright-report/index.html') != '' }}
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
-        with:
-          name: playwright-report-${{ github.sha }}
-          path: apps/web/playwright-report/
-          retention-days: 14
-      - name: Write job summary
-        if: ${{ !cancelled() }}
-        working-directory: apps/web
+      - name: Link report
         env:
-          GITHUB_TOKEN: ${{ github.token }}
-          CUBBY_VITEST_REPORT_URL: ${{ steps.vitest-hosted.outputs.url || steps.vitest-report.outputs.artifact-url }}
-          CUBBY_PLAYWRIGHT_REPORT_URL: ${{ steps.playwright-hosted.outputs.url || steps.playwright-report.outputs.artifact-url }}
-        run: node tooling/ci-report/summary.ts .vitest/records.json playwright-report/results.json
+          URL: ${{ steps.hosted.outputs.url || steps.artifact.outputs.artifact-url }}
+        run: echo "**Test report:** $URL" >> "$GITHUB_STEP_SUMMARY"
 
   # Informative only, outside `CI passed` and allowed to fail: the purchase
   # agent driven through the browser against a scripted model and gateway,
@@ -522,12 +504,26 @@ jobs:
           wasm: restore
       - name: Restore or build web app
         run: pnpm exec nx run @cubby/web:build-cf --outputStyle=stream
-      - name: Run Playwright purchase import tests
-        uses: ./.github/actions/playwright
+      - uses: ./.github/actions/setup-playwright
         with:
-          command: pnpm exec nx run @cubby/web:e2e-purchase-import --outputStyle=stream
-          artifact: purchase-import
           save-browser: "false"
+      - name: Run Playwright purchase import tests
+        run: pnpm exec nx run @cubby/web:e2e-purchase-import --outputStyle=stream
+      # Outside Test report, so it keeps its own HTML report and traces.
+      - name: Upload Playwright report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: playwright-${{ github.sha }}-purchase-import
+          path: |
+            apps/web/playwright-report/**
+            !apps/web/playwright-report/run-manifest.json
+            !apps/web/playwright-report/run-results.json
+            !apps/web/playwright-report/SHA256SUMS
+            !apps/web/playwright-report/workerd-logs/**
+            apps/web/test-results/**/trace.zip
+          if-no-files-found: warn
+          retention-days: 7
 
   live-email:
     name: Live Email decisions (Jev and Clef, optional)

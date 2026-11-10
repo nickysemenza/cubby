@@ -361,9 +361,11 @@ as shards through the `e2e` target, each restoring or building the
 content-keyed Worker. Native checks are separate, and there is no coverage
 mode. CI records a Playwright trace only for the retry of a failed test
 (`on-first-retry`); local runs keep failure traces (`retain-on-failure`). Each
-browser job uploads Playwright's HTML report and traces for seven days, named
-by commit SHA and shard, plus a blob report. Open `playwright-report/index.html`
-from the downloaded artifact to inspect a run.
+browser job uploads only its blob report, which carries the traces, for seven
+days; `Test report` merges them. Each Vitest job uploads its `.vitest/`
+directory (blob, attachments and browser-mode failure screenshots) as one path:
+a recursive glob over `apps/web` walks `node_modules` and held each shard's
+critical path for about 18 seconds.
 
 The disposable PostgreSQL container uses `fsync=off`, `synchronous_commit=off`
 and `full_page_writes=off` through `POSTGRES_INITDB_ARGS`, matching the local
@@ -383,23 +385,23 @@ once through the `postgres` target with four fork workers.
 that name through the `e2e-purchase-import` target, restoring or building its
 Worker first. It is informative only: outside `CI passed` and
 `continue-on-error`. It uses the same `webGate` key and service definitions as
-the other web lanes and uploads the same Playwright report.
+the other web lanes and uploads its own Playwright HTML report and traces,
+because `Test report` does not wait for it.
 
 ### Test report
 
 `Test report` waits for Validation and the test lanes (not Rust or Apple),
-installs without postinstall generation, and merges the Vitest and Playwright
-blobs into HTML reports (`vitest --merge-reports`, `playwright merge-reports`).
-It publishes them to the Nx cache Worker, which serves them at
-`/reports/{run}/{attempt}/{vitest|playwright}/`, and uploads them as 14-day
-artifacts. Uploaders share an eight-request limit and retry transient failures
-twice. Workflows set `NX_CACHE_URL` as a plain value rather than a secret,
-because Actions withholds step outputs containing a secret and would drop the
-report links; only `NX_CACHE_TOKEN` is secret, and fork PRs fall back to the
-artifacts. Vitest Viewer cannot open Actions artifact URLs. The job summary
-(`apps/web/tooling/ci-report/summary.ts`) lists each Linux test lane's result
-and duration, shard balance, per-runner totals, failures, tests that passed only
-on retry, and the slowest tests. It is outside `CI passed`. CI uses only
+installs without postinstall generation, and merges every Vitest and Playwright
+shard blob into one report (`vitest --merge-reports`, `playwright merge-reports`):
+an index page linking the Vitest and Playwright HTML reports. It publishes that
+directory to the Nx cache Worker, which serves it at `/reports/{run}/{attempt}/`,
+and uploads it as a 14-day artifact. Uploads share an eight-request limit and
+retry transient failures twice. Workflows set `NX_CACHE_URL` as a plain value
+rather than a secret, because Actions withholds step outputs containing a secret
+and would drop the report link; only `NX_CACHE_TOKEN` is secret, and fork PRs
+fall back to the artifact. The job summary is Vitest's `github-actions`
+reporter summary plus the report link; Playwright failures surface as `github`
+reporter annotations on the shards. The job is outside `CI passed`. CI uses only
 synthetic data and test credentials, so the report is safe to publish; local
 runs, including the manually dispatched native simulator E2E, keep their
 reports, traces and run bundles local.

@@ -254,7 +254,7 @@ export default defineConfig({
     // The default reporter covers terminal output; JSON preserves failed
     // tests when output is truncated. CI also emits GitHub annotations and a
     // blob per shard; the CI report job merges the blobs into one HTML report
-    // and writes the combined job summary (tooling/ci-report/summary.ts).
+    // and writes the Vitest job summary.
     reporters:
       process.env.GITHUB_ACTIONS === "true"
         ? [
@@ -426,6 +426,8 @@ export default defineConfig({
                   headless: true,
                   provider: playwright(),
                   instances: [{ browser: "chromium" }],
+                  // Beside the blob, so CI uploads one directory per shard.
+                  screenshotDirectory: ".vitest/screenshots",
                 },
                 // Chromium launch + page navigation per file is slower than a
                 // shared jsdom graph; give it real room instead of flaking on

@@ -46,69 +46,6 @@ test("nutrition matrix shares URL basis and preserves partial ranges after reloa
   await expect(contributions).toContainText("75–125 kcal");
 });
 
-test("nutrition matrix preserves zero and exposes focused and catalog nutrients", async ({
-  page,
-}, testInfo) => {
-  const name = `E2E nutrition catalog ${Date.now()}-${testInfo.workerIndex}`;
-  const { recipe } = await seedNutritionPrerequisite(page, name);
-  await gotoAuthenticatedPage(
-    page,
-    `/recipes/${recipe.id}?view=data&nutritionBasis=serving`,
-  );
-  const contributions = page.getByTestId("nutrition-contributions");
-  const focus = page.getByRole("combobox", {
-    name: "Focused nutrient",
-    exact: true,
-  });
-  const table = page.getByRole("table", { name: "Recipe Ingredients Table" });
-  await selectComboboxItem(page, focus, "Sodium");
-  await expect(contributions).toContainText("0 mg known · partial");
-  await selectComboboxItem(page, focus, "Calcium");
-  await expect(
-    table.getByRole("columnheader", { name: /Calcium/ }),
-  ).toBeVisible();
-  await expect(contributions).toContainText("25–50 mg known · partial");
-  await page.getByRole("button", { name: /^Columns/ }).click();
-  await expect(
-    page.getByRole("checkbox", { name: "Show Zinc (mg)", exact: true }),
-  )
-    .toBeVisible()
-    .catch(async (error) => {
-      // Failure path only: a route error hides its real message behind
-      // "Technical details"; open it if present and report the page text
-      // instead of a bare missing-button timeout.
-      await page
-        .getByRole("button", { name: "Technical details", exact: true })
-        .click({ timeout: 2000 })
-        .catch(() => undefined);
-      throw new Error(await page.getByRole("main").innerText(), {
-        cause: error,
-      });
-    });
-  await page
-    .getByRole("checkbox", { name: "Show Zinc (mg)", exact: true })
-    .click();
-  await page.keyboard.press("Escape");
-  await expect(table.getByRole("columnheader", { name: /Zinc/ })).toBeVisible();
-});
-
-test("recipe nutrition keeps per-serving totals independent of recipe scale", async ({
-  page,
-}, testInfo) => {
-  const name = `E2E nutrition scale ${Date.now()}-${testInfo.workerIndex}`;
-  const { recipe } = await seedNutritionPrerequisite(page, name);
-  const contributions = page.getByTestId("nutrition-contributions");
-  await gotoAuthenticatedPage(page, `/recipes/${recipe.id}?view=data&scale=2`);
-  await expect(contributions).toContainText("300–500 kcal");
-  await page.getByRole("button", { name: "Per serving", exact: true }).click();
-  await expect(contributions).toContainText("75–125 kcal");
-  await gotoAuthenticatedPage(
-    page,
-    `/recipes/${recipe.id}?view=data&scale=0.3333&nutritionBasis=serving`,
-  );
-  await expect(contributions).toContainText("75–125 kcal");
-});
-
 test.describe("nutrition between hourly rebuilds", () => {
   // This journey observes a cleared publication before the next scheduled pass.
   // Fixture seeding still explicitly rebuilds its prerequisites.

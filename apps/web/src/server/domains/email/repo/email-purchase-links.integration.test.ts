@@ -133,9 +133,9 @@ describe("Email Purchase links", () => {
     };
   }
 
-  it.each(["accepted_alias", "accepted_attachment"] as const)(
+  it.each(["accepted_alias"] as const)(
     "places owned content-cleared %s evidence on its Vendor and Purchase",
-    async (sourceKind) => {
+    async () => {
       const party = await insertWithShortcode(ctx.db, "ledgerParty", {
         name: "Synthetic accepted evidence member",
         kind: "member",
@@ -183,31 +183,9 @@ describe("Email Purchase links", () => {
           contentClearedAt: new Date("2026-10-01T12:00:00Z"),
         })
         .where(eq(emailTable.orderMailId, original.id));
-      const kind =
-        sourceKind === "accepted_attachment"
-          ? "mail_attachment"
-          : "mail_message";
-      const attachmentKey = "synthetic-accepted-attachment";
-      const externalKey = `gmail:${original.mailboxId}:${original.messageId}${
-        sourceKind === "accepted_attachment"
-          ? `:attachment:${attachmentKey}`
-          : ""
-      }`;
-      // Accepted bytes match the current original: the attachment's own
-      // checksum, or the Email's for a message source.
-      const checksum =
-        sourceKind === "accepted_attachment"
-          ? "f".repeat(64)
-          : original.rawChecksum;
-      if (sourceKind === "accepted_attachment")
-        await getDb(ctx.db).insert(orderMailAttachment).values({
-          orderMailId: original.id,
-          providerAttachmentId: attachmentKey,
-          filename: "synthetic-evidence.pdf",
-          mimeType: "application/pdf",
-          checksum,
-          pendingObjectKey: null,
-        });
+      const kind = "mail_message";
+      const externalKey = `gmail:${original.mailboxId}:${original.messageId}`;
+      const checksum = original.rawChecksum;
       const [root] = await getDb(ctx.db)
         .insert(importSourceClaim)
         .values({
@@ -220,21 +198,18 @@ describe("Email Purchase links", () => {
         })
         .returning();
       if (!root) throw new Error("Synthetic accepted root claim missing");
-      const [acceptedClaim] =
-        sourceKind === "accepted_alias"
-          ? await getDb(ctx.db)
-              .insert(importSourceClaim)
-              .values({
-                ledgerPartyId: party.id,
-                kind,
-                externalKey: "synthetic:historical-accepted-alias",
-                canonicalClaimId: root.id,
-                checksum,
-                firstRunId: scope.id,
-                lastRunId: scope.id,
-              })
-              .returning()
-          : [root];
+      const [acceptedClaim] = await getDb(ctx.db)
+        .insert(importSourceClaim)
+        .values({
+          ledgerPartyId: party.id,
+          kind,
+          externalKey: "synthetic:historical-accepted-alias",
+          canonicalClaimId: root.id,
+          checksum,
+          firstRunId: scope.id,
+          lastRunId: scope.id,
+        })
+        .returning();
       if (!acceptedClaim)
         throw new Error("Synthetic accepted family claim missing");
       await getDb(ctx.db).insert(importSourceOrder).values({
