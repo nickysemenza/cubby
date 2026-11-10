@@ -57,7 +57,10 @@ function claimed(fields: {
     ...(fields.jobId && { "cubby.job.id": fields.jobId }),
     ...(fields.runId && { "cubby.run.id": fields.runId }),
   });
-  log.info("permit claimed", fields);
+  // `key` stays out of the log: Job keys are free-form and could one day name
+  // household data; the Job id joins to the row.
+  const { key: _key, ...logged } = fields;
+  log.info("permit claimed", logged);
 }
 
 /** Candidates one permit may try when siblings took its first choices. */
