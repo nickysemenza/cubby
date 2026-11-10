@@ -1,6 +1,6 @@
 import { suggestionStatus } from "@cubby/schemas/ai";
 import { auditLogActionSchema } from "@cubby/schemas/audit";
-import { SYSTEM_USER_ID } from "@cubby/schemas/context";
+import { systemActor } from "@cubby/schemas/context";
 import {
   feedbackAuthority,
   feedbackVerdict,
@@ -130,7 +130,7 @@ export async function captureFieldCorrection(
   const suggestionId = previous.suggestionId;
   // An import or cron replacing Cubby's value is new evidence, not a grade
   // (system authority never grades); the write alone makes the value protected.
-  if (row.userId === SYSTEM_USER_ID) return null;
+  if (row.userId === systemActor().userId) return null;
   const correctValue = changedTo(row, field) ?? null;
   await recordFeedback(db, {
     suggestionId,

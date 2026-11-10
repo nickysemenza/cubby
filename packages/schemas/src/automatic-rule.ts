@@ -4,7 +4,7 @@ export const AUTOMATIC_RULE_FAMILIES = [
   "statement_transaction",
 ] as const;
 /** Each key leads with its family. The rules are code declarations with no switch. */
-export const AUTOMATIC_RULE_KEYS = [
+const AUTOMATIC_RULE_KEYS = [
   "field.addition",
   "statement_transaction.book_spending",
 ] as const;

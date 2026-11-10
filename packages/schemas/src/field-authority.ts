@@ -3,7 +3,7 @@ import { z } from "zod";
 import { fieldSuggestionsInput } from "./ai";
 
 /** Who holds a field: nobody, Cubby (it may revise), or a person (never overwritten). */
-export const fieldHolder = z.enum(["open", "cubby", "person"]);
+const fieldHolder = z.enum(["open", "cubby", "person"]);
 
 export const fieldAuthorityActionInput = z.object({
   entity: fieldSuggestionsInput.shape.entity,
@@ -22,7 +22,7 @@ export const fieldAuthorityActionInput = z.object({
 export const fieldAuthorityActionOut = z.object({ holder: fieldHolder });
 
 /** Cubby's current answer for an empty or offered field, shown first in its picker. */
-export const fieldGuess = z.object({
+const fieldGuess = z.object({
   suggestionId: z.string(),
   value: z.json(),
   confidence: z.number().min(0).max(1),

@@ -597,7 +597,6 @@ export const suggestionReviewRowSchema = z.object({
   correctValue: z.json().nullable(),
   createdAt: z.string(),
 });
-export type SuggestionReviewRow = z.infer<typeof suggestionReviewRowSchema>;
 
 /**
  * `ai.decisionCatalog`: one row per manifest suggest field plus every
@@ -746,7 +745,7 @@ export type FieldSuggestionOutcome = z.infer<
 >;
 
 /** The most questions one settled read prepares; a list page batches up to it. */
-export const SETTLED_SUGGESTION_QUESTION_MAX = 50;
+const SETTLED_SUGGESTION_QUESTION_MAX = 50;
 /**
  * A single-field `suggestFields` question a form already asked. A remembered
  * decline answers every record sharing the basis.

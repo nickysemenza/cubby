@@ -1,6 +1,6 @@
 import { suggestionStatus } from "@cubby/schemas/ai";
 import { auditLogActionSchema } from "@cubby/schemas/audit";
-import { auditAuthoritySchema, SYSTEM_USER_ID } from "@cubby/schemas/context";
+import { auditAuthoritySchema, systemActor } from "@cubby/schemas/context";
 import { entityFieldByKey } from "@cubby/schemas/entity-fields";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import type { FieldGuess, FieldOrigin } from "@cubby/schemas/field-authority";
@@ -232,7 +232,7 @@ export async function describeFieldOrigin(
     ).data;
     if (actor)
       writer =
-        actor.userId === SYSTEM_USER_ID
+        actor.userId === systemActor().userId
           ? { kind: "import", name: null }
           : actor.channel === "mcp"
             ? { kind: "agent", name: null }

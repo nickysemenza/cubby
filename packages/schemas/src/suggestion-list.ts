@@ -216,7 +216,7 @@ export const suggestionListFilters = suggestionDeclaredFilters.extend(
 );
 export type SuggestionListFilters = z.output<typeof suggestionListFilters>;
 
-export const SUGGESTION_LIST_PAGE_MAX = 200;
+const SUGGESTION_LIST_PAGE_MAX = 200;
 const suggestionPaging = z.object({
   ...suggestionScope.shape,
   sort: suggestionFilterDeclaration.input.shape.sort,
