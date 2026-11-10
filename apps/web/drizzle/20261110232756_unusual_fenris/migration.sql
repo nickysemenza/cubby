@@ -1,5 +1,8 @@
 SET LOCAL lock_timeout = '2s';
 --> statement-breakpoint
+-- The per-provider-id consolidation below runs about 10k groups under exclusive locks.
+SET LOCAL statement_timeout = '30min';
+--> statement-breakpoint
 LOCK TABLE "Entity", "FinancialTransaction", "SourceOccurrence", "SourceTransactionRecord", "FinancialEvidenceAlias", "Suggestion" IN ACCESS EXCLUSIVE MODE;
 --> statement-breakpoint
 CREATE SCHEMA IF NOT EXISTS archive;
@@ -54,6 +57,12 @@ UNION
 SELECT owner.id, owner."providerIdentity" FROM "SourceOccurrence" owner
 WHERE owner.source='monarch' AND owner."identityKind"='provider' AND owner."providerIdentity" IS NOT NULL
   AND owner."deletedAt" IS NULL AND owner."withdrawnAt" IS NULL AND owner."supersededByOccurrenceId" IS NULL;
+--> statement-breakpoint
+CREATE INDEX ON monarch_owner_ids (provider_id);
+--> statement-breakpoint
+CREATE INDEX ON monarch_owner_ids (id);
+--> statement-breakpoint
+ANALYZE monarch_owner_ids;
 --> statement-breakpoint
 DO $migration$
 DECLARE grp record; survivor uuid; survivor_code text; template uuid; attempt int; decision_count int; transaction_count int; fact_count int; latest uuid; latest_time timestamp; accepted uuid; had_accepted boolean; evidence_conflict boolean;
