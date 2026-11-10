@@ -228,12 +228,14 @@ export function requestedRows<C extends Record<string, ColumnType>>(
 ): RequestedRows<C> {
   // SAFETY: `Object.keys` of `C` returns exactly its own string keys.
   const names = Object.keys(columns) as (keyof C & string)[];
+  const types: Record<string, ColumnType> = columns;
+  const cast = (name: string) => sql.raw(columnCasts[types[name] ?? "text"]);
   const arrays = names.map((name) => {
     const values = rows.map((row) => {
       const value = row[name];
       return value === null ? null : String(value);
     });
-    return sql`${nullableTextArrayParam(values)}::${sql.raw(columnCasts[columns[name]])}[]`;
+    return sql`${nullableTextArrayParam(values)}::${cast(name)}[]`;
   });
   const table = sql.identifier(alias);
   return {
@@ -247,8 +249,7 @@ export function requestedRows<C extends Record<string, ColumnType>>(
         )})`
       : sql`(SELECT ${sql.join(
           names.map(
-            (name) =>
-              sql`NULL::${sql.raw(columnCasts[columns[name]])} AS ${sql.identifier(name)}`,
+            (name) => sql`NULL::${cast(name)} AS ${sql.identifier(name)}`,
           ),
           sql`, `,
         )}, NULL::bigint AS ordinality WHERE false) AS ${table}`,
