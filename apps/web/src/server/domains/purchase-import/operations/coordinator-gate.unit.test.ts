@@ -24,7 +24,7 @@ describe("coordinator gate", () => {
     expect(ask(gate, "c", 4).grant).toMatchObject({ held: false, position: 1 });
     expect(ask(gate, "a", 5).grant.held).toBe(true);
     expect(gate.state.holders).toHaveLength(2);
-    expect(gate.status(6)).toEqual({
+    expect(gate.status(6).status).toEqual({
       holders: ["a", "b"],
       waiting: ["c", "d"],
     });
@@ -89,8 +89,8 @@ describe("coordinator gate", () => {
     const gate = new CoordinatorGateQueue(undefined, 1);
     ask(gate, "a", 0);
     ask(gate, "b", 1);
-    expect(gate.status(15 * 60_000).waiting).toEqual(["b"]);
-    expect(gate.status(15 * 60_000 + 2).waiting).toEqual([]);
+    expect(gate.status(15 * 60_000).status.waiting).toEqual(["b"]);
+    expect(gate.status(15 * 60_000 + 2).status.waiting).toEqual([]);
   });
 
   // Review regression (Sol, #3927): a passed-over head that asks again must
@@ -119,5 +119,27 @@ describe("coordinator gate", () => {
     ).toEqual(["agent-b"]);
     expect(ask(gate, "b", 10 + 60_005).grant.held).toBe(true);
     expect(holders()).toBe(1);
+  });
+
+  it("still grants a waiter that asks just after its own reservation lapsed", () => {
+    const gate = new CoordinatorGateQueue(undefined, 1);
+    ask(gate, "a", 0);
+    ask(gate, "b", 1);
+    gate.release({ runId: "a", token: "token-a" }, 10);
+    // Nothing pruned in between: b's own late ask finds the slot free.
+    expect(ask(gate, "b", 10 + 60_001).grant.held).toBe(true);
+  });
+
+  it("reserves capacity a lapsed holder frees, whichever call notices it", () => {
+    const gate = new CoordinatorGateQueue(undefined, 2);
+    ask(gate, "a", 0);
+    ask(gate, "b", 0);
+    ask(gate, "c", 1);
+    const half = COORDINATOR_TURN_LEASE_MS / 2;
+    ask(gate, "b", half);
+    ask(gate, "c", half);
+    const lapsed = COORDINATOR_TURN_LEASE_MS + COORDINATOR_TURN_GRACE_MS + 1;
+    // b renews; a's lapse frees a slot, reserved for c and woken.
+    expect(ask(gate, "b", lapsed).notify).toEqual(["agent-c"]);
   });
 });

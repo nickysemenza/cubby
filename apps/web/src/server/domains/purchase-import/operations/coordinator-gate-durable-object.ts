@@ -54,8 +54,8 @@ export class CoordinatorGateDurableObject
   }
 
   async status(): Promise<CoordinatorGateStatus> {
-    const status = this.queue.status(Date.now());
-    await this.commit([]);
+    const { status, notify } = this.queue.status(Date.now());
+    await this.commit(notify);
     return status;
   }
 

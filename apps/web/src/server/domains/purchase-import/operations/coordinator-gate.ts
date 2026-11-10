@@ -55,6 +55,10 @@ export type CoordinatorGateAcquired = {
   notify: string[];
 };
 export type CoordinatorGateReleased = { released: boolean; notify: string[] };
+export type CoordinatorGateRead = {
+  status: CoordinatorGateStatus;
+  notify: string[];
+};
 
 export class CoordinatorGateQueue {
   constructor(
@@ -75,9 +79,10 @@ export class CoordinatorGateQueue {
       holder.token = request.token;
       holder.agent = request.agent;
       holder.leaseUntil = now + COORDINATOR_TURN_LEASE_MS;
+      // Pruning may have freed another holder's lapsed slot.
       return {
         grant: { held: true, leaseUntil: holder.leaseUntil },
-        notify: [],
+        notify: this.reserve(now),
       };
     }
     let waiter = this.state.waiters.find(
@@ -150,11 +155,15 @@ export class CoordinatorGateQueue {
    * Runs holding or waiting for a turn now. Both are alive: a holder until
    * its lease plus grace lapses, a waiter until it stops asking.
    */
-  status(now: number): CoordinatorGateStatus {
+  status(now: number): CoordinatorGateRead {
     this.prune(now);
+    const notify = this.reserve(now);
     return {
-      holders: this.state.holders.map((entry) => entry.runId),
-      waiting: this.state.waiters.map((entry) => entry.runId),
+      status: {
+        holders: this.state.holders.map((entry) => entry.runId),
+        waiting: this.state.waiters.map((entry) => entry.runId),
+      },
+      notify,
     };
   }
 
@@ -181,8 +190,9 @@ export class CoordinatorGateQueue {
     );
     for (const entry of this.state.waiters)
       if (entry.reservedUntil !== null && entry.reservedUntil <= now) {
+        // Passed over as of the lapse, so its own ask after it still counts.
+        entry.passedAt = entry.reservedUntil;
         entry.reservedUntil = null;
-        entry.passedAt = now;
       }
   }
 
