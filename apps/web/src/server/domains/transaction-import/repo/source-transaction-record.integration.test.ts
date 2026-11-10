@@ -2026,7 +2026,7 @@ describe("statement row ledger", () => {
     },
   );
 
-  it("holds contradictory raw provider claims", async () => {
+  it("holds contradictory raw provider claims but not a display label", async () => {
     await record([
       rowInput({
         providerTransactionId: "synthetic-event",
@@ -2036,12 +2036,24 @@ describe("statement row ledger", () => {
           account_id: "synthetic-account",
         },
       }),
+      rowInput({
+        providerTransactionId: "synthetic-labelled-event",
+        providerAccountId: "synthetic-account",
+        providerData: {
+          id: "synthetic-labelled-event",
+          account_id: "synthetic-account",
+          account: "Synthetic card",
+        },
+      }),
     ]);
     const owners = await getDb(ctx.db).select().from(sourceOccurrence);
-    expect(owners).toHaveLength(1);
-    expect(owners[0]).toMatchObject({
-      identityKind: "provider",
-      reviewState: "identity_conflict",
+    expect(
+      Object.fromEntries(
+        owners.map((owner) => [owner.providerIdentity, owner.reviewState]),
+      ),
+    ).toEqual({
+      "synthetic-event": "identity_conflict",
+      "synthetic-labelled-event": "ready",
     });
   });
 });

@@ -712,7 +712,8 @@ owner.
 provider transaction ID is that event (`provider:monarch` scope): one owner
 per ID, whatever collection or export carried it. The provider account is
 optional evidence; raw provider claims and accounts, when present, must agree,
-and a disagreement holds the owner in `identity_conflict`. Otherwise an
+and a disagreement holds the owner in `identity_conflict`. A bare `account`
+string is Monarch's display label, not an account claim. Otherwise an
 original collection fingerprint and positive physical position establish
 collection-local identity. Neither account descriptors, resolved Cubby
 accounts nor equal facts merge two owners. A new unpositioned request without

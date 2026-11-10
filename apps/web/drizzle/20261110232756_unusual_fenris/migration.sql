@@ -64,6 +64,7 @@ CREATE INDEX ON monarch_owner_ids (id);
 --> statement-breakpoint
 ANALYZE monarch_owner_ids;
 --> statement-breakpoint
+-- A bare string `account` is a display label; only IDs are account claims.
 DO $migration$
 DECLARE grp record; survivor uuid; survivor_code text; template uuid; attempt int; decision_count int; transaction_count int; fact_count int; latest uuid; latest_time timestamp; accepted uuid; had_accepted boolean; evidence_conflict boolean;
 BEGIN
@@ -110,7 +111,7 @@ BEGIN
       EXISTS (SELECT 1 FROM jsonb_array_elements(jsonb_build_array(r."providerData"->'id',r."providerData"->'transaction'->'id')) claim
         WHERE claim<>'null'::jsonb AND (jsonb_typeof(claim)<>'string' OR claim #>> '{}' <> grp.provider_id)) OR
       EXISTS (SELECT 1 FROM jsonb_array_elements(jsonb_build_array(r."providerData"->'account_id',r."providerData"->'transaction'->'account_id',
-        CASE WHEN jsonb_typeof(r."providerData"->'account')='string' THEN r."providerData"->'account' ELSE r."providerData"->'account'->'id' END)) claim
+        r."providerData"->'account'->'id')) claim
         WHERE claim<>'null'::jsonb AND (jsonb_typeof(claim)<>'string' OR (r."providerAccountId" IS NOT NULL AND claim #>> '{}' <> r."providerAccountId")))
     ), false) INTO evidence_conflict FROM monarch_owner_ids m JOIN "SourceTransactionRecord" r ON r."occurrenceId"=m.id AND r."deletedAt" IS NULL
       WHERE m.provider_id=grp.provider_id;
@@ -120,7 +121,7 @@ BEGIN
       UNION ALL
       SELECT claim #>> '{}' FROM monarch_owner_ids m JOIN "SourceTransactionRecord" r ON r."occurrenceId"=m.id
         CROSS JOIN LATERAL jsonb_array_elements(jsonb_build_array(r."providerData"->'account_id',r."providerData"->'transaction'->'account_id',
-          CASE WHEN jsonb_typeof(r."providerData"->'account')='string' THEN r."providerData"->'account' ELSE r."providerData"->'account'->'id' END)) claim
+          r."providerData"->'account'->'id')) claim
         WHERE m.provider_id=grp.provider_id AND r."deletedAt" IS NULL AND jsonb_typeof(claim)='string'
     ) accounts) THEN evidence_conflict := true; END IF;
     SELECT count(DISTINCT r."factFingerprint"), (array_agg(r.id ORDER BY b."observedAt" DESC, r."createdAt" DESC, r.id DESC))[1], max(b."observedAt")
