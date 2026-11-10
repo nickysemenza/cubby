@@ -3,6 +3,7 @@ import { SHIPMENT_IDENTITY_PERIOD_DAYS } from "@cubby/schemas/shipment-fields";
 import { z } from "zod";
 
 import type { shipment, shipmentSourcePackage } from "~/server/db/schema";
+import { normalizeTrackingNumber } from "~/server/domains/shipment/repo/carrier-recognition";
 
 export const identityCandidateSchema = z.object({
   id: z.uuid(),
@@ -151,4 +152,53 @@ export function planAliasBinding(
     binding: unique.length === 1 ? unique[0] : undefined,
     ambiguous: unique.length > 1,
   };
+}
+
+export function planCarrierCorrection(input: {
+  row: typeof shipment.$inferSelect | undefined;
+  carrierId: (typeof shipment.$inferSelect)["carrierId"];
+  number: string | null;
+  sourceBindingAmbiguous: boolean;
+  explicitConflict: boolean;
+  historyTruncated: boolean;
+  historyConflict: boolean;
+  supported: boolean;
+  candidates: z.infer<typeof identityCandidateSchema>[];
+}) {
+  const { row, number } = input;
+  let carrierIssue: string | null = input.sourceBindingAmbiguous
+    ? "The source has multiple package bindings for this reference; review the original source key before alias re-extraction."
+    : input.explicitConflict
+      ? "Explicit package-specific carrier claims conflict; retain them for handoff review."
+      : null;
+  if (input.historyTruncated)
+    carrierIssue =
+      "Carrier evidence exceeds the bounded history scan; review before correction.";
+  else if (input.historyConflict)
+    carrierIssue =
+      "Conflicting explicit carrier evidence may describe a handoff; review before association or correction.";
+  let correctingCarrier = false;
+  if (
+    row &&
+    input.carrierId &&
+    row.carrierId &&
+    row.carrierId !== input.carrierId &&
+    (!row.trackingNumber ||
+      normalizeTrackingNumber(row.trackingNumber) === number)
+  ) {
+    if (input.supported) correctingCarrier = !carrierIssue;
+    else
+      carrierIssue ??=
+        "Carrier claims disagree; inspect the retained source before replacing the stored carrier.";
+  }
+  if (
+    row &&
+    input.candidates.some(
+      (candidate) => candidate.id === row.id && candidate.carrier_conflict,
+    ) &&
+    !correctingCarrier
+  )
+    carrierIssue ??=
+      "Nearby tracking evidence has conflicting carrier identity; review before association.";
+  return { carrierIssue, correctingCarrier };
 }

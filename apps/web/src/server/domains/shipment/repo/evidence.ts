@@ -95,6 +95,7 @@ import {
   identityWindowSchema,
   withinIdentityPeriod,
   planPacketAdmission,
+  planCarrierCorrection,
   sourcePackageSpelling,
   planSourceBinding,
   planAliasBinding,
@@ -893,51 +894,30 @@ async function writeShipmentEvidence(
             )[0],
           )
         : null;
-      let carrierIssue: string | null = sourceBindingAmbiguous
-        ? "The source has multiple package bindings for this reference; review the original source key before alias re-extraction."
-        : carrierClaimsConflict(suggestion.explicit)
-          ? "Explicit package-specific carrier claims conflict; retain them for handoff review."
+      const carrierHistory =
+        row || references.length
+          ? await loadCarrierHistory(tdb, {
+              ...(row ? { shipmentId: row.id } : { window: identity.window }),
+              references: references.map((ref) => ref.number),
+            })
           : null;
-      if (row || references.length) {
-        // Unresolved source claims also constrain first admission, before a Shipment exists.
-        const history = await loadCarrierHistory(tdb, {
-          ...(row ? { shipmentId: row.id } : { window: identity.window }),
-          references: references.map((ref) => ref.number),
-        });
-        if (history.truncated)
-          carrierIssue =
-            "Carrier evidence exceeds the bounded history scan; review before correction.";
-        else if (
-          carrierClaimsConflict([...suggestion.explicit, ...history.claims])
-        )
-          carrierIssue =
-            "Conflicting explicit carrier evidence may describe a handoff; review before association or correction.";
-      }
-      let correctingCarrier = false;
-      if (
-        row &&
-        carrier.id &&
-        row.carrierId &&
-        row.carrierId !== carrier.id &&
-        (!row.trackingNumber ||
-          normalizeTrackingNumber(row.trackingNumber) === number)
-      ) {
-        if (suggestion.primary.carrier) correctingCarrier = !carrierIssue;
-        else
-          carrierIssue ??=
-            "Carrier claims disagree; inspect the retained source before replacing the stored carrier.";
-      }
+      const { carrierIssue, correctingCarrier } = planCarrierCorrection({
+        row,
+        carrierId: carrier.id,
+        number,
+        sourceBindingAmbiguous,
+        explicitConflict: carrierClaimsConflict(suggestion.explicit),
+        historyTruncated: carrierHistory?.truncated ?? false,
+        historyConflict: carrierHistory
+          ? carrierClaimsConflict([
+              ...suggestion.explicit,
+              ...carrierHistory.claims,
+            ])
+          : false,
+        supported: Boolean(suggestion.primary.carrier),
+        candidates: identity.candidates,
+      });
       const currentRowId = row?.id;
-      if (
-        row &&
-        identity.candidates.some(
-          (candidate) =>
-            candidate.id === currentRowId && candidate.carrier_conflict,
-        ) &&
-        !correctingCarrier
-      )
-        carrierIssue ??=
-          "Nearby tracking evidence has conflicting carrier identity; review before association.";
       const projection = row
         ? await projectCarrierReferences(tdb, {
             row,
