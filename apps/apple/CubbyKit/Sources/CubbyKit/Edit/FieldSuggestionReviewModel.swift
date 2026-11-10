@@ -141,7 +141,10 @@ public final class FieldSuggestionReviewModel {
     }
 
     public var reviewedFinanceFields: [String] {
-        let keys = fields.compactMap { field in proposal(field.key)?.financeReview == nil ? nil : field.key }
+        let keys = fields.compactMap { field in
+            field.suggestion?.financeReview != nil && proposal(field.key)?.financeReview != nil
+                ? field.key : nil
+        }
         guard let first = keys.first, let review = proposal(first)?.financeReview,
             keys.allSatisfy({ proposal($0)?.financeReview?.fingerprint == review.fingerprint })
         else { return [] }

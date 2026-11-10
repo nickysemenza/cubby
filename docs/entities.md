@@ -1569,7 +1569,8 @@ Saved-record spending review is declared per field as
 `control.suggest.financeReview.context`: `finance` for the Purchase fallback and
 Expense category, `vendor` for the Vendor default category and spending profile.
 The context selects the saved evidence the server reads, the fingerprint-fenced
-finance writer that applies the proposal and its patch, and the saved-record
+writer that applies the proposal (the `finance` writer books `spendingCategoryId`;
+the `vendor` writer patches the declared Vendor fields), and the saved-record
 gating that web and native read from the manifest. FinancialTransaction's
 read-only `spendingCategoryId` declares no review, so it never enters that writer.
 The `financeCategoryReview` wire enums keep their literal order; a type check
