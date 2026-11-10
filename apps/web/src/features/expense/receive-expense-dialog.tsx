@@ -213,6 +213,7 @@ const ReceiveBody: FC<ReceiveBodyProps> = ({
               search={{
                 family: "product_pair",
                 record: `product:${productId}`,
+                candidate: match.candidate.id,
               }}
               className="font-medium text-primary hover:underline"
             >

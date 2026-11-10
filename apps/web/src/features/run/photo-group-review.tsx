@@ -2556,6 +2556,7 @@ function PhotoProductSuggestions({
                         search={{
                           family: "product_pair",
                           record: `product:${proposal.committedProduct.id}`,
+                          candidate: candidate.id,
                         }}
                       />
                     }
