@@ -153,8 +153,13 @@ export const statementTransactionJudgment = z.object({
   void: z
     .object({ transactionId: z.uuid(), coverageImportId: z.uuid() })
     .nullable(),
-  /** Other charges that could represent the same money. */
-  siblings: z.array(z.object({ source: z.string(), chargeKey: z.string() })),
+  /** Older stored judgments use same-source charge keys. */
+  siblings: z.array(
+    z.union([
+      z.string(),
+      z.object({ source: z.string(), chargeKey: z.string() }),
+    ]),
+  ),
   transfer: statementOwnAccountMove.nullable().default(null),
   transferPair: statementTransferPairRef.nullable().default(null),
   matchedTransactionId: z.uuid().optional(),
