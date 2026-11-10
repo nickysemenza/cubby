@@ -8,6 +8,7 @@ import {
   repositoryTransaction,
   type RepositoryQueryInput,
 } from "~/server/db/repository-access.boundary";
+import { markListSummariesDirty } from "~/server/generic/list/repo/list-summary";
 import { markWorkPublicationDirty } from "~/server/generic/work-queue/repo/work-publication";
 
 /**
@@ -45,8 +46,9 @@ export async function recordChange(
     return;
   }
   if (change.ringFromBackground || inHttpRequest()) {
-    // The member's next Work read republishes from this write's results.
+    // The member's next Work read and list summaries republish from this write's results.
     await repositoryAfterCommit(db, markWorkPublicationDirty);
+    await repositoryAfterCommit(db, markListSummariesDirty);
     await recordCommittedChanges(
       db,
       Object.fromEntries(

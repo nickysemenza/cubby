@@ -756,7 +756,7 @@ export function defineRepository<
         reader: readerOf(ctx),
       }),
       readIntent === "page" && projection !== undefined
-        ? scaffold.totalSummary(ctx.db, filters)
+        ? scaffold.totalSummary(ctx.db, filters, undefined, readerOf(ctx))
         : undefined,
     ]);
     return summary === undefined ? page : { ...page, ...summary };

@@ -522,6 +522,16 @@ Pivot sends the same list request with page size 0 and `groupBy`, reading counts
 summary operation; a placeholder from other filters renders as loading, never as
 the current matrix.
 
+Browser page reads take ungrouped totals and evidence metrics from the
+published `ListSummary` row for the entity, filters and member
+(`generic/list/repo/list-summary.ts`) rather than aggregating the whole
+population per page. The first read of a population computes live and publishes
+after the response. A committed member write marks every publication dirty, so
+the next read still serves the previous summary and republishes through
+`waitUntil`. A read more than ten minutes after the last publication also
+republishes, which bounds background-only changes. Grouped reads, Pivot, MCP,
+Apple and internal reads compute live.
+
 ### Images and enrichment
 
 - Generic rosters request `displayCover` for thumbnails and keep its full count

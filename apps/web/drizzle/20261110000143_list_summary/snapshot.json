@@ -1,0 +1,179 @@
+{
+  "type": "diff",
+  "version": "9",
+  "dialect": "postgres",
+  "id": "02782567-8679-4fa9-b32a-9ec7efa56972",
+  "prevIds": [
+    "fbae7cad-3cfc-4f70-b38d-b892e97eb11c"
+  ],
+  "footprints": [
+    {
+      "statementType": "create_table",
+      "statementTarget": [
+        "table",
+        "public",
+        "ListSummary"
+      ],
+      "writes": [
+        "s|tbl|public.ListSummary",
+        "n|tbl|public.ListSummary",
+        "e|tbl|public.ListSummary",
+        "n|rel|public.ListSummary",
+        "n|type|public.ListSummary",
+        "n|rel|public.ListSummary_pkey"
+      ],
+      "reads": [
+        "n|sch|public"
+      ]
+    },
+    {
+      "statementType": "create_index",
+      "statementTarget": [
+        "index",
+        "public",
+        "ListSummary",
+        "ListSummary_publishedAt_idx"
+      ],
+      "writes": [
+        "s|idx|public.ListSummary_publishedAt_idx",
+        "n|idx|public.ListSummary_publishedAt_idx",
+        "e|idx|public.ListSummary_publishedAt_idx",
+        "n|rel|public.ListSummary_publishedAt_idx"
+      ],
+      "reads": [
+        "n|tbl|public.ListSummary",
+        "n|sch|public",
+        "n|col|public.ListSummary.publishedAt"
+      ]
+    }
+  ],
+  "deltas": [
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "name": "ListSummary",
+        "isRlsEnabled": false,
+        "entityType": "tables"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "ListSummary",
+        "name": "entity",
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "ListSummary",
+        "name": "key",
+        "type": "text",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "ListSummary",
+        "name": "summary",
+        "type": "jsonb",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "ListSummary",
+        "name": "publishedAt",
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "ListSummary",
+        "name": "dirtyAt",
+        "type": "timestamp",
+        "typeSchema": null,
+        "notNull": false,
+        "dimensions": 0,
+        "default": null,
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "ListSummary",
+        "name": "ListSummary_publishedAt_idx",
+        "nameExplicit": true,
+        "columns": [
+          {
+            "value": "publishedAt",
+            "isExpression": false,
+            "asc": true,
+            "nullsFirst": false,
+            "opclass": null
+          }
+        ],
+        "isUnique": false,
+        "where": null,
+        "with": "",
+        "method": "btree",
+        "concurrently": false,
+        "entityType": "indexes"
+      }
+    },
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "ListSummary",
+        "name": "ListSummary_pkey",
+        "columns": [
+          "entity",
+          "key"
+        ],
+        "nameExplicit": false,
+        "entityType": "pks"
+      }
+    }
+  ]
+}

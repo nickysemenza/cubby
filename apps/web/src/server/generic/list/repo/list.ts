@@ -152,6 +152,7 @@ import {
   type ListPagePrefetch,
   type ListReadOptions,
 } from "./list-projection";
+import { listSummaryKey, readPublishedListSummary } from "./list-summary";
 import {
   descriptorsFor,
   fieldModelFor,
@@ -1455,7 +1456,7 @@ export function listScaffold<
       ).withReader(request.reader);
       const totals =
         request.readIntent !== "count" && request.projection === undefined
-          ? scaffold.totalSummary(db, request.filters, context)
+          ? scaffold.totalSummary(db, request.filters, context, request.reader)
           : undefined;
       const [page, summary] = await Promise.all([
         scaffold.list(db, scoped, {
@@ -1618,12 +1619,32 @@ export function listScaffold<
       db: Database | DrizzleTransaction,
       filters: Filters,
       context?: ListContext,
+      /** A browser reader reads the last published totals (`list-summary`). */
+      reader?: ListReader,
     ): Promise<
       { sums: Record<string, number>; incompleteSums: string[] } | undefined
     > {
       const totals = entitySummary[entity]?.list.totals ?? [];
       const keys = [...new Set(totals.flatMap((total) => total.keys))];
       if (keys.length === 0) return undefined;
+      const browser = reader?.actor?.channel === "web" ? reader.actor : null;
+      if (browser)
+        return (
+          await readPublishedListSummary(
+            db,
+            {
+              entity,
+              key: await listSummaryKey({
+                summary: "totals",
+                filters,
+                reader: browser.userId,
+              }),
+            },
+            async () => ({
+              totals: await scaffold.totalSummary(db, filters, context),
+            }),
+          )
+        ).totals;
       const prepared =
         context ??
         (await scaffold.context(db, {
@@ -1952,49 +1973,76 @@ export function listScaffold<
       return withListReadTracing(
         { entity, fields: projection.length },
         async () => {
+          const metricsRequested =
+            request.includeMetrics !== false &&
+            generatedEntityListFields[entity].evidenceMetrics.length > 0 &&
+            readIntent === "page";
+          const groupedQuery = (
+            limit: number,
+            offset: number,
+            groups: typeof group,
+          ) =>
+            readGroupedQuery({
+              db,
+              source,
+              id: sql`${table.id}`,
+              code: sql`${table.shortcode}`,
+              where,
+              joins: spec.joins,
+              groups,
+              evidence: compileEvidenceMetrics({
+                entity,
+                groupBy: listGroupByFromFilters(request.filters),
+                rows: rowsSql,
+                context,
+              }),
+              // Evidence refinements own their sums and coverage; do not
+              // compute the replaced root rollup over the full population.
+              metrics: generatedEntityListFields[entity].metrics
+                .filter(
+                  ({ key }) =>
+                    !generatedEntityListFields[entity].evidenceMetrics.some(
+                      (metric) => metric.key === key,
+                    ),
+                )
+                .map(({ key }) => ({
+                  key,
+                  value: listMetricSql(entity, key, derivedSql, table, context),
+                })),
+              order: page.orderBy,
+              limit,
+              offset,
+            });
+          // Browser pages read whole-population metrics from their last
+          // publication instead of recomputing the catalog per request.
+          const browser =
+            request.reader?.actor?.channel === "web"
+              ? request.reader.actor
+              : null;
+          const publishedMetrics =
+            metricsRequested && group.length === 0 && browser
+              ? (
+                  await readPublishedListSummary(
+                    db,
+                    {
+                      entity,
+                      key: await listSummaryKey({
+                        summary: "metrics",
+                        filters: request.filters,
+                        reader: browser.userId,
+                      }),
+                    },
+                    async () => ({
+                      metrics: (await groupedQuery(0, 0, [])).metrics,
+                    }),
+                  )
+                ).metrics
+              : undefined;
           const groupedPage =
             (group.length > 0 ||
-              (request.includeMetrics !== false &&
-                generatedEntityListFields[entity].evidenceMetrics.length >
-                  0)) &&
+              (metricsRequested && publishedMetrics === undefined)) &&
             readIntent === "page"
-              ? await readGroupedQuery({
-                  db,
-                  source,
-                  id: sql`${table.id}`,
-                  code: sql`${table.shortcode}`,
-                  where,
-                  joins: spec.joins,
-                  groups: group,
-                  evidence: compileEvidenceMetrics({
-                    entity,
-                    groupBy: listGroupByFromFilters(request.filters),
-                    rows: rowsSql,
-                    context,
-                  }),
-                  // Evidence refinements own their sums and coverage; do not
-                  // compute the replaced root rollup over the full population.
-                  metrics: generatedEntityListFields[entity].metrics
-                    .filter(
-                      ({ key }) =>
-                        !generatedEntityListFields[entity].evidenceMetrics.some(
-                          (metric) => metric.key === key,
-                        ),
-                    )
-                    .map(({ key }) => ({
-                      key,
-                      value: listMetricSql(
-                        entity,
-                        key,
-                        derivedSql,
-                        table,
-                        context,
-                      ),
-                    })),
-                  order: page.orderBy,
-                  limit: take,
-                  offset: skip,
-                })
+              ? await groupedQuery(take, skip, group)
               : null;
           const result = groupedPage
             ? {
@@ -2052,7 +2100,9 @@ export function listScaffold<
               : count !== undefined && skip + take < count;
           const grouped =
             groupedPage === null
-              ? {}
+              ? publishedMetrics === undefined
+                ? {}
+                : { metrics: publishedMetrics }
               : {
                   metrics: groupedPage.metrics,
                   ...(group.length
