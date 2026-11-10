@@ -79,6 +79,7 @@ export function CalendarAgenda({
   emptyMessage,
   showAllDays = false,
   onDayClick,
+  renderDayMeta,
   renderItem,
 }: {
   items: readonly CalendarItem[];
@@ -90,6 +91,8 @@ export function CalendarAgenda({
   /** Render the complete period, including empty ruled days. */
   showAllDays?: boolean;
   onDayClick?: (day: string) => void;
+  /** Day-level figures (the day's spend) beside the event count. */
+  renderDayMeta?: (day: string) => React.ReactNode;
   renderItem: (item: CalendarItem) => React.ReactNode;
 }) {
   const groups = groupItemsByDay(items, includesDay, range, showAllDays);
@@ -117,7 +120,8 @@ export function CalendarAgenda({
                     ? "Today"
                     : formatCalendarDay(group.day, "weekdayMonthDay")}
                 </span>
-                <span className="ml-auto text-slate tabular-nums">
+                <span className="ml-auto">{renderDayMeta?.(group.day)}</span>
+                <span className="text-slate tabular-nums">
                   {group.items.length}
                 </span>
               </button>

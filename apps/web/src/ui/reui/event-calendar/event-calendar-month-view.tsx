@@ -16,7 +16,9 @@ import {
   useState,
 } from "react";
 import {
+  useEventCalendar,
   useEventCalendarDay,
+  useEventCalendarMonthSlots,
   useEventCalendarSelector,
   useEventCalendarSettings,
   useEventCalendarWeek,
@@ -37,6 +39,7 @@ import {
   restoreEventCalendarChipFocus,
 } from "~/ui/reui/event-calendar/event-calendar-focus";
 import {
+  getDayKey,
   getRangeKey,
   toZoned,
   zonedStartOfDay,
@@ -106,7 +109,32 @@ function EventCalendarMonthView({
     locale: settings.locale,
   });
 
-  const gridTemplateColumns = `repeat(${headerDays.length}, minmax(0, 1fr))`;
+  const instance = useEventCalendar();
+  const slots = useEventCalendarMonthSlots();
+  const railed = Boolean(slots.renderWeekRail);
+  const gridTemplateColumns = `repeat(${headerDays.length}, minmax(0, 1fr))${
+    railed ? " var(--ec-week-rail-w, 7rem)" : ""
+  }`;
+  // One flag per row: a week with no occurrences keeps the shorter empty-row
+  // floor so busy weeks get the height.
+  const occupiedWeeks = useEventCalendarSelector(
+    () => {
+      const index = instance.internals.getIndex();
+      return weeks
+        .map((week) =>
+          week.some((day) => {
+            const bucket = index.byDay.get(
+              getDayKey(day, settings.timeZone),
+            );
+            return Boolean(bucket?.allDay.length || bucket?.timed.length);
+          })
+            ? "1"
+            : "0",
+        )
+        .join("");
+    },
+    { calendar: instance },
+  );
   const contained = false;
 
   // "auto" fits as many event rows as the cell height allows and rolls the rest
@@ -199,6 +227,14 @@ function EventCalendarMonthView({
               </>
             </div>
           ))}
+          {railed && (
+            <div
+              role="columnheader"
+              className="truncate border-s px-2 py-1.5 text-xs font-medium text-muted-foreground"
+            >
+              {slots.weekRailLabel ?? "Week"}
+            </div>
+          )}
         </div>
         <div
           data-slot="event-calendar-month-body"
@@ -209,7 +245,13 @@ function EventCalendarMonthView({
           style={{
             gridTemplateRows: contained
               ? `repeat(${weeks.length}, minmax(0, 1fr))`
-              : `repeat(${weeks.length}, minmax(var(--ec-month-row-min-h, 8rem), auto))`,
+              : weeks
+                  .map((_, index) =>
+                    occupiedWeeks[index] === "1"
+                      ? "minmax(var(--ec-month-row-min-h, 8rem), auto)"
+                      : "minmax(var(--ec-month-empty-row-min-h, var(--ec-month-row-min-h, 8rem)), auto)",
+                  )
+                  .join(" "),
           }}
         >
           {weeks.map((week, rowIndex) => (
@@ -262,6 +304,7 @@ function EventCalendarMonthWeek({
   contentRef?: Ref<HTMLDivElement>;
 }) {
   const settings = useEventCalendarSettings();
+  const slots = useEventCalendarMonthSlots();
   const firstDay = week[0]!;
   const { bars: weekBars, rowStart } = useEventCalendarWeek(firstDay);
   const colOffset = 0;
@@ -485,6 +528,15 @@ function EventCalendarMonthWeek({
           contentRef={col === 0 ? contentRef : undefined}
         />
       ))}
+      {slots.renderWeekRail && (
+        <div
+          role="gridcell"
+          data-slot="event-calendar-month-week-rail"
+          className="min-w-0 border-s bg-sidebar px-2 py-1.5"
+        >
+          {slots.renderWeekRail(week)}
+        </div>
+      )}
       {/* Continuous bar overlay: one element per bar, placed by grid-column so
           a cross-day span is a single unbroken block. pointer-events pass
           through the gaps to the cells below. NOT aria-hidden - these are the
@@ -644,6 +696,7 @@ function EventCalendarMonthCell({
 }) {
   const settings = useEventCalendarSettings();
   const drop = useEventCalendarDrop(day, true);
+  const dayMeta = useEventCalendarMonthSlots().renderDayMeta?.(day) ?? null;
   const { segments, isToday, isOutside } = useEventCalendarDay(day);
   const period = useEventCalendarSelector((state) => state.period);
 
@@ -795,14 +848,26 @@ function EventCalendarMonthCell({
       {/* Day number first, so lanes and "+N more" never hide the date. */}
       <div
         className={cn(
-          "flex h-6 shrink-0 flex-row-reverse items-center justify-between gap-1 px-1.5",
+          "relative flex h-6 shrink-0 flex-row-reverse items-center justify-between gap-1 px-1.5",
         )}
       >
+        {dayMeta != null && (
+          <span
+            data-slot="event-calendar-month-day-meta"
+            className="min-w-0 truncate transition-opacity group-hover/ec-cell:opacity-0"
+          >
+            {dayMeta}
+          </span>
+        )}
         <button
             type="button"
             data-slot="event-calendar-day-add"
             aria-label={settings.i18n.labels.addEvent}
-            className="flex size-5 cursor-pointer items-center justify-center rounded-sm bg-primary text-primary-foreground opacity-0 transition-opacity focus-visible:opacity-100 group-hover/ec-cell:opacity-100"
+            className={cn(
+              "flex size-5 cursor-pointer items-center justify-center rounded-sm bg-primary text-primary-foreground opacity-0 transition-opacity focus-visible:opacity-100 group-hover/ec-cell:opacity-100",
+              // The day's meta owns the corner at rest; the add button overlays it on hover.
+              dayMeta != null && "absolute end-1.5",
+            )}
             onClick={(e) => {
               e.stopPropagation();
               settings.onSlotClick?.(

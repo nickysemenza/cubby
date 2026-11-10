@@ -27,7 +27,11 @@ import {
 import type { RawCalendarItem } from "@cubby/schemas/calendar-raw-read";
 import { entityRefKey } from "@cubby/schemas/entity";
 import { fieldValueOf } from "@cubby/schemas/field-envelope";
-import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
+import {
+  type ExpenseId,
+  parseEntityId,
+  parseShortcodeFor,
+} from "@cubby/schemas/identifiers";
 import {
   MEAL_TYPE_LABELS,
   type MealType,
@@ -40,6 +44,7 @@ import {
   rawExpenseOut,
   rawTaskOut,
 } from "@cubby/schemas/work-raw-read";
+import { cents, dollars } from "@cubby/shared";
 import type { SQL } from "drizzle-orm";
 import {
   and,
@@ -63,7 +68,20 @@ import {
   notDeleted,
   withTransactionDatabase,
 } from "~/server/db/helpers";
-import { expense, project, task, meal, planting } from "~/server/db/schema";
+import {
+  expense,
+  meal,
+  planting,
+  product,
+  productCategory,
+  project,
+  spendingCategory,
+  task,
+} from "~/server/db/schema";
+import {
+  type ExpenseSpendingAllocationRow,
+  loadExpenseSpendingAllocations,
+} from "~/server/domains/expense/repo/expense-spending-allocation";
 import { expenseScaffold } from "~/server/domains/expense/repo/lookup";
 import {
   plantingScaffold,
@@ -614,12 +632,28 @@ async function getCalendarItems(
             shortcode: expense.shortcode,
             name: expense.name,
             expenseId: expense.id,
+            cost: expense.cost,
             projectName: project.name,
+            productName: product.name,
+            productCategoryShortcode: productCategory.shortcode,
+            productCategoryName: productCategory.name,
+            productCategoryEmoji: productCategory.emoji,
           })
           .from(expense)
           .leftJoin(
             project,
             and(eq(project.id, expense.projectId), notDeleted(project)),
+          )
+          .leftJoin(
+            product,
+            and(eq(product.id, expense.productId), notDeleted(product)),
+          )
+          .leftJoin(
+            productCategory,
+            and(
+              eq(productCategory.id, product.categoryId),
+              notDeleted(productCategory),
+            ),
           )
           .where(
             and(
@@ -633,6 +667,30 @@ async function getCalendarItems(
       items.map((item) => ({ entityKind: item.kind, entityId: item.id })),
     ),
   ]);
+  const allocations = spendingRows.length
+    ? await loadExpenseSpendingAllocations(
+        db,
+        spendingRows.map((row) => row.expenseId),
+      )
+    : new Map<ExpenseId, ExpenseSpendingAllocationRow[]>();
+  const allocatedCategoryIds = [
+    ...new Set(
+      [...allocations.values()].flatMap((rows) =>
+        rows.flatMap((row) =>
+          row.spendingCategoryId ? [row.spendingCategoryId] : [],
+        ),
+      ),
+    ),
+  ];
+  const spendingCategoryEmoji = new Map(
+    (allocatedCategoryIds.length
+      ? await getDb(db)
+          .select({ id: spendingCategory.id, emoji: spendingCategory.emoji })
+          .from(spendingCategory)
+          .where(inArray(spendingCategory.id, allocatedCategoryIds))
+      : []
+    ).map((row) => [row.id, row.emoji]),
+  );
   const spendingByLine = new Map<string, typeof spendingRows>();
   for (const row of spendingRows) {
     const rows = spendingByLine.get(row.shortcode) ?? [];
@@ -713,6 +771,15 @@ async function getCalendarItems(
     }
     return calendarItem.parse({
       ...item,
+      ...(item.kind === "purchase" && {
+        lines: item.lines.map((line) => ({
+          ...line,
+          productName:
+            line.productName ??
+            spendingByLine.get(line.id)?.[0]?.productName ??
+            null,
+        })),
+      }),
       source: sources[index],
       ...((item.kind === "expense" || item.kind === "purchase") && {
         spendingContext: {
@@ -727,6 +794,41 @@ async function getCalendarItems(
               rows.flatMap((row) => (row.projectName ? [row.projectName] : [])),
             ),
           ].sort(),
+          spendingCategories: categoryShares(
+            rows.flatMap((row) =>
+              (allocations.get(row.expenseId) ?? []).flatMap((allocation) =>
+                allocation.spendingCategoryShortcode &&
+                allocation.spendingCategoryName &&
+                allocation.spendingCategoryId
+                  ? [
+                      {
+                        id: allocation.spendingCategoryShortcode,
+                        name: allocation.spendingCategoryName,
+                        emoji:
+                          spendingCategoryEmoji.get(
+                            allocation.spendingCategoryId,
+                          ) ?? null,
+                        amount: allocation.amount,
+                      },
+                    ]
+                  : [],
+              ),
+            ),
+          ),
+          productCategories: categoryShares(
+            rows.flatMap((row) =>
+              row.productCategoryShortcode && row.productCategoryName
+                ? [
+                    {
+                      id: row.productCategoryShortcode,
+                      name: row.productCategoryName,
+                      emoji: row.productCategoryEmoji,
+                      amount: row.cost,
+                    },
+                  ]
+                : [],
+            ),
+          ).map(({ count, ...share }) => ({ ...share, lineCount: count })),
           parties: [...parties.values()].sort((a, b) =>
             a.name.localeCompare(b.name),
           ),
@@ -741,6 +843,35 @@ async function getCalendarItems(
       taskPage.hasMore ||
       (page !== undefined && plantingRows.length === page.limit),
   };
+}
+
+type CategoryShare = {
+  id: string;
+  name: string;
+  emoji: string | null;
+  amount: number | null;
+};
+
+/** Sum shares per category, largest first; one unpriced share makes the category's amount unknown. */
+function categoryShares(shares: readonly CategoryShare[]) {
+  const byId = new Map<string, CategoryShare & { count: number }>();
+  for (const share of shares) {
+    const existing = byId.get(share.id);
+    byId.set(share.id, {
+      ...share,
+      amount: !existing
+        ? share.amount
+        : existing.amount === null || share.amount === null
+          ? null
+          : dollars(cents(existing.amount) + cents(share.amount)),
+      count: (existing?.count ?? 0) + 1,
+    });
+  }
+  return [...byId.values()].sort(
+    (a, b) =>
+      Math.abs(b.amount ?? 0) - Math.abs(a.amount ?? 0) ||
+      a.name.localeCompare(b.name),
+  );
 }
 
 /** Visit bounded feed pages under one snapshot; the awaited consumer releases each page. */

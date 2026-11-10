@@ -33,6 +33,8 @@ import {
   purchaseShortcode,
   taskShortcode,
   ledgerPartyShortcode,
+  productCategoryShortcode,
+  spendingCategoryShortcode,
 } from "./identifiers";
 import { mealFilterFields } from "./meal";
 import { plantingFilterFields } from "./planting";
@@ -211,9 +213,27 @@ export const calendarBeneficiarySource = withFieldEnvelopes(
   { effectiveBeneficiaries: null },
 );
 
+/** A category's share of one spending event; `amount` is null when any share is unpriced. */
+const calendarCategoryShare = z.object({
+  name: z.string(),
+  emoji: z.string().nullable(),
+  amount: z.number().nullable(),
+});
+
 const calendarSpendingContext = z.object({
   beneficiarySources: z.array(calendarBeneficiarySource),
   projectNames: z.array(z.string()),
+  /** Effective spending-category allocations, largest share first. */
+  spendingCategories: z.array(
+    calendarCategoryShare.extend({ id: spendingCategoryShortcode }),
+  ),
+  /** Product categories of the event's lines, largest share first. */
+  productCategories: z.array(
+    calendarCategoryShare.extend({
+      id: productCategoryShortcode,
+      lineCount: z.number().int().positive(),
+    }),
+  ),
   parties: z.array(
     z.object({
       id: ledgerPartyShortcode,

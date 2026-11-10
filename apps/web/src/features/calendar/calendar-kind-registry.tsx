@@ -87,6 +87,31 @@ type CalendarKindSpec<K extends CalendarItemKind> = {
 const tradeLabel = (trade: Trade | null) =>
   trade === null ? null : TRADE_LABELS[trade];
 
+type SpendingItem = ItemOf<"expense"> | ItemOf<"purchase">;
+
+/** The largest spending-category share, naming how many others the event splits into. */
+function spendingCategoryText(item: SpendingItem): string | null {
+  const [first, ...rest] = item.spendingContext?.spendingCategories ?? [];
+  if (!first) return null;
+  return [first.emoji, first.name, rest.length ? `+${rest.length}` : null]
+    .filter(Boolean)
+    .join(" ");
+}
+
+/** The chip's one muted context slot: an explicit Project wins over the category. */
+function spendingContextText(item: SpendingItem): string | null {
+  return (
+    item.spendingContext?.projectNames.join(", ") || spendingCategoryText(item)
+  );
+}
+
+// Largest spend first within a day, below the priority-10 sources so meals and
+// tasks keep their place in a combined calendar. Bounded to (9, 10).
+const spendingPriority = (cost: number | null) => {
+  const amount = Math.abs(cost ?? 0);
+  return 9 + amount / (amount + 1000);
+};
+
 const calendarKindRegistry = {
   meal: {
     create: (date) => mealCaptureRequest({ date }),
@@ -185,23 +210,17 @@ const calendarKindRegistry = {
     metadata: (item) =>
       [
         fieldValueOf(item.source.fields.vendor),
-        item.productName,
+        spendingCategoryText(item),
         ...(item.spendingContext?.projectNames ?? []),
-        ...(item.spendingContext?.parties.map((party) => party.name) ?? []),
-        fieldValueOf(item.source.fields.trade)
-          ? tradeLabel(fieldValueOf(item.source.fields.trade))
-          : "Unassigned trade",
+        item.productName,
+        tradeLabel(fieldValueOf(item.source.fields.trade)),
       ]
         .filter(Boolean)
         .join(" · "),
-    compactBadge: (item) => ({
-      label: item.future ? "Planned" : "Actual",
-      variant: item.future ? "warning" : "outline",
-    }),
-    richBadge: (item) => ({
-      label: item.future ? "Planned" : "Actual",
-      variant: item.future ? "warning" : "outline",
-    }),
+    compactBadge: (item) =>
+      item.future ? { label: "Planned", variant: "warning" } : undefined,
+    richBadge: (item) =>
+      item.future ? { label: "Planned", variant: "warning" } : undefined,
     edit: (item) =>
       item.future
         ? {
@@ -234,24 +253,30 @@ const calendarKindRegistry = {
           : item.future
             ? "var(--warning)"
             : entities.expense.color.accent,
-      priority: 10,
+      priority: spendingPriority(item.cost),
     }),
   },
   purchase: {
     icon: () => KIND_ICONS.purchase,
     metadata: (item) =>
       [
+        item.occurrence === "refund" ? "Refund" : null,
         item.vendor ?? "Purchase",
+        spendingCategoryText(item),
         ...(item.spendingContext?.projectNames ?? []),
-        ...(item.spendingContext?.parties.map((party) => party.name) ?? []),
-      ].join(" · "),
+      ]
+        .filter(Boolean)
+        .join(" · "),
     edit: (_item) => ({
       mode: "read-only",
       entity: "purchase",
       reason:
         "Open the full purchase to review its evidence and edit its spending lines.",
     }),
-    event: () => ({ color: entities.purchase.color.accent, priority: 10 }),
+    event: (item) => ({
+      color: entities.purchase.color.accent,
+      priority: spendingPriority(item.cost),
+    }),
   },
   project: {
     create: (date) => projectCaptureRequest({ date }),
@@ -401,6 +426,7 @@ function calendarItemCreateRequest(kind: CalendarItemKind, date?: string) {
 }
 
 export {
+  spendingContextText,
   calendarItemCreateRequest,
   calendarItemEditDescriptor,
   calendarItemPresentation,

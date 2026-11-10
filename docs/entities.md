@@ -1204,11 +1204,15 @@ per-source media). Meals reuse the selected ids. Canonical images resolve once f
 concurrently with the spending-context read. The response keeps daily nutrition totals, image
 lists, assignment controls and provenance.
 
-Pills show explicitly assigned Projects (not inherited defaults) and spending beneficiary
-LedgerParty names, including a Purchase occurrence's contributing lines, from the effective spending
-allocation resolver and its [default and override policy](household-contribution-ledger.md#presentation-and-unknowns).
-Identities and inheritance state ride in the range batch, so every density renders initials avatars
-and inherited markers without per-row lookups. Explicit unknown attribution stays blank; unpriced
+Chips show explicitly assigned Projects (not inherited defaults), otherwise the largest effective
+spending category, and spending beneficiary LedgerParty names, including a Purchase occurrence's
+contributing lines, from the effective spending allocation resolver and its
+[default and override policy](household-contribution-ledger.md#presentation-and-unknowns).
+Identities and inheritance state ride in the range batch: chips draw initials for recorded
+beneficiaries and the inspector adds inherited ones with their markers, without per-row lookups.
+Spending events also carry effective spending-category allocations and their lines' Product
+categories, each with its emoji and amount, largest first; within a day, spending sorts by amount
+below meals and tasks. Explicit unknown attribution stays blank; unpriced
 lines keep recorded beneficiaries without fabricated allocations; absent project context has no
 placeholder. Spending omits discards (zero or unknown cost with negative product quantity); refunds
 and sales stay.

@@ -2,6 +2,7 @@ import { calendarItemKey, type CalendarItem } from "@cubby/schemas/calendar";
 import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
 import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
+import { addDays } from "date-fns";
 import { useId, useMemo, useRef, useState } from "react";
 
 import { EntityQualityFact } from "~/entity/display/data-quality-value";
@@ -11,9 +12,14 @@ import type { EntityMutationPort } from "~/entity/editing/types";
 import { useEntityEditSession } from "~/entity/editing/use-entity-edit-session";
 import { entityDetailLink } from "~/entity/entities";
 import { WhyValue } from "~/entity/fields/explanation/why-value";
+import { InheritedMarker } from "~/entity/fields/field-resolution";
 import { PickerField } from "~/entity/forms/picker-field";
+import { CategoryLabelById } from "~/entity/presentation/category-label";
+import { SpendingCategoryLabel } from "~/entity/presentation/spending-category-label";
 import { FieldSuggestionProvider } from "~/entity/suggestions/field-suggestion-provider";
+import { formatDateSpan } from "~/lib/date-span";
 import { formatCurrency } from "~/lib/number-format";
+import { formatPlainDate, parsePlainDate } from "~/lib/plain-date";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { DateRangeField } from "~/ui/forms/date-span-field";
 import {
@@ -37,7 +43,11 @@ import { Facts, FactsDensityProvider } from "~/ui/records/facts";
 import { RecordList, RecordRow } from "~/ui/records/record-list";
 
 import { DuplicateMealButton } from "../meal/copy-meals";
-import { CalendarItemPresentation, itemMetadata } from "./calendar-item-row";
+import {
+  CalendarItemAmount,
+  CalendarItemPresentation,
+  itemMetadata,
+} from "./calendar-item-row";
 import { calendarItemEditDescriptor } from "./calendar-kind-registry";
 
 interface CalendarItemInspectorProps {
@@ -105,7 +115,10 @@ function CalendarInspectorOverlay({
       aria-label={`${item.interaction === "read-only" ? "View" : "Edit"} ${item.title}`}
     >
       <PopoverHeader className="border-b pb-2">
-        <PopoverTitle>{item.title}</PopoverTitle>
+        <div className="flex min-w-0 items-baseline gap-2">
+          <PopoverTitle className="min-w-0 flex-1">{item.title}</PopoverTitle>
+          <CalendarItemAmount item={item} className="text-base font-semibold" />
+        </div>
         {item.kind === "meal" ? (
           <EntityQualityFact
             entity="meal"
@@ -366,16 +379,22 @@ function ReadOnlyCalendarItem({
 }) {
   return (
     <Stack gap="sm">
-      <div className="border-y py-2">
-        <CalendarItemPresentation item={item} variant="rich" />
-      </div>
+      {/* Spending facts below restate the rich row, so only other sources show it. */}
+      {item.kind !== "expense" && item.kind !== "purchase" && (
+        <div className="border-y py-2">
+          <CalendarItemPresentation item={item} variant="rich" />
+        </div>
+      )}
       <FactsDensityProvider density="compact">
         <Facts
           layout="list"
           facts={[
             {
-              label: "Dates",
-              value: `${item.startDate} – ${item.endDateExclusive}`,
+              label: spansOneDay(item) ? "Date" : "Dates",
+              value: formatDateSpan(
+                item.startDate,
+                spansOneDay(item) ? null : lastDay(item),
+              ),
             },
             {
               label: "Amount",
@@ -384,11 +403,15 @@ function ReadOnlyCalendarItem({
                 item.cost != null
                   ? formatCurrency(item.cost)
                   : undefined,
-              className: "tabular-nums",
+              className: "font-mono tabular-nums",
             },
+            ...spendingFacts(item),
           ]}
         />
       </FactsDensityProvider>
+      {(item.kind === "expense" || item.kind === "purchase") && (
+        <ProductCategoryBreakdown item={item} />
+      )}
       {item.kind === "purchase" && <PurchaseBreakdown item={item} />}
       {item.kind === "purchase" && item.evidenceNote && (
         <p>{item.evidenceNote}</p>
@@ -396,6 +419,117 @@ function ReadOnlyCalendarItem({
       <p className="text-muted-foreground">{reason}</p>
       <CalendarBeneficiaryExplanations item={item} />
       <OpenFullRecord item={item} />
+    </Stack>
+  );
+}
+
+type SpendingItem = Extract<CalendarItem, { kind: "expense" | "purchase" }>;
+
+const lastDay = (item: CalendarItem) =>
+  formatPlainDate(addDays(parsePlainDate(item.endDateExclusive), -1));
+const spansOneDay = (item: CalendarItem) => lastDay(item) === item.startDate;
+
+const PURCHASE_BASIS_LABELS = {
+  stated_total: "Receipt total",
+  expense_lines: "Sum of spending lines",
+  settlement: "Card settlement",
+  unknown: "Unknown",
+} satisfies Record<
+  Extract<CalendarItem, { kind: "purchase" }>["basis"],
+  string
+>;
+
+/** Category, Project and beneficiary facts; inherited beneficiaries keep their marker here. */
+function spendingFacts(item: CalendarItem) {
+  if (item.kind !== "expense" && item.kind !== "purchase") return [];
+  const context = item.spendingContext;
+  const categories = context?.spendingCategories ?? [];
+  return [
+    ...(item.kind === "purchase"
+      ? [
+          {
+            label: "Amount basis",
+            value: PURCHASE_BASIS_LABELS[item.basis],
+          },
+        ]
+      : []),
+    {
+      label:
+        categories.length > 1 ? "Spending categories" : "Spending category",
+      value: categories.length ? (
+        <span className="flex min-w-0 flex-col items-start gap-1">
+          {categories.map((category) => (
+            <span
+              key={category.id}
+              className="flex max-w-full min-w-0 items-center gap-1.5"
+            >
+              <SpendingCategoryLabel
+                id={category.id}
+                name={category.name}
+                emoji={category.emoji}
+              />
+              {categories.length > 1 && category.amount !== null && (
+                <span className="shrink-0 font-mono text-muted-foreground tabular-nums">
+                  {formatCurrency(category.amount)}
+                </span>
+              )}
+            </span>
+          ))}
+        </span>
+      ) : undefined,
+    },
+    {
+      label: "Project",
+      value: context?.projectNames.length
+        ? context.projectNames.join(", ")
+        : undefined,
+    },
+    {
+      label: "For",
+      value: context?.parties.length ? (
+        <span className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+          {context.parties.map((party) => (
+            <span key={party.id} className="inline-flex items-center gap-1">
+              {party.name}
+              {party.inherited && <InheritedMarker />}
+            </span>
+          ))}
+        </span>
+      ) : undefined,
+    },
+  ];
+}
+
+/** Lines grouped by their Product's category, largest share first. */
+function ProductCategoryBreakdown({ item }: { item: SpendingItem }) {
+  const categories = item.spendingContext?.productCategories ?? [];
+  if (categories.length === 0) return null;
+  return (
+    <Stack gap="xs">
+      <span className="text-xs font-medium text-muted-foreground">
+        By product category
+      </span>
+      <RecordList aria-label="Spending by product category">
+        {categories.map((category) => (
+          <RecordRow
+            key={category.id}
+            clip={false}
+            primary={
+              <CategoryLabelById id={category.id} name={category.name} />
+            }
+            secondary={`${category.lineCount} ${category.lineCount === 1 ? "line" : "lines"}`}
+            trailing={
+              category.amount === null ? (
+                "Unknown amount"
+              ) : (
+                <span className="font-mono tabular-nums">
+                  {formatCurrency(category.amount)}
+                </span>
+              )
+            }
+          />
+        ))}
+      </RecordList>
     </Stack>
   );
 }
@@ -434,7 +568,13 @@ function PurchaseBreakdown({
             }
             secondary={line.productName}
             trailing={
-              line.cost === null ? "Unknown amount" : formatCurrency(line.cost)
+              line.cost === null ? (
+                "Unknown amount"
+              ) : (
+                <span className="font-mono tabular-nums">
+                  {formatCurrency(line.cost)}
+                </span>
+              )
             }
           />
         ))}
