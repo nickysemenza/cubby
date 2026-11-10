@@ -11,8 +11,9 @@ import { EntityIcon } from "~/entity/entities";
 import { Image } from "~/ui/media/image";
 import { TileOverlay } from "~/ui/media/tile-overlay";
 
+const MIN_COUNT_SIZE = 48;
+
 interface EntityCoverProps {
-  imageCount?: number;
   images: readonly ImageUrlSummary[];
   entity?: Entity;
   alt?: string;
@@ -33,7 +34,6 @@ interface EntityCoverProps {
  */
 export function EntityCover({
   images,
-  imageCount,
   entity,
   alt = "",
   size,
@@ -96,7 +96,11 @@ export function EntityCover({
         fit={fit}
         className="absolute inset-0 h-full w-full bg-card"
       />
-      <TileOverlay count={(imageCount ?? images.length) - 1} />
+      {/* A row-height or inline cover has no room for "+N" beside the
+          image, so the label only hid it; the image chain lists the rest. */}
+      {size == null || size >= MIN_COUNT_SIZE ? (
+        <TileOverlay count={images.length - 1} />
+      ) : null}
     </div>
   );
 }

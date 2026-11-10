@@ -6,7 +6,6 @@ import { EntityCover } from "~/entity/components/entity-cover";
 import { ROW_DENSITY } from "~/ui/data-table/density";
 
 interface ImageThumbnailProps {
-  imageCount?: number;
   images: Array<ImageUrlSummary & { id?: string; filename?: string }>;
   alt?: string;
   preview?: boolean;
@@ -19,17 +18,20 @@ interface ImageThumbnailProps {
 /** Image thumbnail that fills the cell height (cell must have h-px trick). */
 export const ImageThumbnail = ({
   images,
-  imageCount,
   alt = "Image",
   preview = true,
   entity,
   fallback,
 }: ImageThumbnailProps) => {
+  // The cover's frame overhangs its cell by a pixel, so spill-over read it as
+  // clipped and painted an inert copy over it that swallowed the preview.
   return (
-    <div className="flex h-full items-center justify-center">
+    <div
+      data-cell-spill-off=""
+      className="flex h-full items-center justify-center"
+    >
       <EntityCover
         images={images}
-        imageCount={imageCount}
         alt={alt}
         entity={entity}
         fallback={fallback}

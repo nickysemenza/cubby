@@ -130,7 +130,10 @@ function explainedCellContent<TItem extends RowData>(
       {content}
     </FieldRecordValue>
   );
-  return explanation && rowIdentity.success ? (
+  // The image column's cover already opens the display-image chain; a second
+  // ⓘ rail over a row-height thumbnail covered it and the hover preview.
+  const imageCell = cell.column.columnDef.meta?.entityColumnRole === "image";
+  return explanation && rowIdentity.success && !imageCell ? (
     <CellFrame
       overlay
       trailing={
