@@ -4,8 +4,8 @@ import { describe, expect, it } from "vitest";
 import { EntityCover } from "./entity-cover";
 
 describe("EntityCover", () => {
-  it("uses product-safe contain sizing and reports additional images", () => {
-    render(
+  it("uses product-safe contain sizing and counts extra images when it has room", () => {
+    const cover = (size: number) => (
       <EntityCover
         images={[
           { url: "https://example.com/one.png" },
@@ -13,14 +13,17 @@ describe("EntityCover", () => {
         ]}
         entity="product"
         alt="Paint tin"
-        size={40}
-      />,
+        size={size}
+      />
     );
+    const { rerender } = render(cover(64));
 
     expect(screen.getByRole("img", { name: "Paint tin" })).toHaveClass(
       "object-contain",
     );
     expect(screen.getByText("+1")).toBeInTheDocument();
+    rerender(cover(24));
+    expect(screen.queryByText("+1")).not.toBeInTheDocument();
   });
 
   it("renders no reserved tile when an optional cover is absent", () => {

@@ -141,7 +141,6 @@ test("taxonomy edits keep product classification paths and labels separate from 
   );
   const row = page.getByRole("row").filter({ hasText: productName });
   await expect(row).toHaveCount(1);
-  await expect(row.getByText("+1", { exact: true })).toBeVisible();
   await row
     .getByRole("button", { name: "Why this image", exact: true })
     .click();

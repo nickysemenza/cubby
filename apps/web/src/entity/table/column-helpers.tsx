@@ -542,7 +542,7 @@ export function createImageColumn<T extends object>(
     enableCellSelection: false,
     // h-px trick: setting height:1px on td makes h-full work on children
     // overflow-hidden prevents image from expanding the row. The cover fills
-    // the row; layout normalization adds any explanation rail beside it.
+    // the row and opens its own display-image chain, so it takes no rail.
     meta: attachCubbyColumnMeta<T>({
       provenance: options.provenance,
       explanation: options.explanation,
@@ -580,9 +580,6 @@ export function createImageColumn<T extends object>(
       ) : (
         <ImageThumbnail
           images={emoji ? [] : getImages(row)}
-          imageCount={
-            options.getImages || emoji ? undefined : rowDisplayCover(row).count
-          }
           alt="Image"
           entity={markEntity}
           fallback={

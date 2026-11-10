@@ -828,7 +828,7 @@ function normalizedColumnSize<TData extends RowData>(
     (measurement ? undefined : tailwindWidth(className, "w"));
   const role = definition.meta?.entityColumnRole;
   if (role === "image") {
-    // Image preview owns provenance work; only the explanation occupies a rail.
+    // The cover owns its image chain and preview; the column has no rail.
     const fixed = declared ?? 32;
     return { size: fixed, minSize: fixed, maxSize: fixed };
   }
