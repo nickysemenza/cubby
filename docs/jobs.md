@@ -735,7 +735,9 @@ attempt in flight. It holds until a member resumes. Sweeps keep their Run.
 Nothing queues an evaluation: `AiEvaluation.runAt` is set while the drain owes
 it (`priority` 0 when the owner or an uncancelled requester is a running,
 member-visible Run nobody scheduled; otherwise 1) and null once it settled or
-parked. Each feature is its own permit unit, so features page in parallel up to
+parked. A parked evaluation is owed again when a member launches its Run, and
+whenever a running Sweep's evaluate step still waits on it. Each feature is its
+own permit unit, so features page in parallel up to
 the queue's concurrency, which is also the bound on paid concurrency. A page
 claims rows under one lease token (`attemptToken` on `DrainContext`), a
 16-minute lease nothing renews because no consumer outlives 15 minutes. A mark
@@ -752,7 +754,11 @@ instead of buying it again.
 
 Each page observes up to 8 items; the rest stay owed and the drain rejoins fair
 selection after the page's checkpoint. Items run two at a time, each in its own
-guarded transactions under the drain lease. Heartbeat and completion logs
+guarded transactions under the drain lease. An item's workflow fence reads its
+own row by primary key and fails once that row's lease is stale, lapsed or
+released; the page-wide lease read filters on the unindexed `leaseToken`, so it
+runs only outside SERIALIZABLE transactions, before paid requests. Heartbeat and
+completion logs
 annotate `drain.claim`, `drain.prepare` and `drain.publish` phase timing
 without logging prompts or household evidence; the Job `page` log carries
 `pageResult`, limited to the numeric `processed`, `published`, `failed` and

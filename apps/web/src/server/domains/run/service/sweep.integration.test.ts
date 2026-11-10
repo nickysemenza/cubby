@@ -869,6 +869,29 @@ describe("Sweeps", () => {
     });
   });
 
+  // Failure mode: a page parks an evaluation while its Sweep is stopped, the
+  // Sweep returns without a member launch, and the wait never makes it due.
+  it("makes a parked evaluation due again while the Sweep waits on it", async () => {
+    await createRepoEntity(ctx, "project", { name: "Synthetic fence repair" });
+    const runId = await fieldSweep();
+    expect(await drive(runId)).toBe("wait");
+    await getDb(ctx.db).execute(
+      sql`UPDATE "AiEvaluation" SET "runAt" = NULL WHERE id IN (SELECT "evaluationId" FROM "AiEvaluationRequest" WHERE "runId" = ${runId}::uuid)`,
+    );
+    expect((await evaluationsOf(runId)).some((entry) => entry.item)).toBe(
+      false,
+    );
+    await getDb(ctx.db).execute(
+      sql`UPDATE "RunStep" SET meta = meta - 'capacityUntil' WHERE "runId" = ${runId}::uuid`,
+    );
+    expect(await drive(runId)).toBe("wait");
+    const waiting = await evaluationsOf(runId);
+    expect(waiting.length).toBeGreaterThan(0);
+    expect(
+      waiting.every((entry) => entry.state === "queued" && entry.item),
+    ).toBe(true);
+  });
+
   // Failure modes: a field Sweep step finishes before its evaluations do, or
   // fans out a child Run instead of requesting evaluations itself; cancelling
   // the Sweep leaves its evaluation Jobs running.

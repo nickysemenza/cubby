@@ -13,6 +13,7 @@ import { JOB_PAGE_LIMITS } from "@cubby/shared/job-page-limits";
 import { z } from "zod";
 
 import { AiBudgetExhaustedError } from "~/server/ai/budget";
+import { reviveRunAiEvaluationWork } from "~/server/ai/evaluation/repo/ai-evaluation-work";
 import {
   readEvaluationOutcomes,
   readEvaluationTally,
@@ -450,6 +451,8 @@ async function evaluationPage(
   const { step } = context;
   const { pending, total, completed, failed } = tally;
   const skipped = tally.blocked + tally.obsolete + tally.cancelled;
+  // This Run is running and still waits, so nothing it waits on may stay parked.
+  if (pending) await reviveRunAiEvaluationWork(context.db, context.run.id);
   // Errors are the newest-first sample; only a settled step records them.
   const errors: RunStepError[] =
     !pending && failed

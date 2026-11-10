@@ -37,8 +37,8 @@ import type {
 
 /** A newer attempt or a settled state owns the evaluation; this attempt writes nothing. */
 export class AiEvaluationAttemptObsoleteError extends Error {
-  constructor() {
-    super("AI evaluation attempt is obsolete");
+  constructor(options?: ErrorOptions) {
+    super("AI evaluation attempt is obsolete", options);
   }
 }
 
