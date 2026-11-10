@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import type { shipment, shipmentSourcePackage } from "~/server/db/schema";
 import { normalizeTrackingNumber } from "~/server/domains/shipment/repo/carrier-recognition";
+import { constraintViolation } from "~/server/errors/app-error";
 
 export const identityCandidateSchema = z.object({
   id: z.uuid(),
@@ -201,4 +202,25 @@ export function planCarrierCorrection(input: {
     carrierIssue ??=
       "Nearby tracking evidence has conflicting carrier identity; review before association.";
   return { carrierIssue, correctingCarrier };
+}
+
+export function validateNotificationDates(input: {
+  sourceKind: string;
+  notificationDate: string | null;
+  shipments: readonly {
+    observations: readonly import("@cubby/schemas/shipment-evidence").ShipmentObservationInput[];
+  }[];
+}) {
+  for (const packet of input.shipments)
+    for (const observation of packet.observations)
+      if (
+        observation.timeBasis === "notification_received" &&
+        (input.sourceKind === "tracking_page" ||
+          input.notificationDate === null ||
+          observation.time.kind !== "date" ||
+          observation.time.value !== input.notificationDate)
+      )
+        constraintViolation(
+          "Notification fallback must use the source notification's Los Angeles calendar date.",
+        );
 }

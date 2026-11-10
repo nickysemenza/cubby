@@ -16,7 +16,6 @@ import {
   datedShipmentEventTime,
   type RecordShipmentEvidenceInput,
   type ShipmentEvidence,
-  type ShipmentObservationInput,
 } from "@cubby/schemas/shipment-evidence";
 import {
   shipmentPurpose,
@@ -89,13 +88,14 @@ import {
   loadSourcePackages,
   loadAliasBindings,
   loadRetiredPackage,
+  loadIdentityCandidates,
 } from "./evidence-packet-load";
 import {
-  identityCandidateSchema,
   identityWindowSchema,
   withinIdentityPeriod,
   planPacketAdmission,
   planCarrierCorrection,
+  validateNotificationDates,
   sourcePackageSpelling,
   planSourceBinding,
   planAliasBinding,
@@ -208,39 +208,6 @@ const retainedRecordInput = z.strictObject({
 });
 type ShipmentWriterInput = Omit<RecordShipmentEvidenceInput, "shipments"> &
   Pick<z.infer<typeof retainedRecordInput>, "shipments">;
-
-async function identityCandidates(
-  db: Database,
-  references: readonly { number: string; carrier: string | null }[],
-  observations: readonly ShipmentObservationInput[],
-  notificationDate: string | null,
-) {
-  const dates = await getDb(db).execute(
-    sql`SELECT
-    min(shipment_event_day(e))::text AS first, max(shipment_event_day(e))::text AS last
-    FROM jsonb_array_elements(${JSON.stringify(observations)}::jsonb) e`,
-    "objects",
-  );
-  const observedWindow = identityWindowSchema.parse(dates[0]);
-  const window = {
-    first: observedWindow.first ?? notificationDate,
-    last: observedWindow.last ?? notificationDate,
-  };
-  const result = await getDb(db).execute(
-    // oxlint-disable-next-line cubby/no-raw-enum-literal-in-sql -- carrier is the existing identity JSON object's key, not a carrier-role value.
-    sql`SELECT id, shortcode, purchase_id,
-    first_day::text, last_day::text, carrier_conflict FROM shipment_identity_candidates(
-    (SELECT coalesce(jsonb_agg(jsonb_build_object('trackingNumber', r->>'trackingNumber',
-      'carrier', shipment_carrier_key(r->>'carrier'))), '[]'::jsonb)
-     FROM jsonb_array_elements(${JSON.stringify(references.map((ref) => ({ trackingNumber: ref.number, carrier: ref.carrier })))}::jsonb) r),
-    ${window.first}::date, ${window.last}::date)`,
-    "objects",
-  );
-  return {
-    window,
-    candidates: z.array(identityCandidateSchema).parse(result),
-  };
-}
 
 async function retainedPackageShipment(
   db: Database,
@@ -614,18 +581,11 @@ async function writeShipmentEvidence(
     const source = await loadSourceCapture(tdb, input, actor);
     const capture = await applySourceCapture(tdb, planSourceCapture(source));
     const { sourceKey, ownerId, notificationDate } = source;
-    for (const packet of input.shipments)
-      for (const observation of packet.observations)
-        if (
-          observation.timeBasis === "notification_received" &&
-          (input.source.kind === "tracking_page" ||
-            notificationDate === null ||
-            observation.time.kind !== "date" ||
-            observation.time.value !== notificationDate)
-        )
-          constraintViolation(
-            "Notification fallback must use the source notification's Los Angeles calendar date.",
-          );
+    validateNotificationDates({
+      sourceKind: input.source.kind,
+      notificationDate,
+      shipments: input.shipments,
+    });
     const purchaseId = await purchaseReference(tdb, input.purchaseId);
     await assertPurchaseSourceOwner(tdb, purchaseId, ownerId);
     const shipmentIds = [];
@@ -847,7 +807,7 @@ async function writeShipmentEvidence(
           keepCurrent && current ? current.event : observation,
         );
       }
-      const identity = await identityCandidates(
+      const identity = await loadIdentityCandidates(
         tdb,
         references,
         effectiveObservations,
@@ -950,7 +910,7 @@ async function writeShipmentEvidence(
             carrier: ref.carrierId,
           })),
         ];
-        const complete = await identityCandidates(
+        const complete = await loadIdentityCandidates(
           tdb,
           completeReferences,
           effectiveObservations,

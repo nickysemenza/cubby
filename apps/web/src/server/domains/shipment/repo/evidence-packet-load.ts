@@ -1,4 +1,6 @@
+import type { ShipmentObservationInput } from "@cubby/schemas/shipment-evidence";
 import { and, eq, isNotNull, sql } from "drizzle-orm";
+import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
@@ -8,6 +10,11 @@ import {
   shipmentObservation,
   shipmentSourcePackage,
 } from "~/server/db/schema";
+
+import {
+  identityCandidateSchema,
+  identityWindowSchema,
+} from "./evidence-packet-plan";
 
 type SourcePackage = typeof shipmentSourcePackage.$inferSelect;
 export async function loadSourcePackages(db: Database, sourceKey: string) {
@@ -68,4 +75,37 @@ export async function loadRetiredPackage(
     )
     .limit(1);
   return retired;
+}
+
+export async function loadIdentityCandidates(
+  db: Database,
+  references: readonly { number: string; carrier: string | null }[],
+  observations: readonly ShipmentObservationInput[],
+  notificationDate: string | null,
+) {
+  const dates = await getDb(db).execute(
+    sql`SELECT
+    min(shipment_event_day(e))::text AS first, max(shipment_event_day(e))::text AS last
+    FROM jsonb_array_elements(${JSON.stringify(observations)}::jsonb) e`,
+    "objects",
+  );
+  const observedWindow = identityWindowSchema.parse(dates[0]);
+  const window = {
+    first: observedWindow.first ?? notificationDate,
+    last: observedWindow.last ?? notificationDate,
+  };
+  const result = await getDb(db).execute(
+    // oxlint-disable-next-line cubby/no-raw-enum-literal-in-sql -- carrier is the existing identity JSON object's key, not a carrier-role value.
+    sql`SELECT id, shortcode, purchase_id,
+    first_day::text, last_day::text, carrier_conflict FROM shipment_identity_candidates(
+    (SELECT coalesce(jsonb_agg(jsonb_build_object('trackingNumber', r->>'trackingNumber',
+      'carrier', shipment_carrier_key(r->>'carrier'))), '[]'::jsonb)
+     FROM jsonb_array_elements(${JSON.stringify(references.map((ref) => ({ trackingNumber: ref.number, carrier: ref.carrier })))}::jsonb) r),
+    ${window.first}::date, ${window.last}::date)`,
+    "objects",
+  );
+  return {
+    window,
+    candidates: z.array(identityCandidateSchema).parse(result),
+  };
 }
