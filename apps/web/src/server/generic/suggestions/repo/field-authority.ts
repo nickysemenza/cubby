@@ -72,7 +72,7 @@ export async function fieldAuthority(
 }
 
 /** `fieldAuthority` for many fields of one entity in one read, in request order. */
-export async function fieldAuthorities(
+async function fieldAuthorities(
   db: RepositoryQueryInput,
   entity: ShortcodeEntity,
   requests: readonly { recordId: string; field: string }[],
