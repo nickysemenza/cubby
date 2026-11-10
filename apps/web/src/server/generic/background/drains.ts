@@ -194,7 +194,8 @@ export function rowDrain<P>(
             : repositoryTransactionDatabase)(db, work)),
     };
     let released = false;
-    let waited = false;
+    // Items already waiting for funding or a provider; a later page failure leaves them waiting.
+    const waiting = new Set<DrainItem>();
     try {
       const backoff = spec.backoff;
       const { store } = spec;
@@ -254,9 +255,8 @@ export function rowDrain<P>(
             for (const { item, error, until } of waits)
               await store.wait!(tx, [item], message(error), until);
           });
-          waited = true;
+          for (const { item } of waits) waiting.add(item);
         }
-        const waiting = new Set(waits.map(({ item }) => item));
         const failures = [...preparationFailures].filter(
           ([item]) => !waiting.has(item),
         );
@@ -339,7 +339,9 @@ export function rowDrain<P>(
             .fenced((tx) =>
               settleFailed(
                 tx,
-                items.map((item) => [item, error] as const),
+                items
+                  .filter((item) => !waiting.has(item))
+                  .map((item) => [item, error] as const),
               ),
             )
             .then((failed) => countDrainItems({ failed }))
@@ -350,7 +352,7 @@ export function rowDrain<P>(
       }
       released = true;
       await spec.store.release?.(db);
-      return waited
+      return waiting.size
         ? { claimed: items.length, outcome: "deferred" }
         : { claimed: items.length };
     } finally {
