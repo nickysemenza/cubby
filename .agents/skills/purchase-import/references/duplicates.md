@@ -35,14 +35,15 @@ notice and its receipt, both itemizing the same lines), read both originals,
 then call `purchase_import.converge_duplicate_source_order` with the receipt's
 Purchase as survivor. In one transaction it moves the duplicate's accepted
 source orders onto the survivor, binds each duplicate line to a survivor line of
-the same amount (preferring the same title, role and booking facts; the
-survivor keeps its own description) and retires it, then folds the
+the same amount (the best valid one-to-one assignment within each amount,
+preferring the same booking facts, then title, then role; a tie between two
+assignments refuses; the survivor keeps its own description) and retires it, then folds the
 rest through the Purchase merge. A booking code, spending category or trade
 only the duplicate line holds moves onto its survivor line. It refuses
-different Vendors, vendor accounts or order ids; two id-less Purchases whose
+different Vendors, vendor accounts or order ids; Purchases without the same order id whose
 source Emails share no thread and date; lines with no survivor line of the same amount; a line whose Product,
 Project, quantity, party attribution, booking code, category or trade
-conflicts with the survivor's; financially claimed lines; and a duplicate with
+conflicts with the survivor's, or a category the survivor's non-principal line cannot hold; financially claimed lines; and a duplicate with
 no accepted source. Those stay review work. `already_applied` means this
 command already retired the duplicate's lines; a duplicate a plain merge
 folded in is refused for review. Replaying the duplicate's Email reaches the
