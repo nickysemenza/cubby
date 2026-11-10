@@ -1,4 +1,5 @@
 import type { FieldSuggestion } from "@cubby/schemas/ai";
+import { fieldGuessInput } from "@cubby/schemas/field-authority";
 import type { FieldGuess } from "@cubby/schemas/field-authority";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useMemo } from "react";
@@ -21,7 +22,7 @@ import { GUESS_GROUP } from "./use-auto-field-suggestion";
 /** Parsed while disabled; never fetched. */
 const INACTIVE = {
   entity: "product",
-  id: "PRD-0",
+  id: "PRD-2222",
   field: "__inactive__",
 } as const;
 const stringValue = z.string().min(1);
@@ -61,9 +62,15 @@ export function useFieldGuess(
   const hydrated = useHydrated();
   const field = source?.targets[0];
   const id = source?.entityId;
-  const input =
+  // Only a saved record's shortcode has a stored guess; drafts and fixtures
+  // without one read nothing.
+  const candidate =
     hydrated && source && id && field
       ? { entity: source.entity, id, field }
+      : null;
+  const input =
+    candidate && fieldGuessInput.safeParse(candidate).success
+      ? candidate
       : null;
   const enabled = input !== null;
   const options = suggestionApi.fieldGuess.queryOptions(input ?? INACTIVE);

@@ -859,7 +859,10 @@ function SearchPickerPopup<TId extends string>({
   create,
   header,
   footer,
+  restingId,
 }: {
+  /** The row Enter picks while nothing is highlighted; drawn as active. */
+  restingId?: TId;
   anchorRef: React.RefObject<HTMLDivElement | null>;
   orderedItems: ComboboxItem<TId>[];
   records: boolean;
@@ -998,9 +1001,13 @@ function SearchPickerPopup<TId extends string>({
                   value={item}
                   disabled={item.presentation?.disabledReason != null}
                   aria-label={rowAriaLabel(item)}
-                  className={rowClass(
-                    item.presentation?.meta === true,
-                    renderItem != null,
+                  className={cn(
+                    rowClass(
+                      item.presentation?.meta === true,
+                      renderItem != null,
+                    ),
+                    // Enter picks this row; it reads active, never selected.
+                    item.id === restingId && "bg-accent text-accent-foreground",
                   )}
                   style={rowStyle(item)}
                 >
@@ -1317,6 +1324,14 @@ function SearchPicker<TId extends string>({
 
   const popup = (
     <SearchPickerPopup
+      restingId={
+        enterPicks !== undefined &&
+        !multiple &&
+        query.trim() === "" &&
+        highlighted === undefined
+          ? enterPicks
+          : undefined
+      }
       anchorRef={anchorRef}
       orderedItems={orderedItems}
       records={records != null}
