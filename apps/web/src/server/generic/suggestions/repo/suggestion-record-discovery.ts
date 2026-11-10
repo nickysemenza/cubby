@@ -279,8 +279,7 @@ export type Reference =
     }
   | { kind: "contains"; at: JsonPath; guard?: ReferenceGuard };
 
-/** Families declare stored reference paths and forward presentation separately. */
-export function declareAffectedRecords(spec: {
+export type AffectedRecordsSpec = {
   roles: readonly string[];
   forward: (requested?: readonly string[]) => SQL;
   references: readonly Reference[];
@@ -289,6 +288,11 @@ export function declareAffectedRecords(spec: {
     scope: SuggestionRecordScope,
     admission: (alias?: string) => SQL | undefined,
   ) => { matches: readonly (SQL | undefined)[]; query?: SQL };
-}) {
+};
+
+/** Families declare stored reference paths and forward presentation separately. */
+export function declareAffectedRecords<const S extends AffectedRecordsSpec>(
+  spec: S,
+) {
   return { affectedRecords: spec };
 }
