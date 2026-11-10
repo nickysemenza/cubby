@@ -169,7 +169,7 @@ type RequestedRows<C> = {
 
 /**
  * Tuples with extra columns as one relation, binding ONE array per column.
- * Replaces hand-rolled `VALUES ${sql.join(...)}` lists.
+ * Use it instead of a `VALUES` list, which binds every value of every row.
  */
 export function requestedRows<C extends Record<string, ColumnType>>(
   rows: readonly { [K in keyof C]: string | number | boolean | null }[],

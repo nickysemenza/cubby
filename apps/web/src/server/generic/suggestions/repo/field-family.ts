@@ -9,7 +9,7 @@ import {
 import { suggestionReviewFamilies } from "@cubby/schemas/suggestion-review-family";
 import { sql } from "drizzle-orm";
 
-import { cubbyHeldFields } from "~/server/generic/suggestions/repo/field-authority-batch";
+import { cubbyHeldFields } from "~/server/generic/suggestions/repo/field-authority";
 import { type SuggestionFamilyDeclaration } from "~/server/generic/suggestions/repo/suggestion-family-declaration";
 import {
   stamps,

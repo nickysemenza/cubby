@@ -62,7 +62,7 @@ or a cached pass can hide a regression ([CI](../ci.md#cache-keys-and-the-remote-
 
 Oxlint's project rules protect unsafe identifier boundaries and soft-delete
 filters. The record-set query rule requires array-backed requested relations;
-shrink its baseline as existing expansions are removed. The SQL vocabulary rule reads every schema enum, including diagnostic
+its baseline is empty and may only shrink. The SQL vocabulary rule reads every schema enum, including diagnostic
 fixture enums outside database declarations: adding a value can expose literals
 in otherwise unchanged consumers. Run the full lint gate after adding any schema
 enum value and shrink its baseline when replacing existing literals. Keep

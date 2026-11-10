@@ -190,8 +190,14 @@ export async function prepareShipmentPacket(
         .from(shipmentObservation)
         .where(eq(shipmentObservation.sourcePackageId, binding.id))
     : [];
+  // Restatement only considers unreviewed source versions; skip the read when none exist.
+  const supported = history.some(
+    (version) => version.sourceEventKey === null && !version.memberReviewed,
+  )
+    ? await loadCaptureObservationIds(tdb, capture.id, history)
+    : new Set<string>();
   const identified = await planPacketObservationIdentities(
-    () => loadCaptureObservationIds(tdb, capture.id, history),
+    supported,
     packet.observations,
     history,
   );

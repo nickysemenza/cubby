@@ -1,6 +1,7 @@
+import { suggestionStatus } from "@cubby/schemas/ai";
 import { suggestionFamily } from "@cubby/schemas/suggestion";
 import { suggestionListFilters } from "@cubby/schemas/suggestion-list";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
@@ -11,6 +12,8 @@ import {
 import { requested } from "~/server/db/helpers/requested";
 import { suggestionTable } from "~/server/db/schema";
 import { suggestionFamilies } from "~/server/generic/suggestions/repo/suggestion-family-declarations";
+import { isReviewFamily } from "~/server/generic/suggestions/repo/suggestion-record-discovery";
+import { suggestionStateAdmission } from "~/server/generic/suggestions/repo/suggestion-touching";
 
 /** Count pending review publications on their primary record, excluding field guesses. */
 export async function loadSuggestionRowCounts(
@@ -20,6 +23,7 @@ export async function loadSuggestionRowCounts(
 ): Promise<Map<string, number>> {
   const counts = new Map<string, number>();
   if (!ids.length) return counts;
+  const database = isTransaction(db) ? databaseForTransaction(db) : db;
   const records = requested(ids.map((id) => ({ entity, id })));
   const rows = await unwrapDb(db)
     .select({
@@ -36,13 +40,21 @@ export async function loadSuggestionRowCounts(
           entity: sql`${suggestionTable.entity}`,
           id: sql`${suggestionTable.recordId}`,
         }),
-        eq(suggestionTable.status, "pending"),
-        eq(suggestionTable.active, true),
-        inArray(
-          suggestionTable.family,
-          Object.keys(suggestionFamilies).map((family) =>
-            suggestionFamily.parse(family),
-          ),
+        suggestionStateAdmission(
+          database,
+          {
+            kind: "suggestions",
+            families: Object.keys(suggestionFamilies)
+              .map((family) => suggestionFamily.parse(family))
+              .filter(isReviewFamily),
+            status: suggestionStatus.enum.pending,
+          },
+          {
+            family: sql`${suggestionTable.family}`,
+            status: sql`${suggestionTable.status}`,
+            active: sql`${suggestionTable.active}`,
+            runId: sql`${suggestionTable.runId}`,
+          },
         ),
       ),
     )
@@ -54,10 +66,10 @@ export async function loadSuggestionRowCounts(
     disposition: ["guess"],
   };
   const keys = fieldIds.length
-    ? await suggestionFamilies.field.keys(
-        isTransaction(db) ? databaseForTransaction(db) : db,
-        { filters, suggestionIds: fieldIds },
-      )
+    ? await suggestionFamilies.field.keys(database, {
+        filters,
+        suggestionIds: fieldIds,
+      })
     : [];
   const excluded = new Set(
     keys

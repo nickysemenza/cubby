@@ -13,6 +13,7 @@ import {
 import { sql } from "drizzle-orm";
 import { z } from "zod";
 
+import { requestedRows } from "~/server/db/helpers/requested";
 import type { RepositoryQueryInput } from "~/server/db/repository-access.boundary";
 import { repositoryQueries as unwrapDb } from "~/server/db/repository-access.boundary";
 import { SHORTCODE_TABLE } from "~/server/generated/shortcode-tables.gen";
@@ -41,6 +42,7 @@ export type FieldAuthority =
     };
 
 const row = z.object({
+  n: z.coerce.number(),
   live: z.unknown(),
   hasLive: z.boolean(),
   auditId: z.string().nullable(),
@@ -65,27 +67,44 @@ export async function fieldAuthority(
   recordId: string,
   field: string,
 ): Promise<FieldAuthority> {
+  const [authority] = await fieldAuthorities(db, entity, [{ recordId, field }]);
+  return authority!;
+}
+
+/** `fieldAuthority` for many fields of one entity in one read, in request order. */
+export async function fieldAuthorities(
+  db: RepositoryQueryInput,
+  entity: ShortcodeEntity,
+  requests: readonly { recordId: string; field: string }[],
+): Promise<FieldAuthority[]> {
+  if (!requests.length) return [];
   const table = SHORTCODE_TABLE[entity];
+  const request = requestedRows(
+    requests.map((item, n) => ({
+      n,
+      recordId: item.recordId,
+      field: item.field,
+    })),
+    { n: "int", recordId: "uuid", field: "text" },
+    "r",
+  );
   const result = await unwrapDb(db).execute<z.input<typeof row>>(sql`
-    WITH stored AS (
-      SELECT to_jsonb(t) ? ${field} AS "hasLive", to_jsonb(t)->${field} AS live
-      FROM ${table} t WHERE t.id = ${recordId}::uuid
-    ), latest AS (
-      SELECT a.id, a.authority, a."createdAt", a.changes->${field}->'to' AS "to"
-      FROM "AuditLog" a
-      WHERE a."entityKind" = ${entity} AND a."entityId" = ${recordId}::uuid
-        AND a.action = ${auditLogActionSchema.enum.update} AND a.changes ? ${field}
-      ORDER BY a."createdAt" DESC, a.id DESC
-      LIMIT 1
-    )
-    SELECT stored.live, COALESCE(stored."hasLive", false) AS "hasLive",
+    SELECT r.n, to_jsonb(t)->r.field AS live,
+      COALESCE(to_jsonb(t) ? r.field, false) AS "hasLive",
       latest.id::text AS "auditId", latest.authority,
       latest."createdAt" AS "writtenAt",
-      latest."to" IS NOT DISTINCT FROM stored.live AS matches,
+      latest."to" IS NOT DISTINCT FROM to_jsonb(t)->r.field AS matches,
       receipt.id::text AS "suggestionId", receipt.confidence, receipt."keptAt"
-    FROM (SELECT 1) one
-    LEFT JOIN stored ON true
-    LEFT JOIN latest ON true
+    FROM ${request.from}
+    LEFT JOIN ${table} t ON t.id = r."recordId"
+    LEFT JOIN LATERAL (
+      SELECT a.id, a.authority, a."createdAt", a.changes->r.field->'to' AS "to"
+      FROM "AuditLog" a
+      WHERE a."entityKind" = ${entity} AND a."entityId" = r."recordId"
+        AND a.action = ${auditLogActionSchema.enum.update} AND a.changes ? r.field
+      ORDER BY a."createdAt" DESC, a.id DESC
+      LIMIT 1
+    ) latest ON true
     LEFT JOIN LATERAL (
       SELECT s.id,
         (s."acceptanceReceipt"->>'confidence')::double precision AS confidence,
@@ -100,13 +119,17 @@ export async function fieldAuthority(
       FROM "Suggestion" s
       WHERE latest.authority = ${auditAuthoritySchema.enum.automatic}
         AND s.family = ${suggestionFamily.enum.field} AND s.entity = ${entity}
-        AND s."recordId" = ${recordId}::uuid AND s.field = ${field}
+        AND s."recordId" = r."recordId" AND s.field = r.field
         AND s."acceptanceReceipt"->'auditIds' ? latest.id::text
       ORDER BY s."createdAt" DESC
       LIMIT 1
     ) receipt ON true
+    ORDER BY r.n
   `);
-  const fact = row.parse(result.rows[0]);
+  return result.rows.map((fact) => decideAuthority(row.parse(fact)));
+}
+
+function decideAuthority(fact: z.infer<typeof row>): FieldAuthority {
   const live = fact.live;
   if (!fact.auditId)
     return empty(live) && fact.hasLive
@@ -258,4 +281,27 @@ export async function describeFieldOrigin(
         ? null
         : await readFieldGuess(db, entity, recordId, field),
   };
+}
+
+/** Correction candidates whose current value Cubby holds, so revising it is not a Disagreement. */
+export async function cubbyHeldFields(
+  db: RepositoryQueryInput,
+  inputs: readonly {
+    id: string;
+    entity: ShortcodeEntity;
+    recordId: string;
+    field: string;
+  }[],
+): Promise<Set<string>> {
+  const groups = new Map<ShortcodeEntity, (typeof inputs)[number][]>();
+  for (const input of inputs)
+    groups.set(input.entity, [...(groups.get(input.entity) ?? []), input]);
+  const held = new Set<string>();
+  for (const [entity, group] of groups) {
+    const authorities = await fieldAuthorities(db, entity, group);
+    group.forEach((input, index) => {
+      if (authorities[index]?.holder === "cubby") held.add(input.id);
+    });
+  }
+  return held;
 }

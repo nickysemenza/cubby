@@ -136,8 +136,8 @@ const eventPlace = (event: ShipmentObservationInput) =>
  * wording. Anything else stays a separate event: same-day occurrences are never guessed.
  */
 export async function planPacketObservationIdentities(
-  /** Loaded only when a restatement match needs it; most replays never query. */
-  loadSupported: () => Promise<ReadonlySet<string>>,
+  /** Stored versions this capture produced; restatement only revises these. */
+  supported: ReadonlySet<string>,
   observations: readonly ShipmentObservationInput[],
   history: readonly (typeof shipmentObservation.$inferSelect)[],
 ) {
@@ -180,7 +180,6 @@ export async function planPacketObservationIdentities(
     claimed.add(revised.occurrenceKey);
   }
   if (!sourceVersions.length || !unmatched().length) return identified;
-  const supported = await loadSupported();
   for (const restated of [
     (event: ShipmentObservationInput) =>
       canonical([restatedEvent(event), eventPlace(event), event.rawStatus]),

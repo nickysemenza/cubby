@@ -49,7 +49,8 @@ export type SuggestionRecordScope = SuggestionRecordSelection & {
   eligibility: SuggestionEligibility;
 };
 
-function suggestionStateAdmission(
+/** The queue's state admission; badges and the touching query share it. */
+export function suggestionStateAdmission(
   db: Database,
   eligibility: SuggestionEligibility,
   s: Pick<
