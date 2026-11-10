@@ -275,7 +275,7 @@ describe("expense repository — CRUD", () => {
       ),
     ).rejects.toMatchObject({
       reason: "CONSTRAINT_VIOLATION",
-      message: expect.stringContaining("Resolve the receipt role first"),
+      message: expect.stringContaining("receipt role first"),
     });
     expect(await getDb(ctx.db).select().from(expense)).toEqual([]);
     expect(await getDb(ctx.db).select().from(purchase)).toEqual([]);

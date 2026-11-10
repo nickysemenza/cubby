@@ -75,6 +75,7 @@ import {
   chargeStateOf,
   hasStatementOccurrence,
   OCCURRENCE_IDENTITY_REVIEW,
+  recommendedWithLabels,
   pendingSuggestion,
   sourceSuggestionAutomaticEligible,
   suggestionField,
@@ -1359,8 +1360,12 @@ async function finishProposal(
 /** Model labels ride on the evidence fingerprint rather than replacing it. */
 export async function labelledProposal(
   proposal: ChargeProposal,
-  judgment: StatementTransactionJudgment,
+  labelled: StatementTransactionJudgment,
 ): Promise<ChargeProposal> {
+  const judgment = {
+    ...labelled,
+    recommended: recommendedWithLabels(labelled),
+  };
   suggestionJudgments.statement_transaction.parse(judgment);
   return {
     ...proposal,

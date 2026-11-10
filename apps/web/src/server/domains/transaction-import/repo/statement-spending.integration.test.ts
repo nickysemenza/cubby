@@ -18,7 +18,6 @@ import {
   sourceOccurrence,
   vendor as vendorTable,
 } from "~/server/db/schema";
-import { updateFinancialAccount } from "~/server/domains/financial-account/repo/financial-account";
 import { bookFinancialTransaction } from "~/server/domains/financial-transaction/repo/financial-booking";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { labelStatementSuggestions } from "~/server/domains/transaction-import/service/statement-suggestion-labels";
@@ -173,7 +172,7 @@ describe("statement spending review and re-import", () => {
   it.each(["once", "exhausted", "stale", "committed"] as const)(
     "preserves shared-card application and replay after %s contention",
     async (mode) => {
-      const { advice, account } = await fixture(null, "household");
+      const { advice } = await fixture(null, "household");
       await labelAndRefreshReads(advice);
       const page = await listSuggestionPage(ctx.db, {
         family: "statement_transaction",
@@ -237,11 +236,8 @@ describe("statement spending review and re-import", () => {
           if (mode === "stale" && builds === 1) {
             external = true;
             try {
-              await updateFinancialAccount(
-                ctx.db,
-                account.output.id,
-                { ledgerPartyId: null },
-                ctx.actor,
+              await getDb(ctx.db).execute(
+                sql`UPDATE "SourceTransactionRecord" SET "rawDescription" = 'SYNTHETIC CHANGED EVIDENCE'`,
               );
             } finally {
               external = false;
@@ -314,7 +310,7 @@ describe("statement spending review and re-import", () => {
           stale: async () => {
             await expect(
               reviewSuggestion(ctx.db, kernelCtx(ctx), command),
-            ).rejects.toThrow(/statement or transaction evidence changed/i);
+            ).rejects.toThrow(/changed since review: create.rawDescription/i);
             expect(builds).toBe(2);
             expect(await read()).toEqual({
               ...before,
@@ -451,7 +447,7 @@ describe("statement spending review and re-import", () => {
       sql`UPDATE "SourceTransactionRecord" SET "rawDescription" = 'SYNTHETIC CHANGED EVIDENCE'`,
     );
     await expect(previewStatementSuggestion(ctx.db, input)).rejects.toThrow(
-      /evidence changed/i,
+      /changed since review: create.rawDescription/i,
     );
   });
   it("replans draft kind and booking without writing transactions, vendors, aliases, or suggestion state", async () => {

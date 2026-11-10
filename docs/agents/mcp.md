@@ -138,9 +138,11 @@ and whose `_meta["cubby/error"]` carries `code`, `reason`, `requestId`, and
 that fails its own schema is `INVALID_OUTPUT` and names each failing path.
 A runner failure is rendered as the runner settled it; it is not normalized or
 reported a second time.
-Generated capability tools append `recovery: "input_schema"` and the allowed
-action's live `inputSchema` to input-validation errors. Correct the payload
-from that contract (or call `describe`); missing evidence is never fabricated.
+Generated capability tools append `recovery: "input_schema"` to
+input-validation errors, pointing at `describe` for the allowed action's full
+contract; the validation causes name each failing path. Correct the payload
+from those causes or the described contract; missing evidence is never
+fabricated.
 Output validation and domain refusals do not advertise input-schema recovery.
 
 Every MCP principal carries a wall-clock budget (`MCP_TOOL_DEADLINE_MS` in
@@ -164,6 +166,9 @@ stops AI and upstream fetches but not Postgres queries or kernel verbs. Work
 that settles after the answer is not reported again; a write records freshness
 again when it ends. Narrow a timed-out read. A timed-out
 write may still have committed: re-read the affected records before retrying.
+An operation batch stops starting items once less than 30 s (or twice its
+slowest item) of its budget remains, answering normally with those items as
+`not_started` (`summary.notStarted`); resubmit only those.
 
 The HTTP ingress (`apps/web/src/server/mcp/http-handler.ts`) authenticates
 through `authenticate(request, MCP_AUTH)` from headers before it reads any

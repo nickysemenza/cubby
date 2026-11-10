@@ -1,4 +1,5 @@
 import { parseEntityId, type RunId } from "@cubby/schemas/identifiers";
+import { aiBudgetSettings } from "@cubby/schemas/mail-import-settings";
 import type { GatewayFetchRequest } from "@cubby/shared/ai/gateway-request";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
@@ -7,7 +8,6 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   AI_BUDGET_LIMIT_USD,
   AiBudgetExhaustedError,
-  PLAN_BUDGET_LIMIT_USD,
   readAiBudget,
   withAiBudget,
   withPlanBudget,
@@ -27,6 +27,8 @@ import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-u
 import { productionJobHandlers } from "~/server/workflows/jobs";
 
 import { planRunPreflight, paidRunPreflight } from "./execution-transport";
+
+const PLAN_BUDGET_LIMIT_USD = aiBudgetSettings.parse({}).planLimitUsd;
 
 const chatRequest = (model = "gpt-6.1-sol"): GatewayFetchRequest => ({
   // pi-ai's Anthropic SDK sends the beta query; budget checks must see past it.

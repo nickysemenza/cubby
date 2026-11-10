@@ -737,7 +737,15 @@ require a new preview.
 ### Holds and identity resolution
 
 Unproven identity blocks automatic acceptance/correction, with money unchanged.
-It creates no new member task for missing source proof. Original evidence and
+It creates no new member task for missing source proof. Intake proves an
+unproven owner when an attested provider row carries the same provider
+transaction ID, provider account and amount as every live observation of
+exactly one unproven owner, with no contradicting raw provider claims: that
+owner becomes the provider occurrence in place, ready, keeping its account,
+disposition and history (unresolved history still derives
+`ownership_conflict`). Any disagreement, a second owner, or a second incoming
+row for the same owner creates the provider owner in `identity_conflict` for
+reviewed resolution. Original evidence and
 actionable member review remain. `matchState: held` blocks automatic actions
 for unresolved identity, historical ownership, or a retained accepted
 reservation whose transaction was deleted. Summary splits `heldHistorical` from
@@ -1297,7 +1305,14 @@ Changing a web draft refreshes the reviewed result; acceptance still replans
 inside its write boundary. Agents may call the preview to inspect uncertain
 effects; it is optional, never acceptance authority or a prerequisite to a
 supported `suggestions.review`. The write always validates the current
-Suggestion, application and spending.
+Suggestion, application and spending. Preview and acceptance rebuild the charge
+from retained evidence, carry the reviewed model labels onto it, and refuse,
+naming each field, only when what was reviewed changed: the recommended action,
+the account, statement date and provider status, the created transaction's kind,
+amount, status, dates, merchant, descriptor and source reference, the candidate
+set (id, amount, differing fields), the superseded, voided or matched
+transaction, or the transfer. Merchant history, sibling, claimed-candidate and
+spending-snapshot drift do not refuse; spending is replanned at acceptance.
 
 Explicit MCP review supplying `booking` or `kindOverride`, or choosing a
 nonrecommended action, uses `verdict: "wrong"` with
@@ -1347,7 +1362,9 @@ group by group, filtering a group with
    direction, so a couple of corrected credits teach it.
 2. Read every other suggestion before choosing. An attach candidate's model
    `label` is advisory — confirm the descriptors yourself, and below about $20
-   read both. Attach to a different candidate, tick `fields`, override the
+   read both. When every candidate is a different amount and labelled
+   `different` with high confidence, the recommendation is `create`; the
+   candidates stay listed, and accepting as is rejects them. Attach to a different candidate, tick `fields`, override the
    kind, or create anyway (`rejectedCandidateIds` listing every candidate) as
    verdict `wrong` with `correction {present: true, value: <the same
    application>}`.
@@ -1394,7 +1411,7 @@ group by group, filtering a group with
    included: ignore only duplicates of another export's row, pre-Cubby rows and
    mis-parsed lines, never `not_modeled`.
 
-A refusal (evidence changed, a live candidate, a stale hold, an attach with
+A refusal (reviewed fields changed, a live candidate, a stale hold, an attach with
 several candidates and no named `transactionId`) writes nothing. Labelling
 republishes a suggestion as a new Suggestion, so a stale-Suggestion error means
 re-list the group and review the replacement. Explicit pending-to-posted
@@ -1511,7 +1528,9 @@ force convergence.
 ### Source identity review
 
 Unproven observations stay held with unchanged money and retained advice;
-applying held advice returns the held reason. Reviewed identity decisions can
+applying held advice returns the held reason. An attested identical provider
+row adopts the unproven owner during intake
+([holds and identity resolution](#holds-and-identity-resolution)). Reviewed identity decisions can
 use `entity.commands` batches of up to 50 independent SourceRecord updates, each
 with its own `expectedDisposition`, fingerprint/version/accepted-owner/history
 checks and explicit judgment. `assign` refuses a conflicting original account or
