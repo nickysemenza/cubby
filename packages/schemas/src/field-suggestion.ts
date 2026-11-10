@@ -92,13 +92,6 @@ export function fieldSuggestionResolutionContext(
   );
 }
 
-/** These questions read a dedicated saved finance/vendor context beyond their basis. */
-export function usesSavedFieldSuggestionContext(entity: string): boolean {
-  return ["financialTransaction", "purchase", "expense", "vendor"].includes(
-    entity,
-  );
-}
-
 const basisIdSchema = z.object({ id: z.string() });
 const basisArraySchema = z.array(z.json());
 

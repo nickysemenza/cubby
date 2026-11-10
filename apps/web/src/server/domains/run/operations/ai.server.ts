@@ -11,7 +11,7 @@ import {
   fieldSuggestionSchema,
   fieldSuggestionOutcomeSchema,
 } from "@cubby/schemas/ai";
-import { usesSavedFieldSuggestionContext } from "@cubby/schemas/field-suggestion";
+import { usesSavedFieldSuggestionContext } from "@cubby/schemas/field-suggestion-policy";
 import {
   parseEntityId,
   type IngredientId,
