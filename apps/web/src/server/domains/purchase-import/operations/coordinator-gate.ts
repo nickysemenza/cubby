@@ -36,6 +36,8 @@ type Holder = {
   agent: string;
   token: string;
   leaseUntil: number;
+  /** When the turn was granted; renewals keep it. Absent on state persisted before it existed. */
+  heldSince?: number;
 };
 type Waiter = {
   runId: string;
@@ -102,6 +104,7 @@ export class CoordinatorGateQueue {
           agent: request.agent,
           token: request.token,
           leaseUntil,
+          heldSince: now,
         });
         return { grant: { held: true, leaseUntil }, notify };
       }
@@ -141,6 +144,7 @@ export class CoordinatorGateQueue {
         agent: request.agent,
         token: request.token,
         leaseUntil,
+        heldSince: now,
       });
       return {
         grant: { held: true, leaseUntil },
@@ -187,7 +191,16 @@ export class CoordinatorGateQueue {
     const notify = this.reserve(now);
     return {
       status: {
-        holders: this.state.holders.map((entry) => entry.runId),
+        // Only a recently granted holder is reported: it covers the gap before
+        // its first heartbeat, while a holder hung for longer than lease plus
+        // grace stays subject to stale-Run expiry.
+        holders: this.state.holders
+          .filter(
+            (entry) =>
+              now - (entry.heldSince ?? 0) <
+              COORDINATOR_TURN_LEASE_MS + COORDINATOR_TURN_GRACE_MS,
+          )
+          .map((entry) => entry.runId),
         waiting: this.state.waiters.map((entry) => entry.runId),
       },
       notify,

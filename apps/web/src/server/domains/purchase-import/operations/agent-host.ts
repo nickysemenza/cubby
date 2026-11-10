@@ -473,8 +473,12 @@ class PurchaseImportRunAgentHost
                   setTimeout(resolve, DISPATCH_RECHECK_MS),
                 ).then(wake));
               // Nothing to wake (the Job settled or its deferral never
-              // committed): release the turn instead of holding it idle.
-              if (!woken) return;
+              // committed): run the agent's own alarm, which this alarm may
+              // have replaced, instead of holding the turn idle.
+              if (!woken) {
+                await (await this.loaded()).alarm();
+                return;
+              }
               this.dispatchExpectedUntil = Date.now() + DISPATCH_HANDOFF_MS;
               await this.alarmAt(this.dispatchExpectedUntil);
               return;

@@ -30,6 +30,18 @@ describe("coordinator gate", () => {
     });
   });
 
+  it("reports a holder for stale-Run exemption only while its grant is recent", () => {
+    const gate = new CoordinatorGateQueue(undefined, 1);
+    ask(gate, "a", 0);
+    const recent = COORDINATOR_TURN_LEASE_MS + COORDINATOR_TURN_GRACE_MS;
+    // Renewals keep the turn but not the exemption: a hung holder expires.
+    ask(gate, "a", recent - 1);
+    expect(gate.status(recent - 1).status.holders).toEqual(["a"]);
+    ask(gate, "a", recent);
+    expect(gate.state.holders).toHaveLength(1);
+    expect(gate.status(recent).status.holders).toEqual([]);
+  });
+
   it("reserves a freed slot for the head of the queue and wakes it", () => {
     const gate = new CoordinatorGateQueue(undefined, 1);
     ask(gate, "a", 0);
