@@ -47,7 +47,7 @@ import {
   type SuggestionKey,
   emptyPendingCounts,
 } from "~/server/generic/suggestions/repo/suggestion-presentation";
-import { readSuggestionRecordRefs } from "~/server/generic/suggestions/repo/suggestion-reference-resolution";
+import { countSuggestionRecordRefs } from "~/server/generic/suggestions/repo/suggestion-reference-resolution";
 import { touchingSuggestionFamilies } from "~/server/generic/suggestions/repo/suggestion-touching";
 import { jsonCursor } from "~/server/lib/json-cursor";
 
@@ -458,18 +458,16 @@ export async function suggestionRecordCounts(
     db,
     suggestionListFilters.parse({ recordIds: input.recordIds }),
   );
-  const refs = await readSuggestionRecordRefs(
+  const counts = await countSuggestionRecordRefs(
     db,
     [...(touching ?? [])],
-    [...new Set(records?.map((ref) => ref.entity))],
+    records ?? [],
   );
-  const counts = new Map(input.recordIds.map((id) => [id, 0]));
-  for (const references of refs.values())
-    for (const record of references)
-      if (counts.has(record.id))
-        counts.set(record.id, (counts.get(record.id) ?? 0) + 1);
   return suggestionRecordCountsOut.parse({
-    records: [...counts].map(([id, pending]) => ({ id, pending })),
+    records: [...new Set(input.recordIds)].map((id) => ({
+      id,
+      pending: counts.get(id) ?? 0,
+    })),
   });
 }
 
