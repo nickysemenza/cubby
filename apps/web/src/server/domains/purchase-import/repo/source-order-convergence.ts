@@ -147,9 +147,15 @@ function pairLines(duplicate: Line[], survivor: Line[]) {
     carry: Partial<Record<CarriedField, string>>;
   }> = [];
   for (const line of duplicate) {
-    const index = unused.findIndex(
-      (candidate) => lineKey(candidate) === lineKey(line),
+    // Among identical lines, prefer the one with the same booking facts so a
+    // stable row order cannot pair two different bookings.
+    const sameKey = (candidate: Line) => lineKey(candidate) === lineKey(line);
+    const sameFacts = (candidate: Line) =>
+      JSON.stringify(candidate.carried) === JSON.stringify(line.carried);
+    const exact = unused.findIndex(
+      (candidate) => sameKey(candidate) && sameFacts(candidate),
     );
+    const index = exact >= 0 ? exact : unused.findIndex(sameKey);
     if (index < 0)
       return {
         error: `The duplicate line "${line.title}" has no identical line on the survivor.`,
@@ -306,10 +312,9 @@ export async function convergeDuplicateSourceOrder(
         .innerJoin(
           emailTable,
           and(
-            eq(
-              sql`${emailTable.provider} || ':' || ${emailTable.mailboxId} || ':' || ${emailTable.messageId}`,
-              importSourceClaim.externalKey,
-            ),
+            // A message key, or one of its attachments' keys.
+            sql`(${importSourceClaim.externalKey} = ${emailTable.provider} || ':' || ${emailTable.mailboxId} || ':' || ${emailTable.messageId}
+              OR starts_with(${importSourceClaim.externalKey}, ${emailTable.provider} || ':' || ${emailTable.mailboxId} || ':' || ${emailTable.messageId} || ':attachment:'))`,
             isNotNull(emailTable.threadId),
             notDeleted(emailTable),
           ),

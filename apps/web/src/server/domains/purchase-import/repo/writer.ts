@@ -250,7 +250,22 @@ async function findPurchase(
   });
   if (matches.length > 1) {
     const reviewed = matches.find((row) => row.id === targetPurchaseId);
-    if (reviewed) return reviewed;
+    // A reviewed target settles the ambiguity only while no other match books
+    // lines; inserting onto an empty twin would book the order twice.
+    const lined = await tx
+      .selectDistinct({ purchaseId: expense.purchaseId })
+      .from(expense)
+      .where(
+        and(
+          inArray(
+            expense.purchaseId,
+            matches.map((row) => row.id),
+          ),
+          notDeleted(expense),
+        ),
+      );
+    if (reviewed && !lined.some((row) => row.purchaseId !== reviewed.id))
+      return reviewed;
     throw new Error(
       `Several Purchases of this Vendor carry this order id (${matches.map((row) => row.shortcode).join(", ")}). Name one as targetPurchaseId, or converge them with purchase_import.converge_duplicate_source_order.`,
     );
