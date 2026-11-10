@@ -412,9 +412,15 @@ describe("embedding refresh and cleanup drains", () => {
         );
       },
     };
+    // An earlier ordinary failure: the wait must still end its streak.
     await getDb(ctx.db)
       .update(searchDocument)
-      .set({ embeddingDueAt: new Date(0) })
+      .set({
+        embeddingDueAt: new Date(0),
+        embeddingAttempts: 1,
+        embeddingFailingSince: new Date(Date.now() - 60_000),
+        embeddingError: "Synthetic earlier failure",
+      })
       .where(isNotNull(searchDocument.embeddingDueAt));
     const page = await embeddingRefreshDrain(refused).page(
       ctx.db,
@@ -430,7 +436,7 @@ describe("embedding refresh and cleanup drains", () => {
       })
       .from(searchDocument)
       .where(eq(searchDocument.entityId, subject.entityId));
-    expect(waiting).toMatchObject({ attempts: 0, failingSince: null });
+    expect(waiting).toMatchObject({ attempts: 1, failingSince: null });
     expect(waiting?.dueAt?.getTime()).toBe(until.getTime());
     expect(waiting?.error).toContain("Synthetic OpenAI credit refusal");
 

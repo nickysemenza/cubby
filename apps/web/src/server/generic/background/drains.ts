@@ -194,6 +194,7 @@ export function rowDrain<P>(
             : repositoryTransactionDatabase)(db, work)),
     };
     let released = false;
+    let waited = false;
     try {
       const backoff = spec.backoff;
       const { store } = spec;
@@ -238,13 +239,32 @@ export function rowDrain<P>(
             spec.prepare(db, items, context),
           );
         preparation = { prepared };
-        for (const error of preparationFailures.values())
+        // An item refused for a funding or provider wait waits for it, spending
+        // no attempt; the page's other items still publish.
+        const waits = store.wait
+          ? [...preparationFailures].flatMap(([item, error]) => {
+              const failure = classifyJobFailure(error);
+              return failure.kind === "deferred"
+                ? [{ item, error, until: failure.until }]
+                : [];
+            })
+          : [];
+        if (waits.length) {
+          await context.fenced(async (tx) => {
+            for (const { item, error, until } of waits)
+              await store.wait!(tx, [item], message(error), until);
+          });
+          waited = true;
+        }
+        const waiting = new Set(waits.map(({ item }) => item));
+        const failures = [...preparationFailures].filter(
+          ([item]) => !waiting.has(item),
+        );
+        for (const [, error] of failures)
           if (stopsDrainPage(error)) throw error;
-        if (preparationFailures.size)
+        if (failures.length)
           countDrainItems({
-            failed: await context.fenced((tx) =>
-              settleFailed(tx, [...preparationFailures]),
-            ),
+            failed: await context.fenced((tx) => settleFailed(tx, failures)),
           });
         // A rolled-back chunk splits; committed siblings never replay.
         const publish = async (chunk: readonly DrainItem[]): Promise<void> => {
@@ -330,7 +350,9 @@ export function rowDrain<P>(
       }
       released = true;
       await spec.store.release?.(db);
-      return { claimed: items.length };
+      return waited
+        ? { claimed: items.length, outcome: "deferred" }
+        : { claimed: items.length };
     } finally {
       if (!released) await spec.store.release?.(db);
     }
