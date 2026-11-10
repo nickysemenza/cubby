@@ -35,7 +35,7 @@ function titleFromPath(pathname: string) {
 }
 
 function labelForPath(pathname: string) {
-  if (pathname.startsWith("/account/")) return "Account";
+  if (segmentMatches(pathname, "/account")) return "Account";
   const activeTo = findActiveTo(pathname);
   const item = completeNavLeaves.find((entry) => entry.to === activeTo);
   return item?.entity
@@ -45,7 +45,7 @@ function labelForPath(pathname: string) {
 
 function parentForPath(pathname: string): LinkProps["to"] | null {
   if (pathname === "/") return null;
-  if (pathname.startsWith("/account/")) return "/settings";
+  if (segmentMatches(pathname, "/account")) return "/settings";
 
   const activeTo = findActiveTo(pathname);
   const activeItem = completeNavLeaves.find((item) => item.to === activeTo);

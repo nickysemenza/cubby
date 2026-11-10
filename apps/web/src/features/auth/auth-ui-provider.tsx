@@ -8,9 +8,9 @@ import { z } from "zod";
 import { authClient } from "~/lib/auth-client";
 import { GMAIL_READONLY_SCOPE } from "~/lib/google-auth-constants";
 
-// Scoped to the better-auth-ui views (`/auth/$authView`,
-// `/account/$accountView`) rather than the root provider, so the library
-// loads with those route chunks instead of every page. Session reads elsewhere
+// Scoped to the better-auth-ui sign-in views (`/auth/$authView`) rather than
+// the root provider, so the library loads with that route chunk instead of
+// every page. Session reads elsewhere
 // use `authClient.useSession()` and need no provider.
 
 // Wrapper to adapt TanStack Router Link to better-auth-ui Link format
@@ -59,7 +59,6 @@ export function AuthUIProvider({ children }: { children: ReactNode }) {
           providers: ["google"],
           signIn: signInWithGoogle,
         }}
-        apiKey={{ prefix: "cubby_" }}
         signUp={false}
         toast={({ variant, message }) => {
           const text = message ?? "Something went wrong.";

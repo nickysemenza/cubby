@@ -18,6 +18,7 @@ import { useEntityMetadata } from "~/entity/metadata";
 import { Page } from "~/entity/page/page";
 import { buildRecordComboboxItem } from "~/entity/picker/combobox-builders";
 import { Picker } from "~/entity/picker/picker";
+import { authAccountsQuery } from "~/features/account/account-queries";
 import { AiFundingSettings } from "~/features/account/ai-funding";
 import { ChatGptPlanSettings } from "~/features/account/chatgpt-plan-card";
 import { PurchaseImportAgentConnection } from "~/features/account/purchase-import-agent-connection";
@@ -272,14 +273,7 @@ function MemberLoginPicker({
 }
 
 function GmailAccessSettings() {
-  const accounts = useQuery({
-    queryKey: ["auth", "accounts"],
-    queryFn: async () => {
-      const result = await authClient.listAccounts();
-      if (result.error) throw new Error(result.error.message);
-      return result.data ?? [];
-    },
-  });
+  const accounts = useQuery(authAccountsQuery);
   const googleAccount = accounts.data?.find(
     (account) => account.providerId === "google",
   );

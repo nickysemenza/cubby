@@ -23,22 +23,6 @@ export const createCubbyAuthClient = (callbackScheme: NativeCallbackScheme) =>
       }),
       apiKeyClient(),
     ],
-    fetchOptions: {
-      onRequest(context) {
-        // The installed account UI omits configId; scope every management request.
-        if (new URL(context.url).pathname.includes("/api-key/")) {
-          if (context.method === "GET") {
-            const url = new URL(context.url);
-            url.searchParams.set("configId", "http-api");
-            context.url = url.toString();
-          } else {
-            const body = JSON.parse(context.body || "{}");
-            context.body = JSON.stringify({ ...body, configId: "http-api" });
-          }
-        }
-        return context;
-      },
-    },
   });
 
 export const authClient = createCubbyAuthClient(
