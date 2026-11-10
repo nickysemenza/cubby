@@ -54,7 +54,6 @@ import {
   emailFinancialAssociation,
   emailRetrievalFailure,
   run as runTable,
-  runApproval,
   runControlEvent,
   runFinding,
   runOperation,
@@ -1866,13 +1865,6 @@ export const ENTITY_EDGE_OVERRIDES = {
       label: "photo group proposals",
       description:
         "A proposed item grouping of this photo-inventory run's images.",
-      liveness: { kind: "must-target-live" },
-    },
-    "RunApproval.runId": {
-      column: runApproval.runId,
-      role: "owned-child",
-      label: "approvals",
-      description: "An approval decision recorded against this run.",
       liveness: { kind: "must-target-live" },
     },
     "ImportSourceClaim.firstRunId": {

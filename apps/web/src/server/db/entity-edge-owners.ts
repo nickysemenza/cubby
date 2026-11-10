@@ -150,7 +150,6 @@ export const ENTITY_EDGE_OWNERS = {
   EmailRetrievalFailure: { excluded: "Immutable Email retrieval history." },
   // A reviewed association names the Email whose evidence it settles.
   EmailFinancialAssociation: { owner: emailFinancialAssociation.emailId },
-  RunApproval: { excluded: WORKFLOW },
   RunControlEvent: { excluded: WORKFLOW },
   RunPushRegistration: {
     excluded:

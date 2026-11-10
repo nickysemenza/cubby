@@ -5,7 +5,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
-import { run as runTable, runApproval, runOperation } from "~/server/db/schema";
+import { run as runTable, runOperation } from "~/server/db/schema";
 import {
   commitPurchaseImport,
   preparePurchaseImport,
@@ -234,18 +234,6 @@ describe("RunOperation rows written by earlier code", () => {
       error: state === "failed" ? "Rejected by member" : null,
       result: { approvalProposal },
     });
-    await getDb(ctx.db)
-      .insert(runApproval)
-      .values({
-        runId: run.id,
-        operationId,
-        operationKind: `mcp:${toolName}`,
-        args,
-        argsFingerprint,
-        targetFingerprint,
-        evidenceFingerprint: argsFingerprint,
-        state: "pending",
-      });
 
     let executions = 0;
     const execute = () =>

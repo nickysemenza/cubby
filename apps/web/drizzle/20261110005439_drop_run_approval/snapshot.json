@@ -1,0 +1,119 @@
+{
+  "type": "diff",
+  "version": "9",
+  "dialect": "postgres",
+  "id": "bb6c4627-c021-45b5-b885-5c3d2409fdf7",
+  "prevIds": [
+    "fbae7cad-3cfc-4f70-b38d-b892e97eb11c"
+  ],
+  "footprints": [
+    {
+      "statementType": "drop_table",
+      "statementTarget": [
+        "table",
+        "public",
+        "RunApproval"
+      ],
+      "writes": [
+        "s|tbl|public.RunApproval",
+        "n|tbl|public.RunApproval",
+        "e|tbl|public.RunApproval",
+        "n|rel|public.RunApproval",
+        "n|type|public.RunApproval"
+      ],
+      "reads": [
+        "n|sch|public"
+      ]
+    }
+  ],
+  "deltas": [
+    {
+      "op": "drop",
+      "key": "tables\u0000[\"public\",\"RunApproval\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"RunApproval\",\"id\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"RunApproval\",\"runId\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"RunApproval\",\"operationId\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"RunApproval\",\"operationKind\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"RunApproval\",\"args\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"RunApproval\",\"argsFingerprint\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"RunApproval\",\"targetFingerprint\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"RunApproval\",\"evidenceFingerprint\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"RunApproval\",\"state\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"RunApproval\",\"createdAt\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"RunApproval\",\"decidedByUserId\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"RunApproval\",\"decidedAt\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"RunApproval\",\"rejectedAt\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"RunApproval\",\"consumedAt\"]"
+    },
+    {
+      "op": "drop",
+      "key": "columns\u0000[\"public\",\"RunApproval\",\"invalidatedAt\"]"
+    },
+    {
+      "op": "drop",
+      "key": "indexes\u0000[\"public\",\"RunApproval_run_operation_key\"]"
+    },
+    {
+      "op": "drop",
+      "key": "indexes\u0000[\"public\",\"RunApproval_run_state_idx\"]"
+    },
+    {
+      "op": "drop",
+      "key": "fks\u0000[\"public\",\"RunApproval\",\"RunApproval_runId_Run_id_fk\"]"
+    },
+    {
+      "op": "drop",
+      "key": "fks\u0000[\"public\",\"RunApproval\",\"RunApproval_decidedByUserId_user_id_fk\"]"
+    },
+    {
+      "op": "drop",
+      "key": "pks\u0000[\"public\",\"RunApproval\",\"RunApproval_pkey\"]"
+    },
+    {
+      "op": "drop",
+      "key": "checks\u0000[\"public\",\"RunApproval\",\"RunApproval_state_check\"]"
+    }
+  ]
+}
