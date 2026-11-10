@@ -497,7 +497,10 @@ export async function executeAiRefreshTarget(
         recordId: target.recordId,
         currentValue: snapshot.currentValue,
         fieldDecisionId: snapshot.fieldDecisionId,
-        predecessorIds: target.suggestionIds,
+        // Field automation names no Suggestions: every pending one is replaced.
+        ...(target.suggestionIds.length && {
+          predecessorIds: target.suggestionIds,
+        }),
         evaluationId: id,
         provenance: saved.provenance,
         ...(target.cause && { cause: target.cause }),
