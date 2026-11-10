@@ -280,7 +280,7 @@ export async function loadFinancialPreview(
     uniqBy(
       providerPairs.map((row) => ({
         source: row.source,
-        provider: row.providerTransactionId,
+        provider: row.providerTransactionId ?? null,
       })),
       (row) => pairKey(row.source, row.provider!),
     ),
