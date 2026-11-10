@@ -109,29 +109,17 @@ public final class FieldSuggestionReviewModel {
         }
         let reviewedDraft = currentValue(key)
         if let review = proposed.financeReview {
-            guard ["spendingCategoryId", "defaultSpendingCategoryId", "spendingProfile"].contains(key) else {
+            guard fields.first(where: { $0.key == key })?.suggestion?.financeReview != nil else {
                 return nil
             }
             isApplying = true
             defer { isApplying = false }
             do {
                 try await recordDraftAcceptance(suggestionId: proposed.suggestionId)
-                let saved = try await saveCategory(
-                    .init(
-                        // Both generated enums come from financeCategoryReviewSchema.
-                        entity: .init(rawValue: review.entity.rawValue), entityId: review.entityId,
-                        fingerprint: review.fingerprint, field: .init(rawValue: key),
-                        spendingCategoryId: key == "spendingCategoryId" ? value : nil,
-                        defaultSpendingCategoryId: key == "defaultSpendingCategoryId" ? value : nil,
-                        spendingProfile: key == "spendingProfile" ? .init(rawValue: value) : nil))
+                let saved = try await saveCategory(.init(review: review, field: key, values: [key: value]))
                 guard scope.accepts(ticket) else { return nil }
-                let savedValue =
-                    key == "spendingProfile"
-                    ? saved.spendingProfile?.rawValue
-                    : key == "defaultSpendingCategoryId"
-                        ? saved.defaultSpendingCategoryId : saved.spendingCategoryId
                 guard saved.entity.rawValue == review.entity.rawValue, saved.entityId == review.entityId,
-                    savedValue == value
+                    try saved.reviewedValue(key) == value
                 else { throw ReviewError.unexpectedAcceptance }
                 editor.acknowledgeSavedField(key, value: .string(value), reviewedDraftValue: reviewedDraft)
                 try await recordApplication(
@@ -174,23 +162,13 @@ public final class FieldSuggestionReviewModel {
         for key in keys {
             try await recordDraftAcceptance(suggestionId: proposal(key)?.suggestionId)
         }
-        let saved = try await saveCategory(
-            .init(
-                entity: .init(rawValue: review.entity.rawValue), entityId: review.entityId,
-                fingerprint: review.fingerprint, spendingCategoryId: values["spendingCategoryId"],
-                defaultSpendingCategoryId: values["defaultSpendingCategoryId"],
-                spendingProfile: values["spendingProfile"].flatMap { .init(rawValue: $0) }))
+        let saved = try await saveCategory(.init(review: review, field: nil, values: values))
         guard scope.accepts(ticket), saved.entity.rawValue == review.entity.rawValue,
             saved.entityId == review.entityId
         else { throw ReviewError.unexpectedAcceptance }
-        let savedValues = [
-            "spendingCategoryId": saved.spendingCategoryId,
-            "defaultSpendingCategoryId": saved.defaultSpendingCategoryId,
-            "spendingProfile": saved.spendingProfile?.rawValue,
-        ]
         var accepted: [Acceptance] = []
         for key in keys {
-            guard let value = values[key], savedValues[key] == value else {
+            guard let value = values[key], try saved.reviewedValue(key) == value else {
                 throw ReviewError.unexpectedAcceptance
             }
             editor.acknowledgeSavedField(key, value: .string(value), reviewedDraftValue: drafts[key] ?? .null)

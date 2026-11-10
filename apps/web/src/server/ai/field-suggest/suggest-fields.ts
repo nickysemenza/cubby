@@ -39,6 +39,11 @@ import {
   fieldSuggestionResolutionEvidence,
   type FieldSuggestionResolutionEvidence,
 } from "@cubby/schemas/field-suggestion";
+import {
+  type FinanceReviewContext,
+  financeReviewContext,
+  isFinanceReviewEntity,
+} from "@cubby/schemas/field-suggestion-policy";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { SupportedDecisionModel } from "@cubby/shared/ai/models";
 import { z } from "zod";
@@ -68,10 +73,7 @@ import {
 } from "~/server/ai/policy/field-suggest";
 import { type AiSelectionUsage, runAiSelection } from "~/server/ai/selection";
 import type { Database } from "~/server/db";
-import {
-  isFinanceCategoryEntity,
-  loadFinanceSuggestionContext,
-} from "~/server/domains/financial-transaction/repo/finance-suggestion-context";
+import { loadFinanceSuggestionContext } from "~/server/domains/financial-transaction/repo/finance-suggestion-context";
 import { resolveDraftEvidenceFields } from "~/server/domains/purchase/repo/purchase-evidence-policy";
 import { classificationAllowsField } from "~/server/domains/spending-category/repo/classification-field-policy";
 import { classificationRefusesField } from "~/server/domains/spending-category/repo/classification-field-policy";
@@ -925,11 +927,8 @@ async function savedSuggestionContext(
   const key = JSON.stringify([
     input.entity,
     input.entityId,
-    input.targets.includes("spendingCategoryId"),
-    input.targets.some(
-      (target) =>
-        target === "defaultSpendingCategoryId" || target === "spendingProfile",
-    ),
+    requestsReview(input, "finance"),
+    requestsReview(input, "vendor"),
   ]);
   let result = batch.get(key);
   if (!result) {
@@ -946,21 +945,25 @@ const savedContexts = new AsyncLocalStorage<
 export const withFieldSuggestionBatch = <T>(work: () => Promise<T>) =>
   savedContexts.run(new Map(), () => withFieldSuggestionPreparation(work));
 
+const requestsReview = (
+  input: FieldSuggestionsInput,
+  context: FinanceReviewContext,
+) =>
+  input.targets.some(
+    (target) => financeReviewContext(input.entity, target) === context,
+  );
+
 async function loadSavedSuggestionContext(
   db: Database,
   input: FieldSuggestionsInput,
 ) {
   return input.entityId &&
-    isFinanceCategoryEntity(input.entity) &&
-    input.targets.includes("spendingCategoryId")
+    isFinanceReviewEntity(input.entity, "finance") &&
+    requestsReview(input, "finance")
     ? await loadFinanceSuggestionContext(db, input.entity, input.entityId)
-    : input.entity === "vendor" &&
-        input.entityId &&
-        input.targets.some(
-          (target) =>
-            target === "defaultSpendingCategoryId" ||
-            target === "spendingProfile",
-        )
+    : input.entityId &&
+        isFinanceReviewEntity(input.entity, "vendor") &&
+        requestsReview(input, "vendor")
       ? await loadVendorSuggestionContext(db, input.entityId)
       : null;
 }
@@ -978,7 +981,7 @@ function reviewedSuggestion(
     !suggestion ||
     !context ||
     !input.entityId ||
-    !(isFinanceCategoryEntity(input.entity) || input.entity === "vendor")
+    !financeReviewContext(input.entity, target)
   )
     return suggestion;
   const review = financeCategoryReviewSchema.parse({
@@ -1123,11 +1126,7 @@ export async function suggestFields(
       const spec = targetSpecs.get(target)!;
       const basisKeys = targetBasisKeys.get(target) ?? [];
 
-      const linkedContext = [
-        "spendingCategoryId",
-        "defaultSpendingCategoryId",
-        "spendingProfile",
-      ].includes(target)
+      const linkedContext = financeReviewContext(input.entity, target)
         ? financeContext
         : null;
       const rawBasis = effectiveRawBasis(

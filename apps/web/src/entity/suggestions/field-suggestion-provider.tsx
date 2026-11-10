@@ -438,7 +438,7 @@ export function FieldSuggestionProvider({
     targets.targets.forEach((target, index) => {
       if (
         persistedEntityId &&
-        target.key === "spendingCategoryId" &&
+        target.financeReview === "finance" &&
         ["purchaseId", "productId", "vendorId"].some(
           (key) => form.getFieldState(paths?.[key] ?? key).isDirty,
         )

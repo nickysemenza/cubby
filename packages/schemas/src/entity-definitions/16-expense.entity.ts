@@ -427,6 +427,7 @@ export const { definition, readSchemas } = defineEntityModel({
           renderer: "entity-select",
           suggest: {
             basis: ["name", "vendor", "productId", "notes", "lineKind"],
+            financeReview: { context: "finance" },
           },
         },
         display: {

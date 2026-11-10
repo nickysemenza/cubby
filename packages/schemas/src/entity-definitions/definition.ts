@@ -436,6 +436,15 @@ const buildMetadataSchemas = () => {
             allowNone: z.boolean().optional().default(false),
             mode: z.enum(["fill", "prune"]).optional().default("fill"),
             reviewRequired: z.boolean().optional().default(false),
+            /**
+             * Saved-record spending review: the proposal carries an evidence
+             * fingerprint and applies through the fenced finance writer.
+             * `finance` reviews a Purchase/Expense category from its lines;
+             * `vendor` reviews a Vendor's defaults from its purchases.
+             */
+            financeReview: z
+              .strictObject({ context: z.enum(["finance", "vendor"]) })
+              .optional(),
           })
           .strict(),
       ),

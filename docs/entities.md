@@ -1564,6 +1564,16 @@ emoji and Vendor spending category/itemization, use the common empty-field
 policy. Effective derived itemization values are populated and remain protected.
 Vendor spending profiles default to `unspecified`, a populated value that remains
 reviewable; removing its mandatory-review flag does not treat that sentinel as empty.
+
+Saved-record spending review is declared per field as
+`control.suggest.financeReview.context`: `finance` for the Purchase fallback and
+Expense category, `vendor` for the Vendor default category and spending profile.
+The context selects the saved evidence the server reads, the fingerprint-fenced
+finance writer that applies the proposal and its patch, and the saved-record
+gating that web and native read from the manifest. FinancialTransaction's
+read-only `spendingCategoryId` declares no review, so it never enters that writer.
+The `financeCategoryReview` wire enums keep their literal order; a type check
+requires them to list every declared entity and field.
 A Suggestion's mutable columns retain the latest evaluation's input and
 policy alongside its application metadata whenever no replacement is published,
 including when an exact wrong review or retained value suppression filters every
