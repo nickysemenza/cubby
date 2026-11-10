@@ -1,7 +1,10 @@
 import { createParser, type EventSourceMessage } from "eventsource-parser";
 import { z } from "zod";
 
-import type { AiGatewayMetadata } from "./gateway-metadata";
+import {
+  CUBBY_PAID_AI_GATEWAY_ID,
+  type AiGatewayMetadata,
+} from "./gateway-metadata";
 import { getChatModelConfig, supportedChatModelSchema } from "./models";
 
 /**
@@ -1338,7 +1341,8 @@ export async function runProviderGateway(args: {
     url = `https://api.cloudflare.com/client/v4/accounts/${args.accountId}/ai/v1/${paidPath}${endpoint.search}`;
     headers.delete("cf-aig-authorization");
     headers.set("authorization", `Bearer ${args.token}`);
-    headers.set("cf-aig-gateway-id", args.gatewayId);
+    // Paid Unified Billing uses the keyless gateway; see CUBBY_PAID_AI_GATEWAY_ID.
+    headers.set("cf-aig-gateway-id", CUBBY_PAID_AI_GATEWAY_ID);
   } else {
     headers.set("cf-aig-authorization", `Bearer ${args.token}`);
   }
