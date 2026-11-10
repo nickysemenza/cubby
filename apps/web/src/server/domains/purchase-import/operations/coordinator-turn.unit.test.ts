@@ -163,9 +163,12 @@ describe("coordinator turn", () => {
       ),
     });
     const turns = new CoordinatorTurn(unknown);
-    for (let check = 0; check < 3; check++)
+    // Quick entries alone never stop renewal.
+    for (let check = 0; check < 4; check++)
       expect((await turns.turn(async () => "ran")).ran).toBe(true);
-    expect(unknown.reportIdleError).toHaveBeenCalledTimes(3);
+    expect(unknown.reportIdleError).toHaveBeenCalledTimes(4);
+    // Two heartbeats later the run of unknowns is long enough.
+    await vi.advanceTimersByTimeAsync((2 * COORDINATOR_TURN_LEASE_MS) / 3);
     expect(unknown.release).not.toHaveBeenCalled();
     const asked = acquire.mock.calls.length;
     // No renewal: entries wait without asking the gate, the heartbeat stops,

@@ -5,7 +5,8 @@
  * is free, runs nothing and reports how long to wait; so does an entry whose
  * gate cannot be reached. pi keeps working in memory after an entry returns,
  * so the turn is kept until pi is confirmed idle. An idle check that fails
- * keeps it too, but only `UNKNOWN_IDLE_LIMIT` times in a row: the turn is
+ * keeps it too, but only while fewer than `UNKNOWN_IDLE_LIMIT` checks in a
+ * row, spanning at least two heartbeats, were undecidable: the turn is
  * then no longer renewed, database work stops at its current deadline, and
  * the coordinator asks again only after the gate's lease plus grace.
  *
@@ -59,8 +60,12 @@ const LONGEST_WAIT_MS = 5 * 60_000;
 const LEASE_SAFETY_MS = 30_000;
 /** Renew while pi works, well inside the lease. */
 const HEARTBEAT_MS = COORDINATOR_TURN_LEASE_MS / 3;
-/** Consecutive undecidable idle checks before the turn stops being renewed. */
+/**
+ * Consecutive undecidable idle checks, over at least this span, before the
+ * turn stops being renewed; quick entries alone never stop it.
+ */
 const UNKNOWN_IDLE_LIMIT = 3;
+const UNKNOWN_IDLE_SPAN_MS = 2 * HEARTBEAT_MS;
 
 /** Doubling from 15 s to 5 min, jittered ±50% so waiting coordinators spread out. */
 export const coordinatorTurnBackoffMs = (waits: number, random = Math.random) =>
@@ -79,6 +84,8 @@ export class CoordinatorTurn {
   /** The gate's own deadline for the last grant. */
   private gateLeaseUntil = 0;
   private unknownIdleChecks = 0;
+  /** When the current run of undecidable idle checks began. */
+  private unknownIdleSince = 0;
   /**
    * Set once idleness stayed undecidable: no renewals and no new admissions
    * until the gate's lease plus grace has passed and it reclaimed the slot.
@@ -191,7 +198,12 @@ export class CoordinatorTurn {
       },
     );
     if (state === "unknown") {
-      if (++this.unknownIdleChecks >= UNKNOWN_IDLE_LIMIT) this.lapse();
+      if (this.unknownIdleChecks++ === 0) this.unknownIdleSince = Date.now();
+      if (
+        this.unknownIdleChecks >= UNKNOWN_IDLE_LIMIT &&
+        Date.now() - this.unknownIdleSince >= UNKNOWN_IDLE_SPAN_MS
+      )
+        this.lapse();
       return;
     }
     this.unknownIdleChecks = 0;
