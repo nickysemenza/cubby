@@ -12,6 +12,7 @@ import {
   memberImportWorld,
   prepareMemberImport,
   retainedMailFixture,
+  type MemberImportOrder,
 } from "../operations/order-import.fixtures";
 import { convergeDuplicateSourceOrder } from "./source-order-convergence";
 
@@ -171,12 +172,13 @@ describe("one order from two source documents", () => {
   it("converges an existing duplicate atomically and replays its source inertly", async () => {
     const { vendor, notice, receipt } = await threadMails(
       "thread-a",
-      "thread-b",
+      "thread-a",
     );
     const importOne = (
       key: string,
       mail: typeof notice,
       orderId: string | null,
+      distinctFromPurchases?: MemberImportOrder["distinctFromPurchases"],
     ) =>
       memberImport(ctx.db, ctx.actor, {
         key,
@@ -186,15 +188,19 @@ describe("one order from two source documents", () => {
             stableOrderId: key,
             vendorId: vendor.shortcode,
             source: mailSource(mail),
+            distinctFromPurchases,
             extraction: { status: "ready", candidate: candidate(orderId) },
           },
         ],
       });
     const duplicate = (await importOne("notice", notice, null)).committed
       .items[0]?.purchaseId;
-    const survivor = (await importOne("receipt", receipt, "Trip ID: R-1"))
-      .committed.items[0]?.purchaseId;
-    if (!duplicate || !survivor) throw new Error("Both imports must commit");
+    if (!duplicate) throw new Error("The notice must commit");
+    // The pre-fix duplicate: the receipt imported beside the notice.
+    const survivor = (
+      await importOne("receipt", receipt, "Trip ID: R-1", [duplicate])
+    ).committed.items[0]?.purchaseId;
+    if (!survivor) throw new Error("The receipt must commit");
     expect(duplicate).not.toBe(survivor);
     expect(await liveCents()).toBe(2500);
 
@@ -236,12 +242,12 @@ describe("one order from two source documents", () => {
     ).resolves.toMatchObject({ status: "already_applied" });
   });
 
-  it("refuses to converge two id-less Purchases from different threads", async () => {
+  it("refuses to converge two rides from different threads when one carries no order id", async () => {
     const { vendor, notice, receipt } = await threadMails("ride-1", "ride-2");
     const ids = [];
-    for (const [key, mail] of [
-      ["ride-1", notice],
-      ["ride-2", receipt],
+    for (const [key, mail, orderId = null] of [
+      ["ride-1", notice, null],
+      ["ride-2", receipt, "R-2"],
     ] as const)
       ids.push(
         (
@@ -253,7 +259,7 @@ describe("one order from two source documents", () => {
                 stableOrderId: key,
                 vendorId: vendor.shortcode,
                 source: mailSource(mail),
-                extraction: { status: "ready", candidate: candidate(null) },
+                extraction: { status: "ready", candidate: candidate(orderId) },
               },
             ],
           })

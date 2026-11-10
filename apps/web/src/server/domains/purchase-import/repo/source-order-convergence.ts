@@ -128,71 +128,148 @@ async function readLines(
   }));
 }
 
+type Pair = {
+  from: Line;
+  to: Line;
+  carry: Partial<Record<CarriedField, string>>;
+};
+
+/** One duplicate line onto one survivor line, or why that pairing would lose a fact. */
+function pairOne(
+  line: Line,
+  to: Line,
+  survivor: readonly Line[],
+): Pair | { error: string } {
+  const keeps = (from: unknown, into: unknown) =>
+    from === null || from === into;
+  if (
+    !keeps(line.productId, to.productId) ||
+    !keeps(line.projectId, to.projectId) ||
+    !keeps(line.productQuantity, to.productQuantity) ||
+    (line.attribution !== "[]" && line.attribution !== to.attribution)
+  )
+    return {
+      error: `The duplicate line "${line.title}" carries a Product, Project, quantity or attribution the survivor's line does not.`,
+    };
+  const carry: Partial<Record<CarriedField, string>> = {};
+  for (const field of CARRIED_FIELDS) {
+    const value = line.carried[field];
+    if (value === null || value === to.carried[field]) continue;
+    if (to.carried[field] !== null)
+      return {
+        error: `The duplicate line "${line.title}" and its survivor line disagree on ${field}.`,
+      };
+    carry[field] = value;
+  }
+  // A booking code another survivor line already holds would book one charge twice.
+  if (
+    carry.bookingTransactionCode &&
+    survivor.some(
+      (other) =>
+        other.id !== to.id &&
+        other.carried.bookingTransactionCode === carry.bookingTransactionCode,
+    )
+  )
+    return {
+      error: `The duplicate line "${line.title}" carries a booking another survivor line already holds.`,
+    };
+  // Only principal lines carry a spending category.
+  if (carry.spendingCategoryId && to.lineKind !== "principal")
+    return {
+      error: `The duplicate line "${line.title}" carries a spending category its survivor's ${to.lineKind} line cannot hold.`,
+    };
+  return { from: line, to, carry };
+}
+
 /**
- * Pair every duplicate line with one survivor line of the same amount,
- * preferring the same title, role and booking facts. Product, Project, quantity and party attribution must not
- * be lost: a duplicate value has to equal its survivor's or be empty. A
- * booking code, spending category or trade the survivor lacks moves onto it;
- * two different values refuse.
+ * Booking-fact matches outrank title matches, which outrank role matches,
+ * across a whole assignment: each tier's weight exceeds the most any lower
+ * tier can add for a group of at most PAIRING_GROUP_MAX lines.
+ */
+const pairScore = (pair: Pair) =>
+  (JSON.stringify(pair.from.carried) === JSON.stringify(pair.to.carried)
+    ? 100
+    : 0) +
+  (titleOf(pair.from) === titleOf(pair.to) ? 10 : 0) +
+  (pair.from.lineKind === pair.to.lineKind ? 1 : 0);
+
+/** The best complete assignment found so far for one amount. */
+type PairingSearch = {
+  best: { score: number; pairs: Pair[] } | null;
+  tied: boolean;
+  firstError: string | null;
+};
+
+/** Most lines of one amount the exhaustive assignment search accepts. */
+const PAIRING_GROUP_MAX = 8;
+
+/**
+ * Pair every duplicate line with one survivor line of the same amount: money
+ * pairs by cents, since two documents may title or classify a line
+ * differently. Within each amount, every valid one-to-one assignment is
+ * scored and the best wins; two different best assignments are ambiguous and
+ * refuse, so row order never decides which line a source binds to. The
+ * survivor keeps its own description.
  */
 function pairLines(duplicate: Line[], survivor: Line[]) {
   if (duplicate.length !== survivor.length)
     return { error: "The two Purchases hold different numbers of lines." };
-  const unused = [...survivor];
-  const pairs: Array<{
-    from: Line;
-    to: Line;
-    carry: Partial<Record<CarriedField, string>>;
-  }> = [];
-  for (const line of duplicate) {
-    // Money pairs by amount; the two documents may title or classify a line
-    // differently. Prefer the closest description so a stable row order cannot
-    // pair two different bookings, and keep the survivor's own description.
-    const preference = (candidate: Line) => {
-      if (centsOf(candidate) !== centsOf(line)) return -1;
-      const sameFacts =
-        JSON.stringify(candidate.carried) === JSON.stringify(line.carried);
-      const sameTitle = titleOf(candidate) === titleOf(line);
-      const sameRole = candidate.lineKind === line.lineKind;
-      return (sameTitle ? 4 : 0) + (sameRole ? 2 : 0) + (sameFacts ? 1 : 0);
-    };
-    let index = -1;
-    let best = -1;
-    for (const [position, candidate] of unused.entries()) {
-      const score = preference(candidate);
-      if (score > best) {
-        best = score;
-        index = position;
+  const groups = new Map<string, { from: Line[]; to: Line[] }>();
+  const group = (line: Line) => {
+    const key = String(centsOf(line));
+    const found = groups.get(key) ?? { from: [], to: [] };
+    groups.set(key, found);
+    return found;
+  };
+  for (const line of duplicate) group(line).from.push(line);
+  for (const line of survivor) group(line).to.push(line);
+  const pairs: Pair[] = [];
+  for (const { from, to } of groups.values()) {
+    if (from.length !== to.length)
+      return {
+        error: `The duplicate line "${(from[0] ?? to[0])!.title}" has no survivor line of the same amount.`,
+      };
+    if (from.length > PAIRING_GROUP_MAX)
+      return {
+        error: `More than ${PAIRING_GROUP_MAX} lines share one amount; pair them by review.`,
+      };
+    const state: PairingSearch = { best: null, tied: false, firstError: null };
+    const used = new Set<number>();
+    const chosen: Pair[] = [];
+    const search = (index: number, score: number) => {
+      if (index === from.length) {
+        if (!state.best || score > state.best.score) {
+          state.best = { score, pairs: [...chosen] };
+          state.tied = false;
+        } else if (score === state.best.score) state.tied = true;
+        return;
       }
-    }
-    if (index < 0)
+      for (const [position, candidate] of to.entries()) {
+        if (used.has(position)) continue;
+        const pair = pairOne(from[index]!, candidate, survivor);
+        if ("error" in pair) {
+          state.firstError ??= pair.error;
+          continue;
+        }
+        used.add(position);
+        chosen.push(pair);
+        search(index + 1, score + pairScore(pair));
+        chosen.pop();
+        used.delete(position);
+      }
+    };
+    search(0, 0);
+    const found = state.best;
+    if (!found)
       return {
-        error: `The duplicate line "${line.title}" has no survivor line of the same amount.`,
+        error:
+          state.firstError ?? "The duplicate lines do not match the survivor.",
       };
-    const [match] = unused.splice(index, 1);
-    const to = match!;
-    const keeps = (from: unknown, into: unknown) =>
-      from === null || from === into;
-    if (
-      !keeps(line.productId, to.productId) ||
-      !keeps(line.projectId, to.projectId) ||
-      !keeps(line.productQuantity, to.productQuantity) ||
-      (line.attribution !== "[]" && line.attribution !== to.attribution)
-    )
+    if (state.tied)
       return {
-        error: `The duplicate line "${line.title}" carries a Product, Project, quantity or attribution the survivor's line does not.`,
+        error: `Lines of one amount ("${from[0]!.title}") pair equally well more than one way; converge them by review.`,
       };
-    const carry: Partial<Record<CarriedField, string>> = {};
-    for (const field of CARRIED_FIELDS) {
-      const value = line.carried[field];
-      if (value === null || value === to.carried[field]) continue;
-      if (to.carried[field] !== null)
-        return {
-          error: `The duplicate line "${line.title}" and its survivor line disagree on ${field}.`,
-        };
-      carry[field] = value;
-    }
-    pairs.push({ from: line, to, carry });
+    pairs.push(...found.pairs);
   }
   return { pairs };
 }
@@ -305,9 +382,10 @@ export async function convergeDuplicateSourceOrder(
         "PURCHASE_MERGE_ORDER_COLLISION",
         `The Purchases carry different order ids (${survivor.orderId}, ${duplicate.orderId}).`,
       );
-    // Without an order id on either side, only one shared Email thread and the
-    // same date tie the two documents to one order; two identical rides do not.
-    if (survivor.orderId === null && duplicate.orderId === null) {
+    // Unless both sides carry the same order id, only one shared Email thread
+    // and the same date tie the two documents to one order; two identical rides
+    // do not.
+    if (survivor.orderId === null || duplicate.orderId === null) {
       const threads = await tx
         .selectDistinct({
           purchaseId: importSourceOrder.purchaseId,
@@ -343,7 +421,7 @@ export async function convergeDuplicateSourceOrder(
       if (!sharesThread || survivor.date !== duplicate.date)
         throw createAppError(
           "PURCHASE_SOURCE_CONVERGENCE_REFUSED",
-          "Neither Purchase carries an order id, and their source Emails share no thread and date; they may be two orders.",
+          "The Purchases share no order id, and their source Emails share no thread and date; they may be two orders.",
         );
     }
     const sourceOrders = await tx
